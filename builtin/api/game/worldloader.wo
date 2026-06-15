@@ -1,6 +1,7 @@
 import woo::std;
 import je;
 import pkg::worst;
+import pkg::toml;
 import builtin::api::serialize::main;
 
 namespace jeapi::loader
@@ -13,12 +14,12 @@ namespace jeapi::loader
         public func create(u: je::universe, wpath: string)
         {
             return je::file::readall(wpath)
-                =>> \dat = dat->dict::deserialize;
-                =>> \dat = dat: dynamic->trycast:<serialize::WorldData::WorldDataRawType>;
-                ->> \dat = worldloader{
-                        __m_world = je::world::create(u),
-                        __m_data = dat: serialize::WorldData,
-                    }
+                =>> \dat = toml::parse(dat)->okay
+                    ->> \dat = worldloader{
+                            __m_world = je::world::create(u),
+                            __m_data = serialize::WorldData { m_data = dat },
+                        }
+                        ;
                     ;
                 ;
         }

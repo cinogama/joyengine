@@ -29,7 +29,7 @@ namespace jeapi::gui::widget
         return option::none;
     }
     
-    let mut registered_click_file_button_callback = option::none: option<(string)=>void>;
+    let mut registered_click_file_button_callback = option::none as option<(string)=>void>;
     
     public func invoke_click_file_callback(wpath: string)
     {

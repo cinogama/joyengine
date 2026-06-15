@@ -4,6 +4,7 @@ import je;
 import je::gui;
 
 import pkg::node_editor;
+import pkg::toml;
 import pkg::guid;
 import pkg::iterator;
 import pkg::try;
@@ -51,17 +52,22 @@ namespace jeapi
             mouse_on_canvas_pos_when_context_menu_before_opened: mut (real, real),
         }
         {
-            public func save_extra_data(self: GraphEditor)
+            public func save_extra_data(self: GraphEditor)=> toml::Toml
             {
-                let result = {}mut: map<string, mut array<real>>;
+                let result = toml::new_table();
                 
                 for (let (uid, state) : self.generated_node_id_for_node)
                 {
                     if (self.graph_context->query_eval_node_uid(uid)->is_value
                         || self.graph_context->query_flow_node_uid(uid)->is_value)
-                        result[uid: string] = [state.position.0, state.position.1];
+                    {
+                        let pos = toml::new_array();
+                        pos->push(state.position.0);
+                        pos->push(state.position.1);
+                        result->set(uid as string, pos);
+                    }
                 }
-                return result: dynamic;
+                return result;
             }
             
             using NodeTree = struct{
@@ -190,7 +196,7 @@ namespace jeapi
                 }
             }
             
-            public func create(graph_context: GraphContext, extra_data: option<dynamic>)
+            public func create(graph_context: GraphContext, extra_data: option<toml::Toml>)
             {
                 let self = GraphEditor{
                     graph_context = graph_context,
@@ -224,15 +230,21 @@ namespace jeapi
                     mouse_on_canvas_pos_when_context_menu_before_opened = mut (0.0, 0.0),
                 };
                 
-                match (extra_data=>>\d = d->trycast:<dict<string, array<real>>>;)
+                match (extra_data=>>\t = t->as_table;)
                 {
                     none?;
                     value(dat)?
                     {
-                        for (let (uidstr, pos) : dat)
+                        for (let (uidstr, pos_t) : dat)
                         {
-                            self->get_node(uidstr: guid::GUID)->set_position(
-                                (pos->get_or(0, 0.), pos->get_or(1, 0.)));
+                            let pos = pos_t->as_array->or([]);
+                            let px = pos->get(0)
+                                =>> \e = e->as_float;
+                                ->or(0.);
+                            let py = pos->get(1)
+                                =>> \e = e->as_float;
+                                ->or(0.);
+                            self->get_node(uidstr as guid::GUID)->set_position((px, py));
                         }
                     }
                 }
@@ -240,9 +252,9 @@ namespace jeapi
                 return self;
             }
             func allocate_id<Id>(self: GraphEditor)
-                where 0: Id is Id;
+                where 0 as Id is Id;
             {
-                return (self.allocated_id +:= 1): Id;
+                return (self.allocated_id +:= 1) as Id;
             }
             func get_node(self: GraphEditor, node_id: guid::GUID)
             {
@@ -302,7 +314,7 @@ namespace jeapi
             }
             func draw_pin(self: GraphEditor, iostate: node_editor::Graph::IOState)
             {
-                let mut shown_image = option::none: option<je::graphic::texture>;
+                let mut shown_image = option::none as option<je::graphic::texture>;
                 if (iostate.kind == node_editor::Graph::IOState::IOKind::Input)
                     shown_image = self.input_pin_image;
                 else if (iostate.kind == node_editor::Graph::IOState::IOKind::Output)
@@ -310,7 +322,7 @@ namespace jeapi
                 else
                     shown_image = self.flow_pin_image;
                     
-                let mut alpha_scale = 1.0: real;
+                let mut alpha_scale = 1.0 as real;
                 match (self.try_linking_from_io_typename)
                 {
                     value(name)?
@@ -327,7 +339,7 @@ namespace jeapi
                     value(img)?
                     {
                         let (r, g, b, a) = i32_to_color32(iostate.typecolor);
-                        ImageSizeColor(img, 20., 20., (r, g, b, (a: real * alpha_scale): int));
+                        ImageSizeColor(img, 20., 20., (r, g, b, (a as real * alpha_scale) as int));
                     }
                 }
                 
@@ -447,7 +459,7 @@ namespace jeapi
                 {
                     let mut color_high_light_factor =
                         RuntimeDebugger::check_node_active(nuid)
-                            ? 1.5 + 0.5 * math::sin(5. * std::time())
+                            ? 1.5 + 0.5 * math::sin(5. * std::clock())
                             | 1.0;
                             
                     let (r, g, b, a) =
@@ -456,10 +468,10 @@ namespace jeapi
                     node_editor::PushStyleColor(
                         node_editor::StyleColor::StyleColor_NodeBg,
                         (
-                            (r: real * color_high_light_factor): int,
-                            (g: real * color_high_light_factor): int,
-                            (b: real * color_high_light_factor): int,
-                            (a: real * color_high_light_factor): int,
+                            (r as real * color_high_light_factor) as int,
+                            (g as real * color_high_light_factor) as int,
+                            (b as real * color_high_light_factor) as int,
+                            (a as real * color_high_light_factor) as int,
                         ));
                     defer node_editor::PopStyleColor(1);
                     
@@ -514,7 +526,7 @@ namespace jeapi
                     none?;
                 }
                 
-                node_editor::Link(linkid, apin, bpin, (r, g, b, (a: real * alpha_scale): int), 2.);
+                node_editor::Link(linkid, apin, bpin, (r, g, b, (a as real * alpha_scale) as int), 2.);
             }
             func query_new_node(editor_context: GraphEditor)
             {
@@ -647,7 +659,7 @@ namespace jeapi
                     return option::none;
                 }
                 
-                let mut result = option::none: option<guid::GUID>;
+                let mut result = option::none as option<guid::GUID>;
                 let mut is_first_node = false;
                 for (let (name, node) :
                     nodes.tree->unmapping
@@ -785,13 +797,13 @@ namespace jeapi
                 
                 if (IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Right))
                 {
-                    right_mouse_down_time = std::time();
+                    right_mouse_down_time = std::clock();
                     mouse_down_pos = GetMousePos();
                 }
                 
                 if (IsItemHovered() && IsMouseReleased(ImGuiMouseButton::ImGuiMouseButton_Right))
                 {
-                    if (std::time() - right_mouse_down_time < 0.2)
+                    if (std::clock() - right_mouse_down_time < 0.2)
                     {
                         let (mx, my) = GetMousePos();
                         if (math::abs(mx - mouse_down_pos.0) < 5.
@@ -872,7 +884,7 @@ namespace jeapi
                             }
                             if (MenuItem(F"复制GUID {node_uid}"))
                             {
-                                SetClipboardText(node_uid: string);
+                                SetClipboardText(node_uid as string);
                             }
                         }
                     }

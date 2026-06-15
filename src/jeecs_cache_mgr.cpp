@@ -7,9 +7,9 @@
 // WARNING!!!!
 // DO NOT USE SIZE_T!!!!
 
-wo_integer_t _crc64_of_file(const char* filepath)
+uint64_t _crc64_of_file(const char* filepath)
 {
-    wo_integer_t crc64_result = 0;
+    uint64_t crc64_result = 0;
     if (auto* origin_file = jeecs_file_open(filepath))
     {
         constexpr size_t READ_COUNT_PER_GROUP = 256;
@@ -33,7 +33,8 @@ wo_integer_t _crc64_of_file(const char* filepath)
     return crc64_result;
 }
 
-jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version, wo_integer_t virtual_crc64)
+jeecs_file* jeecs_load_cache_file(
+    const char* filepath, uint32_t format_version, uint64_t virtual_crc64)
 {
     using namespace std;
 
@@ -73,11 +74,11 @@ jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version,
         }
         else
         {
-            wo_integer_t crc64_result =
+            uint64_t crc64_result =
                 virtual_crc64 ? virtual_crc64 : _crc64_of_file(filepath);
 
-            wo_integer_t cache_crc64 = 0;
-            jeecs_file_read(&cache_crc64, sizeof(wo_integer_t), 1, cache_file);
+            uint64_t cache_crc64 = 0;
+            jeecs_file_read(&cache_crc64, sizeof(uint64_t), 1, cache_file);
 
             if (crc64_result != 0)
             {
@@ -96,11 +97,12 @@ jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version,
     return nullptr;
 }
 
-void* jeecs_create_cache_file(const char* filepath, uint32_t format_version, wo_integer_t usecrc64)
+void* jeecs_create_cache_file(
+    const char* filepath, uint32_t format_version, uint64_t usecrc64)
 {
     using namespace std;
 
-    wo_integer_t crc64_result = usecrc64 == 0 ? _crc64_of_file(filepath) : usecrc64;
+    uint64_t crc64_result = usecrc64 == 0 ? _crc64_of_file(filepath) : usecrc64;
     if (crc64_result == 0)
     {
         jeecs::debug::logwarn(
@@ -126,7 +128,7 @@ void* jeecs_create_cache_file(const char* filepath, uint32_t format_version, wo_
 
     fwrite(&CACHE_MANAGER_MAIN_VERSION, sizeof(uint32_t), 1, f);
     fwrite(&format_version, sizeof(uint32_t), 1, f);
-    fwrite(&crc64_result, sizeof(wo_integer_t), 1, f);
+    fwrite(&crc64_result, sizeof(uint64_t), 1, f);
 
     return f;
 }

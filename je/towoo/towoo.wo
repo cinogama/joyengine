@@ -82,7 +82,7 @@ namespace je
         public func abs<T>(a: T)
             where a is int || a is real;
         {
-            if (a < 0: T)
+            if (a < 0 as T)
                 return -a;
             return a;
         }
@@ -122,19 +122,19 @@ namespace vec2
 {
     public func operator + (a: vec2, b: vec2)
     {
-        return (a[0] + b[0], a[1] + b[1]): vec2;
+        return (a[0] + b[0], a[1] + b[1]) as vec2;
     }
     public func operator - (a: vec2, b: vec2)
     {
-        return (a[0] - b[0], a[1] - b[1]): vec2;
+        return (a[0] - b[0], a[1] - b[1]) as vec2;
     }
     public func operator * (a: vec2, b)
         where b is vec2 || b is real;
     {
         if (b is vec2)
-            return (a[0] * b[0], a[1] * b[1]): vec2;
+            return (a[0] * b[0], a[1] * b[1]) as vec2;
         else
-            return (a[0] * b, a[1] * b): vec2;
+            return (a[0] * b, a[1] * b) as vec2;
     }
     public func operator / (a: vec2, b)
         where b is vec2 || b is real;
@@ -155,7 +155,7 @@ namespace vec2
         let length = self->length;
         if (length == 0.)
             return self;
-        return (x / length, y / length): vec2;
+        return (x / length, y / length) as vec2;
     }
     public func dot(self: vec2, b: vec2)
     {
@@ -166,27 +166,27 @@ namespace vec3
 {
     public func operator + (a: vec3, b: vec3)
     {
-        return (a[0] + b[0], a[1] + b[1], a[2] + b[2]): vec3;
+        return (a[0] + b[0], a[1] + b[1], a[2] + b[2]) as vec3;
     }
     public func operator - (a: vec3, b: vec3)
     {
-        return (a[0] - b[0], a[1] - b[1], a[2] - b[2]): vec3;
+        return (a[0] - b[0], a[1] - b[1], a[2] - b[2]) as vec3;
     }
     public func operator * (a: vec3, b)
         where b is vec3 || b is real;
     {
         if (b is vec3)
-            return (a[0] * b[0], a[1] * b[1], a[2] * b[2]): vec3;
+            return (a[0] * b[0], a[1] * b[1], a[2] * b[2]) as vec3;
         else
-            return (a[0] * b, a[1] * b, a[2] * b): vec3;
+            return (a[0] * b, a[1] * b, a[2] * b) as vec3;
     }
     public func operator / (a: vec3, b)
         where b is vec3 || b is real;
     {
         if (b is vec3)
-            return (a[0] / b[0], a[1] / b[1], a[2] / b[2]): vec3;
+            return (a[0] / b[0], a[1] / b[1], a[2] / b[2]) as vec3;
         else
-            return (a[0] / b, a[1] / b, a[2] / b): vec3;
+            return (a[0] / b, a[1] / b, a[2] / b) as vec3;
     }
     
     public func length(self: vec3)
@@ -200,7 +200,7 @@ namespace vec3
         let length = self->length;
         if (length == 0.)
             return self;
-        return (x/length, y/length, z/length): vec3;
+        return (x/length, y/length, z/length) as vec3;
     }
     public func dot(self: vec3, b: vec3)
     {
@@ -212,34 +212,34 @@ namespace vec3
             self[1] * b[2] - self[2] * b[1],
             self[2] * b[0] - self[0] * b[2],
             self[0] * b[1] - self[1] * b[0]
-            ): vec3;
+            ) as vec3;
     }
 }
 namespace vec4
 {
     public func operator + (a: vec4, b: vec4)
     {
-        return (a[0] + b[0], a[1] + b[1], a[2] + b[2], a[3] + b[3]): vec4;
+        return (a[0] + b[0], a[1] + b[1], a[2] + b[2], a[3] + b[3]) as vec4;
     }
     public func operator - (a: vec4, b: vec4)
     {
-        return (a[0] - b[0], a[1] - b[1], a[2] - b[2], a[3] - b[3]): vec4;
+        return (a[0] - b[0], a[1] - b[1], a[2] - b[2], a[3] - b[3]) as vec4;
     }
     public func operator * (a: vec4, b)
         where b is vec4 || b is real;
     {
         if (b is vec4)
-            return (a[0] * b[0], a[1] * b[1], a[2] * b[2], a[3] * b[3]): vec4;
+            return (a[0] * b[0], a[1] * b[1], a[2] * b[2], a[3] * b[3]) as vec4;
         else
-            return (a[0] * b, a[1] * b, a[2] * b, a[3] * b): vec4;
+            return (a[0] * b, a[1] * b, a[2] * b, a[3] * b) as vec4;
     }
     public func operator / (a: vec4, b)
         where b is vec4 || b is real;
     {
         if (b is vec4)
-            return (a[0] / b[0], a[1] / b[1], a[2] / b[2], a[3] / b[3]): vec4;
+            return (a[0] / b[0], a[1] / b[1], a[2] / b[2], a[3] / b[3]) as vec4;
         else
-            return (a[0] / b, a[1] / b, a[2] / b, a[3] / b): vec4;
+            return (a[0] / b, a[1] / b, a[2] / b, a[3] / b) as vec4;
     }
     
     public func length(self: vec4)
@@ -253,7 +253,7 @@ namespace vec4
         let length = self->length;
         if (length == 0.)
             return self;
-        return (x/length, y/length, z/length, w/length): vec4;
+        return (x/length, y/length, z/length, w/length) as vec4;
     }
     public func dot(self: vec4, b: vec4)
     {
@@ -264,11 +264,11 @@ namespace ivec2
 {
     public func operator + (a: ivec2, b: ivec2)
     {
-        return (a[0] + b[0], a[1] + b[1]): ivec2;
+        return (a[0] + b[0], a[1] + b[1]) as ivec2;
     }
     public func operator - (a: ivec2, b: ivec2)
     {
-        return (a[0] - b[0], a[1] - b[1]): ivec2;
+        return (a[0] - b[0], a[1] - b[1]) as ivec2;
     }
     public func operator * (a: ivec2, b)
         where b is ivec2 || b is int;
@@ -289,7 +289,7 @@ namespace ivec2
 }
 namespace quat
 {
-    public let ident = (0., 0., 0., 1.): quat;
+    public let ident = (0., 0., 0., 1.) as quat;
     
     public func euler(yaw: real, pitch: real, roll: real)
     {
@@ -309,13 +309,13 @@ namespace quat
         z = rsin * pcos * ycos - rcos * psin * ysin,
         w = rcos * pcos * ycos + rsin * psin * ysin;
         let mag = x*x + y*y + z*z + w*w;
-        return (x/mag, y/mag, z/mag, w/mag): quat;
+        return (x/mag, y/mag, z/mag, w/mag) as quat;
     }
     public func axis(a: vec3, ang: real)
     {
         let sv = je::mathf::sin(ang * 0.5 * je::mathf::DEG2RAD);
         let cv = je::mathf::cos(ang * 0.5 * je::mathf::DEG2RAD);
-        return (a[0] * sv, a[1] * sv, a[2] * sv, cv): quat;
+        return (a[0] * sv, a[1] * sv, a[2] * sv, cv) as quat;
     }
     public func rotation(a: vec3, b: vec3)
     {
@@ -337,7 +337,7 @@ namespace quat
     }
     public func inverse(self: quat)
     {
-        return (-self[0], -self[1], -self[2], self[3]): quat;
+        return (-self[0], -self[1], -self[2], self[3]) as quat;
     }
     public func euler_angle(self: quat)
     {
@@ -345,7 +345,7 @@ namespace quat
         let yaw = je::mathf::atan2(2. * (w * x + z * y), 1. - 2. * (x * x + y * y));
         let pitch = je::mathf::asin(je::mathf::clamp(2. * (w * y - x * z), -1., 1.));
         let roll = je::mathf::atan2(2. * (w * z + x * y), 1. - 2. * (z * z + y * y));
-        return (je::mathf::RAD2DEG * yaw, je::mathf::RAD2DEG * pitch, je::mathf::RAD2DEG * roll): vec3;
+        return (je::mathf::RAD2DEG * yaw, je::mathf::RAD2DEG * pitch, je::mathf::RAD2DEG * roll) as vec3;
     }
     public func lerp(a: quat, b: quat, t: real)
     {
@@ -354,7 +354,7 @@ namespace quat
             je::mathf::lerp(a[1], b[1], t),
             je::mathf::lerp(a[2], b[2], t),
             je::mathf::lerp(a[3], b[3], t),
-        ): quat;
+        ) as quat;
     }
     
     extern("libjoyecs", "wojeapi_towoo_math_quat_slerp")
@@ -366,7 +366,7 @@ namespace quat
         if (b is vec3)
         {
             let w = self[3];
-            let u = (self[0], self[1], self[2]): vec3;
+            let u = (self[0], self[1], self[2]) as vec3;
             return u * (2. * u->dot(b))
                 + b * (w * w - u->dot(u))
                 + u->cross(b) * (2. * w);
@@ -376,12 +376,12 @@ namespace quat
             let (x1, y1, z1, w1) = self;
             let (x2, y2, z2, w2) = b;
             
-            let v1 = (x1, y1, z1): vec3;
-            let v2 = (x2, y2, z2): vec3;
+            let v1 = (x1, y1, z1) as vec3;
+            let v2 = (x2, y2, z2) as vec3;
             
             let w3 = w1 * w2 - v1->dot(v2);
             let v3 = v1->cross(v2) + v2 * w1 + v1 * w2;
-            return (v3[0], v3[1], v3[2], w3): quat;
+            return (v3[0], v3[1], v3[2], w3) as quat;
         }
     }
 }
@@ -453,16 +453,25 @@ namespace Renderer
     }
     namespace Shaders
     {
-        extern("libjoyecs", "wojeapi_towoo_renderer_shaders_set_uniform")
+        /* extern("libjoyecs", "wojeapi_towoo_renderer_shaders_set_uniform_i") */
+        /* extern("libjoyecs", "wojeapi_towoo_renderer_shaders_set_uniform_r") */
+        /* extern("libjoyecs", "wojeapi_towoo_renderer_shaders_set_uniform_v") */
+        extern(
+            "libjoyecs",
+            val is int ? "wojeapi_towoo_renderer_shaders_set_uniform_i"
+                | val is real ? "wojeapi_towoo_renderer_shaders_set_uniform_r"
+                | "wojeapi_towoo_renderer_shaders_set_uniform_v")
             public func set_uniform<T>(self: Shaders, name: string, val: T)=> void
-                where val is int
+                where
+            val is int
             || val is real
             || val is vec2
             || val is vec3
             || val is vec4;
-            extern("libjoyecs", "wojeapi_towoo_renderer_shaders_set_shaders")
-                public func set_shaders(self: Shaders, shaders: array<je::graphic::shader>)=> void;
-                
+        ;
+        extern("libjoyecs", "wojeapi_towoo_renderer_shaders_set_shaders")
+            public func set_shaders(self: Shaders, shaders: array<je::graphic::shader>)=> void;
+            
         extern("libjoyecs", "wojeapi_towoo_renderer_shaders_get_shaders")
             public func get_shaders(self: Shaders)=> array<je::graphic::shader>;
     }
@@ -489,7 +498,7 @@ namespace Animation
             
         extern("libjoyecs", "wojeapi_towoo_animation_frameanimation_stop_animation")
             public func stop_action(self: FrameAnimation, animation_id: int)=> void;
-
+            
         extern("libjoyecs", "wojeapi_towoo_animation_frameanimation_is_playing")
             public func is_playing(self: FrameAnimation, animation_id: int)=> bool;
     }

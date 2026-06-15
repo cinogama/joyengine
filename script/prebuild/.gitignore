@@ -4,6 +4,7 @@
 /.vscode
 /build
 /woolang
+/target
 /debug*
 /release*
 /*.exe
@@ -16,3 +17,4 @@
 /*.dylib
 /*.lib
 /*.pdb
+# /baozi.lock.toml

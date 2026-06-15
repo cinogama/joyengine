@@ -118,23 +118,23 @@ namespace je
         UNKNOWN = 0,
         
         APOSTROPHE = 39,    // '\''
-        COMMA = ',': int,
-        MINUS = '-': int,
-        PERIOD = '.': int,
-        SLASH = '/': int,
+        COMMA = ',' as int,
+        MINUS = '-' as int,
+        PERIOD = '.' as int,
+        SLASH = '/' as int,
         
-        A = 'A': int, B, C, D, E, F, G, H, I, J, K, L,
+        A = 'A' as int, B, C, D, E, F, G, H, I, J, K, L,
         M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
-        _1 = '1': int, _2, _3, _4, _5, _6, _7, _8, _9,
+        _1 = '1' as int, _2, _3, _4, _5, _6, _7, _8, _9,
         _0,
-        _ = ' ': int,
+        _ = ' ' as int,
         
-        SEMICOLON = ';': int,
-        EQUAL = '=': int,
-        LEFT_BRACKET = '[': int,
-        BACKSLASH = '\\': int,
-        RIGHT_BRACKET = ']': int,
-        GRAVE_ACCENT = '`': int,
+        SEMICOLON = ';' as int,
+        EQUAL = '=' as int,
+        LEFT_BRACKET = '[' as int,
+        BACKSLASH = '\\' as int,
+        RIGHT_BRACKET = ']' as int,
+        GRAVE_ACCENT = '`' as int,
         
         L_SHIFT = 128,
         R_SHIFT,
@@ -280,10 +280,10 @@ namespace je
                 ->forall(\type: typeinfo = type->is_system(););
         }
         
-        extern("libjoyecs", "wojeapi_type_of", repeat)
+        extern("libjoyecs", "wojeapi_type_of_name")
             public func load(name: ::string)=> option<typeinfo>;
             
-        extern("libjoyecs", "wojeapi_type_of", repeat)
+        extern("libjoyecs", "wojeapi_type_of_id")
             public func loadid(id: ::int)=> option<typeinfo>;
             
         extern("libjoyecs", "wojeapi_type_id")
@@ -499,21 +499,21 @@ namespace je
             }
             
             private let kind<EffectT> =
-                std::type_traits::is_same:<EffectT, reverb> ? effect_kind::REVERB |
-                    std::type_traits::is_same:<EffectT, chorus> ? effect_kind::CHORUS |
-                        std::type_traits::is_same:<EffectT, distortion> ? effect_kind::DISTORTION |
-                            std::type_traits::is_same:<EffectT, echo> ? effect_kind::ECHO |
-                                std::type_traits::is_same:<EffectT, flanger> ? effect_kind::FLANGER |
-                                    std::type_traits::is_same:<EffectT, frequency_shifter> ? effect_kind::FREQUENCY_SHIFTER |
-                                        std::type_traits::is_same:<EffectT, vocal_morpher> ? effect_kind::VOCAL_MORPHER |
-                                            std::type_traits::is_same:<EffectT, pitch_shifter> ? effect_kind::PITCH_SHIFTER |
-                                                std::type_traits::is_same:<EffectT, ring_modulator> ? effect_kind::RING_MODULATOR |
-                                                    std::type_traits::is_same:<EffectT, autowah> ? effect_kind::AUTOWAH |
-                                                        std::type_traits::is_same:<EffectT, compressor> ? effect_kind::COMPRESSOR |
-                                                            std::type_traits::is_same:<EffectT, equalizer> ? effect_kind::EQUALIZER |
-                                                                std::type_traits::is_same:<EffectT, eaxreverb> ? effect_kind::EAXREVERB |
-                                                                    effect_kind::UNKOWN;
-                                                                    
+                std::type_traits::is_same:<EffectT, reverb> ? effect_kind::REVERB
+                    | std::type_traits::is_same:<EffectT, chorus> ? effect_kind::CHORUS
+                    | std::type_traits::is_same:<EffectT, distortion> ? effect_kind::DISTORTION
+                    | std::type_traits::is_same:<EffectT, echo> ? effect_kind::ECHO
+                    | std::type_traits::is_same:<EffectT, flanger> ? effect_kind::FLANGER
+                    | std::type_traits::is_same:<EffectT, frequency_shifter> ? effect_kind::FREQUENCY_SHIFTER
+                    | std::type_traits::is_same:<EffectT, vocal_morpher> ? effect_kind::VOCAL_MORPHER
+                    | std::type_traits::is_same:<EffectT, pitch_shifter> ? effect_kind::PITCH_SHIFTER
+                    | std::type_traits::is_same:<EffectT, ring_modulator> ? effect_kind::RING_MODULATOR
+                    | std::type_traits::is_same:<EffectT, autowah> ? effect_kind::AUTOWAH
+                    | std::type_traits::is_same:<EffectT, compressor> ? effect_kind::COMPRESSOR
+                    | std::type_traits::is_same:<EffectT, equalizer> ? effect_kind::EQUALIZER
+                    | std::type_traits::is_same:<EffectT, eaxreverb> ? effect_kind::EAXREVERB
+                    | effect_kind::UNKOWN;
+                    
             public func create<EffectT>()=> effect<EffectT>
                 where kind:<EffectT> != effect_kind::UNKOWN;
             {
@@ -555,7 +555,7 @@ namespace je
                 
             public func close(self: effect_slot)=> bool
             {
-                return self: gchandle->close();
+                return self as gchandle->close();
             }
             
             public func bind_effect<EffectT>(self: effect_slot, effect_instance: effect<EffectT>)=> void
@@ -602,7 +602,7 @@ namespace je
             
             public func close(self: buffer)=> bool
             {
-                return self: gchandle->close();
+                return self as gchandle->close();
             }
             
             extern("libjoyecs", "wojeapi_audio_buffer_load")
@@ -630,15 +630,15 @@ namespace je
             
             public func close(self: filter)=> bool
             {
-                return self: gchandle->close();
+                return self as gchandle->close();
             }
-
+            
             extern("libjoyecs", "wojeapi_audio_filter_create")
                 public func create()=> filter;
                 
             extern("libjoyecs", "wojeapi_audio_filter_info")
                 public func info(self: filter)=> filter_data_t;
-
+                
             public func update(self: filter, f: (filter_data_t)=> void)=> void
             {
                 extern("libjoyecs", "wojeapi_audio_filter_update")
@@ -671,7 +671,7 @@ namespace je
                 
             public func close(self: source)=> bool
             {
-                return self: gchandle->close();
+                return self as gchandle->close();
             }
             
             extern("libjoyecs", "wojeapi_audio_source_info")
@@ -698,7 +698,7 @@ namespace je
                 
             extern("libjoyecs", "wojeapi_audio_source_set_buffer")
                 public func set_buffer(self: source, buffer: buffer)=> void;
-
+                
             extern("libjoyecs", "wojeapi_audio_source_set_filter")
                 public func set_filter(self: source, filter: option<filter>)=> void;
                 
@@ -905,20 +905,18 @@ namespace je
         }
     }
     
-    public using universe = gchandle;
+    public using universe = handle;
     namespace universe
     {
         extern("libjoyecs", "wojeapi_create_universe")
             public func create()=> universe;
             
-        public func close(self: universe)
-        {
-            return self: gchandle->close();
-        }
-        
+        extern("libjoyecs", "wojeapi_close_universe")
+            public func close(self: universe)=> void;
+            
         extern("libjoyecs", "wojeapi_universe_extend_life")
             public func grow(self: universe)=> void;
-
+            
         extern("libjoyecs", "wojeapi_universe_reduce_life")
             public func trim(self: universe)=> void;
             

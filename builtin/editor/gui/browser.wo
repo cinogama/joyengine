@@ -1,5 +1,4 @@
 import woo::std;
-import woo::shell;
 
 import je;
 import je::gui;
@@ -11,11 +10,13 @@ import je::towoo::types;
 import pkg::image;
 import pkg::fsys;
 import pkg::worst;
+import pkg::toml;
 import pkg::thread;
 import pkg::buffer;
 import pkg::try;
 import pkg::iterator;
-import pkg::vm;
+import pkg::platform;
+import pkg::dumpling;
 
 import builtin::editor::project::main;
 import builtin::editor::cpp::main;
@@ -63,7 +64,7 @@ namespace editor::gui
             return;
         }
         
-        let create_context = (mut default_name, mut "Helloworld", mut option::none: option<int>, mut 16);
+                        let create_context = (mut default_name, mut "Helloworld", mut option::none as option<int>, mut 16);
         launch(func(){
                 let mut open = true;
                 je::gui::SetNextWindowSizeConstraints((350., 200.), (350., 200.));
@@ -377,8 +378,7 @@ namespace editor::gui
                     func (p: PathInfo, context: EditorContext)
                     {
                         match (file::readall(p.path)
-                            =>>\dat = dat as buffer: string->dict::deserialize
-                                ->>\dat = dat->>\k, v = (k as string, v);;;)
+                            =>>\dat = toml::parse(dat: buffer as string)->okay;)
                         {
                             value(tilemap_data)?
                             {
@@ -392,13 +392,13 @@ namespace editor::gui
                 [".wo"] =
                     func (p: PathInfo, context: EditorContext)
                     {
-                        do std::shell(F"code {_wrap_path(context->get_project->get_path->to_string())} {_wrap_path(p.path->to_string)}");
+                        do platform::shell(F"code {_wrap_path(context->get_project->get_path->to_string())} {_wrap_path(p.path->to_string)}");
                         return option::none;
                     },
                 [".shader"] =
                     func (p: PathInfo, context: EditorContext)
                     {
-                        do std::shell(F"code {_wrap_path(context->get_project->get_path->to_string())} {_wrap_path(p.path->to_string)}");
+                        do platform::shell(F"code {_wrap_path(context->get_project->get_path->to_string())} {_wrap_path(p.path->to_string)}");
                         return option::none;
                     },
             };
@@ -410,7 +410,7 @@ namespace editor::gui
                     {
                         do new! thread(func()
                             {
-                                let result = std::shell(p.path->to_string());
+                                let result = platform::shell(p.path->to_string());
                                 if (0 != result)
                                     jeapi::gui::form::errmsg("失败", F"无法打开'{p.path->to_string()}'({result})");
                                     
@@ -446,7 +446,7 @@ namespace editor::gui
     {
         if (fsys::exist(path))
             return false;
-        return file::writeall(path, content: buffer);
+                return file::writeall(path, content as buffer);
     }
     
     func context_menu(path: option<PathInfo>, context: EditorContext)
@@ -893,7 +893,7 @@ namespace workflow::nodes
                                     if (context->get_project()->serialize_world(w, true)
                                         ->> \wdat = write_file_if_not_exist(
                                                 fsys::normalize(F"{cur_creating_path}/{new_world_name}.je4world"),
-                                                wdat as jeapi::serialize::WorldData: string)
+                                                (wdat.m_data)->to_toml())
                                             ;
                                         ->  or(false)
                                         == false)
@@ -912,7 +912,7 @@ namespace workflow::nodes
                     jeapi::gui::form::input("新建瓦片地图", F"在{cur_creating_path}新建瓦片地图", "NewTileMap",
                         \filename: string = fsys::exist(file_path)
                             ? jeapi::gui::form::errmsg("新建瓦片地图失败", "同名文件已经存在")
-                            | write_file_if_not_exist(file_path, "{}")
+                            | write_file_if_not_exist(file_path, "")
                             ? func(){context->get_project->try_update_towoo(false);force_update();}()
                             | jeapi::gui::form::errmsg("新建瓦片地图失败失败", "无法创建文件，可能是文件名非法或磁盘已满")
                                 where file_path = fsys::normalize(cur_creating_path) / (filename + ".je4tilemap"););
@@ -978,7 +978,7 @@ namespace workflow::nodes
                                     file::readall(
                                         fsys::normalize(
                                             F"{std::host_path()}/builtin/shader/{shader_path_name}.shader"))
-                                        ->> \src = create_shader_at(shader_name, src as buffer: string);
+                                        ->> \src = create_shader_at(shader_name, src: buffer as string);
                                         ->  or_do(\ = je::logerr(F"打开内置着色器文件{shader_path_name}失败，请检查编辑器目录");)
                                     ;
                                 ); // end of inputbox
@@ -1040,7 +1040,7 @@ namespace workflow::nodes
                 ;
                 
             if (MenuItem("在资源管理器中显示"))
-                do std::shell(F"explorer \"{fsys::normalize(cur_creating_path)->to_string->replace("/", "\\")}\"");
+                do platform::shell(F"explorer \"{fsys::normalize(cur_creating_path)->to_string->replace("/", "\\")}\"");
                 
             if (MenuItem(F"刷新"))
             {
@@ -1071,7 +1071,7 @@ namespace workflow::nodes
             -> okay
             =>> \childs = childs
                 ->> \child = isfile(child)
-                    ? fsys::filename(fsys::normalize(pchild)) + crc64file(child->to_string)->unwrap: string
+                    ? fsys::filename(fsys::normalize(pchild)) + crc64file(child->to_string)->unwrap as string
                     | pchild
                         where pchild = pure_path(child->to_string);
                     ->  reduce(\l, r = l + r;)
@@ -1088,7 +1088,7 @@ namespace workflow::nodes
         
         if (engine_path_crc64 == specify_module_path_crc64)
         {
-            module->update_compile(std::platform::runtime_type::DEBUG);
+            module->update_compile(platform::BuildType::DEBUG);
         }
         else
         {
@@ -1105,7 +1105,7 @@ namespace workflow::nodes
                         }
                     }
                     else; // 点NO 啥也不干~
-                    module->update_compile(std::platform::runtime_type::DEBUG);
+                    module->update_compile(platform::BuildType::DEBUG);
                 });
         }
     }
@@ -1183,7 +1183,7 @@ namespace workflow::nodes
                         
                 if (!file::writeall(
                         path.path / "nodes.wo",
-                        all_imports: buffer))
+                        all_imports as buffer))
                 {
                     jeapi::gui::form::errmsg(
                         "更新 Workflow 节点清单失败",
@@ -1193,17 +1193,17 @@ namespace workflow::nodes
                 {
                     do try!
                     {
-                        try! vmm = vm::load((path.path / "editor.wo")->to_string, option::none);
-                        try! val = vmm->bootup(false)
-                            -> ok_or("运行 Workflow 编辑器脚本失败");
-                            
-                        if (!(val: bool))
-                            throw! "Workflow 打开失败";
-                            
-                        return_ok!;
+                        let r = dumpling::dispatch(
+                            func()
+                            {
+                                return dumpling::Program::load(path.path / "editor.wo")
+                                    -> or_map(\e = e->to_string;);
+                            });
+
+                        return r=>> \rr = rr;;
                         
                     } catch! e {
-                        jeapi::gui::form::errmsg("打开 Workflow 编辑器失败", F"无法运行 Workflow 编辑器脚本({e})");
+                        jeapi::gui::form::errmsg("打开 Workflow 编辑器失败", F"无法运行 Workflow 编辑器脚本({e: string})");
                     };
                 }
             }
@@ -1261,7 +1261,7 @@ namespace workflow::nodes
                         let file_path = path.path/"components"/F"{s}.hpp";
                         
                         if (MenuItem("在VSCode中打开"))
-                            do std::shell(F"code {_wrap_path(path.path->to_string())} {_wrap_path(file_path->to_string)}");
+                            do platform::shell(F"code {_wrap_path(path.path->to_string())} {_wrap_path(file_path->to_string)}");
                         if (MenuItem("移除此组件"))
                             jeapi::gui::form::ask("确认移除组件？", F"是否从模块{fsys::filename(path.path)}中移除组件{s}?",
                                 func(sure: bool){
@@ -1281,7 +1281,7 @@ namespace workflow::nodes
                         let file_path = path.path/"systems"/F"{s}.cpp";
                         
                         if (MenuItem("在VSCode中打开"))
-                            do std::shell(F"code {_wrap_path(path.path->to_string)} {_wrap_path(file_path->to_string)}");
+                            do platform::shell(F"code {_wrap_path(path.path->to_string)} {_wrap_path(file_path->to_string)}");
                         if (MenuItem("移除此系统"))
                             jeapi::gui::form::ask("确认移除系统？", F"是否从模块{fsys::filename(path.path)}中移除系统{s}?",
                                 func(sure: bool){
@@ -1379,14 +1379,14 @@ namespace $$MODULE_NAME$$
                                                         let system_name = name;
                                                         
                                                         if (!file::writeall(path.path/"systems"/F"{system_name}.hpp",
-                                                                system_header
-                                                                    ->replace("$$MODULE_NAME$$", module_name)
-                                                                    ->replace("$$SYSTEM_NAME$$", system_name): buffer)
+                                                                                                system_header
+                                                                                                    ->replace("$$MODULE_NAME$$", module_name)
+                                                                                                    ->replace("$$SYSTEM_NAME$$", system_name) as buffer)
                                                             ||
-                                                            !file::writeall(path.path/"systems"/F"{system_name}.cpp",
-                                                                system_src
-                                                                    ->replace("$$MODULE_NAME$$", module_name)
-                                                                    ->replace("$$SYSTEM_NAME$$", system_name): buffer)
+                                                                                            !file::writeall(path.path/"systems"/F"{system_name}.cpp",
+                                                                                                system_src
+                                                                                                    ->replace("$$MODULE_NAME$$", module_name)
+                                                                                                    ->replace("$$SYSTEM_NAME$$", system_name) as buffer)
                                                             )
                                                         {
                                                             do fsys::remove(path.path/"systems"/F"{system_name}.hpp")->unwrap;
@@ -1441,9 +1441,9 @@ namespace $$MODULE_NAME$$
                                                         let component_name = name;
                                                         
                                                         if (!file::writeall(path.path/"components"/F"{component_name}.hpp",
-                                                                component_header
-                                                                    ->replace("$$MODULE_NAME$$", module_name)
-                                                                    ->replace("$$COMPONENT_NAME$$", component_name): buffer)
+                                                                 component_header
+                                                                     ->replace("$$MODULE_NAME$$", module_name)
+                                                                     ->replace("$$COMPONENT_NAME$$", component_name) as buffer)
                                                             )
                                                         {
                                                             do fsys::remove(path.path/"components"/F"{component_name}.hpp")->unwrap;
@@ -1602,11 +1602,11 @@ namespace $$MODULE_NAME$$
         Text(path.name);
         EndGroup();
         
-        static let mut _last_click_time = std::time();
+        static let mut _last_click_time = std::clock();
         
         if(clicked)
         {
-            let _current_click_time = std::time();
+            let _current_click_time = std::clock();
             if (_current_click_time - _last_click_time < 0.2)
                 return Action::DoubleClick;
                 
@@ -1624,7 +1624,7 @@ namespace $$MODULE_NAME$$
     
     static let mut force_update_file_group_flag = false;
     static let mut force_update_dir_tree_flag = false;
-    static let cached_image_file_mip_map = {}mut: map<fsys::path_t, option<je::graphic::texture>>;
+    static let cached_image_file_mip_map = {}mut as map<fsys::path_t, option<je::graphic::texture>>;
     
     // 刷新显示的目录信息等...
     public func force_update()
@@ -1638,7 +1638,7 @@ namespace $$MODULE_NAME$$
     func files_group(context: EditorContext)
     {
         static let mut new_showing_path = "";
-        static let mut now_item_in_path = []: array<PathInfo>;
+        static let mut now_item_in_path = [] as array<PathInfo>;
         if (new_showing_path != current_work_path || force_update_file_group_flag)
         {
             new_showing_path = current_work_path;
@@ -1698,7 +1698,7 @@ namespace $$MODULE_NAME$$
                     {
                         let tex = get_file_icon_by_extern_name(item, context);
                         let (w, h) = tex->size;
-                        let whratio = w: real / h: real;
+                        let whratio = w as real / h as real;
                         
                         TextDisabled(F"{w}x{h}");
                         ImageSize(tex, 64. * whratio, 64.);
@@ -1714,9 +1714,9 @@ namespace $$MODULE_NAME$$
             {
                 value(drag_uid)?
                 {
-                    let eid = drag_uid as string: handle: jeapi::debug::Eeid;
+                    let eid = drag_uid: string as handle as jeapi::debug::Eeid;
                     eid->justdo(func(e){
-                            match (jeapi::serialize::entity::dump(e, false)->>\dat = dat: string;)
+                            match (jeapi::serialize::entity::dump(e, false)->>\dat = (dat.m_data)->to_toml();)
                             {
                                 value(entity_json)?
                                 {
@@ -1732,7 +1732,7 @@ namespace $$MODULE_NAME$$
                                                 func(overwrite){
                                                     if (overwrite)
                                                     {
-                                                        do file::writeall(filepath, entity_json: buffer);
+                                                        do file::writeall(filepath, entity_json as buffer);
                                                         eid->justdo(func(e)
                                                             {
                                                                 let prefab = e->towoo::add_component:<Editor::Prefab>->unwrap;
@@ -1756,7 +1756,7 @@ namespace $$MODULE_NAME$$
                                         }
                                         if (create)
                                         {
-                                            do file::writeall(filepath, entity_json: buffer);
+                                            do file::writeall(filepath, entity_json as buffer);
                                             let prefab = e->towoo::add_component:<Editor::Prefab>->unwrap;
                                             prefab.path->set(context->get_project->make_path_normalize(filepath));
                                             force_update();
@@ -1847,7 +1847,7 @@ namespace $$MODULE_NAME$$
             return LogHook{
                 m_logs = []mut,
                 m_display_setting = {
-                    [je::internal::loglevel::NORMAL] = ("普通", mut true, option::none: option<(int, int, int, int)>, mut 0),
+                    [je::internal::loglevel::NORMAL] = ("普通", mut true, option::none as option<(int, int, int, int)>, mut 0),
                     [je::internal::loglevel::INFO] = ("信息", mut true, option::value((0,255,127,255)), mut 0),
                     [je::internal::loglevel::WARNING] = ("警告", mut true, option::value((200,200,0,255)), mut 0),
                     [je::internal::loglevel::ERROR] = ("错误", mut true, option::value((200,0,0,200)), mut 0),

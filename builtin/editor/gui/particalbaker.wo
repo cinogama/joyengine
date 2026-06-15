@@ -4,19 +4,20 @@ import je;
 import je::gui;
 
 import pkg::fsys;
-import pkg::vm;
 import pkg::makenew;
 import pkg::image;
 import pkg::buffer;
 import pkg::math;
 import pkg::thread;
+import pkg::dumpling;
+import pkg::try;
+import pkg::toml;
 
 import builtin::editor::gui::main;
 import builtin::editor::gui::form::ask;
 import builtin::editor::gui::form::msg;
 import builtin::editor::gui::scripteditor;
 import builtin::editor::gui::animation2d;
-import builtin::editor::tools::file;
 
 using je::gui;
 
@@ -61,36 +62,32 @@ namespace editor::gui::particalbaker
         }
         public func save(self: ParticalContext)
         {
-            return file::writeall(
-                self.m_path,
-                {
-                    ["framecount"] = self.m_frame_count: dynamic,
-                    ["framesize"] = [self.m_frame_size[0], self.m_frame_size[1]]: dynamic,
-                    ["framerate"] = self.m_frame_rate: dynamic,
-                    ["repeatround"] = self.m_repeat_round: dynamic,
-                    // 因为 GetText 貌似会自己带上多余的换行符，此处去掉
-                    ["script"] = self.m_script->GetText->trim: dynamic,
-                }: string: buffer,
-            );
+            let dat = toml::new_table();
+            dat->set("framecount", self.m_frame_count);
+            dat->set("framesize", toml::from <| [self.m_frame_size[0], self.m_frame_size[1]]);
+            dat->set("framerate", self.m_frame_rate);
+            dat->set("repeatround", self.m_repeat_round);
+            // 因为 GetText 貌似会自己带上多余的换行符，此处去掉
+            dat->set("script", self.m_script->GetText->trim);
+            return toml::save(dat, self.m_path)->is_ok;
         }
         public func load(path: fsys::path_t)
         {
-            return file::readall(path)
-                =>> \dat = dict::deserialize(dat as buffer: string);
+            return toml::load(path)->okay
                 ->> func(dat)
                 {
-                    let fdata = dat->> \k, v = (k as string, v); as dict<string, dynamic>;
+                    let fsize = dat["framesize"]->as_array()->unwrap;
                     let self = ParticalContext{
-                        m_frame_count = mut fdata["framecount"] as int,
-                        m_frame_size = mut (fdata["framesize"] as array<dynamic>[0] as int, fdata["framesize"] as array<dynamic>[1] as int),
-                        m_frame_rate = mut fdata["framerate"] as real,
-                        m_repeat_round = mut fdata["repeatround"] as int,
+                        m_frame_count = mut dat["framecount"]->as_int()->unwrap,
+                        m_frame_size = mut (fsize[0]->as_int()->unwrap, fsize[1]->as_int()->unwrap),
+                        m_frame_rate = mut dat["framerate"]->as_float()->unwrap,
+                        m_repeat_round = mut dat["repeatround"]->as_int()->unwrap,
                         m_frames_caches = mut [],
                         m_script = CodeEditorContext::create(),
                         m_path = path,
                     };
                     
-                    self.m_script->SetText <| fdata["script"] as string;
+                    self.m_script->SetText <| dat["script"]->as_string()->unwrap;
                     self.m_script->SetLanguageDefinition(WOOLANG_LANGUAGE_DEFINITION);
                     
                     return self;
@@ -168,7 +165,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
         
         let attrib = econtext.m_first_show
             ? WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
-            | 0: WindowsAttribute
+            | 0 as WindowsAttribute
             ;
             
         econtext.m_first_show = false;
@@ -202,7 +199,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                                         if (ok)
                                         {
                                             let framecount = partical_context.m_frames_caches->len;
-                                            let width = math::round(math::sqrt(framecount: real));
+                                            let width = math::round(math::sqrt(framecount as real));
                                             let height = width * width >= framecount ? width | width + 1;
                                             let (w, h) = partical_context.m_frame_size;
                                             
@@ -240,27 +237,40 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                         {
                             if (MenuItem("烘焙"))
                             {
-                                match (vm::load(partical_context.m_path->to_string + " : script.wo",
-                                        option::value <| partical_context.m_script->GetText: buffer))
+                                do try!
                                 {
-                                    ok(vmm)?
-                                    {
-                                        if (!vmm->bootup(true)->is_value)
-                                            jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本运行终止，可能存在错误，请检查日志");
-                                            
-                                        econtext.m_frame_index = 1;
-                                        econtext.m_solved_launch_count = 0;
-                                        
-                                        do new! thread(func(){
-                                                econtext.m_enable_bake = false;
-                                                if (!vmm->invoke("_start_baking", [partical_context: dynamic, econtext: dynamic])->is_value)
-                                                    jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本运行终止，可能存在错误，请检查日志");
-                                                econtext.m_enable_bake = true;
-                                            });
-                                    }
-                                    err(msg)?
-                                        jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本存在错误\n{msg}");
-                                }
+                                    return bind(\r = r;) <|
+                                        dumpling::dispatch(
+                                            func()
+                                            {
+                                                try! program =
+                                                    or_map(\e = e-> to_string;) <| dumpling::Program::create(
+                                                        partical_context.m_path->to_string + " : script.wo",
+                                                        partical_context.m_script->GetText as buffer);
+                                                        
+                                                try! f = ok_or("未找到脚本的入口函数 `_start_baking`") <|
+                                                    program->unsafe::load_extern:<(ParticalContext, _EditorContext)=> void>(
+                                                        "_start_baking");
+                                                        
+                                                do new! thread(
+                                                    func()
+                                                    {
+                                                        econtext.m_enable_bake = false;
+                                                        defer econtext.m_enable_bake = true;
+                                                        
+                                                        do dumpling::dispatch(
+                                                            func(){
+                                                                f(partical_context, econtext);
+                                                            }
+                                                        );
+                                                    });
+                                                    
+                                                return_ok!;
+                                            }
+                                        );
+                                } catch! e {
+                                    jeapi::gui::form::errmsg("烘焙失败", e);
+                                };
                             }
                         }
                         else
@@ -282,36 +292,36 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                     Text("帧数");
                     SameLine();
                     do InputInt("##framecount", partical_context.m_frame_count)
-                        ->> \c = c > 0 ? (partical_context.m_frame_count = c) | (nil: void);;
+                        ->> \c = c > 0 ? (partical_context.m_frame_count = c) | (nil as void);;
                         
                     Text("尺寸");
                     SameLine();
                     do InputInt2("##framesize", partical_context.m_frame_size...)
-                        ->> \s = (x > 0 && y > 0) ? (partical_context.m_frame_size = s) | (nil: void)
+                        ->> \s = (x > 0 && y > 0) ? (partical_context.m_frame_size = s) | (nil as void)
                             where (x, y) = s
                             ;;
                             
                     Text("帧速率(秒/帧)");
                     SameLine();
                     do InputFloatFormat("##framerate", partical_context.m_frame_rate, "%.6f")
-                        ->> \r = r > 0. ? (partical_context.m_frame_rate = r) | (nil: void);;
+                        ->> \r = r > 0. ? (partical_context.m_frame_rate = r) | (nil as void);;
                         
                     Text("粒子渲染趟数");
                     SameLine();
                     do InputInt("##repeatcount", partical_context.m_repeat_round)
-                        ->> \r = r > 0 ? (partical_context.m_repeat_round = r) | (nil: void);;
+                        ->> \r = r > 0 ? (partical_context.m_repeat_round = r) | (nil as void);;
                         
                     let (w, h) = partical_context.m_frame_size;
                     
                     let frames = partical_context.m_frames_caches;
-                    ProgressBar(frames->empty ? 0. | econtext.m_frame_index: real / frames->len: real);
+                    ProgressBar(frames->empty ? 0. | econtext.m_frame_index as real / frames->len as real);
                     
-                    do BeginChildSize("##review", 395., h: real * 395. / w: real);
+                    do BeginChildSize("##review", 395., h as real * 395. / w as real);
                     
-                    if (std::time() - econtext.m_last_update_time >= partical_context.m_frame_rate)
+                    if (std::clock() - econtext.m_last_update_time >= partical_context.m_frame_rate)
                     {
                         econtext.m_frame_index += 1;
-                        econtext.m_last_update_time = std::time();
+                        econtext.m_last_update_time = std::clock();
                     }
                     
                     econtext.m_frame_index = frames->empty
@@ -385,7 +395,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
         partical_context: ParticalContext)
     {
         let editor_context = _EditorContext{
-            m_last_update_time = mut std::time(),
+            m_last_update_time = mut std::clock(),
             m_frame_index = mut 0,
             m_enable_bake = mut true,
             

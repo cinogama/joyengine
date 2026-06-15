@@ -1,6 +1,5 @@
 import woo::std;
 import woo::debug;
-import woo::shell;
 
 import pkg::crashhandler;
 import pkg::fsys;
@@ -11,6 +10,8 @@ import pkg::try;
 import pkg::worst;
 import pkg::singleton;
 import pkg::buffer;
+import pkg::platform;
+import pkg::toml;
 
 import je;
 import je::gui;
@@ -27,6 +28,7 @@ import builtin::editor::environment::main;
 import builtin::editor::project::main;
 import builtin::editor::gui::main;
 import builtin::editor::project::towoomgr;
+import builtin::editor::project::upgrader;
 import builtin::editor::gui::inputmgr;
 import builtin::editor::cpp::main;
 import builtin::editor::tools::file;
@@ -39,7 +41,7 @@ je::internal::register_panic_hook(jeapi::gui::form::panic);
 
 using je::gui;
 
-let mut action_after_guide_form_closed = \ = result::ok(\=do nil;); as ()=>result<()=>void, string>;
+let mut action_after_guide_form_closed = \ = result::ok(\=do nil;);: ()=>result<()=>void, string>;
 
 using Path = struct {
     name: string,       // 仅用于显示
@@ -52,9 +54,9 @@ using Path = struct {
         // NOTE: 这里只考虑Windows的A-Z盘符，什么AA AB AC，就算windows未来支持也给爷滚
         let arr = ["/"]mut;
         
-        if (std::platform::os == std::platform::os_type::WIN32)
+        if (platform::os == platform::Os::WINDOWS)
         {
-            for (let mut ch = 'A'; ch <= 'Z'; ch += 1: char)
+            for (let mut ch = 'A'; ch <= 'Z'; ch += 1 as char)
                 arr->add([ch]->str + ":/");
         }
         
@@ -94,7 +96,7 @@ using Path = struct {
     }
     func show(path: Path)=> option<fsys::path_t>
     {
-        static let mut selected_path = option::none: option<fsys::path_t>;
+        static let mut selected_path = option::none as option<fsys::path_t>;
         
         let show_child = TreeNodeEx(path.name,
             TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow
@@ -173,7 +175,7 @@ func read_editor_data()
 {
     return editor::file::readall(
         fsys::normalize(std::host_path()) / "builtin" / "editor.dat.je4cache")
-        =>> \dat = dict::deserialize(dat as buffer: string);
+        =>> \dat = dict::deserialize(dat: buffer as string);
         ->  or({})
         ;
 }
@@ -181,26 +183,26 @@ func read_editor_data()
 func apply_editor_data_when_start_up_project(dat: dict<dynamic, dynamic>)
 {
     let form_size = dat
-        ->  get_or("form_size": dynamic, [1344, 768]: dynamic) as array<dynamic>
-        ->> \d = d as int;
+        ->  get_or("form_size" as dynamic, [1344, 768] as dynamic): array<dynamic>
+        ->> \d = d: int;
         ;
     je::internal::set_window_size(form_size[0], form_size[1]);
 }
 func save_editor_data_after_exit(dat: dict<dynamic, dynamic>, proj_name: string, proj_path: fsys::path_t)
 {
     let (win_w, win_h) = je::input::windowsize();
-    let project_histories = dat->get_or("history": dynamic, []: dynamic) as array<dynamic>->unsafe::cast:< array<array<string>> >;
+    let project_histories = dat->get_or("history" as dynamic, [] as dynamic): array<dynamic>->unsafe::cast:< array<array<string>> >;
     
     let newdat = dat->to_map();
-    newdat->set("form_size": dynamic, [win_w, win_h]: dynamic);
-    newdat->set("history": dynamic, project_histories
+    newdat->set("form_size" as dynamic, [win_w, win_h] as dynamic);
+    newdat->set("history" as dynamic, project_histories
         ->forall(\record = record[1] != proj_path->to_string;)
-        ->inlay(0, [proj_name, proj_path->to_string]): dynamic);
+        ->inlay(0, [proj_name, proj_path->to_string]) as dynamic);
         
     assert(
         editor::file::writeall(
             fsys::normalize(std::host_path()) / "builtin" / "editor.dat.je4cache",
-            newdat->serialize->unwrap: buffer));
+            newdat->serialize->unwrap as buffer));
             
     assert(fsys::setworkpath(fsys::normalize(std::host_path())));
 }
@@ -365,7 +367,7 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
 ---
 此目录用于保存引擎自动生成的图像资源
 "@
-                                : buffer);
+                                as buffer);
                             do fsys::copy(
                                 fsys::normalize(F"{std::host_path()}/builtin/shader"),
                                 fsys::normalize(F"{p->get_path}/resource/shader"));
@@ -394,8 +396,11 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
 
 # Ignore cache files.
 *.je4cache
+
+# Ignore style file.
+/editor.je4style
 "@
-                                : buffer);
+                                as buffer);
                             do editor::file::writeall(p->get_path / ".gitattributes", 
 @"# JoyEngine ECS
 
@@ -410,7 +415,7 @@ project.je4project text eol=lf
 *.je4chunklist text eol=lf
 CMakeLists.txt text eol=lf
 "@
-                                : buffer);
+                                as buffer);
                             match (je::towoo::unsafe::dynamic_parser::update_all("@/editor.wo"))
                             {
                                 ok(_)?;
@@ -441,36 +446,52 @@ func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict
     // 确保目录存在
     if (! fsys::exist(proj_path))
         return jeapi::gui::form::errmsg("失败", F"加载项目失败，找不到项目文件{proj_path}");
-        
-    match (editor::file::readall(proj_path)
-        =>> \d = dict::deserialize(d as buffer: string);
-        =>> \d = d: dynamic->trycast:<dict<string, dynamic>>;)
+            
+    let on_loaded = func(dat)
     {
-        value(dat)?
-        {
-            // OK, 关闭当前universe，关闭编辑器导航窗口，打开项目
-            u->close();
-            f->set(false);
-            
-            je::internal::set_runtime_path(path->to_string());
-            
-            action_after_guide_form_closed =
-                func()
+        // OK, 关闭当前universe，关闭编辑器导航窗口，打开项目
+        u->close();
+        f->set(false);
+        
+        je::internal::set_runtime_path(path->to_string());
+        
+        action_after_guide_form_closed =
+            func()
+            {
+                try! p = editor::Project::load(path, dat);
+                
+                apply_editor_data_when_start_up_project(editordat);
+                
+                je::gui::register_exit_callback(\=ask_for_saving_proj_when_exit(p););
+                editor::gui::edit_project(p);
+                save_editor_data_after_exit(editordat, p->get_name, p->get_path);
+                je::gui::unregister_exit_callback();
+                
+                return result::ok(\=p->get_towoo_context_for_exit->close;);
+            };
+    };
+    
+    match (toml::load(proj_path))
+    {
+        ok(dat)? on_loaded(dat);
+        err(msg)?
+            return do jeapi::gui::form::ask(
+                "打开项目失败",
+                F"打开项目失败: {msg}\n这可能是由于项目版本过旧导致的，是否尝试升级项目？\n（警告：该操作不可逆，将修改项目内的文件）",
+                func(opt)
                 {
-                    try! p = editor::Project::load(path, dat);
-                    
-                    apply_editor_data_when_start_up_project(editordat);
-                    
-                    je::gui::register_exit_callback(\=ask_for_saving_proj_when_exit(p););
-                    editor::gui::edit_project(p);
-                    save_editor_data_after_exit(editordat, p->get_name, p->get_path);
-                    je::gui::unregister_exit_callback();
-                    
-                    return result::ok(\=p->get_towoo_context_for_exit->close;);
-                };
-        }
-        none?
-            return do jeapi::gui::form::errmsg("失败", F"打开项目失败，找不到或无效的项目文件");
+                    if (opt)
+                    {
+                        editor::Project::uprade_project(path);
+                        
+                        match (toml::load(proj_path))
+                        {
+                            ok(dat)? on_loaded(dat);
+                            err(_)? do jeapi::gui::form::errmsg("失败", "升级后仍无法打开项目");
+                        }
+                    }
+                }
+            );
     }
     
 }
@@ -491,11 +512,11 @@ func editor_main_entry()
         let u = new! editor::Environment();
         {
             let editor_configs = read_editor_data();
-            let historys = editor_configs->get_or("history": dynamic, []: dynamic) as array<dynamic>->unsafe::cast:< vec<array<string>> >;
+            let historys = editor_configs->get_or("history" as dynamic, [] as dynamic): array<dynamic>->unsafe::cast:< vec<array<string>> >;
             
             je::internal::init_graphic_pipeline_for_editor(u->get_universe());
             
-            if (std::platform::os != std::platform::os_type::WIN32 ||
+            if (platform::os != platform::Os::WINDOWS ||
                 editor::CxxProject::is_builder_ready())
             {
                 launch(
@@ -550,7 +571,7 @@ func editor_main_entry()
                                     if (MenuItem("加载此项目"))
                                         open_project_at(fsys::normalize(dat[1]), u, editor_configs, open);
                                     if (MenuItem("打开项目所在路径"))
-                                        do std::shell(F"explorer \"{fsys::normalize(dat[1])->to_string->replace("/", "\\")}\"");
+                                        do platform::shell(F"explorer \"{fsys::normalize(dat[1])->to_string->replace("/", "\\")}\"");
                                     Separator();
                                     if (MenuItem("从历史记录中移除"))
                                     {
@@ -569,7 +590,7 @@ func editor_main_entry()
                                                                     editor::file::writeall(
                                                                         fsys::normalize(
                                                                             std::host_path())/ "builtin" / "editor.dat.je4cache",
-                                                                        editor_configs->serialize->unwrap: buffer));
+                                                                        editor_configs->serialize->unwrap as buffer));
                                                             }
                                                         none?;
                                                     }
@@ -624,7 +645,7 @@ func editor_main_entry()
                             
                             let shine_text = func(text: string)
                             {
-                                if ((std::time() * 2.): int % 2 == 0)
+                                if ((std::clock() * 2.) as int % 2 == 0)
                                     Text(text);
                                 else
                                     TextDisabled(text);

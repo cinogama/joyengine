@@ -10,35 +10,32 @@
 #include "jeecs_core_audio_system.hpp"
 #include "jeecs_core_input_system.hpp"
 
-WO_API wo_api wojeapi_deltatime(wo_vm vm, wo_value args)
+WOORT_API woort_api wojeapi_deltatime(void)
 {
     if (jeecs::script::current_script_game_system_instance == nullptr)
-        return wo_ret_panic(vm, "Cannot get deltatime from the outside of script game system.");
+        return woort_ret_panic("Cannot get deltatime from the outside of script game system.");
 
-    return wo_ret_real(vm, jeecs::script::current_script_game_system_instance->deltatime());
+    return woort_ret_real(jeecs::script::current_script_game_system_instance->deltatime());
 }
 
-WO_API wo_api wojeapi_smooth_deltatime(wo_vm vm, wo_value args)
+WOORT_API woort_api wojeapi_smooth_deltatime(void)
 {
     if (jeecs::script::current_script_game_system_instance == nullptr)
-    {
-        return wo_ret_panic(vm, "Cannot get smooth_deltatime from the outside of script game system.");
-        return wo_ret_real(vm, 0.);
-    }
+        return woort_ret_panic("Cannot get smooth_deltatime from the outside of script game system.");
 
-    return wo_ret_real(vm, jeecs::script::current_script_game_system_instance->deltatimed());
+    return woort_ret_real(jeecs::script::current_script_game_system_instance->deltatimed());
 }
 
-const char *je_ecs_get_name_of_entity(const jeecs::game_entity *entity)
+const char* je_ecs_get_name_of_entity(const jeecs::game_entity* entity)
 {
-    jeecs::Editor::Name *c_name = entity->get_component<jeecs::Editor::Name>();
+    jeecs::Editor::Name* c_name = entity->get_component<jeecs::Editor::Name>();
     if (c_name)
         return c_name->name.c_str();
     return "";
 }
-const char *je_ecs_set_name_of_entity(const jeecs::game_entity *entity, const char *name)
+const char* je_ecs_set_name_of_entity(const jeecs::game_entity* entity, const char* name)
 {
-    jeecs::Editor::Name *c_name = entity->get_component<jeecs::Editor::Name>();
+    jeecs::Editor::Name* c_name = entity->get_component<jeecs::Editor::Name>();
     if (!c_name)
         c_name = entity->add_component<jeecs::Editor::Name>();
 
@@ -47,25 +44,25 @@ const char *je_ecs_set_name_of_entity(const jeecs::game_entity *entity, const ch
     return "";
 }
 
-WO_API wo_api wojeapi_entity_get_prefab_path(wo_vm vm, wo_value args)
+WOORT_API woort_api wojeapi_entity_get_prefab_path(void)
 {
-    jeecs::game_entity *entity = (jeecs::game_entity *)wo_pointer(args + 0);
-    if (auto *prefab = entity->get_component<jeecs::Editor::Prefab>())
-        return wo_ret_option_string(vm, prefab->path.c_str());
-    return wo_ret_option_none(vm);
+    jeecs::game_entity* const entity = static_cast<jeecs::game_entity*>(woort_gcpointer(0));
+    if (auto* prefab = entity->get_component<jeecs::Editor::Prefab>())
+        return woort_ret_option_string(prefab->path.c_str());
+    return woort_ret_option_none();
 }
 
-WO_API wo_api wojeapi_entity_set_prefab_path(wo_vm vm, wo_value args)
+WOORT_API woort_api wojeapi_entity_set_prefab_path(void)
 {
-    jeecs::game_entity *entity = (jeecs::game_entity *)wo_pointer(args + 0);
-    if (auto *prefab = entity->get_component<jeecs::Editor::Prefab>())
+    jeecs::game_entity* const entity = static_cast<jeecs::game_entity*>(woort_gcpointer(0));
+    if (auto* prefab = entity->get_component<jeecs::Editor::Prefab>())
     {
-        prefab->path = wo_string(args + 1);
+        prefab->path = woort_string(1);
     }
-    return wo_ret_void(vm);
+    return woort_ret_void();
 }
 
-void _jeecs_entry_register_core_systems(jeecs::typing::type_unregister_guard *guard)
+void _jeecs_entry_register_core_systems(jeecs::typing::type_unregister_guard* guard)
 {
     jeecs::typing::type_info::register_type<jeecs::script::woovalue>(guard, nullptr);
 

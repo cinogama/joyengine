@@ -97,7 +97,7 @@ namespace je::shader
     }
     
     using ShaderConfig = struct{
-        shared: mut bool,
+        shared    : mut bool,
         ztest     : mut ZConfig,
         zwrite    : mut GConfig,
         blend_equation: mut BlendEquation,
@@ -155,7 +155,7 @@ namespace je::shader
     }
     {
         using woshader;
-        
+
         public func create()=> HLSLForGlslang
             where require!(HLSLForGlslang: IShaderGenerator);
         {
@@ -241,7 +241,7 @@ namespace je::shader
                     hlsl_type_name = field.struct_type->unwrap.name;
                     
                 c->append_line(F"    {hlsl_type_name} {field_name}{
-                    field.array_elem_count->>\v = "[" + v: string + "]";->or("")};");
+                    field.array_elem_count->>\v = "[" + v as string + "]";->or("")};");
             }
             c->append_line("};");
         }
@@ -325,7 +325,7 @@ namespace je::shader
                     hlsl_type_name = field.struct_type->unwrap.name;
                     
                 c->append_line(F"    {hlsl_type_name} {field.name}{
-                    field.array_elem_count->>\v = "[" + v: string + "]";->or("")};");
+                    field.array_elem_count->>\v = "[" + v as string + "]";->or("")};");
             }
             c->append_line("};");
             self.uniform_blocks->add((uniform_block_name, uniform_block.binding));
@@ -351,7 +351,7 @@ namespace je::shader
             do ftype;
             
             if (v is float::base)
-                return ShaderGeneratorContext::EvalResult::Direct(v as real: string);
+                return ShaderGeneratorContext::EvalResult::Direct(v: real as string);
             else if (v is float2::base)
             {
                 let (xv, yv) = v as (real, real);
@@ -391,7 +391,7 @@ namespace je::shader
                         + F"{v[3][0]}, {v[3][1]}, {v[3][2]}, {v[3][3]})");
             }
             else if (v is integer::base)
-                return ShaderGeneratorContext::EvalResult::Direct((v as int): string);
+                return ShaderGeneratorContext::EvalResult::Direct((v: int) as string);
             else if (v is integer2::base)
             {
                 let (xv, yv) = v as (int, int);
@@ -927,9 +927,9 @@ namespace je::shader
                 fragment.generated_codes->len);
                 
             self.generated_vertex_src = option::value(
-                vertex_src->readbuffer(vertex_src->len): string);
+                vertex_src->readbuffer(vertex_src->len): buffer as string);
             self.generated_fragment_src = option::value(
-                fragment_src->readbuffer(fragment_src->len): string);
+                fragment_src->readbuffer(fragment_src->len): buffer as string);
         }
     }
     

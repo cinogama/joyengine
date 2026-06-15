@@ -16,6 +16,8 @@ import pkg::process;
 import pkg::iterator;
 import pkg::singleton;
 import pkg::buffer;
+import pkg::makenew;
+import pkg::toml;
 
 import config;
 
@@ -115,10 +117,10 @@ namespace editor
         public func create_dump(self: Project, dumpped: array<(jeapi::serialize::WorldData, fsys::path_t)>)
         {
             do fsys::mkdir(self.m_path / ".temporary" / "jeeditor");
-            if (! dumpped->>\kv = [kv[0]: dynamic, kv[1]->to_string: dynamic];->serialize
+            if (! dumpped->>\kv = [(kv[0].m_data)->to_toml() as dynamic, kv[1]->to_string as dynamic];->serialize
                 ->> \dat = file::writeall(
                         self.m_path / ".temporary" / "jeeditor" / "debugcontext.dump",
-                        dat: buffer);
+                        dat as buffer);
                     ->  or(false))
             {
                 jeapi::gui::form::errmsg("警告", "调试上下文创建失败，这可能导致崩溃无法恢复上次调试状态");
@@ -129,7 +131,7 @@ namespace editor
         {
             match (file::readall(
                     self.m_path / ".temporary" / "jeeditor" / "debugcontext.dump")
-                    =>> \dat = dat as buffer: string->array::deserialize;)
+                    =>> \dat = dat: buffer as string->array::deserialize;)
             {
                 value(dat)?
                     jeapi::gui::form::ask("是否恢复", "检查到上次引擎在调试过程中意外退出，是否恢复之前的编辑器状态？",
@@ -142,11 +144,12 @@ namespace editor
                                     dat->>
                                         \wdat =
                                             (
-                                                wdat_pair[0]->trycast:<jeapi::serialize::WorldData::WorldDataRawType>->unwrap
-                                                    : jeapi::serialize::WorldData,
-                                                fsys::normalize(wdat_pair[1]: string)
+                                                jeapi::serialize::WorldData {
+                                                    m_data = toml::parse(wdat_pair[0] as string)->okay->unwrap
+                                                    },
+                                                fsys::normalize(wdat_pair[1] as string)
                                                 )
-                                                where wdat_pair = wdat as array<dynamic>
+                                                where wdat_pair = wdat: array<dynamic>
                                             ;
                                         );
                             }
@@ -210,13 +213,25 @@ namespace editor
             // OK 接下来在当前世界上创建游戏世界，至于在哪个世界渲染……emm
             for (let (wdat, _) : context.m_dumped_editing_worlds)
             {
-                let wdat_map = wdat: jeapi::serialize::WorldData::WorldDataRawType->to_map();
-                let syss = wdat_map->get_or("runtime_systems", []: dynamic) as array<dynamic>->connect(
-                    wdat_map->get_or("systems", []: dynamic) as array<dynamic>
-                    );
-                wdat_map->set("systems", syss: dynamic);
+                let wdat_clone = wdat.m_data->clone;
+                let combined_systems = toml::new_array();
+                match (wdat_clone->get("runtime_systems"))
+                {
+                    value(rs)?
+                        for (let s : rs->as_array()->or([]))
+                            combined_systems->push(s);
+                    none?;
+                }
+                match (wdat_clone->get("systems"))
+                {
+                    value(ss)?
+                        for (let s : ss->as_array()->or([]))
+                            combined_systems->push(s);
+                    none?;
+                }
+                wdat_clone->set("systems", combined_systems);
                 set_able(true) <| jeapi::serialize::world::instantiate(
-                    self->get_env->get_universe, wdat_map->unsafe::cast:< typeof(wdat)>, true);
+                    self->get_env->get_universe, jeapi::serialize::WorldData { m_data = wdat_clone }, true);
             }
             self.m_debug_context = option::value(context);
             
@@ -234,19 +249,21 @@ namespace editor
         public func dump_all_world(self: Project)
         {
             let dump_dats = self.m_worlds->to_array
-                =>> \pw = dat->is_value
-                    ? [(dat
-                            ->unwrap: jeapi::serialize::WorldData::WorldDataRawType
-                            -> apply(
-                                "is_editing",
-                                self->get_editing_world
-                                    ->> \ew = ew == pw.m_world_instance;
-                                    ->  or(false) as bool: dynamic): jeapi::serialize::WorldData,
-                            pw.m_world_path)]
-                        | []
-                        where dat = self->serialize_world(pw.m_world_instance, true)
-                    ;
-                ;
+                =>> func(pw)
+                {
+                    match (self->serialize_world(pw.m_world_instance, true))
+                    {
+                        value(dat)?
+                        {
+                            let wdat = dat.m_data;
+                            wdat->set("is_editing",
+                                self->get_editing_world->>\ew = ew == pw.m_world_instance;->or(false));
+                            return [(jeapi::serialize::WorldData { m_data = wdat }, pw.m_world_path)];
+                        }
+                        none?
+                            return [];
+                    }
+                };
                 
             if (dump_dats->len != self.m_worlds->len)
                 return result::err("有世界序列化失败");
@@ -343,9 +360,9 @@ namespace editor
                             return result->>\_=do nil;;
                         },
                         \_,_ = true;,
-                        \_ = je::internal::get_sleep_suppression(): string;,
+                        \_ = je::internal::get_sleep_suppression() as string;,
                         func (str){
-                            je::internal::set_sleep_suppression(str: real);
+                            je::internal::set_sleep_suppression(str as real);
                             return option::value(do nil);
                         },
                         \_ = F"je::internal::set_sleep_suppression({supp});"
@@ -374,7 +391,7 @@ namespace editor
                             return option::none;
                         },
                         func(_,n){je::gui::set_font(option::value(n[0]), option::value(n[1]), n[2]); return true;},
-                        \v = [v[0]: dynamic, v[1]: dynamic, v[2]: dynamic]->serialize->unwrap;,
+                        \v = [v[0] as dynamic, v[1] as dynamic, v[2] as dynamic]->serialize->unwrap;,
                         func (str){
                             let v = array::deserialize(str)->unwrap;
                             if (v->len == 3)
@@ -390,15 +407,15 @@ namespace editor
                         {
                             Text("最大差分时间");
                             let result = InputFloatFormat("##最大差分时间", env->get_universe->get_max_deltatime(), "%.6f");
-                            do result->>\val= val > 0. ? env->get_universe->set_max_deltatime(val) | nil: void;;
+                            do result->>\val= val > 0. ? env->get_universe->set_max_deltatime(val) | nil as void;;
                             TextDisabled("DeltaTime相关函数将不会返回大于此值的差分时间");
                             TextDisabled("* 保证大于 0.0");
                             return result->>\_=do nil;;
                         },
                         \_,_ = true;,
-                        \_ = env->get_universe->get_max_deltatime(): string;,
+                        \_ = env->get_universe->get_max_deltatime() as string;,
                         func (str){
-                            env->get_universe->set_max_deltatime(str: real);
+                            env->get_universe->set_max_deltatime(str as real);
                             return option::value(do nil);
                         },
                         \_ = F"RUNTIME_UNIVERSE->set_max_deltatime({supp});"
@@ -423,17 +440,17 @@ namespace editor
                                 let vsc_config_path = self.m_path / ".vscode" / "settings.json";
                                 
                                 let dat = editor::file::readall(vsc_config_path)
-                                    =>>\dat = dat as buffer: string->map::deserialize;->or({}mut);
+                                    =>>\dat = dat: buffer as string->map::deserialize;->or({}mut);
                                     
-                                dat->set("wooly.enable": dynamic, true: dynamic);
-                                dat->set("wooly.scanroots": dynamic, [
+                                dat->set("wooly.enable" as dynamic, true as dynamic);
+                                dat->set("wooly.scanroots" as dynamic, [
                                         fsys::normalize(std::host_path())->to_string,
                                         self.m_path->to_string,
                                         self->get_vfile_export_path->to_string,
-                                    ]: dynamic);
-                                dat->set("wooly.usingWoolangVersion": dynamic, je::woolang::get_woolang_commit_sha(): dynamic);
-                                    
-                                if (!file::writeall(vsc_config_path, dat->serialize->unwrap: buffer))
+                                    ] as dynamic);
+                                dat->set("wooly.usingWoolangVersion" as dynamic, je::woolang::get_woolang_commit_sha() as dynamic);
+                                
+                                if (!file::writeall(vsc_config_path, dat->serialize->unwrap as buffer))
                                 {
                                     jeapi::gui::form::errmsg("错误", "无法写入VSCode配置文件");
                                     return false;
@@ -441,8 +458,8 @@ namespace editor
                             }
                             return true;
                         },
-                        \config = config: string;,
-                        \config = option::value(config: bool);,
+                        \config = config as string;,
+                        \config = option::value(config as bool);,
                         \_="// Supporting for wooly is unnecessary for exported project.";,
                     )));
         }
@@ -587,38 +604,42 @@ namespace editor
         {
             match (file::readall(
                     self.m_path / ".temporary" / "jeeditor" / "world.list")
-                    =>> \dat = dat as buffer: string->dict::deserialize;)
+                    =>> \dat = dat: buffer as string->dict::deserialize;)
             {
                 value(dat)?
                     for (let (wpath, isediting) : dat)
                     {
-                        match (self->load_world(self.m_path / wpath as string))
+                        match (self->load_world(self.m_path / wpath: string))
                         {
                             ok(w)?
-                                if (isediting as bool) do self->reset_editing_world(w);
+                                if (isediting: bool) do self->reset_editing_world(w);
                             err(info)?
-                                jeapi::gui::form::errmsg("失败", F"无法加载世界 '{wpath as string}': {info}");
+                                jeapi::gui::form::errmsg("失败", F"无法加载世界 '{wpath: string}': {info}");
                         }
                     }
                 none?;
             }
         }
-        public func load(path: fsys::path_t, dat: dict<string, dynamic>)
+        public func load(path: fsys::path_t, dat: toml::Toml)
         {
-            try! self = create(dat["name"] as string, path);
+            try! self = create(dat["name"]->as_string->unwrap, path);
             
             // 先加载配置！这非常重要！
-            for (let (name, val) : dat["configs"] as dict<dynamic, dynamic>->> \k, v = (k as string, v as string);)
+            for (let (name, val) : dat["configs"]->as_table->or({})->> \k, v = (k: string, v->as_string());)
             {
-                if (! self.m_configs->get(name)->> \config = config->parse(val);->or(false))
-                    je::logerr(F"选项 {name} = {val} 未在项目中找到或设置失败");
+                match (val)
+                {
+                    value(option_val)?
+                        if (! self.m_configs->get(name)->> \config = config->parse(option_val);->or(false))
+                            je::logerr(F"选项 {name} = {val} 未在项目中找到或设置失败");
+                    none?;
+                }
+                
             }
             
             // TODO: 加载失败和二进制文件怎么git还需考虑一下
-            for (let module_name : dat->get("modules")
-                =>> \p = p->trycast:<array<string>>();
-                ->> \p = p->iter;
-                -> iterator::iter_option)
+            for (let module_name : dat["modules"]->as_array()->or([])->iter
+                |> iterator::filter_map(\v = v->as_string;))
             {
                 let module_path = path / module_name;
                 match (CxxProject::load(module_path, self))
@@ -662,13 +683,16 @@ namespace editor
             // launch出去自动执行
             je::gui::launch_coroutine(func()
                 {
-                    do je::file::readall("@/editor.je4style")
-                        =>> \style_dat = style_dat->dict::deserialize;
-                        ->> \style_dat = style_dat
-                            ->> \k, v = (k as int: je::gui::ImGuiCol, v as array<dynamic>->>\e = e: real;);
+                    do try!
+                    {
+                        do je::file::readall("@/editor.je4style")
+                            =>> \style_dat = style_dat->dict::deserialize;
+                            ->> \style_dat = style_dat
+                                ->> \k, v = (k: int as je::gui::ImGuiCol, v: array<dynamic>->>\e = e as real;);
+                                ;
+                            ->> \style_dat = jeapi::gui::style::restore_config(style_dat);
                             ;
-                        ->> \style_dat = jeapi::gui::style::restore_config(style_dat);
-                        ;
+                    };
                 });
                 
             self->restore_dump();
@@ -692,12 +716,14 @@ namespace editor
                 none?;
             }
             
-            let dat = {
-                ["name"] = self.m_name: dynamic,
-                ["configs"] = self.m_configs->> \k, v = (k, v->to_string());: dynamic,
-                ["modules"] = self.m_modules->unmapping->>\kv = kv[0]->to_string->sub(self.m_path->to_string->len);: dynamic,
-            };
+            let dat = toml::new_table();
             
+            dat->set("name", self.m_name);
+            dat->set("modules",
+                toml::from <| self.m_modules->unmapping->>\kv = kv[0]->to_string->sub(self.m_path->to_string->len););
+            dat->set("configs",
+                toml::from <| self.m_configs->> \k, v = (k, v->to_string()););
+                
             // 编辑中的世界保存到 .temporary 目录内
             do fsys::mkdir(self.m_path / ".temporary" / "jeeditor");
             
@@ -710,7 +736,7 @@ namespace editor
                 ->  serialize
                 ->> \dat = file::writeall(
                         self.m_path / ".temporary" / "jeeditor" / "world.list",
-                        dat: buffer);
+                        dat as buffer);
                     ->  or(false))
             {
                 jeapi::gui::form::errmsg("失败", "保存编辑中的世界列表失败");
@@ -736,9 +762,7 @@ namespace editor
                 jeapi::gui::form::errmsg("错误", F"项目中的一些世界保存失败:\n{failed_file_list}\n项目保存未能完成");
                 return false;
             }
-            else if (!file::writeall(
-                    self.m_path/"project.je4project",
-                    dat as dict<string, dynamic>: string: buffer))
+            else if (toml::save(dat, self.m_path/"project.je4project")->is_err)
             {
                 jeapi::gui::form::errmsg("错误", F"保存项目文件失败");
                 return false;
@@ -819,7 +843,7 @@ namespace editor
                     {
                         if (last_edit_world == world)
                             return result::ok(do nil); // 新老世界相同，跳过更新
-
+                            
                         last_edit_world->remove_system(self->get_config_editor_system);
                     }
                     none?;
@@ -861,7 +885,7 @@ namespace editor
             do try!
             {
                 try! conf = self->get_config("JE_EDITOR_GENERATE_VFILE_FOR_WOOLY");
-                if (conf->to_string: bool)
+                if (conf->to_string as bool)
                 {
                     let loc = self->get_vfile_export_path();
                     for (let (name, content) : je::woolang::get_all_internal_scripts())
@@ -872,7 +896,7 @@ namespace editor
                         let path = loc / name;
                         do fsys::mkdir(fsys::parent(path));
                         
-                        if (! file::writeall(path, content: buffer))
+                        if (! file::writeall(path, content as buffer))
                             jeapi::gui::form::errmsg("错误", F"无法写入虚拟文件 '{path->to_string}'");
                     }
                 }
@@ -986,23 +1010,22 @@ namespace editor
                     
                     let crot = debug_camera_rot->or(quat::ident);
                     
-                    let debug_camera_info = {
-                        ["root_position"] = [pos[0], pos[1], pos[2]]: dynamic,
-                        ["root_rotation"] = [rot[0], rot[1], rot[2], rot[3]]: dynamic,
-                        ["camera_rotation"] = [crot[0], crot[1], crot[2], crot[3]]: dynamic,
-                        ["camera_in_2d_mode"] = debug_camera
+                    let debug_camera_info = toml::new_table();
+                    debug_camera_info->set("root_position", toml::from <| [pos[0], pos[1], pos[2]]);
+                    debug_camera_info->set("root_rotation", toml::from <| [rot[0], rot[1], rot[2], rot[3]]);
+                    debug_camera_info->set("camera_rotation", toml::from <| [crot[0], crot[1], crot[2], crot[3]]);
+                    debug_camera_info->set("camera_in_2d_mode", debug_camera
                         =>> \e = e->towoo::get_component :<Camera::OrthoProjection>;
-                        ->  is_value: dynamic,
-                        ["camera_in_2d_light"] = debug_camera
+                        ->  is_value);
+                    debug_camera_info->set("camera_in_2d_light", debug_camera
                         =>> \e = e->towoo::get_component :<Light2D::CameraPostPass>;
-                        ->  is_value: dynamic,
-                    };
+                        ->  is_value);
                     return option::value(debug_camera_info);
                 }
                 none? return option::none;
             }
         }
-        public func set_debug_camera_info(_: Project, w: je::world, cameradat: dict<string, dynamic>)
+        public func set_debug_camera_info(_: Project, w: je::world, cameradat: toml::Toml)
         {
             try! camera_root = gui::edit_forms::get_debug_camera_root(w);
             try! camera = gui::edit_forms::get_debug_camera(w);
@@ -1013,25 +1036,42 @@ namespace editor
             
             let camera_local_rotation = camera->towoo::get_component :<Transform::LocalRotation>->unwrap;
             
-            let rpos = cameradat->get_or("root_position", [0., 0., 0.]: dynamic) as array<dynamic>->>\e = e as real;;
+            let rpos = cameradat["root_position"]->as_array()
+                ->> \a = a
+                    ->> \e = e->as_float()->or(0.0);
+                    ;
+                -> or([0., 0., 0.])
+                ;
             root_translation->set_global_pos(
-                (rpos[0], rpos[1], rpos[2]): vec3,
+                (rpos[0], rpos[1], rpos[2]) as vec3,
                 option::value(root_local_position),
                 option::value(root_local_rotation));
                 
-            let rrot = cameradat->get_or("root_rotation", [0., 0., 0., 1.]: dynamic) as array<dynamic>->>\e = e as real;;
+            let rrot = cameradat["root_rotation"]->as_array()
+                ->> \a = a
+                    ->> \e = e->as_float()->or(0.0);
+                    ;
+                -> or([0., 0., 0., 0.])
+                ;
+                
             root_translation->set_global_rot(
-                (rrot[0], rrot[1], rrot[2], rrot[3]): quat,
+                (rrot[0], rrot[1], rrot[2], rrot[3]) as quat,
                 option::value(root_local_rotation));
                 
-            let crot = cameradat->get_or("camera_rotation", [0., 0., 0., 1.]: dynamic) as array<dynamic>->>\e = e as real;;
-            camera_local_rotation.rot->set((crot[0], crot[1], crot[2], crot[3]): quat);
+            let crot = cameradat["camera_rotation"]->as_array()
+                ->> \a = a
+                    ->> \e = e->as_float()->or(0.0);
+                    ;
+                -> or([0., 0., 0., 0.])
+                ;
+                
+            camera_local_rotation.rot->set((crot[0], crot[1], crot[2], crot[3]) as quat);
             
-            if (cameradat->get_or("camera_in_2d_mode", false: dynamic) as bool)
+            if (cameradat["camera_in_2d_mode"]->as_bool()->or(false))
             {
                 gui::edit_forms::update_camera_2d3d_mode(camera, true);
             }
-            if (cameradat->get_or("camera_in_2d_light", false: dynamic) as bool)
+            if (cameradat["camera_in_2d_light"]->as_bool()->or(false))
             {
                 gui::edit_forms::update_camera_2dlight_mode(camera, true);
             }
@@ -1044,31 +1084,50 @@ namespace editor
                 =>> \pw = jeapi::serialize::world::dump(w, true)->okay
                     ->> func (dat)
                     {
-                        let mdat = dat: jeapi::serialize::WorldData::WorldDataRawType->to_map;
-                        mdat->set("entities", dat["entities"] as array<dynamic>
-                            ->  std::sort(
-                                \l, r =
-                                    (l as dict<dynamic, dynamic>->get_or("euid": dynamic, 0H: dynamic) as int)
-                                    <
-                                    (r as dict<dynamic, dynamic>->get_or("euid": dynamic, 0H: dynamic) as int)
-                                    ;
-                                )
-                            ->> \edat = edat as dict<dynamic, dynamic>->erase("euid": dynamic);
-                            : dynamic);
-                        mdat->set("systems", dat["systems"] as array<dynamic>->std::sort(
-                                \l, r = (l as string) < (r as string);
-                                ): dynamic);
-                                
+                        let mdat = dat.m_data->clone;
+                        
+                        // 按 euid 排序实体，并移除 euid 字段
+                        let sorted_entities = toml::new_array();
+                        match (mdat->get("entities")->>\es = es->as_array()->or([])
+                                ->  std::sort(\l, r = (l["euid"]->as_int()->or(0)) < (r["euid"]->as_int()->or(0)););)
+                        {
+                            value(arr)?
+                            {
+                                for (let edat : arr)
+                                {
+                                    do edat->erase_key("euid");
+                                    sorted_entities->push(edat);
+                                }
+                            }
+                            none?;
+                        }
+                        mdat->set("entities", sorted_entities);
+                        
+                        // 排序 systems
+                        let sorted_systems = toml::new_array();
+                        match (mdat->get("systems")->>\ss = ss->as_array()->or([])
+                                ->  std::sort(\l, r = (l->as_string()->or("")) < (r->as_string()->or("")););)
+                        {
+                            value(arr)?
+                                for (let s : arr)
+                                    sorted_systems->push(s);
+                            none?;
+                        }
+                        mdat->set("systems", sorted_systems);
+                        
                         if (contain_debug_camera)
                         {
                             do self->get_debug_camera_info(w)
-                                ->> \debug_camera_info = mdat->set("debug_camera", debug_camera_info: dynamic);
+                                ->> \debug_camera_info = mdat->set("debug_camera", debug_camera_info);
                                 ;
                         }
-                        return mdat->unsafe::asdict;
+                        
+                        mdat->set("runtime_systems",
+                            toml::from <| pw.m_runtime_systems->>\t = t->name;);
+                        mdat->set("remark", pw.m_remark_note);
+                        
+                        return jeapi::serialize::WorldData { m_data = mdat };
                     }
-                    ->> \dat = dat->apply("runtime_systems", pw.m_runtime_systems->>\t=t->name; as array<string>: dynamic);
-                    ->> \dat = dat->apply("remark", pw.m_remark_note as string: dynamic): jeapi::serialize::WorldData;
                     ;
                 ;
         }
@@ -1080,25 +1139,24 @@ namespace editor
                     m_world_instance = self.m_env->load_world(dat),
                     m_world_path = file_path,
                     m_runtime_systems =
-                        mut dat: jeapi::serialize::WorldData::WorldDataRawType->get_or("runtime_systems", []: dynamic) as array<dynamic>
+                        mut (dat.m_data->get("runtime_systems")
+                            =>>\rs = rs->as_array();
+                            ->  or([])
                             =>> \elem = systype->is_value ? [systype->unwrap] | []
-                                where systype = je::typeinfo::load(elem as string);,
-                        m_remark_note = mut dat: jeapi::serialize::WorldData::WorldDataRawType->get_or("remark", "": dynamic) as string,
+                                where systype = je::typeinfo::load(elem->as_string()->or(""))
+                                ;),
+                    m_remark_note = mut dat.m_data->get("remark")=>>\v = v->as_string();->or(""),
                 });
                 
-            if (dat: jeapi::serialize::WorldData::WorldDataRawType->get_or("is_editing", false: dynamic) as bool)
+            if (dat.m_data->get("is_editing")=>>\v = v->as_bool();->or(false))
                 do self->reset_editing_world(w);
                 
-            match (dat: jeapi::serialize::WorldData::WorldDataRawType->get("debug_camera"))
+            match (dat.m_data->get("debug_camera"))
             {
-                value(dat)?
+                value(cameradat)?
                     je::gui::launch_coroutine(
                         func()
                         {
-                            let cameradat = dat as dict<dynamic, dynamic>
-                                ->> \k, v = (k as string, v);
-                                ;
-                                
                             for (;;)
                             {
                                 std::yield();
@@ -1117,23 +1175,25 @@ namespace editor
         {
             let debug_camera_map_path = self.m_path / ".temporary" / "jeeditor" / "world_debug_camera.list";
             try! data = file::readall(debug_camera_map_path)
-                =>> \dat = dat as buffer: string->dict::deserialize;;
-                
-            return_value! data
-                ->> \k, v = (k->or(""), v->or({}: dict<dynamic, dynamic>)->>\k, v = (k->or(""), v););
+                =>> \dat = toml::parse(dat: buffer as string)->okay
+                    =>> \t = t->as_table();
+                    ;
                 ;
+                
+            return_value! data;
         }
         public func try_fetch_camera_debug_info_map(self: Project, p: fsys::path_t)
         {
             return self->try_load_all_camera_debug_info_map()=>> \m = m->get(self->make_path_normalize(p));;
         }
-        public func try_update_camera_debug_info_map(self: Project, p: fsys::path_t, dat: dict<string, dynamic>)
+        public func try_update_camera_debug_info_map(self: Project, p: fsys::path_t, dat: toml::Toml)
         {
             let debug_camera_map_path = self.m_path / ".temporary" / "jeeditor" / "world_debug_camera.list";
-            let old_dat = self->try_load_all_camera_debug_info_map()->or({})->to_map;
+            let old_dat = self->try_load_all_camera_debug_info_map()->or({} as dict<string, toml::Toml>)->to_map;
             
             old_dat->set(self->make_path_normalize(p), dat);
-            return file::writeall(debug_camera_map_path, old_dat->serialize->unwrap: buffer);
+            let root = toml::from <| old_dat;
+            return file::writeall(debug_camera_map_path, root->to_toml() as string as buffer);
         }
         public func save_world(self: Project, w: je::world)
         {
@@ -1152,7 +1212,7 @@ namespace editor
                         
                     return self->serialize_world(pw.m_world_instance, false)
                         ->> \dat = file::writeall(
-                                pw.m_world_path, dat as jeapi::serialize::WorldData: string: buffer);
+                                pw.m_world_path, (dat.m_data)->to_toml() as buffer);
                             ;
                 }
             ->  or(false);
@@ -1163,15 +1223,16 @@ namespace editor
             if (self.m_worlds->forall(\pworld = pworld.m_world_path == file_path;)->empty)
             {
                 match (file::readall(file_path)
-                    =>> \dat = dict::deserialize(dat as buffer: string)
-                        =>> \d = d: dynamic->trycast:<jeapi::serialize::WorldData::WorldDataRawType>;
-                        ->> \d = d->apply(
+                    =>> \dat = toml::parse(dat: buffer as string)->okay
+                        ->> func(d)
+                        {
+                            do d->set(
                                 "debug_camera",
-                                self->try_fetch_camera_debug_info_map(file_path)->or({}): dynamic
-                                )
-                            ;
-                        ;
-                    ->> \dat = self->deserialize_world(dat: jeapi::serialize::WorldData, file_path);)
+                                self->try_fetch_camera_debug_info_map(file_path)->or(toml::new_table()));
+                            return d;
+                        }
+                        ->> \dat = self->deserialize_world(jeapi::serialize::WorldData { m_data = dat }, file_path);
+                        ;)
                 {
                     value(w)?
                         return result::ok(w);
@@ -1202,7 +1263,7 @@ namespace editor
                     self.m_worlds->get(0)
                         ->> \w = need_update_new_editing_world
                             ? self->reset_editing_world(w.m_world_instance)->unwrap
-                            | nil: void
+                            | nil as void
                             ; // 必须成功
                         ->  or_do(\ = self.m_editing_world = option::none;)
                         ;

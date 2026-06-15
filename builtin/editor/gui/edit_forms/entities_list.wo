@@ -11,6 +11,7 @@ import je::towoo::types;
 
 import pkg::math;
 import pkg::worst;
+import pkg::toml;
 import builtin::editor::gui::form::input;
 import builtin::editor::gui::form::ask;
 import builtin::editor::gui::form::msg;
@@ -184,12 +185,12 @@ namespace editor::gui::edit_forms
                                     do InputInt("##px", ctx.x_pixel_count)->>func(vi){
                                         if (vi <= 0) return;
                                         ctx.x_pixel_count = vi;
-                                        ctx.y_pixel_count = math::round(vi: real / ctx.width  * ctx.height);
+                                        ctx.y_pixel_count = math::round(vi as real / ctx.width  * ctx.height);
                                     };
                                     SameLine();
                                     Text("py:");
                                     SameLine();
-                                    do InputInt("##py", ctx.y_pixel_count)->>\vi = vi <= 0 ? (ctx.y_pixel_count = vi) | nil: void;;
+                                    do InputInt("##py", ctx.y_pixel_count)->>\vi = vi <= 0 ? (ctx.y_pixel_count = vi) | nil as void;;
                                     
                                     if (Button("创建"))
                                     {
@@ -212,7 +213,7 @@ namespace editor::gui::edit_forms
                                                 match (einst->towoo::get_component:<Transform::LocalScale>())
                                                 {
                                                     value(lscale)?
-                                                        lscale.scale->set((ctx.width, ctx.height, 1.): vec3);
+                                                        lscale.scale->set((ctx.width, ctx.height, 1.) as vec3);
                                                     none?;
                                                 }
                                                 
@@ -362,7 +363,7 @@ namespace editor::gui::edit_forms
         {
             do euid
                 ->> \uid = uid->justdo(func(e){
-                            match (jeapi::serialize::entity::dump(e, false)->>\dat = dat as jeapi::serialize::EntityData: string;)
+                            match (jeapi::serialize::entity::dump(e, false)->>\dat = dat.m_data->to_toml();)
                             {
                                 value(json)?
                                     SetClipboardText(json);
@@ -376,9 +377,8 @@ namespace editor::gui::edit_forms
         }
         if (MenuItem("粘贴"))
         {
-            do dict::deserialize(GetClipboardText())
-                =>> \d = d: dynamic->trycast:<jeapi::serialize::EntityData::EntityDataRawType>;
-                ->> \d = jeapi::serialize::entity::instantiate(w, d: jeapi::serialize::EntityData, true)
+            do toml::parse(GetClipboardText())->okay
+                ->> \d = jeapi::serialize::entity::instantiate(w, jeapi::serialize::EntityData { m_data = d }, true)
                     ->> func(e)
                     {
                         // 如果成功创建实体，在此重置实体的 Transform::Anchor 组件（如果有的话）
@@ -488,7 +488,7 @@ namespace editor::gui::edit_forms
             
         if (BeginDragDropSource())
         {
-            do SetDragDropPayload("JEDITOR_ENTITY_INSTANCE", e.uid as jeapi::debug::Eeid: string);
+            do SetDragDropPayload("JEDITOR_ENTITY_INSTANCE", e.uid: jeapi::debug::Eeid as string);
             Text(F"实体: {e.e->internal::name()}");
             EndDragDropSource();
         }
@@ -497,10 +497,10 @@ namespace editor::gui::edit_forms
             match (AcceptDragDropPayload("JEDITOR_ENTITY_INSTANCE"))
             {
                 value(drag_uid)?
-                    if (drag_uid as string: handle: jeapi::debug::Eeid != e.uid)
+                    if (drag_uid as string as handle as jeapi::debug::Eeid != e.uid)
                     {
                         // 自己拖到自己身上肯定就寄了，只处理不同的实体。
-                        drag_uid as string: handle: jeapi::debug::Eeid->justdo(
+                        drag_uid as string as handle as jeapi::debug::Eeid->justdo(
                             \c = do jeapi::debug::find_entity_and_child_by_instance(w, c)->>\ce = _set_parent(ce, e);;
                             );
                     }

@@ -93,9 +93,13 @@ endif()
 
 add_library(joyengine_core_pre_define_macro INTERFACE)
 if (JE4_BUILD_SHARED_CORE)
-    target_compile_definitions(joyengine_core_pre_define_macro INTERFACE -DWO_SHARED_LIB)
+    target_compile_definitions(joyengine_core_pre_define_macro 
+        INTERFACE -DWO_SHARED_LIB
+        INTERFACE -DWOORT_SHARED_LIB)
 else()
-    target_compile_definitions(joyengine_core_pre_define_macro INTERFACE -DWO_STATIC_LIB)
+    target_compile_definitions(joyengine_core_pre_define_macro 
+        INTERFACE -DWO_STATIC_LIB
+        INTERFACE -DWOORT_STATIC_LIB)
 endif()
 
 add_library(joyengine_configs INTERFACE)
@@ -104,7 +108,7 @@ target_link_libraries(joyengine_configs INTERFACE joyengine_core_pre_define_macr
 target_compile_features(joyengine_configs INTERFACE cxx_std_20)
 
 if(MSVC) 
-    target_compile_options(joyengine_configs INTERFACE "/source-charset:utf-8")
+    target_compile_options(joyengine_configs INTERFACE "/utf-8")
 else()
     target_compile_options(joyengine_configs INTERFACE -fno-exceptions)
     target_compile_options(joyengine_configs INTERFACE -pthread)
@@ -129,10 +133,6 @@ endif()
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static box2d 3.1" FORCE)
 add_subdirectory("3rd/box2d")
 
-if(MSVC)
-    # Set char set to UTF-8 for assimp.
-    add_compile_options("/source-charset:utf-8")
-endif()
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static assimp" FORCE)
 set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "Build zlib in assimp" FORCE)
 add_subdirectory("3rd/assimp")
@@ -176,9 +176,10 @@ if (JE4_STATIC_LINK_MODULE_AND_PKGS)
     target_compile_definitions(joyengine_configs INTERFACE -DJE4_STATIC_LINK_MODULE_AND_PKGS=1)
 
     set(BAOZI_BUILD_BY_MGR          OFF     CACHE BOOL "Donot apply something for baozi, we will compile it ourself." FORCE)
-    set(BAOZI_WOOLIB_NAME           ""      CACHE STRING "Static link, don't need link woolang library." FORCE)
+    set(BAOZI_INCLUDE_PATH          "${CMAKE_CURRENT_SOURCE_DIR}/3rd/woolang/include"
+                                            CACHE STRING "Specify package include path for compiling." FORCE)
     set(BAOZI_BUILD_SHARED          OFF     CACHE BOOL "Build static link library." FORCE)
-    set(BAOZI_CMAKE_FORMAT_VERSION  "1.0.2" CACHE STRING "Used baozi cmake-doc version." FORCE)
+    set(BAOZI_CMAKE_FORMAT_VERSION  "1.1.0" CACHE STRING "Used baozi cmake-doc version." FORCE)
     set(BUILD_SHARED_LIBS           OFF     CACHE BOOL "Build static modules." FORCE)
 
     macro(JE4_GET_SUB_DIR_LIST result curdir)
@@ -213,8 +214,8 @@ if (JE4_STATIC_LINK_MODULE_AND_PKGS)
             if (TARGET ${pkg_name})
                 # Define link-type-macro for pkg.
                 target_link_libraries(${pkg_name} PRIVATE joyengine_core_pre_define_macro)
-                target_compile_definitions(${pkg_name} PRIVATE -Dwolib_entry=je_static_wo_pkg_${pkg_name}_entry)
-                target_compile_definitions(${pkg_name} PRIVATE -Dwolib_exit=je_static_wo_pkg_${pkg_name}_exit)
+                target_compile_definitions(${pkg_name} PRIVATE -Dwoort_lib_entry=je_static_wo_pkg_${pkg_name}_entry)
+                target_compile_definitions(${pkg_name} PRIVATE -Dwoort_lib_leave=je_static_wo_pkg_${pkg_name}_leave)
                 target_include_directories(${pkg_name} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/3rd/woolang/include")
 
                 if (JE4_BUILD_SHARED_CORE AND NOT MSVC)
@@ -300,4 +301,5 @@ endif()
 target_link_libraries(jedriver PRIVATE 
     joyengine_configs
     joyecs
-    woolang)
+    woolang
+    woort)

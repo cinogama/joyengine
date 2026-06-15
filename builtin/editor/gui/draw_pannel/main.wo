@@ -13,7 +13,8 @@ import pkg::interface;
 import pkg::makenew;
 import pkg::math;
 import pkg::worst;
-import pkg::vm;
+import pkg::dumpling;
+import pkg::try;
 
 import tools;
 import imagescripts;
@@ -175,7 +176,10 @@ namespace editor::gui::drawpannel
     
     interface! IDrawtool
     {
-        public func close(self)=> void;
+        public func close(self)=> void
+        {
+            do self;
+        }
         public func OnMouseDown(self, tex: graphic::texture, col: color4_t, pos: (int, int))=> void;
         public func OnMouseHold(self, tex: graphic::texture, col: color4_t, pos: (int, int))=> void;
         public func OnMouseUp(self, tex: graphic::texture, col: color4_t, pos: (int, int))=> void;
@@ -185,14 +189,14 @@ namespace editor::gui::drawpannel
     func create_all_draw_tools()=> ToolsSetArray
     {
         let result = [
-            ("无", \=new! IDrawtool((): tools::Nothing);),
+            ("无", \=new! IDrawtool(() as tools::Nothing);),
             ("钢笔", \=new! IDrawtool(new! tools::Pen());),
             ("直线", \=new! IDrawtool(new! tools::Line());),
             ("线框", \=new! IDrawtool(new! tools::Rect());),
             ("矩形", \=new! IDrawtool(new! tools::FilledRect());),
             ("圆框", \=new! IDrawtool(new! tools::Circle());),
             ("圆", \=new! IDrawtool(new! tools::FilledCircle());),
-            ("填充", \=new! IDrawtool((): tools::Fill);),
+            ("填充", \=new! IDrawtool(() as tools::Fill);),
         // ("划区", \=new! IDrawtool(new! tools::MagicRange());),
         ]mut;
         
@@ -374,7 +378,8 @@ namespace editor::gui::drawpannel
                                             }
                                             if (MenuItem("脚本编辑器..."))
                                             {
-                                            let DEFAULT_SCRIPT_SRC = 
+                                                let DEFAULT_SCRIPT_SRC = 
+
 @"// 图像处理脚本
 import je;
 import je::editor::graphic;
@@ -391,15 +396,20 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
     let (r, g, b, a) = tex(t, x, y);
     return (r, g, b, a);
 }
-"@;
-                                                    new! ScriptEditor(context, DEFAULT_SCRIPT_SRC, "图像效果", false)
-                                                    ->set_callback(func(vmm)
+"@
+                                                    ;
+                                                new! ScriptEditor(context, DEFAULT_SCRIPT_SRC, "图像效果", false)
+                                                    ->set_callback(func(prog)
                                                         {
-                                                            let result = vmm->invoke(
-                                                                "main", [texture: dynamic, (0, 0): dynamic, (immut texture)->size: dynamic]);
+                                                            try! entry =
+                                                                prog->unsafe::load_extern:<(je::graphic::texture, (int, int), (int, int))=> void>(
+                                                                    "main");
+                                                                    
+                                                            entry(immut texture, (0, 0), (immut texture)->size);
+
                                                             history_mgr->save_step();
                                                             
-                                                            return result;
+                                                             return_value! nil as dynamic;
                                                         });
                                             }
                                             EndMenu();
@@ -506,8 +516,8 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                 drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
                                 drawlist->AddImage(
                                     (lux + draw_context.offset_x, luy + draw_context.offset_y),
-                                    (lux + draw_context.scale * tex_width:real + draw_context.offset_x,
-                                        luy + draw_context.scale * tex_height:real + draw_context.offset_y),
+                                     (lux + draw_context.scale * tex_width as real + draw_context.offset_x,
+                                        luy + draw_context.scale * tex_height as real + draw_context.offset_y),
                                     immut texture,
                                     (255, 255, 255, 255));
                                     
@@ -517,10 +527,10 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                     let block_high_light = xoffset % draw_context.block_size[0] == 0;
                                     if (draw_context.scale >= 5. || block_high_light)
                                     {
-                                        let real_xoffset = xoffset: real * draw_context.scale;
+                                        let real_xoffset = xoffset as real * draw_context.scale;
                                         drawlist->AddLine(
                                             (lux + draw_context.offset_x + real_xoffset, luy + draw_context.offset_y),
-                                            (lux + draw_context.offset_x + real_xoffset, luy + draw_context.offset_y + tex_height:real * draw_context.scale),
+                                            (lux + draw_context.offset_x + real_xoffset, luy + draw_context.offset_y + tex_height as real * draw_context.scale),
                                             block_high_light ? (0, 0, 0, 40) | (0, 0, 0, 20),
                                             block_high_light ? 2.0 | 1.0);
                                     }
@@ -530,10 +540,10 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                     let block_high_light = yoffset % draw_context.block_size[1] == 0;
                                     if (draw_context.scale >= 5. || block_high_light)
                                     {
-                                        let real_yoffset = yoffset: real * draw_context.scale;
+                                        let real_yoffset = yoffset as real * draw_context.scale;
                                         drawlist->AddLine(
                                             (lux + draw_context.offset_x, luy + draw_context.offset_y + real_yoffset),
-                                            (lux + draw_context.offset_x + tex_width:real * draw_context.scale, luy + draw_context.offset_y + real_yoffset),
+                                            (lux + draw_context.offset_x + tex_width as real * draw_context.scale, luy + draw_context.offset_y + real_yoffset),
                                             block_high_light ? (0, 0, 0, 40) | (0, 0, 0, 20),
                                             block_high_light ? 2.0 | 1.0);
                                     }
@@ -541,10 +551,10 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                 
                                 // 获取鼠标所在的像素位置，高亮这一块儿
                                 let (mposx, mposy) = GetMousePos();
-                                let mpixx = ((mposx - lux - draw_context.offset_x) / draw_context.scale): int: real;
-                                let mpixy = ((mposy - luy - draw_context.offset_y) / draw_context.scale): int: real;
+                                let mpixx = ((mposx - lux - draw_context.offset_x) / draw_context.scale) as int as real;
+                                let mpixy = ((mposy - luy - draw_context.offset_y) / draw_context.scale) as int as real;
                                 
-                                if (mpixx >= 0. && mpixx < tex_width:real && mpixy >= 0. && mpixy < tex_height:real)
+                                if (mpixx >= 0. && mpixx < tex_width as real && mpixy >= 0. && mpixy < tex_height as real)
                                 {
                                     // Ok 鼠标指向的像素位置是合法的，高亮！
                                     let highlight_p0 = (mpixx * draw_context.scale + draw_context.offset_x + lux, mpixy * draw_context.scale + draw_context.offset_y + luy);
@@ -553,8 +563,8 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                 }
                                 
                                 // 不过需要注意的是，引擎使用的像素坐标原点不是左上角，而是左下角，所以这里需要做一次简单变换
-                                let mepixx = mpixx: int;
-                                let mepixy = tex_height - 1 - mpixy: int;
+                                let mepixx = mpixx as int;
+                                let mepixy = tex_height - 1 - mpixy as int;
                                 
                                 if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Middle)
                                     && mepixx >= 0 && mepixx < tex_width
@@ -731,7 +741,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
             
             block_size = (mut 16, mut 16),
         };
-        launch(\=edittexture(
+        launch(\= edittexture(
                     context,
                     option::none,
                     passes,

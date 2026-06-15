@@ -48,7 +48,7 @@ namespace jeapi::gui::widget
             1.);
             
         // 因为鼠标只有一个，此处直接把上下文放在静态生命周期变量上
-        static let mut moving_point_context = option::none: option<struct{
+        static let mut moving_point_context = option::none as option<struct{
             moving_job_tag: string,
             moving_group_index: int,
             moving_point_index: int,
@@ -60,7 +60,7 @@ namespace jeapi::gui::widget
             
         // 绘制坐标点
         let mut has_hovered_point = false;
-        let new_position_groups = []mut: vec<array<(real, real)>>;
+        let new_position_groups = []mut as vec<array<(real, real)>>;
         let mut updated = false;
         
         for (let mut group_index = 0; group_index < poses_group->len; group_index += 1)
@@ -73,15 +73,15 @@ namespace jeapi::gui::widget
                 drawlist->AddLine(
                     (x0 * position_ratio + centerx, centery - y0 * position_ratio),
                     (x1 * position_ratio + centerx, centery - y1 * position_ratio),
-                    (127, (255. * (1.0 - group_index: real / poses_group->len: real)): int, 127, 255),
+                    (127, (255. * (1.0 - group_index as real / poses_group->len as real)) as int, 127, 255),
                     1.);
             }
         }
         
         for (let (group_index, poses): poses_group->iter |> iterator::enumerate)
         {
-            let new_position = []mut: vec<(real, real)>;
-            let group_color_depth_ratio = 1.0 - group_index: real / poses_group->len: real;
+            let new_position = []mut as vec<(real, real)>;
+            let group_color_depth_ratio = 1.0 - group_index as real / poses_group->len as real;
             
             for (let (index, (x, y)) : poses->iter |> iterator::enumerate)
             {
@@ -99,10 +99,10 @@ namespace jeapi::gui::widget
                     EndTooltip();
                 }
                 
-                let color_depth = (255. * (1.0 - index: real / poses->len: real)): int;
+                let color_depth = (255. * (1.0 - index as real / poses->len as real)) as int;
                 let color = hovered
                     ? (255, 0, 0, 255)
-                    | (color_depth, color_depth, (color_depth: real * group_color_depth_ratio): int, 255);
+                    | (color_depth, color_depth, (color_depth as real * group_color_depth_ratio) as int, 255);
                     
                 drawlist->AddCircleFilled(pos, 5., color);
                 
@@ -123,7 +123,7 @@ namespace jeapi::gui::widget
                                 if (IsKeyDown(ImGuiKey::ImGuiKey_LeftCtrl))
                                     return v;
                                     
-                                return (v / adsorption_accuracy + 0.5): int: real * adsorption_accuracy;
+                                return (v / adsorption_accuracy + 0.5) as int as real * adsorption_accuracy;
                             };
                             
                             let new_pos = (GetMousePos().0 - centerx, centery - GetMousePos().1);
@@ -153,7 +153,7 @@ namespace jeapi::gui::widget
                 }
             }
             
-            new_position_groups->add(new_position as vec<(real, real)>
+            new_position_groups->add(new_position: vec<(real, real)>
                 ->unsafe::cast:<array<(real, real)>>);
         }
         
@@ -177,7 +177,7 @@ namespace jeapi::gui::widget
         }
         
         return updated
-            ? option::value(new_position_groups as vec<array<(real, real)>>
+            ? option::value(new_position_groups: vec<array<(real, real)>>
                 ->unsafe::cast:<array<array<(real, real)>>>)
             | option::none;
     }

@@ -13,7 +13,7 @@
 #   define JE_HAVE_EXTERN_LIB_WOO_API
 #endif
 
-wo_dylib_handle_t _je_api_lib_handle = nullptr;
+woort_Dylib* _je_api_lib_handle = nullptr;
 void je_extern_lib_woo_api_init()
 {
     assert(_je_api_lib_handle == nullptr);

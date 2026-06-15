@@ -3,9 +3,6 @@
 
 #include "jeecs_cache_version.hpp"
 
-#define JE_IMPL
-#include "jeecs.hpp"
-
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
@@ -14,6 +11,7 @@
 #include <assimp/IOStream.hpp>
 
 #include <forward_list>
+#include <algorithm>
 
 namespace Assimp
 {
@@ -99,8 +97,7 @@ namespace Assimp
     public:
         je_file_io_system()
             : m_current_dir(jeecs_file_get_runtime_path())
-        {
-        }
+        {}
 
         bool Exists(const char* pFile) const override
         {
@@ -191,8 +188,7 @@ struct jegl_resource_bind_counter
     std::atomic_int32_t m_binding_count;
     jegl_resource_bind_counter(int32_t init)
         : m_binding_count(init)
-    {
-    }
+    {}
 };
 
 namespace jeecs::graphic
@@ -355,7 +351,7 @@ namespace jeecs::graphic
                 abort();
             }
         }
-        void free_resouce_body() const
+        void free_resource_body() const
         {
             free(m_resource.m_raw_ptr);
         }
@@ -394,8 +390,7 @@ namespace jeecs::graphic
         template<requirements::basic_graphic_resource T>
         resource_to_destroy(T* res)
             : m_resource(res)
-        {
-        }
+        {}
     };
 }
 
@@ -422,8 +417,7 @@ struct jegl_context_notifier
         cached_resource_statement(T* res)
             : m_resource(res)
             , m_keeped_count(0)
-        {
-        }
+        {}
 
         cached_resource_statement(const cached_resource_statement&) = default;
         cached_resource_statement(cached_resource_statement&&) = default;
@@ -724,7 +718,7 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
                 assert(result == 1);
             }
 
-            deleting_resource->m_resource.free_resouce_body();
+            deleting_resource->m_resource.free_resource_body();
             delete deleting_resource;
         }
     }
@@ -882,6 +876,7 @@ void jegl_finish()
         std::lock_guard g1(jeecs::graphic::_jegl_alive_glthread_list_mx);
         shutdown_glthreads = jeecs::graphic::_jegl_alive_glthread_list;
     } while (0);
+
     for (auto alive_glthread : shutdown_glthreads)
     {
         jegl_terminate_graphic_thread(alive_glthread);
@@ -890,22 +885,6 @@ void jegl_finish()
 
 void jegl_terminate_graphic_thread(jegl_context* thread)
 {
-    do
-    {
-        std::lock_guard g1(jeecs::graphic::_jegl_alive_glthread_list_mx);
-        auto fnd = std::find(
-            jeecs::graphic::_jegl_alive_glthread_list.begin(),
-            jeecs::graphic::_jegl_alive_glthread_list.end(),
-            thread);
-        if (fnd == jeecs::graphic::_jegl_alive_glthread_list.end())
-            return;
-        else
-        {
-            jeecs::graphic::_jegl_alive_glthread_list.erase(fnd);
-        }
-
-    } while (0);
-
     thread->_m_thread_notifier->m_graphic_terminated = true;
 
     do
@@ -929,13 +908,29 @@ void jegl_terminate_graphic_thread(jegl_context* thread)
         }
     } while (0);
 
+    do
+    {
+        std::lock_guard g1(jeecs::graphic::_jegl_alive_glthread_list_mx);
+        auto fnd = std::find(
+            jeecs::graphic::_jegl_alive_glthread_list.begin(),
+            jeecs::graphic::_jegl_alive_glthread_list.end(),
+            thread);
+        if (fnd == jeecs::graphic::_jegl_alive_glthread_list.end())
+            return;
+        else
+        {
+            jeecs::graphic::_jegl_alive_glthread_list.erase(fnd);
+        }
+
+    } while (0);
+
     auto* closing_resource = thread->_m_thread_notifier->_m_closing_resources.pick_all();
     while (closing_resource)
     {
         auto* cur_closing_resource = closing_resource;
         closing_resource = closing_resource->last;
 
-        cur_closing_resource->m_resource.free_resouce_body();
+        cur_closing_resource->m_resource.free_resource_body();
         delete cur_closing_resource;
     }
 
@@ -1136,7 +1131,7 @@ T* _jegl_try_update_shared_resource(jegl_context* context, T* resource)
             context->_m_thread_notifier->_m_cached_resources.insert(
                 std::make_pair(resource_path, caching_statement));
 
-        jegl_context_notifier::cached_resource_statement& cached_resource = 
+        jegl_context_notifier::cached_resource_statement& cached_resource =
             cached_resource_pair->second;
 
         if (insert_succ)
@@ -1228,11 +1223,13 @@ void _jegl_free_resource_instance(
     else
     {
         // 既然这个资源已经没有管理线程了，直接就地杀了埋了
-        if (resource_handle->m_graphic_thread != nullptr)
+        assert(resource_handle->m_graphic_thread == nullptr);
+
+        if (resource_handle->m_ptr != nullptr)
             jeecs::debug::logwarn("Resource %p cannot free by correct graphic context, maybe it is out-dated? Free it!",
                 resource_handle);
 
-        del_res->m_resource.free_resouce_body();
+        del_res->m_resource.free_resource_body();
         delete del_res;
     }
 }
@@ -1381,7 +1378,7 @@ jegl_texture* jegl_create_texture(size_t width, size_t height, jegl_texture::for
 
 jegl_shader* _jegl_create_shader_instance_and_init(void);
 jegl_shader* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path);
-void _jegl_create_shader_cache(jegl_shader* shader_resource, wo_integer_t virtual_file_crc64);
+void _jegl_create_shader_cache(jegl_shader* shader_resource, uint64_t virtual_file_crc64);
 
 jegl_shader* _jegl_load_shader_source_impl(
     const char* path, const char* src, bool is_virtual_file)
@@ -1393,48 +1390,65 @@ jegl_shader* _jegl_load_shader_source_impl(
     }
 
 #if JE4_ENABLE_SHADER_WRAP_GENERATOR
-    wo_vm vmm = wo_create_vm();
-    if (!wo_load_source(vmm, path, src))
+    jegl_shader* instance = nullptr;
+
+    wo_CompileErrors* cerror;
+    woort_CodeEnv* const cenv = wo_load_source(path, src, &cerror);
+    if (cenv == nullptr)
     {
         // Compile error
-        jeecs::debug::logerr("Fail to load shader: %s.\n%s", path, wo_get_compile_error(vmm, WO_DEFAULT));
-        wo_close_vm(vmm);
-        return nullptr;
-    }
-
-    wo_bootup(vmm, WO_FALSE);
-
-    wo_unref_value generate_shader_func;
-
-    if (!wo_extern_symb(&generate_shader_func, vmm, "je::shader::generate_shader"))
-    {
-        jeecs::debug::logerr("Fail to load shader: %s. you should import je::shader.", path);
-        wo_close_vm(vmm);
-        return nullptr;
-    }
-
-    if (wo_value retval = wo_invoke_value(vmm, &generate_shader_func, 0, nullptr, nullptr))
-    {
-        shader_wrapper* shader_graph = reinterpret_cast<shader_wrapper*>(wo_pointer(retval));
-
-        jegl_shader* shader_instance =
-            _jegl_create_shader_instance_and_init();
-
-        jegl_shader_generate_shader_source(shader_graph, shader_instance);
-
-        _jegl_init_resource_handle(&shader_instance->m_handle, path);
-        _jegl_create_shader_cache(shader_instance, is_virtual_file ? wo_crc64_str(src) : 0);
-
-        wo_close_vm(vmm);
-
-        return shader_instance;
+        jeecs::debug::logerr("Fail to load shader: %s.\n%s", path, wo_get_compile_error(cerror, WO_PLAIM));
+        wo_compile_errors_free(cerror);
     }
     else
     {
-        jeecs::debug::logerr("Fail to load shader: %s: %s.", path, wo_get_runtime_error(vmm));
-        wo_close_vm(vmm);
-        return nullptr;
+        woort_vm* const vmm = woort_vm_create();
+        if (vmm == nullptr)
+            jeecs::debug::logerr("Fail to load shader: %s.\nFailed to create vm.");
+        else
+        {
+            woort_vm* const last = woort_vm_swap(vmm);
+
+            woort_value result;
+            if (!woort_push_reserve(1, &result))
+            {
+                jeecs::debug::logerr("Fail to load shader: %s.\nStack overflow.");
+            }
+            else if (WOORT_VM_CALL_STATUS_NORMAL != woort_bootup_codeenv(result, cenv))
+            {
+                jeecs::debug::logerr("Fail to load shader: %s.\n%s.",
+                    woort_vm_get_runtime_error(vmm));
+            }
+            else if (!woort_load_extern_const(result, cenv, "je::shader::generate_shader"))
+            {
+                jeecs::debug::logerr("Fail to load shader: %s. need to import je::shader.",
+                    path);
+            }
+            else if (WOORT_VM_CALL_STATUS_NORMAL != woort_invoke(result, result))
+            {
+                jeecs::debug::logerr("Fail to load shader: %s: %s.", path,
+                    woort_vm_get_runtime_error(vmm));
+            }
+            else
+            {
+                shader_wrapper* const shader_graph =
+                    static_cast<shader_wrapper*>(woort_gcpointer(result));
+
+                instance = _jegl_create_shader_instance_and_init();
+
+                jegl_shader_generate_shader_source(shader_graph, instance);
+
+                _jegl_init_resource_handle(&instance->m_handle, path);
+                _jegl_create_shader_cache(instance, is_virtual_file ? wo_crc64_str(src) : 0);
+            }
+
+            (void)woort_vm_swap(last);
+            woort_vm_close(vmm);
+        }
+        woort_codeenv_drop(cenv);
     }
+
+    return instance;
 #else
     jeecs::debug::logerr("Shader generator has been disabled.");
     return nullptr;
@@ -1815,7 +1829,7 @@ jegl_vertex* jegl_load_vertex(jegl_context* context, const char* path)
                 }
 
                 bones.push_back(bone_data);
-                size_t bone_id = bone_data->m_index;
+                const size_t bone_id = bone_data->m_index;
 
                 if (bone_id >= MAX_BONE_COUNT)
                     // Too many bones, skip to avoid overflow.
@@ -2302,7 +2316,7 @@ void jegl_bind_texture(jegl_texture* texture, size_t pass)
                     texture_blob))
             {
                 // Failed to update blob, need free it.
-                gapi->vertex_close_blob(
+                gapi->texture_close_blob(
                     thread_handle->m_graphic_impl_context,
                     texture_blob);
             }

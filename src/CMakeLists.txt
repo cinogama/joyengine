@@ -323,6 +323,7 @@ target_link_libraries(joyecs PRIVATE
     ${jeecs_graphic_libs}
     ${JE4_STATIC_LINKED_PKG_AND_MODULE_LIST}
     woolang
+    woort
     box2d 
     assimp)
 

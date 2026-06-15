@@ -1,0 +1,107 @@
+import woo::std;
+
+import pkg::fsys;
+import pkg::toml;
+import pkg::iterator;
+import pkg::filestream;
+import pkg::try;
+import pkg::buffer;
+
+using std;
+using fsys;
+
+namespace editor::Project
+{
+    func save_array_to_toml(arr: array<dynamic>)=> toml::Toml
+    {
+        let result = toml::new_array();
+        for (let v : arr)
+        {
+            if (v is nil)
+                continue;
+            else if (v is int)
+                do result->push(v: int);
+            else if (v is real)
+                do result->push(v: real);
+            else if (v is bool)
+                do result->push(v: bool);
+            else if (v is string)
+                do result->push(v: string);
+            else if (v is array<dynamic>)
+                do result->push(save_array_to_toml(v: array<dynamic>));
+            else if (v is dict<dynamic, dynamic>)
+                do result->push(save_dict_to_toml(v: dict<dynamic, dynamic>));
+            else
+                do std::panic("save_array_to_toml: unsupported value type.");
+        }
+        return result;
+    }
+
+    func save_dict_to_toml(m: dict<dynamic, dynamic>)=> toml::Toml
+    {
+        let result = toml::new_table();
+        for (let (k, v) : m)
+        {
+            let key = k as string;
+
+            if (v is nil)
+                continue;
+            else if (v is int)
+                do result->set(key, v: int);
+            else if (v is real)
+                do result->set(key, v: real);
+            else if (v is bool)
+                do result->set(key, v: bool);
+            else if (v is string)
+                do result->set(key, v: string);
+            else if (v is array<dynamic>)
+                do result->set(key, save_array_to_toml(v: array<dynamic>));
+            else if (v is dict<dynamic, dynamic>)
+                do result->set(key, save_dict_to_toml(v: dict<dynamic, dynamic>));
+            else
+                do std::panic(F"save_dict_to_toml: unsupported value type for key '{key}'.");
+        }
+        return result;
+    }
+
+    public func uprade_project(path: path_t)
+    {
+        let file_type_need_to_update = {
+            [".je4world"] = do nil,
+            [".je4entity"] = do nil,
+            [".je4workflow"] = do nil,
+            [".je4tilemap"] = do nil,
+            [".je4tileset"] = do nil,
+            [".je4partical"] = do nil,
+            [".je4chunk"] = do nil,
+            [".je4chunklist"] = do nil,
+            [".je4project"] = do nil,
+        };
+        
+        for (let p : recursive_walk(path)
+            |> iterator::iter_result
+            |> iterator::filter(
+                \p = isfile(p)
+                    && file_type_need_to_update->contains(extension(p)->lower)
+                    ;))
+        {
+            let dat = try!
+            {
+                try! f = filestream::open(p, filestream::mode::read);
+                defer do f->close;
+                
+                let datjson = f->readbuf(f->len): buffer as string;
+                try! d = dict::deserialize(datjson);
+
+                return_value! save_dict_to_toml(d);
+            };
+
+            match (dat)
+            {
+            value(dat_toml)?
+                toml::save(dat_toml, p)->unwrap;
+            none?;
+            }
+        }
+    }
+}

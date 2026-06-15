@@ -11,6 +11,7 @@ import je::towoo::types;
 
 import pkg::fsys;
 import pkg::math;
+import pkg::toml;
 
 import builtin::editor::gui::form::input;
 import builtin::editor::gui::form::ask;
@@ -177,12 +178,12 @@ namespace editor::gui::edit_forms
                             else if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Tab]))
                             {
                                 static let mut last_click_time = 0.;
-                                if (std::time() - last_click_time <= 0.2)
+                                if (std::clock() - last_click_time <= 0.2)
                                 {
-                                    if ((mover_mode +:= 1: je::internal::mover_mode) > je::internal::mover_mode::SCALE)
+                                    if ((mover_mode +:= 1 as je::internal::mover_mode) > je::internal::mover_mode::SCALE)
                                         mover_mode = je::internal::mover_mode::SELECTION;
                                 }
-                                last_click_time = std::time();
+                                last_click_time = std::clock();
                             }
                             
                             if (BeginMenuEnabled(F"{MOVER_MODE[mover_mode]}|{COORD_MODE[coord_mode]}", debug_camera_entity->is_value))
@@ -211,7 +212,7 @@ namespace editor::gui::edit_forms
                                         let lp = e->towoo::get_component:<Transform::LocalPosition>;
                                         let lr = e->towoo::get_component:<Transform::LocalRotation>;
                                         
-                                        do lp->> \lp = lp.pos->set <| (0., 0., 0.): vec3;;
+                                        do lp->> \lp = lp.pos->set <| (0., 0., 0.) as vec3;;
                                         do lr->> \lr = lr.rot->set <| quat::ident;;
                                     }
                                     
@@ -224,39 +225,39 @@ namespace editor::gui::edit_forms
                             
                             if (BeginMenuEnabled("GIZMO", debug_camera_entity->is_value))
                             {
-                                let mut gizmo = std::mutable::create(debug_world->>\w = je::internal::get_editing_gizmo_mode(w);->or(je::internal::gizmo_mode::ALL): int);
+                                let mut gizmo = std::mutable::create(debug_world->>\w = je::internal::get_editing_gizmo_mode(w);->or(je::internal::gizmo_mode::ALL) as int);
                                 let update_gizmo_option = func(item: je::internal::gizmo_mode, able: bool)
                                 {
                                     if (able)
-                                        gizmo->set(gizmo->get->bor(item: int));
-                                    else
-                                        gizmo->set(gizmo->get->band(item: int->bnot));
+                                    gizmo->set(gizmo->get->bor(item as int));
+                                else
+                                    gizmo->set(gizmo->get->band(item as int->bnot));
                                 };
                                 
-                                do MenuItemSelected("摄像机", 0 != gizmo->get->band(je::internal::gizmo_mode::CAMERA: int))
+                                do MenuItemSelected("摄像机", 0 != gizmo->get->band(je::internal::gizmo_mode::CAMERA as int))
                                     ->> \selected = update_gizmo_option(je::internal::gizmo_mode::CAMERA, selected);
                                     ;
-                                do MenuItemSelected("视椎体", 0 != gizmo->get->band(je::internal::gizmo_mode::CAMERA_VISUAL_CONE: int))
+                                do MenuItemSelected("视椎体", 0 != gizmo->get->band(je::internal::gizmo_mode::CAMERA_VISUAL_CONE as int))
                                     ->> \selected = update_gizmo_option(je::internal::gizmo_mode::CAMERA_VISUAL_CONE, selected);
                                     ;
-                                do MenuItemSelected("2D光源", 0 != gizmo->get->band(je::internal::gizmo_mode::LIGHT2D: int))
+                                do MenuItemSelected("2D光源", 0 != gizmo->get->band(je::internal::gizmo_mode::LIGHT2D as int))
                                     ->> \selected = update_gizmo_option(je::internal::gizmo_mode::LIGHT2D, selected);
                                     ;
-                                do MenuItemSelected("2D碰撞体", 0 != gizmo->get->band(je::internal::gizmo_mode::PHYSICS2D_COLLIDER: int))
+                                do MenuItemSelected("2D碰撞体", 0 != gizmo->get->band(je::internal::gizmo_mode::PHYSICS2D_COLLIDER as int))
                                     ->> \selected = update_gizmo_option(je::internal::gizmo_mode::PHYSICS2D_COLLIDER, selected);
                                     ;
-                                do MenuItemSelected("高亮选中", 0 != gizmo->get->band(je::internal::gizmo_mode::SELECTING_HIGHLIGHT: int))
+                                do MenuItemSelected("高亮选中", 0 != gizmo->get->band(je::internal::gizmo_mode::SELECTING_HIGHLIGHT as int))
                                     ->> \selected = update_gizmo_option(je::internal::gizmo_mode::SELECTING_HIGHLIGHT, selected);
                                     ;
                                     
                                 Separator();
                                 
                                 if (MenuItem("全选"))
-                                    gizmo->set(je::internal::gizmo_mode::ALL: int);
+                                    gizmo->set(je::internal::gizmo_mode::ALL as int);
                                 if (MenuItem("全不选"))
-                                    gizmo->set(je::internal::gizmo_mode::NONE: int);
+                                    gizmo->set(je::internal::gizmo_mode::NONE as int);
                                     
-                                do debug_world->>\w = je::internal::set_editing_gizmo_mode(w, gizmo->get: je::internal::gizmo_mode);;
+                                do debug_world->>\w = je::internal::set_editing_gizmo_mode(w, gizmo->get as je::internal::gizmo_mode);;
                                 EndMenu();
                             }
                             
@@ -419,15 +420,15 @@ namespace editor::gui::edit_forms
                                             {
                                                 if (! right_button_down_last_frame)
                                                 {
-                                                    right_key_down_time = std::time();
+                                                    right_key_down_time = std::clock();
                                                     mouse_click_x = mx;
                                                     mouse_click_y = my;
                                                 }
                                             }
                                             else
                                             {
-                                                if (std::time() - right_key_down_time < 0.2
-                                                    && (mouse_click_x - mx, mouse_click_y - my): vec2->length < 5.)
+                                                if (std::clock() - right_key_down_time < 0.2
+                                                    && (mouse_click_x - mx, mouse_click_y - my) as vec2->length < 5.)
                                                     OpenPopup("RightClickContextMenu");
                                             }
                                         }
@@ -435,8 +436,8 @@ namespace editor::gui::edit_forms
                                         right_button_down_last_frame = mouse_right_button_down;
                                         
                                         let (frame_tex_width, frame_tex_height) = frametex->size;
-                                        if (frame_tex_width != available_width: int
-                                            || frame_tex_height != available_height: int)
+                                        if (frame_tex_width != available_width as int
+                                            || frame_tex_height != available_height as int)
                                             need_update_frame = true;
                                     }
                                     none?
@@ -445,9 +446,9 @@ namespace editor::gui::edit_forms
                                 
                                 if (need_update_frame)
                                 {
-                                    if (available_width: int > 0 && available_height: int > 0)
+                                    if (available_width as int > 0 && available_height as int > 0)
                                         camera_entity->je::internal::apply_camera_framebuf_setting(
-                                            available_width: int, available_height: int);
+                                            available_width as int, available_height as int);
                                 }
                                 
                                 if (BeginPopup("RightClickContextMenu"))
@@ -463,15 +464,15 @@ namespace editor::gui::edit_forms
                                         let filepath = proj->parse_path_normalize(path);
                                         if (fsys::extension(filepath)->lower == ".je4entity")
                                         {
-                                            if (debug_world
-                                                =>> func(w)
-                                                {
-                                                    let e = jeapi::serialize::entity::instantiate(
-                                                        w,
-                                                        {
-                                                            ["prefab"] = proj->make_path_normalize(filepath): dynamic
-                                                            }: jeapi::serialize::EntityData,
-                                                        true);
+                                        if (debug_world
+                                            =>> func(w)
+                                            {
+                                                let prefab_dat = toml::new_table();
+                                                prefab_dat->set("prefab", proj->make_path_normalize(filepath));
+                                                let e = jeapi::serialize::entity::instantiate(
+                                                    w,
+                                                    jeapi::serialize::EntityData { m_data = prefab_dat },
+                                                    true);
                                                         
                                                     do e->>\e = set_new_created_entity_pos(w, e);;
                                                     return e;
@@ -535,9 +536,9 @@ namespace editor::gui::edit_forms
                                                                                     let localscale = e->towoo::get_component :<Transform::LocalScale>()->unwrap;
                                                                                     let (px, py) = tex->size;
                                                                                     localscale.scale->set(
-                                                                                        (px: real / entity_create_context.pixel_per_unit: real,
-                                                                                            py: real / entity_create_context.pixel_per_unit: real,
-                                                                                            1.): vec3);
+                                                                                        (px as real / entity_create_context.pixel_per_unit as real,
+                                                                                            py as real / entity_create_context.pixel_per_unit as real,
+                                                                                            1.) as vec3);
                                                                                 }
                                                                                 none?
                                                                                     jeapi::gui::form::errmsg("失败", "从纹理创建实体失败");

@@ -383,18 +383,18 @@ namespace jeecs::graphic::api::vk120
         {
             JECS_DISABLE_MOVE_AND_COPY(vklibrary_instance_proxy);
 
-            void* _instance;
+            woort_Dylib* _instance;
 
             vklibrary_instance_proxy()
             {
 #   if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
-                _instance = wo_load_lib("je/graphiclib/vulkan-1", "vulkan-1.dll", nullptr, false);
+                _instance = woort_dylib_load("je/graphiclib/vulkan-1", "vulkan-1.dll", nullptr, false);
 #   elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
-                _instance = wo_load_lib("je/graphiclib/vulkan", "libvulkan.so", nullptr, false);
+                _instance = woort_dylib_load("je/graphiclib/vulkan", "libvulkan.so", nullptr, false);
 #   elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_LINUX
-                _instance = wo_load_lib("je/graphiclib/vulkan", "libvulkan.so.1", nullptr, false);
+                _instance = woort_dylib_load("je/graphiclib/vulkan", "libvulkan.so.1", nullptr, false);
                 if (_instance == nullptr)
-                    _instance = wo_load_lib("je/graphiclib/vulkan", "libvulkan.so", nullptr, false);
+                    _instance = woort_dylib_load("je/graphiclib/vulkan", "libvulkan.so", nullptr, false);
 #   else
 #       error Unsupport platform for dynamic vulkan library loading.
 #   endif
@@ -406,13 +406,13 @@ namespace jeecs::graphic::api::vk120
             ~vklibrary_instance_proxy()
             {
                 assert(_instance != nullptr);
-                wo_unload_lib(_instance, WO_DYLIB_UNREF);
+                woort_dylib_unload(_instance, WOORT_DYLIB_UNREF);
             }
 
             template <typename FT>
             FT api(const char* name)
             {
-                auto* result_ft = reinterpret_cast<FT>(wo_load_func(_instance, name));
+                auto* result_ft = reinterpret_cast<FT>(woort_dylib_load_func(_instance, name));
                 if (result_ft == nullptr)
                 {
                     jeecs::debug::logfatal("Failed to get vulkan library api: '%s'.", name);

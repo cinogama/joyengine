@@ -7,10 +7,10 @@ import je::gui;
 import pkg::iterator;
 import pkg::try;
 import pkg::makenew;
-import pkg::vm;
 import pkg::worst;
 import pkg::buffer;
 import pkg::fsys;
+import pkg::dumpling;
 
 import builtin::editor::project::main;
 import builtin::editor::gui::main;
@@ -70,7 +70,7 @@ namespace editor::gui
         m_current_edit_state: mut option<History>,
         m_enable_undo: bool,
         
-        m_hook_callback: mut (vm)=> option<dynamic>,
+        m_hook_callback: mut (dumpling::Program)=> option<dynamic>,
     }
     {
         using History = struct{
@@ -108,14 +108,14 @@ namespace editor::gui
                 
                 m_current_edit_state = mut option::none,
                 
-                m_hook_callback = mut \_ = option::value(nil: dynamic);,
+                m_hook_callback = mut \_ = option::value(nil as dynamic);,
             };
             self.m_source->SetLanguageDefinition(WOOLANG_LANGUAGE_DEFINITION);
             self.m_source->SetText(template_script);
             launch(\=show(self););
             return self;
         }
-        public func set_callback(self: ScriptEditor, hook_func: (vm)=>option<dynamic>)
+        public func set_callback(self: ScriptEditor, hook_func: (dumpling::Program)=>option<dynamic>)
         {
             self.m_hook_callback = hook_func;
         }
@@ -446,14 +446,22 @@ namespace editor::gui
         func run_script(self: ScriptEditor)
         {
             try! history = new! History(self.m_project, self.m_source->GetText);
-            try! vmm = vm::load(F"_jeditor_{JobID()}.wo", option::value <| self.m_source->GetText: buffer);
             
             assert(self.m_history->shrink(self.m_history_index));
             self.m_history->add(history);
             self.m_history_index += 1;
             
-            if (!vmm->bootup(true)->is_value
-                || !self.m_hook_callback(vmm)->is_value)
+            let program_result = bind(\r = r;) <|
+                dumpling::dispatch(
+                    func()
+                    {
+                        return or_map(\e = e->to_string;) <|
+                            dumpling::Program::create(F"_jeditor_{JobID()}.wo", self.m_source->GetText as buffer);
+                    });
+                    
+            try! program = program_result;
+                    
+            if (!self.m_hook_callback(program)->is_value)
             {
                 return result::err("运行脚本时发生错误");
             }

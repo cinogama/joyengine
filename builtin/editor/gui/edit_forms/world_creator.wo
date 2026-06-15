@@ -33,9 +33,9 @@ namespace editor::gui::edit_forms
     {
         func _sort(self: WorldContext)
         {
-            self.has_append_types->copy(self.has_append_types->std::sort(\a, b = a->name() < b->name();));
-            self.has_active_types->copy(self.has_active_types->std::sort(\a, b = a->name() < b->name();));
-            self.not_append_types->copy(self.not_append_types->std::sort(\a, b = a->name() < b->name();));
+            self.has_append_types->copy_from(self.has_append_types->std::sort(\a, b = a->name() < b->name();));
+            self.has_active_types->copy_from(self.has_active_types->std::sort(\a, b = a->name() < b->name();));
+            self.not_append_types->copy_from(self.not_append_types->std::sort(\a, b = a->name() < b->name();));
         }
         public func create(proj: Project, name: string, path: fsys::path_t, callback: (je::world)=>bool)
         {

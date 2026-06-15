@@ -3,10 +3,10 @@ import woo::std;
 
 import je;
 
-import pkg::vm;
 import pkg::fsys;
 import pkg::worst;
 import pkg::try;
+import pkg::dumpling;
 
 import builtin::editor::project::main;
 
@@ -19,28 +19,27 @@ namespace editor::gui::drawpannel
         return image_effect_scripts->unmapping->>\name_vm = name_vm[0];;
     }
     
-    using ApplyScriptHost = struct{vmm: vm}
+    using ApplyScriptHost = struct{
+        script_entry: (je::graphic::texture, (int, int), (int, int))=> void,
+    }
     {
         func create(path: fsys::path_t)
         {
-            try! vmm = vm::load(path->to_string, option::none);
-
-            try! _ = vmm->bootup(true)
-                -> ok_or(F"脚本 {path->to_string} 执行失败")
-                ;
-                
-            return_ok! ApplyScriptHost{vmm = vmm};
-        }
-        public func close(self: ApplyScriptHost)
-        {
-            return self.vmm->close();
+            try! prog = or_map(\e = e->to_string;) <| dumpling::Program::load(path);
+            
+            try! entry =
+                ok_or(F"未找到脚本的入口 `main`") <|
+                    prog->unsafe::load_extern:<(je::graphic::texture, (int, int), (int, int))=> void>("main");
+                    
+            return_ok! ApplyScriptHost{script_entry = entry};
         }
         public func apply(self: ApplyScriptHost, ts: je::graphic::texture, lbpos: (int, int), range: (int, int))
         {
-            try! _ = self.vmm->invoke("main", [ts: dynamic, lbpos: dynamic, range: dynamic])
-                -> ok_or("脚本执行失败")
-                ;
-            return_ok!;
+            return dumpling::dispatch(
+                func()
+                {
+                    self.script_entry(ts, lbpos, range);
+                });
         }
     }
     
@@ -56,11 +55,9 @@ namespace editor::gui::drawpannel
     public func apply_script(name: string, ts: je::graphic::texture, lbpos: (int, int), range: (int, int))
     {
         try! host = open_image_effect_host(name);
-        do host-> std::use(func(host)
-            {
-                do host->apply(ts, lbpos, range);
-            });
-            
+
+        do host->apply(ts, lbpos, range);
+        
         return_ok!;
     }
     public func update_and_get_scripts(proj: Project)

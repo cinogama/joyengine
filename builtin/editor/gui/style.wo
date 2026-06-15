@@ -12,11 +12,11 @@ namespace jeapi::gui::style
     public func dump_current_style_color()
     {
         let style_color = {}mut: map<ImGuiCol, array<real>>;
-        for (let mut i = 0; i < ImGuiCol::ImGuiCol_COUNT: int; i += 1)
+        for (let mut i = 0; i < ImGuiCol::ImGuiCol_COUNT as int; i += 1)
         {
-            let col = GetStyleColor(i: ImGuiCol);
+            let col = GetStyleColor(i as ImGuiCol);
             let color = [col[0], col[1], col[2], col[3]];
-            style_color->set(i: ImGuiCol, color);
+            style_color->set(i as ImGuiCol, color);
         }
         return style_color->unsafe::cast:< dict<ImGuiCol, array<real>> >;
     }

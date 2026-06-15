@@ -8,8 +8,8 @@ let mut height = 0.;
 
 public func entry(_: je::graphic::texture, lbpos: (int, int), range: (int, int))
 {    
-    height = range.1: real;
-    center_y = lbpos.1: real + height / 2.;
+    height = range.1 as real;
+    center_y = lbpos.1 as real + height / 2.;
 
     return true;
 }
@@ -17,7 +17,7 @@ public func entry(_: je::graphic::texture, lbpos: (int, int), range: (int, int))
 public func pixel(_: je::graphic::texture, _: int, y: int)
     => (real, real, real, real)
 {
-    let yf = (y: real - center_y + 0.5) / height: real;
+    let yf = (y as real - center_y + 0.5) / height as real;
     let xgray = math::sqrt(0.25 - math::pow(yf, 2.0));
 
     return (xgray, xgray, xgray, 1.0);
