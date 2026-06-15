@@ -10,7 +10,7 @@
 #   error jeecs.h only support for c++
 #else
 
-#include "wo.h"
+#include "woort.h"
 
 #define WO_FAIL_JE_FATAL_ERROR 0xD201
 #define WO_FAIL_JE_BAD_INIT_SHADER_VALUE 0xD202
@@ -51,8 +51,8 @@
 #   include <execution>
 #endif
 
-#define JE_FORCE_CAPI WO_FORCE_CAPI
-#define JE_FORCE_CAPI_END WO_FORCE_CAPI_END
+#define JE_FORCE_CAPI extern "C"{
+#define JE_FORCE_CAPI_END }
 
 #ifdef WO_SHARED_LIB
 #   define JE4_SHARED_CORE
@@ -60,8 +60,8 @@
 #   define JE4_STATIC_CORE
 #endif
 
-#define JE_IMPORT WO_IMPORT
-#define JE_EXPORT WO_EXPORT
+#define JE_IMPORT WOORT_IMPORT
+#define JE_EXPORT WOORT_EXPORT
 
 #ifdef JE_IMPL
 #   define JE_IMPORT_OR_EXPORT JE_EXPORT

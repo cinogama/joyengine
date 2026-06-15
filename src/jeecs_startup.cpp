@@ -2,6 +2,8 @@
 #define JE_ENABLE_DEBUG_API
 #include "jeecs.hpp"
 
+#include "wo.h"
+
 #include <list>
 
 void jeal_init();

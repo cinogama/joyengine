@@ -2,6 +2,8 @@
 #include "jeecs.hpp"
 #include "jeecs_cache_version.hpp"
 
+#include "wo.h"
+
 #include <string>
 
 // WARNING!!!!
