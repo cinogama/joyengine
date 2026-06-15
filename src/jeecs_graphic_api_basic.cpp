@@ -1,6 +1,8 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
+#include "wo.h"
+
 #include "jeecs_cache_version.hpp"
 
 #include <assimp/Importer.hpp>

@@ -8,6 +8,8 @@
 #endif
 #include "jeecs.hpp"
 
+#include "wo.h"
+
 #include <box2d/box2d.h>
 #include <unordered_map>
 

@@ -2,12 +2,14 @@
 #define JE_ENABLE_DEBUG_API
 #include "jeecs.hpp"
 
+#include "wo.h"
+
+#include "jeecs_core_script_system.hpp"
+
 #include <unordered_map>
 #include <optional>
 #include <memory>
 #include <cmath>
-
-#include "jeecs_core_script_system.hpp"
 
 /*
 TooWooo~
