@@ -1227,9 +1227,11 @@ void _jegl_free_resource_instance(
         // 既然这个资源已经没有管理线程了，直接就地杀了埋了
         assert(resource_handle->m_graphic_thread == nullptr);
 
+#ifndef NDEBUG
         if (resource_handle->m_ptr != nullptr)
             jeecs::debug::logwarn("Resource %p cannot free by correct graphic context, maybe it is out-dated? Free it!",
                 resource_handle);
+#endif
 
         del_res->m_resource.free_resource_body();
         delete del_res;

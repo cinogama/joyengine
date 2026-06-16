@@ -38,6 +38,21 @@ struct _je_static_context_t
 };
 static _je_static_context_t _je_global_context;
 
+// woort_exe_path() now follows snprintf semantics (fills @p buf, returns the
+// path length excluding the NUL terminator, 0 on failure). Wrap it so callers
+// can keep using a plain string. The result is cached by the runtime, so this
+// is cheap to call repeatedly.
+static std::string _je_woort_exe_path()
+{
+    size_t need = woort_exe_path(nullptr, 0);
+    if (need == 0)
+        return {};
+
+    std::string path(need, '\0');
+    woort_exe_path(path.data(), need + 1);
+    return path;
+}
+
 void jegl_set_host_graphic_api(jegl_graphic_api_entry api)
 {
     _je_global_context._jegl_host_graphic_api = api;
@@ -240,8 +255,9 @@ void je_init(int argc, char** argv)
         }
     }
 
-    jeecs_file_set_host_path(woort_exe_path());
-    jeecs_file_set_runtime_path(woort_exe_path());
+    const auto exe_path = _je_woort_exe_path();
+    jeecs_file_set_host_path(exe_path.c_str());
+    jeecs_file_set_runtime_path(exe_path.c_str());
 
     je_extern_lib_woo_api_init();
     je_extern_lib_3rd_pkgs_init();
@@ -385,7 +401,7 @@ bool je_main_script_entry()
 
         if (woort_CodeEnv_save_binary(cenv, &buffer, &binary_length))
         {
-            FILE* objdump = fopen((std::string(woort_exe_path()) + "/builtin/editor.woo.je4cache").c_str(), "wb");
+            FILE* objdump = fopen((_je_woort_exe_path() + "/builtin/editor.woo.je4cache").c_str(), "wb");
             if (objdump != nullptr)
             {
                 size_t writelen = fwrite(buffer, 1, binary_length, objdump);
@@ -395,7 +411,7 @@ bool je_main_script_entry()
                 fclose(objdump);
             }
             auto api_src_crc64 = crc64_of_source_and_api();
-            FILE* srccrc = fopen((std::string(woort_exe_path()) + "/builtin/editor.crc.je4cache").c_str(), "wb");
+            FILE* srccrc = fopen((_je_woort_exe_path() + "/builtin/editor.crc.je4cache").c_str(), "wb");
             if (srccrc != nullptr)
             {
                 size_t writecount = fwrite(&api_src_crc64, sizeof(api_src_crc64), 1, srccrc);

@@ -2414,14 +2414,25 @@ WOORT_API woort_api wojeapi_get_all_internal_scripts(void)
     for (size_t i = 0; i < count; ++i)
     {
         const char* vpath = paths[i];
-        char* data = nullptr;
-        size_t len = 0;
-        if (woort_vfs_read(vpath, &data, &len))
-        {
-            woort_set_buffer(val, data, len);
-            (void)woort_map_set_by_string(result, vpath, val);
 
-            woort_free(data);
+        woort_VFile* file = nullptr;
+        if (woort_vfile_open(vpath, &file))
+        {
+            const int64_t fsize = woort_vfile_size(file);
+            if (fsize >= 0)
+            {
+                const size_t alloc_size = (size_t)fsize;
+                char* data = (char*)malloc(alloc_size ? alloc_size : 1);
+                if (data != nullptr)
+                {
+                    const size_t nread = woort_vfile_read(file, data, alloc_size);
+                    woort_set_buffer(val, data, nread);
+                    (void)woort_map_set_by_string(result, vpath, val);
+
+                    free(data);
+                }
+            }
+            woort_vfile_close(file);
         }
     }
 
