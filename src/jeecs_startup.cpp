@@ -62,8 +62,6 @@ jegl_graphic_api_entry jegl_get_host_graphic_api(void)
 {
     if (_je_global_context._jegl_host_graphic_api == nullptr)
     {
-        return jegl_using_vk120_apis;
-
 #if defined(JE_ENABLE_DX11_GAPI)
         return jegl_using_dx11_apis;
 #elif defined(JE_ENABLE_METAL_GAPI)

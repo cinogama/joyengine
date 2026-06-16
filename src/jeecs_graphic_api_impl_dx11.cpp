@@ -253,9 +253,6 @@ namespace jeecs::graphic::api::dx11
             context->m_dx_main_renderer_target_depth_buffer,
             "JoyEngineDx11TargetDepthBuffer");
         JEDX11_TRACE_DEBUG_NAME(
-            context->m_dx_main_renderer_target_depth_buffer,
-            "JoyEngineDx11TargetDepthBuffer");
-        JEDX11_TRACE_DEBUG_NAME(
             context->m_dx_main_renderer_target_depth_view,
             "JoyEngineDx11TargetDepthView");
 
@@ -264,6 +261,20 @@ namespace jeecs::graphic::api::dx11
             context->m_dx_main_renderer_target_view.GetAddressOf(),
             context->m_dx_main_renderer_target_depth_view.Get());
 
+        // 设置视口变换
+        D3D11_VIEWPORT viewport;
+        viewport.TopLeftX = 0;
+        viewport.TopLeftY = 0;
+        viewport.Width = (float)w;
+        viewport.Height = (float)h;
+        viewport.MinDepth = 0.0f;
+        viewport.MaxDepth = 1.0f;
+
+        context->m_dx_context->RSSetViewports(1, &viewport);
+    }
+
+    void dx11_create_rasterizer_states(jegl_dx11_context* context)
+    {
         D3D11_RASTERIZER_DESC rasterizer_describe;
         rasterizer_describe.FillMode = D3D11_FILL_SOLID;
         rasterizer_describe.DepthBias = 0;
@@ -315,17 +326,6 @@ namespace jeecs::graphic::api::dx11
             context->m_rasterizers_r2b[
                 static_cast<size_t>(
                     jegl_shader::cull_mode::BACK)].ReleaseAndGetAddressOf()));
-
-        // 设置视口变换
-        D3D11_VIEWPORT viewport;
-        viewport.TopLeftX = 0;
-        viewport.TopLeftY = 0;
-        viewport.Width = (float)w;
-        viewport.Height = (float)h;
-        viewport.MinDepth = 0.0f;
-        viewport.MaxDepth = 1.0f;
-
-        context->m_dx_context->RSSetViewports(1, &viewport);
     }
 
     jegl_context::graphic_impl_context_t dx11_startup(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
@@ -464,6 +464,9 @@ namespace jeecs::graphic::api::dx11
         JEDX11_TRACE_DEBUG_NAME(context->m_dx_swapchain, "JoyEngineDx11SwapChain");
 
         context->m_dx_context_finished = true;
+
+        // Rasterizer states do not depend on window size, create them only once.
+        dx11_create_rasterizer_states(context);
 
         dx11_callback_windows_size_changed(context);
 
@@ -959,7 +962,6 @@ namespace jeecs::graphic::api::dx11
             depth_describe.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
             depth_describe.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
             depth_describe.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
-            depth_describe.BackFace;
             JERCHECK(context->m_dx_device->CreateDepthStencilState(
                 &depth_describe, blob->m_depth.GetAddressOf()));
 
@@ -1114,8 +1116,6 @@ namespace jeecs::graphic::api::dx11
                 JERCHECK(context->m_dx_device->CreateSamplerState(
                     &sampler_describe,
                     dxsampler.m_sampler.GetAddressOf()));
-
-                dxsampler.m_sampler;
             }
             return blob;
         }
@@ -1328,10 +1328,15 @@ namespace jeecs::graphic::api::dx11
 
         if ((resource->m_format & jegl_texture::format::FRAMEBUF) == jegl_texture::format::FRAMEBUF)
         {
+            // FRAMEBUF 纹理必须是 DEFAULT usage（不能是 DYNAMIC/IMMUTABLE），
+            // 因为它们需要绑定为 render target 或 depth stencil。
+            // 同时 CPUAccessFlags 必须为 0，否则与 DEPTH_STENCIL 绑定标志冲突。
+            texture_describe.Usage = D3D11_USAGE_DEFAULT;
+            texture_describe.CPUAccessFlags = 0;
+
             if (resource->m_format & jegl_texture::format::DEPTH)
             {
                 texture_describe.Format = DXGI_FORMAT_R24G8_TYPELESS;
-                texture_describe.Usage = D3D11_USAGE_DEFAULT;
 
                 // 不使用MSAA
                 texture_describe.SampleDesc.Count = 1;
@@ -1344,21 +1349,24 @@ namespace jeecs::graphic::api::dx11
             else
             {
                 texture_describe.BindFlags |= D3D11_BIND_RENDER_TARGET;
-                texture_describe.Usage = D3D11_USAGE_DEFAULT;
             }
+
+            // FRAMEBUF 纹理不支持 Map 更新，标记为不可修改，
+            // 这样 dx11_texture_update 会通过重建整个纹理来更新。
+            jedx11_texture_res->m_modifiable_texture_buffer = false;
         }
         else
         {
+            const UINT bytes_per_pixel =
+                (UINT)resource->m_width *
+                ((UINT)resource->m_format &
+                    jegl_texture::format::COLOR_DEPTH_MASK)
+                * (float16 ? 2 : 1);
+
             texture_sub_data.pSysMem = resource->m_pixels;
-            texture_sub_data.SysMemPitch =
-                (UINT)resource->m_width *
-                ((UINT)resource->m_format &
-                    jegl_texture::format::COLOR_DEPTH_MASK);
+            texture_sub_data.SysMemPitch = bytes_per_pixel;
             texture_sub_data.SysMemSlicePitch =
-                (UINT)resource->m_width *
-                (UINT)resource->m_height *
-                ((UINT)resource->m_format &
-                    jegl_texture::format::COLOR_DEPTH_MASK);
+                bytes_per_pixel * (UINT)resource->m_height;
 
             texture_sub_data_ptr = &texture_sub_data;
         }
@@ -1415,9 +1423,14 @@ namespace jeecs::graphic::api::dx11
                 texture_instance->m_texture.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
 
             // mappedData is not byte-aligned, we need to copy it byte by row
+            const bool is_float16 =
+                0 != (resource->m_format & jegl_texture::format::FLOAT16);
             for (size_t i = 0; i < resource->m_height; ++i)
             {
-                const size_t row_byte_size = resource->m_width * (resource->m_format & jegl_texture::format::COLOR_DEPTH_MASK);
+                const size_t row_byte_size =
+                    resource->m_width
+                    * (resource->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
+                    * (is_float16 ? 2 : 1);
                 void* dst_row_data = (void*)((intptr_t)mappedData.pData + i * mappedData.RowPitch);
                 const void* src_row_data = resource->m_pixels + i * row_byte_size;
 
@@ -1930,8 +1943,8 @@ namespace jeecs::graphic::api::dx11
                     context->m_current_target_framebuffer->m_target_views.size())
                 {
                     context->m_dx_context->ClearRenderTargetView(
-                        context->m_current_target_framebuffer->m_target_views.at(
-                            clear_operations->m_color.m_color_attachment_idx),
+                        context->m_current_target_framebuffer->m_target_views[
+                            clear_operations->m_color.m_color_attachment_idx],
                         clear_operations->m_color.m_clear_color_rgba);
                 }
                 break;
@@ -1974,6 +1987,7 @@ namespace jeecs::graphic::api::dx11
 
         assert(context->m_current_target_shader->m_uniform_buffer_size != 0);
         assert(context->m_current_target_shader->m_uniform_cpu_buffers != nullptr);
+        assert(location < context->m_current_target_shader->m_uniform_buffer_size);
 
         auto* target_buffer = reinterpret_cast<void*>(
             (intptr_t)context->m_current_target_shader->m_uniform_cpu_buffers + location);
