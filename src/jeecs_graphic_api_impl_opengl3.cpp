@@ -175,10 +175,14 @@ namespace jeecs::graphic::api::gl3
 
         GLuint m_texture_id;
         jegl_texture::format m_texture_format;
+        size_t m_width;
+        size_t m_height;
 
-        jegl_gl3_texture(GLuint id, jegl_texture::format fmt)
+        jegl_gl3_texture(GLuint id, jegl_texture::format fmt, size_t w, size_t h)
             : m_texture_id(id)
             , m_texture_format(fmt)
+            , m_width(w)
+            , m_height(h)
         {
         }
         ~jegl_gl3_texture()
@@ -463,8 +467,6 @@ namespace jeecs::graphic::api::gl3
     {
         jegl_gl3_context* context = reinterpret_cast<jegl_gl3_context*>(ctx);
 
-        context->current_active_shader_may_null = nullptr;
-
         switch (context->m_interface->update())
         {
         case basic_interface::update_result::CLOSE:
@@ -487,7 +489,7 @@ namespace jeecs::graphic::api::gl3
         _label_jegl_gl3_normal_job:
             context->m_interface->swap_for_opengl();
 
-            // Reset context->current_active_shader_may_null to make sure bind correctly.
+            // Reset current_active_shader_may_null to make sure bind correctly.
             context->current_active_shader_may_null = nullptr;
             return jegl_update_action::JEGL_UPDATE_CONTINUE;
         default:
@@ -534,6 +536,10 @@ namespace jeecs::graphic::api::gl3
             return;
 
         auto* current_shader = context->current_active_shader_may_null;
+        assert(current_shader != nullptr);
+        if (current_shader == nullptr)
+            return;
+
         auto* target_buffer = reinterpret_cast<void*>(
             reinterpret_cast<intptr_t>(
                 current_shader->uniform_cpu_buffers) + location);
@@ -1147,8 +1153,8 @@ namespace jeecs::graphic::api::gl3
             switch (resource->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
             {
             case jegl_texture::format::MONO:
-                texture_src_format = GL_LUMINANCE;
-                texture_aim_format = is_16bit ? GL_R16F : GL_LUMINANCE;
+                texture_src_format = GL_RED;
+                texture_aim_format = is_16bit ? GL_R16F : GL_R8;
                 break;
             case jegl_texture::format::RGBA:
                 texture_src_format = GL_RGBA;
@@ -1182,7 +1188,7 @@ namespace jeecs::graphic::api::gl3
             }
         }
 
-        resource->m_handle.m_ptr = new jegl_gl3_texture(texture, resource->m_format);
+        resource->m_handle.m_ptr = new jegl_gl3_texture(texture, resource->m_format, resource->m_width, resource->m_height);
     }
     void texture_update(
         jegl_context::graphic_impl_context_t,
@@ -1210,8 +1216,8 @@ namespace jeecs::graphic::api::gl3
         switch (resource->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
         {
         case jegl_texture::format::MONO:
-            texture_src_format = GL_LUMINANCE;
-            texture_aim_format = is_16bit ? GL_R16F : GL_LUMINANCE;
+            texture_src_format = GL_RED;
+            texture_aim_format = is_16bit ? GL_R16F : GL_R8;
             break;
         case jegl_texture::format::RGBA:
             texture_src_format = GL_RGBA;
@@ -1222,16 +1228,41 @@ namespace jeecs::graphic::api::gl3
             return;
         }
 
-        glTexImage2D(
-            GL_TEXTURE_2D,
-            0,
-            texture_aim_format,
-            (GLsizei)resource->m_width,
-            (GLsizei)resource->m_height,
-            0,
-            texture_src_format,
-            is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
-            resource->m_pixels);
+        const bool same_size =
+            texture_instance->m_width == resource->m_width &&
+            texture_instance->m_height == resource->m_height;
+
+        if (same_size)
+        {
+            // 原地更新，避免重新分配纹理存储
+            glTexSubImage2D(
+                GL_TEXTURE_2D,
+                0,
+                0,
+                0,
+                (GLsizei)resource->m_width,
+                (GLsizei)resource->m_height,
+                texture_src_format,
+                is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
+                resource->m_pixels);
+        }
+        else
+        {
+            // 尺寸发生变化，需要重新分配纹理存储
+            glTexImage2D(
+                GL_TEXTURE_2D,
+                0,
+                texture_aim_format,
+                (GLsizei)resource->m_width,
+                (GLsizei)resource->m_height,
+                0,
+                texture_src_format,
+                is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
+                resource->m_pixels);
+
+            texture_instance->m_width = resource->m_width;
+            texture_instance->m_height = resource->m_height;
+        }
     }
     void texture_close(
         jegl_context::graphic_impl_context_t,
@@ -1371,6 +1402,8 @@ namespace jeecs::graphic::api::gl3
         {
             jegl_texture* frame_texture = attachments[i]->resource();
 
+            // jegl_bind_texture 会触发纹理的懒加载初始化（若尚未创建 GL 纹理对象），
+            // 确保 frame_texture->m_handle.m_ptr 在下方 glFramebufferTexture2D 前有效。
             jegl_bind_texture(frame_texture, 0);
 
             GLenum using_attachment = attachment;
@@ -1397,7 +1430,16 @@ namespace jeecs::graphic::api::gl3
         for (GLenum attachment_index = GL_COLOR_ATTACHMENT0; attachment_index < attachment; ++attachment_index)
             glattachments.push_back(attachment_index);
 
-        glDrawBuffers((GLsizei)glattachments.size(), glattachments.data());
+        if (glattachments.empty())
+        {
+            // 深度纹理没有颜色附件时，需要显式设置 draw buffer 为 GL_NONE，
+            // 否则默认的 GL_COLOR_ATTACHMENT0 因无对应附件会导致 framebuffer 不完整。
+            // 使用 glDrawBuffers 而非 glDrawBuffer，因为 GLES3/WebGL2 仅有 glDrawBuffers。
+            const GLenum none_buf = GL_NONE;
+            glDrawBuffers(1, &none_buf);
+        }
+        else
+            glDrawBuffers((GLsizei)glattachments.size(), glattachments.data());
 
         GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
         if (status != GL_FRAMEBUFFER_COMPLETE)
@@ -1601,7 +1643,7 @@ namespace jeecs::graphic::api::gl3
                 framebuffer->m_handle.m_ptr);
 
         if (nullptr == framebuffer_instance)
-            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
         else
             glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_instance->m_fbo);
 
@@ -1640,8 +1682,9 @@ namespace jeecs::graphic::api::gl3
                 break;
             case jegl_frame_buffer_clear_operation::clear_type::DEPTH:
             {
-                const float gl_depth =
-                    clear_operations->m_depth.m_clear_depth * 2.f - 1.f;
+                // glClearBufferfv(GL_DEPTH, ...) expects a value in [0,1]
+                // (depth-buffer range), identical to Vulkan/Metal/D3D11.
+                const float gl_depth = clear_operations->m_depth.m_clear_depth;
 
                 _gl_update_depth_mask_method(context, GL_TRUE);
                 glClearBufferfv(
