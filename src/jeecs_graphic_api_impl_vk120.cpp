@@ -724,6 +724,12 @@ namespace jeecs::graphic::api::vk120
             }
             void bind_uniform_buffer(uint32_t binding, VkBuffer buffer)
             {
+                if (binding >= MAX_UBO_LAYOUT)
+                {
+                    jeecs::debug::logwarn("Uniform buffer binding %u exceeds max layout count %zu, ignored.",
+                        binding, MAX_UBO_LAYOUT);
+                    return;
+                }
                 if (m_binded_ubos[binding].buffer != buffer)
                 {
                     m_binded_ubos[binding].buffer = buffer;
@@ -732,6 +738,12 @@ namespace jeecs::graphic::api::vk120
             }
             void bind_texture(uint32_t binding, VkImageView image_view)
             {
+                if (binding >= MAX_TEXTURE_LAYOUT)
+                {
+                    jeecs::debug::logwarn("Texture binding %u exceeds max layout count %zu, ignored.",
+                        binding, MAX_TEXTURE_LAYOUT);
+                    return;
+                }
                 if (m_binded_textures[binding].imageView != image_view)
                 {
                     m_binded_textures[binding].imageView = image_view;
@@ -740,6 +752,12 @@ namespace jeecs::graphic::api::vk120
             }
             void bind_sampler(uint32_t binding, VkSampler sampler)
             {
+                if (binding >= MAX_SAMPLER_LAYOUT)
+                {
+                    jeecs::debug::logwarn("Sampler binding %u exceeds max layout count %zu, ignored.",
+                        binding, MAX_SAMPLER_LAYOUT);
+                    return;
+                }
                 if (m_binded_samplers[binding].sampler != sampler)
                 {
                     m_binded_samplers[binding].sampler = sampler;
@@ -1214,6 +1232,20 @@ namespace jeecs::graphic::api::vk120
                 VkAccessFlagBits::VK_ACCESS_COLOR_ATTACHMENT_READ_BIT
                 | VkAccessFlagBits::VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
+            // 当存在深度/模板附件时，外部依赖必须同时覆盖深度阶段，否则验证层会报错且存在同步缺口
+            if (attachment_depth != nullptr)
+            {
+                default_render_subpass_dependency.srcStageMask |=
+                    VkPipelineStageFlagBits::VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+                    | VkPipelineStageFlagBits::VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+                default_render_subpass_dependency.dstStageMask |=
+                    VkPipelineStageFlagBits::VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+                    | VkPipelineStageFlagBits::VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+                default_render_subpass_dependency.dstAccessMask |=
+                    VkAccessFlagBits::VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
+                    | VkAccessFlagBits::VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            }
+
             VkRenderPassCreateInfo default_render_pass_create_info = {};
             default_render_pass_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
             default_render_pass_create_info.flags = 0;
@@ -1395,8 +1427,11 @@ namespace jeecs::graphic::api::vk120
                 jeecs::debug::logfatal("Failed to find suitable depth format.");
             }
 
-            // 设置交换链呈现模式，优先选择VK_PRESENT_MODE_MAILBOX_KHR，其次是VK_PRESENT_MODE_FIFO_KHR；
-            // 如果都不支持，则回滚到VK_PRESENT_MODE_IMMEDIATE_KHR；如果以上模式均不支持，则直接终止
+            // 选择呈现模式。注意:MAILBOX 与 FIFO 都是"无撕裂、受刷新率限制"的同步模式，
+            // 只有 IMMEDIATE 才是真正的不限帧/可能撕裂模式。
+            // 这里的策略是:
+            //   _vk_vsync_config == true (config->m_fps == 0) -> 严格 FIFO(标准 VSync);
+            //   _vk_vsync_config == false -> 优先 MAILBOX(低延迟但仍无撕裂), 否则 IMMEDIATE。
             bool vk_present_mode_mailbox_supported = false;
             bool vk_present_mode_fifo_supported = false;
             bool vk_present_mode_immediate_supported = false;
@@ -1411,12 +1446,15 @@ namespace jeecs::graphic::api::vk120
                     vk_present_mode_immediate_supported = true;
             }
 
-            if (vk_present_mode_mailbox_supported && !_vk_vsync_config)
-                _vk_surface_present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
-            else if (vk_present_mode_fifo_supported && _vk_vsync_config)
+            if (vk_present_mode_fifo_supported && _vk_vsync_config)
                 _vk_surface_present_mode = VK_PRESENT_MODE_FIFO_KHR;
+            else if (vk_present_mode_mailbox_supported && !_vk_vsync_config)
+                _vk_surface_present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
             else if (vk_present_mode_immediate_supported)
                 _vk_surface_present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+            else if (vk_present_mode_fifo_supported)
+                // FIFO 由 Vulkan 保证一定可用，作为最后的兜底
+                _vk_surface_present_mode = VK_PRESENT_MODE_FIFO_KHR;
             else
             {
                 jeecs::debug::logfatal("Failed to create vk120 swapchain, unsupported present mode.");
@@ -1690,6 +1728,14 @@ namespace jeecs::graphic::api::vk120
             _vk_msaa_config = config->m_msaa;
             if (_vk_msaa_config == 0)
                 _vk_msaa_config = 1;
+            // NOTE: 当前 vk120 后端的多重采样尚未实现(管线固定为 VK_SAMPLE_COUNT_1_BIT)，
+            // 这里仅记录配置并以 1x 运行，避免静默忽略用户设置。
+            if (_vk_msaa_config > 1)
+            {
+                jeecs::debug::logwarn("VK120: MSAA x%zu is requested but not implemented yet, "
+                    "rendering will run at 1x (no anti-aliasing).", _vk_msaa_config);
+                _vk_msaa_config = 1;
+            }
 
             _vk_vsync_config = config->m_fps == 0;
 
@@ -2146,7 +2192,7 @@ namespace jeecs::graphic::api::vk120
             vertex_buffer_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
             vertex_buffer_create_info.pNext = nullptr;
             vertex_buffer_create_info.flags = 0;
-            vertex_buffer_create_info.size = (uint32_t)buffer_size;
+            vertex_buffer_create_info.size = (VkDeviceSize)buffer_size;
             vertex_buffer_create_info.usage = buffer_usage;
             vertex_buffer_create_info.sharingMode = VkSharingMode::VK_SHARING_MODE_EXCLUSIVE;
 
@@ -2383,21 +2429,8 @@ namespace jeecs::graphic::api::vk120
                         VkFormat::VK_FORMAT_R32G32B32A32_SFLOAT;
                     vertex_point_data_size += sizeof(float) * 4;
                     break;
-                case jegl_shader::uniform_type::FLOAT2X2:
-                    shader_blob->m_vertex_input_attribute_descriptions[i].format =
-                        VkFormat::VK_FORMAT_R32G32B32A32_SFLOAT;
-                    vertex_point_data_size += sizeof(float) * 4;
-                    break;
-                case jegl_shader::uniform_type::FLOAT3X3:
-                    shader_blob->m_vertex_input_attribute_descriptions[i].format =
-                        VkFormat::VK_FORMAT_R32G32B32A32_SFLOAT;
-                    vertex_point_data_size += sizeof(float) * 4;
-                    break;
-                case jegl_shader::uniform_type::FLOAT4X4:
-                    shader_blob->m_vertex_input_attribute_descriptions[i].format =
-                        VkFormat::VK_FORMAT_R32G32B32A32_SFLOAT;
-                    vertex_point_data_size += sizeof(float) * 4;
-                    break;
+                    // NOTE: 矩阵类型(FLOAT2X2/FLOAT3X3/FLOAT4X4)作为顶点属性未被支持，
+                    // 与 DX11/Metal 后端保持一致；落入下面的 default 分支并报错。
                 default:
                     jeecs::debug::logfatal(
                         "Unsupported vertex input type '%d' in shader '%s'.",
@@ -3287,7 +3320,7 @@ namespace jeecs::graphic::api::vk120
                 uniformbuf,
                 resource->m_buffer + resource->m_update_begin_offset,
                 resource->m_update_begin_offset,
-                resource->m_buffer_size);
+                resource->m_update_length);
         }
 
         /////////////////////////////////////////////////////
@@ -3315,14 +3348,17 @@ namespace jeecs::graphic::api::vk120
             submit_info.signalSemaphoreCount = 1;
             submit_info.pSignalSemaphores = &new_semphore;
 
+            // NOTE: 这里使用 vkQueueWaitIdle 而非 per-image fence 是有意为之。
+            // jevk12_shader 的 UBO 池(m_uniform_variables)按 commit round 回收，且通过
+            // vkMapMemory+memcpy 直接写入 HOST_COHERENT 显存，其生命周期并未绑定到 swapchain
+            // 镜像。只有等 GPU 完成本帧后，下一帧 CPU 才能安全覆写这些 UBO。若要改用 per-image
+            // fence 提升并行度，必须先把 UBO 池改造成 frame-in-flight 感知(按镜像索引)。
             if (vkQueueSubmit(
                 _vk_logic_device_graphic_queue, 1, &submit_info, VK_NULL_HANDLE) != VK_SUCCESS)
             {
                 jeecs::debug::logfatal("Failed to submit draw command buffer!");
             }
 
-            // Fix: Proper semaphore lifecycle management
-            // Only wait for queue if we're targeting the swapchain (presentation needs sync)
             if (_vk_current_target_framebuffer == _vk_current_swapchain_image_content->m_framebuffer)
             {
                 vkQueueWaitIdle(_vk_logic_device_graphic_queue);
@@ -3340,6 +3376,14 @@ namespace jeecs::graphic::api::vk120
 
             _vk_current_target_framebuffer = nullptr;
             _vk_current_command_buffer = nullptr;
+        }
+
+        void recreate_swapchain_and_reinit_imgui()
+        {
+            vkDeviceWaitIdle(_vk_logic_device);
+            jegui_shutdown_vk120(true);
+            recreate_swap_chain_for_current_surface();
+            imgui_init();
         }
 
         void present()
@@ -3361,7 +3405,17 @@ namespace jeecs::graphic::api::vk120
                 present_info.pImageIndices = &_vk_presenting_swapchain_image_index;
                 present_info.pResults = nullptr;
 
-                vkQueuePresentKHR(_vk_logic_device_present_queue, &present_info);
+                VkResult present_result =
+                    vkQueuePresentKHR(_vk_logic_device_present_queue, &present_info);
+                // VK_ERROR_OUT_OF_DATE_KHR / VK_SUBOPTIMAL_KHR 不是致命错误：
+                // 下一帧的 interface update 或 update() 内的 acquire 会触发交换链重建。
+                if (present_result != VK_SUCCESS
+                    && present_result != VK_SUBOPTIMAL_KHR
+                    && present_result != VK_ERROR_OUT_OF_DATE_KHR)
+                {
+                    jeecs::debug::logwarn("Failed to present swap chain image (vkResult=%d).",
+                        (int)present_result);
+                }
             }
         }
 
@@ -3372,15 +3426,33 @@ namespace jeecs::graphic::api::vk120
             _vk_wait_for_last_command_buffer_stage =
                 VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-            if (VkResult::VK_SUCCESS != vkAcquireNextImageKHR(
+            VkResult acquire_result = vkAcquireNextImageKHR(
                 _vk_logic_device,
                 _vk_swapchain,
                 UINT64_MAX,
                 _vk_last_command_buffer_semaphore,
                 VK_NULL_HANDLE,
-                &_vk_presenting_swapchain_image_index))
+                &_vk_presenting_swapchain_image_index);
+
+            // VK_SUBOPTIMAL_KHR 是成功码（图像可用，只是呈现模式非最优），应当继续；
+            // VK_ERROR_OUT_OF_DATE_KHR 表示交换链已失效，重建后用同一个 semaphore 重试。
+            if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR)
             {
-                jeecs::debug::logfatal("Failed to acquire swap chain image.");
+                recreate_swapchain_and_reinit_imgui();
+                // 失败的 acquire 不会 signal semaphore，可安全复用于重试
+                acquire_result = vkAcquireNextImageKHR(
+                    _vk_logic_device,
+                    _vk_swapchain,
+                    UINT64_MAX,
+                    _vk_last_command_buffer_semaphore,
+                    VK_NULL_HANDLE,
+                    &_vk_presenting_swapchain_image_index);
+            }
+
+            if (acquire_result != VK_SUCCESS && acquire_result != VK_SUBOPTIMAL_KHR)
+            {
+                jeecs::debug::logfatal("Failed to acquire swap chain image (vkResult=%d).",
+                    (int)acquire_result);
             }
 
             _vk_current_swapchain_image_content =
@@ -3979,13 +4051,7 @@ namespace jeecs::graphic::api::vk120
         case basic_interface::update_result::RESIZE:
             // Make present before swap chain recreation.
             context->present();
-
-            // Wait for device idle.
-            context->vkDeviceWaitIdle(context->_vk_logic_device);
-            jegui_shutdown_vk120(true);
-            context->recreate_swap_chain_for_current_surface();
-            context->imgui_init();
-
+            context->recreate_swapchain_and_reinit_imgui();
             context->update();
             return jegl_update_action::JEGL_UPDATE_CONTINUE;
         case basic_interface::update_result::CLOSE:
