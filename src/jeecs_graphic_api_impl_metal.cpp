@@ -50,7 +50,7 @@ namespace jeecs::graphic::api::metal
             metal_shader* m_current_target_shader;
             metal_framebuffer* m_current_target_framebuffer_may_null;
 
-            MTL::CommandBuffer* m_currnet_command_buffer;
+            MTL::CommandBuffer* m_current_command_buffer;
             MTL::RenderCommandEncoder* m_current_command_encoder;
         };
         render_runtime_states m_render_states;
@@ -83,6 +83,9 @@ namespace jeecs::graphic::api::metal
             m_interface = new glfw(reboot ? glfw::HOLD : glfw::METAL);
 
             m_metal_layer = CA::MetalLayer::layer();
+            // CA::MetalLayer::layer() 返回 autoreleased 对象，需要显式 retain
+            // 否则在跨 autorelease pool 边界后会变成野指针。
+            m_metal_layer->retain();
             m_metal_layer->setDevice(m_metal_device);
 
             m_render_states.m_screen_width = (int)cfg->m_width;
@@ -101,6 +104,7 @@ namespace jeecs::graphic::api::metal
             m_command_queue->release();
             m_metal_device->release();
             m_main_depth_texture_target->release();
+            m_metal_layer->release();
         }
     };
 
@@ -223,23 +227,23 @@ namespace jeecs::graphic::api::metal
 
         MTL::Buffer* allocate_buffer_to_update(jegl_metal_context* ctx)
         {
+            // 每帧开始时重置索引，使 buffer 池可以被复用，
+            // 避免 each frame 都分配新 buffer 导致的显存泄漏。
+            if (m_command_commit_round != ctx->m_render_states.m_frame_counter)
+            {
+                m_command_commit_round = ctx->m_render_states.m_frame_counter;
+                m_next_allocate_uniform_buffer_index = 0;
+            }
+
             if (m_next_allocate_uniform_buffer_index >= m_allocated_uniform_buffers.size())
             {
-                if (m_command_commit_round != ctx->m_render_states.m_frame_counter)
-                {
-                    m_command_commit_round = ctx->m_render_states.m_frame_counter;
-                    m_next_allocate_uniform_buffer_index = 0;
-                }
-
                 auto* buf = ctx->m_metal_device->newBuffer(
                     m_uniform_cpu_buffer_size,
                     MTL::ResourceStorageModeShared);
 
                 m_allocated_uniform_buffers.push_back(buf);
-                ++m_next_allocate_uniform_buffer_index;
-
-                return buf;
             }
+
             return m_allocated_uniform_buffers[m_next_allocate_uniform_buffer_index++];
         }
         MTL::Buffer* get_last_usable_buffer(jegl_metal_context* ctx)
@@ -518,7 +522,7 @@ namespace jeecs::graphic::api::metal
             ->depthAttachment()
             ->setTexture(metal_context->m_main_depth_texture_target);
 
-        metal_context->m_render_states.m_currnet_command_buffer = nullptr;
+        metal_context->m_render_states.m_current_command_buffer = nullptr;
         metal_context->m_render_states.m_current_command_encoder = nullptr;
 
         // If glfw enabled.
@@ -565,13 +569,13 @@ namespace jeecs::graphic::api::metal
 
         jegui_update_metal(
             metal_context->m_render_states.m_main_render_pass_descriptor,
-            metal_context->m_render_states.m_currnet_command_buffer,
+            metal_context->m_render_states.m_current_command_buffer,
             metal_context->m_render_states.m_current_command_encoder);
 
         metal_context->m_render_states.m_current_command_encoder->endEncoding();
-        metal_context->m_render_states.m_currnet_command_buffer->presentDrawable(
+        metal_context->m_render_states.m_current_command_buffer->presentDrawable(
             metal_context->m_render_states.m_main_this_frame_drawable);
-        metal_context->m_render_states.m_currnet_command_buffer->commit();
+        metal_context->m_render_states.m_current_command_buffer->commit();
 
         // 帧结束后释放自动释放池
         metal_context->m_frame_auto_release->release();
@@ -592,6 +596,18 @@ namespace jeecs::graphic::api::metal
         bool shader_load_failed = false;
         std::string error_informations;
 
+        // 安全地提取 NS::Error 的描述信息，避免 nullptr 解引用。
+        auto safe_error_description = [](NS::Error* err) -> std::string
+            {
+                if (err == nullptr)
+                    return "<no error info>";
+                auto* desc = err->localizedDescription();
+                if (desc == nullptr)
+                    return "<no error info>";
+                const char* utf8 = desc->utf8String();
+                return utf8 != nullptr ? std::string(utf8) : std::string("<no error info>");
+            };
+
         vertex_library = metal_context->m_metal_device->newLibrary(
             NS::String::string(shader->m_vertex_msl_mac_src, NS::StringEncoding::UTF8StringEncoding),
             nullptr,
@@ -602,8 +618,7 @@ namespace jeecs::graphic::api::metal
             shader_load_failed = true;
             error_informations += "In vertex shader: \n";
 
-            error_informations +=
-                error_info->localizedDescription()->utf8String();
+            error_informations += safe_error_description(error_info);
         }
 
         fragment_library = metal_context->m_metal_device->newLibrary(
@@ -615,8 +630,7 @@ namespace jeecs::graphic::api::metal
         {
             shader_load_failed = true;
             error_informations += "In fragment shader: \n";
-            error_informations +=
-                error_info->localizedDescription()->utf8String();
+            error_informations += safe_error_description(error_info);
         }
 
         if (shader_load_failed)
@@ -888,6 +902,7 @@ namespace jeecs::graphic::api::metal
                 case jegl_shader::uniform_type::FLOAT2X2:
                     unit_size = 16;
                     allign_base = 8;
+                    break;
                 case jegl_shader::uniform_type::FLOAT3X3:
                     unit_size = 48;
                     allign_base = 16;
@@ -1364,12 +1379,20 @@ namespace jeecs::graphic::api::metal
             pso = metal_context->m_metal_device->newRenderPipelineState(pDesc, &pError);
             if (pso == nullptr)
             {
+                std::string pso_err_msg = "<no error info>";
+                if (pError != nullptr)
+                {
+                    if (auto* desc = pError->localizedDescription(); desc != nullptr)
+                        if (const char* utf8 = desc->utf8String(); utf8 != nullptr)
+                            pso_err_msg = utf8;
+                }
+
                 jeecs::debug::logfatal(
                     "Fail to create pipeline state object for shader '%s':\n%s",
                     res->m_handle.m_path_may_null_if_builtin != nullptr
                     ? res->m_handle.m_path_may_null_if_builtin
                     : "<builtin>",
-                    pError->localizedDescription()->utf8String());
+                    pso_err_msg.c_str());
                 abort();
             }
 
@@ -1543,30 +1566,34 @@ namespace jeecs::graphic::api::metal
             }
         }
 
-        MTL::Buffer* current_shader_uniform_buffer;
-        if (current_shader->m_uniform_buffer_updated)
-        {
-            current_shader->m_uniform_buffer_updated = false;
-            current_shader_uniform_buffer = current_shader->allocate_buffer_to_update(metal_context);
-
-            // 将CPU端的uniform数据更新到GPU缓冲区
-            void* buffer_contents = current_shader_uniform_buffer->contents();
-            memcpy(
-                buffer_contents,
-                current_shader->m_uniform_cpu_buffer,
-                current_shader->m_uniform_cpu_buffer_size);
-        }
-        else
-            current_shader_uniform_buffer = current_shader->get_last_usable_buffer(metal_context);
-
         metal_context->m_render_states.m_current_command_encoder->setVertexBuffer(
             vertex_instance->m_vertex_buffer, 0, vertex_instance->m_vertex_stride, 0);
 
-        // Binding shader uniform.
-        metal_context->m_render_states.m_current_command_encoder->setVertexBuffer(
-            current_shader_uniform_buffer, 0, 0 + 1);
-        metal_context->m_render_states.m_current_command_encoder->setFragmentBuffer(
-            current_shader_uniform_buffer, 0, 0 + 1);
+        // Binding shader uniform. 仅当 shader 存在 uniform 时才分配/绑定 UBO，
+        // 避免为无 uniform 的 shader 分配 0 字节 buffer。
+        if (current_shader->m_uniform_cpu_buffer_size != 0)
+        {
+            MTL::Buffer* current_shader_uniform_buffer;
+            if (current_shader->m_uniform_buffer_updated)
+            {
+                current_shader->m_uniform_buffer_updated = false;
+                current_shader_uniform_buffer = current_shader->allocate_buffer_to_update(metal_context);
+
+                // 将CPU端的uniform数据更新到GPU缓冲区
+                void* buffer_contents = current_shader_uniform_buffer->contents();
+                memcpy(
+                    buffer_contents,
+                    current_shader->m_uniform_cpu_buffer,
+                    current_shader->m_uniform_cpu_buffer_size);
+            }
+            else
+                current_shader_uniform_buffer = current_shader->get_last_usable_buffer(metal_context);
+
+            metal_context->m_render_states.m_current_command_encoder->setVertexBuffer(
+                current_shader_uniform_buffer, 0, 0 + 1);
+            metal_context->m_render_states.m_current_command_encoder->setFragmentBuffer(
+                current_shader_uniform_buffer, 0, 0 + 1);
+        }
 
         metal_context->m_render_states.m_current_command_encoder->drawIndexedPrimitives(
             vertex_instance->m_primitive_type,
@@ -1730,10 +1757,10 @@ namespace jeecs::graphic::api::metal
         // Finish last command encoder and buffer if any.
         if (metal_context->m_render_states.m_current_command_encoder != nullptr)
         {
-            assert(metal_context->m_render_states.m_currnet_command_buffer != nullptr);
+            assert(metal_context->m_render_states.m_current_command_buffer != nullptr);
 
             metal_context->m_render_states.m_current_command_encoder->endEncoding();
-            metal_context->m_render_states.m_currnet_command_buffer->commit();
+            metal_context->m_render_states.m_current_command_buffer->commit();
         }
 
         metal_framebuffer* target_framebuf_may_null = fb == nullptr
@@ -1747,10 +1774,10 @@ namespace jeecs::graphic::api::metal
             ? target_framebuf_may_null->m_render_pass_descriptor
             : metal_context->m_render_states.m_main_render_pass_descriptor;
 
-        metal_context->m_render_states.m_currnet_command_buffer =
+        metal_context->m_render_states.m_current_command_buffer =
             metal_context->m_command_queue->commandBuffer();
         metal_context->m_render_states.m_current_command_encoder =
-            metal_context->m_render_states.m_currnet_command_buffer->renderCommandEncoder(
+            metal_context->m_render_states.m_current_command_buffer->renderCommandEncoder(
                 target_framebuffer_desc);
 
         // Set viewport
