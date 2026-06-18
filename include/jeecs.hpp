@@ -10706,62 +10706,29 @@ namespace jeecs
     }
     namespace Physics2D
     {
-        // ===================== World layer =====================
-        namespace World
+        // ===================== Scene-level config =====================
+        // Exactly one entity per game_world should carry this. The referenced
+        // woolang script is the single source of truth for the scene's physics:
+        //   1. the number of physics layers (worlds),
+        //   2. per-layer settings (gravity / solver substeps / sleeping / CCD),
+        //   3. the collision-group rules shared across ALL layers.
+        // Rigidbodies bind to a layer via Rigidbody::layerid (0..N-1).
+        struct Scene
         {
-            // Mandatory identity + collision-group config. One per physics world entity.
-            struct Core
-            {
-                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Core);
-                JECS_DEFAULT_CONSTRUCTOR(Core);
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Scene);
+            JECS_DEFAULT_CONSTRUCTOR(Scene);
 
-                size_t layerid = 0;
-                basic::fileresource<void> collide_group_config;
+            basic::fileresource<void> physics_config;
 
-                static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
-                {
-                    typing::register_member(guard, &Core::layerid, "layerid");
-                    typing::register_member(guard, &Core::collide_group_config, "collide_group_config");
-                }
-            };
-            struct Gravity
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Gravity);
-                JECS_DEFAULT_CONSTRUCTOR(Gravity);
-
-                math::vec2 value = math::vec2(0.f, -9.8f);
-                static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
-                {
-                    typing::register_member(guard, &Gravity::value, "value");
-                }
-            };
-            struct SolverSubsteps
-            {
-                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(SolverSubsteps);
-                JECS_DEFAULT_CONSTRUCTOR(SolverSubsteps);
-
-                size_t value = 4;
-                static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
-                {
-                    typing::register_member(guard, &SolverSubsteps::value, "value");
-                }
-            };
-            // Tag: enable body sleeping. Absent = sleeping disabled.
-            struct EnableSleeping
-            {
-                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(EnableSleeping);
-                JECS_DEFAULT_CONSTRUCTOR(EnableSleeping);
-            };
-            // Tag: enable continuous collision detection (CCD) globally.
-            struct EnableContinuous
-            {
-                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(EnableContinuous);
-                JECS_DEFAULT_CONSTRUCTOR(EnableContinuous);
-            };
-        }
+                typing::register_member(guard, &Scene::physics_config, "physics_config");
+            }
+        };
 
         // ===================== Rigidbody layer =====================
-        // Mandatory component for any 2D-physics-driven entity. `layerid` binds it to a World::Core.
+        // Mandatory component for any 2D-physics-driven entity. `layerid` binds it
+        // to a layer declared by the scene's Physics2D::Scene config script.
         struct Rigidbody
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Rigidbody);
@@ -10775,7 +10742,7 @@ namespace jeecs
             // the ones that run before PhysicsUpdate, which observe the previous
             // frame's CollisionResult.
             // 0 = no body has been created yet (before first PhysicsUpdate, or
-            //     after the owning World::Core disappeared).
+            //     after the owning layer disappeared from the scene config).
             uint64_t body_id = 0;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
@@ -12354,11 +12321,7 @@ namespace jeecs
             type_info::register_type<Light2D::SpriteShadow>(guard, "Light2D::SpriteShadow");
             type_info::register_type<Light2D::SelfShadow>(guard, "Light2D::SelfShadow");
 
-            type_info::register_type<Physics2D::World::Core>(guard, "Physics2D::World::Core");
-            type_info::register_type<Physics2D::World::Gravity>(guard, "Physics2D::World::Gravity");
-            type_info::register_type<Physics2D::World::SolverSubsteps>(guard, "Physics2D::World::SolverSubsteps");
-            type_info::register_type<Physics2D::World::EnableSleeping>(guard, "Physics2D::World::EnableSleeping");
-            type_info::register_type<Physics2D::World::EnableContinuous>(guard, "Physics2D::World::EnableContinuous");
+            type_info::register_type<Physics2D::Scene>(guard, "Physics2D::Scene");
 
             type_info::register_type<Physics2D::Rigidbody>(guard, "Physics2D::Rigidbody");
             type_info::register_type<Physics2D::DynamicBody>(guard, "Physics2D::DynamicBody");

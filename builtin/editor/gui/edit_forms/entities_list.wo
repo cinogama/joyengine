@@ -348,14 +348,10 @@ namespace editor::gui::edit_forms
                     ]);
             }
             Separator();
-            if (MenuItem("物理层级配置"))
+            if (MenuItem("物理场景配置"))
             {
-                do fast_create_entity(context, w, "物理层级配置", [
-                        "Physics2D::World::Core",
-                        "Physics2D::World::Gravity",
-                        "Physics2D::World::SolverSubsteps",
-                        "Physics2D::World::EnableSleeping",
-                        "Physics2D::World::EnableContinuous",
+                do fast_create_entity(context, w, "物理场景配置", [
+                        "Physics2D::Scene",
                     ]);
             }
             

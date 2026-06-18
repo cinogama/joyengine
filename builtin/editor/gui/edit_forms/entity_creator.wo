@@ -446,13 +446,9 @@ namespace editor::gui::edit_forms
                         context->add_components("Physics2D::IsTrigger");
                     }
                     Separator();
-                    if (MenuItem("世界配置"))
+                    if (MenuItem("场景配置"))
                     {
-                        context->add_components("Physics2D::World::Core");
-                        context->add_components("Physics2D::World::Gravity");
-                        context->add_components("Physics2D::World::SolverSubsteps");
-                        context->add_components("Physics2D::World::EnableSleeping");
-                        context->add_components("Physics2D::World::EnableContinuous");
+                        context->add_components("Physics2D::Scene");
                     }
                     EndMenu();
                 }

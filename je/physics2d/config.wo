@@ -1,10 +1,51 @@
 // Joyengine 4.x
+// Scene-level Physics2D configuration.
+// A config script declares:
+//   1. the physics layers (worlds) via PHYSICS2D_LAYER!,
+//   2. the collision groups via PHYSICS2D_GROUP!,
+//   3. the collision rules via PHYSICS2D_COLLISIONS!.
+// The collision-group table is shared across ALL layers.
+// The script returns a SceneConfig { layers, collide_groups }.
 import woo::std;
 import je;
 import je::towoo;
 
 namespace je::physics2d::config
 {
+    // One per physics world. Layer index = declaration order.
+    // Field order is significant for the C++ loader:
+    //   0 = m_gravity, 1 = m_solver_substeps,
+    //   2 = m_enable_sleeping, 3 = m_enable_continuous.
+    // gravity uses the (real, real) tuple directly (vec2 is a `using`
+    // alias of it, hence a distinct type — see woolang rule: `using`
+    // creates a new type); the C++ loader reads it as a 2-float tuple.
+    using LayerInfo = struct{
+        m_gravity: (real, real),
+        m_solver_substeps: int,
+        m_enable_sleeping: bool,
+        m_enable_continuous: bool,
+    }
+    {
+        public let layers = []mut: vec<LayerInfo>;
+
+        public func create(
+            gravity: (real, real),
+            solver_substeps: int,
+            enable_sleeping: bool,
+            enable_continuous: bool)
+        {
+            let self = LayerInfo{
+                m_gravity = gravity,
+                m_solver_substeps = solver_substeps,
+                m_enable_sleeping = enable_sleeping,
+                m_enable_continuous = enable_continuous,
+            };
+
+            layers->add(self);
+            return self;
+        }
+    }
+
     using CollideGroupInfo = struct{
         m_filter_components: vec<(je::typeinfo, CollideGroupInfo::Requirement)>,
         m_collide_mask: mut int,
@@ -43,6 +84,114 @@ namespace je::physics2d::config
             b.m_collide_mask = b.m_collide_mask->bor(1->bshl(a.m_self_gid));
         }
     }
+
+    // Returned to the engine. Field order is significant:
+    //   field 0 = layers, field 1 = collide_groups.
+    // Constructed via build() so the macro never touches the private
+    // fields directly.
+    public using SceneConfig = struct{
+        layers: vec<LayerInfo>,
+        collide_groups: vec<CollideGroupInfo>,
+    }
+    {
+        // Pack the declared layers + collide-groups into the value the
+        // engine reads. Called from the PHYSICS2D_COLLISIONS! macro.
+        public func build()=> SceneConfig
+        {
+            return SceneConfig {
+                layers = LayerInfo::layers,
+                collide_groups = CollideGroupInfo::groups,
+            };
+        }
+    }
+}
+
+#macro PHYSICS2D_LAYER
+{
+    /*
+    PHYSICS2D_LAYER! 层名
+    {
+        gravity: (0.0, -9.8);
+        substeps: 4;
+        sleep: true;
+        continuous: false;
+    }
+    Any field may be omitted; defaults are gravity=(0.0,-9.8), substeps=4,
+    sleep=true, continuous=false. Layer index = declaration order.
+    */
+    using std::token_type;
+    
+    let layer_name = lexer->expect_token(l_identifier)->or("<Empty>");
+    if (lexer->next != "{")
+    {
+        lexer->error("Unexpected token, should be '{'.");
+        return "";
+    }
+
+    let mut gravity_val    = option::none: option<string>;
+    let mut substeps_val   = option::none: option<string>;
+    let mut sleep_val      = option::none: option<string>;
+    let mut continuous_val = option::none: option<string>;
+    
+    parse_layer_fields@
+    for (;;)
+    {
+        let token = lexer->next;
+        if (token == "}")
+            break parse_layer_fields;
+        else if (token == "")
+        {
+            lexer->error("Unexpected EOF.");
+            return "";
+        }
+
+        let key = token;
+        if (lexer->next != ":")
+        {
+            lexer->error("Unexpected token, should be ':' after layer field name.");
+            return "";
+        }
+
+        let mut value = "";
+        for (;;)
+        {
+            let t = lexer->next;
+            if (t == ";")
+                break;
+            else if (t == "}")
+            {
+                lexer->error("Unexpected '}', should be ';'.");
+                return "";
+            }
+            else if (t == "")
+            {
+                lexer->error("Unexpected EOF.");
+                return "";
+            }
+            value += t;
+        }
+
+        if (key == "gravity")
+            gravity_val = option::value(value);
+        else if (key == "substeps")
+            substeps_val = option::value(value);
+        else if (key == "sleep")
+            sleep_val = option::value(value);
+        else if (key == "continuous")
+            continuous_val = option::value(value);
+        else
+        {
+            lexer->error(F"Unknown layer field '{key}', expected gravity/substeps/sleep/continuous.");
+            return "";
+        }
+    }
+
+    let gravity    = gravity_val->or("(0.0, -9.8)");
+    let substeps   = substeps_val->or("4");
+    let sleep      = sleep_val->or("true");
+    let continuous = continuous_val->or("false");
+
+    return F"let {layer_name} = je::physics2d::config::LayerInfo::create({gravity}, {substeps}, {sleep}, {continuous});";
 }
 
 #macro PHYSICS2D_GROUP
@@ -197,5 +346,5 @@ namespace je::physics2d::config
             i += 1;
         }
     }
-    return result + "return je::physics2d::config::CollideGroupInfo::groups;";
+    return result + "return je::physics2d::config::SceneConfig::build();";
 }

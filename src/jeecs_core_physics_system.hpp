@@ -129,17 +129,42 @@ namespace jeecs
         };
 
         // ============================================================
-        // load_collide_groups_from_path: pure function that loads and
-        // parses a woolang collision-group config, returning nullopt
-        // and logging on any failure.
+        // scene_physics_config: the parsed result of the scene-level
+        // physics config script. Layers define the N physics worlds;
+        // collide_groups is the collision-rule table shared by ALL layers.
         // ============================================================
-        static std::optional<collision_group_table> load_collide_groups_from_path(
+        struct scene_physics_config
+        {
+            struct layer_info
+            {
+                math::vec2 gravity    = math::vec2(0.f, -9.8f);
+                size_t     substeps   = 4;
+                bool       sleep      = false;
+                bool       continuous = false;
+            };
+            std::vector<layer_info> layers;
+            collision_group_table   collide_groups; // shared across every layer
+        };
+
+        // ============================================================
+        // load_scene_physics_config_from_path: pure function that loads
+        // and parses a woolang scene-physics config, returning nullopt
+        // and logging on any failure.
+        //
+        // The script must return a struct of shape:
+        //   { layers: vec<LayerInfo>, collide_groups: vec<CollideGroupInfo> }
+        // where LayerInfo = { gravity: (real, real), solver_substeps: int,
+        //                     enable_sleeping: bool, enable_continuous: bool }
+        //   (field order is significant) and CollideGroupInfo keeps its
+        //   original layout: [filter_components, collide_mask].
+        // ============================================================
+        static std::optional<scene_physics_config> load_scene_physics_config_from_path(
             const std::string& path)
         {
             jeecs_file* fp = jeecs_file_open(path.c_str());
             if (fp == nullptr)
             {
-                jeecs::debug::logerr("Unable to open Physics2D collide-group config: '%s'.", path.c_str());
+                jeecs::debug::logerr("Unable to open Physics2D scene config: '%s'.", path.c_str());
                 return std::nullopt;
             }
 
@@ -152,18 +177,18 @@ namespace jeecs
             if (cenv == nullptr)
             {
                 jeecs::debug::logerr(
-                    "Unable to parse Physics2D collide-group config '%s':\n%s.",
+                    "Unable to parse Physics2D scene config '%s':\n%s.",
                     path.c_str(),
                     wo_get_compile_error(cerr, WO_PLAIM));
                 wo_compile_errors_free(cerr);
                 return std::nullopt;
             }
 
-            collision_group_table result{};
+            scene_physics_config result{};
             woort_vm* const vmm = woort_vm_create();
             if (vmm == nullptr)
             {
-                jeecs::debug::logerr("Unable to resolve Physics2D collide-group config: failed to create VM.");
+                jeecs::debug::logerr("Unable to resolve Physics2D scene config: failed to create VM.");
                 woort_codeenv_drop(cenv);
                 return std::nullopt;
             }
@@ -173,31 +198,68 @@ namespace jeecs
             woort_vm_swap_guard vm_guard{ vmm };
 
             woort_value s;
-            if (!woort_push_reserve(5, &s))
+            if (!woort_push_reserve(9, &s))
             {
-                jeecs::debug::logerr("Unable to resolve Physics2D collide-group config: stack overflow.");
+                jeecs::debug::logerr("Unable to resolve Physics2D scene config: stack overflow.");
                 woort_codeenv_drop(cenv);
                 return std::nullopt;
             }
 
-            const woort_value result_vec     = s + 0;
-            const woort_value group_info     = s + 1; // struct{filters, collide_mask}
-            const woort_value filter_vec     = s + 2; // array<(typeinfo, Requirement)>
-            const woort_value filter_value   = s + 3; // reused slot for current element
-            const woort_value collide_mask   = s + 4; // reused slot
+            const woort_value result_struct  = s + 0; // { layers, collide_groups }
+            const woort_value layers_vec     = s + 1;
+            const woort_value groups_vec     = s + 2;
+            const woort_value layer_slot     = s + 3; // reused per layer
+            const woort_value gravity_slot   = s + 4; // reused (vec2 = nested struct)
+            const woort_value group_info     = s + 5; // reused per collide group
+            const woort_value filter_vec     = s + 6; // array<(typeinfo, Requirement)>
+            const woort_value filter_value   = s + 7; // reused slot for current element
+            const woort_value typeinfo_slot  = s + 8; // reused
 
-            const woort_VmCallStatus status = woort_bootup_codeenv(result_vec, cenv);
+            const woort_VmCallStatus status = woort_bootup_codeenv(result_struct, cenv);
             if (status != WOORT_VM_CALL_STATUS_NORMAL)
             {
                 jeecs::debug::logerr(
-                    "Unable to resolve Physics2D collide-group config '%s': %s.",
+                    "Unable to resolve Physics2D scene config '%s': %s.",
                     path.c_str(),
                     woort_vm_get_runtime_error(vmm));
                 woort_codeenv_drop(cenv);
                 return std::nullopt;
             }
 
-            size_t configed = woort_vec_len(result_vec);
+            // Unpack the two top-level fields of the returned struct.
+            woort_struct_get(layers_vec, result_struct, 0);
+            woort_struct_get(groups_vec, result_struct, 1);
+
+            // ---- Layers ----
+            const size_t layer_count = woort_vec_len(layers_vec);
+            result.layers.clear();
+            result.layers.reserve(layer_count);
+            for (size_t i = 0; i < layer_count; ++i)
+            {
+                (void)woort_vec_get(layer_slot, layers_vec, i);
+
+                // Field 0: gravity (vec2 → nested struct, fields 0/1 = x/y).
+                woort_struct_get(gravity_slot, layer_slot, 0);
+
+                scene_physics_config::layer_info info{};
+                info.gravity = math::vec2(
+                    woort_struct_get_float(gravity_slot, 0),
+                    woort_struct_get_float(gravity_slot, 1));
+                info.substeps   = static_cast<size_t>(woort_struct_get_int(layer_slot, 1));
+                info.sleep      = woort_struct_get_bool(layer_slot, 2);
+                info.continuous = woort_struct_get_bool(layer_slot, 3);
+                result.layers.push_back(info);
+            }
+
+            if (result.layers.empty())
+            {
+                jeecs::debug::logwarn(
+                    "Physics2D scene config '%s' declared no layers; at least one is required.",
+                    path.c_str());
+            }
+
+            // ---- Collide groups (shared by every layer) ----
+            size_t configed = woort_vec_len(groups_vec);
             if (configed > MAX_GROUP_COUNT)
             {
                 jeecs::debug::logwarn(
@@ -205,13 +267,13 @@ namespace jeecs
                     MAX_GROUP_COUNT, configed, path.c_str());
                 configed = MAX_GROUP_COUNT;
             }
-            result.m_count = configed;
+            result.collide_groups.m_count = configed;
 
             for (size_t i = 0; i < configed; ++i)
             {
-                auto& group = result.m_groups[i];
+                auto& group = result.collide_groups.m_groups[i];
 
-                (void)woort_vec_get(group_info, result_vec, i);
+                (void)woort_vec_get(group_info, groups_vec, i);
                 // First struct field: filter list of (typeinfo, Requirement)
                 woort_struct_get(filter_vec, group_info, 0);
 
@@ -225,18 +287,17 @@ namespace jeecs
                     (void)woort_vec_get(filter_value, filter_vec, j - 1);
 
                     woort_value requirement_slot = filter_value;
-                    woort_struct_get(collide_mask,   filter_value,   0); // typeinfo
+                    woort_struct_get(typeinfo_slot,    filter_value, 0); // typeinfo
                     woort_struct_get(requirement_slot, filter_value, 1); // Requirement
 
                     group.m_filters.push_back(group_filter_rule{
-                        static_cast<const typing::type_info*>(woort_pointer(collide_mask)),
+                        static_cast<const typing::type_info*>(woort_pointer(typeinfo_slot)),
                         static_cast<requirement::type>(woort_int(requirement_slot)),
                     });
                 }
 
                 // Second struct field: collide mask.
-                woort_struct_get(collide_mask, group_info, 1);
-                group.m_collide_mask = static_cast<uint16_t>(woort_int(collide_mask));
+                group.m_collide_mask = static_cast<uint16_t>(woort_struct_get_int(group_info, 1));
             }
 
             woort_codeenv_drop(cenv);
@@ -344,6 +405,14 @@ namespace jeecs
         // Reused scratch buffers (avoids per-frame allocation).
         std::vector<b2ContactData>                                 m_contact_data_scratch;
 
+        // Scene-level config cache. The script is the single source of truth:
+        // it defines the layer count, per-layer settings, and the shared
+        // collision-group table. Reloaded only when Physics2D::Scene's
+        // referenced path changes.
+        std::string                                                m_loaded_config_path;
+        physics2d_detail::scene_physics_config                     m_scene_config{};
+        bool                                                       m_config_loaded = false;
+
         Physics2DUpdatingSystem(game_world w)
             : game_system(w)
         {
@@ -400,24 +469,72 @@ namespace jeecs
         {
             std::unordered_map<size_t, std::unique_ptr<PhysicsWorld>> this_frame;
 
-            for (auto&& [e, core, gravity, substeps, sleep, cont] :
-                query_entity<view typesof(
-                    Physics2D::World::Core&,
-                    Physics2D::World::Gravity*,
-                    Physics2D::World::SolverSubsteps*,
-                    Physics2D::World::EnableSleeping*,
-                    Physics2D::World::EnableContinuous*
-                )>())
+            // ---- Resolve the scene config from the (single) Physics2D::Scene entity. ----
+            std::string current_path;
+            size_t      scene_count = 0;
+            for (auto&& [e, scene] :
+                query_entity<view typesof(Physics2D::Scene&)>())
             {
-                const size_t lid = core.layerid;
-
-                if (this_frame.find(lid) != this_frame.end())
+                if (++scene_count == 1 && scene.physics_config.has_resource())
                 {
-                    // Bug-fix: detect duplicate layerid via this_frame map (not via context state).
-                    jeecs::debug::logerr(
-                        "Duplicate Physics2D world layerid: %zu, the second world entity is ignored.", lid);
-                    continue;
+                    auto path_opt = scene.physics_config.get_path();
+                    if (path_opt.has_value())
+                        current_path = path_opt.value();
                 }
+            }
+
+            if (scene_count == 0)
+            {
+                // No scene config present: tear down everything and drop the cache.
+                m_config_loaded = false;
+                m_loaded_config_path.clear();
+                m_scene_config = {};
+                return this_frame;
+            }
+            if (scene_count > 1)
+            {
+                jeecs::debug::logerr(
+                    "Multiple Physics2D::Scene entities found (%zu); only the first will be used.",
+                    scene_count);
+            }
+
+            // Reload only when the referenced path changes (or on first use).
+            if (current_path != m_loaded_config_path)
+            {
+                if (current_path.empty())
+                {
+                    m_config_loaded = false;
+                    m_loaded_config_path.clear();
+                    m_scene_config = {};
+                }
+                else
+                {
+                    auto loaded =
+                        physics2d_detail::load_scene_physics_config_from_path(current_path);
+                    if (loaded.has_value())
+                    {
+                        m_scene_config       = std::move(loaded.value());
+                        m_config_loaded      = true;
+                        m_loaded_config_path = current_path;
+                    }
+                    else
+                    {
+                        // Remember the bad path so we don't retry every frame,
+                        // but keep the previously loaded config (if any) alive.
+                        m_loaded_config_path = current_path;
+                    }
+                }
+            }
+
+            if (!m_config_loaded || m_scene_config.layers.empty())
+                return this_frame;
+
+            // ---- Build / reuse one b2World per declared layer. ----
+            const auto& layers = m_scene_config.layers;
+            for (size_t i = 0; i < layers.size(); ++i)
+            {
+                const size_t lid = i;
+                const auto& layer = layers[i];
 
                 auto prev_it = m_worlds.find(lid);
                 std::unique_ptr<PhysicsWorld> pw;
@@ -428,27 +545,14 @@ namespace jeecs
                     pw->world   = b2CreateWorld(&wdef);
                     pw->layerid = lid;
 
-                    // Initial config snapshot (will be overwritten below by diff step).
-                    pw->gravity_snap    = gravity ? gravity->value : math::vec2(0.f, -9.8f);
-                    pw->substeps_snap   = substeps ? substeps->value : 4;
-                    pw->sleep_snap      = sleep != nullptr;
-                    pw->continuous_snap = cont != nullptr;
+                    pw->gravity_snap    = layer.gravity;
+                    pw->substeps_snap   = layer.substeps;
+                    pw->sleep_snap      = layer.sleep;
+                    pw->continuous_snap = layer.continuous;
 
-                    b2World_SetGravity(pw->world, b2Vec2{ pw->gravity_snap.x, pw->gravity_snap.y });
-                    b2World_EnableSleeping(pw->world, pw->sleep_snap);
-                    b2World_EnableContinuous(pw->world, pw->continuous_snap);
-
-                    // Load collide-group config if provided.
-                    if (core.collide_group_config.has_resource())
-                    {
-                        auto path_opt = core.collide_group_config.get_path();
-                        if (path_opt.has_value())
-                        {
-                            auto groups = physics2d_detail::load_collide_groups_from_path(path_opt.value());
-                            if (groups.has_value())
-                                pw->groups = std::move(groups.value());
-                        }
-                    }
+                    b2World_SetGravity(pw->world, b2Vec2{ layer.gravity.x, layer.gravity.y });
+                    b2World_EnableSleeping(pw->world, layer.sleep);
+                    b2World_EnableContinuous(pw->world, layer.continuous);
                 }
                 else
                 {
@@ -456,31 +560,28 @@ namespace jeecs
                     // (prev_it entry is left empty; m_worlds is replaced at end of frame.)
                 }
 
+                // The collision-group table is shared across all layers.
+                pw->groups = m_scene_config.collide_groups;
+
                 // Diff config & apply.
-                const math::vec2 want_g = gravity ? gravity->value : math::vec2(0.f, -9.8f);
-                if (need_update_vec2(b2World_GetGravity(pw->world), want_g))
+                if (need_update_vec2(b2World_GetGravity(pw->world), layer.gravity))
                 {
-                    b2World_SetGravity(pw->world, b2Vec2{ want_g.x, want_g.y });
+                    b2World_SetGravity(pw->world, b2Vec2{ layer.gravity.x, layer.gravity.y });
                     // Awake every body so the new gravity takes effect immediately.
                     for (auto& [_, rec] : pw->bodies)
                         b2Body_SetAwake(rec.body, true);
                 }
-
-                const bool want_sleep = sleep != nullptr;
-                if (pw->sleep_snap != want_sleep)
+                if (pw->sleep_snap != layer.sleep)
                 {
-                    b2World_EnableSleeping(pw->world, want_sleep);
-                    pw->sleep_snap = want_sleep;
+                    b2World_EnableSleeping(pw->world, layer.sleep);
+                    pw->sleep_snap = layer.sleep;
                 }
-
-                const bool want_cont = cont != nullptr;
-                if (pw->continuous_snap != want_cont)
+                if (pw->continuous_snap != layer.continuous)
                 {
-                    b2World_EnableContinuous(pw->world, want_cont);
-                    pw->continuous_snap = want_cont;
+                    b2World_EnableContinuous(pw->world, layer.continuous);
+                    pw->continuous_snap = layer.continuous;
                 }
-
-                pw->substeps_snap = substeps ? substeps->value : 4;
+                pw->substeps_snap = layer.substeps;
 
                 this_frame.emplace(lid, std::move(pw));
             }
@@ -538,8 +639,9 @@ namespace jeecs
                 if (world_it == this_frame.end() || world_it->second == nullptr)
                 {
                     jeecs::debug::logerr(
-                        "Rigidbody belongs to layer %zu, but no Physics2D::World::Core with that layerid exists.",
-                        rb.layerid);
+                        "Rigidbody belongs to layer %zu, but the Physics2D scene config does not "
+                        "define a layer with that index (declared layer count: %zu).",
+                        rb.layerid, m_scene_config.layers.size());
                     continue;
                 }
                 PhysicsWorld* pw = world_it->second.get();

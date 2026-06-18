@@ -568,10 +568,18 @@ LATE_UPDATE!
                             | jeapi::gui::form::errmsg("创建ToWoo System 脚本失败", "无法创建文件，可能是文件名非法或磁盘已满")
                                 where file_path = fsys::normalize(cur_creating_path) / (filename + ".jesystem.wo"););
                 }
-                if (MenuItem("Physics2D 组配置"))
+                if (MenuItem("Physics2D 场景配置"))
                 {
                     let default_empty_script = 
 @"import je::physics2d::config;
+
+PHYSICS2D_LAYER! 默认层
+{
+    gravity: (0.0, -9.8);
+    substeps: 4;
+    sleep: true;
+    continuous: false;
+}
 
 PHYSICS2D_GROUP! 普通物体
 {
@@ -582,12 +590,12 @@ PHYSICS2D_COLLISIONS!
     普通物体, 普通物体;
 }
 "@;
-                        jeapi::gui::form::input("新建Physics2D 组配置", F"在{cur_creating_path}新建Physics2D 组配置", "group",
+                        jeapi::gui::form::input("新建Physics2D 场景配置", F"在{cur_creating_path}新建Physics2D 场景配置", "scene",
                         \filename: string = fsys::exist(file_path)
-                            ? jeapi::gui::form::errmsg("创建Physics2D 组配置失败", "同名文件已经存在")
+                            ? jeapi::gui::form::errmsg("创建Physics2D 场景配置失败", "同名文件已经存在")
                             | write_file_if_not_exist(file_path, F"// {filename}.jephysics2d.wo\n{default_empty_script}")
                             ? force_update()
-                            | jeapi::gui::form::errmsg("创建Physics2D 组配置失败", "无法创建文件，可能是文件名非法或磁盘已满")
+                            | jeapi::gui::form::errmsg("创建Physics2D 场景配置失败", "无法创建文件，可能是文件名非法或磁盘已满")
                                 where file_path = fsys::normalize(cur_creating_path) / (filename + ".jephysics2d.wo"););
                 }
                 if (MenuItem("编辑器工具脚本"))
