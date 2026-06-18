@@ -1435,7 +1435,7 @@ WOORT_API woort_api wojeapi_towoo_physics2d_collisionresult_check(void)
     // Look up by the stable body_id rather than by pointer, so this works
     // even when the CollisionResult was produced last PhysicsUpdate and the
     // other entity's archetype has since migrated.
-    const auto* contact = collisionResult.find(rigidbody.body_id);
+    const auto* contact = collisionResult.find(rigidbody);
     if (contact != nullptr)
     {
         woort_value ret = stack_base + 0;

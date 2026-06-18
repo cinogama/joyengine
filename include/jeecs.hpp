@@ -10990,10 +10990,10 @@ namespace jeecs
             CollisionResult(CollisionResult&&) = default;
             CollisionResult(const CollisionResult&) {}
 
-            const Contact* find(uint64_t body_id) const
+            const Contact* find(const Rigidbody& body) const
             {
                 for (auto& c : contacts)
-                    if (c.other_body_id == body_id)
+                    if (c.other_body_id == body.body_id)
                         return &c;
                 return nullptr;
             }
