@@ -70,7 +70,7 @@ jeecs_file* jeecs_load_cache_file(
         }
 
         // 2. Check crc64 of current file;
-        if (virtual_crc64 == -1)
+        if (virtual_crc64 == ~(uint64_t)0)
         {
             // Origin file missing, it's Okay.
         }

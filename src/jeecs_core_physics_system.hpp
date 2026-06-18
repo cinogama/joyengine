@@ -33,23 +33,14 @@ namespace jeecs
         // Strongly-typed Box2D id wrappers (replace former reinterpret macros).
         //
         // Box2D already provides official lossless encode/decode helpers
-        // (`b2StoreBodyId` / `b2LoadBodyId` / `b2StoreWorldId`), so we just
-        // wrap them for hashing & null checks. No type-punning UB.
+        // (`b2StoreBodyId` / `b2LoadBodyId` / `b2StoreShapeId` /
+        // `b2LoadShapeId`), so we just wrap them for hashing & null checks.
+        // No type-punning UB.
         // ============================================================
         inline uint64_t b2_body_to_u64(b2BodyId v) noexcept { return b2StoreBodyId(v); }
-        inline uint64_t b2_shape_to_u64(b2ShapeId v) noexcept
-        {
-            // b2ShapeId shares layout with b2BodyId (int32 + uint16 + uint16 = 8B).
-            return b2StoreBodyId(*reinterpret_cast<const b2BodyId*>(&v));
-        }
+        inline uint64_t b2_shape_to_u64(b2ShapeId v) noexcept { return b2StoreShapeId(v); }
         inline b2BodyId  u64_to_b2_body(uint64_t v)  noexcept { return b2LoadBodyId(v); }
-        inline b2ShapeId u64_to_b2_shape(uint64_t v) noexcept
-        {
-            b2BodyId tmp = b2LoadBodyId(v);
-            b2ShapeId out;
-            std::memcpy(&out, &tmp, sizeof(out));
-            return out;
-        }
+        inline b2ShapeId u64_to_b2_shape(uint64_t v) noexcept { return b2LoadShapeId(v); }
 
         struct B2BodyKeyHash
         {
