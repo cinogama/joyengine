@@ -1401,16 +1401,16 @@ WOORT_API woort_api wojeapi_towoo_physics2d_collisionresult_all(void)
     const woort_value val = stack_base + 2;
 
     woort_set_map(result_container);
-    woort_map_reserve(result_container, collisionResult.results.size());
+    woort_map_reserve(result_container, collisionResult.contacts.size());
 
-    for (auto& [rigidbody, result] : collisionResult.results)
+    for (auto& [rigidbody, contact] : collisionResult.contacts)
     {
         woort_set_struct(val, 2);
         (void)woort_map_set_by_pointer(result_container, rigidbody, val);
 
-        wo_set_vec2(elem, result.position);
+        wo_set_vec2(elem, contact.point);
         woort_struct_set(val, 0, elem);
-        wo_set_vec2(elem, result.normalize);
+        wo_set_vec2(elem, contact.normal);
         woort_struct_set(val, 1, elem);
     }
 
@@ -1428,17 +1428,17 @@ WOORT_API woort_api wojeapi_towoo_physics2d_collisionresult_check(void)
     auto& rigidbody =
         wo_component<jeecs::Physics2D::Rigidbody>(1, WOORT_RETURN_SLOT);
 
-    auto* result = collisionResult.check(&rigidbody);
-    if (result != nullptr)
+    const auto* contact = collisionResult.find(&rigidbody);
+    if (contact != nullptr)
     {
         woort_value ret = stack_base + 0;
 
         woort_set_struct(ret, 2);
 
-        wo_set_vec2(stack_base + 1, result->position);
+        wo_set_vec2(stack_base + 1, contact->point);
         woort_struct_set(ret, 0, stack_base + 1);
 
-        wo_set_vec2(stack_base + 1, result->normalize);
+        wo_set_vec2(stack_base + 1, contact->normal);
         woort_struct_set(ret, 1, stack_base + 1);
 
         return woort_ret_option_value(ret);

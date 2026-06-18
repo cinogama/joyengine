@@ -421,33 +421,38 @@ namespace editor::gui::edit_forms
                     {
                         context->add_components("Physics2D::Rigidbody");
                         context->add_components("Physics2D::Collider::Box");
-                        context->add_components("Physics2D::Friction");
                     }
                     if (MenuItem("动力学"))
                     {
                         context->add_components("Physics2D::Rigidbody");
+                        context->add_components("Physics2D::DynamicBody");
                         context->add_components("Physics2D::Collider::Box");
+                        context->add_components("Physics2D::Density");
                         context->add_components("Physics2D::Friction");
-                        context->add_components("Physics2D::Kinematics");
-                        context->add_components("Physics2D::Mass");
                     }
                     if (MenuItem("高速动力学"))
                     {
                         context->add_components("Physics2D::Rigidbody");
-                        context->add_components("Physics2D::Collider::Box");
-                        context->add_components("Physics2D::Friction");
-                        context->add_components("Physics2D::Kinematics");
-                        context->add_components("Physics2D::Mass");
+                        context->add_components("Physics2D::DynamicBody");
                         context->add_components("Physics2D::Bullet");
+                        context->add_components("Physics2D::Collider::Box");
+                        context->add_components("Physics2D::Density");
+                        context->add_components("Physics2D::Friction");
                     }
-                    if (MenuItem("弹性"))
+                    if (MenuItem("触发器"))
                     {
-                        context->add_components("Physics2D::Restitution");
+                        context->add_components("Physics2D::Rigidbody");
+                        context->add_components("Physics2D::Collider::Box");
+                        context->add_components("Physics2D::IsTrigger");
                     }
                     Separator();
                     if (MenuItem("世界配置"))
                     {
-                        context->add_components("Physics2D::World");
+                        context->add_components("Physics2D::World::Core");
+                        context->add_components("Physics2D::World::Gravity");
+                        context->add_components("Physics2D::World::SolverSubsteps");
+                        context->add_components("Physics2D::World::EnableSleeping");
+                        context->add_components("Physics2D::World::EnableContinuous");
                     }
                     EndMenu();
                 }

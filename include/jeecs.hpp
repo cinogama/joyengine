@@ -10706,69 +10706,215 @@ namespace jeecs
     }
     namespace Physics2D
     {
-        struct World
+        // ===================== World layer =====================
+        namespace World
         {
-            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(World);
-            JECS_DEFAULT_CONSTRUCTOR(World);
-
-            size_t layerid = 0;
-            math::vec2 gravity = math::vec2(0.f, -9.8f);
-            bool sleepable = true;
-            bool continuous = true;
-            size_t step = 4;
-
-            basic::fileresource<void> group_config;
-
-            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            // Mandatory identity + collision-group config. One per physics world entity.
+            struct Core
             {
-                typing::register_member(guard, &World::layerid, "layerid");
-                typing::register_member(guard, &World::gravity, "gravity");
-                typing::register_member(guard, &World::sleepable, "sleepable");
-                typing::register_member(guard, &World::continuous, "continuous");
-                typing::register_member(guard, &World::step, "step");
-                typing::register_member(guard, &World::group_config, "group_config");
-            }
-        };
+                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Core);
+                JECS_DEFAULT_CONSTRUCTOR(Core);
+
+                size_t layerid = 0;
+                basic::fileresource<void> collide_group_config;
+
+                static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+                {
+                    typing::register_member(guard, &Core::layerid, "layerid");
+                    typing::register_member(guard, &Core::collide_group_config, "collide_group_config");
+                }
+            };
+            struct Gravity
+            {
+                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Gravity);
+                JECS_DEFAULT_CONSTRUCTOR(Gravity);
+
+                math::vec2 value = math::vec2(0.f, -9.8f);
+                static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+                {
+                    typing::register_member(guard, &Gravity::value, "value");
+                }
+            };
+            struct SolverSubsteps
+            {
+                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(SolverSubsteps);
+                JECS_DEFAULT_CONSTRUCTOR(SolverSubsteps);
+
+                size_t value = 4;
+                static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+                {
+                    typing::register_member(guard, &SolverSubsteps::value, "value");
+                }
+            };
+            // Tag: enable body sleeping. Absent = sleeping disabled.
+            struct EnableSleeping
+            {
+                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(EnableSleeping);
+                JECS_DEFAULT_CONSTRUCTOR(EnableSleeping);
+            };
+            // Tag: enable continuous collision detection (CCD) globally.
+            struct EnableContinuous
+            {
+                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(EnableContinuous);
+                JECS_DEFAULT_CONSTRUCTOR(EnableContinuous);
+            };
+        }
+
+        // ===================== Rigidbody layer =====================
+        // Mandatory component for any 2D-physics-driven entity. `layerid` binds it to a World::Core.
         struct Rigidbody
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Rigidbody);
-
-            using rigidbody_id_t = uint64_t;
-            constexpr static rigidbody_id_t null_rigidbody = 0;
-
-            rigidbody_id_t native_rigidbody = null_rigidbody;
-            Rigidbody* _arch_updated_modify_hack = nullptr;
-
-            bool rigidbody_just_created = false;
-            math::vec2 record_body_scale = math::vec2(0.f, 0.f);
-            float record_density = 0.f;
-            float record_friction = 0.f;
-            float record_restitution = 0.f;
+            JECS_DEFAULT_CONSTRUCTOR(Rigidbody);
 
             size_t layerid = 0;
-
-            Rigidbody() = default;
-            Rigidbody(Rigidbody&&) = default;
-            Rigidbody(const Rigidbody& other)
-                : layerid(other.layerid)
-            {
-                // Do nothing
-            }
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Rigidbody::layerid, "layerid");
             }
         };
-        struct Mass
+        // BodyType tags: at most one. None = Static.
+        struct DynamicBody
         {
-            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Mass);
-            JECS_DEFAULT_CONSTRUCTOR(Mass);
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(DynamicBody);
+            JECS_DEFAULT_CONSTRUCTOR(DynamicBody);
+        };
+        struct KinematicBody
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(KinematicBody);
+            JECS_DEFAULT_CONSTRUCTOR(KinematicBody);
+        };
+        // Tag: enable per-body CCD for fast-moving entities.
+        struct Bullet
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Bullet);
+            JECS_DEFAULT_CONSTRUCTOR(Bullet);
+        };
 
-            float density = 1.f;
+        // ===================== Axis locks (orthogonal tags) =====================
+        struct LockTranslationX
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(LockTranslationX);
+            JECS_DEFAULT_CONSTRUCTOR(LockTranslationX);
+        };
+        struct LockTranslationY
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(LockTranslationY);
+            JECS_DEFAULT_CONSTRUCTOR(LockTranslationY);
+        };
+        struct LockRotation
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(LockRotation);
+            JECS_DEFAULT_CONSTRUCTOR(LockRotation);
+        };
 
+        // ===================== Kinematic state (bidirectional) =====================
+        struct LinearVelocity
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(LinearVelocity);
+            JECS_DEFAULT_CONSTRUCTOR(LinearVelocity);
+
+            math::vec2 value = {};
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(guard, &Mass::density, "density");
+                typing::register_member(guard, &LinearVelocity::value, "value");
+            }
+        };
+        struct AngularVelocity
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(AngularVelocity);
+            JECS_DEFAULT_CONSTRUCTOR(AngularVelocity);
+
+            float value = 0.f;
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &AngularVelocity::value, "value");
+            }
+        };
+        struct LinearDamping
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(LinearDamping);
+            JECS_DEFAULT_CONSTRUCTOR(LinearDamping);
+
+            float value = 0.f;
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &LinearDamping::value, "value");
+            }
+        };
+        struct AngularDamping
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(AngularDamping);
+            JECS_DEFAULT_CONSTRUCTOR(AngularDamping);
+
+            float value = 0.f;
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &AngularDamping::value, "value");
+            }
+        };
+        struct GravityScale
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(GravityScale);
+            JECS_DEFAULT_CONSTRUCTOR(GravityScale);
+
+            float value = 1.f;
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &GravityScale::value, "value");
+            }
+        };
+
+        // ===================== Colliders (mutually exclusive) =====================
+        namespace Collider
+        {
+            struct Box
+            {
+                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Box);
+                JECS_DEFAULT_CONSTRUCTOR(Box);
+
+                math::vec2 size = math::vec2(1.f, 1.f);
+                static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+                {
+                    typing::register_member(guard, &Box::size, "size");
+                }
+            };
+            struct Circle
+            {
+                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Circle);
+                JECS_DEFAULT_CONSTRUCTOR(Circle);
+
+                float radius = 0.5f;
+                static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+                {
+                    typing::register_member(guard, &Circle::radius, "radius");
+                }
+            };
+            struct Capsule
+            {
+                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Capsule);
+                JECS_DEFAULT_CONSTRUCTOR(Capsule);
+
+                float radius = 0.25f;
+                float height = 1.f;
+                static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+                {
+                    typing::register_member(guard, &Capsule::radius, "radius");
+                    typing::register_member(guard, &Capsule::height, "height");
+                }
+            };
+        }
+
+        // ===================== Material (orthogonal) =====================
+        struct Density
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Density);
+            JECS_DEFAULT_CONSTRUCTOR(Density);
+
+            float value = 1.f;
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &Density::value, "value");
             }
         };
         struct Friction
@@ -10776,7 +10922,7 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Friction);
             JECS_DEFAULT_CONSTRUCTOR(Friction);
 
-            float value = 1.f;
+            float value = 0.2f;
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Friction::value, "value");
@@ -10787,55 +10933,31 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Restitution);
             JECS_DEFAULT_CONSTRUCTOR(Restitution);
 
-            float value = 1.f;
+            float value = 0.f;
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Restitution::value, "value");
             }
         };
-        struct Kinematics
+        // Tag: sensor shape — generates contacts but no collision response.
+        struct IsTrigger
         {
-            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Kinematics);
-            JECS_DEFAULT_CONSTRUCTOR(Kinematics);
-
-            math::vec2 linear_velocity = {};
-            float angular_velocity = 0.f;
-            float linear_damping = 0.f;
-            float angular_damping = 0.f;
-            float gravity_scale = 1.f;
-
-            bool lock_movement_x = false;
-            bool lock_movement_y = false;
-            bool lock_rotation = false;
-
-            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
-            {
-                typing::register_member(guard, &Kinematics::linear_velocity, "linear_velocity");
-                typing::register_member(guard, &Kinematics::angular_velocity, "angular_velocity");
-                typing::register_member(guard, &Kinematics::linear_damping, "linear_damping");
-                typing::register_member(guard, &Kinematics::angular_damping, "angular_damping");
-                typing::register_member(guard, &Kinematics::gravity_scale, "gravity_scale");
-                typing::register_member(guard, &Kinematics::lock_movement_x, "lock_movement_x");
-                typing::register_member(guard, &Kinematics::lock_movement_y, "lock_movement_y");
-                typing::register_member(guard, &Kinematics::lock_rotation, "lock_rotation");
-            }
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(IsTrigger);
+            JECS_DEFAULT_CONSTRUCTOR(IsTrigger);
         };
-        struct Bullet
-        {
-            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Bullet);
-            JECS_DEFAULT_CONSTRUCTOR(Bullet);
-        };
-        namespace Transform
+
+        // ===================== Local pose offsets (orthogonal, optional) =====================
+        namespace Offset
         {
             struct Position
             {
                 JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Position);
                 JECS_DEFAULT_CONSTRUCTOR(Position);
 
-                math::vec2 offset = { 0.f, 0.f };
+                math::vec2 value = {};
                 static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
                 {
-                    typing::register_member(guard, &Position::offset, "offset");
+                    typing::register_member(guard, &Position::value, "value");
                 }
             };
             struct Rotation
@@ -10843,10 +10965,10 @@ namespace jeecs
                 JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Rotation);
                 JECS_DEFAULT_CONSTRUCTOR(Rotation);
 
-                float angle = 0.f;
+                float degree = 0.f;
                 static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
                 {
-                    typing::register_member(guard, &Rotation::angle, "angle");
+                    typing::register_member(guard, &Rotation::degree, "degree");
                 }
             };
             struct Scale
@@ -10854,70 +10976,41 @@ namespace jeecs
                 JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Scale);
                 JECS_DEFAULT_CONSTRUCTOR(Scale);
 
-                math::vec2 scale = { 1.f, 1.f };
+                math::vec2 value = math::vec2(1.f, 1.f);
                 static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
                 {
-                    typing::register_member(guard, &Scale::scale, "scale");
+                    typing::register_member(guard, &Scale::value, "value");
                 }
             };
         }
-        namespace Collider
-        {
-            using shape_id_t = uint64_t;
-            constexpr static shape_id_t null_shape = 0;
 
-            struct Box
-            {
-                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Box);
-
-                shape_id_t native_shape = null_shape;
-
-                Box() = default;
-                Box(Box&&) = default;
-                Box(const Box&) {};
-            };
-            struct Circle
-            {
-                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Circle);
-
-                shape_id_t native_shape = null_shape;
-
-                Circle() = default;
-                Circle(Circle&&) = default;
-                Circle(const Circle&) {};
-            };
-            struct Capsule
-            {
-                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Capsule);
-
-                shape_id_t native_shape = null_shape;
-
-                Capsule() = default;
-                Capsule(Capsule&&) = default;
-                Capsule(const Capsule&) {};
-            };
-        }
+        // ===================== Output: per-frame contacts =====================
         struct CollisionResult
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(CollisionResult);
 
-            struct collide_result
+            struct Contact
             {
-                math::vec2 position;
-                math::vec2 normalize;
+                math::vec2 point;             // World-space contact point.
+                math::vec2 normal;            // Direction from self to other.
+                float normal_impulse = 0.f;
+                float tangent_impulse = 0.f;
             };
-            basic::map<Rigidbody*, collide_result> results;
+            // Flat array keyed by the other entity's Rigidbody*. Pointers are
+            // valid for the current frame (CollisionResult is rebuilt every
+            // PhysicsUpdate), so the woolang bridge can compare by address.
+            basic::vector<std::pair<Rigidbody*, Contact>> contacts;
 
             CollisionResult() = default;
-            CollisionResult(CollisionResult&&) {};
-            CollisionResult(const CollisionResult&) {};
+            CollisionResult(CollisionResult&&) = default;
+            CollisionResult(const CollisionResult&) {}
 
-            const collide_result* check(Rigidbody* rigidbody) const
+            const Contact* find(const Rigidbody* other) const
             {
-                auto fnd = results.find(rigidbody);
-                if (fnd == results.end())
-                    return nullptr;
-                return &fnd->v;
+                for (auto& kv : contacts)
+                    if (kv.first == other)
+                        return &kv.second;
+                return nullptr;
             }
         };
     }
@@ -12242,19 +12335,40 @@ namespace jeecs
             type_info::register_type<Light2D::SpriteShadow>(guard, "Light2D::SpriteShadow");
             type_info::register_type<Light2D::SelfShadow>(guard, "Light2D::SelfShadow");
 
-            type_info::register_type<Physics2D::World>(guard, "Physics2D::World");
+            type_info::register_type<Physics2D::World::Core>(guard, "Physics2D::World::Core");
+            type_info::register_type<Physics2D::World::Gravity>(guard, "Physics2D::World::Gravity");
+            type_info::register_type<Physics2D::World::SolverSubsteps>(guard, "Physics2D::World::SolverSubsteps");
+            type_info::register_type<Physics2D::World::EnableSleeping>(guard, "Physics2D::World::EnableSleeping");
+            type_info::register_type<Physics2D::World::EnableContinuous>(guard, "Physics2D::World::EnableContinuous");
+
             type_info::register_type<Physics2D::Rigidbody>(guard, "Physics2D::Rigidbody");
-            type_info::register_type<Physics2D::Kinematics>(guard, "Physics2D::Kinematics");
-            type_info::register_type<Physics2D::Mass>(guard, "Physics2D::Mass");
+            type_info::register_type<Physics2D::DynamicBody>(guard, "Physics2D::DynamicBody");
+            type_info::register_type<Physics2D::KinematicBody>(guard, "Physics2D::KinematicBody");
             type_info::register_type<Physics2D::Bullet>(guard, "Physics2D::Bullet");
+
+            type_info::register_type<Physics2D::LockTranslationX>(guard, "Physics2D::LockTranslationX");
+            type_info::register_type<Physics2D::LockTranslationY>(guard, "Physics2D::LockTranslationY");
+            type_info::register_type<Physics2D::LockRotation>(guard, "Physics2D::LockRotation");
+
+            type_info::register_type<Physics2D::LinearVelocity>(guard, "Physics2D::LinearVelocity");
+            type_info::register_type<Physics2D::AngularVelocity>(guard, "Physics2D::AngularVelocity");
+            type_info::register_type<Physics2D::LinearDamping>(guard, "Physics2D::LinearDamping");
+            type_info::register_type<Physics2D::AngularDamping>(guard, "Physics2D::AngularDamping");
+            type_info::register_type<Physics2D::GravityScale>(guard, "Physics2D::GravityScale");
+
             type_info::register_type<Physics2D::Collider::Box>(guard, "Physics2D::Collider::Box");
             type_info::register_type<Physics2D::Collider::Circle>(guard, "Physics2D::Collider::Circle");
             type_info::register_type<Physics2D::Collider::Capsule>(guard, "Physics2D::Collider::Capsule");
-            type_info::register_type<Physics2D::Transform::Position>(guard, "Physics2D::Transform::Position");
-            type_info::register_type<Physics2D::Transform::Rotation>(guard, "Physics2D::Transform::Rotation");
-            type_info::register_type<Physics2D::Transform::Scale>(guard, "Physics2D::Transform::Scale");
-            type_info::register_type<Physics2D::Restitution>(guard, "Physics2D::Restitution");
+
+            type_info::register_type<Physics2D::Density>(guard, "Physics2D::Density");
             type_info::register_type<Physics2D::Friction>(guard, "Physics2D::Friction");
+            type_info::register_type<Physics2D::Restitution>(guard, "Physics2D::Restitution");
+            type_info::register_type<Physics2D::IsTrigger>(guard, "Physics2D::IsTrigger");
+
+            type_info::register_type<Physics2D::Offset::Position>(guard, "Physics2D::Offset::Position");
+            type_info::register_type<Physics2D::Offset::Rotation>(guard, "Physics2D::Offset::Rotation");
+            type_info::register_type<Physics2D::Offset::Scale>(guard, "Physics2D::Offset::Scale");
+
             type_info::register_type<Physics2D::CollisionResult>(guard, "Physics2D::CollisionResult");
 
             type_info::register_type<Audio::Source>(guard, "Audio::Source");

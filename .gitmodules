@@ -52,7 +52,7 @@
     path = 3rd/box2d
     url = https://git.cinogama.net/cinogamaproject/joyengineecs/box2d.git
     branch = main
-    tag = v3.1.0
+    tag = v3.1.1
 [submodule "3rd/ImGuiColorTextEdit"]
     path = 3rd/ImGuiColorTextEdit
     url = https://git.cinogama.net/cinogamaproject/joyengineecs/ImGuiColorTextEdit.git

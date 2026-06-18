@@ -351,7 +351,11 @@ namespace editor::gui::edit_forms
             if (MenuItem("物理层级配置"))
             {
                 do fast_create_entity(context, w, "物理层级配置", [
-                        "Physics2D::World",
+                        "Physics2D::World::Core",
+                        "Physics2D::World::Gravity",
+                        "Physics2D::World::SolverSubsteps",
+                        "Physics2D::World::EnableSleeping",
+                        "Physics2D::World::EnableContinuous",
                     ]);
             }
             

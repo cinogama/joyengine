@@ -1530,12 +1530,12 @@ public let frag =
 
             if (_gizmo_mask & gizmo_mode::PHYSICS2D_COLLIDER)
             {
-                for (auto&& [trans, ppos, prot, pscale, box, capsule, circle] : query<
+                for (auto&& [trans, opos, orot, oscale, box, capsule, circle] : query<
                     view typesof(
                         Translation&,
-                        Physics2D::Transform::Position*,
-                        Physics2D::Transform::Rotation*,
-                        Physics2D::Transform::Scale*,
+                        Physics2D::Offset::Position*,
+                        Physics2D::Offset::Rotation*,
+                        Physics2D::Offset::Scale*,
                         Physics2D::Collider::Box*,
                         Physics2D::Collider::Capsule*,
                         Physics2D::Collider::Circle*
@@ -1551,75 +1551,71 @@ public let frag =
                 >())
                 {
                     auto final_world_position = trans.world_position;
-                    if (ppos != nullptr)
-                        final_world_position += math::vec3(ppos->offset);
+                    if (opos != nullptr)
+                        final_world_position += math::vec3(opos->value);
 
                     auto final_world_rotation = trans.world_rotation;
-                    if (prot != nullptr)
-                        final_world_rotation = final_world_rotation * math::quat::euler(0.f, 0.f, prot->angle);
+                    if (orot != nullptr)
+                        final_world_rotation = final_world_rotation * math::quat::euler(0.f, 0.f, orot->degree);
 
-                    auto final_local_scale = trans.local_scale;
-                    if (pscale != nullptr)
-                        // We don't care about z of sacle.
-                        final_local_scale = final_local_scale * math::vec3(pscale->scale);
+                    // Collider geometry comes from the component itself; Offset::Scale
+                    // (if present) further scales it. Transform.local_scale is ignored
+                    // for collider preview to match the runtime behavior.
+                    auto extra_scale = math::vec2(1.f, 1.f);
+                    if (oscale != nullptr)
+                        extra_scale = oscale->value;
 
                     if (box != nullptr)
+                    {
+                        const auto box_size = math::vec2(
+                            std::abs(box->size.x) * std::abs(extra_scale.x),
+                            std::abs(box->size.y) * std::abs(extra_scale.y));
                         easy_draw_impl(
                             final_world_position,
                             final_world_rotation,
-                            final_local_scale,
+                            math::vec3(box_size.x, box_size.y, 1.f),
                             _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
                             _gizmo_resources.m_gizmo_physics2d_collider_box_vertex->resource(),
                             nullptr);
+                    }
                     else if (circle != nullptr)
                     {
-                        // m_gizmo_physics2d_collider_circle_vertex's R is 1.0f, so we need to scale it.
-                        final_local_scale.x = std::max(final_local_scale.x, final_local_scale.y) / 2.0f;
-                        final_local_scale.y = final_local_scale.x;
-
+                        // m_gizmo_physics2d_collider_circle_vertex's R is 1.0f (diameter 2).
+                        const float r = std::abs(circle->radius)
+                            * std::max(std::abs(extra_scale.x), std::abs(extra_scale.y));
                         easy_draw_impl(
                             final_world_position,
                             final_world_rotation,
-                            final_local_scale,
+                            math::vec3(r * 2.f, r * 2.f, r * 2.f),
                             _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
                             _gizmo_resources.m_gizmo_physics2d_collider_circle_vertex->resource(),
                             nullptr);
                     }
                     else if (capsule != nullptr)
                     {
-                        // We need to draw 2 circles and 1 box.
-                        auto circle_r = abs(final_local_scale.x / 2.0f);
-                        auto circle_offset = std::max(abs(final_local_scale.y) / 2.0f - abs(circle_r), 0.f);
+                        // Capsule = two end circles + one middle box.
+                        const float r = std::abs(capsule->radius) * std::abs(extra_scale.x);
+                        const float h = std::abs(capsule->height) * std::abs(extra_scale.y);
+                        const float half_h = h * 0.5f;
+                        const float offset = std::max(half_h - r, 0.f);
 
-                        auto circle_position1 = final_world_position + final_world_rotation * math::vec3(0.f, circle_offset, 0.f);
-                        auto circle_position2 = final_world_position + final_world_rotation * math::vec3(0.f, -circle_offset, 0.f);
-                        auto circle_scale = math::vec3(circle_r, circle_r, circle_r);
-
-                        auto box_scale = math::vec3(
-                            final_local_scale.x,
-                            circle_offset * 2.0f,
-                            final_local_scale.z);
+                        const auto circle_position1 = final_world_position + final_world_rotation * math::vec3(0.f,  offset, 0.f);
+                        const auto circle_position2 = final_world_position + final_world_rotation * math::vec3(0.f, -offset, 0.f);
+                        const auto circle_scale     = math::vec3(r * 2.f, r * 2.f, r * 2.f);
+                        const auto box_scale        = math::vec3(r * 2.f, offset * 2.f, 1.f);
 
                         easy_draw_impl(
-                            circle_position1,
-                            final_world_rotation,
-                            circle_scale,
+                            circle_position1, final_world_rotation, circle_scale,
                             _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
                             _gizmo_resources.m_gizmo_physics2d_collider_circle_vertex->resource(),
                             nullptr);
-
                         easy_draw_impl(
-                            circle_position2,
-                            final_world_rotation,
-                            circle_scale,
+                            circle_position2, final_world_rotation, circle_scale,
                             _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
                             _gizmo_resources.m_gizmo_physics2d_collider_circle_vertex->resource(),
                             nullptr);
-
                         easy_draw_impl(
-                            final_world_position,
-                            final_world_rotation,
-                            box_scale,
+                            final_world_position, final_world_rotation, box_scale,
                             _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
                             _gizmo_resources.m_gizmo_physics2d_collider_box_vertex->resource(),
                             nullptr);

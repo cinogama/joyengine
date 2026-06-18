@@ -11,726 +11,997 @@
 #include "wo.h"
 
 #include <box2d/box2d.h>
+#include <algorithm>
+#include <array>
+#include <bit>
+#include <cstdint>
+#include <cstring>
+#include <execution>
+#include <memory>
+#include <optional>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace jeecs
 {
     using namespace slice_requirement;
 
-    // We will treat the b2BodyId as a unique id.
-    static_assert(sizeof(Physics2D::Rigidbody::rigidbody_id_t) == sizeof(b2BodyId));
-    static_assert(sizeof(Physics2D::Collider::shape_id_t) == sizeof(b2ShapeId));
-
-#define JE_B2JBody(b) (*std::launder(                               \
-    reinterpret_cast<const Physics2D::Rigidbody::rigidbody_id_t *>( \
-        const_cast<const b2BodyId *>(&b))))
-#define JE_J2BBody(b) (*std::launder(   \
-    reinterpret_cast<const b2BodyId *>( \
-        const_cast<const Physics2D::Rigidbody::rigidbody_id_t *>(&b))))
-
-#define JE_B2JShape(b) (*std::launder(                         \
-    reinterpret_cast<const Physics2D::Collider::shape_id_t *>( \
-        const_cast<const b2ShapeId *>(&b))))
-#define JE_J2BShape(b) (*std::launder(   \
-    reinterpret_cast<const b2ShapeId *>( \
-        const_cast<const Physics2D::Collider::shape_id_t *>(&b))))
-
-    struct Physics2DUpdatingSystem : public game_system
+    namespace physics2d_detail
     {
-        struct Physics2DWorldContext
+        // ============================================================
+        // Strongly-typed Box2D id wrappers (replace former reinterpret macros).
+        //
+        // Box2D already provides official lossless encode/decode helpers
+        // (`b2StoreBodyId` / `b2LoadBodyId` / `b2StoreWorldId`), so we just
+        // wrap them for hashing & null checks. No type-punning UB.
+        // ============================================================
+        inline uint64_t b2_body_to_u64(b2BodyId v) noexcept  { return b2StoreBodyId(v); }
+        inline uint64_t b2_shape_to_u64(b2ShapeId v) noexcept
         {
-            b2WorldId m_physics_world;
-            size_t m_step_count;
-
-            size_t m_simulate_round_count;
-            std::unordered_map<Physics2D::Rigidbody::rigidbody_id_t, size_t> m_all_alive_bodys;
-
-            constexpr static size_t MAX_GROUP_COUNT = 16;
-            struct group_config
-            {
-                struct filter_config
-                {
-                    const jeecs::typing::type_info* m_type;
-                    requirement::type m_requirement;
-                };
-
-                std::vector<filter_config> m_group_filter;
-                uint16_t m_collision_mask;
-            };
-            group_config m_group_configs[MAX_GROUP_COUNT];
-
-            JECS_DISABLE_MOVE_AND_COPY(Physics2DWorldContext);
-
-            Physics2DWorldContext(
-                const Physics2D::World* world,
-                size_t simulate_round_count)
-                : m_physics_world({}), m_step_count(4), m_simulate_round_count(0), m_group_configs()
-            {
-                b2WorldDef world_def = b2DefaultWorldDef();
-                m_physics_world = b2CreateWorld(&world_def);
-
-                update_world_config(
-                    world, simulate_round_count);
-
-                if (world->group_config.has_resource())
-                {
-                    auto path = world->group_config.get_path().value();
-                    auto* physics_group_config = jeecs_file_open(path.c_str());
-
-                    if (physics_group_config == nullptr)
-                        jeecs::debug::logerr("Unable to open physics group config: '%s', please check.",
-                            path.c_str());
-                    else
-                    {
-                        std::vector<char> buf(physics_group_config->m_file_length);
-                        jeecs_file_read(buf.data(), sizeof(char), buf.size(), physics_group_config);
-                        jeecs_file_close(physics_group_config);
-
-                        wo_CompileErrors* cerror;
-                        woort_CodeEnv* const cenv = wo_load_binary(path.c_str(), buf.data(), buf.size(), &cerror);
-
-                        if (cenv == nullptr)
-                        {
-                            jeecs::debug::logerr(
-                                "Unable to resolve physics group config: '%s':\n%s.",
-                                path.c_str(),
-                                wo_get_compile_error(cerror, WO_PLAIM));
-
-                            wo_compile_errors_free(cerror);
-                        }
-                        else
-                        {
-                            woort_vm* const vmm = woort_vm_create();
-                            if (vmm == nullptr)
-                                jeecs::debug::logerr("Unable to resolve physics group config: Failed to create vm.");
-                            else
-                            {
-                                woort_vm* const last = woort_vm_swap(vmm);
-                                {
-                                    woort_value s;
-                                    if (!woort_push_reserve(5, &s))
-                                        jeecs::debug::logerr("Unable to resolve physics group config: Stack overflow.");
-                                    else
-                                    {
-                                        const woort_value result = s + 0;
-
-                                        // group_config_info_t: struct{types, collider_mask}
-                                        const woort_value group_config_info = s + 1;
-                                        // array<(const type_info*, Requirement)>
-                                        const woort_value filter_types = s + 2;
-                                        // Requirement
-                                        const woort_value group_requirement = s + 3;
-                                        // int/const type_info*
-                                        const woort_value group_collide_with_mask = s + 4;
-
-                                        const woort_VmCallStatus status = woort_bootup_codeenv(result, cenv);
-
-                                        if (status != WOORT_VM_CALL_STATUS_NORMAL)
-                                            jeecs::debug::logerr("Unable to resolve physics group config: '%s': %s.",
-                                                path.c_str(), woort_vm_get_runtime_error(vmm));
-                                        else
-                                        {
-                                            // Resolve!
-                                            size_t configed_group_count = woort_vec_len(result);
-                                            if (configed_group_count > static_cast<size_t>(MAX_GROUP_COUNT))
-                                            {
-                                                jeecs::debug::logwarn("The number of physics2d collision groups is limited to 16, "
-                                                    "but the %d group(s) are provided in this configuration: `%s`, excess groups will be ignored",
-                                                    (int)configed_group_count, path.c_str());
-                                                configed_group_count = static_cast<size_t>(MAX_GROUP_COUNT);
-                                            }
-
-                                            for (size_t i = 0; i < static_cast<size_t>(MAX_GROUP_COUNT); ++i)
-                                            {
-                                                auto& group = m_group_configs[i];
-                                                if (i < configed_group_count)
-                                                {
-                                                    (void)woort_vec_get(group_config_info, result, i);
-                                                    woort_struct_get(filter_types, group_config_info, 0);
-                                                    for (size_t ii = woort_vec_len(filter_types); ii > 0; --ii)
-                                                    {
-                                                        (void)woort_vec_get(group_collide_with_mask, filter_types, ii - 1);
-                                                        woort_struct_get(group_requirement, group_collide_with_mask, 1);
-                                                        woort_struct_get(group_collide_with_mask, group_collide_with_mask, 0);
-                                                        group.m_group_filter.push_back(
-                                                            group_config::filter_config{
-                                                                static_cast<const typing::type_info*>(woort_pointer(group_collide_with_mask)),
-                                                                static_cast<requirement::type>(woort_int(group_requirement)),
-                                                            });
-                                                    }
-
-                                                    woort_struct_get(filter_types, group_config_info, 1);
-                                                    group.m_collision_mask = static_cast<uint16_t>(woort_int(filter_types));
-                                                }
-                                                else
-                                                    group.m_collision_mask = 0x0000;
-                                            }
-                                        }
-                                    }
-                                    ////
-                                }
-                                (void)woort_vm_swap(nullptr);
-                                woort_vm_close(vmm);
-                            }
-                            woort_codeenv_drop(cenv);
-                        }
-                    }
-                }
-            }
-
-            ~Physics2DWorldContext()
-            {
-                b2DestroyWorld(m_physics_world);
-            }
-
-            bool update_world_config(
-                const Physics2D::World* world,
-                size_t simulate_round_count)
-            {
-                b2Vec2 gravity_config_value = b2Vec2{ world->gravity.x, world->gravity.y };
-
-                if (b2World_GetGravity(m_physics_world) != gravity_config_value)
-                {
-                    b2World_SetGravity(m_physics_world, gravity_config_value);
-                    for (auto& [rbody, _] : m_all_alive_bodys)
-                    {
-                        // Awake all rigidbody to make sure the gravity is updated.
-                        b2Body_SetAwake(JE_J2BBody(rbody), true);
-                    }
-                }
-
-                b2World_EnableContinuous(m_physics_world, world->continuous);
-                b2World_EnableSleeping(m_physics_world, world->sleepable);
-
-                m_step_count = world->step;
-
-                if (m_simulate_round_count == simulate_round_count)
-                {
-                    jeecs::debug::logerr("Duplicate physical world layerid: %zu, please check and eliminate it.",
-                        world->layerid);
-
-                    return false;
-                }
-                else
-                {
-                    m_simulate_round_count = simulate_round_count;
-                    return true;
-                }
-            }
-        };
-
-        std::map<size_t, std::unique_ptr<Physics2DWorldContext>>
-            _m_alive_physic_worlds;
-        size_t  m_simulate_round_count;
-
-        // NOTE: It seems that box2d have some threading-problem. when two world contain Physics2DUpdatingSystem
-        //      start up at same time, crash might happend.
-        inline static std::mutex m_physics_box2d_mx;
-
-        Physics2DUpdatingSystem(game_world world)
-            : game_system(world), m_simulate_round_count(0)
+            // b2ShapeId shares layout with b2BodyId (int32 + uint16 + uint16 = 8B).
+            return b2StoreBodyId(*reinterpret_cast<const b2BodyId*>(&v));
+        }
+        inline b2BodyId  u64_to_b2_body(uint64_t v)  noexcept { return b2LoadBodyId(v); }
+        inline b2ShapeId u64_to_b2_shape(uint64_t v) noexcept
         {
-            assert(JE_B2JBody(b2_nullBodyId) == Physics2D::Rigidbody::null_rigidbody);
-            assert(JE_B2JShape(b2_nullShapeId) == Physics2D::Collider::null_shape);
+            b2BodyId tmp = b2LoadBodyId(v);
+            b2ShapeId out;
+            std::memcpy(&out, &tmp, sizeof(out));
+            return out;
         }
 
-        inline static bool check_if_need_update_vec2(const b2Vec2& a, const math::vec2& b) noexcept
+        struct B2BodyKeyHash
+        {
+            inline size_t operator()(b2BodyId v) const noexcept
+            {
+                return std::hash<uint64_t>{}(b2_body_to_u64(v));
+            }
+        };
+        struct B2ShapeKeyHash
+        {
+            inline size_t operator()(b2ShapeId v) const noexcept
+            {
+                return std::hash<uint64_t>{}(b2_shape_to_u64(v));
+            }
+        };
+        inline bool b2_body_eq(b2BodyId a, b2BodyId b) noexcept
+        {
+            return b2_body_to_u64(a) == b2_body_to_u64(b);
+        }
+        inline bool b2_shape_eq(b2ShapeId a, b2ShapeId b) noexcept
+        {
+            return b2_shape_to_u64(a) == b2_shape_to_u64(b);
+        }
+        inline bool b2_body_is_null(b2BodyId v) noexcept
+        {
+            return b2_body_to_u64(v) == 0;
+        }
+        inline bool b2_world_is_null(b2WorldId v) noexcept
+        {
+            return b2StoreWorldId(v) == 0;
+        }
+
+        // ============================================================
+        // Equality predicates for use as unordered_map KeyEqual.
+        // (b2BodyId / b2ShapeId are C structs without operator==.)
+        // ============================================================
+        struct B2BodyKeyEqual
+        {
+            inline bool operator()(b2BodyId a, b2BodyId b) const noexcept { return b2_body_eq(a, b); }
+        };
+        struct B2ShapeKeyEqual
+        {
+            inline bool operator()(b2ShapeId a, b2ShapeId b) const noexcept { return b2_shape_eq(a, b); }
+        };
+
+        // ============================================================
+        // Collision-group table (max 16 groups, fits in uint16 bitmask).
+        // ============================================================
+        constexpr size_t MAX_GROUP_COUNT = 16;
+
+        struct group_filter_rule
+        {
+            const jeecs::typing::type_info* m_type;
+            jeecs::requirement::type        m_requirement;
+        };
+        struct group_definition
+        {
+            std::vector<group_filter_rule> m_filters;
+            uint16_t                       m_collide_mask = 0; // Bit i set => this group collides with group i.
+        };
+        struct collision_group_table
+        {
+            std::array<group_definition, MAX_GROUP_COUNT> m_groups;
+            size_t                                         m_count = 0; // Number of valid groups (rest unused).
+        };
+
+        // ============================================================
+        // RAII guard for woolang VM swap. The previous implementation
+        // forgot to restore the prior VM, polluting global state.
+        // ============================================================
+        struct woort_vm_swap_guard
+        {
+            woort_vm* m_prev;
+            explicit woort_vm_swap_guard(woort_vm* next) : m_prev(woort_vm_swap(next)) {}
+            ~woort_vm_swap_guard() { (void)woort_vm_swap(m_prev); }
+            JECS_DISABLE_MOVE_AND_COPY(woort_vm_swap_guard);
+        };
+
+        // ============================================================
+        // load_collide_groups_from_path: pure function that loads and
+        // parses a woolang collision-group config, returning nullopt
+        // and logging on any failure.
+        // ============================================================
+        static std::optional<collision_group_table> load_collide_groups_from_path(
+            const std::string& path)
+        {
+            jeecs_file* fp = jeecs_file_open(path.c_str());
+            if (fp == nullptr)
+            {
+                jeecs::debug::logerr("Unable to open Physics2D collide-group config: '%s'.", path.c_str());
+                return std::nullopt;
+            }
+
+            std::vector<char> buf(fp->m_file_length);
+            jeecs_file_read(buf.data(), sizeof(char), buf.size(), fp);
+            jeecs_file_close(fp);
+
+            wo_CompileErrors* cerr = nullptr;
+            woort_CodeEnv* const cenv = wo_load_binary(path.c_str(), buf.data(), buf.size(), &cerr);
+            if (cenv == nullptr)
+            {
+                jeecs::debug::logerr(
+                    "Unable to parse Physics2D collide-group config '%s':\n%s.",
+                    path.c_str(),
+                    wo_get_compile_error(cerr, WO_PLAIM));
+                wo_compile_errors_free(cerr);
+                return std::nullopt;
+            }
+
+            collision_group_table result{};
+            woort_vm* const vmm = woort_vm_create();
+            if (vmm == nullptr)
+            {
+                jeecs::debug::logerr("Unable to resolve Physics2D collide-group config: failed to create VM.");
+                woort_codeenv_drop(cenv);
+                return std::nullopt;
+            }
+
+            // Run the entire parse under the swap guard so the prior VM is restored
+            // even on early-return paths.
+            woort_vm_swap_guard vm_guard{ vmm };
+
+            woort_value s;
+            if (!woort_push_reserve(5, &s))
+            {
+                jeecs::debug::logerr("Unable to resolve Physics2D collide-group config: stack overflow.");
+                woort_codeenv_drop(cenv);
+                return std::nullopt;
+            }
+
+            const woort_value result_vec     = s + 0;
+            const woort_value group_info     = s + 1; // struct{filters, collide_mask}
+            const woort_value filter_vec     = s + 2; // array<(typeinfo, Requirement)>
+            const woort_value filter_value   = s + 3; // reused slot for current element
+            const woort_value collide_mask   = s + 4; // reused slot
+
+            const woort_VmCallStatus status = woort_bootup_codeenv(result_vec, cenv);
+            if (status != WOORT_VM_CALL_STATUS_NORMAL)
+            {
+                jeecs::debug::logerr(
+                    "Unable to resolve Physics2D collide-group config '%s': %s.",
+                    path.c_str(),
+                    woort_vm_get_runtime_error(vmm));
+                woort_codeenv_drop(cenv);
+                return std::nullopt;
+            }
+
+            size_t configed = woort_vec_len(result_vec);
+            if (configed > MAX_GROUP_COUNT)
+            {
+                jeecs::debug::logwarn(
+                    "Physics2D collision groups are limited to %zu; %zu provided in '%s', extras ignored.",
+                    MAX_GROUP_COUNT, configed, path.c_str());
+                configed = MAX_GROUP_COUNT;
+            }
+            result.m_count = configed;
+
+            for (size_t i = 0; i < configed; ++i)
+            {
+                auto& group = result.m_groups[i];
+
+                (void)woort_vec_get(group_info, result_vec, i);
+                // First struct field: filter list of (typeinfo, Requirement)
+                woort_struct_get(filter_vec, group_info, 0);
+
+                const size_t filter_count = woort_vec_len(filter_vec);
+                group.m_filters.clear();
+                group.m_filters.reserve(filter_count);
+
+                for (size_t j = filter_count; j > 0; --j)
+                {
+                    // Read in reverse so the reused slot has the expected value at the end.
+                    (void)woort_vec_get(filter_value, filter_vec, j - 1);
+
+                    woort_value requirement_slot = filter_value;
+                    woort_struct_get(collide_mask,   filter_value,   0); // typeinfo
+                    woort_struct_get(requirement_slot, filter_value, 1); // Requirement
+
+                    group.m_filters.push_back(group_filter_rule{
+                        static_cast<const typing::type_info*>(woort_pointer(collide_mask)),
+                        static_cast<requirement::type>(woort_int(requirement_slot)),
+                    });
+                }
+
+                // Second struct field: collide mask.
+                woort_struct_get(collide_mask, group_info, 1);
+                group.m_collide_mask = static_cast<uint16_t>(woort_int(collide_mask));
+            }
+
+            woort_codeenv_drop(cenv);
+            return result;
+        }
+
+        // ============================================================
+        // Compute self category/mask bits for an entity, given a group table.
+        // categoryBits = OR of (1 << i) for each group i the entity matches.
+        // maskBits      = OR of each matched group's collide_mask.
+        // ============================================================
+        inline void compute_collision_filter(
+            const collision_group_table& table,
+            const game_entity& e,
+            uint64_t& out_category,
+            uint64_t& out_mask)
+        {
+            uint64_t cat = 0;
+            uint64_t msk = 0;
+            for (size_t i = 0; i < table.m_count; ++i)
+            {
+                const auto& g = table.m_groups[i];
+                bool matches = true;
+                for (const auto& f : g.m_filters)
+                {
+                    assert(f.m_requirement == requirement::type::CONTAINS
+                        || f.m_requirement == requirement::type::EXCEPT);
+
+                    const bool has = je_ecs_world_entity_get_component(&e, f.m_type->m_id) != nullptr;
+                    if ((f.m_requirement == requirement::type::CONTAINS) != has)
+                    {
+                        matches = false;
+                        break;
+                    }
+                }
+                if (matches)
+                {
+                    cat |= (uint64_t(1) << i);
+                    msk |= uint64_t(g.m_collide_mask);
+                }
+            }
+            out_category = cat;
+            out_mask     = msk;
+        }
+    }
+
+    // ================================================================
+    // Physics2DUpdatingSystem
+    //
+    // Phases per frame:
+    //   1. phase_sync_worlds       — create / update / destroy b2WorldId
+    //   2. phase_sync_bodies_in    — write component state into box2d
+    //   3. phase_step              — b2World_Step (parallel across worlds)
+    //   4. phase_sync_bodies_out   — write box2d result back to components
+    //   5. phase_collect_contacts  — populate CollisionResult
+    // ================================================================
+    struct Physics2DUpdatingSystem : public game_system
+    {
+        struct PhysicsWorld
+        {
+            b2WorldId                                world{};
+            size_t                                   layerid = 0;
+
+            // Snapshot of last-applied world config (for diff'ing).
+            math::vec2                               gravity_snap   = math::vec2(0.f, -9.8f);
+            size_t                                   substeps_snap  = 4;
+            bool                                     sleep_snap     = false;
+            bool                                     continuous_snap = false;
+
+            physics2d_detail::collision_group_table  groups{};
+
+            // Per-body runtime record. Stable pointer lifetime = life of the entry.
+            struct BodyRecord
+            {
+                game_entity     entity;          // Refreshed every frame in phase_sync_bodies_in.
+                b2BodyId        body{};
+                b2ShapeId       shape{};
+
+                // Diff cache: decides whether the fixture must be rebuilt.
+                enum class ShapeKind : uint8_t { None, Box, Circle, Capsule };
+                ShapeKind       cached_kind = ShapeKind::None;
+                math::vec2      cached_box_size   = {};
+                float           cached_circle_r   = 0.f;
+                float           cached_capsule_r  = 0.f;
+                float           cached_capsule_h  = 0.f;
+                float           cached_density    = -1.f;
+                float           cached_friction   = -1.f;
+                float           cached_restitution = -1.f;
+                bool            cached_trigger    = false;
+
+                uint64_t        last_seen_frame = 0;
+            };
+            std::unordered_map<b2BodyId, BodyRecord,
+                physics2d_detail::B2BodyKeyHash,
+                physics2d_detail::B2BodyKeyEqual> bodies;
+
+            // Scratch for dead-body sweep.
+            std::vector<b2BodyId> dead_scratch;
+        };
+
+        // Active worlds keyed by layerid.
+        std::unordered_map<size_t, std::unique_ptr<PhysicsWorld>> m_worlds;
+        uint64_t                                                   m_frame = 0;
+
+        // Reused scratch buffers (avoids per-frame allocation).
+        std::vector<b2ContactData>                                 m_contact_data_scratch;
+
+        // Cross-system map: Rigidbody* -> owning entity, valid for the current frame.
+        // Used by the woolang bridge to resolve CollisionResult::check(Rigidbody).
+        std::unordered_map<Physics2D::Rigidbody*, game_entity>     m_rb_addr_to_entity;
+
+        Physics2DUpdatingSystem(game_world w)
+            : game_system(w)
+        {
+        }
+
+        ~Physics2DUpdatingSystem()
+        {
+            for (auto& [_, pw] : m_worlds)
+                if (pw && !physics2d_detail::b2_world_is_null(pw->world))
+                    b2DestroyWorld(pw->world);
+        }
+
+        // ------------------------------------------------------------
+        // Helpers
+        // ------------------------------------------------------------
+        inline static bool need_update_vec2(const b2Vec2& a, const math::vec2& b) noexcept
         {
             return !math::almost_equal(a.x, b.x) || !math::almost_equal(a.y, b.y);
         }
-        inline static bool check_if_need_update_float(float a, float b) noexcept
+        inline static bool need_update_float(float a, float b) noexcept
         {
             return !math::almost_equal(a, b);
         }
 
-        void PhysicsUpdate()
+        // Resolve final body pose (world-space) from Translation + Offset components.
+        inline static void compute_body_pose(
+            const Transform::Translation& trans,
+            const Physics2D::Offset::Position* opos,
+            const Physics2D::Offset::Rotation* orot,
+            math::vec2& out_pos,
+            float&      out_rot_deg)
         {
-            ++m_simulate_round_count;
+            const math::vec2 offset_pos = opos ? opos->value : math::vec2(0.f);
+            const float      extra_rot  = orot ? orot->degree : 0.f;
 
-            std::map<size_t, std::unique_ptr<Physics2DWorldContext>>
-                _m_this_frame_alive_worlds;
+            const float world_rot_deg =
+                trans.world_rotation.euler_angle().z + extra_rot;
 
-            std::lock_guard g(m_physics_box2d_mx);
+            // Rotate the local offset into world space, then add to world position.
+            const math::vec3 rotated = math::quat::euler(0.f, 0.f, world_rot_deg)
+                * math::vec3(offset_pos.x, offset_pos.y, 0.f);
 
-            for (auto&& [e, world] : query_entity<
-                view typesof(Physics2D::World&)
-            >())
+            out_pos     = math::vec2(trans.world_position.x + rotated.x,
+                                     trans.world_position.y + rotated.y);
+            out_rot_deg = world_rot_deg;
+        }
+
+        // ------------------------------------------------------------
+        // Phase 1: synchronize worlds.
+        // Returns the set of worlds alive this frame (ownership transferred
+        // back into m_worlds at the end of PhysicsUpdate).
+        // ------------------------------------------------------------
+        std::unordered_map<size_t, std::unique_ptr<PhysicsWorld>> phase_sync_worlds()
+        {
+            std::unordered_map<size_t, std::unique_ptr<PhysicsWorld>> this_frame;
+
+            for (auto&& [e, core, gravity, substeps, sleep, cont] :
+                query_entity<view typesof(
+                    Physics2D::World::Core&,
+                    Physics2D::World::Gravity*,
+                    Physics2D::World::SolverSubsteps*,
+                    Physics2D::World::EnableSleeping*,
+                    Physics2D::World::EnableContinuous*
+                )>())
             {
-                auto fnd = _m_alive_physic_worlds.find(world.layerid);
-                if (fnd == _m_alive_physic_worlds.end())
+                const size_t lid = core.layerid;
+
+                if (this_frame.find(lid) != this_frame.end())
                 {
-                    // No such a physic world layer, create context for it.
-                    _m_this_frame_alive_worlds[world.layerid] =
-                        std::make_unique<Physics2DWorldContext>(
-                            &world, m_simulate_round_count);
+                    // Bug-fix: detect duplicate layerid via this_frame map (not via context state).
+                    jeecs::debug::logerr(
+                        "Duplicate Physics2D world layerid: %zu, the second world entity is ignored.", lid);
+                    continue;
+                }
+
+                auto prev_it = m_worlds.find(lid);
+                std::unique_ptr<PhysicsWorld> pw;
+                if (prev_it == m_worlds.end())
+                {
+                    pw = std::make_unique<PhysicsWorld>();
+                    b2WorldDef wdef = b2DefaultWorldDef();
+                    pw->world   = b2CreateWorld(&wdef);
+                    pw->layerid = lid;
+
+                    // Initial config snapshot (will be overwritten below by diff step).
+                    pw->gravity_snap    = gravity ? gravity->value : math::vec2(0.f, -9.8f);
+                    pw->substeps_snap   = substeps ? substeps->value : 4;
+                    pw->sleep_snap      = sleep != nullptr;
+                    pw->continuous_snap = cont != nullptr;
+
+                    b2World_SetGravity(pw->world, b2Vec2{ pw->gravity_snap.x, pw->gravity_snap.y });
+                    b2World_EnableSleeping(pw->world, pw->sleep_snap);
+                    b2World_EnableContinuous(pw->world, pw->continuous_snap);
+
+                    // Load collide-group config if provided.
+                    if (core.collide_group_config.has_resource())
+                    {
+                        auto path_opt = core.collide_group_config.get_path();
+                        if (path_opt.has_value())
+                        {
+                            auto groups = physics2d_detail::load_collide_groups_from_path(path_opt.value());
+                            if (groups.has_value())
+                                pw->groups = std::move(groups.value());
+                        }
+                    }
                 }
                 else
                 {
-                    // Update configs
-                    if (!fnd->second->update_world_config(&world, m_simulate_round_count))
-                        // Invalid world config, remove this world.
-                        e.remove_component<Physics2D::World>();
-
-                    _m_this_frame_alive_worlds[world.layerid] = std::move(fnd->second);
+                    pw = std::move(prev_it->second);
+                    // (prev_it entry is left empty; m_worlds is replaced at end of frame.)
                 }
+
+                // Diff config & apply.
+                const math::vec2 want_g = gravity ? gravity->value : math::vec2(0.f, -9.8f);
+                if (need_update_vec2(b2World_GetGravity(pw->world), want_g))
+                {
+                    b2World_SetGravity(pw->world, b2Vec2{ want_g.x, want_g.y });
+                    // Awake every body so the new gravity takes effect immediately.
+                    for (auto& [_, rec] : pw->bodies)
+                        b2Body_SetAwake(rec.body, true);
+                }
+
+                const bool want_sleep = sleep != nullptr;
+                if (pw->sleep_snap != want_sleep)
+                {
+                    b2World_EnableSleeping(pw->world, want_sleep);
+                    pw->sleep_snap = want_sleep;
+                }
+
+                const bool want_cont = cont != nullptr;
+                if (pw->continuous_snap != want_cont)
+                {
+                    b2World_EnableContinuous(pw->world, want_cont);
+                    pw->continuous_snap = want_cont;
+                }
+
+                pw->substeps_snap = substeps ? substeps->value : 4;
+
+                this_frame.emplace(lid, std::move(pw));
             }
 
+            return this_frame;
+        }
+
+        // ------------------------------------------------------------
+        // Phase 2: write component state into box2d.
+        // ------------------------------------------------------------
+        void phase_sync_bodies_in(
+            std::unordered_map<size_t, std::unique_ptr<PhysicsWorld>>& this_frame)
+        {
+            // Per-frame addr->entity map (consumed by woolang bridge later this frame).
+            m_rb_addr_to_entity.clear();
+
             for (auto&& [
-                e,
-                translation,
-                rigidbody,
-                mass,
-                kinematics,
-                restitution,
-                friction,
-                bullet,
-                boxcollider,
-                circlecollider,
-                capsulecollider,
-                scale,
-                posoffset,
-                rotoffset,
-                rendshape
-            ]:
-            query_entity <
+                e, trans, rb, dyn, kinem, bullet,
+                lockx, locky, lockr,
+                lvel, avel, ldamp, adamp, gscale,
+                box, circle, capsule,
+                density, friction, restitution, trigger,
+                opos, orot, oscale
+            ] : query_entity<
                 view typesof(
                     Transform::Translation&,
                     Physics2D::Rigidbody&,
-                    Physics2D::Mass*,
-                    Physics2D::Kinematics*,
-                    Physics2D::Restitution*,
-                    Physics2D::Friction*,
+                    Physics2D::DynamicBody*,
+                    Physics2D::KinematicBody*,
                     Physics2D::Bullet*,
+                    Physics2D::LockTranslationX*,
+                    Physics2D::LockTranslationY*,
+                    Physics2D::LockRotation*,
+                    Physics2D::LinearVelocity*,
+                    Physics2D::AngularVelocity*,
+                    Physics2D::LinearDamping*,
+                    Physics2D::AngularDamping*,
+                    Physics2D::GravityScale*,
                     Physics2D::Collider::Box*,
                     Physics2D::Collider::Circle*,
                     Physics2D::Collider::Capsule*,
-                    Physics2D::Transform::Scale*,
-                    Physics2D::Transform::Position*,
-                    Physics2D::Transform::Rotation*,
-                    Renderer::Shape*
+                    Physics2D::Density*,
+                    Physics2D::Friction*,
+                    Physics2D::Restitution*,
+                    Physics2D::IsTrigger*,
+                    Physics2D::Offset::Position*,
+                    Physics2D::Offset::Rotation*,
+                    Physics2D::Offset::Scale*
                 ),
                 anyof typesof(
                     Physics2D::Collider::Box,
                     Physics2D::Collider::Circle,
                     Physics2D::Collider::Capsule
                 )
-            > ())
+            >())
             {
-                auto fnd = _m_this_frame_alive_worlds.find(rigidbody.layerid);
-                if (fnd == _m_this_frame_alive_worlds.end())
+                // Publish this Rigidbody* -> entity mapping for the woolang bridge.
+                m_rb_addr_to_entity[&rb] = e;
+
+                auto world_it = this_frame.find(rb.layerid);
+                if (world_it == this_frame.end() || world_it->second == nullptr)
                 {
-                    rigidbody.native_rigidbody = Physics2D::Rigidbody::null_rigidbody;
                     jeecs::debug::logerr(
-                        "The rigidbody belongs to layer: %d, but the physical world of this layer cannot be found.",
-                        rigidbody.layerid);
+                        "Rigidbody belongs to layer %zu, but no Physics2D::World::Core with that layerid exists.",
+                        rb.layerid);
+                    continue;
+                }
+                PhysicsWorld* pw = world_it->second.get();
+
+                // Resolve final pose.
+                math::vec2 want_pos;
+                float       want_rot_deg;
+                compute_body_pose(trans, opos, orot, want_pos, want_rot_deg);
+
+                // BodyType resolution.
+                b2BodyType want_type = b2_staticBody;
+                if (dyn && kinem)
+                {
+                    jeecs::debug::logerr(
+                        "Entity has both DynamicBody and KinematicBody; treating as Dynamic.");
+                    want_type = b2_dynamicBody;
+                }
+                else if (dyn)
+                    want_type = b2_dynamicBody;
+                else if (kinem)
+                    want_type = b2_kinematicBody;
+
+                // Locate-or-create the BodyRecord by entity identity.
+                // We linear-scan the per-world body map (worlds usually have
+                // bounded body counts; for very large worlds a secondary
+                // entity->record index can be added later).
+                PhysicsWorld::BodyRecord* rec = nullptr;
+                for (auto& [bid, r] : pw->bodies)
+                {
+                    if (r.entity == e)
+                    {
+                        rec = &r;
+                        break;
+                    }
+                }
+
+                if (rec == nullptr)
+                {
+                    // First time we see this entity: create the b2Body.
+                    b2BodyDef bdef = b2DefaultBodyDef();
+                    bdef.type     = want_type;
+                    bdef.position = b2Vec2{ want_pos.x, want_pos.y };
+                    bdef.rotation = b2MakeRot(want_rot_deg * math::DEG2RAD);
+
+                    b2BodyId new_body = b2CreateBody(pw->world, &bdef);
+                    if (physics2d_detail::b2_body_is_null(new_body))
+                    {
+                        jeecs::debug::logerr("b2CreateBody failed for entity on layer %zu.", rb.layerid);
+                        continue;
+                    }
+
+                    PhysicsWorld::BodyRecord nr{};
+                    nr.entity   = e;
+                    nr.body     = new_body;
+                    nr.shape    = b2_nullShapeId;
+                    auto inserted = pw->bodies.emplace(new_body, std::move(nr));
+                    rec = &inserted.first->second;
+                }
+                rec->last_seen_frame = m_frame;
+                rec->entity          = e; // Refresh handle every frame.
+
+                const b2BodyId body = rec->body;
+
+                // BodyType.
+                b2Body_SetType(body, want_type);
+                b2Body_SetBullet(body, bullet != nullptr);
+                b2Body_SetFixedRotation(body, lockr != nullptr);
+                if (lockr != nullptr)
+                    b2Body_SetAwake(body, true);
+
+                // Velocity / damping / gravity scale.
+                if (lvel)
+                {
+                    const b2Vec2 want_lv{ lvel->value.x, lvel->value.y };
+                    if (need_update_vec2(b2Body_GetLinearVelocity(body), lvel->value))
+                        b2Body_SetLinearVelocity(body, want_lv);
+                }
+                if (avel)
+                {
+                    if (need_update_float(b2Body_GetAngularVelocity(body), avel->value))
+                        b2Body_SetAngularVelocity(body, avel->value);
+                }
+                if (ldamp)
+                {
+                    if (need_update_float(b2Body_GetLinearDamping(body), ldamp->value))
+                        b2Body_SetLinearDamping(body, ldamp->value);
+                }
+                if (adamp)
+                {
+                    if (need_update_float(b2Body_GetAngularDamping(body), adamp->value))
+                        b2Body_SetAngularDamping(body, adamp->value);
+                }
+                if (gscale)
+                {
+                    if (need_update_float(b2Body_GetGravityScale(body), gscale->value))
+                        b2Body_SetGravityScale(body, gscale->value);
+                }
+
+                // Pose.
+                const bool pos_changed = need_update_vec2(
+                    b2Body_GetPosition(body), want_pos);
+                const bool rot_changed = need_update_float(
+                    b2Rot_GetAngle(b2Body_GetRotation(body)) * math::RAD2DEG, want_rot_deg);
+                if (pos_changed || rot_changed)
+                {
+                    b2Body_SetTransform(
+                        body,
+                        b2Vec2{ want_pos.x, want_pos.y },
+                        b2MakeRot(want_rot_deg * math::DEG2RAD));
+                    b2Body_SetAwake(body, true);
+                }
+
+                // ---- Fixture rebuild decision ----
+                const float want_density     = density     ? density->value     : 0.f;
+                const float want_friction    = friction    ? friction->value    : 0.f;
+                const float want_restitution = restitution ? restitution->value : 0.f;
+                const bool  want_trigger     = trigger != nullptr;
+
+                PhysicsWorld::BodyRecord::ShapeKind want_kind =
+                    PhysicsWorld::BodyRecord::ShapeKind::None;
+                if (box)     want_kind = PhysicsWorld::BodyRecord::ShapeKind::Box;
+                else if (circle)  want_kind = PhysicsWorld::BodyRecord::ShapeKind::Circle;
+                else if (capsule) want_kind = PhysicsWorld::BodyRecord::ShapeKind::Capsule;
+
+                bool force_rebuild = (rec->cached_kind != want_kind);
+                if (!force_rebuild)
+                {
+                    // Diff geometry.
+                    switch (want_kind)
+                    {
+                    case PhysicsWorld::BodyRecord::ShapeKind::Box:
+                        if (rec->cached_box_size != box->size) force_rebuild = true;
+                        break;
+                    case PhysicsWorld::BodyRecord::ShapeKind::Circle:
+                        if (rec->cached_circle_r != circle->radius) force_rebuild = true;
+                        break;
+                    case PhysicsWorld::BodyRecord::ShapeKind::Capsule:
+                        if (rec->cached_capsule_r != capsule->radius
+                            || rec->cached_capsule_h != capsule->height) force_rebuild = true;
+                        break;
+                    default: break;
+                    }
+                    if (!force_rebuild)
+                    {
+                        if (rec->cached_density     != want_density
+                            || rec->cached_friction    != want_friction
+                            || rec->cached_restitution != want_restitution
+                            || rec->cached_trigger     != want_trigger)
+                            force_rebuild = true;
+                    }
+                }
+
+                if (force_rebuild)
+                {
+                    // Destroy old shape if any.
+                    if (!physics2d_detail::b2_shape_eq(rec->shape, b2_nullShapeId))
+                        b2DestroyShape(rec->shape, true);
+
+                    b2ShapeDef sdef = b2DefaultShapeDef();
+                    sdef.density             = want_density;
+                    sdef.material.friction    = want_friction;
+                    sdef.material.restitution = want_restitution;
+                    sdef.isSensor             = want_trigger;
+
+                    b2ShapeId new_shape = b2_nullShapeId;
+                    switch (want_kind)
+                    {
+                    case PhysicsWorld::BodyRecord::ShapeKind::Box:
+                    {
+                        b2Polygon box_poly = b2MakeBox(
+                            std::abs(box->size.x) * 0.5f,
+                            std::abs(box->size.y) * 0.5f);
+                        new_shape = b2CreatePolygonShape(body, &sdef, &box_poly);
+                        rec->cached_box_size = box->size;
+                        break;
+                    }
+                    case PhysicsWorld::BodyRecord::ShapeKind::Circle:
+                    {
+                        b2Circle c;
+                        c.center = b2Vec2{ 0.f, 0.f };
+                        c.radius = std::abs(circle->radius);
+                        new_shape = b2CreateCircleShape(body, &sdef, &c);
+                        rec->cached_circle_r = circle->radius;
+                        break;
+                    }
+                    case PhysicsWorld::BodyRecord::ShapeKind::Capsule:
+                    {
+                        const float r = std::abs(capsule->radius);
+                        const float h = std::abs(capsule->height) * 0.5f;
+                        b2Capsule cap;
+                        cap.radius = r;
+                        // Two center points symmetric about origin; total height = 2h.
+                        if (h > r)
+                        {
+                            cap.center1 = b2Vec2{ 0.f,  h - r };
+                            cap.center2 = b2Vec2{ 0.f, -h + r };
+                        }
+                        else
+                        {
+                            // Capsule degenerates to a circle.
+                            cap.center1 = b2Vec2{ 0.f, 0.f };
+                            cap.center2 = b2Vec2{ 0.f, 0.f };
+                        }
+                        new_shape = b2CreateCapsuleShape(body, &sdef, &cap);
+                        rec->cached_capsule_r = capsule->radius;
+                        rec->cached_capsule_h = capsule->height;
+                        break;
+                    }
+                    default:
+                        assert(false && "Unreachable: want_kind must be set by anyof constraint.");
+                        break;
+                    }
+
+                    rec->shape              = new_shape;
+                    rec->cached_kind        = want_kind;
+                    rec->cached_density     = want_density;
+                    rec->cached_friction    = want_friction;
+                    rec->cached_restitution = want_restitution;
+                    rec->cached_trigger     = want_trigger;
+
+                    // Apply collision-group filter (categoryBits/maskBits).
+                    uint64_t cat = 0, msk = 0;
+                    physics2d_detail::compute_collision_filter(pw->groups, e, cat, msk);
+                    b2Filter filter = b2Shape_GetFilter(new_shape);
+                    filter.categoryBits = cat;
+                    filter.maskBits     = msk;
+                    b2Shape_SetFilter(new_shape, filter);
+                }
+            }
+        }
+
+        // ------------------------------------------------------------
+        // Phase 3: step every world. Worlds are independent per Box2D v3,
+        // so we parallelize across them.
+        // ------------------------------------------------------------
+        void phase_step(
+            std::unordered_map<size_t, std::unique_ptr<PhysicsWorld>>& this_frame)
+        {
+            std::vector<PhysicsWorld*> worlds;
+            worlds.reserve(this_frame.size());
+            for (auto& [_, pw] : this_frame) worlds.push_back(pw.get());
+
+            const float    dt    = deltatime();
+            const uint64_t frame = m_frame;
+
+            std::for_each(
+                std::execution::par_unseq,
+                worlds.begin(), worlds.end(),
+                [dt, frame](PhysicsWorld* pw)
+                {
+                    const int substeps = static_cast<int>(
+                        pw->substeps_snap == 0 ? 1 : pw->substeps_snap);
+                    b2World_Step(pw->world, dt, substeps);
+
+                    // Sweep dead bodies (records not refreshed this frame).
+                    pw->dead_scratch.clear();
+                    for (auto& [bid, rec] : pw->bodies)
+                        if (rec.last_seen_frame != frame)
+                            pw->dead_scratch.push_back(bid);
+                    for (b2BodyId dead : pw->dead_scratch)
+                    {
+                        pw->bodies.erase(dead);
+                        b2DestroyBody(dead);
+                    }
+                });
+        }
+
+        // ------------------------------------------------------------
+        // Phase 4: write solver results back to components.
+        // ------------------------------------------------------------
+        void phase_sync_bodies_out()
+        {
+            for (auto&& [
+                e, trans, localpos, localrot,
+                rb, lvel, avel,
+                lockx, locky, lockr,
+                opos, orot
+            ] : query_entity<view typesof(
+                Transform::Translation&,
+                Transform::LocalPosition&,
+                Transform::LocalRotation&,
+                Physics2D::Rigidbody&,
+                Physics2D::LinearVelocity*,
+                Physics2D::AngularVelocity*,
+                Physics2D::LockTranslationX*,
+                Physics2D::LockTranslationY*,
+                Physics2D::LockRotation*,
+                Physics2D::Offset::Position*,
+                Physics2D::Offset::Rotation*
+            )>())
+            {
+                auto world_it = m_worlds.find(rb.layerid);
+                if (world_it == m_worlds.end())
+                    continue;
+                PhysicsWorld* pw = world_it->second.get();
+
+                // Find this entity's BodyRecord.
+                PhysicsWorld::BodyRecord* rec = nullptr;
+                for (auto& [bid, r] : pw->bodies)
+                    if (r.entity == e) { rec = &r; break; }
+                if (rec == nullptr)
+                    continue;
+
+                const b2BodyId body = rec->body;
+                const b2Vec2   new_pos    = b2Body_GetPosition(body);
+                const b2Rot    new_rot    = b2Body_GetRotation(body);
+                const float    new_rot_deg = b2Rot_GetAngle(new_rot) * math::RAD2DEG;
+
+                // Recover the local offset rotation that was applied on the way in,
+                // so the rotation we write back is the entity's own (without offset).
+                const float extra_rot = orot ? orot->degree : 0.f;
+                const math::vec2 offset_pos = opos ? opos->value : math::vec2(0.f);
+                const float entity_rot_deg = new_rot_deg - extra_rot;
+
+                // Rotate offset back into local space to subtract from world pos.
+                const math::vec3 rotated = math::quat::euler(0.f, 0.f, entity_rot_deg)
+                    * math::vec3(offset_pos.x, offset_pos.y, 0.f);
+
+                const bool lock_x = lockx != nullptr;
+                const bool lock_y = locky != nullptr;
+
+                const float out_x = lock_x ? trans.world_position.x : (new_pos.x - rotated.x);
+                const float out_y = lock_y ? trans.world_position.y : (new_pos.y - rotated.y);
+
+                trans.set_global_position(
+                    math::vec3(out_x, out_y, trans.world_position.z),
+                    &localpos, &localrot);
+
+                if (!lockr)
+                {
+                    auto euler = trans.world_rotation.euler_angle();
+                    euler.z = entity_rot_deg;
+                    trans.set_global_rotation(math::quat::euler(euler), &localrot);
+                }
+
+                if (lvel)
+                {
+                    const b2Vec2 lv = b2Body_GetLinearVelocity(body);
+                    lvel->value = math::vec2(
+                        lock_x ? 0.f : lv.x,
+                        lock_y ? 0.f : lv.y);
+                }
+                if (avel && !lockr)
+                    avel->value = b2Body_GetAngularVelocity(body);
+                else if (avel && lockr)
+                    avel->value = 0.f;
+            }
+        }
+
+        // ------------------------------------------------------------
+        // Phase 5: collect contacts into CollisionResult.
+        // ------------------------------------------------------------
+        void phase_collect_contacts()
+        {
+            for (auto&& [e, rb, cr] : query_entity<view typesof(
+                Physics2D::Rigidbody&,
+                Physics2D::CollisionResult&
+            )>())
+            {
+                auto world_it = m_worlds.find(rb.layerid);
+                if (world_it == m_worlds.end())
+                {
+                    cr.contacts.clear();
+                    continue;
+                }
+                PhysicsWorld* pw = world_it->second.get();
+
+                // Find this entity's BodyRecord.
+                PhysicsWorld::BodyRecord* self_rec = nullptr;
+                for (auto& [bid, r] : pw->bodies)
+                    if (r.entity == e) { self_rec = &r; break; }
+                if (self_rec == nullptr)
+                {
+                    cr.contacts.clear();
                     continue;
                 }
 
-                auto& physics_world_instance = fnd->second->m_physics_world;
-                auto& all_rigidbody_list = fnd->second->m_all_alive_bodys;
+                const b2BodyId self_body = self_rec->body;
 
-                math::vec3 offset_position = posoffset != nullptr
-                    ? math::vec3(posoffset->offset)
-                    : math::vec3(0.f, 0.f, 0.f)
-                    ;
-                float final_offset_rotation =
-                    translation.world_rotation.euler_angle().z +
-                    (rotoffset != nullptr ? rotoffset->angle : 0.f);
+                cr.contacts.clear();
+                const int cap = b2Body_GetContactCapacity(self_body);
+                if (cap <= 0)
+                    continue;
 
-                math::vec3 final_offset_position =
-                    math::quat::euler(0.f, 0.f, final_offset_rotation) * offset_position;
+                if (static_cast<size_t>(cap) > m_contact_data_scratch.size())
+                    m_contact_data_scratch.resize(static_cast<size_t>(cap));
 
-                if (rigidbody.rigidbody_just_created == true)
+                const int n = b2Body_GetContactData(
+                    self_body, m_contact_data_scratch.data(), cap);
+                assert(n >= 0 && (size_t)n <= m_contact_data_scratch.size());
+
+                for (int i = 0; i < n; ++i)
                 {
-                    b2BodyDef default_rigidbody_config = b2DefaultBodyDef();
-                    default_rigidbody_config.rotation = b2MakeRot(final_offset_rotation * math::DEG2RAD);
-                    default_rigidbody_config.position = {
-                        translation.world_position.x + final_offset_position.x,
-                        translation.world_position.y + final_offset_position.y };
+                    const b2ContactData& cd = m_contact_data_scratch[i];
+                    if (cd.manifold.pointCount <= 0)
+                        continue;
 
-                    auto b2newbody = b2CreateBody(physics_world_instance, &default_rigidbody_config);
-                    rigidbody.native_rigidbody = JE_B2JBody(b2newbody);
-                }
+                    // Determine which side is self.
+                    const b2BodyId body_a = b2Shape_GetBody(cd.shapeIdA);
+                    const bool     self_is_a = physics2d_detail::b2_body_eq(body_a, self_body);
 
-                auto existing_alive_body_finding_result =
-                    all_rigidbody_list.find(rigidbody.native_rigidbody);
+                    const b2ShapeId other_shape = self_is_a ? cd.shapeIdB : cd.shapeIdA;
+                    const b2BodyId  other_body  = b2Shape_GetBody(other_shape);
 
-                assert(existing_alive_body_finding_result == all_rigidbody_list.end() ||
-                    existing_alive_body_finding_result->second + 1 == m_simulate_round_count);
-
-                if (existing_alive_body_finding_result == all_rigidbody_list.end()
-                    && rigidbody.rigidbody_just_created == false)
-                {
-                    rigidbody.rigidbody_just_created = true;
-                    rigidbody.native_rigidbody = Physics2D::Rigidbody::null_rigidbody;
-                }
-                else
-                {
-                    rigidbody.rigidbody_just_created = false;
-
-                    assert(rigidbody.native_rigidbody != Physics2D::Rigidbody::null_rigidbody);
-                    b2BodyId rigidbody_instance = JE_J2BBody(rigidbody.native_rigidbody);
-                    all_rigidbody_list[rigidbody.native_rigidbody] = m_simulate_round_count;
-
-                    // 如果实体有 Physics2D::Bullet 组件，那么就适用高精度碰撞
-                    b2Body_SetBullet(rigidbody_instance, bullet != nullptr);
-
-                    b2ShapeId old_shape_id;
-                    const auto old_shape_count =
-                        b2Body_GetShapes(rigidbody_instance, &old_shape_id, 1);
-
-                    // 开始创建碰撞体
-                    bool force_update_fixture = old_shape_count == 0;
-
-                    // NOTE: 此处不再考虑实体的网格大小，开发者应当自行调整
-                    auto entity_scaled_size = math::vec2(
-                        translation.local_scale.x,
-                        translation.local_scale.y);
-
-                    if (scale != nullptr)
-                        entity_scaled_size *= scale->scale;
-
-                    if (entity_scaled_size != rigidbody.record_body_scale)
+                    // Resolve other entity via the per-world body table.
+                    auto other_it = pw->bodies.find(other_body);
+                    game_entity other_entity{};
+                    Physics2D::Rigidbody* other_rb = nullptr;
+                    if (other_it != pw->bodies.end())
                     {
-                        rigidbody.record_body_scale = entity_scaled_size;
-                        force_update_fixture = true;
-                    }
-                    if (mass != nullptr && mass->density != rigidbody.record_density)
-                    {
-                        rigidbody.record_density = mass->density;
-                        force_update_fixture = true;
-                    }
-                    if (friction != nullptr && friction->value != rigidbody.record_friction)
-                    {
-                        rigidbody.record_friction = friction->value;
-                        force_update_fixture = true;
-                    }
-                    if (restitution != nullptr && restitution->value != rigidbody.record_restitution)
-                    {
-                        rigidbody.record_restitution = restitution->value;
-                        force_update_fixture = true;
+                        other_entity = other_it->second.entity;
+                        other_rb     = other_entity.get_component<Physics2D::Rigidbody>();
                     }
 
-                    // Check if the shape has been changed.
-                    if (boxcollider != nullptr)
+                    // Normal points from A to B in Box2D convention.
+                    // We want it to point from self to other.
+                    const math::vec2 normal = self_is_a
+                        ? math::vec2(cd.manifold.normal.x, cd.manifold.normal.y)
+                        : math::vec2(-cd.manifold.normal.x, -cd.manifold.normal.y);
+
+                    // Emit one Contact per manifold point (Box2D gives up to 2).
+                    for (int p = 0; p < cd.manifold.pointCount; ++p)
                     {
-                        if (JE_B2JShape(old_shape_id) != boxcollider->native_shape)
-                            force_update_fixture = true;
-                    }
-                    else if (circlecollider != nullptr)
-                    {
-                        if (JE_B2JShape(old_shape_id) != circlecollider->native_shape)
-                            force_update_fixture = true;
-                    }
-                    else if (capsulecollider != nullptr)
-                    {
-                        if (JE_B2JShape(old_shape_id) != capsulecollider->native_shape)
-                            force_update_fixture = true;
-                    }
-
-                    if (force_update_fixture || old_shape_count == 0)
-                    {
-                        b2ShapeDef shape_define = b2DefaultShapeDef();
-                        shape_define.density = mass ? mass->density : 0.f;
-                        shape_define.material.friction = friction ? friction->value : 0.f;
-                        shape_define.material.restitution = restitution ? restitution->value : 0.f;
-
-                        b2ShapeId created_shape_id;
-
-                        if (boxcollider != nullptr)
-                        {
-                            auto box_polygon = b2MakeBox(
-                                abs(entity_scaled_size.x / 2.f),
-                                abs(entity_scaled_size.y / 2.f));
-
-                            created_shape_id = b2CreatePolygonShape(
-                                rigidbody_instance,
-                                &shape_define,
-                                &box_polygon);
-                            boxcollider->native_shape = JE_B2JShape(created_shape_id);
-                        }
-                        else if (circlecollider != nullptr)
-                        {
-                            b2Circle circle;
-                            circle.center = b2Vec2{ 0.f, 0.f };
-                            circle.radius = std::max(abs(entity_scaled_size.x / 2.f), abs(entity_scaled_size.y / 2.f));
-
-                            created_shape_id = b2CreateCircleShape(
-                                rigidbody_instance,
-                                &shape_define,
-                                &circle);
-                            circlecollider->native_shape = JE_B2JShape(created_shape_id);
-                        }
-                        else if (capsulecollider != nullptr)
-                        {
-                            b2Capsule capsule;
-
-                            float height = abs(entity_scaled_size.y / 2.f);
-
-                            capsule.radius = abs(entity_scaled_size.x / 2.f);
-                            capsule.center1 = b2Vec2{
-                                0.f, height < capsule.radius ? 0.f : height - capsule.radius };
-                            capsule.center2 = b2Vec2{
-                                0.f, height < capsule.radius ? 0.f : capsule.radius - height };
-
-                            created_shape_id = b2CreateCapsuleShape(
-                                rigidbody_instance,
-                                &shape_define,
-                                &capsule);
-                            capsulecollider->native_shape = JE_B2JShape(created_shape_id);
-                        }
-                        else
-                        {
-                            // Cannot be here.
-                            abort();
-                        }
-
-                        // Set address of rigidbody for storing collision result.
-                        b2Shape_SetUserData(created_shape_id, &rigidbody);
-
-                        if (old_shape_count != 0)
-                            b2DestroyShape(old_shape_id, true);
-                    }
-
-                    if (kinematics == nullptr)
-                        b2Body_SetType(rigidbody_instance, b2_staticBody);
-                    else
-                    {
-                        if (mass == nullptr)
-                            b2Body_SetType(rigidbody_instance, b2_kinematicBody);
-                        else
-                            b2Body_SetType(rigidbody_instance, b2_dynamicBody);
-
-                        // 检查刚体内的动力学和变换属性，从组件同步到物理引擎
-                        if (check_if_need_update_vec2(b2Body_GetLinearVelocity(rigidbody_instance), kinematics->linear_velocity))
-                            b2Body_SetLinearVelocity(rigidbody_instance, b2Vec2{ kinematics->linear_velocity.x, kinematics->linear_velocity.y });
-                        if (check_if_need_update_float(b2Body_GetAngularVelocity(rigidbody_instance), kinematics->angular_velocity))
-                            b2Body_SetAngularVelocity(rigidbody_instance, kinematics->angular_velocity);
-
-                        if (check_if_need_update_float(b2Body_GetLinearDamping(rigidbody_instance), kinematics->linear_damping))
-                            b2Body_SetLinearDamping(rigidbody_instance, kinematics->linear_damping);
-                        if (check_if_need_update_float(b2Body_GetAngularDamping(rigidbody_instance), kinematics->angular_damping))
-                            b2Body_SetAngularDamping(rigidbody_instance, kinematics->angular_damping);
-                        if (check_if_need_update_float(b2Body_GetGravityScale(rigidbody_instance), kinematics->gravity_scale))
-                            b2Body_SetGravityScale(rigidbody_instance, kinematics->gravity_scale);
-
-                        if (b2Body_IsFixedRotation(rigidbody_instance) != kinematics->lock_rotation)
-                        {
-                            b2Body_SetFixedRotation(rigidbody_instance, kinematics->lock_rotation);
-                            b2Body_SetAwake(rigidbody_instance, true);
-                        }
-                    }
-
-                    if (check_if_need_update_vec2(
-                        b2Body_GetPosition(rigidbody_instance),
-                        math::vec2(
-                            translation.world_position.x + final_offset_position.x,
-                            translation.world_position.y + final_offset_position.y))
-                        || check_if_need_update_float(
-                            b2Rot_GetAngle(b2Body_GetRotation(rigidbody_instance)) * math::RAD2DEG,
-                            final_offset_rotation))
-                    {
-                        b2Body_SetTransform(
-                            rigidbody_instance,
-                            b2Vec2{
-                                translation.world_position.x + final_offset_position.x,
-                                translation.world_position.y + final_offset_position.y },
-                                b2MakeRot(final_offset_rotation * math::DEG2RAD));
-                        b2Body_SetAwake(rigidbody_instance, true);
-                    }
-
-                    if (force_update_fixture || rigidbody._arch_updated_modify_hack != &rigidbody)
-                    {
-                        b2ShapeId current_shape_id;
-                        if (b2Body_GetShapes(rigidbody_instance, &current_shape_id, 1) != 0)
-                        {
-                            rigidbody._arch_updated_modify_hack = &rigidbody;
-                            uint16_t self_mask_type = 0x0000;
-                            uint16_t self_collide_group = 0x0000;
-
-                            for (size_t i = 0; i < Physics2DWorldContext::MAX_GROUP_COUNT; ++i)
-                            {
-                                auto& group = fnd->second->m_group_configs[i];
-                                bool is_this_group = true;
-
-                                for (auto& filter_type : group.m_group_filter)
-                                {
-                                    assert(filter_type.m_requirement == requirement::type::CONTAINS
-                                        || filter_type.m_requirement == requirement::type::EXCEPT);
-
-                                    bool has_component = je_ecs_world_entity_get_component(&e, filter_type.m_type->m_id);
-                                    if ((filter_type.m_requirement == requirement::type::CONTAINS) != has_component)
-                                    {
-                                        is_this_group = false;
-                                        break;
-                                    }
-                                }
-
-                                if (is_this_group)
-                                {
-                                    self_mask_type |= (uint16_t)(1 << i);
-                                    self_collide_group |= group.m_collision_mask;
-                                }
-                            }
-
-                            b2Filter filter = b2Shape_GetFilter(current_shape_id);
-                            filter.maskBits = self_mask_type;
-                            filter.categoryBits = self_collide_group;
-                            b2Shape_SetFilter(current_shape_id, filter);
-                        }
+                        const b2ManifoldPoint& mp = cd.manifold.points[p];
+                        Physics2D::CollisionResult::Contact out{};
+                        out.point           = math::vec2(mp.point.x, mp.point.y); // already world-space
+                        out.normal          = normal;
+                        out.normal_impulse  = mp.normalImpulse;
+                        out.tangent_impulse = mp.tangentImpulse;
+                        cr.contacts.push_back({ other_rb, out });
                     }
                 }
             }
+        }
 
-            // 物理引擎在此处进行物理解算
-            for (auto& [_, physics_world] : _m_this_frame_alive_worlds)
-            {
-                b2World_Step(
-                    physics_world->m_physics_world,
-                    deltatime(),
-                    physics_world->m_step_count);
+        // ------------------------------------------------------------
+        // Top-level update.
+        // ------------------------------------------------------------
+        void PhysicsUpdate()
+        {
+            ++m_frame;
 
-                // NOTE: 这个变量名真恐怖...
-                std::vector<Physics2D::Rigidbody::rigidbody_id_t> _dead_bodys;
+            auto this_frame = phase_sync_worlds();
+            phase_sync_bodies_in(this_frame);
+            phase_step(this_frame);
 
-                for (auto [body, round] : physics_world->m_all_alive_bodys)
-                {
-                    if (round != m_simulate_round_count)
-                        _dead_bodys.push_back(body);
-                }
-                for (auto dead_body : _dead_bodys)
-                {
-                    physics_world->m_all_alive_bodys.erase(dead_body);
-                    b2DestroyBody(JE_J2BBody(dead_body));
-                }
-            }
+            // Promote this_frame into m_worlds (drops worlds not seen this frame).
+            m_worlds = std::move(this_frame);
 
-            _m_alive_physic_worlds.swap(_m_this_frame_alive_worlds);
-
-            // 在此处将动力学数据更新到组件上
-            for (auto&& [
-                translation,
-                localposition,
-                localrotation,
-                rigidbody,
-                kinematics,
-                collisions,
-                posoffset,
-                rotoffset
-            ] :
-            query<
-                view typesof(
-                    Transform::Translation&,
-                    Transform::LocalPosition&,
-                    Transform::LocalRotation&,
-                    Physics2D::Rigidbody&,
-                    Physics2D::Kinematics*,
-                    Physics2D::CollisionResult*,
-                    Physics2D::Transform::Position*,
-                    Physics2D::Transform::Rotation*
-                ),
-                anyof typesof(
-                    Physics2D::Kinematics,
-                    Physics2D::CollisionResult
-                )
-            >())
-            {
-                if (rigidbody.native_rigidbody != Physics2D::Rigidbody::null_rigidbody)
-                {
-                    // 从刚体获取解算完成之后的坐标
-                    b2BodyId rigidbody_instance = JE_J2BBody(rigidbody.native_rigidbody);
-
-                    auto new_position = b2Body_GetPosition(rigidbody_instance);
-                    if (kinematics != nullptr &&
-                        rigidbody.rigidbody_just_created == false)
-                    {
-                        math::vec3 offset_position = posoffset != nullptr
-                            ? math::vec3(posoffset->offset)
-                            : math::vec3(0.f, 0.f, 0.f);
-                        float final_offset_rotation =
-                            b2Rot_GetAngle(b2Body_GetRotation(rigidbody_instance)) * math::RAD2DEG - (rotoffset != nullptr ? rotoffset->angle : 0.f);
-
-                        math::vec3 final_offset_position =
-                            math::quat::euler(0.f, 0.f, final_offset_rotation) * offset_position;
-
-                        auto new_velocity = b2Body_GetLinearVelocity(rigidbody_instance);
-
-                        kinematics->linear_velocity = math::vec2{
-                            kinematics->lock_movement_x ? 0.0f : new_velocity.x,
-                            kinematics->lock_movement_y ? 0.0f : new_velocity.y };
-                        translation.set_global_position(
-                            math::vec3(
-                                kinematics->lock_movement_x ? translation.world_position.x : new_position.x - final_offset_position.x,
-                                kinematics->lock_movement_y ? translation.world_position.y : new_position.y - final_offset_position.y,
-                                translation.world_position.z),
-                            &localposition,
-                            &localrotation);
-
-                        kinematics->angular_velocity = b2Body_GetAngularVelocity(rigidbody_instance);
-
-                        auto world_angle = translation.world_rotation.euler_angle();
-                        world_angle.z = final_offset_rotation;
-                        translation.set_global_rotation(
-                            math::quat::euler(world_angle),
-                            &localrotation);
-                    }
-                    if (collisions != nullptr)
-                    {
-                        collisions->results.clear();
-
-                        std::vector<b2ContactData> contacts(
-                            (size_t)b2Body_GetContactCapacity(rigidbody_instance));
-
-                        int contact_count = b2Body_GetContactData(
-                            rigidbody_instance,
-                            contacts.data(),
-                            (int)contacts.size());
-
-                        assert((size_t)contact_count <= contacts.size());
-                        contacts.resize((size_t)contact_count);
-
-                        for (const auto& contact : contacts)
-                        {
-                            if (contact.manifold.pointCount > 0)
-                            {
-                                auto* a = std::launder(reinterpret_cast<Physics2D::Rigidbody*>(
-                                    b2Shape_GetUserData(contact.shapeIdA)));
-                                auto* b = std::launder(reinterpret_cast<Physics2D::Rigidbody*>(
-                                    b2Shape_GetUserData(contact.shapeIdB)));
-
-                                Physics2D::Rigidbody* other_rigidbody;
-                                math::vec2 contact_point;
-
-                                if (a->native_rigidbody != rigidbody.native_rigidbody)
-                                {
-                                    other_rigidbody = a;
-                                    contact_point = math::vec2(
-                                        translation.world_position.x + contact.manifold.points[0].anchorB.x,
-                                        translation.world_position.y + contact.manifold.points[0].anchorB.y);
-                                }
-                                else
-                                {
-                                    other_rigidbody = b;
-                                    contact_point = math::vec2(
-                                        translation.world_position.x + contact.manifold.points[0].anchorA.x,
-                                        translation.world_position.y + contact.manifold.points[0].anchorA.y);
-                                }
-
-                                assert(other_rigidbody != nullptr);
-                                assert(collisions->results.find(other_rigidbody) == collisions->results.end());
-
-                                collisions->results[other_rigidbody] =
-                                    Physics2D::CollisionResult::collide_result{
-                                        contact_point,
-                                        math::vec2(
-                                            contact.manifold.normal.x,
-                                            contact.manifold.normal.y),
-                                };
-                            }
-                        }
-                    }
-                }
-            }
+            // Now query against the promoted m_worlds for write-back & contact collection.
+            phase_sync_bodies_out();
+            phase_collect_contacts();
         }
     };
 }
