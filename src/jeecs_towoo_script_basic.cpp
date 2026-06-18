@@ -1403,10 +1403,14 @@ WOORT_API woort_api wojeapi_towoo_physics2d_collisionresult_all(void)
     woort_set_map(result_container);
     woort_map_reserve(result_container, collisionResult.contacts.size());
 
-    for (auto& [rigidbody, contact] : collisionResult.contacts)
+    for (auto& contact : collisionResult.contacts)
     {
         woort_set_struct(val, 2);
-        (void)woort_map_set_by_pointer(result_container, rigidbody, val);
+        // Encode the stable body_id as a fake handle. Woolang treats it as an
+        // opaque map key; C++ consumers can recover it via static_cast<uintptr_t>.
+        void* fake_handle = reinterpret_cast<void*>(
+            static_cast<uintptr_t>(contact.other_body_id));
+        (void)woort_map_set_by_pointer(result_container, fake_handle, val);
 
         wo_set_vec2(elem, contact.point);
         woort_struct_set(val, 0, elem);
@@ -1428,7 +1432,10 @@ WOORT_API woort_api wojeapi_towoo_physics2d_collisionresult_check(void)
     auto& rigidbody =
         wo_component<jeecs::Physics2D::Rigidbody>(1, WOORT_RETURN_SLOT);
 
-    const auto* contact = collisionResult.find(&rigidbody);
+    // Look up by the stable body_id rather than by pointer, so this works
+    // even when the CollisionResult was produced last PhysicsUpdate and the
+    // other entity's archetype has since migrated.
+    const auto* contact = collisionResult.find(rigidbody.body_id);
     if (contact != nullptr)
     {
         woort_value ret = stack_base + 0;

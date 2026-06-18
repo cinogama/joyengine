@@ -344,10 +344,6 @@ namespace jeecs
         // Reused scratch buffers (avoids per-frame allocation).
         std::vector<b2ContactData>                                 m_contact_data_scratch;
 
-        // Cross-system map: Rigidbody* -> owning entity, valid for the current frame.
-        // Used by the woolang bridge to resolve CollisionResult::check(Rigidbody).
-        std::unordered_map<Physics2D::Rigidbody*, game_entity>     m_rb_addr_to_entity;
-
         Physics2DUpdatingSystem(game_world w)
             : game_system(w)
         {
@@ -498,9 +494,6 @@ namespace jeecs
         void phase_sync_bodies_in(
             std::unordered_map<size_t, std::unique_ptr<PhysicsWorld>>& this_frame)
         {
-            // Per-frame addr->entity map (consumed by woolang bridge later this frame).
-            m_rb_addr_to_entity.clear();
-
             for (auto&& [
                 e, trans, rb, dyn, kinem, bullet,
                 lockx, locky, lockr,
@@ -541,9 +534,6 @@ namespace jeecs
                 )
             >())
             {
-                // Publish this Rigidbody* -> entity mapping for the woolang bridge.
-                m_rb_addr_to_entity[&rb] = e;
-
                 auto world_it = this_frame.find(rb.layerid);
                 if (world_it == this_frame.end() || world_it->second == nullptr)
                 {
@@ -610,6 +600,11 @@ namespace jeecs
                 }
                 rec->last_seen_frame = m_frame;
                 rec->entity          = e; // Refresh handle every frame.
+
+                // Publish the stable body_id so any system phase (including
+                // ones running before the next PhysicsUpdate) can use it as a
+                // cross-frame identifier when looking up CollisionResult.
+                rb.body_id = physics2d_detail::b2_body_to_u64(rec->body);
 
                 const b2BodyId body = rec->body;
 
@@ -954,15 +949,17 @@ namespace jeecs
                     const b2ShapeId other_shape = self_is_a ? cd.shapeIdB : cd.shapeIdA;
                     const b2BodyId  other_body  = b2Shape_GetBody(other_shape);
 
-                    // Resolve other entity via the per-world body table.
+                    // Stable cross-frame id for the other body. This is what
+                    // CollisionResult consumers compare against Rigidbody::body_id.
+                    const uint64_t other_body_id = physics2d_detail::b2_body_to_u64(other_body);
+
+                    // Resolve whether the other side is a sensor (IsTrigger).
+                    // We rely on the cached_trigger flag written in phase_sync_bodies_in
+                    // to avoid depending on extra Box2D query APIs.
+                    bool other_is_trigger = false;
                     auto other_it = pw->bodies.find(other_body);
-                    game_entity other_entity{};
-                    Physics2D::Rigidbody* other_rb = nullptr;
                     if (other_it != pw->bodies.end())
-                    {
-                        other_entity = other_it->second.entity;
-                        other_rb     = other_entity.get_component<Physics2D::Rigidbody>();
-                    }
+                        other_is_trigger = other_it->second.cached_trigger;
 
                     // Normal points from A to B in Box2D convention.
                     // We want it to point from self to other.
@@ -975,11 +972,13 @@ namespace jeecs
                     {
                         const b2ManifoldPoint& mp = cd.manifold.points[p];
                         Physics2D::CollisionResult::Contact out{};
+                        out.other_body_id   = other_body_id;
                         out.point           = math::vec2(mp.point.x, mp.point.y); // already world-space
                         out.normal          = normal;
                         out.normal_impulse  = mp.normalImpulse;
                         out.tangent_impulse = mp.tangentImpulse;
-                        cr.contacts.push_back({ other_rb, out });
+                        out.is_trigger      = other_is_trigger;
+                        cr.contacts.push_back(out);
                     }
                 }
             }

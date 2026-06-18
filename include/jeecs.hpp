@@ -10768,9 +10768,20 @@ namespace jeecs
             JECS_DEFAULT_CONSTRUCTOR(Rigidbody);
 
             size_t layerid = 0;
+
+            // Stable cross-frame body identifier, written by Physics2DUpdatingSystem
+            // every PhysicsUpdate. Survives archetype migration (value semantics,
+            // not a pointer), so it is safe to read in any system phase — including
+            // the ones that run before PhysicsUpdate, which observe the previous
+            // frame's CollisionResult.
+            // 0 = no body has been created yet (before first PhysicsUpdate, or
+            //     after the owning World::Core disappeared).
+            uint64_t body_id = 0;
+
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Rigidbody::layerid, "layerid");
+                typing::register_member(guard, &Rigidbody::body_id, "body_id");
             }
         };
         // BodyType tags: at most one. None = Static.
@@ -10991,25 +11002,33 @@ namespace jeecs
 
             struct Contact
             {
-                math::vec2 point;             // World-space contact point.
-                math::vec2 normal;            // Direction from self to other.
-                float normal_impulse = 0.f;
-                float tangent_impulse = 0.f;
+                // Stable identifier matching the other body's Rigidbody::body_id.
+                // Safe to compare across frame boundaries (it's a value, not a pointer).
+                uint64_t    other_body_id = 0;
+
+                math::vec2  point;             // World-space contact point.
+                math::vec2  normal;            // Direction from self to other.
+                float       normal_impulse = 0.f;
+                float       tangent_impulse = 0.f;
+
+                // True if the other side is a sensor (IsTrigger). Such contacts
+                // represent overlap only — no physical response was applied.
+                // C++-only; not exposed through the woolang collide_result struct.
+                bool        is_trigger = false;
             };
-            // Flat array keyed by the other entity's Rigidbody*. Pointers are
-            // valid for the current frame (CollisionResult is rebuilt every
-            // PhysicsUpdate), so the woolang bridge can compare by address.
-            basic::vector<std::pair<Rigidbody*, Contact>> contacts;
+            // Flat array keyed by other_body_id. Linear-scan lookup; expected
+            // per-entity contact count is small (<8), so this beats a map.
+            basic::vector<Contact> contacts;
 
             CollisionResult() = default;
             CollisionResult(CollisionResult&&) = default;
             CollisionResult(const CollisionResult&) {}
 
-            const Contact* find(const Rigidbody* other) const
+            const Contact* find(uint64_t body_id) const
             {
-                for (auto& kv : contacts)
-                    if (kv.first == other)
-                        return &kv.second;
+                for (auto& c : contacts)
+                    if (c.other_body_id == body_id)
+                        return &c;
                 return nullptr;
             }
         };
