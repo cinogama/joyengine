@@ -117,15 +117,25 @@ namespace jeecs
         };
 
         // ============================================================
-        // RAII guard for woolang VM swap. The previous implementation
-        // forgot to restore the prior VM, polluting global state.
+        // RAII guard for a woolang VM session: swaps the new VM in on
+        // construction, and on destruction restores the prior VM *then*
+        // closes the session VM (swap-back-before-close order, matching
+        // jeecs_graphic_api_basic.cpp). Owns the VM, so every return path
+        // after construction is leak-free.
         // ============================================================
-        struct woort_vm_swap_guard
+        struct woort_vm_session_guard
         {
             woort_vm* m_prev;
-            explicit woort_vm_swap_guard(woort_vm* next) : m_prev(woort_vm_swap(next)) {}
-            ~woort_vm_swap_guard() { (void)woort_vm_swap(m_prev); }
-            JECS_DISABLE_MOVE_AND_COPY(woort_vm_swap_guard);
+            woort_vm* m_vm;
+            explicit woort_vm_session_guard(woort_vm* next)
+                : m_prev(woort_vm_swap(next)), m_vm(next) {}
+            ~woort_vm_session_guard()
+            {
+                (void)woort_vm_swap(m_prev); // restore the prior VM first
+                if (m_vm != nullptr)
+                    woort_vm_close(m_vm);     // then release the session VM
+            }
+            JECS_DISABLE_MOVE_AND_COPY(woort_vm_session_guard);
         };
 
         // ============================================================
@@ -195,9 +205,9 @@ namespace jeecs
                 return std::nullopt;
             }
 
-            // Run the entire parse under the swap guard so the prior VM is restored
-            // even on early-return paths.
-            woort_vm_swap_guard vm_guard{ vmm };
+            // Run the entire parse under the session guard so the prior VM is
+            // restored and the session VM is closed on every return path.
+            woort_vm_session_guard vm_guard{ vmm };
 
             woort_value s;
             if (!woort_push_reserve(9, &s))
