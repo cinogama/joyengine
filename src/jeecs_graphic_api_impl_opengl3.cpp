@@ -210,7 +210,6 @@ namespace jeecs::graphic::api::gl3
             glDeleteFramebuffers(1, &m_fbo);
         }
     };
-    constexpr size_t MAX_TEXTURE_UNITS = 128;
 
     struct jegl_gl3_context
     {
@@ -444,8 +443,6 @@ namespace jeecs::graphic::api::gl3
                     reinterpret_cast<jegl_gl3_shader*>(res->m_handle.m_ptr);
 
                 assert(shader_instance != nullptr);
-                jegl_gl3_context* ctx =
-                    reinterpret_cast<jegl_gl3_context*>(jctx->m_graphic_impl_context);
 
                 const auto& blob_shared = shader_instance->m_shared_blob_data;
                 for (size_t i = 0; i < blob_shared->m_sampler_count; i += 1)

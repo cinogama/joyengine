@@ -78,8 +78,8 @@ namespace jeecs
 
             ToWooBaseSystem(game_world w, const typing::type_info* ty)
                 : game_system(w)
-                , m_type(ty)
                 , m_job_vm(nullptr)
+                , m_type(ty)
             {
                 std::shared_lock sg1(_registered_towoo_base_systems_mx);
 

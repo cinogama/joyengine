@@ -1814,7 +1814,6 @@ namespace jeecs
             // check for extra parameters;
             if (wave_format.subChunkSize > 16)
             {
-                int16_t useless;
                 jeecs_file_seek(
                     wav_file, 
                     wave_format.subChunkSize - 16, 

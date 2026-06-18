@@ -1001,7 +1001,6 @@ WOORT_API woort_api wojeapi_wheel_count(void)
     auto wheel = jeecs::input::wheel((size_t)woort_int(0));
 
     const woort_value result = s + 0;
-    const woort_value elem = s + 1;
 
     woort_set_struct(result, 2);
 
@@ -1021,7 +1020,6 @@ WOORT_API woort_api wojeapi_input_window_size(void)
     auto winsz = jeecs::input::windowsize();
 
     const woort_value result = s + 0;
-    const woort_value elem = s + 1;
 
     woort_set_struct(result, 2);
 
@@ -1041,7 +1039,6 @@ WOORT_API woort_api wojeapi_input_window_pos(void)
     auto winpos = jeecs::input::windowpos();
 
     const woort_value result = s + 0;
-    const woort_value elem = s + 1;
 
     woort_set_struct(result, 2);
 
@@ -1061,7 +1058,6 @@ WOORT_API woort_api wojeapi_input_mouse_pos(void)
     auto mousepos = jeecs::input::mousepos((size_t)woort_int(0));
 
     const woort_value result = s + 0;
-    const woort_value elem = s + 1;
 
     woort_set_struct(result, 2);
 
@@ -1081,7 +1077,6 @@ WOORT_API woort_api wojeapi_input_mouse_view_pos(void)
     auto mouseview = jeecs::input::mouseviewpos((size_t)woort_int(0));
 
     const woort_value result = s + 0;
-    const woort_value elem = s + 1;
 
     woort_set_struct(result, 2);
 
@@ -1115,7 +1110,6 @@ WOORT_API woort_api wojeapi_input_gamepad_axis(void)
     auto axis = gamepad->stick(kcode);
 
     const woort_value result = s + 0;
-    const woort_value elem = s + 1;
 
     woort_set_struct(result, 2);
 
@@ -1495,8 +1489,6 @@ WOORT_API woort_api wojeapi_texture_get_pixel(void)
 {
     auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(0);
 
-    const woort_value elem = WOORT_RETURN_SLOT;
-
     const size_t x = woort_struct_get_int(1, 0);
     const size_t y = woort_struct_get_int(1, 1);
 
@@ -1784,7 +1776,6 @@ WOORT_API woort_api wojeapi_textures_of_entity(void)
         return woort_ret_panic("Stack overflow.");
 
     const woort_value out_map = s + 0;
-    const woort_value key = s + 1;
     const woort_value val = s + 2;
 
     woort_set_map(out_map);

@@ -2653,7 +2653,7 @@ bool jegui_shutdown_callback()
                 close = woort_bool(tmp);
         }
     }
-    (void)woort_vm_swap(nullptr);
+    (void)woort_vm_swap(last);
 
     return close;
 }

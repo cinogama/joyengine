@@ -911,7 +911,9 @@ namespace jeecs
             const uint64_t frame = m_frame;
 
             std::for_each(
+#if __cpp_lib_execution
                 std::execution::par_unseq,
+#endif
                 worlds.begin(), worlds.end(),
                 [dt, frame](PhysicsWorld* pw)
                 {
