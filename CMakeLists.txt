@@ -110,6 +110,12 @@ target_compile_features(joyengine_configs INTERFACE cxx_std_20)
 if(MSVC) 
     target_compile_options(joyengine_configs INTERFACE "/utf-8")
 else()
+    # 注意：libstdc++ 的 PSTL（<execution> 并行算法）在内部用
+    # catch(const std::bad_alloc&) 回收工作线程的 OOM（见 pstl/utils.h），
+    # 系统头没有 #ifdef __EXCEPTIONS 保护，因此任何真正的 par_unseq
+    # 模板实例化在 -fno-exceptions 下都会无法编译。
+    # 若未来要恢复 no-exceptions 纪律，必须先放弃 <execution> 并行算法，
+    # 改用自写线程池（参考 JE_PARALLEL_FOREACH 的判定）。
     # target_compile_options(joyengine_configs INTERFACE -fno-exceptions)
     target_compile_options(joyengine_configs INTERFACE -pthread)
     target_link_options(joyengine_configs INTERFACE -pthread)

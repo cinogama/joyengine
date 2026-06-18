@@ -16,7 +16,6 @@
 #include <bit>
 #include <cstdint>
 #include <cstring>
-#include <execution>
 #include <memory>
 #include <optional>
 #include <string>
@@ -901,10 +900,7 @@ namespace jeecs
             const float    dt = deltatime();
             const uint64_t frame = m_frame;
 
-            std::for_each(
-#if __cpp_lib_execution
-                std::execution::par_unseq,
-#endif
+            ::jeecs::parallel_foreach(
                 worlds.begin(), worlds.end(),
                 [dt, frame](PhysicsWorld* pw)
                 {

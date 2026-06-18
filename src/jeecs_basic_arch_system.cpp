@@ -16,11 +16,10 @@
 #define DEBUG_ARCH_LOG_WARN(...) jeecs::debug::logwarn(__VA_ARGS__)
 #endif
 
-#if defined(__cpp_lib_execution) && defined(NDEBUG) && JE4_CURRENT_PLATFORM != JE4_PLATFORM_WEBGL
-#define ParallelForeach(...) std::for_each(std::execution::par_unseq, __VA_ARGS__)
-#else
-#define ParallelForeach std::for_each
-#endif
+// 统一使用 jeecs.hpp 提供的 JE_PARALLEL_FOREACH 宏，
+// 该宏已根据编译器/异常/平台/Release 状态自动决定是否启用 par_unseq。
+// 历史上这里曾用本地 ParallelForeach 宏配合 __cpp_lib_execution 守卫，
+// 但守卫判定在 <execution> 被 include 之前，永远退化成串行 —— 现已修复。
 
 #define jeoffsetof(T, M) ((::size_t)&reinterpret_cast<char const volatile &>((((T *)0)->M)))
 
@@ -1587,10 +1586,7 @@ namespace jeecs_impl
         std::lock_guard g1(_m_command_executer_guard_mx);
 
         // Update all operate in this buffer
-        std::for_each(
-#ifdef __cpp_lib_execution
-            std::execution::par_unseq,
-#endif
+        ::jeecs::parallel_foreach(
             _m_entity_command_buffers.begin(), _m_entity_command_buffers.end(),
             [](std::pair<const arch_type::entity, _entity_command_buffer*>& _buf_in_entity)
             {
@@ -1977,49 +1973,49 @@ namespace jeecs_impl
             ecs_world::system_container_t& active_systems =
                 cur_world->get_system_instances();
 
-            ParallelForeach(
+            ::jeecs::parallel_foreach(
                 active_systems.begin(), active_systems.end(),
                 [](ecs_world::system_container_t::value_type& val)
                 {
                     val.first->m_system_updaters->m_pre_update(val.second);
                 });
-            ParallelForeach(
+            ::jeecs::parallel_foreach(
                 active_systems.begin(), active_systems.end(),
                 [](ecs_world::system_container_t::value_type& val)
                 {
                     val.first->m_system_updaters->m_state_update(val.second);
                 });
-            ParallelForeach(
+            ::jeecs::parallel_foreach(
                 active_systems.begin(), active_systems.end(),
                 [](ecs_world::system_container_t::value_type& val)
                 {
                     val.first->m_system_updaters->m_update(val.second);
                 });
-            ParallelForeach(
+            ::jeecs::parallel_foreach(
                 active_systems.begin(), active_systems.end(),
                 [](ecs_world::system_container_t::value_type& val)
                 {
                     val.first->m_system_updaters->m_transform_update(val.second);
                 });
-            ParallelForeach(
+            ::jeecs::parallel_foreach(
                 active_systems.begin(), active_systems.end(),
                 [](ecs_world::system_container_t::value_type& val)
                 {
                     val.first->m_system_updaters->m_physics_update(val.second);
                 });
-            ParallelForeach(
+            ::jeecs::parallel_foreach(
                 active_systems.begin(), active_systems.end(),
                 [](ecs_world::system_container_t::value_type& val)
                 {
                     val.first->m_system_updaters->m_late_update(val.second);
                 });
-            ParallelForeach(
+            ::jeecs::parallel_foreach(
                 active_systems.begin(), active_systems.end(),
                 [](ecs_world::system_container_t::value_type& val)
                 {
                     val.first->m_system_updaters->m_commit_update(val.second);
                 });
-            ParallelForeach(
+            ::jeecs::parallel_foreach(
                 active_systems.begin(), active_systems.end(),
                 [](ecs_world::system_container_t::value_type& val)
                 {
@@ -2068,7 +2064,7 @@ namespace jeecs_impl
             std::vector<ecs_world*> _m_removing_worlds;
 
             // Update all worlds, if world is closing, add it to _m_removing_worlds.
-            ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
+            ::jeecs::parallel_foreach(_m_world_list.begin(), _m_world_list.end(),
                 [this, &_m_removing_worlds](ecs_world* world)
                 {
                     if (!world->update())
@@ -2261,12 +2257,12 @@ namespace jeecs_impl
 
             // 一个逻辑帧从此处开始：
             // 1. 完成预先任务
-            ParallelForeach(
+            ::jeecs::parallel_foreach(
                 _m_shared_pre_jobs.begin(), _m_shared_pre_jobs.end(),
                 [this](ecs_job* shared_job)
                 {
                     if (shared_job->m_job_type == ecs_job::job_type::FOR_WORLDS)
-                        ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
+                        ::jeecs::parallel_foreach(_m_world_list.begin(), _m_world_list.end(),
                             [shared_job](ecs_world* world)
                             {
                                 world->execute_world_job(shared_job);
@@ -2276,12 +2272,12 @@ namespace jeecs_impl
                 });
 
             // 2. 完成常规任务
-            ParallelForeach(
+            ::jeecs::parallel_foreach(
                 _m_shared_jobs.begin(), _m_shared_jobs.end(),
                 [this](ecs_job* shared_job)
                 {
                     if (shared_job->m_job_type == ecs_job::job_type::FOR_WORLDS)
-                        ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
+                        ::jeecs::parallel_foreach(_m_world_list.begin(), _m_world_list.end(),
                             [shared_job](ecs_world* world)
                             {
                                 world->execute_world_job(shared_job);
@@ -2307,12 +2303,12 @@ namespace jeecs_impl
             // NOTE: 渲染等呈现操作必须在提交完成后、世界更新前完成，为了规避图形资源
             //      因移除组件等行为而释放，产生错误的渲染结果——尽管高阶图形接口提供
             //      了图形资源安全和基本正确性保证；
-            ParallelForeach(
+            ::jeecs::parallel_foreach(
                 _m_shared_after_jobs.begin(), _m_shared_after_jobs.end(),
                 [this](ecs_job* shared_job)
                 {
                     if (shared_job->m_job_type == ecs_job::job_type::FOR_WORLDS)
-                        ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
+                        ::jeecs::parallel_foreach(_m_world_list.begin(), _m_world_list.end(),
                             [shared_job](ecs_world* world)
                             {
                                 world->execute_world_job(shared_job);

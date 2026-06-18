@@ -47,9 +47,7 @@
 #include <tuple>
 #include <concepts>
 
-#ifdef __cpp_lib_execution
-#   include <execution>
-#endif
+#include <execution>
 
 #define JE_FORCE_CAPI extern "C"{
 #define JE_FORCE_CAPI_END }
@@ -109,6 +107,36 @@
 #   error JE4_CURRENT_PLATFORM must be one of JE4_PLATFORM_WINDOWS, JE4_PLATFORM_LINUX, JE4_PLATFORM_ANDROID, JE4_PLATFORM_WEBGL
 #endif
 
+// =============================================================================
+// 统一并行遍历入口 je_parallel_foreach
+//
+// 背景：libstdc++ 的 PSTL（<execution> 并行算法）在内部使用
+//   catch(const std::bad_alloc&) 来回收工作线程的 OOM（见 pstl/utils.h），
+//   系统头里没有 #ifdef __EXCEPTIONS 保护，因此任何真正的 par_unseq
+//   模板实例化在 -fno-exceptions 下都无法编译。
+//
+// 调用方写：
+//   jeecs::parallel_foreach(begin, end, lambda);
+// 满足以下全部条件时启用 par_unseq，否则自动退化为串行 std::for_each：
+//   1. 标准库提供 <execution>            (__cpp_lib_execution)
+//   2. 当前编译单元启用了异常处理        (__EXCEPTIONS 或 _CPPUNWIND)
+//   3. 不是 WebGL/Emscripten 目标         (无可用线程池)
+//   4. 是 Release/RelWithDebInfo 构建     (NDEBUG，避免调试态并发开销)
+//
+// 注意：这里必须用 函数模板 而不是函数式宏。原因：调用方传入的 lambda
+// 体内可能含有 #ifndef NDEBUG 等预处理指令（见 command_buffer::update），
+// 若用函数式宏包装，预处理指令出现在宏实参列表里属未定义行为，
+// 在 MSVC /Zc:preprocessor 下会直接报 C2121/C5101。
+// =============================================================================
+#if defined(__cpp_lib_execution) \
+    && (defined(__EXCEPTIONS) || defined(_CPPUNWIND)) \
+    && (JE4_CURRENT_PLATFORM != JE4_PLATFORM_WEBGL) \
+    && defined(NDEBUG)
+#   define JE_PARALLEL_FOREACH_ENABLED 1
+#else
+#   define JE_PARALLEL_FOREACH_ENABLED 0
+#endif
+
 // [用语]
 // 此处定义引擎自定义使用的关键字/保留字
 
@@ -138,6 +166,23 @@ jeecs [命名空间]
 */
 namespace jeecs
 {
+    /*
+    jeecs::parallel_foreach [函数模板]
+    统一的并行遍历入口：当 JE_PARALLEL_FOREACH_ENABLED 时使用
+    std::for_each(par_unseq, ...)，否则退化为串行 std::for_each。
+    用函数模板而非宏实现，是为了避免调用方 lambda 体内的预处理指令
+    (#ifndef NDEBUG 等) 落入函数式宏实参列表导致的未定义行为。
+    */
+    template <typename _Iter, typename _Fn>
+    inline void parallel_foreach(_Iter _first, _Iter _last, _Fn _fn)
+    {
+#if JE_PARALLEL_FOREACH_ENABLED
+        ::std::for_each(::std::execution::par_unseq, _first, _last, ::std::move(_fn));
+#else
+        ::std::for_each(_first, _last, ::std::move(_fn));
+#endif
+    }
+
     /*
     jeecs::rendchain_branch [类型]
     可编程图形接口类型，用于表示一组绘制流程
@@ -7020,10 +7065,7 @@ namespace jeecs
             template<typename FT>
             void foreach_parallel(FT&& ft)
             {
-                std::for_each(
-#ifdef __cpp_lib_execution
-                    std::execution::par_unseq,
-#endif
+                ::jeecs::parallel_foreach(
                     * this,
                     end(),
                     ft);
@@ -7082,10 +7124,7 @@ namespace jeecs
             template<typename FT>
             void foreach_parallel(FT&& ft)
             {
-                std::for_each(
-#ifdef __cpp_lib_execution
-                    std::execution::par_unseq,
-#endif
+                ::jeecs::parallel_foreach(
                     * this,
                     end(),
                     ft);
@@ -9637,18 +9676,12 @@ namespace jeecs
                             }
                             else
                             {
-                                std::for_each(
-#ifdef __cpp_lib_execution
-                                    std::execution::par_unseq,
-#endif
+                                ::jeecs::parallel_foreach(
                                     parallel_pixel_index_iter{ 0 },
                                     parallel_pixel_index_iter{ size_t(character_info->m_texture->height()) },
                                     [&](size_t fy)
                                     {
-                                        std::for_each(
-#ifdef __cpp_lib_execution
-                                            std::execution::par_unseq,
-#endif
+                                        ::jeecs::parallel_foreach(
                                             parallel_pixel_index_iter{ 0 },
                                             parallel_pixel_index_iter{
                                                 size_t(character_info->m_texture->width())
