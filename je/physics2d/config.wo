@@ -12,14 +12,15 @@ import je::towoo;
 
 namespace je::physics2d::config
 {
-    // One per physics world. Layer index = declaration order.
-    // Field order is significant for the C++ loader:
-    //   0 = m_gravity, 1 = m_solver_substeps,
-    //   2 = m_enable_sleeping, 3 = m_enable_continuous.
+    // One per physics world. The user-declared id (field 0) binds it to
+    // Rigidbody::layerid. Field order is significant for the C++ loader:
+    //   0 = m_layerid, 1 = m_gravity, 2 = m_solver_substeps,
+    //   3 = m_enable_sleeping, 4 = m_enable_continuous.
     // gravity uses the (real, real) tuple directly (vec2 is a `using`
     // alias of it, hence a distinct type — see woolang rule: `using`
     // creates a new type); the C++ loader reads it as a 2-float tuple.
     using LayerInfo = struct{
+        m_layerid: int,
         m_gravity: (real, real),
         m_solver_substeps: int,
         m_enable_sleeping: bool,
@@ -29,20 +30,21 @@ namespace je::physics2d::config
         public let layers = []mut: vec<LayerInfo>;
 
         public func create(
+            layerid: int,
             gravity: (real, real),
             solver_substeps: int,
             enable_sleeping: bool,
             enable_continuous: bool)
         {
-            let self = LayerInfo{
+            let info = LayerInfo{
+                m_layerid = layerid,
                 m_gravity = gravity,
                 m_solver_substeps = solver_substeps,
                 m_enable_sleeping = enable_sleeping,
                 m_enable_continuous = enable_continuous,
             };
 
-            layers->add(self);
-            return self;
+            layers->add(info);
         }
     }
 
@@ -109,19 +111,23 @@ namespace je::physics2d::config
 #macro PHYSICS2D_LAYER
 {
     /*
-    PHYSICS2D_LAYER! 层名
+    PHYSICS2D_LAYER! layerId /* optional comment */
     {
         gravity: (0.0, -9.8);
         substeps: 4;
         sleep: true;
         continuous: false;
     }
+    `layerId` is an integer that binds the layer to Rigidbody::layerid.
     Any field may be omitted; defaults are gravity=(0.0,-9.8), substeps=4,
-    sleep=true, continuous=false. Layer index = declaration order.
+    sleep=true, continuous=false.
     */
-    using std::token_type;
-    
-    let layer_name = lexer->expect_token(l_identifier)->or("<Empty>");
+    let layer_id = lexer->next;
+    if (layer_id == "" || layer_id == "{")
+    {
+        lexer->error("PHYSICS2D_LAYER! expects an integer layer id before '{'.");
+        return "";
+    }
     if (lexer->next != "{")
     {
         lexer->error("Unexpected token, should be '{'.");
@@ -191,7 +197,7 @@ namespace je::physics2d::config
     let sleep      = sleep_val->or("true");
     let continuous = continuous_val->or("false");
 
-    return F"let {layer_name} = je::physics2d::config::LayerInfo::create({gravity}, {substeps}, {sleep}, {continuous});";
+    return F"je::physics2d::config::LayerInfo::create({layer_id}, {gravity}, {substeps}, {sleep}, {continuous});";
 }
 
 #macro PHYSICS2D_GROUP

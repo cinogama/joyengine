@@ -573,7 +573,7 @@ LATE_UPDATE!
                     let default_empty_script = 
 @"import je::physics2d::config;
 
-PHYSICS2D_LAYER! 默认层
+PHYSICS2D_LAYER! 0 /* 默认层 */
 {
     gravity: (0.0, -9.8);
     substeps: 4;

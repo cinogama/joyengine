@@ -137,6 +137,7 @@ namespace jeecs
         {
             struct layer_info
             {
+                size_t     layerid    = 0;
                 math::vec2 gravity    = math::vec2(0.f, -9.8f);
                 size_t     substeps   = 4;
                 bool       sleep      = false;
@@ -153,8 +154,9 @@ namespace jeecs
         //
         // The script must return a struct of shape:
         //   { layers: vec<LayerInfo>, collide_groups: vec<CollideGroupInfo> }
-        // where LayerInfo = { gravity: (real, real), solver_substeps: int,
-        //                     enable_sleeping: bool, enable_continuous: bool }
+        // where LayerInfo = { layerid: int, gravity: (real, real),
+        //                     solver_substeps: int, enable_sleeping: bool,
+        //                     enable_continuous: bool }
         //   (field order is significant) and CollideGroupInfo keeps its
         //   original layout: [filter_components, collide_mask].
         // ============================================================
@@ -238,16 +240,17 @@ namespace jeecs
             {
                 (void)woort_vec_get(layer_slot, layers_vec, i);
 
-                // Field 0: gravity (vec2 → nested struct, fields 0/1 = x/y).
-                woort_struct_get(gravity_slot, layer_slot, 0);
-
                 scene_physics_config::layer_info info{};
+                info.layerid = static_cast<size_t>(woort_struct_get_int(layer_slot, 0));
+
+                // Field 1: gravity (vec2 → nested struct, fields 0/1 = x/y).
+                woort_struct_get(gravity_slot, layer_slot, 1);
                 info.gravity = math::vec2(
                     woort_struct_get_float(gravity_slot, 0),
                     woort_struct_get_float(gravity_slot, 1));
-                info.substeps   = static_cast<size_t>(woort_struct_get_int(layer_slot, 1));
-                info.sleep      = woort_struct_get_bool(layer_slot, 2);
-                info.continuous = woort_struct_get_bool(layer_slot, 3);
+                info.substeps   = static_cast<size_t>(woort_struct_get_int(layer_slot, 2));
+                info.sleep      = woort_struct_get_bool(layer_slot, 3);
+                info.continuous = woort_struct_get_bool(layer_slot, 4);
                 result.layers.push_back(info);
             }
 
@@ -530,11 +533,18 @@ namespace jeecs
                 return this_frame;
 
             // ---- Build / reuse one b2World per declared layer. ----
-            const auto& layers = m_scene_config.layers;
-            for (size_t i = 0; i < layers.size(); ++i)
+            // Each layer carries its own user-declared id (layerid), which is
+            // what Rigidbody::layerid binds to — independent of declaration order.
+            for (const auto& layer : m_scene_config.layers)
             {
-                const size_t lid = i;
-                const auto& layer = layers[i];
+                const size_t lid = layer.layerid;
+
+                if (this_frame.find(lid) != this_frame.end())
+                {
+                    jeecs::debug::logerr(
+                        "Duplicate Physics2D layer id: %zu, the second declaration is ignored.", lid);
+                    continue;
+                }
 
                 auto prev_it = m_worlds.find(lid);
                 std::unique_ptr<PhysicsWorld> pw;
