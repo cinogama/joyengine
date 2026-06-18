@@ -4,6 +4,7 @@
 
 #include "jeecs_core_translation_system.hpp"
 #include "jeecs_core_graphic_system.hpp"
+#include "jeecs_core_frame_animation_system.hpp"
 #include "jeecs_core_editor_system.hpp"
 #include "jeecs_core_physics_system.hpp"
 #include "jeecs_core_script_system.hpp"
