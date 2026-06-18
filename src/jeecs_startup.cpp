@@ -49,7 +49,7 @@ static std::string _je_woort_exe_path()
         return {};
 
     std::string path(need, '\0');
-    woort_exe_path(path.data(), need + 1);
+    (void)woort_exe_path(path.data(), need + 1);
     return path;
 }
 

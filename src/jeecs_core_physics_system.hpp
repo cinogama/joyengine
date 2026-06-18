@@ -36,7 +36,7 @@ namespace jeecs
         // (`b2StoreBodyId` / `b2LoadBodyId` / `b2StoreWorldId`), so we just
         // wrap them for hashing & null checks. No type-punning UB.
         // ============================================================
-        inline uint64_t b2_body_to_u64(b2BodyId v) noexcept  { return b2StoreBodyId(v); }
+        inline uint64_t b2_body_to_u64(b2BodyId v) noexcept { return b2StoreBodyId(v); }
         inline uint64_t b2_shape_to_u64(b2ShapeId v) noexcept
         {
             // b2ShapeId shares layout with b2BodyId (int32 + uint16 + uint16 = 8B).
@@ -128,7 +128,8 @@ namespace jeecs
             woort_vm* m_prev;
             woort_vm* m_vm;
             explicit woort_vm_session_guard(woort_vm* next)
-                : m_prev(woort_vm_swap(next)), m_vm(next) {}
+                : m_prev(woort_vm_swap(next)), m_vm(next) {
+            }
             ~woort_vm_session_guard()
             {
                 (void)woort_vm_swap(m_prev); // restore the prior VM first
@@ -147,10 +148,10 @@ namespace jeecs
         {
             struct layer_info
             {
-                size_t     layerid    = 0;
-                math::vec2 gravity    = math::vec2(0.f, -9.8f);
-                size_t     substeps   = 4;
-                bool       sleep      = false;
+                size_t     layerid = 0;
+                math::vec2 gravity = math::vec2(0.f, -9.8f);
+                size_t     substeps = 4;
+                bool       sleep = false;
                 bool       continuous = false;
             };
             std::vector<layer_info> layers;
@@ -217,15 +218,15 @@ namespace jeecs
                 return std::nullopt;
             }
 
-            const woort_value result_struct  = s + 0; // { layers, collide_groups }
-            const woort_value layers_vec     = s + 1;
-            const woort_value groups_vec     = s + 2;
-            const woort_value layer_slot     = s + 3; // reused per layer
-            const woort_value gravity_slot   = s + 4; // reused (vec2 = nested struct)
-            const woort_value group_info     = s + 5; // reused per collide group
-            const woort_value filter_vec     = s + 6; // array<(typeinfo, Requirement)>
-            const woort_value filter_value   = s + 7; // reused slot for current element
-            const woort_value typeinfo_slot  = s + 8; // reused
+            const woort_value result_struct = s + 0; // { layers, collide_groups }
+            const woort_value layers_vec = s + 1;
+            const woort_value groups_vec = s + 2;
+            const woort_value layer_slot = s + 3; // reused per layer
+            const woort_value gravity_slot = s + 4; // reused (vec2 = nested struct)
+            const woort_value group_info = s + 5; // reused per collide group
+            const woort_value filter_vec = s + 6; // array<(typeinfo, Requirement)>
+            const woort_value filter_value = s + 7; // reused slot for current element
+            const woort_value typeinfo_slot = s + 8; // reused
 
             const woort_VmCallStatus status = woort_bootup_codeenv(result_struct, cenv);
             if (status != WOORT_VM_CALL_STATUS_NORMAL)
@@ -258,8 +259,8 @@ namespace jeecs
                 info.gravity = math::vec2(
                     woort_struct_get_float(gravity_slot, 0),
                     woort_struct_get_float(gravity_slot, 1));
-                info.substeps   = static_cast<size_t>(woort_struct_get_int(layer_slot, 2));
-                info.sleep      = woort_struct_get_bool(layer_slot, 3);
+                info.substeps = static_cast<size_t>(woort_struct_get_int(layer_slot, 2));
+                info.sleep = woort_struct_get_bool(layer_slot, 3);
                 info.continuous = woort_struct_get_bool(layer_slot, 4);
                 result.layers.push_back(info);
             }
@@ -300,13 +301,13 @@ namespace jeecs
                     (void)woort_vec_get(filter_value, filter_vec, j - 1);
 
                     woort_value requirement_slot = filter_value;
-                    woort_struct_get(typeinfo_slot,    filter_value, 0); // typeinfo
+                    woort_struct_get(typeinfo_slot, filter_value, 0); // typeinfo
                     woort_struct_get(requirement_slot, filter_value, 1); // Requirement
 
                     group.m_filters.push_back(group_filter_rule{
                         static_cast<const typing::type_info*>(woort_pointer(typeinfo_slot)),
                         static_cast<requirement::type>(woort_int(requirement_slot)),
-                    });
+                        });
                 }
 
                 // Second struct field: collide mask.
@@ -353,7 +354,7 @@ namespace jeecs
                 }
             }
             out_category = cat;
-            out_mask     = msk;
+            out_mask = msk;
         }
     }
 
@@ -375,9 +376,9 @@ namespace jeecs
             size_t                                   layerid = 0;
 
             // Snapshot of last-applied world config (for diff'ing).
-            math::vec2                               gravity_snap   = math::vec2(0.f, -9.8f);
-            size_t                                   substeps_snap  = 4;
-            bool                                     sleep_snap     = false;
+            math::vec2                               gravity_snap = math::vec2(0.f, -9.8f);
+            size_t                                   substeps_snap = 4;
+            bool                                     sleep_snap = false;
             bool                                     continuous_snap = false;
 
             physics2d_detail::collision_group_table  groups{};
@@ -392,14 +393,14 @@ namespace jeecs
                 // Diff cache: decides whether the fixture must be rebuilt.
                 enum class ShapeKind : uint8_t { None, Box, Circle, Capsule };
                 ShapeKind       cached_kind = ShapeKind::None;
-                math::vec2      cached_box_size   = {};
-                float           cached_circle_r   = 0.f;
-                float           cached_capsule_r  = 0.f;
-                float           cached_capsule_h  = 0.f;
-                float           cached_density    = -1.f;
-                float           cached_friction   = -1.f;
+                math::vec2      cached_box_size = {};
+                float           cached_circle_r = 0.f;
+                float           cached_capsule_r = 0.f;
+                float           cached_capsule_h = 0.f;
+                float           cached_density = -1.f;
+                float           cached_friction = -1.f;
                 float           cached_restitution = -1.f;
-                bool            cached_trigger    = false;
+                bool            cached_trigger = false;
 
                 uint64_t        last_seen_frame = 0;
             };
@@ -456,10 +457,10 @@ namespace jeecs
             const Physics2D::Offset::Position* opos,
             const Physics2D::Offset::Rotation* orot,
             math::vec2& out_pos,
-            float&      out_rot_deg)
+            float& out_rot_deg)
         {
             const math::vec2 offset_pos = opos ? opos->value : math::vec2(0.f);
-            const float      extra_rot  = orot ? orot->degree : 0.f;
+            const float      extra_rot = orot ? orot->degree : 0.f;
 
             const float world_rot_deg =
                 trans.world_rotation.euler_angle().z + extra_rot;
@@ -468,8 +469,8 @@ namespace jeecs
             const math::vec3 rotated = math::quat::euler(0.f, 0.f, world_rot_deg)
                 * math::vec3(offset_pos.x, offset_pos.y, 0.f);
 
-            out_pos     = math::vec2(trans.world_position.x + rotated.x,
-                                     trans.world_position.y + rotated.y);
+            out_pos = math::vec2(trans.world_position.x + rotated.x,
+                trans.world_position.y + rotated.y);
             out_rot_deg = world_rot_deg;
         }
 
@@ -526,16 +527,13 @@ namespace jeecs
                         physics2d_detail::load_scene_physics_config_from_path(current_path);
                     if (loaded.has_value())
                     {
-                        m_scene_config       = std::move(loaded.value());
-                        m_config_loaded      = true;
-                        m_loaded_config_path = current_path;
+                        m_scene_config = std::move(loaded.value());
+                        m_config_loaded = true;
                     }
-                    else
-                    {
-                        // Remember the bad path so we don't retry every frame,
-                        // but keep the previously loaded config (if any) alive.
-                        m_loaded_config_path = current_path;
-                    }
+
+                    // Remember the bad path so we don't retry every frame,
+                    // but keep the previously loaded config (if any) alive.
+                    m_loaded_config_path = current_path;
                 }
             }
 
@@ -562,12 +560,12 @@ namespace jeecs
                 {
                     pw = std::make_unique<PhysicsWorld>();
                     b2WorldDef wdef = b2DefaultWorldDef();
-                    pw->world   = b2CreateWorld(&wdef);
+                    pw->world = b2CreateWorld(&wdef);
                     pw->layerid = lid;
 
-                    pw->gravity_snap    = layer.gravity;
-                    pw->substeps_snap   = layer.substeps;
-                    pw->sleep_snap      = layer.sleep;
+                    pw->gravity_snap = layer.gravity;
+                    pw->substeps_snap = layer.substeps;
+                    pw->sleep_snap = layer.sleep;
                     pw->continuous_snap = layer.continuous;
 
                     b2World_SetGravity(pw->world, b2Vec2{ layer.gravity.x, layer.gravity.y });
@@ -622,7 +620,7 @@ namespace jeecs
                 box, circle, capsule,
                 density, friction, restitution, trigger,
                 opos, orot, oscale
-            ] : query_entity<
+            ] : query_entity <
                 view typesof(
                     Transform::Translation&,
                     Physics2D::Rigidbody&,
@@ -653,7 +651,7 @@ namespace jeecs
                     Physics2D::Collider::Circle,
                     Physics2D::Collider::Capsule
                 )
-            >())
+            > ())
             {
                 auto world_it = this_frame.find(rb.layerid);
                 if (world_it == this_frame.end() || world_it->second == nullptr)
@@ -702,7 +700,7 @@ namespace jeecs
                 {
                     // First time we see this entity: create the b2Body.
                     b2BodyDef bdef = b2DefaultBodyDef();
-                    bdef.type     = want_type;
+                    bdef.type = want_type;
                     bdef.position = b2Vec2{ want_pos.x, want_pos.y };
                     bdef.rotation = b2MakeRot(want_rot_deg * math::DEG2RAD);
 
@@ -714,14 +712,14 @@ namespace jeecs
                     }
 
                     PhysicsWorld::BodyRecord nr{};
-                    nr.entity   = e;
-                    nr.body     = new_body;
-                    nr.shape    = b2_nullShapeId;
+                    nr.entity = e;
+                    nr.body = new_body;
+                    nr.shape = b2_nullShapeId;
                     auto inserted = pw->bodies.emplace(new_body, std::move(nr));
                     rec = &inserted.first->second;
                 }
                 rec->last_seen_frame = m_frame;
-                rec->entity          = e; // Refresh handle every frame.
+                rec->entity = e; // Refresh handle every frame.
 
                 // Publish the stable body_id so any system phase (including
                 // ones running before the next PhysicsUpdate) can use it as a
@@ -780,10 +778,10 @@ namespace jeecs
                 }
 
                 // ---- Fixture rebuild decision ----
-                const float want_density     = density     ? density->value     : 0.f;
-                const float want_friction    = friction    ? friction->value    : 0.f;
+                const float want_density = density ? density->value : 0.f;
+                const float want_friction = friction ? friction->value : 0.f;
                 const float want_restitution = restitution ? restitution->value : 0.f;
-                const bool  want_trigger     = trigger != nullptr;
+                const bool  want_trigger = trigger != nullptr;
 
                 PhysicsWorld::BodyRecord::ShapeKind want_kind =
                     PhysicsWorld::BodyRecord::ShapeKind::None;
@@ -811,10 +809,10 @@ namespace jeecs
                     }
                     if (!force_rebuild)
                     {
-                        if (rec->cached_density     != want_density
-                            || rec->cached_friction    != want_friction
+                        if (rec->cached_density != want_density
+                            || rec->cached_friction != want_friction
                             || rec->cached_restitution != want_restitution
-                            || rec->cached_trigger     != want_trigger)
+                            || rec->cached_trigger != want_trigger)
                             force_rebuild = true;
                     }
                 }
@@ -826,10 +824,10 @@ namespace jeecs
                         b2DestroyShape(rec->shape, true);
 
                     b2ShapeDef sdef = b2DefaultShapeDef();
-                    sdef.density             = want_density;
-                    sdef.material.friction    = want_friction;
+                    sdef.density = want_density;
+                    sdef.material.friction = want_friction;
                     sdef.material.restitution = want_restitution;
-                    sdef.isSensor             = want_trigger;
+                    sdef.isSensor = want_trigger;
 
                     b2ShapeId new_shape = b2_nullShapeId;
                     switch (want_kind)
@@ -880,19 +878,19 @@ namespace jeecs
                         break;
                     }
 
-                    rec->shape              = new_shape;
-                    rec->cached_kind        = want_kind;
-                    rec->cached_density     = want_density;
-                    rec->cached_friction    = want_friction;
+                    rec->shape = new_shape;
+                    rec->cached_kind = want_kind;
+                    rec->cached_density = want_density;
+                    rec->cached_friction = want_friction;
                     rec->cached_restitution = want_restitution;
-                    rec->cached_trigger     = want_trigger;
+                    rec->cached_trigger = want_trigger;
 
                     // Apply collision-group filter (categoryBits/maskBits).
                     uint64_t cat = 0, msk = 0;
                     physics2d_detail::compute_collision_filter(pw->groups, e, cat, msk);
                     b2Filter filter = b2Shape_GetFilter(new_shape);
                     filter.categoryBits = cat;
-                    filter.maskBits     = msk;
+                    filter.maskBits = msk;
                     b2Shape_SetFilter(new_shape, filter);
                 }
             }
@@ -909,7 +907,7 @@ namespace jeecs
             worlds.reserve(this_frame.size());
             for (auto& [_, pw] : this_frame) worlds.push_back(pw.get());
 
-            const float    dt    = deltatime();
+            const float    dt = deltatime();
             const uint64_t frame = m_frame;
 
             std::for_each(
@@ -971,8 +969,8 @@ namespace jeecs
                     continue;
 
                 const b2BodyId body = rec->body;
-                const b2Vec2   new_pos    = b2Body_GetPosition(body);
-                const b2Rot    new_rot    = b2Body_GetRotation(body);
+                const b2Vec2   new_pos = b2Body_GetPosition(body);
+                const b2Rot    new_rot = b2Body_GetRotation(body);
                 const float    new_rot_deg = b2Rot_GetAngle(new_rot) * math::RAD2DEG;
 
                 // Recover the local offset rotation that was applied on the way in,
@@ -1069,7 +1067,7 @@ namespace jeecs
                     const bool     self_is_a = physics2d_detail::b2_body_eq(body_a, self_body);
 
                     const b2ShapeId other_shape = self_is_a ? cd.shapeIdB : cd.shapeIdA;
-                    const b2BodyId  other_body  = b2Shape_GetBody(other_shape);
+                    const b2BodyId  other_body = b2Shape_GetBody(other_shape);
 
                     // Stable cross-frame id for the other body. This is what
                     // CollisionResult consumers compare against Rigidbody::body_id.
@@ -1094,12 +1092,12 @@ namespace jeecs
                     {
                         const b2ManifoldPoint& mp = cd.manifold.points[p];
                         Physics2D::CollisionResult::Contact out{};
-                        out.other_body_id   = other_body_id;
-                        out.point           = math::vec2(mp.point.x, mp.point.y); // already world-space
-                        out.normal          = normal;
-                        out.normal_impulse  = mp.normalImpulse;
+                        out.other_body_id = other_body_id;
+                        out.point = math::vec2(mp.point.x, mp.point.y); // already world-space
+                        out.normal = normal;
+                        out.normal_impulse = mp.normalImpulse;
                         out.tangent_impulse = mp.tangentImpulse;
-                        out.is_trigger      = other_is_trigger;
+                        out.is_trigger = other_is_trigger;
                         cr.contacts.push_back(out);
                     }
                 }

@@ -10748,7 +10748,6 @@ namespace jeecs
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Rigidbody::layerid, "layerid");
-                typing::register_member(guard, &Rigidbody::body_id, "body_id");
             }
         };
         // BodyType tags: at most one. None = Static.

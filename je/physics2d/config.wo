@@ -111,7 +111,7 @@ namespace je::physics2d::config
 #macro PHYSICS2D_LAYER
 {
     /*
-    PHYSICS2D_LAYER! layerId /* optional comment */
+    PHYSICS2D_LAYER! layerId
     {
         gravity: (0.0, -9.8);
         substeps: 4;

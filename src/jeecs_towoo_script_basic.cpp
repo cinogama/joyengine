@@ -1453,6 +1453,19 @@ WOORT_API woort_api wojeapi_towoo_physics2d_collisionresult_check(void)
     return woort_ret_option_none();
 }
 
+WOORT_API woort_api wojeapi_towoo_physics2d_rigidbody_get_body_id(void)
+{
+    auto& rigidbody =
+        wo_component<jeecs::Physics2D::Rigidbody>(0, WOORT_RETURN_SLOT);
+
+    if (rigidbody.body_id == 0)
+        return woort_ret_option_none();
+
+    void* body_id_handle = reinterpret_cast<void*>(
+        static_cast<uintptr_t>(rigidbody.body_id));
+    return woort_ret_option_pointer(body_id_handle);
+}
+
 WOORT_API woort_api wojeapi_towoo_renderer_textures_bind_texture(void)
 {
     auto& textures =
