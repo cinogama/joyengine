@@ -53,7 +53,7 @@ namespace jeapi::loader
                             try! sz = dat["size"]->as_int();
                             try! tex = dat["texture"]->as_string();
                             try! wkable = dat["walkable"]->as_array()
-                                ->> \arr = arr->>\e = e->as_bool()->or(false);
+                                ->> \arr = arr->>\e = e->as_bool()->or(false);;
                                 ;
                                 
                             let parent_path = _get_located_path(chunk_layer_path);
@@ -138,7 +138,7 @@ namespace jeapi::loader
                         {
                             do try!
                             {
-                                try! id = layer_id as int;
+                                let id = layer_id as int;
                                 try! path = layer_path->as_string();
                                 
                                 try! layer = layer::create(parent_path + path, id);
@@ -192,7 +192,7 @@ namespace jeapi::loader
                     {
                         for (let (dx, dv) : dat)
                         {
-                            try! x = dx as int;
+                            let x = dx as int;
                             try! v = dv->as_table();
                             
                             let chunk_line = {}mut: map<int, chunk>;
@@ -201,7 +201,7 @@ namespace jeapi::loader
                             {
                                 do try!
                                 {
-                                    try! y = dy as int;
+                                    let y = dy as int;
                                     try! path = cpath->as_string();
                                     try! newchunk = chunk::create(parent_path + path);
                                     

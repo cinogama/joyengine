@@ -14,7 +14,7 @@ namespace jeapi::loader
         public func create(w: je::world, wpath: string)
         {
             return je::file::readall(wpath)
-                =>> \dat = toml::parse(dat)->okay
+                =>> \dat = toml::parse(dat)->okay;
                 =>> \dat =
                     jeapi::serialize::prefab::instantiate(
                         w, serialize::EntityData { m_data = dat }, false)
