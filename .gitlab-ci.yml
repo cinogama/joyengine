@@ -152,10 +152,13 @@ build_win64_dx11_opengl_vk:
       - build/OpenAL32.dll
       - build/libjoyecs.dll
       - build/libwoo.dll
+      - build/libwoort.dll
       - build/libjoyecs.lib
       - build/libwoo.lib
+      - build/libwoort.lib
       - build/libjoyecs.pdb
       - build/libwoo.pdb
+      - build/libwoort.pdb
       - build/pkg/*
       - build/builtin/*
       - build/licenses/*
