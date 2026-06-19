@@ -1550,13 +1550,16 @@ public let frag =
                     )
                 >())
                 {
-                    auto final_world_position = trans.world_position;
-                    if (opos != nullptr)
-                        final_world_position += math::vec3(opos->value);
-
                     auto final_world_rotation = trans.world_rotation;
                     if (orot != nullptr)
                         final_world_rotation = final_world_rotation * math::quat::euler(0.f, 0.f, orot->degree);
+
+                    auto final_world_position = trans.world_position;
+                    if (opos != nullptr)
+                    {
+                        const math::vec3 rotated = final_world_rotation * math::vec3(opos->value.x, opos->value.y, 0.f);
+                        final_world_position += rotated;
+                    }
 
                     // Collider geometry comes from the component itself; Offset::Scale
                     // (if present) further scales it. Transform.local_scale is ignored
@@ -1586,7 +1589,7 @@ public let frag =
                         easy_draw_impl(
                             final_world_position,
                             final_world_rotation,
-                            math::vec3(r * 2.f, r * 2.f, r * 2.f),
+                            math::vec3(r, r, r),
                             _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
                             _gizmo_resources.m_gizmo_physics2d_collider_circle_vertex->resource(),
                             nullptr);
@@ -1601,7 +1604,7 @@ public let frag =
 
                         const auto circle_position1 = final_world_position + final_world_rotation * math::vec3(0.f,  offset, 0.f);
                         const auto circle_position2 = final_world_position + final_world_rotation * math::vec3(0.f, -offset, 0.f);
-                        const auto circle_scale     = math::vec3(r * 2.f, r * 2.f, r * 2.f);
+                        const auto circle_scale     = math::vec3(r, r, r);
                         const auto box_scale        = math::vec3(r * 2.f, offset * 2.f, 1.f);
 
                         easy_draw_impl(

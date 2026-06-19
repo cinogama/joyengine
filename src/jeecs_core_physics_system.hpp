@@ -387,6 +387,7 @@ namespace jeecs
                 float           cached_circle_r = 0.f;
                 float           cached_capsule_r = 0.f;
                 float           cached_capsule_h = 0.f;
+                math::vec2      cached_offset_scale = { 1.f, 1.f };
                 float           cached_density = -1.f;
                 float           cached_friction = -1.f;
                 float           cached_restitution = -1.f;
@@ -772,6 +773,7 @@ namespace jeecs
                 const float want_friction = friction ? friction->value : 0.f;
                 const float want_restitution = restitution ? restitution->value : 0.f;
                 const bool  want_trigger = trigger != nullptr;
+                const math::vec2 want_offset_scale = oscale ? oscale->value : math::vec2(1.f, 1.f);
 
                 PhysicsWorld::BodyRecord::ShapeKind want_kind =
                     PhysicsWorld::BodyRecord::ShapeKind::None;
@@ -786,14 +788,17 @@ namespace jeecs
                     switch (want_kind)
                     {
                     case PhysicsWorld::BodyRecord::ShapeKind::Box:
-                        if (rec->cached_box_size != box->size) force_rebuild = true;
+                        if (rec->cached_box_size != box->size
+                            || rec->cached_offset_scale != want_offset_scale) force_rebuild = true;
                         break;
                     case PhysicsWorld::BodyRecord::ShapeKind::Circle:
-                        if (rec->cached_circle_r != circle->radius) force_rebuild = true;
+                        if (rec->cached_circle_r != circle->radius
+                            || rec->cached_offset_scale != want_offset_scale) force_rebuild = true;
                         break;
                     case PhysicsWorld::BodyRecord::ShapeKind::Capsule:
                         if (rec->cached_capsule_r != capsule->radius
-                            || rec->cached_capsule_h != capsule->height) force_rebuild = true;
+                            || rec->cached_capsule_h != capsule->height
+                            || rec->cached_offset_scale != want_offset_scale) force_rebuild = true;
                         break;
                     default: break;
                     }
@@ -825,8 +830,8 @@ namespace jeecs
                     case PhysicsWorld::BodyRecord::ShapeKind::Box:
                     {
                         b2Polygon box_poly = b2MakeBox(
-                            std::abs(box->size.x) * 0.5f,
-                            std::abs(box->size.y) * 0.5f);
+                            std::abs(box->size.x) * std::abs(want_offset_scale.x) * 0.5f,
+                            std::abs(box->size.y) * std::abs(want_offset_scale.y) * 0.5f);
                         new_shape = b2CreatePolygonShape(body, &sdef, &box_poly);
                         rec->cached_box_size = box->size;
                         break;
@@ -835,15 +840,16 @@ namespace jeecs
                     {
                         b2Circle c;
                         c.center = b2Vec2{ 0.f, 0.f };
-                        c.radius = std::abs(circle->radius);
+                        c.radius = std::abs(circle->radius)
+                            * std::max(std::abs(want_offset_scale.x), std::abs(want_offset_scale.y));
                         new_shape = b2CreateCircleShape(body, &sdef, &c);
                         rec->cached_circle_r = circle->radius;
                         break;
                     }
                     case PhysicsWorld::BodyRecord::ShapeKind::Capsule:
                     {
-                        const float r = std::abs(capsule->radius);
-                        const float h = std::abs(capsule->height) * 0.5f;
+                        const float r = std::abs(capsule->radius) * std::abs(want_offset_scale.x);
+                        const float h = std::abs(capsule->height) * std::abs(want_offset_scale.y) * 0.5f;
                         b2Capsule cap;
                         cap.radius = r;
                         // Two center points symmetric about origin; total height = 2h.
@@ -870,6 +876,7 @@ namespace jeecs
 
                     rec->shape = new_shape;
                     rec->cached_kind = want_kind;
+                    rec->cached_offset_scale = want_offset_scale;
                     rec->cached_density = want_density;
                     rec->cached_friction = want_friction;
                     rec->cached_restitution = want_restitution;
