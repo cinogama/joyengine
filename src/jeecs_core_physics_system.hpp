@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -70,6 +71,20 @@ namespace jeecs
         inline bool b2_world_is_null(b2WorldId v) noexcept
         {
             return b2StoreWorldId(v) == 0;
+        }
+
+        // Box2D's b2CreateWorld / b2DestroyWorld touch a process-global
+        // b2_worlds[] slot pool and global contact-register init without
+        // any internal synchronization, so concurrent world creation
+        // (e.g. multiple ECS worlds starting physics in parallel update
+        // workers) races and corrupts per-world init. This serializes
+        // only world lifecycle across all Physics2DUpdatingSystem
+        // instances; per-world step/setter calls are independent once a
+        // world is fully created.
+        inline std::mutex& b2_world_lifecycle_mutex() noexcept
+        {
+            static std::mutex m;
+            return m;
         }
 
         // ============================================================
@@ -427,7 +442,11 @@ namespace jeecs
         {
             for (auto& [_, pw] : m_worlds)
                 if (pw && !physics2d_detail::b2_world_is_null(pw->world))
+                {
+                    const std::lock_guard b2_world_lock(
+                        physics2d_detail::b2_world_lifecycle_mutex());
                     b2DestroyWorld(pw->world);
+                }
         }
 
         // ------------------------------------------------------------
@@ -551,7 +570,6 @@ namespace jeecs
                 {
                     pw = std::make_unique<PhysicsWorld>();
                     b2WorldDef wdef = b2DefaultWorldDef();
-                    pw->world = b2CreateWorld(&wdef);
                     pw->layerid = lid;
 
                     pw->gravity_snap = layer.gravity;
@@ -559,9 +577,17 @@ namespace jeecs
                     pw->sleep_snap = layer.sleep;
                     pw->continuous_snap = layer.continuous;
 
-                    b2World_SetGravity(pw->world, b2Vec2{ layer.gravity.x, layer.gravity.y });
-                    b2World_EnableSleeping(pw->world, layer.sleep);
-                    b2World_EnableContinuous(pw->world, layer.continuous);
+                    // Serialize world creation + initial config: b2CreateWorld
+                    // races on Box2D's global slot pool when several ECS worlds
+                    // boot physics on parallel workers in the same frame.
+                    {
+                        const std::lock_guard b2_world_lock(
+                            physics2d_detail::b2_world_lifecycle_mutex());
+                        pw->world = b2CreateWorld(&wdef);
+                        b2World_SetGravity(pw->world, b2Vec2{ layer.gravity.x, layer.gravity.y });
+                        b2World_EnableSleeping(pw->world, layer.sleep);
+                        b2World_EnableContinuous(pw->world, layer.continuous);
+                    }
                 }
                 else
                 {
