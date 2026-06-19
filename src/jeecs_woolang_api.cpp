@@ -352,6 +352,11 @@ WOORT_API woort_api wojeapi_universe_wait(void)
     return woort_ret_void();
 }
 
+WOORT_API woort_api wojeapi_time(void)
+{
+    return woort_ret_real(je_clock_time());
+}
+
 WOORT_API woort_api wojeapi_universe_get_frame_deltatime(void)
 {
     return woort_ret_real(je_ecs_universe_get_frame_deltatime(woort_pointer(0)));

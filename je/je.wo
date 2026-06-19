@@ -55,6 +55,9 @@ namespace je
         }
     }
     
+    extern("libjoyecs", "wojeapi_time")
+        public func time()=> real;
+
     extern("libjoyecs", "wojeapi_deltatime")
         public func deltatime()=> real;
         
