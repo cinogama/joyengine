@@ -1,0 +1,60 @@
+// editor.common.template
+// 模板加载与占位符替换的辅助函数。
+// 模板文件位于 builtin/editor/templates/，命名形如 name.ext.tmpl。
+// 占位符使用 $NAME$ 语法，由 render() 按字典批量替换。
+
+import woo::std;
+
+import pkg::fsys;
+import pkg::buffer;
+import pkg::iterator;
+
+import builtin::editor::tools::file;
+
+namespace editor::common::template
+{
+    // 加载 builtin/editor/templates/<name> 模板文件，返回原始字符串。
+    // 找不到时返回 option::none。
+    public func load_template(template_name: string) => option<string>
+    {
+        let template_path = fsys::normalize(
+            F"{std::host_path()}/builtin/editor/templates/{template_name}");
+        match (editor::file::readall(template_path))
+        {
+            value(buf)? return option::value(buf: buffer as string);
+            none? return option::none;
+        }
+    }
+
+    // 加载模板；找不到时 panic（用于编辑器自身依赖的模板）。
+    public func load_template_or_panic(template_name: string) => string
+    {
+        return load_template(template_name)->unwrap;
+    }
+
+    // 按 replacements 字典批量替换 $KEY$ 占位符。
+    // - src: 模板原文
+    // - replacements: 占位符名（不含 $）到替换值的映射；未提供的占位符保留原样
+    public func render(src: string, replacements: dict<string, string>) => string
+    {
+        let mut result = src;
+        for (let (key, val) : replacements)
+        {
+            let placeholder = F"${key}$";
+            result = result->replace(placeholder, val);
+        }
+        return result;
+    }
+
+    // 便捷形式：接收键值对数组
+    public func render_pairs(src: string, pairs: array<(string, string)>) => string
+    {
+        let mut result = src;
+        for (let (key, val) : pairs)
+        {
+            let placeholder = F"${key}$";
+            result = result->replace(placeholder, val);
+        }
+        return result;
+    }
+}

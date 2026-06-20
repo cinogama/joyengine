@@ -22,6 +22,7 @@ import builtin::editor::gui::form::input;
 import builtin::editor::gui::form::msg;
 import builtin::editor::tools::varify;
 import builtin::editor::tools::file;
+import builtin::editor::common::template;
 
 using je::gui;
 using jeapi::varify;
@@ -139,103 +140,9 @@ namespace editor
         }
         public func regenerate_cmake_doc(self: CxxProject)
         {
-            let CMAKE_FILE_CONTENT = 
-@"# CMakeList for JoyEngine Module
-cmake_minimum_required (VERSION 3.16)
-
-project ("$$JEMODULE_PROJECT_NAME$$")
-
-#####################################################################
-option(BUILD_SHARED_LIBS "Static link packages into engine." OFF)
-
-set (JEMODULE_ENGINE_CORE_LIB_FILENAME  "libjoyecs"  CACHE STRING 
-    "The file name of engine core library.")
-set (JEMODULE_WOOLANG_LIB_FILENAME  "libwoo"  CACHE STRING 
-    "The file name of woolang library.")
-set (JEMODULE_WOORT_LIB_FILENAME  "libwoort"  CACHE STRING 
-    "The file name of woolang library.")
-
-#####################################################################
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.build/${CMAKE_BUILD_TYPE}")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.build/${CMAKE_BUILD_TYPE}")
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.build/${CMAKE_BUILD_TYPE}")
-set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/.build/${CMAKE_BUILD_TYPE}")
-
-#####################################################################
-if(BUILD_SHARED_LIBS)
-    set(JEMODULE_BUILD_TYPE SHARED)
-    find_library(jemodule_jeecs_lib "${JEMODULE_ENGINE_CORE_LIB_FILENAME}" ./.engine/library)
-    find_library(jemodule_woolang_lib "${JEMODULE_WOOLANG_LIB_FILENAME}" ./.engine/library)
-    find_library(jemodule_woort_lib "${JEMODULE_WOORT_LIB_FILENAME}" ./.engine/library)
-else()
-    set(JEMODULE_BUILD_TYPE STATIC)
-endif()
-
-file(GLOB_RECURSE jemodule_system_src_cpp ./systems/*.cpp)
-file(GLOB_RECURSE jemodule_system_src_hpp ./systems/*.hpp)
-file(GLOB_RECURSE jemodule_system_src_c ./systems/*.c)
-file(GLOB_RECURSE jemodule_system_src_h ./systems/*.h)
-
-file(GLOB_RECURSE jemodule_component_src_cpp ./components/*.cpp)
-file(GLOB_RECURSE jemodule_component_src_hpp ./components/*.hpp)
-file(GLOB_RECURSE jemodule_component_src_c ./components/*.c)
-file(GLOB_RECURSE jemodule_component_src_h ./components/*.h)
-
-file(GLOB_RECURSE jemodule_source_src_cpp ./sources/*.cpp)
-file(GLOB_RECURSE jemodule_source_src_hpp ./sources/*.hpp)
-file(GLOB_RECURSE jemodule_source_src_c ./sources/*.c)
-file(GLOB_RECURSE jemodule_source_src_h ./sources/*.h)
-
-#####################################################################
-add_library($$JEMODULE_PROJECT_NAME$$ 
-    ${JEMODULE_BUILD_TYPE}
-    
-    ${jemodule_system_src_cpp}
-    ${jemodule_system_src_hpp}
-    ${jemodule_system_src_c}
-    ${jemodule_system_src_h}
-
-    ${jemodule_component_src_cpp}
-    ${jemodule_component_src_hpp}
-    ${jemodule_component_src_c}
-    ${jemodule_component_src_h}
-
-    ${jemodule_source_src_cpp}
-    ${jemodule_source_src_hpp}
-    ${jemodule_source_src_c}
-    ${jemodule_source_src_h}
-
-    ./main.cpp
-    ./loader.hpp)
-
-if(BUILD_SHARED_LIBS)
-    target_link_libraries($$JEMODULE_PROJECT_NAME$$ 
-        PRIVATE ${jemodule_jeecs_lib} 
-        PRIVATE ${jemodule_woolang_lib}
-        PRIVATE ${jemodule_woort_lib})
-else()
-    target_compile_definitions(
-        $$JEMODULE_PROJECT_NAME$$ 
-            PRIVATE -Djeecs_module_entry=jestatic_module_$$JEMODULE_PROJECT_NAME$$_entry
-            PRIVATE -Djeecs_module_leave=jestatic_module_$$JEMODULE_PROJECT_NAME$$_leave)
-endif()
-
-target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ./.engine/include)
-target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ./systems)
-target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ./components)
-target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ./sources)
-
-set_target_properties($$JEMODULE_PROJECT_NAME$$ PROPERTIES OUTPUT_NAME lib$$JEMODULE_PROJECT_NAME$$)
-set_target_properties($$JEMODULE_PROJECT_NAME$$ PROPERTIES PREFIX "")
-
-target_compile_features($$JEMODULE_PROJECT_NAME$$ PRIVATE cxx_std_20)
-if(MSVC) 
-    target_compile_options($$JEMODULE_PROJECT_NAME$$ PRIVATE "/source-charset:utf-8")
-else()
-    target_compile_options($$JEMODULE_PROJECT_NAME$$ PRIVATE -fno-exceptions)
-endif()
-"@;
-                let content = CMAKE_FILE_CONTENT->replace("$$JEMODULE_PROJECT_NAME$$", self.name);
+            let CMAKE_FILE_CONTENT =
+                editor::common::template::load_template_or_panic("cxx_module_CMakeLists.txt.tmpl");
+            let content = CMAKE_FILE_CONTENT->replace("$$JEMODULE_PROJECT_NAME$$", self.name);
             if (!file::writeall(self.path / "CMakeLists.txt", content as buffer))
             {
                 return result::err(F"无法写入'{self.path}/CMakeLists.txt'");
@@ -304,9 +211,8 @@ endif()
                 none?
                     return self.module_instance := option::none;
             }
-            
-            // 动态库更新完毕，立即重新加载编辑器脚本/ToWoo以更新类型信息
-            self.project->update_towoo(true);
+            // 此前的 update_towoo 调用位于 match 两侧 return 之后，永远不可达；
+            // 如需在加载后更新 ToWoo，请由调用方在收到返回值后显式触发。
         }
         func get_current_runtime_id(runtime_dll_path: fsys::path_t)
         {
@@ -640,11 +546,11 @@ endif()
                                                     
                                                     // 这里的操作非常重要，需要确保全部世界已经被完全正确地关闭，
                                                     // 否则如果有世界在卸载模块之后才执行清理操作，就有可能发生调用到已经不再有效的析构
-                                                    // 函数。这玩意儿非常恐怖，这里yield一下，保证一切按部就班
-                                                    
+                                                    // 函数。这里多次 yield 让 VM 有机会完成所有世界的清理工作。
+
                                                     std::yield();
                                                     std::yield();
-                                                    std::yield(); // 玄学，来三下
+                                                    std::yield();
                                                     
                                                     self->close();
                                                     
@@ -704,30 +610,8 @@ endif()
                     ;
                 ->or([]);
                 
-            let loader_header = 
-@"#pragma once
-#include "jeecs.hpp"
-
-// Do not modify this file
-// 'loader.hpp' will be generated by editor.
-
-// Headers of components/systems
-// E.G. #include "ExampleComponent.hpp"
-$$INCLUDE_COMPONENT_HEADERS$$
-$$INCLUDE_SYSTEM_HEADERS$$
-
-namespace jemodule
-{
-    static void register_types(jeecs::typing::type_unregister_guard* guard)
-    {
-        using namespace jeecs;
-        // Here to load components/system
-        // e.g. typing::type_info::register_type<Module::ExampleComponent>(guard, "Module::ExampleComponent");
-$$REGISTER_COMPONENT_TYPES$$
-$$REGISTER_SYSTEM_TYPES$$
-    }
-}
-"@;
+            let loader_header =
+                editor::common::template::load_template_or_panic("cxx_module_loader.hpp.tmpl");
                 let import_component_headers =
                 components
                     ->map(\f: string = F"#include \"{f}.hpp\"";)

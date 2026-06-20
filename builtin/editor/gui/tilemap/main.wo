@@ -31,7 +31,7 @@ using je::internal;
 
 namespace editor::gui::tilemap
 {
-    enum WrapingTileWay
+    enum WrappingTileWay
     {
         NOTHING = 0,
         UP = 0b0000_0001,
@@ -44,9 +44,9 @@ namespace editor::gui::tilemap
         RIGHTUP = 0b0100_0000,
         RIGHTDOWN = 0b1000_0000,
     }
-    namespace WrapingTileWay
+    namespace WrappingTileWay
     {
-        func get_way_name(self: WrapingTileWay)
+        func get_way_name(self: WrappingTileWay)
         {
             let mut name = "";
             
@@ -77,13 +77,13 @@ namespace editor::gui::tilemap
             if (band(self as int, RIGHTDOWN as int) != 0)
             {
                 assert(band(self as int, RIGHT as int) != 0 && band(self as int, DOWN as int) != 0);
-                name += "d";
+                name += "e";
             }
             return name == "" ? "x" | immut name;
         }
         
         func get_sampling_texture_lu(
-            self: WrapingTileWay,
+            self: WrappingTileWay,
             target: image,
             maintex: graphic::texture,
             ix: int, iy: int,
@@ -136,7 +136,7 @@ namespace editor::gui::tilemap
         }
         
         func get_sampling_texture_ld(
-            self: WrapingTileWay,
+            self: WrappingTileWay,
             target: image,
             maintex: graphic::texture,
             ix: int, iy: int,
@@ -190,7 +190,7 @@ namespace editor::gui::tilemap
         }
         
         func get_sampling_texture_ru(
-            self: WrapingTileWay,
+            self: WrappingTileWay,
             target: image,
             maintex: graphic::texture,
             ix: int, iy: int,
@@ -245,7 +245,7 @@ namespace editor::gui::tilemap
         }
         
         func get_sampling_texture_rd(
-            self: WrapingTileWay,
+            self: WrappingTileWay,
             target: image,
             maintex: graphic::texture,
             ix: int, iy: int,
@@ -301,7 +301,7 @@ namespace editor::gui::tilemap
         }
         
         func get_sampling_texture(
-            self: WrapingTileWay,
+            self: WrappingTileWay,
             target: image,
             maintex: graphic::texture,
             ix: int, iy: int,
@@ -340,7 +340,7 @@ namespace editor::gui::tilemap
         其中，UNR UNL DNR DNL 仅当UDLR中 正交两个方向的方块存在同时，斜向方块亦存在的情况下才可
         因此共有： 16 + 15 共31张图
         */
-        auto_wrap: mut option<map<WrapingTileWay, graphic::texture>>,
+        auto_wrap: mut option<map<WrappingTileWay, graphic::texture>>,
         walkable: mut bool,
         non_periodic_expansion: mut bool,
     }
@@ -406,7 +406,7 @@ namespace editor::gui::tilemap
                     non_periodic_expansion = mut false,
                 });
         }
-        func get_texture(self: Tile, context: EditorContext, way: WrapingTileWay)
+        func get_texture(self: Tile, context: EditorContext, way: WrappingTileWay)
         {
             match (self.auto_wrap)
             {
@@ -614,7 +614,7 @@ namespace editor::gui::tilemap
         m_focus_on_drawing_layer: mut bool,
         m_offset: mut(real, real), // 未经过缩放的原始偏移
         m_scale: mut real,
-        m_layerd_tiles: mut map<int, map<int, map<int, Tile>>>,
+        m_layered_tiles: mut map<int, map<int, map<int, Tile>>>,
         
         m_show_grid: mut bool,
     }
@@ -631,7 +631,7 @@ namespace editor::gui::tilemap
                 m_focus_on_drawing_layer = mut true,
                 m_offset = mut(0., 0.),
                 m_scale = mut 1.,
-                m_layerd_tiles = mut {}mut,
+                m_layered_tiles = mut {}mut,
                 
                 m_show_grid = mut true,
             };
@@ -670,16 +670,16 @@ namespace editor::gui::tilemap
         // 在当前绘制图层的上方插入一层(当前层后移)
         func insert_layer_at_here(self: TileEditContext)
         {
-            self.m_layerd_tiles =
-                self.m_layerd_tiles ->> \k, v = (k >= self.m_drawing_layer ? k + 1 | k, v);
+            self.m_layered_tiles =
+                self.m_layered_tiles ->> \k, v = (k >= self.m_drawing_layer ? k + 1 | k, v);
                     ;
         }
         
         // 移除当前绘制图层（后续层前移）
         func remove_this_layer(self: TileEditContext)
         {
-            self.m_layerd_tiles =
-                self.m_layerd_tiles->forall(\k, _ = k != self.m_drawing_layer;)
+            self.m_layered_tiles =
+                self.m_layered_tiles->forall(\k, _ = k != self.m_drawing_layer;)
                     ->> \k, v = (k > self.m_drawing_layer ? k - 1 | k, v);
                     ;
         }
@@ -723,7 +723,7 @@ namespace editor::gui::tilemap
             
             let tilelists = []mut as vec<array<int>>;
             let unwalkable_mapping = {}mut as map<int, map<int, void>>;
-            for (let (layer, tiles): self.m_layerd_tiles)
+            for (let (layer, tiles): self.m_layered_tiles)
             {
                 for (let (x, ytiles): tiles)
                 {
@@ -778,7 +778,7 @@ namespace editor::gui::tilemap
                     value(tileset)?
                     {
                         let tile = tileset->gettile(tx, ty)->unwrap;
-                        self.m_layerd_tiles->get_or_set(layer, {}mut)->get_or_set(x, {}mut)->set(y, tile);
+                        self.m_layered_tiles->get_or_set(layer, {}mut)->get_or_set(x, {}mut)->set(y, tile);
                     }
                     none?
                         ; // 已经报过错了，这里就简单忽略
@@ -788,7 +788,7 @@ namespace editor::gui::tilemap
         
         func get_tile(self: TileEditContext, layer: int, x: int, y: int)
         {
-            return self.m_layerd_tiles->get(layer)=>>\d = d->get(x);=>>\d = d->get(y);;
+            return self.m_layered_tiles->get(layer)=>>\d = d->get(x);=>>\d = d->get(y);;
         }
         func get_selected_tile(self: TileEditContext)
         {
@@ -797,11 +797,11 @@ namespace editor::gui::tilemap
         func apply_draw_tile(self: TileEditContext, x: int, y: int)
         {
             do self->get_selected_tile->> \tile =
-                self.m_layerd_tiles->get_or_set(self.m_drawing_layer, {}mut)->get_or_set(x, {}mut)->set(y, tile);;
+                self.m_layered_tiles->get_or_set(self.m_drawing_layer, {}mut)->get_or_set(x, {}mut)->set(y, tile);;
         }
         func clear_draw_tile(self: TileEditContext, x: int, y: int)
         {
-            do self.m_layerd_tiles->get(self.m_drawing_layer)=>>\tiles=tiles->get(x);->>\ytiles=ytiles->remove(y);;
+            do self.m_layered_tiles->get(self.m_drawing_layer)=>>\tiles=tiles->get(x);->>\ytiles=ytiles->remove(y);;
         }
         func create_tilemap_form(self: TileEditContext, replacing_tile: option<TileMapSet>)
         {
@@ -878,7 +878,7 @@ namespace editor::gui::tilemap
                                                             open = false;
                                                             t.modifed = true;
                                                             
-                                                            for (let (layer, tiles): self.m_layerd_tiles)
+                                                            for (let (layer, tiles): self.m_layered_tiles)
                                                             {
                                                                 for (let (x, ytiles): tiles)
                                                                 {
@@ -889,9 +889,9 @@ namespace editor::gui::tilemap
                                                                             match (t->gettile(tile.location...))
                                                                             {
                                                                                 value(newtile)?
-                                                                                    do self.m_layerd_tiles[layer][x]->set(y, newtile);
+                                                                                    do self.m_layered_tiles[layer][x]->set(y, newtile);
                                                                                 none?
-                                                                                    do self.m_layerd_tiles[layer][x]->remove(y);
+                                                                                    do self.m_layered_tiles[layer][x]->remove(y);
                                                                             }
                                                                             
                                                                         }
@@ -978,14 +978,14 @@ namespace editor::gui::tilemap
                                         if (opt)
                                         {
                                             // 清除所有使用此图集的Tile
-                                            for (let (layer, tiles): self.m_layerd_tiles)
+                                            for (let (layer, tiles): self.m_layered_tiles)
                                             {
                                                 for (let (x, ytiles): tiles)
                                                 {
                                                     for (let (y, tile): ytiles)
                                                     {
                                                         if (tile.uid == tset.uid)
-                                                            do self.m_layerd_tiles[layer][x]->remove(y);
+                                                            do self.m_layered_tiles[layer][x]->remove(y);
                                                     }
                                                 }
                                             }
@@ -1096,46 +1096,46 @@ namespace editor::gui::tilemap
             {
                 value(centertile)?
                 {
-                    let mut way = WrapingTileWay::NOTHING;
+                    let mut way = WrappingTileWay::NOTHING;
                     if (self->get_tile(layer, x + 1, y)->>\t = std::is_same(t, centertile);->or(false))
-                        way += WrapingTileWay::RIGHT;
+                        way += WrappingTileWay::RIGHT;
                     if (self->get_tile(layer, x - 1, y)->>\t = std::is_same(t, centertile);->or(false))
-                        way += WrapingTileWay::LEFT;
+                        way += WrappingTileWay::LEFT;
                     if (self->get_tile(layer, x, y - 1)->>\t = std::is_same(t, centertile);->or(false))
-                        way += WrapingTileWay::UP;
+                        way += WrappingTileWay::UP;
                     if (self->get_tile(layer, x, y + 1)->>\t = std::is_same(t, centertile);->or(false))
-                        way += WrapingTileWay::DOWN;
+                        way += WrappingTileWay::DOWN;
                         
-                    if (way as int->band(WrapingTileWay::UP as int) != 0)
+                    if (way as int->band(WrappingTileWay::UP as int) != 0)
                     {
-                        if (way as int->band(WrapingTileWay::RIGHT as int) != 0)
+                        if (way as int->band(WrappingTileWay::RIGHT as int) != 0)
                         {
                             if (self->get_tile(layer, x + 1, y - 1)->>\t = std::is_same(t, centertile);->or(false))
-                                way += WrapingTileWay::RIGHTUP;
+                                way += WrappingTileWay::RIGHTUP;
                         }
-                        if (way as int->band(WrapingTileWay::LEFT as int) != 0)
+                        if (way as int->band(WrappingTileWay::LEFT as int) != 0)
                         {
                             if (self->get_tile(layer, x - 1, y - 1)->>\t = std::is_same(t, centertile);->or(false))
-                                way += WrapingTileWay::LEFTUP;
+                                way += WrappingTileWay::LEFTUP;
                         }
                     }
-                    if (way as int->band(WrapingTileWay::DOWN as int) != 0)
+                    if (way as int->band(WrappingTileWay::DOWN as int) != 0)
                     {
-                        if (way as int->band(WrapingTileWay::RIGHT as int) != 0)
+                        if (way as int->band(WrappingTileWay::RIGHT as int) != 0)
                         {
                             if (self->get_tile(layer, x + 1, y + 1)->>\t = std::is_same(t, centertile);->or(false))
-                                way += WrapingTileWay::RIGHTDOWN;
+                                way += WrappingTileWay::RIGHTDOWN;
                         }
-                        if (way as int->band(WrapingTileWay::LEFT as int) != 0)
+                        if (way as int->band(WrappingTileWay::LEFT as int) != 0)
                         {
                             if (self->get_tile(layer, x - 1, y + 1)->>\t = std::is_same(t, centertile);->or(false))
-                                way += WrapingTileWay::LEFTDOWN;
+                                way += WrappingTileWay::LEFTDOWN;
                         }
                     }
                     return way;
                 }
                 none?
-                    return WrapingTileWay::NOTHING;
+                    return WrappingTileWay::NOTHING;
             }
         }
         func draw_tile(self: TileEditContext)
@@ -1163,7 +1163,7 @@ namespace editor::gui::tilemap
                 let (oldoffsetx, oldoffsety) =
                     (oldorigin_offsetx * self.m_scale, oldorigin_offsety * self.m_scale);
                     
-                for (let (layer, tiles) : self.m_layerd_tiles->unmapping->std::sort(\(layera, _), (layerb, _) = layera > layerb;))
+                for (let (layer, tiles) : self.m_layered_tiles->unmapping->std::sort(\(layera, _), (layerb, _) = layera > layerb;))
                 {
                     for (let (x, ytiles): tiles)
                     {
@@ -1268,7 +1268,7 @@ namespace editor::gui::tilemap
         
         func walk_through(self: TileEditContext, callback: (int, int, int, Tile)=> void)
         {
-            for (let (layer, tiles) : self.m_layerd_tiles)
+            for (let (layer, tiles) : self.m_layered_tiles)
             {
                 for (let (x, ytiles) :  tiles)
                 {
@@ -1282,7 +1282,7 @@ namespace editor::gui::tilemap
         
         func get_map_range(self: TileEditContext)
         {
-            let xys = self.m_layerd_tiles
+            let xys = self.m_layered_tiles
                 ->  unmapping
                 =>> \layer_tiles = layer_tiles[1]->unmapping
                     =>> \x_tiles = x_tiles[1]->unmapping
@@ -1330,9 +1330,9 @@ namespace editor::gui::tilemap
                     let tile_texture = tile->get_texture(self.m_context, tile_way);
                     let (tile_texture_w, tile_texture_h) = tile_texture->size;
                     
-                    let RANDOMABLE_WAYS_0 = WrapingTileWay::NOTHING;
-                    let RANDOMABLE_WAYS_1 = WrapingTileWay::UP + WrapingTileWay::DOWN + WrapingTileWay::LEFT + WrapingTileWay::RIGHT;
-                    let RANDOMABLE_WAYS_2 = RANDOMABLE_WAYS_1 + WrapingTileWay::LEFTUP + WrapingTileWay::RIGHTUP + WrapingTileWay::LEFTDOWN + WrapingTileWay::RIGHTDOWN;
+                    let RANDOMABLE_WAYS_0 = WrappingTileWay::NOTHING;
+                    let RANDOMABLE_WAYS_1 = WrappingTileWay::UP + WrappingTileWay::DOWN + WrappingTileWay::LEFT + WrappingTileWay::RIGHT;
+                    let RANDOMABLE_WAYS_2 = RANDOMABLE_WAYS_1 + WrappingTileWay::LEFTUP + WrappingTileWay::RIGHTUP + WrappingTileWay::LEFTDOWN + WrappingTileWay::RIGHTDOWN;
                     let RANDOM_METHOD = tile.non_periodic_expansion && (tile.auto_wrap->is_value == false ||
                         tile_way == RANDOMABLE_WAYS_0 || tile_way == RANDOMABLE_WAYS_1 || tile_way == RANDOMABLE_WAYS_2)
                         ? fake_random(layer, x, y)
@@ -1414,9 +1414,9 @@ namespace editor::gui::tilemap
                     let tile_texture = tile->get_texture(self.m_context, tile_way);
                     let (tile_texture_w, tile_texture_h) = tile_texture->size;
                     
-                    let RANDOMABLE_WAYS_0 = WrapingTileWay::NOTHING;
-                    let RANDOMABLE_WAYS_1 = WrapingTileWay::UP + WrapingTileWay::DOWN + WrapingTileWay::LEFT + WrapingTileWay::RIGHT;
-                    let RANDOMABLE_WAYS_2 = RANDOMABLE_WAYS_1 + WrapingTileWay::LEFTUP + WrapingTileWay::RIGHTUP + WrapingTileWay::LEFTDOWN + WrapingTileWay::RIGHTDOWN;
+                    let RANDOMABLE_WAYS_0 = WrappingTileWay::NOTHING;
+                    let RANDOMABLE_WAYS_1 = WrappingTileWay::UP + WrappingTileWay::DOWN + WrappingTileWay::LEFT + WrappingTileWay::RIGHT;
+                    let RANDOMABLE_WAYS_2 = RANDOMABLE_WAYS_1 + WrappingTileWay::LEFTUP + WrappingTileWay::RIGHTUP + WrappingTileWay::LEFTDOWN + WrappingTileWay::RIGHTDOWN;
                     let RANDOM_METHOD = tile.non_periodic_expansion && (tile.auto_wrap->is_value == false ||
                         tile_way == RANDOMABLE_WAYS_0 || tile_way == RANDOMABLE_WAYS_1 || tile_way == RANDOMABLE_WAYS_2)
                         ? fake_random(layer, x, y)
@@ -1519,9 +1519,9 @@ namespace editor::gui::tilemap
                     let tile_texture = tile->get_texture(self.m_context, tile_way);
                     let (tile_texture_w, tile_texture_h) = tile_texture->size;
                     
-                    let RANDOMABLE_WAYS_0 = WrapingTileWay::NOTHING;
-                    let RANDOMABLE_WAYS_1 = WrapingTileWay::UP + WrapingTileWay::DOWN + WrapingTileWay::LEFT + WrapingTileWay::RIGHT;
-                    let RANDOMABLE_WAYS_2 = RANDOMABLE_WAYS_1 + WrapingTileWay::LEFTUP + WrapingTileWay::RIGHTUP + WrapingTileWay::LEFTDOWN + WrapingTileWay::RIGHTDOWN;
+                    let RANDOMABLE_WAYS_0 = WrappingTileWay::NOTHING;
+                    let RANDOMABLE_WAYS_1 = WrappingTileWay::UP + WrappingTileWay::DOWN + WrappingTileWay::LEFT + WrappingTileWay::RIGHT;
+                    let RANDOMABLE_WAYS_2 = RANDOMABLE_WAYS_1 + WrappingTileWay::LEFTUP + WrappingTileWay::RIGHTUP + WrappingTileWay::LEFTDOWN + WrappingTileWay::RIGHTDOWN;
                     let RANDOM_METHOD = tile.non_periodic_expansion && (tile.auto_wrap->is_value == false ||
                         tile_way == RANDOMABLE_WAYS_0 || tile_way == RANDOMABLE_WAYS_1 || tile_way == RANDOMABLE_WAYS_2)
                         ? fake_random(layer, x, y)

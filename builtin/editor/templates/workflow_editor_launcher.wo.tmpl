@@ -1,0 +1,18 @@
+// Donot modify this file!
+
+import builtin::statements;
+import builtin::editor::gui::workflow;
+
+import pkg::worst::macro;
+import pkg::fsys;
+
+import nodes;
+
+match (editor::gui::edit_forms::WorkFlowEditorContext::show_edit_form(
+    fsys::parent(fsys::normalize(__FILE__!))))
+{
+    value(_)?
+        return true;
+    none?
+        return false;
+}

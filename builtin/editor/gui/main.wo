@@ -221,8 +221,8 @@ namespace editor::gui
     
     public func edit_project(proj: Project)
     {
-        // 这又是个傻逼函数，传入一个项目实例，为这个项目实例创建基本运行环境
-        // 然后启一堆编辑窗口，直到项目被关闭
+        // 为传入的项目实例创建编辑器运行环境，并启动所有编辑器窗口，
+        // 直到项目被关闭。
         
         // 创建基础运行环境
         let context = EditorContext{

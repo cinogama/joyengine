@@ -17,6 +17,7 @@ import builtin::editor::cpp::main;
 import builtin::editor::project::config;
 import builtin::editor::gui::main;
 import builtin::editor::tools::file;
+import builtin::editor::common::template;
 
 using je::gui;
 
@@ -30,12 +31,11 @@ namespace editor::gui::edit_forms
         ACTION((pack_config, je::internal::fimage_packer)=>array<(string, string)>),
     }
     using pack_config = struct {
-        m_pack_dll_into_image: bool,        // 将C++模块打包进镜像文件中？如果为true，则在运行时释放出动态库，否则原样复制
         m_image_size: int,
         m_start_up_worlds: array<string>,
         m_rule: (bool, fsys::path_t, string)=> Action,
         m_resolution: (int, int),
-        
+
         m_pack_output_log_mx: thread::mutex,
         m_pack_output_log: vec<string>,
         m_finished: mut bool,
@@ -60,6 +60,15 @@ namespace editor::gui::edit_forms
                 }
             );
         }
+        // 跨线程访问的完成标志必须经由 mutex 保护，避免数据竞争
+        func is_finished(self: pack_config) => bool
+        {
+            return self.m_pack_output_log_mx |> thread::IMutex::exec(\= self.m_finished;);
+        }
+        func mark_finished(self: pack_config)
+        {
+            self.m_pack_output_log_mx |> thread::IMutex::exec(\= self.m_finished = true;);
+        }
     }
     
     func _default_rule(saving_woolang_pdi: bool, originpath: fsys::path_t, packpath: string)=> Action
@@ -74,19 +83,16 @@ namespace editor::gui::edit_forms
                 
             if (fsys::extension(originpath)->lower == ".je4project")
                 return Action::SKIP;  // 跳过项目文件
-                
+
             if (fsys::extension(originpath)->lower == ".dmp")
                 return Action::SKIP;  // 跳过崩溃转储文件
-                
+
             if (fsys::extension(originpath)->lower == ".je4tilemap")
                 return Action::SKIP;  // 跳过tilemap文件
-                
+
             if (fsys::extension(originpath)->lower == ".je4tileset")
                 return Action::SKIP;  // 跳过tileset文件
-                
-            if (fsys::extension(originpath)->lower == ".dmp")
-                return Action::SKIP;  // 跳过崩溃转储文件
-                
+
             if (fsys::extension(originpath)->lower == ".je4cache")
                 return Action::SKIP;  // 跳过构造缓存文件
                 
@@ -217,8 +223,8 @@ namespace editor::gui::edit_forms
                     }
                 ->  mapping;
                 
-                // 0. 重新编译所有C++项目，只编译到输出目录中
-                // P.S. 这个序号真牛逼，人家都是1 2 3，这里是1 2 0 哈哈哈
+                // 第 0 步：重新编译所有 C++ 项目（只输出到导出目录）。
+                // 步骤序号与下文逻辑步骤不连续，此处保留原编号便于对照历史实现。
                 do thread::create(func()
                     {
                         config->log("正在编译模块");
@@ -234,7 +240,7 @@ namespace editor::gui::edit_forms
                                 config->log(F"模块 {name} 编译失败");
                             }
                             config->log("注意：一个或多个模块编译失败，打包终止");
-                            config.m_finished = true;
+                            config->mark_finished();
                             return;
                         }
                         else
@@ -327,99 +333,7 @@ namespace editor::gui::edit_forms
                                 
                             // 1.4 将启动脚本编译后打入镜像
                             config->log(F"正在打包启动脚本");
-                            let boot_up_script = @"
-                                import je;
-                                import je::gui;
-                                import je::internal;
-                                
-                                import woo::std;
-                                import pkg::singleton;
-                                
-                                import builtin::api::gui::panic;
-                                import builtin::api::serialize::main;
-                                import pkg::toml;
-
-                                je::internal::register_panic_hook(jeapi::gui::form::panic);
-
-                                let LOADED_WORLDS_MAPPING = {}mut: map<string, je::world>;
-                                func LOAD_WORLD(path: string)
-                                {
-                                    let world_dat = je::file::readall(path)
-                                        =>> \dat = toml::parse(dat)->okay;
-                                        ->  unwrap
-                                        ;
-                                    
-                                    LOADED_WORLDS_MAPPING->set(
-                                        path, 
-                                        jeapi::serialize::world::instantiate(
-                                            RUNTIME_UNIVERSE, 
-                                            jeapi::serialize::WorldData { m_data = world_dat },
-                                            false));
-                                }
-
-                                let LOADED_MODULE_HANDLES = []mut: vec<handle>;
-                                let LOADED_TOWOO_SYSTEM_TYPES = []mut: vec<je::typeinfo>;
-                                let LOADED_TOWOO_COMPONENT_TYPES = []mut: vec<je::typeinfo>;
-
-                                // 在此处加载模块
-                                $LOAD_DYLIB_MODULES$
-
-                                // 在此处加载ToWoo组件
-                                $LOAD_TOWOO_COMPONENT$
-
-                                je::towoo::update_api();
-
-                                // 在此处加载ToWoo系统
-                                $LOAD_TOWOO_SCRIPTS$
-
-                                // 在此加载类型加载器
-                                $LOAD_TYPE_LOADER$
-
-                                // 在此设置分辨率
-                                $APPLY_RESOLUTION$
-
-                                // 在此设置窗口标题
-                                $APPLY_TITLE$
-                                
-                                // 启动Universe，在Universe中加载世界
-                                let RUNTIME_UNIVERSE = je::universe::create();
-                                {
-                                    // 延长Universe生命周期
-                                    RUNTIME_UNIVERSE->grow();
-                                    
-                                    // Defer: 释放Universe生命周期
-                                    defer RUNTIME_UNIVERSE->trim();
-                               
-                                    // 在此处应用项目设置
-                                    $APPLY_PROJECT_CONFIG$
-
-                                    // 在此处加载世界实例
-                                    $LOAD_WORLD_INSTANCE$
-
-                                    // 在此激活所有世界
-                                    for (let (_, world) : LOADED_WORLDS_MAPPING)
-                                        world->set_able(true);
-
-                                    // 在此调用运行时脚本（如果有）
-                                    $IMPORT_RUNTIME_SCRIPT_MAY_NOT_EXIST$                             
-                                }
-                                RUNTIME_UNIVERSE->wait();
-
-                                // 关闭类型管理器
-                                je::towoo::unsafe::dynamic_parser::clear(); 
-
-                                for (let tinfo: LOADED_TOWOO_SYSTEM_TYPES)
-                                    je::towoo::unregister_system(tinfo);
-
-                                for (let tinfo: LOADED_TOWOO_COMPONENT_TYPES)
-                                    je::towoo::unregister_component(tinfo);
-
-                                for (let libhandle : LOADED_MODULE_HANDLES)
-                                    je::unload_module(libhandle);       
-
-                                // 重置所有单例，确保一切照常释放和退出
-                                singleton::unsafe::reset_all_singleton();                        
-                            "@;
+                            let boot_up_script = editor::common::template::load_template_or_panic("runtime_main.wo.tmpl");
                                 
                             // 1.4.1 生成加载动态库相关代码
                             config->log(F"正在生成装载动态库的脚本");
@@ -475,16 +389,15 @@ namespace editor::gui::edit_forms
                                 load_world_instance += F"LOAD_WORLD({startup_world_path->enstring});\n";
                             }
                             
-                            // 1.4.5 加载入口脚本
-                            let load_entry_script = "";
-                            
+                            // 1.4.5 加载入口脚本（占位符，目前为空，保留以便将来扩展）
+
                             let final_boot_script = boot_up_script
                                 ->replace("$LOAD_DYLIB_MODULES$", dylib_loader)
                                 ->replace("$LOAD_TOWOO_COMPONENT$", loading_towoo_components)
                                 ->replace("$LOAD_TOWOO_SCRIPTS$", loading_towoo_systems)
                                 ->replace("$APPLY_PROJECT_CONFIG$", proj_config)
                                 ->replace("$LOAD_WORLD_INSTANCE$", load_world_instance)
-                                ->replace("$IMPORT_RUNTIME_SCRIPT_MAY_NOT_EXIST$", load_entry_script)
+                                ->replace("$IMPORT_RUNTIME_SCRIPT_MAY_NOT_EXIST$", "")
                                 ->replace("$LOAD_TYPE_LOADER$", "match (je::towoo::unsafe::dynamic_parser::update_all(\"@/editor.wo\")){ok(_)?;err(msg)?je::logerr(msg);}")
                                 ->replace("$APPLY_RESOLUTION$", F"je::internal::set_window_size({config.m_resolution[0]}, {config.m_resolution[1]});")
                                 ->replace("$APPLY_TITLE$", F"je::internal::set_window_title({proj->get_name->enstring});");
@@ -512,8 +425,8 @@ namespace editor::gui::edit_forms
                             }
                             
                             config->log("打包完成");
-                            
-                            config.m_finished = true;
+
+                            config->mark_finished();
                         }
                     });
                 return result::ok(do nil);
@@ -686,14 +599,13 @@ namespace editor::gui::edit_forms
                         if (ButtonSize("开始打包", (cur_width, 0.)))
                         {
                             let conf = pack_config{
-                                m_pack_dll_into_image = false,
                                 m_image_size = pack_image_file_size->get,
                                 m_start_up_worlds = selecting_all_worlds_file
                                     ->  forall(\path_and_checked = path_and_checked[1];)
                                     ->> \path_and_checked = path_and_checked[0];,
                                 m_rule = _default_rule,
                                 m_resolution = reso_config->get,
-                                
+
                                 m_pack_output_log_mx = new! thread::mutex(),
                                 m_pack_output_log = []mut,
                                 m_finished = mut false,
@@ -721,7 +633,7 @@ namespace editor::gui::edit_forms
                         
                         EndChild();
                         
-                        if (pack_config_instance->get->unwrap.m_finished)
+                        if (pack_config_instance->get->unwrap->is_finished())
                         {
                             if (ButtonSize("完成", (cur_width, 0.)))
                                 open = false;

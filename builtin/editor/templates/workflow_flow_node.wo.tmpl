@@ -1,0 +1,45 @@
+// $NODE_NAME$.wo
+import woo::std;
+
+import je;
+
+import pkg::node_editor;
+import pkg::async;
+import pkg::interface;
+import pkg::try;
+
+import builtin::statements;
+import builtin::statements::types;
+
+namespace workflow::nodes
+{
+    using node_editor;
+
+    using $NODE_NAME$ = struct{
+    }
+    {
+        public let name = "Flow/$NODE_NAME$";
+        public let color = 0xFF88AA55;
+        public let description = "";
+
+        public func create(_: node_editor::Graph::FlowNodeIOCreator)=> $NODE_NAME$
+            where require!($NODE_NAME$: node_editor::IFlowNode);
+        {
+            return $NODE_NAME${
+            };
+        }
+        async! public func forward(self: $NODE_NAME$)=> OutputFlow::NextFlow
+        {
+            return or(OutputFlow::NextFlow::Stop) <|
+                try!
+                {
+                    do self;
+                    return_value! OutputFlow::NextFlow::Stop;
+
+                } catch! {
+                    je::logwarn("流程节点 `$NODE_NAME$` 执行终止");
+                };
+        }
+    }
+    jeapi::statements::register_node:<$NODE_NAME$>();
+}

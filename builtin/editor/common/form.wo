@@ -1,0 +1,190 @@
+// editor.common.form
+// 编辑器表单与对话框的高层封装。
+// - editor_window: 包装 BeginAttrOpen + match value/none + End() 的样板
+// - fail / info / confirm / prompt: 对 jeapi::gui::form::errmsg/ask/input/msg 的命名别名
+// - try_load_shader / try_load_texture: 加载失败时自动弹错误框的便捷函数
+// - fail_with_log: 同时记录到引擎日志
+
+import woo::std;
+
+import je;
+import je::gui;
+import je::internal;
+
+import pkg::fsys;
+import pkg::buffer;
+
+import builtin::api::gui::form;
+import builtin::api::gui::errmsg;
+import builtin::editor::gui::inputmgr;
+import builtin::editor::gui::form::msg;
+import builtin::editor::gui::form::ask;
+import builtin::editor::gui::form::input;
+import builtin::editor::tools::file;
+
+using je::gui;
+
+namespace editor::common::form
+{
+    // 包装典型的 "BeginAttrOpen + match value/none + End()" 编辑器窗口样板。
+    // open: 由调用方持有的可变可见性开关（来自 EditorContext::register_editor_form_controlor）
+    // body: 仅在窗口可见时调用
+    public func editor_window(
+        name: string,
+        flags: WindowsAttribute,
+        open: std::mutable<bool>,
+        body: ()=>void)
+    {
+        if (open->get)
+        {
+            open->set(true);
+            match (BeginAttrOpen(name, flags))
+            {
+                value(show)?
+                    if (show)
+                        body();
+                none?
+                    open->set(false);
+            }
+            End();
+        }
+    }
+
+    // 唯一窗口（每次调用产生唯一的 JobID 后缀，可用于 launch(func(){...}) 内部）
+    public func editor_unique_window(
+        name: string,
+        flags: WindowsAttribute,
+        body: ()=>void) => bool
+    {
+        let mut open = true;
+        match (BeginAttrOpen(name, flags))
+        {
+            value(show)?
+                if (show)
+                    body();
+            none?
+                open = false;
+        }
+        End();
+        return open;
+    }
+
+    // ===== 简单对话框别名（统一编辑器内调用风格） =====
+    public let fail  = jeapi::gui::errmsg;
+    public let info  = jeapi::gui::form::msg;
+
+    // "是/否/取消" 三态确认，回调参数为 true（是）/false（否）；取消时不调用
+    public func confirm(title: string, text: string, on_yes: (bool)=>void)
+    {
+        jeapi::gui::form::ask(title, text, on_yes);
+    }
+
+    // 单行文本输入对话框
+    public func prompt(title: string, text: string, default_val: string, on_ok: (string)=>void)
+    {
+        jeapi::gui::form::input(title, text, default_val, on_ok);
+    }
+
+    // 多行文本输入对话框
+    public func multiline_prompt(title: string, text: string, default_val: string, on_ok: (string)=>void)
+    {
+        jeapi::gui::form::multiinput(title, text, default_val, on_ok);
+    }
+
+    // 同时记录到引擎日志的错误框
+    public func fail_with_log(title: string, text: string)
+    {
+        je::logerr(F"[{title}] {text}");
+        do jeapi::gui::errmsg(title, text);
+    }
+
+    public func warn_with_log(title: string, text: string)
+    {
+        je::logwarn(F"[{title}] {text}");
+        do jeapi::gui::errmsg(title, text);
+    }
+
+    // ===== 资源加载辅助：加载失败时弹错误框并返回 none =====
+    public func try_load_shader(universe: option<je::universe>, path: string) => option<je::graphic::shader>
+    {
+        match (je::graphic::shader::load(universe, path))
+        {
+            value(s)? return option::value(s);
+            none?
+            {
+                fail("加载着色器失败", F"无法加载文件 {path} 作为着色器");
+                return option::none;
+            }
+        }
+    }
+
+    public func try_load_texture(universe: option<je::universe>, path: string) => option<je::graphic::texture>
+    {
+        match (je::graphic::texture::load(universe, path))
+        {
+            value(t)? return option::value(t);
+            none?
+            {
+                fail("加载纹理失败", F"无法加载文件 {path} 作为纹理");
+                return option::none;
+            }
+        }
+    }
+
+    // 从给定实体所属的世界获取 universe option，常见用于 shader/texture 加载
+    public func universe_of_entity(e: je::entity) => option<je::universe>
+    {
+        return e->get_world->get_universe->option::value;
+    }
+
+    // ===== 快捷键检测（聚焦当前窗口时） =====
+    public func enter_pressed() => bool
+    {
+        return IsWindowFocused() && jeapi::gui::inputmgr::keypush(ImGuiKey::ImGuiKey_Enter);
+    }
+    public func shift_enter_pressed() => bool
+    {
+        return IsWindowFocused() && jeapi::gui::inputmgr::keyspush([
+            ImGuiKey::ImGuiKey_LeftShift, ImGuiKey::ImGuiKey_Enter]);
+    }
+    public func escape_pressed() => bool
+    {
+        return IsWindowFocused() && jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Escape]);
+    }
+    public func cancel_pressed() => bool
+    {
+        return IsWindowFocused() && jeapi::gui::inputmgr::keyspush([
+            ImGuiKey::ImGuiKey_LeftCtrl, ImGuiKey::ImGuiKey_Backspace]);
+    }
+
+    // ===== 文件创建对话框 =====
+    // 弹出输入框，用户输入文件名后，按 content_template(filename) 生成内容写入
+    // target_dir/filename+extension；同名已存在或写入失败时弹错误框。
+    // on_created: 创建成功后的回调（一般用于刷新 browser 等）。
+    public func create_file_with_template_dialog(
+        title: string,
+        prompt_text: string,
+        default_name: string,
+        extension: string,
+        content_template: (string)=>string,
+        target_dir: fsys::path_t,
+        on_created: ()=>void)
+    {
+        jeapi::gui::form::input(title, prompt_text, default_name,
+            func(filename: string)
+            {
+                let file_path = target_dir / (filename + extension);
+                if (fsys::exist(file_path))
+                {
+                    jeapi::gui::form::errmsg(F"{title}失败", "同名文件已经存在");
+                    return;
+                }
+                if (! editor::file::writeall(file_path, content_template(filename) as buffer))
+                {
+                    jeapi::gui::form::errmsg(F"{title}失败", "无法创建文件，可能是文件名非法或磁盘已满");
+                    return;
+                }
+                on_created();
+            });
+    }
+}

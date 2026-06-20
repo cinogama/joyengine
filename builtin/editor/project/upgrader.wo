@@ -1,5 +1,7 @@
 import woo::std;
 
+import je;
+
 import pkg::fsys;
 import pkg::toml;
 import pkg::iterator;
@@ -12,7 +14,9 @@ using fsys;
 
 namespace editor::Project
 {
-    func save_array_to_toml(arr: array<dynamic>)=> toml::Toml
+    // 把数组中的每个元素写入新的 toml array，跳过 nil；
+    // 遇到不支持的类型时 panic。
+    func _save_array_to_toml(arr: array<dynamic>)=> toml::Toml
     {
         let result = toml::new_array();
         for (let v : arr)
@@ -28,16 +32,16 @@ namespace editor::Project
             else if (v is string)
                 do result->push(v: string);
             else if (v is array<dynamic>)
-                do result->push(save_array_to_toml(v: array<dynamic>));
+                do result->push(_save_array_to_toml(v: array<dynamic>));
             else if (v is dict<dynamic, dynamic>)
-                do result->push(save_dict_to_toml(v: dict<dynamic, dynamic>));
+                do result->push(_save_dict_to_toml(v: dict<dynamic, dynamic>));
             else
-                do std::panic("save_array_to_toml: unsupported value type.");
+                do std::panic("_save_array_to_toml: unsupported value type.");
         }
         return result;
     }
 
-    func save_dict_to_toml(m: dict<dynamic, dynamic>)=> toml::Toml
+    func _save_dict_to_toml(m: dict<dynamic, dynamic>)=> toml::Toml
     {
         let result = toml::new_table();
         for (let (k, v) : m)
@@ -55,52 +59,55 @@ namespace editor::Project
             else if (v is string)
                 do result->set(key, v: string);
             else if (v is array<dynamic>)
-                do result->set(key, save_array_to_toml(v: array<dynamic>));
+                do result->set(key, _save_array_to_toml(v: array<dynamic>));
             else if (v is dict<dynamic, dynamic>)
-                do result->set(key, save_dict_to_toml(v: dict<dynamic, dynamic>));
+                do result->set(key, _save_dict_to_toml(v: dict<dynamic, dynamic>));
             else
-                do std::panic(F"save_dict_to_toml: unsupported value type for key '{key}'.");
+                do std::panic(F"_save_dict_to_toml: unsupported value type for key '{key}'.");
         }
         return result;
     }
 
-    public func uprade_project(path: path_t)
+    public func upgrade_project(path: path_t)
     {
-        let file_type_need_to_update = {
-            [".je4world"] = do nil,
-            [".je4entity"] = do nil,
-            [".je4workflow"] = do nil,
-            [".je4tilemap"] = do nil,
-            [".je4tileset"] = do nil,
-            [".je4partical"] = do nil,
-            [".je4chunk"] = do nil,
+        // 需要从 JSON 升级到 TOML 的项目文件扩展名集合
+        let file_ext_need_to_update = {
+            [".je4world"]     = do nil,
+            [".je4entity"]    = do nil,
+            [".je4workflow"]  = do nil,
+            [".je4tilemap"]   = do nil,
+            [".je4tileset"]   = do nil,
+            [".je4partical"]  = do nil,
+            [".je4chunk"]     = do nil,
             [".je4chunklist"] = do nil,
-            [".je4project"] = do nil,
+            [".je4project"]   = do nil,
         };
-        
+
         for (let p : recursive_walk(path)
             |> iterator::iter_result
             |> iterator::filter(
                 \p = isfile(p)
-                    && file_type_need_to_update->contains(extension(p)->lower)
+                    && file_ext_need_to_update->contains(extension(p)->lower)
                     ;))
         {
             let dat = try!
             {
                 try! f = filestream::open(p, filestream::mode::read);
                 defer do f->close;
-                
+
                 let datjson = f->readbuf(f->len): buffer as string;
                 try! d = dict::deserialize(datjson);
 
-                return_value! save_dict_to_toml(d);
+                return_value! _save_dict_to_toml(d);
             };
 
             match (dat)
             {
             value(dat_toml)?
                 toml::save(dat_toml, p)->unwrap;
-            none?;
+            none?
+                // 解析或序列化失败时静默跳过；保留原文件不动以便人工排查
+                je::logwarn(F"upgrade_project: 跳过无法解析的文件 {p}");
             }
         }
     }

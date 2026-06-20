@@ -1,0 +1,55 @@
+// editor.common.style
+// 编辑器视觉与布局的共享常量：命名颜色、默认窗口尺寸、其他 UI 数值。
+// 替代散落在各 GUI 文件中的硬编码字面量。
+
+import je::gui;
+using je::gui::ImGuiCol;
+using je::gui::Color32RGBA;
+
+namespace editor::common::style
+{
+    // ===== 命名颜色（RGBA，0-255） =====
+    public let COLOR_DANGER         = (200,   0,   0, 255) as Color32RGBA;
+    public let COLOR_DANGER_DEEP    = (200,   0,   0, 255) as Color32RGBA;
+    public let COLOR_WARNING        = (200, 125,  40, 255) as Color32RGBA;
+    public let COLOR_SUCCESS        = (  0, 200,   0, 255) as Color32RGBA;
+    public let COLOR_INFO           = ( 50, 150, 100, 255) as Color32RGBA;
+    public let COLOR_HINT_BLUE      = ( 20, 125, 175, 255) as Color32RGBA;
+    public let COLOR_HINT_ORANGE    = (175, 125,  20, 255) as Color32RGBA;
+    public let COLOR_HINT_PURPLE    = ( 75, 100, 213, 255) as Color32RGBA;
+    public let COLOR_VIEWPORT_BG    = ( 75,  75,  75, 255) as Color32RGBA;
+
+    // tilemap / draw_pannel 中网格与高亮的颜色（半透明）
+    public let COLOR_GRID_DARK      = (  0,   0,   0,  40) as Color32RGBA;
+    public let COLOR_GRID_LIGHT     = (  0,   0,   0,  20) as Color32RGBA;
+    public let COLOR_TILE_HIGHLIGHT = (255, 255, 255, 100) as Color32RGBA;
+    public let COLOR_TILE_VALID     = (  0, 255,   0, 127) as Color32RGBA;
+    public let COLOR_TILE_INVALID   = (255,   0,   0, 127) as Color32RGBA;
+    public let COLOR_TILE_NEUTRAL   = (127, 127, 127, 127) as Color32RGBA;
+
+    // ===== 默认窗口尺寸约束（min_x, min_y, max_x, max_y） =====
+    public let SIZE_EDITOR_FORM_DEFAULT = ( 50.,  50., 2000., 2000.);
+    public let SIZE_PROJECT_NAVIGATOR   = (200., 200., 2000., 2000.);
+    public let SIZE_INSPECTOR           = (300., 300., 2000., 2000.);
+    public let SIZE_ENTITY_CREATOR      = (500., 300., 2000., 1000.);
+    public let SIZE_WORLD_CREATOR       = (500., 300., 2000., 1000.);
+    public let SIZE_VIEWPORT            = (300., 200., 2000., 1100.);
+    public let SIZE_EXPORT_PROJECT      = (700., 500.,  700.,  500.);
+    public let SIZE_STYLE_EDITOR        = (700., 550.,  700.,  550.);
+    public let SIZE_PROJECT_SETTINGS    = (500., 300.,  500.,  600.);
+
+    // ===== 通用 UI 数值 =====
+    public let ICON_SIZE_LARGE   = (64., 64.);
+    public let ICON_SIZE_SMALL   = (16., 16.);
+    public let ICON_SIZE_LIST    = (32., 32.);
+    public let ICON_SIZE_TOOLTIP = (64., 64.);
+
+    // 双击阈值（秒）
+    public let DOUBLE_CLICK_TIME = 0.2;
+    // 鼠标拖动死区（像素）
+    public let DRAG_DEADZONE     = 5.;
+    // tilemap 基础瓦片像素
+    public let BASE_TILE_SIZE    = 50.;
+    // 默认瓦片像素（用于纹理导出）
+    public let DEFAULT_TILE_PX   = 16;
+}

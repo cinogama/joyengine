@@ -1,0 +1,30 @@
+// Runtime
+import woo::std;
+
+import builtin::statements;
+import builtin::statements::types;
+import builtin::statements::runtime;
+
+import pkg::decorator;
+import pkg::async;
+import pkg::node_editor;
+import pkg::any;
+
+import nodes;
+
+namespace workflow::runtime
+{
+    using jeapi::statements;
+
+    decorator![register_dispatcher("main")]
+    async! func main(graph: GraphContext, ...)
+    {
+        let hook = RuntimeDebugger::hook(graph);
+        defer hook->unhook();
+
+        for (let (_, node) : graph->walk_flow_nodes())
+        {
+            do node;
+        }
+    }
+}

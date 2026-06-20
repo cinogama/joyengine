@@ -18,12 +18,14 @@ import builtin::editor::gui::form::msg;
 import builtin::editor::dbg::main;
 
 import builtin::editor::gui::edit_forms::entity_creator;
+import builtin::editor::gui::edit_forms::presets;
 import builtin::editor::gui::draw_pannel::main;
 import builtin::api::serialize::main;
 import builtin::editor::gui::main;
 import builtin::editor::project::main;
 import builtin::editor::gui::main_menu;
 import builtin::editor::gui::context_menu;
+import builtin::editor::common::form;
 
 using je::gui;
 
@@ -77,10 +79,112 @@ namespace editor::gui::edit_forms
         }
         let e = w->add_entity(cs->>\tname = je::typeinfo::load(tname)->unwrap;);
         e->internal::set_name(name);
-        
+
         set_new_created_entity_pos(w, e);
-        
+
         return option::value(e);
+    }
+
+    // "手动绘制的实体"对话框：可指定尺寸与像素分辨率，创建后立即进入绘制面板。
+    using _DrawEntityConfig = struct{
+        name: mut string,
+        width: mut real,
+        height: mut real,
+        x_pixel_count: mut int,
+        y_pixel_count: mut int,
+    };
+    func _show_draw_entity_dialog(context: EditorContext, w: je::world)
+    {
+        let ctx = _DrawEntityConfig{
+            name = mut "绘制实体",
+            width = mut 1.0,
+            height = mut 1.0,
+            x_pixel_count = mut 16,
+            y_pixel_count = mut 16,
+        };
+        launch(func(){
+                let mut open = true;
+                match (BeginAttrOpen("创建绘制对象", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
+                {
+                    value(show)?
+                        if (show)
+                        {
+                            Text("名称：");
+                            SameLine();
+                            do InputText("##name", ctx.name)->>\name = ctx.name = name;;
+                            Text("尺寸：");
+                            Text("x:");
+                            SameLine();
+                            do InputFloatFormat("##x", ctx.width, "%.6f")->>func(vf){
+                                if (vf <= 0.) return;
+                                ctx.width = vf;
+                                ctx.x_pixel_count = math::round(vf * 16.0);
+                            };
+                            SameLine();
+                            Text("y:");
+                            SameLine();
+                            do InputFloatFormat("##y", ctx.height, "%.6f")->>func(vf){
+                                if (vf <= 0.) return;
+                                ctx.height = vf;
+                                ctx.y_pixel_count = math::round(vf * 16.0);
+                            };
+
+                            Text("px:");
+                            SameLine();
+                            do InputInt("##px", ctx.x_pixel_count)->>func(vi){
+                                if (vi <= 0) return;
+                                ctx.x_pixel_count = vi;
+                                ctx.y_pixel_count = math::round(vi as real / ctx.width  * ctx.height);
+                            };
+                            SameLine();
+                            Text("py:");
+                            SameLine();
+                            do InputInt("##py", ctx.y_pixel_count)->>\vi = vi <= 0 ? (ctx.y_pixel_count = vi) | nil as void;;
+
+                            if (Button("创建"))
+                            {
+                                open = false;
+                                        let e = fast_create_entity(context, w, ctx.name, presets::BASE_TRANSFORM_COMPONENTS->connect([
+                                                "Renderer::Shape",
+                                                "Renderer::Shaders",
+                                                "Renderer::Textures",
+                                            ]));
+                                match (e)
+                                {
+                                    none?;
+                                    value(einst)?
+                                    {
+                                        match (einst->towoo::get_component:<Transform::LocalScale>())
+                                        {
+                                            value(lscale)?
+                                                lscale.scale->set((ctx.width, ctx.height, 1.) as vec3);
+                                            none?;
+                                        }
+
+                                        let tex = new! je::graphic::texture(ctx.x_pixel_count, ctx.y_pixel_count);
+                                        einst->bind_texture(0, option::value(tex));
+
+                                        do editor::common::form::try_load_shader(
+                                                einst->get_world->get_universe->option::value,
+                                                "@/resource/shader/Unlit.shader")
+                                            ->> \s = einst->set_shaders([s]);
+                                        ;
+
+                                        drawpannel::drawedit(context, einst);
+                                    }
+                                }
+                            }
+                            SameLine();
+                            if (Button("取消"))
+                                open = false;
+                        }
+                    none?
+                        open = false;
+                }
+                End();
+
+                return open;
+            });
     }
     public func entity_edit_context_menu(context: EditorContext, w: je::world, euid: option<jeapi::debug::Eeid>)=> void
     {
@@ -92,269 +196,41 @@ namespace editor::gui::edit_forms
         }
         if (BeginMenu("快速创建实体"))
         {
-            if (MenuItem("基本渲染实体"))
+            // 用 ENTITY_PRESET_GROUPS 数据表驱动大部分菜单项
+            for (let group : presets::ENTITY_PRESET_GROUPS)
             {
-                do fast_create_entity(context, w, "默认物体", [
-                        "Transform::LocalPosition",
-                        "Transform::LocalRotation",
-                        "Transform::LocalScale",
-                        "Transform::LocalToWorld",
-                        "Transform::Translation",
-                        "Renderer::Shape",
-                        "Renderer::Shaders",
-                        "Renderer::Textures",
-                    ]);
+                if (group.separator_before)
+                    Separator();
+
+                for (let preset : group.presets)
+                {
+                    if (MenuItem(preset.menu_label))
+                    {
+                        do fast_create_entity(context, w, preset.entity_name, preset.components)
+                            ->> func(e)
+                            {
+                                match (preset.default_shader)
+                                {
+                                    value(shader_path)?
+                                        do editor::common::form::try_load_shader(
+                                                e->get_world->get_universe->option::value,
+                                                shader_path)
+                                            ->> \s = e->set_shaders([s]);
+                                        ;
+                                    none?;
+                                }
+                            };
+                    }
+                }
             }
-            if (MenuItem("基本UI"))
-            {
-                do fast_create_entity(context, w, "默认UI", [
-                        "Transform::LocalToWorld",
-                        "Transform::Translation",
-                        "Renderer::Shape",
-                        "Renderer::Shaders",
-                        "Renderer::Textures",
-                        "UserInterface::Origin",
-                        "UserInterface::Absolute",
-                        "UserInterface::Relatively",
-                        "Transform::LocalToWorld",
-                        "Transform::Translation",
-                    ]);
-            }
-            if (MenuItem("带2D阴影的基本渲染实体"))
-            {
-                do fast_create_entity(context, w, "默认2D阴影物体", [
-                        "Transform::LocalPosition",
-                        "Transform::LocalRotation",
-                        "Transform::LocalScale",
-                        "Transform::LocalToWorld",
-                        "Transform::Translation",
-                        "Renderer::Shape",
-                        "Renderer::Shaders",
-                        "Renderer::Textures",
-                        "Light2D::BlockShadow",
-                        "Light2D::SelfShadow",
-                        "Light2D::ShapeShadow",
-                    ]);
-            }
+
+            // 特殊：手动绘制的实体（需要先打开对话框采集尺寸/像素数）
             Separator();
             if (MenuItem("手动绘制的实体"))
             {
-                using _EntityConfig = struct{
-                    name: mut string,
-                    width: mut real,
-                    height: mut real,
-                    x_pixel_count: mut int,
-                    y_pixel_count: mut int,
-                };
-                let ctx = _EntityConfig{
-                    name = mut "绘制实体",
-                    width = mut 1.0,
-                    height = mut 1.0,
-                    x_pixel_count = mut 16,
-                    y_pixel_count = mut 16,
-                };
-                launch(func(){
-                        let mut open = true;
-                        match (BeginAttrOpen("创建绘制对象", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
-                        {
-                            value(show)?
-                                if (show)
-                                {
-                                    Text("名称：");
-                                    SameLine();
-                                    do InputText("##name", ctx.name)->>\name = ctx.name = name;;
-                                    Text("尺寸：");
-                                    Text("x:");
-                                    SameLine();
-                                    do InputFloatFormat("##x", ctx.width, "%.6f")->>func(vf){
-                                        if (vf <= 0.) return;
-                                        ctx.width = vf;
-                                        ctx.x_pixel_count = math::round(vf * 16.0);
-                                    };
-                                    SameLine();
-                                    Text("y:");
-                                    SameLine();
-                                    do InputFloatFormat("##y", ctx.height, "%.6f")->>func(vf){
-                                        if (vf <= 0.) return;
-                                        ctx.height = vf;
-                                        ctx.y_pixel_count = math::round(vf * 16.0);
-                                    };
-                                    
-                                    Text("px:");
-                                    SameLine();
-                                    do InputInt("##px", ctx.x_pixel_count)->>func(vi){
-                                        if (vi <= 0) return;
-                                        ctx.x_pixel_count = vi;
-                                        ctx.y_pixel_count = math::round(vi as real / ctx.width  * ctx.height);
-                                    };
-                                    SameLine();
-                                    Text("py:");
-                                    SameLine();
-                                    do InputInt("##py", ctx.y_pixel_count)->>\vi = vi <= 0 ? (ctx.y_pixel_count = vi) | nil as void;;
-                                    
-                                    if (Button("创建"))
-                                    {
-                                        open = false;
-                                        let e = fast_create_entity(context, w, ctx.name, [
-                                                "Transform::LocalPosition",
-                                                "Transform::LocalRotation",
-                                                "Transform::LocalScale",
-                                                "Transform::LocalToWorld",
-                                                "Transform::Translation",
-                                                "Renderer::Shape",
-                                                "Renderer::Shaders",
-                                                "Renderer::Textures",
-                                            ]);
-                                        match (e)
-                                        {
-                                            none?;
-                                            value(einst)?
-                                            {
-                                                match (einst->towoo::get_component:<Transform::LocalScale>())
-                                                {
-                                                    value(lscale)?
-                                                        lscale.scale->set((ctx.width, ctx.height, 1.) as vec3);
-                                                    none?;
-                                                }
-                                                
-                                                let tex = new! je::graphic::texture(ctx.x_pixel_count, ctx.y_pixel_count);
-                                                einst->bind_texture(0, option::value(tex));
-                                                
-                                                let default_shader_path = "@/resource/shader/Unlit.shader";
-                                                do je::graphic::shader::load(einst->get_world->get_universe->option::value, default_shader_path)
-                                                    ->> \s = einst->set_shaders([s]);
-                                                    ->  or_do(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
-                                                    ;
-                                                    
-                                                drawpannel::drawedit(context, einst);
-                                            }
-                                        }
-                                    }
-                                    SameLine();
-                                    if (Button("取消"))
-                                        open = false;
-                                }
-                            none?
-                                open = false;
-                        }
-                        End();
-                        
-                        return open;
-                    });
+                _show_draw_entity_dialog(context, w);
             }
-            Separator();
-            if (MenuItem("2D光源（点）"))
-            {
-                do fast_create_entity(context, w, "2D点光源", [
-                        "Transform::LocalPosition",
-                        "Transform::LocalRotation",
-                        "Transform::LocalScale",
-                        "Transform::LocalToWorld",
-                        "Transform::Translation",
-                        "Renderer::Shape",
-                        "Renderer::Shaders",
-                        "Renderer::Textures",
-                        "Renderer::Color",
-                        "Light2D::Point",
-                        "Light2D::Gain",
-                        "Light2D::ShadowBuffer",
-                    ])->>func(e)
-                {
-                    // 设置默认的光照着色器
-                    let default_shader_path = "@/resource/shader/Light2DPoint.shader";
-                    do je::graphic::shader::load(e->get_world->get_universe->option::value, default_shader_path)
-                        ->> \s = e->set_shaders([s]);
-                        ->  or_do(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
-                        ;
-                };
-            }
-            if (MenuItem("2D光源（范围）"))
-            {
-                do fast_create_entity(context, w, "2D范围光源", [
-                        "Transform::LocalPosition",
-                        "Transform::LocalRotation",
-                        "Transform::LocalScale",
-                        "Transform::LocalToWorld",
-                        "Transform::Translation",
-                        "Renderer::Shape",
-                        "Renderer::Shaders",
-                        "Renderer::Textures",
-                        "Renderer::Color",
-                        "Light2D::Range",
-                        "Light2D::Gain",
-                        "Light2D::ShadowBuffer",
-                    ])->>func(e)
-                {
-                    // 设置默认的光照着色器
-                    let default_shader_path = "@/resource/shader/Light2DRange.shader";
-                    do je::graphic::shader::load(e->get_world->get_universe->option::value, default_shader_path)
-                        ->> \s = e->set_shaders([s]);
-                        ->  or_do(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
-                        ;
-                };
-            }
-            if (MenuItem("2D光源（平行）"))
-            {
-                do fast_create_entity(context, w, "2D平行光源", [
-                        "Transform::LocalPosition",
-                        "Transform::LocalRotation",
-                        "Transform::LocalScale",
-                        "Transform::LocalToWorld",
-                        "Transform::Translation",
-                        "Renderer::Shape",
-                        "Renderer::Shaders",
-                        "Renderer::Textures",
-                        "Renderer::Color",
-                        "Light2D::Parallel",
-                        "Light2D::Gain",
-                        "Light2D::ShadowBuffer",
-                    ])->>func(e)
-                {
-                    // 设置默认的光照着色器
-                    let default_shader_path = "@/resource/shader/Light2DParallel.shader";
-                    do je::graphic::shader::load(e->get_world->get_universe->option::value, default_shader_path)
-                        ->> \s = e->set_shaders([s]);
-                        ->  or_do(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
-                        ;
-                };
-            }
-            Separator();
-            if (MenuItem("摄像机（透视）"))
-            {
-                do fast_create_entity(context, w, "摄像机", [
-                        "Transform::LocalPosition",
-                        "Transform::LocalRotation",
-                        "Transform::LocalScale",
-                        "Transform::LocalToWorld",
-                        "Transform::Translation",
-                        "Camera::FrustumCulling",
-                        "Camera::Projection",
-                        "Camera::PerspectiveProjection",
-                        "Camera::Viewport",
-                    ]);
-            }
-            if (MenuItem("摄像机（平行）"))
-            {
-                do fast_create_entity(context, w, "摄像机", [
-                        "Transform::LocalPosition",
-                        "Transform::LocalRotation",
-                        "Transform::LocalScale",
-                        "Transform::LocalToWorld",
-                        "Transform::Translation",
-                        "Camera::FrustumCulling",
-                        "Camera::Projection",
-                        "Camera::OrthoProjection",
-                        "Camera::Viewport",
-                    ]);
-            }
-            Separator();
-            if (MenuItem("物理场景配置"))
-            {
-                do fast_create_entity(context, w, "物理场景配置", [
-                        "Physics2D::Scene",
-                    ]);
-            }
-            
+
             EndMenu();
         }
         Separator();

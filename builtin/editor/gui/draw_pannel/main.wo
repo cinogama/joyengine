@@ -760,7 +760,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
         
         let textures = e->get_textures();
         
-        // 这个大大的傻逼代码作用是获取当前实体使用的所有纹理通道
+        // 以下逻辑用于获取当前实体使用的所有纹理通道
         let used_texture_id_pass = e->get_shaders()
             =>> \shader = shader->get_uniforms()
                 ->  unmapping

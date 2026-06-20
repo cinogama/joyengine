@@ -1,0 +1,103 @@
+// 导出项目时使用的运行时启动脚本模板。
+// 占位符通过 editor::common::template::render 替换：
+//   $LOAD_DYLIB_MODULES$                - 加载动态库模块的代码段
+//   $LOAD_TOWOO_COMPONENT$              - 加载 ToWoo 组件的代码段
+//   $LOAD_TOWOO_SCRIPTS$                - 加载 ToWoo 系统的代码段
+//   $LOAD_TYPE_LOADER$                  - 类型加载器调用
+//   $APPLY_RESOLUTION$                  - 设置窗口分辨率的代码
+//   $APPLY_TITLE$                       - 设置窗口标题的代码
+//   $APPLY_PROJECT_CONFIG$              - 应用项目配置的代码段
+//   $LOAD_WORLD_INSTANCE$               - 加载世界实例的代码段
+//   $IMPORT_RUNTIME_SCRIPT_MAY_NOT_EXIST$ - 可选的运行时入口脚本（默认为空）
+
+import je;
+import je::gui;
+import je::internal;
+
+import woo::std;
+import pkg::singleton;
+
+import builtin::api::gui::panic;
+import builtin::api::serialize::main;
+import pkg::toml;
+
+je::internal::register_panic_hook(jeapi::gui::form::panic);
+
+let LOADED_WORLDS_MAPPING = {}mut: map<string, je::world>;
+func LOAD_WORLD(path: string)
+{
+    let world_dat = je::file::readall(path)
+        =>> \dat = toml::parse(dat)->okay;
+        ->  unwrap
+        ;
+
+    LOADED_WORLDS_MAPPING->set(
+        path,
+        jeapi::serialize::world::instantiate(
+            RUNTIME_UNIVERSE,
+            jeapi::serialize::WorldData { m_data = world_dat },
+            false));
+}
+
+let LOADED_MODULE_HANDLES = []mut: vec<handle>;
+let LOADED_TOWOO_SYSTEM_TYPES = []mut: vec<je::typeinfo>;
+let LOADED_TOWOO_COMPONENT_TYPES = []mut: vec<je::typeinfo>;
+
+// 在此处加载模块
+$LOAD_DYLIB_MODULES$
+
+// 在此处加载 ToWoo 组件
+$LOAD_TOWOO_COMPONENT$
+
+je::towoo::update_api();
+
+// 在此处加载 ToWoo 系统
+$LOAD_TOWOO_SCRIPTS$
+
+// 在此加载类型加载器
+$LOAD_TYPE_LOADER$
+
+// 在此设置分辨率
+$APPLY_RESOLUTION$
+
+// 在此设置窗口标题
+$APPLY_TITLE$
+
+// 启动 Universe，在 Universe 中加载世界
+let RUNTIME_UNIVERSE = je::universe::create();
+{
+    // 延长 Universe 生命周期
+    RUNTIME_UNIVERSE->grow();
+
+    // Defer: 释放 Universe 生命周期
+    defer RUNTIME_UNIVERSE->trim();
+
+    // 在此处应用项目设置
+    $APPLY_PROJECT_CONFIG$
+
+    // 在此处加载世界实例
+    $LOAD_WORLD_INSTANCE$
+
+    // 在此激活所有世界
+    for (let (_, world) : LOADED_WORLDS_MAPPING)
+        world->set_able(true);
+
+    // 在此调用运行时脚本（如果有）
+    $IMPORT_RUNTIME_SCRIPT_MAY_NOT_EXIST$
+}
+RUNTIME_UNIVERSE->wait();
+
+// 关闭类型管理器
+je::towoo::unsafe::dynamic_parser::clear();
+
+for (let tinfo: LOADED_TOWOO_SYSTEM_TYPES)
+    je::towoo::unregister_system(tinfo);
+
+for (let tinfo: LOADED_TOWOO_COMPONENT_TYPES)
+    je::towoo::unregister_component(tinfo);
+
+for (let libhandle : LOADED_MODULE_HANDLES)
+    je::unload_module(libhandle);
+
+// 重置所有单例，确保一切照常释放和退出
+singleton::unsafe::reset_all_singleton();

@@ -21,7 +21,6 @@ import builtin::api::serialize::main;
 import builtin::editor::gui::form::input;
 import builtin::editor::gui::form::ask;
 import builtin::editor::gui::form::msg;
-import builtin::editor::gui::type_edit_widget_mgr;
 import builtin::editor::gui::main_menu;
 import builtin::editor::gui::context_menu;
 import builtin::editor::gui::main;
@@ -29,7 +28,6 @@ import builtin::editor::dbg::main;
 import builtin::editor::project::main;
 import builtin::editor::project::towoomgr;
 import builtin::editor::gui::browser;
-import builtin::editor::gui::edit_forms::entity_creator;
 import builtin::editor::environment::main;
 import builtin::editor::tools::file;
 
@@ -104,10 +102,6 @@ namespace editor::gui::edit_forms
         {
             Text(shader->path);
             EndTooltip();
-        }
-        if (IsItemClickedLeft() && !IsItemToggledOpen())
-        {
-        // TODO: 总得放点什么在这儿
         }
         if (show_uniforms)
         {

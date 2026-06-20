@@ -1,0 +1,61 @@
+// editor.common.io
+// 通用文件与系统交互辅助。
+// 注意：本文件不依赖 editor::Project，需要 Project 的辅助请放到具体业务模块。
+
+import woo::std;
+
+import je;
+
+import pkg::fsys;
+import pkg::platform;
+import pkg::buffer;
+import pkg::image;
+
+import builtin::editor::tools::file;
+
+namespace editor::common::io
+{
+    // 在路径外包裹引号以适配 shell（处理空格、制表符）
+    public func wrap_shell_path(path: string) => string
+    {
+        if (path->find(" ")->is_value || path->find("\t")->is_value)
+            return F"\"{path}\"";
+        return path;
+    }
+
+    // 在 Windows 资源管理器中打开目录
+    public func open_in_explorer(dir: fsys::path_t)
+    {
+        do platform::shell(F"explorer \"{fsys::normalize(dir)->to_string->replace("/", "\\")}\"");
+    }
+
+    // 仅当目标不存在时写入；返回是否实际写入了新文件
+    public func write_file_if_not_exist(path: fsys::path_t, content: string) => bool
+    {
+        if (fsys::exist(path))
+            return false;
+        return editor::file::writeall(path, content as buffer);
+    }
+
+    // 把 src 纹理的全部像素拷贝到 dst 图像（逐像素）
+    public func copy_texture_to_image(
+        src: je::graphic::texture, dst: image,
+        src_offset: (int, int), dst_offset: (int, int), size: (int, int))
+    {
+        let (sx, sy) = src_offset;
+        let (dx, dy) = dst_offset;
+        let (w,  h)  = size;
+        for (let mut ix = 0; ix < w; ix += 1)
+            for (let mut iy = 0; iy < h; iy += 1)
+                dst->setpix((dx + ix, dy + iy), src->pix((sx + ix, sy + iy))->get_color());
+    }
+
+    // 全图拷贝：把整个纹理复制到一张新的图像
+    public func clone_texture_as_image(src: je::graphic::texture) => image
+    {
+        let (w, h) = src->size;
+        let dst = new! image(w, h);
+        copy_texture_to_image(src, dst, (0, 0), (0, 0), (w, h));
+        return dst;
+    }
+}

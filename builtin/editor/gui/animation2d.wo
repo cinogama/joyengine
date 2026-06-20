@@ -42,6 +42,8 @@ namespace editor::gui::animation2d
     }
     namespace DataValue
     {
+        using je::gui;
+
         func to_string(self: DataValue)
         {
             match (self)
@@ -52,6 +54,65 @@ namespace editor::gui::animation2d
                 VEC3((x, y, z))? return F"({x}, {y}, {z})";
                 VEC4((x, y, z, w))? return F"({x}, {y}, {z}, {w})";
                 QUAT4((x, y, z))? return F"({x}, {y}, {z})";
+            }
+        }
+
+        // 通用：把 DataValue 编辑控件渲染为一行，变更时通过 on_change 回调写回
+        public func input_data_value(label: string, value: DataValue, on_change: (DataValue)=>void)
+        {
+            match (value)
+            {
+                INT(n)?
+                    do InputInt(label, n)->> \nv = on_change(DataValue::INT(nv));;
+                FLOAT(x)?
+                    do InputFloat(label, x)->> \nv = on_change(DataValue::FLOAT(nv));;
+                VEC2((x, y))?
+                    do InputFloat2(label, x, y)->> \nv = on_change(DataValue::VEC2(nv));;
+                VEC3((x, y, z))?
+                    do InputFloat3(label, x, y, z)->> \nv = on_change(DataValue::VEC3(nv));;
+                VEC4((x, y, z, w))?
+                    do InputFloat4(label, x, y, z, w)->> \nv = on_change(DataValue::VEC4(nv));;
+                QUAT4((x, y, z))?
+                    do InputFloat3(label, x, y, z)->> \nv = on_change(DataValue::QUAT4(nv));;
+            }
+        }
+
+        // 通用：把 DataValue 序列化追加到 buffer（与 save 中的内联 match 等价）
+        public func append_to_buffer(buf: buffer, value: DataValue) => buffer
+        {
+            match (value)
+            {
+                INT(n)?
+                {
+                    let b = buf->appendui8(DataValueType::INT as int);
+                    return b->appendi32(n);
+                }
+                FLOAT(x)?
+                {
+                    let b = buf->appendui8(DataValueType::FLOAT as int);
+                    return b->appendf32(x);
+                }
+                VEC2((x, y))?
+                {
+                    let b = buf->appendui8(DataValueType::VEC2 as int);
+                    return b->appendf32(x)->appendf32(y);
+                }
+                VEC3((x, y, z))?
+                {
+                    let b = buf->appendui8(DataValueType::VEC3 as int);
+                    return b->appendf32(x)->appendf32(y)->appendf32(z);
+                }
+                VEC4((x, y, z, w))?
+                {
+                    let b = buf->appendui8(DataValueType::VEC4 as int);
+                    return b->appendf32(x)->appendf32(y)->appendf32(z)->appendf32(w);
+                }
+                QUAT4((ex, ey, ez))?
+                {
+                    let (x, y, z, w) = quat::euler(ex, ey, ez);
+                    let b = buf->appendui8(DataValueType::QUAT4 as int);
+                    return b->appendf32(x)->appendf32(y)->appendf32(z)->appendf32(w);
+                }
             }
         }
     }
@@ -98,8 +159,8 @@ namespace editor::gui::animation2d
         }
     }
     using Animation2dFrameData = struct{
-        m_component_dats: vec<FrameComponentData>,
-        m_uniform_dats: vec<FrameUniformData>,
+        m_component_data: vec<FrameComponentData>,
+        m_uniform_data: vec<FrameUniformData>,
         m_time: mut real,
     }
     {
@@ -107,8 +168,8 @@ namespace editor::gui::animation2d
         {
             return Animation2dFrameData{
                 m_time = mut self.m_time,
-                m_component_dats = self.m_component_dats->dup()->>\v = v->dup;,
-                m_uniform_dats = self.m_uniform_dats->dup()->>\v = v->dup;,
+                m_component_data = self.m_component_data->dup()->>\v = v->dup;,
+                m_uniform_data = self.m_uniform_data->dup()->>\v = v->dup;,
             };
         }
     }
@@ -169,7 +230,7 @@ namespace editor::gui::animation2d
         else if (a is (real, real, real, real))
             return (lerp(a[0], b[0], deg), lerp(a[1], b[1], deg), lerp(a[2], b[2], deg), lerp(a[3], b[3], deg));
         else
-            std::panic("你是故意来找茬的吧？");
+            std::panic("lerp: unsupported value type");
     }
     func lerp_data_value(a, b, deg: real)
     {
@@ -283,8 +344,8 @@ namespace editor::gui::animation2d
                     
                     let frame_data = Animation2dFrameData{
                         m_time = mut time,
-                        m_component_dats = []mut,
-                        m_uniform_dats = []mut,
+                        m_component_data = []mut,
+                        m_uniform_data = []mut,
                     };
                     
                     let component_data_count = bufdata->readi64();
@@ -301,7 +362,7 @@ namespace editor::gui::animation2d
                         
                         let value = read_typed_value(bufdata);
                         
-                        frame_data.m_component_dats->add(FrameComponentData{
+                        frame_data.m_component_data->add(FrameComponentData{
                                 m_component_name = component_name,
                                 m_member_name = member_name,
                                 m_offset_mode = mut offset_mode,
@@ -318,7 +379,7 @@ namespace editor::gui::animation2d
                         
                         let value = read_typed_value(bufdata);
                         
-                        frame_data.m_uniform_dats->add(FrameUniformData{
+                        frame_data.m_uniform_data->add(FrameUniformData{
                                 m_uniform_name = uniform_name,
                                 m_value = mut value,
                             });
@@ -351,110 +412,24 @@ namespace editor::gui::animation2d
                     // 3. 保存一帧的持续时间，以及组件数据和一致变量数据
                     result = result->appendf32(frame.m_time);
                     
-                    result = result->appendi64(frame.m_component_dats->len);
-                    for (let cdata : frame.m_component_dats)
+                    result = result->appendi64(frame.m_component_data->len);
+                    for (let cdata : frame.m_component_data)
                     {
                         result = result->appendi64(cdata.m_component_name->byte_len)
                             + cdata.m_component_name: string as buffer;
                         result = result->appendi64(cdata.m_member_name->byte_len)
                             + cdata.m_member_name: string as buffer;
                         result = result->appendui8(cdata.m_offset_mode? 1 | 0);
-                        match (cdata.m_value)
-                        {
-                            INT(n)?
-                            {
-                                result = result->appendui8(DataValueType::INT as int);
-                                result = result->appendi32(n);
-                            }
-                            FLOAT(x)?
-                            {
-                                result = result->appendui8(DataValueType::FLOAT as int);
-                                result = result->appendf32(x);
-                            }
-                            VEC2((x, y))?
-                            {
-                                result = result->appendui8(DataValueType::VEC2 as int);
-                                result = result->appendf32(x);
-                                result = result->appendf32(y);
-                            }
-                            VEC3((x, y, z))?
-                            {
-                                result = result->appendui8(DataValueType::VEC3 as int);
-                                result = result->appendf32(x);
-                                result = result->appendf32(y);
-                                result = result->appendf32(z);
-                            }
-                            VEC4((x, y, z, w))?
-                            {
-                                result = result->appendui8(DataValueType::VEC4 as int);
-                                result = result->appendf32(x);
-                                result = result->appendf32(y);
-                                result = result->appendf32(z);
-                                result = result->appendf32(w);
-                            }
-                            QUAT4((ex, ey, ez))?
-                            {
-                                let (x, y, z, w) = quat::euler(ex, ey, ez);
-                                
-                                result = result->appendui8(DataValueType::QUAT4 as int);
-                                result = result->appendf32(x);
-                                result = result->appendf32(y);
-                                result = result->appendf32(z);
-                                result = result->appendf32(w);
-                            }
-                        }
+                        result = DataValue::append_to_buffer(result, cdata.m_value);
                     }
-                    
-                    result = result->appendi64(frame.m_uniform_dats->len);
-                    for (let udata : frame.m_uniform_dats)
+
+                    result = result->appendi64(frame.m_uniform_data->len);
+                    for (let udata : frame.m_uniform_data)
                     {
                         result = result->appendi64(udata.m_uniform_name->byte_len)
                             + udata.m_uniform_name: string as buffer;
-                            
-                        match (udata.m_value)
-                        {
-                            INT(n)?
-                            {
-                                result = result->appendui8(DataValueType::INT as int);
-                                result = result->appendi32(n);
-                            }
-                            FLOAT(x)?
-                            {
-                                result = result->appendui8(DataValueType::FLOAT as int);
-                                result = result->appendf32(x);
-                            }
-                            VEC2((x, y))?
-                            {
-                                result = result->appendui8(DataValueType::VEC2 as int);
-                                result = result->appendf32(x);
-                                result = result->appendf32(y);
-                            }
-                            VEC3((x, y, z))?
-                            {
-                                result = result->appendui8(DataValueType::VEC3 as int);
-                                result = result->appendf32(x);
-                                result = result->appendf32(y);
-                                result = result->appendf32(z);
-                            }
-                            VEC4((x, y, z, w))?
-                            {
-                                result = result->appendui8(DataValueType::VEC4 as int);
-                                result = result->appendf32(x);
-                                result = result->appendf32(y);
-                                result = result->appendf32(z);
-                                result = result->appendf32(w);
-                            }
-                            QUAT4((ex, ey, ez))?
-                            {
-                                let (x, y, z, w) = quat::euler(ex, ey, ez);
-                                
-                                result = result->appendui8(DataValueType::QUAT4 as int);
-                                result = result->appendf32(x);
-                                result = result->appendf32(y);
-                                result = result->appendf32(z);
-                                result = result->appendf32(w);
-                            }
-                        }
+
+                        result = DataValue::append_to_buffer(result, udata.m_value);
                     }
                 }
                 
@@ -480,7 +455,7 @@ namespace editor::gui::animation2d
                         f -= 1;
                         let framedat = Animation2dFrameData{
                             m_time = mut ftime,
-                            m_component_dats = [
+                            m_component_data = [
                                 FrameComponentData{
                                     m_component_name = "Renderer::Textures",
                                     m_member_name = "offset",
@@ -494,7 +469,7 @@ namespace editor::gui::animation2d
                                     m_offset_mode = mut false,
                                 },
                             ]mut,
-                            m_uniform_dats = []mut,
+                            m_uniform_data = []mut,
                         };
                         animation_datas.m_frames->add(framedat);
                     }
@@ -567,8 +542,8 @@ namespace editor::gui::animation2d
                                 {
                                     action_data.m_frames->add(Animation2dFrameData{
                                             m_time = mut 0.1,
-                                            m_component_dats = []mut,
-                                            m_uniform_dats = []mut,
+                                            m_component_data = []mut,
+                                            m_uniform_data = []mut,
                                         });
                                 }
                                 if (MenuItem("新建若干帧"))
@@ -597,8 +572,8 @@ namespace editor::gui::animation2d
                                                             {
                                                                 action_data.m_frames->add(Animation2dFrameData{
                                                                         m_time = mut frametime->get,
-                                                                        m_component_dats = []mut,
-                                                                        m_uniform_dats = []mut,
+                                                                        m_component_data = []mut,
+                                                                        m_uniform_data = []mut,
                                                                     });
                                                             }
                                                             
@@ -783,39 +758,15 @@ namespace editor::gui::animation2d
                                                                             }
                                                                         }
                                                                         
-                                                                        match (editing_value->get)
-                                                                        {
-                                                                            INT(n)?
-                                                                                do InputInt("值", n)->>\nv = editing_value->set(DataValue::INT(nv));;
-                                                                            FLOAT(x)?
-                                                                                do InputFloat("值", x)->>\nv = editing_value->set(DataValue::FLOAT(nv));;
-                                                                            VEC2((x, y))?
-                                                                                do InputFloat2("值", x, y)->>\nv = editing_value->set(DataValue::VEC2(nv));;
-                                                                            VEC3((x, y, z))?
-                                                                                do InputFloat3("值", x, y, z)->>\nv = editing_value->set(DataValue::VEC3(nv));;
-                                                                            VEC4((x, y, z, w))?
-                                                                                do InputFloat4("值", x, y, z, w)->>\nv = editing_value->set(DataValue::VEC4(nv));;
-                                                                            QUAT4((x, y, z))?
-                                                                                do InputFloat3("值", x, y, z)->>\nv = editing_value->set(DataValue::QUAT4(nv));;
-                                                                        }
-                                                                        
+                                                                        DataValue::input_data_value(
+                                                                            "值", editing_value->get,
+                                                                            \v = editing_value->set(v););
+
                                                                         if (lerp_mode->get)
                                                                         {
-                                                                            match (lerp_end_value->get)
-                                                                            {
-                                                                                INT(n)?
-                                                                                    do InputInt("插值目标", n)->>\nv = lerp_end_value->set(DataValue::INT(nv));;
-                                                                                FLOAT(x)?
-                                                                                    do InputFloat("插值目标", x)->>\nv = lerp_end_value->set(DataValue::FLOAT(nv));;
-                                                                                VEC2((x, y))?
-                                                                                    do InputFloat2("插值目标", x, y)->>\nv = lerp_end_value->set(DataValue::VEC2(nv));;
-                                                                                VEC3((x, y, z))?
-                                                                                    do InputFloat3("插值目标", x, y, z)->>\nv = lerp_end_value->set(DataValue::VEC3(nv));;
-                                                                                VEC4((x, y, z, w))?
-                                                                                    do InputFloat4("插值目标", x, y, z, w)->>\nv = lerp_end_value->set(DataValue::VEC4(nv));;
-                                                                                QUAT4((x, y, z))?
-                                                                                    do InputFloat3("插值目标", x, y, z)->>\nv = lerp_end_value->set(DataValue::QUAT4(nv));;
-                                                                            }
+                                                                            DataValue::input_data_value(
+                                                                                "插值目标", lerp_end_value->get,
+                                                                                \v = lerp_end_value->set(v););
                                                                         }
                                                                         
                                                                         if (selecting_id->get->is_value && Button("创建"))
@@ -838,7 +789,7 @@ namespace editor::gui::animation2d
                                                                                     let frameid = fidx + i;
                                                                                     let frame = animation.m_frames[frameid];
                                                                                     
-                                                                                    frame.m_component_dats->add(FrameComponentData{
+                                                                                    frame.m_component_data->add(FrameComponentData{
                                                                                             m_component_name = all_components[selecting_id->get->unwrap]->name(),
                                                                                             m_member_name = member_name,
                                                                                             m_value = mut lerp_data_value(editing_value->get, lerp_end_value->get,
@@ -850,7 +801,7 @@ namespace editor::gui::animation2d
                                                                                         
                                                                                     deltaed_time += frame.m_time;
                                                                                 }
-                                                                                animation.m_frames[i + lerp_frame_count->get - 1].m_component_dats->add(FrameComponentData{
+                                                                                animation.m_frames[i + lerp_frame_count->get - 1].m_component_data->add(FrameComponentData{
                                                                                         m_component_name = all_components[selecting_id->get->unwrap]->name(),
                                                                                         m_member_name = member_name,
                                                                                         m_value = mut lerp_end_value->get,
@@ -860,14 +811,14 @@ namespace editor::gui::animation2d
                                                                             }
                                                                             else if (for_all_frame->get)
                                                                                 for (let per_frame_data : animation.m_frames)
-                                                                                    per_frame_data.m_component_dats->add(FrameComponentData{
+                                                                                    per_frame_data.m_component_data->add(FrameComponentData{
                                                                                             m_component_name = all_components[selecting_id->get->unwrap]->name(),
                                                                                             m_member_name = member_name,
                                                                                             m_value = mut editing_value->get,
                                                                                             m_offset_mode = mut offset_mode->get,
                                                                                         });
                                                                             else
-                                                                                frame_data.m_component_dats->add(FrameComponentData{
+                                                                                frame_data.m_component_data->add(FrameComponentData{
                                                                                         m_component_name = all_components[selecting_id->get->unwrap]->name(),
                                                                                         m_member_name = member_name,
                                                                                         m_value = mut editing_value->get,
@@ -946,39 +897,15 @@ namespace editor::gui::animation2d
                                                                 {
                                                                     value(idx)?
                                                                     {
-                                                                        match (uniform_types[idx][1])
-                                                                        {
-                                                                            INT(n)?
-                                                                                do InputInt("值", n)->>\nv = uniform_types[idx][1] = DataValue::INT(nv);;
-                                                                            FLOAT(x)?
-                                                                                do InputFloat("值", x)->>\nv = uniform_types[idx][1] = DataValue::FLOAT(nv);;
-                                                                            VEC2((x, y))?
-                                                                                do InputFloat2("值", x, y)->>\nv = uniform_types[idx][1] = DataValue::VEC2(nv);;
-                                                                            VEC3((x, y, z))?
-                                                                                do InputFloat3("值", x, y, z)->>\nv = uniform_types[idx][1] = DataValue::VEC3(nv);;
-                                                                            VEC4((x, y, z, w))?
-                                                                                do InputFloat4("值", x, y, z, w)->>\nv = uniform_types[idx][1] = DataValue::VEC4(nv);;
-                                                                            QUAT4((x, y, z))?
-                                                                                do InputFloat3("值", x, y, z)->>\nv = uniform_types[idx][1] = DataValue::QUAT4(nv);;
-                                                                        }
-                                                                        
+                                                                        DataValue::input_data_value(
+                                                                            "值", uniform_types[idx][1],
+                                                                            \v = uniform_types[idx][1] = v;);
+
                                                                         if (lerp_mode->get)
                                                                         {
-                                                                            match (uniform_types[idx][2])
-                                                                            {
-                                                                                INT(n)?
-                                                                                    do InputInt("插值目标", n)->>\nv = uniform_types[idx][2] = DataValue::INT(nv);;
-                                                                                FLOAT(x)?
-                                                                                    do InputFloat("插值目标", x)->>\nv = uniform_types[idx][2] = DataValue::FLOAT(nv);;
-                                                                                VEC2((x, y))?
-                                                                                    do InputFloat2("插值目标", x, y)->>\nv = uniform_types[idx][2] = DataValue::VEC2(nv);;
-                                                                                VEC3((x, y, z))?
-                                                                                    do InputFloat3("插值目标", x, y, z)->>\nv = uniform_types[idx][2] = DataValue::VEC3(nv);;
-                                                                                VEC4((x, y, z, w))?
-                                                                                    do InputFloat4("插值目标", x, y, z, w)->>\nv = uniform_types[idx][2] = DataValue::VEC4(nv);;
-                                                                                QUAT4((x, y, z))?
-                                                                                    do InputFloat3("插值目标", x, y, z)->>\nv = uniform_types[idx][2] = DataValue::QUAT4(nv);;
-                                                                            }
+                                                                            DataValue::input_data_value(
+                                                                                "插值目标", uniform_types[idx][2],
+                                                                                \v = uniform_types[idx][2] = v;);
                                                                         }
                                                                     }
                                                                     none?
@@ -1010,7 +937,7 @@ namespace editor::gui::animation2d
                                                                             let frameid = fidx + i;
                                                                             let frame = animation.m_frames[frameid];
                                                                             
-                                                                            frame.m_uniform_dats->add(FrameUniformData{
+                                                                            frame.m_uniform_data->add(FrameUniformData{
                                                                                     m_uniform_name = uniform_name->get,
                                                                                     m_value = mut lerp_data_value(editing_value, lerp_end_value,
                                                                                         total_frame_time == 0.
@@ -1020,19 +947,19 @@ namespace editor::gui::animation2d
                                                                                 
                                                                             deltaed_time += frame.m_time;
                                                                         }
-                                                                        animation.m_frames[i + lerp_frame_count->get - 1].m_uniform_dats->add(FrameUniformData{
+                                                                        animation.m_frames[i + lerp_frame_count->get - 1].m_uniform_data->add(FrameUniformData{
                                                                                 m_uniform_name = uniform_name->get,
                                                                                 m_value = mut lerp_end_value,
                                                                             });
                                                                     }
                                                                     else if (for_all_frame->get)
                                                                         for (let per_frame_data : animation.m_frames)
-                                                                            per_frame_data.m_uniform_dats->add(FrameUniformData{
+                                                                            per_frame_data.m_uniform_data->add(FrameUniformData{
                                                                                     m_uniform_name = uniform_name->get,
                                                                                     m_value = mut uniform_types[uniform_type_idx][1],
                                                                                 });
                                                                     else
-                                                                        frame_data.m_uniform_dats->add(FrameUniformData{
+                                                                        frame_data.m_uniform_data->add(FrameUniformData{
                                                                                 m_uniform_name = uniform_name->get,
                                                                                 m_value = mut uniform_types[uniform_type_idx][1],
                                                                             });
@@ -1121,7 +1048,7 @@ namespace editor::gui::animation2d
                         match (selected_frame)
                         {
                             value(f)?
-                                for (let (cindex, cdata): f.m_component_dats->iter |> iterator::enumerate)
+                                for (let (cindex, cdata): f.m_component_data->iter |> iterator::enumerate)
                                 {
                                     if (SelectableSelected(cdata->to_string(),
                                             animation_context.m_selected_c_or_u_data->is_selected_component_idx(cindex)))
@@ -1136,15 +1063,15 @@ namespace editor::gui::animation2d
                                                     if (ok)
                                                     {
                                                         for (let fm : selected_animation->unwrap.m_frames)
-                                                            fm.m_component_dats->swap(
-                                                                fm.m_component_dats->forall(
+                                                            fm.m_component_data->swap(
+                                                                fm.m_component_data->forall(
                                                                     \dcdata = dcdata.m_component_name != cdata.m_component_name
                                                                         || dcdata.m_member_name != cdata.m_member_name
                                                                         ;)
                                                                 );
                                                     }
                                                     else
-                                                        do f.m_component_dats->remove(cindex);
+                                                        do f.m_component_data->remove(cindex);
                                                 });
                                         }
                                         EndPopup();
@@ -1164,7 +1091,7 @@ namespace editor::gui::animation2d
                         match (selected_frame)
                         {
                             value(f)?
-                                for (let (uindex, udata): f.m_uniform_dats->iter |> iterator::enumerate)
+                                for (let (uindex, udata): f.m_uniform_data->iter |> iterator::enumerate)
                                 {
                                     if (SelectableSelected(udata->to_string(),
                                             animation_context.m_selected_c_or_u_data->is_selected_uniform_idx(uindex)))
@@ -1178,13 +1105,13 @@ namespace editor::gui::animation2d
                                                 {
                                                     if (ok)
                                                         for (let fm : selected_animation->unwrap.m_frames)
-                                                            fm.m_uniform_dats->swap(
-                                                                fm.m_uniform_dats->forall(
+                                                            fm.m_uniform_data->swap(
+                                                                fm.m_uniform_data->forall(
                                                                     \dudata = dudata.m_uniform_name != udata.m_uniform_name
                                                                         ;)
                                                                 );
                                                     else
-                                                        do f.m_uniform_dats->remove(uindex);
+                                                        do f.m_uniform_data->remove(uindex);
                                                 });
                                         }
                                         EndPopup();
@@ -1199,51 +1126,27 @@ namespace editor::gui::animation2d
                     match (animation_context.m_selected_c_or_u_data)
                     {
                         ComponentIndex(id)?
-                            match (selected_frame=>>\f = f.m_component_dats->get(id);)
+                            match (selected_frame=>>\f = f.m_component_data->get(id);)
                             {
                                 none?
                                     animation_context.m_selected_c_or_u_data = SelectedComponentOrUniformData::None;
                                 value(cdata)?
                                 {
-                                    match (cdata.m_value)
-                                    {
-                                        INT(n)?
-                                            do InputInt("值", n)->>\nv = cdata.m_value = DataValue::INT(nv);;
-                                        FLOAT(x)?
-                                            do InputFloat("值", x)->>\nv = cdata.m_value = DataValue::FLOAT(nv);;
-                                        VEC2((x, y))?
-                                            do InputFloat2("值", x, y)->>\nv = cdata.m_value = DataValue::VEC2(nv);;
-                                        VEC3((x, y, z))?
-                                            do InputFloat3("值", x, y, z)->>\nv = cdata.m_value = DataValue::VEC3(nv);;
-                                        VEC4((x, y, z, w))?
-                                            do InputFloat4("值", x, y, z, w)->>\nv = cdata.m_value = DataValue::VEC4(nv);;
-                                        QUAT4((x, y, z))?
-                                            do InputFloat3("值", x, y, z)->>\nv = cdata.m_value = DataValue::QUAT4(nv);;
-                                    }
+                                    DataValue::input_data_value(
+                                        "值", cdata.m_value,
+                                        \v = cdata.m_value = v;);
                                     do CheckBox("偏移模式", cdata.m_offset_mode)->>\nv = cdata.m_offset_mode = nv;;
                                 }
                             }
                         UniformIndex(id)?
-                            match (selected_frame=>>\f = f.m_uniform_dats->get(id);)
+                            match (selected_frame=>>\f = f.m_uniform_data->get(id);)
                             {
                                 none?
                                     animation_context.m_selected_c_or_u_data = SelectedComponentOrUniformData::None;
                                 value(udata)?
-                                    match (udata.m_value)
-                                    {
-                                        INT(n)?
-                                            do InputInt("值", n)->>\nv = udata.m_value = DataValue::INT(nv);;
-                                        FLOAT(x)?
-                                            do InputFloat("值", x)->>\nv = udata.m_value = DataValue::FLOAT(nv);;
-                                        VEC2((x, y))?
-                                            do InputFloat2("值", x, y)->>\nv = udata.m_value = DataValue::VEC2(nv);;
-                                        VEC3((x, y, z))?
-                                            do InputFloat3("值", x, y, z)->>\nv = udata.m_value = DataValue::VEC3(nv);;
-                                        VEC4((x, y, z, w))?
-                                            do InputFloat4("值", x, y, z, w)->>\nv = udata.m_value = DataValue::VEC4(nv);;
-                                        QUAT4((x, y, z))?
-                                            do InputFloat3("值", x, y, z)->>\nv = udata.m_value = DataValue::QUAT4(nv);;
-                                    }
+                                    DataValue::input_data_value(
+                                        "值", udata.m_value,
+                                        \v = udata.m_value = v;);
                             }
                         None?
                             TextDisabled("选择组件成员或着色器变量以编辑");

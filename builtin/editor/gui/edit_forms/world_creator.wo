@@ -10,13 +10,12 @@ import pkg::fsys;
 import builtin::editor::project::main;
 import builtin::editor::gui::form::msg;
 import builtin::editor::gui::main;
+import builtin::editor::gui::edit_forms::presets;
 
 using je::gui;
 
 namespace editor::gui::edit_forms
 {
-    let icon_world_image = je::graphic::texture::load(option::none, F"!/builtin/icon/System.png")->unwrap;
-    
     using WorldContext  = struct {
         name  : mut string,
         edit_world : option<je::world>,
@@ -56,16 +55,26 @@ namespace editor::gui::edit_forms
             context.not_append_types->swap(all_systems);
             
             for (let sys : all_systems)
+            {
                 // 不显示所有编辑器/图形系统
-                if (!sys->name()->begin_with("Editor::"))
-                    if (sys->name()->begin_with("Translation::"))
-                        // 默认添加Translation相关系统
-                        context.has_active_types->add(sys);
-            else if (sys->name()->begin_with("Tickline::"))
-                // 默认添加Tickline相关系统
-                context.has_append_types->add(sys);
-            else
-                context.not_append_types->add(sys);
+                if (sys->name()->begin_with("Editor::"))
+                    continue;
+
+                if (sys->name()->begin_with("Translation::"))
+                {
+                    // 默认添加 Translation 相关系统到激活列表
+                    context.has_active_types->add(sys);
+                }
+                else if (sys->name()->begin_with("Tickline::"))
+                {
+                    // 默认添加 Tickline 相关系统到追加列表
+                    context.has_append_types->add(sys);
+                }
+                else
+                {
+                    context.not_append_types->add(sys);
+                }
+            }
                 
             // 添加默认图形管线
             context->active("Graphic::UnlitGraphicPipelineSystem");
@@ -118,70 +127,41 @@ namespace editor::gui::edit_forms
         
         public func active(self: WorldContext, type_name: string)
         {
-            // 将选定实体添加进立即激活的列表中
-            match(je::typeinfo::load(type_name))
-            {
-                value(type)?
-                    if (self.has_active_types->find(type)->is_none)
-                    {
-                        self.has_active_types->add(type);
-                        do self.not_append_types->find(type)
-                            ->> \idx = self.not_append_types->remove(idx);
-                            ;
-                        do self.has_append_types->find(type)
-                            ->> \idx = self.has_append_types->remove(idx);
-                            ;
-                    }
-                none?
-                    je::logfatal("没有找到系统: ", type_name);
-            }
+            // 将选定系统添加进立即激活的列表中
+            presets::move_type_between_lists(
+                type_name,
+                self.has_active_types,
+                [self.not_append_types, self.has_append_types],
+                "没有找到系统: ");
         }
         public func unuse(self: WorldContext, type_name: string)
         {
-            // 将选定实体添加进未激活的列表中
-            match(je::typeinfo::load(type_name))
-            {
-                value(type)?
-                    if (self.not_append_types->find(type)->is_none)
-                    {
-                        self.not_append_types->add(type);
-                        do self.has_append_types->find(type)
-                            ->> \idx = self.has_append_types->remove(idx);
-                            ;
-                        do self.has_active_types->find(type)
-                            ->> \idx = self.has_active_types->remove(idx);
-                            ;
-                    }
-                none?
-                    je::logfatal("没有找到系统: ", type_name);
-            }
+            // 将选定系统添加进未激活的列表中
+            presets::move_type_between_lists(
+                type_name,
+                self.not_append_types,
+                [self.has_append_types, self.has_active_types],
+                "没有找到系统: ");
         }
         public func append(self: WorldContext, type_name: string)
         {
-            // 将选定实体添加进运行时激活的列表中
-            match(je::typeinfo::load(type_name))
-            {
-                value(type)?
-                    if (self.has_append_types->find(type)->is_none)
-                    {
-                        self.has_append_types->add(type);
-                        do self.not_append_types->find(type)
-                            ->> \idx = self.not_append_types->remove(idx);
-                            ;
-                        do self.has_active_types->find(type)
-                            ->> \idx = self.has_active_types->remove(idx);
-                            ;
-                    }
-                none?
-                    je::logfatal("没有找到系统: ", type_name);
-            }
+            // 将选定系统添加进运行时激活的列表中
+            presets::move_type_between_lists(
+                type_name,
+                self.has_append_types,
+                [self.not_append_types, self.has_active_types],
+                "没有找到系统: ");
         }
     }
     
     func show_system(typename: string)
     {
         using je::gui;
-        
+
+        // 懒加载图标，避免模块加载时的副作用 panic
+        static let icon_world_image
+            = je::graphic::texture::load(option::none, F"!/builtin/icon/System.png")->unwrap;
+
         BeginGroup();
         do ImageButtonScale(F"##{typename}#button", icon_world_image, 1.);
         if (BeginDragDropSource())
@@ -322,9 +302,8 @@ namespace editor::gui::edit_forms
                                     je::logfatal("无法添加运行时激活的系统，未知的错误");
                                 }
                                 launch(func(){
-                                        // 为了保证世界数据写入完全之后再执行回调（一般用于序列化并保存）
-                                        // 此处摇匀一下，不过仍然需要考虑不同世界位于不同线程可能导致的问题
-                                        // 摇晃一次即可，摇晃三次纯属玄学
+                                        // 为了保证世界数据写入完全之后再执行回调（一般用于序列化并保存），
+                                        // 此处 yield 让 VM 有机会完成写入；多次 yield 用于跨线程场景的稳妥同步。
                                         std::yield();
                                         std::yield();
                                         std::yield();

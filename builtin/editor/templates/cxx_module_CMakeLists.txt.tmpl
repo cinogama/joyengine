@@ -1,0 +1,96 @@
+# CMakeList for JoyEngine Module
+# 占位符：$$JEMODULE_PROJECT_NAME$$ 由编辑器在生成时替换为模块名。
+
+cmake_minimum_required (VERSION 3.16)
+
+project ("$$JEMODULE_PROJECT_NAME$$")
+
+#####################################################################
+option(BUILD_SHARED_LIBS "Static link packages into engine." OFF)
+
+set (JEMODULE_ENGINE_CORE_LIB_FILENAME  "libjoyecs"  CACHE STRING
+    "The file name of engine core library.")
+set (JEMODULE_WOOLANG_LIB_FILENAME  "libwoo"  CACHE STRING
+    "The file name of woolang library.")
+set (JEMODULE_WOORT_LIB_FILENAME  "libwoort"  CACHE STRING
+    "The file name of woolang library.")
+
+#####################################################################
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.build/${CMAKE_BUILD_TYPE}")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.build/${CMAKE_BUILD_TYPE}")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.build/${CMAKE_BUILD_TYPE}")
+set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/.build/${CMAKE_BUILD_TYPE}")
+
+#####################################################################
+if(BUILD_SHARED_LIBS)
+    set(JEMODULE_BUILD_TYPE SHARED)
+    find_library(jemodule_jeecs_lib "${JEMODULE_ENGINE_CORE_LIB_FILENAME}" ./.engine/library)
+    find_library(jemodule_woolang_lib "${JEMODULE_WOOLANG_LIB_FILENAME}" ./.engine/library)
+    find_library(jemodule_woort_lib "${JEMODULE_WOORT_LIB_FILENAME}" ./.engine/library)
+else()
+    set(JEMODULE_BUILD_TYPE STATIC)
+endif()
+
+file(GLOB_RECURSE jemodule_system_src_cpp ./systems/*.cpp)
+file(GLOB_RECURSE jemodule_system_src_hpp ./systems/*.hpp)
+file(GLOB_RECURSE jemodule_system_src_c ./systems/*.c)
+file(GLOB_RECURSE jemodule_system_src_h ./systems/*.h)
+
+file(GLOB_RECURSE jemodule_component_src_cpp ./components/*.cpp)
+file(GLOB_RECURSE jemodule_component_src_hpp ./components/*.hpp)
+file(GLOB_RECURSE jemodule_component_src_c ./components/*.c)
+file(GLOB_RECURSE jemodule_component_src_h ./components/*.h)
+
+file(GLOB_RECURSE jemodule_source_src_cpp ./sources/*.cpp)
+file(GLOB_RECURSE jemodule_source_src_hpp ./sources/*.hpp)
+file(GLOB_RECURSE jemodule_source_src_c ./sources/*.c)
+file(GLOB_RECURSE jemodule_source_src_h ./sources/*.h)
+
+#####################################################################
+add_library($$JEMODULE_PROJECT_NAME$$
+    ${JEMODULE_BUILD_TYPE}
+
+    ${jemodule_system_src_cpp}
+    ${jemodule_system_src_hpp}
+    ${jemodule_system_src_c}
+    ${jemodule_system_src_h}
+
+    ${jemodule_component_src_cpp}
+    ${jemodule_component_src_hpp}
+    ${jemodule_component_src_c}
+    ${jemodule_component_src_h}
+
+    ${jemodule_source_src_cpp}
+    ${jemodule_source_src_hpp}
+    ${jemodule_source_src_c}
+    ${jemodule_source_src_h}
+
+    ./main.cpp
+    ./loader.hpp)
+
+if(BUILD_SHARED_LIBS)
+    target_link_libraries($$JEMODULE_PROJECT_NAME$$
+        PRIVATE ${jemodule_jeecs_lib}
+        PRIVATE ${jemodule_woolang_lib}
+        PRIVATE ${jemodule_woort_lib})
+else()
+    target_compile_definitions(
+        $$JEMODULE_PROJECT_NAME$$
+            PRIVATE -Djeecs_module_entry=jestatic_module_$$JEMODULE_PROJECT_NAME$$_entry
+            PRIVATE -Djeecs_module_leave=jestatic_module_$$JEMODULE_PROJECT_NAME$$_leave)
+endif()
+
+target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ./.engine/include)
+target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ./systems)
+target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ./components)
+target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ./sources)
+
+set_target_properties($$JEMODULE_PROJECT_NAME$$ PROPERTIES OUTPUT_NAME lib$$JEMODULE_PROJECT_NAME$$)
+set_target_properties($$JEMODULE_PROJECT_NAME$$ PROPERTIES PREFIX "")
+
+target_compile_features($$JEMODULE_PROJECT_NAME$$ PRIVATE cxx_std_20)
+if(MSVC)
+    target_compile_options($$JEMODULE_PROJECT_NAME$$ PRIVATE "/source-charset:utf-8")
+else()
+    target_compile_options($$JEMODULE_PROJECT_NAME$$ PRIVATE -fno-exceptions)
+endif()

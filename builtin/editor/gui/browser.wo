@@ -35,6 +35,8 @@ import builtin::editor::gui::tilemap::main;
 import builtin::editor::gui::edit_forms::world_creator;
 import builtin::editor::gui::draw_pannel::main;
 import builtin::editor::tools::file;
+import builtin::editor::common::form;
+import builtin::editor::common::template;
 
 using je::gui;
 
@@ -180,39 +182,38 @@ namespace editor::gui
     
     // 支持作为图片格式的拓展名
     public let IMAGE_FILE_EXTERN_NAMES = [".png", ".jpg", ".bmp", ".psd",];
-    
-    // 用于储存文件拓展名和图标的对应关系
-    let FILE_TYPE_ICONS = {
-        [".png"] = je::graphic::texture::load(option::none, F"!/builtin/icon/TextureFile.png")->unwrap,
-        [".jpg"] = je::graphic::texture::load(option::none, F"!/builtin/icon/TextureFile.png")->unwrap,
-        [".bmp"] = je::graphic::texture::load(option::none, F"!/builtin/icon/TextureFile.png")->unwrap,
-        [".psd"] = je::graphic::texture::load(option::none, F"!/builtin/icon/TextureFile.png")->unwrap,
-        
-        [".ttf"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Font.png")->unwrap,
-        
-        [".wav"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Music.png")->unwrap,
-        
-        [".wo"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Plugins.png")->unwrap,
-        
-        [".shader"] = je::graphic::texture::load(option::none, F"!/builtin/icon/ShaderFile.png")->unwrap,
-        
-        [".je4module"] = je::graphic::texture::load(option::none, F"!/builtin/icon/CppProgram.png")->unwrap,
-        [".je4workflows"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Workflow.png")->unwrap,
-        
-        [".je4world"] = je::graphic::texture::load(option::none, F"!/builtin/icon/World.png")->unwrap,
-        [".je4entity"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Entity.png")->unwrap,
-        
-        [".je4animation"] = je::graphic::texture::load(option::none, F"!/builtin/icon/AnimationFile.png")->unwrap,
-        
-        [".je4tilemap"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Tilemap.png")->unwrap,
-        [".je4partical"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Partical.png")->unwrap,
-        
-        [".je4cache"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Joy.png")->unwrap,
-    };
-    
+
     // 根据文件拓展名返回文件的类型
     private func get_file_icon_by_extern_name(_path: PathInfo, context: EditorContext)
     {
+        // 文件扩展名 -> 图标的映射表；懒加载以避免模块加载时的副作用 panic
+        static let FILE_TYPE_ICONS = {
+            [".png"] = je::graphic::texture::load(option::none, F"!/builtin/icon/TextureFile.png")->unwrap,
+            [".jpg"] = je::graphic::texture::load(option::none, F"!/builtin/icon/TextureFile.png")->unwrap,
+            [".bmp"] = je::graphic::texture::load(option::none, F"!/builtin/icon/TextureFile.png")->unwrap,
+            [".psd"] = je::graphic::texture::load(option::none, F"!/builtin/icon/TextureFile.png")->unwrap,
+
+            [".ttf"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Font.png")->unwrap,
+
+            [".wav"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Music.png")->unwrap,
+
+            [".wo"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Plugins.png")->unwrap,
+
+            [".shader"] = je::graphic::texture::load(option::none, F"!/builtin/icon/ShaderFile.png")->unwrap,
+
+            [".je4module"] = je::graphic::texture::load(option::none, F"!/builtin/icon/CppProgram.png")->unwrap,
+            [".je4workflows"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Workflow.png")->unwrap,
+
+            [".je4world"] = je::graphic::texture::load(option::none, F"!/builtin/icon/World.png")->unwrap,
+            [".je4entity"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Entity.png")->unwrap,
+
+            [".je4animation"] = je::graphic::texture::load(option::none, F"!/builtin/icon/AnimationFile.png")->unwrap,
+
+            [".je4tilemap"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Tilemap.png")->unwrap,
+            [".je4partical"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Partical.png")->unwrap,
+
+            [".je4cache"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Joy.png")->unwrap,
+        };
         static let default_path_icon
             = je::graphic::texture::load(option::none, F"!/builtin/icon/FilePath.png")->unwrap;
         static let default_file_icon
@@ -318,7 +319,7 @@ namespace editor::gui
                                 return subdirs;
                         none?;
                     }
-                file? // 文件也来获取子目录，搁这儿找茬呢？
+                file? // 文件没有子目录，调用此分支属于调用方契约错误
                     std::panic("Failed to get subpath: is a file.");
             }
             
@@ -466,17 +467,16 @@ namespace editor::gui
                 Separator();
                 if (MenuItem("空文件"))
                 {
-                    jeapi::gui::form::input("新建空文件", F"在{cur_creating_path}新建空文件", "NewFile.txt",
-                        \filename: string = fsys::exist(file_path)
-                            ? jeapi::gui::form::errmsg("创建空文件失败", "同名文件已经存在")
-                            | write_file_if_not_exist(file_path, "")
-                            ? force_update()
-                            | jeapi::gui::form::errmsg("创建空文件失败", "无法创建文件，可能是文件名非法或磁盘已满")
-                                where file_path = fsys::normalize(cur_creating_path) / filename;);
+                    editor::common::form::create_file_with_template_dialog(
+                        "新建空文件", F"在{cur_creating_path}新建空文件",
+                        "NewFile.txt", "",
+                        func(_) { return ""; },
+                        fsys::normalize(cur_creating_path),
+                        func() { force_update(); });
                 }
                 if (MenuItem("Woolang 脚本"))
                 {
-                    let default_empty_script = 
+                    let default_empty_script =
 @"import woo::std;
 import je;
 
@@ -484,19 +484,18 @@ using std;
 using je;
 
 // 可以在此处编写自己的代码：
-je::log("Helloworld");
+je::log(\"Helloworld\");
 "@;
-                        jeapi::gui::form::input("新建Woolang 脚本", F"在{cur_creating_path}新建Woolang 脚本", "NewScript",
-                        \filename: string = fsys::exist(file_path)
-                            ? jeapi::gui::form::errmsg("创建Woolang 脚本失败", "同名文件已经存在")
-                            | write_file_if_not_exist(file_path, F"// {filename}.wo\n{default_empty_script}")
-                            ? force_update()
-                            | jeapi::gui::form::errmsg("创建Woolang 脚本失败", "无法创建文件，可能是文件名非法或磁盘已满")
-                                where file_path = fsys::normalize(cur_creating_path) / (filename + ".wo"););
+                    editor::common::form::create_file_with_template_dialog(
+                        "新建Woolang 脚本", F"在{cur_creating_path}新建Woolang 脚本",
+                        "NewScript", ".wo",
+                        func(fn) { return F"// {fn}.wo\n{default_empty_script}"; },
+                        fsys::normalize(cur_creating_path),
+                        func() { force_update(); });
                 }
                 if (MenuItem("ToWoo Component 声明"))
                 {
-                    let default_empty_script = 
+                    let default_empty_script =
 @"import woo::std;
 
 import je::towoo::component;
@@ -506,17 +505,16 @@ component!
 {
 }
 "@;
-                        jeapi::gui::form::input("新建ToWoo Component 声明", F"在{cur_creating_path}新建ToWoo Component 脚本", "NewToWooComponent",
-                        \filename: string = fsys::exist(file_path)
-                            ? jeapi::gui::form::errmsg("创建ToWoo Component 声明失败", "同名文件已经存在")
-                            | write_file_if_not_exist(file_path, F"// {filename}.jecomponent.wo\n{default_empty_script}")
-                            ? func(){context->get_project->try_update_towoo(false);force_update();}()
-                            | jeapi::gui::form::errmsg("创建ToWoo Component 声明失败", "无法创建文件，可能是文件名非法或磁盘已满")
-                                where file_path = fsys::normalize(cur_creating_path) / (filename + ".jecomponent.wo"););
+                    editor::common::form::create_file_with_template_dialog(
+                        "新建ToWoo Component 声明", F"在{cur_creating_path}新建ToWoo Component 脚本",
+                        "NewToWooComponent", ".jecomponent.wo",
+                        func(fn) { return F"// {fn}.jecomponent.wo\n{default_empty_script}"; },
+                        fsys::normalize(cur_creating_path),
+                        func() { context->get_project->try_update_towoo(false); force_update(); });
                 }
                 if (MenuItem("ToWoo System 脚本"))
                 {
-                    let default_empty_script = 
+                    let default_empty_script =
 @"import woo::std;
 import je;
 import je::towoo;
@@ -560,17 +558,16 @@ LATE_UPDATE!
 {
 }
 "@;
-                        jeapi::gui::form::input("新建ToWoo System 脚本", F"在{cur_creating_path}新建ToWoo System 脚本", "NewToWooSystem",
-                        \filename: string = fsys::exist(file_path)
-                            ? jeapi::gui::form::errmsg("创建ToWoo System 脚本失败", "同名文件已经存在")
-                            | write_file_if_not_exist(file_path, F"// {filename}.jesystem.wo\n{default_empty_script}")
-                            ? func(){context->get_project->try_update_towoo(false);force_update();}()
-                            | jeapi::gui::form::errmsg("创建ToWoo System 脚本失败", "无法创建文件，可能是文件名非法或磁盘已满")
-                                where file_path = fsys::normalize(cur_creating_path) / (filename + ".jesystem.wo"););
+                    editor::common::form::create_file_with_template_dialog(
+                        "新建ToWoo System 脚本", F"在{cur_creating_path}新建ToWoo System 脚本",
+                        "NewToWooSystem", ".jesystem.wo",
+                        func(fn) { return F"// {fn}.jesystem.wo\n{default_empty_script}"; },
+                        fsys::normalize(cur_creating_path),
+                        func() { context->get_project->try_update_towoo(false); force_update(); });
                 }
                 if (MenuItem("Physics2D 场景配置"))
                 {
-                    let default_empty_script = 
+                    let default_empty_script =
 @"import je::physics2d::config;
 
 PHYSICS2D_LAYER! 0 /* 默认层 */
@@ -590,17 +587,16 @@ PHYSICS2D_COLLISIONS!
     普通物体, 普通物体;
 }
 "@;
-                        jeapi::gui::form::input("新建Physics2D 场景配置", F"在{cur_creating_path}新建Physics2D 场景配置", "scene",
-                        \filename: string = fsys::exist(file_path)
-                            ? jeapi::gui::form::errmsg("创建Physics2D 场景配置失败", "同名文件已经存在")
-                            | write_file_if_not_exist(file_path, F"// {filename}.jephysics2d.wo\n{default_empty_script}")
-                            ? force_update()
-                            | jeapi::gui::form::errmsg("创建Physics2D 场景配置失败", "无法创建文件，可能是文件名非法或磁盘已满")
-                                where file_path = fsys::normalize(cur_creating_path) / (filename + ".jephysics2d.wo"););
+                    editor::common::form::create_file_with_template_dialog(
+                        "新建Physics2D 场景配置", F"在{cur_creating_path}新建Physics2D 场景配置",
+                        "scene", ".jephysics2d.wo",
+                        func(fn) { return F"// {fn}.jephysics2d.wo\n{default_empty_script}"; },
+                        fsys::normalize(cur_creating_path),
+                        func() { force_update(); });
                 }
                 if (MenuItem("编辑器工具脚本"))
                 {
-                    let default_empty_script = 
+                    let default_empty_script =
 @"import woo::std;
 import je;
 
@@ -610,17 +606,13 @@ using je;
 extern func main(_: universe, _: option<world>, _: option<entity>)
 {
 }
-"@
-                        ;
-                        
-                    jeapi::gui::form::input("新建编辑器工具脚本", F"在{cur_creating_path}新建编辑器工具脚本",
-                        "NewScript",
-                        \filename: string = fsys::exist(file_path)
-                            ? jeapi::gui::form::errmsg("创建编辑器工具脚本失败", "同名文件已经存在")
-                            | write_file_if_not_exist(file_path, F"// {filename}.je.wo\n{default_empty_script}")
-                            ? force_update()
-                            | jeapi::gui::form::errmsg("创建编辑器工具脚本失败", "无法创建文件，可能是文件名非法或磁盘已满")
-                                where file_path = fsys::normalize(cur_creating_path) / (filename + ".je.wo"););
+"@;
+                    editor::common::form::create_file_with_template_dialog(
+                        "新建编辑器工具脚本", F"在{cur_creating_path}新建编辑器工具脚本",
+                        "NewScript", ".je.wo",
+                        func(fn) { return F"// {fn}.je.wo\n{default_empty_script}"; },
+                        fsys::normalize(cur_creating_path),
+                        func() { force_update(); });
                 }
                 if (BeginMenu("Workflow"))
                 {
@@ -639,75 +631,15 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                                         -> or_map(\errid = F"无法创建 Workflow 集目录({errid})";)
                                         ;
                                         
-                                    let gitattributes = 
-@"# JoyEngine ECS Workflows
+                                    let gitattributes =
+                                        editor::common::template::load_template_or_panic("workflow_gitattributes.tmpl");
+                                    let runtime_src =
+                                        editor::common::template::load_template_or_panic("workflow_runtime.wo.tmpl");
+                                    let nodes_list =
+                                        editor::common::template::load_template_or_panic("workflow_nodes.wo.tmpl");
+                                    let workflow_editor_launcher =
+                                        editor::common::template::load_template_or_panic("workflow_editor_launcher.wo.tmpl");
 
-/editor.wo text eol=lf
-/nodes.wo text eol=lf
-"@
-;
-                                    let runtime_src = 
-@"// Runtime
-import woo::std;
-
-import builtin::statements;
-import builtin::statements::types;
-import builtin::statements::runtime;
-
-import pkg::decorator;
-import pkg::async;
-import pkg::node_editor;
-import pkg::any;
-
-import nodes;
-
-namespace workflow::runtime
-{
-    using jeapi::statements;
-
-    decorator![register_dispatcher("main")]
-    async! func main(graph: GraphContext, ...)
-    {
-        let hook = RuntimeDebugger::hook(graph);
-        defer hook->unhook();
-
-        for (let (_, node) : graph->walk_flow_nodes())
-        {
-            do node;
-        }
-    }
-}
-"@
-                                        ;
-                                        
-                                    let nodes_list = 
-@"// Donot modify this file!
-;
-"@
-                                        ;
-                                        
-                                    let workflow_editor_launcher = 
-@"// Donot modify this file!
-
-import builtin::statements;
-import builtin::editor::gui::workflow;
-
-import pkg::worst::macro;
-import pkg::fsys;
-
-import nodes;
-
-match (editor::gui::edit_forms::WorkFlowEditorContext::show_edit_form(
-    fsys::parent(fsys::normalize(__FILE__!))))
-{
-    value(_)?
-        return true;
-    none?
-        return false;
-}
-"@
-                                        ;
-                                        
                                     defer force_update();
                                     
                                     if (!write_file_if_not_exist(
@@ -760,53 +692,8 @@ match (editor::gui::edit_forms::WorkFlowEditorContext::show_edit_form(
                             func(filename)
                             {
                                 let node_declaration_template =
-@"// $NODE_NAME$.wo
-import woo::std;
+                                    editor::common::template::load_template_or_panic("workflow_eval_node.wo.tmpl");
 
-import je;
-
-import pkg::node_editor;
-import pkg::async;
-import pkg::interface;
-import pkg::try;
-
-import builtin::statements;
-import builtin::statements::types;
-
-namespace workflow::nodes
-{
-    using node_editor;
-
-    using $NODE_NAME$ = struct{
-    }
-    {
-        public let name = "Eval/$NODE_NAME$";
-        public let color = 0xFFAA8855;
-        public let description = "";
-        
-        public func create(_: node_editor::Graph::NodeIOCreator)=> $NODE_NAME$
-            where require!($NODE_NAME$: node_editor::INode);
-        {
-            return $NODE_NAME${
-            };
-        }
-        async! public func eval(self: $NODE_NAME$)=> void
-        {
-            do try!
-            {
-                do self;
-                return_value!;
-
-            } catch! {
-                je::logwarn("节点 `$NODE_NAME$` 求值终止");
-            };
-        }
-    }
-    jeapi::statements::register_node:<$NODE_NAME$>();
-}
-"@
-                                    ;
-                                    
                                 if (!write_file_if_not_exist(
                                         fsys::normalize(cur_creating_path) / F"{filename}.wo",
                                         node_declaration_template->replace("$NODE_NAME$", filename)))
@@ -826,54 +713,8 @@ namespace workflow::nodes
                             func(filename)
                             {
                                 let node_declaration_template =
-@"// $NODE_NAME$.wo
-import woo::std;
+                                    editor::common::template::load_template_or_panic("workflow_flow_node.wo.tmpl");
 
-import je;
-
-import pkg::node_editor;
-import pkg::async;
-import pkg::interface;
-import pkg::try;
-
-import builtin::statements;
-import builtin::statements::types;
-
-namespace workflow::nodes
-{
-    using node_editor;
-
-    using $NODE_NAME$ = struct{
-    }
-    {
-        public let name = "Flow/$NODE_NAME$";
-        public let color = 0xFF88AA55;
-        public let description = "";
-        
-        public func create(_: node_editor::Graph::FlowNodeIOCreator)=> $NODE_NAME$
-            where require!($NODE_NAME$: node_editor::IFlowNode);
-        {
-            return $NODE_NAME${
-            };
-        }
-        async! public func forward(self: $NODE_NAME$)=> OutputFlow::NextFlow
-        {
-            return or(OutputFlow::NextFlow::Stop) <| 
-                try!
-                {
-                    do self;
-                    return_value! OutputFlow::NextFlow::Stop;
-
-                } catch! {
-                    je::logwarn("流程节点 `$NODE_NAME$` 执行终止");
-                };
-        }
-    }
-    jeapi::statements::register_node:<$NODE_NAME$>();
-}
-"@
-                                    ;
-                                    
                                 if (!write_file_if_not_exist(
                                         fsys::normalize(cur_creating_path) / F"{filename}.wo",
                                         node_declaration_template->replace("$NODE_NAME$", filename)))
@@ -917,13 +758,12 @@ namespace workflow::nodes
                 }
                 if (MenuItem("瓦片地图"))
                 {
-                    jeapi::gui::form::input("新建瓦片地图", F"在{cur_creating_path}新建瓦片地图", "NewTileMap",
-                        \filename: string = fsys::exist(file_path)
-                            ? jeapi::gui::form::errmsg("新建瓦片地图失败", "同名文件已经存在")
-                            | write_file_if_not_exist(file_path, "")
-                            ? func(){context->get_project->try_update_towoo(false);force_update();}()
-                            | jeapi::gui::form::errmsg("新建瓦片地图失败失败", "无法创建文件，可能是文件名非法或磁盘已满")
-                                where file_path = fsys::normalize(cur_creating_path) / (filename + ".je4tilemap"););
+                    editor::common::form::create_file_with_template_dialog(
+                        "新建瓦片地图", F"在{cur_creating_path}新建瓦片地图",
+                        "NewTileMap", ".je4tilemap",
+                        func(_) { return ""; },
+                        fsys::normalize(cur_creating_path),
+                        func() { context->get_project->try_update_towoo(false); force_update(); });
                 }
                 Separator();
                 if (BeginMenu("纹理"))
@@ -1112,7 +952,7 @@ namespace workflow::nodes
                             return;
                         }
                     }
-                    else; // 点NO 啥也不干~
+                    else; // 用户选择不更新引擎文件，直接进入编译流程
                     module->update_compile(platform::BuildType::DEBUG);
                 });
         }
@@ -1326,66 +1166,14 @@ namespace workflow::nodes
                                                             jeapi::gui::form::errmsg("创建系统失败", F"模块{fsys::filename(path.path)}已经存在一个同名系统");
                                                             return;
                                                         }
-                                                        
-                                                let system_header = 
-@"#pragma once
-#include "jeecs.hpp"
 
-namespace $$MODULE_NAME$$
-{
-    struct $$SYSTEM_NAME$$ : public jeecs::game_system
-    {
-        $$SYSTEM_NAME$$(jeecs::game_world world);
-        ~$$SYSTEM_NAME$$();
-        
-        void OnEnable();
-        void OnDisable();
-
-        void PreUpdate();
-        void Update();
-        void LateUpdate();
-    };
-}
-"@
-                                                            ;
-                                            let system_src = 
-@"#include "$$SYSTEM_NAME$$.hpp"
-
-using namespace std;
-using namespace jeecs;
-
-namespace $$MODULE_NAME$$
-{
-    $$SYSTEM_NAME$$::$$SYSTEM_NAME$$(game_world world)
-        : game_system(world)
-    {
-    }
-    $$SYSTEM_NAME$$::~$$SYSTEM_NAME$$()
-    {
-    }
-
-    void $$SYSTEM_NAME$$::OnEnable()
-    {
-    }
-    void $$SYSTEM_NAME$$::OnDisable()
-    {
-    }
-
-    void $$SYSTEM_NAME$$::PreUpdate()
-    {
-    }
-    void $$SYSTEM_NAME$$::Update()
-    {
-    }
-    void $$SYSTEM_NAME$$::LateUpdate()
-    {
-    }
-}
-"@
-                                                            ;
+                                                        let system_header =
+                                                            editor::common::template::load_template_or_panic("cxx_system.hpp.tmpl");
+                                                        let system_src =
+                                                            editor::common::template::load_template_or_panic("cxx_system.cpp.tmpl");
                                                         let module_name = fsys::purename(path.path);
                                                         let system_name = name;
-                                                        
+
                                                         if (!file::writeall(path.path/"systems"/F"{system_name}.hpp",
                                                                                                 system_header
                                                                                                     ->replace("$$MODULE_NAME$$", module_name)
@@ -1399,12 +1187,12 @@ namespace $$MODULE_NAME$$
                                                         {
                                                             do fsys::remove(path.path/"systems"/F"{system_name}.hpp")->unwrap;
                                                             do fsys::remove(path.path/"systems"/F"{system_name}.cpp")->unwrap;
-                                                            
+
                                                             jeapi::gui::form::errmsg("创建系统失败", "无法创建和写入系统源文件");
                                                         }
                                                         else
                                                         {
-                                                            jeapi::gui::form::errmsg("创建系统成功", "系统已创建到\n"
+                                                            jeapi::gui::form::msg("创建系统成功", "系统已创建到\n"
                                                                 + F"{path.path}/systems/{system_name}.hpp\n"
                                                                 + F"{path.path}/systems/{system_name}.cpp");
                                                             systems->add(system_name);
@@ -1420,32 +1208,10 @@ namespace $$MODULE_NAME$$
                                                             jeapi::gui::form::errmsg("创建组件失败", F"模块{fsys::filename(path.path)}已经存在一个同名组件");
                                                             return;
                                                         }
-                                                        
-                                                let component_header = 
-@"#pragma once
-#include "jeecs.hpp"
 
-namespace $$MODULE_NAME$$
-{
-    struct $$COMPONENT_NAME$$
-    {
-        JECS_DISABLE_MOVE_AND_COPY_OPERATOR($$COMPONENT_NAME$$);
-
-        $$COMPONENT_NAME$$()= default;
-        $$COMPONENT_NAME$$(const $$COMPONENT_NAME$$&) = default;
-        $$COMPONENT_NAME$$($$COMPONENT_NAME$$&&) = default;
-
-        static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
-        {
-            using namespace jeecs;
-
-            // Register member in this function.
-            // e.g. typing::register_member(guard, &$$COMPONENT_NAME$$::member, "member");
-        }
-    };
-}
-"@;
-                                                            let module_name = fsys::purename(path.path);
+                                                let component_header =
+                                                    editor::common::template::load_template_or_panic("cxx_component.hpp.tmpl");
+                                                        let module_name = fsys::purename(path.path);
                                                         let component_name = name;
                                                         
                                                         if (!file::writeall(path.path/"components"/F"{component_name}.hpp",
@@ -1459,7 +1225,7 @@ namespace $$MODULE_NAME$$
                                                         }
                                                         else
                                                         {
-                                                            jeapi::gui::form::errmsg("创建组件成功", "组件已创建到\n"
+                                                            jeapi::gui::form::msg("创建组件成功", "组件已创建到\n"
                                                                 + F"{path.path}/components/{component_name}.hpp");
                                                             components->add(component_name);
                                                         }
@@ -1687,17 +1453,14 @@ namespace $$MODULE_NAME$$
             ->> func(item)
             {
                 let action = FileIcon(item, context);
-                
-                if (action == Action::Click)
-                {
-                }
-                else if (action == Action::DoubleClick)
+
+                if (action == Action::DoubleClick)
                 {
                     do item->indir(\_ = set_current_work_path(item.path);)
                         ->infile(\ = do item->get_open_method()(item, context)
                                 ->> \err = jeapi::gui::form::errmsg("失败", F"打开文件失败:\n{err}");
                                 ;);
-                                
+
                 }
                 else if (action == Action::Hovered && BeginTooltip())
                 {

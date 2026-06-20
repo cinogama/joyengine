@@ -1,0 +1,378 @@
+// editor.gui.edit_forms.presets
+// 实体/组件预设的集中数据表与构建辅助函数。
+// 替代原先散落在 entities_list.wo 和 entity_creator.wo 中的字面量复制粘贴。
+
+import woo::std;
+
+import je;
+import je::gui;
+
+import builtin::editor::gui::main;
+
+using je::gui;
+
+namespace editor::gui::edit_forms::presets
+{
+    // ===== 共享的组件类型名列表 =====
+    public let BASE_TRANSFORM_COMPONENTS = [
+        "Transform::LocalPosition",
+        "Transform::LocalRotation",
+        "Transform::LocalScale",
+        "Transform::LocalToWorld",
+        "Transform::Translation",
+    ];
+
+    public let UI_TRANSFORM_COMPONENTS = [
+        "UserInterface::Origin",
+        "UserInterface::Absolute",
+        "UserInterface::Relatively",
+        "Transform::Translation",
+    ];
+
+    public let BASE_RENDERER_COMPONENTS = [
+        "Renderer::Shape",
+        "Renderer::Shaders",
+        "Renderer::Textures",
+    ];
+
+    public let LIGHT2D_POINT_COMPONENTS = [
+        "Light2D::Point",
+        "Light2D::Gain",
+        "Light2D::ShadowBuffer",
+    ];
+
+    public let LIGHT2D_RANGE_COMPONENTS = [
+        "Light2D::Range",
+        "Light2D::Gain",
+        "Light2D::ShadowBuffer",
+    ];
+
+    public let LIGHT2D_PARALLEL_COMPONENTS = [
+        "Light2D::Parallel",
+        "Light2D::Gain",
+        "Light2D::ShadowBuffer",
+    ];
+
+    public let LIGHT2D_SHADOW_COMMON_COMPONENTS = [
+        "Light2D::ShapeShadow",
+        "Light2D::BlockShadow",
+        "Light2D::SelfShadow",
+    ];
+
+    public let CAMERA_PERSPECTIVE_COMPONENTS = [
+        "Camera::Projection",
+        "Camera::PerspectiveProjection",
+        "Camera::Viewport",
+        "Camera::FrustumCulling",
+    ];
+
+    public let CAMERA_ORTHO_COMPONENTS = [
+        "Camera::Projection",
+        "Camera::OrthoProjection",
+        "Camera::Viewport",
+        "Camera::FrustumCulling",
+    ];
+
+    public let CAMERA_UI_ONLY_COMPONENTS = [
+        "Camera::Projection",
+    ];
+
+    public let CAMERA_2D_LIGHT_POSTPASS_COMPONENTS = [
+        "Light2D::CameraPostPass",
+        "Renderer::Shaders",
+    ];
+
+    public let PHYSICS2D_STATIC_COMPONENTS = [
+        "Physics2D::Rigidbody",
+        "Physics2D::Collider::Box",
+    ];
+
+    public let PHYSICS2D_DYNAMIC_COMPONENTS = [
+        "Physics2D::Rigidbody",
+        "Physics2D::DynamicBody",
+        "Physics2D::Collider::Box",
+        "Physics2D::Density",
+        "Physics2D::Friction",
+    ];
+
+    public let PHYSICS2D_FAST_DYNAMIC_COMPONENTS = [
+        "Physics2D::Rigidbody",
+        "Physics2D::DynamicBody",
+        "Physics2D::Bullet",
+        "Physics2D::Collider::Box",
+        "Physics2D::Density",
+        "Physics2D::Friction",
+    ];
+
+    public let PHYSICS2D_TRIGGER_COMPONENTS = [
+        "Physics2D::Rigidbody",
+        "Physics2D::Collider::Box",
+        "Physics2D::IsTrigger",
+    ];
+
+    public let PHYSICS2D_SCENE_COMPONENTS = [
+        "Physics2D::Scene",
+    ];
+
+    // ===== 实体快速创建预设（用于"快速创建实体"菜单） =====
+    public using EntityPreset = struct {
+        public menu_label: string,                  // 菜单显示文本
+        public entity_name: string,                 // 创建时的实体名
+        public components: array<string>,           // 组件类型名列表
+        public default_shader: option<string>,      // 创建后自动加载的着色器（可选）
+    };
+
+    // 用于分隔不同语义类别的预设组
+    public using EntityPresetGroup = struct {
+        public separator_before: bool,              // 此组前是否绘制分隔线
+        public presets: array<EntityPreset>,
+    };
+
+    public let ENTITY_PRESET_GROUPS = [
+        EntityPresetGroup {
+            separator_before = false,
+            presets = [
+                EntityPreset {
+                    menu_label   = "基本渲染实体",
+                    entity_name  = "默认物体",
+                    components   = BASE_TRANSFORM_COMPONENTS->connect(BASE_RENDERER_COMPONENTS),
+                    default_shader = option::none,
+                },
+                EntityPreset {
+                    menu_label   = "基本UI",
+                    entity_name  = "默认UI",
+                    components   = [
+                        "Transform::LocalToWorld",
+                        "Transform::Translation",
+                        "Renderer::Shape",
+                        "Renderer::Shaders",
+                        "Renderer::Textures",
+                        "UserInterface::Origin",
+                        "UserInterface::Absolute",
+                        "UserInterface::Relatively",
+                    ],
+                    default_shader = option::none,
+                },
+                EntityPreset {
+                    menu_label   = "带2D阴影的基本渲染实体",
+                    entity_name  = "默认2D阴影物体",
+                    components   = BASE_TRANSFORM_COMPONENTS
+                        ->connect(BASE_RENDERER_COMPONENTS)
+                        ->connect([
+                            "Light2D::BlockShadow",
+                            "Light2D::SelfShadow",
+                            "Light2D::ShapeShadow",
+                        ]),
+                    default_shader = option::none,
+                },
+            ],
+        },
+        EntityPresetGroup {
+            separator_before = true,
+            presets = [
+                EntityPreset {
+                    menu_label   = "2D光源（点）",
+                    entity_name  = "2D点光源",
+                    components   = BASE_TRANSFORM_COMPONENTS
+                        ->connect(BASE_RENDERER_COMPONENTS)
+                        ->connect(["Renderer::Color"])
+                        ->connect(LIGHT2D_POINT_COMPONENTS),
+                    default_shader = option::value("@/resource/shader/Light2DPoint.shader"),
+                },
+                EntityPreset {
+                    menu_label   = "2D光源（范围）",
+                    entity_name  = "2D范围光源",
+                    components   = BASE_TRANSFORM_COMPONENTS
+                        ->connect(BASE_RENDERER_COMPONENTS)
+                        ->connect(["Renderer::Color"])
+                        ->connect(LIGHT2D_RANGE_COMPONENTS),
+                    default_shader = option::value("@/resource/shader/Light2DRange.shader"),
+                },
+                EntityPreset {
+                    menu_label   = "2D光源（平行）",
+                    entity_name  = "2D平行光源",
+                    components   = BASE_TRANSFORM_COMPONENTS
+                        ->connect(BASE_RENDERER_COMPONENTS)
+                        ->connect(["Renderer::Color"])
+                        ->connect(LIGHT2D_PARALLEL_COMPONENTS),
+                    default_shader = option::value("@/resource/shader/Light2DParallel.shader"),
+                },
+            ],
+        },
+        EntityPresetGroup {
+            separator_before = true,
+            presets = [
+                EntityPreset {
+                    menu_label   = "摄像机（透视）",
+                    entity_name  = "摄像机",
+                    components   = BASE_TRANSFORM_COMPONENTS->connect(CAMERA_PERSPECTIVE_COMPONENTS),
+                    default_shader = option::none,
+                },
+                EntityPreset {
+                    menu_label   = "摄像机（平行）",
+                    entity_name  = "摄像机",
+                    components   = BASE_TRANSFORM_COMPONENTS->connect(CAMERA_ORTHO_COMPONENTS),
+                    default_shader = option::none,
+                },
+            ],
+        },
+        EntityPresetGroup {
+            separator_before = true,
+            presets = [
+                EntityPreset {
+                    menu_label   = "物理场景配置",
+                    entity_name  = "物理场景配置",
+                    components   = PHYSICS2D_SCENE_COMPONENTS,
+                    default_shader = option::none,
+                },
+            ],
+        },
+    ];
+
+    // ===== 组件集合预设（用于"常用组件集合"菜单） =====
+    // 每个组：组名（option::none 表示直接 MenuItem 而非子菜单）+ 一组叶子节点
+    public using ComponentPresetLeaf = struct {
+        public label: string,
+        public components: array<string>,
+    };
+
+    public using ComponentPresetGroup = struct {
+        public submenu_label: option<string>,   // none = 顶层叶子项（仅第一个叶子有效）；value = 子菜单标题
+        public leaves: array<ComponentPresetLeaf>,
+        public separator_before: bool,          // 此组前是否绘制分隔线
+    };
+
+    public let COMPONENT_PRESET_GROUPS = [
+        ComponentPresetGroup {
+            submenu_label = option::none,
+            separator_before = false,
+            leaves = [
+                ComponentPresetLeaf { label = "移除全部组件", components = [] },
+            ],
+        },
+        ComponentPresetGroup {
+            submenu_label = option::value("变换（Transform）"),
+            separator_before = true,
+            leaves = [
+                ComponentPresetLeaf { label = "一般变换", components = BASE_TRANSFORM_COMPONENTS },
+                ComponentPresetLeaf { label = "UI变换", components = UI_TRANSFORM_COMPONENTS },
+            ],
+        },
+        ComponentPresetGroup {
+            submenu_label = option::none,
+            separator_before = false,
+            leaves = [
+                ComponentPresetLeaf { label = "基本渲染（Renderer）", components = BASE_RENDERER_COMPONENTS },
+            ],
+        },
+        ComponentPresetGroup {
+            submenu_label = option::value("2D光照（Light2D）"),
+            separator_before = false,
+            leaves = [
+                ComponentPresetLeaf { label = "点光源", components = LIGHT2D_POINT_COMPONENTS },
+                ComponentPresetLeaf { label = "范围光源", components = LIGHT2D_RANGE_COMPONENTS },
+                ComponentPresetLeaf { label = "平行光源", components = LIGHT2D_PARALLEL_COMPONENTS },
+            ],
+        },
+        ComponentPresetGroup {
+            submenu_label = option::value("2D阴影（Shadow2D）"),
+            separator_before = false,
+            leaves = [
+                ComponentPresetLeaf { label = "常用组合", components = LIGHT2D_SHADOW_COMMON_COMPONENTS },
+                ComponentPresetLeaf { label = "形状", components = ["Light2D::ShapeShadow"] },
+                ComponentPresetLeaf { label = "块投射", components = ["Light2D::BlockShadow"] },
+                ComponentPresetLeaf { label = "精灵图（俯视角）", components = ["Light2D::SpriteShadow"] },
+                ComponentPresetLeaf { label = "自身", components = ["Light2D::SelfShadow"] },
+            ],
+        },
+        ComponentPresetGroup {
+            submenu_label = option::value("摄像机（Camera）"),
+            separator_before = false,
+            leaves = [
+                ComponentPresetLeaf { label = "透视投影", components = CAMERA_PERSPECTIVE_COMPONENTS },
+                ComponentPresetLeaf { label = "平行投影", components = CAMERA_ORTHO_COMPONENTS },
+                ComponentPresetLeaf { label = "仅UI投影", components = CAMERA_UI_ONLY_COMPONENTS },
+                ComponentPresetLeaf { label = "2D光照后处理流程", components = CAMERA_2D_LIGHT_POSTPASS_COMPONENTS },
+            ],
+        },
+        ComponentPresetGroup {
+            submenu_label = option::value("2D物理（Physics2D）"),
+            separator_before = false,
+            leaves = [
+                ComponentPresetLeaf { label = "静态", components = PHYSICS2D_STATIC_COMPONENTS },
+                ComponentPresetLeaf { label = "动力学", components = PHYSICS2D_DYNAMIC_COMPONENTS },
+                ComponentPresetLeaf { label = "高速动力学", components = PHYSICS2D_FAST_DYNAMIC_COMPONENTS },
+                ComponentPresetLeaf { label = "触发器", components = PHYSICS2D_TRIGGER_COMPONENTS },
+                ComponentPresetLeaf { label = "场景配置", components = PHYSICS2D_SCENE_COMPONENTS },
+            ],
+        },
+    ];
+
+    // ===== 菜单绘制辅助：根据 ComponentPresetGroup 渲染 MenuItem / BeginMenu =====
+    // on_pick_components: 当用户选中某个叶子时，把对应组件列表传给它
+    public func draw_component_preset_group(
+        group: ComponentPresetGroup,
+        on_pick_components: (array<string>)=>void,
+        on_remove_all: ()=>void)
+    {
+        if (group.separator_before)
+            Separator();
+
+        match (group.submenu_label)
+        {
+            value(label)?
+            {
+                if (BeginMenu(label))
+                {
+                    for (let leaf : group.leaves)
+                    {
+                        if (MenuItem(leaf.label))
+                            on_pick_components(leaf.components);
+                    }
+                    EndMenu();
+                }
+            }
+            none?
+            {
+                // 顶层叶子；约定：leaves[0] 是叶子项。
+                // 特殊约定：若 components 为空，调用 on_remove_all（用于"移除全部组件"）
+                for (let leaf : group.leaves)
+                {
+                    if (MenuItem(leaf.label))
+                    {
+                        if (leaf.components->empty)
+                            on_remove_all();
+                        else
+                            on_pick_components(leaf.components);
+                    }
+                }
+            }
+        }
+    }
+
+    // ===== 列表移动辅助：在多个 typeinfo 列表之间移动一个类型 =====
+    // target  : 目标列表（如果 type 不在其中则加入）
+    // others  : 需要从中移除 type 的其他列表
+    // 找不到对应类型时调用 je::logfatal 输出 not_found_log + type_name
+    public func move_type_between_lists(
+        type_name: string,
+        target: vec<je::typeinfo>,
+        others: array<vec<je::typeinfo>>,
+        not_found_log: string)
+    {
+        match (je::typeinfo::load(type_name))
+        {
+            value(type)?
+            {
+                if (target->find(type)->is_none)
+                {
+                    target->add(type);
+                    for (let other : others)
+                        do other->find(type)->> \idx = other->remove(idx);;
+                }
+            }
+            none?
+                je::logfatal(not_found_log, type_name);
+        }
+    }
+}

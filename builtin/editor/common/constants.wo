@@ -1,0 +1,115 @@
+// editor.common.constants
+// 编辑器全局共享常量：文件扩展名、引擎路径、目录名等。
+// 目的是消除散落在各文件中的字面量重复，集中管理命名约定。
+
+namespace editor::common::constants
+{
+    // ===== JoyEngine 项目相关扩展名 =====
+    public let EXT_PROJECT          = ".je4project";
+    public let EXT_PROJECT_LOCK     = ".je4lock";
+    public let EXT_WORLD           = ".je4world";
+    public let EXT_ENTITY          = ".je4entity";
+    public let EXT_ANIMATION       = ".je4animation";
+    public let EXT_PARTICAL        = ".je4partical";
+    public let EXT_TILEMAP         = ".je4tilemap";
+    public let EXT_TILESET         = ".je4tileset";
+    public let EXT_WORKFLOW_SET    = ".je4workflows";
+    public let EXT_WORKFLOW        = ".je4workflow";
+    public let EXT_MODULE          = ".je4module";
+    public let EXT_CACHE           = ".je4cache";
+    public let EXT_STYLE           = ".je4style";
+    public let EXT_CHUNK           = ".je4chunk";
+    public let EXT_CHUNKLIST       = ".je4chunklist";
+
+    // ===== 编辑器/ToWoo Woolang 脚本扩展名 =====
+    public let EXT_SHADER          = ".shader";
+    public let EXT_WOOLANG         = ".wo";
+    public let EXT_EDITOR_TOOL     = ".je.wo";
+    public let EXT_TOWOO_COMPONENT = ".jecomponent.wo";
+    public let EXT_TOWOO_SYSTEM    = ".jesystem.wo";
+    public let EXT_PHYSICS2D_CFG   = ".jephysics2d.wo";
+
+    // ===== 资源文件扩展名（图片/字体/音频） =====
+    public let EXT_PNG             = ".png";
+    public let EXT_JPG             = ".jpg";
+    public let EXT_BMP             = ".bmp";
+    public let EXT_PSD             = ".psd";
+    public let EXT_TTF             = ".ttf";
+    public let EXT_WAV             = ".wav";
+
+    public let IMAGE_FILE_EXT_NAMES = [EXT_PNG, EXT_JPG, EXT_BMP, EXT_PSD];
+
+    // ===== 引擎内置资源路径前缀 =====
+    // "!" 前缀指向引擎安装目录，"@" 前缀指向当前运行时项目目录
+    public let ENGINE_BUILTIN_ROOT = "!/builtin";
+    public let PROJECT_RESOURCE_ROOT = "@/resource";
+    public let SHADER_DIR          = "@/resource/shader";
+    public let FONT_DIR            = "@/resource/font";
+    public let TEXTURE_DIR         = "@/resource/texture";
+
+    // ===== 编辑器内置图标（!/builtin/icon/*.png） =====
+    public let ICON_PATH_CREATE         = F"{ENGINE_BUILTIN_ROOT}/icon/Create.png";
+    public let ICON_PATH_LOAD           = F"{ENGINE_BUILTIN_ROOT}/icon/Load.png";
+    public let ICON_PATH_EXIT           = F"{ENGINE_BUILTIN_ROOT}/icon/Exit.png";
+    public let ICON_PATH_CINO_LOGO      = F"{ENGINE_BUILTIN_ROOT}/icon/cinoicon_light.png";
+    public let ICON_PATH_TEXTURE_FILE   = F"{ENGINE_BUILTIN_ROOT}/icon/TextureFile.png";
+    public let ICON_PATH_FONT           = F"{ENGINE_BUILTIN_ROOT}/icon/Font.png";
+    public let ICON_PATH_MUSIC          = F"{ENGINE_BUILTIN_ROOT}/icon/Music.png";
+    public let ICON_PATH_PLUGIN         = F"{ENGINE_BUILTIN_ROOT}/icon/Plugins.png";
+    public let ICON_PATH_SHADER_FILE    = F"{ENGINE_BUILTIN_ROOT}/icon/ShaderFile.png";
+    public let ICON_PATH_CPP_PROGRAM    = F"{ENGINE_BUILTIN_ROOT}/icon/CppProgram.png";
+    public let ICON_PATH_WORKFLOW       = F"{ENGINE_BUILTIN_ROOT}/icon/Workflow.png";
+    public let ICON_PATH_WORLD          = F"{ENGINE_BUILTIN_ROOT}/icon/World.png";
+    public let ICON_PATH_ENTITY         = F"{ENGINE_BUILTIN_ROOT}/icon/Entity.png";
+    public let ICON_PATH_ANIMATION      = F"{ENGINE_BUILTIN_ROOT}/icon/AnimationFile.png";
+    public let ICON_PATH_TILEMAP        = F"{ENGINE_BUILTIN_ROOT}/icon/Tilemap.png";
+    public let ICON_PATH_PARTICAL       = F"{ENGINE_BUILTIN_ROOT}/icon/Partical.png";
+    public let ICON_PATH_JOY            = F"{ENGINE_BUILTIN_ROOT}/icon/Joy.png";
+    public let ICON_PATH_FILE_PATH      = F"{ENGINE_BUILTIN_ROOT}/icon/FilePath.png";
+    public let ICON_PATH_FILE           = F"{ENGINE_BUILTIN_ROOT}/icon/File.png";
+    public let ICON_PATH_COMPONENT      = F"{ENGINE_BUILTIN_ROOT}/icon/Component.png";
+    public let ICON_PATH_SYSTEM         = F"{ENGINE_BUILTIN_ROOT}/icon/System.png";
+
+    // ===== 编辑器内部目录名 =====
+    public let DIR_TEMPORARY        = ".temporary";
+    public let DIR_EDITOR_TEMP      = ".temporary/jeeditor";
+    public let DIR_VFILE_EXPORT     = ".temporary/jeeditor/virtual";
+    public let DIR_VSCODE           = ".vscode";
+
+    // ===== 内置默认着色器相对路径（用于实体/摄像机默认材质等） =====
+    public let SHADER_UNLIT                 = "@/resource/shader/Unlit.shader";
+    public let SHADER_UNLIT_BLEND           = "@/resource/shader/UnlitBlend.shader";
+    public let SHADER_MONO                  = "@/resource/shader/Mono.shader";
+    public let SHADER_FORWARD2D             = "@/resource/shader/Forward2D.shader";
+    public let SHADER_FORWARD2D_MONO        = "@/resource/shader/Forward2DMono.shader";
+    public let SHADER_FORWARD2D_NORMAL      = "@/resource/shader/Forward2DNormal.shader";
+    public let SHADER_FORWARD2D_SELF_GLOW   = "@/resource/shader/Forward2DSelfGlowing.shader";
+    public let SHADER_LIGHT2D_POINT         = "@/resource/shader/Light2DPoint.shader";
+    public let SHADER_LIGHT2D_RANGE         = "@/resource/shader/Light2DRange.shader";
+    public let SHADER_LIGHT2D_PARALLEL      = "@/resource/shader/Light2DParallel.shader";
+    public let SHADER_CAMERA_DEFER2D_PASS   = "@/resource/shader/CameraDefer2DPass.shader";
+
+    // ===== 拖拽 payload 类型常量 =====
+    public let DND_PAYLOAD_COMPONENT_TYPE   = "JEDITOR_COMPONENT_TYPE";
+    public let DND_PAYLOAD_SYSTEM_TYPE      = "JEDITOR_SYSTEM_TYPE";
+    public let DND_PAYLOAD_ENTITY_INSTANCE  = "JEDITOR_ENTITY_INSTANCE";
+
+    // ===== 默认字体（与项目一同创建） =====
+    public let DEFAULT_FONT_PATH_CN         = "@/resource/font/HarmonyOS_Sans_SC_Regular.ttf";
+    public let DEFAULT_FONT_PATH_LATIN      = "@/resource/font/JetBrainsMono_Regular.ttf";
+    public let DEFAULT_FONT_SIZE            = 18;
+
+    // ===== 默认字体（编辑器启动信息） =====
+    public let BOOT_FONT_PATH               = "!/builtin/font/cino_ipix_12px.ttf";
+
+    // ===== 编辑器数据文件名 =====
+    public let EDITOR_DATA_FILE             = "editor.dat.je4cache";
+    public let EDITOR_STYLE_FILE            = "editor.je4style";
+    public let WORLD_LIST_FILE              = "world.list";
+    public let DEBUG_DUMP_FILE              = "debugcontext.dump";
+    public let WORLD_DEBUG_CAMERA_FILE      = "world_debug_camera.list";
+
+    // ===== Git 元信息文件 =====
+    public let GITIGNORE_FILE               = ".gitignore";
+    public let GITATTRIBUTES_FILE           = ".gitattributes";
+}
