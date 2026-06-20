@@ -38,7 +38,7 @@ void jegui_update_metal(
         [](void* state)
         { 
             MetalRendCommandStates* metal_states =
-                reinterpret_cast<MetalRendCommandStates*>(state);
+                static_cast<MetalRendCommandStates*>(state);
 
             ImGui_ImplMetal_RenderDrawData(
                 ImGui::GetDrawData(),

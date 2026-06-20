@@ -1690,7 +1690,7 @@ namespace jeecs
         {
             void* buf = malloc(sizeof(jeal_effect_head) + sizeof(T));
 
-            jeal_effect_head* head = reinterpret_cast<jeal_effect_head*>(buf);
+            jeal_effect_head* head = static_cast<jeal_effect_head*>(buf);
             T* effect = JE_EFFECT_DATA(T, buf);
 
             head->m_effect_instance = nullptr;

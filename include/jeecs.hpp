@@ -4840,82 +4840,82 @@ namespace jeecs
             }
             static void destructor(void* _ptr)
             {
-                ((T*)_ptr)->~T();
+                static_cast<T*>(_ptr)->~T();
             }
             static void copier(void* _ptr, const void* _be_copy_ptr)
             {
                 if constexpr (std::is_copy_constructible_v<T>)
-                    new (_ptr) T(*(const T*)_be_copy_ptr);
+                    new (_ptr) T(*static_cast<const T*>(_be_copy_ptr));
                 else
                     debug::logerr("This type: '%s' is not copy-constructible but you try to do it.", typeid(T).name());
             }
             static void mover(void* _ptr, void* _be_moved_ptr)
             {
                 if constexpr (std::is_move_constructible_v<T>)
-                    new (_ptr) T(std::move(*(T*)_be_moved_ptr));
+                    new (_ptr) T(std::move(*static_cast<T*>(_be_moved_ptr)));
                 else
                     debug::logerr("This type: '%s' is not move-constructible but you try to do it.", typeid(T).name());
             }
             static void on_enable(void* _ptr)
             {
                 if constexpr (traits::system::has_OnEnable<T>)
-                    reinterpret_cast<T*>(_ptr)->OnEnable();
+                    static_cast<T*>(_ptr)->OnEnable();
             }
             static void on_disable(void* _ptr)
             {
                 if constexpr (traits::system::has_OnDisable<T>)
-                    reinterpret_cast<T*>(_ptr)->OnDisable();
+                    static_cast<T*>(_ptr)->OnDisable();
             }
             static void pre_update(void* _ptr)
             {
                 if constexpr (traits::system::has_PreUpdate<T>)
-                    reinterpret_cast<T*>(_ptr)->PreUpdate();
+                    static_cast<T*>(_ptr)->PreUpdate();
             }
             static void state_update(void* _ptr)
             {
                 if constexpr (traits::system::has_StateUpdate<T>)
-                    reinterpret_cast<T*>(_ptr)->StateUpdate();
+                    static_cast<T*>(_ptr)->StateUpdate();
             }
             static void update(void* _ptr)
             {
                 if constexpr (traits::system::has_Update<T>)
-                    reinterpret_cast<T*>(_ptr)->Update();
+                    static_cast<T*>(_ptr)->Update();
             }
             static void physics_update(void* _ptr)
             {
                 if constexpr (traits::system::has_PhysicsUpdate<T>)
-                    reinterpret_cast<T*>(_ptr)->PhysicsUpdate();
+                    static_cast<T*>(_ptr)->PhysicsUpdate();
             }
             static void transform_update(void* _ptr)
             {
                 if constexpr (traits::system::has_TransformUpdate<T>)
-                    reinterpret_cast<T*>(_ptr)->TransformUpdate();
+                    static_cast<T*>(_ptr)->TransformUpdate();
             }
             static void late_update(void* _ptr)
             {
                 if constexpr (traits::system::has_LateUpdate<T>)
-                    reinterpret_cast<T*>(_ptr)->LateUpdate();
+                    static_cast<T*>(_ptr)->LateUpdate();
             }
             static void commit_update(void* _ptr)
             {
                 if constexpr (traits::system::has_CommitUpdate<T>)
-                    reinterpret_cast<T*>(_ptr)->CommitUpdate();
+                    static_cast<T*>(_ptr)->CommitUpdate();
             }
             static void graphic_update(void* _ptr)
             {
                 if constexpr (traits::system::has_GraphicUpdate<T>)
-                    reinterpret_cast<T*>(_ptr)->GraphicUpdate();
+                    static_cast<T*>(_ptr)->GraphicUpdate();
             }
 
             static void parse_from_script_type(void* _ptr, woort_value val)
             {
                 if constexpr (traits::has_JEScriptTypeInterface<T>)
-                    reinterpret_cast<T*>(_ptr)->JEParseFromScriptType(val);
+                    static_cast<T*>(_ptr)->JEParseFromScriptType(val);
             }
             static void parse_to_script_type(const void* _ptr, woort_value val)
             {
                 if constexpr (traits::has_JEScriptTypeInterface<T>)
-                    reinterpret_cast<const T*>(_ptr)->JEParseToScriptType(val);
+                    static_cast<const T*>(_ptr)->JEParseToScriptType(val);
             }
         };
     }
@@ -6698,7 +6698,7 @@ namespace jeecs
                     if (component_info.m_component_offset_of_unit != 0)
                     {
                         size_t offset = component_info.m_component_offset_in_chunk + component_info.m_component_offset_of_unit * entity_id;
-                        return reinterpret_cast<void*>(reinterpret_cast<intptr_t>(chunkbuf) + offset);
+                        return static_cast<char*>(chunkbuf) + offset;
                     }
                     else
                         return nullptr;
@@ -6710,7 +6710,7 @@ namespace jeecs
                     typing::entity_id_in_chunk_t entity_id)
                 {
                     constexpr size_t cid = _const_type_index<ComponentT, ArgTs...>::index;
-                    auto* component_ptr = std::launder(reinterpret_cast<typename typing::origin_t<ComponentT> *>(
+                    auto* component_ptr = std::launder(static_cast<typename typing::origin_t<ComponentT> *>(
                         get_component_from_archchunk_ptr(archinfo, chunkbuf, entity_id, cid)));
 
                     if (component_ptr != nullptr)
@@ -9813,7 +9813,7 @@ namespace jeecs
             static void callback(jegl_context* context, void* p)
             {
                 graphic_syncer_host* self =
-                    reinterpret_cast<graphic_syncer_host*>(p);
+                    static_cast<graphic_syncer_host*>(p);
 
                 std::lock_guard g(self->mx);
                 self->graphic_context = context;
@@ -12186,14 +12186,14 @@ namespace jeecs
                     for (size_t i = 0; i + 2 < raw_vertex_data->m_index_count; i += 3)
                     {
                         const float* point_0 =
-                            std::launder(reinterpret_cast<const float*>(
-                                (intptr_t)raw_vertex_data->m_vertexs + raw_vertex_data->m_data_size_per_point * i));
+                            reinterpret_cast<const float*>(
+                                static_cast<const char*>(raw_vertex_data->m_vertexs) + raw_vertex_data->m_data_size_per_point * i);
                         const float* point_1 =
-                            std::launder(reinterpret_cast<const float*>(
-                                (intptr_t)raw_vertex_data->m_vertexs + raw_vertex_data->m_data_size_per_point * (i + 1)));
+                            reinterpret_cast<const float*>(
+                                static_cast<const char*>(raw_vertex_data->m_vertexs) + raw_vertex_data->m_data_size_per_point * (i + 1));
                         const float* point_2 =
-                            std::launder(reinterpret_cast<const float*>(
-                                (intptr_t)raw_vertex_data->m_vertexs + raw_vertex_data->m_data_size_per_point * (i + 2)));
+                            reinterpret_cast<const float*>(
+                                static_cast<const char*>(raw_vertex_data->m_vertexs) + raw_vertex_data->m_data_size_per_point * (i + 2));
 
                         vec3 triangle_point[3] = {
                             {point_0[0], point_0[1], point_0[2]},
@@ -12212,11 +12212,11 @@ namespace jeecs
                 case jegl_vertex::type::TRIANGLESTRIP:
                 {
                     const float* point_0 =
-                        std::launder(reinterpret_cast<const float*>(
-                            (intptr_t)raw_vertex_data->m_vertexs));
+                        reinterpret_cast<const float*>(
+                            static_cast<const char*>(raw_vertex_data->m_vertexs));
                     const float* point_1 =
-                        std::launder(reinterpret_cast<const float*>(
-                            (intptr_t)raw_vertex_data->m_vertexs + raw_vertex_data->m_data_size_per_point));
+                        reinterpret_cast<const float*>(
+                            static_cast<const char*>(raw_vertex_data->m_vertexs) + raw_vertex_data->m_data_size_per_point);
 
                     vec3 triangle_point[3] = {
                         {point_0[0], point_0[1], point_0[2]},
@@ -12226,8 +12226,8 @@ namespace jeecs
 
                     for (size_t i = 2; i < raw_vertex_data->m_index_count; ++i)
                     {
-                        const float* point = std::launder(reinterpret_cast<const float*>(
-                            (intptr_t)raw_vertex_data->m_vertexs + raw_vertex_data->m_data_size_per_point * i));
+                        const float* point = reinterpret_cast<const float*>(
+                            static_cast<const char*>(raw_vertex_data->m_vertexs) + raw_vertex_data->m_data_size_per_point * i);
 
                         triangle_point[i % 3] = { point[0], point[1], point[2] };
 

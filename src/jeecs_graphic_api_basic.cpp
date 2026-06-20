@@ -1351,7 +1351,7 @@ void jegl_close_uniformbuf(jegl_uniform_buffer* ubuffer)
 jegl_texture* jegl_create_texture(size_t width, size_t height, jegl_texture::format format)
 {
     jegl_texture* texture_instance =
-        reinterpret_cast<jegl_texture*>(malloc(sizeof(jegl_texture)));
+        static_cast<jegl_texture*>(malloc(sizeof(jegl_texture)));
 
     assert(texture_instance != nullptr);
 
@@ -1535,7 +1535,7 @@ jegl_texture* jegl_load_texture(jegl_context* context, const char* path)
     if (jeecs_file* texfile = jeecs_file_open(path))
     {
         jegl_texture* texture_instance =
-            reinterpret_cast<jegl_texture*>(malloc(sizeof(jegl_texture)));
+            static_cast<jegl_texture*>(malloc(sizeof(jegl_texture)));
 
         int w, h, cdepth;
 
@@ -1606,7 +1606,7 @@ jegl_vertex* _jegl_create_vertex_impl(
 
     assert(format_count > 0);
 
-    jegl_vertex* vertex = reinterpret_cast<jegl_vertex*>(malloc(sizeof(jegl_vertex)));
+    jegl_vertex* vertex = static_cast<jegl_vertex*>(malloc(sizeof(jegl_vertex)));
 
     vertex->m_type = type;
     vertex->m_data_size_per_point = data_size_per_point;
@@ -1640,15 +1640,15 @@ jegl_vertex* _jegl_create_vertex_impl(
     if (format[0].m_count == 3 && format[0].m_type == jegl_vertex::data_type::FLOAT32)
     {
         // First data group is position(by default).
-        x_min = x_max = reinterpret_cast<const float*>(datas)[0];
-        y_min = y_max = reinterpret_cast<const float*>(datas)[1];
-        z_min = z_max = reinterpret_cast<const float*>(datas)[2];
+        x_min = x_max = static_cast<const float*>(datas)[0];
+        y_min = y_max = static_cast<const float*>(datas)[1];
+        z_min = z_max = static_cast<const float*>(datas)[2];
 
         // First data group is position(by default).
         for (size_t i = 1; i < data_group_count; ++i)
         {
             const float* fdata = reinterpret_cast<const float*>(
-                reinterpret_cast<const char*>(datas) + i * data_size_per_point);
+                static_cast<const char*>(datas) + i * data_size_per_point);
 
             float x = fdata[0];
             float y = fdata[1];
@@ -1955,7 +1955,7 @@ jegl_frame_buffer* jegl_create_framebuf(
     }
 
     jegl_frame_buffer* framebuf =
-        reinterpret_cast<jegl_frame_buffer*>(
+        static_cast<jegl_frame_buffer*>(
             malloc(sizeof(jegl_frame_buffer)));
 
     framebuf->m_attachment_count =
@@ -1964,7 +1964,7 @@ jegl_frame_buffer* jegl_create_framebuf(
     framebuf->m_height = height;
 
     jeecs::basic::resource<jeecs::graphic::texture>* attachments =
-        reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
+        static_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
             malloc(
                 framebuf->m_attachment_count
                 * sizeof(jeecs::basic::resource<jeecs::graphic::texture>)));
@@ -1999,7 +1999,7 @@ jegl_uniform_buffer* jegl_create_uniformbuf(
     size_t length)
 {
     jegl_uniform_buffer* uniformbuf =
-        reinterpret_cast<jegl_uniform_buffer*>(
+        static_cast<jegl_uniform_buffer*>(
             malloc(sizeof(jegl_uniform_buffer)));
 
     uniformbuf->m_buffer = (uint8_t*)malloc(length);

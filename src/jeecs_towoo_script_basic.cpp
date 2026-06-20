@@ -135,8 +135,8 @@ namespace jeecs
                     while (member_tinfo != nullptr)
                     {
                         woort_set_pointer(tmpval,
-                            reinterpret_cast<void*>(
-                                reinterpret_cast<intptr_t>(component)
+                            static_cast<void*>(
+                                static_cast<char*>(component)
                                 + member_tinfo->m_member_offset));
 
                         woort_struct_set(writeval, member_idx + 1, tmpval);
@@ -393,14 +393,14 @@ namespace jeecs
                 auto* member = m_type->m_member_types->m_members;
                 while (member != nullptr)
                 {
-                    auto* this_member = reinterpret_cast<void*>(
-                        reinterpret_cast<intptr_t>(this) + member->m_member_offset);
+                    auto* this_member = static_cast<void*>(
+                        reinterpret_cast<char*>(this) + member->m_member_offset);
                     member->m_member_type->construct(this_member, arg);
 
                     if (member->m_woovalue_init_may_null != nullptr)
                     {
                         auto* val = std::launder(
-                            reinterpret_cast<script::woovalue*>(this_member));
+                            static_cast<script::woovalue*>(this_member));
 
                         woort_Value tmp;
                         const bool entry_tmp_gc_guard = woort_GC_sync_marking_lock();
@@ -427,8 +427,8 @@ namespace jeecs
                 auto* member = m_type->m_member_types->m_members;
                 while (member != nullptr)
                 {
-                    auto* this_member = reinterpret_cast<void*>(
-                        reinterpret_cast<intptr_t>(this) + member->m_member_offset);
+                    auto* this_member = static_cast<void*>(
+                        reinterpret_cast<char*>(this) + member->m_member_offset);
                     member->m_member_type->destruct(this_member);
                     member = member->m_next_member;
                 }
@@ -443,10 +443,10 @@ namespace jeecs
                 auto* member = m_type->m_member_types->m_members;
                 while (member != nullptr)
                 {
-                    auto* this_member = reinterpret_cast<void*>(
-                        reinterpret_cast<intptr_t>(this) + member->m_member_offset);
-                    auto* other_member = reinterpret_cast<void*>(
-                        reinterpret_cast<intptr_t>(&another) + member->m_member_offset);
+                    auto* this_member = static_cast<void*>(
+                        reinterpret_cast<char*>(this) + member->m_member_offset);
+                    auto* other_member = static_cast<const void*>(
+                        reinterpret_cast<const char*>(&another) + member->m_member_offset);
 
                     member->m_member_type->copy(this_member, other_member);
                     member = member->m_next_member;
@@ -462,10 +462,10 @@ namespace jeecs
                 auto* member = m_type->m_member_types->m_members;
                 while (member != nullptr)
                 {
-                    auto* this_member = reinterpret_cast<void*>(
-                        reinterpret_cast<intptr_t>(this) + member->m_member_offset);
-                    auto* other_member = reinterpret_cast<void*>(
-                        reinterpret_cast<intptr_t>(&another) + member->m_member_offset);
+                    auto* this_member = static_cast<void*>(
+                        reinterpret_cast<char*>(this) + member->m_member_offset);
+                    auto* other_member = static_cast<void*>(
+                        reinterpret_cast<char*>(&another) + member->m_member_offset);
 
                     member->m_member_type->move(this_member, other_member);
                     member = member->m_next_member;
@@ -1584,8 +1584,8 @@ WOORT_API woort_api wojeapi_towoo_renderer_shaders_get_shaders(void)
             WOORT_IGNORE,
             [](void* ptr)
             {
-                delete std::launder(reinterpret_cast<
-                    jeecs::basic::resource<jeecs::graphic::shader>*>(ptr));
+                delete static_cast<
+                    jeecs::basic::resource<jeecs::graphic::shader>*>(ptr);
             },
             nullptr);
         woort_vec_push(result_container, elem);

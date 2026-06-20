@@ -65,23 +65,23 @@ struct jegl_rendchain
 
             static void release_shader(void* shader_ptr)
             {
-                jegl_close_shader(reinterpret_cast<jegl_shader*>(shader_ptr));
+                jegl_close_shader(static_cast<jegl_shader*>(shader_ptr));
             }
             static void release_texture(void* texture_ptr)
             {
-                jegl_close_texture(reinterpret_cast<jegl_texture*>(texture_ptr));
+                jegl_close_texture(static_cast<jegl_texture*>(texture_ptr));
             }
             static void release_vertex(void* vertex_ptr)
             {
-                jegl_close_vertex(reinterpret_cast<jegl_vertex*>(vertex_ptr));
+                jegl_close_vertex(static_cast<jegl_vertex*>(vertex_ptr));
             }
             static void release_uniform_buffer(void* uniform_buffer_ptr)
             {
-                jegl_close_uniformbuf(reinterpret_cast<jegl_uniform_buffer*>(uniform_buffer_ptr));
+                jegl_close_uniformbuf(static_cast<jegl_uniform_buffer*>(uniform_buffer_ptr));
             }
             static void release_frame_buffer(void* frame_buffer_ptr)
             {
-                jegl_close_framebuf(reinterpret_cast<jegl_frame_buffer*>(frame_buffer_ptr));
+                jegl_close_framebuf(static_cast<jegl_frame_buffer*>(frame_buffer_ptr));
             }
 
             resource_release_method(const resource_release_method&) = default;

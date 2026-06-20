@@ -719,7 +719,7 @@ void jegl_shader_generator_shutdown()
 
 jegl_shader* _jegl_create_shader_instance_and_init(void)
 {
-    jegl_shader* shader_instance = reinterpret_cast<jegl_shader*>(
+    jegl_shader* shader_instance = static_cast<jegl_shader*>(
         malloc(sizeof(jegl_shader)));
 
     assert(shader_instance != nullptr);

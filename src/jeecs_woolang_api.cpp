@@ -1613,7 +1613,7 @@ WOORT_API woort_api wojeapi_font_open(void)
 WOORT_API woort_api wojeapi_font_load_char(void)
 {
     auto* loaded_font =
-        reinterpret_cast<jeecs::basic::resource<jeecs::graphic::font> *>(
+        static_cast<jeecs::basic::resource<jeecs::graphic::font> *>(
             woort_gcpointer(0));
     assert(loaded_font != nullptr);
 
@@ -2779,7 +2779,7 @@ WOORT_API woort_api wojeapi_audio_buffer_load(void)
             WOORT_IGNORE,
             [](void* p)
             {
-                delete reinterpret_cast<jeecs::basic::resource<jeecs::audio::buffer>*>(p);
+                delete static_cast<jeecs::basic::resource<jeecs::audio::buffer>*>(p);
             },
             nullptr);
     }
@@ -2818,7 +2818,7 @@ WOORT_API woort_api wojeapi_audio_filter_create(void)
         WOORT_IGNORE,
         [](void* p)
         {
-            delete reinterpret_cast<jeecs::basic::resource<jeecs::audio::filter>*>(p);
+            delete static_cast<jeecs::basic::resource<jeecs::audio::filter>*>(p);
         },
         nullptr);
 }
@@ -2826,7 +2826,7 @@ WOORT_API woort_api wojeapi_audio_filter_create(void)
 WOORT_API woort_api wojeapi_audio_filter_info(void)
 {
     jeecs::basic::resource<jeecs::audio::filter>* filter =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::filter> *>(woort_gcpointer(0));
+        static_cast<jeecs::basic::resource<jeecs::audio::filter> *>(woort_gcpointer(0));
 
     woort_set_struct(WOORT_RETURN_SLOT, 4);
 
@@ -2843,7 +2843,7 @@ WOORT_API woort_api wojeapi_audio_filter_info(void)
 WOORT_API woort_api wojeapi_audio_filter_update(void)
 {
     jeecs::basic::resource<jeecs::audio::filter>* filter =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::filter> *>(woort_gcpointer(0));
+        static_cast<jeecs::basic::resource<jeecs::audio::filter> *>(woort_gcpointer(0));
     const woort_value updated_info = 1;
 
     (*filter)->update([&](jeal_filter* flt)
@@ -2864,7 +2864,7 @@ WOORT_API woort_api wojeapi_audio_source_create(void)
         WOORT_IGNORE,
         [](void* p)
         {
-            delete reinterpret_cast<jeecs::basic::resource<jeecs::audio::source>*>(p);
+            delete static_cast<jeecs::basic::resource<jeecs::audio::source>*>(p);
         },
         nullptr);
 }
@@ -2875,7 +2875,7 @@ WOORT_API woort_api wojeapi_audio_source_info(void)
         return woort_ret_panic("Stack overflow.");
 
     jeecs::basic::resource<jeecs::audio::source>* source =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
+        static_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
 
     woort_set_struct(WOORT_RETURN_SLOT, 5);
 
@@ -2904,7 +2904,7 @@ WOORT_API woort_api wojeapi_audio_source_info(void)
 WOORT_API woort_api wojeapi_audio_source_update(void)
 {
     jeecs::basic::resource<jeecs::audio::source>* source =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
+        static_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
     const woort_value updated_info = 1;
 
     (*source)->update(
@@ -2934,7 +2934,7 @@ WOORT_API woort_api wojeapi_audio_source_update(void)
 WOORT_API woort_api wojeapi_audio_source_play(void)
 {
     jeecs::basic::resource<jeecs::audio::source>* source =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
+        static_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
 
     (*source)->play();
 
@@ -2943,7 +2943,7 @@ WOORT_API woort_api wojeapi_audio_source_play(void)
 WOORT_API woort_api wojeapi_audio_source_stop(void)
 {
     jeecs::basic::resource<jeecs::audio::source>* source =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
+        static_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
 
     (*source)->stop();
 
@@ -2952,7 +2952,7 @@ WOORT_API woort_api wojeapi_audio_source_stop(void)
 WOORT_API woort_api wojeapi_audio_source_pause(void)
 {
     jeecs::basic::resource<jeecs::audio::source>* source =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
+        static_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
 
     (*source)->pause();
 
@@ -2961,9 +2961,9 @@ WOORT_API woort_api wojeapi_audio_source_pause(void)
 WOORT_API woort_api wojeapi_audio_source_set_buffer(void)
 {
     jeecs::basic::resource<jeecs::audio::source>* source =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
+        static_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
     jeecs::basic::resource<jeecs::audio::buffer>* buffer =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::buffer> *>(woort_gcpointer(1));
+        static_cast<jeecs::basic::resource<jeecs::audio::buffer> *>(woort_gcpointer(1));
 
     (*source)->set_playing_buffer(*buffer);
 
@@ -2972,7 +2972,7 @@ WOORT_API woort_api wojeapi_audio_source_set_buffer(void)
 WOORT_API woort_api wojeapi_audio_source_set_filter(void)
 {
     jeecs::basic::resource<jeecs::audio::source>* source =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
+        static_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
 
     std::optional<jeecs::basic::resource<jeecs::audio::filter>> filter;
     if (woort_option_get(WOORT_RETURN_SLOT, 1))
@@ -2989,7 +2989,7 @@ WOORT_API woort_api wojeapi_audio_source_set_filter(void)
 WOORT_API woort_api wojeapi_audio_source_bind_effect_slot_and_filter(void)
 {
     jeecs::basic::resource<jeecs::audio::source>* source =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
+        static_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
 
     std::optional<jeecs::basic::resource<jeecs::audio::effect_slot>> effect_slot;
     std::optional<jeecs::basic::resource<jeecs::audio::filter>> filter;
@@ -3234,7 +3234,7 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
     case woolang_je_audio_effect_kind::CHORUS:
     {
         auto* effect =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_chorus)*>(effect_res_ptr);
+            static_cast<wo_je_effect_res_t(jeal_effect_chorus)*>(effect_res_ptr);
 
         auto* info = (*effect)->handle();
 
@@ -3252,7 +3252,7 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
     case woolang_je_audio_effect_kind::DISTORTION:
     {
         auto* effect =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_distortion)*>(effect_res_ptr);
+            static_cast<wo_je_effect_res_t(jeal_effect_distortion)*>(effect_res_ptr);
 
         auto* info = (*effect)->handle();
 
@@ -3269,7 +3269,7 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
     case woolang_je_audio_effect_kind::ECHO:
     {
         auto* effect =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_echo)*>(effect_res_ptr);
+            static_cast<wo_je_effect_res_t(jeal_effect_echo)*>(effect_res_ptr);
 
         auto* info = (*effect)->handle();
 
@@ -3286,7 +3286,7 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
     case woolang_je_audio_effect_kind::FLANGER:
     {
         auto* effect =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_flanger)*>(effect_res_ptr);
+            static_cast<wo_je_effect_res_t(jeal_effect_flanger)*>(effect_res_ptr);
 
         auto* info = (*effect)->handle();
 
@@ -3304,7 +3304,7 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
     case woolang_je_audio_effect_kind::FREQUENCY_SHIFTER:
     {
         auto* effect =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_frequency_shifter)*>(effect_res_ptr);
+            static_cast<wo_je_effect_res_t(jeal_effect_frequency_shifter)*>(effect_res_ptr);
 
         auto* info = (*effect)->handle();
 
@@ -3319,7 +3319,7 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
     case woolang_je_audio_effect_kind::VOCAL_MORPHER:
     {
         auto* effect =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_vocal_morpher)*>(effect_res_ptr);
+            static_cast<wo_je_effect_res_t(jeal_effect_vocal_morpher)*>(effect_res_ptr);
 
         auto* info = (*effect)->handle();
 
@@ -3337,7 +3337,7 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
     case woolang_je_audio_effect_kind::PITCH_SHIFTER:
     {
         auto* effect =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_pitch_shifter)*>(effect_res_ptr);
+            static_cast<wo_je_effect_res_t(jeal_effect_pitch_shifter)*>(effect_res_ptr);
 
         auto* info = (*effect)->handle();
 
@@ -3351,7 +3351,7 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
     case woolang_je_audio_effect_kind::RING_MODULATOR:
     {
         auto* effect =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_ring_modulator)*>(effect_res_ptr);
+            static_cast<wo_je_effect_res_t(jeal_effect_ring_modulator)*>(effect_res_ptr);
 
         auto* info = (*effect)->handle();
 
@@ -3366,7 +3366,7 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
     case woolang_je_audio_effect_kind::AUTOWAH:
     {
         auto* effect =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_autowah)*>(effect_res_ptr);
+            static_cast<wo_je_effect_res_t(jeal_effect_autowah)*>(effect_res_ptr);
 
         auto* info = (*effect)->handle();
 
@@ -3382,7 +3382,7 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
     case woolang_je_audio_effect_kind::COMPRESSOR:
     {
         auto* effect =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_compressor)*>(effect_res_ptr);
+            static_cast<wo_je_effect_res_t(jeal_effect_compressor)*>(effect_res_ptr);
 
         auto* info = (*effect)->handle();
 
@@ -3395,7 +3395,7 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
     case woolang_je_audio_effect_kind::EQUALIZER:
     {
         auto* effect =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_equalizer)*>(effect_res_ptr);
+            static_cast<wo_je_effect_res_t(jeal_effect_equalizer)*>(effect_res_ptr);
 
         auto* info = (*effect)->handle();
 
@@ -3417,7 +3417,7 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
     case woolang_je_audio_effect_kind::EAXREVERB:
     {
         auto* effect =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_eaxreverb)*>(effect_res_ptr);
+            static_cast<wo_je_effect_res_t(jeal_effect_eaxreverb)*>(effect_res_ptr);
 
         auto* info = (*effect)->handle();
 
@@ -3476,7 +3476,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
     case woolang_je_audio_effect_kind::REVERB:
     {
         auto* effect_instance =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_reverb)*>(effect);
+            static_cast<wo_je_effect_res_t(jeal_effect_reverb)*>(effect);
 
         (*effect_instance)->update([&](jeal_effect_reverb* eff)
             {
@@ -3499,7 +3499,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
     case woolang_je_audio_effect_kind::CHORUS:
     {
         auto* effect_instance =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_chorus)*>(effect);
+            static_cast<wo_je_effect_res_t(jeal_effect_chorus)*>(effect);
 
         (*effect_instance)->update([&](jeal_effect_chorus* eff)
             {
@@ -3515,7 +3515,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
     case woolang_je_audio_effect_kind::DISTORTION:
     {
         auto* effect_instance =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_distortion)*>(effect);
+            static_cast<wo_je_effect_res_t(jeal_effect_distortion)*>(effect);
 
         (*effect_instance)->update([&](jeal_effect_distortion* eff)
             {
@@ -3530,7 +3530,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
     case woolang_je_audio_effect_kind::ECHO:
     {
         auto* effect_instance =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_echo)*>(effect);
+            static_cast<wo_je_effect_res_t(jeal_effect_echo)*>(effect);
 
         (*effect_instance)->update([&](jeal_effect_echo* eff)
             {
@@ -3545,7 +3545,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
     case woolang_je_audio_effect_kind::FLANGER:
     {
         auto* effect_instance =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_flanger)*>(effect);
+            static_cast<wo_je_effect_res_t(jeal_effect_flanger)*>(effect);
 
         (*effect_instance)->update([&](jeal_effect_flanger* eff)
             {
@@ -3561,7 +3561,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
     case woolang_je_audio_effect_kind::FREQUENCY_SHIFTER:
     {
         auto* effect_instance =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_frequency_shifter)*>(effect);
+            static_cast<wo_je_effect_res_t(jeal_effect_frequency_shifter)*>(effect);
 
         (*effect_instance)->update([&](jeal_effect_frequency_shifter* eff)
             {
@@ -3574,7 +3574,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
     case woolang_je_audio_effect_kind::VOCAL_MORPHER:
     {
         auto* effect_instance =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_vocal_morpher)*>(effect);
+            static_cast<wo_je_effect_res_t(jeal_effect_vocal_morpher)*>(effect);
 
         (*effect_instance)->update([&](jeal_effect_vocal_morpher* eff)
             {
@@ -3590,7 +3590,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
     case woolang_je_audio_effect_kind::PITCH_SHIFTER:
     {
         auto* effect_instance =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_pitch_shifter)*>(effect);
+            static_cast<wo_je_effect_res_t(jeal_effect_pitch_shifter)*>(effect);
 
         (*effect_instance)->update([&](jeal_effect_pitch_shifter* eff)
             {
@@ -3602,7 +3602,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
     case woolang_je_audio_effect_kind::RING_MODULATOR:
     {
         auto* effect_instance =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_ring_modulator)*>(effect);
+            static_cast<wo_je_effect_res_t(jeal_effect_ring_modulator)*>(effect);
 
         (*effect_instance)->update([&](jeal_effect_ring_modulator* eff)
             {
@@ -3615,7 +3615,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
     case woolang_je_audio_effect_kind::AUTOWAH:
     {
         auto* effect_instance =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_autowah)*>(effect);
+            static_cast<wo_je_effect_res_t(jeal_effect_autowah)*>(effect);
 
         (*effect_instance)->update([&](jeal_effect_autowah* eff)
             {
@@ -3629,7 +3629,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
     case woolang_je_audio_effect_kind::COMPRESSOR:
     {
         auto* effect_instance =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_compressor)*>(effect);
+            static_cast<wo_je_effect_res_t(jeal_effect_compressor)*>(effect);
 
         (*effect_instance)->update([&](jeal_effect_compressor* eff)
             {
@@ -3640,7 +3640,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
     case woolang_je_audio_effect_kind::EQUALIZER:
     {
         auto* effect_instance =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_equalizer)*>(effect);
+            static_cast<wo_je_effect_res_t(jeal_effect_equalizer)*>(effect);
 
         (*effect_instance)->update([&](jeal_effect_equalizer* eff)
             {
@@ -3660,7 +3660,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
     case woolang_je_audio_effect_kind::EAXREVERB:
     {
         auto* effect_instance =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_eaxreverb)*>(effect);
+            static_cast<wo_je_effect_res_t(jeal_effect_eaxreverb)*>(effect);
 
         (*effect_instance)->update([&](jeal_effect_eaxreverb* eff)
             {

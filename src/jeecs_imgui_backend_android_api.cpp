@@ -22,8 +22,8 @@ void jegui_android_handleInputEvent()
 
 void jegui_android_init(void* egl_interface)
 {
-    const auto* egl_ctx = 
-        reinterpret_cast<const jeecs::graphic::egl::egl_context*>(egl_interface);
+    const auto* egl_ctx =
+        static_cast<const jeecs::graphic::egl::egl_context*>(egl_interface);
 
     _je_tg_android_app = egl_ctx->m_app;
     ImGui_ImplAndroid_Init(egl_ctx->m_window);

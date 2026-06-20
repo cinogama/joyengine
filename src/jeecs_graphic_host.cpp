@@ -126,7 +126,7 @@ namespace jeecs
 
         static void _update_frame_universe_job(void* host)
         {
-            auto* graphic_host = std::launder(reinterpret_cast<graphic_uhost*>(host));
+            auto* graphic_host = static_cast<graphic_uhost*>(host);
 
             if (graphic_host->m_graphic_frame_update)
             {
@@ -140,7 +140,7 @@ namespace jeecs
                 //  同时不能有其他绘制相关操作。
                 if (!jegl_update(graphic_host->glthread, SYNC_MODE, [](void* p)
                     {
-                        auto* graphic_host = std::launder(reinterpret_cast<graphic_uhost*>(p));
+                        auto* graphic_host = static_cast<graphic_uhost*>(p);
                         for (auto& branch : graphic_host->m_rendchain_branchs)
                             branch->flip_chain_buffer();
                     },
@@ -270,7 +270,7 @@ namespace jeecs
                 jegl_get_host_graphic_api(),
                 [](jegl_context* glthread, void* ptr, jegl_update_action action)
                 {
-                    std::launder(reinterpret_cast<graphic_uhost*>(ptr))->_frame_rend_impl(action);
+                    static_cast<graphic_uhost*>(ptr)->_frame_rend_impl(action);
                 },
                 this);
 

@@ -1764,14 +1764,14 @@ WOORT_API woort_api je_gui_code_editor_language_definition_create(void)
         WOORT_IGNORE,
         [](void* p)
         {
-            delete std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(p));
+            delete static_cast<TextEditor::LanguageDefinition*>(p);
         },
         nullptr);
 }
 WOORT_API woort_api je_gui_code_editor_language_definition_add_keyword(void)
 {
     TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0)));
+        static_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0));
 
     defs->mKeywords.insert(woort_string(1));
     return woort_ret_void();
@@ -1779,7 +1779,7 @@ WOORT_API woort_api je_gui_code_editor_language_definition_add_keyword(void)
 WOORT_API woort_api je_gui_code_editor_language_definition_add_identifier(void)
 {
     TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0)));
+        static_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0));
 
     TextEditor::Identifier ident;
     ident.mDeclaration = woort_string(2);
@@ -1792,7 +1792,7 @@ WOORT_API woort_api je_gui_code_editor_language_definition_add_identifier(void)
 WOORT_API woort_api je_gui_code_editor_language_definition_add_token_regex(void)
 {
     TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0)));
+        static_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0));
 
     defs->mTokenRegexStrings.push_back(
         std::make_pair(woort_string(1), (TextEditor::PaletteIndex)woort_int(2)));
@@ -1802,7 +1802,7 @@ WOORT_API woort_api je_gui_code_editor_language_definition_add_token_regex(void)
 WOORT_API woort_api je_gui_code_editor_language_definition_set_mlcomment(void)
 {
     TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0)));
+        static_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0));
 
     defs->mCommentStart = woort_string(1);
     defs->mCommentEnd = woort_string(2);
@@ -1812,7 +1812,7 @@ WOORT_API woort_api je_gui_code_editor_language_definition_set_mlcomment(void)
 WOORT_API woort_api je_gui_code_editor_language_definition_set_slcomment(void)
 {
     TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0)));
+        static_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0));
 
     defs->mSingleLineComment = woort_string(1);
 
@@ -1821,7 +1821,7 @@ WOORT_API woort_api je_gui_code_editor_language_definition_set_slcomment(void)
 WOORT_API woort_api je_gui_code_editor_language_definition_set_case_sensitive(void)
 {
     TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0)));
+        static_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0));
 
     defs->mCaseSensitive = woort_bool(1);
 
@@ -1830,7 +1830,7 @@ WOORT_API woort_api je_gui_code_editor_language_definition_set_case_sensitive(vo
 WOORT_API woort_api je_gui_code_editor_language_definition_set_auto_indentation(void)
 {
     TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0)));
+        static_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0));
 
     defs->mAutoIndentation = woort_bool(1);
 
@@ -1839,7 +1839,7 @@ WOORT_API woort_api je_gui_code_editor_language_definition_set_auto_indentation(
 WOORT_API woort_api je_gui_code_editor_language_definition_set_preproc_char(void)
 {
     TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0)));
+        static_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0));
 
     defs->mPreprocChar = (char)(char)woort_int(1);
 
@@ -1848,9 +1848,9 @@ WOORT_API woort_api je_gui_code_editor_language_definition_set_preproc_char(void
 
 WOORT_API woort_api je_gui_code_editor_set_language_definition(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
+    TextEditor* text_editor = static_cast<TextEditor*>(woort_gcpointer(0));
     TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(1)));
+        static_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(1));
 
     text_editor->SetLanguageDefinition(*defs);
 
@@ -1858,23 +1858,23 @@ WOORT_API woort_api je_gui_code_editor_set_language_definition(void)
 }
 WOORT_API woort_api je_gui_code_editor_undoable(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
+    TextEditor* text_editor = static_cast<TextEditor*>(woort_gcpointer(0));
     return woort_ret_bool(text_editor->CanUndo());
 }
 WOORT_API woort_api je_gui_code_editor_redoable(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
+    TextEditor* text_editor = static_cast<TextEditor*>(woort_gcpointer(0));
     return woort_ret_bool(text_editor->CanRedo());
 }
 WOORT_API woort_api je_gui_code_editor_undo(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
+    TextEditor* text_editor = static_cast<TextEditor*>(woort_gcpointer(0));
     text_editor->Undo();
     return woort_ret_void();
 }
 WOORT_API woort_api je_gui_code_editor_redo(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
+    TextEditor* text_editor = static_cast<TextEditor*>(woort_gcpointer(0));
     text_editor->Redo();
     return woort_ret_void();
 }
@@ -1883,7 +1883,7 @@ WOORT_API woort_api je_gui_code_editor_get_cursor_pos(void)
     woort_value s;
     if (!woort_push_reserve(2, &s))
         return woort_ret_panic("Stack overflow.");
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
+    TextEditor* text_editor = static_cast<TextEditor*>(woort_gcpointer(0));
 
     woort_value result = s + 0;
     woort_value elem = s + 1;
@@ -1905,7 +1905,7 @@ WOORT_API woort_api je_gui_code_editor_set_cursor_pos(void)
     woort_value s;
     if (!woort_push_reserve(1, &s))
         return woort_ret_panic("Stack overflow.");
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
+    TextEditor* text_editor = static_cast<TextEditor*>(woort_gcpointer(0));
 
     woort_value elem = s + 0;
 
@@ -1921,34 +1921,34 @@ WOORT_API woort_api je_gui_code_editor_set_cursor_pos(void)
 }
 WOORT_API woort_api je_gui_code_editor_insert_text(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
+    TextEditor* text_editor = static_cast<TextEditor*>(woort_gcpointer(0));
     text_editor->InsertText(woort_string(1));
     return woort_ret_void();
 }
 WOORT_API woort_api je_gui_code_editor_copy(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
+    TextEditor* text_editor = static_cast<TextEditor*>(woort_gcpointer(0));
     text_editor->Copy();
 
     return woort_ret_void();
 }
 WOORT_API woort_api je_gui_code_editor_cut(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
+    TextEditor* text_editor = static_cast<TextEditor*>(woort_gcpointer(0));
     text_editor->Cut();
 
     return woort_ret_void();
 }
 WOORT_API woort_api je_gui_code_editor_paste(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
+    TextEditor* text_editor = static_cast<TextEditor*>(woort_gcpointer(0));
     text_editor->Paste();
 
     return woort_ret_void();
 }
 WOORT_API woort_api je_gui_code_editor_delete(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
+    TextEditor* text_editor = static_cast<TextEditor*>(woort_gcpointer(0));
     text_editor->Delete();
 
     return woort_ret_void();
@@ -1964,21 +1964,21 @@ WOORT_API woort_api je_gui_code_editor_create(void)
         WOORT_IGNORE,
         [](void* p)
         {
-            delete std::launder(reinterpret_cast<TextEditor*>(p));
+            delete static_cast<TextEditor*>(p);
         },
         nullptr);
 }
 
 WOORT_API woort_api je_gui_code_editor_get_text(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
+    TextEditor* text_editor = static_cast<TextEditor*>(woort_gcpointer(0));
 
     return woort_ret_string(text_editor->GetText().c_str());
 }
 
 WOORT_API woort_api je_gui_code_editor_set_text(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
+    TextEditor* text_editor = static_cast<TextEditor*>(woort_gcpointer(0));
 
     text_editor->SetText(woort_string(1));
     return woort_ret_void();
@@ -1986,7 +1986,7 @@ WOORT_API woort_api je_gui_code_editor_set_text(void)
 
 WOORT_API woort_api je_gui_code_editor_show(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
+    TextEditor* text_editor = static_cast<TextEditor*>(woort_gcpointer(0));
     text_editor->Render(woort_string(0));
 
     return woort_ret_void();
@@ -1994,7 +1994,7 @@ WOORT_API woort_api je_gui_code_editor_show(void)
 
 WOORT_API woort_api je_gui_code_editor_show_size(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
+    TextEditor* text_editor = static_cast<TextEditor*>(woort_gcpointer(0));
     text_editor->Render(woort_string(1), val2vec2(2), woort_bool(3));
 
     return woort_ret_void();
@@ -2012,7 +2012,7 @@ WOORT_API woort_api je_gui_node_editor_context_create(void)
         [](void* p)
         {
             ax::NodeEditor::DestroyEditor(
-                reinterpret_cast<ax::NodeEditor::EditorContext*>(p));
+                static_cast<ax::NodeEditor::EditorContext*>(p));
         },
         nullptr);
 }
@@ -2020,7 +2020,7 @@ WOORT_API woort_api je_gui_node_editor_context_create(void)
 WOORT_API woort_api je_gui_node_editor_begin(void)
 {
     ax::NodeEditor::EditorContext* ctx =
-        reinterpret_cast<ax::NodeEditor::EditorContext*>(woort_gcpointer(1));
+        static_cast<ax::NodeEditor::EditorContext*>(woort_gcpointer(1));
 
     ax::NodeEditor::SetCurrentEditor(ctx);
     ax::NodeEditor::Begin(woort_string(0));

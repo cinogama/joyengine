@@ -433,14 +433,14 @@ namespace jeecs::graphic::api::gl3
             [](jegl_context*, jegl_texture* res)
             {
                 jegl_gl3_texture* texture_instance =
-                    reinterpret_cast<jegl_gl3_texture*>(res->m_handle.m_ptr);
+                    static_cast<jegl_gl3_texture*>(res->m_handle.m_ptr);
 
                 return (uint64_t)texture_instance->m_texture_id;
             },
             [](jegl_context* jctx, jegl_shader* res)
             {
                 jegl_gl3_shader* shader_instance =
-                    reinterpret_cast<jegl_gl3_shader*>(res->m_handle.m_ptr);
+                    static_cast<jegl_gl3_shader*>(res->m_handle.m_ptr);
 
                 assert(shader_instance != nullptr);
 
@@ -462,7 +462,7 @@ namespace jeecs::graphic::api::gl3
 
     jegl_update_action gl_pre_update(jegl_context::graphic_impl_context_t ctx)
     {
-        jegl_gl3_context* context = reinterpret_cast<jegl_gl3_context*>(ctx);
+        jegl_gl3_context* context = static_cast<jegl_gl3_context*>(ctx);
 
         switch (context->m_interface->update())
         {
@@ -511,7 +511,7 @@ namespace jeecs::graphic::api::gl3
     }
     void gl_shutdown(jegl_context*, jegl_context::graphic_impl_context_t userdata, bool reboot)
     {
-        jegl_gl3_context* context = reinterpret_cast<jegl_gl3_context*>(userdata);
+        jegl_gl3_context* context = static_cast<jegl_gl3_context*>(userdata);
 
         if (!reboot)
             jeecs::debug::log("Graphic thread (OpenGL3) shutdown!");
@@ -527,7 +527,7 @@ namespace jeecs::graphic::api::gl3
         jegl_shader::uniform_type type,
         const void* val)
     {
-        jegl_gl3_context* context = reinterpret_cast<jegl_gl3_context*>(ctx);
+        jegl_gl3_context* context = static_cast<jegl_gl3_context*>(ctx);
 
         if (location == jeecs::graphic::INVALID_UNIFORM_LOCATION)
             return;
@@ -537,8 +537,8 @@ namespace jeecs::graphic::api::gl3
         if (current_shader == nullptr)
             return;
 
-        auto* target_buffer = reinterpret_cast<void*>(
-            reinterpret_cast<intptr_t>(
+        auto* target_buffer = static_cast<void*>(
+            static_cast<char*>(
                 current_shader->uniform_cpu_buffers) + location);
 
         size_t data_size_byte_length = 0;
@@ -568,8 +568,8 @@ namespace jeecs::graphic::api::gl3
             // 3x3 矩阵在 std140 布局中需要特殊处理，每行按 vec4 对齐
             data_size_byte_length = 48;  // 3 * 16 bytes (std140 对齐)
 
-            float* target_storage = reinterpret_cast<float*>(target_buffer);
-            const float* source_storage = reinterpret_cast<const float*>(val);
+            float* target_storage = static_cast<float*>(target_buffer);
+            const float* source_storage = static_cast<const float*>(val);
 
             // 检查数据是否已经相同，避免不必要的更新
             bool needs_update =
@@ -954,7 +954,7 @@ namespace jeecs::graphic::api::gl3
     void shader_close_resource_blob(
         jegl_context::graphic_impl_context_t ctx, jegl_resource_blob blob)
     {
-        delete reinterpret_cast<jegl3_shader_blob*>(blob);
+        delete static_cast<jegl3_shader_blob*>(blob);
     }
 
     jegl_resource_blob texture_create_resource_blob(
@@ -985,7 +985,7 @@ namespace jeecs::graphic::api::gl3
         resource->m_handle.m_ptr = nullptr;
         if (blob != nullptr)
         {
-            auto* shader_blob = reinterpret_cast<jegl3_shader_blob*>(blob);
+            auto* shader_blob = static_cast<jegl3_shader_blob*>(blob);
 
             auto shader_program = shader_blob->m_shared_blob_data->m_shader_program_instance;
             glUseProgram(shader_program);
@@ -1074,7 +1074,7 @@ namespace jeecs::graphic::api::gl3
         jegl_shader* resource)
     {
         jegl_gl3_shader* shader_instance =
-            reinterpret_cast<jegl_gl3_shader*>(resource->m_handle.m_ptr);
+            static_cast<jegl_gl3_shader*>(resource->m_handle.m_ptr);
 
         if (shader_instance != nullptr)
             delete shader_instance;
@@ -1192,7 +1192,7 @@ namespace jeecs::graphic::api::gl3
         jegl_texture* resource)
     {
         jegl_gl3_texture* texture_instance =
-            reinterpret_cast<jegl_gl3_texture*>(resource->m_handle.m_ptr);
+            static_cast<jegl_gl3_texture*>(resource->m_handle.m_ptr);
 
         // Update texture's pixels, only normal pixel data will be updated.
         // NOTE: 深度纹理和 Cube 纹理不支持更新
@@ -1265,7 +1265,7 @@ namespace jeecs::graphic::api::gl3
         jegl_context::graphic_impl_context_t,
         jegl_texture* resource)
     {
-        delete reinterpret_cast<jegl_gl3_texture*>(resource->m_handle.m_ptr);
+        delete static_cast<jegl_gl3_texture*>(resource->m_handle.m_ptr);
     }
 
     void vertex_init(
@@ -1346,7 +1346,7 @@ namespace jeecs::graphic::api::gl3
         jegl_context::graphic_impl_context_t,
         jegl_vertex* resource)
     {
-        delete reinterpret_cast<jegl3_vertex_data*>(resource->m_handle.m_ptr);
+        delete static_cast<jegl3_vertex_data*>(resource->m_handle.m_ptr);
     }
 
     void ubuffer_init(
@@ -1360,7 +1360,7 @@ namespace jeecs::graphic::api::gl3
         jegl_uniform_buffer* resource)
     {
         jegl_gl3_uniformbuf* ubuf =
-            reinterpret_cast<jegl_gl3_uniformbuf*>(resource->m_handle.m_ptr);
+            static_cast<jegl_gl3_uniformbuf*>(resource->m_handle.m_ptr);
 
         assert(resource->m_update_length != 0);
 
@@ -1376,7 +1376,7 @@ namespace jeecs::graphic::api::gl3
         jegl_context::graphic_impl_context_t,
         jegl_uniform_buffer* resource)
     {
-        delete reinterpret_cast<jegl_gl3_uniformbuf*>(resource->m_handle.m_ptr);
+        delete static_cast<jegl_gl3_uniformbuf*>(resource->m_handle.m_ptr);
     }
 
     void framebuffer_init(
@@ -1420,7 +1420,7 @@ namespace jeecs::graphic::api::gl3
                 GL_FRAMEBUFFER,
                 using_attachment,
                 buffer_texture_type,
-                reinterpret_cast<jegl_gl3_texture*>(frame_texture->m_handle.m_ptr)->m_texture_id,
+                static_cast<jegl_gl3_texture*>(frame_texture->m_handle.m_ptr)->m_texture_id,
                 0);
         }
         std::vector<GLuint> glattachments;
@@ -1456,7 +1456,7 @@ namespace jeecs::graphic::api::gl3
         jegl_context::graphic_impl_context_t,
         jegl_frame_buffer* resource)
     {
-        delete reinterpret_cast<jegl_gl3_framebuf*>(resource->m_handle.m_ptr);
+        delete static_cast<jegl_gl3_framebuf*>(resource->m_handle.m_ptr);
     }
 
     void _gl_update_depth_test_method(jegl_gl3_context* ctx, GLenum mode)
@@ -1528,7 +1528,7 @@ namespace jeecs::graphic::api::gl3
     bool _gl_using_shader_program(jegl_gl3_context* context, jegl_shader* resource)
     {
         jegl_gl3_shader* shader_instance =
-            reinterpret_cast<jegl_gl3_shader*>(resource->m_handle.m_ptr);
+            static_cast<jegl_gl3_shader*>(resource->m_handle.m_ptr);
 
         if (context->current_active_shader_may_null == shader_instance)
             return shader_instance != nullptr;
@@ -1555,14 +1555,14 @@ namespace jeecs::graphic::api::gl3
 
     bool gl_bind_shader(jegl_context::graphic_impl_context_t context, jegl_shader* shader)
     {
-        jegl_gl3_context* ctx = reinterpret_cast<jegl_gl3_context*>(context);
+        jegl_gl3_context* ctx = static_cast<jegl_gl3_context*>(context);
         return _gl_using_shader_program(ctx, shader);
     }
 
     void gl_bind_uniform_buffer(jegl_context::graphic_impl_context_t, jegl_uniform_buffer* uniformbuf)
     {
         jegl_gl3_uniformbuf* ubuf =
-            reinterpret_cast<jegl_gl3_uniformbuf*>(uniformbuf->m_handle.m_ptr);
+            static_cast<jegl_gl3_uniformbuf*>(uniformbuf->m_handle.m_ptr);
 
         glBindBufferRange(
             GL_UNIFORM_BUFFER,
@@ -1574,9 +1574,9 @@ namespace jeecs::graphic::api::gl3
 
     void gl_bind_texture(jegl_context::graphic_impl_context_t ctx, jegl_texture* texture, size_t pass)
     {
-        jegl_gl3_context* context = reinterpret_cast<jegl_gl3_context*>(ctx);
+        jegl_gl3_context* context = static_cast<jegl_gl3_context*>(ctx);
         jegl_gl3_texture* texture_instance =
-            reinterpret_cast<jegl_gl3_texture*>(texture->m_handle.m_ptr);
+            static_cast<jegl_gl3_texture*>(texture->m_handle.m_ptr);
 
         context->bind_texture_pass_impl(
             (GLint)pass,
@@ -1588,8 +1588,8 @@ namespace jeecs::graphic::api::gl3
 
     void gl_draw_vertex_with_shader(jegl_context::graphic_impl_context_t ctx, jegl_vertex* vert)
     {
-        jegl_gl3_context* context = reinterpret_cast<jegl_gl3_context*>(ctx);
-        jegl3_vertex_data* vdata = reinterpret_cast<jegl3_vertex_data*>(vert->m_handle.m_ptr);
+        jegl_gl3_context* context = static_cast<jegl_gl3_context*>(ctx);
+        jegl3_vertex_data* vdata = static_cast<jegl3_vertex_data*>(vert->m_handle.m_ptr);
 
         auto* current_shader = context->current_active_shader_may_null;
         assert(current_shader != nullptr);
@@ -1611,8 +1611,8 @@ namespace jeecs::graphic::api::gl3
                 glBufferSubData(GL_UNIFORM_BUFFER,
                     current_shader->uniform_buffer_update_offset,
                     current_shader->uniform_buffer_update_size,
-                    reinterpret_cast<void*>(
-                        reinterpret_cast<intptr_t>(current_shader->uniform_cpu_buffers)
+                    static_cast<void*>(
+                        static_cast<char*>(current_shader->uniform_cpu_buffers)
                         + current_shader->uniform_buffer_update_offset));
 
                 current_shader->uniform_buffer_update_size = 0;
@@ -1629,14 +1629,14 @@ namespace jeecs::graphic::api::gl3
         const int32_t(*viewport_xywh)[4],
         const jegl_frame_buffer_clear_operation* clear_operations)
     {
-        jegl_gl3_context* context = reinterpret_cast<jegl_gl3_context*>(ctx);
+        jegl_gl3_context* context = static_cast<jegl_gl3_context*>(ctx);
 
         // Reset current binded shader.
         context->current_active_shader_may_null = nullptr;
 
         jegl_gl3_framebuf* framebuffer_instance = nullptr;
         if (framebuffer != nullptr)
-            framebuffer_instance = reinterpret_cast<jegl_gl3_framebuf*>(
+            framebuffer_instance = static_cast<jegl_gl3_framebuf*>(
                 framebuffer->m_handle.m_ptr);
 
         if (nullptr == framebuffer_instance)

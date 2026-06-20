@@ -159,7 +159,7 @@ namespace jeecs::graphic::metal
             NS::Notification* pNotification) override
         {
             NS::Application* application =
-                reinterpret_cast<NS::Application*>(pNotification->object());
+                static_cast<NS::Application*>(pNotification->object());
 
             application->setMainMenu(createMenuBar());
             application->setActivationPolicy(NS::ActivationPolicy::ActivationPolicyRegular);
@@ -168,7 +168,7 @@ namespace jeecs::graphic::metal
             NS::Notification* pNotification) override
         {
             NS::Application* application =
-                reinterpret_cast<NS::Application*>(pNotification->object());
+                static_cast<NS::Application*>(pNotification->object());
 
             assert(m_engine_graphic_host != nullptr);
 
@@ -178,7 +178,7 @@ namespace jeecs::graphic::metal
 
 
             m_window_view_layout_instance =
-                reinterpret_cast<window_view_layout*>(config.m_userdata);
+                static_cast<window_view_layout*>(config.m_userdata);
 
             m_window_view_layout_instance->m_metal_view->setDelegate(this);
 

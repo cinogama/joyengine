@@ -82,7 +82,7 @@ void jegui_update_vk120(VkCommandBuffer cmdbuf)
         {
             ImGui_ImplVulkan_RenderDrawData(
                 ImGui::GetDrawData(),
-                *reinterpret_cast<VkCommandBuffer *>(p_cmdbuf));
+                *static_cast<VkCommandBuffer *>(p_cmdbuf));
         },
         &cmdbuf);
 }
