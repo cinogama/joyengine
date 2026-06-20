@@ -453,11 +453,18 @@ namespace jeecs::graphic::api::metal
 
                 return (uint64_t)tex->m_texture;
             },
-            [](jegl_context* ctx, jegl_shader* res)
+            [](jegl_context* /*ctx*/, jegl_shader* /*res*/)
             {
+                // TODO: Metal + IMGUI 暂不支持运行时切换采样方式。
+                // 原因：imgui_impl_metal.mm 的片元着色器使用了 `constexpr sampler`
+                //（min/mag_filter 硬编码为 linear），constexpr sampler 是编译期常量，
+                // 完全忽略 setFragmentSamplerState 的绑定，因此本回调无效。
+                // 若要支持，需将 imgui 子模块的 metal 着色器改为 [[sampler(0)]] 参数形式，
+                // 并在 ImGui_ImplMetal_SetupRenderState 中绑定默认 linear sampler（参考 dx11 后端）。
+#if 0
                 auto* metal_context =
-                    static_cast<jegl_metal_context*>(ctx->m_graphic_impl_context);
-                auto* shader_instance = static_cast<metal_shader*>(res->m_handle.m_ptr);
+                    reinterpret_cast<jegl_metal_context*>(ctx->m_graphic_impl_context);
+                auto* shader_instance = reinterpret_cast<metal_shader*>(res->m_handle.m_ptr);
                 auto& shader_shared_state = *shader_instance->m_shared_state;
                 for (const auto& sampler_struct : shader_shared_state.m_samplers)
                 {
@@ -465,6 +472,7 @@ namespace jeecs::graphic::api::metal
                         sampler_struct.m_sampler,
                         sampler_struct.m_sampler_id);
                 }
+#endif
             },
             // If glfw enabled.
             glfw_window,
