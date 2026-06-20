@@ -5776,15 +5776,6 @@ namespace jeecs
             {
                 return *m_resource;
             }
-
-            bool operator==(const T* ptr) const
-            {
-                return m_resource == ptr;
-            }
-            bool operator!=(const T* ptr) const
-            {
-                return m_resource != ptr;
-            }
         };
 
         template <typename T>
@@ -9126,7 +9117,6 @@ namespace jeecs
             explicit uniformbuffer(jegl_uniform_buffer* res)
                 : resource_basic(res)
             {
-                assert(resource() != nullptr);
             }
 
         public:

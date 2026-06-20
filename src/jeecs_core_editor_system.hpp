@@ -2059,13 +2059,6 @@ WOORT_API woort_api wojeapi_reload_texture_of_entity(void)
     {
         for (auto& texture_res : textures->textures)
         {
-            if (texture_res.m_texture == nullptr
-                || texture_res.m_texture->resource() == nullptr)
-            {
-                jeecs::debug::logerr("wojeapi_reload_texture_of_entity: encountered a null texture slot, skipping.");
-                continue;
-            }
-
             const char* existed_texture_path =
                 texture_res.m_texture->resource()->m_handle.m_path_may_null_if_builtin;
 
@@ -2106,30 +2099,24 @@ WOORT_API woort_api wojeapi_reload_shader_of_entity(void)
                 return bad_shader;
             };
         auto copy_shader_generator =
-            [gcontext](jeecs::basic::resource<jeecs::graphic::shader>* newshader, auto oldshader)
+            [gcontext](jeecs::basic::resource<jeecs::graphic::shader>& newshader, auto oldshader)
             {
-                // Defensive check: in practice this never fails because callers
-                // only invoke us with a valid loaded shader. basic::resource has
-                // no null state, so we can't fabricate a return value here -
-                // log + abort makes the failure visible instead of silently UB.
-                if (newshader == nullptr
-                    || *newshader == nullptr
-                    || (*newshader)->resource()->m_handle.m_path_may_null_if_builtin == nullptr)
+                if (newshader->resource()->m_handle.m_path_may_null_if_builtin == nullptr)
                 {
                     jeecs::debug::logfatal("copy_shader_generator: invalid newshader; aborting.");
                     std::abort();
                 }
 
-                jeecs::basic::resource<jeecs::graphic::shader> new_shader_instance = *newshader;
+                jeecs::basic::resource<jeecs::graphic::shader> new_shader_instance = newshader;
 
                 // Re-load the shader from disk. On failure, log and leave
-                // *newshader unchanged (its previous value is still valid).
+                // newshader unchanged (its previous value is still valid).
                 auto reloaded = jeecs::detail::load_editor_resource_or_log(
                     jeecs::graphic::shader::load(
                         gcontext, new_shader_instance->resource()->m_handle.m_path_may_null_if_builtin),
                     "reloaded shader instance");
                 if (reloaded.has_value())
-                    *newshader = reloaded.value();
+                    newshader = reloaded.value();
 
                 const char builtin_uniform_varname[] = "JE_";
 
@@ -2164,11 +2151,6 @@ WOORT_API woort_api wojeapi_reload_shader_of_entity(void)
             {
                 for (auto& shader : shaders->shaders)
                 {
-                    if (shader == nullptr)
-                    {
-                        jeecs::debug::logerr("wojeapi_reload_shader_of_entity: null shader entry encountered.");
-                        continue;
-                    }
                     if (shader->resource()->m_handle.m_path_may_null_if_builtin != nullptr
                         && old_shader_path == shader->resource()->m_handle.m_path_may_null_if_builtin)
                     {
@@ -2212,14 +2194,9 @@ WOORT_API woort_api wojeapi_reload_shader_of_entity(void)
                     {
                         for (auto& shader : shaders->shaders)
                         {
-                            if (shader == nullptr)
-                            {
-                                jeecs::debug::logerr("wojeapi_reload_shader_of_entity: null shader entry encountered during replace.");
-                                continue;
-                            }
                             if (shader->resource()->m_handle.m_path_may_null_if_builtin != nullptr
                                 && old_shader_path == shader->resource()->m_handle.m_path_may_null_if_builtin)
-                                shader = copy_shader_generator(&new_shader.value(), shader);
+                                shader = copy_shader_generator(new_shader.value(), shader);
                         }
                     }
                     else
@@ -2231,10 +2208,10 @@ WOORT_API woort_api wojeapi_reload_shader_of_entity(void)
                                 auto& ok_shader = ok_or_bad_shader.get_ok();
                                 if (ok_shader->resource()->m_handle.m_path_may_null_if_builtin != nullptr
                                     && old_shader_path == ok_shader->resource()->m_handle.m_path_may_null_if_builtin)
-                                    ok_or_bad_shader = copy_shader_generator(&new_shader.value(), ok_shader);
+                                    ok_or_bad_shader = copy_shader_generator(new_shader.value(), ok_shader);
                             }
                             else if (ok_or_bad_shader.get_bad().m_path == old_shader_path)
-                                ok_or_bad_shader = copy_shader_generator(&new_shader.value(), ok_or_bad_shader.get_bad());
+                                ok_or_bad_shader = copy_shader_generator(new_shader.value(), ok_or_bad_shader.get_bad());
                         }
 
                         // Ok, check for update!
@@ -2258,12 +2235,6 @@ WOORT_API woort_api wojeapi_reload_shader_of_entity(void)
 
                         for (auto& shader : shaders->shaders)
                         {
-                            if (shader == nullptr)
-                            {
-                                jeecs::debug::logerr("wojeapi_reload_shader_of_entity: null shader entry during move-to-bad.");
-                                continue;
-                            }
-
                             // 1.1.1.1 If shader is old one, move the data to BadShadersUniform, or move shader directly
                             if (shader->resource()->m_handle.m_path_may_null_if_builtin != nullptr
                                 && old_shader_path == shader->resource()->m_handle.m_path_may_null_if_builtin)

@@ -231,8 +231,6 @@ public let frag =
                         perspec->angle, projection.znear, projection.zfar);
                 }
 
-                assert(projection.default_uniform_buffer != nullptr);
-
                 projection.default_uniform_buffer->update_buffer(
                     offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_v_float4x4),
                     sizeof(projection.view),
@@ -306,15 +304,10 @@ public let frag =
             const auto* light_shape =
                 mesh.has_value() ? mesh->get() : m_default_resources.default_shape_quad.get();
 
-            assert(light_shape->resource() != nullptr);
-
             const auto* const raw_vertex_data = light_shape->resource();
-            if (raw_vertex_data != nullptr)
-            {
-                size.x *= 2.0f * std::max(abs(raw_vertex_data->m_x_max), abs(raw_vertex_data->m_x_min));
-                size.y *= 2.0f * std::max(abs(raw_vertex_data->m_y_max), abs(raw_vertex_data->m_y_min));
-                size.z *= 2.0f * std::max(abs(raw_vertex_data->m_z_max), abs(raw_vertex_data->m_z_min));
-            }
+            size.x *= 2.0f * std::max(abs(raw_vertex_data->m_x_max), abs(raw_vertex_data->m_x_min));
+            size.y *= 2.0f * std::max(abs(raw_vertex_data->m_y_max), abs(raw_vertex_data->m_y_min));
+            size.z *= 2.0f * std::max(abs(raw_vertex_data->m_z_max), abs(raw_vertex_data->m_z_min));
 
             return size;
         }
@@ -329,7 +322,6 @@ public let frag =
             const float (&vp)[4][4],
             const math::vec4& shader_time)
         {
-            assert(projection.default_uniform_buffer != nullptr);
             auto* ub = projection.default_uniform_buffer.get();
             ub->update_buffer(
                 offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_v_float4x4),
