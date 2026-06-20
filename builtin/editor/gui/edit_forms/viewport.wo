@@ -401,7 +401,11 @@ namespace editor::gui::edit_forms
                                         else
                                         {
                                             windows_moveable = true;
-                                            mouse_valid_to_editor = false;
+                                            // 按住按键期间（按住右键旋转摄像机/按住左键拖拽 mover），
+                                            // 鼠标会被锁定或滑出渲染区域，不应中断进行中的编辑操作；
+                                            // 只有按键全部释放后才解除编辑有效状态。
+                                            if (left_and_right_mouse_button_released)
+                                                mouse_valid_to_editor = false;
                                         }
                                         
                                         // 如果允许编辑，那么启用编辑器
