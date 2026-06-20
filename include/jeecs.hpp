@@ -36,6 +36,7 @@
 #include <unordered_map>
 #include <algorithm>
 #include <functional>
+#include <ranges>
 #include <type_traits>
 #include <cstddef>
 #include <cmath>
@@ -9373,239 +9374,244 @@ namespace jeecs
                 return m_font;
             }
         private:
-            struct parallel_pixel_index_iter
-            {
-                size_t id;
-                parallel_pixel_index_iter operator++()
-                {
-                    return { ++id };
-                }
-                parallel_pixel_index_iter operator++(int)
-                {
-                    return { id++ };
-                }
-                bool operator==(const parallel_pixel_index_iter& pindex) const
-                {
-                    return id == pindex.id;
-                }
-                bool operator!=(const parallel_pixel_index_iter& pindex) const
-                {
-                    return id != pindex.id;
-                }
-                size_t& operator*()
-                {
-                    return id;
-                }
-                ptrdiff_t operator-(const parallel_pixel_index_iter& another) const
-                {
-                    return ptrdiff_t(id - another.id);
-                }
-
-                typedef std::forward_iterator_tag iterator_category;
-                typedef size_t value_type;
-                typedef ptrdiff_t difference_type;
-                typedef const size_t* pointer;
-                typedef const size_t& reference;
-            };
-
             inline static basic::resource<texture> text_texture_impl(
                 font& font_base,
                 const std::u32string& text) noexcept
             {
                 const auto* base_font_resource = font_base.resource();
-                const auto walk_through_all_character =
-                    [&text](
-                        const std::function<void(std::u32string_view, std::u32string_view)>& callback_attr,
-                        const std::function<void(char32_t)>& callback_char)
-                    {
-                        bool in_escape = false;
 
-                        const auto text_end = text.cend();
-                        for (auto iter = text.cbegin(); iter != text_end; ++iter)
-                        {
-                            const char32_t ch = *iter;
+                // u32 -> utf8 conversion helper.
+                const auto u32_to_utf8 = [](std::u32string_view sv) -> std::string
+                {
+                    const size_t sz = woort_u32strn_to_str(sv.data(), sv.size(), nullptr, 0);
+                    std::string out;
+                    out.resize(sz);
+                    (void)woort_u32strn_to_str(sv.data(), sv.size(), out.data(), sz);
+                    return out;
+                };
 
-                            if (!in_escape)
-                            {
-                                if (ch == U'\\')
-                                {
-                                    in_escape = false;
-                                    continue;
-                                }
-                                else if (ch == U'{')
-                                {
-                                    bool in_field_name = true;
-                                    std::u32string field;
-                                    std::u32string value;
-
-                                    for (++iter; iter != text_end; ++iter)
-                                    {
-                                        const char32_t ch_in_scope = *iter;
-
-                                        if (ch_in_scope == U':')
-                                            in_field_name = false;
-                                        else if (ch_in_scope != U'}')
-                                        {
-                                            if (in_field_name)
-                                                field += ch_in_scope;
-                                            else
-                                                value += ch_in_scope;
-                                        }
-                                        else // if (ch_in_scope == U'}')
-                                        {
-                                            callback_attr(field, value);
-                                            break;
-                                        }
-                                    }
-                                    continue;
-                                }
-                                // Normal character.
-                            }
-                            // Normal character, mark as not in escape.
-                            in_escape = false;
-                            callback_char(ch);
-                        }
+                // Parse hex color ("RRGGBBAA"; shorter input zero-pads, matching
+                // the legacy strncpy-into-"00000000" behavior) into normalized RGBA.
+                // Bytes are unpacked in the same order the old code used.
+                const auto parse_hex_color = [&](std::u32string_view hex) -> math::vec4
+                {
+                    char buf[9] = "00000000";
+                    const auto u8hex = u32_to_utf8(hex);
+                    std::strncpy(buf, u8hex.c_str(), 8);
+                    const unsigned int packed = std::strtoul(buf, nullptr, 16);
+                    const auto* b = reinterpret_cast<const unsigned char*>(&packed);
+                    return math::vec4{
+                        b[3] / 255.0f, // R
+                        b[2] / 255.0f, // G
+                        b[1] / 255.0f, // B
+                        b[0] / 255.0f  // A
                     };
+                };
 
-                using font_and_size_pair_t = std::pair<std::string, size_t>;
-                std::map<font_and_size_pair_t, basic::resource<font>>
-                    FONT_POOL;
-                float       TEXT_SCALE = 1.0f;
-                math::vec4  TEXT_COLOR = { 1, 1, 1, 1 };
-                math::vec2  TEXT_OFFSET = { 0, 0 };
-                font* TEXT_FONT_CURRENT = &font_base;
+                // Alpha-over compositing of a glyph pixel onto the destination.
+                // A fully-transparent destination reads back as white (1,1,1) for
+                // RGB, preserving the engine's text-rendering look; the alpha
+                // channel uses standard Porter-Duff 'over'.
+                const auto blend_glyph_pixel = [](
+                    const math::vec4& dst,
+                    const math::vec4& src,
+                    const math::vec4& tint) -> math::vec4
+                {
+                    const float src_a = src.w * tint.w;
+                    const float inv_a = 1.0f - src_a;
+                    const float dst_r = dst.w ? dst.x : 1.0f;
+                    const float dst_g = dst.w ? dst.y : 1.0f;
+                    const float dst_b = dst.w ? dst.z : 1.0f;
+                    return math::vec4(
+                        tint.x * src.x * src_a + dst_r * inv_a,
+                        tint.y * src.y * src_a + dst_g * inv_a,
+                        tint.z * src.z * src_a + dst_b * inv_a,
+                        src_a + dst.w * inv_a);
+                };
+
+                // Cached scaled-font pool shared by both passes.
+                using font_key_t = std::pair<std::string, size_t>;
+                std::map<font_key_t, basic::resource<font>> font_pool;
+
+                // Mutable text style, driven by attribute events and read by char
+                // events. Grouped so a single reset() restores the default state.
+                struct
+                {
+                    float      scale  = 1.0f;
+                    math::vec4 color  = math::vec4{ 1, 1, 1, 1 };
+                    math::vec2 offset = math::vec2{ 0, 0 };
+                    font*      current = nullptr;
+                } style;
+                style.current = &font_base;
+
+                const auto reset_style = [&]() noexcept
+                {
+                    style.scale   = 1.0f;
+                    style.color   = math::vec4{ 1, 1, 1, 1 };
+                    style.offset  = math::vec2{ 0, 0 };
+                    style.current = &font_base;
+                };
+
+                // Single source of truth for attribute application — shared by the
+                // measure and raster passes so their state cannot drift apart.
+                const auto apply_attr = [&](std::u32string_view field, std::u32string_view value)
+                {
+                    const auto u8value = u32_to_utf8(value);
+
+                    if (field == U"scale")
+                    {
+                        style.scale = std::stof(u8value);
+                        if (style.scale == 1.0f)
+                        {
+                            style.current = &font_base;
+                            return;
+                        }
+                        const auto key = std::make_pair(
+                            std::string(base_font_resource->m_path),
+                            static_cast<size_t>(std::round(
+                                style.scale * base_font_resource->m_scale_x)));
+
+                        auto found = font_pool.find(key);
+                        if (found == font_pool.end())
+                        {
+                            auto loaded = font::load(
+                                key.first,
+                                key.second,
+                                base_font_resource->m_board_size_x,
+                                base_font_resource->m_updater);
+
+                            if (!loaded.has_value())
+                            {
+                                debug::logerr(
+                                    "Failed to open font: '%s'.",
+                                    base_font_resource->m_path);
+                                style.current = &font_base;
+                                return;
+                            }
+                            found = font_pool.emplace(key, std::move(*loaded)).first;
+                        }
+                        style.current = found->second.get();
+                    }
+                    else if (field == U"color")
+                    {
+                        style.color = parse_hex_color(value);
+                    }
+                    else if (field == U"offset")
+                    {
+                        math::vec2 delta = math::vec2{ 0, 0 };
+                        (void)std::sscanf(u8value.c_str(), "(%f,%f)", &delta.x, &delta.y);
+                        style.offset = style.offset + delta;
+                    }
+                };
+
+                // Markup scanner. Supports {field:value} attribute spans and a
+                // backslash escape: '\' makes the next character literal (so '\{'
+                // emits '{', '\\' emits '\'). A lone trailing '\' is dropped.
+                const auto walk_text = [&text](
+                    const std::function<void(std::u32string_view, std::u32string_view)>& on_attr,
+                    const std::function<void(char32_t)>& on_char)
+                {
+                    const auto end = text.cend();
+                    for (auto it = text.cbegin(); it != end; ++it)
+                    {
+                        const char32_t ch = *it;
+
+                        if (ch == U'\\')
+                        {
+                            if (++it; it != end)
+                                on_char(*it);
+                            continue;
+                        }
+                        if (ch == U'{')
+                        {
+                            bool in_field = true;
+                            std::u32string field;
+                            std::u32string value;
+
+                            for (++it; it != end; ++it)
+                            {
+                                const char32_t c = *it;
+                                if (c == U':')
+                                    in_field = false;
+                                else if (c == U'}')
+                                {
+                                    on_attr(field, value);
+                                    break;
+                                }
+                                else if (in_field)
+                                    field += c;
+                                else
+                                    value += c;
+                            }
+                            continue;
+                        }
+                        on_char(ch);
+                    }
+                };
+
+                // Pixel offset contributed by the current text offset, in text-space
+                // units (note: y uses m_scale_x too, preserved from the original).
+                const auto offset_dx = [&]() noexcept {
+                    return static_cast<int>(style.offset.x * base_font_resource->m_scale_x);
+                };
+                const auto offset_dy = [&]() noexcept {
+                    return static_cast<int>(style.offset.y * base_font_resource->m_scale_x);
+                };
 
                 int next_ch_x = 0;
                 int next_ch_y = 0;
-                int line_count = 0;
 
-                // Calculate the size of the text.
+                // ---------- Pass 1: measure bounding box ----------
                 bool first_char = true;
                 int min_px = 0, min_py = 0, max_px = 0, max_py = 0;
 
-                walk_through_all_character(
-                    [&](std::u32string_view field, std::u32string_view value) {
-                        const size_t sz = woort_u32strn_to_str(
-                            value.data(), value.size(), nullptr, 0);
-
-                        std::string u8value;
-                        u8value.resize(sz);
-                        (void)woort_u32strn_to_str(
-                            value.data(), value.size(), u8value.data(), sz);
-
-                        if (field == U"scale")
+                walk_text(
+                    apply_attr,
+                    [&](char32_t ch)
+                    {
+                        const auto* info = style.current->get_character(ch);
+                        if (info == nullptr)
+                            return;
+                        if (ch == U'\n')
                         {
-                            TEXT_SCALE = std::stof(u8value);
-                            if (TEXT_SCALE == 1.0f)
-                                TEXT_FONT_CURRENT = &font_base;
-                            else
-                            {
-                                const auto font_pair = std::make_pair(
-                                    base_font_resource->m_path,
-                                    static_cast<size_t>(round(TEXT_SCALE * base_font_resource->m_scale_x)));
-
-                                auto font_fnd = FONT_POOL.find(font_pair);
-                                if (font_fnd == FONT_POOL.end())
-                                {
-                                    auto loaded_font = font::load(
-                                        font_pair.first,
-                                        font_pair.second,
-                                        base_font_resource->m_board_size_x,
-                                        base_font_resource->m_updater);
-
-                                    if (!loaded_font.has_value())
-                                        debug::logerr(
-                                            "Failed to open font: '%s'.",
-                                            base_font_resource->m_path);
-                                    else
-                                        TEXT_FONT_CURRENT = FONT_POOL.insert(
-                                            std::make_pair(
-                                                font_pair,
-                                                loaded_font.value())).first->second.get();
-                                }
-                                else
-                                    TEXT_FONT_CURRENT = font_fnd->second.get();
-                            }
+                            next_ch_x = 0;
+                            next_ch_y += info->m_advance_y;
+                            return;
                         }
-                        else if (field == U"offset")
+
+                        const int px_min = next_ch_x + info->m_baseline_offset_x + offset_dx();
+                        const int py_min = next_ch_y + info->m_baseline_offset_y + offset_dy();
+                        const int px_max = px_min + info->m_width;
+                        const int py_max = py_min + info->m_height;
+
+                        if (first_char)
                         {
-                            math::vec2 offset;
-                            ((void)sscanf(u8value.c_str(), "(%f,%f)", &offset.x, &offset.y));
-                            TEXT_OFFSET += offset;
+                            min_px = px_min; min_py = py_min;
+                            max_px = px_max; max_py = py_max;
+                            first_char = false;
                         }
-                    },
-                    [&](char32_t ch) {
-                        if (auto* character_info = TEXT_FONT_CURRENT->get_character(ch))
+                        else
                         {
-                            if (ch == U'\n')
-                            {
-                                next_ch_x = 0;
-                                next_ch_y += character_info->m_advance_y;
-                                line_count++;
-                            }
-                            else
-                            {
-                                const int px_min =
-                                    next_ch_x
-                                    + character_info->m_baseline_offset_x
-                                    + static_cast<int>(
-                                        TEXT_OFFSET.x
-                                        * base_font_resource->m_scale_x);
-                                const int py_min =
-                                    next_ch_y
-                                    + character_info->m_baseline_offset_y
-                                    + static_cast<int>(
-                                        TEXT_OFFSET.y
-                                        * base_font_resource->m_scale_x);
-
-                                const int px_max =
-                                    next_ch_x
-                                    + character_info->m_width
-                                    + character_info->m_baseline_offset_x
-                                    + static_cast<int>(
-                                        TEXT_OFFSET.x
-                                        * base_font_resource->m_scale_x);
-                                const int py_max =
-                                    next_ch_y
-                                    + character_info->m_height
-                                    + character_info->m_baseline_offset_y
-                                    + static_cast<int>(
-                                        TEXT_OFFSET.y
-                                        * base_font_resource->m_scale_x);
-
-                                if (first_char)
-                                {
-                                    min_px = px_min;
-                                    min_py = py_min;
-                                    max_px = px_max;
-                                    max_py = py_max;
-                                    first_char = false;
-                                }
-                                else
-                                {
-                                    min_px = std::min(min_px, px_min);
-                                    min_py = std::min(min_py, py_min);
-                                    max_px = std::max(max_px, px_max);
-                                    max_py = std::max(max_py, py_max);
-                                }
-
-                                next_ch_x += character_info->m_advance_x;
-                            }
+                            min_px = std::min(min_px, px_min);
+                            min_py = std::min(min_py, py_min);
+                            max_px = std::max(max_px, px_max);
+                            max_py = std::max(max_py, py_max);
                         }
+                        next_ch_x += info->m_advance_x;
                     });
+
+                // Empty / attribute-only text: emit a 1x1 transparent texture,
+                // making the historical accidental output explicit.
+                if (first_char)
+                {
+                    min_px = min_py = 0;
+                    max_px = max_py = 0;
+                }
 
                 const int size_x = max_px - min_px + 1;
                 const int size_y = max_py - min_py + 1;
-
                 const int correct_x = -min_px;
                 const int correct_y = -min_py;
-
-                next_ch_x = 0;
-                next_ch_y = 0;
-                line_count = 0;
-                TEXT_SCALE = 1.0f;
-                TEXT_OFFSET = { 0, 0 };
-                TEXT_FONT_CURRENT = &font_base;
 
                 auto new_texture = texture::create(
                     static_cast<size_t>(size_x),
@@ -9615,115 +9621,51 @@ namespace jeecs
                 std::memset(
                     new_texture->resource()->m_pixels,
                     0,
-                    size_x * size_y * 4);
+                    static_cast<size_t>(size_x) * static_cast<size_t>(size_y) * 4);
 
-                walk_through_all_character(
-                    [&](std::u32string_view field, std::u32string_view value) {
-                        const size_t sz = woort_u32strn_to_str(
-                            value.data(), value.size(), nullptr, 0);
+                // ---------- Pass 2: rasterize ----------
+                next_ch_x = 0;
+                next_ch_y = 0;
+                reset_style();
 
-                        std::string u8value;
-                        u8value.resize(sz);
-                        (void)woort_u32strn_to_str(
-                            value.data(), value.size(), u8value.data(), sz);
-
-                        if (field == U"color")
+                walk_text(
+                    apply_attr,
+                    [&](char32_t ch)
+                    {
+                        const auto* info = style.current->get_character(ch);
+                        if (info == nullptr)
+                            return;
+                        if (ch == U'\n')
                         {
-                            char color[9] = "00000000";
-                            strncpy(color, u8value.c_str(), 8);
-
-                            unsigned int colordata = strtoul(color, NULL, 16);
-
-                            unsigned char As = (*(unsigned char*)(&colordata));
-                            unsigned char Bs = (*(((unsigned char*)(&colordata)) + 1));
-                            unsigned char Gs = (*(((unsigned char*)(&colordata)) + 2));
-                            unsigned char Rs = (*(((unsigned char*)(&colordata)) + 3));
-
-                            TEXT_COLOR = { Rs / 255.0f, Gs / 255.0f, Bs / 255.0f, As / 255.0f };
+                            next_ch_x = 0;
+                            next_ch_y += info->m_advance_y;
+                            return;
                         }
-                        else if (field == U"scale")
-                        {
-                            TEXT_SCALE = std::stof(u8value);
 
-                            if (TEXT_SCALE == 1.0f)
-                                TEXT_FONT_CURRENT = &font_base;
-                            else
-                            {
-                                const auto& font_in_pool = FONT_POOL.at(
-                                    std::make_pair(
-                                        base_font_resource->m_path,
-                                        static_cast<size_t>(
-                                            round(TEXT_SCALE * base_font_resource->m_scale_x))));
+                        const auto& glyph = info->m_texture;
+                        const int base_dst_x = correct_x + next_ch_x + info->m_baseline_offset_x + offset_dx();
+                        const int base_dst_y = correct_y + next_ch_y + info->m_baseline_offset_y + offset_dy();
 
-                                TEXT_FONT_CURRENT = font_in_pool.get();
-                            }
-                        }
-                        else if (field == U"offset")
-                        {
-                            math::vec2 offset;
-                            ((void)sscanf(u8value.c_str(), "(%f,%f)", &offset.x, &offset.y));
-                            TEXT_OFFSET = TEXT_OFFSET + offset;
-                        }
-                    },
-                    [&](char32_t ch) {
-                        if (auto* character_info = TEXT_FONT_CURRENT->get_character(ch))
-                        {
-                            if (ch == U'\n')
+                        auto rows = std::views::iota(size_t{ 0 }, glyph->height());
+                        ::jeecs::parallel_foreach(
+                            rows.begin(), rows.end(),
+                            [&](size_t fy)
                             {
-                                next_ch_x = 0;
-                                next_ch_y += character_info->m_advance_y;
-                                line_count++;
-                            }
-                            else
-                            {
+                                auto cols = std::views::iota(size_t{ 0 }, glyph->width());
                                 ::jeecs::parallel_foreach(
-                                    parallel_pixel_index_iter{ 0 },
-                                    parallel_pixel_index_iter{ size_t(character_info->m_texture->height()) },
-                                    [&](size_t fy)
+                                    cols.begin(), cols.end(),
+                                    [&](size_t fx)
                                     {
-                                        ::jeecs::parallel_foreach(
-                                            parallel_pixel_index_iter{ 0 },
-                                            parallel_pixel_index_iter{
-                                                size_t(character_info->m_texture->width())
-                                            },
-                                            [&](size_t fx)
-                                            {
-                                                const auto x =
-                                                    correct_x
-                                                    + next_ch_x
-                                                    + static_cast<int>(fx)
-                                                    + character_info->m_baseline_offset_x
-                                                    + static_cast<int>(
-                                                        TEXT_OFFSET.x
-                                                        * base_font_resource->m_scale_x);
+                                        const size_t x = static_cast<size_t>(base_dst_x + static_cast<int>(fx));
+                                        const size_t y = static_cast<size_t>(base_dst_y + static_cast<int>(fy));
 
-                                                const auto y =
-                                                    correct_y
-                                                    + next_ch_y
-                                                    + static_cast<int>(fy)
-                                                    + character_info->m_baseline_offset_y
-                                                    + static_cast<int>(
-                                                        TEXT_OFFSET.y
-                                                        * base_font_resource->m_scale_x);
-
-                                                auto pdst = new_texture->pix(
-                                                    static_cast<size_t>(x), static_cast<size_t>(y));
-                                                const auto psrc = character_info->m_texture->pix(
-                                                    static_cast<size_t>(fx), static_cast<size_t>(fy)).get();
-
-                                                float src_alpha = psrc.w * TEXT_COLOR.w;
-
-                                                pdst.set(
-                                                    math::vec4(
-                                                        src_alpha * psrc.x * TEXT_COLOR.x + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().x : 1.0f),
-                                                        src_alpha * psrc.y * TEXT_COLOR.y + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().y : 1.0f),
-                                                        src_alpha * psrc.z * TEXT_COLOR.z + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().z : 1.0f),
-                                                        src_alpha * psrc.w * TEXT_COLOR.w + (1.0f - src_alpha) * pdst.get().w));
-                                            }); // end of for each
+                                        auto dst = new_texture->pix(x, y);
+                                        const auto src = glyph->pix(fx, fy).get();
+                                        dst.set(blend_glyph_pixel(dst.get(), src, style.color));
                                     });
-                                next_ch_x += character_info->m_advance_x;
-                            }
-                        }
+                            });
+
+                        next_ch_x += info->m_advance_x;
                     });
 
                 return new_texture;

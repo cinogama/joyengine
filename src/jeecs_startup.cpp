@@ -31,9 +31,6 @@ struct _je_static_context_t
 
     jegl_graphic_api_entry _jegl_host_graphic_api = nullptr;
 
-    std::mutex _je_delay_free_libs_mx;
-    std::list<woort_Dylib*> _je_delay_free_libs;
-
     jeecs::typing::type_unregister_guard* _je_unregister_guard = nullptr;
 };
 static _je_static_context_t _je_global_context;
@@ -210,8 +207,6 @@ void _jeecs_entry_register_core_systems(
 
 void je_init(int argc, char** argv)
 {
-    assert(_je_global_context._je_delay_free_libs.empty());
-
     // Update default graphic sync funciton
     jegl_register_sync_thread_callback(
         je_default_graphic_interface_sync_func, nullptr);
@@ -482,11 +477,6 @@ void je_finish()
 
     wo_finish([](void*)
         {
-            for (auto* mod : _je_global_context._je_delay_free_libs)
-                woort_dylib_unload(mod, WOORT_DYLIB_UNREF);
-
-            _je_global_context._je_delay_free_libs.clear();
-
             // Free registered external libraries.
             je_extern_lib_module_finish();
             je_extern_lib_3rd_pkgs_finish();
@@ -547,10 +537,5 @@ void je_module_unload(woort_Dylib* lib)
     if (auto leave = (jeecs::typing::module_leave_t)woort_dylib_load_func(lib, "jeecs_module_leave"))
         leave();
     jeecs::debug::loginfo("Module: '%p' request to unload.", lib);
-    woort_dylib_unload(lib, WOORT_DYLIB_BURY);
-
-    // NOTE: Woolang GCptr may invoke some function defined in lib in GC Thread job,
-    //  to make sure safety, all the lib will be free in je_finish.
-    std::lock_guard g(_je_global_context._je_delay_free_libs_mx);
-    _je_global_context._je_delay_free_libs.push_back(lib);
+    woort_dylib_unload(lib, WOORT_DYLIB_UNREF_AND_BURY);
 }
