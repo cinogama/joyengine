@@ -925,7 +925,7 @@ namespace editor
                     Transform::Translation::type::typeinfo,
                     Transform::Anchor::type::typeinfo,
                     // Editor 族组件
-                    Editor::Invisable::type::typeinfo,
+                    Editor::Invisible::type::typeinfo,
                     Editor::EditorWalker::type::typeinfo,
                 ]);
             // 摄像机，同时负责x轴旋转
@@ -935,7 +935,7 @@ namespace editor
                     Transform::LocalToParent::type::typeinfo,
                     Transform::Translation::type::typeinfo,
                     // Editor 族组件
-                    Editor::Invisable::type::typeinfo,
+                    Editor::Invisible::type::typeinfo,
                     Editor::EditorWalker::type::typeinfo,
                     // Camera 族组件
                     Camera::PerspectiveProjection::type::typeinfo,
@@ -957,7 +957,7 @@ namespace editor
                     Transform::Translation::type::typeinfo,
                     Transform::LocalToWorld::type::typeinfo,
                     // Editor 族组件
-                    Editor::Invisable::type::typeinfo,
+                    Editor::Invisible::type::typeinfo,
                     Editor::EntityMoverRoot::type::typeinfo,
                 ]);
                 

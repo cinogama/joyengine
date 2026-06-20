@@ -27,7 +27,7 @@ namespace jeecs
         {
             basic::string name;
         };
-        struct Invisable
+        struct Invisible
         {
             // Entity with this component will not display in editor, and will not be saved.
         };
@@ -966,7 +966,7 @@ public let frag =
                         Renderer::Shape,
                         Renderer::Rendqueue,
                         Renderer::Color,
-                        Editor::Invisable,
+                        Editor::Invisible,
                         Editor::EntityMover>();
                     game_entity axis_y_e = current_world.add_entity<
                         Transform::LocalPosition,
@@ -977,7 +977,7 @@ public let frag =
                         Renderer::Shape,
                         Renderer::Rendqueue,
                         Renderer::Color,
-                        Editor::Invisable,
+                        Editor::Invisible,
                         Editor::EntityMover>();
                     game_entity axis_z_e = current_world.add_entity<
                         Transform::LocalPosition,
@@ -988,7 +988,7 @@ public let frag =
                         Renderer::Shape,
                         Renderer::Rendqueue,
                         Renderer::Color,
-                        Editor::Invisable,
+                        Editor::Invisible,
                         Editor::EntityMover>();
 
                     game_entity select_box = current_world.add_entity<
@@ -1000,7 +1000,7 @@ public let frag =
                         Renderer::Shaders,
                         Renderer::Shape,
                         Renderer::Rendqueue,
-                        Editor::Invisable,
+                        Editor::Invisible,
                         Editor::EntitySelectBox>();
 
                     axis_x_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
@@ -1466,7 +1466,7 @@ public let frag =
                 for (auto&& [e, trans, proj] : query_entity<
                     view typesof(Translation&, Projection&),
                     anyof typesof(OrthoProjection, PerspectiveProjection),
-                    except typesof(Editor::Invisable)
+                    except typesof(Editor::Invisible)
                 >())
                 {
                     if (_gizmo_mask & gizmo_mode::CAMERA)
@@ -1507,7 +1507,7 @@ public let frag =
                 for (auto&& [e, trans] : query_entity<
                     view typesof(Translation&),
                     anyof typesof(Point, Range),
-                    except typesof(Editor::Invisable)
+                    except typesof(Editor::Invisible)
                 >())
                 {
                     SelectEntity(e, trans, nullptr);
@@ -1520,7 +1520,7 @@ public let frag =
                 for (auto&& [e, trans] : query_entity<
                     view typesof(Translation&),
                     contains typesof(Parallel),
-                    except typesof(Editor::Invisable)
+                    except typesof(Editor::Invisible)
                 >())
                 {
                     SelectEntity(e, trans, nullptr);
@@ -1546,7 +1546,7 @@ public let frag =
                         Physics2D::Collider::Circle
                     ),
                     except typesof(
-                        Editor::Invisable
+                        Editor::Invisible
                     )
                 >())
                 {
@@ -1702,7 +1702,7 @@ public let frag =
             for (auto&& [e, trans, shape] : query_entity<
                 view typesof(Translation&, Shape&),
                 contains typesof(Shaders),
-                except typesof(Editor::Invisable, Point, Parallel, Range)
+                except typesof(Editor::Invisible, Point, Parallel, Range)
             >())
             {
                 SelectEntity(e, trans, &shape);

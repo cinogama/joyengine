@@ -469,9 +469,9 @@ namespace editor::gui::edit_forms
         ;
         
         static let
-            Invisable = je::typeinfo::load("Editor::Invisable")->unwrap;
+            Invisible = je::typeinfo::load("Editor::Invisible")->unwrap;
             
-        if (!get_is_albe_to_display_debug_entity() && e.e->get_component(Invisable)->is_value)
+        if (!get_is_albe_to_display_debug_entity() && e.e->get_component(Invisible)->is_value)
             // 不可见实体，不准看！
             return;
             

@@ -681,12 +681,12 @@ namespace jeapi::serialize
             if (!bad_shader_entity->empty)
                 return result::err(bad_shader_entity);
                 
-            static let INVISABLE = je::typeinfo::load("Editor::Invisable")->unwrap;
+            static let INVISIBLE = je::typeinfo::load("Editor::Invisible")->unwrap;
             
             let entities_json_list =
                 w->get_all_entities([])
                     // 跳过编辑器上的不可见实体
-                    ->  forall(\e = e->get_component(INVISABLE)->is_none;)
+                    ->  forall(\e = e->get_component(INVISIBLE)->is_none;)
                     =>> \e = oe->is_value ? [oe->unwrap] | [] where oe = entity::dump(e, need_euid);
                     ;
                     

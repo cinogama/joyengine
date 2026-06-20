@@ -70,7 +70,7 @@ void _jeecs_entry_register_core_systems(jeecs::typing::type_unregister_guard* gu
     jeecs::typing::type_info::register_type<jeecs::Editor::Name>(guard, "Editor::Name");
     jeecs::typing::type_info::register_type<jeecs::Editor::Prefab>(guard, "Editor::Prefab");
     jeecs::typing::type_info::register_type<jeecs::Editor::EditorWalker>(guard, "Editor::EditorWalker");
-    jeecs::typing::type_info::register_type<jeecs::Editor::Invisable>(guard, "Editor::Invisable");
+    jeecs::typing::type_info::register_type<jeecs::Editor::Invisible>(guard, "Editor::Invisible");
     jeecs::typing::type_info::register_type<jeecs::Editor::EntityMover>(guard, "Editor::EntityMover");
     jeecs::typing::type_info::register_type<jeecs::Editor::EntityMoverRoot>(guard, "Editor::EntityMoverRoot");
     jeecs::typing::type_info::register_type<jeecs::Editor::BadShadersUniform>(guard, "Editor::BadShadersUniform");
