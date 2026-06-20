@@ -1261,7 +1261,7 @@ namespace jeecs::graphic::api::metal
                 static_cast<char*>(buffer_contents)
                 + ubuffer->m_update_begin_offset),
             static_cast<void*>(
-                static_cast<char*>(ubuffer->m_buffer)
+                reinterpret_cast<char*>(ubuffer->m_buffer)
                 + ubuffer->m_update_begin_offset),
             ubuffer->m_update_length);
     }
