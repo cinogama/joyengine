@@ -450,7 +450,9 @@ namespace editor::gui::animation2d
         let mut unis = []mut as vec<FrameUniformData>;
         for (let p : pairs)
         {
-            if (!checked->get_or(p.m_ks, false))
+            // 默认与弹窗一致：可插值键默认勾选，其余默认不勾（未在 map 中显式设置时取此默认）
+            let defv = p.m_in_a && p.m_in_b && p.m_type_match;
+            if (!checked->get_or(p.m_ks, defv))
                 continue;
             let val = interp_pair_value(p, t);
             match (p.m_key)
@@ -2232,7 +2234,7 @@ namespace editor::gui::animation2d
 
                     // 三栏布局：左动作 / 中预览+时间轴 / 右属性
                     let left_w = 180.;
-                    let right_w = 380.;
+                    let right_w = 500.;
                     let mut center_w = avail[0] - left_w - right_w - 8.;
                     if (center_w < 200.) center_w = 200.;
 
