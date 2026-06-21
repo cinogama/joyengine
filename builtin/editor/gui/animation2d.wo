@@ -1136,13 +1136,6 @@ namespace editor::gui::animation2d
             value(fr)? TextDisabled(F"{fr->len}帧 / {math::round(AnimationContext::total_duration(fr) * 1000.) as real / 1000.}s");
             none?;
         }
-        SameLine();
-        if (Button("💾保存"))
-            do try_save(state);
-
-        SameLine();
-        if (Button("+动作"))
-            do ask_new_action(state);
     }
 
     func try_save(self: EditorState) => void
