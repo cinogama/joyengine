@@ -115,6 +115,8 @@ namespace je::gui
         public func BeginChildAttr(title:string, attr: WindowsAttribute)=> bool;
     extern("libjoyecs", "je_gui_begin_child_size")
         public func BeginChildSize(title:string, sizex: real, sizey: real)=> bool;
+    extern("libjoyecs", "je_gui_begin_child_size_flags")
+        public func BeginChildSizeFlags(title:string, sizex: real, sizey: real, attr: WindowsAttribute)=> bool;
         
     extern("libjoyecs", "je_gui_is_window_focused")
         public func IsWindowFocused()=> bool;
@@ -550,6 +552,18 @@ namespace je::gui
     extern("libjoyecs", "je_gui_image_size_color")
         public func ImageSizeColor(tex: je::graphic::texture, width: real, height: real, color: Color32RGBA)=> void;
         
+    // Image with custom UVs. UVs use engine/OpenGL convention (V points up):
+    // pass uv0 as the min corner and uv1 as the max corner; V is flipped internally
+    // so the region displays upright (consistent with Image/ImageSize).
+    // This lets you display an arbitrary sub-region of a sprite-sheet, matching
+    // the Renderer::Textures offset/tiling convention used by FrameAnimation.
+    extern("libjoyecs", "je_gui_image_uv")
+        public func ImageUV(tex: je::graphic::texture, width: real, height: real, uv0: ImVec2, uv1: ImVec2)=> void;
+    extern("libjoyecs", "je_gui_image_uv_color")
+        public func ImageUVColor(tex: je::graphic::texture, width: real, height: real, uv0: ImVec2, uv1: ImVec2, tint: Color32RGBA)=> void;
+    extern("libjoyecs", "je_gui_imagebutton_uv")
+        public func ImageButtonUV(label: string, tex: je::graphic::texture, width: real, height: real, uv0: ImVec2, uv1: ImVec2)=> bool;
+        
     extern("libjoyecs", "je_gui_push_item_width")
         public func PushItemWidth(width: real)=> void;
         
@@ -635,6 +649,10 @@ namespace je::gui
             
         extern("libjoyecs", "je_gui_draw_list_add_image")
             public func AddImage(self: DrawListT, from: ImVec2, to: ImVec2, tex: graphic::texture, color: Color32RGBA)=> void;
+            
+        // Same as AddImage but with explicit UVs (engine convention, V up).
+        extern("libjoyecs", "je_gui_draw_list_add_image_uv")
+            public func AddImageUV(self: DrawListT, from: ImVec2, to: ImVec2, uv0: ImVec2, uv1: ImVec2, tex: graphic::texture, tint: Color32RGBA)=> void;
             
         extern("libjoyecs", "je_gui_draw_list_add_line")
             public func AddLine(self: DrawListT, from: ImVec2, to: ImVec2, color: Color32RGBA, board: real)=> void;
@@ -846,6 +864,179 @@ namespace je::gui
         
     extern("libjoyecs", "je_gui_dummy")
         public func Dummy(sz: ImVec2)=> void;
+        
+    // ===================================================================================
+    // Cursor / canvas / time / scroll / size / slider / table / keys
+    // (added for the frame animation editor, generally useful)
+    // ===================================================================================
+    
+    extern("libjoyecs", "je_gui_set_cursor_screen_pos")
+        public func SetCursorScreenPos(pos: ImVec2)=> void;
+    extern("libjoyecs", "je_gui_get_cursor_screen_pos")
+        public func GetCursorScreenPos()=> ImVec2;
+    extern("libjoyecs", "je_gui_set_cursor_pos")
+        public func SetCursorPos(pos: ImVec2)=> void;
+        
+    extern("libjoyecs", "je_gui_get_time")
+        public func GetTime()=> real;
+    extern("libjoyecs", "je_gui_get_frame_count")
+        public func GetFrameCount()=> int;
+        
+    extern("libjoyecs", "je_gui_get_scroll_x")
+        public func GetScrollX()=> real;
+    extern("libjoyecs", "je_gui_get_scroll_y")
+        public func GetScrollY()=> real;
+    extern("libjoyecs", "je_gui_get_scroll_max_x")
+        public func GetScrollMaxX()=> real;
+    extern("libjoyecs", "je_gui_get_scroll_max_y")
+        public func GetScrollMaxY()=> real;
+    extern("libjoyecs", "je_gui_set_scroll_here_x")
+        public func SetScrollHereX(ratio_x: real)=> void;
+    extern("libjoyecs", "je_gui_set_scroll_here_y")
+        public func SetScrollHereY(ratio_y: real)=> void;
+    extern("libjoyecs", "je_gui_set_scroll_from_pos_x")
+        public func SetScrollFromPosX(local_x: real, center_x_ratio: real)=> void;
+    extern("libjoyecs", "je_gui_set_scroll_from_pos_y")
+        public func SetScrollFromPosY(local_y: real, center_y_ratio: real)=> void;
+    extern("libjoyecs", "je_gui_set_scroll_x")
+        public func SetScrollX(scroll_x: real)=> void;
+    extern("libjoyecs", "je_gui_set_scroll_y")
+        public func SetScrollY(scroll_y: real)=> void;
+        
+    extern("libjoyecs", "je_gui_calc_text_size")
+        public func CalcTextSize(text: string)=> ImVec2;
+    extern("libjoyecs", "je_gui_get_text_line_height")
+        public func GetTextLineHeight()=> real;
+    extern("libjoyecs", "je_gui_get_text_line_height_with_spacing")
+        public func GetTextLineHeightWithSpacing()=> real;
+    extern("libjoyecs", "je_gui_get_frame_height")
+        public func GetFrameHeight()=> real;
+    extern("libjoyecs", "je_gui_get_frame_height_with_spacing")
+        public func GetFrameHeightWithSpacing()=> real;
+    extern("libjoyecs", "je_gui_get_window_size")
+        public func GetWindowSize()=> ImVec2;
+        
+    // ---- Sliders ----
+    extern("libjoyecs", "je_gui_slider_float")
+        public func SliderFloat(label: string, value: real, min: real, max: real)=> option<real>;
+    extern("libjoyecs", "je_gui_slider_float_format")
+        public func SliderFloatFormat(label: string, value: real, min: real, max: real, format: string)=> option<real>;
+    extern("libjoyecs", "je_gui_slider_float2")
+        public func SliderFloat2(label: string, x: real, y: real, min: real, max: real)=> option<(real, real)>;
+    extern("libjoyecs", "je_gui_slider_float3")
+        public func SliderFloat3(label: string, x: real, y: real, z: real, min: real, max: real)=> option<(real, real, real)>;
+    extern("libjoyecs", "je_gui_slider_float4")
+        public func SliderFloat4(label: string, x: real, y: real, z: real, w: real, min: real, max: real)=> option<(real, real, real, real)>;
+    extern("libjoyecs", "je_gui_slider_int")
+        public func SliderInt(label: string, value: int, min: int, max: int)=> option<int>;
+    extern("libjoyecs", "je_gui_slider_int2")
+        public func SliderInt2(label: string, x: int, y: int, min: int, max: int)=> option<(int, int)>;
+    extern("libjoyecs", "je_gui_slider_int3")
+        public func SliderInt3(label: string, x: int, y: int, z: int, min: int, max: int)=> option<(int, int, int)>;
+    extern("libjoyecs", "je_gui_slider_int4")
+        public func SliderInt4(label: string, x: int, y: int, z: int, w: int, min: int, max: int)=> option<(int, int, int, int)>;
+    // SliderAngle: value/input is radians; min/max are degrees.
+    extern("libjoyecs", "je_gui_slider_angle")
+        public func SliderAngle(label: string, angle_radians: real, min_degrees: real, max_degrees: real)=> option<real>;
+    extern("libjoyecs", "je_gui_v_slider_float")
+        public func VSliderFloat(label: string, size: ImVec2, value: real, min: real, max: real)=> option<real>;
+        
+    // ---- Tables ----
+    public enum TableFlags
+    {
+        ImGuiTableFlags_None                               = 0,
+        ImGuiTableFlags_Resizable                          = 1,
+        ImGuiTableFlags_Reorderable                        = 2,
+        ImGuiTableFlags_Hideable                           = 4,
+        ImGuiTableFlags_Sortable                           = 8,
+        ImGuiTableFlags_NoSavedSettings                    = 16,
+        ImGuiTableFlags_ContextMenuInBody                  = 32,
+        ImGuiTableFlags_NoHostExtendX                      = 64,
+        ImGuiTableFlags_NoHostExtendY                      = 128,
+        ImGuiTableFlags_NoKeepColumnsVisible               = 256,
+        ImGuiTableFlags_PreciseWidths                      = 512,
+        ImGuiTableFlags_NoClip                             = 1024,
+        ImGuiTableFlags_PadOuterX                          = 2048,
+        ImGuiTableFlags_NoPadOuterX                        = 4096,
+        ImGuiTableFlags_NoPadInnerX                        = 8192,
+        ImGuiTableFlags_ScrollX                            = 16384,
+        ImGuiTableFlags_ScrollY                            = 32768,
+        ImGuiTableFlags_SizingFixedFit                     = 65536,
+        ImGuiTableFlags_SizingFixedSame                    = 131072,
+        ImGuiTableFlags_SizingStretchProp                  = 262144,
+        ImGuiTableFlags_SizingStretchSame                  = 524288,
+    }
+    public enum TableRowFlags
+    {
+        ImGuiTableRowFlags_None    = 0,
+        ImGuiTableRowFlags_Headers = 1,
+    }
+    public enum TableColumnFlags
+    {
+        ImGuiTableColumnFlags_None                  = 0,
+        ImGuiTableColumnFlags_Disabled              = 1,
+        ImGuiTableColumnFlags_DefaultHide           = 2,
+        ImGuiTableColumnFlags_DefaultSort           = 4,
+        ImGuiTableColumnFlags_WidthStretch          = 8,
+        ImGuiTableColumnFlags_WidthFixed            = 16,
+        ImGuiTableColumnFlags_NoResize              = 32,
+        ImGuiTableColumnFlags_NoReorder             = 64,
+        ImGuiTableColumnFlags_NoHide                = 128,
+        ImGuiTableColumnFlags_NoClip                = 256,
+        ImGuiTableColumnFlags_NoSort                = 512,
+        ImGuiTableColumnFlags_NoSortAscending       = 1024,
+        ImGuiTableColumnFlags_NoSortDescending      = 2048,
+        ImGuiTableColumnFlags_NoHeaderLabel         = 4096,
+        ImGuiTableColumnFlags_NoHeaderWidth         = 8192,
+        ImGuiTableColumnFlags_PreferSortAscending   = 16384,
+        ImGuiTableColumnFlags_PreferSortDescending  = 32768,
+        ImGuiTableColumnFlags_IndentEnable          = 65536,
+        ImGuiTableColumnFlags_IndentDisable         = 131072,
+        ImGuiTableColumnFlags_AngledHeader          = 262144,
+        ImGuiTableColumnFlags_WidthMask_            = ImGuiTableColumnFlags_WidthStretch + ImGuiTableColumnFlags_WidthFixed,
+    }
+    extern("libjoyecs", "je_gui_begin_table")
+        public func BeginTable(label: string, column_count: int, flags: TableFlags)=> bool;
+    extern("libjoyecs", "je_gui_end_table")
+        public func EndTable()=> void;
+    extern("libjoyecs", "je_gui_table_next_row")
+        public func TableNextRow(flags: TableRowFlags, min_row_height: real)=> void;
+    extern("libjoyecs", "je_gui_table_next_column")
+        public func TableNextColumn()=> bool;
+    extern("libjoyecs", "je_gui_table_set_column_index")
+        public func TableSetColumnIndex(column: int)=> bool;
+    extern("libjoyecs", "je_gui_table_setup_column")
+        public func TableSetupColumn(label: string, flags: TableColumnFlags, init_width_or_weight: real)=> void;
+    extern("libjoyecs", "je_gui_table_headers_row")
+        public func TableHeadersRow()=> void;
+    extern("libjoyecs", "je_gui_table_setup_scroll_freeze")
+        public func TableSetupScrollFreeze(columns: int, rows: int)=> void;
+        
+    // ---- Keyboard edges ----
+    extern("libjoyecs", "je_gui_is_key_pressed")
+        public func IsKeyPressed(key: ImGuiKey, repeat: bool)=> bool;
+    extern("libjoyecs", "je_gui_is_key_released")
+        public func IsKeyReleased(key: ImGuiKey)=> bool;
+        
+    // ---- Misc extras ----
+    extern("libjoyecs", "je_gui_collapsing_header")
+        public func CollapsingHeaderFlags(label: string, flags: TreeNodeAttribute)=> bool;
+    public func CollapsingHeader(label: string)=> bool
+    {
+        return CollapsingHeaderFlags(label, TreeNodeAttribute::ImGuiTreeNodeFlags_None);
+    }
+    extern("libjoyecs", "je_gui_radio_button")
+        public func RadioButton(label: string, active: bool)=> bool;
+    extern("libjoyecs", "je_gui_is_item_focused")
+        public func IsItemFocused()=> bool;
+    extern("libjoyecs", "je_gui_is_item_visible")
+        public func IsItemVisible()=> bool;
+    extern("libjoyecs", "je_gui_set_item_default_focus")
+        public func SetItemDefaultFocus()=> void;
+    extern("libjoyecs", "je_gui_set_keyboard_focus_here")
+        public func SetKeyboardFocusHere(offset: int)=> void;
+    extern("libjoyecs", "je_gui_close_current_popup")
+        public func CloseCurrentPopup()=> void;
         
     using CodeEditorContext = gchandle
     {

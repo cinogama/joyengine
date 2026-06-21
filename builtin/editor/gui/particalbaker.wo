@@ -223,7 +223,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                                             
                                             assert(animationimg->save(outimgpath->to_string()));
                                             
-                                            let fanimdat = new! animation2d::AnimationContext(outanimpath);
+                                            let fanimdat = animation2d::AnimationContext::create(outanimpath);
                                             fanimdat->fast_create_for_partical(width, height, framecount, partical_context.m_frame_rate);
                                             assert(fanimdat->save);
                                         }

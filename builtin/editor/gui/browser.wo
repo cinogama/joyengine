@@ -845,7 +845,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                                     jeapi::gui::form::errmsg("创建2D帧动画失败", "可能是同名文件已经存在或文件名路径不合法");
                                 else
                                 {
-                                    assert(new! animation2d::AnimationContext(path)->save);
+                                    assert(animation2d::AnimationContext::create(path)->save);
                                     force_update();
                                 }
                             });

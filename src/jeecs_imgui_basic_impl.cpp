@@ -826,6 +826,11 @@ WOORT_API woort_api je_gui_begin_child_size(void)
     return woort_ret_bool(ImGui::BeginChild(woort_string(0),
         ImVec2(woort_float(1), woort_float(2)), true));
 }
+WOORT_API woort_api je_gui_begin_child_size_flags(void)
+{
+    return woort_ret_bool(ImGui::BeginChild(woort_string(0),
+        ImVec2(woort_float(1), woort_float(2)), true, (ImGuiWindowFlags)woort_int(3)));
+}
 
 WOORT_API woort_api je_gui_end_child(void)
 {
@@ -2348,6 +2353,346 @@ WOORT_API woort_api je_gui_node_editor_resume(void)
     ax::NodeEditor::Resume();
     return woort_ret_void();
 }
+
+// ===================================================================================
+// Extra bindings used by the 2D frame animation editor (and general purpose)
+// ===================================================================================
+
+// ---- Cursor / canvas ----
+WOORT_API woort_api je_gui_set_cursor_screen_pos(void)
+{
+    ImGui::SetCursorScreenPos(val2vec2(0));
+    return woort_ret_void();
+}
+WOORT_API woort_api je_gui_get_cursor_screen_pos(void)
+{
+    woort_value s;
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
+    auto&& cpos = ImGui::GetCursorScreenPos();
+    return woort_ret_value(set_float2_to_struct(s + 0, cpos.x, cpos.y));
+}
+WOORT_API woort_api je_gui_set_cursor_pos(void)
+{
+    ImGui::SetCursorPos(val2vec2(0));
+    return woort_ret_void();
+}
+
+// ---- Time / frame count ----
+WOORT_API woort_api je_gui_get_time(void)
+{
+    return woort_ret_float((float)ImGui::GetTime());
+}
+WOORT_API woort_api je_gui_get_frame_count(void)
+{
+    return woort_ret_int((woort_Int)ImGui::GetFrameCount());
+}
+
+// ---- Scroll API ----
+WOORT_API woort_api je_gui_get_scroll_x(void) { return woort_ret_float(ImGui::GetScrollX()); }
+WOORT_API woort_api je_gui_get_scroll_y(void) { return woort_ret_float(ImGui::GetScrollY()); }
+WOORT_API woort_api je_gui_get_scroll_max_x(void) { return woort_ret_float(ImGui::GetScrollMaxX()); }
+WOORT_API woort_api je_gui_get_scroll_max_y(void) { return woort_ret_float(ImGui::GetScrollMaxY()); }
+
+WOORT_API woort_api je_gui_set_scroll_here_x(void) { ImGui::SetScrollHereX(woort_float(0)); return woort_ret_void(); }
+WOORT_API woort_api je_gui_set_scroll_here_y(void) { ImGui::SetScrollHereY(woort_float(0)); return woort_ret_void(); }
+WOORT_API woort_api je_gui_set_scroll_from_pos_x(void) { ImGui::SetScrollFromPosX(woort_float(0), woort_float(1)); return woort_ret_void(); }
+WOORT_API woort_api je_gui_set_scroll_from_pos_y(void) { ImGui::SetScrollFromPosY(woort_float(0), woort_float(1)); return woort_ret_void(); }
+WOORT_API woort_api je_gui_set_scroll_x(void) { ImGui::SetScrollX(woort_float(0)); return woort_ret_void(); }
+WOORT_API woort_api je_gui_set_scroll_y(void) { ImGui::SetScrollY(woort_float(0)); return woort_ret_void(); }
+
+// ---- Size / metrics queries ----
+WOORT_API woort_api je_gui_calc_text_size(void)
+{
+    woort_value s;
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
+    auto sz = ImGui::CalcTextSize(woort_string(0));
+    return woort_ret_value(set_float2_to_struct(s + 0, sz.x, sz.y));
+}
+WOORT_API woort_api je_gui_get_text_line_height(void) { return woort_ret_float(ImGui::GetTextLineHeight()); }
+WOORT_API woort_api je_gui_get_text_line_height_with_spacing(void) { return woort_ret_float(ImGui::GetTextLineHeightWithSpacing()); }
+WOORT_API woort_api je_gui_get_frame_height(void) { return woort_ret_float(ImGui::GetFrameHeight()); }
+WOORT_API woort_api je_gui_get_frame_height_with_spacing(void) { return woort_ret_float(ImGui::GetFrameHeightWithSpacing()); }
+WOORT_API woort_api je_gui_get_window_size(void)
+{
+    woort_value s;
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
+    auto sz = ImGui::GetWindowSize();
+    return woort_ret_value(set_float2_to_struct(s + 0, sz.x, sz.y));
+}
+
+// ---- Sliders ----
+WOORT_API woort_api je_gui_slider_float(void)
+{
+    woort_U8CString label = woort_string(0);
+    float v = woort_float(1);
+    if (ImGui::SliderFloat(label, &v, woort_float(2), woort_float(3)))
+        return woort_ret_option_float(v);
+    return woort_ret_option_none();
+}
+WOORT_API woort_api je_gui_slider_float_format(void)
+{
+    woort_U8CString label = woort_string(0);
+    float v = woort_float(1);
+    if (ImGui::SliderFloat(label, &v, woort_float(2), woort_float(3), woort_string(4)))
+        return woort_ret_option_float(v);
+    return woort_ret_option_none();
+}
+WOORT_API woort_api je_gui_slider_float2(void)
+{
+    woort_value s;
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
+    float v[] = { woort_float(1), woort_float(2) };
+    if (ImGui::SliderFloat2(woort_string(0), v, woort_float(3), woort_float(4)))
+        return woort_ret_option_value(set_float2_to_struct(s + 0, v[0], v[1]));
+    return woort_ret_option_none();
+}
+WOORT_API woort_api je_gui_slider_float3(void)
+{
+    woort_value s;
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
+    float v[] = { woort_float(1), woort_float(2), woort_float(3) };
+    if (ImGui::SliderFloat3(woort_string(0), v, woort_float(4), woort_float(5)))
+        return woort_ret_option_value(set_float3_to_struct(s + 0, v[0], v[1], v[2]));
+    return woort_ret_option_none();
+}
+WOORT_API woort_api je_gui_slider_float4(void)
+{
+    woort_value s;
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
+    float v[] = { woort_float(1), woort_float(2), woort_float(3), woort_float(4) };
+    if (ImGui::SliderFloat4(woort_string(0), v, woort_float(5), woort_float(6)))
+        return woort_ret_option_value(set_float4_to_struct(s + 0, v[0], v[1], v[2], v[3]));
+    return woort_ret_option_none();
+}
+WOORT_API woort_api je_gui_slider_int(void)
+{
+    woort_U8CString label = woort_string(0);
+    int v = (int)woort_int(1);
+    if (ImGui::SliderInt(label, &v, (int)woort_int(2), (int)woort_int(3)))
+        return woort_ret_option_int(v);
+    return woort_ret_option_none();
+}
+WOORT_API woort_api je_gui_slider_int2(void)
+{
+    woort_value s;
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
+    int v[] = { (int)woort_int(1), (int)woort_int(2) };
+    if (ImGui::SliderInt2(woort_string(0), v, (int)woort_int(3), (int)woort_int(4)))
+    {
+        woort_value result = s + 0;
+        woort_value elem = s + 1;
+        woort_set_struct(result, 2);
+        woort_set_int(elem, v[0]); woort_struct_set(result, 0, elem);
+        woort_set_int(elem, v[1]); woort_struct_set(result, 1, elem);
+        return woort_ret_option_value(result);
+    }
+    return woort_ret_option_none();
+}
+WOORT_API woort_api je_gui_slider_int3(void)
+{
+    woort_value s;
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
+    int v[] = { (int)woort_int(1), (int)woort_int(2), (int)woort_int(3) };
+    if (ImGui::SliderInt3(woort_string(0), v, (int)woort_int(4), (int)woort_int(5)))
+    {
+        woort_value result = s + 0;
+        woort_value elem = s + 1;
+        woort_set_struct(result, 3);
+        woort_set_int(elem, v[0]); woort_struct_set(result, 0, elem);
+        woort_set_int(elem, v[1]); woort_struct_set(result, 1, elem);
+        woort_set_int(elem, v[2]); woort_struct_set(result, 2, elem);
+        return woort_ret_option_value(result);
+    }
+    return woort_ret_option_none();
+}
+WOORT_API woort_api je_gui_slider_int4(void)
+{
+    woort_value s;
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
+    int v[] = { (int)woort_int(1), (int)woort_int(2), (int)woort_int(3), (int)woort_int(4) };
+    if (ImGui::SliderInt4(woort_string(0), v, (int)woort_int(5), (int)woort_int(6)))
+    {
+        woort_value result = s + 0;
+        woort_value elem = s + 1;
+        woort_set_struct(result, 4);
+        woort_set_int(elem, v[0]); woort_struct_set(result, 0, elem);
+        woort_set_int(elem, v[1]); woort_struct_set(result, 1, elem);
+        woort_set_int(elem, v[2]); woort_struct_set(result, 2, elem);
+        woort_set_int(elem, v[3]); woort_struct_set(result, 3, elem);
+        return woort_ret_option_value(result);
+    }
+    return woort_ret_option_none();
+}
+WOORT_API woort_api je_gui_slider_angle(void)
+{
+    woort_U8CString label = woort_string(0);
+    float v = woort_float(1);
+    if (ImGui::SliderAngle(label, &v, woort_float(2), woort_float(3)))
+        return woort_ret_option_float(v);
+    return woort_ret_option_none();
+}
+WOORT_API woort_api je_gui_v_slider_float(void)
+{
+    woort_U8CString label = woort_string(0);
+    float v = woort_float(2);
+    if (ImGui::VSliderFloat(label, val2vec2(1), &v, woort_float(3), woort_float(4)))
+        return woort_ret_option_float(v);
+    return woort_ret_option_none();
+}
+
+// ---- Tables ----
+WOORT_API woort_api je_gui_begin_table(void)
+{
+    return woort_ret_bool(ImGui::BeginTable(
+        woort_string(0), (int)woort_int(1), (ImGuiTableFlags)woort_int(2)));
+}
+WOORT_API woort_api je_gui_end_table(void) { ImGui::EndTable(); return woort_ret_void(); }
+WOORT_API woort_api je_gui_table_next_row(void)
+{
+    ImGui::TableNextRow((ImGuiTableRowFlags)woort_int(0), woort_float(1));
+    return woort_ret_void();
+}
+WOORT_API woort_api je_gui_table_next_column(void) { return woort_ret_bool(ImGui::TableNextColumn()); }
+WOORT_API woort_api je_gui_table_set_column_index(void) { return woort_ret_bool(ImGui::TableSetColumnIndex((int)woort_int(0))); }
+WOORT_API woort_api je_gui_table_setup_column(void)
+{
+    ImGui::TableSetupColumn(woort_string(0), (ImGuiTableColumnFlags)woort_int(1), woort_float(2));
+    return woort_ret_void();
+}
+WOORT_API woort_api je_gui_table_headers_row(void) { ImGui::TableHeadersRow(); return woort_ret_void(); }
+WOORT_API woort_api je_gui_table_setup_scroll_freeze(void)
+{
+    ImGui::TableSetupScrollFreeze((int)woort_int(0), (int)woort_int(1));
+    return woort_ret_void();
+}
+
+// ---- Keyboard edges ----
+WOORT_API woort_api je_gui_is_key_pressed(void)
+{
+    return woort_ret_bool(ImGui::IsKeyPressed((ImGuiKey)woort_int(0), woort_bool(1)));
+}
+WOORT_API woort_api je_gui_is_key_released(void)
+{
+    return woort_ret_bool(ImGui::IsKeyReleased((ImGuiKey)woort_int(0)));
+}
+
+// ---- Image with custom UVs (engine/OpenGL UV convention: V points up) ----
+// Internally flips V so the sub-region displays upright, matching how the full
+// Image() binding behaves (which uses uvmin=(0,1),uvmax=(1,0)). Callers pass
+// uv0 as the min corner and uv1 as the max corner in engine UV space.
+static inline void je_gui_image_uv_impl(
+    jeecs::basic::resource<jeecs::graphic::texture>* texture,
+    float w, float h, woort_value uv0v, woort_value uv1v, ImVec4 tint, bool use_tint)
+{
+    jegl_bind_texture((*texture)->resource(), 0);
+
+    ImVec2 uv0 = val2vec2(uv0v);
+    ImVec2 uv1 = val2vec2(uv1v);
+    ImVec2 uvmin(uv0.x, uv1.y);
+    ImVec2 uvmax(uv1.x, uv0.y);
+
+    auto* dlist = ImGui::GetWindowDrawList();
+    dlist->AddCallback([](auto, auto)
+        { _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
+            _je_gui_tls_ctx._jegl_context,
+            _je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource()); },
+        nullptr);
+
+    ImTextureID tex = (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
+        _je_gui_tls_ctx._jegl_context, (*texture)->resource());
+
+    if (use_tint)
+        ImGui::Image(tex, ImVec2(w, h), uvmin, uvmax, tint);
+    else
+        ImGui::Image(tex, ImVec2(w, h), uvmin, uvmax);
+
+    dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+}
+
+WOORT_API woort_api je_gui_image_uv(void)
+{
+    auto* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)woort_gcpointer(0);
+    je_gui_image_uv_impl(texture, woort_float(1), woort_float(2), 3, 4, ImVec4(1, 1, 1, 1), false);
+    return woort_ret_void();
+}
+WOORT_API woort_api je_gui_image_uv_color(void)
+{
+    auto* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)woort_gcpointer(0);
+    je_gui_image_uv_impl(texture, woort_float(1), woort_float(2), 3, 4, val2colorf4(5), true);
+    return woort_ret_void();
+}
+WOORT_API woort_api je_gui_imagebutton_uv(void)
+{
+    woort_U8CString label = woort_string(0);
+    auto* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)woort_gcpointer(1);
+    jegl_bind_texture((*texture)->resource(), 0);
+
+    ImVec2 uv0 = val2vec2(4);
+    ImVec2 uv1 = val2vec2(5);
+    ImVec2 uvmin(uv0.x, uv1.y);
+    ImVec2 uvmax(uv1.x, uv0.y);
+
+    bool result = false;
+    auto* dlist = ImGui::GetWindowDrawList();
+    dlist->AddCallback([](auto, auto)
+        { _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
+            _je_gui_tls_ctx._jegl_context,
+            _je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource()); },
+        nullptr);
+    result = ImGui::ImageButton(label,
+        (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
+            _je_gui_tls_ctx._jegl_context, (*texture)->resource()),
+        ImVec2(woort_float(2), woort_float(3)), uvmin, uvmax);
+    dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+    return woort_ret_bool(result);
+}
+WOORT_API woort_api je_gui_draw_list_add_image_uv(void)
+{
+    ImDrawList* dlist = (ImDrawList*)woort_pointer(0);
+    auto* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)woort_gcpointer(5);
+    jegl_bind_texture((*texture)->resource(), 0);
+
+    ImVec2 uv0 = val2vec2(3);
+    ImVec2 uv1 = val2vec2(4);
+    ImVec2 uvmin(uv0.x, uv1.y);
+    ImVec2 uvmax(uv1.x, uv0.y);
+
+    dlist->AddCallback([](auto, auto)
+        { _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
+            _je_gui_tls_ctx._jegl_context,
+            _je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource()); },
+        nullptr);
+    dlist->AddImage(
+        (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
+            _je_gui_tls_ctx._jegl_context, (*texture)->resource()),
+        val2vec2(1), val2vec2(2), uvmin, uvmax, val2color32(6));
+    dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+    return woort_ret_void();
+}
+
+// ---- Misc extras ----
+WOORT_API woort_api je_gui_collapsing_header(void)
+{
+    return woort_ret_bool(ImGui::CollapsingHeader(woort_string(0), (ImGuiTreeNodeFlags)woort_int(1)));
+}
+WOORT_API woort_api je_gui_radio_button(void)
+{
+    return woort_ret_bool(ImGui::RadioButton(woort_string(0), woort_bool(1)));
+}
+WOORT_API woort_api je_gui_is_item_focused(void) { return woort_ret_bool(ImGui::IsItemFocused()); }
+WOORT_API woort_api je_gui_is_item_visible(void) { return woort_ret_bool(ImGui::IsItemVisible()); }
+WOORT_API woort_api je_gui_set_item_default_focus(void) { ImGui::SetItemDefaultFocus(); return woort_ret_void(); }
+WOORT_API woort_api je_gui_set_keyboard_focus_here(void) { ImGui::SetKeyboardFocusHere((int)woort_int(0)); return woort_ret_void(); }
+WOORT_API woort_api je_gui_close_current_popup(void) { ImGui::CloseCurrentPopup(); return woort_ret_void(); }
 
 ////////////////////////////////////////////////////////////////////////////////////////////
 
