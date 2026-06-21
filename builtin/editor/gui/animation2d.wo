@@ -251,6 +251,231 @@ namespace editor::gui::animation2d
         }
     }
 
+    // slerp 版本的数据值插值：QUAT4 走球面插值（quat::slerp），其余复用 lerp_data_value。
+    // 调用方需保证 a、b 同类型（由 collect_interp_pairs 的 m_type_match 把关）。
+    func interp_data_value(a: DataValue, b: DataValue, t: real) => DataValue
+    {
+        match (a)
+        {
+            QUAT4((aex, aey, aez))?
+            {
+                let (bex, bey, bez) = b->unsafe::cast :<(void, (real, real, real))>()[1];
+                let qa = quat::euler(aez, aey, aex);
+                let qb = quat::euler(bez, bey, bex);
+                let qr = quat::slerp(qa, qb, t);
+                let (rz, ry, rx) = qr->euler_angle as (real, real, real);
+                return DataValue::QUAT4((rx, ry, rz));
+            }
+            _? return lerp_data_value(a, b, t);
+        }
+    }
+    func data_value_type_tag(v: DataValue) => DataValueType
+    {
+        match (v)
+        {
+            INT(_)? return DataValueType::INT;
+            FLOAT(_)? return DataValueType::FLOAT;
+            VEC2(_)? return DataValueType::VEC2;
+            VEC3(_)? return DataValueType::VEC3;
+            VEC4(_)? return DataValueType::VEC4;
+            QUAT4(_)? return DataValueType::QUAT4;
+        }
+    }
+    func data_value_same_type(a: DataValue, b: DataValue) => bool
+    {
+        return data_value_type_tag(a) == data_value_type_tag(b);
+    }
+
+    // 插值键：标识一个可插值的组件成员或着色器变量
+    union InterpKey
+    {
+        Component((string, string)),
+        Uniform(string),
+    }
+    namespace InterpKey
+    {
+        func label(k: InterpKey) => string
+        {
+            match (k)
+            {
+                Component((c, m))? return c + "." + m;
+                Uniform(u)? return u;
+            }
+        }
+    }
+
+    // 两帧之间的键配对信息：标注每个键在 A/B 中的存在性与类型一致性
+    using InterpPair = struct{
+        m_key: InterpKey,
+        m_ks: string,
+        m_in_a: bool,
+        m_in_b: bool,
+        m_type_match: bool,
+        m_a_val: option<DataValue>,
+        m_b_val: option<DataValue>,
+        m_a_offset_mode: bool,
+    };
+
+    // 在一帧中按 (组件名, 成员名) 查找已存在的值
+    func find_component_value(frame: Animation2dFrameData, cname: string, mname: string) => option<DataValue>
+    {
+        let mut res = option::none: option<DataValue>;
+        for (let cd : frame.m_component_data)
+        {
+            if (cd.m_component_name == cname && cd.m_member_name == mname)
+            {
+                res = option::value(cd.m_value);
+                break;
+            }
+        }
+        return res;
+    }
+    // 在一帧中按变量名查找已存在的着色器变量值
+    func find_uniform_value(frame: Animation2dFrameData, uname: string) => option<DataValue>
+    {
+        let mut res = option::none: option<DataValue>;
+        for (let ud : frame.m_uniform_data)
+        {
+            if (ud.m_uniform_name == uname)
+            {
+                res = option::value(ud.m_value);
+                break;
+            }
+        }
+        return res;
+    }
+
+    // 汇总两帧中所有组件/着色器变量键，标注存在性与类型一致性（不做原地修改）
+    func collect_interp_pairs(a: Animation2dFrameData, b: Animation2dFrameData) => vec<InterpPair>
+    {
+        let mut result = []mut as vec<InterpPair>;
+        // A 的组件键：若 B 中也存在则配对
+        for (let cd : a.m_component_data)
+        {
+            let ks = "C:" + cd.m_component_name + "." + cd.m_member_name;
+            match (find_component_value(b, cd.m_component_name, cd.m_member_name))
+            {
+                value(bval)?
+                    do result->add(InterpPair{
+                        m_key = InterpKey::Component((cd.m_component_name, cd.m_member_name)),
+                        m_ks = ks,
+                        m_in_a = true, m_in_b = true,
+                        m_type_match = data_value_same_type(cd.m_value, bval),
+                        m_a_val = option::value(cd.m_value), m_b_val = option::value(bval),
+                        m_a_offset_mode = cd.m_offset_mode,
+                    });
+                none?
+                    do result->add(InterpPair{
+                        m_key = InterpKey::Component((cd.m_component_name, cd.m_member_name)),
+                        m_ks = ks,
+                        m_in_a = true, m_in_b = false, m_type_match = false,
+                        m_a_val = option::value(cd.m_value), m_b_val = option::none,
+                        m_a_offset_mode = cd.m_offset_mode,
+                    });
+            }
+        }
+        // A 的 uniform 键
+        for (let ud : a.m_uniform_data)
+        {
+            let ks = "U:" + ud.m_uniform_name;
+            match (find_uniform_value(b, ud.m_uniform_name))
+            {
+                value(bval)?
+                    do result->add(InterpPair{
+                        m_key = InterpKey::Uniform(ud.m_uniform_name),
+                        m_ks = ks,
+                        m_in_a = true, m_in_b = true,
+                        m_type_match = data_value_same_type(ud.m_value, bval),
+                        m_a_val = option::value(ud.m_value), m_b_val = option::value(bval),
+                        m_a_offset_mode = false,
+                    });
+                none?
+                    do result->add(InterpPair{
+                        m_key = InterpKey::Uniform(ud.m_uniform_name),
+                        m_ks = ks,
+                        m_in_a = true, m_in_b = false, m_type_match = false,
+                        m_a_val = option::value(ud.m_value), m_b_val = option::none,
+                        m_a_offset_mode = false,
+                    });
+            }
+        }
+        // B 的组件键中，A 里没有的
+        for (let cd : b.m_component_data)
+        {
+            if (find_component_value(a, cd.m_component_name, cd.m_member_name)->is_none)
+            {
+                let ks = "C:" + cd.m_component_name + "." + cd.m_member_name;
+                do result->add(InterpPair{
+                    m_key = InterpKey::Component((cd.m_component_name, cd.m_member_name)),
+                    m_ks = ks,
+                    m_in_a = false, m_in_b = true, m_type_match = false,
+                    m_a_val = option::none, m_b_val = option::value(cd.m_value),
+                    m_a_offset_mode = cd.m_offset_mode,
+                });
+            }
+        }
+        // B 的 uniform 键中，A 里没有的
+        for (let ud : b.m_uniform_data)
+        {
+            if (find_uniform_value(a, ud.m_uniform_name)->is_none)
+            {
+                let ks = "U:" + ud.m_uniform_name;
+                do result->add(InterpPair{
+                    m_key = InterpKey::Uniform(ud.m_uniform_name),
+                    m_ks = ks,
+                    m_in_a = false, m_in_b = true, m_type_match = false,
+                    m_a_val = option::none, m_b_val = option::value(ud.m_value),
+                    m_a_offset_mode = false,
+                });
+            }
+        }
+        return result;
+    }
+
+    // 取单个键在 t 处的值：可插值则插值，否则复制存在侧
+    func interp_pair_value(p: InterpPair, t: real) => DataValue
+    {
+        if (p.m_in_a && p.m_in_b && p.m_type_match)
+            return interp_data_value(p.m_a_val->unwrap, p.m_b_val->unwrap, t);
+        if (p.m_in_a)
+            return p.m_a_val->unwrap;
+        return p.m_b_val->unwrap;
+    }
+
+    // 按勾选状态与 t 生成一帧（offset_mode 沿用 A 侧）
+    func build_interpolated_frame(
+        pairs: vec<InterpPair>, checked: map<string, bool>, t: real, ftime: real) => Animation2dFrameData
+    {
+        let mut comps = []mut as vec<FrameComponentData>;
+        let mut unis = []mut as vec<FrameUniformData>;
+        for (let p : pairs)
+        {
+            if (!checked->get_or(p.m_ks, false))
+                continue;
+            let val = interp_pair_value(p, t);
+            match (p.m_key)
+            {
+                Component((cname, mname))?
+                    do comps->add(FrameComponentData{
+                        m_component_name = cname,
+                        m_member_name = mname,
+                        m_offset_mode = mut p.m_a_offset_mode,
+                        m_value = mut val,
+                    });
+                Uniform(uname)?
+                    do unis->add(FrameUniformData{
+                        m_uniform_name = uname,
+                        m_value = mut val,
+                    });
+            }
+        }
+        return Animation2dFrameData{
+            m_time = mut ftime,
+            m_component_data = comps,
+            m_uniform_data = unis,
+        };
+    }
+
     // 把 je::typeinfo 映射为对应的默认 DataValue（添加组件/变量时使用）
     func default_data_value_for_type(t: je::typeinfo) => DataValue
     {
@@ -586,6 +811,13 @@ namespace editor::gui::animation2d
         m_ss_cols: mut int,
         m_ss_rows: mut int,
         m_ss_ftime: mut real,
+
+        // 两帧间线性插值弹窗：菜单触发时暂存的关键帧索引与编辑期勾选/参数状态
+        m_interp_pair: mut option<(int, int)>,
+        m_interp_checked: map<string, bool>,
+        m_interp_count: mut int,
+        m_interp_ftime: mut real,
+        m_interp_was_open: mut bool,
     }
     {
         func create(context: AnimationContext, universe: option<je::universe>, open: std::mutable<bool>) => EditorState
@@ -614,6 +846,11 @@ namespace editor::gui::animation2d
                 m_ss_cols = mut 4,
                 m_ss_rows = mut 4,
                 m_ss_ftime = mut 0.1,
+                m_interp_pair = mut option::none,
+                m_interp_checked = {}mut,
+                m_interp_count = mut 3,
+                m_interp_ftime = mut 0.1,
+                m_interp_was_open = mut false,
             };
         }
 
@@ -1421,6 +1658,19 @@ namespace editor::gui::animation2d
             Separator();
             if (MenuItem("批量改帧时间"))
                 do open_batch_time(state, frames);
+            if (MenuItemEnabled("在选中两帧间插值...", state.m_selected_frames->len == 2))
+            {
+                let sel = state.m_selected_frames->to_array;
+                let mut ia = sel[0];
+                let mut ib = sel[1];
+                if (ia > ib)
+                {
+                    let tmp = ia;
+                    ia = ib;
+                    ib = tmp;
+                }
+                state.m_interp_pair = option::value((ia, ib));
+            }
             Separator();
             if (MenuItemEnabled("删除选中帧", state.m_selected_frames->len > 0))
                 do delete_selected_frames(state, frames);
@@ -1429,6 +1679,8 @@ namespace editor::gui::animation2d
 
         // 精灵图切片弹窗
         do render_spritesheet_popup(state, frames);
+        // 两帧间线性插值弹窗
+        do render_interpolate_popup(state, frames);
 
         // 快捷键（时间轴悬停时）
         if (IsWindowFocused())
@@ -1534,6 +1786,99 @@ namespace editor::gui::animation2d
                 do CloseCurrentPopup();
             EndPopup();
         }
+    }
+
+    // 两帧间线性插值弹窗：在 A、B 两关键帧之间生成 N 个插值帧。
+    // 菜单项只负责把选中两帧写入 m_interp_pair；本函数在 ##timeline 窗口内触发 OpenPopup/BeginPopup，
+    // 保证两者处于同一 ID 栈。
+    func render_interpolate_popup(state: EditorState, frames: vec<Animation2dFrameData>) => void
+    {
+        if (state.m_interp_pair->is_value && !state.m_interp_was_open)
+            do OpenPopup("##interp_popup");
+        let now_open = BeginPopup("##interp_popup");
+        if (now_open && !state.m_interp_was_open)
+            do state.m_interp_checked->clear();
+        state.m_interp_was_open = now_open;
+        if (!now_open)
+        {
+            state.m_interp_pair = option::none;
+            return;
+        }
+
+        let mut a = -1;
+        let mut b = -1;
+        match (state.m_interp_pair)
+        {
+            value((pa, pb))? { a = pa; b = pb; }
+            none?;
+        }
+        if (a < 0 || a >= frames->len || b < 0 || b >= frames->len)
+        {
+            TextDisabled("选中帧无效");
+            EndPopup();
+            return;
+        }
+
+        let A = frames[a];
+        let B = frames[b];
+        let pairs = collect_interp_pairs(A, B);
+        // 勾选状态存于 map；缺省时：可插值键=勾选，其余=不勾选（由 get_or 提供默认）
+        let cv = state.m_interp_checked;
+
+        Text(F"在帧 {a} 与帧 {b} 之间生成 {state.m_interp_count} 个插值帧（插入到帧 {a} 之后）");
+        do InputInt("生成帧数##ipn", state.m_interp_count)->> \v = state.m_interp_count = (v < 1 ? 1 | v);;
+        do InputFloat("每帧时间##ipt", state.m_interp_ftime)->> \v = state.m_interp_ftime = (v < 0. ? 0. | v);;
+        Separator();
+        Text("勾选要插值（或复制）的键：");
+        for (let (i, p) : pairs->iter |> iterator::enumerate)
+        {
+            let both_match = p.m_in_a && p.m_in_b && p.m_type_match;
+            let mismatched = p.m_in_a && p.m_in_b && !p.m_type_match;
+            let only_a = p.m_in_a && !p.m_in_b;
+            let label = InterpKey::label(p.m_key);
+            if (mismatched)
+            {
+                TextDisabled(F"{label}  [类型不符，已跳过]");
+                continue;
+            }
+            let cur = cv->get_or(p.m_ks, both_match);
+            match (CheckBox(F"{label}##ip{i}", cur))
+            {
+                value(v)? do cv->set(p.m_ks, v);
+                none?;
+            }
+            SameLine();
+            if (both_match)
+                TextDisabled("(插值)");
+            else if (only_a)
+                TextDisabled("(仅A，复制)");
+            else
+                TextDisabled("(仅B，复制)");
+        }
+        Separator();
+        if (Button("生成##ipgen"))
+        {
+            let n = state.m_interp_count;
+            let ftime = state.m_interp_ftime;
+            let snap = frames->dup()->>\f = f->dup;;
+            for (let mut i = 1; i <= n; i += 1)
+            {
+                let t = i as real / (n + 1) as real;
+                let newf = build_interpolated_frame(pairs, cv, t, ftime);
+                do frames->insert(a + i, newf);
+            }
+            do state->record(frames, snap, "两帧间线性插值");
+            state.m_context.m_selected_frame = a + 1;
+            state.m_interp_pair = option::none;
+            do CloseCurrentPopup();
+        }
+        SameLine();
+        if (Button("取消##ipcancel"))
+        {
+            state.m_interp_pair = option::none;
+            do CloseCurrentPopup();
+        }
+        EndPopup();
     }
 
     // ---- 右侧：属性面板 ----
@@ -1927,10 +2272,11 @@ namespace editor::gui::animation2d
                                 else
                                 {
                                     let cur = state->advance_playback(frames);
-                                    if (ctx.m_selected_frame < 0 || ctx.m_selected_frame >= frames->len)
-                                    {
+                                    // 播放时跟随播放游标；否则停在用户选中的帧
+                                    if (state.m_playing && cur >= 0)
+                                        ctx.m_selected_frame = cur;
+                                    else if (ctx.m_selected_frame < 0 || ctx.m_selected_frame >= frames->len)
                                         ctx.m_selected_frame = cur >= 0 ? cur | 0;
-                                    }
                                     let cf = ctx.m_selected_frame;
                                     do _render_center(state, frames, cf);
                                 }
