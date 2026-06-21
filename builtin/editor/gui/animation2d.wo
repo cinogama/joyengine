@@ -670,6 +670,7 @@ namespace editor::gui::animation2d
         }
         func redo(self: EditorState, frames: vec<Animation2dFrameData>) => void
         {
+            do self->flush_value_edit(frames);
             match (self.m_undo.m_future->pop())
             {
                 value(cmd)?
@@ -831,7 +832,7 @@ namespace editor::gui::animation2d
             }
             return found;
         };
-        match (Combo("##action_combo", names, cur_idx))
+        match (Combo("##action_combo", names, cur_idx()))
         {
             value(idx)?
             {
@@ -891,7 +892,7 @@ namespace editor::gui::animation2d
         SameLine();
         match (frames_opt)
         {
-            value(fr)? TextDisabled(F"{fr->len}帧 / {math::round(AnimationContext::total_duration(fr) * 1000.) / 1000.}s");
+            value(fr)? TextDisabled(F"{fr->len}帧 / {math::round(AnimationContext::total_duration(fr) * 1000.) as real / 1000.}s");
             none?;
         }
         SameLine();
@@ -1027,7 +1028,7 @@ namespace editor::gui::animation2d
                     {
                         if (p == "")
                             return;
-                        let out_ctx = AnimationContext::create(p as fsys::path_t);
+                        let out_ctx = AnimationContext::create(fsys::normalize(p));
                         out_ctx.m_animations->set(action_name, act->dup());
                         if (out_ctx->save())
                             do jeapi::gui::form::msg("导出成功", F"动作已导出到 {p}");
@@ -1044,7 +1045,7 @@ namespace editor::gui::animation2d
             {
                 if (p == "")
                     return;
-                match (AnimationContext::open(p as fsys::path_t))
+                match (AnimationContext::open(fsys::normalize(p)))
                 {
                     ok(other)?
                     {
@@ -1069,7 +1070,7 @@ namespace editor::gui::animation2d
     {
         let avail = GetContentRegionAvail();
         let tl_h = 130.;
-        let preview_h = avail[1] - tl_h - GetFrameHeightWithSpacing() * 2. - 8.;
+        let mut preview_h = avail[1] - tl_h - GetFrameHeightWithSpacing() * 2. - 8.;
         if (preview_h < 80.)
             preview_h = 80.;
 
@@ -1112,15 +1113,15 @@ namespace editor::gui::animation2d
         let p = state.m_source_path;
         if (p == "")
         {
-            state.m_source_texture = mut option::none;
+            state.m_source_texture = option::none;
             return;
         }
         match (je::graphic::texture::load(state.m_universe, p))
         {
-            value(tex)? state.m_source_texture = mut option::value(tex);
+            value(tex)? state.m_source_texture = option::value(tex);
             none?
             {
-                state.m_source_texture = mut option::none;
+                state.m_source_texture = option::none;
                 do jeapi::gui::form::msg("载入失败", F"无法载入贴图：{p}");
             }
         }
@@ -1323,7 +1324,7 @@ namespace editor::gui::animation2d
                 do dl->AddRect((x, row_y), (x + cw, row_y + row_h), (20, 20, 20, 255), 0.);
                 do dl->AddText((x + 4., row_y + 2.), (220, 220, 220, 255), i as string);
                 do dl->AddText((x + 4., row_y + row_h - GetTextLineHeight() - 2.),
-                    (180, 220, 180, 255), F"{math::round(f.m_time * 1000.) / 1000.}");
+                    (180, 220, 180, 255), F"{math::round(f.m_time * 1000.) as real / 1000.}");
                 x += cw;
             }
 
@@ -1386,7 +1387,7 @@ namespace editor::gui::animation2d
         EndChild();
 
         // 时间轴右键菜单
-        if (BeginPopupContextItem("##tl_ctx"))
+        if (BeginPopupContextItemLabel("##tl_ctx"))
         {
             let cf = current_frame;
             if (MenuItem("新建帧"))
@@ -1462,7 +1463,6 @@ namespace editor::gui::animation2d
         let sel = state.m_selected_frames->to_array;
         if (sel->len == 0)
             return;
-        let t = std::mutable::create(0.1);
         jeapi::gui::form::input("批量改帧时间", F"为 {sel->len} 个选中帧设置时间(秒)", "0.1",
             func(s)
             {
@@ -1886,7 +1886,7 @@ namespace editor::gui::animation2d
                     // 三栏布局：左动作 / 中预览+时间轴 / 右属性
                     let left_w = 180.;
                     let right_w = 380.;
-                    let center_w = avail[0] - left_w - right_w - 8.;
+                    let mut center_w = avail[0] - left_w - right_w - 8.;
                     if (center_w < 200.) center_w = 200.;
 
                     // 工具栏（整宽）
@@ -1997,6 +1997,6 @@ namespace editor::gui::animation2d
         context->launch_editor_form(func()
             {
                 return _animation_edit_form(state);
-            });
+            }, ());
     }
 }
