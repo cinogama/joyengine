@@ -1100,13 +1100,13 @@ namespace editor::gui::animation2d
 
         // 播放控制
         let has_frames = frames_opt->map(\fr = fr->len > 0;)->or(false);
-        if (Button(state.m_playing ? "⏸##play" | "▶##play") && has_frames)
+        if (Button(state.m_playing ? "暂停##play" | "播放##play") && has_frames)
         {
             state.m_playing = !state.m_playing;
             state.m_last_tick = 0.;
         }
         SameLine();
-        if (Button("⏹##stop") && has_frames)
+        if (Button("停止##stop") && has_frames)
         {
             state.m_playing = false;
             state.m_play_time = 0.;
@@ -1119,6 +1119,7 @@ namespace editor::gui::animation2d
         }
         SameLine();
         // 速度
+        SetNextItemWidth(80.);
         do DragFloat("##speed", state.m_preview_speed, 0.05, 0.05, 8.)
             ->> \v = state.m_preview_speed = (v > 0.01 ? v | 0.01);;
         SameLine();
