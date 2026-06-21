@@ -891,7 +891,7 @@ namespace editor::gui::animation2d
         SameLine();
         match (frames_opt)
         {
-            value(fr)? TextDisabled(F"{fr->len}帧 / {AnimationContext::total_duration(fr):.3f}s");
+            value(fr)? TextDisabled(F"{fr->len}帧 / {math::round(AnimationContext::total_duration(fr) * 1000.) / 1000.}s");
             none?;
         }
         SameLine();
@@ -1323,7 +1323,7 @@ namespace editor::gui::animation2d
                 do dl->AddRect((x, row_y), (x + cw, row_y + row_h), (20, 20, 20, 255), 0.);
                 do dl->AddText((x + 4., row_y + 2.), (220, 220, 220, 255), i as string);
                 do dl->AddText((x + 4., row_y + row_h - GetTextLineHeight() - 2.),
-                    (180, 220, 180, 255), F"{f.m_time:.3f}");
+                    (180, 220, 180, 255), F"{math::round(f.m_time * 1000.) / 1000.}");
                 x += cw;
             }
 
@@ -1720,7 +1720,7 @@ namespace editor::gui::animation2d
         SameLine();
 
         // 成员列表（选中组件后）
-        let members = {
+        let members = func(){
             let mut m = [] as array<(string, je::typeinfo)>;
             match (sel_type->get)
             {
@@ -1732,8 +1732,8 @@ namespace editor::gui::animation2d
                     }
                 none?;
             }
-            m;
-        };
+            return m;
+        }();
         let member_displays = members->>\nametype = nametype[0] + ": " + nametype[1]->name;;
         do Combo("成员##cm", member_displays, sel_member->get)->> \ni = sel_member->set(option::value(ni));;
 
@@ -1741,7 +1741,7 @@ namespace editor::gui::animation2d
         Separator();
 
         // 取选中成员的 (名字, 类型)
-        let sel_member_info = {
+        let sel_member_info = func(){
             let mut mi = option::none: option<(string, je::typeinfo)>;
             match (sel_member->get)
             {
@@ -1753,8 +1753,8 @@ namespace editor::gui::animation2d
                     }
                 none?;
             }
-            mi;
-        };
+            return mi;
+        }();
         match (sel_member_info)
         {
             value((mname, mtype))?
@@ -1969,7 +1969,12 @@ namespace editor::gui::animation2d
                         state.m_open->set(false);
                         if (!ok)
                             return;
-                        do match (state->cur_frames) { value(fr)? do state->flush_value_edit(fr); none?; };
+                        match (state->cur_frames) 
+                        { 
+                        value(fr)? 
+                            do state->flush_value_edit(fr); 
+                        none?; 
+                        };
                         if (!ctx->save())
                             do jeapi::gui::form::msg("保存失败", F"动画未能保存到 {ctx.m_path}");
                     });
