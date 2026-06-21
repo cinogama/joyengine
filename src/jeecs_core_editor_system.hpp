@@ -919,7 +919,12 @@ public let frag =
             using namespace math;
 
             if (!_editor_enabled)
+            {
+                if (!_inputs.r_button_pushed)
+                    _inputs.advise_lock_mouse_walking_camera = false;
+
                 return;
+            }
 
             for (auto&& [position, rotation, trans] : query<
                 view typesof(LocalPosition&, LocalRotation&, Translation&),
