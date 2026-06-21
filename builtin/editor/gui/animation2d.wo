@@ -798,8 +798,9 @@ namespace editor::gui::animation2d
         }
         if (!found)
             return option::none;
-        let uv0 = offset;
-        let uv1 = (offset[0] + tiling[0], offset[1] + tiling[1]);
+        // 对应 woshader: finalUV = (uv + offset) * tiling
+        let uv0 = (offset[0] * tiling[0], offset[1] * tiling[1]);
+        let uv1 = ((offset[0] + 1.) * tiling[0], (offset[1] + 1.) * tiling[1]);
         return option::value((uv0, uv1));
     }
 
@@ -1496,19 +1497,20 @@ namespace editor::gui::animation2d
                 let tx = 1. / cols as real;
                 let ty = 1. / rows as real;
                 // 从上到下、左到右（与运行时纹理 V 向上一致：顶行 = y = rows-1）
+                // shader: finalUV = (uv + offset) * tiling，offset 取单元格索引（而非 UV 坐标）
                 for (let mut j = 0; j < rows; j += 1)
                 {
                     for (let mut i = 0; i < cols; i += 1)
                     {
-                        let y = (rows - 1 - j) as real * ty;
-                        let x = i as real * tx;
+                        let col = i as real;
+                        let row = (rows - 1 - j) as real;
                         frames->add(Animation2dFrameData{
                             m_time = mut state.m_ss_ftime,
                             m_component_data = [
                                 FrameComponentData{
                                     m_component_name = "Renderer::Textures",
                                     m_member_name = "offset",
-                                    m_value = mut DataValue::VEC2((x, y)),
+                                    m_value = mut DataValue::VEC2((col, row)),
                                     m_offset_mode = mut false,
                                 },
                                 FrameComponentData{
