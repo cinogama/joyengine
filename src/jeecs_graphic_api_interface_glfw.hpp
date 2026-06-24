@@ -41,6 +41,98 @@ namespace jeecs::graphic
         inline static std::mutex _m_glfw_instance_mx;
         inline static size_t _m_glfw_taking_count = 0;
 
+        struct __physical_gamepad
+        {
+            je_io_gamepad_handle_t handle = nullptr;
+        };
+        __physical_gamepad _m_gamepads[GLFW_JOYSTICK_LAST + 1];
+        // The global glfwSetJoystickCallback receives no user pointer, so route
+        // through this static pointer to the owning instance (single-window app).
+        inline static glfw* _m_active = nullptr;
+
+        static void _glfw_open_gamepad(int jid)
+        {
+            auto* self = _m_active;
+            if (self == nullptr || jid < 0 || jid > GLFW_JOYSTICK_LAST)
+                return;
+
+            auto& slot = self->_m_gamepads[jid];
+            if (slot.handle != nullptr)
+                return;
+
+            if (glfwJoystickIsGamepad(jid) == GLFW_FALSE)
+                return;
+
+            const char* name = glfwGetGamepadName(jid);
+            const char* guid = glfwGetJoystickGUID(jid);
+
+            slot.handle = je_io_create_gamepad(
+                name != nullptr ? name : "Physical gamepad",
+                guid != nullptr ? guid : nullptr);
+        }
+        static void _glfw_close_gamepad(int jid)
+        {
+            auto* self = _m_active;
+            if (self == nullptr || jid < 0 || jid > GLFW_JOYSTICK_LAST)
+                return;
+
+            auto& slot = self->_m_gamepads[jid];
+            if (slot.handle != nullptr)
+            {
+                je_io_close_gamepad(slot.handle);
+                slot.handle = nullptr;
+            }
+        }
+        static void glfw_callback_joystick(int jid, int event)
+        {
+            if (event == GLFW_CONNECTED)
+                _glfw_open_gamepad(jid);
+            else if (event == GLFW_DISCONNECTED)
+                _glfw_close_gamepad(jid);
+        }
+
+        void _poll_gamepads()
+        {
+            GLFWgamepadstate state;
+            for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; ++jid)
+            {
+                auto handle = _m_gamepads[jid].handle;
+                if (handle == nullptr || !je_io_gamepad_is_active(handle, nullptr))
+                    continue;
+
+                if (glfwGetGamepadState(jid, &state) == GLFW_FALSE)
+                    continue;
+
+                using namespace jeecs::input;
+
+                je_io_gamepad_update_button_state(handle, gamepadcode::A,     state.buttons[GLFW_GAMEPAD_BUTTON_A] != 0);
+                je_io_gamepad_update_button_state(handle, gamepadcode::B,     state.buttons[GLFW_GAMEPAD_BUTTON_B] != 0);
+                je_io_gamepad_update_button_state(handle, gamepadcode::X,     state.buttons[GLFW_GAMEPAD_BUTTON_X] != 0);
+                je_io_gamepad_update_button_state(handle, gamepadcode::Y,     state.buttons[GLFW_GAMEPAD_BUTTON_Y] != 0);
+                je_io_gamepad_update_button_state(handle, gamepadcode::LB,    state.buttons[GLFW_GAMEPAD_BUTTON_LEFT_BUMPER] != 0);
+                je_io_gamepad_update_button_state(handle, gamepadcode::RB,    state.buttons[GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER] != 0);
+                je_io_gamepad_update_button_state(handle, gamepadcode::LS,    state.buttons[GLFW_GAMEPAD_BUTTON_LEFT_THUMB] != 0);
+                je_io_gamepad_update_button_state(handle, gamepadcode::RS,    state.buttons[GLFW_GAMEPAD_BUTTON_RIGHT_THUMB] != 0);
+                je_io_gamepad_update_button_state(handle, gamepadcode::SELECT, state.buttons[GLFW_GAMEPAD_BUTTON_BACK] != 0);
+                je_io_gamepad_update_button_state(handle, gamepadcode::START, state.buttons[GLFW_GAMEPAD_BUTTON_START] != 0);
+                je_io_gamepad_update_button_state(handle, gamepadcode::GUIDE, state.buttons[GLFW_GAMEPAD_BUTTON_GUIDE] != 0);
+                je_io_gamepad_update_button_state(handle, gamepadcode::UP,    state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_UP] != 0);
+                je_io_gamepad_update_button_state(handle, gamepadcode::DOWN,  state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_DOWN] != 0);
+                je_io_gamepad_update_button_state(handle, gamepadcode::LEFT,  state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_LEFT] != 0);
+                je_io_gamepad_update_button_state(handle, gamepadcode::RIGHT, state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_RIGHT] != 0);
+
+                je_io_gamepad_update_stick(handle, joystickcode::L,
+                    state.axes[GLFW_GAMEPAD_AXIS_LEFT_X], state.axes[GLFW_GAMEPAD_AXIS_LEFT_Y]);
+                je_io_gamepad_update_stick(handle, joystickcode::R,
+                    state.axes[GLFW_GAMEPAD_AXIS_RIGHT_X], state.axes[GLFW_GAMEPAD_AXIS_RIGHT_Y]);
+                // Triggers are reported by GLFW in [0,1]; store as x-only per joystickcode semantics.
+                je_io_gamepad_update_stick(handle, joystickcode::LT,
+                    state.axes[GLFW_GAMEPAD_AXIS_LEFT_TRIGGER], 0.f);
+                je_io_gamepad_update_stick(handle, joystickcode::RT,
+                    state.axes[GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER], 0.f);
+            }
+        }
+
     public:
         enum interface_type
         {
@@ -423,6 +515,17 @@ namespace jeecs::graphic
             glfwSetCursorPosCallback(_m_windows, glfw_callback_mouse_pos_changed);
             glfwSetMouseButtonCallback(_m_windows, glfw_callback_mouse_key_clicked);
             glfwSetScrollCallback(_m_windows, glfw_callback_mouse_scroll_changed);
+
+            // Physical gamepad support: register the connect/disconnect callback
+            // and pick up any devices that were already connected before the window
+            // was created. GLFW's gamepad API is not supported on Emscripten.
+            _m_active = this;
+            for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; ++jid)
+            {
+                if (glfwJoystickPresent(jid) == GLFW_TRUE)
+                    _glfw_open_gamepad(jid);
+            }
+            glfwSetJoystickCallback(glfw_callback_joystick);
 #endif
         }
         virtual void swap_for_opengl() override
@@ -457,6 +560,9 @@ namespace jeecs::graphic
                 glfwSetWindowTitle(_m_windows, title);
 
             glfwPollEvents();
+#if JE4_CURRENT_PLATFORM != JE4_PLATFORM_WEBGL
+            _poll_gamepads();
+#endif
             if (glfwWindowShouldClose(_m_windows) == GLFW_TRUE)
             {
                 glfwSetWindowShouldClose(_m_windows, GLFW_FALSE);
@@ -476,6 +582,15 @@ namespace jeecs::graphic
         }
         virtual void shutdown(bool reboot) override
         {
+#if JE4_CURRENT_PLATFORM != JE4_PLATFORM_WEBGL
+            if (_m_active == this)
+            {
+                glfwSetJoystickCallback(nullptr);
+                _m_active = nullptr;
+            }
+            for (int jid = 0; jid <= GLFW_JOYSTICK_LAST; ++jid)
+                _glfw_close_gamepad(jid);
+#endif
             glfwDestroyWindow(_m_windows);
             if (!reboot)
             {

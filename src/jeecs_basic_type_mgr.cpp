@@ -291,7 +291,7 @@ namespace jeecs_impl
 
                 je_mem_free((void *)current_member->m_member_name);
 
-                if (current_member->m_member_name != nullptr)
+                if (current_member->m_woovalue_type_may_null != nullptr)
                     je_mem_free((void *)current_member->m_woovalue_type_may_null);
 
                 const bool entry_tmp_gc_guard = woort_GC_sync_marking_lock();
@@ -359,6 +359,8 @@ namespace jeecs_impl
             if (tinfo->m_script_parsers != nullptr)
                 _free_script_parser(tinfo->m_script_parsers);
 
+            je_mem_free((void *)tinfo->m_typename);
+
             delete tinfo;
         }
 
@@ -412,7 +414,7 @@ namespace jeecs_impl
                 if (t != nullptr)
                     types.push_back(t);
             }
-            return _m_type_records;
+            return types;
         }
         size_t get_unregistered_count() const noexcept
         {
@@ -561,7 +563,7 @@ const jeecs::typing::type_info **jedbg_get_all_registed_types(void)
     auto result = (const jeecs::typing::type_info **)je_mem_alloc(sizeof(const jeecs::typing::type_info *) * (types.size() + 1));
     result[types.size()] = nullptr;
 
-    memcpy(result, types.data(), types.size() * sizeof(const jeecs::typing::type_info **));
+    memcpy(result, types.data(), types.size() * sizeof(const jeecs::typing::type_info *));
 
     return result;
 }
