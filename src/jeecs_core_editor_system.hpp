@@ -794,15 +794,29 @@ public let frag =
                 desc);
         }
 
-        // Force the resource's bounds to a cubic [-size, +size] region centered
-        // at the origin. Used so axis/circle gizmos remain pickable even when
-        // their geometry is a thin line. No-op if the resource failed to load.
-        static void _reset_bounds_to_selector(std::optional<basic::resource<graphic::vertex>>& v, float size)
+        // Reset only the two axes orthogonal to `axis_index` (0=x, 1=y, 2=z)
+        // to [-size, +size], leaving the along-axis bounds untouched so a line
+        // gizmo keeps its full length while becoming pickable off-axis. No-op
+        // if the resource failed to load.
+        static void _reset_bounds_to_selector(std::optional<basic::resource<graphic::vertex>>& v, int axis_index, float size)
         {
             if (!v.has_value()) return;
             auto* r = v.value()->resource();
-            r->m_x_min = r->m_y_min = r->m_z_min = -size;
-            r->m_x_max = r->m_y_max = r->m_z_max =  size;
+            if (axis_index == 0)
+            {
+                r->m_y_min = r->m_z_min = -size;
+                r->m_y_max = r->m_z_max =  size;
+            }
+            else if (axis_index == 1)
+            {
+                r->m_x_min = r->m_z_min = -size;
+                r->m_x_max = r->m_z_max =  size;
+            }
+            else
+            {
+                r->m_x_min = r->m_y_min = -size;
+                r->m_x_max = r->m_y_max =  size;
+            }
         }
 
         // Expand the two axes orthogonal to `axis_index` (0=x, 1=y, 2=z) by
@@ -854,9 +868,9 @@ public let frag =
             _pad_orthogonal(circ_y, 1, SELECTOR_PADDING);
             _pad_orthogonal(circ_z, 2, SELECTOR_PADDING);
 
-            _reset_bounds_to_selector(axis_x, SELECTOR_PADDING);
-            _reset_bounds_to_selector(axis_y, SELECTOR_PADDING);
-            _reset_bounds_to_selector(axis_z, SELECTOR_PADDING);
+            _reset_bounds_to_selector(axis_x, 0, SELECTOR_PADDING);
+            _reset_bounds_to_selector(axis_y, 1, SELECTOR_PADDING);
+            _reset_bounds_to_selector(axis_z, 2, SELECTOR_PADDING);
 
             // Along-axis bounds for the circles (the lines were already reset above).
             if (circ_x.has_value())
