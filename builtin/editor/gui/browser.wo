@@ -1044,7 +1044,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                         let r = dumpling::dispatch(
                             func()
                             {
-                                return dumpling::Program::load(path.path / "editor.wo")
+                                return dumpling::Program::load(path.path / "editor.wo", false)
                                     -> or_map(\e = e->to_string;);
                             });
 

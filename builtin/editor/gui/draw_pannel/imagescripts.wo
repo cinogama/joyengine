@@ -25,7 +25,7 @@ namespace editor::gui::drawpannel
     {
         func create(path: fsys::path_t)
         {
-            try! prog = or_map(\e = e->to_string;) <| dumpling::Program::load(path);
+            try! prog = or_map(\e = e->to_string;) <| dumpling::Program::load(path, true);
             
             try! entry =
                 ok_or(F"未找到脚本的入口 `main`") <|

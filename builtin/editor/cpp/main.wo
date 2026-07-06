@@ -97,7 +97,7 @@ namespace editor
         }
         public func get_dylib_files_by_config(rttype: platform::BuildType)
         {
-            let libname = ["libjoyecs", "libwoo"];
+            let libname = ["libjoyecs", "libwoo", "libwoort"];
             return libname
                 ->> \name = _lib_append_suffix(name, rttype);
                 ;

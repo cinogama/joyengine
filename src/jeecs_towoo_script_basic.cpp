@@ -664,7 +664,7 @@ import je::towoo::types;
         jeecs::towoo::ToWooBaseSystem::towoo_system_info* sysinfo_ptr,
         const char* system_name)
     {
-        if (WOORT_VM_CALL_STATUS_NORMAL != woort_bootup_codeenv(WOORT_IGNORE, cenv))
+        if (WOORT_VM_CALL_STATUS_NORMAL != woort_bootup(WOORT_IGNORE, cenv, true))
         {
             jeecs::debug::logerr("Failed to register: '%s', init failed: '%s'.",
                 system_name, woort_vm_get_runtime_error(vmm));

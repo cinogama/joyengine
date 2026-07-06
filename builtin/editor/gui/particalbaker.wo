@@ -246,7 +246,8 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                                                 try! program =
                                                     or_map(\e = e-> to_string;) <| dumpling::Program::create(
                                                         partical_context.m_path->to_string + " : script.wo",
-                                                        partical_context.m_script->GetText as buffer);
+                                                        partical_context.m_script->GetText as buffer,
+                                                        true);
                                                         
                                                 try! f = ok_or("未找到脚本的入口函数 `_start_baking`") <|
                                                     program->unsafe::load_extern:<(ParticalContext, _EditorContext)=> void>(

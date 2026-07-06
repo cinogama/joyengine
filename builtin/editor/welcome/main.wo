@@ -45,7 +45,7 @@ namespace jeapi::welcome
                             Text(je::internal::build_version_info());
 
                             let (a, b, c, d) = std::debug::runtime_version();
-                            Text(F"Powered by woolang {a}.{b}.{c}.{d}");
+                            Text(F"Powered by WooRT {a}.{b}.{c}.{d}");
                             Separator();
                             
                             Text("第三方组件及开源许可");

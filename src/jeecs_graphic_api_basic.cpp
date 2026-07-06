@@ -1418,7 +1418,7 @@ jegl_shader* _jegl_load_shader_source_impl(
             {
                 jeecs::debug::logerr("Fail to load shader: %s.\nStack overflow.");
             }
-            else if (WOORT_VM_CALL_STATUS_NORMAL != woort_bootup_codeenv(result, cenv))
+            else if (WOORT_VM_CALL_STATUS_NORMAL != woort_bootup(result, cenv, false))
             {
                 jeecs::debug::logerr("Fail to load shader: %s.\n%s.",
                     woort_vm_get_runtime_error(vmm));

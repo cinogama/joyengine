@@ -30,7 +30,7 @@ namespace editor::tools
             {
                 return bind(\r = r;) <| dumpling::dispatch(
                     func(){
-                        try! program = or_map(\e = e->to_string;) <| dumpling::Program::load(path);
+                        try! program = or_map(\e = e->to_string;) <| dumpling::Program::load(path, true);
                         
                         match (program->unsafe::load_extern:<(je::universe, option<je::world>, option<je::entity>)=> void>(
                                 "main"))

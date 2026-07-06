@@ -233,7 +233,7 @@ namespace jeecs
             const woort_value filter_value = s + 7; // reused slot for current element
             const woort_value typeinfo_slot = s + 8; // reused
 
-            const woort_VmCallStatus status = woort_bootup_codeenv(result_struct, cenv);
+            const woort_VmCallStatus status = woort_bootup(result_struct, cenv, false);
             if (status != WOORT_VM_CALL_STATUS_NORMAL)
             {
                 jeecs::debug::logerr(

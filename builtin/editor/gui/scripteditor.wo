@@ -456,7 +456,7 @@ namespace editor::gui
                     func()
                     {
                         return or_map(\e = e->to_string;) <|
-                            dumpling::Program::create(F"_jeditor_{JobID()}.wo", self.m_source->GetText as buffer);
+                            dumpling::Program::create(F"_jeditor_{JobID()}.wo", self.m_source->GetText as buffer, true);
                     });
                     
             try! program = program_result;

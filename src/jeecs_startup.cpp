@@ -313,7 +313,7 @@ return main();
                 woort_value s;
                 if (!woort_push_reserve(1, &s))
                     woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow.");
-                else if (woort_bootup_codeenv(s, cenv) == WOORT_VM_CALL_STATUS_NORMAL)
+                else if (woort_bootup(s, cenv, false) == WOORT_VM_CALL_STATUS_NORMAL)
                 {
                     crc64_result = static_cast<uint64_t>(woort_int(s));
                 }
@@ -432,7 +432,7 @@ bool je_main_script_entry()
         {
             woort_vm* const last = woort_vm_swap(vmm);
             {
-                (void)woort_bootup_codeenv(WOORT_IGNORE, cenv);
+                (void)woort_bootup(WOORT_IGNORE, cenv, true);
             }
             (void)woort_vm_swap(last);
 

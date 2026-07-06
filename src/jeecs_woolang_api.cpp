@@ -2327,7 +2327,7 @@ WOORT_API woort_api wojeapi_towoo_update_component(void)
                                 "forget to import je/towoo/component.wo ?",
                                 component_name, component_path);
                         }
-                        else if (WOORT_VM_CALL_STATUS_NORMAL != woort_bootup_codeenv(WOORT_IGNORE, cenv))
+                        else if (WOORT_VM_CALL_STATUS_NORMAL != woort_bootup(WOORT_IGNORE, cenv, false))
                         {
                             jeecs::debug::logerr("Failed to register: '%s', init failed: '%s'.",
                                 component_name, woort_vm_get_runtime_error(vmm));
@@ -2593,7 +2593,7 @@ std::optional<std::string> _je_dynamic_parser_update_all(const char* path)
             return std::optional("Stack overflow.");
         }
 
-        if (WOORT_VM_CALL_STATUS_NORMAL != woort_bootup_codeenv(WOORT_IGNORE, cenv))
+        if (WOORT_VM_CALL_STATUS_NORMAL != woort_bootup(WOORT_IGNORE, cenv, true))
         {
             (void)woort_vm_swap(last);
 
