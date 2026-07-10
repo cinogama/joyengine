@@ -17,8 +17,8 @@ extern "C" {
 
 struct _jegl_window_android_app
 {
-    void* m_android_app;
-    void* m_android_window;
+    struct android_app* m_android_app;
+    ANativeWindow* m_android_window;
 };
 
 class je_game_engine_context_for_android : jeecs::game_engine_context
