@@ -36,7 +36,6 @@
 #include <unordered_map>
 #include <algorithm>
 #include <functional>
-#include <ranges>
 #include <type_traits>
 #include <cstddef>
 #include <cmath>
@@ -9636,24 +9635,20 @@ namespace jeecs
                         const int base_dst_x = correct_x + next_ch_x + info->m_baseline_offset_x + offset_dx();
                         const int base_dst_y = correct_y + next_ch_y + info->m_baseline_offset_y + offset_dy();
 
-                        auto rows = std::views::iota(size_t{ 0 }, glyph->height());
-                        ::jeecs::parallel_foreach(
-                            rows.begin(), rows.end(),
-                            [&](size_t fy)
+                        const size_t glyph_h = glyph->height();
+                        const size_t glyph_w = glyph->width();
+                        for (size_t fy = 0; fy < glyph_h; ++fy)
+                        {
+                            for (size_t fx = 0; fx < glyph_w; ++fx)
                             {
-                                auto cols = std::views::iota(size_t{ 0 }, glyph->width());
-                                ::jeecs::parallel_foreach(
-                                    cols.begin(), cols.end(),
-                                    [&](size_t fx)
-                                    {
-                                        const size_t x = static_cast<size_t>(base_dst_x + static_cast<int>(fx));
-                                        const size_t y = static_cast<size_t>(base_dst_y + static_cast<int>(fy));
+                                const size_t x = static_cast<size_t>(base_dst_x + static_cast<int>(fx));
+                                const size_t y = static_cast<size_t>(base_dst_y + static_cast<int>(fy));
 
-                                        auto dst = new_texture->pix(x, y);
-                                        const auto src = glyph->pix(fx, fy).get();
-                                        dst.set(blend_glyph_pixel(dst.get(), src, style.color));
-                                    });
-                            });
+                                auto dst = new_texture->pix(x, y);
+                                const auto src = glyph->pix(fx, fy).get();
+                                dst.set(blend_glyph_pixel(dst.get(), src, style.color));
+                            }
+                        }
 
                         next_ch_x += info->m_advance_x;
                     });
