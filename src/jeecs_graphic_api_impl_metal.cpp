@@ -16,7 +16,6 @@
 #include <AppKit/AppKit.hpp>
 #include <MetalKit/MetalKit.hpp>
 
-// #include "jeecs_graphic_api_interface_cocoa.hpp"
 #include "jeecs_graphic_api_interface_glfw.hpp"
 
 namespace jeecs::graphic::api::metal
