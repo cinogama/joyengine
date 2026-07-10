@@ -433,7 +433,7 @@ extern "C" {
             &_je_file_instance::_je_android_file_seek,
             &_je_file_instance::_je_android_file_close);
 
-        wo_set_exe_path(jni_cstring(env, library_path).c_str());
+        (void)woort_set_exe_path(jni_cstring(env, library_path).c_str());
         jeecs_file_set_host_path(jni_cstring(env, cache_path).c_str());
         jeecs_file_set_runtime_path(jni_cstring(env, asset_path).c_str());
 

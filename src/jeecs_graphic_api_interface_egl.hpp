@@ -268,7 +268,7 @@ namespace jeecs::graphic
 
         virtual void* interface_handle() const override
         {
-            return static_cast<void*>(&m_context);
+            return static_cast<void*>(const_cast<egl_context*>(&m_context));
         }
     };
 }

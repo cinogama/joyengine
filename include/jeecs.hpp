@@ -7346,7 +7346,7 @@ namespace jeecs
         constexpr static float DEG2RAD = PI / 180.f;
         constexpr static float EPSILON = FLT_EPSILON;
 
-        template<std::floating_point T>
+        template <typename T, typename = std::enable_if_t<std::is_floating_point_v<T>>>
         inline bool almost_equal(T a, T b, T eps = (T)1e-6) noexcept
         {
             if (a == b)
