@@ -1057,6 +1057,8 @@ public let frag =
 
                     game_world current_world = mover_entity.game_world();
 
+                    const auto& anchor_uid = anchor.uid;
+
                     // Helper that creates one of the three axis gizmos (x/y/z).
                     auto make_axis_entity = [&](
                         const math::vec3& axis_vec,
@@ -1076,11 +1078,13 @@ public let frag =
 
                         if (axis_shader.has_value())
                             e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader.value());
+
                         e.get_component<Editor::EntityMover>()->axis = axis_vec;
                         e.get_component<Renderer::Shape>()->vertex = axis_vertex;
                         e.get_component<Renderer::Rendqueue>()->rend_queue = GIZMO_REND_QUEUE;
                         e.get_component<Transform::LocalPosition>()->pos = axis_vec;
-                        e.get_component<Transform::LocalToParent>()->parent_uid = anchor.uid;
+                        e.get_component<Transform::LocalToParent>()->parent_uid = anchor_uid;
+
                         return e;
                     };
 
@@ -1104,7 +1108,7 @@ public let frag =
                         select_box.get_component<Renderer::Shaders>()->shaders.push_back(select_box_shader.value());
                     select_box.get_component<Renderer::Shape>()->vertex = select_box_vert;
                     select_box.get_component<Renderer::Rendqueue>()->rend_queue = GIZMO_REND_QUEUE;
-                    select_box.get_component<Transform::LocalToParent>()->parent_uid = anchor.uid;
+                    select_box.get_component<Transform::LocalToParent>()->parent_uid = anchor_uid;
                 }
                 if (const game_entity* current = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr)
                 {

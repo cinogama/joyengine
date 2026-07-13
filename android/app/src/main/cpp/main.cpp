@@ -19,6 +19,7 @@ struct _jegl_window_android_app
 {
     struct android_app* m_android_app;
     ANativeWindow* m_android_window;
+    ANativeWindow** m_live_window_ptr;
 };
 
 class je_game_engine_context_for_android : jeecs::game_engine_context
@@ -129,6 +130,7 @@ public:
         request.m_type = application_request::request_kind::INIT_REND_WINDOW;
         request.m_argm.m_app_context.m_android_app = app;
         request.m_argm.m_app_context.m_android_window = app->window;
+        request.m_argm.m_app_context.m_live_window_ptr = &app->window;
     }
 
     void request_to_term()

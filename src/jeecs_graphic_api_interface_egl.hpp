@@ -25,6 +25,10 @@ namespace jeecs::graphic
         {
             struct android_app* m_android_app;
             ANativeWindow* m_android_window;
+            // Points to the live ANativeWindow* inside android_app::window,
+            // so update() can detect window destruction/recreation without
+            // requiring the full android_app definition in this header.
+            ANativeWindow** m_live_window_ptr;
         };
 
     public:
@@ -51,11 +55,13 @@ namespace jeecs::graphic
 
         int32_t _m_recorded_width;
         int32_t _m_recorded_height;
+        ANativeWindow** _m_live_window_ptr;
 
     public:
         egl(interface_type type)
             : _m_recorded_width(0)
             , _m_recorded_height(0)
+            , _m_live_window_ptr(nullptr)
         {
             m_context.m_type = type;
             m_context.m_window = nullptr;
@@ -73,6 +79,7 @@ namespace jeecs::graphic
 
             m_context.m_window = data->m_android_window;
             m_context.m_app = data->m_android_app;
+            _m_live_window_ptr = data->m_live_window_ptr;
 
             switch (m_context.m_type)
             {
@@ -210,7 +217,7 @@ namespace jeecs::graphic
             // After APP_CMD_TERM_WINDOW, native_app_glue sets app->window to nullptr.
             // The cached m_context.m_window then points to a freed surface.
             // Return PAUSE until a reboot provides a fresh window via APP_CMD_INIT_WINDOW.
-            if (m_context.m_app == nullptr || m_context.m_app->window != m_context.m_window)
+            if (_m_live_window_ptr == nullptr || *_m_live_window_ptr != m_context.m_window)
                 return update_result::PAUSE;
 
             int32_t width = ANativeWindow_getWidth(m_context.m_window);
