@@ -6421,11 +6421,14 @@ namespace jeecs
         template <typename FirstCompT, typename... CompTs>
         inline game_entity add_entity()
         {
-            typing::typeid_t component_ids[] = {
+            const typing::typeid_t component_ids[] = {
                 typing::type_info::id<FirstCompT>(),
                 typing::type_info::id<CompTs>()...,
-                typing::INVALID_TYPE_ID };
+                typing::INVALID_TYPE_ID,
+            };
+
             game_entity gentity;
+
             je_ecs_world_create_entity_with_components(
                 handle(), &gentity, component_ids);
 
@@ -6442,11 +6445,14 @@ namespace jeecs
         template <typename FirstCompT, typename... CompTs>
         inline game_entity add_prefab()
         {
-            typing::typeid_t component_ids[] = {
+            const typing::typeid_t component_ids[] = {
                 typing::type_info::id<FirstCompT>(),
                 typing::type_info::id<CompTs>()...,
-                typing::INVALID_TYPE_ID };
+                typing::INVALID_TYPE_ID,
+            };
+
             game_entity gentity;
+
             je_ecs_world_create_prefab_with_components(
                 handle(), &gentity, component_ids);
 

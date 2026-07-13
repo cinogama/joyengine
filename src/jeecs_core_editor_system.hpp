@@ -1084,13 +1084,11 @@ public let frag =
                         e.get_component<Renderer::Rendqueue>()->rend_queue = GIZMO_REND_QUEUE;
                         e.get_component<Transform::LocalPosition>()->pos = axis_vec;
                         e.get_component<Transform::LocalToParent>()->parent_uid = anchor_uid;
-
-                        return e;
                     };
 
-                    game_entity axis_x_e = make_axis_entity(math::vec3(1.f, 0, 0), axis_x);
-                    game_entity axis_y_e = make_axis_entity(math::vec3(0, 1.f, 0), axis_y);
-                    game_entity axis_z_e = make_axis_entity(math::vec3(0, 0, 1.f), axis_z);
+                    make_axis_entity(math::vec3(1.f, 0, 0), axis_x);
+                    make_axis_entity(math::vec3(0, 1.f, 0), axis_y);
+                    make_axis_entity(math::vec3(0, 0, 1.f), axis_z);
 
                     game_entity select_box = current_world.add_entity<
                         Transform::LocalRotation,
