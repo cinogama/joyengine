@@ -17,7 +17,6 @@ set(JE4_ENABLE_VULKAN120_GAPI           OFF CACHE BOOL "Disable Vulkan 1.2 on We
 set(JE4_ENABLE_METAL_GAPI               OFF CACHE BOOL "Disable Metal on WebGL" FORCE)
 
 set(WO_DISABLE_COMPILER                 ON CACHE BOOL "Disable compiler on WebGL to reduce size" FORCE)
-set(WO_DISABLE_FUNCTION_FOR_WASM        ON CACHE BOOL "Disable dynamic lib loading" FORCE)
 set(WOORT_BUILD_WITH_ASMJIT             OFF CACHE BOOL "Disable JIT on WebGL" FORCE)
 
 set(JE4_IGNORED_WOOLANG_PKG_LIST        "process;socket" CACHE STRING "Ignore process and socket for WASM" FORCE)

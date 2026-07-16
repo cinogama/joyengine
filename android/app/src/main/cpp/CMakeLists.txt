@@ -20,7 +20,6 @@ set(JE4_ENABLE_VULKAN120_GAPI           OFF CACHE BOOL "Disable Vulkan 1.2 on An
 set(JE4_ENABLE_METAL_GAPI               OFF CACHE BOOL "Disable Metal on Android" FORCE)
 
 set(WO_DISABLE_COMPILER                 ON CACHE BOOL "Disable compiler on Android to reduce size" FORCE)
-set(WO_DISABLE_FUNCTION_FOR_WASM        OFF CACHE BOOL "Enable dynamic lib loading (For vulkan)" FORCE)
 set(WOORT_BUILD_WITH_ASMJIT             OFF CACHE BOOL "Disable JIT on Android" FORCE)
 
 # Searches for a package provided by the game activity dependency
