@@ -1,4 +1,6 @@
 #include <emscripten/html5.h>
+#include <string>
+#include <vector>
 
 /*
  * JoyECS
@@ -78,7 +80,20 @@ extern "C"
         _je4_js_callback_prepare_surface_context()
     {
         assert(g_webgl_context == nullptr);
-        g_webgl_context = new je_webgl_context(g_argc, g_argv);
+
+        std::vector<std::string> arg_strings;
+        for (int i = 0; i < g_argc; ++i)
+            arg_strings.emplace_back(g_argv[i]);
+        arg_strings.emplace_back("--woort-gc-max-reserved-memory");
+        arg_strings.emplace_back("256");
+
+        std::vector<char*> extra_argv;
+        extra_argv.reserve(arg_strings.size());
+        for (auto& s : arg_strings)
+            extra_argv.push_back(s.data());
+
+        g_webgl_context = new je_webgl_context(
+            static_cast<int>(extra_argv.size()), extra_argv.data());
     }
     void EMSCRIPTEN_KEEPALIVE 
         _je4_je_io_update_mousepos(int group, int x, int y)

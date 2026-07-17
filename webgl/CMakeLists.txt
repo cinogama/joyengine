@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.22.1)
 
 project("joyengineecs4w")
 
+set(JE4_WEBGL_MAX_HEAP_MEM_SIZE         "2" CACHE STRING "Maximum heap memory size in GB for WebGL (MAXIMUM_MEMORY)" FORCE)
+
 # Setting for JoyEngineECS 4 Webgl.
 set(JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD OFF CACHE BOOL "Disable install baozi on WebGL" FORCE)
 set(JE4_STATIC_LINK_MODULE_AND_PKGS     ON  CACHE BOOL "Enable static link packages on WebGL" FORCE)
@@ -89,10 +91,11 @@ set_target_properties(joyengineecs4w PROPERTIES
         -s USE_WEBGL2=1 \
         -s USE_GLFW=3 \
         -s SHARED_MEMORY=1 \
-        -s INITIAL_MEMORY=33554432 \
+        -s INITIAL_MEMORY=32MB \
+        -s MAXIMUM_MEMORY={JE4_WEBGL_MAX_HEAP_MEM_SIZE}GB \
         -s ALLOW_MEMORY_GROWTH=1 \
-        -s STACK_SIZE=1048576 \
-        -s DEFAULT_PTHREAD_STACK_SIZE=1048576 \
+        -s STACK_SIZE=1MB \
+        -s DEFAULT_PTHREAD_STACK_SIZE=1MB \
         -s PTHREAD_POOL_SIZE=16 \
         -s PTHREAD_POOL_SIZE_STRICT=0 \
         -s MIN_SAFARI_VERSION=150000 \
