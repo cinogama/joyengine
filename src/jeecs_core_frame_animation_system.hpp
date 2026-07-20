@@ -37,7 +37,7 @@ namespace jeecs
                     if (!animation.m_current_action.has_value())
                         continue;
 
-                    auto* active_animation_frames =
+                    auto active_animation_frames =
                         animation.m_animations.find(animation.m_current_action.value());
 
                     if (active_animation_frames != animation.m_animations.end())

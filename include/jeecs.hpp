@@ -5313,62 +5313,417 @@ namespace jeecs
             }
         };
 
+        class string;
+
+        namespace _detail
+        {
+            template <typename T>
+            inline size_t default_hash(const T& key) noexcept
+            {
+                return std::hash<T>{}(key);
+            }
+        }
+
         /*
         jeecs::basic::map [类型]
         用于存放大小可变的唯一键值对
             * 为了保证模块之间的二进制一致性，公共组件中请不要使用std::map
+            * 采用开放寻址（线性探测）的哈希表实现
         */
         template <typename KeyT, typename ValT>
         class map
         {
+        public:
             struct pair
             {
                 KeyT k;
                 ValT v;
             };
-            basic::vector<pair> dats;
+
+        private:
+            enum class slot_state : uint8_t
+            {
+                EMPTY = 0,
+                OCCUPIED = 1,
+                TOMBSTONE = 2,
+            };
+
+            struct slot
+            {
+                slot_state state;
+                size_t cached_hash;
+                alignas(pair) unsigned char storage[sizeof(pair)];
+            };
+
+            slot* m_slots = nullptr;
+            size_t m_capacity = 0;
+            size_t m_size = 0;
+            size_t m_tombstones = 0;
+
+            static constexpr size_t MIN_CAPACITY = 16;
+            static constexpr size_t LOAD_FACTOR_NUM = 3;
+            static constexpr size_t LOAD_FACTOR_DEN = 4;
+
+            inline static pair* _slot_pair(slot& s) noexcept
+            {
+                return std::launder(reinterpret_cast<pair*>(s.storage));
+            }
+            inline static const pair* _slot_pair(const slot& s) noexcept
+            {
+                return std::launder(reinterpret_cast<const pair*>(s.storage));
+            }
+
+            inline static size_t _hash_key(const KeyT& k) noexcept
+            {
+                if constexpr (std::is_same_v<std::decay_t<KeyT>, basic::string>)
+                {
+                    // FNV-1a 64-bit; 与 basic::hash_compile_time 的算法保持一致。
+                    constexpr typing::typehash_t _fnv_prime = (typing::typehash_t)0x100000001B3ull;
+                    constexpr typing::typehash_t _fnv_basis = (typing::typehash_t)0xCBF29CE484222325ull;
+                    typing::typehash_t h = _fnv_basis;
+                    const char* p = k.c_str();
+                    while (*p != 0)
+                    {
+                        h = (*p ^ h) * _fnv_prime;
+                        ++p;
+                    }
+                    return (size_t)h;
+                }
+                else
+                {
+                    return _detail::default_hash(k);
+                }
+            }
+
+            inline static size_t _round_up_pow2(size_t v) noexcept
+            {
+                if (v <= 1) return 1;
+                --v;
+                v |= v >> 1; v |= v >> 2; v |= v >> 4;
+                v |= v >> 8; v |= v >> 16;
+                if constexpr (sizeof(size_t) > 4) v |= v >> 32;
+                return v + 1;
+            }
+
+            void _deallocate() noexcept
+            {
+                if (m_slots != nullptr)
+                {
+                    for (size_t i = 0; i < m_capacity; ++i)
+                    {
+                        if (m_slots[i].state == slot_state::OCCUPIED)
+                            _slot_pair(m_slots[i])->~pair();
+                    }
+                    je_mem_free(m_slots);
+                    m_slots = nullptr;
+                }
+                m_capacity = 0;
+                m_size = 0;
+                m_tombstones = 0;
+            }
+
+            void _alloc_slots(size_t cap) noexcept
+            {
+                m_slots = (slot*)je_mem_alloc(cap * sizeof(slot));
+                m_capacity = cap;
+                m_size = 0;
+                m_tombstones = 0;
+                for (size_t i = 0; i < cap; ++i)
+                    m_slots[i].state = slot_state::EMPTY;
+            }
+
+            void _rehash(size_t new_cap) noexcept
+            {
+                slot* old_slots = m_slots;
+                size_t old_cap = m_capacity;
+
+                m_slots = (slot*)je_mem_alloc(new_cap * sizeof(slot));
+                m_capacity = new_cap;
+                m_size = 0;
+                m_tombstones = 0;
+
+                for (size_t i = 0; i < new_cap; ++i)
+                    m_slots[i].state = slot_state::EMPTY;
+
+                for (size_t i = 0; i < old_cap; ++i)
+                {
+                    if (old_slots[i].state == slot_state::OCCUPIED)
+                    {
+                        const size_t h = old_slots[i].cached_hash;
+                        size_t idx = h & (new_cap - 1);
+                        while (m_slots[idx].state == slot_state::OCCUPIED)
+                            idx = (idx + 1) & (new_cap - 1);
+
+                        new (m_slots[idx].storage) pair(std::move(*_slot_pair(old_slots[i])));
+                        _slot_pair(old_slots[i])->~pair();
+                        m_slots[idx].state = slot_state::OCCUPIED;
+                        m_slots[idx].cached_hash = h;
+                        ++m_size;
+                    }
+                }
+
+                if (old_slots != nullptr)
+                    je_mem_free(old_slots);
+            }
+
+            inline void _ensure_cap_for_insert() noexcept
+            {
+                const size_t used_after = m_size + m_tombstones + 1;
+                const size_t threshold = (m_capacity * LOAD_FACTOR_NUM) / LOAD_FACTOR_DEN;
+
+                if (m_capacity == 0 || used_after > threshold)
+                {
+                    if (m_capacity == 0)
+                    {
+                        _alloc_slots(MIN_CAPACITY);
+                    }
+                    else if (m_tombstones > m_size)
+                    {
+                        // 多数浪费来自墓碑，原地 rehash 即可
+                        _rehash(m_capacity);
+                    }
+                    else
+                    {
+                        _rehash(m_capacity * 2);
+                    }
+                }
+            }
+
+            slot* _find_slot(const KeyT& k) const noexcept
+            {
+                if (m_capacity == 0)
+                    return nullptr;
+
+                const size_t h = _hash_key(k);
+                const size_t mask = m_capacity - 1;
+                size_t idx = h & mask;
+                const size_t start = idx;
+
+                do
+                {
+                    slot& s = m_slots[idx];
+                    if (s.state == slot_state::EMPTY)
+                        return nullptr;
+                    if (s.state == slot_state::OCCUPIED
+                        && s.cached_hash == h
+                        && _slot_pair(s)->k == k)
+                    {
+                        return const_cast<slot*>(&s);
+                    }
+                    idx = (idx + 1) & mask;
+                } while (idx != start);
+
+                return nullptr;
+            }
 
         public:
+            class iterator
+            {
+                friend class map;
+                slot* m_cur;
+                slot* m_end_slot;
+
+                iterator(slot* cur, slot* end_slot, bool /*skip_to_occupied*/) noexcept
+                    : m_cur(cur), m_end_slot(end_slot)
+                {
+                    while (m_cur < m_end_slot && m_cur->state != slot_state::OCCUPIED)
+                        ++m_cur;
+                }
+
+            public:
+                iterator(slot* cur, slot* end_slot) noexcept
+                    : m_cur(cur), m_end_slot(end_slot)
+                {
+                }
+
+                iterator& operator++() noexcept
+                {
+                    do
+                    {
+                        ++m_cur;
+                    } while (m_cur < m_end_slot && m_cur->state != slot_state::OCCUPIED);
+                    return *this;
+                }
+
+                pair& operator*() const noexcept
+                {
+                    return *_slot_pair(*m_cur);
+                }
+                pair* operator->() const noexcept
+                {
+                    return _slot_pair(*m_cur);
+                }
+
+                bool operator==(const iterator& o) const noexcept { return m_cur == o.m_cur; }
+                bool operator!=(const iterator& o) const noexcept { return m_cur != o.m_cur; }
+            };
+
+            map() noexcept = default;
+
+            ~map() noexcept
+            {
+                _deallocate();
+            }
+
+            map(const map& o) noexcept
+            {
+                if (o.m_capacity > 0)
+                {
+                    _alloc_slots(o.m_capacity);
+                    for (size_t i = 0; i < o.m_capacity; ++i)
+                    {
+                        if (o.m_slots[i].state == slot_state::OCCUPIED)
+                        {
+                            slot& dst = m_slots[i];
+                            dst.state = slot_state::OCCUPIED;
+                            dst.cached_hash = o.m_slots[i].cached_hash;
+                            new (dst.storage) pair(*_slot_pair(o.m_slots[i]));
+                            ++m_size;
+                        }
+                    }
+                }
+            }
+
+            map(map&& o) noexcept
+                : m_slots(o.m_slots)
+                , m_capacity(o.m_capacity)
+                , m_size(o.m_size)
+                , m_tombstones(o.m_tombstones)
+            {
+                o.m_slots = nullptr;
+                o.m_capacity = 0;
+                o.m_size = 0;
+                o.m_tombstones = 0;
+            }
+
+            map& operator=(const map& o) noexcept
+            {
+                if (this != &o)
+                {
+                    _deallocate();
+                    if (o.m_capacity > 0)
+                    {
+                        _alloc_slots(o.m_capacity);
+                        for (size_t i = 0; i < o.m_capacity; ++i)
+                        {
+                            if (o.m_slots[i].state == slot_state::OCCUPIED)
+                            {
+                                slot& dst = m_slots[i];
+                                dst.state = slot_state::OCCUPIED;
+                                dst.cached_hash = o.m_slots[i].cached_hash;
+                                new (dst.storage) pair(*_slot_pair(o.m_slots[i]));
+                                ++m_size;
+                            }
+                        }
+                    }
+                }
+                return *this;
+            }
+
+            map& operator=(map&& o) noexcept
+            {
+                if (this != &o)
+                {
+                    _deallocate();
+                    m_slots = o.m_slots;
+                    m_capacity = o.m_capacity;
+                    m_size = o.m_size;
+                    m_tombstones = o.m_tombstones;
+
+                    o.m_slots = nullptr;
+                    o.m_capacity = 0;
+                    o.m_size = 0;
+                    o.m_tombstones = 0;
+                }
+                return *this;
+            }
+
             ValT& operator[](const KeyT& k) noexcept
             {
-                auto* fnd = find(k);
-                if (fnd == dats.end())
+                if (slot* found = _find_slot(k); found != nullptr)
+                    return _slot_pair(*found)->v;
+
+                _ensure_cap_for_insert();
+
+                const size_t h = _hash_key(k);
+                const size_t mask = m_capacity - 1;
+                size_t idx = h & mask;
+                slot* first_tombstone = nullptr;
+
+                while (true)
                 {
-                    dats.push_back({ k, {} });
-                    return dats.back().v;
+                    slot& s = m_slots[idx];
+                    if (s.state == slot_state::EMPTY)
+                    {
+                        slot* target = first_tombstone != nullptr ? first_tombstone : &s;
+                        target->state = slot_state::OCCUPIED;
+                        target->cached_hash = h;
+                        new (target->storage) pair{ k, ValT{} };
+                        if (target != &s)
+                            --m_tombstones;
+                        ++m_size;
+                        return _slot_pair(*target)->v;
+                    }
+                    if (s.state == slot_state::TOMBSTONE && first_tombstone == nullptr)
+                        first_tombstone = &s;
+
+                    idx = (idx + 1) & mask;
                 }
-                return fnd->v;
             }
+
+            iterator find(const KeyT& k) noexcept
+            {
+                slot* s = _find_slot(k);
+                if (s == nullptr)
+                    return end();
+                return iterator(s, m_slots + m_capacity, true);
+            }
+
+            bool erase(const KeyT& k) noexcept
+            {
+                slot* s = _find_slot(k);
+                if (s == nullptr)
+                    return false;
+
+                _slot_pair(*s)->~pair();
+                s->state = slot_state::TOMBSTONE;
+                --m_size;
+                ++m_tombstones;
+                return true;
+            }
+
             void clear() noexcept
             {
-                dats.clear();
-            }
-            pair* find(const KeyT& k) const noexcept
-            {
-                return std::find_if(dats.begin(), dats.end(), [&k](pair& p)
-                    { return p.k == k; });
-            }
-            bool erase(const KeyT& k)
-            {
-                auto* fnd = find(k);
-                if (fnd != end())
+                for (size_t i = 0; i < m_capacity; ++i)
                 {
-                    dats.erase(fnd);
-                    return true;
+                    if (m_slots[i].state == slot_state::OCCUPIED)
+                        _slot_pair(m_slots[i])->~pair();
+                    m_slots[i].state = slot_state::EMPTY;
                 }
-                return false;
+                m_size = 0;
+                m_tombstones = 0;
             }
-            inline auto begin() const noexcept -> pair*
+
+            iterator begin() noexcept
             {
-                return dats.begin();
+                if (m_capacity == 0)
+                    return end();
+                return iterator(m_slots, m_slots + m_capacity, true);
             }
-            inline auto end() const noexcept -> pair*
+
+            iterator end() noexcept
             {
-                return dats.end();
+                return iterator(m_slots + m_capacity, m_slots + m_capacity);
             }
-            inline size_t size() const
+
+            inline size_t size() const noexcept
             {
-                return dats.size();
+                return m_size;
+            }
+
+            inline bool empty() const noexcept
+            {
+                return m_size == 0;
             }
         };
 
