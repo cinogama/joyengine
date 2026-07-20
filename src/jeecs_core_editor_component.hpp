@@ -120,6 +120,7 @@ namespace jeecs
         };
     }
 }
+
 WOORT_API woort_api wojeapi_store_bad_shader_name(void)
 {
     jeecs::game_entity* const entity = static_cast<jeecs::game_entity*>(woort_gcpointer(0));

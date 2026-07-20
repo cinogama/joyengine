@@ -5,7 +5,7 @@
 #include "jeecs_core_translation_system.hpp"
 #include "jeecs_core_graphic_system.hpp"
 #include "jeecs_core_frame_animation_system.hpp"
-#include "jeecs_core_editor_system.hpp"
+#include "jeecs_core_editor_component.hpp"
 #include "jeecs_core_physics_system.hpp"
 #include "jeecs_core_script_system.hpp"
 #include "jeecs_core_audio_system.hpp"
@@ -77,16 +77,12 @@ void _jeecs_entry_register_core_systems(jeecs::typing::type_unregister_guard* gu
     jeecs::typing::type_info::register_type<jeecs::Editor::EntitySelectBox>(guard, "Editor::EntitySelectBox");
     jeecs::typing::type_info::register_type<jeecs::Editor::EntityId>(guard, "Editor::EntityId");
 
-    jeecs::typing::type_info::register_type<jeecs::DefaultEditorSystem>(guard, "Editor::DefaultEditorSystem");
     jeecs::typing::type_info::register_type<jeecs::TranslationUpdatingSystem>(guard, "Translation::TranslationUpdatingSystem");
     jeecs::typing::type_info::register_type<jeecs::Physics2DUpdatingSystem>(guard, "Physics::Physics2DUpdatingSystem");
-
     jeecs::typing::type_info::register_type<jeecs::FrameAnimationSystem>(guard, "Animation::FrameAnimationSystem");
-
     jeecs::typing::type_info::register_type<jeecs::UserInterfaceGraphicPipelineSystem>(guard, "Graphic::UserInterfaceGraphicPipelineSystem");
     jeecs::typing::type_info::register_type<jeecs::UnlitGraphicPipelineSystem>(guard, "Graphic::UnlitGraphicPipelineSystem");
     jeecs::typing::type_info::register_type<jeecs::DeferLight2DGraphicPipelineSystem>(guard, "Graphic::DeferLight2DGraphicPipelineSystem");
-
     jeecs::typing::type_info::register_type<jeecs::AudioUpdatingSystem>(guard, "Audio::AudioUpdatingSystem");
     jeecs::typing::type_info::register_type<jeecs::VirtualGamepadInputSystem>(guard, "Input::VirtualGamepadInputSystem");
 }

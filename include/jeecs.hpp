@@ -5324,6 +5324,19 @@ namespace jeecs
             }
         }
 
+        constexpr typing::typehash_t prime = (typing::typehash_t)0x100000001B3ull;
+        constexpr typing::typehash_t basis = (typing::typehash_t)0xCBF29CE484222325ull;
+
+        /*
+        jeecs::basic::hash_compile_time [函数]
+        可在编译时计算字符串的哈希值的哈希函数
+        */
+        constexpr typing::typehash_t hash_compile_time(
+            char const* str, typing::typehash_t last_value = basis)
+        {
+            return *str ? hash_compile_time(str + 1, (*str ^ last_value) * prime) : last_value;
+        }
+
         /*
         jeecs::basic::map [类型]
         用于存放大小可变的唯一键值对
@@ -5377,32 +5390,12 @@ namespace jeecs
             {
                 if constexpr (std::is_same_v<std::decay_t<KeyT>, basic::string>)
                 {
-                    // FNV-1a 64-bit; 与 basic::hash_compile_time 的算法保持一致。
-                    constexpr typing::typehash_t _fnv_prime = (typing::typehash_t)0x100000001B3ull;
-                    constexpr typing::typehash_t _fnv_basis = (typing::typehash_t)0xCBF29CE484222325ull;
-                    typing::typehash_t h = _fnv_basis;
-                    const char* p = k.c_str();
-                    while (*p != 0)
-                    {
-                        h = (*p ^ h) * _fnv_prime;
-                        ++p;
-                    }
-                    return (size_t)h;
+                    return (size_t)hash_compile_time(k.c_str());
                 }
                 else
                 {
                     return _detail::default_hash(k);
                 }
-            }
-
-            inline static size_t _round_up_pow2(size_t v) noexcept
-            {
-                if (v <= 1) return 1;
-                --v;
-                v |= v >> 1; v |= v >> 2; v |= v >> 4;
-                v |= v >> 8; v |= v >> 16;
-                if constexpr (sizeof(size_t) > 4) v |= v >> 32;
-                return v + 1;
             }
 
             void _deallocate() noexcept
@@ -5489,7 +5482,7 @@ namespace jeecs
                 }
             }
 
-            slot* _find_slot(const KeyT& k) const noexcept
+            const slot* _find_slot(const KeyT& k) const noexcept
             {
                 if (m_capacity == 0)
                     return nullptr;
@@ -5508,7 +5501,7 @@ namespace jeecs
                         && s.cached_hash == h
                         && _slot_pair(s)->k == k)
                     {
-                        return const_cast<slot*>(&s);
+                        return &s;
                     }
                     idx = (idx + 1) & mask;
                 } while (idx != start);
@@ -5516,14 +5509,23 @@ namespace jeecs
                 return nullptr;
             }
 
+            slot* _find_slot(const KeyT& k) noexcept
+            {
+                return const_cast<slot*>(
+                    static_cast<const map&>(*this)._find_slot(k));
+            }
+
         public:
-            class iterator
+            template <bool IsConst>
+            class basic_iterator
             {
                 friend class map;
-                slot* m_cur;
-                slot* m_end_slot;
+                using slot_ptr_t = std::conditional_t<IsConst, const slot*, slot*>;
 
-                iterator(slot* cur, slot* end_slot, bool /*skip_to_occupied*/) noexcept
+                slot_ptr_t m_cur;
+                slot_ptr_t m_end_slot;
+
+                basic_iterator(slot_ptr_t cur, slot_ptr_t end_slot, bool /*skip_to_occupied*/) noexcept
                     : m_cur(cur), m_end_slot(end_slot)
                 {
                     while (m_cur < m_end_slot && m_cur->state != slot_state::OCCUPIED)
@@ -5531,12 +5533,12 @@ namespace jeecs
                 }
 
             public:
-                iterator(slot* cur, slot* end_slot) noexcept
+                basic_iterator(slot_ptr_t cur, slot_ptr_t end_slot) noexcept
                     : m_cur(cur), m_end_slot(end_slot)
                 {
                 }
 
-                iterator& operator++() noexcept
+                basic_iterator& operator++() noexcept
                 {
                     do
                     {
@@ -5545,18 +5547,21 @@ namespace jeecs
                     return *this;
                 }
 
-                pair& operator*() const noexcept
+                auto& operator*() const noexcept
                 {
                     return *_slot_pair(*m_cur);
                 }
-                pair* operator->() const noexcept
+                auto* operator->() const noexcept
                 {
                     return _slot_pair(*m_cur);
                 }
 
-                bool operator==(const iterator& o) const noexcept { return m_cur == o.m_cur; }
-                bool operator!=(const iterator& o) const noexcept { return m_cur != o.m_cur; }
+                bool operator==(const basic_iterator& o) const noexcept { return m_cur == o.m_cur; }
+                bool operator!=(const basic_iterator& o) const noexcept { return m_cur != o.m_cur; }
             };
+
+            using iterator = basic_iterator<false>;
+            using const_iterator = basic_iterator<true>;
 
             map() noexcept = default;
 
@@ -5679,6 +5684,14 @@ namespace jeecs
                 return iterator(s, m_slots + m_capacity, true);
             }
 
+            const_iterator find(const KeyT& k) const noexcept
+            {
+                const slot* s = _find_slot(k);
+                if (s == nullptr)
+                    return end();
+                return const_iterator(s, m_slots + m_capacity, true);
+            }
+
             bool erase(const KeyT& k) noexcept
             {
                 slot* s = _find_slot(k);
@@ -5711,9 +5724,21 @@ namespace jeecs
                 return iterator(m_slots, m_slots + m_capacity, true);
             }
 
+            const_iterator begin() const noexcept
+            {
+                if (m_capacity == 0)
+                    return end();
+                return const_iterator(m_slots, m_slots + m_capacity, true);
+            }
+
             iterator end() noexcept
             {
                 return iterator(m_slots + m_capacity, m_slots + m_capacity);
+            }
+
+            const_iterator end() const noexcept
+            {
+                return const_iterator(m_slots + m_capacity, m_slots + m_capacity);
             }
 
             inline size_t size() const noexcept
@@ -5837,19 +5862,6 @@ namespace jeecs
                 return c_str();
             }
         };
-
-        constexpr typing::typehash_t prime = (typing::typehash_t)0x100000001B3ull;
-        constexpr typing::typehash_t basis = (typing::typehash_t)0xCBF29CE484222325ull;
-
-        /*
-        jeecs::basic::hash_compile_time [函数]
-        可在编译时计算字符串的哈希值的哈希函数
-        */
-        constexpr typing::typehash_t hash_compile_time(
-            char const* str, typing::typehash_t last_value = basis)
-        {
-            return *str ? hash_compile_time(str + 1, (*str ^ last_value) * prime) : last_value;
-        }
 
         /*
         jeecs::basic::allign_size [函数]
