@@ -1,3 +1,39 @@
 import woo::std;
 
-std::println("Hello");
+import je;
+import je::internal;
+
+using std;
+using je;
+
+namespace JEEditor
+{
+    using Environment = struct{
+        m_universe: universe,
+    }
+    {
+        public func create()=> Environment
+        {
+            let u = universe::create();
+            je::internal::init_graphic_pipeline_for_editor(u);
+            
+            return Environment{
+                m_universe = u,
+            };
+        }
+        public func wait(self: Environment)
+        {
+            self.m_universe->wait;
+        }
+    }
+}
+
+func main()
+{
+    let e = JEEditor::Environment::create();
+    defer e->wait();
+    
+    
+}
+
+main();
