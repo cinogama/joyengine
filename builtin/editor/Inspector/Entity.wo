@@ -1,9 +1,17 @@
 import woo::std;
 import je;
+import je::internal;
 
 using je;
 
 namespace JEEditor::Inspector::Entity
 {
-    
+    public func get_name(e: entity)=> string
+    {
+        return e->internal::name;   
+    }
+    public func set_name(e: entity, name: string)
+    {
+        e->internal::set_name(name);
+    }
 }
