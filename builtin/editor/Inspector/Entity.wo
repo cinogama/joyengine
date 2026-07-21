@@ -1,0 +1,9 @@
+import woo::std;
+import je;
+
+using je;
+
+namespace JEEditor::Inspector::Entity
+{
+    
+}

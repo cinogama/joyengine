@@ -1,0 +1,11 @@
+import je;
+
+using je;
+
+namespace JEEditor::Inspector
+{
+    public func get_worlds(u: universe)
+    {
+        return u->get_all_worlds();
+    }
+}

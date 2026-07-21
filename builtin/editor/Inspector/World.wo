@@ -1,0 +1,57 @@
+import woo::std;
+import je;
+
+using je;
+
+namespace JEEditor::Inspector::World
+{
+    using WorldCtx = struct{
+        m_name: mut string,
+        m_runtime_systems: vec<typeinfo>,
+    }
+    {
+        protected let s_world_contex = {}mut: map<world, WorldCtx>;
+        protected func create()=> WorldCtx
+        {
+            return WorldCtx{
+                m_name = mut "<unnamed>",
+                m_runtime_systems = []mut,
+            };
+        }
+        /* ---------------------------------------------------------- */
+        func get_or_create_world_ctx(w: world)
+        {
+            return s_world_contex->get_or_set_do(w, \= create(););
+        }
+        func close_world_ctx(w: world)
+        {
+            do s_world_contex->remove(w);
+        }
+    }
+    /* ---------------------------------------------------------- */
+    public func get_entities(w: world)=> array<entity>
+    {
+        return w->get_all_entities([]);
+    }
+    public func get_attached_systems(w: world)=> array<typeinfo>
+    {
+        return w->get_all_systems();
+    }
+    public func get_runtime_systems(w: world)=> array<typeinfo>
+    {
+        return WorldCtx::get_or_create_world_ctx(w).m_runtime_systems->to_array;
+    }
+    public func get_name(w: world)=> string
+    {
+        return WorldCtx::get_or_create_world_ctx(w).m_name;
+    }
+    public func set_name(w: world, name: string)
+    {
+        return WorldCtx::get_or_create_world_ctx(w).m_name = name;
+    }
+    public func close(w: world)
+    {
+        WorldCtx::close_world_ctx(w);
+        w->close();
+    }
+}
