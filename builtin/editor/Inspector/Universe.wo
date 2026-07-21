@@ -1,9 +1,40 @@
+import woo::std;
 import je;
+
+import World;
 
 using je;
 
-namespace JEEditor::Inspector
+namespace JEEditor::Inspector::Universe
 {
+    using UniverseCtx = struct{
+        m_world_contexts: map<world, World::WorldCtx>,
+    }
+    {
+        func create()
+        {
+            return UniverseCtx{
+                m_world_contexts = {}mut,
+            };
+        }
+        public func instance()=> UniverseCtx
+        {
+            static let _instance = create();
+            
+            return _instance;
+        }
+        public func world_ctx(self: UniverseCtx, w: world)=> World::WorldCtx
+        {
+            return self.m_world_contexts->get_or_set_do(
+                w,
+                World::WorldCtx::create);
+        }
+        public func close_world_ctx(self: UniverseCtx, w: world)
+        {
+            do self.m_world_contexts->remove(w);
+        }
+    };
+    
     public func get_worlds(u: universe)
     {
         return u->get_all_worlds();

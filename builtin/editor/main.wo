@@ -3,6 +3,8 @@ import woo::std;
 import je;
 import je::internal;
 
+import pkg::singleton;
+
 using std;
 using je;
 
@@ -30,11 +32,12 @@ namespace JEEditor
 
 func main()
 {
+    // 编辑器脚本退出之前清掉所有单例实例
+    defer singleton::unsafe::reset_all_singleton();
+
     // 创建一个 Universe，之后编辑器将在这上面运行
     let e = JEEditor::Environment::create();
     defer e->wait();
-    
-        
 }
 
 main();
