@@ -142,5 +142,17 @@ func _start_baking_impl<VoidT>(context: ParticalContext, econtext: _EditorContex
 }
 extern public func _start_baking(context: ParticalContext, econtext: _EditorContext)
 {
-    _start_baking_impl:<void>(context, econtext);
+    func _baking_job<T>()
+    {
+        _start_baking_impl:<void>(context, econtext);
+    }
+
+    if (typeid(_baking_job:<void>) != 0)
+        _baking_job:<void>();
+    else
+    {
+        do context;
+        do econtext;
+        std::panic("Missing `_baking_job`");    
+    }
 }

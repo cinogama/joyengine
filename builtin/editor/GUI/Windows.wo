@@ -1,5 +1,64 @@
 import woo::std;
 
+import je;
+import je::gui;
+
+import pkg::interface;
+
+using std;
+using je;
+using je::gui;
+
 namespace JEEditor::GUI::Windows
 {
+    interface! IWindows
+    {
+        public func get_attrib(self)=> WindowsAttribute;
+        public func get_title(self)=> string;
+
+        public func get_size_limit(self)=> option<(int, int)>
+        {
+            do self;
+            return option::none;
+        }
+        
+        public func run(self)=> void;
+        
+        public func on_close(self)=> bool
+        {
+            do self;
+            return true;
+        }
+    };
+    
+    namespace IWindows
+    {
+        func _engine_imgui_show_job(i: IWindows)=> bool
+        {
+             let stat = BeginAttrOpen(
+                i->get_title,
+                i->get_attrib);
+                
+            defer End();
+            
+            match (stat)
+            {
+                none? return false;
+                value(open)?
+                {
+                    if (!open && !i->on_close)
+                        return false;
+                        
+                    i->run();
+                    return true;
+                }
+            }
+        }
+    }
+
+    public func show<T>(window_instance: T)
+        where require!(T: IWindows);
+    {
+        launch(\= IWindows::create(window_instance)->_engine_imgui_show_job;);
+    }
 }

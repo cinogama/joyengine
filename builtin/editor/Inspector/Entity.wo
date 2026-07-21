@@ -17,8 +17,4 @@ namespace JEEditor::Inspector::Entity
     {
         e->internal::set_name(name);
     }
-    public func get_components(e: entity)=> array<typeinfo>
-    {
-        return e->internal::get_components_types();
-    }
 }

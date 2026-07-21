@@ -949,7 +949,10 @@ namespace je::shader
                 
         let generator = je::shader::HLSLForGlslang::create();
         
-        woshader::ShaderParseGlobalContext::generate(generator);
+        if (typeid(woshader::ShaderParseGlobalContext::generate(generator)) != 0)
+            woshader::ShaderParseGlobalContext::generate(generator);
+        else
+            std::panic("Bad shader source.");
         
         return _wraped_shader(
             generator.generated_vertex_src->unwrap,
