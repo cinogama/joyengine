@@ -30,7 +30,34 @@ namespace JEEditor
         {
             self.m_universe->wait;
         }
-    }    
+    }
+    
+    using DemoWindows = struct{}
+    {
+        import je::gui;
+        using je::gui;
+
+        public func create()=> DemoWindows
+            where require!(DemoWindows: GUI::Windows::IWindows);
+        {
+            return DemoWindows{};
+        }
+
+        public func getAttrib(_: DemoWindows)=> WindowsAttribute
+        {
+            return WindowsAttribute::ImGuiWindowFlags_None;
+        }
+        public func getTitle(_: DemoWindows)=> string
+        {
+            return "Example$ID";
+        }
+        public func run(_: DemoWindows)=> bool
+        {
+            Text("Helloworld~");
+
+            return true;
+        }
+    }
 }
 
 func main()
@@ -41,6 +68,11 @@ func main()
     // 创建一个 Universe，之后编辑器将在这上面运行
     let e = JEEditor::Environment::create();
     defer e->wait();
+
+    je::internal::set_window_size(1920, 1080);
+
+    do JEEditor::GUI::Windows::show(JEEditor::DemoWindows::create());
+    do JEEditor::GUI::Windows::show(JEEditor::DemoWindows::create());
 }
 
 main();

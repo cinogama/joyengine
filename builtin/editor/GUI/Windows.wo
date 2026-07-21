@@ -11,54 +11,103 @@ using je::gui;
 
 namespace JEEditor::GUI::Windows
 {
+    public union SizeConstraints
+    {
+        Unlimited,
+        AutoSize,
+        Limited((ImVec2, ImVec2)),
+    }
+
     interface! IWindows
     {
-        public func get_attrib(self)=> WindowsAttribute;
-        public func get_title(self)=> string;
-
-        public func get_size_limit(self)=> option<(int, int)>
+        public func getAttrib(self)=> WindowsAttribute;
+        public func getTitle(self)=> string;
+        public func getSizeConstraints(self)=> SizeConstraints
         {
             do self;
-            return option::none;
+            return SizeConstraints::AutoSize;
         }
-        
-        public func run(self)=> void;
-        
-        public func on_close(self)=> bool
+
+        public func onClose(self)=> bool
         {
             do self;
             return true;
         }
+
+        public func run(self)=> bool;
     };
     
     namespace IWindows
     {
-        func _engine_imgui_show_job(i: IWindows)=> bool
+        let s_unique_window_record = {}mut: map<string, IWindows>;
+
+        func try_register_unique_window(self: IWindows, title: string)
         {
-             let stat = BeginAttrOpen(
-                i->get_title,
-                i->get_attrib);
+            if (s_unique_window_record->contains(title))
+                return false;
+
+            s_unique_window_record->set(title, self);
+            return true;
+        }
+
+        func _engine_imgui_show_job(i: IWindows, title: string, is_unique: bool)=> bool
+        {
+            let mut attrib = i->getAttrib;
+
+            if (!is_unique)
+                attrib += WindowsAttribute::ImGuiWindowFlags_NoSavedSettings;
                 
+            match (i->getSizeConstraints)
+            {
+                Unlimited?;
+                AutoSize?
+                    attrib += WindowsAttribute::ImGuiWindowFlags_NoResize
+                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize;
+                Limited((min, max))?
+                    SetNextWindowSizeConstraints(min, max);
+            }
+            
+            let (show, mut open) = BeginAttrOpen(title, attrib);
             defer End();
             
-            match (stat)
+            if (!open)
+                open = !i->onClose;
+            
+            if (show)
             {
-                none? return false;
-                value(open)?
-                {
-                    if (!open && !i->on_close)
-                        return false;
-                        
-                    i->run();
-                    return true;
-                }
+                if (!i->run())
+                    open = false;
             }
+          
+            if (!open && is_unique)
+                assert(s_unique_window_record->remove(title));
+            
+            return open;
+        }
+        func _show(i: IWindows, mut title: string, is_unique: bool)
+        {
+            if (!is_unique)
+                title = title->replace("$ID", F"##{JobID()}");
+
+            while(i->_engine_imgui_show_job(title, is_unique))
+                std::yield();
         }
     }
-
+    
     public func show<T>(window_instance: T)
         where require!(T: IWindows);
     {
-        launch(\= IWindows::create(window_instance)->_engine_imgui_show_job;);
+        let mut title = window_instance->getTitle;
+        let is_unique = title->find("$ID")->is_none;
+
+        let i = IWindows::create(window_instance);
+        if (is_unique)
+        {
+            if (!i->try_register_unique_window(title))
+                return option::none;
+        }
+
+        launch_coroutine(\= i->_show(title, is_unique););
+        return option::value(i);
     }
 }

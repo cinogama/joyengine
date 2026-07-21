@@ -797,9 +797,11 @@ WOORT_API woort_api je_gui_begin_open(void)
     bool windows_flag = true;
     bool showing = ImGui::Begin(woort_string(0), &windows_flag, (ImGuiWindowFlags)woort_int(1));
 
-    if (windows_flag)
-        return woort_ret_option_bool(showing);
-    return woort_ret_option_none();
+    woort_set_struct(WOORT_RETURN_SLOT, 2);
+    woort_struct_set_bool(WOORT_RETURN_SLOT, 0, showing);
+    woort_struct_set_bool(WOORT_RETURN_SLOT, 1, windows_flag);
+
+    return woort_ret();
 }
 
 WOORT_API woort_api je_gui_is_window_focused(void)

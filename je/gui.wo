@@ -100,7 +100,7 @@ namespace je::gui
     extern("libjoyecs", "je_gui_begin_attr")
         public func BeginAttr(title:string, attribute:WindowsAttribute)=> bool;
     extern("libjoyecs", "je_gui_begin_open")
-        public func BeginAttrOpen(title:string, attribute:WindowsAttribute)=> option<bool>;
+        public func BeginAttrOpen(title:string, attribute:WindowsAttribute)=> (bool/* show */, bool /* open */);
     public func BeginOpen(title:string)
     {
         return BeginAttrOpen(title, WindowsAttribute::ImGuiWindowFlags_None);

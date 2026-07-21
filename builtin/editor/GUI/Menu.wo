@@ -1,0 +1,96 @@
+import woo::std;
+
+import je;
+import je::gui;
+
+using std;
+using je;
+using je::gui;
+
+namespace JEEditor::GUI
+{
+    union MenuOrItem
+    {
+        Menu(Menu),
+        Item(MenuItem),
+        Separator,
+    }
+    
+    using MenuItem = struct{
+        m_parent: Menu,
+        
+        m_name: string,
+        m_on_click: ()=> void,
+        
+        m_enable: mut ()=> bool,
+        m_check_stat: mut option<()=> bool>,
+    }
+    {
+        func create(name: string, parent: Menu, onclick: ()=> void)=> MenuItem
+        {
+            return MenuItem{
+                m_parent = parent,
+                
+                m_name = name,
+                m_on_click = onclick,
+                
+                m_enable = mut \=true;,
+                m_check_stat = mut option::none,
+            };
+        }
+        public func enableWhen(self: MenuItem, cond: ()=> bool)=> MenuItem
+        {
+            self.m_enable = cond;
+            return self;
+        }
+        public func checkWhen(self: MenuItem, cond: ()=> bool)=> MenuItem
+        {
+            self.m_check_stat = option::value(cond);
+            return self;
+        }
+        public func endItem(self: MenuItem)=> Menu
+        {
+            return self.m_parent;
+        }
+    }
+    
+    using Menu = struct{
+        m_parent: mut option<Menu>,
+        
+        m_name: string,
+        m_sub_items: vec<MenuOrItem>,
+    }
+    {
+        public func create(name: string)=> Menu
+        {
+            return Menu{
+                m_parent = mut option::none,
+                
+                m_name = name,
+                m_sub_items = []mut,
+            };
+        }
+        
+        public func subItem(self: Menu, name: string, action: ()=> void)=> MenuItem
+        {
+            let sub_item = MenuItem::create(name, self, action);
+
+            self.m_sub_items->add(MenuOrItem::Item(sub_item));
+            
+            return sub_item;
+        }
+        public func subMenu(self: Menu, name: string)=> Menu
+        {
+            let sub_menu = Menu::create(name);
+            
+            sub_menu.m_parent = option::value(self);
+            self.m_sub_items->add(MenuOrItem::Menu(sub_menu));
+            
+            return sub_menu;
+        }
+        public func separator(self: Menu)=> void
+        {
+            self.m_sub_items->add(MenuOrItem::Separator);
+        }
+    }
+}
