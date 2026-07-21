@@ -155,12 +155,12 @@ namespace je::gui
     extern("libjoyecs", "je_gui_menu_item_shortcut_enabled")
         public func MenuItemShortcutEnabled(text:string, shortcut:string, enable:bool)=> bool;
     extern("libjoyecs", "je_gui_menu_item_selected")
-        public func MenuItemShortcutSelectedEnabled(text:string, shortcut:string, selected:bool, enable:bool)=> option<bool /*selected*/>;
-    public func MenuItemSelectedEnabled(text:string, selected:bool, enable:bool)=> option<bool /*selected*/>
+        public func MenuItemShortcutSelectedEnabled(text:string, shortcut:string, selected:bool, enable:bool)=> bool;
+    public func MenuItemSelectedEnabled(text:string, selected:bool, enable:bool)=> bool
     {
         return MenuItemShortcutSelectedEnabled(text, "", selected, enable);
     }
-    public func MenuItemSelected(text:string, selected:bool)=> option<bool /*selected*/>
+    public func MenuItemSelected(text:string, selected:bool)=> bool
     {
         return MenuItemShortcutSelectedEnabled(text, "", selected, true);
     }

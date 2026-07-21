@@ -1,0 +1,53 @@
+import woo::std;
+
+import je;
+import je::gui;
+
+import pkg::interface;
+
+import builtin::editor::GUI::Windows;
+
+using std;
+using je;
+using je::gui;
+
+using JEEditor::GUI;
+
+namespace JEEditor::Forms
+{
+    using MsgBox = struct{
+        m_title: string,
+        m_text: string,
+    }
+    {
+        public func create(title: string, text: string)=> MsgBox
+            where require!(MsgBox: Windows::IWindows);
+        {
+            return MsgBox{
+                m_title = title,
+                m_text = text,
+            };
+        }
+        
+        public func getTitle(self: MsgBox)=> string
+        {
+            return F"消息: {self.m_title}$ID";
+        }
+        public func getAttrib(_: MsgBox)=> WindowsAttribute
+        {
+            return WindowsAttribute::ImGuiWindowFlags_NoDocking
+                + WindowsAttribute::ImGuiWindowFlags_NoCollapse
+            ;
+        }
+        public func run(self: MsgBox)=> bool
+        {
+            Text(self.m_text);
+            return !Button("确认");
+        }
+
+        public func show(title: string, text: string)
+        {
+            do Windows::show(MsgBox::create(title, text));
+        }
+    }
+}

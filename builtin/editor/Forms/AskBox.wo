@@ -1,0 +1,89 @@
+import woo::std;
+
+import je;
+import je::gui;
+
+import pkg::interface;
+
+import builtin::editor::GUI::Windows;
+
+using std;
+using je;
+using je::gui;
+
+using JEEditor::GUI;
+
+namespace JEEditor::Forms
+{
+    using AskBox = struct{
+        m_title: string,
+        m_text: string,
+        
+        m_on_yes: mut option<()=> void>,
+        m_on_no: mut option<()=> void>,
+    }
+    {
+        public func create(title: string, text: string)=> AskBox
+            where require!(AskBox: Windows::IWindows);
+        {
+            return AskBox{
+                m_title = title,
+                m_text = text,
+                m_on_yes = mut option::none,
+                m_on_no = mut option::none,
+            };
+        }
+        
+        public func getTitle(self: AskBox)=> string
+        {
+            return F"确认: {self.m_title}$ID";
+        }
+        public func getAttrib(_: AskBox)=> WindowsAttribute
+        {
+            return WindowsAttribute::ImGuiWindowFlags_NoDocking
+                + WindowsAttribute::ImGuiWindowFlags_NoCollapse
+                ;
+        }
+        public func run(self: AskBox)=> bool
+        {
+            Text(self.m_text);
+            
+            let mut clicked = false;
+            if (Button("是"))
+            {
+                clicked = true;
+                do self.m_on_yes->> \callback = callback();;
+            }
+            SameLine();
+            if (Button("否"))
+            {
+                clicked = true;
+                do self.m_on_no->> \callback = callback();;
+            }
+            SameLine();
+            if (Button("取消"))
+            {
+                clicked = true;
+            }
+            return !clicked;            
+        }
+        
+        public func show(title: string, text: string)
+        {
+            let askbox = AskBox::create(title, text);
+            do Windows::show(askbox);
+
+            return askbox;
+        }
+        public func onYes(self: AskBox, callback: ()=> void)
+        {
+            self.m_on_yes = option::value(callback);
+            return self;
+        }
+        public func onNo(self: AskBox, callback: ()=> void)
+        {
+            self.m_on_no = option::value(callback);
+            return self;
+        }
+    }
+}

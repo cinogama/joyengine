@@ -902,12 +902,7 @@ WOORT_API woort_api je_gui_menu_item_shortcut_enabled(void)
 WOORT_API woort_api je_gui_menu_item_selected(void)
 {
     bool selected = woort_bool(2);
-    bool clicked = ImGui::MenuItem(woort_string(0), woort_string(1), &selected, woort_bool(3));
-    woort_set_bool(2, selected);
-
-    if (clicked)
-        return woort_ret_option_bool(selected);
-    return woort_ret_option_none();
+    return woort_ret_bool(ImGui::MenuItem(woort_string(0), woort_string(1), &selected, woort_bool(3)));
 }
 
 WOORT_API woort_api je_gui_end_main_menu_bar(void)

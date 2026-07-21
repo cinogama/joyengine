@@ -5,6 +5,8 @@ import je::gui;
 
 import pkg::interface;
 
+import Menu;
+
 using std;
 using je;
 using je::gui;
@@ -17,45 +19,57 @@ namespace JEEditor::GUI::Windows
         AutoSize,
         Limited((ImVec2, ImVec2)),
     }
-
+    
     interface! IWindows
     {
-        public func getAttrib(self)=> WindowsAttribute;
         public func getTitle(self)=> string;
+        public func getAttrib(self)=> WindowsAttribute
+        {
+            do self;
+            return WindowsAttribute::ImGuiWindowFlags_None;
+        }
         public func getSizeConstraints(self)=> SizeConstraints
         {
             do self;
             return SizeConstraints::AutoSize;
         }
-
+        public func getMenu(self)=> option<Menu>
+        {
+            do self;
+            return option::none;
+        }
+        
         public func onClose(self)=> bool
         {
             do self;
             return true;
         }
-
+        
         public func run(self)=> bool;
     };
     
     namespace IWindows
     {
         let s_unique_window_record = {}mut: map<string, IWindows>;
-
+        
         func try_register_unique_window(self: IWindows, title: string)
         {
             if (s_unique_window_record->contains(title))
                 return false;
-
+                
             s_unique_window_record->set(title, self);
             return true;
         }
-
-        func _engine_imgui_show_job(i: IWindows, title: string, is_unique: bool)=> bool
+        
+        func _engine_imgui_show_job(i: IWindows, title: string, is_unique: bool, menu: option<Menu>)=> bool
         {
             let mut attrib = i->getAttrib;
-
+            
             if (!is_unique)
                 attrib += WindowsAttribute::ImGuiWindowFlags_NoSavedSettings;
+                
+            if (menu->is_value)
+                attrib += WindowsAttribute::ImGuiWindowFlags_MenuBar;
                 
             match (i->getSizeConstraints)
             {
@@ -72,24 +86,33 @@ namespace JEEditor::GUI::Windows
             
             if (!open)
                 open = !i->onClose;
-            
+                
             if (show)
             {
+                match (menu)
+                {
+                    none?;
+                    value(menu_instance)?
+                        menu_instance->showMenuBar();
+                }
+                
                 if (!i->run())
                     open = false;
             }
-          
+            
             if (!open && is_unique)
                 assert(s_unique_window_record->remove(title));
-            
+                
             return open;
         }
         func _show(i: IWindows, mut title: string, is_unique: bool)
         {
             if (!is_unique)
                 title = title->replace("$ID", F"##{JobID()}");
-
-            while(i->_engine_imgui_show_job(title, is_unique))
+                
+            let menu_instance = i->getMenu;
+            
+            while(i->_engine_imgui_show_job(title, is_unique, menu_instance))
                 std::yield();
         }
     }
@@ -99,14 +122,14 @@ namespace JEEditor::GUI::Windows
     {
         let mut title = window_instance->getTitle;
         let is_unique = title->find("$ID")->is_none;
-
+        
         let i = IWindows::create(window_instance);
         if (is_unique)
         {
             if (!i->try_register_unique_window(title))
                 return option::none;
         }
-
+        
         launch_coroutine(\= i->_show(title, is_unique););
         return option::value(i);
     }
