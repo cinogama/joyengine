@@ -12,7 +12,7 @@ namespace je::shader
     public let LINEAR = woshader::Sampler2D::filter::LINEAR;
     public let CLAMP = woshader::Sampler2D::wrap::CLAMP;
     public let REPEAT = woshader::Sampler2D::wrap::REPEAT;
-
+    
     public let NEVER = ZConfig::NEVER;
     public let LESS = ZConfig::LESS;
     public let EQUAL = ZConfig::EQUAL;
@@ -155,7 +155,7 @@ namespace je::shader
     }
     {
         using woshader;
-
+        
         public func create()=> HLSLForGlslang
             where require!(HLSLForGlslang: IShaderGenerator);
         {
@@ -781,7 +781,7 @@ namespace je::shader
             {
                 let t = field->get_type;
                 self.fragment_out_layout->add(t);
-
+                
                 let hlsl_type_name = get_type_name_with_type(t);
                 
                 c->append_line(F"    {hlsl_type_name} _v{idx}: SV_TARGET{idx};");
@@ -1003,10 +1003,10 @@ namespace je::shader
             uv: woshader::float2,
             tiling: woshader::float2,
             offset: woshader::float2)
-        {
-            return (uv + offset) * tiling;
-        }
-        
+    {
+        return (uv + offset) * tiling;
+    }
+    
     public func movement(m: woshader::float4x4)
     {
         return woshader::vec3!(

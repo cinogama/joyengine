@@ -28,7 +28,7 @@ namespace je::physics2d::config
     }
     {
         public let layers = []mut: vec<LayerInfo>;
-
+        
         public func create(
             layerid: int,
             gravity: (real, real),
@@ -43,11 +43,11 @@ namespace je::physics2d::config
                 m_enable_sleeping = enable_sleeping,
                 m_enable_continuous = enable_continuous,
             };
-
+            
             layers->add(info);
         }
     }
-
+    
     using CollideGroupInfo = struct{
         m_filter_components: vec<(je::typeinfo, CollideGroupInfo::Requirement)>,
         m_collide_mask: mut int,
@@ -86,7 +86,7 @@ namespace je::physics2d::config
             b.m_collide_mask = b.m_collide_mask->bor(1->bshl(a.m_self_gid));
         }
     }
-
+    
     // Returned to the engine. Field order is significant:
     //   field 0 = layers, field 1 = collide_groups.
     // Constructed via build() so the macro never touches the private
@@ -113,10 +113,10 @@ namespace je::physics2d::config
     /*
     PHYSICS2D_LAYER! layerId
     {
-        gravity: (0.0, -9.8);
-        substeps: 4;
-        sleep: true;
-        continuous: false;
+    gravity: (0.0, -9.8);
+    substeps: 4;
+    sleep: true;
+    continuous: false;
     }
     `layerId` is an integer that binds the layer to Rigidbody::layerid.
     Any field may be omitted; defaults are gravity=(0.0,-9.8), substeps=4,
@@ -133,14 +133,14 @@ namespace je::physics2d::config
         lexer->error("Unexpected token, should be '{'.");
         return "";
     }
-
+    
     let mut gravity_val    = option::none: option<string>;
     let mut substeps_val   = option::none: option<string>;
     let mut sleep_val      = option::none: option<string>;
     let mut continuous_val = option::none: option<string>;
     
     parse_layer_fields@
-    for (;;)
+        for (;;)
     {
         let token = lexer->next;
         if (token == "}")
@@ -150,14 +150,14 @@ namespace je::physics2d::config
             lexer->error("Unexpected EOF.");
             return "";
         }
-
+        
         let key = token;
         if (lexer->next != ":")
         {
             lexer->error("Unexpected token, should be ':' after layer field name.");
             return "";
         }
-
+        
         let mut value = "";
         for (;;)
         {
@@ -176,7 +176,7 @@ namespace je::physics2d::config
             }
             value += t;
         }
-
+        
         if (key == "gravity")
             gravity_val = option::value(value);
         else if (key == "substeps")
@@ -191,12 +191,12 @@ namespace je::physics2d::config
             return "";
         }
     }
-
+    
     let gravity    = gravity_val->or("(0.0, -9.8)");
     let substeps   = substeps_val->or("4");
     let sleep      = sleep_val->or("true");
     let continuous = continuous_val->or("false");
-
+    
     return F"je::physics2d::config::LayerInfo::create({layer_id}, {gravity}, {substeps}, {sleep}, {continuous});";
 }
 
@@ -222,61 +222,61 @@ namespace je::physics2d::config
     
     parse_filter_components@
         for (;;)
+    {
+        let mut typename = "";
+        let mut mode = option::none: option<string>;
+        for (;;)
         {
-            let mut typename = "";
-            let mut mode = option::none: option<string>;
-            for (;;)
+            let token = lexer->next;
+            if (token == ";")
             {
-                let token = lexer->next;
-                if (token == ";")
+                if (typename == "")
                 {
-                    if (typename == "")
-                    {
-                        lexer->error("Unexpected '}', should be typename.");
-                        return "";
-                    }
-                    
-                    types->add((typename, mode->or("CONTAINS")));
-                    typename = "";
-                    break;
-                }
-                else if (token == "}")
-                {
-                    if (typename != "")
-                    {
-                        lexer->error("Unexpected '}', should be ';'.");
-                        return "";
-                    }
-                    break parse_filter_components;
-                }
-                else if (token == "")
-                {
-                    lexer->error("Unexpected EOF.");
+                    lexer->error("Unexpected '}', should be typename.");
                     return "";
                 }
-                else if (token == "except")
-                {
-                    if (mode->is_value)
-                    {
-                        lexer->error(F"Duplicately marked attributes have been previously marked as `{mode->unwrap}`");
-                        return "";
-                    }
-                    mode = option::value("EXCEPT");
-                }
-                else if (token == "contains")
-                {
-                    if (mode->is_value)
-                    {
-                        lexer->error(F"Duplicately marked attributes have been previously marked as `{mode->unwrap}`");
-                        return "";
-                    }
-                    mode = option::value("CONTAINS");
-                }
-                else
-                    typename += token;
+                
+                types->add((typename, mode->or("CONTAINS")));
+                typename = "";
+                break;
             }
+            else if (token == "}")
+            {
+                if (typename != "")
+                {
+                    lexer->error("Unexpected '}', should be ';'.");
+                    return "";
+                }
+                break parse_filter_components;
+            }
+            else if (token == "")
+            {
+                lexer->error("Unexpected EOF.");
+                return "";
+            }
+            else if (token == "except")
+            {
+                if (mode->is_value)
+                {
+                    lexer->error(F"Duplicately marked attributes have been previously marked as `{mode->unwrap}`");
+                    return "";
+                }
+                mode = option::value("EXCEPT");
+            }
+            else if (token == "contains")
+            {
+                if (mode->is_value)
+                {
+                    lexer->error(F"Duplicately marked attributes have been previously marked as `{mode->unwrap}`");
+                    return "";
+                }
+                mode = option::value("CONTAINS");
+            }
+            else
+                typename += token;
         }
-        
+    }
+    
     let mut result = F"let {group_name} = je::physics2d::config::CollideGroupInfo::create();";
     for (let (typename, mode) : types)
     {

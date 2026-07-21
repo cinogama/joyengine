@@ -96,7 +96,7 @@ func _launch<VoidT>(econtext: _EditorContext, frame_place: int, partical_count: 
         {
             if (econtext.m_enable_bake)
                 return;
-
+                
             let fid = f + frame_place;
             let poses = position(fid, user_data) as array<(real, real)>;
             let col = color(fid, user_data) as (real, real, real, real);
@@ -129,7 +129,7 @@ func _start_baking_impl<VoidT>(context: ParticalContext, econtext: _EditorContex
     {
         econtext.m_target_launch_count = baking_launch_record->len;
         econtext.m_solved_launch_count = i;
-
+        
         _launch:<VoidT>(econtext, baking_launch_record[i]...);
         
         if (econtext.m_enable_bake)

@@ -1,4 +1,7 @@
 import woo::std;
+
+import pkg::worst;
+
 import je;
 import je::internal;
 
@@ -13,5 +16,9 @@ namespace JEEditor::Inspector::Entity
     public func set_name(e: entity, name: string)
     {
         e->internal::set_name(name);
+    }
+    public func get_components(e: entity)=> array<typeinfo>
+    {
+        return e->internal::get_components_types();
     }
 }
