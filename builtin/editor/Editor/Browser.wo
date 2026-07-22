@@ -29,6 +29,19 @@ namespace JEEditor::Editor
         m_filter: mut string,
         m_last_click_time: mut real,
         m_last_clicked: mut option<fsys::path_t>,
+        
+        // ---- caching ----
+        // Set to true by async callbacks (mkdir/remove/move) to signal
+        // that the filesystem changed and all caches need refreshing.
+        m_fs_dirty: mutable<bool>,
+        
+        // Tree cache: maps a directory path string to its sorted subdirs.
+        m_tree_cache: map<string, array<fsys::path_t>>,
+        
+        // File-list cache for the current directory.
+        m_list_path: mut string,
+        m_list_dirs: mut array<fsys::path_t>,
+        m_list_files: mut array<fsys::path_t>,
     }
     {
         func childDirs(dir: fsys::path_t)=> array<fsys::path_t>
@@ -51,6 +64,43 @@ namespace JEEditor::Editor
                 ;
         }
         
+        // Flush the global dirty flag: clear the tree cache and force the
+        // file-list cache to reload on next access.
+        func processDirty(self: Browser)=> void
+        {
+            if (self.m_fs_dirty->get())
+            {
+                self.m_tree_cache->clear();
+                self.m_list_path = "";
+                self.m_fs_dirty->set(false);
+            }
+        }
+        
+        // Cached lookup of subdirectories for the tree view.
+        func getSubDirs(self: Browser, dir: fsys::path_t)=> array<fsys::path_t>
+        {
+            let key = dir->to_string();
+            if (self.m_tree_cache->contains(key))
+                return self.m_tree_cache->get(key)->unwrap;
+                
+            let dirs = childDirs(dir);
+            self.m_tree_cache->set(key, dirs);
+            return dirs;
+        }
+        
+        // Refresh the file-list cache when the current directory changes
+        // or after a global dirty flush.
+        func ensureFileListCache(self: Browser)=> void
+        {
+            let cur_key = self.m_current->to_string();
+            if (self.m_list_path != cur_key)
+            {
+                self.m_list_dirs = childDirs(self.m_current);
+                self.m_list_files = childFiles(self.m_current);
+                self.m_list_path = cur_key;
+            }
+        }
+        
         public func create()=> Browser
             where require!(Browser: IWindows);
         {
@@ -62,6 +112,12 @@ namespace JEEditor::Editor
                 m_filter = mut "",
                 m_last_click_time = mut 0.,
                 m_last_clicked = mut option::none,
+                
+                m_fs_dirty = mutable::create(false),
+                m_tree_cache = {}mut,
+                m_list_path = mut root->to_string(),
+                m_list_dirs = mut childDirs(root),
+                m_list_files = mut childFiles(root),
             };
         }
         
@@ -76,6 +132,7 @@ namespace JEEditor::Editor
         
         public func run(self: Browser)=> bool
         {
+            self->processDirty();
             self->drawToolbar();
             Separator();
             
@@ -129,8 +186,12 @@ namespace JEEditor::Editor
             if (Button("新建文件夹"))
             {
                 let base = self.m_current;
+                let dirty = self.m_fs_dirty;
                 do InputBox::show("新建文件夹", "请输入文件夹名称：", "NewFolder")
-                    ->then(\name = do mkdir(base / name);)
+                    ->then(func(name: string) {
+                            do mkdir(base / name);
+                            dirty->set(true);
+                        })
                     ;
             }
             
@@ -188,7 +249,7 @@ namespace JEEditor::Editor
         
         func drawDirNode(self: Browser, dir: fsys::path_t)=> void
         {
-            for (let d : childDirs(dir))
+            for (let d : self->getSubDirs(dir))
             {
                 let name = filename(d);
                 let is_selected = self.m_selected->is_value
@@ -219,8 +280,9 @@ namespace JEEditor::Editor
         
         func drawFileList(self: Browser)=> void
         {
-            let dirs = childDirs(self.m_current);
-            let files = childFiles(self.m_current);
+            self->ensureFileListCache();
+            let dirs = self.m_list_dirs;
+            let files = self.m_list_files;
             
             let filter_lower = self.m_filter->lower;
             let has_filter = filter_lower->len > 0;
@@ -269,11 +331,15 @@ namespace JEEditor::Editor
             if (BeginPopupContextWindow())
             {
                 let base = self.m_current;
+                let dirty = self.m_fs_dirty;
                 
                 if (MenuItem("新建文件夹"))
                 {
                     do InputBox::show("新建文件夹", "请输入文件夹名称：", "NewFolder")
-                        ->then(\name = do mkdir(base / name);)
+                        ->then(func(name: string) {
+                                do mkdir(base / name);
+                                dirty->set(true);
+                            })
                         ;
                 }
                 
@@ -291,7 +357,10 @@ namespace JEEditor::Editor
                     if (MenuItem("重命名"))
                     {
                         do InputBox::show("重命名", "请输入新名称：", sel_name)
-                            ->then(\new_name = do move(sel, sel_parent / new_name);)
+                            ->then(func(new_name: string) {
+                                    do move(sel, sel_parent / new_name);
+                                    dirty->set(true);
+                                })
                             ;
                     }
                     
@@ -301,7 +370,10 @@ namespace JEEditor::Editor
                     {
                         let target = sel;
                         do AskBox::show("删除", F"确认删除 \"{sel_name}\" 吗？")
-                            ->onYes(\=do remove(target);)
+                            ->onYes(func() {
+                                    do remove(target);
+                                    dirty->set(true);
+                                })
                             ;
                     }
                     
