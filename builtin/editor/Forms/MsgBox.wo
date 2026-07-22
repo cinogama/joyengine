@@ -18,14 +18,16 @@ namespace JEEditor::Forms
     using MsgBox = struct{
         m_title: string,
         m_text: string,
+        m_icon: option<graphic::texture>,
     }
     {
-        public func create(title: string, text: string)=> MsgBox
+        public func create(title: string, text: string, icon: option<graphic::texture>)=> MsgBox
             where require!(MsgBox: Windows::IWindows);
         {
             return MsgBox{
                 m_title = title,
                 m_text = text,
+                m_icon = icon,
             };
         }
         
@@ -37,17 +39,30 @@ namespace JEEditor::Forms
         {
             return WindowsAttribute::ImGuiWindowFlags_NoDocking
                 + WindowsAttribute::ImGuiWindowFlags_NoCollapse
-            ;
+                ;
         }
         public func run(self: MsgBox)=> bool
         {
+            match (self.m_icon)
+            {
+                none?;
+                value(icon)?
+                {
+                    Image(icon);
+                    SameLine();
+                }
+            }
             Text(self.m_text);
             return !Button("确认");
         }
-
-        public func show(title: string, text: string)
+        
+        public func msg(title: string, text: string)
         {
-            do Windows::show(MsgBox::create(title, text));
+            do Windows::show(MsgBox::create(title, text, option::none));
+        }
+        public func err(title: string, text: string)
+        {
+            do Windows::show(MsgBox::create(title, text, option::none));
         }
     }
 }
