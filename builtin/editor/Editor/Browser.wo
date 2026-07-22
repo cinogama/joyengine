@@ -1,0 +1,41 @@
+import woo::std;
+
+import pkg::fsys;
+import pkg::interface;
+
+import builtin::editor::GUI::Windows;
+
+using std;
+using fsys;
+
+using JEEditor::GUI::Windows;
+
+namespace JEEditor::Editor
+{
+    using Browser = struct{
+        m_workpath: mut path_t,
+    }
+    {
+        public func create()=> Browser
+            where require!(Browser: IWindows);
+        {
+            return Browser{
+                m_workpath = mut workpath(),
+            };
+        }
+
+        public func getTitle(_: Browser)=> string
+        {
+            return "项目资源管理器";
+        }
+        public func getSizeConstraints(_: Browser)=> SizeConstraints
+        {
+            return SizeConstraints::Limited(((600., 200.), (4096., 4096.)));
+        }
+        public func run(_: Browser)=> bool
+        {
+            return true;
+        }
+    }
+
+}

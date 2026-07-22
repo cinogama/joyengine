@@ -78,7 +78,7 @@ namespace JEEditor::GUI::Forms
             
             if (Button("是"))
                 self->onEnter();
-            
+                
             SameLine();
             if (Button("否"))
             {
@@ -86,7 +86,7 @@ namespace JEEditor::GUI::Forms
                 do self.m_on_no->> \callback = callback();;
             }
             SameLine();
-
+            
             if (Button("取消"))
                 self.m_close = true;
                 

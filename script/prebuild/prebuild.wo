@@ -505,6 +505,9 @@ func main()
             skip_process_and_socket = true;
     }
     
+    // 删掉之前的编译缓存
+    do fsys::remove(build_path / "builtin" / "editor.woo.je4cache");
+
     try! _ = copy_pkgs(copy_pkg_src_only);
     if (copy_gles_emu)
     {
