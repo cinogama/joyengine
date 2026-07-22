@@ -33,7 +33,7 @@ namespace JEEditor::Editor
         m_path: fsys::path_t,
     }
     {
-        public let type = "JEEditor_Editor_BrowserFilePayload";
+        public let type = "JE_EDITOR_BROWSER_FILE_PATH";
         
         public func restore(data: string) => option<FilePayload>
         {
