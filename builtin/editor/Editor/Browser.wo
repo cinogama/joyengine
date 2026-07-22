@@ -9,16 +9,20 @@ import pkg::worst;
 import pkg::iterator;
 
 import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Icons;
 import builtin::editor::GUI::Forms::InputBox;
 import builtin::editor::GUI::Forms::AskBox;
 
 using std;
 using je;
 using je::gui;
+using je::graphic;
 using fsys;
 
+using JEEditor::GUI;
 using JEEditor::GUI::Windows;
 using JEEditor::GUI::Forms;
+using JEEditor::GUI::Icons;
 
 namespace JEEditor::Editor
 {
@@ -278,6 +282,93 @@ namespace JEEditor::Editor
             }
         }
         
+        func isTextureExt(ext: string)=> bool
+        {
+            return ext == ".png" || ext == ".jpg" || ext == ".jpeg"
+                || ext == ".bmp" || ext == ".tga" || ext == ".tif"
+                || ext == ".tiff" || ext == ".gif" || ext == ".webp"
+                || ext == ".hdr" || ext == ".exr" || ext == ".dds"
+                || ext == ".ico" || ext == ".pvr" || ext == ".ktx";
+        }
+
+        func isAnimationExt(ext: string)=> bool
+        {
+            return ext == ".anim" || ext == ".animation" || ext == ".anm";
+        }
+
+        func isShaderExt(ext: string)=> bool
+        {
+            return ext == ".shader";
+        }
+
+        func isFontExt(ext: string)=> bool
+        {
+            return ext == ".ttf" || ext == ".otf" || ext == ".font" || ext == ".fnt";
+        }
+
+        func isMusicExt(ext: string)=> bool
+        {
+            return ext == ".wav" || ext == ".mp3" || ext == ".ogg"
+                || ext == ".flac" || ext == ".aiff" || ext == ".m4a";
+        }
+
+        func isTilemapExt(ext: string)=> bool
+        {
+            return ext == ".tmx" || ext == ".tsx" || ext == ".tilemap" || ext == ".map";
+        }
+
+        func isCppExt(ext: string)=> bool
+        {
+            return ext == ".cpp" || ext == ".cc" || ext == ".cxx"
+                || ext == ".c" || ext == ".h" || ext == ".hpp" || ext == ".hxx";
+        }
+
+        func isWoolangScript(ext: string)=> bool
+        {
+            return ext == ".wo";
+        }
+
+        // 根据路径返回对应的图标：目录返回文件夹图标，文件按扩展名分派。
+        func iconForPath(path: fsys::path_t)=> option<graphic::texture>
+        {
+            if (isdir(path))
+                return Icons::FOLDER;
+
+            let ext = string::lower(extension(path));
+
+            if (isTextureExt(ext))
+                return Icons::TEXTURE;
+            if (isAnimationExt(ext))
+                return Icons::ANIMATION;
+            if (isShaderExt(ext))
+                return Icons::SHADER;
+            if (isFontExt(ext))
+                return Icons::FONT;
+            if (isMusicExt(ext))
+                return Icons::MUSIC;
+            if (isTilemapExt(ext))
+                return Icons::TILEMAP;
+            if (isCppExt(ext))
+                return Icons::CPP;
+            if (isWoolangScript(ext))
+                return Icons::WOOLANG;
+
+            return Icons::FILE;
+        }
+
+        func drawItemIcon(path: fsys::path_t)=> void
+        {
+            match(iconForPath(path))
+            {
+                none?;
+                value(icon)?
+                {
+                    ImageSize(icon, 16., 16.);
+                    SameLine();
+                }
+            }
+        }
+
         func drawFileList(self: Browser)=> void
         {
             self->ensureFileListCache();
@@ -298,6 +389,7 @@ namespace JEEditor::Editor
                     let is_selected = self.m_selected->is_value
                         && self.m_selected->unwrap == d;
                         
+                    drawItemIcon(d);
                     let clicked = SelectableSelected(
                         F"{name}/##{d->to_string()}", is_selected);
                         
@@ -317,6 +409,7 @@ namespace JEEditor::Editor
                     let is_selected = self.m_selected->is_value
                         && self.m_selected->unwrap == f;
                         
+                    drawItemIcon(f);
                     let clicked = SelectableSelected(
                         F"{name}##{f->to_string()}", is_selected);
                         

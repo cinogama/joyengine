@@ -10,4 +10,16 @@ namespace JEEditor::GUI::Icons
 {
     public let WARNING = texture::load(option::none, "!/builtin/icon/Warning.png");
     public let ASK = texture::load(option::none, "!/builtin/icon/Ask.png");
+
+    // ---- 文件 / 文件夹类型图标 ----
+    public let FOLDER    = texture::load(option::none, "!/builtin/icon/FilePath.png");
+    public let FILE      = texture::load(option::none, "!/builtin/icon/File.png");
+    public let TEXTURE   = texture::load(option::none, "!/builtin/icon/TextureFile.png");
+    public let ANIMATION = texture::load(option::none, "!/builtin/icon/AnimationFile.png");
+    public let SHADER    = texture::load(option::none, "!/builtin/icon/ShaderFile.png");
+    public let FONT      = texture::load(option::none, "!/builtin/icon/Font.png");
+    public let MUSIC     = texture::load(option::none, "!/builtin/icon/Music.png");
+    public let TILEMAP   = texture::load(option::none, "!/builtin/icon/Tilemap.png");
+    public let CPP       = texture::load(option::none, "!/builtin/icon/CppProgram.png");
+    public let WOOLANG   = texture::load(option::none, "!/builtin/icon/Script.png");
 }
