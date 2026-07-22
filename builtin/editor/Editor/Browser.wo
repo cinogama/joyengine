@@ -340,7 +340,7 @@ namespace JEEditor::Editor
                 return Icons::FOLDER;
                 
             let ext = string::lower(extension(path));
-            return dict::get_or(ext_icon_map, ext, Icons::FILE);
+            return ext_icon_map->get(ext)=>> \v = v;->or_bind(\= Icons::FILE;);
         }
         
         func drawItemIcon(path: fsys::path_t)=> void
@@ -371,7 +371,7 @@ namespace JEEditor::Editor
             for (let d : dirs)
             {
                 let name = filename(d);
-                if (!has_filter || name->lower->find(filter_lower)->is_value)
+                if (!name->begin_with(".") && (!has_filter || name->lower->find(filter_lower)->is_value))
                 {
                     let is_selected = self.m_selected->is_value
                         && self.m_selected->unwrap == d;
@@ -391,7 +391,7 @@ namespace JEEditor::Editor
             for (let f : files)
             {
                 let name = filename(f);
-                if (!has_filter || name->lower->find(filter_lower)->is_value)
+                if (!name->begin_with(".") && (!has_filter || name->lower->find(filter_lower)->is_value))
                 {
                     let is_selected = self.m_selected->is_value
                         && self.m_selected->unwrap == f;
