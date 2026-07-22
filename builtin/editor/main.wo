@@ -93,14 +93,6 @@ func main()
     defer e->wait();
     
     do JEEditor::GUI::Windows::show(JEEditor::DemoWindows::create());
-    
-    JEEditor::GUI::Forms::MsgBox::msg("", "这是一个示例提示信息，嘻嘻");
-    JEEditor::GUI::Forms::MsgBox::err("", "这是一个示例提示错误，嘻嘻");
-    do JEEditor::GUI::Forms::AskBox::show("", "这是一个示例提问，嘻嘻")
-        ->onYes(\=do nil;)
-        ->onNo(\=do nil;)
-        ;
-    
     do JEEditor::GUI::Windows::show(JEEditor::Editor::Browser::create());
 }
 

@@ -56,6 +56,10 @@ namespace JEEditor::GUI::Forms
                     -> finish
                     ;
         }
+        public func getSpawnPos(_: InputBox)=> option<ImVec2>
+        {
+            return option::value(GetMousePos());
+        }
         func onEnter(self: InputBox)=> void
         {
             self.m_close = true;

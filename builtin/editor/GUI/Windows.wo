@@ -44,6 +44,11 @@ namespace JEEditor::GUI::Windows
             do self;
             return option::none;
         }
+        public func getSpawnPos(self)=> option<ImVec2>
+        {
+            do self;
+            return option::none;
+        }
         
         public func onClose(self)=> bool
         {
@@ -127,7 +132,14 @@ namespace JEEditor::GUI::Windows
             let menu_instance = i->getMenu;
             let shortcut_instance = i->getShortcut;
             
-            while(i->_engine_imgui_show_job(title, is_unique, menu_instance, shortcut_instance))
+            match (i->getSpawnPos)
+            {
+                none?;
+                value(pos)?
+                    SetNextWindowPos(pos);
+            }
+            
+            while (i->_engine_imgui_show_job(title, is_unique, menu_instance, shortcut_instance))
                 std::yield();
         }
     }
