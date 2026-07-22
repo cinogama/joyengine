@@ -729,17 +729,7 @@ namespace je::gui
         public func SetDragDropPayload(type: string, data: string)=> bool;
     extern("libjoyecs", "je_gui_end_drag_drop_source")
         public func EndDragDropSource()=> void;
-        
-    public func DragItem(type: string, payload: string, holddo: ()=>void)
-    {
-        if (BeginDragDropSource())
-        {
-            do SetDragDropPayload(type, payload);
-            holddo();
-            do EndDragDropSource();
-        }
-    }
-    
+            
     extern("libjoyecs", "je_gui_begin_drag_drop_target")
         public func BeginDragDropTarget()=> bool;
     extern("libjoyecs", "je_gui_accept_drag_drop_payload")

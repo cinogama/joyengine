@@ -1,0 +1,47 @@
+import je::gui;
+
+import pkg::interface;
+import pkg::concept;
+
+using je::gui;
+
+namespace JEEditor::GUI::Drag
+{
+    interface! IDragPayload
+    {
+        require(
+            concept!{
+                typeof<Self>::type: string;
+                typeif<Self>::restore: (string)=> option<Self>;
+            });
+        public func dump(self)=> string;
+        public func tips(self)=> string;
+    }
+    
+    public func DragPayload<T>(payload: T)
+        where require!(T: IDragPayload);
+    {
+        if (BeginDragDropSource())
+        {
+            defer EndDragDropSource();
+            do SetDragDropPayload(type<T>::type, payload->dump);
+            
+            Text(payload->tips());
+        }
+    }
+    public func AcceptDrag<T>()
+        where require!(T: IDragPayload);
+    {
+        if(BeginDragDropTarget())
+        {
+            defer EndDragDropTarget();
+            match (AcceptDragDropPayload(typeof<T>::type))
+            {
+                none?;
+                value(payload)?
+                    return typeof<T>::restore(payload);
+            }
+        }
+        return option::none;
+    }
+}
