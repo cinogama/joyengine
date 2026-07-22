@@ -282,80 +282,67 @@ namespace JEEditor::Editor
             }
         }
         
-        func isTextureExt(ext: string)=> bool
-        {
-            return ext == ".png" || ext == ".jpg" || ext == ".jpeg"
-                || ext == ".bmp" || ext == ".tga" || ext == ".tif"
-                || ext == ".tiff" || ext == ".gif" || ext == ".webp"
-                || ext == ".hdr" || ext == ".exr" || ext == ".dds"
-                || ext == ".ico" || ext == ".pvr" || ext == ".ktx";
-        }
-
-        func isAnimationExt(ext: string)=> bool
-        {
-            return ext == ".anim" || ext == ".animation" || ext == ".anm";
-        }
-
-        func isShaderExt(ext: string)=> bool
-        {
-            return ext == ".shader";
-        }
-
-        func isFontExt(ext: string)=> bool
-        {
-            return ext == ".ttf" || ext == ".otf" || ext == ".font" || ext == ".fnt";
-        }
-
-        func isMusicExt(ext: string)=> bool
-        {
-            return ext == ".wav" || ext == ".mp3" || ext == ".ogg"
-                || ext == ".flac" || ext == ".aiff" || ext == ".m4a";
-        }
-
-        func isTilemapExt(ext: string)=> bool
-        {
-            return ext == ".tmx" || ext == ".tsx" || ext == ".tilemap" || ext == ".map";
-        }
-
-        func isCppExt(ext: string)=> bool
-        {
-            return ext == ".cpp" || ext == ".cc" || ext == ".cxx"
-                || ext == ".c" || ext == ".h" || ext == ".hpp" || ext == ".hxx";
-        }
-
-        func isWoolangScript(ext: string)=> bool
-        {
-            return ext == ".wo";
-        }
-
-        // 根据路径返回对应的图标：目录返回文件夹图标，文件按扩展名分派。
+        // 根据路径返回对应的图标：目录返回文件夹图标，文件按扩展名走 ext_icon_map 查询，
+        // 未命中则返回默认 FILE 图标。
         func iconForPath(path: fsys::path_t)=> option<graphic::texture>
         {
+            // 扩展名 -> 图标 的查找表；命中即用，未命中走默认 FILE 图标。
+            static let ext_icon_map = {
+                [".png"] = Icons::TEXTURE,
+                [".jpg"] = Icons::TEXTURE,
+                [".jpeg"] = Icons::TEXTURE,
+                [".bmp"] = Icons::TEXTURE,
+                [".tga"] = Icons::TEXTURE,
+                [".tif"] = Icons::TEXTURE,
+                [".tiff"] = Icons::TEXTURE,
+                [".gif"] = Icons::TEXTURE,
+                [".webp"] = Icons::TEXTURE,
+                [".hdr"] = Icons::TEXTURE,
+                [".exr"] = Icons::TEXTURE,
+                [".dds"] = Icons::TEXTURE,
+                [".ico"] = Icons::TEXTURE,
+                [".pvr"] = Icons::TEXTURE,
+                [".ktx"] = Icons::TEXTURE,
+                [".psd"] = Icons::TEXTURE,
+                
+                [".shader"] = Icons::SHADER,
+                
+                [".ttf"] = Icons::FONT,
+                [".otf"] = Icons::FONT,
+                [".font"] = Icons::FONT,
+                [".fnt"] = Icons::FONT,
+                
+                [".wav"] = Icons::MUSIC,
+                [".mp3"] = Icons::MUSIC,
+                [".ogg"] = Icons::MUSIC,
+                [".flac"] = Icons::MUSIC,
+                [".aiff"] = Icons::MUSIC,
+                [".m4a"] = Icons::MUSIC,
+                
+                [".cpp"] = Icons::CPP,
+                [".cc"] = Icons::CPP,
+                [".cxx"] = Icons::CPP,
+                [".c"] = Icons::CPP,
+                [".h"] = Icons::CPP,
+                [".hpp"] = Icons::CPP,
+                [".hxx"] = Icons::CPP,
+                
+                [".wo"] = Icons::WOOLANG,
+                
+                [".je4animation"] = Icons::ANIMATION,
+                [".je4tilemap"] = Icons::TILEMAP,
+                [".je4world"] = Icons::WORLD,
+                [".je4entity"] = Icons::ENTITY,
+            };
+            
+            
             if (isdir(path))
                 return Icons::FOLDER;
-
+                
             let ext = string::lower(extension(path));
-
-            if (isTextureExt(ext))
-                return Icons::TEXTURE;
-            if (isAnimationExt(ext))
-                return Icons::ANIMATION;
-            if (isShaderExt(ext))
-                return Icons::SHADER;
-            if (isFontExt(ext))
-                return Icons::FONT;
-            if (isMusicExt(ext))
-                return Icons::MUSIC;
-            if (isTilemapExt(ext))
-                return Icons::TILEMAP;
-            if (isCppExt(ext))
-                return Icons::CPP;
-            if (isWoolangScript(ext))
-                return Icons::WOOLANG;
-
-            return Icons::FILE;
+            return dict::get_or(ext_icon_map, ext, Icons::FILE);
         }
-
+        
         func drawItemIcon(path: fsys::path_t)=> void
         {
             match(iconForPath(path))
@@ -368,7 +355,7 @@ namespace JEEditor::Editor
                 }
             }
         }
-
+        
         func drawFileList(self: Browser)=> void
         {
             self->ensureFileListCache();
