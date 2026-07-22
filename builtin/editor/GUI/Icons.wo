@@ -1,0 +1,13 @@
+import woo::std;
+
+import je;
+
+using std;
+using je;
+using je::graphic;
+
+namespace JEEditor::GUI::Icons
+{
+    public let WARNING = texture::load(option::none, "!/builtin/icon/Warning.png");
+    public let ASK = texture::load(option::none, "!/builtin/icon/Ask.png");
+}

@@ -5,20 +5,22 @@ import je::gui;
 
 import pkg::interface;
 
+import builtin::editor::GUI::Icons;
 import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Shortcut;
 
 using std;
 using je;
 using je::gui;
 
-using JEEditor::GUI;
-
-namespace JEEditor::Forms
+namespace JEEditor::GUI::Forms
 {
     using MsgBox = struct{
         m_title: string,
         m_text: string,
         m_icon: option<graphic::texture>,
+        
+        m_closed: mut bool,
     }
     {
         public func create(title: string, text: string, icon: option<graphic::texture>)=> MsgBox
@@ -28,6 +30,8 @@ namespace JEEditor::Forms
                 m_title = title,
                 m_text = text,
                 m_icon = icon,
+                
+                m_closed = mut false,
             };
         }
         
@@ -41,6 +45,14 @@ namespace JEEditor::Forms
                 + WindowsAttribute::ImGuiWindowFlags_NoCollapse
                 ;
         }
+        public func getShortcut(self: MsgBox)=> option<Shortcut>
+        {
+            return option::value <|
+                Shortcut::begin()
+                    -> shortCut([ImGuiKey::ImGuiKey_Enter], \=self.m_closed = true;)
+                    -> finish
+                    ;
+        }
         public func run(self: MsgBox)=> bool
         {
             match (self.m_icon)
@@ -48,12 +60,16 @@ namespace JEEditor::Forms
                 none?;
                 value(icon)?
                 {
-                    Image(icon);
+                    ImageSize(icon, 32., 32.);
                     SameLine();
                 }
             }
             Text(self.m_text);
-            return !Button("确认");
+            
+            if (Button("确认"))
+                self.m_closed = true;
+                
+            return !self.m_closed;
         }
         
         public func msg(title: string, text: string)
@@ -62,7 +78,7 @@ namespace JEEditor::Forms
         }
         public func err(title: string, text: string)
         {
-            do Windows::show(MsgBox::create(title, text, option::none));
+            do Windows::show(MsgBox::create(title, text, Icons::WARNING));
         }
     }
 }

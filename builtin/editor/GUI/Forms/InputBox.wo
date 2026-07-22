@@ -1,0 +1,104 @@
+import woo::std;
+
+import je;
+import je::gui;
+
+import pkg::interface;
+
+import builtin::editor::GUI::Icons;
+import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Shortcut;
+
+using std;
+using je;
+using je::gui;
+
+namespace JEEditor::GUI::Forms
+{
+    using InputBox = struct{
+        m_title: string,
+        m_text: string,
+        m_default: string,
+        m_content: mut string,
+        
+        m_on_input: mut (string)=> void,
+        m_close: mut bool,
+    }
+    {
+        public func create(title: string, text: string, default: string)=> InputBox
+            where require!(InputBox: Windows::IWindows);
+        {
+            return InputBox{
+                m_title = title,
+                m_text = text,
+                m_default = default,
+                m_content = mut default,
+                m_on_input = mut \_ = do nil;,
+                m_close = mut false,
+            };
+        }
+        
+        public func getTitle(self: InputBox)=> string
+        {
+            return F"输入: {self.m_title}$ID";
+        }
+        public func getAttrib(_: InputBox)=> WindowsAttribute
+        {
+            return WindowsAttribute::ImGuiWindowFlags_NoDocking
+                + WindowsAttribute::ImGuiWindowFlags_NoCollapse
+                ;
+        }
+        public func getShortcut(self: InputBox)=> option<Shortcut>
+        {
+            return option::value <|
+                Shortcut::begin()
+                    -> shortCut([ImGuiKey::ImGuiKey_Enter], \= self->onEnter;)
+                    -> finish
+                    ;
+        }
+        func onEnter(self: InputBox)=> void
+        {
+            self.m_close = true;
+            self.m_on_input(self.m_content);
+        }
+        public func run(self: InputBox)=> bool
+        {
+            Text(self.m_text);
+            
+            match (InputText(F"##Input_1", self.m_content))
+            {
+                none?;
+                value(new_text)?
+                    self.m_content = new_text;
+            }
+            
+            SameLine();
+            
+            if (Button("还原"))
+                self.m_content = self.m_default;
+                
+            if (Button("确认"))
+                self->onEnter();
+            
+            SameLine();
+            
+            if (Button("取消"))
+                self.m_close = true;
+                
+            return !self.m_close;
+        }
+        
+        public func show(title: string, text: string, default: string)
+        {
+            let askbox = InputBox::create(title, text, default);
+            do Windows::show(askbox);
+            
+            return askbox;
+        }
+        public func then(self: InputBox, callback: (string)=> void)
+        {
+            self.m_on_input = callback;
+            return self;
+        }
+    }
+}

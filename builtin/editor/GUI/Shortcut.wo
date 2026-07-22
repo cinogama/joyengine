@@ -1,0 +1,68 @@
+import woo::std;
+
+import je::gui;
+
+import pkg::worst;
+
+using std;
+using je::gui;
+
+namespace JEEditor::GUI
+{
+    using Shortcut = struct{
+        m_shortcut_records: array<(array<ImGuiKey>, ()=> void, mutable<bool>)>,
+    }
+    {
+        using CreatingShortcuts = vec<(array<ImGuiKey>, ()=> void)>
+        {
+            public func shortCut(
+                self: CreatingShortcuts, keys: array<ImGuiKey>, action: ()=> void)=> CreatingShortcuts
+            {
+                self as raw CreatingShortcuts->add((keys, action));
+                return self;
+            }
+            public func finish(self: CreatingShortcuts)
+            {
+                return Shortcut{
+                    m_shortcut_records =
+                        self as raw CreatingShortcuts
+                            // 为了防止窗口刚创建出来时，快捷键已经按下导致错误触发，此处设置为 true
+                            ->> \e = (e..., mutable::create(true));
+                            -> unsafe::asarray,
+                    };
+            }
+        }
+        
+        public func begin()=> CreatingShortcuts
+        {
+            return []mut as CreatingShortcuts;
+        }
+        public func update(self: Shortcut)
+        {
+            let is_focused = IsWindowFocused();
+            shortcuts_walk@ for (let (keys, action, triggered) : self.m_shortcut_records)
+            {
+                if (!is_focused)
+                {
+                    // 同上，避免其他窗口因快捷键关闭而转移 Focus 时，错误触发新 Focus 窗口的快捷键
+                    triggered->set(true);
+                    continue;
+                }
+
+                for (let key : keys)
+                {
+                    if (!IsKeyDown(key))
+                    {
+                        triggered->set(false);
+                        continue shortcuts_walk;
+                    }
+                }
+                if (!triggered->get())
+                {
+                    triggered->set(true);
+                    action();
+                }
+            }
+        }
+    }
+}

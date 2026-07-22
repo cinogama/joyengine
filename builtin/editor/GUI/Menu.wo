@@ -20,10 +20,11 @@ namespace JEEditor::GUI
         m_parent: Menu,
         
         m_name: string,
+        m_shortcut: mut string,
         m_on_click: ()=> void,
         
         m_enable: mut ()=> bool,
-        m_check_stat: mut option<()=> bool>,
+        m_check_stat: mut ()=> bool,
     }
     {
         func create(name: string, parent: Menu, onclick: ()=> void)=> MenuItem
@@ -32,10 +33,11 @@ namespace JEEditor::GUI
                 m_parent = parent,
                 
                 m_name = name,
+                m_shortcut = mut "",
                 m_on_click = onclick,
                 
                 m_enable = mut \=true;,
-                m_check_stat = mut option::none,
+                m_check_stat = mut \=false;,
             };
         }
         public func enableWhen(self: MenuItem, cond: ()=> bool)=> MenuItem
@@ -45,7 +47,12 @@ namespace JEEditor::GUI
         }
         public func checkWhen(self: MenuItem, cond: ()=> bool)=> MenuItem
         {
-            self.m_check_stat = option::value(cond);
+            self.m_check_stat = cond;
+            return self;
+        }
+        public func shortCut(self: MenuItem, shortcut: string)=> MenuItem
+        {
+            self.m_shortcut = shortcut;
             return self;
         }
         public func endItem(self: MenuItem)=> Menu
@@ -56,9 +63,10 @@ namespace JEEditor::GUI
         func showMenuItem(self: MenuItem)
         {
             let enabled = self.m_enable();
-            if (MenuItemSelectedEnabled(
+            if (MenuItemShortcutSelectedEnabled(
                     self.m_name,
-                    self.m_check_stat->>\checker = checker();->or(false),
+                    self.m_shortcut,
+                    self.m_check_stat(),
                     enabled))
             {
                 self.m_on_click();

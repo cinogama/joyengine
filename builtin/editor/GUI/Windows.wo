@@ -6,6 +6,7 @@ import je::gui;
 import pkg::interface;
 
 import Menu;
+import Shortcut;
 
 using std;
 using je;
@@ -32,6 +33,11 @@ namespace JEEditor::GUI::Windows
         {
             do self;
             return SizeConstraints::AutoSize;
+        }
+        public func getShortcut(self)=> option<Shortcut>
+        {
+            do self;
+            return option::none;
         }
         public func getMenu(self)=> option<Menu>
         {
@@ -61,7 +67,8 @@ namespace JEEditor::GUI::Windows
             return true;
         }
         
-        func _engine_imgui_show_job(i: IWindows, title: string, is_unique: bool, menu: option<Menu>)=> bool
+        func _engine_imgui_show_job(
+            i: IWindows, title: string, is_unique: bool, menu: option<Menu>, shortcut: option<Shortcut>)=> bool
         {
             let mut attrib = i->getAttrib;
             
@@ -89,6 +96,13 @@ namespace JEEditor::GUI::Windows
                 
             if (show)
             {
+                match (shortcut)
+                {
+                    none?;
+                    value(shortcut_instance)?
+                        shortcut_instance->update();
+                }
+                
                 match (menu)
                 {
                     none?;
@@ -111,8 +125,9 @@ namespace JEEditor::GUI::Windows
                 title = title->replace("$ID", F"##{JobID()}");
                 
             let menu_instance = i->getMenu;
+            let shortcut_instance = i->getShortcut;
             
-            while(i->_engine_imgui_show_job(title, is_unique, menu_instance))
+            while(i->_engine_imgui_show_job(title, is_unique, menu_instance, shortcut_instance))
                 std::yield();
         }
     }

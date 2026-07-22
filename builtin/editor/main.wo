@@ -9,8 +9,8 @@ import pkg::interface;
 import GUI::Windows;
 import GUI::Menu;
 
-import Forms::MsgBox;
-import Forms::AskBox;
+import GUI::Forms::MsgBox;
+import GUI::Forms::AskBox;
 
 using std;
 using je;
@@ -89,11 +89,12 @@ func main()
     // 创建一个 Universe，之后编辑器将在这上面运行
     let e = JEEditor::Environment::create();
     defer e->wait();
-        
+    
     do JEEditor::GUI::Windows::show(JEEditor::DemoWindows::create());
     
-    JEEditor::Forms::MsgBox::show("", "这是一个示例提示信息，嘻嘻");
-    do JEEditor::Forms::AskBox::show("", "这是一个示例提问，嘻嘻")
+    JEEditor::GUI::Forms::MsgBox::msg("", "这是一个示例提示信息，嘻嘻");
+    JEEditor::GUI::Forms::MsgBox::err("", "这是一个示例提示错误，嘻嘻");
+    do JEEditor::GUI::Forms::AskBox::show("", "这是一个示例提问，嘻嘻")
         ->onYes(\=do nil;)
         ->onNo(\=do nil;)
         ;
