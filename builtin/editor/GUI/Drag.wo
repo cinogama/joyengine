@@ -12,7 +12,7 @@ namespace JEEditor::GUI::Drag
         require(
             concept!{
                 typeof<Self>::type: string;
-                typeif<Self>::restore: (string)=> option<Self>;
+                typeof<Self>::restore: (string)=> option<Self>;
             });
         public func dump(self)=> string;
         public func tips(self)=> string;
@@ -24,7 +24,7 @@ namespace JEEditor::GUI::Drag
         if (BeginDragDropSource())
         {
             defer EndDragDropSource();
-            do SetDragDropPayload(type<T>::type, payload->dump);
+            do SetDragDropPayload(typeof<T>::type, payload->dump);
             
             Text(payload->tips());
         }

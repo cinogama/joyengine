@@ -10,6 +10,7 @@ import pkg::iterator;
 
 import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Icons;
+import builtin::editor::GUI::Drag;
 import builtin::editor::GUI::Forms::InputBox;
 import builtin::editor::GUI::Forms::AskBox;
 
@@ -21,11 +22,35 @@ using fsys;
 
 using JEEditor::GUI;
 using JEEditor::GUI::Windows;
+using JEEditor::GUI::Drag;
 using JEEditor::GUI::Forms;
 using JEEditor::GUI::Icons;
 
 namespace JEEditor::Editor
 {
+    using FilePayload = struct
+    {
+        m_path: fsys::path_t,
+    }
+    {
+        public let type = "JEEditor_Editor_BrowserFilePayload";
+        
+        public func restore(data: string) => option<FilePayload>
+        {
+            return option::value(FilePayload { m_path = normalize(data) });
+        }
+        
+        public func dump(self: FilePayload) => string
+        {
+            return self.m_path->to_string;
+        }
+        
+        public func tips(self: FilePayload) => string
+        {
+            return F"移动: {filename(self.m_path)}";
+        }
+    }
+    
     using Browser = struct{
         m_root: fsys::path_t,
         m_current: mut fsys::path_t,
@@ -228,15 +253,17 @@ namespace JEEditor::Editor
             let root_name = filename(self.m_root);
             let display_name = root_name->len > 0 ? root_name | "项目";
             
-            let mut root_flags = TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen;
-            root_flags += TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow;
-            root_flags += TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick;
-            root_flags += TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
-            
+            let mut root_flags = TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
+                
             if (self.m_current == self.m_root)
                 root_flags += TreeNodeAttribute::ImGuiTreeNodeFlags_Selected;
                 
             let root_open = TreeNodeEx(F"{display_name}##browser_root", root_flags);
+            
+            self->acceptDirDrop(self.m_root);
             
             if (IsItemClickedLeft())
             {
@@ -259,14 +286,16 @@ namespace JEEditor::Editor
                 let is_selected = self.m_selected->is_value
                     && self.m_selected->unwrap == d;
                     
-                let mut flags = TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow;
-                flags += TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick;
-                flags += TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
-                
+                let mut flags = TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow
+                    + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick
+                    + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
+                    
                 if (is_selected)
                     flags += TreeNodeAttribute::ImGuiTreeNodeFlags_Selected;
                     
                 let node_open = TreeNodeEx(F"{name}##{d->to_string()}", flags);
+                
+                self->acceptDirDrop(d);
                 
                 if (IsItemClickedLeft())
                 {
@@ -380,6 +409,8 @@ namespace JEEditor::Editor
                     let clicked = SelectableSelected(
                         F"{name}/##{d->to_string()}", is_selected);
                         
+                    Drag::DragPayload(FilePayload { m_path = d });
+                    
                     if (IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Right))
                         self.m_selected = option::value(d);
                         
@@ -400,6 +431,8 @@ namespace JEEditor::Editor
                     let clicked = SelectableSelected(
                         F"{name}##{f->to_string()}", is_selected);
                         
+                    Drag::DragPayload(FilePayload { m_path = f });
+                    
                     if (IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Right))
                         self.m_selected = option::value(f);
                         
@@ -480,6 +513,34 @@ namespace JEEditor::Editor
             
             if (is_double && isdir(path))
                 self.m_current = path;
+        }
+        
+        func acceptDirDrop(self: Browser, target_dir: fsys::path_t)=> void
+        {
+            match (Drag::AcceptDrag:<FilePayload>())
+            {
+                none?;
+                value(payload)?
+                    self->requestMove(payload.m_path, target_dir);
+            }
+        }
+        
+        func requestMove(self: Browser, src: fsys::path_t, target_dir: fsys::path_t)=> void
+        {
+            if (parent(src) == target_dir)
+                return;
+                
+            let src_name = filename(src);
+            let dst = target_dir / src_name;
+            let dirty = self.m_fs_dirty;
+            let target_name = filename(target_dir);
+            
+            do AskBox::show("移动", F"确认将 \"{src_name}\" 移动到 \"{target_name}\" 吗？")
+                ->onYes(func() {
+                        do move(src, dst);
+                        dirty->set(true);
+                    })
+                ;
         }
     }
 }
