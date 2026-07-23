@@ -14,6 +14,7 @@
 #include <set>
 #include <vector>
 #include <algorithm>
+#include <atomic>
 
 namespace jeecs
 {
@@ -56,15 +57,32 @@ namespace jeecs
         };
         struct Prefab
         {
-            jeecs::basic::string path;
-            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            basic::string path;
+            static void JERefRegsiter(typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Prefab::path, "path");
             }
         };
         struct EntityId
         {
-            jeecs::typing::debug_eid_t eid;
+            inline static std::atomic<typing::debug_eid_t> ALLOCATED_EID;
+
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(EntityId);
+            typing::debug_eid_t eid;
+
+            EntityId()
+                : eid(1 + ALLOCATED_EID.fetch_add(1, std::memory_order::relaxed))
+            {
+            }
+            EntityId(const EntityId&)
+                : eid(1 + ALLOCATED_EID.fetch_add(1, std::memory_order::relaxed))
+            {
+            }
+            EntityId(EntityId&& another)
+                : eid(another.eid)
+            {
+            }
+
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &EntityId::eid, "eid");
@@ -543,20 +561,13 @@ WOORT_API woort_api wojeapi_get_bad_shader_list_of_entity(void)
     return woort_ret_value(result);
 }
 
-static jeecs::typing::debug_eid_t _editor_entity_uid;
-
-void jedbg_set_editing_entity_uid(const jeecs::typing::debug_eid_t uid)
-{
-    _editor_entity_uid = uid;
-}
-jeecs::typing::debug_eid_t jedbg_get_editing_entity_uid()
-{
-    return _editor_entity_uid;
-}
 jeecs::typing::debug_eid_t jedbg_get_entity_uid(const jeecs::game_entity* e)
 {
     auto* eid = e->get_component<jeecs::Editor::EntityId>();
     if (eid == nullptr)
-        return 0;
+    {
+        eid = e->add_component<jeecs::Editor::EntityId>();
+        return 0 /* invalid */;
+    }
     return eid->eid;
 }

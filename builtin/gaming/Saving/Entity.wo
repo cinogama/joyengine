@@ -15,7 +15,7 @@ using je::graphic;
 
 namespace JEGaming::Saving::Entity
 {
-    func _save_component(cinst: component)
+    func _save_component(cinst: component)=> Toml
     {
         let component_dat = new_table();
         for (let (mname, mtype, maddr) : cinst->get_members)
@@ -35,6 +35,11 @@ namespace JEGaming::Saving::Entity
         let components_dat = new_table();
         for (let ctype : e->internal::get_components_types())
         {
+            let ctype_name = ctype->name;
+            if (ctype_name->begin_with("Editor::"))
+                /* Donot save editor components */
+                continue;
+                
             components_dat->set(
                 ctype->name,
                 _save_component(
@@ -43,39 +48,80 @@ namespace JEGaming::Saving::Entity
         return components_dat;
     }
     
-    func _save_shader(sinst: shader)
+    func _save_shader(sinst: shader)=> Toml
     {
+        let shader_dat = new_table();
         for (let (uname, uinst) : sinst->get_uniforms)
         {
-
+            match (uinst)
+            {
+                integer(vi)?
+                    shader_dat->set(uname, vi);
+                integer2((vi1, vi2))?
+                    shader_dat->set(uname, from([vi1, vi2]));
+                integer3((vi1, vi2, vi3))?
+                    shader_dat->set(uname, from([vi1, vi2, vi3]));
+                integer4((vi1, vi2, vi3, vi4))?
+                    shader_dat->set(uname, from([vi1, vi2, vi3, vi4]));
+                float(vr)?
+                    shader_dat->set(uname, vr);
+                float2((vr1, vr2))?
+                    shader_dat->set(uname, from([vr1, vr2]));
+                float3((vr1, vr2, vr3))?
+                    shader_dat->set(uname, from([vr1, vr2, vr3]));
+                float4((vr1, vr2, vr3, vr4))?
+                    shader_dat->set(uname, from([vr1, vr2, vr3, vr4]));
+                _?/* Ignore. */;
+            }
         }
-    }
-
-    func _save_shaders(e: entity)
-    {
-        for (let sinst : e->get_shaders())
-        {
-            sinst->path;
-        }
+        return shader_dat;
     }
     
-    func _save_textures(e: entity, toml: Toml)
+    func _save_shaders(e: entity)=> Toml
     {
-        
+        let shaders_dat = new_table();
+        for (let sinst : e->get_shaders())
+        {
+            match (sinst->path)
+            {
+                none? /* Skip builtin shader */;
+                value(shader_path)?
+                    shaders_dat->set(shader_path, _save_shader(sinst));
+            }
+        }
+        return shaders_dat;
+    }
+    
+    func _save_textures(e: entity)=> Toml
+    {
+        let textures_dat = new_table();
+        for (let (tpass, tinst) : e->get_textures)
+        {
+            match (tinst->path)
+            {
+                none? /* Skip builtin texture */;
+                value(texture_path)?
+                     textures_dat->set(tpass as string, texture_path);
+            }
+        }
+        return textures_dat;
     }
     
     public func save(e: entity)=> Toml
     {
         let toml = new_table();
         
+        // 0. Save name
+        toml->set("name", e->internal::name);
+
         // 1. Walk through all components
-        _save_components(e, toml);
+        toml->set("components", _save_components(e));
         
         // 2. Save shaders
-        _save_shaders(e, toml);
+        toml->set("shaders", _save_shaders(e));
         
         // 3. Save textures
-        _save_textures(e, toml);
+        toml->set("textures", _save_textures(e));
         
         return toml;
     }

@@ -677,26 +677,6 @@ WOORT_API woort_api wojeapi_get_world_from_entity(void)
     return woort_ret_pointer(world);
 }
 
-WOORT_API woort_api wojeapi_set_editing_entity_uid(void)
-{
-    jedbg_set_editing_entity_uid((jeecs::typing::debug_eid_t)woort_int(0));
-    return woort_ret_void();
-}
-
-WOORT_API woort_api wojeapi_reset_editing_entity_uid(void)
-{
-    jedbg_set_editing_entity_uid(0);
-    return woort_ret_void();
-}
-
-WOORT_API woort_api wojeapi_get_editing_entity_uid(void)
-{
-    jeecs::typing::debug_eid_t uid = jedbg_get_editing_entity_uid();
-
-    if (uid != 0)
-        return woort_ret_option_int((woort_Int)uid);
-    return woort_ret_option_none();
-}
 WOORT_API woort_api wojeapi_get_entity_uid(void)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
@@ -2200,8 +2180,8 @@ WOORT_API woort_api wojeapi_shader_path(void)
     auto* shader = (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(0);
 
     if (auto str = (*shader)->resource()->m_handle.m_path_may_null_if_builtin)
-        return woort_ret_string(str);
-    return woort_ret_string("< Built-in shader >");
+        return woort_ret_option_string(str);
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api wojeapi_texture_get_size(void)

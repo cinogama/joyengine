@@ -322,6 +322,15 @@ namespace jeecs
         */
         using timestamp_ms_t = uint64_t;
 
+        /*
+        jeecs::typing::debug_eid_t [类型别名]
+        实体的调试 ID，对于任何实体，确保在引擎的生命周期内唯一
+        仅编辑器环境下有效。
+        ----------------------------------
+        * 0 是无效值
+        ----------------------------------
+        * 正计划废弃，待编辑器重构计划推进。
+        */
         using debug_eid_t = uint64_t;
 
         template <typename T>
@@ -4606,10 +4615,6 @@ JE_API size_t jedbg_get_unregister_type_count(void);
 
 // NOTE: need free the return result by 'je_mem_free'
 JE_API const jeecs::typing::type_info** jedbg_get_all_system_attached_in_world(void* _world);
-
-JE_API void jedbg_set_editing_entity_uid(const jeecs::typing::debug_eid_t uid);
-
-JE_API jeecs::typing::debug_eid_t jedbg_get_editing_entity_uid();
 
 JE_API jeecs::typing::debug_eid_t jedbg_get_entity_uid(const jeecs::game_entity* e);
 

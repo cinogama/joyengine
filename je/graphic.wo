@@ -92,7 +92,7 @@ namespace je
                 public func create(univ: option<universe>, vpath: string, src: string)=> option<shader>;
                 
             extern("libjoyecs", "wojeapi_shader_path")
-                public func path(self: shader)=> string;
+                public func path(self: shader)=> option<string>;
                 
             public union uniform_variable
             {
