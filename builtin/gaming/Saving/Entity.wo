@@ -158,34 +158,53 @@ namespace JEGaming::Saving::Entity
         
         for (let section : ["components", "shaders"])
         {
-            if (!entity_dat->contains(section))
-                continue;
-                
-            let e_sec = entity_dat[section];
-            if (!prefab_entity_dat->contains(section))
+            if (entity_dat->contains(section))
             {
-                result->set(section, e_sec->clone);
-                continue;
-            }
-            
-            let p_sec = prefab_entity_dat[section];
-            let sec_diff = new_table();
-            for (let (ckey, cval) : e_sec->as_table->unwrap)
-            {
-                match (p_sec->get(ckey))
+                let e_sec = entity_dat[section];
+                if (!prefab_entity_dat->contains(section))
                 {
-                    none?
-                        sec_diff->set(ckey, cval);
-                    value(pfab_cval)?
+                    result->set(section, e_sec->clone);
+                }
+                else
+                {
+                    let p_sec = prefab_entity_dat[section];
+                    let sec_diff = new_table();
+                    for (let (ckey, cval) : e_sec->as_table->unwrap)
                     {
-                        let member_diff = _diff_shallow(cval, pfab_cval);
-                        if (member_diff->len > 0)
-                            sec_diff->set(ckey, member_diff);
+                        match (p_sec->get(ckey))
+                        {
+                            none?
+                                sec_diff->set(ckey, cval);
+                            value(pfab_cval)?
+                            {
+                                let member_diff = _diff_shallow(cval, pfab_cval);
+                                if (member_diff->len > 0)
+                                    sec_diff->set(ckey, member_diff);
+                            }
+                        }
                     }
+                    if (sec_diff->len > 0)
+                        result->set(section, sec_diff);
                 }
             }
-            if (sec_diff->len > 0)
-                result->set(section, sec_diff);
+            
+            if (prefab_entity_dat->contains(section))
+            {
+                let p_sec = prefab_entity_dat[section];
+                let e_sec = entity_dat->contains(section) ? entity_dat[section] | new_table();
+                
+                let removed = new_array();
+                
+                for (let (ckey, _) : p_sec->as_table->unwrap)
+                {
+                    if (!e_sec->contains(ckey))
+                        removed->push(ckey);
+                }
+                if (removed->len > 0)
+                    result->set(
+                        section == "components" ? "removed_component" | "removed_shader",
+                        removed);
+            }
         }
         
         return result;
@@ -198,11 +217,11 @@ namespace JEGaming::Saving::Entity
         return parse(prefab_content)->okay;
     }
     
-    // func combine(entity_dat: Toml, prefab_entity_dat: Toml)
-    // {
-
-    // }
-
+    func combine(entity_dat: Toml, prefab_entity_dat: Toml)
+    {
+    
+    }
+    
     // public func restore(w: world, entity_dat: Toml)
     // {
     //     if (entity_dat->contains("prefab"))
@@ -241,7 +260,7 @@ namespace JEGaming::Saving::Entity
                     
                     return_value! diff_dat;
                 };
-
+                
                 match (diff_dat_may_none)
                 {
                     value(diff_dat)?
