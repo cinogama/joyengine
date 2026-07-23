@@ -1,5 +1,6 @@
 import woo::std;
-import je;
+
+import je::ecs;
 
 import World;
 

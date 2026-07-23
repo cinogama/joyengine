@@ -1,6 +1,6 @@
 import woo::std;
 
-import je;
+import je::graphic;
 import je::gui;
 
 import pkg::interface;
@@ -10,20 +10,20 @@ import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Shortcut;
 
 using std;
-using je;
 using je::gui;
+using je::graphic;
 
 namespace JEEditor::GUI::Forms
 {
     using MsgBox = struct{
         m_title: string,
         m_text: string,
-        m_icon: option<graphic::texture>,
+        m_icon: option<texture>,
         
         m_closed: mut bool,
     }
     {
-        public func create(title: string, text: string, icon: option<graphic::texture>)=> MsgBox
+        public func create(title: string, text: string, icon: option<texture>)=> MsgBox
             where require!(MsgBox: Windows::IWindows);
         {
             return MsgBox{

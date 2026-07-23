@@ -1,6 +1,6 @@
 import woo::std;
 
-import je;
+import je::graphic;
 import je::gui;
 
 import pkg::fsys;
@@ -15,7 +15,7 @@ import builtin::editor::GUI::Forms::InputBox;
 import builtin::editor::GUI::Forms::AskBox;
 
 using std;
-using je;
+
 using je::gui;
 using je::graphic;
 using fsys;
@@ -313,7 +313,7 @@ namespace JEEditor::Editor
         
         // 根据路径返回对应的图标：目录返回文件夹图标，文件按扩展名走 ext_icon_map 查询，
         // 未命中则返回默认 FILE 图标。
-        func iconForPath(path: fsys::path_t)=> option<graphic::texture>
+        func iconForPath(path: fsys::path_t)=> option<texture>
         {
             // 扩展名 -> 图标 的查找表；命中即用，未命中走默认 FILE 图标。
             static let ext_icon_map = {

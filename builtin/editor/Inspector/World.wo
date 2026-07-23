@@ -1,5 +1,6 @@
 import woo::std;
-import je;
+import je::typeinfo;
+import je::ecs;
 
 import pkg::fsys;
 

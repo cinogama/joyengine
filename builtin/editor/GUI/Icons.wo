@@ -1,9 +1,8 @@
 import woo::std;
 
-import je;
+import je::graphic;
 
 using std;
-using je;
 using je::graphic;
 
 namespace JEEditor::GUI::Icons

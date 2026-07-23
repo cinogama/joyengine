@@ -44,11 +44,11 @@ namespace je
                 extern("libjoyecs", "wojeapi_dynamic_parser_clear")
                     public func clear()=> void;
                     
-                extern("libjoyecs", "wojeapi_dynamic_parser_saving")
-                    public func saving(type: typeinfo, val: handle)=> option<string>;
+                extern("libjoyecs", "wojeapi_dynamic_parser_save")
+                    public func save(type: typeinfo, val: handle)=> option<string>;
                     
-                extern("libjoyecs", "wojeapi_dynamic_parser_restoring")
-                    public func restoring(type: je::typeinfo, val: handle, dat: string)=> bool;
+                extern("libjoyecs", "wojeapi_dynamic_parser_restore")
+                    public func restore(type: je::typeinfo, val: handle, dat: string)=> bool;
                     
                 extern("libjoyecs", "wojeapi_dynamic_parser_edit")
                     public func edit(type: je::typeinfo, val: handle, tag: string)=> bool;

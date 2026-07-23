@@ -2662,7 +2662,7 @@ WOORT_API woort_api wojeapi_dynamic_parser_clear(void)
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_dynamic_parser_saving(void)
+WOORT_API woort_api wojeapi_dynamic_parser_save(void)
 {
     woort_value s;
     if (!woort_push_reserve(2, &s))
@@ -2695,7 +2695,7 @@ WOORT_API woort_api wojeapi_dynamic_parser_saving(void)
     return woort_ret_option_none();
 }
 
-WOORT_API woort_api wojeapi_dynamic_parser_restoring(void)
+WOORT_API woort_api wojeapi_dynamic_parser_restore(void)
 {
     woort_value s;
     if (!woort_push_reserve(2, &s))

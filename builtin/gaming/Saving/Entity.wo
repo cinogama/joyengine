@@ -1,0 +1,82 @@
+import woo::std;
+
+import pkg::toml;
+
+import je;
+import je::ecs;
+import je::typeinfo;
+import je::graphic;
+import je::internal;
+
+using std;
+using je;
+using toml;
+using je::graphic;
+
+namespace JEGaming::Saving::Entity
+{
+    func _save_component(cinst: component)
+    {
+        let component_dat = new_table();
+        for (let (mname, mtype, maddr) : cinst->get_members)
+        {
+            match (towoo::unsafe::dynamic_parser::save(mtype, maddr))
+            {
+                none?;
+                value(saved_data)?
+                    component_dat->set(mname, saved_data);
+            }
+        }
+        return component_dat;
+    }
+    
+    func _save_components(e: entity)=> Toml
+    {
+        let components_dat = new_table();
+        for (let ctype : e->internal::get_components_types())
+        {
+            components_dat->set(
+                ctype->name,
+                _save_component(
+                    e->get_component(ctype)->unwrap));
+        }
+        return components_dat;
+    }
+    
+    func _save_shader(sinst: shader)
+    {
+        for (let (uname, uinst) : sinst->get_uniforms)
+        {
+
+        }
+    }
+
+    func _save_shaders(e: entity)
+    {
+        for (let sinst : e->get_shaders())
+        {
+            sinst->path;
+        }
+    }
+    
+    func _save_textures(e: entity, toml: Toml)
+    {
+        
+    }
+    
+    public func save(e: entity)=> Toml
+    {
+        let toml = new_table();
+        
+        // 1. Walk through all components
+        _save_components(e, toml);
+        
+        // 2. Save shaders
+        _save_shaders(e, toml);
+        
+        // 3. Save textures
+        _save_textures(e, toml);
+        
+        return toml;
+    }
+}

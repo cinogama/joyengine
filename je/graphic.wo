@@ -113,9 +113,9 @@ namespace je
                 x : real,
                 y : real,
                 z : real,
-                w : real
-                };
-                
+                w : real,
+            };
+            
             extern("libjoyecs", "wojeapi_get_uniforms_from_shader")
                 public func get_uniforms(self: shader)=> map<string, uniform_variable>;
                 

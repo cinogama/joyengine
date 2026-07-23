@@ -2,7 +2,7 @@ import woo::std;
 
 import pkg::worst;
 
-import je;
+import je::ecs;
 import je::internal;
 
 using je;

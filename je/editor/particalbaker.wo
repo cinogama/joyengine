@@ -1,7 +1,8 @@
 // Joyengine 4.x
 import woo::std;
 import pkg::math;
-import je;
+
+import je::graphic;
 
 using _EditorContext = struct{
     m_last_update_time: mut real,

@@ -1,6 +1,5 @@
 import woo::std;
 
-import je;
 import je::gui;
 
 import pkg::interface;
@@ -10,7 +9,6 @@ import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Shortcut;
 
 using std;
-using je;
 using je::gui;
 
 namespace JEEditor::GUI::Forms

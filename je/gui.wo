@@ -1,6 +1,7 @@
 // Joyengine 4.x
 import woo::std;
-import je;
+
+import je::graphic;
 
 namespace je::gui
 {

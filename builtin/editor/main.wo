@@ -1,6 +1,7 @@
 import woo::std;
 
-import je;
+import je::ecs;
+import je::graphic;
 import je::internal;
 
 import pkg::singleton;
