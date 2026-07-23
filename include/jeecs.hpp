@@ -4596,10 +4596,6 @@ JE_API bool je_main_script_entry();
 // [world1, world2,..., nullptr]
 JE_API void** jedbg_get_all_worlds_in_universe(void* _universes);
 
-JE_API const char* jedbg_get_world_name(void* _world);
-
-JE_API void jedbg_set_world_name(void* _world, const char* name);
-
 JE_API void jedbg_free_entity(jeecs::game_entity* _entity_list);
 
 // NOTE: need free the return result by 'je_mem_free'(and elem with jedbg_free_entity)

@@ -433,17 +433,6 @@ WOORT_API woort_api wojeapi_set_able_world(void)
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_get_world_name(void)
-{
-    return woort_ret_string(jedbg_get_world_name(woort_pointer(0)));
-}
-
-WOORT_API woort_api wojeapi_set_world_name(void)
-{
-    jedbg_set_world_name(woort_pointer(0), woort_string(1));
-    return woort_ret_void();
-}
-
 WOORT_API woort_api wojeapi_add_system_to_world(void)
 {
     /*

@@ -107,6 +107,11 @@ namespace JEGaming::Saving::Entity
         return textures_dat;
     }
     
+    func diff(entity_dat: Toml, prefab_entity_dat: Toml)=> Toml
+    {
+        
+    }
+
     public func save(e: entity)=> Toml
     {
         let toml = new_table();

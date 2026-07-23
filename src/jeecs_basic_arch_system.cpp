@@ -1256,8 +1256,6 @@ namespace jeecs_impl
         using system_slice_cache_container_t =
             std::unordered_map<jeecs::game_system*, slice_cache_container_t>;
     private:
-        std::string _m_name;
-
         ecs_universe* _m_universe;
 
         command_buffer _m_command_buffer;
@@ -1276,8 +1274,7 @@ namespace jeecs_impl
 
     public:
         ecs_world(ecs_universe* universe)
-            : _m_name("<anonymous>")
-            , _m_universe(universe)
+            : _m_universe(universe)
             , _m_command_buffer(this)
             , _m_arch_manager(this)
             , _m_world_enabled(false)
@@ -1405,16 +1402,6 @@ namespace jeecs_impl
         {
             // NOTE: This function used for editor
             return _m_arch_manager;
-        }
-        const std::string& _name() const noexcept
-        {
-            // NOTE: This function used for editor
-            return _m_name;
-        }
-        const std::string& _name(const std::string& new_name) noexcept
-        {
-            // NOTE: This function used for editor
-            return _m_name = new_name;
         }
 
     public:
@@ -2851,16 +2838,6 @@ void** jedbg_get_all_worlds_in_universe(void* _universe)
     *write_place = nullptr;
 
     return out_result;
-}
-
-const char* jedbg_get_world_name(void* _world)
-{
-    return static_cast<jeecs_impl::ecs_world*>(_world)->_name().c_str();
-}
-
-void jedbg_set_world_name(void* _world, const char* name)
-{
-    static_cast<jeecs_impl::ecs_world*>(_world)->_name(name);
 }
 
 void jedbg_free_entity(jeecs::game_entity* _entity_list)

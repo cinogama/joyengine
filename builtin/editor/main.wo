@@ -1,5 +1,6 @@
 import woo::std;
 
+import je;
 import je::ecs;
 import je::graphic;
 import je::internal;
@@ -86,6 +87,9 @@ namespace JEEditor
 
 func main()
 {
+    // 生成内置脚本引导
+    towoo::update_api();
+
     // 编辑器脚本退出之前清掉所有单例实例
     defer singleton::unsafe::reset_all_singleton();
     
