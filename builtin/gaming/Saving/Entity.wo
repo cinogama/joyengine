@@ -2,6 +2,7 @@ import woo::std;
 
 import pkg::toml;
 import pkg::try;
+import pkg::worst;
 
 import je;
 import je::ecs;
@@ -34,7 +35,9 @@ namespace JEGaming::Saving::Entity
     func _save_components(e: entity)=> Toml
     {
         let components_dat = new_table();
-        for (let ctype : e->internal::get_components_types())
+        for (let ctype : e->internal::get_components_types()
+            /* 为了确保顺序，此处始终按照字母序排列 */
+            |> sort(\l, r = l->name < r->name;))
         {
             let ctype_name = ctype->name;
             if (ctype_name->begin_with("Editor::"))
@@ -217,9 +220,77 @@ namespace JEGaming::Saving::Entity
         return parse(prefab_content)->okay;
     }
     
-    func combine(entity_dat: Toml, prefab_entity_dat: Toml)
+    func combine(entity_dat: Toml, prefab_entity_dat: Toml)=> Toml
     {
-    
+        let result = new_table();
+        
+        if (entity_dat->contains("name"))
+            result->set("name", entity_dat["name"]);
+        else if (prefab_entity_dat->contains("name"))
+            result->set("name", prefab_entity_dat["name"]);
+            
+        if (entity_dat->contains("textures") || prefab_entity_dat->contains("textures"))
+        {
+            let tex = new_table();
+            if (prefab_entity_dat->contains("textures"))
+                for (let (k, v) : prefab_entity_dat["textures"]->as_table->unwrap)
+                    tex->set(k, v);
+            if (entity_dat->contains("textures"))
+                for (let (k, v) : entity_dat["textures"]->as_table->unwrap)
+                    tex->set(k, v);
+            if (tex->len > 0)
+                result->set("textures", tex);
+        }
+        
+        for (let section : ["components", "shaders"])
+        {
+            let removed_field = section == "components" ? "removed_component" | "removed_shader";
+            let combined = new_table();
+            
+            if (prefab_entity_dat->contains(section))
+                for (let (ckey, cval) : prefab_entity_dat[section]->as_table->unwrap)
+                    combined->set(ckey, cval->clone);
+                    
+            if (entity_dat->contains(removed_field))
+            {
+                match (entity_dat[removed_field]->as_array)
+                {
+                    none?;
+                    value(removed_items)?
+                        for (let item : removed_items)
+                        {
+                            match (item->as_string)
+                            {
+                                none?;
+                                value(name)? combined->erase_key(name);
+                            }
+                        }
+                }
+            }
+            
+            if (entity_dat->contains(section))
+            {
+                for (let (ckey, cval) : entity_dat[section]->as_table->unwrap)
+                {
+                    match (combined->get(ckey))
+                    {
+                        none?
+                            combined->set(ckey, cval);
+                        value(base)?
+                            for (let (mkey, mval) : cval->as_table->unwrap)
+                                base->set(mkey, mval);
+                    }
+                }
+            }
+            
+            if (combined->len > 0)
+                result->set(section, combined);
+        }
+        
+        if (entity_dat->contains("prefab"))
+            result->set("prefab", entity_dat["prefab"]);
+            
+        return result;
     }
     
     // public func restore(w: world, entity_dat: Toml)
