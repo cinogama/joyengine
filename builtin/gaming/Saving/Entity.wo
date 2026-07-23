@@ -52,9 +52,19 @@ namespace JEGaming::Saving::Entity
         return components_dat;
     }
     
-    func _save_shader(sinst: shader)=> Toml
+    func _save_shader(sinst: shader)=> option<Toml>
     {
         let shader_dat = new_table();
+        
+        match (sinst->path)
+        {
+            none?
+                /* Skip builtin shader. */
+                return option::none;
+            value(shader_path)?
+                shader_dat->set("path", shader_path);
+        }
+        
         for (let (uname, uinst) : sinst->get_uniforms)
         {
             match (uinst)
@@ -78,19 +88,19 @@ namespace JEGaming::Saving::Entity
                 _?/* Ignore. */;
             }
         }
-        return shader_dat;
+        return option::value(shader_dat);
     }
     
     func _save_shaders(e: entity)=> Toml
     {
-        let shaders_dat = new_table();
+        let shaders_dat = new_array();
         for (let sinst : e->get_shaders())
         {
-            match (sinst->path)
+            match (_save_shader(sinst))
             {
                 none? /* Skip builtin shader */;
-                value(shader_path)?
-                    shaders_dat->set(shader_path, _save_shader(sinst));
+                value(shader_dat)?
+                    shaders_dat->push(shader_dat);
             }
         }
         return shaders_dat;
@@ -111,106 +121,9 @@ namespace JEGaming::Saving::Entity
         return textures_dat;
     }
     
-    func _toml_equal(a: Toml, b: Toml)=> bool
-    {
-        return a->to_toml == b->to_toml;
-    }
-    
-    func _diff_shallow(entity_tbl: Toml, prefab_tbl: Toml)=> Toml
-    {
-        let result = new_table();
-        for (let (key, eval) : entity_tbl->as_table->unwrap)
-        {
-            match (prefab_tbl->get(key))
-            {
-                none?
-                    result->set(key, eval);
-                value(pval)?
-                    if (!_toml_equal(eval, pval))
-                        result->set(key, eval);
-            }
-        }
-        return result;
-    }
-    
     func diff(entity_dat: Toml, prefab_entity_dat: Toml)=> Toml
     {
-        let result = new_table();
-        
-        if (entity_dat->contains("name"))
-        {
-            let e_name = entity_dat["name"];
-            let name_differs = (!prefab_entity_dat->contains("name"))
-                || (!_toml_equal(e_name, prefab_entity_dat["name"]));
-            if (name_differs)
-                result->set("name", e_name);
-        }
-        
-        if (entity_dat->contains("textures"))
-        {
-            let e_tex = entity_dat["textures"];
-            if (prefab_entity_dat->contains("textures"))
-            {
-                let d = _diff_shallow(e_tex, prefab_entity_dat["textures"]);
-                if (d->len > 0)
-                    result->set("textures", d);
-            }
-            else
-                result->set("textures", e_tex->clone);
-        }
-        
-        for (let section : ["components", "shaders"])
-        {
-            if (entity_dat->contains(section))
-            {
-                let e_sec = entity_dat[section];
-                if (!prefab_entity_dat->contains(section))
-                {
-                    result->set(section, e_sec->clone);
-                }
-                else
-                {
-                    let p_sec = prefab_entity_dat[section];
-                    let sec_diff = new_table();
-                    for (let (ckey, cval) : e_sec->as_table->unwrap)
-                    {
-                        match (p_sec->get(ckey))
-                        {
-                            none?
-                                sec_diff->set(ckey, cval);
-                            value(pfab_cval)?
-                            {
-                                let member_diff = _diff_shallow(cval, pfab_cval);
-                                if (member_diff->len > 0)
-                                    sec_diff->set(ckey, member_diff);
-                            }
-                        }
-                    }
-                    if (sec_diff->len > 0)
-                        result->set(section, sec_diff);
-                }
-            }
-            
-            if (prefab_entity_dat->contains(section))
-            {
-                let p_sec = prefab_entity_dat[section];
-                let e_sec = entity_dat->contains(section) ? entity_dat[section] | new_table();
-                
-                let removed = new_array();
-                
-                for (let (ckey, _) : p_sec->as_table->unwrap)
-                {
-                    if (!e_sec->contains(ckey))
-                        removed->push(ckey);
-                }
-                if (removed->len > 0)
-                    result->set(
-                        section == "components" ? "removed_component" | "removed_shader",
-                        removed);
-            }
-        }
-        
-        return result;
+    
     }
     
     func load_prefab_dat_from_file(engine_path: string)=> option<Toml>
@@ -220,78 +133,10 @@ namespace JEGaming::Saving::Entity
         return parse(prefab_content)->okay;
     }
     
-    func combine(entity_dat: Toml, prefab_entity_dat: Toml)=> Toml
-    {
-        let result = new_table();
-        
-        if (entity_dat->contains("name"))
-            result->set("name", entity_dat["name"]);
-        else if (prefab_entity_dat->contains("name"))
-            result->set("name", prefab_entity_dat["name"]);
-            
-        if (entity_dat->contains("textures") || prefab_entity_dat->contains("textures"))
-        {
-            let tex = new_table();
-            if (prefab_entity_dat->contains("textures"))
-                for (let (k, v) : prefab_entity_dat["textures"]->as_table->unwrap)
-                    tex->set(k, v);
-            if (entity_dat->contains("textures"))
-                for (let (k, v) : entity_dat["textures"]->as_table->unwrap)
-                    tex->set(k, v);
-            if (tex->len > 0)
-                result->set("textures", tex);
-        }
-        
-        for (let section : ["components", "shaders"])
-        {
-            let removed_field = section == "components" ? "removed_component" | "removed_shader";
-            let combined = new_table();
-            
-            if (prefab_entity_dat->contains(section))
-                for (let (ckey, cval) : prefab_entity_dat[section]->as_table->unwrap)
-                    combined->set(ckey, cval->clone);
-                    
-            if (entity_dat->contains(removed_field))
-            {
-                match (entity_dat[removed_field]->as_array)
-                {
-                    none?;
-                    value(removed_items)?
-                        for (let item : removed_items)
-                        {
-                            match (item->as_string)
-                            {
-                                none?;
-                                value(name)? combined->erase_key(name);
-                            }
-                        }
-                }
-            }
-            
-            if (entity_dat->contains(section))
-            {
-                for (let (ckey, cval) : entity_dat[section]->as_table->unwrap)
-                {
-                    match (combined->get(ckey))
-                    {
-                        none?
-                            combined->set(ckey, cval);
-                        value(base)?
-                            for (let (mkey, mval) : cval->as_table->unwrap)
-                                base->set(mkey, mval);
-                    }
-                }
-            }
-            
-            if (combined->len > 0)
-                result->set(section, combined);
-        }
-        
-        if (entity_dat->contains("prefab"))
-            result->set("prefab", entity_dat["prefab"]);
-            
-        return result;
-    }
+    // func combine(entity_dat: Toml, prefab_entity_dat: Toml)=> Toml
+    // {
+    
+    // }
     
     // public func restore(w: world, entity_dat: Toml)
     // {
