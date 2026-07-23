@@ -1,0 +1,171 @@
+// Joyengine 4.x
+import woo::std;
+import je::ecs;
+
+namespace je
+{
+    namespace graphic
+    {
+        public using vertex = gchandle
+        {
+            public enum type
+            {
+                LINES = 0,
+                LINESTRIP,
+                TRIANGLES,
+                TRIANGLESTRIP,
+            }
+            
+            extern("libjoyecs", "wojeapi_vertex_load")
+                public func load(univ: option<universe>, path: string)=> option<vertex>;
+                
+            extern("libjoyecs", "wojeapi_vertex_create")
+                public func create(vtype: type, vertices: array<real>, indices: array<int>, formats: array<int>)=> vertex;
+                
+            extern("libjoyecs", "wojeapi_vertex_path")
+                public func path(self: vertex)=> option<string>;
+        }
+        
+        public using texture = gchandle
+        {
+            extern("libjoyecs", "wojeapi_texture_open")
+                public func load(univ: option<universe>, path: string)=> option<texture>;
+                
+            extern("libjoyecs", "wojeapi_texture_create")
+                public func create(width: int, height: int)=> texture;
+                
+            extern("libjoyecs", "wojeapi_texture_clip")
+                public func clip(src: texture, x: int, y: int, w: int, h: int)=> texture;
+                
+            extern("libjoyecs", "wojeapi_texture_bind_path")
+                public func bind_path(self: texture, new_path: string)=> void;
+                
+            extern("libjoyecs", "wojeapi_texture_path")
+                public func path(self: texture)=> option<string>;
+                
+            extern("libjoyecs", "wojeapi_texture_get_size")
+                public func size(self: texture)=> (int, int);
+                
+            extern("libjoyecs", "wojeapi_texture_get_pixel")
+                public func pix(self: texture, pos: (int, int))=> pixel;
+                
+            public using pixel = gchandle;
+            namespace pixel
+            {
+                extern("libjoyecs", "wojeapi_texture_set_pixel_color")
+                    public func set_color(self: pixel, rgba: (real,real,real,real))=> void;
+                    
+                extern("libjoyecs", "wojeapi_texture_pixel_color")
+                    public func get_color(self: pixel)=> (real, real, real, real);
+            }
+        }
+        
+        public using character = struct{
+            m_texture: texture,
+            m_character: char,
+            m_width: int,
+            m_height: int,
+            m_advise_width: int,
+            m_advise_height: int,
+            m_baseline_offset_x: int,
+            m_baseline_offset_y: int,
+        };
+        
+        public using font = gchandle
+        {
+            extern("libjoyecs", "wojeapi_font_open")
+                public func load(path: string, font_width: int)=> option<font>;
+                
+            extern("libjoyecs", "wojeapi_font_load_char")
+                public func load_char(self: font, ch: char)=> character;
+                
+            extern("libjoyecs", "wojeapi_font_string_texture")
+                public func load_string(self: font, str: string)=> texture;
+        }
+        
+        public using shader = gchandle
+        {
+            extern("libjoyecs", "wojeapi_shader_open")
+                public func load(univ: option<universe>, path: string)=> option<shader>;
+                
+            extern("libjoyecs", "wojeapi_shader_create")
+                public func create(univ: option<universe>, vpath: string, src: string)=> option<shader>;
+                
+            extern("libjoyecs", "wojeapi_shader_path")
+                public func path(self: shader)=> string;
+                
+            public union uniform_variable
+            {
+                integer(int),
+                integer2((int, int)),
+                integer3((int, int, int)),
+                integer4((int, int, int, int)),
+                float(real),
+                float2((real, real)),
+                float3((real, real, real)),
+                float4((real, real, real, real)),
+                texture(int),
+                others,
+            }
+            
+            public using uniform_value_data = struct {
+                n : int,
+                x : real,
+                y : real,
+                z : real,
+                w : real
+                };
+                
+            extern("libjoyecs", "wojeapi_get_uniforms_from_shader")
+                public func get_uniforms(self: shader)=> map<string, uniform_variable>;
+                
+            extern("libjoyecs", "wojeapi_set_uniforms_int")
+                func _set_uniform_int(shad: shader, name: string, val: int)=> void;
+            extern("libjoyecs", "wojeapi_set_uniforms_int2")
+                func _set_uniform_int2(shad: shader, name: string, x: int, y: int)=> void;
+            extern("libjoyecs", "wojeapi_set_uniforms_int3")
+                func _set_uniform_int3(shad: shader, name: string, x: int, y: int, z: int)=> void;
+            extern("libjoyecs", "wojeapi_set_uniforms_int4")
+                func _set_uniform_int4(shad: shader, name: string, x: int, y: int, z: int, w: int)=> void;
+                
+            extern("libjoyecs", "wojeapi_set_uniforms_float")
+                func _set_uniform_float(shad: shader, name: string, val: real)=> void;
+            extern("libjoyecs", "wojeapi_set_uniforms_float2")
+                func _set_uniform_float2(shad: shader, name: string, x: real, y: real)=> void;
+            extern("libjoyecs", "wojeapi_set_uniforms_float3")
+                func _set_uniform_float3(shad: shader, name: string, x: real, y: real, z: real)=> void;
+            extern("libjoyecs", "wojeapi_set_uniforms_float4")
+                func _set_uniform_float4(shad: shader, name: string, x: real, y: real, z: real, w: real)=> void;
+                
+            public func set_uniform<T>(self: shader, name: string, val: T)
+                where val is int
+                || val is (int, int)
+                || val is (int, int, int)
+                || val is (int, int, int, int)
+                || val is real
+                || val is (real, real)
+                || val is (real, real, real)
+                || val is (real, real, real, real);
+            {
+                if (val is int)
+                    _set_uniform_int(self, name, val);
+                if (val is (int, int))
+                    _set_uniform_int2(self, name, val...);
+                else if (val is (int, int, int))
+                    _set_uniform_int3(self, name, val...);
+                else if (val is (int, int, int, int))
+                    _set_uniform_int4(self, name, val...);
+                else if (val is real)
+                    _set_uniform_float(self, name, val);
+                else if (val is (real, real))
+                    _set_uniform_float2(self, name, val...);
+                else if (val is (real, real, real))
+                    _set_uniform_float3(self, name, val...);
+                else if (val is (real, real, real, real))
+                    _set_uniform_float4(self, name, val...);
+                else
+                    std::panic("Here should not been exec.");
+            }
+        }
+    }
+}

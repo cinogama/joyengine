@@ -1,0 +1,159 @@
+// Joyengine 4.x
+import woo::std;
+
+namespace je
+{
+    public let MAX_MOUSE_GROUP_COUNT = 16;
+    
+    public enum mousecode
+    {
+        LEFT,
+        MID,
+        RIGHT,
+        
+        CUSTOM_0 = 16,
+        CUSTOM_1,
+        CUSTOM_2,
+        CUSTOM_3,
+        CUSTOM_4,
+        CUSTOM_5,
+        CUSTOM_6,
+        CUSTOM_7,
+        CUSTOM_8,
+    };
+    
+    public enum keycode
+    {
+        UNKNOWN = 0,
+        
+        APOSTROPHE = 39,    // '\''
+        COMMA = ',' as int,
+        MINUS = '-' as int,
+        PERIOD = '.' as int,
+        SLASH = '/' as int,
+        
+        A = 'A' as int, B, C, D, E, F, G, H, I, J, K, L,
+        M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
+        _1 = '1' as int, _2, _3, _4, _5, _6, _7, _8, _9,
+        _0,
+        _ = ' ' as int,
+        
+        SEMICOLON = ';' as int,
+        EQUAL = '=' as int,
+        LEFT_BRACKET = '[' as int,
+        BACKSLASH = '\\' as int,
+        RIGHT_BRACKET = ']' as int,
+        GRAVE_ACCENT = '`' as int,
+        
+        L_SHIFT = 128,
+        R_SHIFT,
+        L_CTRL,
+        R_CTRL,
+        L_ALT,
+        R_ALT,
+        TAB,
+        ENTER,
+        ESC,
+        BACKSPACE,
+        
+        NP_0, NP_1, NP_2, NP_3, NP_4,
+        NP_5, NP_6, NP_7, NP_8, NP_9,
+        NP_DECIMAL,
+        NP_DIVIDE,
+        NP_MULTIPLY,
+        NP_SUBTRACT,
+        NP_ADD,
+        NP_ENTER,
+        
+        UP, DOWN, LEFT, RIGHT,
+        
+        F1, F2, F3, F4, F5, F6, F7, F8,
+        F9, F10, F11, F12, F13, F14, F15, F16,
+        
+        CUSTOM_0 = 256,
+        CUSTOM_1,
+        CUSTOM_2,
+        CUSTOM_3,
+        CUSTOM_4,
+        CUSTOM_5,
+        CUSTOM_6,
+        CUSTOM_7,
+        CUSTOM_8,
+    };
+    public enum gamepadcode
+    {
+        UP,
+        DOWN,
+        LEFT,
+        RIGHT,
+        
+        A,
+        B,
+        X,
+        Y,
+        
+        // LT,
+        // RT,
+        LB,
+        RB,
+        LS,
+        RS,
+        
+        SELECT,
+        START,
+        GUIDE,
+        
+        _COUNT, //
+    };
+    public enum joystickcode
+    {
+        L,
+        R,
+        LT, // Use x value only.
+        RT, // Use x value only.
+        
+        _COUNT, //
+    };
+    
+    namespace input
+    {
+        extern("libjoyecs", "wojeapi_wheel_count")
+            public func wheel(group: int)=> (real, real);
+            
+        extern("libjoyecs", "wojeapi_input_keydown")
+            public func keydown(kcode: keycode)=> bool;
+            
+        extern("libjoyecs", "wojeapi_input_mousedown")
+            public func mousedown(group: int, kcode: mousecode)=> bool;
+            
+        extern("libjoyecs", "wojeapi_input_window_size")
+            public func windowsize()=> (int, int);
+            
+        extern("libjoyecs", "wojeapi_input_window_pos")
+            public func windowpos()=> (int, int);
+            
+        extern("libjoyecs", "wojeapi_input_mouse_pos")
+            public func mousepos(group: int)=> (int, int);
+            
+        extern("libjoyecs", "wojeapi_input_mouse_view_pos")
+            public func mouseviewpos(group: int)=> (real, real);
+            
+        public using gamepad = gchandle
+        {
+            extern("libjoyecs", "wojeapi_input_gamepad_button")
+                public func button(self: gamepad, kcode: gamepadcode)=> bool;
+                
+            extern("libjoyecs", "wojeapi_input_gamepad_axis")
+                public func axis(self: gamepad, kcode: joystickcode)=> (real, real);
+                
+            extern("libjoyecs", "wojeapi_input_gamepad_actived")
+                public func actived(self: gamepad)=> option<int>;
+                
+            extern("libjoyecs", "wojeapi_input_gamepad_get_all")
+                public func get_all()=> array<gamepad>;
+                
+            extern("libjoyecs", "wojeapi_input_gamepad_last")
+                public func last()=> option<gamepad>;
+        }
+    }
+}

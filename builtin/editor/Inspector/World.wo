@@ -1,15 +1,20 @@
 import woo::std;
 import je;
 
+import pkg::fsys;
+
 import Universe;
 
 using je;
+using fsys;
 
 namespace JEEditor::Inspector::World
 {
     using WorldCtx = struct{
         m_name: mut string,
         m_runtime_systems: vec<typeinfo>,
+
+        m_saving_path: mut option<path_t>,
     }
     {
         public func create()=> WorldCtx
@@ -17,6 +22,8 @@ namespace JEEditor::Inspector::World
             return WorldCtx{
                 m_name = mut "<unnamed>",
                 m_runtime_systems = []mut,
+
+                m_saving_path = mut option::none,
             };
         }
     }

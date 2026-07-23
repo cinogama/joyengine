@@ -1,0 +1,73 @@
+// Joyengine 4.x
+import woo::std;
+
+namespace je
+{
+    public using typeinfo = handle
+    {
+        public func operator == (self: typeinfo, another: typeinfo)
+        {
+            return self->id() == another->id();
+        }
+        public func operator != (self: typeinfo, another: typeinfo)
+        {
+            return self->id() != another->id();
+        }
+        
+        extern("libjoyecs", "wojeapi_type_is_component")
+            public func is_component(self: typeinfo)=> ::bool;
+            
+        extern("libjoyecs", "wojeapi_type_is_system")
+            public func is_system(self: typeinfo)=> ::bool;
+            
+        extern("libjoyecs", "wojeapi_get_all_registed_types")
+            public func get_all_registed_types()=> array<typeinfo>;
+            
+        public func get_all_components_types()
+        {
+            return get_all_registed_types()
+                ->forall(\type: typeinfo = type->is_component(););
+        }
+        
+        public func get_all_systems_types()
+        {
+            return get_all_registed_types()
+                ->forall(\type: typeinfo = type->is_system(););
+        }
+        
+        extern("libjoyecs", "wojeapi_type_of_name")
+            public func load(name: ::string)=> option<typeinfo>;
+            
+        extern("libjoyecs", "wojeapi_type_of_id")
+            public func loadid(id: ::int)=> option<typeinfo>;
+            
+        extern("libjoyecs", "wojeapi_type_id")
+            public func id(self: typeinfo)=> ::int;
+            
+        extern("libjoyecs", "wojeapi_type_name")
+            public func name(self: typeinfo)=> ::string;
+            
+        extern("libjoyecs", "wojeapi_script_type_name")
+            public func script_name(self: typeinfo)=> option<::string>;
+            
+        enum basic_type
+        {
+            INT, INT2, BOOL, FLOAT, FLOAT2, FLOAT3, FLOAT4, STRING, QUAT,
+        }
+        extern("libjoyecs", "wojeapi_type_basic_type")
+            private func get_basic_type(tid: basic_type)=> typeinfo;
+            
+        extern("libjoyecs", "wojeapi_type_members")
+            public func get_members_info(self: typeinfo)=> array<(::string, typeinfo)>;
+            
+        public let int = typeinfo::get_basic_type(basic_type::INT);
+        public let int2 = typeinfo::get_basic_type(basic_type::INT2);
+        public let bool = typeinfo::get_basic_type(basic_type::BOOL);
+        public let float = typeinfo::get_basic_type(basic_type::FLOAT);
+        public let float2 = typeinfo::get_basic_type(basic_type::FLOAT2);
+        public let float3 = typeinfo::get_basic_type(basic_type::FLOAT3);
+        public let float4 = typeinfo::get_basic_type(basic_type::FLOAT4);
+        public let quat = typeinfo::get_basic_type(basic_type::QUAT);
+        public let string = typeinfo::get_basic_type(basic_type::STRING);
+    }
+}
