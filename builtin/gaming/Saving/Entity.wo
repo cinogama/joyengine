@@ -1,6 +1,7 @@
 import woo::std;
 
 import pkg::toml;
+import pkg::try;
 
 import je;
 import je::ecs;
@@ -101,33 +102,156 @@ namespace JEGaming::Saving::Entity
             {
                 none? /* Skip builtin texture */;
                 value(texture_path)?
-                     textures_dat->set(tpass as string, texture_path);
+                    textures_dat->set(tpass as string, texture_path);
             }
         }
         return textures_dat;
     }
     
+    func _toml_equal(a: Toml, b: Toml)=> bool
+    {
+        return a->to_toml == b->to_toml;
+    }
+    
+    func _diff_shallow(entity_tbl: Toml, prefab_tbl: Toml)=> Toml
+    {
+        let result = new_table();
+        for (let (key, eval) : entity_tbl->as_table->unwrap)
+        {
+            match (prefab_tbl->get(key))
+            {
+                none?
+                    result->set(key, eval);
+                value(pval)?
+                    if (!_toml_equal(eval, pval))
+                        result->set(key, eval);
+            }
+        }
+        return result;
+    }
+    
     func diff(entity_dat: Toml, prefab_entity_dat: Toml)=> Toml
     {
+        let result = new_table();
         
+        if (entity_dat->contains("name"))
+        {
+            let e_name = entity_dat["name"];
+            let name_differs = (!prefab_entity_dat->contains("name"))
+                || (!_toml_equal(e_name, prefab_entity_dat["name"]));
+            if (name_differs)
+                result->set("name", e_name);
+        }
+        
+        if (entity_dat->contains("textures"))
+        {
+            let e_tex = entity_dat["textures"];
+            if (prefab_entity_dat->contains("textures"))
+            {
+                let d = _diff_shallow(e_tex, prefab_entity_dat["textures"]);
+                if (d->len > 0)
+                    result->set("textures", d);
+            }
+            else
+                result->set("textures", e_tex->clone);
+        }
+        
+        for (let section : ["components", "shaders"])
+        {
+            if (!entity_dat->contains(section))
+                continue;
+                
+            let e_sec = entity_dat[section];
+            if (!prefab_entity_dat->contains(section))
+            {
+                result->set(section, e_sec->clone);
+                continue;
+            }
+            
+            let p_sec = prefab_entity_dat[section];
+            let sec_diff = new_table();
+            for (let (ckey, cval) : e_sec->as_table->unwrap)
+            {
+                match (p_sec->get(ckey))
+                {
+                    none?
+                        sec_diff->set(ckey, cval);
+                    value(pfab_cval)?
+                    {
+                        let member_diff = _diff_shallow(cval, pfab_cval);
+                        if (member_diff->len > 0)
+                            sec_diff->set(ckey, member_diff);
+                    }
+                }
+            }
+            if (sec_diff->len > 0)
+                result->set(section, sec_diff);
+        }
+        
+        return result;
     }
+    
+    func load_prefab_dat_from_file(engine_path: string)=> option<Toml>
+    {
+        try! prefab_content = file::readall(engine_path);
+        
+        return parse(prefab_content)->okay;
+    }
+    
+    // func combine(entity_dat: Toml, prefab_entity_dat: Toml)
+    // {
 
+    // }
+
+    // public func restore(w: world, entity_dat: Toml)
+    // {
+    //     if (entity_dat->contains("prefab"))
+    //     {
+    //         entity_dat["prefab"];
+    //     }
+    // }
     public func save(e: entity)=> Toml
     {
         let toml = new_table();
         
-        // 0. Save name
+        // 0. Save name.
         toml->set("name", e->internal::name);
-
-        // 1. Walk through all components
+        
+        // 1. Walk through all components.
         toml->set("components", _save_components(e));
         
-        // 2. Save shaders
+        // 2. Save shaders.
         toml->set("shaders", _save_shaders(e));
         
-        // 3. Save textures
+        // 3. Save textures.
         toml->set("textures", _save_textures(e));
         
+        // 4. Calc diff by prefab data.
+        match (e->internal::get_prefab_path())
+        {
+            none?
+                return toml;
+            value(prefab_path)?
+            {
+                let diff_dat_may_none = try!{
+                    try! prefab_dat = load_prefab_dat_from_file(prefab_path);
+                    
+                    let diff_dat = diff(toml, prefab_dat);
+                    diff_dat->set("prefab", prefab_path);
+                    
+                    return_value! diff_dat;
+                };
+
+                match (diff_dat_may_none)
+                {
+                    value(diff_dat)?
+                        return diff_dat;
+                    none?
+                        // 尽管无法读取预设体数据，但是依然保留预设体关系
+                        toml->set("prefab", prefab_path);
+                }
+            }
+        }
         return toml;
     }
 }
