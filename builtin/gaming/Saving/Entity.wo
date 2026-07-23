@@ -121,9 +121,180 @@ namespace JEGaming::Saving::Entity
         return textures_dat;
     }
     
+    func _toml_value_equal(a: Toml, b: Toml)=> bool
+    {
+        if (a->is_int())
+            return b->is_int() && a->as_int()->unwrap == b->as_int()->unwrap;
+        if (a->is_float())
+            return b->is_float() && a->as_float()->unwrap == b->as_float()->unwrap;
+        if (a->is_bool())
+            return b->is_bool() && a->as_bool()->unwrap == b->as_bool()->unwrap;
+        if (a->is_string())
+            return b->is_string() && a->as_string()->unwrap == b->as_string()->unwrap;
+        if (a->is_table())
+        {
+            if (!b->is_table() || a->len() != b->len())
+                return false;
+            let at = a->as_table()->unwrap;
+            let bt = b->as_table()->unwrap;
+            for (let (k, av) : at)
+            {
+                if (!bt->contains(k))
+                    return false;
+                if (!_toml_value_equal(av, bt[k]))
+                    return false;
+            }
+            return true;
+        }
+        if (a->is_array())
+        {
+            if (!b->is_array() || a->len() != b->len())
+                return false;
+            let aa = a->as_array()->unwrap;
+            let ba = b->as_array()->unwrap;
+            for (let mut i = 0; i < aa->len(); i += 1)
+                if (!_toml_value_equal(aa[i], ba[i]))
+                    return false;
+            return true;
+        }
+        return false;
+    }
+    
+    func _diff_members(entity_members: Toml, prefab_members: Toml)=> Toml
+    {
+        let result = new_table();
+        match (entity_members->as_table())
+        {
+            none?;
+            value(etable)?
+                for (let (mname, mval) : etable)
+                    if (!prefab_members->contains(mname)
+                        || !_toml_value_equal(mval, prefab_members[mname]))
+                        result->set(mname, mval);
+        }
+        return result;
+    }
+    
     func diff(entity_dat: Toml, prefab_entity_dat: Toml)=> Toml
     {
-    
+        let diff_dat = new_table();
+        
+        // Always keep the entity's own name.
+        diff_dat->set("name", entity_dat["name"]);
+        
+        // ── components (member-level diff) ──
+        let entity_comps = entity_dat["components"];
+        let prefab_comps = prefab_entity_dat["components"];
+        
+        let diff_components = new_table();
+        let removed_components = new_array();
+        
+        match (prefab_comps->as_table())
+        {
+            none?;
+            value(ptable)?
+                for (let (cname, _) : ptable)
+                    if (!entity_comps->contains(cname))
+                        removed_components->push(cname);
+        }
+        
+        match (entity_comps->as_table())
+        {
+            none?;
+            value(etable)?
+                for (let (cname, ecomp) : etable)
+                {
+                    if (!prefab_comps->contains(cname))
+                        diff_components->set(cname, ecomp);
+                    else
+                    {
+                        let comp_diff = _diff_members(ecomp, prefab_comps[cname]);
+                        if (comp_diff->len() > 0)
+                            diff_components->set(cname, comp_diff);
+                    }
+                }
+        }
+        
+        diff_dat->set("components", diff_components);
+        if (removed_components->len() > 0)
+            diff_dat->set("removed_components", removed_components);
+        
+        // ── shaders (positional, matched by slot index) ──
+        let diff_shaders = new_table();
+        let removed_shaders = new_array();
+        
+        let entity_shaders = entity_dat["shaders"];
+        let prefab_shaders = prefab_entity_dat["shaders"];
+        
+        let entity_slen = entity_shaders->len();
+        let prefab_slen = prefab_shaders->len();
+        let max_slen = entity_slen > prefab_slen ? entity_slen | prefab_slen;
+        
+        for (let mut i = 0; i < max_slen; i += 1)
+        {
+            if (i < entity_slen && i < prefab_slen)
+            {
+                let eshader = entity_shaders[i];
+                let pshader = prefab_shaders[i];
+                
+                let epath = eshader->get("path")
+                    =>> \t = t->as_string;
+                    ->or("");
+                let ppath = pshader->get("path")
+                    =>> \t = t->as_string;
+                    ->or("");
+                
+                // Path mismatch → entire shader is different.
+                if (epath != ppath)
+                    diff_shaders->set(i as string, eshader);
+                else
+                {
+                    let shader_diff = _diff_members(eshader, pshader);
+                    if (shader_diff->len() > 0)
+                        diff_shaders->set(i as string, shader_diff);
+                }
+            }
+            else if (i < entity_slen)
+                diff_shaders->set(i as string, entity_shaders[i]);
+            else
+                removed_shaders->push(i);
+        }
+        
+        diff_dat->set("shaders", diff_shaders);
+        if (removed_shaders->len() > 0)
+            diff_dat->set("removed_shaders", removed_shaders);
+        
+        // ── textures (table: pass → path) ──
+        let entity_textures = entity_dat["textures"];
+        let prefab_textures = prefab_entity_dat["textures"];
+        
+        let diff_textures = new_table();
+        let removed_textures = new_array();
+        
+        match (prefab_textures->as_table())
+        {
+            none?;
+            value(ptable)?
+                for (let (tpass, _) : ptable)
+                    if (!entity_textures->contains(tpass))
+                        removed_textures->push(tpass);
+        }
+        
+        match (entity_textures->as_table())
+        {
+            none?;
+            value(etable)?
+                for (let (tpass, tdat) : etable)
+                    if (!prefab_textures->contains(tpass)
+                        || !_toml_value_equal(tdat, prefab_textures[tpass]))
+                        diff_textures->set(tpass, tdat);
+        }
+        
+        diff_dat->set("textures", diff_textures);
+        if (removed_textures->len() > 0)
+            diff_dat->set("removed_textures", removed_textures);
+        
+        return diff_dat;
     }
     
     func load_prefab_dat_from_file(engine_path: string)=> option<Toml>
