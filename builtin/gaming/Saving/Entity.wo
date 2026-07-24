@@ -3,6 +3,7 @@ import woo::std;
 import pkg::toml;
 import pkg::try;
 import pkg::worst;
+import pkg::iterator;
 
 import je;
 import je::ecs;
@@ -14,6 +15,7 @@ using std;
 using je;
 using toml;
 using je::graphic;
+using iterator;
 
 namespace JEGaming::Saving::Entity
 {
@@ -216,16 +218,23 @@ namespace JEGaming::Saving::Entity
         let removed_textures = new_array();
         for (let (_, ptpath) : prefab_textures_dat)
         {
-            let ptpath_ = ptpath->as_string;
-            match (ptpath_)
+            match (ptpath->as_string)
             {
                 none?;
                 value(path)?
-                    if (!entity_textures_dat->contains(path)
-                        || entity_textures_dat[path]->as_string->is_none)
+                {
+                    let mut still_exists = false;
+                    for (let (_, etpath) : entity_textures_dat)
                     {
-                        removed_textures->push(path);
+                        if (etpath->as_string->or("") == path)
+                        {
+                            still_exists = true;
+                            break;
+                        }
                     }
+                    if (!still_exists)
+                        removed_textures->push(path);
+                }
             }
         }
         return removed_textures->len > 0
@@ -405,11 +414,136 @@ namespace JEGaming::Saving::Entity
         return diff_dat;
     }
     
-    func load_prefab_dat_from_file(engine_path: string)=> option<Toml>
+    func apply(modifing_exist_dat: Toml, patching_dat: Toml)
+    {
+        // 1. Name - always take from patch.
+        modifing_exist_dat->set("name", patching_dat["name"]);
+        
+        // 2. Components.
+        // 2a. Remove removed components.
+        match (patching_dat->get("removed_components")=>> \v = v->as_array;)
+        {
+            none?;
+            value(removed)?
+                for (let rc : removed)
+                    modifing_exist_dat["components"]->erase_key(rc->as_string->unwrap);
+        }
+        
+        // 2b. Merge component diffs.
+        match (patching_dat->get("components")=>> \v = v->as_table;)
+        {
+            none?;
+            value(cdiffs)?
+                for (let (ctype, cdiff) : cdiffs)
+                {
+                    if (modifing_exist_dat["components"]->contains(ctype))
+                    {
+                        let exist_comp = modifing_exist_dat["components"][ctype];
+                        for (let (fname, fval) : cdiff->as_table->or({}))
+                            exist_comp->set(fname, fval);
+                    }
+                    else
+                        modifing_exist_dat["components"]->set(ctype, cdiff);
+                }
+        }
+        
+        // 3. Textures.
+        // 3a. Remove removed textures (by matching path values).
+        match (patching_dat->get("removed_textures")=>> \v = v->as_array;)
+        {
+            none?;
+            value(removed)?
+            {
+                let exist_textures = modifing_exist_dat["textures"]->as_table->or({});
+                for (let rpath : removed)
+                {
+                    let path = rpath->as_string->or("");
+                    let to_remove = []mut: vec<string>;
+                    for (let (tpass, tpath) : exist_textures)
+                    {
+                        if (tpath->as_string->or("") == path)
+                            to_remove->vec::add(tpass);
+                    }
+                    for (let tpass : to_remove)
+                        modifing_exist_dat["textures"]->erase_key(tpass);
+                }
+            }
+        }
+        
+        // 3b. Apply texture diffs.
+        match (patching_dat->get("textures")=>> \v = v->as_table;)
+        {
+            none?;
+            value(tdiffs)?
+                for (let (tpass, tpath) : tdiffs)
+                    modifing_exist_dat["textures"]->set(tpass, tpath);
+        }
+        
+        // 4. Shaders.
+        match (patching_dat->get("shaders")=>> \v = v->as_array;)
+        {
+            none?;
+            value(sdiffs)?
+            {
+                let exist_shaders =
+                    modifing_exist_dat->get("shaders")=>> \v = v->as_array;->or([]);
+                    
+                let result_shaders = new_array();
+                for (let sdat : sdiffs)
+                {
+                    match (sdat->get("from"))
+                    {
+                        value(from_val)?
+                        {
+                            let j = from_val->as_int->unwrap;
+                            let base = exist_shaders[j]->clone();
+                            for (let (uname, uval) : sdat->as_table->or({}))
+                            {
+                                if (uname == "from")
+                                    continue;
+                                base->set(uname, uval);
+                            }
+                            result_shaders->push(base);
+                        }
+                        none?
+                            result_shaders->push(sdat);
+                    }
+                }
+                modifing_exist_dat->set("shaders", result_shaders);
+            }
+        }
+    }
+    
+    func load(engine_path: string)=> option<Toml>
     {
         try! prefab_content = file::readall(engine_path);
+        try! mut prefab_dat = parse(prefab_content)->okay;
         
-        return parse(prefab_content)->okay;
+        match (prefab_dat->get("prefab"))
+        {
+            none?;
+            value(prefab_path)?
+            {
+                let patched_dat_may_none = try!{
+                    try! path = prefab_path->as_string;
+                    try! parent_prefab_dat = Entity::load(path);
+                    
+                    apply(parent_prefab_dat, prefab_dat);
+                    return_value! parent_prefab_dat;
+                };
+                
+                match (patched_dat_may_none)
+                {
+                    none?;
+                    value(patched_dat)?
+                    {
+                        patched_dat->erase_key("prefab");
+                        prefab_dat = patched_dat;
+                    }
+                }
+            }
+        }
+        return_value! prefab_dat;
     }
     
     public func save(e: entity)=> Toml
@@ -436,7 +570,7 @@ namespace JEGaming::Saving::Entity
             value(prefab_path)?
             {
                 let diff_dat_may_none = try!{
-                    try! prefab_dat = load_prefab_dat_from_file(prefab_path);
+                    try! prefab_dat = Entity::load(prefab_path);
                     
                     let diff_dat = diff(toml, prefab_dat);
                     diff_dat->set("prefab", prefab_path);
@@ -455,5 +589,63 @@ namespace JEGaming::Saving::Entity
             }
         }
         return toml;
+    }
+    
+    public func restore(w: world, edat: Toml)=> entity
+    {
+        let component_dats =
+            edat->get("components")=>> \v = v->as_table;->or({})->iter
+                |> filter_map(
+                    func((tname, tdat))
+                    {
+                        try! tinfo = typeinfo::load(tname);
+                        return_value! (tinfo, tdat);
+                    })
+                |> collect
+                ;
+                
+        let universe = option::value(w->get_universe);
+
+        // Create entity.
+        let e = w->add_entity(
+            component_dats->> \(ctype, _) = ctype;);
+            
+        // Apply component data.
+        for (let (ctype, cdat) : component_dats)
+        {
+            do try!{
+                let cinst = e->get_component(ctype)->unwrap;
+                for (let (mname, mdat) : cdat->as_table->or({}))
+                {
+                    try! mdata = mdat->as_string;
+                    try! (mtype, minst) = cinst->get_member(mname);
+                    
+                    do towoo::unsafe::dynamic_parser::restore(
+                        mtype, minst, mdata);
+                }
+                return_value!;
+            };
+        }
+        
+        // Apply textures.
+        let textures_dat = edat->get("components")
+            =>> \v = v->as_table;->or({});
+
+        for (let (tpass, tpath) : textures_dat)
+        {
+            do try!{
+                try! texture_path = tpath->as_string;
+
+                e->bind_texture(
+                    tpass as int, 
+                    texture::load(universe, texture_path));
+
+                return_value!;
+            };
+        }
+            
+        // Apply shaders.
+
+        return e;
     }
 }
