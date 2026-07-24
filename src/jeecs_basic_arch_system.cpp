@@ -1186,7 +1186,7 @@ namespace jeecs_impl
             _find_or_create_buffer_for_world()->m_destroy_world = true;
         }
 
-        void set_able_world(bool enable)
+        void set_enable_world(bool enable)
         {
             std::shared_lock sl(_m_command_executer_guard_mx);
 
@@ -1489,9 +1489,9 @@ namespace jeecs_impl
         {
             get_command_buffer().remove_system_instance(type);
         }
-        inline void request_to_set_able(bool enable) noexcept
+        inline void request_to_set_enable(bool enable) noexcept
         {
-            get_command_buffer().set_able_world(enable);
+            get_command_buffer().set_enable_world(enable);
         }
         inline bool fetch_and_request_slice_cache_dependence(
             jeecs::game_system* system_instance,
@@ -1540,7 +1540,7 @@ namespace jeecs_impl
         {
             _m_destroying_flag = true;
         }
-        inline void _set_able_world(bool enable) noexcept
+        inline void _set_enable_world(bool enable) noexcept
         {
             if (_m_world_enabled != enable)
             {
@@ -1816,7 +1816,7 @@ namespace jeecs_impl
             // Apply universe world is enabled/disabled.
             if (_m_world_command_buffer->m_update_enabled.has_value())
             {
-                _m_world->_set_able_world(_m_world_command_buffer->m_update_enabled.value());
+                _m_world->_set_enable_world(_m_world_command_buffer->m_update_enabled.value());
                 _m_world_command_buffer->m_update_enabled = std::nullopt;
             }
 
@@ -2698,9 +2698,9 @@ void je_ecs_world_remove_system_instance(void* world, jeecs::typing::typeid_t ty
     static_cast<jeecs_impl::ecs_world*>(world)->request_to_remove_system(jeecs::typing::type_info::of(type));
 }
 
-void je_ecs_world_set_able(void* world, bool enable)
+void je_ecs_world_set_enable(void* world, bool enable)
 {
-    static_cast<jeecs_impl::ecs_world*>(world)->request_to_set_able(enable);
+    static_cast<jeecs_impl::ecs_world*>(world)->request_to_set_enable(enable);
 }
 
 void je_ecs_world_create_entity_with_components(

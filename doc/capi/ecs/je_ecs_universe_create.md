@@ -46,7 +46,7 @@ int main() {
     
     // 创建世界
     void* world = je_ecs_world_create(universe);
-    je_ecs_world_set_able(world, true);
+    je_ecs_world_set_enable(world, true);
     
     // 等待 Universe 退出
     je_ecs_universe_loop(universe);

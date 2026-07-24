@@ -645,6 +645,54 @@ namespace JEGaming::Saving::Entity
         }
             
         // Apply shaders.
+        let shaders = []mut: vec<shader>;
+        let shaders_dat = edat->get("shaders")=>> \v = v->as_array;->or([]);
+        
+        for (let sdat : shaders_dat)
+        {
+            do try!{
+                try! shader_path = sdat->get("path")=>> \v = v->as_string;;
+                try! sinst = shader::load(universe, shader_path);
+                
+                for (let (uname, uval) : sdat->as_table->or({}))
+                {
+                    if (uval->is_int)
+                        sinst->set_uniform(uname, uval->as_int->unwrap);
+                    else if (uval->is_float)
+                        sinst->set_uniform(uname, uval->as_float->unwrap);
+                    else if (uval->is_array)
+                    {
+                        let cnt = uval->len;
+                        if (cnt == 2 || cnt == 3 || cnt == 4)
+                        {
+                            if (uval[0]->is_int)
+                            {
+                                if (cnt == 2)
+                                    sinst->set_uniform(uname, (uval[0]->as_int->unwrap, uval[1]->as_int->unwrap));
+                                else if (cnt == 3)
+                                    sinst->set_uniform(uname, (uval[0]->as_int->unwrap, uval[1]->as_int->unwrap, uval[2]->as_int->unwrap));
+                                else
+                                    sinst->set_uniform(uname, (uval[0]->as_int->unwrap, uval[1]->as_int->unwrap, uval[2]->as_int->unwrap, uval[3]->as_int->unwrap));
+                            }
+                            else
+                            {
+                                if (cnt == 2)
+                                    sinst->set_uniform(uname, (uval[0]->as_float->unwrap, uval[1]->as_float->unwrap));
+                                else if (cnt == 3)
+                                    sinst->set_uniform(uname, (uval[0]->as_float->unwrap, uval[1]->as_float->unwrap, uval[2]->as_float->unwrap));
+                                else
+                                    sinst->set_uniform(uname, (uval[0]->as_float->unwrap, uval[1]->as_float->unwrap, uval[2]->as_float->unwrap, uval[3]->as_float->unwrap));
+                            }
+                        }
+                    }
+                }
+                
+                shaders->vec::add(sinst);
+                return_value!;
+            };
+        }
+        
+        e->set_shaders(shaders->vec::to_array());
 
         return e;
     }

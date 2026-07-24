@@ -1350,9 +1350,9 @@ JE_API void* je_ecs_world_in_universe(void* world);
 je_ecs_world_create [基本接口]
 在指定的宇宙中创建一个世界
     * 世界在创建之后，默认为非激活状态，请在初始化操作完成后调用
-        je_ecs_world_set_able 将世界激活
+        je_ecs_world_set_enable 将世界激活
 请参见：
-    je_ecs_world_set_able
+    je_ecs_world_set_enable
 */
 JE_API void* je_ecs_world_create(void* in_universe);
 
@@ -1532,14 +1532,14 @@ JE_API void* je_ecs_world_of_entity(
     const jeecs::game_entity* entity);
 
 /*
-je_ecs_world_set_able [基本接口]
+je_ecs_world_set_enable [基本接口]
 设置世界是否被激活
     * 若世界未激活，则实体组件系统更新将被暂停，世界任务亦将被跳过，仅响应
         世界销毁请求和激活世界请求
     * 世界在激活/取消激活时，所有系统的对应回调会被执行；如果系统实例创建时，
         世界尚未激活，则系统的回调函数不会被执行
 */
-JE_API void je_ecs_world_set_able(void* world, bool enable);
+JE_API void je_ecs_world_set_enable(void* world, bool enable);
 
 /*
 je_ecs_world_query_dependence [基本接口]
@@ -6900,9 +6900,9 @@ namespace jeecs
             je_ecs_world_destroy(_m_ecs_world_addr);
         }
 
-        void set_able(bool able) const noexcept
+        void set_enable(bool able) const noexcept
         {
-            je_ecs_world_set_able(handle(), able);
+            je_ecs_world_set_enable(handle(), able);
         }
 
         inline game_universe get_universe() const noexcept;

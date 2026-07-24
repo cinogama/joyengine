@@ -36,7 +36,7 @@ int main() {
     // 创建世界并初始化
     void* world = je_ecs_world_create(universe);
     // ... 添加系统、创建实体等初始化操作 ...
-    je_ecs_world_set_able(world, true);
+    je_ecs_world_set_enable(world, true);
     
     // 阻塞主线程，等待 Universe 退出
     // Universe 会在所有世界关闭且生命周期计数归零后退出

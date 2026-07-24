@@ -427,9 +427,9 @@ WOORT_API woort_api wojeapi_close_world(void)
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_set_able_world(void)
+WOORT_API woort_api wojeapi_set_enable_world(void)
 {
-    jeecs::game_world(woort_pointer(0)).set_able(woort_bool(1));
+    jeecs::game_world(woort_pointer(0)).set_enable(woort_bool(1));
     return woort_ret_void();
 }
 

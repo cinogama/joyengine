@@ -35,4 +35,10 @@ namespace JEGaming::Saving::World
 
         return world_dat;
     }
+    public func restore(u: universe, wdat: Toml)=> world
+    {
+        let w = world::create(u);
+
+        return w;
+    }
 }

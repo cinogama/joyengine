@@ -54,8 +54,8 @@ namespace je
         extern("libjoyecs", "wojeapi_close_world")
             public func close(self: world) => void;
             
-        extern("libjoyecs", "wojeapi_set_able_world")
-            public func set_able(self: world, able: bool)=> void;
+        extern("libjoyecs", "wojeapi_set_enable_world")
+            public func set_enable(self: world, able: bool)=> void;
             
         extern("libjoyecs", "wojeapi_add_system_to_world")
             public func add_system(self: world, systype: typeinfo)=> bool;
