@@ -137,6 +137,12 @@ namespace je
             
         extern("libjoyecs", "wojeapi_input_mouse_view_pos")
             public func mouseviewpos(group: int)=> (real, real);
+
+        extern("libjoyecs", "wojeapi_input_set_lock_mouse")
+            public func set_lock_mouse(lock: bool)=> void;
+
+        extern("libjoyecs", "wojeapi_input_get_lock_mouse")
+            public func get_lock_mouse()=> bool;
             
         public using gamepad = gchandle
         {

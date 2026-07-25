@@ -6,6 +6,7 @@ import je::graphic;
 import je::gui;
 import je::typeinfo;
 import je::internal;
+import je::input;
 
 import je::towoo;
 import je::towoo::types;
@@ -57,6 +58,13 @@ namespace JEEditor::Editor
         m_editor_walk_camera_frame_buffer: mut option<graphic::framebuffer>,
         m_fb_pending_size: mut ImVec2,
         m_fb_settle_counter: mut int,
+        
+        // Camera control state:
+        m_is_look_active: mut bool,
+        m_is_pan_active: mut bool,
+        m_is_orbit_active: mut bool,
+        m_orbit_pivot: mut vec3,
+        m_orbit_distance: mut real,
     }
     {
         let TRASNLATION_SYSTEM_TYPE =
@@ -67,6 +75,17 @@ namespace JEEditor::Editor
         // 拖拽缩放窗口时 content 尺寸每帧都在变化；等待尺寸连续稳定这么多帧后
         // 再重建摄像机 framebuffer，避免在拖拽过程中频繁分配 GPU 资源。
         let FRAMEBUFFER_RESIZE_SETTLE_FRAMES = 30;
+        
+        // ---- 摄像机游走参数 ----
+        let CAMERA_MOVE_SPEED = 8.;
+        let CAMERA_FAST_MOVE_MULTIPLIER = 3.;
+        let CAMERA_LOOK_SENSITIVITY = 0.15;
+        let CAMERA_ORBIT_SENSITIVITY = 0.3;
+        let CAMERA_PAN_SENSITIVITY = 0.01;
+        let CAMERA_WHEEL_DOLLY = 5.;
+        let CAMERA_PITCH_LIMIT = 88.;
+        let CAMERA_DEFAULT_ORBIT_DISTANCE = 10.;
+        let CAMERA_MIN_ORTHO_SCALE = 0.05;
         
         enum CloseRequest
         {
@@ -94,6 +113,12 @@ namespace JEEditor::Editor
                 m_editor_walk_camera_frame_buffer = mut option::none,
                 m_fb_pending_size = mut (0., 0.),
                 m_fb_settle_counter = mut 0,
+                
+                m_is_look_active = mut false,
+                m_is_pan_active = mut false,
+                m_is_orbit_active = mut false,
+                m_orbit_pivot = mut (0., 0., 0.) as vec3,
+                m_orbit_distance = mut CAMERA_DEFAULT_ORBIT_DISTANCE,
             };
         }
         
@@ -114,6 +139,9 @@ namespace JEEditor::Editor
         }
         public func onClose(self: WorldEditorViewport)=> void
         {
+            if (self.m_is_look_active)
+                input::set_lock_mouse(false);
+            
             match (s_last_focusd_world_view)
             {
                 none?;
@@ -167,6 +195,8 @@ namespace JEEditor::Editor
                 
             self->updateWalkCameraFramebuffer();
             
+            let mut viewport_hovered = false;
+            
             match (self.m_editor_walk_camera_frame_buffer=>>\fb = fb->attachment(0);)
             {
                 none?
@@ -177,8 +207,12 @@ namespace JEEditor::Editor
                 {
                     let (w, h) = GetContentRegionAvail();
                     ImageSize(fbtex, w, h);
+                    viewport_hovered = IsItemHovered();
                 }
             }
+            
+            let dt = mathf::clamp(deltatime(), 0., 0.1);
+            self->updateCameraControl(dt, viewport_hovered);
             
             return self.m_close == CloseRequest::NORMALLY;
         }
@@ -247,6 +281,246 @@ namespace JEEditor::Editor
                     r2b->set(self.m_editor_walk_camera_frame_buffer);
                 }
             }
+        }
+        
+        // 根据输入控制编辑器摄像机（三维/二维游走）。
+        // 操作方式参考 Unity / Blender 等编辑器视口：
+        //
+        //   三维（透视）摄像机：
+        //     鼠标右键拖拽       — 自由环视（FPS 风格，锁定鼠标）
+        //     右键 + WASD        — 前后左右移动
+        //     右键 + Q / E       — 下 / 上移动
+        //     右键 + Shift       — 加速移动
+        //     鼠标中键拖拽       — 屏幕平面平移
+        //     鼠标滚轮           — 沿视线方向推拉
+        //     Alt + 左键拖拽     — 围绕焦点轨道旋转
+        //     Alt + 滚轮         — 调整轨道距离（推拉焦点）
+        //
+        //   二维（正交）摄像机：
+        //     鼠标中键拖拽       — 屏幕平面平移
+        //     鼠标滚轮           — 缩放（调整正交 scale）
+        //
+        func updateCameraControl(self: WorldEditorViewport, dt: real, hovered: bool)=> void
+        {
+            let cameras = self.m_world_instance->internal::get_all_entities([
+                    Camera::RendToFramebuffer::type::typeinfo,
+                    Editor::Invisible::type::typeinfo,
+                ]);
+            
+            if (cameras->empty)
+                return;
+            
+            let cam = cameras[0];
+            let posOpt = cam->towoo::get_component:<Transform::LocalPosition>;
+            let rotOpt = cam->towoo::get_component:<Transform::LocalRotation>;
+            
+            if (posOpt->is_none || rotOpt->is_none)
+                return;
+            
+            let pos = posOpt->unwrap;
+            let rot = rotOpt->unwrap;
+            
+            match (cam->towoo::get_component:<Camera::PerspectiveProjection>)
+            {
+                value(_)?
+                    self->controlPerspectiveCamera(pos, rot, dt, hovered);
+                none?
+                    match (cam->towoo::get_component:<Camera::OrthoProjection>)
+                    {
+                        value(ortho)?
+                            self->controlOrthoCamera(pos, rot, ortho, hovered);
+                        none?;
+                    }
+            }
+        }
+        
+        func controlPerspectiveCamera(
+            self: WorldEditorViewport,
+            pos: Transform::LocalPosition,
+            rot: Transform::LocalRotation,
+            dt: real,
+            hovered: bool)=> void
+        {
+            let curPos = pos.pos->get;
+            let curRot = rot.rot->get;
+            
+            let forward = curRot * ((0., 0., -1.) as vec3);
+            let right = curRot * ((1., 0., 0.) as vec3);
+            let up = curRot * ((0., 1., 0.) as vec3);
+            let worldUp = (0., 1., 0.) as vec3;
+            
+            // ---- 激活 / 停止各项操作 ----
+            if (hovered)
+            {
+                if (IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Right))
+                {
+                    self.m_is_look_active = true;
+                    input::set_lock_mouse(true);
+                }
+                if (IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Middle))
+                    self.m_is_pan_active = true;
+                if (IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left)
+                    && IsKeyDown(ImGuiKey::ImGuiKey_LeftAlt))
+                {
+                    self.m_is_orbit_active = true;
+                    self.m_orbit_pivot = curPos + forward * self.m_orbit_distance;
+                }
+            }
+            
+            if (!IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Right))
+            {
+                if (self.m_is_look_active)
+                {
+                    self.m_is_look_active = false;
+                    input::set_lock_mouse(false);
+                }
+            }
+            if (!IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Middle))
+                self.m_is_pan_active = false;
+            if (!IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left)
+                || !IsKeyDown(ImGuiKey::ImGuiKey_LeftAlt))
+                self.m_is_orbit_active = false;
+            
+            let (mdx, mdy) = GetMouseDeltaPos();
+            let wheel = GetMouseWheel();
+            let wv = wheel.1;
+            
+            let mut newPos = curPos;
+            let mut newRot = curRot;
+            let mut changed = false;
+            
+            // ---- 自由环视（右键拖拽）----
+            if (self.m_is_look_active)
+            {
+                let euler = curRot->euler_angle;
+                let nax = mathf::clamp(
+                    euler.0 + (-mdy) * CAMERA_LOOK_SENSITIVITY,
+                    -CAMERA_PITCH_LIMIT, CAMERA_PITCH_LIMIT);
+                let nay = euler.1 + (-mdx) * CAMERA_LOOK_SENSITIVITY;
+                newRot = quat::euler(nax, nay, 0.);
+                changed = true;
+            }
+            
+            // ---- 轨道旋转（Alt + 左键拖拽）----
+            if (self.m_is_orbit_active)
+            {
+                let yawQ = quat::axis(worldUp, mdx * CAMERA_ORBIT_SENSITIVITY);
+                let pitchQ = quat::axis(right, mdy * CAMERA_ORBIT_SENSITIVITY);
+                let orbitQ = yawQ * pitchQ;
+                
+                let offset = curPos - self.m_orbit_pivot;
+                newPos = self.m_orbit_pivot + (orbitQ * offset);
+                newRot = orbitQ * curRot;
+                changed = true;
+            }
+            
+            // ---- WASD / QE 飞行（右键按住时）----
+            if (self.m_is_look_active)
+            {
+                let speed = CAMERA_MOVE_SPEED
+                    * (IsKeyDown(ImGuiKey::ImGuiKey_LeftShift)
+                        ? CAMERA_FAST_MOVE_MULTIPLIER | 1.)
+                    * dt;
+                
+                let mf = (IsKeyDown(ImGuiKey::ImGuiKey_W) ? 1. | 0.)
+                    - (IsKeyDown(ImGuiKey::ImGuiKey_S) ? 1. | 0.);
+                let mr = (IsKeyDown(ImGuiKey::ImGuiKey_D) ? 1. | 0.)
+                    - (IsKeyDown(ImGuiKey::ImGuiKey_A) ? 1. | 0.);
+                let mu = (IsKeyDown(ImGuiKey::ImGuiKey_E) ? 1. | 0.)
+                    - (IsKeyDown(ImGuiKey::ImGuiKey_Q) ? 1. | 0.);
+                
+                if (mf != 0. || mr != 0. || mu != 0.)
+                {
+                    let fwd = newRot * ((0., 0., -1.) as vec3);
+                    let rgt = newRot * ((1., 0., 0.) as vec3);
+                    newPos = newPos + fwd * (mf * speed);
+                    newPos = newPos + rgt * (mr * speed);
+                    newPos = newPos + worldUp * (mu * speed);
+                    changed = true;
+                }
+            }
+            
+            // ---- 平移（中键拖拽）----
+            if (self.m_is_pan_active)
+            {
+                newPos = newPos + right * (mdx * CAMERA_PAN_SENSITIVITY);
+                newPos = newPos - up * (mdy * CAMERA_PAN_SENSITIVITY);
+                changed = true;
+            }
+            
+            // ---- 滚轮缩放 ----
+            if (hovered && wv != 0.)
+            {
+                if (self.m_is_orbit_active)
+                {
+                    self.m_orbit_distance = mathf::clamp(
+                        self.m_orbit_distance * (1. - wv * 0.1),
+                        0.1, 10000.);
+                    let toCam = newPos - self.m_orbit_pivot;
+                    let dist = toCam->length;
+                    if (dist > 0.0001)
+                        newPos = self.m_orbit_pivot + toCam->unit * self.m_orbit_distance;
+                    changed = true;
+                }
+                else
+                {
+                    let fwd = newRot * ((0., 0., -1.) as vec3);
+                    newPos = newPos + fwd * (wv * CAMERA_WHEEL_DOLLY);
+                    changed = true;
+                }
+            }
+            
+            if (changed)
+            {
+                pos.pos->set(newPos);
+                rot.rot->set(newRot);
+            }
+        }
+        
+        func controlOrthoCamera(
+            self: WorldEditorViewport,
+            pos: Transform::LocalPosition,
+            rot: Transform::LocalRotation,
+            ortho: Camera::OrthoProjection,
+            hovered: bool)=> void
+        {
+            let curPos = pos.pos->get;
+            let curRot = rot.rot->get;
+            
+            let right = curRot * ((1., 0., 0.) as vec3);
+            let up = curRot * ((0., 1., 0.) as vec3);
+            
+            if (hovered && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Middle))
+                self.m_is_pan_active = true;
+            if (!IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Middle))
+                self.m_is_pan_active = false;
+            
+            let (mdx, mdy) = GetMouseDeltaPos();
+            let wheel = GetMouseWheel();
+            let wv = wheel.1;
+            
+            let mut newPos = curPos;
+            let mut moved = false;
+            
+            if (self.m_is_pan_active)
+            {
+                let scale = ortho.scale->get;
+                let panFactor = scale * CAMERA_PAN_SENSITIVITY;
+                newPos = newPos + right * (mdx * panFactor);
+                newPos = newPos - up * (mdy * panFactor);
+                moved = true;
+            }
+            
+            if (hovered && wv != 0.)
+            {
+                let scale = ortho.scale->get;
+                ortho.scale->set(mathf::clamp(
+                    scale * (1. - wv * 0.1),
+                    CAMERA_MIN_ORTHO_SCALE, 10000.));
+            }
+            
+            if (moved)
+                pos.pos->set(newPos);
         }
         
         // ==========================

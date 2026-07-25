@@ -1014,6 +1014,17 @@ WOORT_API woort_api wojeapi_input_mouse_view_pos(void)
     return woort_ret_value(result);
 }
 
+WOORT_API woort_api wojeapi_input_set_lock_mouse(void)
+{
+    je_io_set_lock_mouse(woort_bool(0));
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_input_get_lock_mouse(void)
+{
+    return woort_ret_bool(je_io_get_lock_mouse());
+}
+
 WOORT_API woort_api wojeapi_input_gamepad_button(void)
 {
     jeecs::input::gamepad* gamepad =
