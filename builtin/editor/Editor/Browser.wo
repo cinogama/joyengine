@@ -82,7 +82,7 @@ namespace JEEditor::Editor
         }
         public func showBrowser()
         {
-            do Windows::show(create());
+            do show(create());
         }
         public func closeBrowser()
         {

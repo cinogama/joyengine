@@ -1,6 +1,7 @@
 import builtin::editor::GUI::Menu;
 
 import Browser;
+import EntityList;
 import WorldEditorViewport;
 
 namespace JEEditor::Editor::MainMenu
@@ -24,6 +25,16 @@ namespace JEEditor::Editor::MainMenu
                         Browser::showBrowser();
                 })
             ->      checkWhen(Browser::isBrowserExist)
+            ->      endItem
+            ->  subItem("实体列表",
+                func()
+                {
+                    if (EntityList::isEntityListExist())
+                        EntityList::closeEntityList();
+                    else
+                        EntityList::showEntityList();
+                })
+            ->      checkWhen(EntityList::isEntityListExist)
             ->      endItem
             ->  endMenu
             -> subMenu("编辑")

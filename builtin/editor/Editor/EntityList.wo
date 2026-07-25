@@ -1,0 +1,115 @@
+import woo::std;
+
+import je::internal;
+import je::ecs;
+import je::gui;
+import je::towoo;
+import je::towoo::components;
+
+import pkg::interface;
+import pkg::iterator;
+import pkg::worst;
+
+import builtin::editor::GUI::Windows;
+
+import WorldEditorViewport;
+
+using iterator;
+using je;
+using je::gui;
+using JEEditor::GUI::Windows;
+
+namespace JEEditor::Editor
+{
+    using EntityList = struct{
+        m_close: mut bool,
+    }
+    {
+        let mut s_entitylist_singleton = option::none: option<EntityList>;
+        public func isEntityListExist()
+        {
+            return s_entitylist_singleton->is_value;
+        }
+        public func showEntityList()
+        {
+            do show(create());
+        }
+        public func closeEntityList()
+        {
+            match (s_entitylist_singleton)
+            {
+                none?;
+                value(entitylist_instance)?
+                    entitylist_instance->close();
+            }
+        }
+        
+        func create()=> EntityList
+            where require!(EntityList: IWindows);
+        {
+            return EntityList{
+                m_close = mut false,
+            };
+        }
+        public func close(self: EntityList)
+        {
+            self.m_close = true;
+        }
+        public func onCreate(self: EntityList)=> void
+        {
+            s_entitylist_singleton = option::value(self);
+        }
+        public func onClose(_: EntityList)=> void
+        {
+            s_entitylist_singleton = option::none;
+        }
+        public func getTitle(_: EntityList)=> string
+        {
+            return "实体列表";
+        }
+        public func getSizeConstraints(_: EntityList)=> SizeConstraints
+        {
+            return SizeConstraints::Limited(((300., 200.), (400., 4096.)));
+        }
+        func showEntitiesInWorld(w: world)
+        {
+            let entities = w->internal::get_all_entities([])->iter
+                |> filter(\e = e->towoo::get_component:<Editor::Invisible>->is_none;)
+                |> collect
+                : array<entity> |> unsafe::cast:<array<mut entity>>
+                ;
+                
+            std::sort_in_place(
+                entities,
+                \l, r = lid < rid
+                    where lid = l->internal::get_entity_uid->or(0h as entity::internal::euid_t)
+                        , rid = r->internal::get_entity_uid->or(0h as entity::internal::euid_t)
+                    ;);
+                    
+            for (let e : entities: array<mut entity> |> unsafe::cast:<array<entity>>)
+            {
+                // TODO: 目前只是简单实现了一个清单，需要更进一步
+                let mut entity_name = e->internal::name;
+                if (entity_name == "")
+                    entity_name = "<匿名实体>";
+                
+                Text(entity_name);
+            }
+        }
+        public func run(self: EntityList)=> bool
+        {
+            match (WorldEditorViewport::getLastFocused())
+            {
+                none?
+                    TextDisabled("（没有待编辑的世界）");
+                value(wctx)?
+                {
+                    showEntitiesInWorld(wctx->getWorld);
+                }
+            }
+            return !self.m_close;
+        }
+        
+    // ===============
+    }
+}

@@ -393,8 +393,8 @@ namespace JEEditor::Editor
             if (self.m_is_look_active)
             {
                 self.m_rotation_x *= quat::euler(mdy * CAMERA_LOOK_SENSITIVITY, 0., 0.);
-                self.m_rotation_y *=quat::euler(0., mdx * CAMERA_LOOK_SENSITIVITY, 0.);
-                newRot = self.m_rotation_x * self.m_rotation_y;
+                self.m_rotation_y *= quat::euler(0., mdx * CAMERA_LOOK_SENSITIVITY, 0.);
+                newRot = self.m_rotation_y * self.m_rotation_x;
                 changed = true;
             }
             
@@ -425,8 +425,8 @@ namespace JEEditor::Editor
             // ---- 平移（中键拖拽）----
             if (self.m_is_pan_active)
             {
-                newPos = newPos + right * (mdx * CAMERA_PAN_SENSITIVITY);
-                newPos = newPos - up * (mdy * CAMERA_PAN_SENSITIVITY);
+                newPos = newPos + right * (-mdx * CAMERA_PAN_SENSITIVITY);
+                newPos = newPos - up * (-mdy * CAMERA_PAN_SENSITIVITY);
                 changed = true;
             }
             
@@ -542,6 +542,11 @@ namespace JEEditor::Editor
             }
         }
         
+        public func getWorld(self: WorldEditorViewport)=> world
+        {
+            return self.m_world_instance;
+        }
+
         // ==========================
         
         public func findWorldEditorViewport(w: world)
