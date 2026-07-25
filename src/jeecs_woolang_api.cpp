@@ -266,52 +266,6 @@ WOORT_API woort_api wojeapi_unload_module(void)
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_apply_camera_framebuf_setting(void)
-{
-    jeecs::game_entity* const entity = static_cast<jeecs::game_entity*>(woort_gcpointer(0));
-    if (jeecs::Camera::RendToFramebuffer* rbf = entity->get_component<jeecs::Camera::RendToFramebuffer>())
-    {
-        rbf->framebuffer = jeecs::graphic::framebuffer::create(
-            (size_t)woort_int(1),
-            (size_t)woort_int(2),
-            {
-                jegl_texture::format::RGBA,
-            },
-            true);
-    }
-    else
-        jeecs::debug::logfatal("No RendToFramebuffer in specify entity when 'wojeapi_apply_camera_framebuf_setting'.");
-    return woort_ret_void();
-}
-
-WOORT_API woort_api wojeapi_get_framebuf_texture(void)
-{
-    jeecs::game_entity* const entity = static_cast<jeecs::game_entity*>(woort_gcpointer(0));
-    if (jeecs::Camera::RendToFramebuffer* rbf = entity->get_component<jeecs::Camera::RendToFramebuffer>())
-    {
-        if (!rbf->framebuffer.has_value())
-            return woort_ret_option_none();
-
-        auto tex = rbf->framebuffer.value()->get_attachment((size_t)woort_int(1));
-        if (tex.has_value())
-            return woort_ret_option_gchandle(
-                new jeecs::basic::resource<jeecs::graphic::texture>(tex.value()),
-                WOORT_IGNORE,
-                [](void* ptr)
-                {
-                    delete (jeecs::basic::resource<jeecs::graphic::texture> *)ptr;
-                },
-                nullptr);
-
-        jeecs::debug::logerr("RendToFramebuffer(%p).framebuffer not contain attach(%zu) in entity when 'wojeapi_get_framebuf_texture'.",
-            rbf, (size_t)woort_int(1));
-        return woort_ret_option_none();
-    }
-    else
-        jeecs::debug::logerr("No RendToFramebuffer in specify entity when 'wojeapi_get_framebuf_texture'.");
-    return woort_ret_option_none();
-}
-
 // ECS UNIVERSE
 WOORT_API woort_api wojeapi_create_universe(void)
 {

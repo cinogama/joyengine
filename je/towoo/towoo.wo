@@ -2,6 +2,8 @@
 import woo::std;
 
 import je;
+import je::graphic;
+import je::audio;
 import je::towoo::types;
 import je::towoo::components;
 

@@ -6,6 +6,10 @@ import je::graphic;
 import je::gui;
 import je::typeinfo;
 
+import je::towoo;
+import je::towoo::types;
+import je::towoo::components;
+
 import pkg::fsys;
 import pkg::interface;
 import pkg::worst;
@@ -47,8 +51,16 @@ namespace JEEditor::Editor
         
         m_runtime_systems: vec<typeinfo>,
         m_saving_path: option<path_t>,
+
+        // Editor context:
+
     }
     {
+        let TRASNLATION_SYSTEM_TYPE =
+            typeinfo::load("Translation::TranslationUpdatingSystem")->unwrap;
+        let DEFAULT_GRAPHIC_SYSTEM_TYPE =
+            typeinfo::load("Graphic::UnlitGraphicPipelineSystem")->unwrap;
+            
         enum CloseRequest
         {
             NORMALLY,
@@ -140,6 +152,9 @@ namespace JEEditor::Editor
             if (IsWindowFocused())
                 s_last_focusd_world_view = option::value(self);
                 
+            let (w, h) = GetContentRegionAvail();
+            ImageSize(Icons::FILE->unwrap, w, h);
+            
             return self.m_close == CloseRequest::NORMALLY;
         }
         
@@ -198,6 +213,36 @@ namespace JEEditor::Editor
             let new_world = world::create(
                 Inspector::Universe::UniverseCtx::instance()->getUniverse());
                 
+            // Create default graphic pipe line.
+            do new_world->add_system(DEFAULT_GRAPHIC_SYSTEM_TYPE);
+            do new_world->add_system(TRASNLATION_SYSTEM_TYPE);
+            
+            // Create editor camera.
+            do new_world->add_entity([
+                Transform::Translation::type::typeinfo,
+                Transform::LocalPosition::type::typeinfo,
+                Transform::LocalRotation::type::typeinfo,
+                Transform::LocalToWorld::type::typeinfo,
+                Camera::Projection::type::typeinfo,
+                Camera::PerspectiveProjection::type::typeinfo,
+                Camera::RendToFramebuffer::type::typeinfo,
+                Editor::Invisable::type::typeinfo,
+            ]);
+
+            let e = new_world->add_entity([
+                Transform::Translation::type::typeinfo,
+                Transform::LocalPosition::type::typeinfo,
+                Transform::LocalRotation::type::typeinfo,
+                Transform::LocalToWorld::type::typeinfo,
+                Renderer::Shaders::type::typeinfo,
+                Renderer::Shape::type::typeinfo,
+            ]);
+
+            e->towoo::get_component:<Transform::LocalPosition>->unwrap.pos->set(
+                (0., 0., 1.) as vec3);
+            
+            new_world->set_enable(true);
+
             for (let mut i = 0;; i += 1)
             {
                 match (Windows::show(
