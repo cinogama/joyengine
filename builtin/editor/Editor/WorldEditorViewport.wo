@@ -60,11 +60,14 @@ namespace JEEditor::Editor
         m_fb_settle_counter: mut int,
         
         // Camera control state:
+        m_last_time: mut real,
         m_is_look_active: mut bool,
         m_is_pan_active: mut bool,
         m_is_orbit_active: mut bool,
         m_orbit_pivot: mut vec3,
         m_orbit_distance: mut real,
+        m_rotation_x: mut quat,
+        m_rotation_y: mut quat,
     }
     {
         let TRASNLATION_SYSTEM_TYPE =
@@ -114,11 +117,15 @@ namespace JEEditor::Editor
                 m_fb_pending_size = mut (0., 0.),
                 m_fb_settle_counter = mut 0,
                 
+                // Camera control state:
+                m_last_time = mut 0.,
                 m_is_look_active = mut false,
                 m_is_pan_active = mut false,
                 m_is_orbit_active = mut false,
                 m_orbit_pivot = mut (0., 0., 0.) as vec3,
                 m_orbit_distance = mut CAMERA_DEFAULT_ORBIT_DISTANCE,
+                m_rotation_x = mut quat::ident,
+                m_rotation_y = mut quat::ident,
             };
         }
         
@@ -141,7 +148,7 @@ namespace JEEditor::Editor
         {
             if (self.m_is_look_active)
                 input::set_lock_mouse(false);
-            
+                
             match (s_last_focusd_world_view)
             {
                 none?;
@@ -211,7 +218,9 @@ namespace JEEditor::Editor
                 }
             }
             
-            let dt = mathf::clamp(deltatime(), 0., 0.1);
+            let now = time();
+            let dt = mathf::clamp(now - self.m_last_time, 0., 0.1);
+            self.m_last_time = now;
             self->updateCameraControl(dt, viewport_hovered);
             
             return self.m_close == CloseRequest::NORMALLY;
@@ -229,7 +238,7 @@ namespace JEEditor::Editor
             if (debug_cameras->empty)
                 // 未找到调试摄像机，跳过本轮更新
                 return;
-
+                
             let avail = GetContentRegionAvail();
             let target_w = avail.0 as int;
             let target_h = avail.1 as int;
@@ -276,7 +285,7 @@ namespace JEEditor::Editor
                 value(fb)?
                 {
                     self.m_editor_walk_camera_frame_buffer = option::value(fb);
-
+                    
                     let r2b = debug_cameras[0]->towoo::get_component:<Camera::RendToFramebuffer>->unwrap;
                     r2b->set(self.m_editor_walk_camera_frame_buffer);
                 }
@@ -306,17 +315,17 @@ namespace JEEditor::Editor
                     Camera::RendToFramebuffer::type::typeinfo,
                     Editor::Invisible::type::typeinfo,
                 ]);
-            
+                
             if (cameras->empty)
                 return;
-            
+                
             let cam = cameras[0];
             let posOpt = cam->towoo::get_component:<Transform::LocalPosition>;
             let rotOpt = cam->towoo::get_component:<Transform::LocalRotation>;
             
             if (posOpt->is_none || rotOpt->is_none)
                 return;
-            
+                
             let pos = posOpt->unwrap;
             let rot = rotOpt->unwrap;
             
@@ -344,7 +353,7 @@ namespace JEEditor::Editor
             let curPos = pos.pos->get;
             let curRot = rot.rot->get;
             
-            let forward = curRot * ((0., 0., -1.) as vec3);
+            let forward = curRot * ((0., 0., 1.) as vec3);
             let right = curRot * ((1., 0., 0.) as vec3);
             let up = curRot * ((0., 1., 0.) as vec3);
             let worldUp = (0., 1., 0.) as vec3;
@@ -359,12 +368,6 @@ namespace JEEditor::Editor
                 }
                 if (IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Middle))
                     self.m_is_pan_active = true;
-                if (IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left)
-                    && IsKeyDown(ImGuiKey::ImGuiKey_LeftAlt))
-                {
-                    self.m_is_orbit_active = true;
-                    self.m_orbit_pivot = curPos + forward * self.m_orbit_distance;
-                }
             }
             
             if (!IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Right))
@@ -377,10 +380,7 @@ namespace JEEditor::Editor
             }
             if (!IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Middle))
                 self.m_is_pan_active = false;
-            if (!IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left)
-                || !IsKeyDown(ImGuiKey::ImGuiKey_LeftAlt))
-                self.m_is_orbit_active = false;
-            
+                
             let (mdx, mdy) = GetMouseDeltaPos();
             let wheel = GetMouseWheel();
             let wv = wheel.1;
@@ -392,25 +392,9 @@ namespace JEEditor::Editor
             // ---- 自由环视（右键拖拽）----
             if (self.m_is_look_active)
             {
-                let euler = curRot->euler_angle;
-                let nax = mathf::clamp(
-                    euler.0 + (-mdy) * CAMERA_LOOK_SENSITIVITY,
-                    -CAMERA_PITCH_LIMIT, CAMERA_PITCH_LIMIT);
-                let nay = euler.1 + (-mdx) * CAMERA_LOOK_SENSITIVITY;
-                newRot = quat::euler(nax, nay, 0.);
-                changed = true;
-            }
-            
-            // ---- 轨道旋转（Alt + 左键拖拽）----
-            if (self.m_is_orbit_active)
-            {
-                let yawQ = quat::axis(worldUp, mdx * CAMERA_ORBIT_SENSITIVITY);
-                let pitchQ = quat::axis(right, mdy * CAMERA_ORBIT_SENSITIVITY);
-                let orbitQ = yawQ * pitchQ;
-                
-                let offset = curPos - self.m_orbit_pivot;
-                newPos = self.m_orbit_pivot + (orbitQ * offset);
-                newRot = orbitQ * curRot;
+                self.m_rotation_x *= quat::euler(mdy * CAMERA_LOOK_SENSITIVITY, 0., 0.);
+                self.m_rotation_y *=quat::euler(0., mdx * CAMERA_LOOK_SENSITIVITY, 0.);
+                newRot = self.m_rotation_x * self.m_rotation_y;
                 changed = true;
             }
             
@@ -421,20 +405,18 @@ namespace JEEditor::Editor
                     * (IsKeyDown(ImGuiKey::ImGuiKey_LeftShift)
                         ? CAMERA_FAST_MOVE_MULTIPLIER | 1.)
                     * dt;
-                
+                    
                 let mf = (IsKeyDown(ImGuiKey::ImGuiKey_W) ? 1. | 0.)
                     - (IsKeyDown(ImGuiKey::ImGuiKey_S) ? 1. | 0.);
                 let mr = (IsKeyDown(ImGuiKey::ImGuiKey_D) ? 1. | 0.)
                     - (IsKeyDown(ImGuiKey::ImGuiKey_A) ? 1. | 0.);
                 let mu = (IsKeyDown(ImGuiKey::ImGuiKey_E) ? 1. | 0.)
                     - (IsKeyDown(ImGuiKey::ImGuiKey_Q) ? 1. | 0.);
-                
+                    
                 if (mf != 0. || mr != 0. || mu != 0.)
                 {
-                    let fwd = newRot * ((0., 0., -1.) as vec3);
-                    let rgt = newRot * ((1., 0., 0.) as vec3);
-                    newPos = newPos + fwd * (mf * speed);
-                    newPos = newPos + rgt * (mr * speed);
+                    newPos = newPos + forward * (mf * speed);
+                    newPos = newPos + right * (mr * speed);
                     newPos = newPos + worldUp * (mu * speed);
                     changed = true;
                 }
@@ -464,8 +446,7 @@ namespace JEEditor::Editor
                 }
                 else
                 {
-                    let fwd = newRot * ((0., 0., -1.) as vec3);
-                    newPos = newPos + fwd * (wv * CAMERA_WHEEL_DOLLY);
+                    newPos = newPos + forward * (wv * CAMERA_WHEEL_DOLLY);
                     changed = true;
                 }
             }
@@ -494,7 +475,7 @@ namespace JEEditor::Editor
                 self.m_is_pan_active = true;
             if (!IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Middle))
                 self.m_is_pan_active = false;
-            
+                
             let (mdx, mdy) = GetMouseDeltaPos();
             let wheel = GetMouseWheel();
             let wv = wheel.1;
@@ -515,8 +496,8 @@ namespace JEEditor::Editor
             {
                 let scale = ortho.scale->get;
                 ortho.scale->set(mathf::clamp(
-                    scale * (1. - wv * 0.1),
-                    CAMERA_MIN_ORTHO_SCALE, 10000.));
+                        scale * (1. - wv * 0.1),
+                        CAMERA_MIN_ORTHO_SCALE, 10000.));
             }
             
             if (moved)
@@ -591,6 +572,7 @@ namespace JEEditor::Editor
                     Camera::Projection::type::typeinfo,
                     Camera::PerspectiveProjection::type::typeinfo,
                     Camera::RendToFramebuffer::type::typeinfo,
+                    Camera::Clear::type::typeinfo,
                     Editor::Invisible::type::typeinfo,
                 ]);
                 
@@ -605,6 +587,18 @@ namespace JEEditor::Editor
                 
             e->towoo::get_component:<Transform::LocalPosition>->unwrap.pos->set(
                 (0., 0., 1.) as vec3);
+                
+            let e2 = new_world->add_entity([
+                    Transform::Translation::type::typeinfo,
+                    Transform::LocalPosition::type::typeinfo,
+                    Transform::LocalRotation::type::typeinfo,
+                    Transform::LocalToWorld::type::typeinfo,
+                    Renderer::Shaders::type::typeinfo,
+                    Renderer::Shape::type::typeinfo,
+                ]);
+                
+            e2->towoo::get_component:<Transform::LocalPosition>->unwrap.pos->set(
+                (0., 1.5, 1.) as vec3);
                 
             new_world->set_enable(true);
             
