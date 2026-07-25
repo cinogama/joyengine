@@ -2,6 +2,7 @@ import builtin::editor::GUI::Menu;
 
 import Browser;
 import EntityList;
+import LogBrowser;
 import WorldEditorViewport;
 
 namespace JEEditor::Editor::MainMenu
@@ -35,6 +36,16 @@ namespace JEEditor::Editor::MainMenu
                         EntityList::showEntityList();
                 })
             ->      checkWhen(EntityList::isEntityListExist)
+            ->      endItem
+            ->  subItem("日志浏览器",
+                func()
+                {
+                    if (LogBrowser::isLogBrowserExist())
+                        LogBrowser::closeLogBrowser();
+                    else
+                        LogBrowser::showLogBrowser();
+                })
+            ->      checkWhen(LogBrowser::isLogBrowserExist)
             ->      endItem
             ->  endMenu
             -> subMenu("编辑")

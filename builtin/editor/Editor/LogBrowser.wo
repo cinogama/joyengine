@@ -1,0 +1,313 @@
+import woo::std;
+
+import je;
+import je::gui;
+import je::internal;
+
+import pkg::interface;
+
+import builtin::editor::GUI::Windows;
+
+using std;
+using je;
+using je::gui;
+using JEEditor::GUI::Windows;
+
+namespace JEEditor::Editor
+{
+    // 日志浏览器
+    // 通过 je::internal::hooklog 注册日志回调，使用 je::internal::getlogs 拉取日志，
+    // 在编辑器内提供一个可过滤、可着色、自动滚动的日志查看窗口。
+    using LogBrowser = struct{
+        m_close: mut bool,
+        m_hook: mut handle,
+
+        // 等级过滤开关
+        m_show_normal: mut bool,
+        m_show_info: mut bool,
+        m_show_warning: mut bool,
+        m_show_error: mut bool,
+        m_show_fatal: mut bool,
+
+        // 文本过滤
+        m_filter: mut string,
+
+        // 滚动与计数
+        m_auto_scroll: mut bool,
+        m_baseline: mut int,      // “清除”按钮设置基线，仅显示该索引之后的日志
+        m_last_count: mut int,    // 上一帧日志总数，用于检测新日志到达
+    }
+    {
+        let mut s_logbrowser_singleton = option::none: option<LogBrowser>;
+        public func isLogBrowserExist()
+        {
+            return s_logbrowser_singleton->is_value;
+        }
+        public func showLogBrowser()
+        {
+            do show(create());
+        }
+        public func closeLogBrowser()
+        {
+            match (s_logbrowser_singleton)
+            {
+                none?;
+                value(inst)?
+                    inst->close();
+            }
+        }
+
+        public func create()=> LogBrowser
+            where require!(LogBrowser: IWindows);
+        {
+            return LogBrowser{
+                m_close = mut false,
+                m_hook = mut 0h,
+                m_show_normal = mut true,
+                m_show_info = mut true,
+                m_show_warning = mut true,
+                m_show_error = mut true,
+                m_show_fatal = mut true,
+                m_filter = mut "",
+                m_auto_scroll = mut true,
+                m_baseline = mut 0,
+                m_last_count = mut 0,
+            };
+        }
+
+        public func close(self: LogBrowser)
+        {
+            self.m_close = true;
+        }
+        public func getTitle(_: LogBrowser)=> string
+        {
+            return "日志浏览器";
+        }
+        public func getSizeConstraints(_: LogBrowser)=> SizeConstraints
+        {
+            return SizeConstraints::Limited(((420., 200.), (4096., 4096.)));
+        }
+        public func onCreate(self: LogBrowser)=> void
+        {
+            s_logbrowser_singleton = option::value(self);
+            self.m_hook = internal::hooklog();
+        }
+        public func onClose(self: LogBrowser)=> void
+        {
+            internal::unhooklog(self.m_hook);
+            s_logbrowser_singleton = option::none;
+        }
+
+        func levelShown(self: LogBrowser, lvl: internal::loglevel)=> bool
+        {
+            if (lvl == internal::loglevel::NORMAL)
+                return self.m_show_normal;
+            if (lvl == internal::loglevel::INFO)
+                return self.m_show_info;
+            if (lvl == internal::loglevel::WARNING)
+                return self.m_show_warning;
+            if (lvl == internal::loglevel::ERROR)
+                return self.m_show_error;
+            return self.m_show_fatal;
+        }
+
+        func levelName(lvl: internal::loglevel)=> string
+        {
+            if (lvl == internal::loglevel::NORMAL)
+                return "NORMAL";
+            if (lvl == internal::loglevel::INFO)
+                return "INFO";
+            if (lvl == internal::loglevel::WARNING)
+                return "WARN";
+            if (lvl == internal::loglevel::ERROR)
+                return "ERROR";
+            return "FATAL";
+        }
+
+        func levelColor(lvl: internal::loglevel)=> Color32RGBA
+        {
+            if (lvl == internal::loglevel::NORMAL)
+                return (200, 200, 200, 255);
+            if (lvl == internal::loglevel::INFO)
+                return (120, 180, 255, 255);
+            if (lvl == internal::loglevel::WARNING)
+                return (240, 200, 80, 255);
+            if (lvl == internal::loglevel::ERROR)
+                return (240, 110, 110, 255);
+            return (255, 70, 70, 255);
+        }
+
+        func matchesFilter(self: LogBrowser, msg: string)=> bool
+        {
+            if (self.m_filter->len == 0)
+                return true;
+            return msg->lower->find(self.m_filter->lower)->is_value;
+        }
+
+        // 统计基线之后、且满足过滤条件的日志数量: (总数, 可见数)
+        func countVisible(self: LogBrowser, logs: array<(internal::loglevel, string)>)=> (int, int)
+        {
+            let mut total = 0;
+            let mut shown = 0;
+            let mut idx = 0;
+            for (let (lvl, msg) : logs)
+            {
+                if (idx >= self.m_baseline)
+                {
+                    total += 1;
+                    if (self->levelShown(lvl) && self->matchesFilter(msg))
+                        shown += 1;
+                }
+                idx += 1;
+            }
+            return (total, shown);
+        }
+
+        func copyVisible(self: LogBrowser, logs: array<(internal::loglevel, string)>)=> void
+        {
+            let mut buf = "";
+            let mut idx = 0;
+            for (let (lvl, msg) : logs)
+            {
+                if (idx >= self.m_baseline)
+                {
+                    if (self->levelShown(lvl) && self->matchesFilter(msg))
+                        buf = buf + F"[{levelName(lvl)}] {msg}\n";
+                }
+                idx += 1;
+            }
+            SetClipboardText(buf);
+        }
+
+        public func run(self: LogBrowser)=> bool
+        {
+            let logs = internal::getlogs();
+            let (total, shown) = self->countVisible(logs);
+
+            self->drawToolbar(logs, total, shown);
+            Separator();
+
+            let avail = GetContentRegionAvail();
+            let list_flags = WindowsAttribute::ImGuiWindowFlags_HorizontalScrollbar;
+            if (BeginChildSizeFlags("##LogList", avail.0, avail.1, list_flags))
+                self->drawLogs(logs);
+            EndChild();
+
+            return !self.m_close;
+        }
+
+        func drawToolbar(self: LogBrowser, logs: array<(internal::loglevel, string)>, total: int, shown: int)=> void
+        {
+            if (Button("清除"))
+                self.m_baseline = logs->len;
+            SameLine();
+            if (Button("复制全部"))
+                self->copyVisible(logs);
+            SameLine();
+            match (CheckBox("自动滚动##lb_autoscroll", self.m_auto_scroll))
+            {
+                none?;
+                value(v)?
+                    self.m_auto_scroll = v;
+            }
+
+            SameLine();
+            Separator();
+            SameLine();
+
+            match (CheckBox("正常##lb_n", self.m_show_normal))
+            {
+                none?;
+                value(v)?
+                    self.m_show_normal = v;
+            }
+            SameLine();
+            match (CheckBox("信息##lb_i", self.m_show_info))
+            {
+                none?;
+                value(v)?
+                    self.m_show_info = v;
+            }
+            SameLine();
+            match (CheckBox("警告##lb_w", self.m_show_warning))
+            {
+                none?;
+                value(v)?
+                    self.m_show_warning = v;
+            }
+            SameLine();
+            match (CheckBox("错误##lb_e", self.m_show_error))
+            {
+                none?;
+                value(v)?
+                    self.m_show_error = v;
+            }
+            SameLine();
+            match (CheckBox("致命##lb_f", self.m_show_fatal))
+            {
+                none?;
+                value(v)?
+                    self.m_show_fatal = v;
+            }
+
+            SameLine();
+            Separator();
+            SameLine();
+            Text("搜索:");
+            SameLine();
+            PushItemWidth(140.);
+            match (InputText("##LogFilter", self.m_filter))
+            {
+                none?;
+                value(s)?
+                    self.m_filter = s;
+            }
+            PopItemWidth();
+
+            SameLine();
+            TextDisabled(F"共 {total} 条 / 显示 {shown} 条");
+        }
+
+        func drawLogs(self: LogBrowser, logs: array<(internal::loglevel, string)>)=> void
+        {
+            PushTextWrapPos(0.);
+            defer PopTextWrapPos();
+
+            let mut drew_any = false;
+            let mut idx = 0;
+            for (let (lvl, msg) : logs)
+            {
+                if (idx >= self.m_baseline)
+                {
+                    if (self->levelShown(lvl) && self->matchesFilter(msg))
+                    {
+                        drew_any = true;
+                        TextColored(
+                            levelColor(lvl),
+                            F"[{levelName(lvl)}] {msg}");
+                    }
+                }
+                idx += 1;
+            }
+
+            if (!drew_any)
+                TextDisabled("(没有日志)");
+
+            // 自动滚动：当有新日志到达时，将视图钉在底部
+            let cur_count = logs->len;
+            if (self.m_auto_scroll && cur_count != self.m_last_count && drew_any)
+                SetScrollHereY(1.);
+            self.m_last_count = cur_count;
+
+            // 右键上下文菜单
+            if (BeginPopupContextWindow())
+            {
+                if (MenuItem("复制全部可见日志"))
+                    self->copyVisible(logs);
+                if (MenuItem("清除"))
+                    self.m_baseline = logs->len;
+                EndPopup();
+            }
+        }
+    }
+}

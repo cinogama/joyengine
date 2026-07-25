@@ -135,6 +135,13 @@ namespace je::gui
         public func Text(msg:string)=> void;
     extern("libjoyecs", "je_gui_text_disabled")
         public func TextDisabled(msg:string)=> void;
+    extern("libjoyecs", "je_gui_text_colored")
+        public func TextColored(color: Color32RGBA, msg:string)=> void;
+        
+    extern("libjoyecs", "je_gui_push_text_wrap_pos")
+        public func PushTextWrapPos(wrap_local_pos_x: real)=> void;
+    extern("libjoyecs", "je_gui_pop_text_wrap_pos")
+        public func PopTextWrapPos()=> void;
         
     extern("libjoyecs", "je_gui_button")
         public func Button(msg:string)=> bool;
