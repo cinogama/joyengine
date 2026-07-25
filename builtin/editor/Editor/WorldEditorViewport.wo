@@ -51,9 +51,9 @@ namespace JEEditor::Editor
         
         m_runtime_systems: vec<typeinfo>,
         m_saving_path: option<path_t>,
-
+        
         // Editor context:
-
+        m_editor_walk_camera_frame_buffer: mut option<graphic::framebuffer>,
     }
     {
         let TRASNLATION_SYSTEM_TYPE =
@@ -77,10 +77,14 @@ namespace JEEditor::Editor
             //      因此，世界实例的释放将由 WorldEditorViewport 在 onClose 时执行
             return WorldEditorViewport{
                 m_close = mut CloseRequest::NORMALLY,
+                
                 m_world_instance = w,
+                
                 m_name = name,
                 m_runtime_systems = []mut,
                 m_saving_path = path,
+                
+                m_editor_walk_camera_frame_buffer = mut option::none,
             };
         }
         
@@ -152,8 +156,18 @@ namespace JEEditor::Editor
             if (IsWindowFocused())
                 s_last_focusd_world_view = option::value(self);
                 
-            let (w, h) = GetContentRegionAvail();
-            ImageSize(Icons::FILE->unwrap, w, h);
+            match (self.m_editor_walk_camera_frame_buffer)
+            {
+                none?
+                {
+                    TextDisabled("（没有有效的渲染结果，等待重新创建……）");
+                }
+                value(_)?
+                {
+                    let (w, h) = GetContentRegionAvail();
+                    ImageSize(Icons::FILE->unwrap, w, h);
+                }
+            }
             
             return self.m_close == CloseRequest::NORMALLY;
         }
@@ -219,30 +233,30 @@ namespace JEEditor::Editor
             
             // Create editor camera.
             do new_world->add_entity([
-                Transform::Translation::type::typeinfo,
-                Transform::LocalPosition::type::typeinfo,
-                Transform::LocalRotation::type::typeinfo,
-                Transform::LocalToWorld::type::typeinfo,
-                Camera::Projection::type::typeinfo,
-                Camera::PerspectiveProjection::type::typeinfo,
-                Camera::RendToFramebuffer::type::typeinfo,
-                Editor::Invisable::type::typeinfo,
-            ]);
-
+                    Transform::Translation::type::typeinfo,
+                    Transform::LocalPosition::type::typeinfo,
+                    Transform::LocalRotation::type::typeinfo,
+                    Transform::LocalToWorld::type::typeinfo,
+                    Camera::Projection::type::typeinfo,
+                    Camera::PerspectiveProjection::type::typeinfo,
+                    Camera::RendToFramebuffer::type::typeinfo,
+                    Editor::Invisible::type::typeinfo,
+                ]);
+                
             let e = new_world->add_entity([
-                Transform::Translation::type::typeinfo,
-                Transform::LocalPosition::type::typeinfo,
-                Transform::LocalRotation::type::typeinfo,
-                Transform::LocalToWorld::type::typeinfo,
-                Renderer::Shaders::type::typeinfo,
-                Renderer::Shape::type::typeinfo,
-            ]);
-
+                    Transform::Translation::type::typeinfo,
+                    Transform::LocalPosition::type::typeinfo,
+                    Transform::LocalRotation::type::typeinfo,
+                    Transform::LocalToWorld::type::typeinfo,
+                    Renderer::Shaders::type::typeinfo,
+                    Renderer::Shape::type::typeinfo,
+                ]);
+                
             e->towoo::get_component:<Transform::LocalPosition>->unwrap.pos->set(
                 (0., 0., 1.) as vec3);
-            
+                
             new_world->set_enable(true);
-
+            
             for (let mut i = 0;; i += 1)
             {
                 match (Windows::show(
