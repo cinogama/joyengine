@@ -126,13 +126,6 @@ namespace JEEditor::GUI::Windows
                     open = false;
             }
             
-            if (!open)
-            {
-                i->onClose();
-                if (is_unique)
-                    assert(s_unique_window_record->remove(title));
-            }
-            
             return open;
         }
         func _show(i: IWindows, mut title: string, is_unique: bool)
@@ -151,13 +144,22 @@ namespace JEEditor::GUI::Windows
             }
             
             i->onCreate();
-            while (i->_engine_imgui_show_job(title, is_unique, menu_instance, shortcut_instance))
-                std::yield();
+            {
+                while (i->_engine_imgui_show_job(
+                        title, is_unique, menu_instance, shortcut_instance))
+                {
+                    std::yield();
+                }
+                
+                if (is_unique)
+                    assert(s_unique_window_record->remove(title));
+            }
+            i->onClose();
         }
     }
     
-    public func show<T>(window_instance: T)
-        where require!(T: IWindows);
+    public func show<T>(window_instance: T)=> option<IWindows>
+    // where require!(T: IWindows);
     {
         let mut title = window_instance->getTitle;
         let is_unique = title->find("$ID")->is_none;

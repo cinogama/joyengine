@@ -100,7 +100,6 @@ namespace JEEditor::GUI::Forms
         public func then(self: InputBox, callback: (string)=> void)
         {
             self.m_on_input = callback;
-            return self;
         }
     }
 }
