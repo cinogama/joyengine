@@ -5,6 +5,7 @@ import je::ecs;
 import je::graphic;
 import je::gui;
 import je::typeinfo;
+import je::internal;
 
 import je::towoo;
 import je::towoo::types;
@@ -54,6 +55,8 @@ namespace JEEditor::Editor
         
         // Editor context:
         m_editor_walk_camera_frame_buffer: mut option<graphic::framebuffer>,
+        m_fb_pending_size: mut ImVec2,
+        m_fb_settle_counter: mut int,
     }
     {
         let TRASNLATION_SYSTEM_TYPE =
@@ -61,6 +64,10 @@ namespace JEEditor::Editor
         let DEFAULT_GRAPHIC_SYSTEM_TYPE =
             typeinfo::load("Graphic::UnlitGraphicPipelineSystem")->unwrap;
             
+        // 拖拽缩放窗口时 content 尺寸每帧都在变化；等待尺寸连续稳定这么多帧后
+        // 再重建摄像机 framebuffer，避免在拖拽过程中频繁分配 GPU 资源。
+        let FRAMEBUFFER_RESIZE_SETTLE_FRAMES = 30;
+        
         enum CloseRequest
         {
             NORMALLY,
@@ -85,6 +92,8 @@ namespace JEEditor::Editor
                 m_saving_path = path,
                 
                 m_editor_walk_camera_frame_buffer = mut option::none,
+                m_fb_pending_size = mut (0., 0.),
+                m_fb_settle_counter = mut 0,
             };
         }
         
@@ -156,20 +165,88 @@ namespace JEEditor::Editor
             if (IsWindowFocused())
                 s_last_focusd_world_view = option::value(self);
                 
-            match (self.m_editor_walk_camera_frame_buffer)
+            self->updateWalkCameraFramebuffer();
+            
+            match (self.m_editor_walk_camera_frame_buffer=>>\fb = fb->attachment(0);)
             {
                 none?
                 {
                     TextDisabled("（没有有效的渲染结果，等待重新创建……）");
                 }
-                value(_)?
+                value(fbtex)?
                 {
                     let (w, h) = GetContentRegionAvail();
-                    ImageSize(Icons::FILE->unwrap, w, h);
+                    ImageSize(fbtex, w, h);
                 }
             }
             
             return self.m_close == CloseRequest::NORMALLY;
+        }
+        
+        // 根据 GetContentRegionAvail 自动创建/重建摄像机 framebuffer；
+        // 若窗口尺寸仍在变化（正在拖拽缩放），则等待尺寸稳定后再更新。
+        func updateWalkCameraFramebuffer(self: WorldEditorViewport)=> void
+        {
+            let debug_cameras = self.m_world_instance->internal::get_all_entities([
+                    Camera::RendToFramebuffer::type::typeinfo,
+                    Editor::Invisible::type::typeinfo,
+                ]);
+                
+            if (debug_cameras->empty)
+                // 未找到调试摄像机，跳过本轮更新
+                return;
+
+            let avail = GetContentRegionAvail();
+            let target_w = avail.0 as int;
+            let target_h = avail.1 as int;
+            
+            // 尺寸退化（窗口折叠/尚未布局）时跳过。
+            if (target_w <= 0 || target_h <= 0)
+                return;
+                
+            // 当前 framebuffer 已与目标尺寸一致，则无需重建。
+            match (self.m_editor_walk_camera_frame_buffer)
+            {
+                none?;
+                value(fb)?
+                {
+                    let (cw, ch) = fb->size();
+                    if (cw == target_w && ch == target_h)
+                    {
+                        self.m_fb_settle_counter = 0;
+                        return;
+                    }
+                }
+            }
+            
+            // 尺寸不一致（或尚无 framebuffer）：仅在尺寸连续稳定若干帧后重建，
+            // 避免拖拽过程中每帧都重新分配。
+            if (avail.0 != self.m_fb_pending_size.0
+                || avail.1 != self.m_fb_pending_size.1)
+            {
+                self.m_fb_pending_size = avail;
+                self.m_fb_settle_counter = 0;
+            }
+            self.m_fb_settle_counter += 1;
+            
+            if (self.m_fb_settle_counter < FRAMEBUFFER_RESIZE_SETTLE_FRAMES)
+                return;
+                
+            // 尺寸已稳定，按目标尺寸（重新）创建 framebuffer。
+            match (graphic::framebuffer::create(
+                    target_w, target_h,
+                    [graphic::framebuffer::color_format::RGBA as int],
+                    true))
+            {
+                none?;
+                value(fb)?
+                {
+                    self.m_editor_walk_camera_frame_buffer = option::value(fb);
+
+                    let r2b = debug_cameras[0]->towoo::get_component:<Camera::RendToFramebuffer>->unwrap;
+                    r2b->set(self.m_editor_walk_camera_frame_buffer);
+                }
+            }
         }
         
         // ==========================
