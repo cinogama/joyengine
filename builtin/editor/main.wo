@@ -16,6 +16,7 @@ import GUI::Forms::AskBox;
 
 import Editor::Browser;
 import Editor::EntityList;
+import Editor::LogBrowser;
 import Editor::MainMenu;
 
 import Inspector::Universe;
@@ -31,18 +32,19 @@ func main()
 {
     // 编辑器脚本退出之前清掉所有单例实例
     defer singleton::unsafe::reset_all_singleton();
-        
+    
     // 创建一个 Universe，之后编辑器将在这上面运行
     let u = Inspector::Universe::UniverseCtx::instance()->getUniverse();
     defer u->wait();
-
+    
     // 编辑器，直接初始化图形处理流程。
     je::internal::init_graphic_pipeline_for_editor(u);
-
+    
     JEEditor::Editor::MainMenu::registerMainMenu();
     
-    do Browser::showBrowser();    
+    do Browser::showBrowser();
     do EntityList::showEntityList();
+    do LogBrowser::showLogBrowser();
 }
 
 main();
