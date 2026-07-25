@@ -3839,3 +3839,458 @@ WOORT_API woort_api wojeapi_input_update_key_state(void)
 
     return woort_ret_void();
 }
+
+/////////////////////////// RENDCHAIN API ///////////////////////////
+
+static const uint32_t* _wojeapi_lookup_uniform_location(
+    jeecs::basic::resource<jeecs::graphic::shader>* shader_res, const char* name)
+{
+    auto* builtin = (*shader_res)->m_builtin;
+
+    if (strcmp(name, "JE_M") == 0)
+        return &builtin->m_builtin_uniform_m;
+    if (strcmp(name, "JE_MV") == 0)
+        return &builtin->m_builtin_uniform_mv;
+    if (strcmp(name, "JE_MVP") == 0)
+        return &builtin->m_builtin_uniform_mvp;
+    if (strcmp(name, "JE_LOCAL_SCALE") == 0)
+        return &builtin->m_builtin_uniform_local_scale;
+    if (strcmp(name, "JE_UV_TILING") == 0)
+        return &builtin->m_builtin_uniform_tiling;
+    if (strcmp(name, "JE_UV_OFFSET") == 0)
+        return &builtin->m_builtin_uniform_offset;
+    if (strcmp(name, "JE_COLOR") == 0)
+        return &builtin->m_builtin_uniform_color;
+    if (strcmp(name, "JE_LIGHT2D_RESOLUTION") == 0)
+        return &builtin->m_builtin_uniform_light2d_resolution;
+    if (strcmp(name, "JE_LIGHT2D_DECAY") == 0)
+        return &builtin->m_builtin_uniform_light2d_decay;
+
+    auto* custom = (*shader_res)->resource()->m_custom_uniforms;
+    while (custom != nullptr)
+    {
+        if (strcmp(custom->m_name, name) == 0)
+            return &custom->m_index;
+        custom = custom->m_next;
+    }
+    return nullptr;
+}
+
+WOORT_API woort_api wojeapi_uniformbuffer_create(void)
+{
+    const size_t binding_place = (size_t)woort_int(0);
+    const size_t buffer_size = (size_t)woort_int(1);
+
+    std::optional<jeecs::basic::resource<jeecs::graphic::uniformbuffer>> ub;
+
+    woort_vm* const last = woort_vm_swap(nullptr);
+    {
+        ub = jeecs::graphic::uniformbuffer::create(binding_place, buffer_size);
+    }
+    (void)woort_vm_swap(last);
+
+    if (ub.has_value())
+        return woort_ret_option_gchandle(
+            new jeecs::basic::resource<jeecs::graphic::uniformbuffer>(ub.value()),
+            WOORT_IGNORE,
+            [](void* ptr)
+            {
+                delete (jeecs::basic::resource<jeecs::graphic::uniformbuffer> *)ptr;
+            },
+            nullptr);
+
+    return woort_ret_option_none();
+}
+
+WOORT_API woort_api wojeapi_uniformbuffer_update(void)
+{
+    auto* ub =
+        (jeecs::basic::resource<jeecs::graphic::uniformbuffer> *)woort_gcpointer(0);
+    const size_t offset = (size_t)woort_int(1);
+
+    size_t buflen = 0;
+    const void* buf = woort_buffer(2, &buflen);
+
+    (*ub)->update_buffer(offset, buflen, buf);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_uhost_get_or_create_for_universe(void)
+{
+    void* universe = woort_pointer(0);
+
+    jeecs::graphic_uhost* host;
+
+    woort_vm* const last = woort_vm_swap(nullptr);
+    {
+        host = jegl_uhost_get_or_create_for_universe(universe, nullptr);
+    }
+    (void)woort_vm_swap(last);
+
+    return woort_ret_pointer(host);
+}
+
+WOORT_API woort_api wojeapi_uhost_get_context(void)
+{
+    auto* host = (jeecs::graphic_uhost*)woort_pointer(0);
+    return woort_ret_pointer(jegl_uhost_get_context(host));
+}
+
+WOORT_API woort_api wojeapi_uhost_set_skip_behavior(void)
+{
+    auto* host = (jeecs::graphic_uhost*)woort_pointer(0);
+    bool skip_all_draw = woort_bool(1);
+
+    jegl_uhost_set_skip_behavior(host, skip_all_draw);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_uhost_alloc_branch(void)
+{
+    auto* host = (jeecs::graphic_uhost*)woort_pointer(0);
+    return woort_ret_pointer(jegl_uhost_alloc_branch(host));
+}
+
+WOORT_API woort_api wojeapi_uhost_free_branch(void)
+{
+    auto* host = (jeecs::graphic_uhost*)woort_pointer(0);
+    auto* branch = (jeecs::rendchain_branch*)woort_pointer(1);
+
+    jegl_uhost_free_branch(host, branch);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_branch_new_frame(void)
+{
+    auto* branch = (jeecs::rendchain_branch*)woort_pointer(0);
+    int priority = (int)woort_int(1);
+
+    jegl_branch_new_frame(branch, priority);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_branch_new_chain(void)
+{
+    auto* branch = (jeecs::rendchain_branch*)woort_pointer(0);
+
+    jegl_frame_buffer* fb = nullptr;
+    if (woort_option_get(WOORT_RETURN_SLOT, 1))
+    {
+        auto* fb_res =
+            (jeecs::basic::resource<jeecs::graphic::framebuffer> *)woort_gcpointer(WOORT_RETURN_SLOT);
+        fb = (*fb_res)->resource();
+    }
+
+    int32_t x = (int32_t)woort_int(2);
+    int32_t y = (int32_t)woort_int(3);
+    uint32_t w = (uint32_t)woort_int(4);
+    uint32_t h = (uint32_t)woort_int(5);
+
+    return woort_ret_pointer(jegl_branch_new_chain(branch, fb, x, y, w, h));
+}
+
+WOORT_API woort_api wojeapi_rchain_create(void)
+{
+    return woort_ret_pointer(jegl_rchain_create());
+}
+
+WOORT_API woort_api wojeapi_rchain_close(void)
+{
+    auto* chain = (jegl_rendchain*)woort_pointer(0);
+    jegl_rchain_close(chain);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_begin(void)
+{
+    auto* chain = (jegl_rendchain*)woort_pointer(0);
+
+    jegl_frame_buffer* fb = nullptr;
+    if (woort_option_get(WOORT_RETURN_SLOT, 1))
+    {
+        auto* fb_res =
+            (jeecs::basic::resource<jeecs::graphic::framebuffer> *)woort_gcpointer(WOORT_RETURN_SLOT);
+        fb = (*fb_res)->resource();
+    }
+
+    int32_t x = (int32_t)woort_int(2);
+    int32_t y = (int32_t)woort_int(3);
+    uint32_t w = (uint32_t)woort_int(4);
+    uint32_t h = (uint32_t)woort_int(5);
+
+    jegl_rchain_begin(chain, fb, x, y, w, h);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_bind_uniform_buffer(void)
+{
+    auto* chain = (jegl_rendchain*)woort_pointer(0);
+    auto* ub =
+        (jeecs::basic::resource<jeecs::graphic::uniformbuffer> *)woort_gcpointer(1);
+
+    jegl_rchain_bind_uniform_buffer(chain, (*ub)->resource());
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_clear_color_buffer(void)
+{
+    auto* chain = (jegl_rendchain*)woort_pointer(0);
+    size_t attachment_index = (size_t)woort_int(1);
+
+    const woort_value color_tuple = 2;
+    float clear_color[4];
+    clear_color[0] = (float)woort_struct_get_real(color_tuple, 0);
+    clear_color[1] = (float)woort_struct_get_real(color_tuple, 1);
+    clear_color[2] = (float)woort_struct_get_real(color_tuple, 2);
+    clear_color[3] = (float)woort_struct_get_real(color_tuple, 3);
+
+    jegl_rchain_clear_color_buffer(chain, attachment_index, clear_color);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_clear_depth_buffer(void)
+{
+    auto* chain = (jegl_rendchain*)woort_pointer(0);
+    float clear_depth = woort_float(1);
+
+    jegl_rchain_clear_depth_buffer(chain, clear_depth);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_allocate_texture_group(void)
+{
+    auto* chain = (jegl_rendchain*)woort_pointer(0);
+    return woort_ret_pointer(jegl_rchain_allocate_texture_group(chain));
+}
+
+WOORT_API woort_api wojeapi_rchain_bind_texture(void)
+{
+    auto* chain = (jegl_rendchain*)woort_pointer(0);
+    auto* tg = (jegl_rchain_texture_group*)woort_pointer(1);
+    size_t binding_pass = (size_t)woort_int(2);
+    auto* tex =
+        (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(3);
+
+    jegl_rchain_bind_texture(chain, tg, binding_pass, (*tex)->resource());
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_draw(void)
+{
+    auto* chain = (jegl_rendchain*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    auto* vert =
+        (jeecs::basic::resource<jeecs::graphic::vertex> *)woort_gcpointer(2);
+
+    jegl_rchain_texture_group* tg = nullptr;
+    if (woort_option_get(WOORT_RETURN_SLOT, 3))
+        tg = (jegl_rchain_texture_group*)woort_pointer(WOORT_RETURN_SLOT);
+
+    auto* act = jegl_rchain_draw(chain, (*shad)->resource(), (*vert)->resource(), tg);
+
+    return woort_ret_pointer(act);
+}
+
+WOORT_API woort_api wojeapi_rchain_commit(void)
+{
+    auto* chain = (jegl_rendchain*)woort_pointer(0);
+    auto* ctx = (jegl_context*)woort_pointer(1);
+
+    jegl_rchain_commit(chain, ctx);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_get_target_framebuf(void)
+{
+    auto* chain = (jegl_rendchain*)woort_pointer(0);
+    auto* fb = jegl_rchain_get_target_framebuf(chain);
+
+    if (fb != nullptr)
+        return woort_ret_option_pointer(fb);
+
+    return woort_ret_option_none();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_buffer(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* ub =
+        (jeecs::basic::resource<jeecs::graphic::uniformbuffer> *)woort_gcpointer(1);
+
+    jegl_rchain_set_uniform_buffer(act, (*ub)->resource());
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_int(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    const char* name = woort_string(2);
+    int val = (int)woort_int(3);
+
+    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
+    jegl_rchain_set_uniform_int(act, loc, val);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_int2(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    const char* name = woort_string(2);
+
+    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
+    jegl_rchain_set_uniform_int2(act, loc, (int)woort_int(3), (int)woort_int(4));
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_int3(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    const char* name = woort_string(2);
+
+    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
+    jegl_rchain_set_uniform_int3(act, loc,
+        (int)woort_int(3), (int)woort_int(4), (int)woort_int(5));
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_int4(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    const char* name = woort_string(2);
+
+    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
+    jegl_rchain_set_uniform_int4(act, loc,
+        (int)woort_int(3), (int)woort_int(4), (int)woort_int(5), (int)woort_int(6));
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_float(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    const char* name = woort_string(2);
+    float val = woort_float(3);
+
+    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
+    jegl_rchain_set_uniform_float(act, loc, val);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_float2(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    const char* name = woort_string(2);
+
+    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
+    jegl_rchain_set_uniform_float2(act, loc, woort_float(3), woort_float(4));
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_float3(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    const char* name = woort_string(2);
+
+    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
+    jegl_rchain_set_uniform_float3(act, loc,
+        woort_float(3), woort_float(4), woort_float(5));
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_float4(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    const char* name = woort_string(2);
+
+    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
+    jegl_rchain_set_uniform_float4(act, loc,
+        woort_float(3), woort_float(4), woort_float(5), woort_float(6));
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_float2x2(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    const char* name = woort_string(2);
+
+    float mat[2][2];
+    for (int i = 0; i < 4; ++i)
+        (&mat[0][0])[i] = woort_float((woort_value)(3 + i));
+
+    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
+    jegl_rchain_set_uniform_float2x2(act, loc, mat);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_float3x3(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    const char* name = woort_string(2);
+
+    float mat[3][3];
+    for (int i = 0; i < 9; ++i)
+        (&mat[0][0])[i] = woort_float((woort_value)(3 + i));
+
+    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
+    jegl_rchain_set_uniform_float3x3(act, loc, mat);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_float4x4(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    const char* name = woort_string(2);
+
+    float mat[4][4];
+    for (int i = 0; i < 16; ++i)
+        (&mat[0][0])[i] = woort_float((woort_value)(3 + i));
+
+    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
+    jegl_rchain_set_uniform_float4x4(act, loc, mat);
+
+    return woort_ret_void();
+}

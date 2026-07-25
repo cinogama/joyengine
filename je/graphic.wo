@@ -1,6 +1,7 @@
 // Joyengine 4.x
 import woo::std;
 import je::ecs;
+import pkg::buffer;
 
 namespace je
 {
@@ -189,6 +190,168 @@ namespace je
 
             extern("libjoyecs", "wojeapi_framebuffer_get_size")
                 public func size(self: framebuffer)=> (int, int);
+        }
+        
+        public using uniformbuffer = gchandle
+        {
+            extern("libjoyecs", "wojeapi_uniformbuffer_create")
+                public func create(binding_place: int, buffer_size: int)=> option<uniformbuffer>;
+            
+            extern("libjoyecs", "wojeapi_uniformbuffer_update")
+                public func update(self: uniformbuffer, offset: int, data: buffer)=> void;
+        }
+        
+        public using rendchain = handle;
+        namespace rendchain
+        {
+            extern("libjoyecs", "wojeapi_rchain_create")
+                public func create()=> rendchain;
+            
+            extern("libjoyecs", "wojeapi_rchain_close")
+                public func close(self: rendchain)=> void;
+            
+            extern("libjoyecs", "wojeapi_rchain_begin")
+                public func begin(self: rendchain, fb: option<framebuffer>, x: int, y: int, w: int, h: int)=> void;
+            
+            extern("libjoyecs", "wojeapi_rchain_bind_uniform_buffer")
+                public func bind_uniform_buffer(self: rendchain, ub: uniformbuffer)=> void;
+            
+            extern("libjoyecs", "wojeapi_rchain_clear_color_buffer")
+                public func clear_color_buffer(self: rendchain, attachment_index: int, color: (real, real, real, real))=> void;
+            
+            extern("libjoyecs", "wojeapi_rchain_clear_depth_buffer")
+                public func clear_depth_buffer(self: rendchain, depth: real)=> void;
+            
+            extern("libjoyecs", "wojeapi_rchain_allocate_texture_group")
+                public func allocate_texture_group(self: rendchain)=> texture_group;
+            
+            extern("libjoyecs", "wojeapi_rchain_bind_texture")
+                public func bind_texture(self: rendchain, tg: texture_group, binding_pass: int, tex: texture)=> void;
+            
+            extern("libjoyecs", "wojeapi_rchain_draw")
+                public func draw(self: rendchain, shad: shader, vert: vertex, tg: option<texture_group>)=> rend_action;
+            
+            extern("libjoyecs", "wojeapi_rchain_commit")
+                public func commit(self: rendchain, ctx: glcontext)=> void;
+            
+            extern("libjoyecs", "wojeapi_rchain_get_target_framebuf")
+                public func get_target_framebuf(self: rendchain)=> option<handle>;
+        }
+        
+        public using texture_group = handle;
+        
+        public using rend_action = handle;
+        namespace rend_action
+        {
+            extern("libjoyecs", "wojeapi_rchain_set_uniform_buffer")
+                public func set_uniform_buffer(self: rend_action, ub: uniformbuffer)=> void;
+            
+            extern("libjoyecs", "wojeapi_rchain_set_uniform_int")
+                func _set_uniform_int(act: rend_action, shad: shader, name: string, val: int)=> void;
+            extern("libjoyecs", "wojeapi_rchain_set_uniform_int2")
+                func _set_uniform_int2(act: rend_action, shad: shader, name: string, x: int, y: int)=> void;
+            extern("libjoyecs", "wojeapi_rchain_set_uniform_int3")
+                func _set_uniform_int3(act: rend_action, shad: shader, name: string, x: int, y: int, z: int)=> void;
+            extern("libjoyecs", "wojeapi_rchain_set_uniform_int4")
+                func _set_uniform_int4(act: rend_action, shad: shader, name: string, x: int, y: int, z: int, w: int)=> void;
+            
+            extern("libjoyecs", "wojeapi_rchain_set_uniform_float")
+                func _set_uniform_float(act: rend_action, shad: shader, name: string, val: real)=> void;
+            extern("libjoyecs", "wojeapi_rchain_set_uniform_float2")
+                func _set_uniform_float2(act: rend_action, shad: shader, name: string, x: real, y: real)=> void;
+            extern("libjoyecs", "wojeapi_rchain_set_uniform_float3")
+                func _set_uniform_float3(act: rend_action, shad: shader, name: string, x: real, y: real, z: real)=> void;
+            extern("libjoyecs", "wojeapi_rchain_set_uniform_float4")
+                func _set_uniform_float4(act: rend_action, shad: shader, name: string, x: real, y: real, z: real, w: real)=> void;
+            
+            extern("libjoyecs", "wojeapi_rchain_set_uniform_float2x2")
+                func _set_uniform_float2x2(act: rend_action, shad: shader, name: string, 
+                    m0: real, m1: real, m2: real, m3: real)=> void;
+            extern("libjoyecs", "wojeapi_rchain_set_uniform_float3x3")
+                func _set_uniform_float3x3(act: rend_action, shad: shader, name: string, 
+                    m0: real, m1: real, m2: real, m3: real, m4: real, m5: real, m6: real, m7: real, m8: real)=> void;
+            extern("libjoyecs", "wojeapi_rchain_set_uniform_float4x4")
+                func _set_uniform_float4x4(act: rend_action, shad: shader, name: string, 
+                    m0: real, m1: real, m2: real, m3: real, 
+                    m4: real, m5: real, m6: real, m7: real, 
+                    m8: real, m9: real, m10: real, m11: real, 
+                    m12: real, m13: real, m14: real, m15: real)=> void;
+            
+            public func set_uniform<T>(self: rend_action, shad: shader, name: string, val: T)
+                where val is int
+                || val is (int, int)
+                || val is (int, int, int)
+                || val is (int, int, int, int)
+                || val is real
+                || val is (real, real)
+                || val is (real, real, real)
+                || val is (real, real, real, real);
+            {
+                if (val is int)
+                    _set_uniform_int(self, shad, name, val);
+                else if (val is (int, int))
+                    _set_uniform_int2(self, shad, name, val...);
+                else if (val is (int, int, int))
+                    _set_uniform_int3(self, shad, name, val...);
+                else if (val is (int, int, int, int))
+                    _set_uniform_int4(self, shad, name, val...);
+                else if (val is real)
+                    _set_uniform_float(self, shad, name, val);
+                else if (val is (real, real))
+                    _set_uniform_float2(self, shad, name, val...);
+                else if (val is (real, real, real))
+                    _set_uniform_float3(self, shad, name, val...);
+                else if (val is (real, real, real, real))
+                    _set_uniform_float4(self, shad, name, val...);
+                else
+                    std::panic("Here should not been exec.");
+            }
+            
+            public func set_uniform_mat4x4(self: rend_action, shad: shader, name: string, val: (real, real, real, real, real, real, real, real, real, real, real, real, real, real, real, real))
+            {
+                _set_uniform_float4x4(self, shad, name, val...);
+            }
+            
+            public func set_uniform_mat3x3(self: rend_action, shad: shader, name: string, val: (real, real, real, real, real, real, real, real, real))
+            {
+                _set_uniform_float3x3(self, shad, name, val...);
+            }
+            
+            public func set_uniform_mat2x2(self: rend_action, shad: shader, name: string, val: (real, real, real, real))
+            {
+                _set_uniform_float2x2(self, shad, name, val...);
+            }
+        }
+        
+        public using glcontext = handle;
+        
+        public using graphic_uhost = handle;
+        namespace graphic_uhost
+        {
+            extern("libjoyecs", "wojeapi_uhost_get_or_create_for_universe")
+                public func get_or_create(u: universe)=> graphic_uhost;
+            
+            extern("libjoyecs", "wojeapi_uhost_get_context")
+                public func get_context(self: graphic_uhost)=> glcontext;
+            
+            extern("libjoyecs", "wojeapi_uhost_set_skip_behavior")
+                public func set_skip_behavior(self: graphic_uhost, skip_all_draw: bool)=> void;
+            
+            extern("libjoyecs", "wojeapi_uhost_alloc_branch")
+                public func alloc_branch(self: graphic_uhost)=> rendchain_branch;
+            
+            extern("libjoyecs", "wojeapi_uhost_free_branch")
+                public func free_branch(self: graphic_uhost, br: rendchain_branch)=> void;
+        }
+        
+        public using rendchain_branch = handle;
+        namespace rendchain_branch
+        {
+            extern("libjoyecs", "wojeapi_branch_new_frame")
+                public func new_frame(self: rendchain_branch, priority: int)=> void;
+            
+            extern("libjoyecs", "wojeapi_branch_new_chain")
+                public func new_chain(self: rendchain_branch, fb: option<framebuffer>, x: int, y: int, w: int, h: int)=> rendchain;
         }
     }
 }
