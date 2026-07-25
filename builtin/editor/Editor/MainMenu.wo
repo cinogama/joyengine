@@ -1,6 +1,7 @@
 import builtin::editor::GUI::Menu;
 
 import Browser;
+import WorldEditorViewport;
 
 namespace JEEditor::Editor::MainMenu
 {
@@ -26,7 +27,7 @@ namespace JEEditor::Editor::MainMenu
             ->      endItem
             ->  endMenu
             -> subMenu("编辑")
-            ->  subItem("新建世界", \= do nil;)
+            ->  subItem("新建世界", WorldEditorViewport::createNewWorldToEdit)
             ->      endItem
             ->  endMenu
             -> subMenu("工具")

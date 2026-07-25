@@ -1,5 +1,6 @@
 import woo::std;
 
+import je;
 import je::ecs;
 import je::graphic;
 import je::gui;
@@ -15,8 +16,7 @@ import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Menu;
 import builtin::editor::GUI::Icons;
 import builtin::editor::GUI::Drag;
-import builtin::editor::GUI::Forms::InputBox;
-import builtin::editor::GUI::Forms::AskBox;
+import builtin::editor::GUI::Forms::MsgBox;
 
 import builtin::editor::Inspector::World;
 import builtin::editor::Inspector::Universe;
@@ -37,28 +37,42 @@ using JEEditor::GUI::Icons;
 namespace JEEditor::Editor
 {
     using WorldEditorViewport = struct{
+        m_close: mut bool,
+        
         m_world_instance: world,
         
         // World context:
         m_name: string,
         
         m_runtime_systems: vec<typeinfo>,
-        m_saving_path: mut option<path_t>,
+        m_saving_path: option<path_t>,
     }
     {
         let s_world_viewports = {}mut: map<world, WorldEditorViewport>;
         
-        public func create(w: world, name: string)=> WorldEditorViewport
+        func create(w: world, name: string, path: option<path_t>)=> WorldEditorViewport
             where require!(WorldEditorViewport: IWindows);
         {
             // 注意：按照设计，WorldEditorViewport 的生命周期应当比 world 实例更长
             //      因此，世界实例的释放将由 WorldEditorViewport 在 onClose 时执行
             return WorldEditorViewport{
+                m_close = mut false,
                 m_world_instance = w,
                 m_name = name,
                 m_runtime_systems = []mut,
-                m_saving_path = mut option::none,
+                m_saving_path = path,
             };
+        }
+        
+        func isCurrentViewportAvailable(self: WorldEditorViewport)
+        {
+            match (s_world_viewports->get(self.m_world_instance))
+            {
+                none?;
+                value(wv)?
+                    return std::is_same(wv, self);
+            }
+            return false;
         }
         
         public func onCreate(self: WorldEditorViewport)=> void
@@ -67,12 +81,17 @@ namespace JEEditor::Editor
         }
         public func onClose(self: WorldEditorViewport)=> void
         {
-            do s_world_viewports->remove(self.m_world_instance);
-            self.m_world_instance->close;
+            if (self->isCurrentViewportAvailable)
+            {
+                do s_world_viewports->remove(self.m_world_instance);
+                self.m_world_instance->close;
+            }
         }
         public func getTitle(self: WorldEditorViewport)=> string
         {
-            return F"世界视口：{self.m_name}";
+            let saving_path = self.m_saving_path->> \p = p->to_string;;
+            
+            return F"世界视口：{self.m_name}##{saving_path->or(":<unsaved>")}";
         }
         public func getMenu(_: WorldEditorViewport)=> option<Menu>
         {
@@ -82,12 +101,12 @@ namespace JEEditor::Editor
         }
         public func getSizeConstraints(_: WorldEditorViewport)=> SizeConstraints
         {
-            return SizeConstraints::Limited(((320., 240.), (300., 4096.)));
+            return SizeConstraints::Limited(((320., 240.), (4096., 4096.)));
         }
         
-        public func run(_: WorldEditorViewport)=> bool
+        public func run(self: WorldEditorViewport)=> bool
         {
-            return true;
+            return !self.m_close;
         }
         
         // ==========================
@@ -106,12 +125,53 @@ namespace JEEditor::Editor
         {
             return self.m_saving_path;
         }
-
+        
+        public func dropAndRename(self: WorldEditorViewport, new_name: string)
+        {
+            if (self->isCurrentViewportAvailable)
+            {
+                match (Windows::show(create(self.m_world_instance, new_name, self.m_saving_path)))
+                {
+                    none?
+                    {
+                        GUI::Forms::MsgBox::err(
+                            "重命名失败", "重命名世界失败，存在同名的未保存世界");
+                            
+                        if (!self.m_saving_path->is_none)
+                            // 这种情况通常情况下不应该发生
+                            logerr("Failed to rename world: duplicated opened world?");
+                    }
+                    value(_)?
+                        self.m_close = true;
+                }
+            }
+        }
+        
         // ==========================
-
+        
         public func findWorldEditorViewport(w: world)
         {
             return s_world_viewports->get(w);
+        }
+        
+        public func createNewWorldToEdit()
+        {
+            let new_world = world::create(
+                Inspector::Universe::UniverseCtx::instance()->getUniverse());
+                
+            for (let mut i = 0;; i += 1)
+            {
+                match (Windows::show(
+                        create(
+                            new_world,
+                            i == 0 ? "New world" | F"New world {i + 1}",
+                            option::none)))
+                {
+                    none?;
+                    value(_)?
+                        break;
+                }
+            }
         }
     }
 }
