@@ -437,8 +437,7 @@ namespace UserInterface
     namespace Origin
     {
         extern("libjoyecs", "wojeapi_towoo_userinterface_origin_layout")
-            public func get_layout(self: Origin, display_range: vec2)=> (vec2, vec2, vec2);
-            
+            public func get_layout(self: Origin, display_range: vec2)=> (vec2, vec2, vec2);   
         extern("libjoyecs", "wojeapi_towoo_userinterface_origin_mouse_on")
             public func mouse_on(self: Origin, display_range: vec2, angle: real, mouse_pos: vec2)=> bool;
     }
@@ -473,7 +472,6 @@ namespace Renderer
         ;
         extern("libjoyecs", "wojeapi_towoo_renderer_shaders_set_shaders")
             public func set_shaders(self: Shaders, shaders: array<je::graphic::shader>)=> void;
-            
         extern("libjoyecs", "wojeapi_towoo_renderer_shaders_get_shaders")
             public func get_shaders(self: Shaders)=> array<je::graphic::shader>;
     }
@@ -483,23 +481,32 @@ namespace Physics2D
     namespace Rigidbody
     {
         using Id = handle;
-
+        
         extern("libjoyecs", "wojeapi_towoo_physics2d_rigidbody_get_body_id")
             public func get_id(self: Rigidbody)=> option<Id>;
     }
-
+    
     namespace CollisionResult
     {
         // `position` is the world-space contact point; `normalize` is the
         // direction from self to the other body. Both come straight from
         // Box2D's manifold data.
         using collide_result = struct{position: vec2, normalize: vec2};
-
+        
         extern("libjoyecs", "wojeapi_towoo_physics2d_collisionresult_all")
             public func all(self: CollisionResult)=> dict<Rigidbody::Id, collide_result>;
-
         extern("libjoyecs", "wojeapi_towoo_physics2d_collisionresult_check")
             public func check(self: CollisionResult, another: Rigidbody)=> option<collide_result>;
+    }
+}
+namespace Camera
+{
+    namespace RendToFramebuffer
+    {
+        extern("libjoyecs", "wojeapi_towoo_camera_rendtoframebuffer_get")
+            public func get(self: RendToFramebuffer)=> option<je::graphic::framebuffer>;
+       extern("libjoyecs", "wojeapi_towoo_camera_rendtoframebuffer_set")
+            public func set(self: RendToFramebuffer, framebuf: option<je::graphic::framebuffer>)=> void;
     }
 }
 namespace Animation
@@ -508,10 +515,8 @@ namespace Animation
     {
         extern("libjoyecs", "wojeapi_towoo_animation_frameanimation_active_animation")
             public func active_action(self: FrameAnimation, animation_id: int, name: string, loop: bool)=> void;
-            
         extern("libjoyecs", "wojeapi_towoo_animation_frameanimation_stop_animation")
             public func stop_action(self: FrameAnimation, animation_id: int)=> void;
-            
         extern("libjoyecs", "wojeapi_towoo_animation_frameanimation_is_playing")
             public func is_playing(self: FrameAnimation, animation_id: int)=> bool;
     }

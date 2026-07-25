@@ -1753,3 +1753,47 @@ WOORT_API woort_api wojeapi_towoo_userinterface_origin_mouse_on(void)
 
     return woort_ret_bool(origin.mouse_on(r.x, r.y, a, m));
 }
+
+// ==========================================================================
+// Camera::RendToFramebuffer
+// ==========================================================================
+
+WOORT_API woort_api wojeapi_towoo_camera_rendtoframebuffer_get(void)
+{
+    auto& rendToFramebuffer =
+        wo_component<jeecs::Camera::RendToFramebuffer>(0, WOORT_RETURN_SLOT);
+
+    if (rendToFramebuffer.framebuffer.has_value())
+    {
+        return woort_ret_option_gchandle(
+            new jeecs::basic::resource<jeecs::graphic::framebuffer>(
+                rendToFramebuffer.framebuffer.value()),
+            WOORT_IGNORE,
+            [](void* p)
+            {
+                delete static_cast<
+                    jeecs::basic::resource<jeecs::graphic::framebuffer>*>(p);
+            },
+            nullptr);
+    }
+    return woort_ret_option_none();
+}
+
+WOORT_API woort_api wojeapi_towoo_camera_rendtoframebuffer_set(void)
+{
+    auto& rendToFramebuffer =
+        wo_component<jeecs::Camera::RendToFramebuffer>(0, WOORT_RETURN_SLOT);
+
+    if (woort_option_get(WOORT_RETURN_SLOT, 1))
+    {
+        rendToFramebuffer.framebuffer.emplace(
+            *static_cast<jeecs::basic::resource<jeecs::graphic::framebuffer>*>(
+                woort_gcpointer(WOORT_RETURN_SLOT)));
+    }
+    else
+    {
+        rendToFramebuffer.framebuffer.reset();
+    }
+
+    return woort_ret_void();
+}
