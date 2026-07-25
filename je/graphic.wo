@@ -167,5 +167,28 @@ namespace je
                     std::panic("Here should not been exec.");
             }
         }
+        
+        public using framebuffer = gchandle
+        {
+            public enum color_format
+            {
+                MONO = 1,
+                RGBA = 4,
+                FLOAT16 = 16,
+            }
+
+            extern("libjoyecs", "wojeapi_framebuffer_create")
+                public func create(
+                    width: int,
+                    height: int,
+                    color_attachment_formats: array<int>,
+                    contain_depth_attachment: bool)=> option<framebuffer>;
+
+            extern("libjoyecs", "wojeapi_framebuffer_get_attachment")
+                public func attachment(self: framebuffer, index: int)=> option<texture>;
+
+            extern("libjoyecs", "wojeapi_framebuffer_get_size")
+                public func size(self: framebuffer)=> (int, int);
+        }
     }
 }

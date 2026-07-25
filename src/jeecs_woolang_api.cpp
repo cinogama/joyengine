@@ -2149,6 +2149,79 @@ WOORT_API woort_api wojeapi_texture_path(void)
     return woort_ret_option_none();
 }
 
+///////////////////////////////////////////////////////////////
+WOORT_API woort_api wojeapi_framebuffer_create(void)
+{
+    const size_t reso_w = (size_t)woort_int(0);
+    const size_t reso_h = (size_t)woort_int(1);
+    const woort_value formats_arr = 2;
+    const bool contain_depth = woort_bool(3);
+
+    const size_t fmt_count = woort_vec_len(formats_arr);
+    std::vector<jegl_texture::format> formats(fmt_count);
+
+    for (size_t i = 0; i < fmt_count; ++i)
+    {
+        (void)woort_vec_get(WOORT_RETURN_SLOT, formats_arr, i);
+        formats[i] = (jegl_texture::format)woort_unbox_int(WOORT_RETURN_SLOT);
+    }
+
+    std::optional<jeecs::basic::resource<jeecs::graphic::framebuffer>> loaded_framebuffer;
+
+    woort_vm* const last = woort_vm_swap(nullptr);
+    {
+        loaded_framebuffer = jeecs::graphic::framebuffer::create(
+            reso_w, reso_h, formats, contain_depth);
+    }
+    (void)woort_vm_swap(last);
+
+    if (loaded_framebuffer.has_value())
+        return woort_ret_option_gchandle(
+            new jeecs::basic::resource<jeecs::graphic::framebuffer>(loaded_framebuffer.value()),
+            WOORT_IGNORE,
+            [](void* ptr)
+            {
+                delete (jeecs::basic::resource<jeecs::graphic::framebuffer> *)ptr;
+            },
+            nullptr);
+
+    return woort_ret_option_none();
+}
+
+WOORT_API woort_api wojeapi_framebuffer_get_attachment(void)
+{
+    auto* loaded_framebuffer =
+        (jeecs::basic::resource<jeecs::graphic::framebuffer> *)woort_gcpointer(0);
+
+    auto attachment = (*loaded_framebuffer)->get_attachment((size_t)woort_int(1));
+
+    if (attachment.has_value())
+        return woort_ret_option_gchandle(
+            new jeecs::basic::resource<jeecs::graphic::texture>(attachment.value()),
+            WOORT_IGNORE,
+            [](void* ptr)
+            {
+                delete (jeecs::basic::resource<jeecs::graphic::texture> *)ptr;
+            },
+            nullptr);
+
+    return woort_ret_option_none();
+}
+
+WOORT_API woort_api wojeapi_framebuffer_get_size(void)
+{
+    auto* loaded_framebuffer =
+        (jeecs::basic::resource<jeecs::graphic::framebuffer> *)woort_gcpointer(0);
+    auto sz = loaded_framebuffer->get()->size();
+
+    woort_set_struct(WOORT_RETURN_SLOT, 2);
+
+    woort_struct_set_int(WOORT_RETURN_SLOT, 0, (woort_Int)sz.x);
+    woort_struct_set_int(WOORT_RETURN_SLOT, 1, (woort_Int)sz.y);
+
+    return woort_ret();
+}
+
 WOORT_API woort_api wojeapi_get_entity_arch_information(void)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
