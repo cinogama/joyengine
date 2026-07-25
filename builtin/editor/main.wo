@@ -18,6 +18,7 @@ import Editor::Browser;
 import Editor::EntityList;
 import Editor::LogBrowser;
 import Editor::MainMenu;
+import Editor::Inspector;
 
 import Inspector::Universe;
 
@@ -45,6 +46,7 @@ func main()
     do Browser::showBrowser();
     do EntityList::showEntityList();
     do LogBrowser::showLogBrowser();
+    do Inspector::showInspector();
 }
 
 main();

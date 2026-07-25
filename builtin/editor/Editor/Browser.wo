@@ -172,7 +172,7 @@ namespace JEEditor::Editor
                 m_list_files = mut childFiles(root),
             };
         }
-        public func close(self: Browser)
+        func close(self: Browser)
         {
             self.m_close = true;
         }

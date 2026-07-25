@@ -22,20 +22,20 @@ namespace JEEditor::Editor
     using LogBrowser = struct{
         m_close: mut bool,
         m_hook: mut handle,
-
+        
         // 本地累积的日志缓冲（getlogs 每次只返回增量）
         m_logs: vec<(internal::loglevel, string)>,
-
+        
         // 等级过滤开关
         m_show_normal: mut bool,
         m_show_info: mut bool,
         m_show_warning: mut bool,
         m_show_error: mut bool,
         m_show_fatal: mut bool,
-
+        
         // 文本过滤
         m_filter: mut string,
-
+        
         // 滚动与计数
         m_auto_scroll: mut bool,
         m_last_count: mut int,    // 上一帧缓冲长度，用于检测新日志到达
@@ -43,7 +43,7 @@ namespace JEEditor::Editor
     {
         // 缓冲上限：超过则只保留最近的 MAX_LOGS 条，避免无界增长
         let MAX_LOGS = 10000;
-
+        
         let mut s_logbrowser_singleton = option::none: option<LogBrowser>;
         public func isLogBrowserExist()
         {
@@ -62,7 +62,7 @@ namespace JEEditor::Editor
                     inst->close();
             }
         }
-
+        
         public func create()=> LogBrowser
             where require!(LogBrowser: IWindows);
         {
@@ -80,8 +80,8 @@ namespace JEEditor::Editor
                 m_last_count = mut 0,
             };
         }
-
-        public func close(self: LogBrowser)
+        
+        func close(self: LogBrowser)
         {
             self.m_close = true;
         }
@@ -103,18 +103,18 @@ namespace JEEditor::Editor
             internal::unhooklog(self.m_hook);
             s_logbrowser_singleton = option::none;
         }
-
+        
         // 排空 getlogs() 的增量日志到本地缓冲，并在超限时裁剪
         func drainLogs(self: LogBrowser)=> void
         {
             for (let entry : internal::getlogs())
                 self.m_logs->add(entry);
-
+                
             let cur = self.m_logs->len;
             if (cur > MAX_LOGS)
                 self.m_logs->copy_from(self.m_logs->sub(cur - MAX_LOGS));
         }
-
+        
         func levelShown(self: LogBrowser, lvl: internal::loglevel)=> bool
         {
             if (lvl == internal::loglevel::NORMAL)
@@ -127,7 +127,7 @@ namespace JEEditor::Editor
                 return self.m_show_error;
             return self.m_show_fatal;
         }
-
+        
         func levelName(lvl: internal::loglevel)=> string
         {
             if (lvl == internal::loglevel::NORMAL)
@@ -140,7 +140,7 @@ namespace JEEditor::Editor
                 return "ERROR";
             return "FATAL";
         }
-
+        
         func levelColor(lvl: internal::loglevel)=> Color32RGBA
         {
             if (lvl == internal::loglevel::NORMAL)
@@ -153,14 +153,14 @@ namespace JEEditor::Editor
                 return (240, 110, 110, 255);
             return (255, 70, 70, 255);
         }
-
+        
         func matchesFilter(self: LogBrowser, msg: string)=> bool
         {
             if (self.m_filter->len == 0)
                 return true;
             return msg->lower->find(self.m_filter->lower)->is_value;
         }
-
+        
         // 统计满足过滤条件的日志数量: (总数, 可见数)
         func countVisible(self: LogBrowser)=> (int, int)
         {
@@ -174,7 +174,7 @@ namespace JEEditor::Editor
             }
             return (total, shown);
         }
-
+        
         func copyVisible(self: LogBrowser)=> void
         {
             let mut buf = "";
@@ -185,24 +185,24 @@ namespace JEEditor::Editor
             }
             SetClipboardText(buf);
         }
-
+        
         public func run(self: LogBrowser)=> bool
         {
             self->drainLogs();
             let (total, shown) = self->countVisible();
-
+            
             self->drawToolbar(total, shown);
             Separator();
-
+            
             let avail = GetContentRegionAvail();
             let list_flags = WindowsAttribute::ImGuiWindowFlags_HorizontalScrollbar;
             if (BeginChildSizeFlags("##LogList", avail.0, avail.1, list_flags))
                 self->drawLogs();
             EndChild();
-
+            
             return !self.m_close;
         }
-
+        
         func drawToolbar(self: LogBrowser, total: int, shown: int)=> void
         {
             if (Button("清除"))
@@ -217,11 +217,11 @@ namespace JEEditor::Editor
                 value(v)?
                     self.m_auto_scroll = v;
             }
-
+            
             SameLine();
             Separator();
             SameLine();
-
+            
             match (CheckBox("正常##lb_n", self.m_show_normal))
             {
                 none?;
@@ -256,7 +256,7 @@ namespace JEEditor::Editor
                 value(v)?
                     self.m_show_fatal = v;
             }
-
+            
             SameLine();
             Separator();
             SameLine();
@@ -270,16 +270,16 @@ namespace JEEditor::Editor
                     self.m_filter = s;
             }
             PopItemWidth();
-
+            
             SameLine();
             TextDisabled(F"共 {total} 条 / 显示 {shown} 条");
         }
-
+        
         func drawLogs(self: LogBrowser)=> void
         {
             PushTextWrapPos(0.);
             defer PopTextWrapPos();
-
+            
             let mut drew_any = false;
             for (let (lvl, msg) : self.m_logs)
             {
@@ -291,24 +291,25 @@ namespace JEEditor::Editor
                         F"[{levelName(lvl)}] {msg}");
                 }
             }
-
+            
             if (!drew_any)
                 TextDisabled("(没有日志)");
-
+                
             // 自动滚动：当有新日志到达时，将视图钉在底部
             let cur_count = self.m_logs->len;
             if (self.m_auto_scroll && cur_count != self.m_last_count && drew_any)
                 SetScrollHereY(1.);
             self.m_last_count = cur_count;
-
+            
             // 右键上下文菜单
             if (BeginPopupContextWindow())
             {
+                defer EndPopup();
+
                 if (MenuItem("复制全部可见日志"))
                     self->copyVisible();
                 if (MenuItem("清除"))
                     self.m_logs->clear();
-                EndPopup();
             }
         }
     }

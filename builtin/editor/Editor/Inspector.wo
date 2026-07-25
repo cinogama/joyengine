@@ -1,0 +1,58 @@
+import woo::std;
+
+import pkg::interface;
+
+import builtin::editor::GUI::Windows;
+
+using JEEditor::GUI::Windows;
+
+namespace JEEditor::Editor
+{
+    using Inspector = struct{
+        m_close: mut bool,
+    }
+    {
+        let mut s_inspector_singleton = option::none: option<Inspector>;
+        public func isInspector()
+        {
+            return s_inspector_singleton->is_value;
+        }
+        public func showInspector()
+        {
+            do show(create());
+        }
+        public func closeInspector()
+        {
+            match (s_inspector_singleton)
+            {
+                none?;
+                value(inst)?
+                    inst->close();
+            }
+        }
+
+        func create()=> Inspector
+            where require!(Inspector: IWindows);
+        {
+            return Inspector{
+                m_close = mut false,
+            };
+        }
+        func close(self: Inspector)=> void
+        {
+            self.m_close = true;
+        }
+        public func getTitle(_: Inspector)=> string
+        {
+            return "检视";
+        }
+        public func getSizeConstraints(_: Inspector)=> SizeConstraints
+        {
+            return SizeConstraints::Limited(((300., 200.), (600., 4096.)));
+        }
+        public func run(self: Inspector)=> bool
+        {
+            return !self.m_close;
+        }
+    }
+}

@@ -51,7 +51,7 @@ namespace JEEditor::Editor
                 m_close = mut false,
             };
         }
-        public func close(self: EntityList)
+        func close(self: EntityList)
         {
             self.m_close = true;
         }
