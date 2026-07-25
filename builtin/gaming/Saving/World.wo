@@ -2,6 +2,7 @@ import woo::std;
 
 import pkg::toml;
 import pkg::worst;
+import pkg::iterator;
 
 import je;
 import je::ecs;
@@ -13,6 +14,7 @@ import Entity;
 using std;
 using je;
 using toml;
+using iterator;
 
 namespace JEGaming::Saving::World
 {
@@ -29,16 +31,43 @@ namespace JEGaming::Saving::World
                 ;
             ;
         sort_in_place(entities_dat, \(ida, _), (idb, _) = ida < idb;);
-
+        
         world_dat->set("entities", from(entities_dat->> \(_, edat) = edat;));
-        world_dat->set("systems", from(w->internal::get_all_systems->>\tinfo = tinfo->name;));
-
+        world_dat->set("systems", from(
+                w->internal::get_all_systems->iter
+                    |> map(\tinfo = tinfo->name;)
+                    |> filter(\tname = !tname->begin_with("Editor::");)
+                    ));
+                    
         return world_dat;
     }
     public func restore(u: universe, wdat: Toml)=> world
     {
         let w = world::create(u);
-
+        
+        // Restore systems.
+        let systems_dat =
+            wdat->get("systems")
+                =>> \v = v->as_array;->or([])
+                -> connect(
+                    wdat->get("running_systems")
+                        =>> \v = v->as_array;->or([]));
+                        
+        for (let sdat : systems_dat)
+        {
+            match (sdat->as_string=>> \tname = typeinfo::load(tname);)
+            {
+                none?;
+                value(systype)?
+                    do w->add_system(systype);
+            }
+        }
+        
+        // Restore entities.
+        let entities_dat = wdat->get("entities")=>> \v = v->as_array;->or([]);
+        for (let edat : entities_dat)
+            do Entity::restore(w, edat);
+            
         return w;
     }
 }

@@ -5,6 +5,7 @@ import je::ecs;
 import pkg::fsys;
 
 import Universe;
+import builtin::editor::Editor::WorldEditorViewport;
 
 using je;
 using fsys;
@@ -29,32 +30,4 @@ namespace JEEditor::Inspector::World
         }
     }
     /* ---------------------------------------------------------- */
-    public func get_entities(w: world)=> array<entity>
-    {
-        return w->get_all_entities([]);
-    }
-    public func get_attached_systems(w: world)=> array<typeinfo>
-    {
-        return w->get_all_systems();
-    }
-    public func get_runtime_systems(w: world)=> array<typeinfo>
-    {
-        return Universe::UniverseCtx::instance()->world_ctx(w)
-            .m_runtime_systems->to_array;
-    }
-    public func get_name(w: world)=> string
-    {
-        return Universe::UniverseCtx::instance()->world_ctx(w)
-            .m_name;
-    }
-    public func set_name(w: world, name: string)
-    {
-        return Universe::UniverseCtx::instance()->world_ctx(w)
-            .m_name = name;
-    }
-    public func close(w: world)
-    {
-        Universe::UniverseCtx::instance()->close_world_ctx(w);
-        w->close();
-    }
 }

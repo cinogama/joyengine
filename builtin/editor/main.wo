@@ -15,90 +15,32 @@ import GUI::Forms::MsgBox;
 import GUI::Forms::AskBox;
 
 import Editor::Browser;
+import Editor::MainMenu;
+
+import Inspector::Universe;
 
 using std;
 using je;
 
-namespace JEEditor
-{
-    using Environment = struct{
-        m_universe: universe,
-    }
-    {
-        public func create()=> Environment
-        {
-            let u = universe::create();
-            je::internal::init_graphic_pipeline_for_editor(u);
-            
-            return Environment{
-                m_universe = u,
-            };
-        }
-        public func wait(self: Environment)
-        {
-            self.m_universe->wait;
-        }
-    }
-    
-    using DemoWindows = struct{}
-    {
-        import je::gui;
-        using je::gui;
-        
-        public func create()=> DemoWindows
-            where require!(DemoWindows: GUI::Windows::IWindows);
-        {
-            return DemoWindows{};
-        }
-        
-        public func getAttrib(_: DemoWindows)=> WindowsAttribute
-        {
-            return WindowsAttribute::ImGuiWindowFlags_None;
-        }
-        public func getTitle(_: DemoWindows)=> string
-        {
-            return "Example";
-        }
-        public func getMenu(_: DemoWindows)=> option<GUI::Menu>
-        {
-            return option::value <|
-                GUI::Menu::create("")
-                    ->subMenu("Demo1")
-                    ->  subItem("Option1", \=do nil;)->endItem
-                    ->  subItem("Option2", \=do nil;)->endItem
-                    ->endMenu
-                    ->subMenu("Demo2")
-                    ->  subItem("Option1", \=do nil;)->endItem
-                    ->  subItem("Option2", \=do nil;)->endItem
-                    ->  separator
-                    ->  subItem("Option3", \=do nil;)->endItem
-                    ->endMenu
-                    ;
-        }
-        
-        public func run(_: DemoWindows)=> bool
-        {
-            Text("Helloworld~");
-            
-            return true;
-        }
-    }
-}
+using JEEditor;
+using JEEditor::Editor;
+using JEEditor::GUI::Windows;
 
 func main()
 {
-    // 生成内置脚本引导
-    towoo::update_api();
-
     // 编辑器脚本退出之前清掉所有单例实例
     defer singleton::unsafe::reset_all_singleton();
-    
+        
     // 创建一个 Universe，之后编辑器将在这上面运行
-    let e = JEEditor::Environment::create();
-    defer e->wait();
+    let u = Inspector::Universe::UniverseCtx::instance()->getUniverse();
+    defer u->wait();
+
+    // 编辑器，直接初始化图形处理流程。
+    je::internal::init_graphic_pipeline_for_editor(u);
+
+    JEEditor::Editor::MainMenu::registerMainMenu();
     
-    do JEEditor::GUI::Windows::show(JEEditor::DemoWindows::create());
-    do JEEditor::GUI::Windows::show(JEEditor::Editor::Browser::create());
+    do Browser::showBrowser();    
 }
 
 main();

@@ -1,0 +1,40 @@
+import builtin::editor::GUI::Menu;
+
+import Browser;
+
+namespace JEEditor::Editor::MainMenu
+{
+    using GUI;
+    
+    public func registerMainMenu()
+    {
+        let engineMainMenu = Menu::create("")
+            -> subMenu("JoyEngine")
+            ->  endMenu
+            -> subMenu("文件")
+            ->  endMenu
+            -> subMenu("视图")
+            ->  subItem("项目资源管理器",
+                func()
+                {
+                    if (Browser::isBrowserExist())
+                        Browser::closeBrowser();
+                    else
+                        Browser::showBrowser();
+                })
+            ->      checkWhen(Browser::isBrowserExist)
+            ->      endItem
+            ->  endMenu
+            -> subMenu("编辑")
+            ->  subItem("新建世界", \= do nil;)
+            ->      endItem
+            ->  endMenu
+            -> subMenu("工具")
+            ->  endMenu
+            -> subMenu("帮助")
+            ->  endMenu
+            ;
+            
+        Menu::registerMainMenu(engineMainMenu);
+    }
+}

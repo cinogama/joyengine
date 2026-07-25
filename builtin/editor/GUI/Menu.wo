@@ -141,7 +141,7 @@ namespace JEEditor::GUI
             if (BeginMenu(self.m_name))
             {
                 defer EndMenu();
-
+                
                 self->_showMenuItems();
             }
         }
@@ -150,9 +150,38 @@ namespace JEEditor::GUI
             if (BeginMenuBar())
             {
                 defer EndMenuBar();
-
+                
                 self->_showMenuItems();
             }
+        }
+        func showMainMenuBar(self: Menu)=> void
+        {
+            if (BeginMainMenuBar())
+            {
+                defer EndMainMenuBar();
+                
+                self->_showMenuItems();
+            }
+        }
+        
+        let mut s_main_menu_instance = option::none: option<Menu>;
+        public func registerMainMenu(menu: Menu)
+        {
+            if (s_main_menu_instance->is_none)
+            {
+                launch_coroutine(func(){
+                        for (;;)
+                        {
+                            match (s_main_menu_instance)
+                            {
+                                none?;
+                                value(main_menu)? main_menu->showMainMenuBar();
+                            }
+                            std::yield();
+                        }
+                    });
+            }
+            s_main_menu_instance = option::value(menu);
         }
     }
 }

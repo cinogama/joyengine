@@ -1,0 +1,117 @@
+import woo::std;
+
+import je::ecs;
+import je::graphic;
+import je::gui;
+import je::typeinfo;
+
+import pkg::fsys;
+import pkg::interface;
+import pkg::worst;
+import pkg::iterator;
+import pkg::try;
+
+import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Menu;
+import builtin::editor::GUI::Icons;
+import builtin::editor::GUI::Drag;
+import builtin::editor::GUI::Forms::InputBox;
+import builtin::editor::GUI::Forms::AskBox;
+
+import builtin::editor::Inspector::World;
+import builtin::editor::Inspector::Universe;
+
+using std;
+
+using je;
+using je::gui;
+using je::graphic;
+using fsys;
+
+using JEEditor::GUI;
+using JEEditor::GUI::Windows;
+using JEEditor::GUI::Drag;
+using JEEditor::GUI::Forms;
+using JEEditor::GUI::Icons;
+
+namespace JEEditor::Editor
+{
+    using WorldEditorViewport = struct{
+        m_world_instance: world,
+        
+        // World context:
+        m_name: string,
+        
+        m_runtime_systems: vec<typeinfo>,
+        m_saving_path: mut option<path_t>,
+    }
+    {
+        let s_world_viewports = {}mut: map<world, WorldEditorViewport>;
+        
+        public func create(w: world, name: string)=> WorldEditorViewport
+            where require!(WorldEditorViewport: IWindows);
+        {
+            // 注意：按照设计，WorldEditorViewport 的生命周期应当比 world 实例更长
+            //      因此，世界实例的释放将由 WorldEditorViewport 在 onClose 时执行
+            return WorldEditorViewport{
+                m_world_instance = w,
+                m_name = name,
+                m_runtime_systems = []mut,
+                m_saving_path = mut option::none,
+            };
+        }
+        
+        public func onCreate(self: WorldEditorViewport)=> void
+        {
+            s_world_viewports->set(self.m_world_instance, self);
+        }
+        public func onClose(self: WorldEditorViewport)=> void
+        {
+            do s_world_viewports->remove(self.m_world_instance);
+            self.m_world_instance->close;
+        }
+        public func getTitle(self: WorldEditorViewport)=> string
+        {
+            return F"世界视口：{self.m_name}";
+        }
+        public func getMenu(_: WorldEditorViewport)=> option<Menu>
+        {
+            return option::value <|
+                Menu::create("")
+                    ;
+        }
+        public func getSizeConstraints(_: WorldEditorViewport)=> SizeConstraints
+        {
+            return SizeConstraints::Limited(((320., 240.), (300., 4096.)));
+        }
+        
+        public func run(_: WorldEditorViewport)=> bool
+        {
+            return true;
+        }
+        
+        // ==========================
+        
+        public func getRuntimeSystems(self: WorldEditorViewport)=> array<typeinfo>
+        {
+            return self.m_runtime_systems->to_array();
+        }
+        
+        public func getName(self: WorldEditorViewport)=> string
+        {
+            return self.m_name;
+        }
+        
+        public func getSavingPath(self: WorldEditorViewport)=> option<path_t>
+        {
+            return self.m_saving_path;
+        }
+
+        // ==========================
+
+        public func findWorldEditorViewport(w: world)
+        {
+            return s_world_viewports->get(w);
+        }
+    }
+}

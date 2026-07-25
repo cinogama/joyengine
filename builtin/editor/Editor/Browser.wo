@@ -52,6 +52,8 @@ namespace JEEditor::Editor
     }
     
     using Browser = struct{
+        m_close: mut bool,
+
         m_root: fsys::path_t,
         m_current: mut fsys::path_t,
         m_selected: mut option<fsys::path_t>,
@@ -73,6 +75,25 @@ namespace JEEditor::Editor
         m_list_files: mut array<fsys::path_t>,
     }
     {
+        let mut s_browser_singleton = option::none: option<Browser>;
+        public func isBrowserExist()
+        {
+            return s_browser_singleton->is_value;
+        }
+        public func showBrowser()
+        {
+            do Windows::show(create());
+        }
+        public func closeBrowser()
+        {
+            match (s_browser_singleton)
+            {
+                none?;
+                value(browser_instance)?
+                    browser_instance->close();
+            }
+        }
+
         func childDirs(dir: fsys::path_t)=> array<fsys::path_t>
         {
             return walk(dir)
@@ -135,6 +156,8 @@ namespace JEEditor::Editor
         {
             let root = workpath();
             return Browser{
+                m_close = mut false,
+
                 m_root = root,
                 m_current = mut root,
                 m_selected = mut option::none,
@@ -149,7 +172,10 @@ namespace JEEditor::Editor
                 m_list_files = mut childFiles(root),
             };
         }
-        
+        public func close(self: Browser)
+        {
+            self.m_close = true;
+        }
         public func getTitle(_: Browser)=> string
         {
             return "项目资源管理器";
@@ -158,7 +184,14 @@ namespace JEEditor::Editor
         {
             return SizeConstraints::Limited(((600., 200.), (4096., 4096.)));
         }
-        
+        public func onCreate(self: Browser)=> void
+        {
+            s_browser_singleton = option::value(self);
+        }
+        public func onClose(_: Browser)=> void
+        {
+            s_browser_singleton = option::none;
+        }
         public func run(self: Browser)=> bool
         {
             self->processDirty();
@@ -185,7 +218,7 @@ namespace JEEditor::Editor
             }
             EndChild();
             
-            return true;
+            return !self.m_close;
         }
         
         func drawToolbar(self: Browser)=> void

@@ -49,11 +49,18 @@ namespace JEEditor::GUI::Windows
             do self;
             return option::none;
         }
-        
-        public func onClose(self)=> bool
+        public func onPreClose(self)=> bool
         {
             do self;
             return true;
+        }
+        public func onCreate(self)=> void
+        {
+            do self;
+        }
+        public func onClose(self)=> void
+        {
+            do self;
         }
         
         public func run(self)=> bool;
@@ -97,7 +104,7 @@ namespace JEEditor::GUI::Windows
             defer End();
             
             if (!open)
-                open = !i->onClose;
+                open = !i->onPreClose;
                 
             if (show)
             {
@@ -119,9 +126,13 @@ namespace JEEditor::GUI::Windows
                     open = false;
             }
             
-            if (!open && is_unique)
-                assert(s_unique_window_record->remove(title));
-                
+            if (!open)
+            {
+                i->onClose();
+                if (is_unique)
+                    assert(s_unique_window_record->remove(title));
+            }
+            
             return open;
         }
         func _show(i: IWindows, mut title: string, is_unique: bool)
@@ -139,6 +150,7 @@ namespace JEEditor::GUI::Windows
                     SetNextWindowPos(pos);
             }
             
+            i->onCreate();
             while (i->_engine_imgui_show_job(title, is_unique, menu_instance, shortcut_instance))
                 std::yield();
         }
