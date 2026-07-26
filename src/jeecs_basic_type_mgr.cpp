@@ -61,6 +61,7 @@ namespace jeecs_impl
             jeecs::typing::copy_construct_func_t _copy_constructor,
             jeecs::typing::move_construct_func_t _move_constructor) noexcept
         {
+            assert(_align != 0 && (_align & (_align - 1)) == 0);
             assert(_size != 0 && _size % _align == 0);
 
             jeecs::typing::type_info* const tinfo = new jeecs::typing::type_info{
@@ -133,6 +134,7 @@ namespace jeecs_impl
             jeecs::typing::copy_construct_func_t _copy_constructor,
             jeecs::typing::move_construct_func_t _move_constructor) noexcept
         {
+            assert(_align != 0 && (_align & (_align - 1)) == 0);
             assert(_size != 0 && _size % _align == 0);
 
             jeecs::typing::type_info* const tinfo = 
