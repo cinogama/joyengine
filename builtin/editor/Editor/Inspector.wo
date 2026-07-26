@@ -52,6 +52,8 @@ namespace JEEditor::Editor
         }
         public func run(self: Inspector)=> bool
         {
+            
+
             return !self.m_close;
         }
     }

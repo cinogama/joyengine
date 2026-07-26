@@ -387,8 +387,7 @@ namespace jeecs
 
         template <class R, class... Args>
         struct function_traits<R(*)(Args...)> : public function_traits<R(Args...)>
-        {
-        };
+        {};
 
         template <class R, class... Args>
         struct function_traits<R(Args...)>
@@ -430,13 +429,11 @@ namespace jeecs
 
         template <class F>
         struct function_traits<F&> : public function_traits<F>
-        {
-        };
+        {};
 
         template <class F>
         struct function_traits<F&&> : public function_traits<F>
-        {
-        };
+        {};
 
         template <size_t n, typename T, typename... Ts>
         struct _variadic_type_indexer
@@ -4946,8 +4943,7 @@ namespace jeecs
         public:
             singleton()
                 : m_instance(nullptr), m_ref_count(0)
-            {
-            }
+            {}
             ~singleton()
             {
                 assert(m_instance == nullptr);
@@ -5156,8 +5152,7 @@ namespace jeecs
 
         public:
             vector() noexcept
-            {
-            }
+            {}
             ~vector() noexcept
             {
                 clear();
@@ -5536,8 +5531,7 @@ namespace jeecs
             public:
                 basic_iterator(slot_ptr_t cur, slot_ptr_t end_slot) noexcept
                     : m_cur(cur), m_end_slot(end_slot)
-                {
-                }
+                {}
 
                 basic_iterator& operator++() noexcept
                 {
@@ -5787,13 +5781,11 @@ namespace jeecs
 
             string(const string& str) noexcept
                 : string(str.c_str())
-            {
-            }
+            {}
 
             string(const std::string& str) noexcept
                 : string(str.c_str())
-            {
-            }
+            {}
 
             string(string&& str) noexcept
                 : _c_str(str._c_str)
@@ -6165,12 +6157,10 @@ namespace jeecs
 
             optional() noexcept
                 : takeplace(0), has_constructed(false)
-            {
-            }
+            {}
             optional(const std::nullopt_t&) noexcept
                 : takeplace(0), has_constructed(false)
-            {
-            }
+            {}
             optional(const std::optional<T>& opt) noexcept
                 : has_constructed(opt.has_value())
             {
@@ -6774,8 +6764,7 @@ namespace jeecs
     public:
         game_world(void* ecs_world_addr)
             : _m_ecs_world_addr(ecs_world_addr)
-        {
-        }
+        {}
 
     private:
         friend class game_system;
@@ -6975,8 +6964,7 @@ namespace jeecs
             , m_archs({})
             , m_current_arch_version(0)
             , m_cached_arch_belongs_to_world_handle(nullptr)
-        {
-        }
+        {}
         dependence(dependence&& d)
             : m_requirements(std::move(d.m_requirements))
             , m_archs(std::move(d.m_archs))
@@ -7075,8 +7063,9 @@ namespace jeecs
                     typing::entity_id_in_chunk_t entity_id)
                 {
                     constexpr size_t cid = _const_type_index<ComponentT, ArgTs...>::index;
-                    auto* component_ptr = std::launder(static_cast<typename typing::origin_t<ComponentT> *>(
-                        get_component_from_archchunk_ptr(archinfo, chunkbuf, entity_id, cid)));
+                    auto* component_ptr =
+                        static_cast<typename typing::origin_t<ComponentT> *>(
+                            get_component_from_archchunk_ptr(archinfo, chunkbuf, entity_id, cid));
 
                     if (component_ptr != nullptr)
                     {
@@ -7307,8 +7296,7 @@ namespace jeecs
                 , m_chunk_currnet(nullptr)
                 , m_chunk_current_entity_meta(nullptr)
                 , m_chunk_entity_currnet_index(0)
-            {
-            }
+            {}
 
         private:
             void _move_to_valid_entity()
@@ -7360,8 +7348,7 @@ namespace jeecs
                 , m_chunk_currnet(nullptr)
                 , m_chunk_current_entity_meta(nullptr)
                 , m_chunk_entity_currnet_index(0)
-            {
-            }
+            {}
             explicit slice(const dependence* dependence)
             {
                 m_archs_current = dependence->m_archs.begin();
@@ -7402,14 +7389,12 @@ namespace jeecs
             }
             bool operator ==(const slice& pindex) const
             {
-                return m_archs_current == pindex.m_archs_current
-                    && m_chunk_currnet == pindex.m_chunk_currnet
+                return m_chunk_currnet == pindex.m_chunk_currnet
                     && m_chunk_entity_currnet_index == pindex.m_chunk_entity_currnet_index;
             }
             bool operator !=(const slice& pindex) const
             {
-                return m_archs_current != pindex.m_archs_current
-                    || m_chunk_currnet != pindex.m_chunk_currnet
+                return m_chunk_currnet != pindex.m_chunk_currnet
                     || m_chunk_entity_currnet_index != pindex.m_chunk_entity_currnet_index;
             }
             value_type operator*()
@@ -7431,7 +7416,7 @@ namespace jeecs
             void foreach_parallel(FT&& ft)
             {
                 ::jeecs::parallel_foreach(
-                    * this,
+                    *this,
                     end(),
                     ft);
             }
@@ -7442,8 +7427,7 @@ namespace jeecs
             explicit entity_slice(
                 const dependence::arch_chunks_info* _archs_end)
                 : slice(_archs_end)
-            {
-            }
+            {}
         public:
             typedef typename SliceView::entity_with_components value_type;
 
@@ -7454,8 +7438,7 @@ namespace jeecs
             entity_slice() = default;
             explicit entity_slice(const dependence* dependence)
                 : slice(dependence)
-            {
-            }
+            {}
 
             entity_slice operator ++()
             {
@@ -7490,7 +7473,7 @@ namespace jeecs
             void foreach_parallel(FT&& ft)
             {
                 ::jeecs::parallel_foreach(
-                    * this,
+                    *this,
                     end(),
                     ft);
             }
@@ -7523,8 +7506,7 @@ namespace jeecs
     public:
         game_universe(void* universe_addr)
             : _m_universe_addr(universe_addr)
-        {
-        }
+        {}
         inline void* handle() const noexcept
         {
             return _m_universe_addr;
@@ -7624,8 +7606,7 @@ namespace jeecs
     public:
         game_system(game_world world)
             : _m_game_world(world)
-        {
-        }
+        {}
 
         inline double deltatimed() const
         {
@@ -7878,33 +7859,26 @@ namespace jeecs
         {
             constexpr vec2(float _x = 0.f, float _y = 0.f) noexcept
                 : _basevec2(_x, _y)
-            {
-            }
+            {}
             constexpr vec2(const vec2& _v2) noexcept
                 : _basevec2(_v2.x, _v2.y)
-            {
-            }
+            {}
             constexpr vec2(vec2&& _v2) noexcept
                 : _basevec2(_v2.x, _v2.y)
-            {
-            }
+            {}
 
             constexpr vec2(const _basevec3& _v3) noexcept
                 : _basevec2(_v3.x, _v3.y)
-            {
-            }
+            {}
             constexpr vec2(_basevec3&& _v3) noexcept
                 : _basevec2(_v3.x, _v3.y)
-            {
-            }
+            {}
             constexpr vec2(const _basevec4& _v4) noexcept
                 : _basevec2(_v4.x, _v4.y)
-            {
-            }
+            {}
             constexpr vec2(_basevec4&& _v4) noexcept
                 : _basevec2(_v4.x, _v4.y)
-            {
-            }
+            {}
 
             // + - * / with another vec2
             inline constexpr vec2 operator+(const vec2& _v2) const noexcept
@@ -8046,17 +8020,14 @@ namespace jeecs
             int y;
             constexpr ivec2(int _x = 0, int _y = 0) noexcept
                 : x(_x), y(_y)
-            {
-            }
+            {}
             constexpr ivec2(const vec2& _v2) noexcept
                 : x((int)_v2.x), y((int)_v2.y)
-            {
-            }
+            {}
 
             constexpr ivec2(vec2&& _v2) noexcept
                 : x((int)_v2.x), y((int)_v2.y)
-            {
-            }
+            {}
 
             // + - * / with another vec2
             inline constexpr ivec2 operator+(const ivec2& _v2) const noexcept
@@ -8176,33 +8147,26 @@ namespace jeecs
         {
             constexpr vec3(float _x = 0.f, float _y = 0.f, float _z = 0.f) noexcept
                 : _basevec3(_x, _y, _z)
-            {
-            }
+            {}
             constexpr vec3(const vec3& _v3) noexcept
                 : _basevec3(_v3.x, _v3.y, _v3.z)
-            {
-            }
+            {}
             constexpr vec3(vec3&& _v3) noexcept
                 : _basevec3(_v3.x, _v3.y, _v3.z)
-            {
-            }
+            {}
 
             constexpr vec3(const _basevec2& _v2) noexcept
                 : _basevec3(_v2.x, _v2.y, 0.f)
-            {
-            }
+            {}
             constexpr vec3(_basevec2&& _v2) noexcept
                 : _basevec3(_v2.x, _v2.y, 0.f)
-            {
-            }
+            {}
             constexpr vec3(const _basevec4& _v4) noexcept
                 : _basevec3(_v4.x, _v4.y, _v4.z)
-            {
-            }
+            {}
             constexpr vec3(_basevec4&& _v4) noexcept
                 : _basevec3(_v4.x, _v4.y, _v4.z)
-            {
-            }
+            {}
 
             // + - * / with another vec3
             inline constexpr vec3 operator+(const vec3& _v3) const noexcept
@@ -8358,33 +8322,26 @@ namespace jeecs
         {
             constexpr vec4(float _x = 0.f, float _y = 0.f, float _z = 0.f, float _w = 0.f) noexcept
                 : _basevec4(_x, _y, _z, _w)
-            {
-            }
+            {}
             constexpr vec4(const vec4& _v4) noexcept
                 : _basevec4(_v4.x, _v4.y, _v4.z, _v4.w)
-            {
-            }
+            {}
             constexpr vec4(vec4&& _v4) noexcept
                 : _basevec4(_v4.x, _v4.y, _v4.z, _v4.w)
-            {
-            }
+            {}
 
             constexpr vec4(const _basevec2& _v2) noexcept
                 : _basevec4(_v2.x, _v2.y, 0.f, 0.f)
-            {
-            }
+            {}
             constexpr vec4(_basevec2&& _v2) noexcept
                 : _basevec4(_v2.x, _v2.y, 0.f, 0.f)
-            {
-            }
+            {}
             constexpr vec4(const _basevec3& _v3) noexcept
                 : _basevec4(_v3.x, _v3.y, _v3.z, 0.f)
-            {
-            }
+            {}
             constexpr vec4(_basevec3&& _v3) noexcept
                 : _basevec4(_v3.x, _v3.y, _v3.z, 0.f)
-            {
-            }
+            {}
 
             // + - * / with another vec4
             inline constexpr vec4 operator+(const vec4& _v4) const noexcept
@@ -8561,8 +8518,7 @@ namespace jeecs
 
             constexpr quat() noexcept
                 : x(0.f), y(0.f), z(0.f), w(1.f)
-            {
-            }
+            {}
 
             quat(float yaw, float pitch, float roll) noexcept
             {
@@ -8946,8 +8902,7 @@ namespace jeecs
         {
             explicit texture(jegl_texture* res)
                 : resource_basic(res)
-            {
-            }
+            {}
 
         public:
             static std::optional<basic::resource<texture>> load(jegl_context* context, const std::string& str)
@@ -9399,8 +9354,7 @@ namespace jeecs
         {
             explicit vertex(jegl_vertex* res)
                 : resource_basic(res)
-            {
-            }
+            {}
 
         public:
             static std::optional<basic::resource<vertex>> load(
@@ -9437,8 +9391,7 @@ namespace jeecs
         {
             explicit framebuffer(jegl_frame_buffer* res)
                 : resource_basic(res)
-            {
-            }
+            {}
 
         public:
             static std::optional<basic::resource<framebuffer>> create(
@@ -9489,8 +9442,7 @@ namespace jeecs
         {
             explicit uniformbuffer(jegl_uniform_buffer* res)
                 : resource_basic(res)
-            {
-            }
+            {}
 
         public:
             static std::optional<basic::resource<uniformbuffer>> create(
@@ -9684,8 +9636,7 @@ namespace jeecs
         private:
             font(je_font* font_resource) noexcept
                 : m_font(font_resource)
-            {
-            }
+            {}
 
         public:
             static std::optional<basic::resource<font>> load(
@@ -9745,31 +9696,31 @@ namespace jeecs
 
                 // u32 -> utf8 conversion helper.
                 const auto u32_to_utf8 = [](std::u32string_view sv) -> std::string
-                {
-                    const size_t sz = woort_u32strn_to_str(sv.data(), sv.size(), nullptr, 0);
-                    std::string out;
-                    out.resize(sz);
-                    (void)woort_u32strn_to_str(sv.data(), sv.size(), out.data(), sz);
-                    return out;
-                };
+                    {
+                        const size_t sz = woort_u32strn_to_str(sv.data(), sv.size(), nullptr, 0);
+                        std::string out;
+                        out.resize(sz);
+                        (void)woort_u32strn_to_str(sv.data(), sv.size(), out.data(), sz);
+                        return out;
+                    };
 
                 // Parse hex color ("RRGGBBAA"; shorter input zero-pads, matching
                 // the legacy strncpy-into-"00000000" behavior) into normalized RGBA.
                 // Bytes are unpacked in the same order the old code used.
                 const auto parse_hex_color = [&](std::u32string_view hex) -> math::vec4
-                {
-                    char buf[9] = "00000000";
-                    const auto u8hex = u32_to_utf8(hex);
-                    std::strncpy(buf, u8hex.c_str(), 8);
-                    const unsigned int packed = std::strtoul(buf, nullptr, 16);
-                    const auto* b = reinterpret_cast<const unsigned char*>(&packed);
-                    return math::vec4{
-                        b[3] / 255.0f, // R
-                        b[2] / 255.0f, // G
-                        b[1] / 255.0f, // B
-                        b[0] / 255.0f  // A
+                    {
+                        char buf[9] = "00000000";
+                        const auto u8hex = u32_to_utf8(hex);
+                        std::strncpy(buf, u8hex.c_str(), 8);
+                        const unsigned int packed = std::strtoul(buf, nullptr, 16);
+                        const auto* b = reinterpret_cast<const unsigned char*>(&packed);
+                        return math::vec4{
+                            b[3] / 255.0f, // R
+                            b[2] / 255.0f, // G
+                            b[1] / 255.0f, // B
+                            b[0] / 255.0f  // A
+                        };
                     };
-                };
 
                 // Alpha-over compositing of a glyph pixel onto the destination.
                 // A fully-transparent destination reads back as white (1,1,1) for
@@ -9779,18 +9730,18 @@ namespace jeecs
                     const math::vec4& dst,
                     const math::vec4& src,
                     const math::vec4& tint) -> math::vec4
-                {
-                    const float src_a = src.w * tint.w;
-                    const float inv_a = 1.0f - src_a;
-                    const float dst_r = dst.w ? dst.x : 1.0f;
-                    const float dst_g = dst.w ? dst.y : 1.0f;
-                    const float dst_b = dst.w ? dst.z : 1.0f;
-                    return math::vec4(
-                        tint.x * src.x * src_a + dst_r * inv_a,
-                        tint.y * src.y * src_a + dst_g * inv_a,
-                        tint.z * src.z * src_a + dst_b * inv_a,
-                        src_a + dst.w * inv_a);
-                };
+                    {
+                        const float src_a = src.w * tint.w;
+                        const float inv_a = 1.0f - src_a;
+                        const float dst_r = dst.w ? dst.x : 1.0f;
+                        const float dst_g = dst.w ? dst.y : 1.0f;
+                        const float dst_b = dst.w ? dst.z : 1.0f;
+                        return math::vec4(
+                            tint.x * src.x * src_a + dst_r * inv_a,
+                            tint.y * src.y * src_a + dst_g * inv_a,
+                            tint.z * src.z * src_a + dst_b * inv_a,
+                            src_a + dst.w * inv_a);
+                    };
 
                 // Cached scaled-font pool shared by both passes.
                 using font_key_t = std::pair<std::string, size_t>;
@@ -9800,72 +9751,72 @@ namespace jeecs
                 // events. Grouped so a single reset() restores the default state.
                 struct
                 {
-                    float      scale  = 1.0f;
-                    math::vec4 color  = math::vec4{ 1, 1, 1, 1 };
+                    float      scale = 1.0f;
+                    math::vec4 color = math::vec4{ 1, 1, 1, 1 };
                     math::vec2 offset = math::vec2{ 0, 0 };
-                    font*      current = nullptr;
+                    font* current = nullptr;
                 } style;
                 style.current = &font_base;
 
                 const auto reset_style = [&]() noexcept
-                {
-                    style.scale   = 1.0f;
-                    style.color   = math::vec4{ 1, 1, 1, 1 };
-                    style.offset  = math::vec2{ 0, 0 };
-                    style.current = &font_base;
-                };
+                    {
+                        style.scale = 1.0f;
+                        style.color = math::vec4{ 1, 1, 1, 1 };
+                        style.offset = math::vec2{ 0, 0 };
+                        style.current = &font_base;
+                    };
 
                 // Single source of truth for attribute application — shared by the
                 // measure and raster passes so their state cannot drift apart.
                 const auto apply_attr = [&](std::u32string_view field, std::u32string_view value)
-                {
-                    const auto u8value = u32_to_utf8(value);
-
-                    if (field == U"scale")
                     {
-                        style.scale = std::stof(u8value);
-                        if (style.scale == 1.0f)
-                        {
-                            style.current = &font_base;
-                            return;
-                        }
-                        const auto key = std::make_pair(
-                            std::string(base_font_resource->m_path),
-                            static_cast<size_t>(std::round(
-                                style.scale * base_font_resource->m_scale_x)));
+                        const auto u8value = u32_to_utf8(value);
 
-                        auto found = font_pool.find(key);
-                        if (found == font_pool.end())
+                        if (field == U"scale")
                         {
-                            auto loaded = font::load(
-                                key.first,
-                                key.second,
-                                base_font_resource->m_board_size_x,
-                                base_font_resource->m_updater);
-
-                            if (!loaded.has_value())
+                            style.scale = std::stof(u8value);
+                            if (style.scale == 1.0f)
                             {
-                                debug::logerr(
-                                    "Failed to open font: '%s'.",
-                                    base_font_resource->m_path);
                                 style.current = &font_base;
                                 return;
                             }
-                            found = font_pool.emplace(key, std::move(*loaded)).first;
+                            const auto key = std::make_pair(
+                                std::string(base_font_resource->m_path),
+                                static_cast<size_t>(std::round(
+                                    style.scale * base_font_resource->m_scale_x)));
+
+                            auto found = font_pool.find(key);
+                            if (found == font_pool.end())
+                            {
+                                auto loaded = font::load(
+                                    key.first,
+                                    key.second,
+                                    base_font_resource->m_board_size_x,
+                                    base_font_resource->m_updater);
+
+                                if (!loaded.has_value())
+                                {
+                                    debug::logerr(
+                                        "Failed to open font: '%s'.",
+                                        base_font_resource->m_path);
+                                    style.current = &font_base;
+                                    return;
+                                }
+                                found = font_pool.emplace(key, std::move(*loaded)).first;
+                            }
+                            style.current = found->second.get();
                         }
-                        style.current = found->second.get();
-                    }
-                    else if (field == U"color")
-                    {
-                        style.color = parse_hex_color(value);
-                    }
-                    else if (field == U"offset")
-                    {
-                        math::vec2 delta = math::vec2{ 0, 0 };
-                        (void)std::sscanf(u8value.c_str(), "(%f,%f)", &delta.x, &delta.y);
-                        style.offset = style.offset + delta;
-                    }
-                };
+                        else if (field == U"color")
+                        {
+                            style.color = parse_hex_color(value);
+                        }
+                        else if (field == U"offset")
+                        {
+                            math::vec2 delta = math::vec2{ 0, 0 };
+                            (void)std::sscanf(u8value.c_str(), "(%f,%f)", &delta.x, &delta.y);
+                            style.offset = style.offset + delta;
+                        }
+                    };
 
                 // Markup scanner. Supports {field:value} attribute spans and a
                 // backslash escape: '\' makes the next character literal (so '\{'
@@ -9873,53 +9824,53 @@ namespace jeecs
                 const auto walk_text = [&text](
                     const std::function<void(std::u32string_view, std::u32string_view)>& on_attr,
                     const std::function<void(char32_t)>& on_char)
-                {
-                    const auto end = text.cend();
-                    for (auto it = text.cbegin(); it != end; ++it)
                     {
-                        const char32_t ch = *it;
-
-                        if (ch == U'\\')
+                        const auto end = text.cend();
+                        for (auto it = text.cbegin(); it != end; ++it)
                         {
-                            if (++it; it != end)
-                                on_char(*it);
-                            continue;
-                        }
-                        if (ch == U'{')
-                        {
-                            bool in_field = true;
-                            std::u32string field;
-                            std::u32string value;
+                            const char32_t ch = *it;
 
-                            for (++it; it != end; ++it)
+                            if (ch == U'\\')
                             {
-                                const char32_t c = *it;
-                                if (c == U':')
-                                    in_field = false;
-                                else if (c == U'}')
-                                {
-                                    on_attr(field, value);
-                                    break;
-                                }
-                                else if (in_field)
-                                    field += c;
-                                else
-                                    value += c;
+                                if (++it; it != end)
+                                    on_char(*it);
+                                continue;
                             }
-                            continue;
+                            if (ch == U'{')
+                            {
+                                bool in_field = true;
+                                std::u32string field;
+                                std::u32string value;
+
+                                for (++it; it != end; ++it)
+                                {
+                                    const char32_t c = *it;
+                                    if (c == U':')
+                                        in_field = false;
+                                    else if (c == U'}')
+                                    {
+                                        on_attr(field, value);
+                                        break;
+                                    }
+                                    else if (in_field)
+                                        field += c;
+                                    else
+                                        value += c;
+                                }
+                                continue;
+                            }
+                            on_char(ch);
                         }
-                        on_char(ch);
-                    }
-                };
+                    };
 
                 // Pixel offset contributed by the current text offset, in text-space
                 // units (note: y uses m_scale_x too, preserved from the original).
                 const auto offset_dx = [&]() noexcept {
                     return static_cast<int>(style.offset.x * base_font_resource->m_scale_x);
-                };
+                    };
                 const auto offset_dy = [&]() noexcept {
                     return static_cast<int>(style.offset.y * base_font_resource->m_scale_x);
-                };
+                    };
 
                 int next_ch_x = 0;
                 int next_ch_y = 0;
@@ -10057,8 +10008,7 @@ namespace jeecs
                 : game_system(w)
                 , _m_graphic_host(jegl_uhost_get_or_create_for_universe(w.get_universe().handle(), config))
                 , _m_this_frame_allocate_rchain_pipeline_count(0)
-            {
-            }
+            {}
             ~BasePipelineInterface()
             {
                 OnDisable();
@@ -10868,8 +10818,7 @@ namespace jeecs
 
                 texture_with_passid(size_t pass, const basic::resource<graphic::texture>& tex)
                     : m_pass_id(pass), m_texture(tex)
-                {
-                }
+                {}
             };
             math::vec2 tiling = math::vec2(1.f, 1.f);
             math::vec2 offset = math::vec2(0.f, 0.f);
@@ -11366,8 +11315,7 @@ namespace jeecs
 
                 light_shape()
                     : m_point_count(0)
-                {
-                }
+                {}
 
                 static const char* JEScriptTypeName()
                 {
@@ -11507,8 +11455,7 @@ namespace jeecs
             ShadowBuffer() = default;
             ShadowBuffer(const ShadowBuffer& another)
                 : resolution_ratio(another.resolution_ratio)
-            {
-            }
+            {}
             ShadowBuffer(ShadowBuffer&&) = default;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
@@ -12121,8 +12068,7 @@ namespace jeecs
             Source() noexcept
                 : source(audio::source::create()), pitch(1.0f), volume(1.0f)
 
-            {
-            }
+            {}
             Source(const Source& another) noexcept
                 : Source()
             {
@@ -12135,8 +12081,7 @@ namespace jeecs
                 , pitch(another.pitch)
                 , volume(another.volume)
                 , last_position(another.last_position)
-            {
-            }
+            {}
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
@@ -12184,8 +12129,7 @@ namespace jeecs
                 , buffer(another.buffer)
                 , play(another.play)
                 , loop(another.loop)
-            {
-            }
+            {}
             Playing(Playing&&) = default;
 
             void set_buffer(const basic::resource<audio::buffer>& buf)
@@ -12236,8 +12180,7 @@ namespace jeecs
                     another.left_stick_up_left_down_right[1],
                     another.left_stick_up_left_down_right[2],
                     another.left_stick_up_left_down_right[3] }
-            {
-            }
+            {}
             VirtualGamepad(VirtualGamepad&& another)
                 : gamepad(another.gamepad)
                 , keymap(std::move(another.keymap))
@@ -12275,8 +12218,7 @@ namespace jeecs
 
             ray(const vec3& _orgin, const vec3& _direction) : orgin(_orgin),
                 direction(_direction)
-            {
-            }
+            {}
             ray(const Transform::Translation& camera_trans, const Camera::Projection& camera_proj, const vec2& screen_pos, bool ortho)
             {
                 // 根据摄像机和屏幕坐标创建射线
@@ -12317,8 +12259,7 @@ namespace jeecs
                 intersect_result(bool rslt, float dist = INFINITY, const vec3& plce = vec3(0, 0, 0)) : intersected(rslt),
                     place(plce),
                     distance(dist)
-                {
-                }
+                {}
             };
 
             intersect_result intersect_triangle(const vec3& v0, const vec3& v1, const vec3& v2) const
@@ -12988,8 +12929,7 @@ namespace jeecs
         public:
             gamepad(je_io_gamepad_handle_t gamepad_handle)
                 : m_gamepad_handle(gamepad_handle)
-            {
-            }
+            {}
             gamepad(const gamepad&) = default;
             gamepad(gamepad&&) = default;
             gamepad& operator=(const gamepad&) = default;
