@@ -227,7 +227,7 @@ namespace jeecs_impl
             inline void move_component_from(jeecs::typing::entity_id_in_chunk_t eid, jeecs::typing::typeid_t tid, void* from_component) const
             {
                 const arch_type_info& arch_typeinfo = _m_arch_typeinfo_mapping->at(tid);
-                void* component_addr = get_component_addr(eid, arch_typeinfo.m_typeinfo->m_chunk_size, arch_typeinfo.m_begin_offset_in_chunk);
+                void* component_addr = get_component_addr(eid, arch_typeinfo.m_typeinfo->m_size, arch_typeinfo.m_begin_offset_in_chunk);
                 arch_typeinfo.m_typeinfo->move(component_addr, from_component);
                 arch_typeinfo.m_typeinfo->destruct(from_component);
             }
@@ -265,13 +265,13 @@ namespace jeecs_impl
                     return nullptr;
                 const arch_type_info& arch_typeinfo = fnd->second;
                 return get_component_addr(
-                    eid, arch_typeinfo.m_typeinfo->m_chunk_size, arch_typeinfo.m_begin_offset_in_chunk);
+                    eid, arch_typeinfo.m_typeinfo->m_size, arch_typeinfo.m_begin_offset_in_chunk);
             }
             inline void destruct_component_addr_with_typeid(jeecs::typing::entity_id_in_chunk_t eid, jeecs::typing::typeid_t tid) const noexcept
             {
                 const arch_type_info& arch_typeinfo = _m_arch_typeinfo_mapping->at(tid);
                 auto* component_addr = get_component_addr(
-                    eid, arch_typeinfo.m_typeinfo->m_chunk_size, arch_typeinfo.m_begin_offset_in_chunk);
+                    eid, arch_typeinfo.m_typeinfo->m_size, arch_typeinfo.m_begin_offset_in_chunk);
 
                 arch_typeinfo.m_typeinfo->destruct(component_addr);
             }
@@ -460,7 +460,7 @@ namespace jeecs_impl
                     component_reserved_gap += gap_size;
 
                 last_align = typeinfo->m_align;
-                entity_size += typeinfo->m_chunk_size;
+                entity_size += typeinfo->m_size;
             }
             const_cast<size_t&>(_m_entity_size) = entity_size;
 
@@ -478,7 +478,7 @@ namespace jeecs_impl
                 const_cast<archtypes_map&>(_m_arch_typeinfo_mapping)[typeinfo->m_id] =
                     arch_type_info{ typeinfo, mem_offset };
 
-                mem_offset += typeinfo->m_chunk_size * _m_entity_count_per_chunk;
+                mem_offset += typeinfo->m_size * _m_entity_count_per_chunk;
             }
         }
         ~arch_type()
@@ -578,10 +578,10 @@ namespace jeecs_impl
                                     for (auto& arch_typeinfo : _m_arch_typeinfo_mapping)
                                     {
                                         void* moving_component_addr = pick_chunk->get_component_addr(i,
-                                            arch_typeinfo.second.m_typeinfo->m_chunk_size,
+                                            arch_typeinfo.second.m_typeinfo->m_size,
                                             arch_typeinfo.second.m_begin_offset_in_chunk);
                                         void* new_component_addr = target_chunk->get_component_addr(new_entity_id,
-                                            arch_typeinfo.second.m_typeinfo->m_chunk_size,
+                                            arch_typeinfo.second.m_typeinfo->m_size,
                                             arch_typeinfo.second.m_begin_offset_in_chunk);
 
                                         arch_typeinfo.second.m_typeinfo->move(new_component_addr, moving_component_addr);
@@ -717,7 +717,7 @@ namespace jeecs_impl
             for (auto& arch_typeinfo : _m_arch_typeinfo_mapping)
             {
                 void* component_addr = chunk->get_component_addr(entity_id,
-                    arch_typeinfo.second.m_typeinfo->m_chunk_size,
+                    arch_typeinfo.second.m_typeinfo->m_size,
                     arch_typeinfo.second.m_begin_offset_in_chunk);
 
                 if (prefab == nullptr)
@@ -780,7 +780,8 @@ namespace jeecs_impl
                     out_arch_info->m_component_infos.emplace_back(
                         jeecs::dependence::arch_chunks_info::component_info{
                             arch_typeinfo->m_begin_offset_in_chunk,
-                            arch_typeinfo->m_typeinfo->m_chunk_size });
+                            arch_typeinfo->m_typeinfo->m_size
+                        });
                 }
                 else
                 {
@@ -811,8 +812,7 @@ namespace jeecs_impl
 
     public:
         arch_manager(ecs_world* world) : _m_world(world)
-        {
-        }
+        {}
         ~arch_manager()
         {
             for (auto& [types, archtype] : _m_arch_types_mapping)
@@ -1134,8 +1134,7 @@ namespace jeecs_impl
     public:
         command_buffer(ecs_world* world)
             : _m_world(world), _m_world_command_buffer(nullptr)
-        {
-        }
+        {}
         ~command_buffer()
         {
             assert(_m_entity_command_buffers.empty() && _m_world_command_buffer == nullptr);

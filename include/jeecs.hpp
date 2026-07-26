@@ -6592,7 +6592,6 @@ namespace jeecs
             const char* m_typename; // will be free by je_typing_unregister
             size_t m_size;
             size_t m_align;
-            size_t m_chunk_size; // calc by je_typing_register
             typehash_t m_hash;
 
             construct_func_t m_constructor;
@@ -7100,13 +7099,15 @@ namespace jeecs
                         if (info.m_component_offset_of_unit == 0)
                             return nullptr;
                     }
+
                     // CONTAINS 路径无分支：arch 保证 offset_of_unit > 0
+                    assert(sizeof(ComponentT) == info.m_component_offset_of_unit);
 
                     auto* component_ptr = static_cast<typename typing::origin_t<ComponentT>*>(
                         static_cast<void*>(
                             static_cast<char*>(chunkbuf)
                             + info.m_component_offset_in_chunk
-                            + info.m_component_offset_of_unit * entity_id));
+                            + sizeof(ComponentT) * entity_id));
 
                     if constexpr (std::is_reference_v<ComponentT>)
                         return *component_ptr;

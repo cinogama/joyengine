@@ -813,9 +813,11 @@ import je::towoo::types;
             member_defs.push_back(_member_info{
                 member_name, member_wooval_type, member_typeinfo, component_size });
 
-            component_size += member_typeinfo->m_chunk_size;
+            component_size += member_typeinfo->m_size;
             component_align = std::max(component_align, member_typeinfo->m_align);
         }
+        // Update size by align.
+        component_size = jeecs::basic::allign_size(component_size, component_align);
 
         return { member_defs, { component_size, component_align } };
     }
@@ -931,8 +933,10 @@ void je_towoo_update_api()
     // typeinfo lookup fails because the dependency isn't yet loaded.
     const auto all_registed_types = _gather_all_registed_types();
 
-    const std::string woolang_parsing_type_decl = _generate_type_decl(all_registed_types);
-    const std::string woolang_component_type_decl = _generate_component_decl(all_registed_types);
+    const std::string woolang_parsing_type_decl = 
+        _generate_type_decl(all_registed_types);
+    const std::string woolang_component_type_decl = 
+        _generate_component_decl(all_registed_types);
 
     if (!woort_vfs_create(
         "je/towoo/types.wo",
