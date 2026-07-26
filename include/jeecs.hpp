@@ -45,6 +45,7 @@
 #include <initializer_list>
 #include <optional>
 #include <tuple>
+#include <array>
 #include <concepts>
 
 #include <execution>
@@ -455,6 +456,34 @@ namespace jeecs
         */
         template <size_t n, typename... Ts>
         using index_types_t = typename _variadic_type_indexer<n, Ts...>::type;
+
+        /*
+        jeecs::typing::pack_index_v<Target, Ts...> [编译期常量]
+        在类型序列 Ts... 中查找 Target 首次出现的位置；若未找到则为 SIZE_MAX。
+        替代旧的 _const_type_index 递归实现，编译期展开更友好。
+        */
+        namespace _detail
+        {
+            template <typename Target, size_t I, typename... Ts>
+            struct _pack_index_helper;
+
+            template <typename Target, size_t I, typename First, typename... Rest>
+            struct _pack_index_helper<Target, I, First, Rest...>
+            {
+                static constexpr size_t value =
+                    std::is_same_v<Target, First>
+                    ? I
+                    : _pack_index_helper<Target, I + 1, Rest...>::value;
+            };
+
+            template <typename Target, size_t I>
+            struct _pack_index_helper<Target, I>
+            {
+                static constexpr size_t value = SIZE_MAX;
+            };
+        }
+        template <typename Target, typename... Ts>
+        inline constexpr size_t pack_index_v = _detail::_pack_index_helper<Target, 0, Ts...>::value;
 
         class type_unregister_guard;
     }
@@ -7021,68 +7050,71 @@ namespace jeecs
         {
             struct view_base
             {
-            private:
-                template <typename ComponentT, typename... ArgTs>
-                struct _const_type_index
-                {
-                    using f_t = typing::function_traits<void(ArgTs...)>;
-                    template <size_t id = 0>
-                    static constexpr size_t _index()
-                    {
-                        if constexpr (std::is_same_v<
-                            typename f_t::template argument<id>::type, ComponentT>)
-                            return id;
-                        else
-                            return _index<id + 1>();
-                    }
-                    static constexpr size_t index = _index();
-                };
+                using component_info = dependence::arch_chunks_info::component_info;
+
             public:
-                inline static void* get_component_from_archchunk_ptr(
+                // 运行时按 cid 取组件，供脚本绑定等无法在编译期决定类型的场景使用。
+                // 形参 archinfo 仅用于读取 component_info；若调用方已缓存 component_info，
+                // 请直接调用 get_component_by_cached_info。
+                inline static void* get_component_by_index(
                     const dependence::arch_chunks_info* archinfo,
                     void* chunkbuf,
                     typing::entity_id_in_chunk_t entity_id,
                     size_t cid)
                 {
                     assert(cid < archinfo->m_component_infos.size());
-
-                    const auto& component_info = archinfo->m_component_infos.at(cid);
-
-                    if (component_info.m_component_offset_of_unit != 0)
-                    {
-                        size_t offset = component_info.m_component_offset_in_chunk + component_info.m_component_offset_of_unit * entity_id;
-                        return static_cast<char*>(chunkbuf) + offset;
-                    }
-                    else
-                        return nullptr;
+                    return get_component_by_cached_info(
+                        &archinfo->m_component_infos.at(cid), chunkbuf, entity_id);
                 }
-                template <typename ComponentT, typename... ArgTs>
-                inline static ComponentT get_component_from_archchunk(
-                    const dependence::arch_chunks_info* archinfo,
+                // 接收预缓存的单个 component_info，避免重复查 arch_chunks_info::m_component_infos。
+                inline static void* get_component_by_cached_info(
+                    const component_info* info,
                     void* chunkbuf,
                     typing::entity_id_in_chunk_t entity_id)
                 {
-                    constexpr size_t cid = _const_type_index<ComponentT, ArgTs...>::index;
-                    auto* component_ptr =
-                        static_cast<typename typing::origin_t<ComponentT> *>(
-                            get_component_from_archchunk_ptr(archinfo, chunkbuf, entity_id, cid));
-
-                    if (component_ptr != nullptr)
+                    if (info->m_component_offset_of_unit != 0)
                     {
-                        if constexpr (std::is_reference_v<ComponentT>)
-                            return *component_ptr;
-                        else
-                        {
-                            static_assert(std::is_pointer_v<ComponentT>);
-                            return component_ptr;
-                        }
+                        size_t offset = info->m_component_offset_in_chunk
+                            + info->m_component_offset_of_unit * entity_id;
+                        return static_cast<char*>(chunkbuf) + offset;
                     }
+                    return nullptr;
+                }
+                // 编译期版本：cid 由 pack_index_v 在编译期决定；
+                //cached_infos 应为调用方预缓存的 component_info 数组（按 view 的 Components... 顺序）。
+                // 对于 CONTAINS（引用）类型走无分支路径；
+                // 对于 MAYNOT（指针）类型保留 nullptr 检查。
+                template <typename ComponentT, typename... ArgTs>
+                inline static ComponentT get_component_from_archchunk(
+                    const component_info* cached_infos,
+                    void* chunkbuf,
+                    typing::entity_id_in_chunk_t entity_id)
+                {
+                    constexpr size_t cid = typing::pack_index_v<ComponentT, ArgTs...>;
+                    static_assert(cid != SIZE_MAX, "ComponentT must be one of ArgTs...");
+                    const auto& info = cached_infos[cid];
+
+                    if constexpr (std::is_pointer_v<ComponentT>)
+                    {
+                        // MAYNOT：offset_of_unit == 0 表示此 arch 不含该可选组件
+                        if (info.m_component_offset_of_unit == 0)
+                            return nullptr;
+                    }
+                    // CONTAINS 路径无分支：arch 保证 offset_of_unit > 0
+
+                    auto* component_ptr = static_cast<typename typing::origin_t<ComponentT>*>(
+                        static_cast<void*>(
+                            static_cast<char*>(chunkbuf)
+                            + info.m_component_offset_in_chunk
+                            + info.m_component_offset_of_unit * entity_id));
 
                     if constexpr (std::is_reference_v<ComponentT>)
-                        // Only maynot/anyof canbe here. 'je_ecs_world_update_dependences_archinfo' may have some problem.
-                        abort();
+                        return *component_ptr;
                     else
-                        return nullptr; // Only maynot/anyof can be here, no need to cast the type;
+                    {
+                        static_assert(std::is_pointer_v<ComponentT>);
+                        return component_ptr;
+                    }
                 }
             protected:
                 template<typename T, typename ... Ts>
@@ -7145,25 +7177,28 @@ namespace jeecs
             }
 
             static components fetch_component_slice_from_chunk(
-                const dependence::arch_chunks_info* archinfo, void* chunkbuf, typing::entity_id_in_chunk_t entity_id)
+                const component_info* cached_infos,
+                void* chunkbuf,
+                typing::entity_id_in_chunk_t entity_id)
             {
-                return std::forward_as_tuple(
-                    get_component_from_archchunk<Components, Components...>(archinfo, chunkbuf, entity_id)...);
+                return components{
+                    get_component_from_archchunk<Components, Components...>(
+                        cached_infos, chunkbuf, entity_id)... };
             }
             static entity_with_components fetch_entity_and_component_slice_from_chunk(
-                const dependence::arch_chunks_info* archinfo,
+                const component_info* cached_infos,
                 void* chunkbuf,
                 typing::entity_id_in_chunk_t entity_id,
                 typing::version_t entity_version)
             {
-                return std::forward_as_tuple(
+                return entity_with_components{
                     game_entity{
                         chunkbuf,
                         entity_id,
                         entity_version,
                     },
                     get_component_from_archchunk<Components, Components...>(
-                        archinfo, chunkbuf, entity_id)...);
+                        cached_infos, chunkbuf, entity_id)... };
             }
         };
         template<typename ... Components>
@@ -7278,59 +7313,162 @@ namespace jeecs
         }
 
     public:
-        class slice
+        // CRTP 基类：封装 slice / entity_slice 共享的迭代逻辑与状态。
+        // 派生类只需提供 value_type、iterator typedefs、operator* 以及接受
+        // const dependence::arch_chunks_info* 的构造函数。
+        template <typename Derived>
+        class slice_base
         {
+        public:
+            static constexpr size_t _component_count =
+                std::tuple_size_v<typename SliceView::components>;
+
         protected:
             const dependence::arch_chunks_info* m_archs_current;
             const dependence::arch_chunks_info* m_archs_end;
 
-            void* m_chunk_currnet;
+            void* m_chunk_current;
             const jeecs::game_entity::meta* m_chunk_current_entity_meta;
-            typing::entity_id_in_chunk_t m_chunk_entity_currnet_index;
+            typing::entity_id_in_chunk_t m_chunk_entity_current_index;
+
+            // 预缓存本视图所需的 component_info（按 SliceView::Components... 顺序）。
+            // 在进入新 arch 时一次性刷新，避免每次解引用都走 arch_chunks_info::m_component_infos
+            // 的双重间接。
+            std::array<typename dependence::arch_chunks_info::component_info, _component_count> m_cached_infos{};
+
+            slice_base() = default;
 
             // For `end()` only.
-            explicit slice(
-                const dependence::arch_chunks_info* _archs_end)
+            explicit slice_base(const dependence::arch_chunks_info* _archs_end)
                 : m_archs_current(_archs_end)
                 , m_archs_end(_archs_end)
-                , m_chunk_currnet(nullptr)
+                , m_chunk_current(nullptr)
                 , m_chunk_current_entity_meta(nullptr)
-                , m_chunk_entity_currnet_index(0)
+                , m_chunk_entity_current_index(0)
             {}
 
-        private:
+            // 进入一个新 arch：刷新 chunk、meta、预缓存 component_info。
+            inline void _enter_current_arch()
+            {
+                m_chunk_current = je_arch_get_chunk(m_archs_current->m_arch);
+                assert(m_chunk_current != nullptr);
+                m_chunk_current_entity_meta = je_arch_entity_meta_addr_in_chunk(m_chunk_current);
+
+                const auto& src = m_archs_current->m_component_infos;
+                for (size_t i = 0; i < _component_count; ++i)
+                    m_cached_infos[i] = src[i];
+            }
+            // 在同一 arch 内切换 chunk：仅刷新 meta 指针。
+            inline void _enter_current_chunk()
+            {
+                m_chunk_current_entity_meta = je_arch_entity_meta_addr_in_chunk(m_chunk_current);
+            }
+
             void _move_to_valid_entity()
             {
                 for (;;)
                 {
-                    if (m_chunk_entity_currnet_index >= m_archs_current->m_entity_count)
+                    if (m_chunk_entity_current_index >= m_archs_current->m_entity_count)
                     {
                         // Move to next chunk.
-                        m_chunk_entity_currnet_index = 0;
-                        m_chunk_currnet = je_arch_next_chunk(m_chunk_currnet);
-                        if (m_chunk_currnet == nullptr)
+                        m_chunk_entity_current_index = 0;
+                        m_chunk_current = je_arch_next_chunk(m_chunk_current);
+                        if (m_chunk_current == nullptr)
                         {
                             // Move to next arch.
                             if (++m_archs_current == m_archs_end)
-                                // End! m_archs_current == m_archs_end && m_chunk_currnet == nullptr
+                                // End! m_archs_current == m_archs_end && m_chunk_current == nullptr
                                 break;
 
-                            m_chunk_currnet = je_arch_get_chunk(m_archs_current->m_arch);
-                            assert(m_chunk_currnet != nullptr);
+                            _enter_current_arch();
                         }
-
-                        // Update entity meta for new chunk.
-                        m_chunk_current_entity_meta = je_arch_entity_meta_addr_in_chunk(m_chunk_currnet);
+                        else
+                        {
+                            _enter_current_chunk();
+                        }
                     }
 
                     if (jeecs::game_entity::entity_stat::READY
-                        == m_chunk_current_entity_meta[m_chunk_entity_currnet_index].m_stat)
+                        == m_chunk_current_entity_meta[m_chunk_entity_current_index].m_stat)
                         break;
 
-                    ++m_chunk_entity_currnet_index;
+                    ++m_chunk_entity_current_index;
                 }
             }
 
+            // 由派生类的 dependence 构造函数调用，统一初始化路径。
+            void _init_from_dependence(const dependence* dep)
+            {
+                m_archs_current = dep->m_archs.begin();
+                m_archs_end = dep->m_archs.end();
+                m_chunk_entity_current_index = 0;
+
+                if (m_archs_current != m_archs_end)
+                {
+                    _enter_current_arch();
+                    _move_to_valid_entity();
+                }
+                else
+                {
+                    // NOTE: 没有枚举到任何 ArchType，直接置为 end 状态。
+                    m_chunk_current = nullptr;
+                    m_chunk_current_entity_meta = nullptr;
+                    m_chunk_entity_current_index = 0;
+                }
+            }
+
+        public:
+            Derived& operator ++()
+            {
+                ++m_chunk_entity_current_index;
+                _move_to_valid_entity();
+                return static_cast<Derived&>(*this);
+            }
+            Derived operator ++(int)
+            {
+                Derived current = static_cast<Derived&>(*this);
+                ++m_chunk_entity_current_index;
+                _move_to_valid_entity();
+                return current;
+            }
+            bool operator ==(const Derived& pindex) const
+            {
+                return m_chunk_current == pindex.m_chunk_current
+                    && m_chunk_entity_current_index == pindex.m_chunk_entity_current_index;
+            }
+            bool operator !=(const Derived& pindex) const
+            {
+                return m_chunk_current != pindex.m_chunk_current
+                    || m_chunk_entity_current_index != pindex.m_chunk_entity_current_index;
+            }
+
+            Derived begin()
+            {
+                return static_cast<Derived&>(*this);
+            }
+            Derived end() const
+            {
+                return Derived(m_archs_end);
+            }
+
+            // 注意：slice 是 forward_iterator，调用 std::for_each(par_unseq, ...)
+            // 时大多数标准库实现难以有效切分工作（无法随机访问）。
+            // 对规模较大的实体集合，请改用 collection::foreach_chunk 或
+            // collection::foreach_parallel_chunks，它们以 chunk 为粒度切分，
+            // 内层循环可由调用方写为紧凑 SOA 形式并获得真正并行加速。
+            template<typename FT>
+            void foreach_parallel(FT&& ft)
+            {
+                ::jeecs::parallel_foreach(
+                    static_cast<Derived&>(*this),
+                    end(),
+                    std::forward<FT>(ft));
+            }
+        };
+
+        class slice : public slice_base<slice>
+        {
+            using base_t = slice_base<slice>;
         public:
             typedef ptrdiff_t difference_type;
             typedef typename SliceView::components value_type;
@@ -7338,144 +7476,58 @@ namespace jeecs
             typedef void reference;
             typedef std::forward_iterator_tag iterator_category;
 
+            slice() = default;
             slice(const slice&) = default;
             slice(slice&&) = default;
-            slice& operator = (const slice&) = default;
-            slice& operator = (slice&&) = default;
-            slice()
-                : m_archs_current(nullptr)
-                , m_archs_end(nullptr)
-                , m_chunk_currnet(nullptr)
-                , m_chunk_current_entity_meta(nullptr)
-                , m_chunk_entity_currnet_index(0)
-            {}
-            explicit slice(const dependence* dependence)
+            slice& operator=(const slice&) = default;
+            slice& operator=(slice&&) = default;
+
+            explicit slice(const dependence::arch_chunks_info* _archs_end)
+                : base_t(_archs_end) {}
+            explicit slice(const dependence* dep)
             {
-                m_archs_current = dependence->m_archs.begin();
-                m_archs_end = dependence->m_archs.end();
-
-                if (m_archs_current != m_archs_end)
-                {
-                    m_chunk_currnet = je_arch_get_chunk(m_archs_current->m_arch);
-                    m_chunk_current_entity_meta = je_arch_entity_meta_addr_in_chunk(m_chunk_currnet);
-                    m_chunk_entity_currnet_index = 0;
-
-                    _move_to_valid_entity();
-                }
-                else
-                {
-                    // NOTE: 没有枚举到任何 ArchType，直接置为 end 状态。
-                    m_chunk_currnet = nullptr;
-                    m_chunk_current_entity_meta = nullptr;
-                    m_chunk_entity_currnet_index = 0;
-                }
+                this->_init_from_dependence(dep);
             }
 
-            slice operator ++()
-            {
-                ++m_chunk_entity_currnet_index;
-                _move_to_valid_entity();
-
-                return *this;
-            }
-            slice operator ++(int)
-            {
-                auto current = this;
-
-                ++m_chunk_entity_currnet_index;
-                _move_to_valid_entity();
-
-                return current;
-            }
-            bool operator ==(const slice& pindex) const
-            {
-                return m_chunk_currnet == pindex.m_chunk_currnet
-                    && m_chunk_entity_currnet_index == pindex.m_chunk_entity_currnet_index;
-            }
-            bool operator !=(const slice& pindex) const
-            {
-                return m_chunk_currnet != pindex.m_chunk_currnet
-                    || m_chunk_entity_currnet_index != pindex.m_chunk_entity_currnet_index;
-            }
             value_type operator*()
             {
                 return SliceView::fetch_component_slice_from_chunk(
-                    m_archs_current, m_chunk_currnet, m_chunk_entity_currnet_index);
-            }
-
-            slice begin()
-            {
-                return *this;
-            }
-            slice end()
-            {
-                return slice(m_archs_end);
-            }
-
-            template<typename FT>
-            void foreach_parallel(FT&& ft)
-            {
-                ::jeecs::parallel_foreach(
-                    *this,
-                    end(),
-                    ft);
+                    this->m_cached_infos.data(),
+                    this->m_chunk_current,
+                    this->m_chunk_entity_current_index);
             }
         };
-        class entity_slice : public slice
-        {
-        private:
-            explicit entity_slice(
-                const dependence::arch_chunks_info* _archs_end)
-                : slice(_archs_end)
-            {}
-        public:
-            typedef typename SliceView::entity_with_components value_type;
 
+        class entity_slice : public slice_base<entity_slice>
+        {
+            using base_t = slice_base<entity_slice>;
+        public:
+            typedef ptrdiff_t difference_type;
+            typedef typename SliceView::entity_with_components value_type;
+            typedef void pointer;
+            typedef void reference;
+            typedef std::forward_iterator_tag iterator_category;
+
+            entity_slice() = default;
             entity_slice(const entity_slice&) = default;
             entity_slice(entity_slice&&) = default;
-            entity_slice& operator = (const entity_slice&) = default;
-            entity_slice& operator = (entity_slice&&) = default;
-            entity_slice() = default;
-            explicit entity_slice(const dependence* dependence)
-                : slice(dependence)
-            {}
+            entity_slice& operator=(const entity_slice&) = default;
+            entity_slice& operator=(entity_slice&&) = default;
 
-            entity_slice operator ++()
+            explicit entity_slice(const dependence::arch_chunks_info* _archs_end)
+                : base_t(_archs_end) {}
+            explicit entity_slice(const dependence* dep)
             {
-                this->slice::operator++();
-                return *this;
+                this->_init_from_dependence(dep);
             }
-            entity_slice operator ++(int)
-            {
-                auto current = this;
-                this->slice::operator++(0);
-                return current;
-            }
+
             value_type operator*()
             {
                 return SliceView::fetch_entity_and_component_slice_from_chunk(
-                    this->m_archs_current,
-                    this->m_chunk_currnet,
-                    this->m_chunk_entity_currnet_index,
-                    this->m_chunk_current_entity_meta[this->m_chunk_entity_currnet_index].m_version);
-            }
-
-            entity_slice begin()
-            {
-                return *this;
-            }
-            entity_slice end()
-            {
-                return entity_slice(this->m_archs_end);
-            }
-
-            template<typename FT>
-            void foreach_parallel(FT&& ft)
-            {
-                ::jeecs::parallel_foreach(
-                    *this,
-                    end(),
-                    ft);
+                    this->m_cached_infos.data(),
+                    this->m_chunk_current,
+                    this->m_chunk_entity_current_index,
+                    this->m_chunk_current_entity_meta[this->m_chunk_entity_current_index].m_version);
             }
         };
 
@@ -7496,6 +7548,84 @@ namespace jeecs
         {
             m_dependence.update(w);
             return entity_slice(&m_dependence);
+        }
+
+        // ============================================================
+        // foreach_chunk / foreach_parallel_chunks
+        //
+        // 设计动机：slice 是 forward iterator，foreach_parallel 走
+        // std::for_each(par_unseq, ...) 时实际难以并行（无法随机切分）。
+        // 这两个接口改以 chunk 为粒度遍历：
+        //   * foreach_chunk           —— 串行遍历所有 chunk
+        //   * foreach_parallel_chunks —— chunk 间并行（不同 chunk 处理无共享数据）
+        //
+        // 调用方在内层写紧凑 SOA 循环，可获得真正的并行加速。
+        //
+        // 回调签名（ft 被同步调用一次/chunk）：
+        //   void(const dependence::arch_chunks_info::component_info* infos,
+        //        void* chunkbuf,
+        //        const game_entity::meta* meta,
+        //        typing::entity_id_in_chunk_t entity_count)
+        //
+        // 注意：entity_count 是该 chunk 所属 arch 的容量上限（所有 chunk 一致），
+        //       实际有效实体需调用方根据 meta[eid].m_stat == READY 自行过滤；
+        //       infos 已包含视图组件的 offset/stride，可用
+        //       view_base::get_component_by_cached_info 解出每个组件地址。
+        //       对于 foreach_parallel_chunks，ft 必须是线程安全的。
+        // ============================================================
+        template <typename FT>
+        void foreach_chunk(game_world w, FT&& ft)
+        {
+            m_dependence.update(w);
+            for (const auto& arch : m_dependence.m_archs)
+            {
+                const auto infos = arch.m_component_infos.data();
+                void* chunk = je_arch_get_chunk(arch.m_arch);
+                while (chunk != nullptr)
+                {
+                    const auto* meta = je_arch_entity_meta_addr_in_chunk(chunk);
+                    ft(infos, chunk, meta, arch.m_entity_count);
+                    chunk = je_arch_next_chunk(chunk);
+                }
+            }
+        }
+
+        template <typename FT>
+        void foreach_parallel_chunks(game_world w, FT&& ft)
+        {
+            m_dependence.update(w);
+
+            struct chunk_handle
+            {
+                const dependence::arch_chunks_info::component_info* infos;
+                void* chunk;
+                const game_entity::meta* meta;
+                typing::entity_id_in_chunk_t count;
+            };
+
+            basic::vector<chunk_handle> chunks;
+            for (const auto& arch : m_dependence.m_archs)
+            {
+                const auto infos = arch.m_component_infos.data();
+                void* chunk = je_arch_get_chunk(arch.m_arch);
+                while (chunk != nullptr)
+                {
+                    chunks.push_back(chunk_handle{
+                        infos,
+                        chunk,
+                        je_arch_entity_meta_addr_in_chunk(chunk),
+                        arch.m_entity_count });
+                    chunk = je_arch_next_chunk(chunk);
+                }
+            }
+
+            // basic::vector::begin()/end() 返回原生指针，是 random-access iterator，
+            // 能被 std::for_each(par_unseq, ...) 有效切分到工作线程。
+            ::jeecs::parallel_foreach(
+                chunks.begin(), chunks.end(),
+                [&ft](const chunk_handle& h) {
+                    ft(h.infos, h.chunk, h.meta, h.count);
+                });
         }
     };
 
@@ -8120,12 +8250,12 @@ namespace jeecs
                 return "public using ivec2 = (int, int);";
             }
 
-            inline float max() const noexcept
+            inline int max() const noexcept
             {
                 return std::max(x, y);
             }
 
-            inline float min() const noexcept
+            inline int min() const noexcept
             {
                 return std::min(x, y);
             }

@@ -255,7 +255,7 @@ namespace jeecs
                                 cmpidx != work.m_used_components.end(); ++cmpidx)
                             {
                                 const size_t cmpid = cmpidx - work.m_used_components.begin();
-                                void* component = slice_requirement::base::view_base::get_component_from_archchunk_ptr(
+                                void* component = slice_requirement::base::view_base::get_component_by_index(
                                     &archinfo, cur_chunk, eid, cmpid);
                                 const auto* typeinfo = *cmpidx;
                                 const woort_value component_st = stack_base + 2 + cmpid;
