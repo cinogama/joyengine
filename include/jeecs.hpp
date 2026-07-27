@@ -7101,13 +7101,13 @@ namespace jeecs
                     }
 
                     // CONTAINS 路径无分支：arch 保证 offset_of_unit > 0
-                    assert(sizeof(ComponentT) == info.m_component_offset_of_unit);
+                    assert(sizeof(typename typing::origin_t<ComponentT>) == info.m_component_offset_of_unit);
 
                     auto* component_ptr = static_cast<typename typing::origin_t<ComponentT>*>(
                         static_cast<void*>(
                             static_cast<char*>(chunkbuf)
                             + info.m_component_offset_in_chunk
-                            + sizeof(ComponentT) * entity_id));
+                            + sizeof(typename typing::origin_t<ComponentT>) * entity_id));
 
                     if constexpr (std::is_reference_v<ComponentT>)
                         return *component_ptr;

@@ -302,8 +302,6 @@ namespace JEEditor::Editor
         //     右键 + Shift       — 加速移动
         //     鼠标中键拖拽       — 屏幕平面平移
         //     鼠标滚轮           — 沿视线方向推拉
-        //     Alt + 左键拖拽     — 围绕焦点轨道旋转
-        //     Alt + 滚轮         — 调整轨道距离（推拉焦点）
         //
         //   二维（正交）摄像机：
         //     鼠标中键拖拽       — 屏幕平面平移
@@ -313,23 +311,60 @@ namespace JEEditor::Editor
         {
             let cameras = self.m_world_instance->internal::get_all_entities([
                     Camera::RendToFramebuffer::type::typeinfo,
+                    Camera::Projection::type::typeinfo,
                     Editor::Invisible::type::typeinfo,
+                    Transform::LocalPosition::type::typeinfo,
+                    Transform::LocalRotation::type::typeinfo,
+                    Transform::Translation::type::typeinfo,
                 ]);
                 
             if (cameras->empty)
                 return;
                 
             let cam = cameras[0];
-            let posOpt = cam->towoo::get_component:<Transform::LocalPosition>;
-            let rotOpt = cam->towoo::get_component:<Transform::LocalRotation>;
+            let pos = cam->towoo::get_component:<Transform::LocalPosition>->unwrap;
+            let rot = cam->towoo::get_component:<Transform::LocalRotation>->unwrap;
+            let trans = cam->towoo::get_component:<Transform::Translation>->unwrap;
+            let proj = cam->towoo::get_component:<Camera::Projection>->unwrap;
             
-            if (posOpt->is_none || rotOpt->is_none)
-                return;
+            let perspectiveProjection = cam->towoo::get_component:<Camera::PerspectiveProjection>;
+            
+            if (hovered && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left))
+            {
+                let (rect_min, rect_max) = GetItemRect();
                 
-            let pos = posOpt->unwrap;
-            let rot = rotOpt->unwrap;
+                let mouse_diff = GetMousePos() as vec2 - rect_min as vec2;
+                let viewport_size = rect_max as vec2 - rect_min as vec2;
+                
+                let (vpx, vpy) =
+                    ((mouse_diff / viewport_size) - (0.5, 0.5) as vec2) * 2.;
+                    
+                let camera_ray =
+                    towoo::ray::from(
+                        trans,
+                        proj,
+                        (vpx, 1.0 - vpy) as vec2,
+                        perspectiveProjection->is_none);
+                        
+                for (let e : self.m_world_instance->internal::get_all_entities([
+                            Transform::Translation::type::typeinfo,
+                        ]))
+                {
+                    if (e->towoo::get_component:<Editor::Invisible>->is_value)
+                        continue;
+
+                    let result = camera_ray->intersect(
+                        e->towoo::get_component:<Transform::Translation>->unwrap,
+                        e->towoo::get_component:<Renderer::Shape>,
+                        true,
+                    );
+                    
+                    if (result->is_value)
+                        je::log(result->unwrap);
+                }
+            }
             
-            match (cam->towoo::get_component:<Camera::PerspectiveProjection>)
+            match (perspectiveProjection)
             {
                 value(_)?
                     self->controlPerspectiveCamera(pos, rot, dt, hovered);

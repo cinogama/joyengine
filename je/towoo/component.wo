@@ -3,6 +3,7 @@ import woo::std;
 
 import je;
 import je::towoo::types;
+import je::typeinfo;
 
 namespace je::towoo::component
 {
