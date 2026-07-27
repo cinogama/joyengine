@@ -343,7 +343,7 @@ namespace JEEditor::Editor
                     towoo::ray::from(
                         trans,
                         proj,
-                        (vpx, 1.0 - vpy) as vec2,
+                        (vpx, -vpy) as vec2,
                         perspectiveProjection->is_none);
                         
                 for (let e : self.m_world_instance->internal::get_all_entities([
