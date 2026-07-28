@@ -581,7 +581,8 @@ namespace jeecs
 
         template <class R, class... Args>
         struct function_traits<R(*)(Args...)> : public function_traits<R(Args...)>
-        {};
+        {
+        };
 
         template <class R, class... Args>
         struct function_traits<R(Args...)>
@@ -623,11 +624,13 @@ namespace jeecs
 
         template <class F>
         struct function_traits<F&> : public function_traits<F>
-        {};
+        {
+        };
 
         template <class F>
         struct function_traits<F&&> : public function_traits<F>
-        {};
+        {
+        };
 
         template <size_t n, typename T, typename... Ts>
         struct _variadic_type_indexer
@@ -1495,18 +1498,37 @@ JE_API void je_ecs_world_destroy(void* world);
 
 typedef enum je_ComponentRequirementKind
 {
-    JE_COMPONENT_REQUIRE_CONTAINS, // Must have spcify component
-    JE_COMPONENT_REQUIRE_MAYNOT,  // May have or not have
-    JE_COMPONENT_REQUIRE_ANYOF,   // Must have one of 'ANYOF' components
-    JE_COMPONENT_REQUIRE_EXCEPT,  // Must not contain spcify component
+    JE_COMPONENT_REQUIRE_CONTAINS,  // Must have spcify component
+    JE_COMPONENT_REQUIRE_MAYNOT,    // May have or not have
+    JE_COMPONENT_REQUIRE_EXCEPT,    // Must not contain spcify component
+    JE_COMPONENT_REQUIRE_ANYOF_0,     // Must have one of 'ANYOF' components
 
 }je_ComponentRequirementKind;
 
 typedef struct je_ComponentRequirement {
-    je_ComponentRequirementKind m_kind;
-    size_t                      m_group_id;
-    je_TypeId                   m_typeid;
+    int /*je_ComponentRequirementKind*/ m_kind;
+    je_TypeId                           m_typeid;
 }je_ComponentRequirement;
+
+typedef struct je_RequirementCollection je_RequirementCollection;
+
+typedef struct je_DependenceArchInfos
+{
+    void* m_arch;
+    size_t  m_entity_count;
+
+    // View detail.
+    size_t* m_view_component_offset;
+    size_t* m_view_component_size;
+
+} je_DependenceArchInfos;
+
+typedef struct je_Dependence {
+    je_DependenceArchInfos* m_archs;
+    size_t                      m_arch_count;
+
+    je_RequirementCollection* m_requirement_colloection;
+}je_Dependence;
 
 /*
 je_ecs_world_update_dependences_archinfo [基本接口]
@@ -3785,7 +3807,7 @@ JE_API void jegui_set_font(
     size_t size);
 
 typedef uint64_t jegui_user_image_handle_t;
-typedef jegui_user_image_handle_t (*jegui_user_image_loader_t)(jegl_context*, jegl_texture*);
+typedef jegui_user_image_handle_t(*jegui_user_image_loader_t)(jegl_context*, jegl_texture*);
 typedef void  (*jegui_user_sampler_loader_t)(jegl_context*, jegl_shader*);
 
 /*
@@ -5077,7 +5099,8 @@ namespace jeecs
         public:
             singleton()
                 : m_instance(nullptr), m_ref_count(0)
-            {}
+            {
+            }
             ~singleton()
             {
                 assert(m_instance == nullptr);
@@ -5286,7 +5309,8 @@ namespace jeecs
 
         public:
             vector() noexcept
-            {}
+            {
+            }
             ~vector() noexcept
             {
                 clear();
@@ -5665,7 +5689,8 @@ namespace jeecs
             public:
                 basic_iterator(slot_ptr_t cur, slot_ptr_t end_slot) noexcept
                     : m_cur(cur), m_end_slot(end_slot)
-                {}
+                {
+                }
 
                 basic_iterator& operator++() noexcept
                 {
@@ -5915,11 +5940,13 @@ namespace jeecs
 
             string(const string& str) noexcept
                 : string(str.c_str())
-            {}
+            {
+            }
 
             string(const std::string& str) noexcept
                 : string(str.c_str())
-            {}
+            {
+            }
 
             string(string&& str) noexcept
                 : _c_str(str._c_str)
@@ -6291,10 +6318,12 @@ namespace jeecs
 
             optional() noexcept
                 : takeplace(0), has_constructed(false)
-            {}
+            {
+            }
             optional(const std::nullopt_t&) noexcept
                 : takeplace(0), has_constructed(false)
-            {}
+            {
+            }
             optional(const std::optional<T>& opt) noexcept
                 : has_constructed(opt.has_value())
             {
@@ -6819,7 +6848,8 @@ namespace jeecs
     public:
         game_world(void* ecs_world_addr)
             : _m_ecs_world_addr(ecs_world_addr)
-        {}
+        {
+        }
 
     private:
         friend class game_system;
@@ -7001,7 +7031,8 @@ namespace jeecs
         dependence(const dependence& d)
             : m_requirements(d.m_requirements)
             , m_archs({})
-        {}
+        {
+        }
         dependence(dependence&& d)
             : m_requirements(std::move(d.m_requirements))
             , m_archs(std::move(d.m_archs))
@@ -7138,7 +7169,11 @@ namespace jeecs
                 static void _apply_dependence_impl(size_t group, dependence* out_dependence)
                 {
                     out_dependence->m_requirements.push_back(
-                        je_ComponentRequirement{ RequireType, group, typing::id<typing::origin_t<T>>() });
+                        je_ComponentRequirement{
+                            RequireType >= JE_COMPONENT_REQUIRE_ANYOF_0
+                                ? RequireType + group
+                                : RequireType,
+                            typing::id<typing::origin_t<T>>() });
 
                     if constexpr (sizeof...(Ts) > 0)
                         _apply_dependence_impl<Ts...>(group, out_dependence);
@@ -7153,7 +7188,7 @@ namespace jeecs
             };
             struct contains_base : requirement_base<JE_COMPONENT_REQUIRE_CONTAINS> {};
             struct except_base : requirement_base<JE_COMPONENT_REQUIRE_EXCEPT> {};
-            struct anyof_base : requirement_base<JE_COMPONENT_REQUIRE_ANYOF> {};
+            struct anyof_base : requirement_base<JE_COMPONENT_REQUIRE_ANYOF_0> {};
         }
 
         template<typing::traits::is_reference_or_pointer ... Components>
@@ -7335,7 +7370,8 @@ namespace jeecs
                 , m_chunk_current(nullptr)
                 , m_chunk_current_entity_meta(nullptr)
                 , m_chunk_entity_current_index(0)
-            {}
+            {
+            }
 
             // 进入一个新 arch：刷新 chunk、meta、预缓存 component_info。
             inline void _enter_current_arch()
@@ -7473,7 +7509,8 @@ namespace jeecs
             slice& operator=(slice&&) = default;
 
             explicit slice(const dependence::arch_chunks_info* _archs_end)
-                : base_t(_archs_end) {}
+                : base_t(_archs_end) {
+            }
             explicit slice(const dependence* dep)
             {
                 this->_init_from_dependence(dep);
@@ -7505,7 +7542,8 @@ namespace jeecs
             entity_slice& operator=(entity_slice&&) = default;
 
             explicit entity_slice(const dependence::arch_chunks_info* _archs_end)
-                : base_t(_archs_end) {}
+                : base_t(_archs_end) {
+            }
             explicit entity_slice(const dependence* dep)
             {
                 this->_init_from_dependence(dep);
@@ -7626,7 +7664,8 @@ namespace jeecs
     public:
         game_universe(void* universe_addr)
             : _m_universe_addr(universe_addr)
-        {}
+        {
+        }
         inline void* handle() const noexcept
         {
             return _m_universe_addr;
@@ -7725,7 +7764,8 @@ namespace jeecs
     public:
         game_system(game_world world)
             : _m_game_world(world)
-        {}
+        {
+        }
 
         inline double deltatimed() const
         {
@@ -7978,26 +8018,33 @@ namespace jeecs
         {
             constexpr vec2(float _x = 0.f, float _y = 0.f) noexcept
                 : _basevec2(_x, _y)
-            {}
+            {
+            }
             constexpr vec2(const vec2& _v2) noexcept
                 : _basevec2(_v2.x, _v2.y)
-            {}
+            {
+            }
             constexpr vec2(vec2&& _v2) noexcept
                 : _basevec2(_v2.x, _v2.y)
-            {}
+            {
+            }
 
             constexpr vec2(const _basevec3& _v3) noexcept
                 : _basevec2(_v3.x, _v3.y)
-            {}
+            {
+            }
             constexpr vec2(_basevec3&& _v3) noexcept
                 : _basevec2(_v3.x, _v3.y)
-            {}
+            {
+            }
             constexpr vec2(const _basevec4& _v4) noexcept
                 : _basevec2(_v4.x, _v4.y)
-            {}
+            {
+            }
             constexpr vec2(_basevec4&& _v4) noexcept
                 : _basevec2(_v4.x, _v4.y)
-            {}
+            {
+            }
 
             // + - * / with another vec2
             inline constexpr vec2 operator+(const vec2& _v2) const noexcept
@@ -8139,14 +8186,17 @@ namespace jeecs
             int y;
             constexpr ivec2(int _x = 0, int _y = 0) noexcept
                 : x(_x), y(_y)
-            {}
+            {
+            }
             constexpr ivec2(const vec2& _v2) noexcept
                 : x((int)_v2.x), y((int)_v2.y)
-            {}
+            {
+            }
 
             constexpr ivec2(vec2&& _v2) noexcept
                 : x((int)_v2.x), y((int)_v2.y)
-            {}
+            {
+            }
 
             // + - * / with another vec2
             inline constexpr ivec2 operator+(const ivec2& _v2) const noexcept
@@ -8266,26 +8316,33 @@ namespace jeecs
         {
             constexpr vec3(float _x = 0.f, float _y = 0.f, float _z = 0.f) noexcept
                 : _basevec3(_x, _y, _z)
-            {}
+            {
+            }
             constexpr vec3(const vec3& _v3) noexcept
                 : _basevec3(_v3.x, _v3.y, _v3.z)
-            {}
+            {
+            }
             constexpr vec3(vec3&& _v3) noexcept
                 : _basevec3(_v3.x, _v3.y, _v3.z)
-            {}
+            {
+            }
 
             constexpr vec3(const _basevec2& _v2) noexcept
                 : _basevec3(_v2.x, _v2.y, 0.f)
-            {}
+            {
+            }
             constexpr vec3(_basevec2&& _v2) noexcept
                 : _basevec3(_v2.x, _v2.y, 0.f)
-            {}
+            {
+            }
             constexpr vec3(const _basevec4& _v4) noexcept
                 : _basevec3(_v4.x, _v4.y, _v4.z)
-            {}
+            {
+            }
             constexpr vec3(_basevec4&& _v4) noexcept
                 : _basevec3(_v4.x, _v4.y, _v4.z)
-            {}
+            {
+            }
 
             // + - * / with another vec3
             inline constexpr vec3 operator+(const vec3& _v3) const noexcept
@@ -8441,26 +8498,33 @@ namespace jeecs
         {
             constexpr vec4(float _x = 0.f, float _y = 0.f, float _z = 0.f, float _w = 0.f) noexcept
                 : _basevec4(_x, _y, _z, _w)
-            {}
+            {
+            }
             constexpr vec4(const vec4& _v4) noexcept
                 : _basevec4(_v4.x, _v4.y, _v4.z, _v4.w)
-            {}
+            {
+            }
             constexpr vec4(vec4&& _v4) noexcept
                 : _basevec4(_v4.x, _v4.y, _v4.z, _v4.w)
-            {}
+            {
+            }
 
             constexpr vec4(const _basevec2& _v2) noexcept
                 : _basevec4(_v2.x, _v2.y, 0.f, 0.f)
-            {}
+            {
+            }
             constexpr vec4(_basevec2&& _v2) noexcept
                 : _basevec4(_v2.x, _v2.y, 0.f, 0.f)
-            {}
+            {
+            }
             constexpr vec4(const _basevec3& _v3) noexcept
                 : _basevec4(_v3.x, _v3.y, _v3.z, 0.f)
-            {}
+            {
+            }
             constexpr vec4(_basevec3&& _v3) noexcept
                 : _basevec4(_v3.x, _v3.y, _v3.z, 0.f)
-            {}
+            {
+            }
 
             // + - * / with another vec4
             inline constexpr vec4 operator+(const vec4& _v4) const noexcept
@@ -8637,7 +8701,8 @@ namespace jeecs
 
             constexpr quat() noexcept
                 : x(0.f), y(0.f), z(0.f), w(1.f)
-            {}
+            {
+            }
 
             quat(float yaw, float pitch, float roll) noexcept
             {
@@ -9021,7 +9086,8 @@ namespace jeecs
         {
             explicit texture(jegl_texture* res)
                 : resource_basic(res)
-            {}
+            {
+            }
 
         public:
             static std::optional<basic::resource<texture>> load(jegl_context* context, const std::string& str)
@@ -9473,7 +9539,8 @@ namespace jeecs
         {
             explicit vertex(jegl_vertex* res)
                 : resource_basic(res)
-            {}
+            {
+            }
 
         public:
             static std::optional<basic::resource<vertex>> load(
@@ -9510,7 +9577,8 @@ namespace jeecs
         {
             explicit framebuffer(jegl_frame_buffer* res)
                 : resource_basic(res)
-            {}
+            {
+            }
 
         public:
             static std::optional<basic::resource<framebuffer>> create(
@@ -9561,7 +9629,8 @@ namespace jeecs
         {
             explicit uniformbuffer(jegl_uniform_buffer* res)
                 : resource_basic(res)
-            {}
+            {
+            }
 
         public:
             static std::optional<basic::resource<uniformbuffer>> create(
@@ -9755,7 +9824,8 @@ namespace jeecs
         private:
             font(je_font* font_resource) noexcept
                 : m_font(font_resource)
-            {}
+            {
+            }
 
         public:
             static std::optional<basic::resource<font>> load(
@@ -10127,7 +10197,8 @@ namespace jeecs
                 : game_system(w)
                 , _m_graphic_host(jegl_uhost_get_or_create_for_universe(w.get_universe().handle(), config))
                 , _m_this_frame_allocate_rchain_pipeline_count(0)
-            {}
+            {
+            }
             ~BasePipelineInterface()
             {
                 OnDisable();
@@ -10937,7 +11008,8 @@ namespace jeecs
 
                 texture_with_passid(size_t pass, const basic::resource<graphic::texture>& tex)
                     : m_pass_id(pass), m_texture(tex)
-                {}
+                {
+                }
             };
             math::vec2 tiling = math::vec2(1.f, 1.f);
             math::vec2 offset = math::vec2(0.f, 0.f);
@@ -11434,7 +11506,8 @@ namespace jeecs
 
                 light_shape()
                     : m_point_count(0)
-                {}
+                {
+                }
 
                 static const char* JEScriptTypeName()
                 {
@@ -11574,7 +11647,8 @@ namespace jeecs
             ShadowBuffer() = default;
             ShadowBuffer(const ShadowBuffer& another)
                 : resolution_ratio(another.resolution_ratio)
-            {}
+            {
+            }
             ShadowBuffer(ShadowBuffer&&) = default;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
@@ -12187,7 +12261,8 @@ namespace jeecs
             Source() noexcept
                 : source(audio::source::create()), pitch(1.0f), volume(1.0f)
 
-            {}
+            {
+            }
             Source(const Source& another) noexcept
                 : Source()
             {
@@ -12200,7 +12275,8 @@ namespace jeecs
                 , pitch(another.pitch)
                 , volume(another.volume)
                 , last_position(another.last_position)
-            {}
+            {
+            }
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
@@ -12248,7 +12324,8 @@ namespace jeecs
                 , buffer(another.buffer)
                 , play(another.play)
                 , loop(another.loop)
-            {}
+            {
+            }
             Playing(Playing&&) = default;
 
             void set_buffer(const basic::resource<audio::buffer>& buf)
@@ -12299,7 +12376,8 @@ namespace jeecs
                     another.left_stick_up_left_down_right[1],
                     another.left_stick_up_left_down_right[2],
                     another.left_stick_up_left_down_right[3] }
-            {}
+            {
+            }
             VirtualGamepad(VirtualGamepad&& another)
                 : gamepad(another.gamepad)
                 , keymap(std::move(another.keymap))
@@ -12337,7 +12415,8 @@ namespace jeecs
 
             ray(const vec3& _orgin, const vec3& _direction) : orgin(_orgin),
                 direction(_direction)
-            {}
+            {
+            }
             ray(const Transform::Translation& camera_trans, const Camera::Projection& camera_proj, const vec2& screen_pos, bool ortho)
             {
                 // 根据摄像机和屏幕坐标创建射线
@@ -12378,7 +12457,8 @@ namespace jeecs
                 intersect_result(bool rslt, float dist = INFINITY, const vec3& plce = vec3(0, 0, 0)) : intersected(rslt),
                     place(plce),
                     distance(dist)
-                {}
+                {
+                }
             };
 
             intersect_result intersect_triangle(const vec3& v0, const vec3& v1, const vec3& v2) const
@@ -13048,7 +13128,8 @@ namespace jeecs
         public:
             gamepad(je_io_gamepad_handle_t gamepad_handle)
                 : m_gamepad_handle(gamepad_handle)
-            {}
+            {
+            }
             gamepad(const gamepad&) = default;
             gamepad(gamepad&&) = default;
             gamepad& operator=(const gamepad&) = default;

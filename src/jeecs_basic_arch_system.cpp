@@ -785,9 +785,9 @@ namespace jeecs_impl
                 else
                 {
                     assert(
-                        requirement.m_kind == JE_COMPONENT_REQUIRE_ANYOF
-                        || requirement.m_kind == JE_COMPONENT_REQUIRE_MAYNOT
-                        || requirement.m_kind == JE_COMPONENT_REQUIRE_EXCEPT);
+                        requirement.m_kind == JE_COMPONENT_REQUIRE_MAYNOT
+                        || requirement.m_kind == JE_COMPONENT_REQUIRE_EXCEPT
+                        || requirement.m_kind >= JE_COMPONENT_REQUIRE_ANYOF_0);
 
                     out_arch_info->m_component_infos.emplace_back(
                         jeecs::dependence::arch_chunks_info::component_info{
@@ -854,7 +854,7 @@ namespace jeecs_impl
         inline void update_dependence_archinfo(jeecs::dependence* dependence) const noexcept
         {
             types_set contain_set, except_set /*, maynot_set*/;
-            std::map<size_t /* Group id */, types_set> anyof_sets;
+            std::map<je_ComponentRequirementKind, types_set> anyof_sets;
 
             for (auto& requirement : dependence->m_requirements)
             {
@@ -865,12 +865,13 @@ namespace jeecs_impl
                     break;
                 case JE_COMPONENT_REQUIRE_MAYNOT:
                     /*maynot_set.insert(requirement.m_typeid);*/ break;
-                case JE_COMPONENT_REQUIRE_ANYOF:
-                    anyof_sets[requirement.m_group_id].insert(requirement.m_typeid);
-                    break;
                 case JE_COMPONENT_REQUIRE_EXCEPT:
                     except_set.insert(requirement.m_typeid);
                     break;
+                default /* JE_COMPONENT_REQUIRE_ANYOF_0... */:
+                    anyof_sets[requirement.m_kind].insert(requirement.m_typeid);
+                    break;
+               
                 }
             }
 
@@ -888,7 +889,8 @@ namespace jeecs_impl
                             return true;
                     return b.empty();
                 };
-            static auto contain_all_any = [](const types_set& a, const std::map<size_t /* Group id */, types_set>& b)
+            static auto contain_all_any = [](
+                const types_set& a, const std::map<je_ComponentRequirementKind, types_set>& b)
                 {
                     for (auto& [_, type_id_set] : b)
                         if (contain_any(a, type_id_set) == false)

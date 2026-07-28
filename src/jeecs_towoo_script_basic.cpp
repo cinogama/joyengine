@@ -47,7 +47,8 @@ namespace jeecs
 
                 towoo_system_info(woort_CodeEnv* cenv)
                     : m_code_env(cenv)
-                {}
+                {
+                }
                 ~towoo_system_info()
                 {
                     woort_CodeEnv_drop(m_code_env);
@@ -274,9 +275,8 @@ namespace jeecs
                                         woort_set_option_value(component_st, component_st);
                                     }
                                     break;
-                                case JE_COMPONENT_REQUIRE_ANYOF:
                                 case JE_COMPONENT_REQUIRE_EXCEPT:
-                                default:
+                                default /* JE_COMPONENT_REQUIRE_ANYOF_0... */:
                                     break;
                                 }
                             }
@@ -933,9 +933,9 @@ void je_towoo_update_api()
     // typeinfo lookup fails because the dependency isn't yet loaded.
     const auto all_registed_types = _gather_all_registed_types();
 
-    const std::string woolang_parsing_type_decl = 
+    const std::string woolang_parsing_type_decl =
         _generate_type_decl(all_registed_types);
-    const std::string woolang_component_type_decl = 
+    const std::string woolang_component_type_decl =
         _generate_component_decl(all_registed_types);
 
     if (!woort_vfs_create(
@@ -1139,8 +1139,9 @@ WOORT_API woort_api wojeapi_towoo_register_system_job(void)
 
             stepwork.m_dependence.m_requirements.push_back(
                 je_ComponentRequirement{
-                    ty,
-                    static_cast<size_t>(woort_int(elem)),
+                    ty >= JE_COMPONENT_REQUIRE_ANYOF_0
+                        ? ty + static_cast<int>(woort_int(elem))
+                        : ty,
                     typeinfo->m_id
                 });
 
