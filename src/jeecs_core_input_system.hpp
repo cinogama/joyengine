@@ -37,9 +37,9 @@ namespace jeecs
                     left_stick_x += 1.f;
 
                 je_io_gamepad_update_stick(
-                    vgamepad.gamepad, input::joystickcode::L, left_stick_x, left_stick_y);
+                    vgamepad.gamepad, JE_JOY_L, left_stick_x, left_stick_y);
 
-                std::unordered_map<input::gamepadcode, bool> key_state;
+                std::unordered_map<je_Gamepadcode, bool> key_state;
                 for (auto& [kb, gp] : vgamepad.keymap)
                 {
                     key_state[gp] = key_state[gp] || input::keydown(kb);

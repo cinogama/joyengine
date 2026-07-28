@@ -105,30 +105,30 @@ namespace jeecs::graphic
 
                 using namespace jeecs::input;
 
-                je_io_gamepad_update_button_state(handle, gamepadcode::A,     state.buttons[GLFW_GAMEPAD_BUTTON_A] != 0);
-                je_io_gamepad_update_button_state(handle, gamepadcode::B,     state.buttons[GLFW_GAMEPAD_BUTTON_B] != 0);
-                je_io_gamepad_update_button_state(handle, gamepadcode::X,     state.buttons[GLFW_GAMEPAD_BUTTON_X] != 0);
-                je_io_gamepad_update_button_state(handle, gamepadcode::Y,     state.buttons[GLFW_GAMEPAD_BUTTON_Y] != 0);
-                je_io_gamepad_update_button_state(handle, gamepadcode::LB,    state.buttons[GLFW_GAMEPAD_BUTTON_LEFT_BUMPER] != 0);
-                je_io_gamepad_update_button_state(handle, gamepadcode::RB,    state.buttons[GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER] != 0);
-                je_io_gamepad_update_button_state(handle, gamepadcode::LS,    state.buttons[GLFW_GAMEPAD_BUTTON_LEFT_THUMB] != 0);
-                je_io_gamepad_update_button_state(handle, gamepadcode::RS,    state.buttons[GLFW_GAMEPAD_BUTTON_RIGHT_THUMB] != 0);
-                je_io_gamepad_update_button_state(handle, gamepadcode::SELECT, state.buttons[GLFW_GAMEPAD_BUTTON_BACK] != 0);
-                je_io_gamepad_update_button_state(handle, gamepadcode::START, state.buttons[GLFW_GAMEPAD_BUTTON_START] != 0);
-                je_io_gamepad_update_button_state(handle, gamepadcode::GUIDE, state.buttons[GLFW_GAMEPAD_BUTTON_GUIDE] != 0);
-                je_io_gamepad_update_button_state(handle, gamepadcode::UP,    state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_UP] != 0);
-                je_io_gamepad_update_button_state(handle, gamepadcode::DOWN,  state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_DOWN] != 0);
-                je_io_gamepad_update_button_state(handle, gamepadcode::LEFT,  state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_LEFT] != 0);
-                je_io_gamepad_update_button_state(handle, gamepadcode::RIGHT, state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_RIGHT] != 0);
+                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_A,     state.buttons[GLFW_GAMEPAD_BUTTON_A] != 0);
+                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_B,     state.buttons[GLFW_GAMEPAD_BUTTON_B] != 0);
+                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_X,     state.buttons[GLFW_GAMEPAD_BUTTON_X] != 0);
+                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_Y,     state.buttons[GLFW_GAMEPAD_BUTTON_Y] != 0);
+                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_LB,    state.buttons[GLFW_GAMEPAD_BUTTON_LEFT_BUMPER] != 0);
+                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_RB,    state.buttons[GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER] != 0);
+                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_LS,    state.buttons[GLFW_GAMEPAD_BUTTON_LEFT_THUMB] != 0);
+                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_RS,    state.buttons[GLFW_GAMEPAD_BUTTON_RIGHT_THUMB] != 0);
+                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_SELECT, state.buttons[GLFW_GAMEPAD_BUTTON_BACK] != 0);
+                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_START, state.buttons[GLFW_GAMEPAD_BUTTON_START] != 0);
+                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_GUIDE, state.buttons[GLFW_GAMEPAD_BUTTON_GUIDE] != 0);
+                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_UP,    state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_UP] != 0);
+                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_DOWN,  state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_DOWN] != 0);
+                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_LEFT,  state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_LEFT] != 0);
+                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_RIGHT, state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_RIGHT] != 0);
 
-                je_io_gamepad_update_stick(handle, joystickcode::L,
+                je_io_gamepad_update_stick(handle, JE_JOY_L,
                     state.axes[GLFW_GAMEPAD_AXIS_LEFT_X], state.axes[GLFW_GAMEPAD_AXIS_LEFT_Y]);
-                je_io_gamepad_update_stick(handle, joystickcode::R,
+                je_io_gamepad_update_stick(handle, JE_JOY_R,
                     state.axes[GLFW_GAMEPAD_AXIS_RIGHT_X], state.axes[GLFW_GAMEPAD_AXIS_RIGHT_Y]);
-                // Triggers are reported by GLFW in [0,1]; store as x-only per joystickcode semantics.
-                je_io_gamepad_update_stick(handle, joystickcode::LT,
+                // Triggers are reported by GLFW in [0,1]; store as x-only per je_Joystickcode semantics.
+                je_io_gamepad_update_stick(handle, JE_JOY_LT,
                     state.axes[GLFW_GAMEPAD_AXIS_LEFT_TRIGGER], 0.f);
-                je_io_gamepad_update_stick(handle, joystickcode::RT,
+                je_io_gamepad_update_stick(handle, JE_JOY_RT,
                     state.axes[GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER], 0.f);
             }
         }
@@ -169,23 +169,23 @@ namespace jeecs::graphic
         }
         static void glfw_callback_mouse_key_clicked(GLFWwindow* fw, int key, int state, int mod)
         {
-            jeecs::input::mousecode keycode;
+            je_Mousecode je_Keycode;
             switch (key)
             {
             case GLFW_MOUSE_BUTTON_LEFT:
-                keycode = jeecs::input::mousecode::LEFT;
+                je_Keycode = JE_MOUSE_LEFT;
                 break;
             case GLFW_MOUSE_BUTTON_MIDDLE:
-                keycode = jeecs::input::mousecode::MID;
+                je_Keycode = JE_MOUSE_MID;
                 break;
             case GLFW_MOUSE_BUTTON_RIGHT:
-                keycode = jeecs::input::mousecode::RIGHT;
+                je_Keycode = JE_MOUSE_RIGHT;
                 break;
             default:
                 // do nothing.
                 return;
             }
-            je_io_update_mouse_state(0, keycode, state != 0);
+            je_io_update_mouse_state(0, je_Keycode, state != 0);
         }
         static void glfw_callback_mouse_scroll_changed(GLFWwindow* fw, double xoffset, double yoffset)
         {
@@ -198,39 +198,39 @@ namespace jeecs::graphic
             static_assert(GLFW_KEY_A == 'A');
             static_assert(GLFW_KEY_0 == '0');
 
-            jeecs::input::keycode keycode;
+            je_Keycode je_Keycode;
 
             switch (key)
             {
             case GLFW_KEY_LEFT_SHIFT:
-                keycode = jeecs::input::keycode::L_SHIFT;
+                je_Keycode = JE_KEY_L_SHIFT;
                 break;
             case GLFW_KEY_RIGHT_SHIFT:
-                keycode = jeecs::input::keycode::R_SHIFT;
+                je_Keycode = JE_KEY_R_SHIFT;
                 break;
             case GLFW_KEY_LEFT_ALT:
-                keycode = jeecs::input::keycode::L_ALT;
+                je_Keycode = JE_KEY_L_ALT;
                 break;
             case GLFW_KEY_RIGHT_ALT:
-                keycode = jeecs::input::keycode::R_ALT;
+                je_Keycode = JE_KEY_R_ALT;
                 break;
             case GLFW_KEY_LEFT_CONTROL:
-                keycode = jeecs::input::keycode::L_CTRL;
+                je_Keycode = JE_KEY_L_CTRL;
                 break;
             case GLFW_KEY_RIGHT_CONTROL:
-                keycode = jeecs::input::keycode::R_CTRL;
+                je_Keycode = JE_KEY_R_CTRL;
                 break;
             case GLFW_KEY_TAB:
-                keycode = jeecs::input::keycode::TAB;
+                je_Keycode = JE_KEY_TAB;
                 break;
             case GLFW_KEY_ENTER:
-                keycode = jeecs::input::keycode::ENTER;
+                je_Keycode = JE_KEY_ENTER;
                 break;
             case GLFW_KEY_ESCAPE:
-                keycode = jeecs::input::keycode::ESC;
+                je_Keycode = JE_KEY_ESC;
                 break;
             case GLFW_KEY_BACKSPACE:
-                keycode = jeecs::input::keycode::BACKSPACE;
+                je_Keycode = JE_KEY_BACKSPACE;
                 break;
             case GLFW_KEY_KP_0:
             case GLFW_KEY_KP_1:
@@ -242,38 +242,38 @@ namespace jeecs::graphic
             case GLFW_KEY_KP_7:
             case GLFW_KEY_KP_8:
             case GLFW_KEY_KP_9:
-                keycode = (jeecs::input::keycode)(
-                    (uint16_t)jeecs::input::keycode::NP_0 + (key - GLFW_KEY_KP_0));
+                je_Keycode = (je_Keycode)(
+                    (uint16_t)JE_KEY_NP_0 + (key - GLFW_KEY_KP_0));
                 break;
             case GLFW_KEY_KP_ADD:
-                keycode = jeecs::input::keycode::NP_ADD;
+                je_Keycode = JE_KEY_NP_ADD;
                 break;
             case GLFW_KEY_KP_SUBTRACT:
-                keycode = jeecs::input::keycode::NP_SUBTRACT;
+                je_Keycode = JE_KEY_NP_SUBTRACT;
                 break;
             case GLFW_KEY_KP_MULTIPLY:
-                keycode = jeecs::input::keycode::NP_MULTIPLY;
+                je_Keycode = JE_KEY_NP_MULTIPLY;
                 break;
             case GLFW_KEY_KP_DIVIDE:
-                keycode = jeecs::input::keycode::NP_DIVIDE;
+                je_Keycode = JE_KEY_NP_DIVIDE;
                 break;
             case GLFW_KEY_KP_DECIMAL:
-                keycode = jeecs::input::keycode::NP_DECIMAL;
+                je_Keycode = JE_KEY_NP_DECIMAL;
                 break;
             case GLFW_KEY_KP_ENTER:
-                keycode = jeecs::input::keycode::NP_ENTER;
+                je_Keycode = JE_KEY_NP_ENTER;
                 break;
             case GLFW_KEY_UP:
-                keycode = jeecs::input::keycode::UP;
+                je_Keycode = JE_KEY_UP;
                 break;
             case GLFW_KEY_DOWN:
-                keycode = jeecs::input::keycode::DOWN;
+                je_Keycode = JE_KEY_DOWN;
                 break;
             case GLFW_KEY_LEFT:
-                keycode = jeecs::input::keycode::LEFT;
+                je_Keycode = JE_KEY_LEFT;
                 break;
             case GLFW_KEY_RIGHT:
-                keycode = jeecs::input::keycode::RIGHT;
+                je_Keycode = JE_KEY_RIGHT;
                 break;
             case GLFW_KEY_F1:
             case GLFW_KEY_F2:
@@ -291,18 +291,18 @@ namespace jeecs::graphic
             case GLFW_KEY_F14:
             case GLFW_KEY_F15:
             case GLFW_KEY_F16:
-                keycode = (jeecs::input::keycode)(
-                    (uint16_t)jeecs::input::keycode::F1 + (key - GLFW_KEY_F1));
+                je_Keycode = (je_Keycode)(
+                    (uint16_t)JE_KEY_F1 + (key - GLFW_KEY_F1));
                 break;
             default:
                 if (key >= 0 && key <= 127)
-                    keycode = (jeecs::input::keycode)key;
+                    je_Keycode = (je_Keycode)key;
                 else
                     return;
                 break;
             }
 
-            je_io_update_key_state(keycode, stage != 0);
+            je_io_update_key_state(je_Keycode, stage != 0);
         }
     public:
         glfw(interface_type type)

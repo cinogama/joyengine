@@ -8,7 +8,7 @@
 
 struct _je_mouse_state
 {
-    bool _key_states[(uint8_t)jeecs::input::mousecode::_COUNT];
+    bool _key_states[(uint8_t)JE_MOUSE_COUNT];
     int _pos_x;
     int _pos_y;
     float _wheel_x;
@@ -22,14 +22,14 @@ struct _je_gamepad_state
     je_TimestampMs
         _last_update_time;
 
-    bool _key_states[(uint8_t)jeecs::input::gamepadcode::_COUNT];
+    bool _key_states[(uint8_t)JE_GAMEPAD_COUNT];
 
     struct __je_gamepad_stick_state
     {
         jeecs::math::vec2 _position;
         float _deadzone;
     };
-    __je_gamepad_stick_state _stick_states[(uint8_t)jeecs::input::joystickcode::_COUNT];
+    __je_gamepad_stick_state _stick_states[(uint8_t)JE_JOY_COUNT];
 };
 
 struct _je_basic_io_state
@@ -39,7 +39,7 @@ struct _je_basic_io_state
     std::list<_je_gamepad_state> _gamepads;
 
     _je_mouse_state _mouses[jeecs::input::MAX_MOUSE_GROUP_COUNT];
-    bool _key_states[(uint16_t)jeecs::input::keycode::_COUNT];
+    bool _key_states[(uint16_t)JE_KEY_COUNT];
 
     int _windows_width;
     int _windows_height;
@@ -62,9 +62,9 @@ struct _je_basic_io_state
 };
 _je_basic_io_state _state = {};
 
-void je_io_update_key_state(jeecs::input::keycode keycode, bool keydown)
+void je_io_update_key_state(je_Keycode je_Keycode, bool keydown)
 {
-    _state._key_states[(uint16_t)keycode] = keydown;
+    _state._key_states[(uint16_t)je_Keycode] = keydown;
 }
 void je_io_update_mouse_pos(size_t group, int x, int y)
 {
@@ -99,9 +99,9 @@ void je_io_set_lock_mouse(bool lock)
     _state._shoudle_lock_mouse = lock;
 }
 
-bool je_io_get_key_down(jeecs::input::keycode keycode)
+bool je_io_get_key_down(je_Keycode je_Keycode)
 {
-    return _state._key_states[(uint16_t)keycode];
+    return _state._key_states[(uint16_t)je_Keycode];
 }
 
 void je_io_get_mouse_pos(size_t group, int *out_x, int *out_y)
@@ -182,14 +182,14 @@ bool je_io_fetch_update_window_title(const char **out_title)
     return false;
 }
 
-bool je_io_get_mouse_state(size_t group, jeecs::input::mousecode key)
+bool je_io_get_mouse_state(size_t group, je_Mousecode key)
 {
     if (group < jeecs::input::MAX_MOUSE_GROUP_COUNT)
         return _state._mouses[group]._key_states[(size_t)key];
     return false;
 }
 
-void je_io_update_mouse_state(size_t group, jeecs::input::mousecode key, bool keydown)
+void je_io_update_mouse_state(size_t group, je_Mousecode key, bool keydown)
 {
     if (group < jeecs::input::MAX_MOUSE_GROUP_COUNT)
         _state._mouses[group]._key_states[(size_t)key] = keydown;
@@ -244,10 +244,10 @@ je_io_gamepad_handle_t je_io_create_gamepad(
 
     gamepad->_last_update_time = je_clock_time_stamp();
 
-    for (size_t i = 0; i < (uint8_t)jeecs::input::gamepadcode::_COUNT; ++i)
+    for (size_t i = 0; i < (uint8_t)JE_GAMEPAD_COUNT; ++i)
         gamepad->_key_states[i] = false;
 
-    for (size_t i = 0; i < (uint8_t)jeecs::input::joystickcode::_COUNT; ++i)
+    for (size_t i = 0; i < (uint8_t)JE_JOY_COUNT; ++i)
     {
         auto &stick = gamepad->_stick_states[i];
         stick._position = jeecs::math::vec2();
@@ -310,7 +310,7 @@ bool je_io_gamepad_is_active(
     return gamepad->_enabled;
 }
 bool je_io_gamepad_get_button_down(
-    je_io_gamepad_handle_t gamepad, jeecs::input::gamepadcode code)
+    je_io_gamepad_handle_t gamepad, je_Gamepadcode code)
 {
     if (!gamepad->_enabled)
         return false;
@@ -318,7 +318,7 @@ bool je_io_gamepad_get_button_down(
     return gamepad->_key_states[(size_t)code];
 }
 void je_io_gamepad_update_button_state(
-    je_io_gamepad_handle_t gamepad, jeecs::input::gamepadcode code, bool down)
+    je_io_gamepad_handle_t gamepad, je_Gamepadcode code, bool down)
 {
     if (!gamepad->_enabled)
     {
@@ -331,7 +331,7 @@ void je_io_gamepad_update_button_state(
 }
 
 void je_io_gamepad_get_stick(
-    je_io_gamepad_handle_t gamepad, jeecs::input::joystickcode stickid, float *out_x, float *out_y)
+    je_io_gamepad_handle_t gamepad, je_Joystickcode stickid, float *out_x, float *out_y)
 {
     if (!gamepad->_enabled)
     {
@@ -344,7 +344,7 @@ void je_io_gamepad_get_stick(
     *out_y = stick._position.y;
 }
 void je_io_gamepad_update_stick(
-    je_io_gamepad_handle_t gamepad, jeecs::input::joystickcode stickid, float x, float y)
+    je_io_gamepad_handle_t gamepad, je_Joystickcode stickid, float x, float y)
 {
     if (!gamepad->_enabled)
     {
@@ -366,7 +366,7 @@ void je_io_gamepad_update_stick(
 }
 
 void je_io_gamepad_stick_set_deadzone(
-    je_io_gamepad_handle_t gamepad, jeecs::input::joystickcode stickid, float deadzone)
+    je_io_gamepad_handle_t gamepad, je_Joystickcode stickid, float deadzone)
 {
     if (!gamepad->_enabled)
     {

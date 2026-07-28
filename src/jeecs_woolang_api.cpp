@@ -918,13 +918,13 @@ WOORT_API woort_api wojeapi_get_components_member(void)
 // INPUTS
 WOORT_API woort_api wojeapi_input_keydown(void)
 {
-    return woort_ret_bool(jeecs::input::keydown((jeecs::input::keycode)woort_int(0)));
+    return woort_ret_bool(jeecs::input::keydown((je_Keycode)woort_int(0)));
 }
 
 WOORT_API woort_api wojeapi_input_mousedown(void)
 {
     return woort_ret_bool(jeecs::input::mousedown(
-        (size_t)woort_int(0), (jeecs::input::mousecode)woort_int(1)));
+        (size_t)woort_int(0), (je_Mousecode)woort_int(1)));
 }
 
 WOORT_API woort_api wojeapi_wheel_count(void)
@@ -1037,8 +1037,8 @@ WOORT_API woort_api wojeapi_input_gamepad_button(void)
 {
     jeecs::input::gamepad* gamepad =
         (jeecs::input::gamepad*)woort_gcpointer(0);
-    jeecs::input::gamepadcode kcode =
-        (jeecs::input::gamepadcode)woort_int(1);
+    je_Gamepadcode kcode =
+        (je_Gamepadcode)woort_int(1);
 
     return woort_ret_bool(gamepad->button(kcode));
 }
@@ -1051,8 +1051,8 @@ WOORT_API woort_api wojeapi_input_gamepad_axis(void)
 
     jeecs::input::gamepad* gamepad =
         (jeecs::input::gamepad*)woort_gcpointer(0);
-    jeecs::input::joystickcode kcode =
-        (jeecs::input::joystickcode)woort_int(1);
+    je_Joystickcode kcode =
+        (je_Joystickcode)woort_int(1);
 
     auto axis = gamepad->stick(kcode);
 
@@ -3824,7 +3824,7 @@ WOORT_API woort_api wojeapi_audio_effect_slot_update(void)
 WOORT_API woort_api wojeapi_input_update_mouse_state(void)
 {
     auto group = (size_t)woort_int(0);
-    auto key = (jeecs::input::mousecode)woort_int(1);
+    auto key = (je_Mousecode)woort_int(1);
     auto down = woort_bool(2);
 
     je_io_update_mouse_state(group, key, down);
@@ -3840,7 +3840,7 @@ WOORT_API woort_api wojeapi_input_update_wheel(void)
 }
 WOORT_API woort_api wojeapi_input_update_key_state(void)
 {
-    auto key = (jeecs::input::keycode)woort_int(0);
+    auto key = (je_Keycode)woort_int(0);
     auto down = woort_bool(1);
 
     je_io_update_key_state(key, down);

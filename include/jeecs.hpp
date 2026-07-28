@@ -224,6 +224,176 @@ typedef struct je_GameEntity {
     je_Version _m_version;
 } je_GameEntity;
 
+// ---- 输入码（input）C 枚举 ----
+// 原 jeecs::input 的 enum class 已迁移为 C 枚举（je_*），C++ 直接使用。
+// 枚举项加 JE_<KIND>_ 前缀以避免不同输入码间的同名冲突（如 LEFT/RIGHT/A/B）。
+typedef enum je_Mousecode {
+    JE_MOUSE_LEFT,
+    JE_MOUSE_MID,
+    JE_MOUSE_RIGHT,
+
+    JE_MOUSE_CUSTOM_0 = 16,
+    JE_MOUSE_CUSTOM_1,
+    JE_MOUSE_CUSTOM_2,
+    JE_MOUSE_CUSTOM_3,
+    JE_MOUSE_CUSTOM_4,
+    JE_MOUSE_CUSTOM_5,
+    JE_MOUSE_CUSTOM_6,
+    JE_MOUSE_CUSTOM_7,
+    JE_MOUSE_CUSTOM_8,
+
+    JE_MOUSE_COUNT,
+} je_Mousecode;
+
+typedef enum je_Keycode {
+    JE_KEY_UNKNOWN = 0,
+
+    JE_KEY_APOSTROPHE = '\'',
+    JE_KEY_COMMA = ',',
+    JE_KEY_MINUS = '-',
+    JE_KEY_PERIOD = '.',
+    JE_KEY_SLASH = '/',
+
+    JE_KEY_A = 'A',
+    JE_KEY_B,
+    JE_KEY_C,
+    JE_KEY_D,
+    JE_KEY_E,
+    JE_KEY_F,
+    JE_KEY_G,
+    JE_KEY_H,
+    JE_KEY_I,
+    JE_KEY_J,
+    JE_KEY_K,
+    JE_KEY_L,
+    JE_KEY_M,
+    JE_KEY_N,
+    JE_KEY_O,
+    JE_KEY_P,
+    JE_KEY_Q,
+    JE_KEY_R,
+    JE_KEY_S,
+    JE_KEY_T,
+    JE_KEY_U,
+    JE_KEY_V,
+    JE_KEY_W,
+    JE_KEY_X,
+    JE_KEY_Y,
+    JE_KEY_Z,
+    JE_KEY_1 = '1',
+    JE_KEY_2,
+    JE_KEY_3,
+    JE_KEY_4,
+    JE_KEY_5,
+    JE_KEY_6,
+    JE_KEY_7,
+    JE_KEY_8,
+    JE_KEY_9,
+    JE_KEY_0,
+    JE_KEY_SPACE = ' ',
+
+    JE_KEY_SEMICOLON = ';',
+    JE_KEY_EQUAL = '=',
+    JE_KEY_LEFT_BRACKET = '[',
+    JE_KEY_BACKSLASH = '\\',
+    JE_KEY_RIGHT_BRACKET = ']',
+    JE_KEY_GRAVE_ACCENT = '`',
+
+    JE_KEY_L_SHIFT = 128,
+    JE_KEY_R_SHIFT,
+    JE_KEY_L_CTRL,
+    JE_KEY_R_CTRL,
+    JE_KEY_L_ALT,
+    JE_KEY_R_ALT,
+    JE_KEY_TAB,
+    JE_KEY_ENTER,
+    JE_KEY_ESC,
+    JE_KEY_BACKSPACE,
+
+    JE_KEY_NP_0,
+    JE_KEY_NP_1,
+    JE_KEY_NP_2,
+    JE_KEY_NP_3,
+    JE_KEY_NP_4,
+    JE_KEY_NP_5,
+    JE_KEY_NP_6,
+    JE_KEY_NP_7,
+    JE_KEY_NP_8,
+    JE_KEY_NP_9,
+    JE_KEY_NP_DECIMAL,
+    JE_KEY_NP_DIVIDE,
+    JE_KEY_NP_MULTIPLY,
+    JE_KEY_NP_SUBTRACT,
+    JE_KEY_NP_ADD,
+    JE_KEY_NP_ENTER,
+
+    JE_KEY_UP,
+    JE_KEY_DOWN,
+    JE_KEY_LEFT,
+    JE_KEY_RIGHT,
+
+    JE_KEY_F1,
+    JE_KEY_F2,
+    JE_KEY_F3,
+    JE_KEY_F4,
+    JE_KEY_F5,
+    JE_KEY_F6,
+    JE_KEY_F7,
+    JE_KEY_F8,
+    JE_KEY_F9,
+    JE_KEY_F10,
+    JE_KEY_F11,
+    JE_KEY_F12,
+    JE_KEY_F13,
+    JE_KEY_F14,
+    JE_KEY_F15,
+    JE_KEY_F16,
+
+    JE_KEY_CUSTOM_0 = 256,
+    JE_KEY_CUSTOM_1,
+    JE_KEY_CUSTOM_2,
+    JE_KEY_CUSTOM_3,
+    JE_KEY_CUSTOM_4,
+    JE_KEY_CUSTOM_5,
+    JE_KEY_CUSTOM_6,
+    JE_KEY_CUSTOM_7,
+    JE_KEY_CUSTOM_8,
+
+    JE_KEY_COUNT,
+} je_Keycode;
+
+typedef enum je_Gamepadcode {
+    JE_GAMEPAD_UP,
+    JE_GAMEPAD_DOWN,
+    JE_GAMEPAD_LEFT,
+    JE_GAMEPAD_RIGHT,
+
+    JE_GAMEPAD_A,
+    JE_GAMEPAD_B,
+    JE_GAMEPAD_X,
+    JE_GAMEPAD_Y,
+
+    JE_GAMEPAD_LB,
+    JE_GAMEPAD_RB,
+    JE_GAMEPAD_LS,
+    JE_GAMEPAD_RS,
+
+    JE_GAMEPAD_SELECT,
+    JE_GAMEPAD_START,
+    JE_GAMEPAD_GUIDE,
+
+    JE_GAMEPAD_COUNT,
+} je_Gamepadcode;
+
+typedef enum je_Joystickcode {
+    JE_JOY_L,
+    JE_JOY_R,
+    JE_JOY_LT, // Use x value only.
+    JE_JOY_RT, // Use x value only.
+
+    JE_JOY_COUNT,
+} je_Joystickcode;
+
 // ---- C ABI 不透明句柄（opaque handle）前向声明 ----
 // 这些类型对外仅暴露指针；完整定义在引擎内部（src/）。C/C++ 通用，二进制兼容。
 typedef struct je_GraphicUhost    je_GraphicUhost;      // 图形渲染宿主上下文
@@ -637,175 +807,8 @@ namespace jeecs
     {
         constexpr size_t MAX_MOUSE_GROUP_COUNT = 16;
 
-        enum class mousecode : uint8_t
-        {
-            LEFT,
-            MID,
-            RIGHT,
-
-            CUSTOM_0 = 16,
-            CUSTOM_1,
-            CUSTOM_2,
-            CUSTOM_3,
-            CUSTOM_4,
-            CUSTOM_5,
-            CUSTOM_6,
-            CUSTOM_7,
-            CUSTOM_8,
-
-            _COUNT, //
-        };
-        enum class keycode : uint16_t
-        {
-            UNKNOWN = 0,
-
-            APOSTROPHE = '\'',
-            COMMA = ',',
-            MINUS = '-',
-            PERIOD = '.',
-            SLASH = '/',
-
-            A = 'A',
-            B,
-            C,
-            D,
-            E,
-            F,
-            G,
-            H,
-            I,
-            J,
-            K,
-            L,
-            M,
-            N,
-            O,
-            P,
-            Q,
-            R,
-            S,
-            T,
-            U,
-            V,
-            W,
-            X,
-            Y,
-            Z,
-            _1 = '1',
-            _2,
-            _3,
-            _4,
-            _5,
-            _6,
-            _7,
-            _8,
-            _9,
-            _0,
-            _ = ' ',
-
-            SEMICOLON = ';',
-            EQUAL = '=',
-            LEFT_BRACKET = '[',
-            BACKSLASH = '\\',
-            RIGHT_BRACKET = ']',
-            GRAVE_ACCENT = '`',
-
-            L_SHIFT = 128,
-            R_SHIFT,
-            L_CTRL,
-            R_CTRL,
-            L_ALT,
-            R_ALT,
-            TAB,
-            ENTER,
-            ESC,
-            BACKSPACE,
-
-            NP_0,
-            NP_1,
-            NP_2,
-            NP_3,
-            NP_4,
-            NP_5,
-            NP_6,
-            NP_7,
-            NP_8,
-            NP_9,
-            NP_DECIMAL,
-            NP_DIVIDE,
-            NP_MULTIPLY,
-            NP_SUBTRACT,
-            NP_ADD,
-            NP_ENTER,
-
-            UP,
-            DOWN,
-            LEFT,
-            RIGHT,
-
-            F1,
-            F2,
-            F3,
-            F4,
-            F5,
-            F6,
-            F7,
-            F8,
-            F9,
-            F10,
-            F11,
-            F12,
-            F13,
-            F14,
-            F15,
-            F16,
-
-            CUSTOM_0 = 256,
-            CUSTOM_1,
-            CUSTOM_2,
-            CUSTOM_3,
-            CUSTOM_4,
-            CUSTOM_5,
-            CUSTOM_6,
-            CUSTOM_7,
-            CUSTOM_8,
-
-            _COUNT, //
-        };
-        enum class gamepadcode : uint8_t
-        {
-            UP,
-            DOWN,
-            LEFT,
-            RIGHT,
-
-            A,
-            B,
-            X,
-            Y,
-
-            // LT,
-            // RT,
-            LB,
-            RB,
-            LS,
-            RS,
-
-            SELECT,
-            START,
-            GUIDE,
-
-            _COUNT, //
-        };
-        enum class joystickcode : uint8_t
-        {
-            L,
-            R,
-            LT, // Use x value only.
-            RT, // Use x value only.
-
-            _COUNT, //
-        };
+        // 原 je_Mousecode/je_Keycode/je_Gamepadcode/je_Joystickcode 的 enum class 已迁移为
+        // C 枚举 je_Mousecode/je_Keycode/je_Gamepadcode/je_Joystickcode（见文件顶部 C ABI 段）。
     }
 
     /*
@@ -3815,7 +3818,7 @@ JE_API bool jegui_shutdown_callback(void);
 je_io_update_key_state [基本接口]
 更新指定键的状态信息
 */
-JE_API void je_io_update_key_state(jeecs::input::keycode keycode, bool keydown);
+JE_API void je_io_update_key_state(je_Keycode je_Keycode, bool keydown);
 
 /*
 je_io_update_mouse_pos [基本接口]
@@ -3828,7 +3831,7 @@ JE_API void je_io_update_mouse_pos(size_t group, int x, int y);
 je_io_update_mouse_state [基本接口]
 更新鼠标（或触摸点）的状态
 */
-JE_API void je_io_update_mouse_state(size_t group, jeecs::input::mousecode key, bool keydown);
+JE_API void je_io_update_mouse_state(size_t group, je_Mousecode key, bool keydown);
 
 /*
 je_io_update_window_size [基本接口]
@@ -3854,7 +3857,7 @@ JE_API void je_io_update_wheel(size_t group, float x, float y);
 je_io_get_key_down [基本接口]
 获取指定的按键是否被按下
 */
-JE_API bool je_io_get_key_down(jeecs::input::keycode keycode);
+JE_API bool je_io_get_key_down(je_Keycode je_Keycode);
 
 /*
 je_io_get_mouse_pos [基本接口]
@@ -3866,7 +3869,7 @@ JE_API void je_io_get_mouse_pos(size_t group, int* out_x, int* out_y);
 je_io_get_mouse_state [基本接口]
 获取鼠标的按键状态
 */
-JE_API bool je_io_get_mouse_state(size_t group, jeecs::input::mousecode key);
+JE_API bool je_io_get_mouse_state(size_t group, je_Mousecode key);
 
 /*
 je_io_get_window_size [基本接口]
@@ -3993,7 +3996,7 @@ je_io_gamepad_get_button_down [基本接口]
     je_io_close_gamepad
 */
 JE_API bool je_io_gamepad_get_button_down(
-    je_io_gamepad_handle_t gamepad, jeecs::input::gamepadcode code);
+    je_io_gamepad_handle_t gamepad, je_Gamepadcode code);
 /*
 je_io_gamepad_update_button_state [基本接口]
 更新指定的虚拟手柄按键状态，可以被 je_io_gamepad_get_button_down 获取
@@ -4005,7 +4008,7 @@ je_io_gamepad_update_button_state [基本接口]
     je_io_close_gamepad
 */
 JE_API void je_io_gamepad_update_button_state(
-    je_io_gamepad_handle_t gamepad, jeecs::input::gamepadcode code, bool down);
+    je_io_gamepad_handle_t gamepad, je_Gamepadcode code, bool down);
 
 /*
 je_io_gamepad_get_stick [基本接口]
@@ -4018,7 +4021,7 @@ je_io_gamepad_get_stick [基本接口]
     je_io_close_gamepad
 */
 JE_API void je_io_gamepad_get_stick(
-    je_io_gamepad_handle_t gamepad, jeecs::input::joystickcode stickid, float* out_x, float* out_y);
+    je_io_gamepad_handle_t gamepad, je_Joystickcode stickid, float* out_x, float* out_y);
 /*
 je_io_gamepad_update_stick [基本接口]
 更新指定虚拟手柄的指定摇杆的坐标
@@ -4032,7 +4035,7 @@ je_io_gamepad_update_stick [基本接口]
     je_io_close_gamepad
 */
 JE_API void je_io_gamepad_update_stick(
-    je_io_gamepad_handle_t gamepad, jeecs::input::joystickcode stickid, float x, float y);
+    je_io_gamepad_handle_t gamepad, je_Joystickcode stickid, float x, float y);
 
 /*
 je_io_gamepad_stick_set_deadzone [基本接口]
@@ -4041,7 +4044,7 @@ je_io_gamepad_stick_set_deadzone [基本接口]
     * 当设置摇杆的坐标（je_io_gamepad_update_stick）时，如果坐标的模长小于死区，则坐标将被视为0
 */
 JE_API void je_io_gamepad_stick_set_deadzone(
-    je_io_gamepad_handle_t gamepad, jeecs::input::joystickcode stickid, float deadzone);
+    je_io_gamepad_handle_t gamepad, je_Joystickcode stickid, float deadzone);
 
 // Library / Module loader
 
@@ -12269,24 +12272,24 @@ namespace jeecs
 
             je_io_gamepad_handle_t gamepad;
 
-            basic::map<input::keycode, input::gamepadcode> keymap;
-            input::keycode left_stick_up_left_down_right[4];
+            basic::map<je_Keycode, je_Gamepadcode> keymap;
+            je_Keycode left_stick_up_left_down_right[4];
 
             VirtualGamepad()
                 : gamepad(je_io_create_gamepad(nullptr, nullptr))
                 , left_stick_up_left_down_right{
-                    input::keycode::W,
-                    input::keycode::A,
-                    input::keycode::S,
-                    input::keycode::D }
+                    JE_KEY_W,
+                    JE_KEY_A,
+                    JE_KEY_S,
+                    JE_KEY_D }
             {
-                keymap[input::keycode::UP] = input::gamepadcode::UP;
-                keymap[input::keycode::DOWN] = input::gamepadcode::DOWN;
-                keymap[input::keycode::LEFT] = input::gamepadcode::LEFT;
-                keymap[input::keycode::RIGHT] = input::gamepadcode::RIGHT;
+                keymap[JE_KEY_UP] = JE_GAMEPAD_UP;
+                keymap[JE_KEY_DOWN] = JE_GAMEPAD_DOWN;
+                keymap[JE_KEY_LEFT] = JE_GAMEPAD_LEFT;
+                keymap[JE_KEY_RIGHT] = JE_GAMEPAD_RIGHT;
 
-                keymap[input::keycode::ENTER] = input::gamepadcode::START;
-                keymap[input::keycode::ESC] = input::gamepadcode::SELECT;
+                keymap[JE_KEY_ENTER] = JE_GAMEPAD_START;
+                keymap[JE_KEY_ESC] = JE_GAMEPAD_SELECT;
             }
             VirtualGamepad(const VirtualGamepad& another)
                 : gamepad(je_io_create_gamepad(nullptr, nullptr))
@@ -12945,11 +12948,11 @@ namespace jeecs
     }
     namespace input
     {
-        inline bool keydown(keycode key)
+        inline bool keydown(je_Keycode key)
         {
             return je_io_get_key_down(key);
         }
-        inline bool mousedown(size_t group, mousecode key)
+        inline bool mousedown(size_t group, je_Mousecode key)
         {
             return je_io_get_mouse_state(group, key);
         }
@@ -13052,11 +13055,11 @@ namespace jeecs
             gamepad& operator=(gamepad&&) = default;
             ~gamepad() = default;
 
-            bool button(gamepadcode button) const
+            bool button(je_Gamepadcode button) const
             {
                 return je_io_gamepad_get_button_down(m_gamepad_handle, button);
             }
-            math::vec2 stick(joystickcode stick) const
+            math::vec2 stick(je_Joystickcode stick) const
             {
                 float x, y;
                 je_io_gamepad_get_stick(m_gamepad_handle, stick, &x, &y);
