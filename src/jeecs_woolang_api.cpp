@@ -488,11 +488,11 @@ WOORT_API woort_api wojeapi_add_entity_to_world_with_components(void)
     }
 
     return woort_ret_gchandle(
-        new jeecs::game_entity(gworld._add_entity(components)),
+        new je_GameEntity(gworld._add_entity(components)._m_raw),
         WOORT_IGNORE,
         [](void* ptr)
         {
-            delete (jeecs::game_entity*)ptr;
+            delete (je_GameEntity*)ptr;
         },
         nullptr);
 }
@@ -500,14 +500,17 @@ WOORT_API woort_api wojeapi_add_entity_to_world_with_components(void)
 WOORT_API woort_api wojeapi_add_entity_to_world_with_prefab(void)
 {
     jeecs::game_world gworld(woort_pointer(0));
-    jeecs::game_entity* const prefab_entity = static_cast<jeecs::game_entity*>(woort_gcpointer(1));
+    je_GameEntity* const prefab_entity = static_cast<je_GameEntity*>(woort_gcpointer(1));
+
+    je_GameEntity* _e = new je_GameEntity{};
+    je_ecs_world_create_entity_with_prefab(gworld.handle(), _e, prefab_entity);
 
     return woort_ret_gchandle(
-        new jeecs::game_entity(gworld.add_entity(*prefab_entity)),
+        _e,
         WOORT_IGNORE,
         [](void* ptr)
         {
-            delete (jeecs::game_entity*)ptr;
+            delete (je_GameEntity*)ptr;
         },
         nullptr);
 }
@@ -534,11 +537,11 @@ WOORT_API woort_api wojeapi_add_prefab_to_world_with_components(void)
     }
 
     return woort_ret_gchandle(
-        new jeecs::game_entity(gworld._add_prefab(components)),
+        new je_GameEntity(gworld._add_prefab(components)._m_raw),
         WOORT_IGNORE,
         [](void* ptr)
         {
-            delete (jeecs::game_entity*)ptr;
+            delete (je_GameEntity*)ptr;
         },
         nullptr);
 }
@@ -594,7 +597,7 @@ WOORT_API woort_api wojeapi_get_all_entities_from_world(void)
                 WOORT_IGNORE,
                 [](void* entity_ptr)
                 {
-                    jedbg_free_entity((jeecs::game_entity*)entity_ptr);
+                    jedbg_free_entity((je_GameEntity*)entity_ptr);
                 },
                 nullptr);
             woort_vec_push(out_arr, elem);
@@ -608,21 +611,26 @@ WOORT_API woort_api wojeapi_get_all_entities_from_world(void)
 // ECS ENTITY
 WOORT_API woort_api wojeapi_close_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
-    entity->close();
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
+    if (entity->_m_in_chunk != nullptr)
+    {
+        void* _w = je_ecs_world_of_entity(entity);
+        if (_w != nullptr)
+            je_ecs_world_destroy_entity(_w, entity);
+    }
     return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_get_world_from_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
     void* world = je_ecs_world_of_entity(entity);
     return woort_ret_pointer(world);
 }
 
 WOORT_API woort_api wojeapi_get_entity_uid(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
     je_DebugEid uid = jedbg_get_entity_uid(entity);
 
     if (uid != 0)
@@ -632,9 +640,9 @@ WOORT_API woort_api wojeapi_get_entity_uid(void)
 
 WOORT_API woort_api wojeapi_get_entity_anchor_uuid(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
-    if (auto* anc = entity->get_component<jeecs::Transform::Anchor>())
+    if (auto* anc = (jeecs::Transform::Anchor*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Transform::Anchor>()))
     {
         anc->uid.JEParseToScriptType(WOORT_RETURN_SLOT);
         return woort_ret_option_value(WOORT_RETURN_SLOT);
@@ -644,8 +652,8 @@ WOORT_API woort_api wojeapi_get_entity_anchor_uuid(void)
 }
 WOORT_API woort_api wojeapi_get_parent_anchor_uid(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
-    if (auto* l2p = entity->get_component<jeecs::Transform::LocalToParent>())
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
+    if (auto* l2p = (jeecs::Transform::LocalToParent*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Transform::LocalToParent>()))
     {
         l2p->parent_uid.JEParseToScriptType(WOORT_RETURN_SLOT);
         return woort_ret_option_value(WOORT_RETURN_SLOT);
@@ -656,24 +664,24 @@ WOORT_API woort_api wojeapi_get_parent_anchor_uid(void)
 
 WOORT_API woort_api wojeapi_set_parent(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
-    jeecs::game_entity* parent = (jeecs::game_entity*)woort_gcpointer(1);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
+    je_GameEntity* parent = (je_GameEntity*)woort_gcpointer(1);
     bool force = woort_bool(2);
 
-    auto* l2p = entity->get_component<jeecs::Transform::LocalToParent>();
-    auto* ca = parent->get_component<jeecs::Transform::Anchor>();
+    auto* l2p = (jeecs::Transform::LocalToParent*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Transform::LocalToParent>());
+    auto* ca = (jeecs::Transform::Anchor*)je_ecs_world_entity_get_component(parent, jeecs::typing::id<jeecs::Transform::Anchor>());
     if (force)
     {
         if (nullptr == l2p)
-            l2p = entity->add_component<jeecs::Transform::LocalToParent>();
+            l2p = (jeecs::Transform::LocalToParent*)je_ecs_world_entity_add_component(entity, jeecs::typing::id<jeecs::Transform::LocalToParent>());
         if (nullptr == ca)
-            ca = parent->add_component<jeecs::Transform::Anchor>();
+            ca = (jeecs::Transform::Anchor*)je_ecs_world_entity_add_component(parent, jeecs::typing::id<jeecs::Transform::Anchor>());
     }
 
     if (l2p && ca)
     {
-        if (entity->get_component<jeecs::Transform::LocalToWorld>())
-            entity->remove_component<jeecs::Transform::LocalToWorld>();
+        if ((jeecs::Transform::LocalToWorld*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Transform::LocalToWorld>()))
+            je_ecs_world_entity_remove_component(entity, jeecs::typing::id<jeecs::Transform::LocalToWorld>());
 
         l2p->parent_uid = ca->uid;
         return woort_ret_bool(true);
@@ -684,21 +692,21 @@ WOORT_API woort_api wojeapi_set_parent(void)
 
 WOORT_API woort_api wojeapi_set_parent_with_uid(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
     bool force = woort_bool(2);
 
-    auto* l2p = entity->get_component<jeecs::Transform::LocalToParent>();
+    auto* l2p = (jeecs::Transform::LocalToParent*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Transform::LocalToParent>());
     if (force)
     {
         if (nullptr == l2p)
-            l2p = entity->add_component<jeecs::Transform::LocalToParent>();
+            l2p = (jeecs::Transform::LocalToParent*)je_ecs_world_entity_add_component(entity, jeecs::typing::id<jeecs::Transform::LocalToParent>());
     }
 
     if (l2p)
     {
-        if (entity->get_component<jeecs::Transform::LocalToWorld>())
-            entity->remove_component<jeecs::Transform::LocalToWorld>();
+        if ((jeecs::Transform::LocalToWorld*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Transform::LocalToWorld>()))
+            je_ecs_world_entity_remove_component(entity, jeecs::typing::id<jeecs::Transform::LocalToWorld>());
 
         l2p->parent_uid.JEParseFromScriptType(1);
         return woort_ret_bool(true);
@@ -709,13 +717,13 @@ WOORT_API woort_api wojeapi_set_parent_with_uid(void)
 
 WOORT_API woort_api wojeapi_get_entity_name(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
     return woort_ret_string(je_ecs_get_name_of_entity(entity));
 }
 
 WOORT_API woort_api wojeapi_set_entity_name(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
     je_ecs_set_name_of_entity(entity, woort_string(1));
     return woort_ret_void();
 }
@@ -723,7 +731,7 @@ WOORT_API woort_api wojeapi_set_entity_name(void)
 WOORT_API woort_api wojeapi_get_entity_chunk_info(void)
 {
     char buf[64];
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
     int result = snprintf(buf, sizeof(buf), "[%p:%uv%u]", entity->_m_in_chunk, entity->_m_id, entity->_m_version);
     assert(result > 0 && result < (int)sizeof(buf));
@@ -734,7 +742,7 @@ WOORT_API woort_api wojeapi_get_entity_chunk_info(void)
 
 WOORT_API woort_api wojeapi_find_entity_with_chunk_info(void)
 {
-    jeecs::game_entity* entity = new jeecs::game_entity();
+    je_GameEntity* entity = new je_GameEntity();
     ((void)sscanf(woort_string(0), "[%p:%uv%u]", &entity->_m_in_chunk, &entity->_m_id, &entity->_m_version));
 
     return woort_ret_gchandle(
@@ -742,14 +750,14 @@ WOORT_API woort_api wojeapi_find_entity_with_chunk_info(void)
         WOORT_IGNORE,
         [](void* ptr)
         {
-            delete (jeecs::game_entity*)ptr;
+            delete (je_GameEntity*)ptr;
         },
         nullptr);
 }
 
 WOORT_API woort_api wojeapi_get_all_components_types_from_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
     woort_value s;
 
@@ -776,7 +784,7 @@ WOORT_API woort_api wojeapi_get_all_components_types_from_entity(void)
 
 WOORT_API woort_api wojeapi_get_component_from_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
     auto* const component_addr =
         je_ecs_world_entity_get_component(entity,
@@ -790,7 +798,7 @@ WOORT_API woort_api wojeapi_get_component_from_entity(void)
 
 WOORT_API woort_api wojeapi_add_component_from_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
     return woort_ret_pointer(je_ecs_world_entity_add_component(entity,
         ((const je_TypeInfo*)woort_pointer(1))->m_id));
@@ -798,7 +806,7 @@ WOORT_API woort_api wojeapi_add_component_from_entity(void)
 
 WOORT_API woort_api wojeapi_remove_component_from_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
     je_ecs_world_entity_remove_component(
         entity, ((const je_TypeInfo*)woort_pointer(1))->m_id);
@@ -807,18 +815,18 @@ WOORT_API woort_api wojeapi_remove_component_from_entity(void)
 
 WOORT_API woort_api wojeapi_is_top_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
-    return woort_ret_bool(nullptr == entity->get_component<jeecs::Transform::LocalToParent>());
+    return woort_ret_bool(nullptr == (jeecs::Transform::LocalToParent*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Transform::LocalToParent>()));
 }
 
 WOORT_API woort_api wojeapi_is_child_of_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
-    jeecs::game_entity* parent = (jeecs::game_entity*)woort_gcpointer(1);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
+    je_GameEntity* parent = (je_GameEntity*)woort_gcpointer(1);
 
-    jeecs::Transform::LocalToParent* l2p = entity->get_component<jeecs::Transform::LocalToParent>();
-    jeecs::Transform::Anchor* archor = parent->get_component<jeecs::Transform::Anchor>();
+    jeecs::Transform::LocalToParent* l2p = (jeecs::Transform::LocalToParent*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Transform::LocalToParent>());
+    jeecs::Transform::Anchor* archor = (jeecs::Transform::Anchor*)je_ecs_world_entity_get_component(parent, jeecs::typing::id<jeecs::Transform::Anchor>());
 
     if (l2p && archor)
     {
@@ -1708,7 +1716,7 @@ WOORT_API woort_api wojeapi_shader_create(void)
 
 WOORT_API woort_api wojeapi_textures_of_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
     woort_value s;
     if (!woort_push_reserve(3, &s))
@@ -1719,7 +1727,7 @@ WOORT_API woort_api wojeapi_textures_of_entity(void)
 
     woort_set_map(out_map);
 
-    if (jeecs::Renderer::Textures* textures = entity->get_component<jeecs::Renderer::Textures>())
+    if (jeecs::Renderer::Textures* textures = (jeecs::Renderer::Textures*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Renderer::Textures>()))
     {
         for (auto& texture : textures->textures)
         {
@@ -1740,9 +1748,9 @@ WOORT_API woort_api wojeapi_textures_of_entity(void)
 
 WOORT_API woort_api wojeapi_bind_texture_for_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
-    if (jeecs::Renderer::Textures* textures = entity->get_component<jeecs::Renderer::Textures>())
+    if (jeecs::Renderer::Textures* textures = (jeecs::Renderer::Textures*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Renderer::Textures>()))
     {
         if (woort_option_get(WOORT_RETURN_SLOT, 2))
         {
@@ -1763,9 +1771,9 @@ WOORT_API woort_api wojeapi_bind_texture_for_entity(void)
 
 WOORT_API woort_api wojeapi_set_shape_for_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
-    if (jeecs::Renderer::Shape* shape = entity->get_component<jeecs::Renderer::Shape>())
+    if (jeecs::Renderer::Shape* shape = (jeecs::Renderer::Shape*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Renderer::Shape>()))
     {
         if (woort_option_get(WOORT_RETURN_SLOT, 1))
             shape->vertex.emplace(*(jeecs::basic::resource<jeecs::graphic::vertex> *)woort_gcpointer(WOORT_RETURN_SLOT));
@@ -1780,9 +1788,9 @@ WOORT_API woort_api wojeapi_set_shape_for_entity(void)
 
 WOORT_API woort_api wojeapi_get_shape_of_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
-    if (jeecs::Renderer::Shape* shape = entity->get_component<jeecs::Renderer::Shape>())
+    if (jeecs::Renderer::Shape* shape = (jeecs::Renderer::Shape*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Renderer::Shape>()))
     {
         if (shape->vertex.has_value())
             return woort_ret_option_gchandle(
@@ -1897,7 +1905,7 @@ WOORT_API woort_api wojeapi_vertex_path(void)
 
 WOORT_API woort_api wojeapi_shaders_of_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
     woort_value s;
     if (!woort_push_reserve(2, &s))
@@ -1908,7 +1916,7 @@ WOORT_API woort_api wojeapi_shaders_of_entity(void)
 
     woort_set_vec(out_array);
 
-    if (jeecs::Renderer::Shaders* shaders = entity->get_component<jeecs::Renderer::Shaders>())
+    if (jeecs::Renderer::Shaders* shaders = (jeecs::Renderer::Shaders*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Renderer::Shaders>()))
     {
         for (auto& shader : shaders->shaders)
         {
@@ -1934,10 +1942,10 @@ WOORT_API woort_api wojeapi_reload_texture_of_entity(void);
 
 WOORT_API woort_api wojeapi_set_shaders_of_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
     const woort_value shader_array = 1;
 
-    if (jeecs::Renderer::Shaders* shaders = entity->get_component<jeecs::Renderer::Shaders>())
+    if (jeecs::Renderer::Shaders* shaders = (jeecs::Renderer::Shaders*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Renderer::Shaders>()))
     {
         shaders->shaders.clear();
         const size_t arrsize = woort_vec_len(shader_array);
@@ -2235,7 +2243,7 @@ WOORT_API woort_api wojeapi_framebuffer_get_size(void)
 
 WOORT_API woort_api wojeapi_get_entity_arch_information(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
     size_t chunk_size = 0, entity_size = 0, entity_count = 0;
 
     jedbg_get_entity_arch_information(entity, &chunk_size, &entity_size, &entity_count);

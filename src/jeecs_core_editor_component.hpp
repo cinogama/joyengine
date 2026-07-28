@@ -561,12 +561,14 @@ WOORT_API woort_api wojeapi_get_bad_shader_list_of_entity(void)
     return woort_ret_value(result);
 }
 
-je_DebugEid jedbg_get_entity_uid(const jeecs::game_entity* e)
+je_DebugEid jedbg_get_entity_uid(const je_GameEntity* e)
 {
-    auto* eid = e->get_component<jeecs::Editor::EntityId>();
+    auto* eid = (jeecs::Editor::EntityId*)je_ecs_world_entity_get_component(
+        e, jeecs::typing::id<jeecs::Editor::EntityId>());
     if (eid == nullptr)
     {
-        eid = e->add_component<jeecs::Editor::EntityId>();
+        eid = (jeecs::Editor::EntityId*)je_ecs_world_entity_add_component(
+            e, jeecs::typing::id<jeecs::Editor::EntityId>());
         return 0 /* invalid */;
     }
     return eid->eid;

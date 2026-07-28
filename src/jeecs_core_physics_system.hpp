@@ -345,7 +345,7 @@ namespace jeecs
                     assert(f.m_requirement == requirement::type::CONTAINS
                         || f.m_requirement == requirement::type::EXCEPT);
 
-                    const bool has = je_ecs_world_entity_get_component(&e, f.m_type->m_id) != nullptr;
+                    const bool has = je_ecs_world_entity_get_component(&e._m_raw, f.m_type->m_id) != nullptr;
                     if ((f.m_requirement == requirement::type::CONTAINS) != has)
                     {
                         matches = false;

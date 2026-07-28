@@ -27,18 +27,21 @@ WOORT_API woort_api wojeapi_smooth_deltatime(void)
     return woort_ret_real(jeecs::script::current_script_game_system_instance->deltatimed());
 }
 
-const char* je_ecs_get_name_of_entity(const jeecs::game_entity* entity)
+const char* je_ecs_get_name_of_entity(const je_GameEntity* entity)
 {
-    jeecs::Editor::Name* c_name = entity->get_component<jeecs::Editor::Name>();
+    auto* c_name = (jeecs::Editor::Name*)je_ecs_world_entity_get_component(
+        entity, jeecs::typing::id<jeecs::Editor::Name>());
     if (c_name)
         return c_name->name.c_str();
     return "";
 }
-const char* je_ecs_set_name_of_entity(const jeecs::game_entity* entity, const char* name)
+const char* je_ecs_set_name_of_entity(const je_GameEntity* entity, const char* name)
 {
-    jeecs::Editor::Name* c_name = entity->get_component<jeecs::Editor::Name>();
+    auto* c_name = (jeecs::Editor::Name*)je_ecs_world_entity_get_component(
+        entity, jeecs::typing::id<jeecs::Editor::Name>());
     if (!c_name)
-        c_name = entity->add_component<jeecs::Editor::Name>();
+        c_name = (jeecs::Editor::Name*)je_ecs_world_entity_add_component(
+            entity, jeecs::typing::id<jeecs::Editor::Name>());
 
     if (c_name)
         return (c_name->name = name).c_str();

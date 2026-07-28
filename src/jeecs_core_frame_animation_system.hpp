@@ -61,7 +61,7 @@ namespace jeecs
 
                                             assert(cdata.m_component_type != nullptr && cdata.m_member_info != nullptr);
 
-                                            auto* component_addr = je_ecs_world_entity_get_component(&e, cdata.m_component_type->m_id);
+                                            auto* component_addr = je_ecs_world_entity_get_component(&e._m_raw, cdata.m_component_type->m_id);
                                             if (component_addr == nullptr)
                                                 // 没有这个组件，忽略之
                                                 continue;
