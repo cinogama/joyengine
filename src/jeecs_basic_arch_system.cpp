@@ -23,6 +23,17 @@
 
 #define jeoffsetof(T, M) ((::size_t)&reinterpret_cast<char const volatile &>((((T *)0)->M)))
 
+struct je_CollectedRequirements
+{
+    using types_set = std::set<je_TypeId>;
+
+    types_set m_contain_set;
+    types_set m_except_set;
+    std::map<int /*je_ComponentRequirementKind*/, types_set> m_anyof_sets;
+
+    std::vector<je_DependenceArchInfos> m_selected_archs;
+};
+
 /*
  * 欢迎来到罪恶和灾难之地！这里是ArchSystem，整个引擎最黑暗扭曲的阴暗之地！
  * 所有的并行、组件、实体（如果存在的话）、世界、整个上下文，都处于这个混沌
@@ -57,7 +68,7 @@
 
 namespace jeecs_impl
 {
-    using types_set = std::set<je_TypeId>;
+    using types_set = je_CollectedRequirements::types_set;
 
     constexpr size_t CHUNK_SIZE = 16 * 1024; // 16K
 
@@ -722,7 +733,7 @@ namespace jeecs_impl
                 if (prefab == nullptr)
                     jeecs::typing::construct(arch_typeinfo.second.m_typeinfo, component_addr);
                 else
-                    jeecs::typing::copy(arch_typeinfo.second.m_typeinfo, 
+                    jeecs::typing::copy(arch_typeinfo.second.m_typeinfo,
                         component_addr, prefab->get_component(arch_typeinfo.second.m_typeinfo->m_id));
             }
 
@@ -854,7 +865,7 @@ namespace jeecs_impl
         inline void update_dependence_archinfo(jeecs::dependence* dependence) const noexcept
         {
             types_set contain_set, except_set /*, maynot_set*/;
-            std::map<je_ComponentRequirementKind, types_set> anyof_sets;
+            std::map<int, types_set> anyof_sets;
 
             for (auto& requirement : dependence->m_requirements)
             {
@@ -871,7 +882,7 @@ namespace jeecs_impl
                 default /* JE_COMPONENT_REQUIRE_ANYOF_0... */:
                     anyof_sets[requirement.m_kind].insert(requirement.m_typeid);
                     break;
-               
+
                 }
             }
 
@@ -890,7 +901,7 @@ namespace jeecs_impl
                     return b.empty();
                 };
             static auto contain_all_any = [](
-                const types_set& a, const std::map<je_ComponentRequirementKind, types_set>& b)
+                const types_set& a, const std::map<int, types_set>& b)
                 {
                     for (auto& [_, type_id_set] : b)
                         if (contain_any(a, type_id_set) == false)
@@ -912,8 +923,8 @@ namespace jeecs_impl
                 for (auto& [typeset, arch] : _m_arch_types_mapping)
                 {
                     if (contains(typeset, contain_set)
-                        && contain_all_any(typeset, anyof_sets)
-                        && except(typeset, except_set))
+                        && except(typeset, except_set)
+                        && contain_all_any(typeset, anyof_sets))
                     {
                         // Current arch is matched!
                         arch->create_chunk_info(
@@ -1446,7 +1457,6 @@ namespace jeecs_impl
                     }
                 }
             }
-
             return !_m_destroying_flag;
         }
 
@@ -2706,8 +2716,8 @@ void je_ecs_world_create_entity_with_components(
         ->create_entity_with_component(types, JE_ENTITY_STAT_READY);
 
     out_entity->_m_in_chunk = entity._m_in_chunk;
-                    out_entity->_m_id = entity._m_id;
-                    out_entity->_m_version = entity._m_version;
+    out_entity->_m_id = entity._m_id;
+    out_entity->_m_version = entity._m_version;
 }
 void je_ecs_world_create_prefab_with_components(
     void* world,
@@ -2721,8 +2731,8 @@ void je_ecs_world_create_prefab_with_components(
     auto entity = static_cast<jeecs_impl::ecs_world*>(world)
         ->create_entity_with_component(types, JE_ENTITY_STAT_PREFAB);
     out_entity->_m_in_chunk = entity._m_in_chunk;
-                    out_entity->_m_id = entity._m_id;
-                    out_entity->_m_version = entity._m_version;
+    out_entity->_m_id = entity._m_id;
+    out_entity->_m_version = entity._m_version;
 }
 
 void je_ecs_world_create_entity_with_prefab(
@@ -2734,8 +2744,18 @@ void je_ecs_world_create_entity_with_prefab(
         ->create_entity_with_prefab(
             reinterpret_cast<const jeecs_impl::arch_type::entity*>(prefab));
     out_entity->_m_in_chunk = entity._m_in_chunk;
-                    out_entity->_m_id = entity._m_id;
-                    out_entity->_m_version = entity._m_version;
+    out_entity->_m_id = entity._m_id;
+    out_entity->_m_version = entity._m_version;
+}
+
+void je_ecs_collect_requirements(
+    void* world,
+    je_RequirementCollection* modify_collection,
+    const je_ComponentRequirement* requirements,
+    size_t view_requiremnt_count,
+    size_t other_requiremnts_count)
+{
+    // static_cast<jeecs_impl::ecs_world*>(world)->update_dependence_archinfo(modify_collection);
 }
 
 void je_ecs_world_update_dependences_archinfo(void* world, jeecs::dependence* dependence)

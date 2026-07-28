@@ -1501,7 +1501,7 @@ typedef enum je_ComponentRequirementKind
     JE_COMPONENT_REQUIRE_CONTAINS,  // Must have spcify component
     JE_COMPONENT_REQUIRE_MAYNOT,    // May have or not have
     JE_COMPONENT_REQUIRE_EXCEPT,    // Must not contain spcify component
-    JE_COMPONENT_REQUIRE_ANYOF_0,     // Must have one of 'ANYOF' components
+    JE_COMPONENT_REQUIRE_ANYOF_0,   // Must have one of 'ANYOF' components
 
 }je_ComponentRequirementKind;
 
@@ -1510,11 +1510,9 @@ typedef struct je_ComponentRequirement {
     je_TypeId                           m_typeid;
 }je_ComponentRequirement;
 
-typedef struct je_RequirementCollection je_RequirementCollection;
-
 typedef struct je_DependenceArchInfos
 {
-    void* m_arch;
+    void*   m_arch;
     size_t  m_entity_count;
 
     // View detail.
@@ -1523,12 +1521,21 @@ typedef struct je_DependenceArchInfos
 
 } je_DependenceArchInfos;
 
-typedef struct je_Dependence {
-    je_DependenceArchInfos* m_archs;
-    size_t                      m_arch_count;
+typedef struct je_CollectedRequirements je_CollectedRequirements;
 
-    je_RequirementCollection* m_requirement_colloection;
-}je_Dependence;
+typedef struct je_RequirementCollection {
+    je_DependenceArchInfos*     m_cached_archs;
+    size_t                      m_cached_arch_count;
+
+    je_CollectedRequirements*   m_collected_requirement;
+}je_RequirementCollection;
+
+JE_API void je_ecs_collect_requirements(
+    void* world,
+    je_RequirementCollection* modify_collection,
+    const je_ComponentRequirement* requirements, 
+    size_t view_requiremnt_count, 
+    size_t other_requiremnts_count);
 
 /*
 je_ecs_world_update_dependences_archinfo [基本接口]
@@ -7146,8 +7153,9 @@ namespace jeecs
 
                     out_dependence->m_requirements.push_back(
                         je_ComponentRequirement{
-                            std::is_pointer_v<T> ? JE_COMPONENT_REQUIRE_MAYNOT : JE_COMPONENT_REQUIRE_CONTAINS,
-                            0,
+                            std::is_pointer_v<T> 
+                                ? JE_COMPONENT_REQUIRE_MAYNOT 
+                                : JE_COMPONENT_REQUIRE_CONTAINS,
                             typing::id<typing::origin_t<T>>() });
 
                     if constexpr (sizeof...(Ts) > 0)
@@ -7166,7 +7174,7 @@ namespace jeecs
             struct requirement_base
             {
                 template<typename T, typename ... Ts>
-                static void _apply_dependence_impl(size_t group, dependence* out_dependence)
+                static void _apply_dependence_impl(int group, dependence* out_dependence)
                 {
                     out_dependence->m_requirements.push_back(
                         je_ComponentRequirement{
@@ -7180,7 +7188,7 @@ namespace jeecs
                 }
 
                 template<typename ... Ts>
-                static void _apply_dependence(size_t group, dependence* out_dependence)
+                static void _apply_dependence(int group, dependence* out_dependence)
                 {
                     if constexpr (sizeof...(Ts) > 0)
                         _apply_dependence_impl<Ts...>(group, out_dependence);
@@ -7230,7 +7238,7 @@ namespace jeecs
         struct contains : base::contains_base
         {
             using components = std::tuple<Components...>;
-            static void apply_dependence(size_t group, dependence* out_dependence)
+            static void apply_dependence(int group, dependence* out_dependence)
             {
                 _apply_dependence<Components...>(group, out_dependence);
             }
@@ -7239,7 +7247,7 @@ namespace jeecs
         struct except : base::except_base
         {
             using components = std::tuple<Components...>;
-            static void apply_dependence(size_t group, dependence* out_dependence)
+            static void apply_dependence(int group, dependence* out_dependence)
             {
                 _apply_dependence<Components...>(group, out_dependence);
             }
@@ -7248,7 +7256,7 @@ namespace jeecs
         struct anyof : base::anyof_base
         {
             using components = std::tuple<Components...>;
-            static void apply_dependence(size_t group, dependence* out_dependence)
+            static void apply_dependence(int group, dependence* out_dependence)
             {
                 _apply_dependence<Components...>(group, out_dependence);
             }
@@ -7311,7 +7319,7 @@ namespace jeecs
     {
         dependence m_dependence;
 
-        template<size_t Group, typename T, typename ... Ts>
+        template<int Group, typename T, typename ... Ts>
         static void _apply_requirements_impl(dependence* dep)
         {
             static_assert(
@@ -7324,7 +7332,7 @@ namespace jeecs
             if constexpr (sizeof...(Ts) > 0)
                 _apply_requirements_impl<Group + 1, Ts...>(dep);
         }
-        template<size_t Group, typename ... Ts>
+        template<int Group, typename ... Ts>
         static void _apply_requirements(dependence* dep)
         {
             if constexpr (sizeof...(Ts) > 0)
