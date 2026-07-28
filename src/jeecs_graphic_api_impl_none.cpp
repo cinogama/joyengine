@@ -5,7 +5,7 @@
 
 namespace jeecs::graphic::api::none
 {
-    jegl_context::graphic_impl_context_t
+    jegl_graphic_impl_context_t
         startup(jegl_context* glthread, const jegl_interface_config*, bool reboot)
     {
         if (!reboot)
@@ -23,10 +23,10 @@ namespace jeecs::graphic::api::none
 
         return nullptr;
     }
-    void pre_shutdown(jegl_context*, jegl_context::graphic_impl_context_t, bool)
+    void pre_shutdown(jegl_context*, jegl_graphic_impl_context_t, bool)
     {
     }
-    void shutdown(jegl_context*, jegl_context::graphic_impl_context_t, bool reboot)
+    void shutdown(jegl_context*, jegl_graphic_impl_context_t, bool reboot)
     {
         if (!reboot)
             jeecs::debug::log("Graphic thread (None) shutdown!");
@@ -34,110 +34,110 @@ namespace jeecs::graphic::api::none
         jegui_shutdown_none(reboot);
     }
 
-    jegl_update_action pre_update(jegl_context::graphic_impl_context_t)
+    jegl_update_action pre_update(jegl_graphic_impl_context_t)
     {
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
     jegl_update_action commit_update(
-        jegl_context::graphic_impl_context_t, jegl_update_action)
+        jegl_graphic_impl_context_t, jegl_update_action)
     {
         jegui_update_none();
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
 
-    jegl_resource_blob create_shader_blob(jegl_context::graphic_impl_context_t, jegl_shader*)
+    jegl_resource_blob create_shader_blob(jegl_graphic_impl_context_t, jegl_shader*)
     {
         return nullptr;
     }
-    void close_shader_blob(jegl_context::graphic_impl_context_t, jegl_resource_blob)
+    void close_shader_blob(jegl_graphic_impl_context_t, jegl_resource_blob)
     {
     }
-    jegl_resource_blob create_texture_blob(jegl_context::graphic_impl_context_t, jegl_texture*)
-    {
-        return nullptr;
-    }
-    void close_texture_blob(jegl_context::graphic_impl_context_t, jegl_resource_blob)
-    {
-    }
-    jegl_resource_blob create_vertex_blob(jegl_context::graphic_impl_context_t, jegl_vertex*)
+    jegl_resource_blob create_texture_blob(jegl_graphic_impl_context_t, jegl_texture*)
     {
         return nullptr;
     }
-    void close_vertex_blob(jegl_context::graphic_impl_context_t, jegl_resource_blob)
+    void close_texture_blob(jegl_graphic_impl_context_t, jegl_resource_blob)
+    {
+    }
+    jegl_resource_blob create_vertex_blob(jegl_graphic_impl_context_t, jegl_vertex*)
+    {
+        return nullptr;
+    }
+    void close_vertex_blob(jegl_graphic_impl_context_t, jegl_resource_blob)
     {
     }
 
-    void init_shader(jegl_context::graphic_impl_context_t, jegl_resource_blob, jegl_shader*)
+    void init_shader(jegl_graphic_impl_context_t, jegl_resource_blob, jegl_shader*)
     {
     }
-    void init_texture(jegl_context::graphic_impl_context_t, jegl_resource_blob, jegl_texture*)
+    void init_texture(jegl_graphic_impl_context_t, jegl_resource_blob, jegl_texture*)
     {
     }
-    void init_vertex(jegl_context::graphic_impl_context_t, jegl_resource_blob, jegl_vertex*)
+    void init_vertex(jegl_graphic_impl_context_t, jegl_resource_blob, jegl_vertex*)
     {
     }
-    void init_framebuffer(jegl_context::graphic_impl_context_t, jegl_frame_buffer*)
+    void init_framebuffer(jegl_graphic_impl_context_t, jegl_frame_buffer*)
     {
     }
-    void init_ubuffer(jegl_context::graphic_impl_context_t, jegl_uniform_buffer*)
-    {
-    }
-
-    void update_shader(jegl_context::graphic_impl_context_t, jegl_shader*)
-    {
-    }
-    void update_texture(jegl_context::graphic_impl_context_t, jegl_texture*)
-    {
-    }
-    void update_vertex(jegl_context::graphic_impl_context_t, jegl_vertex*)
-    {
-    }
-    void update_framebuffer(jegl_context::graphic_impl_context_t, jegl_frame_buffer*)
-    {
-    }
-    void update_ubuffer(jegl_context::graphic_impl_context_t, jegl_uniform_buffer*)
+    void init_ubuffer(jegl_graphic_impl_context_t, jegl_uniform_buffer*)
     {
     }
 
-    void close_shader(jegl_context::graphic_impl_context_t, jegl_shader*)
+    void update_shader(jegl_graphic_impl_context_t, jegl_shader*)
     {
     }
-    void close_texture(jegl_context::graphic_impl_context_t, jegl_texture*)
+    void update_texture(jegl_graphic_impl_context_t, jegl_texture*)
     {
     }
-    void close_vertex(jegl_context::graphic_impl_context_t, jegl_vertex*)
+    void update_vertex(jegl_graphic_impl_context_t, jegl_vertex*)
     {
     }
-    void close_framebuffer(jegl_context::graphic_impl_context_t, jegl_frame_buffer*)
+    void update_framebuffer(jegl_graphic_impl_context_t, jegl_frame_buffer*)
     {
     }
-    void close_ubuffer(jegl_context::graphic_impl_context_t, jegl_uniform_buffer*)
+    void update_ubuffer(jegl_graphic_impl_context_t, jegl_uniform_buffer*)
     {
     }
 
-    void bind_uniform_buffer(jegl_context::graphic_impl_context_t, jegl_uniform_buffer*)
+    void close_shader(jegl_graphic_impl_context_t, jegl_shader*)
     {
     }
-    bool bind_shader(jegl_context::graphic_impl_context_t, jegl_shader*)
+    void close_texture(jegl_graphic_impl_context_t, jegl_texture*)
+    {
+    }
+    void close_vertex(jegl_graphic_impl_context_t, jegl_vertex*)
+    {
+    }
+    void close_framebuffer(jegl_graphic_impl_context_t, jegl_frame_buffer*)
+    {
+    }
+    void close_ubuffer(jegl_graphic_impl_context_t, jegl_uniform_buffer*)
+    {
+    }
+
+    void bind_uniform_buffer(jegl_graphic_impl_context_t, jegl_uniform_buffer*)
+    {
+    }
+    bool bind_shader(jegl_graphic_impl_context_t, jegl_shader*)
     {
         return true;
     }
-    void bind_texture(jegl_context::graphic_impl_context_t, jegl_texture*, size_t)
+    void bind_texture(jegl_graphic_impl_context_t, jegl_texture*, size_t)
     {
     }
-    void draw_vertex_with_shader(jegl_context::graphic_impl_context_t, jegl_vertex*)
+    void draw_vertex_with_shader(jegl_graphic_impl_context_t, jegl_vertex*)
     {
     }
 
     void bind_framebuffer(
-        jegl_context::graphic_impl_context_t,
+        jegl_graphic_impl_context_t,
         jegl_frame_buffer*,
         const int32_t(*)[4],
         const jegl_frame_buffer_clear_operation*)
     {
     }
 
-    void set_uniform(jegl_context::graphic_impl_context_t, uint32_t, jegl_shader::uniform_type, const void*)
+    void set_uniform(jegl_graphic_impl_context_t, uint32_t, jegl_shader::uniform_type, const void*)
     {
     }
 }

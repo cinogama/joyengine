@@ -4000,7 +4000,7 @@ namespace jeecs::graphic::api::vk120
         return m_uniform_variables[m_next_allocate_ubos_for_uniform_variable - 1];
     }
 
-    jegl_context::graphic_impl_context_t
+    jegl_graphic_impl_context_t
         startup(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
     {
         if (!reboot)
@@ -4009,13 +4009,13 @@ namespace jeecs::graphic::api::vk120
         jegl_vk120_context* context = new jegl_vk120_context(gthread, config, reboot);
         return context;
     }
-    void pre_shutdown(jegl_context*, jegl_context::graphic_impl_context_t ctx, bool reboot)
+    void pre_shutdown(jegl_context*, jegl_graphic_impl_context_t ctx, bool reboot)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
 
         context->pre_shutdown();
     }
-    void shutdown(jegl_context*, jegl_context::graphic_impl_context_t ctx, bool reboot)
+    void shutdown(jegl_context*, jegl_graphic_impl_context_t ctx, bool reboot)
     {
         if (!reboot)
             jeecs::debug::log("Graphic thread (Vulkan120) shutdown!");
@@ -4029,7 +4029,7 @@ namespace jeecs::graphic::api::vk120
         delete context;
     }
 
-    jegl_update_action pre_update(jegl_context::graphic_impl_context_t ctx)
+    jegl_update_action pre_update(jegl_graphic_impl_context_t ctx)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
 
@@ -4067,7 +4067,7 @@ namespace jeecs::graphic::api::vk120
         }
     }
     jegl_update_action commit_update(
-        jegl_context::graphic_impl_context_t ctx, jegl_update_action)
+        jegl_graphic_impl_context_t ctx, jegl_update_action)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
 
@@ -4077,39 +4077,39 @@ namespace jeecs::graphic::api::vk120
     }
 
     jegl_resource_blob shader_create_resource_blob(
-        jegl_context::graphic_impl_context_t ctx, jegl_shader* shader)
+        jegl_graphic_impl_context_t ctx, jegl_shader* shader)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
 
         return context->create_shader_blob(shader);
     }
     void shader_close_resource_blob(
-        jegl_context::graphic_impl_context_t ctx, jegl_resource_blob blob)
+        jegl_graphic_impl_context_t ctx, jegl_resource_blob blob)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
 
         context->destroy_shader_blob(static_cast<jevk12_shader_blob*>(blob));
     }
     jegl_resource_blob texture_create_resource_blob(
-        jegl_context::graphic_impl_context_t, jegl_texture*)
+        jegl_graphic_impl_context_t, jegl_texture*)
     {
         return nullptr;
     }
     void texture_close_resource_blob(
-        jegl_context::graphic_impl_context_t, jegl_resource_blob)
+        jegl_graphic_impl_context_t, jegl_resource_blob)
     {
     }
     jegl_resource_blob vertex_create_resource_blob(
-        jegl_context::graphic_impl_context_t, jegl_vertex*)
+        jegl_graphic_impl_context_t, jegl_vertex*)
     {
         return nullptr;
     }
     void vertex_close_resource_blob(
-        jegl_context::graphic_impl_context_t, jegl_resource_blob)
+        jegl_graphic_impl_context_t, jegl_resource_blob)
     {
     }
 
-    void init_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource_blob blob, jegl_shader* shader)
+    void init_shader(jegl_graphic_impl_context_t ctx, jegl_resource_blob blob, jegl_shader* shader)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
 
@@ -4143,19 +4143,19 @@ namespace jeecs::graphic::api::vk120
             }
         }
     }
-    void init_texture(jegl_context::graphic_impl_context_t ctx, jegl_resource_blob, jegl_texture* texture)
+    void init_texture(jegl_graphic_impl_context_t ctx, jegl_resource_blob, jegl_texture* texture)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
 
         texture->m_handle.m_ptr = context->create_texture_instance(texture);
     }
-    void init_vertex(jegl_context::graphic_impl_context_t ctx, jegl_resource_blob, jegl_vertex* vertex)
+    void init_vertex(jegl_graphic_impl_context_t ctx, jegl_resource_blob, jegl_vertex* vertex)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
 
         vertex->m_handle.m_ptr = context->create_vertex_instance(vertex);
     }
-    void init_framebuffer(jegl_context::graphic_impl_context_t ctx, jegl_frame_buffer* fbuffer)
+    void init_framebuffer(jegl_graphic_impl_context_t ctx, jegl_frame_buffer* fbuffer)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
 
@@ -4190,17 +4190,17 @@ namespace jeecs::graphic::api::vk120
 
         fbuffer->m_handle.m_ptr = frame_buffer_instance;
     }
-    void init_ubuffer(jegl_context::graphic_impl_context_t ctx, jegl_uniform_buffer* ubuffer)
+    void init_ubuffer(jegl_graphic_impl_context_t ctx, jegl_uniform_buffer* ubuffer)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
 
         ubuffer->m_handle.m_ptr = context->create_uniform_buffer(ubuffer);
     }
 
-    void update_shader(jegl_context::graphic_impl_context_t ctx, jegl_shader* shader)
+    void update_shader(jegl_graphic_impl_context_t ctx, jegl_shader* shader)
     {
     }
-    void update_texture(jegl_context::graphic_impl_context_t ctx, jegl_texture* texture)
+    void update_texture(jegl_graphic_impl_context_t ctx, jegl_texture* texture)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
 
@@ -4209,45 +4209,45 @@ namespace jeecs::graphic::api::vk120
             static_cast<jevk12_texture*>(texture->m_handle.m_ptr), 
             texture);
     }
-    void update_vertex(jegl_context::graphic_impl_context_t ctx, jegl_vertex* vertex)
+    void update_vertex(jegl_graphic_impl_context_t ctx, jegl_vertex* vertex)
     {
     }
-    void update_framebuffer(jegl_context::graphic_impl_context_t ctx, jegl_frame_buffer* fbuffer)
+    void update_framebuffer(jegl_graphic_impl_context_t ctx, jegl_frame_buffer* fbuffer)
     {
     }
-    void update_ubuffer(jegl_context::graphic_impl_context_t ctx, jegl_uniform_buffer* ubuffer)
+    void update_ubuffer(jegl_graphic_impl_context_t ctx, jegl_uniform_buffer* ubuffer)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
         context->update_uniform_buffer(ubuffer);
     }
 
-    void close_shader(jegl_context::graphic_impl_context_t ctx, jegl_shader* shader)
+    void close_shader(jegl_graphic_impl_context_t ctx, jegl_shader* shader)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
         context->destroy_shader(static_cast<jevk12_shader*>(shader->m_handle.m_ptr));
     }
-    void close_texture(jegl_context::graphic_impl_context_t ctx, jegl_texture* texture)
+    void close_texture(jegl_graphic_impl_context_t ctx, jegl_texture* texture)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
         context->destroy_texture_instance(static_cast<jevk12_texture*>(texture->m_handle.m_ptr));
     }
-    void close_vertex(jegl_context::graphic_impl_context_t ctx, jegl_vertex* vertex)
+    void close_vertex(jegl_graphic_impl_context_t ctx, jegl_vertex* vertex)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
         context->destroy_vertex_instance(static_cast<jevk12_vertex*>(vertex->m_handle.m_ptr));
     }
-    void close_framebuffer(jegl_context::graphic_impl_context_t ctx, jegl_frame_buffer* fbuffer)
+    void close_framebuffer(jegl_graphic_impl_context_t ctx, jegl_frame_buffer* fbuffer)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
         context->destroy_frame_buffer(static_cast<jevk12_framebuffer*>(fbuffer->m_handle.m_ptr));
     }
-    void close_ubuffer(jegl_context::graphic_impl_context_t ctx, jegl_uniform_buffer* ubuffer)
+    void close_ubuffer(jegl_graphic_impl_context_t ctx, jegl_uniform_buffer* ubuffer)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
         context->destroy_uniform_buffer(static_cast<jevk12_uniformbuf*>(ubuffer->m_handle.m_ptr));
     }
 
-    void draw_vertex_with_shader(jegl_context::graphic_impl_context_t ctx, jegl_vertex* vertex)
+    void draw_vertex_with_shader(jegl_graphic_impl_context_t ctx, jegl_vertex* vertex)
     {
         jegl_vk120_context* context =
             static_cast<jegl_vk120_context*>(ctx);
@@ -4256,14 +4256,14 @@ namespace jeecs::graphic::api::vk120
             static_cast<jevk12_vertex*>(vertex->m_handle.m_ptr));
     }
 
-    bool bind_shader(jegl_context::graphic_impl_context_t ctx, jegl_shader* shader)
+    bool bind_shader(jegl_graphic_impl_context_t ctx, jegl_shader* shader)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
 
         auto* shader_instance = static_cast<jevk12_shader*>(shader->m_handle.m_ptr);
         return context->cmd_bind_shader_pipeline(shader_instance);
     }
-    void bind_uniform_buffer(jegl_context::graphic_impl_context_t ctx, jegl_uniform_buffer* uniformbuf)
+    void bind_uniform_buffer(jegl_graphic_impl_context_t ctx, jegl_uniform_buffer* uniformbuf)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
         jevk12_uniformbuf* uniformbuf_instance =
@@ -4273,7 +4273,7 @@ namespace jeecs::graphic::api::vk120
             uniformbuf_instance->m_real_binding_place, uniformbuf_instance->m_uniform_buffer);
     }
 
-    void bind_texture(jegl_context::graphic_impl_context_t ctx, jegl_texture* texture, size_t pass)
+    void bind_texture(jegl_graphic_impl_context_t ctx, jegl_texture* texture, size_t pass)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
 
@@ -4284,7 +4284,7 @@ namespace jeecs::graphic::api::vk120
     }
 
     void set_rend_to_framebuffer(
-        jegl_context::graphic_impl_context_t ctx,
+        jegl_graphic_impl_context_t ctx,
         jegl_frame_buffer* framebuf,
         const int32_t(*viewport_xywh)[4],
         const jegl_frame_buffer_clear_operation* clear_operations)
@@ -4335,7 +4335,7 @@ namespace jeecs::graphic::api::vk120
     }
 
     void set_uniform(
-        jegl_context::graphic_impl_context_t ctx,
+        jegl_graphic_impl_context_t ctx,
         uint32_t location,
         jegl_shader::uniform_type type,
         const void* val)

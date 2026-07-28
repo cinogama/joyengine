@@ -2060,13 +2060,12 @@ enum jegl_update_action
 jegl_context [类型]
 图形上下文，储存有当前图形线程的各项信息
 */
+// 图形实现上下文指针（提升到文件作用域，供 jegl_graphic_api 的函数指针别名直接使用，避免 C++ 的 :: 作用域解析）。
+typedef void* jegl_graphic_impl_context_t;
 struct jegl_context
 {
-    // 用户定义的图形实现上下文指针，供图形接口实现使用
-    using graphic_impl_context_t = void*;
-
     // 图形帧渲染任务函数类型定义，图形线程负责每帧调用一次此函数
-    using frame_job_func_t = void (*)(jegl_context*, void*, jegl_update_action);
+    typedef void (*frame_job_func_t)(jegl_context*, void*, jegl_update_action);
 
     frame_job_func_t _m_frame_rend_work;
     void* _m_frame_rend_work_arg;
@@ -2079,7 +2078,7 @@ struct jegl_context
     je_Version m_version;
     jegl_interface_config m_config;
     jegl_graphic_api* m_apis;
-    graphic_impl_context_t m_graphic_impl_context;
+    jegl_graphic_impl_context_t m_graphic_impl_context;
 };
 
 using jegl_resource_blob = void*;
@@ -2483,84 +2482,84 @@ struct jegl_graphic_api
 {
     // 图形基本启动和关闭接口
     using startup_func_t =
-        jegl_context::graphic_impl_context_t(*)(jegl_context*, const jegl_interface_config*, bool);
+        jegl_graphic_impl_context_t(*)(jegl_context*, const jegl_interface_config*, bool);
     using shutdown_func_t =
-        void (*)(jegl_context*, jegl_context::graphic_impl_context_t, bool);
+        void (*)(jegl_context*, jegl_graphic_impl_context_t, bool);
 
     using update_func_t =
-        jegl_update_action(*)(jegl_context::graphic_impl_context_t);
+        jegl_update_action(*)(jegl_graphic_impl_context_t);
     using commit_func_t =
-        jegl_update_action(*)(jegl_context::graphic_impl_context_t, jegl_update_action);
+        jegl_update_action(*)(jegl_graphic_impl_context_t, jegl_update_action);
 
     // 资源创建相关接口
     using shader_create_blob_func_t =
-        jegl_resource_blob(*)(jegl_context::graphic_impl_context_t, jegl_shader*);
+        jegl_resource_blob(*)(jegl_graphic_impl_context_t, jegl_shader*);
     using shader_close_blob_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob);
+        void (*)(jegl_graphic_impl_context_t, jegl_resource_blob);
     using shader_init_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob, jegl_shader*);
+        void (*)(jegl_graphic_impl_context_t, jegl_resource_blob, jegl_shader*);
     using shader_update_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_shader*);
+        void (*)(jegl_graphic_impl_context_t, jegl_shader*);
     using shader_close_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_shader*);
+        void (*)(jegl_graphic_impl_context_t, jegl_shader*);
 
     using texture_create_blob_func_t =
-        jegl_resource_blob(*)(jegl_context::graphic_impl_context_t, jegl_texture*);
+        jegl_resource_blob(*)(jegl_graphic_impl_context_t, jegl_texture*);
     using texture_close_blob_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob);
+        void (*)(jegl_graphic_impl_context_t, jegl_resource_blob);
     using texture_init_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob, jegl_texture*);
+        void (*)(jegl_graphic_impl_context_t, jegl_resource_blob, jegl_texture*);
     using texture_update_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_texture*);
+        void (*)(jegl_graphic_impl_context_t, jegl_texture*);
     using texture_close_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_texture*);
+        void (*)(jegl_graphic_impl_context_t, jegl_texture*);
 
     using vertex_create_blob_func_t =
-        jegl_resource_blob(*)(jegl_context::graphic_impl_context_t, jegl_vertex*);
+        jegl_resource_blob(*)(jegl_graphic_impl_context_t, jegl_vertex*);
     using vertex_close_blob_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob);
+        void (*)(jegl_graphic_impl_context_t, jegl_resource_blob);
     using vertex_init_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob, jegl_vertex*);
+        void (*)(jegl_graphic_impl_context_t, jegl_resource_blob, jegl_vertex*);
     using vertex_update_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_vertex*);
+        void (*)(jegl_graphic_impl_context_t, jegl_vertex*);
     using vertex_close_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_vertex*);
+        void (*)(jegl_graphic_impl_context_t, jegl_vertex*);
 
     using framebuffer_init_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_frame_buffer*);
+        void (*)(jegl_graphic_impl_context_t, jegl_frame_buffer*);
     using framebuffer_update_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_frame_buffer*);
+        void (*)(jegl_graphic_impl_context_t, jegl_frame_buffer*);
     using framebuffer_close_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_frame_buffer*);
+        void (*)(jegl_graphic_impl_context_t, jegl_frame_buffer*);
 
     using ubuffer_init_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_uniform_buffer*);
+        void (*)(jegl_graphic_impl_context_t, jegl_uniform_buffer*);
     using ubuffer_update_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_uniform_buffer*);
+        void (*)(jegl_graphic_impl_context_t, jegl_uniform_buffer*);
     using ubuffer_close_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_uniform_buffer*);
+        void (*)(jegl_graphic_impl_context_t, jegl_uniform_buffer*);
 
     // Shader uniform 设置相关接口
     using set_uniform_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, uint32_t, jegl_shader::uniform_type, const void*);
+        void (*)(jegl_graphic_impl_context_t, uint32_t, jegl_shader::uniform_type, const void*);
 
     // 绘制相关接口
     using viewport_xyzw_t = int32_t[4];
     using bind_framebuf_func_t =
         void (*)(
-            jegl_context::graphic_impl_context_t,
+            jegl_graphic_impl_context_t,
             jegl_frame_buffer* /* MAY NULL */,
             const viewport_xyzw_t*,
             const jegl_frame_buffer_clear_operation*);
 
     using bind_ubuffer_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_uniform_buffer*);
+        void (*)(jegl_graphic_impl_context_t, jegl_uniform_buffer*);
     using bind_shader_func_t =
-        bool (*)(jegl_context::graphic_impl_context_t, jegl_shader*);
+        bool (*)(jegl_graphic_impl_context_t, jegl_shader*);
     using bind_texture_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_texture*, size_t);
+        void (*)(jegl_graphic_impl_context_t, jegl_texture*, size_t);
     using draw_vertex_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_vertex*);
+        void (*)(jegl_graphic_impl_context_t, jegl_vertex*);
 
 
     /*
@@ -2825,8 +2824,8 @@ struct jegl_graphic_api
 };
 static_assert(sizeof(jegl_graphic_api) % sizeof(void*) == 0);
 
-using jeecs_api_register_func_t = void (*)(jegl_graphic_api*);
-using jeecs_sync_callback_func_t = void (*)(jegl_context*, void*);
+typedef void  (*jeecs_api_register_func_t)(jegl_graphic_api*);
+typedef void  (*jeecs_sync_callback_func_t)(jegl_context*, void*);
 
 /*
 jegl_register_sync_graphic_callback [基本接口]
@@ -3770,10 +3769,8 @@ JE_API void jegui_set_font(
     size_t size);
 
 typedef uint64_t jegui_user_image_handle_t;
-using jegui_user_image_loader_t =
-jegui_user_image_handle_t(*)(jegl_context*, jegl_texture*);
-using jegui_user_sampler_loader_t =
-void (*)(jegl_context*, jegl_shader*);
+typedef jegui_user_image_handle_t (*jegui_user_image_loader_t)(jegl_context*, jegl_texture*);
+typedef void  (*jegui_user_sampler_loader_t)(jegl_context*, jegl_shader*);
 
 /*
 jegui_init_basic [基本接口]

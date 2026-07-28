@@ -328,7 +328,7 @@ namespace jeecs::graphic::api::dx11
                     jegl_shader::cull_mode::BACK)].ReleaseAndGetAddressOf()));
     }
 
-    jegl_context::graphic_impl_context_t dx11_startup(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
+    jegl_graphic_impl_context_t dx11_startup(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
     {
         jegl_dx11_context* context = new jegl_dx11_context;
 
@@ -501,10 +501,10 @@ namespace jeecs::graphic::api::dx11
 
         return context;
     }
-    void dx11_pre_shutdown(jegl_context*, jegl_context::graphic_impl_context_t, bool)
+    void dx11_pre_shutdown(jegl_context*, jegl_graphic_impl_context_t, bool)
     {
     }
-    void dx11_shutdown(jegl_context*, jegl_context::graphic_impl_context_t userdata, bool reboot)
+    void dx11_shutdown(jegl_context*, jegl_graphic_impl_context_t userdata, bool reboot)
     {
         jegl_dx11_context* context = static_cast<jegl_dx11_context*>(userdata);
 
@@ -550,7 +550,7 @@ namespace jeecs::graphic::api::dx11
 #endif
     }
 
-    jegl_update_action dx11_pre_update(jegl_context::graphic_impl_context_t ctx)
+    jegl_update_action dx11_pre_update(jegl_graphic_impl_context_t ctx)
     {
         jegl_dx11_context* context = static_cast<jegl_dx11_context*>(ctx);
 
@@ -579,7 +579,7 @@ namespace jeecs::graphic::api::dx11
     }
 
     jegl_update_action dx11_commit_update(
-        jegl_context::graphic_impl_context_t ctx, jegl_update_action)
+        jegl_graphic_impl_context_t ctx, jegl_update_action)
     {
         jegl_dx11_context* context = static_cast<jegl_dx11_context*>(ctx);
 
@@ -620,7 +620,7 @@ namespace jeecs::graphic::api::dx11
     };
 
     jegl_resource_blob dx11_shader_create_blob(
-        jegl_context::graphic_impl_context_t ctx,
+        jegl_graphic_impl_context_t ctx,
         jegl_shader* shader)
     {
         jegl_dx11_context* context = static_cast<jegl_dx11_context*>(ctx);
@@ -1123,40 +1123,40 @@ namespace jeecs::graphic::api::dx11
         return nullptr;
     }
     void dx11_shader_close_blob(
-        jegl_context::graphic_impl_context_t ctx,
+        jegl_graphic_impl_context_t ctx,
         jegl_resource_blob blob)
     {
         delete static_cast<dx11_resource_shader_blob*>(blob);
     }
 
     jegl_resource_blob dx11_texture_create_blob(
-        jegl_context::graphic_impl_context_t,
+        jegl_graphic_impl_context_t,
         jegl_texture*)
     {
         return nullptr;
     }
     void dx11_texture_close_blob(
-        jegl_context::graphic_impl_context_t,
+        jegl_graphic_impl_context_t,
         jegl_resource_blob)
     {
         // No need to do anything.
     }
 
     jegl_resource_blob dx11_vertex_create_blob(
-        jegl_context::graphic_impl_context_t,
+        jegl_graphic_impl_context_t,
         jegl_vertex*)
     {
         return nullptr;
     }
     void dx11_vertex_close_blob(
-        jegl_context::graphic_impl_context_t,
+        jegl_graphic_impl_context_t,
         jegl_resource_blob)
     {
         // No need to do anything.
     }
 
     void dx11_shader_init(
-        jegl_context::graphic_impl_context_t ctx,
+        jegl_graphic_impl_context_t ctx,
         jegl_resource_blob blob,
         jegl_shader* shader)
     {
@@ -1254,13 +1254,13 @@ namespace jeecs::graphic::api::dx11
         }
     }
     void dx11_shader_update(
-        jegl_context::graphic_impl_context_t,
+        jegl_graphic_impl_context_t,
         jegl_shader*)
     {
         // No need to do anything.
     }
     void dx11_shader_close(
-        jegl_context::graphic_impl_context_t,
+        jegl_graphic_impl_context_t,
         jegl_shader* shader)
     {
         auto* dx11_shader = static_cast<jedx11_shader*>(shader->m_handle.m_ptr);
@@ -1397,7 +1397,7 @@ namespace jeecs::graphic::api::dx11
         return jedx11_texture_res;
     }
     void dx11_texture_init(
-        jegl_context::graphic_impl_context_t ctx,
+        jegl_graphic_impl_context_t ctx,
         jegl_resource_blob,
         jegl_texture* resource)
     {
@@ -1406,7 +1406,7 @@ namespace jeecs::graphic::api::dx11
             context, resource, false /* Immutable as default */);
     }
     void dx11_texture_update(
-        jegl_context::graphic_impl_context_t ctx,
+        jegl_graphic_impl_context_t ctx,
         jegl_texture* resource)
     {
         jegl_dx11_context* context =
@@ -1451,7 +1451,7 @@ namespace jeecs::graphic::api::dx11
         }
     }
     void dx11_texture_close(
-        jegl_context::graphic_impl_context_t,
+        jegl_graphic_impl_context_t,
         jegl_texture* resource)
     {
         jedx11_texture* texture_instance =
@@ -1468,7 +1468,7 @@ namespace jeecs::graphic::api::dx11
     }
 
     void dx11_vertex_init(
-        jegl_context::graphic_impl_context_t ctx,
+        jegl_graphic_impl_context_t ctx,
         jegl_resource_blob,
         jegl_vertex* resource)
     {
@@ -1542,20 +1542,20 @@ namespace jeecs::graphic::api::dx11
         resource->m_handle.m_ptr = vertex;
     }
     void dx11_vertex_update(
-        jegl_context::graphic_impl_context_t,
+        jegl_graphic_impl_context_t,
         jegl_vertex*)
     {
         // No need to do anything.
     }
     void dx11_vertex_close(
-        jegl_context::graphic_impl_context_t,
+        jegl_graphic_impl_context_t,
         jegl_vertex* resource)
     {
         delete static_cast<jedx11_vertex*>(resource->m_handle.m_ptr);
     }
 
     void dx11_framebuf_init(
-        jegl_context::graphic_impl_context_t ctx,
+        jegl_graphic_impl_context_t ctx,
         jegl_frame_buffer* resource)
     {
         jegl_dx11_context* context = static_cast<jegl_dx11_context*>(ctx);
@@ -1642,20 +1642,20 @@ namespace jeecs::graphic::api::dx11
         resource->m_handle.m_ptr = jedx11_framebuffer_res;
     }
     void dx11_framebuf_update(
-        jegl_context::graphic_impl_context_t,
+        jegl_graphic_impl_context_t,
         jegl_frame_buffer*)
     {
         // No need to do anything.
     }
     void dx11_framebuf_close(
-        jegl_context::graphic_impl_context_t,
+        jegl_graphic_impl_context_t,
         jegl_frame_buffer* resource)
     {
         delete static_cast<jedx11_framebuffer*>(resource->m_handle.m_ptr);
     }
 
     void dx11_ubuffer_init(
-        jegl_context::graphic_impl_context_t ctx,
+        jegl_graphic_impl_context_t ctx,
         jegl_uniform_buffer* resource)
     {
         jegl_dx11_context* context = static_cast<jegl_dx11_context*>(ctx);
@@ -1689,7 +1689,7 @@ namespace jeecs::graphic::api::dx11
         resource->m_handle.m_ptr = jedx11_uniformbuf_res;
     }
     void dx11_ubuffer_update(
-        jegl_context::graphic_impl_context_t ctx,
+        jegl_graphic_impl_context_t ctx,
         jegl_uniform_buffer* resource)
     {
         jegl_dx11_context* context = static_cast<jegl_dx11_context*>(ctx);
@@ -1708,20 +1708,20 @@ namespace jeecs::graphic::api::dx11
         context->m_dx_context->Unmap(uniformbuf_instance->m_uniformbuf.Get(), 0);
     }
     void dx11_ubuffer_close(
-        jegl_context::graphic_impl_context_t,
+        jegl_graphic_impl_context_t,
         jegl_uniform_buffer* resource)
     {
         delete static_cast<jedx11_uniformbuf*>(resource->m_handle.m_ptr);
     }
 
     void dx11_set_uniform(
-        jegl_context::graphic_impl_context_t ctx,
+        jegl_graphic_impl_context_t ctx,
         uint32_t location,
         jegl_shader::uniform_type type,
         const void* val);
 
     void dx11_draw_vertex_with_shader(
-        jegl_context::graphic_impl_context_t ctx, jegl_vertex* vert)
+        jegl_graphic_impl_context_t ctx, jegl_vertex* vert)
     {
         jegl_dx11_context* context = static_cast<jegl_dx11_context*>(ctx);
 
@@ -1794,7 +1794,7 @@ namespace jeecs::graphic::api::dx11
         context->m_dx_context->IASetPrimitiveTopology(vertex->m_method);
         context->m_dx_context->DrawIndexed(vertex->m_count, 0, 0);
     }
-    bool dx11_bind_shader(jegl_context::graphic_impl_context_t ctx, jegl_shader* shader)
+    bool dx11_bind_shader(jegl_graphic_impl_context_t ctx, jegl_shader* shader)
     {
         jegl_dx11_context* context = static_cast<jegl_dx11_context*>(ctx);
 
@@ -1832,7 +1832,7 @@ namespace jeecs::graphic::api::dx11
         return true;
     }
 
-    void dx11_bind_uniform_buffer(jegl_context::graphic_impl_context_t ctx, jegl_uniform_buffer* uniformbuf)
+    void dx11_bind_uniform_buffer(jegl_graphic_impl_context_t ctx, jegl_uniform_buffer* uniformbuf)
     {
         jegl_dx11_context* context = static_cast<jegl_dx11_context*>(ctx);
 
@@ -1843,7 +1843,7 @@ namespace jeecs::graphic::api::dx11
             uniformbuf_instance->m_binding_place, 1, uniformbuf_instance->m_uniformbuf.GetAddressOf());
     }
 
-    void dx11_bind_texture(jegl_context::graphic_impl_context_t ctx, jegl_texture* texture, size_t pass)
+    void dx11_bind_texture(jegl_graphic_impl_context_t ctx, jegl_texture* texture, size_t pass)
     {
         jegl_dx11_context* context = static_cast<jegl_dx11_context*>(ctx);
 
@@ -1858,7 +1858,7 @@ namespace jeecs::graphic::api::dx11
     }
 
     void dx11_set_rend_to_framebuffer(
-        jegl_context::graphic_impl_context_t ctx,
+        jegl_graphic_impl_context_t ctx,
         jegl_frame_buffer* framebuffer,
         const int32_t(*viewport_xywh)[4],
         const jegl_frame_buffer_clear_operation* clear_operations)
@@ -1975,7 +1975,7 @@ namespace jeecs::graphic::api::dx11
         }
     }
     void dx11_set_uniform(
-        jegl_context::graphic_impl_context_t ctx,
+        jegl_graphic_impl_context_t ctx,
         uint32_t location,
         jegl_shader::uniform_type type,
         const void* val)

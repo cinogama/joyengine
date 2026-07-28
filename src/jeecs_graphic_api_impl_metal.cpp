@@ -421,7 +421,7 @@ namespace jeecs::graphic::api::metal
         m_depth_stencil_state->release();
     }
 
-    jegl_context::graphic_impl_context_t
+    jegl_graphic_impl_context_t
         startup(jegl_context* glthread, const jegl_interface_config* cfg, bool reboot)
     {
         if (!reboot)
@@ -479,10 +479,10 @@ namespace jeecs::graphic::api::metal
 
         return context;
     }
-    void pre_shutdown(jegl_context*, jegl_context::graphic_impl_context_t, bool)
+    void pre_shutdown(jegl_context*, jegl_graphic_impl_context_t, bool)
     {
     }
-    void shutdown(jegl_context*, jegl_context::graphic_impl_context_t ctx, bool reboot)
+    void shutdown(jegl_context*, jegl_graphic_impl_context_t ctx, bool reboot)
     {
         jegl_metal_context* metal_context = static_cast<jegl_metal_context*>(ctx);
 
@@ -497,7 +497,7 @@ namespace jeecs::graphic::api::metal
         delete metal_context;
     }
 
-    jegl_update_action pre_update(jegl_context::graphic_impl_context_t ctx)
+    jegl_update_action pre_update(jegl_graphic_impl_context_t ctx)
     {
         jegl_metal_context* metal_context =
             static_cast<jegl_metal_context*>(ctx);
@@ -558,13 +558,13 @@ namespace jeecs::graphic::api::metal
     }
 
     void bind_framebuffer(
-        jegl_context::graphic_impl_context_t ctx,
+        jegl_graphic_impl_context_t ctx,
         jegl_frame_buffer* fb,
         const int32_t(*viewport_xywh)[4],
         const jegl_frame_buffer_clear_operation* clear_operations);
 
     jegl_update_action commit_update(
-        jegl_context::graphic_impl_context_t ctx, jegl_update_action)
+        jegl_graphic_impl_context_t ctx, jegl_update_action)
     {
         jegl_metal_context* metal_context =
             static_cast<jegl_metal_context*>(ctx);
@@ -589,7 +589,7 @@ namespace jeecs::graphic::api::metal
     }
 
 
-    jegl_resource_blob create_shader_blob(jegl_context::graphic_impl_context_t ctx, jegl_shader* shader)
+    jegl_resource_blob create_shader_blob(jegl_graphic_impl_context_t ctx, jegl_shader* shader)
     {
         jegl_metal_context* metal_context =
             static_cast<jegl_metal_context*>(ctx);
@@ -988,26 +988,26 @@ namespace jeecs::graphic::api::metal
             return shader_blob;
         }
     }
-    void close_shader_blob(jegl_context::graphic_impl_context_t, jegl_resource_blob blob)
+    void close_shader_blob(jegl_graphic_impl_context_t, jegl_resource_blob blob)
     {
         delete static_cast<metal_resource_shader_blob*>(blob);
     }
-    jegl_resource_blob create_texture_blob(jegl_context::graphic_impl_context_t, jegl_texture*)
+    jegl_resource_blob create_texture_blob(jegl_graphic_impl_context_t, jegl_texture*)
     {
         return nullptr;
     }
-    void close_texture_blob(jegl_context::graphic_impl_context_t, jegl_resource_blob)
+    void close_texture_blob(jegl_graphic_impl_context_t, jegl_resource_blob)
     {
     }
-    jegl_resource_blob create_vertex_blob(jegl_context::graphic_impl_context_t, jegl_vertex*)
+    jegl_resource_blob create_vertex_blob(jegl_graphic_impl_context_t, jegl_vertex*)
     {
         return nullptr;
     }
-    void close_vertex_blob(jegl_context::graphic_impl_context_t, jegl_resource_blob)
+    void close_vertex_blob(jegl_graphic_impl_context_t, jegl_resource_blob)
     {
     }
 
-    void init_shader(jegl_context::graphic_impl_context_t, jegl_resource_blob blob, jegl_shader* shader)
+    void init_shader(jegl_graphic_impl_context_t, jegl_resource_blob blob, jegl_shader* shader)
     {
         if (blob != nullptr)
         {
@@ -1047,7 +1047,7 @@ namespace jeecs::graphic::api::metal
         else
             shader->m_handle.m_ptr = nullptr;
     }
-    void init_texture(jegl_context::graphic_impl_context_t ctx, jegl_resource_blob, jegl_texture* texture)
+    void init_texture(jegl_graphic_impl_context_t ctx, jegl_resource_blob, jegl_texture* texture)
     {
         jegl_metal_context* metal_context =
             static_cast<jegl_metal_context*>(ctx);
@@ -1132,7 +1132,7 @@ namespace jeecs::graphic::api::metal
         texture->m_handle.m_ptr = new metal_texture(texture_instance, texture_format);
         texture_desc->release();
     }
-    void init_vertex(jegl_context::graphic_impl_context_t ctx, jegl_resource_blob, jegl_vertex* vertex)
+    void init_vertex(jegl_graphic_impl_context_t ctx, jegl_resource_blob, jegl_vertex* vertex)
     {
         jegl_metal_context* metal_context =
             static_cast<jegl_metal_context*>(ctx);
@@ -1175,7 +1175,7 @@ namespace jeecs::graphic::api::metal
             vertex->m_index_count,
             vertex->m_data_size_per_point);
     }
-    void init_framebuffer(jegl_context::graphic_impl_context_t, jegl_frame_buffer* fbuffer)
+    void init_framebuffer(jegl_graphic_impl_context_t, jegl_frame_buffer* fbuffer)
     {
         metal_framebuffer* framebuf = new metal_framebuffer(
             fbuffer->m_width,
@@ -1234,7 +1234,7 @@ namespace jeecs::graphic::api::metal
         }
         fbuffer->m_handle.m_ptr = framebuf;
     }
-    void init_ubuffer(jegl_context::graphic_impl_context_t ctx, jegl_uniform_buffer* ubuffer)
+    void init_ubuffer(jegl_graphic_impl_context_t ctx, jegl_uniform_buffer* ubuffer)
     {
         jegl_metal_context* metal_context =
             static_cast<jegl_metal_context*>(ctx);
@@ -1242,20 +1242,20 @@ namespace jeecs::graphic::api::metal
         ubuffer->m_handle.m_ptr = new metal_uniform_buffer(metal_context, ubuffer);
     }
 
-    void update_shader(jegl_context::graphic_impl_context_t, jegl_shader*)
+    void update_shader(jegl_graphic_impl_context_t, jegl_shader*)
     {
     }
-    void update_texture(jegl_context::graphic_impl_context_t, jegl_texture*)
+    void update_texture(jegl_graphic_impl_context_t, jegl_texture*)
     {
         // TODO;
     }
-    void update_vertex(jegl_context::graphic_impl_context_t, jegl_vertex*)
+    void update_vertex(jegl_graphic_impl_context_t, jegl_vertex*)
     {
     }
-    void update_framebuffer(jegl_context::graphic_impl_context_t, jegl_frame_buffer*)
+    void update_framebuffer(jegl_graphic_impl_context_t, jegl_frame_buffer*)
     {
     }
-    void update_ubuffer(jegl_context::graphic_impl_context_t, jegl_uniform_buffer* ubuffer)
+    void update_ubuffer(jegl_graphic_impl_context_t, jegl_uniform_buffer* ubuffer)
     {
         metal_uniform_buffer* ubuf =
             static_cast<metal_uniform_buffer*>(ubuffer->m_handle.m_ptr);
@@ -1273,28 +1273,28 @@ namespace jeecs::graphic::api::metal
             ubuffer->m_update_length);
     }
 
-    void close_shader(jegl_context::graphic_impl_context_t, jegl_shader* shader)
+    void close_shader(jegl_graphic_impl_context_t, jegl_shader* shader)
     {
         delete static_cast<metal_shader*>(shader->m_handle.m_ptr);
     }
-    void close_texture(jegl_context::graphic_impl_context_t, jegl_texture* texture)
+    void close_texture(jegl_graphic_impl_context_t, jegl_texture* texture)
     {
         delete static_cast<metal_texture*>(texture->m_handle.m_ptr);
     }
-    void close_vertex(jegl_context::graphic_impl_context_t, jegl_vertex* vertex)
+    void close_vertex(jegl_graphic_impl_context_t, jegl_vertex* vertex)
     {
         delete static_cast<metal_vertex*>(vertex->m_handle.m_ptr);
     }
-    void close_framebuffer(jegl_context::graphic_impl_context_t, jegl_frame_buffer* fbuffer)
+    void close_framebuffer(jegl_graphic_impl_context_t, jegl_frame_buffer* fbuffer)
     {
         delete static_cast<metal_framebuffer*>(fbuffer->m_handle.m_ptr);
     }
-    void close_ubuffer(jegl_context::graphic_impl_context_t, jegl_uniform_buffer* ubuffer)
+    void close_ubuffer(jegl_graphic_impl_context_t, jegl_uniform_buffer* ubuffer)
     {
         delete static_cast<metal_uniform_buffer*>(ubuffer->m_handle.m_ptr);
     }
 
-    void bind_uniform_buffer(jegl_context::graphic_impl_context_t ctx, jegl_uniform_buffer* res)
+    void bind_uniform_buffer(jegl_graphic_impl_context_t ctx, jegl_uniform_buffer* res)
     {
         metal_uniform_buffer* ubuf =
             static_cast<metal_uniform_buffer*>(res->m_handle.m_ptr);
@@ -1306,7 +1306,7 @@ namespace jeecs::graphic::api::metal
         metal_context->m_render_states.m_current_command_encoder->setFragmentBuffer(
             ubuf->m_uniform_buffer, 0, ubuf->m_binding_place);
     }
-    bool bind_shader(jegl_context::graphic_impl_context_t ctx, jegl_shader* res)
+    bool bind_shader(jegl_graphic_impl_context_t ctx, jegl_shader* res)
     {
         auto* metal_context = static_cast<jegl_metal_context*>(ctx);
         auto* shader_instance = static_cast<metal_shader*>(res->m_handle.m_ptr);
@@ -1444,7 +1444,7 @@ namespace jeecs::graphic::api::metal
 
         return true;
     }
-    void bind_texture(jegl_context::graphic_impl_context_t ctx, jegl_texture* res, size_t pass)
+    void bind_texture(jegl_graphic_impl_context_t ctx, jegl_texture* res, size_t pass)
     {
         auto* metal_context = static_cast<jegl_metal_context*>(ctx);
         auto* texture_instance = static_cast<metal_texture*>(res->m_handle.m_ptr);
@@ -1454,7 +1454,7 @@ namespace jeecs::graphic::api::metal
             texture_instance->m_texture, (uint32_t)pass);
     }
     void set_uniform(
-        jegl_context::graphic_impl_context_t ctx,
+        jegl_graphic_impl_context_t ctx,
         uint32_t location,
         jegl_shader::uniform_type type,
         const void* val)
@@ -1529,7 +1529,7 @@ namespace jeecs::graphic::api::metal
         current_shader->m_uniform_buffer_updated = true;
     }
 
-    void draw_vertex_with_shader(jegl_context::graphic_impl_context_t ctx, jegl_vertex* res)
+    void draw_vertex_with_shader(jegl_graphic_impl_context_t ctx, jegl_vertex* res)
     {
         auto* metal_context = static_cast<jegl_metal_context*>(ctx);
         auto* vertex_instance =
@@ -1749,7 +1749,7 @@ namespace jeecs::graphic::api::metal
     }
 
     void bind_framebuffer(
-        jegl_context::graphic_impl_context_t ctx,
+        jegl_graphic_impl_context_t ctx,
         jegl_frame_buffer* fb,
         const int32_t(*viewport_xywh)[4],
         const jegl_frame_buffer_clear_operation* clear_operations)
