@@ -65,10 +65,10 @@ namespace jeecs
         };
         struct EntityId
         {
-            inline static std::atomic<typing::debug_eid_t> ALLOCATED_EID;
+            inline static std::atomic<je_DebugEid> ALLOCATED_EID;
 
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(EntityId);
-            typing::debug_eid_t eid;
+            je_DebugEid eid;
 
             EntityId()
                 : eid(1 + ALLOCATED_EID.fetch_add(1, std::memory_order::relaxed))
@@ -561,7 +561,7 @@ WOORT_API woort_api wojeapi_get_bad_shader_list_of_entity(void)
     return woort_ret_value(result);
 }
 
-jeecs::typing::debug_eid_t jedbg_get_entity_uid(const jeecs::game_entity* e)
+je_DebugEid jedbg_get_entity_uid(const jeecs::game_entity* e)
 {
     auto* eid = e->get_component<jeecs::Editor::EntityId>();
     if (eid == nullptr)

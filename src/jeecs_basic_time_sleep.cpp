@@ -37,10 +37,10 @@ double je_clock_time()
     using namespace std;
     return (chrono::steady_clock::now() - jeecs::_g_time_ctx._start_time) / 1.0s;
 }
-jeecs::typing::timestamp_ms_t je_clock_time_stamp()
+je_TimestampMs je_clock_time_stamp()
 {
     using namespace std;
-    return (jeecs::typing::timestamp_ms_t)(
+    return (je_TimestampMs)(
         chrono::steady_clock::now().time_since_epoch() / 1ms);
 }
 

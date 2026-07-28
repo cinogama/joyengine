@@ -242,7 +242,7 @@ namespace jeecs
                     while (cur_chunk)
                     {
                         auto entity_meta_addr = je_arch_entity_meta_addr_in_chunk(cur_chunk);
-                        typing::version_t version;
+                        je_Version version;
                         for (typing::entity_id_in_chunk_t eid = 0;
                             eid < archinfo.m_entity_count; ++eid)
                         {

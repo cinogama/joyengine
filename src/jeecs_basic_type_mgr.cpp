@@ -21,8 +21,8 @@ namespace jeecs_impl
         JECS_DISABLE_MOVE_AND_COPY(global_factory_holder);
 
         using sequence_type_records = std::vector<je_TypeInfo*>;
-        using named_type_records = std::unordered_map<std::string, jeecs::typing::typeid_t>;
-        using hash_type_records = std::unordered_map<jeecs::typing::typehash_t, jeecs::typing::typeid_t>;
+        using named_type_records = std::unordered_map<std::string, je_TypeId>;
+        using hash_type_records = std::unordered_map<je_TypeHash, je_TypeId>;
 
         mutable std::shared_mutex _m_factory_mx;
 
@@ -52,7 +52,7 @@ namespace jeecs_impl
 
         je_TypeInfo* declear_type(
             const char* _typename,
-            jeecs::typing::typehash_t _hash,
+            je_TypeHash _hash,
             size_t _size,
             size_t _align,
             je_typing_class _typecls,
@@ -105,7 +105,7 @@ namespace jeecs_impl
                 if (holder_fnd != _m_type_records.end())
                 {
                     *holder_fnd = tinfo;
-                    tinfo->m_id = 1 + (jeecs::typing::typeid_t)(holder_fnd - _m_type_records.begin());
+                    tinfo->m_id = 1 + (je_TypeId)(holder_fnd - _m_type_records.begin());
                 }
                 else
                 {
@@ -367,7 +367,7 @@ namespace jeecs_impl
             delete tinfo;
         }
 
-        je_TypeInfo* get_info_by_id(jeecs::typing::typeid_t id) noexcept
+        je_TypeInfo* get_info_by_id(je_TypeId id) noexcept
         {
             if (id && id != jeecs::typing::INVALID_TYPE_ID)
             {
@@ -377,7 +377,7 @@ namespace jeecs_impl
             }
             return nullptr;
         }
-        je_TypeInfo* get_info_by_hash(jeecs::typing::typehash_t hash) noexcept
+        je_TypeInfo* get_info_by_hash(je_TypeHash hash) noexcept
         {
             std::shared_lock sg1(_m_factory_mx);
             auto fnd = _m_hash_type_records.find(hash);
@@ -429,7 +429,7 @@ namespace jeecs_impl
 
 const je_TypeInfo* je_typing_register(
     const char* _name,
-    jeecs::typing::typehash_t _hash,
+    je_TypeHash _hash,
     size_t _size,
     size_t _align,
     je_typing_class _typecls,
@@ -470,14 +470,14 @@ void je_typing_reset(
 }
 
 const je_TypeInfo* je_typing_get_info_by_id(
-    jeecs::typing::typeid_t _id)
+    je_TypeId _id)
 {
     return jeecs_impl::global_factory_holder::holder()
         ->get_info_by_id(_id);
 }
 
 const je_TypeInfo* je_typing_get_info_by_hash(
-    jeecs::typing::typehash_t _hash)
+    je_TypeHash _hash)
 {
     return jeecs_impl::global_factory_holder::holder()
         ->get_info_by_hash(_hash);

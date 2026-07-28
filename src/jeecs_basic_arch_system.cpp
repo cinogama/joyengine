@@ -57,7 +57,7 @@
 
 namespace jeecs_impl
 {
-    using types_set = std::set<jeecs::typing::typeid_t>;
+    using types_set = std::set<je_TypeId>;
 
     constexpr size_t CHUNK_SIZE = 16 * 1024; // 16K
 
@@ -65,7 +65,7 @@ namespace jeecs_impl
     class arch_manager;
     class ecs_world;
 
-    inline bool is_system_component_depends(jeecs::typing::typeid_t id)
+    inline bool is_system_component_depends(je_TypeId id)
     {
         if (jeecs::typing::of(id) == nullptr)
             return true;
@@ -151,7 +151,7 @@ namespace jeecs_impl
 
     public:
         using types_list = std::vector<const je_TypeInfo*>;
-        using archtypes_map = std::unordered_map<jeecs::typing::typeid_t, arch_type_info>;
+        using archtypes_map = std::unordered_map<je_TypeId, arch_type_info>;
 
     private:
         /* Will be init in construction */
@@ -224,7 +224,7 @@ namespace jeecs_impl
             //          `move_component_from` will move a specify component instance to current chunk.
             //         But component in current chunk has been destructed. So we didn't need to destruct
             //          it again.
-            inline void move_component_from(jeecs::typing::entity_id_in_chunk_t eid, jeecs::typing::typeid_t tid, void* from_component) const
+            inline void move_component_from(jeecs::typing::entity_id_in_chunk_t eid, je_TypeId tid, void* from_component) const
             {
                 const arch_type_info& arch_typeinfo = _m_arch_typeinfo_mapping->at(tid);
                 void* component_addr = get_component_addr(eid, arch_typeinfo.m_typeinfo->m_size, arch_typeinfo.m_begin_offset_in_chunk);
@@ -232,7 +232,7 @@ namespace jeecs_impl
                 jeecs::typing::destruct(arch_typeinfo.m_typeinfo, from_component);
             }
 
-            bool alloc_entity_id(jeecs::typing::entity_id_in_chunk_t* out_id, jeecs::typing::version_t* out_version)
+            bool alloc_entity_id(jeecs::typing::entity_id_in_chunk_t* out_id, je_Version* out_version)
             {
                 if (_m_free_slots.pop(out_id))
                 {
@@ -252,13 +252,13 @@ namespace jeecs_impl
             {
                 return (void*)(_m_chunk_buffer + _offset + _eid * _chunksize);
             }
-            inline bool is_entity_valid(jeecs::typing::entity_id_in_chunk_t eid, jeecs::typing::version_t eversion) const noexcept
+            inline bool is_entity_valid(jeecs::typing::entity_id_in_chunk_t eid, je_Version eversion) const noexcept
             {
                 if (_m_entities_meta[eid].m_version != eversion)
                     return false;
                 return true;
             }
-            inline void* get_component_addr_with_typeid(jeecs::typing::entity_id_in_chunk_t eid, jeecs::typing::typeid_t tid) const noexcept
+            inline void* get_component_addr_with_typeid(jeecs::typing::entity_id_in_chunk_t eid, je_TypeId tid) const noexcept
             {
                 auto fnd = _m_arch_typeinfo_mapping->find(tid);
                 if (fnd == _m_arch_typeinfo_mapping->end())
@@ -267,7 +267,7 @@ namespace jeecs_impl
                 return get_component_addr(
                     eid, arch_typeinfo.m_typeinfo->m_size, arch_typeinfo.m_begin_offset_in_chunk);
             }
-            inline void destruct_component_addr_with_typeid(jeecs::typing::entity_id_in_chunk_t eid, jeecs::typing::typeid_t tid) const noexcept
+            inline void destruct_component_addr_with_typeid(jeecs::typing::entity_id_in_chunk_t eid, je_TypeId tid) const noexcept
             {
                 const arch_type_info& arch_typeinfo = _m_arch_typeinfo_mapping->at(tid);
                 auto* component_addr = get_component_addr(
@@ -383,11 +383,11 @@ namespace jeecs_impl
         {
             arch_chunk* _m_in_chunk;
             jeecs::typing::entity_id_in_chunk_t _m_id;
-            jeecs::typing::version_t _m_version;
+            je_Version _m_version;
 
             // Do not invoke this function if possiable, you should get component by arch_type & system.
             template <typename CT = void>
-            inline CT* get_component(jeecs::typing::typeid_t tid) const
+            inline CT* get_component(je_TypeId tid) const
             {
                 if (_m_in_chunk != nullptr && _m_in_chunk->is_entity_valid(_m_id, _m_version))
                     return static_cast<CT*>(_m_in_chunk->get_component_addr_with_typeid(_m_id, tid));
@@ -438,7 +438,7 @@ namespace jeecs_impl
 
             assert(!_types_set.empty());
 
-            for (jeecs::typing::typeid_t tid : _types_set)
+            for (je_TypeId tid : _types_set)
                 const_cast<types_list&>(_m_arch_typeinfo).push_back(jeecs::typing::of(tid));
 
             std::sort(
@@ -547,7 +547,7 @@ namespace jeecs_impl
                             {
                                 // OK, 继续搬运，这搬运组件多是一件美事啊
                                 jeecs::typing::entity_id_in_chunk_t new_entity_id;
-                                jeecs::typing::version_t new_entity_version;
+                                je_Version new_entity_version;
 
                                 // 从target_chunk中找到一个空闲位置，如果target_chunk满了，就移动到下一个target，直到
                                 // 完成分配，或者target_chunk == pick_chunk(自己搬到自己身上没有意义~)
@@ -668,7 +668,7 @@ namespace jeecs_impl
         void alloc_entity(
             arch_chunk** out_chunk,
             jeecs::typing::entity_id_in_chunk_t* out_eid,
-            jeecs::typing::version_t* out_eversion) noexcept
+            je_Version* out_eversion) noexcept
         {
             std::shared_lock sg1(_m_chunk_list_defragmentation_mx);
             while (true)
@@ -711,7 +711,7 @@ namespace jeecs_impl
         {
             arch_chunk* chunk;
             jeecs::typing::entity_id_in_chunk_t entity_id;
-            jeecs::typing::version_t entity_version;
+            je_Version entity_version;
 
             alloc_entity(&chunk, &entity_id, &entity_version);
             for (auto& arch_typeinfo : _m_arch_typeinfo_mapping)
@@ -741,7 +741,7 @@ namespace jeecs_impl
         {
             return _m_entity_count_per_chunk;
         }
-        inline const arch_type_info* get_arch_type_info_by_type_id(jeecs::typing::typeid_t tid) const
+        inline const arch_type_info* get_arch_type_info_by_type_id(je_TypeId tid) const
         {
             auto fnd = _m_arch_typeinfo_mapping.find(tid);
             if (fnd != _m_arch_typeinfo_mapping.end())
@@ -1016,12 +1016,12 @@ namespace jeecs_impl
 
             struct typed_component
             {
-                jeecs::typing::typeid_t m_type_id;
+                je_TypeId m_type_id;
                 void* m_component_addr; // if m_add_system_instance == nullptr, remove spcify comp
 
                 typed_component* last;
 
-                typed_component(jeecs::typing::typeid_t tid, void* addr)
+                typed_component(je_TypeId tid, void* addr)
                     : m_type_id(tid), m_component_addr(addr)
                 {
                     // Do nothing else
@@ -1056,7 +1056,7 @@ namespace jeecs_impl
                 // NOTE: 当尝试添加一个切片查询缓存时，系统可能已经被移除了；这种情况下就不添加了
                 jeecs::game_system* m_system_instance_may_not_exist;
 
-                jeecs::typing::typehash_t m_query_slice_typehash;
+                je_TypeHash m_query_slice_typehash;
                 std::unique_ptr<jeecs::dependence> m_created_dependence;
 
                 append_slice_query_cache* last;
@@ -1154,7 +1154,7 @@ namespace jeecs_impl
             _find_or_create_buffer_for_entity(e)->m_entity_removed_flag = true;
         }
 
-        void* append_component(const arch_type::entity& e, jeecs::typing::typeid_t component_type)
+        void* append_component(const arch_type::entity& e, je_TypeId component_type)
         {
             const auto* tinfo = jeecs::typing::of(component_type);
             std::shared_lock sl(_m_command_executer_guard_mx);
@@ -1168,7 +1168,7 @@ namespace jeecs_impl
 
             return created_component;
         }
-        void remove_component(const arch_type::entity& e, jeecs::typing::typeid_t component_type)
+        void remove_component(const arch_type::entity& e, je_TypeId component_type)
         {
             std::shared_lock sl(_m_command_executer_guard_mx);
 
@@ -1223,7 +1223,7 @@ namespace jeecs_impl
         }
         void add_system_query_cache(
             jeecs::game_system* system_instance,
-            jeecs::typing::typehash_t hash,
+            je_TypeHash hash,
             std::unique_ptr<jeecs::dependence> dependence)
         {
             std::shared_lock sl(_m_command_executer_guard_mx);
@@ -1247,7 +1247,7 @@ namespace jeecs_impl
         using system_container_t =
             std::unordered_map<const je_TypeInfo*, jeecs::game_system*>;
         using slice_cache_container_t =
-            std::unordered_map<jeecs::typing::typehash_t, std::unique_ptr<jeecs::dependence>>;
+            std::unordered_map<je_TypeHash, std::unique_ptr<jeecs::dependence>>;
 
         // NOTE: 此处之所以要根据不同系统实例缓存不同的切片，是考虑到编译防火墙，不同编译器/库对
         //      相同/不同的切片类型哈希可能不同/相同；为了规避因此导致的哈希冲突或者重复，针对不同
@@ -1361,7 +1361,7 @@ namespace jeecs_impl
 
         void append_slice_cache_for_system_instance(
             jeecs::game_system* sys,
-            jeecs::typing::typehash_t hash,
+            je_TypeHash hash,
             std::unique_ptr<jeecs::dependence>&& dependence)
         {
             auto fnd = m_system_slice_caches.find(sys);
@@ -1484,7 +1484,7 @@ namespace jeecs_impl
         }
         inline bool fetch_and_request_slice_cache_dependence(
             jeecs::game_system* system_instance,
-            jeecs::typing::typehash_t hash,
+            je_TypeHash hash,
             jeecs::dependence** out_dependence)
         {
             // NOTE: `m_system_slice_caches` 只进行读操作，以确保安全。不允许在命令缓冲区处理期间
@@ -1570,7 +1570,7 @@ namespace jeecs_impl
                 arch_type::entity current_entity = _buf_in_entity.first;
 
                 auto* modify_typed_components = _buf_in_entity.second->m_adding_or_removing_components.pick_all();
-                std::unordered_map<jeecs::typing::typeid_t, void*> modifying_component_type_and_instances;
+                std::unordered_map<je_TypeId, void*> modifying_component_type_and_instances;
 
                 while (modify_typed_components != nullptr)
                 {
@@ -1612,7 +1612,7 @@ namespace jeecs_impl
                         }
 
                         // Remove all component
-                        for (jeecs::typing::typeid_t type_id : *current_entity.chunk()->types())
+                        for (je_TypeId type_id : *current_entity.chunk()->types())
                         {
                             current_entity.chunk()->destruct_component_addr_with_typeid(
                                 current_entity._m_id,
@@ -1661,7 +1661,7 @@ namespace jeecs_impl
                             types_set new_chunk_types = *current_entity.chunk()->types();
 
                             // 2. Apply modify!
-                            std::unordered_map<jeecs::typing::typeid_t, void*> append_component_type_addr_map;
+                            std::unordered_map<je_TypeId, void*> append_component_type_addr_map;
                             for (auto& [tid, instance] : modifying_component_type_and_instances)
                             {
                                 if (instance == nullptr)
@@ -1732,12 +1732,12 @@ namespace jeecs_impl
                                 {
                                     arch_type::arch_chunk* chunk;
                                     jeecs::typing::entity_id_in_chunk_t entity_id;
-                                    jeecs::typing::version_t entity_version;
+                                    je_Version entity_version;
 
                                     new_arch_type_my_null->alloc_entity(&chunk, &entity_id, &entity_version);
                                     // Entity alloced, move component to here..
 
-                                    for (jeecs::typing::typeid_t type_id : new_chunk_types)
+                                    for (je_TypeId type_id : new_chunk_types)
                                     {
                                         auto fnd = append_component_type_addr_map.find(type_id);
                                         if (fnd == append_component_type_addr_map.end())
@@ -2668,12 +2668,12 @@ void je_ecs_world_destroy(void* world)
     static_cast<jeecs_impl::ecs_world*>(world)->get_command_buffer().close_world();
 }
 
-jeecs::game_system* je_ecs_world_add_system_instance(void* world, jeecs::typing::typeid_t type)
+jeecs::game_system* je_ecs_world_add_system_instance(void* world, je_TypeId type)
 {
     return static_cast<jeecs_impl::ecs_world*>(world)->request_to_append_system(jeecs::typing::of(type));
 }
 
-jeecs::game_system* je_ecs_world_get_system_instance(void* world, jeecs::typing::typeid_t type)
+jeecs::game_system* je_ecs_world_get_system_instance(void* world, je_TypeId type)
 {
     auto& syss = static_cast<jeecs_impl::ecs_world*>(world)->get_system_instances();
     auto fnd = syss.find(jeecs::typing::of(type));
@@ -2682,7 +2682,7 @@ jeecs::game_system* je_ecs_world_get_system_instance(void* world, jeecs::typing:
     return fnd->second;
 }
 
-void je_ecs_world_remove_system_instance(void* world, jeecs::typing::typeid_t type)
+void je_ecs_world_remove_system_instance(void* world, je_TypeId type)
 {
     static_cast<jeecs_impl::ecs_world*>(world)->request_to_remove_system(jeecs::typing::of(type));
 }
@@ -2695,7 +2695,7 @@ void je_ecs_world_set_enable(void* world, bool enable)
 void je_ecs_world_create_entity_with_components(
     void* world,
     jeecs::game_entity* out_entity,
-    const jeecs::typing::typeid_t* component_ids)
+    const je_TypeId* component_ids)
 {
     jeecs_impl::types_set types;
     while (*component_ids != jeecs::typing::INVALID_TYPE_ID)
@@ -2709,7 +2709,7 @@ void je_ecs_world_create_entity_with_components(
 void je_ecs_world_create_prefab_with_components(
     void* world,
     jeecs::game_entity* out_entity,
-    const jeecs::typing::typeid_t* component_ids)
+    const je_TypeId* component_ids)
 {
     jeecs_impl::types_set types;
     while (*component_ids != jeecs::typing::INVALID_TYPE_ID)
@@ -2738,7 +2738,7 @@ void je_ecs_world_update_dependences_archinfo(void* world, jeecs::dependence* de
 
 void* je_ecs_world_entity_add_component(
     const jeecs::game_entity* entity,
-    jeecs::typing::typeid_t type)
+    je_TypeId type)
 {
     auto* entity_located_world =
         static_cast<jeecs_impl::ecs_world*>(je_ecs_world_of_entity(entity));
@@ -2751,7 +2751,7 @@ void* je_ecs_world_entity_add_component(
 
 void je_ecs_world_entity_remove_component(
     const jeecs::game_entity* entity,
-    jeecs::typing::typeid_t type)
+    je_TypeId type)
 {
     auto* entity_located_world =
         static_cast<jeecs_impl::ecs_world*>(je_ecs_world_of_entity(entity));
@@ -2768,7 +2768,7 @@ const jeecs::game_entity::meta* je_arch_entity_meta_addr_in_chunk(void* chunk)
 
 void* je_ecs_world_entity_get_component(
     const jeecs::game_entity* entity,
-    jeecs::typing::typeid_t type)
+    je_TypeId type)
 {
     auto& ecs_entity = *reinterpret_cast<const jeecs_impl::arch_type::entity*>(entity);
     auto* component = ecs_entity.get_component(type);
@@ -2800,7 +2800,7 @@ void* je_ecs_world_of_entity(const jeecs::game_entity* entity)
 bool je_ecs_world_query_slice_dependence(
     void* world,
     jeecs::game_system* system_instance,
-    jeecs::typing::typehash_t slice_type_hash,
+    je_TypeHash slice_type_hash,
     jeecs::dependence** out_dependence)
 {
     return static_cast<jeecs_impl::ecs_world*>(world)

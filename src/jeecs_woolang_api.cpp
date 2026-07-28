@@ -471,7 +471,7 @@ WOORT_API woort_api wojeapi_add_entity_to_world_with_components(void)
     jeecs::game_world gworld = woort_pointer(0);
     woort_value components_list = 1;
 
-    std::vector<jeecs::typing::typeid_t> components;
+    std::vector<je_TypeId> components;
 
     woort_value s;
     if (!woort_push_reserve(1, &s))
@@ -517,7 +517,7 @@ WOORT_API woort_api wojeapi_add_prefab_to_world_with_components(void)
     jeecs::game_world gworld(woort_pointer(0));
     woort_value components_list = 1;
 
-    std::vector<jeecs::typing::typeid_t> components;
+    std::vector<je_TypeId> components;
 
     woort_value s;
 
@@ -558,7 +558,7 @@ WOORT_API woort_api wojeapi_get_all_entities_from_world(void)
     void* world_instance = woort_pointer(0);
 
     auto required_components_len = woort_vec_len(1);
-    std::vector<jeecs::typing::typeid_t> required_components(required_components_len);
+    std::vector<je_TypeId> required_components(required_components_len);
 
     for (size_t i = 0; i < required_components_len; ++i)
     {
@@ -623,7 +623,7 @@ WOORT_API woort_api wojeapi_get_world_from_entity(void)
 WOORT_API woort_api wojeapi_get_entity_uid(void)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
-    jeecs::typing::debug_eid_t uid = jedbg_get_entity_uid(entity);
+    je_DebugEid uid = jedbg_get_entity_uid(entity);
 
     if (uid != 0)
         return woort_ret_option_int((woort_Int)uid);
@@ -1062,7 +1062,7 @@ WOORT_API woort_api wojeapi_input_gamepad_actived(void)
     jeecs::input::gamepad* gamepad =
         (jeecs::input::gamepad*)woort_gcpointer(0);
 
-    jeecs::typing::timestamp_ms_t actived;
+    je_TimestampMs actived;
     if (gamepad->actived(&actived))
         return woort_ret_option_int(actived);
 
@@ -1191,7 +1191,7 @@ WOORT_API woort_api wojeapi_type_of_name(void)
 WOORT_API woort_api wojeapi_type_of_id(void)
 {
     auto* const je_TypeInfo =
-        jeecs::typing::of((jeecs::typing::typeid_t)woort_int(0));
+        jeecs::typing::of((je_TypeId)woort_int(0));
 
     if (je_TypeInfo == nullptr)
         return woort_ret_option_none();
@@ -2459,7 +2459,7 @@ struct dynamic_parser_impl_t
 struct dynamic_parser_global_context_t
 {
     using parser_table_t =
-        std::unordered_map<jeecs::typing::typeid_t, std::unique_ptr<dynamic_parser_impl_t>>;
+        std::unordered_map<je_TypeId, std::unique_ptr<dynamic_parser_impl_t>>;
 
     std::mutex _je_dynamic_parser_mx;
 

@@ -224,32 +224,29 @@ namespace jeecs
     namespace typing
     {
         /*
-        jeecs::typing::typehash_t [类型别名]
+        je_TypeHash [类型别名]
         用于储存哈希值结果的类型
         */
-        using typehash_t = ::je_TypeHash;
 
         /*
-        jeecs::typing::typeid_t [类型别名]
+        je_TypeId [类型别名]
         用于储存引擎的类型工厂管理的类型ID，规定的无效值是 jeecs::typing::INVALID_TYPE_ID
             请参见：
             jeecs::typing::INVALID_TYPE_ID
         */
-        using typeid_t = ::je_TypeId;
 
         /*
         jeecs::typing::INVALID_TYPE_ID [常量]
-        jeecs::typing::typeid_t 类型的无效值
+        je_TypeId 类型的无效值
         请参见：
-            jeecs::typing::typeid_t
+            je_TypeId
         */
-        constexpr typeid_t INVALID_TYPE_ID = SIZE_MAX;
+        constexpr je_TypeId INVALID_TYPE_ID = SIZE_MAX;
 
         using module_entry_t = void (*)(woort_Dylib*);
         using module_leave_t = void (*)(void);
 
         using entity_id_in_chunk_t = uint32_t;
-        using version_t = ::je_Version;
 
         /*
         jeecs::typing::uuid [类型]
@@ -322,15 +319,14 @@ namespace jeecs
         using uid_t = uuid;
 
         /*
-        jeecs::typing::timestamp_ms_t [类型别名]
+        je_TimestampMs [类型别名]
         用于储存以毫秒为单位的时间戳的类型别名
         请参见：
             je_clock_time_stamp
         */
-        using timestamp_ms_t = ::je_TimestampMs;
 
         /*
-        jeecs::typing::debug_eid_t [类型别名]
+        je_DebugEid [类型别名]
         实体的调试 ID，对于任何实体，确保在引擎的生命周期内唯一
         仅编辑器环境下有效。
         ----------------------------------
@@ -338,7 +334,6 @@ namespace jeecs
         ----------------------------------
         * 正计划废弃，待编辑器重构计划推进。
         */
-        using debug_eid_t = ::je_DebugEid;
 
         template <typename T>
         struct _origin_type
@@ -541,18 +536,18 @@ namespace jeecs
 
         struct meta
         {
-            jeecs::typing::version_t m_version;
+            je_Version m_version;
             jeecs::game_entity::entity_stat m_stat;
         };
 
         void* _m_in_chunk;
         jeecs::typing::entity_id_in_chunk_t _m_id;
-        jeecs::typing::version_t _m_version;
+        je_Version _m_version;
 
         inline game_entity& _set_arch_chunk_info(
             void* chunk,
             jeecs::typing::entity_id_in_chunk_t index,
-            jeecs::typing::version_t ver) noexcept
+            je_Version ver) noexcept
         {
             _m_in_chunk = chunk;
             _m_id = index;
@@ -1529,7 +1524,7 @@ JE_API void je_ecs_world_remove_system_instance(
 /*
 je_ecs_world_create_entity_with_components [基本接口]
 向指定世界中创建一个用于指定组件集合的实体，创建结果通过参数 out_entity 返回
-component_ids 应该指向一个储存有N+1个jeecs::typing::typeid_t实例的连续空间，
+component_ids 应该指向一个储存有N+1个je_TypeId实例的连续空间，
 其中，N是组件种类数量且不应该为0，空间的最后应该是jeecs::typing::INVALID_TYPE_ID
 以表示结束。
     * 若向一个正在销毁中的世界创建实体，则创建失败，out_entity将被写入`无效值`
@@ -5433,15 +5428,15 @@ namespace jeecs
             }
         }
 
-        constexpr typing::typehash_t prime = (typing::typehash_t)0x100000001B3ull;
-        constexpr typing::typehash_t basis = (typing::typehash_t)0xCBF29CE484222325ull;
+        constexpr je_TypeHash prime = (je_TypeHash)0x100000001B3ull;
+        constexpr je_TypeHash basis = (je_TypeHash)0xCBF29CE484222325ull;
 
         /*
         jeecs::basic::hash_compile_time [函数]
         可在编译时计算字符串的哈希值的哈希函数
         */
-        constexpr typing::typehash_t hash_compile_time(
-            char const* str, typing::typehash_t last_value = basis)
+        constexpr je_TypeHash hash_compile_time(
+            char const* str, je_TypeHash last_value = basis)
         {
             return *str ? hash_compile_time(str + 1, (*str ^ last_value) * prime) : last_value;
         }
@@ -6523,11 +6518,11 @@ namespace jeecs
         {
 
             using id_typeinfo_map_t = std::unordered_map<
-                jeecs::typing::typeid_t,
+                je_TypeId,
                 const je_TypeInfo*>;
             using registered_type_hash_map_t = std::unordered_map<
-                jeecs::typing::typehash_t,
-                jeecs::typing::typeid_t>;
+                je_TypeHash,
+                je_TypeId>;
 
             mutable std::mutex _m_mx;
 
@@ -6604,7 +6599,7 @@ namespace jeecs
                 _m_self_registed_id_typeinfo.clear();
                 _m_self_registed_hash.clear();
             }
-            const je_TypeInfo* get_local_type_info(jeecs::typing::typeid_t id) const
+            const je_TypeInfo* get_local_type_info(je_TypeId id) const
             {
                 std::lock_guard g1(_m_mx);
                 return _m_self_registed_id_typeinfo.at(id);
@@ -6812,7 +6807,7 @@ namespace jeecs
         template <typename FirstCompT, typename... CompTs>
         inline game_entity add_entity()
         {
-            const typing::typeid_t component_ids[] = {
+            const je_TypeId component_ids[] = {
                 typing::id<FirstCompT>(),
                 typing::id<CompTs>()...,
                 typing::INVALID_TYPE_ID,
@@ -6836,7 +6831,7 @@ namespace jeecs
         template <typename FirstCompT, typename... CompTs>
         inline game_entity add_prefab()
         {
-            const typing::typeid_t component_ids[] = {
+            const je_TypeId component_ids[] = {
                 typing::id<FirstCompT>(),
                 typing::id<CompTs>()...,
                 typing::INVALID_TYPE_ID,
@@ -6850,7 +6845,7 @@ namespace jeecs
             return gentity;
         }
 
-        inline jeecs::game_system* add_system(jeecs::typing::typeid_t type)
+        inline jeecs::game_system* add_system(je_TypeId type)
         {
             return je_ecs_world_add_system_instance(handle(), type);
         }
@@ -6862,7 +6857,7 @@ namespace jeecs
                 typing::id<SystemT>()));
         }
 
-        inline jeecs::game_system* get_system(jeecs::typing::typeid_t type)
+        inline jeecs::game_system* get_system(je_TypeId type)
         {
             return je_ecs_world_get_system_instance(handle(), type);
         }
@@ -6874,7 +6869,7 @@ namespace jeecs
                 typing::id<SystemT>()));
         }
 
-        inline void remove_system(jeecs::typing::typeid_t type)
+        inline void remove_system(je_TypeId type)
         {
             je_ecs_world_remove_system_instance(handle(), type);
         }
@@ -6886,7 +6881,7 @@ namespace jeecs
         }
 
         // This function only used for editor.
-        inline game_entity _add_entity(std::vector<typing::typeid_t> components)
+        inline game_entity _add_entity(std::vector<je_TypeId> components)
         {
             components.push_back(typing::INVALID_TYPE_ID);
 
@@ -6897,7 +6892,7 @@ namespace jeecs
             return gentity;
         }
         // This function only used for editor.
-        inline game_entity _add_prefab(std::vector<typing::typeid_t> components)
+        inline game_entity _add_prefab(std::vector<je_TypeId> components)
         {
             components.push_back(typing::INVALID_TYPE_ID);
 
@@ -6944,7 +6939,7 @@ namespace jeecs
 
         type m_require;
         size_t m_require_group_id;
-        typing::typeid_t m_type;
+        je_TypeId m_type;
     };
     static_assert(std::is_trivial_v<requirement>);
 
@@ -7171,7 +7166,7 @@ namespace jeecs
                 const component_info* cached_infos,
                 void* chunkbuf,
                 typing::entity_id_in_chunk_t entity_id,
-                typing::version_t entity_version)
+                je_Version entity_version)
             {
                 return entity_with_components{
                     game_entity{
@@ -12980,7 +12975,7 @@ namespace jeecs
             return { x, y };
         }
 
-        template <typing::typehash_t hash_v1, int v2>
+        template <je_TypeHash hash_v1, int v2>
         static bool _isUp(bool keystate)
         {
             static bool lastframekeydown;
@@ -12988,7 +12983,7 @@ namespace jeecs
             lastframekeydown = keystate;
             return res;
         }
-        template <typing::typehash_t hash_v1, int v2>
+        template <je_TypeHash hash_v1, int v2>
         static bool _firstDown(bool keystate)
         {
             static bool lastframekeydown;
@@ -12996,10 +12991,10 @@ namespace jeecs
             lastframekeydown = keystate;
             return res;
         }
-        template <typing::typehash_t hash_v1, int v2>
+        template <je_TypeHash hash_v1, int v2>
         static bool _doubleClick(bool keystate, float i = 0.1f)
         {
-            static typing::timestamp_ms_t lact_click_tm = je_clock_time_stamp();
+            static je_TimestampMs lact_click_tm = je_clock_time_stamp();
             static bool release_for_next_click = false;
 
             auto cur_time = je_clock_time_stamp();
@@ -13007,7 +13002,7 @@ namespace jeecs
             // 1. first click.
             if (keystate)
             {
-                if (release_for_next_click && cur_time - lact_click_tm < (typing::timestamp_ms_t)(i * 1000.f))
+                if (release_for_next_click && cur_time - lact_click_tm < (je_TimestampMs)(i * 1000.f))
                 {
                     // Is Double click!
                     lact_click_tm = 0; // reset the time.
@@ -13015,7 +13010,7 @@ namespace jeecs
                     return true;
                 }
                 // Release for a long time, re calc the time
-                if (!release_for_next_click || cur_time - lact_click_tm > (typing::timestamp_ms_t)(i * 1000.f))
+                if (!release_for_next_click || cur_time - lact_click_tm > (je_TimestampMs)(i * 1000.f))
                 {
                     lact_click_tm = cur_time;
                     release_for_next_click = false;
@@ -13023,7 +13018,7 @@ namespace jeecs
             }
             else
             {
-                if (!release_for_next_click && cur_time - lact_click_tm < (typing::timestamp_ms_t)(i * 1000.f))
+                if (!release_for_next_click && cur_time - lact_click_tm < (je_TimestampMs)(i * 1000.f))
                     release_for_next_click = true;
             }
             return false;
@@ -13057,7 +13052,7 @@ namespace jeecs
                 je_io_gamepad_get_stick(m_gamepad_handle, stick, &x, &y);
                 return { x, y };
             }
-            bool actived(typing::timestamp_ms_t* out_last_update_time_may_null) const
+            bool actived(je_TimestampMs* out_last_update_time_may_null) const
             {
                 return je_io_gamepad_is_active(
                     m_gamepad_handle, out_last_update_time_may_null);
@@ -13091,7 +13086,7 @@ namespace jeecs
             {
                 auto gamepad_handles = _get_all_handle();
 
-                typing::timestamp_ms_t last_update_time = 0;
+                je_TimestampMs last_update_time = 0;
                 size_t last_index = SIZE_MAX;
 
                 const size_t size = gamepad_handles.size();
@@ -13099,7 +13094,7 @@ namespace jeecs
 
                 for (size_t i = 0; i < size; ++i)
                 {
-                    typing::timestamp_ms_t cur_time;
+                    je_TimestampMs cur_time;
                     if (je_io_gamepad_is_active(data[i], &cur_time))
                     {
                         if (cur_time > last_update_time)
