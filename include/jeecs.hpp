@@ -1530,21 +1530,14 @@ typedef struct je_RequirementCollection {
     je_CollectedRequirements*   m_collected_requirement;
 }je_RequirementCollection;
 
-JE_API void je_ecs_collect_requirements(
-    void* world,
-    je_RequirementCollection* modify_collection,
+JE_API je_CollectedRequirements* je_ecs_collect_requirements(
     const je_ComponentRequirement* requirements, 
     size_t view_requiremnt_count, 
     size_t other_requiremnts_count);
 
-/*
-je_ecs_world_update_dependences_archinfo [基本接口]
-从当前世界更新类型依赖信息（即 ArchType 缓存）
-此函数一般用于 collection 更新自身某步 dependence 的 ArchType 缓存
-*/
-JE_API void je_ecs_world_update_dependences_archinfo(
+JE_API void je_ecs_world_update_collection(
     void* world,
-    jeecs::dependence* dependence);
+    je_RequirementCollection* collection);
 
 /*
 je_ecs_world_add_system_instance [基本接口]
@@ -1708,7 +1701,7 @@ JE_API bool je_ecs_world_query_slice_dependence(
     void* world,
     jeecs::game_system* system_instance,
     je_TypeHash slice_type_hash,
-    jeecs::dependence** out_dependence);
+    je_RequirementCollection** out_collection);
 
 // ATTENTION: Following 2 functions have no thread-safe-promise:
 /*

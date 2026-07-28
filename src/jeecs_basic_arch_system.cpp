@@ -31,6 +31,7 @@ struct je_CollectedRequirements
     types_set m_except_set;
     std::map<int /*je_ComponentRequirementKind*/, types_set> m_anyof_sets;
 
+    size_t m_view_required;
     std::vector<je_DependenceArchInfos> m_selected_archs;
 };
 
@@ -777,7 +778,9 @@ namespace jeecs_impl
             return _m_arch_typeinfo;
         }
 
-        inline void create_chunk_info(const jeecs::dependence* depend, jeecs::dependence::arch_chunks_info* out_arch_info) const noexcept
+        inline void create_chunk_info(
+            const je_CollectedRequirements* depend, 
+            je_DependenceArchInfos* out_arch_info) const noexcept
         {
             out_arch_info->m_arch = const_cast<arch_type*>(this);
             out_arch_info->m_entity_count = get_entity_count_per_chunk();
@@ -862,30 +865,8 @@ namespace jeecs_impl
         {
             return !_m_arch_modified.test_and_set();
         }
-        inline void update_dependence_archinfo(jeecs::dependence* dependence) const noexcept
+        inline void update_collection_archinfo(je_RequirementCollection* collection) const noexcept
         {
-            types_set contain_set, except_set /*, maynot_set*/;
-            std::map<int, types_set> anyof_sets;
-
-            for (auto& requirement : dependence->m_requirements)
-            {
-                switch (requirement.m_kind)
-                {
-                case JE_COMPONENT_REQUIRE_CONTAINS:
-                    contain_set.insert(requirement.m_typeid);
-                    break;
-                case JE_COMPONENT_REQUIRE_MAYNOT:
-                    /*maynot_set.insert(requirement.m_typeid);*/ break;
-                case JE_COMPONENT_REQUIRE_EXCEPT:
-                    except_set.insert(requirement.m_typeid);
-                    break;
-                default /* JE_COMPONENT_REQUIRE_ANYOF_0... */:
-                    anyof_sets[requirement.m_kind].insert(requirement.m_typeid);
-                    break;
-
-                }
-            }
-
             static auto contains = [](const types_set& a, const types_set& b)
                 {
                     for (auto type_id : b)
@@ -916,23 +897,27 @@ namespace jeecs_impl
                     return true;
                 };
 
-            dependence->m_archs.clear();
+            auto* const collected_requirement = collection->m_collected_requirement;
+            collected_requirement->m_selected_archs.clear();
             do
             {
                 std::shared_lock sg1(_m_arch_types_mapping_mx);
                 for (auto& [typeset, arch] : _m_arch_types_mapping)
                 {
-                    if (contains(typeset, contain_set)
-                        && except(typeset, except_set)
-                        && contain_all_any(typeset, anyof_sets))
+                    if (contains(typeset, collected_requirement->m_contain_set)
+                        && except(typeset, collected_requirement->m_except_set)
+                        && contain_all_any(typeset, collected_requirement->m_anyof_sets))
                     {
                         // Current arch is matched!
                         arch->create_chunk_info(
-                            dependence,
-                            &dependence->m_archs.emplace_back());
+                            collected_requirement,
+                            &collected_requirement->m_selected_archs.emplace_back());
                     }
                 }
             } while (0);
+
+            collection->m_cached_archs = collected_requirement->m_selected_archs.data();
+            collection->m_cached_arch_count = collected_requirement->m_selected_archs.size();
         }
         inline void close_all_entity(ecs_world* by_world)
         {
@@ -1069,7 +1054,7 @@ namespace jeecs_impl
                 jeecs::game_system* m_system_instance_may_not_exist;
 
                 je_TypeHash m_query_slice_typehash;
-                std::unique_ptr<jeecs::dependence> m_created_dependence;
+                je_RequirementCollection* m_created_collection;
 
                 append_slice_query_cache* last;
             };
@@ -1236,7 +1221,7 @@ namespace jeecs_impl
         void add_system_query_cache(
             jeecs::game_system* system_instance,
             je_TypeHash hash,
-            std::unique_ptr<jeecs::dependence> dependence)
+            je_RequirementCollection* dependence)
         {
             std::shared_lock sl(_m_command_executer_guard_mx);
 
@@ -1244,7 +1229,7 @@ namespace jeecs_impl
                 new _world_command_buffer::append_slice_query_cache{
                     system_instance,
                     hash,
-                    std::move(dependence),
+                    dependence,
                 });
         }
 
@@ -1259,7 +1244,7 @@ namespace jeecs_impl
         using system_container_t =
             std::unordered_map<const je_TypeInfo*, jeecs::game_system*>;
         using slice_cache_container_t =
-            std::unordered_map<je_TypeHash, std::unique_ptr<jeecs::dependence>>;
+            std::unordered_map<je_TypeHash, je_RequirementCollection*>;
 
         // NOTE: 此处之所以要根据不同系统实例缓存不同的切片，是考虑到编译防火墙，不同编译器/库对
         //      相同/不同的切片类型哈希可能不同/相同；为了规避因此导致的哈希冲突或者重复，针对不同
@@ -1371,21 +1356,26 @@ namespace jeecs_impl
 #endif
         }
 
+        static void _drop_collection_instance(
+            je_RequirementCollection* collection)
+        {
+            delete collection->m_collected_requirement;
+            delete collection;
+        }
+
         void append_slice_cache_for_system_instance(
             jeecs::game_system* sys,
             je_TypeHash hash,
-            std::unique_ptr<jeecs::dependence>&& dependence)
+            je_RequirementCollection* collection)
         {
             auto fnd = m_system_slice_caches.find(sys);
             if (fnd != m_system_slice_caches.end())
             {
                 auto& slice_caches = fnd->second;
-                auto fnd2 = slice_caches.find(hash);
-                if (fnd2 == slice_caches.end())
-                {
-                    slice_caches.insert(
-                        std::make_pair(hash, std::move(dependence)));
-                }
+
+                if (slice_caches.emplace(hash, collection).second)
+                    return;
+
                 // Else, already exist, do nothing.
             }
             // Else, system instance not exist, do nothing.
@@ -1398,6 +1388,8 @@ namespace jeecs_impl
                     this);
             }
 #endif
+            // Drop created collection.
+            _drop_collection_instance(collection);
         }
 
         arch_manager& _get_arch_mgr() noexcept
@@ -1413,9 +1405,9 @@ namespace jeecs_impl
         }
 
     public:
-        void update_dependence_archinfo(jeecs::dependence* require) const noexcept
+        void update_collection_archinfo(je_RequirementCollection* collection) const noexcept
         {
-            _get_arch_mgr().update_dependence_archinfo(require);
+            _get_arch_mgr().update_collection_archinfo(collection);
         }
 
         bool update()
@@ -1496,7 +1488,7 @@ namespace jeecs_impl
         inline bool fetch_and_request_slice_cache_dependence(
             jeecs::game_system* system_instance,
             je_TypeHash hash,
-            jeecs::dependence** out_dependence)
+            je_RequirementCollection** out_collection)
         {
             // NOTE: `m_system_slice_caches` 只进行读操作，以确保安全。不允许在命令缓冲区处理期间
             //      执行 `fetch_and_request_slice_cache_dependence`
@@ -1507,19 +1499,19 @@ namespace jeecs_impl
                 auto fnd2 = fnd->second.find(hash);
                 if (fnd2 != fnd->second.end())
                 {
-                    *out_dependence = fnd2->second.get();
+                    *out_collection = fnd2->second;
                     return true;
                 }
             }
 
-            auto created_dependence = std::make_unique<jeecs::dependence>();
-            *out_dependence = created_dependence.get();
+            je_RequirementCollection* const created_collection = new je_RequirementCollection();
+            *out_collection = created_collection;
 
             // NOTE: dependence 的需求将在外部初始化，更新也需要由外部执行
             get_command_buffer().add_system_query_cache(
                 system_instance,
                 hash,
-                std::move(created_dependence));
+                created_collection);
 
             return false;
         }
@@ -1864,7 +1856,7 @@ namespace jeecs_impl
                     _m_world->append_slice_cache_for_system_instance(
                         cur_append_query_caches->m_system_instance_may_not_exist,
                         cur_append_query_caches->m_query_slice_typehash,
-                        std::move(cur_append_query_caches->m_created_dependence));
+                        cur_append_query_caches->m_created_collection);
 
                     delete cur_append_query_caches;
                 }
@@ -2748,19 +2740,43 @@ void je_ecs_world_create_entity_with_prefab(
     out_entity->_m_version = entity._m_version;
 }
 
-void je_ecs_collect_requirements(
-    void* world,
-    je_RequirementCollection* modify_collection,
+je_CollectedRequirements* je_ecs_collect_requirements(
     const je_ComponentRequirement* requirements,
     size_t view_requiremnt_count,
     size_t other_requiremnts_count)
 {
-    // static_cast<jeecs_impl::ecs_world*>(world)->update_dependence_archinfo(modify_collection);
+    je_CollectedRequirements* const new_collected = new je_CollectedRequirements();
+
+    new_collected->m_view_required = view_requiremnt_count;
+
+    const size_t total_requiremet_count = view_requiremnt_count + other_requiremnts_count;
+    for (size_t i = 0; i < total_requiremet_count; ++i)
+    {
+        const auto& requirement = requirements[i];
+        switch (requirement.m_kind)
+        {
+        case JE_COMPONENT_REQUIRE_CONTAINS:
+            new_collected->m_contain_set.insert(requirement.m_typeid);
+            break;
+        case JE_COMPONENT_REQUIRE_MAYNOT:
+            break;
+        case JE_COMPONENT_REQUIRE_EXCEPT:
+            new_collected->m_except_set.insert(requirement.m_typeid);
+            break;
+        default /* JE_COMPONENT_REQUIRE_ANYOF_0... */:
+            new_collected->m_anyof_sets[requirement.m_kind].insert(requirement.m_typeid);
+            break;
+
+        }
+    }
+    return new_collected;
 }
 
-void je_ecs_world_update_dependences_archinfo(void* world, jeecs::dependence* dependence)
+void je_ecs_world_update_collection(
+    void* world,
+    je_RequirementCollection* collection)
 {
-    static_cast<jeecs_impl::ecs_world*>(world)->update_dependence_archinfo(dependence);
+    static_cast<jeecs_impl::ecs_world*>(world)->update_collection_archinfo(collection);
 }
 
 void* je_ecs_world_entity_add_component(
@@ -2828,11 +2844,11 @@ bool je_ecs_world_query_slice_dependence(
     void* world,
     jeecs::game_system* system_instance,
     je_TypeHash slice_type_hash,
-    jeecs::dependence** out_dependence)
+    je_RequirementCollection** out_collection)
 {
     return static_cast<jeecs_impl::ecs_world*>(world)
         ->fetch_and_request_slice_cache_dependence(
-            system_instance, slice_type_hash, out_dependence);
+            system_instance, slice_type_hash, out_collection);
 }
 
 //////////////////// FOLLOWING IS DEBUG EDITOR API ////////////////////
