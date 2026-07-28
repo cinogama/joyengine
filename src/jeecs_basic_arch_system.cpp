@@ -1263,8 +1263,6 @@ namespace jeecs_impl
         bool _m_world_enabled;
         bool _m_destroying_flag;
 
-        std::atomic_size_t _m_archmgr_updated_version;
-
         system_container_t m_systems;
         system_slice_cache_container_t m_system_slice_caches;
     private:
@@ -1278,7 +1276,6 @@ namespace jeecs_impl
             , _m_arch_manager(this)
             , _m_world_enabled(false)
             , _m_destroying_flag(false)
-            , _m_archmgr_updated_version(100)
         {
             std::lock_guard g1(_m_alive_worlds_mx);
             _m_alive_worlds.insert(this);
@@ -1404,11 +1401,6 @@ namespace jeecs_impl
         }
 
     public:
-        size_t archtype_mgr_updated_version() const noexcept
-        {
-            return _m_archmgr_updated_version;
-        }
-
         void update_dependence_archinfo(jeecs::dependence* require) const noexcept
         {
             _get_arch_mgr().update_dependence_archinfo(require);
@@ -1442,8 +1434,6 @@ namespace jeecs_impl
             }
             if (_m_arch_manager._arch_modified())
             {
-                ++_m_archmgr_updated_version;
-
                 // Arch types modified, all dependence arch info need to be updated.
                 for (auto& [system_instance, slice_cache] : m_system_slice_caches)
                 {
@@ -1515,7 +1505,6 @@ namespace jeecs_impl
             *out_dependence = created_dependence.get();
 
             // NOTE: dependence 的需求将在外部初始化，更新也需要由外部执行
-
             get_command_buffer().add_system_query_cache(
                 system_instance,
                 hash,
@@ -2739,11 +2728,6 @@ void je_ecs_world_create_entity_with_prefab(
         ->create_entity_with_prefab(
             reinterpret_cast<const jeecs_impl::arch_type::entity*>(prefab));
     out_entity->_set_arch_chunk_info(entity._m_in_chunk, entity._m_id, entity._m_version);
-}
-
-size_t je_ecs_world_archmgr_updated_version(void* world)
-{
-    return static_cast<jeecs_impl::ecs_world*>(world)->archtype_mgr_updated_version();
 }
 
 void je_ecs_world_update_dependences_archinfo(void* world, jeecs::dependence* dependence)

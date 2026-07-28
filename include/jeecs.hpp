@@ -1400,13 +1400,6 @@ je_ecs_world_destroy [基本接口]
 JE_API void je_ecs_world_destroy(void* world);
 
 /*
-je_ecs_world_archmgr_updated_version [基本接口]
-获取当前世界的 ArchManager 的版本号
-此函数可获取世界的 ArchType 是否有增加，一般用于 collection 检测是否需要更新 ArchType 缓存
-*/
-JE_API size_t je_ecs_world_archmgr_updated_version(void* world);
-
-/*
 je_ecs_world_update_dependences_archinfo [基本接口]
 从当前世界更新类型依赖信息（即 ArchType 缓存）
 此函数一般用于 collection 更新自身某步 dependence 的 ArchType 缓存
@@ -1579,7 +1572,7 @@ JE_API bool je_ecs_world_query_slice_dependence(
     jeecs::typing::typehash_t slice_type_hash,
     jeecs::dependence** out_dependence);
 
-// ATTENTION: These 2 functions have no thread-safe-promise.
+// ATTENTION: Following 2 functions have no thread-safe-promise:
 /*
 je_ecs_get_name_of_entity [基本接口]
 获取实体的名称，一般只用于调试使用，不建议使用在实际项目中
@@ -6983,31 +6976,20 @@ namespace jeecs
         basic::vector<requirement> m_requirements;
         basic::vector<arch_chunks_info> m_archs;
 
-        size_t m_current_arch_version;
-        void* m_cached_arch_belongs_to_world_handle;
-
         dependence() = default;
         dependence(const dependence& d)
             : m_requirements(d.m_requirements)
             , m_archs({})
-            , m_current_arch_version(0)
-            , m_cached_arch_belongs_to_world_handle(nullptr)
         {}
         dependence(dependence&& d)
             : m_requirements(std::move(d.m_requirements))
             , m_archs(std::move(d.m_archs))
-            , m_current_arch_version(d.m_current_arch_version)
-            , m_cached_arch_belongs_to_world_handle(d.m_cached_arch_belongs_to_world_handle)
         {
-            d.m_current_arch_version = 0;
-            d.m_cached_arch_belongs_to_world_handle = nullptr;
         }
         dependence& operator=(const dependence& d)
         {
             m_requirements = d.m_requirements;
             m_archs = {};
-            m_current_arch_version = 0;
-            m_cached_arch_belongs_to_world_handle = nullptr;
 
             return *this;
         }
@@ -7015,11 +6997,6 @@ namespace jeecs
         {
             m_requirements = std::move(d.m_requirements);
             m_archs = std::move(d.m_archs);
-            m_current_arch_version = d.m_current_arch_version;
-            m_cached_arch_belongs_to_world_handle = d.m_cached_arch_belongs_to_world_handle;
-
-            d.m_current_arch_version = 0;
-            d.m_cached_arch_belongs_to_world_handle = nullptr;
 
             return *this;
         }
@@ -7028,18 +7005,9 @@ namespace jeecs
         void update(game_world aim_world) noexcept
         {
             auto* world_handle = aim_world.handle();
-
             assert(world_handle != nullptr);
 
-            size_t arch_updated_ver = je_ecs_world_archmgr_updated_version(world_handle);
-            if (m_cached_arch_belongs_to_world_handle != world_handle
-                || m_current_arch_version != arch_updated_ver)
-            {
-                m_current_arch_version = arch_updated_ver;
-                m_cached_arch_belongs_to_world_handle = world_handle;
-
-                je_ecs_world_update_dependences_archinfo(world_handle, this);
-            }
+            je_ecs_world_update_dependences_archinfo(world_handle, this);
         }
     };
 
@@ -7727,7 +7695,6 @@ namespace jeecs
                 &dep))
             {
                 // This dependence is just created, need to apply requirements.
-
                 collection<SliceView, SliceRequirements...>::apply_requirements(dep);
                 dep->update(get_world());
             }
