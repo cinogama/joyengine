@@ -260,12 +260,12 @@ namespace jeecs
                                 const auto* typeinfo = *cmpidx;
                                 const woort_value component_st = stack_base + 2 + cmpid;
 
-                                switch (work.m_dependence.m_requirements[cmpid].m_require)
+                                switch (work.m_dependence.m_requirements[cmpid].m_kind)
                                 {
-                                case requirement::type::CONTAINS:
+                                case JE_COMPONENT_REQUIRE_CONTAINS:
                                     create_component_struct(component_st, m_work_function, component, typeinfo);
                                     break;
-                                case requirement::type::MAYNOT:
+                                case JE_COMPONENT_REQUIRE_MAYNOT:
                                     if (component == nullptr)
                                         woort_set_option_none(component_st);
                                     else
@@ -274,8 +274,8 @@ namespace jeecs
                                         woort_set_option_value(component_st, component_st);
                                     }
                                     break;
-                                case requirement::type::ANYOF:
-                                case requirement::type::EXCEPT:
+                                case JE_COMPONENT_REQUIRE_ANYOF:
+                                case JE_COMPONENT_REQUIRE_EXCEPT:
                                 default:
                                     break;
                                 }
@@ -1132,13 +1132,13 @@ WOORT_API woort_api wojeapi_towoo_register_system_job(void)
                 static_cast<const je_TypeInfo*>(woort_pointer(elem));
 
             woort_struct_get(elem, requirement_info, 0);
-            const jeecs::requirement::type ty =
-                static_cast<jeecs::requirement::type>(woort_int(elem));
+            const je_ComponentRequirementKind ty =
+                static_cast<je_ComponentRequirementKind>(woort_int(elem));
 
             woort_struct_get(elem, requirement_info, 1);
 
             stepwork.m_dependence.m_requirements.push_back(
-                jeecs::requirement{
+                je_ComponentRequirement{
                     ty,
                     static_cast<size_t>(woort_int(elem)),
                     typeinfo->m_id

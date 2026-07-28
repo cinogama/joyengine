@@ -108,7 +108,7 @@ namespace jeecs
         struct group_filter_rule
         {
             const je_TypeInfo* m_type;
-            jeecs::requirement::type        m_requirement;
+            je_ComponentRequirementKind     m_requirement;
         };
         struct group_definition
         {
@@ -311,7 +311,7 @@ namespace jeecs
 
                     group.m_filters.push_back(group_filter_rule{
                         static_cast<const je_TypeInfo*>(woort_pointer(typeinfo_slot)),
-                        static_cast<requirement::type>(woort_int(requirement_slot)),
+                        static_cast<je_ComponentRequirementKind>(woort_int(requirement_slot)),
                         });
                 }
 
@@ -342,11 +342,11 @@ namespace jeecs
                 bool matches = true;
                 for (const auto& f : g.m_filters)
                 {
-                    assert(f.m_requirement == requirement::type::CONTAINS
-                        || f.m_requirement == requirement::type::EXCEPT);
+                    assert(f.m_requirement == JE_COMPONENT_REQUIRE_CONTAINS
+                        || f.m_requirement == JE_COMPONENT_REQUIRE_EXCEPT);
 
                     const bool has = je_ecs_world_entity_get_component(&e._m_raw, f.m_type->m_id) != nullptr;
-                    if ((f.m_requirement == requirement::type::CONTAINS) != has)
+                    if ((f.m_requirement == JE_COMPONENT_REQUIRE_CONTAINS) != has)
                     {
                         matches = false;
                         break;

@@ -773,7 +773,7 @@ namespace jeecs_impl
 
             for (const auto& requirement : depend->m_requirements)
             {
-                auto* arch_typeinfo = get_arch_type_info_by_type_id(requirement.m_type);
+                auto* arch_typeinfo = get_arch_type_info_by_type_id(requirement.m_typeid);
                 if (arch_typeinfo != nullptr)
                 {
                     out_arch_info->m_component_infos.emplace_back(
@@ -785,9 +785,9 @@ namespace jeecs_impl
                 else
                 {
                     assert(
-                        requirement.m_require == jeecs::requirement::ANYOF
-                        || requirement.m_require == jeecs::requirement::MAYNOT
-                        || requirement.m_require == jeecs::requirement::EXCEPT);
+                        requirement.m_kind == JE_COMPONENT_REQUIRE_ANYOF
+                        || requirement.m_kind == JE_COMPONENT_REQUIRE_MAYNOT
+                        || requirement.m_kind == JE_COMPONENT_REQUIRE_EXCEPT);
 
                     out_arch_info->m_component_infos.emplace_back(
                         jeecs::dependence::arch_chunks_info::component_info{
@@ -858,18 +858,18 @@ namespace jeecs_impl
 
             for (auto& requirement : dependence->m_requirements)
             {
-                switch (requirement.m_require)
+                switch (requirement.m_kind)
                 {
-                case jeecs::requirement::type::CONTAINS:
-                    contain_set.insert(requirement.m_type);
+                case JE_COMPONENT_REQUIRE_CONTAINS:
+                    contain_set.insert(requirement.m_typeid);
                     break;
-                case jeecs::requirement::type::MAYNOT:
-                    /*maynot_set.insert(requirement.m_type);*/ break;
-                case jeecs::requirement::type::ANYOF:
-                    anyof_sets[requirement.m_require_group_id].insert(requirement.m_type);
+                case JE_COMPONENT_REQUIRE_MAYNOT:
+                    /*maynot_set.insert(requirement.m_typeid);*/ break;
+                case JE_COMPONENT_REQUIRE_ANYOF:
+                    anyof_sets[requirement.m_group_id].insert(requirement.m_typeid);
                     break;
-                case jeecs::requirement::type::EXCEPT:
-                    except_set.insert(requirement.m_type);
+                case JE_COMPONENT_REQUIRE_EXCEPT:
+                    except_set.insert(requirement.m_typeid);
                     break;
                 }
             }

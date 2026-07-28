@@ -6952,22 +6952,9 @@ namespace jeecs
         inline game_universe get_universe() const noexcept;
     };
 
-    // Used for select the components of entities which match spcify requirements.
-    struct requirement
-    {
-        enum type : uint8_t
-        {
-            CONTAINS, // Must have spcify component
-            MAYNOT,  // May have or not have
-            ANYOF,   // Must have one of 'ANYOF' components
-            EXCEPT,  // Must not contain spcify component
-        };
-
-        type m_require;
-        size_t m_require_group_id;
-        je_TypeId m_type;
-    };
-    static_assert(std::is_trivial_v<requirement>);
+    // 组件筛选要求现在直接使用 C ABI 的 je_ComponentRequirement（见文件顶部 C ABI 段），
+    // 字段对应：m_kind / m_group_id / m_typeid，枚举值 JE_COMPONENT_REQUIRE_*。
+    static_assert(std::is_trivial_v<je_ComponentRequirement>);
 
     struct dependence
     {
@@ -7007,7 +6994,7 @@ namespace jeecs
             basic::vector<component_info> m_component_infos;
         };
 
-        basic::vector<requirement> m_requirements;
+        basic::vector<je_ComponentRequirement> m_requirements;
         basic::vector<arch_chunks_info> m_archs;
 
         dependence() = default;
@@ -7127,8 +7114,8 @@ namespace jeecs
                         std::is_pointer_v<T> || std::is_reference_v<T>);
 
                     out_dependence->m_requirements.push_back(
-                        requirement{
-                            std::is_pointer_v<T> ? requirement::type::MAYNOT : requirement::type::CONTAINS,
+                        je_ComponentRequirement{
+                            std::is_pointer_v<T> ? JE_COMPONENT_REQUIRE_MAYNOT : JE_COMPONENT_REQUIRE_CONTAINS,
                             0,
                             typing::id<typing::origin_t<T>>() });
 
@@ -7144,14 +7131,14 @@ namespace jeecs
                 }
             };
 
-            template<requirement::type RequireType>
+            template<je_ComponentRequirementKind RequireType>
             struct requirement_base
             {
                 template<typename T, typename ... Ts>
                 static void _apply_dependence_impl(size_t group, dependence* out_dependence)
                 {
                     out_dependence->m_requirements.push_back(
-                        requirement{ RequireType, group, typing::id<typing::origin_t<T>>() });
+                        je_ComponentRequirement{ RequireType, group, typing::id<typing::origin_t<T>>() });
 
                     if constexpr (sizeof...(Ts) > 0)
                         _apply_dependence_impl<Ts...>(group, out_dependence);
@@ -7164,9 +7151,9 @@ namespace jeecs
                         _apply_dependence_impl<Ts...>(group, out_dependence);
                 }
             };
-            struct contains_base : requirement_base<requirement::type::CONTAINS> {};
-            struct except_base : requirement_base<requirement::type::EXCEPT> {};
-            struct anyof_base : requirement_base<requirement::type::ANYOF> {};
+            struct contains_base : requirement_base<JE_COMPONENT_REQUIRE_CONTAINS> {};
+            struct except_base : requirement_base<JE_COMPONENT_REQUIRE_EXCEPT> {};
+            struct anyof_base : requirement_base<JE_COMPONENT_REQUIRE_ANYOF> {};
         }
 
         template<typing::traits::is_reference_or_pointer ... Components>
