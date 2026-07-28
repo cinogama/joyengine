@@ -113,7 +113,7 @@ public let frag =
 
         struct camera_arch
         {
-            rendchain_branch* branchPipeline;
+            je_RendchainBranch* branchPipeline;
 
             const Rendqueue* rendqueue;
             const Projection* projection;
@@ -339,7 +339,7 @@ public let frag =
 
         // Allocate a rend_chain for a camera; honors optional sub-viewport (normalized rect).
         jegl_rendchain* new_rend_chain_for_camera(
-            rendchain_branch* branch,
+            je_RendchainBranch* branch,
             const Viewport* viewport,
             graphic::framebuffer* rend_aim_buffer,
             size_t buffer_w, size_t buffer_h)
@@ -1522,7 +1522,7 @@ public func frag(vf: v2f)
 
         struct l2dcamera_arch
         {
-            rendchain_branch* branchPipeline;
+            je_RendchainBranch* branchPipeline;
 
             const Rendqueue* rendqueue;
             const Translation* translation;

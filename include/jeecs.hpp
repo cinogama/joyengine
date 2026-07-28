@@ -6,52 +6,63 @@
 
 #define _CRT_SECURE_NO_WARNINGS
 
-#ifndef __cplusplus
-#   error jeecs.h only support for c++
-#else
-
+// woort.h 自身已是 C/C++ 双兼容（内部用 #ifdef __cplusplus 分段），
+// 它是 C ABI 段的依赖，因此无条件包含。
 #include "woort.h"
 
 #define WO_FAIL_JE_FATAL_ERROR 0xD201
 #define WO_FAIL_JE_BAD_INIT_SHADER_VALUE 0xD202
 
-#include <cstdint>
-#include <cstring>
-#include <cstdlib>
-#include <cassert>
-#include <cfloat>
+// C++ 标准库头文件仅在 C++ 下需要（C++ 辅助声明段与 C++ 包装段使用）。
+// C ABI 段不得依赖这些头文件。
+#ifdef __cplusplus
+#   include <cstdint>
+#   include <cstring>
+#   include <cstdlib>
+#   include <cassert>
+#   include <cfloat>
 
-#include <typeinfo>
+#   include <typeinfo>
 
-#include <atomic>
-#include <thread>
-#include <mutex>
-#include <shared_mutex>
-#include <condition_variable>
+#   include <atomic>
+#   include <thread>
+#   include <mutex>
+#   include <shared_mutex>
+#   include <condition_variable>
 
-#include <set>
-#include <map>
-#include <vector>
-#include <unordered_set>
-#include <unordered_map>
-#include <algorithm>
-#include <functional>
-#include <type_traits>
-#include <cstddef>
-#include <cmath>
-#include <random>
-#include <sstream>
-#include <climits>
-#include <initializer_list>
-#include <optional>
-#include <tuple>
-#include <array>
-#include <concepts>
+#   include <set>
+#   include <map>
+#   include <vector>
+#   include <unordered_set>
+#   include <unordered_map>
+#   include <algorithm>
+#   include <functional>
+#   include <type_traits>
+#   include <cstddef>
+#   include <cmath>
+#   include <random>
+#   include <sstream>
+#   include <climits>
+#   include <initializer_list>
+#   include <optional>
+#   include <tuple>
+#   include <array>
+#   include <concepts>
 
-#include <execution>
+#   include <execution>
+#endif // __cplusplus
 
-#define JE_FORCE_CAPI extern "C"{
-#define JE_FORCE_CAPI_END }
+// JE_FORCE_CAPI / JE_FORCE_CAPI_END
+// C++ 下展开为 extern "C" { ... }，用于将 C ABI 包裹以保证链接约定；
+// 纯 C 下展开为空（C 本身即为 C 链接）。
+// 这是编译防火墙的关键骨架：C ABI 段应仅使用 C 构造，使其可被纯 C 编译器处理。
+#ifdef __cplusplus
+#   define JE_FORCE_CAPI extern "C"{
+#   define JE_FORCE_CAPI_END }
+#else
+#   define JE_FORCE_CAPI
+#   define JE_FORCE_CAPI_END
+#endif
 
 #ifdef WO_SHARED_LIB
 #   define JE4_SHARED_CORE
@@ -161,9 +172,28 @@
 
 #define typesof(...) <__VA_ARGS__>      // 用于优化泛型参数列表对代码自动整理的影响，配合需要大量泛型参数的接口使用
 
+// ==========================================================================
+// C ABI 原始标量类型（je_ 前缀 + 大驼峰）
+// 这些是 C ABI 段的基础标量类型别名，C/C++ 通用。必须在 C++ 辅助声明段之前
+// 定义，以便 C++ 端以它们为规范提供 jeecs::typing:: 别名，C ABI 签名也直接使用。
+// ==========================================================================
+typedef size_t   je_TypeHash;     // 类型哈希值
+typedef size_t   je_TypeId;       // 引擎类型工厂管理的类型 ID（无效值 = (je_TypeId)-1）
+typedef uint32_t je_Version;      // 版本号（实体索引版本、图形线程版本等）
+typedef uint64_t je_TimestampMs;  // 毫秒时间戳
+typedef uint64_t je_DebugEid;     // 调试用实体 ID（仅编辑器）
+
+// ---- C ABI 不透明句柄（opaque handle）前向声明 ----
+// 这些类型对外仅暴露指针；完整定义在引擎内部（src/）。C/C++ 通用，二进制兼容。
+typedef struct je_GraphicUhost    je_GraphicUhost;      // 图形渲染宿主上下文
+typedef struct je_RendchainBranch je_RendchainBranch;   // 可编程绘制分支
+
+#ifdef __cplusplus
 /*
-jeecs [命名空间]
-此处定义引擎自带的所有的C++接口类、函数、类型和常量
+jeecs [命名空间] —— C++ 辅助声明段
+此处定义引擎自带的所有的C++接口类、函数、类型和常量。
+该段提供 C ABI 段需要引用的类型别名/前向声明（如 je_TypeInfo、game_entity 等），
+仅 C++ 可见；纯 C 编译器跳过本段。
 */
 namespace jeecs
 {
@@ -184,19 +214,8 @@ namespace jeecs
 #endif
     }
 
-    /*
-    jeecs::rendchain_branch [类型]
-    可编程图形接口类型，用于表示一组绘制流程
-    请参见
-        jegl_rendchain
-    */
-    struct rendchain_branch;
-
-    /*
-    jeecs::graphic_uhost [类型]
-    可编程图形接口类型，用于表示一个渲染上下文的总和
-    */
-    struct graphic_uhost;
+    // 注：je_RendchainBranch / je_GraphicUhost 不再在此提供 C++ 别名。
+    // C++ 代码直接使用 C ABI 类型 je_RendchainBranch / je_GraphicUhost（见文件顶部 C ABI 段）。
 
     /*
     jeecs::typing [命名空间]
@@ -208,7 +227,7 @@ namespace jeecs
         jeecs::typing::typehash_t [类型别名]
         用于储存哈希值结果的类型
         */
-        using typehash_t = size_t;
+        using typehash_t = ::je_TypeHash;
 
         /*
         jeecs::typing::typeid_t [类型别名]
@@ -216,7 +235,7 @@ namespace jeecs
             请参见：
             jeecs::typing::INVALID_TYPE_ID
         */
-        using typeid_t = size_t;
+        using typeid_t = ::je_TypeId;
 
         /*
         jeecs::typing::INVALID_TYPE_ID [常量]
@@ -226,24 +245,11 @@ namespace jeecs
         */
         constexpr typeid_t INVALID_TYPE_ID = SIZE_MAX;
 
-        struct type_info;
-
         using module_entry_t = void (*)(woort_Dylib*);
         using module_leave_t = void (*)(void);
 
-        using construct_func_t = void (*)(void*, void*, const jeecs::typing::type_info*);
-        using destruct_func_t = void (*)(void*);
-        using copy_construct_func_t = void (*)(void*, const void*);
-        using move_construct_func_t = void (*)(void*, void*);
-
-        using on_enable_or_disable_func_t = void (*)(void*);
-        using update_func_t = void (*)(void*);
-
-        using parse_c2w_func_t = void (*)(const void*, woort_value);
-        using parse_w2c_func_t = void (*)(void*, woort_value);
-
         using entity_id_in_chunk_t = uint32_t;
-        using version_t = uint32_t;
+        using version_t = ::je_Version;
 
         /*
         jeecs::typing::uuid [类型]
@@ -321,7 +327,7 @@ namespace jeecs
         请参见：
             je_clock_time_stamp
         */
-        using timestamp_ms_t = uint64_t;
+        using timestamp_ms_t = ::je_TimestampMs;
 
         /*
         jeecs::typing::debug_eid_t [类型别名]
@@ -332,7 +338,7 @@ namespace jeecs
         ----------------------------------
         * 正计划废弃，待编辑器重构计划推进。
         */
-        using debug_eid_t = uint64_t;
+        using debug_eid_t = ::je_DebugEid;
 
         template <typename T>
         struct _origin_type
@@ -854,6 +860,8 @@ namespace std
     };
 }
 
+#endif // __cplusplus （C++ 辅助声明段结束）
+
 JE_FORCE_CAPI
 
 /*
@@ -964,25 +972,102 @@ typedef enum je_typing_class
     JE_SYSTEM,
 } je_typing_class;
 
+// ==========================================================================
+// 类型子系统（typing）C 类型
+// je_TypeInfo 及其关联类型拥有公开的平凡数据布局（非不透明）。C++ 包装层
+// （jeecs::typing）直接使用这些 C 类型；原 je_TypeInfo 上的便捷方法以
+// jeecs::typing 命名空间下的自由函数形式提供。
+// ==========================================================================
+
+/* 前向声明：函数指针类型与 je_MemberInfo 需要引用 je_TypeInfo */
+typedef struct je_TypeInfo je_TypeInfo;
+
+/* 类型子系统使用的函数指针类型（C ABI 签名直接使用） */
+typedef void (*je_ConstructFunc)(void* addr, void* arg, const je_TypeInfo* tinfo);
+typedef void (*je_DestructFunc)(void* addr);
+typedef void (*je_CopyConstructFunc)(void* dst, const void* src);
+typedef void (*je_MoveConstructFunc)(void* dst, void* src);
+typedef void (*je_OnEnableOrDisableFunc)(void* sys);
+typedef void (*je_UpdateFunc)(void* sys);
+typedef void (*je_ParseC2WFunc)(const void* c_data, woort_value w_value);
+typedef void (*je_ParseW2CFunc)(void* c_data, woort_value w_value);
+
+/* 组件成员信息节点 */
+typedef struct je_MemberInfo {
+    const je_TypeInfo* m_class_type;
+    const char* m_member_name;
+    const char* m_woovalue_type_may_null;
+    woort_GCPin* m_woovalue_init_may_null;
+    const je_TypeInfo* m_member_type;
+    ptrdiff_t m_member_offset;
+    struct je_MemberInfo* m_next_member;
+} je_MemberInfo;
+
+/* 组件成员信息集合 */
+typedef struct je_TypeinfoMember {
+    size_t m_member_count;
+    je_MemberInfo* m_members;
+} je_TypeinfoMember;
+
+/* woolang 转换信息 */
+typedef struct je_TypeinfoScriptParser {
+    je_ParseC2WFunc m_script_parse_c2w;
+    je_ParseW2CFunc m_script_parse_w2c;
+    const char* m_woolang_typename;
+    const char* m_woolang_typedecl;
+} je_TypeinfoScriptParser;
+
+/* 系统更新方法集 */
+typedef struct je_TypeinfoSystemUpdater {
+    je_OnEnableOrDisableFunc m_on_enable;
+    je_OnEnableOrDisableFunc m_on_disable;
+    je_UpdateFunc m_pre_update;
+    je_UpdateFunc m_state_update;
+    je_UpdateFunc m_update;
+    je_UpdateFunc m_physics_update;
+    je_UpdateFunc m_transform_update;
+    je_UpdateFunc m_late_update;
+    je_UpdateFunc m_commit_update;
+    je_UpdateFunc m_graphic_update;
+} je_TypeinfoSystemUpdater;
+
+/* 类型信息（完整平凡布局，非不透明） */
+typedef struct je_TypeInfo {
+    je_TypeId m_id;
+    const char* m_typename; // will be free by je_typing_unregister
+    size_t m_size;
+    size_t m_align;
+    je_TypeHash m_hash;
+    je_ConstructFunc m_constructor;
+    je_DestructFunc m_destructor;
+    je_CopyConstructFunc m_copier;
+    je_MoveConstructFunc m_mover;
+    je_typing_class m_type_class;
+    const je_TypeinfoMember* m_member_types;
+    const je_TypeinfoScriptParser* m_script_parsers;
+    const je_TypeinfoSystemUpdater* m_system_updaters;
+    const je_TypeInfo* m_next;
+} je_TypeInfo;
+
 /*
 je_typing_register [基本接口]
 向引擎的类型管理器注册一个类型及其基本信息，返回记录当前类型的类型地址
 * 类型的名称是区分的唯一标记符，不同类型必须使用不同的名字。
 * 必须通过 je_typing_unregister 在适当时机释放
 请参见：
-    jeecs::typing::typeid_t
+    je_TypeId
     je_typing_unregister
 */
-JE_API const jeecs::typing::type_info* je_typing_register(
+JE_API const je_TypeInfo* je_typing_register(
     const char* _name,
-    jeecs::typing::typehash_t _hash,
+    je_TypeHash _hash,
     size_t _size,
     size_t _align,
     je_typing_class _typecls,
-    jeecs::typing::construct_func_t _constructor,
-    jeecs::typing::destruct_func_t _destructor,
-    jeecs::typing::copy_construct_func_t _copy_constructor,
-    jeecs::typing::move_construct_func_t _move_constructor);
+    je_ConstructFunc _constructor,
+    je_DestructFunc _destructor,
+    je_CopyConstructFunc _copy_constructor,
+    je_MoveConstructFunc _move_constructor);
 
 /*
 je_typing_reset [基本接口]
@@ -990,41 +1075,41 @@ je_typing_reset [基本接口]
     * 成员字段将被重置，请重新注册
 */
 JE_API void je_typing_reset(
-    const jeecs::typing::type_info* _tinfo,
+    const je_TypeInfo* _tinfo,
     size_t _size,
     size_t _align,
-    jeecs::typing::construct_func_t _constructor,
-    jeecs::typing::destruct_func_t _destructor,
-    jeecs::typing::copy_construct_func_t _copy_constructor,
-    jeecs::typing::move_construct_func_t _move_constructor);
+    je_ConstructFunc _constructor,
+    je_DestructFunc _destructor,
+    je_CopyConstructFunc _copy_constructor,
+    je_MoveConstructFunc _move_constructor);
 
 /*
 je_typing_get_info_by_id [基本接口]
 通过类型id获取类型信息，若给定的id不合法，返回nullptr
 请参见：
-    jeecs::typing::typeid_t
-    jeecs::typing::type_info
+    je_TypeId
+    je_TypeInfo
 */
-JE_API const jeecs::typing::type_info* je_typing_get_info_by_id(
-    jeecs::typing::typeid_t _id);
+JE_API const je_TypeInfo* je_typing_get_info_by_id(
+    je_TypeId _id);
 
 /*
 je_typing_get_info_by_hash [基本接口]
 通过类型的哈希值获取类型信息，若给定的类型哈希不合法，返回nullptr
 请参见：
-    jeecs::typing::typehash_t
-    jeecs::typing::type_info
+    je_TypeHash
+    je_TypeInfo
 */
-JE_API const jeecs::typing::type_info* je_typing_get_info_by_hash(
-    jeecs::typing::typehash_t _hash);
+JE_API const je_TypeInfo* je_typing_get_info_by_hash(
+    je_TypeHash _hash);
 
 /*
 je_typing_get_info_by_name [基本接口]
 通过类型的名称获取类型信息，若给定的类型名不合法或不存在，返回nullptr
 请参见：
-    jeecs::typing::type_info
+    je_TypeInfo
 */
-JE_API const jeecs::typing::type_info* je_typing_get_info_by_name(
+JE_API const je_TypeInfo* je_typing_get_info_by_name(
     const char* type_name);
 
 /*
@@ -1034,21 +1119,21 @@ je_typing_unregister [基本接口]
 类型是当前模块通过 je_typing_register 成功注册的类型。
 若释放的类型不合法，则给出级别错误的日志信息。
 请参见：
-    jeecs::typing::type_info
+    je_TypeInfo
     je_typing_register
 */
-JE_API void je_typing_unregister(const jeecs::typing::type_info* tinfo);
+JE_API void je_typing_unregister(const je_TypeInfo* tinfo);
 
 /*
 je_register_member [基本接口]
 向引擎的类型管理器注册指定类型的成员信息。
 * 使用本地typeinfo，而非全局通用typeinfo
 请参见：
-    jeecs::typing::type_info
+    je_TypeInfo
 */
 JE_API void je_register_member(
-    const jeecs::typing::type_info* _classtype,
-    const jeecs::typing::type_info* _membertype,
+    const je_TypeInfo* _classtype,
+    const je_TypeInfo* _membertype,
     const char* _member_name,
     const char* _woovalue_type_may_null,
     woort_value _boxed_woovalue_init_may_ignored /* Use WOORT_IGNORE as none init */,
@@ -1059,12 +1144,12 @@ je_register_script_parser [基本接口]
 向引擎的类型管理器注册指定类型的脚本转换方法。
 * 使用本地typeinfo，而非全局通用typeinfo
 请参见：
-    jeecs::typing::type_info
+    je_TypeInfo
 */
 JE_API void je_register_script_parser(
-    const jeecs::typing::type_info* _type,
-    jeecs::typing::parse_c2w_func_t c2w,
-    jeecs::typing::parse_w2c_func_t w2c,
+    const je_TypeInfo* _type,
+    je_ParseC2WFunc c2w,
+    je_ParseW2CFunc w2c,
     const char* woolang_typename,
     const char* woolang_typedecl);
 
@@ -1073,35 +1158,35 @@ je_register_system_updater [基本接口]
 向引擎的类型管理器注册指定类型的系统更新方法。
 * 使用本地typeinfo，而非全局通用typeinfo
 请参见：
-    jeecs::typing::type_info
+    je_TypeInfo
 */
 JE_API void je_register_system_updater(
-    const jeecs::typing::type_info* _type,
-    jeecs::typing::on_enable_or_disable_func_t _on_enable,
-    jeecs::typing::on_enable_or_disable_func_t _on_disable,
-    jeecs::typing::update_func_t _pre_update,
-    jeecs::typing::update_func_t _state_update,
-    jeecs::typing::update_func_t _update,
-    jeecs::typing::update_func_t _physics_update,
-    jeecs::typing::update_func_t _transform_update,
-    jeecs::typing::update_func_t _late_update,
-    jeecs::typing::update_func_t _commit_update,
-    jeecs::typing::update_func_t _graphic_update);
+    const je_TypeInfo* _type,
+    je_OnEnableOrDisableFunc _on_enable,
+    je_OnEnableOrDisableFunc _on_disable,
+    je_UpdateFunc _pre_update,
+    je_UpdateFunc _state_update,
+    je_UpdateFunc _update,
+    je_UpdateFunc _physics_update,
+    je_UpdateFunc _transform_update,
+    je_UpdateFunc _late_update,
+    je_UpdateFunc _commit_update,
+    je_UpdateFunc _graphic_update);
 
 ////////////////////// ToWoo //////////////////////
 /*
 je_towoo_update_api [基本接口]
 根据类型信息重新生成 je/api/.. 的接口脚本
 请参见：
-    jeecs::typing::type_info
+    je_TypeInfo
 */
 JE_API void je_towoo_update_api();
 
-JE_API const jeecs::typing::type_info* je_towoo_register_system(
+JE_API const je_TypeInfo* je_towoo_register_system(
     const char* system_name,
     const char* script_path);
 
-JE_API void je_towoo_unregister_system(const jeecs::typing::type_info* tinfo);
+JE_API void je_towoo_unregister_system(const je_TypeInfo* tinfo);
 
 ////////////////////// ARCH //////////////////////
 
@@ -1419,7 +1504,7 @@ je_ecs_world_add_system_instance [基本接口]
 */
 JE_API jeecs::game_system* je_ecs_world_add_system_instance(
     void* world,
-    jeecs::typing::typeid_t type);
+    je_TypeId type);
 
 /*
 je_ecs_world_get_system_instance [基本接口]
@@ -1428,7 +1513,7 @@ je_ecs_world_get_system_instance [基本接口]
 */
 JE_API jeecs::game_system* je_ecs_world_get_system_instance(
     void* world,
-    jeecs::typing::typeid_t type);
+    je_TypeId type);
 
 /*
 je_ecs_world_remove_system_instance [基本接口]
@@ -1439,7 +1524,7 @@ je_ecs_world_remove_system_instance [基本接口]
 */
 JE_API void je_ecs_world_remove_system_instance(
     void* world,
-    jeecs::typing::typeid_t type);
+    je_TypeId type);
 
 /*
 je_ecs_world_create_entity_with_components [基本接口]
@@ -1449,7 +1534,7 @@ component_ids 应该指向一个储存有N+1个jeecs::typing::typeid_t实例的�
 以表示结束。
     * 若向一个正在销毁中的世界创建实体，则创建失败，out_entity将被写入`无效值`
 请参见：
-    jeecs::typing::typeid_t
+    je_TypeId
     jeecs::typing::INVALID_TYPE_ID
     jeecs::game_entity
     jeecs::game_world::add_entity
@@ -1457,7 +1542,7 @@ component_ids 应该指向一个储存有N+1个jeecs::typing::typeid_t实例的�
 JE_API void je_ecs_world_create_entity_with_components(
     void* world,
     jeecs::game_entity* out_entity,
-    const jeecs::typing::typeid_t* component_ids);
+    const je_TypeId* component_ids);
 
 /*
 je_ecs_world_create_prefab_with_components [基本接口]
@@ -1470,7 +1555,7 @@ je_ecs_world_create_prefab_with_components [基本接口]
 JE_API void je_ecs_world_create_prefab_with_components(
     void* world,
     jeecs::game_entity* out_entity,
-    const jeecs::typing::typeid_t* component_ids);
+    const je_TypeId* component_ids);
 
 /*
 je_ecs_world_create_entity_with_prefab [基本接口]
@@ -1512,7 +1597,7 @@ je_ecs_world_entity_add_component [基本接口]
 */
 JE_API void* je_ecs_world_entity_add_component(
     const jeecs::game_entity* entity,
-    jeecs::typing::typeid_t type);
+    je_TypeId type);
 
 /*
 je_ecs_world_entity_remove_component [基本接口]
@@ -1527,7 +1612,7 @@ je_ecs_world_entity_remove_component [基本接口]
 */
 JE_API void je_ecs_world_entity_remove_component(
     const jeecs::game_entity* entity,
-    jeecs::typing::typeid_t type);
+    je_TypeId type);
 
 /*
 je_ecs_world_entity_get_component [基本接口]
@@ -1538,7 +1623,7 @@ je_ecs_world_entity_get_component [基本接口]
 */
 JE_API void* je_ecs_world_entity_get_component(
     const jeecs::game_entity* entity,
-    jeecs::typing::typeid_t type);
+    je_TypeId type);
 
 /*
 je_ecs_world_of_entity [基本接口]
@@ -1569,7 +1654,7 @@ je_ecs_world_query_dependence [基本接口]
 JE_API bool je_ecs_world_query_slice_dependence(
     void* world,
     jeecs::game_system* system_instance,
-    jeecs::typing::typehash_t slice_type_hash,
+    je_TypeHash slice_type_hash,
     jeecs::dependence** out_dependence);
 
 // ATTENTION: Following 2 functions have no thread-safe-promise:
@@ -1632,7 +1717,7 @@ je_clock_time_stamp [基本接口]
 获取当前时间戳，单位是毫秒
     * 这个时间与 je_clock_time 获取到的时间不同，*不是* 引擎启动时起的计时
 */
-JE_API jeecs::typing::timestamp_ms_t je_clock_time_stamp();
+JE_API je_TimestampMs je_clock_time_stamp();
 
 /*
 je_clock_sleep_until [基本接口]
@@ -1983,7 +2068,7 @@ struct jegl_context
     void* _m_interface_handle;
 
     void* m_universe_instance;
-    jeecs::typing::version_t m_version;
+    je_Version m_version;
     jegl_interface_config m_config;
     jegl_graphic_api* m_apis;
     graphic_impl_context_t m_graphic_impl_context;
@@ -2002,7 +2087,7 @@ struct jegl_resource_handle
     jegl_resource_bind_counter* m_raw_ref_count;
 
     jegl_context* m_graphic_thread;
-    jeecs::typing::version_t m_graphic_thread_version;
+    je_Version m_graphic_thread_version;
 
     bool m_modified;
     void* m_ptr;
@@ -3601,7 +3686,7 @@ jegl_uhost_get_or_create_for_universe [基本接口]
     jegl_reboot_graphic_thread
     je_ecs_universe_register_exit_callback
 */
-JE_API jeecs::graphic_uhost* jegl_uhost_get_or_create_for_universe(
+JE_API je_GraphicUhost* jegl_uhost_get_or_create_for_universe(
     void* universe,
     const jegl_interface_config* config);
 
@@ -3610,7 +3695,7 @@ jegl_uhost_get_context [基本接口]
 从指定的可编程图形上下文接口获取图形线程的正式描述符
 */
 JE_API jegl_context* jegl_uhost_get_context(
-    jeecs::graphic_uhost* host);
+    je_GraphicUhost* host);
 
 /*
 jegl_uhost_set_skip_behavior [基本接口]
@@ -3619,7 +3704,7 @@ jegl_uhost_set_skip_behavior [基本接口]
     * uhost 实例创建时默认为真
 */
 JE_API void jegl_uhost_set_skip_behavior(
-    jeecs::graphic_uhost* host, bool skip_all_draw);
+    je_GraphicUhost* host, bool skip_all_draw);
 
 /*
 jegl_uhost_alloc_branch [基本接口]
@@ -3628,23 +3713,23 @@ jegl_uhost_alloc_branch [基本接口]
 请参见：
     jegl_uhost_free_branch
 */
-JE_API jeecs::rendchain_branch* jegl_uhost_alloc_branch(
-    jeecs::graphic_uhost* host);
+JE_API je_RendchainBranch* jegl_uhost_alloc_branch(
+    je_GraphicUhost* host);
 
 /*
 jegl_uhost_free_branch [基本接口]
 从指定的可编程图形上下文接口释放一个绘制组
 */
 JE_API void jegl_uhost_free_branch(
-    jeecs::graphic_uhost* host,
-    jeecs::rendchain_branch* free_branch);
+    je_GraphicUhost* host,
+    je_RendchainBranch* free_branch);
 
 /*
 jegl_branch_new_frame [基本接口]
 在绘制开始之前，指示绘制组开始新的一帧，并指定优先级
 */
 JE_API void jegl_branch_new_frame(
-    jeecs::rendchain_branch* branch,
+    je_RendchainBranch* branch,
     int priority);
 
 /*
@@ -3654,7 +3739,7 @@ jegl_branch_new_chain [基本接口]
     jegl_rendchain
 */
 JE_API jegl_rendchain* jegl_branch_new_chain(
-    jeecs::rendchain_branch* branch,
+    je_RendchainBranch* branch,
     jegl_frame_buffer* framebuffer,
     int32_t x,
     int32_t y,
@@ -3892,7 +3977,7 @@ je_io_gamepad_is_active [基本接口]
 */
 JE_API bool je_io_gamepad_is_active(
     je_io_gamepad_handle_t gamepad,
-    jeecs::typing::timestamp_ms_t* out_last_pushed_time_may_null);
+    je_TimestampMs* out_last_pushed_time_may_null);
 /*
 je_io_gamepad_get_button_down [基本接口]
 获取指定虚拟手柄的指定按键是否被按下
@@ -4621,17 +4706,17 @@ JE_API void jedbg_free_entity(jeecs::game_entity* _entity_list);
 JE_API jeecs::game_entity** jedbg_get_all_entities_in_world(void* _world);
 
 // NOTE: need free the return result by 'je_mem_free'
-JE_API const jeecs::typing::type_info** jedbg_get_all_components_from_entity(const jeecs::game_entity* _entity);
+JE_API const je_TypeInfo** jedbg_get_all_components_from_entity(const jeecs::game_entity* _entity);
 
 // NOTE: need free the return result by 'je_mem_free'
-JE_API const jeecs::typing::type_info** jedbg_get_all_registed_types(void);
+JE_API const je_TypeInfo** jedbg_get_all_registed_types(void);
 
 JE_API size_t jedbg_get_unregister_type_count(void);
 
 // NOTE: need free the return result by 'je_mem_free'
-JE_API const jeecs::typing::type_info** jedbg_get_all_system_attached_in_world(void* _world);
+JE_API const je_TypeInfo** jedbg_get_all_system_attached_in_world(void* _world);
 
-JE_API jeecs::typing::debug_eid_t jedbg_get_entity_uid(const jeecs::game_entity* e);
+JE_API je_DebugEid jedbg_get_entity_uid(const jeecs::game_entity* e);
 
 JE_API void jedbg_get_entity_arch_information(
     jeecs::game_entity* _entity,
@@ -4665,6 +4750,12 @@ JE_DECL_ATOMIC_OPERATOR_API(intptr_t);
 
 JE_FORCE_CAPI_END
 
+#ifdef __cplusplus
+/*
+jeecs [命名空间] —— C++ 包装层
+将上方纯 C ABI 包装为易用的 C++ 接口（类型别名、enum class 映射、RAII 包装类等）。
+仅 C++ 可见。
+*/
 namespace jeecs
 {
 #define JECS_DISABLE_MOVE_AND_COPY_OPERATOR(TYPE) \
@@ -4762,7 +4853,7 @@ namespace jeecs
             };
 
             template <typename U>
-            concept has_pointer_typeinfo_constructor_function = requires(void* ptr, const jeecs::typing::type_info * tinfo)
+            concept has_pointer_typeinfo_constructor_function = requires(void* ptr, const je_TypeInfo * tinfo)
             {
                 new U(ptr, tinfo);
             };
@@ -4772,7 +4863,7 @@ namespace jeecs
                 new U(ptr);
             };
             template <typename U>
-            concept has_typeinfo_constructor_function = requires(const jeecs::typing::type_info * tinfo)
+            concept has_typeinfo_constructor_function = requires(const je_TypeInfo * tinfo)
             {
                 new U(tinfo);
             };
@@ -4844,7 +4935,7 @@ namespace jeecs
         template <typename T>
         struct default_functions
         {
-            static void constructor(void* _ptr, void* arg_ptr, const jeecs::typing::type_info* tinfo)
+            static void constructor(void* _ptr, void* arg_ptr, const je_TypeInfo* tinfo)
             {
                 if constexpr (traits::has_pointer_typeinfo_constructor_function<T>)
                     new (_ptr) T(arg_ptr, tinfo);
@@ -6425,69 +6516,15 @@ namespace jeecs
             return u;
         }
 
-        /*
-        jeecs::typing::typeinfo_member [类型]
-        用于储存组件的成员信息
-        */
-        struct typeinfo_member
-        {
-            struct member_info
-            {
-                const type_info* m_class_type;
-
-                const char* m_member_name;
-
-                const char* m_woovalue_type_may_null;
-                woort_GCPin* m_woovalue_init_may_null;
-
-                const type_info* m_member_type;
-                ptrdiff_t m_member_offset;
-
-                member_info* m_next_member;
-            };
-
-            size_t m_member_count;
-            member_info* m_members;
-        };
-
-        /*
-        jeecs::typing::typeinfo_script_parser [类型]
-        用于储存与woolang进行转换的方法和类型信息
-        */
-        struct typeinfo_script_parser
-        {
-            parse_c2w_func_t m_script_parse_c2w;
-            parse_w2c_func_t m_script_parse_w2c;
-            const char* m_woolang_typename;
-            const char* m_woolang_typedecl;
-        };
-
-        /*
-        jeecs::typing::typeinfo_system_updater [类型]
-        用于储存系统的更新方法
-        */
-        struct typeinfo_system_updater
-        {
-            on_enable_or_disable_func_t m_on_enable;
-            on_enable_or_disable_func_t m_on_disable;
-
-            update_func_t m_pre_update;
-            update_func_t m_state_update;
-            update_func_t m_update;
-            update_func_t m_physics_update;
-            update_func_t m_transform_update;
-            update_func_t m_late_update;
-            update_func_t m_commit_update;
-            update_func_t m_graphic_update;
-        };
-
+        /* je_TypeinfoMember / je_TypeinfoScriptParser / je_TypeinfoSystemUpdater
+           已迁移为 C ABI 类型 je_TypeinfoMember / je_TypeinfoScriptParser /
+           je_TypeinfoSystemUpdater（见文件顶部 C ABI 段），C++ 直接使用。 */
         class type_unregister_guard
         {
-            friend struct type_info;
 
             using id_typeinfo_map_t = std::unordered_map<
                 jeecs::typing::typeid_t,
-                const jeecs::typing::type_info*>;
+                const je_TypeInfo*>;
             using registered_type_hash_map_t = std::unordered_map<
                 jeecs::typing::typehash_t,
                 jeecs::typing::typeid_t>;
@@ -6505,7 +6542,7 @@ namespace jeecs
                 assert(_m_self_registed_id_typeinfo.empty());
             }
             template <typename T>
-            bool _register_or_get_local_type_info(const char* _typename, const type_info** out_typeinfo)
+            bool _register_or_get_local_type_info(const char* _typename, const je_TypeInfo** out_typeinfo)
             {
                 do
                 {
@@ -6567,7 +6604,7 @@ namespace jeecs
                 _m_self_registed_id_typeinfo.clear();
                 _m_self_registed_hash.clear();
             }
-            const jeecs::typing::type_info* get_local_type_info(jeecs::typing::typeid_t id) const
+            const je_TypeInfo* get_local_type_info(jeecs::typing::typeid_t id) const
             {
                 std::lock_guard g1(_m_mx);
                 return _m_self_registed_id_typeinfo.at(id);
@@ -6575,157 +6612,133 @@ namespace jeecs
         };
 
         /*
-        jeecs::typing::type_info [类型]
-        用于储存类型信息和基本接口
+        jeecs::typing 自由函数（原 je_TypeInfo 上的便捷方法）
+        这些函数操作 const je_TypeInfo*；je_TypeInfo 的平凡数据布局见文件顶部 C ABI 段的 je_TypeInfo。
         */
-        struct type_info
+        template <typename T>
+        inline const je_TypeInfo* of()
         {
-            typeid_t m_id;
+            return je_typing_get_info_by_hash(typeid(T).hash_code());
+        }
+        inline const je_TypeInfo* of(je_TypeId _tid)
+        {
+            return je_typing_get_info_by_id(_tid);
+        }
+        inline const je_TypeInfo* of(const char* name)
+        {
+            return je_typing_get_info_by_name(name);
+        }
 
-            const char* m_typename; // will be free by je_typing_unregister
-            size_t m_size;
-            size_t m_align;
-            typehash_t m_hash;
+        template <typename T>
+        inline je_TypeId id()
+        {
+            return of<T>()->m_id;
+        }
+        inline je_TypeId id(const je_TypeInfo* _tinfo)
+        {
+            return _tinfo->m_id;
+        }
+        inline je_TypeId id(const char* name)
+        {
+            return of(name)->m_id;
+        }
 
-            construct_func_t m_constructor;
-            destruct_func_t m_destructor;
-            copy_construct_func_t m_copier;
-            move_construct_func_t m_mover;
-
-            je_typing_class m_type_class;
-
-            const typeinfo_member* m_member_types;
-            const typeinfo_script_parser* m_script_parsers;
-            const typeinfo_system_updater* m_system_updaters;
-
-            const type_info* m_next;
-
-        public:
-            template <typename T>
-            inline static const type_info* of()
+        template <typename T>
+        inline const je_TypeInfo* register_type(
+            type_unregister_guard* guard, const char* _typename)
+        {
+            const je_TypeInfo* local_type = nullptr;
+            if (guard->_register_or_get_local_type_info<T>(_typename, &local_type))
             {
-                return je_typing_get_info_by_hash(typeid(T).hash_code());
-            }
-            inline static const type_info* of(typeid_t _tid)
-            {
-                return je_typing_get_info_by_id(_tid);
-            }
-            inline static const type_info* of(const char* name)
-            {
-                return je_typing_get_info_by_name(name);
-            }
-
-            template <typename T>
-            inline static typeid_t id()
-            {
-                return of<T>()->m_id;
-            }
-            inline static typeid_t id(const type_info* _tinfo)
-            {
-                return _tinfo->m_id;
-            }
-            inline static typeid_t id(const char* name)
-            {
-                return of(name)->m_id;
-            }
-
-            template <typename T>
-            inline static const type_info* register_type(
-                jeecs::typing::type_unregister_guard* guard, const char* _typename)
-            {
-                const type_info* local_type = nullptr;
-                if (guard->_register_or_get_local_type_info<T>(_typename, &local_type))
+                if constexpr (traits::has_JERefRegsiter<T>)
                 {
-                    if constexpr (traits::has_JERefRegsiter<T>)
-                    {
-                        T::JERefRegsiter(guard);
-                    }
+                    T::JERefRegsiter(guard);
                 }
+            }
 
-                if (local_type->m_type_class == je_typing_class::JE_SYSTEM)
+            if (local_type->m_type_class == je_typing_class::JE_SYSTEM)
+            {
+                je_register_system_updater(
+                    local_type,
+                    default_functions<T>::on_enable,
+                    default_functions<T>::on_disable,
+                    default_functions<T>::pre_update,
+                    default_functions<T>::state_update,
+                    default_functions<T>::update,
+                    default_functions<T>::physics_update,
+                    default_functions<T>::transform_update,
+                    default_functions<T>::late_update,
+                    default_functions<T>::commit_update,
+                    default_functions<T>::graphic_update);
+            }
+
+            if constexpr (traits::has_JEScriptTypeInterface<T>)
+            {
+                je_register_script_parser(local_type,
+                    default_functions<T>::parse_to_script_type,
+                    default_functions<T>::parse_from_script_type,
+                    T::JEScriptTypeName(),
+                    T::JEScriptTypeDeclare());
+            }
+
+            return local_type;
+        }
+
+        inline void construct(const je_TypeInfo* t, void* addr, void* arg = nullptr)
+        {
+            t->m_constructor(addr, arg, t);
+        }
+        inline void destruct(const je_TypeInfo* t, void* addr)
+        {
+            t->m_destructor(addr);
+        }
+        inline void copy(const je_TypeInfo* t, void* dst_addr, const void* src_addr)
+        {
+            t->m_copier(dst_addr, src_addr);
+        }
+        inline void move(const je_TypeInfo* t, void* dst_addr, void* src_addr)
+        {
+            t->m_mover(dst_addr, src_addr);
+        }
+
+        inline bool is_system(const je_TypeInfo* t) noexcept
+        {
+            return t->m_type_class == je_typing_class::JE_SYSTEM;
+        }
+
+        inline bool is_component(const je_TypeInfo* t) noexcept
+        {
+            return t->m_type_class == je_typing_class::JE_COMPONENT;
+        }
+
+        inline const je_MemberInfo* find_member_by_name(const je_TypeInfo* t, const char* name) noexcept
+        {
+            if (t->m_member_types == nullptr)
+            {
+                if (t->m_next != nullptr)
+                    return find_member_by_name(t->m_next, name);
+            }
+            else
+            {
+                auto* member_info_ptr = t->m_member_types->m_members;
+                while (member_info_ptr != nullptr)
                 {
-                    je_register_system_updater(
-                        local_type,
-                        typing::default_functions<T>::on_enable,
-                        typing::default_functions<T>::on_disable,
-                        typing::default_functions<T>::pre_update,
-                        typing::default_functions<T>::state_update,
-                        typing::default_functions<T>::update,
-                        typing::default_functions<T>::physics_update,
-                        typing::default_functions<T>::transform_update,
-                        typing::default_functions<T>::late_update,
-                        typing::default_functions<T>::commit_update,
-                        typing::default_functions<T>::graphic_update);
+                    if (strcmp(member_info_ptr->m_member_name, name) == 0)
+                        return member_info_ptr;
+
+                    member_info_ptr = member_info_ptr->m_next_member;
                 }
+            }
+            jeecs::debug::logerr("Failed to find member named: '%s' in '%s'.", name, t->m_typename);
+            return nullptr;
+        }
+        inline const je_TypeinfoScriptParser* get_script_parser(const je_TypeInfo* t)
+        {
+            if (t->m_script_parsers == nullptr && t->m_next != nullptr)
+                return get_script_parser(t->m_next);
 
-                if constexpr (traits::has_JEScriptTypeInterface<T>)
-                {
-                    je_register_script_parser(local_type,
-                        typing::default_functions<T>::parse_to_script_type,
-                        typing::default_functions<T>::parse_from_script_type,
-                        T::JEScriptTypeName(),
-                        T::JEScriptTypeDeclare());
-                }
-
-                return local_type;
-            }
-
-            void construct(void* addr, void* arg = nullptr) const
-            {
-                m_constructor(addr, arg, this);
-            }
-            void destruct(void* addr) const
-            {
-                m_destructor(addr);
-            }
-            void copy(void* dst_addr, const void* src_addr) const
-            {
-                m_copier(dst_addr, src_addr);
-            }
-            void move(void* dst_addr, void* src_addr) const
-            {
-                m_mover(dst_addr, src_addr);
-            }
-
-            inline bool is_system() const noexcept
-            {
-                return m_type_class == je_typing_class::JE_SYSTEM;
-            }
-
-            inline bool is_component() const noexcept
-            {
-                return m_type_class == je_typing_class::JE_COMPONENT;
-            }
-
-            inline const typeinfo_member::member_info* find_member_by_name(const char* name) const noexcept
-            {
-                if (m_member_types == nullptr)
-                {
-                    if (m_next != nullptr)
-                        return m_next->find_member_by_name(name);
-                }
-                else
-                {
-                    auto* member_info_ptr = m_member_types->m_members;
-                    while (member_info_ptr != nullptr)
-                    {
-                        if (strcmp(member_info_ptr->m_member_name, name) == 0)
-                            return member_info_ptr;
-
-                        member_info_ptr = member_info_ptr->m_next_member;
-                    }
-                }
-                jeecs::debug::logerr("Failed to find member named: '%s' in '%s'.", name, this->m_typename);
-                return nullptr;
-            }
-            inline const typeinfo_script_parser* get_script_parser() const
-            {
-                if (m_script_parsers == nullptr && m_next != nullptr)
-                    return m_next->get_script_parser();
-
-                return m_script_parsers;
-            }
-        };
+            return t->m_script_parsers;
+        }
 
         template <typename ClassT, typename MemberT>
         inline void register_member(
@@ -6733,11 +6746,11 @@ namespace jeecs
             ptrdiff_t member_offset,
             const char* membname)
         {
-            const type_info* membt = type_info::register_type<MemberT>(guard, nullptr);
+            const je_TypeInfo* membt = jeecs::typing::register_type<MemberT>(guard, nullptr);
             assert(membt->m_type_class == je_typing_class::JE_BASIC_TYPE);
 
             je_register_member(
-                guard->get_local_type_info(type_info::id<ClassT>()),
+                guard->get_local_type_info(jeecs::typing::id<ClassT>()),
                 membt,
                 membname,
                 nullptr,
@@ -6764,13 +6777,13 @@ namespace jeecs
             const std::string& woolang_typename,
             const std::string& woolang_typedecl)
         {
-            const typing::type_info* local_typeinfo = nullptr;
+            const je_TypeInfo* local_typeinfo = nullptr;
             guard->_register_or_get_local_type_info<T>(nullptr, &local_typeinfo);
 
             je_register_script_parser(
                 local_typeinfo,
-                reinterpret_cast<jeecs::typing::parse_c2w_func_t>(c2w),
-                reinterpret_cast<jeecs::typing::parse_w2c_func_t>(w2c),
+                reinterpret_cast<je_ParseC2WFunc>(c2w),
+                reinterpret_cast<je_ParseW2CFunc>(w2c),
                 woolang_typename.c_str(),
                 woolang_typedecl.c_str());
         }
@@ -6800,8 +6813,8 @@ namespace jeecs
         inline game_entity add_entity()
         {
             const typing::typeid_t component_ids[] = {
-                typing::type_info::id<FirstCompT>(),
-                typing::type_info::id<CompTs>()...,
+                typing::id<FirstCompT>(),
+                typing::id<CompTs>()...,
                 typing::INVALID_TYPE_ID,
             };
 
@@ -6824,8 +6837,8 @@ namespace jeecs
         inline game_entity add_prefab()
         {
             const typing::typeid_t component_ids[] = {
-                typing::type_info::id<FirstCompT>(),
-                typing::type_info::id<CompTs>()...,
+                typing::id<FirstCompT>(),
+                typing::id<CompTs>()...,
                 typing::INVALID_TYPE_ID,
             };
 
@@ -6846,7 +6859,7 @@ namespace jeecs
         inline SystemT* add_system()
         {
             return static_cast<SystemT*>(add_system(
-                typing::type_info::id<SystemT>()));
+                typing::id<SystemT>()));
         }
 
         inline jeecs::game_system* get_system(jeecs::typing::typeid_t type)
@@ -6858,7 +6871,7 @@ namespace jeecs
         inline SystemT* get_system()
         {
             return static_cast<SystemT*>(get_system(
-                typing::type_info::id<SystemT>()));
+                typing::id<SystemT>()));
         }
 
         inline void remove_system(jeecs::typing::typeid_t type)
@@ -6869,7 +6882,7 @@ namespace jeecs
         template <typename SystemT>
         inline void remove_system()
         {
-            remove_system(typing::type_info::id<SystemT>());
+            remove_system(typing::id<SystemT>());
         }
 
         // This function only used for editor.
@@ -7096,7 +7109,7 @@ namespace jeecs
                         requirement{
                             std::is_pointer_v<T> ? requirement::type::MAYNOT : requirement::type::CONTAINS,
                             0,
-                            typing::type_info::id<typing::origin_t<T>>() });
+                            typing::id<typing::origin_t<T>>() });
 
                     if constexpr (sizeof...(Ts) > 0)
                         _apply_dependence_impl<Ts...>(out_dependence);
@@ -7117,7 +7130,7 @@ namespace jeecs
                 static void _apply_dependence_impl(size_t group, dependence* out_dependence)
                 {
                     out_dependence->m_requirements.push_back(
-                        requirement{ RequireType, group, typing::type_info::id<typing::origin_t<T>>() });
+                        requirement{ RequireType, group, typing::id<typing::origin_t<T>>() });
 
                     if constexpr (sizeof...(Ts) > 0)
                         _apply_dependence_impl<Ts...>(group, out_dependence);
@@ -7765,19 +7778,19 @@ namespace jeecs
     inline T* game_entity::get_component() const noexcept
     {
         return (T*)je_ecs_world_entity_get_component(this,
-            typing::type_info::id<T>());
+            typing::id<T>());
     }
     template <typename T>
     inline T* game_entity::add_component() const noexcept
     {
         return (T*)je_ecs_world_entity_add_component(this,
-            typing::type_info::id<T>());
+            typing::id<T>());
     }
     template <typename T>
     inline void game_entity::remove_component() const noexcept
     {
         return je_ecs_world_entity_remove_component(this,
-            typing::type_info::id<T>());
+            typing::id<T>());
     }
 
     inline jeecs::game_world game_entity::game_world() const noexcept
@@ -10098,8 +10111,8 @@ namespace jeecs
                 float m_time[4];
             };
 
-            graphic_uhost* _m_graphic_host;
-            std::vector<rendchain_branch*> _m_rchain_pipeline;
+            je_GraphicUhost* _m_graphic_host;
+            std::vector<je_RendchainBranch*> _m_rchain_pipeline;
             size_t _m_this_frame_allocate_rchain_pipeline_count;
 
             BasePipelineInterface(game_world w, const jegl_interface_config* config)
@@ -10126,7 +10139,7 @@ namespace jeecs
             {
                 _m_this_frame_allocate_rchain_pipeline_count = 0;
             }
-            rendchain_branch* allocate_branch(int priority)
+            je_RendchainBranch* allocate_branch(int priority)
             {
                 if (_m_this_frame_allocate_rchain_pipeline_count >= _m_rchain_pipeline.size())
                 {
@@ -11774,9 +11787,9 @@ namespace jeecs
                     };
                     struct component_data
                     {
-                        const jeecs::typing::type_info*
+                        const je_TypeInfo*
                             m_component_type;
-                        const jeecs::typing::typeinfo_member::member_info*
+                        const je_MemberInfo*
                             m_member_info;
                         data_value m_member_value;
                         bool m_offset_mode;
@@ -11937,7 +11950,7 @@ namespace jeecs
                                                 break;
                                             }
 
-                                            auto* component_type = jeecs::typing::type_info::of(component_name.c_str());
+                                            auto* component_type = jeecs::typing::of(component_name.c_str());
                                             if (component_type == nullptr)
                                                 jeecs::debug::logerr(
                                                     "Failed to found component type named '%s' when reading animation '%s' frame %zu in '%s'.",
@@ -11949,7 +11962,7 @@ namespace jeecs
                                             {
                                                 frame_data::component_data cdata;
                                                 cdata.m_component_type = component_type;
-                                                cdata.m_member_info = component_type->find_member_by_name(member_name.c_str());
+                                                cdata.m_member_info = jeecs::typing::find_member_by_name(component_type, member_name.c_str());
                                                 cdata.m_member_value = value;
                                                 cdata.m_offset_mode = offset_mode != 0;
                                                 cdata.m_member_addr_cache = nullptr;
@@ -12652,87 +12665,87 @@ namespace jeecs
             // 0. register built-in components
             using namespace typing;
 
-            type_info::register_type<Transform::LocalPosition>(guard, "Transform::LocalPosition");
-            type_info::register_type<Transform::LocalRotation>(guard, "Transform::LocalRotation");
-            type_info::register_type<Transform::LocalScale>(guard, "Transform::LocalScale");
-            type_info::register_type<Transform::Anchor>(guard, "Transform::Anchor");
-            type_info::register_type<Transform::LocalToWorld>(guard, "Transform::LocalToWorld");
-            type_info::register_type<Transform::LocalToParent>(guard, "Transform::LocalToParent");
-            type_info::register_type<Transform::Translation>(guard, "Transform::Translation");
+            jeecs::typing::register_type<Transform::LocalPosition>(guard, "Transform::LocalPosition");
+            jeecs::typing::register_type<Transform::LocalRotation>(guard, "Transform::LocalRotation");
+            jeecs::typing::register_type<Transform::LocalScale>(guard, "Transform::LocalScale");
+            jeecs::typing::register_type<Transform::Anchor>(guard, "Transform::Anchor");
+            jeecs::typing::register_type<Transform::LocalToWorld>(guard, "Transform::LocalToWorld");
+            jeecs::typing::register_type<Transform::LocalToParent>(guard, "Transform::LocalToParent");
+            jeecs::typing::register_type<Transform::Translation>(guard, "Transform::Translation");
 
-            type_info::register_type<UserInterface::Origin>(guard, "UserInterface::Origin");
-            type_info::register_type<UserInterface::Rotation>(guard, "UserInterface::Rotation");
-            type_info::register_type<UserInterface::Absolute>(guard, "UserInterface::Absolute");
-            type_info::register_type<UserInterface::Relatively>(guard, "UserInterface::Relatively");
+            jeecs::typing::register_type<UserInterface::Origin>(guard, "UserInterface::Origin");
+            jeecs::typing::register_type<UserInterface::Rotation>(guard, "UserInterface::Rotation");
+            jeecs::typing::register_type<UserInterface::Absolute>(guard, "UserInterface::Absolute");
+            jeecs::typing::register_type<UserInterface::Relatively>(guard, "UserInterface::Relatively");
 
-            type_info::register_type<Renderer::Rendqueue>(guard, "Renderer::Rendqueue");
-            type_info::register_type<Renderer::Shape>(guard, "Renderer::Shape");
-            type_info::register_type<Renderer::Shaders>(guard, "Renderer::Shaders");
-            type_info::register_type<Renderer::Textures>(guard, "Renderer::Textures");
-            type_info::register_type<Renderer::Color>(guard, "Renderer::Color");
+            jeecs::typing::register_type<Renderer::Rendqueue>(guard, "Renderer::Rendqueue");
+            jeecs::typing::register_type<Renderer::Shape>(guard, "Renderer::Shape");
+            jeecs::typing::register_type<Renderer::Shaders>(guard, "Renderer::Shaders");
+            jeecs::typing::register_type<Renderer::Textures>(guard, "Renderer::Textures");
+            jeecs::typing::register_type<Renderer::Color>(guard, "Renderer::Color");
 
-            type_info::register_type<Animation::FrameAnimation>(guard, "Animation::FrameAnimation");
+            jeecs::typing::register_type<Animation::FrameAnimation>(guard, "Animation::FrameAnimation");
 
-            type_info::register_type<Camera::FrustumCulling>(guard, "Camera::FrustumCulling");
-            type_info::register_type<Camera::Projection>(guard, "Camera::Projection");
-            type_info::register_type<Camera::OrthoProjection>(guard, "Camera::OrthoProjection");
-            type_info::register_type<Camera::PerspectiveProjection>(guard, "Camera::PerspectiveProjection");
-            type_info::register_type<Camera::Viewport>(guard, "Camera::Viewport");
-            type_info::register_type<Camera::RendToFramebuffer>(guard, "Camera::RendToFramebuffer");
-            type_info::register_type<Camera::Clear>(guard, "Camera::Clear");
+            jeecs::typing::register_type<Camera::FrustumCulling>(guard, "Camera::FrustumCulling");
+            jeecs::typing::register_type<Camera::Projection>(guard, "Camera::Projection");
+            jeecs::typing::register_type<Camera::OrthoProjection>(guard, "Camera::OrthoProjection");
+            jeecs::typing::register_type<Camera::PerspectiveProjection>(guard, "Camera::PerspectiveProjection");
+            jeecs::typing::register_type<Camera::Viewport>(guard, "Camera::Viewport");
+            jeecs::typing::register_type<Camera::RendToFramebuffer>(guard, "Camera::RendToFramebuffer");
+            jeecs::typing::register_type<Camera::Clear>(guard, "Camera::Clear");
 
-            type_info::register_type<Light2D::TopDown>(guard, "Light2D::TopDown");
-            type_info::register_type<Light2D::Gain>(guard, "Light2D::Gain");
-            type_info::register_type<Light2D::Point>(guard, "Light2D::Point");
-            type_info::register_type<Light2D::Range>(guard, "Light2D::Range");
-            type_info::register_type<Light2D::Parallel>(guard, "Light2D::Parallel");
-            type_info::register_type<Light2D::ShadowBuffer>(guard, "Light2D::ShadowBuffer");
-            type_info::register_type<Light2D::CameraPostPass>(guard, "Light2D::CameraPostPass");
-            type_info::register_type<Light2D::BlockShadow>(guard, "Light2D::BlockShadow");
-            type_info::register_type<Light2D::ShapeShadow>(guard, "Light2D::ShapeShadow");
-            type_info::register_type<Light2D::SpriteShadow>(guard, "Light2D::SpriteShadow");
-            type_info::register_type<Light2D::SelfShadow>(guard, "Light2D::SelfShadow");
+            jeecs::typing::register_type<Light2D::TopDown>(guard, "Light2D::TopDown");
+            jeecs::typing::register_type<Light2D::Gain>(guard, "Light2D::Gain");
+            jeecs::typing::register_type<Light2D::Point>(guard, "Light2D::Point");
+            jeecs::typing::register_type<Light2D::Range>(guard, "Light2D::Range");
+            jeecs::typing::register_type<Light2D::Parallel>(guard, "Light2D::Parallel");
+            jeecs::typing::register_type<Light2D::ShadowBuffer>(guard, "Light2D::ShadowBuffer");
+            jeecs::typing::register_type<Light2D::CameraPostPass>(guard, "Light2D::CameraPostPass");
+            jeecs::typing::register_type<Light2D::BlockShadow>(guard, "Light2D::BlockShadow");
+            jeecs::typing::register_type<Light2D::ShapeShadow>(guard, "Light2D::ShapeShadow");
+            jeecs::typing::register_type<Light2D::SpriteShadow>(guard, "Light2D::SpriteShadow");
+            jeecs::typing::register_type<Light2D::SelfShadow>(guard, "Light2D::SelfShadow");
 
-            type_info::register_type<Physics2D::Scene>(guard, "Physics2D::Scene");
+            jeecs::typing::register_type<Physics2D::Scene>(guard, "Physics2D::Scene");
 
-            type_info::register_type<Physics2D::Rigidbody>(guard, "Physics2D::Rigidbody");
-            type_info::register_type<Physics2D::DynamicBody>(guard, "Physics2D::DynamicBody");
-            type_info::register_type<Physics2D::KinematicBody>(guard, "Physics2D::KinematicBody");
-            type_info::register_type<Physics2D::Bullet>(guard, "Physics2D::Bullet");
+            jeecs::typing::register_type<Physics2D::Rigidbody>(guard, "Physics2D::Rigidbody");
+            jeecs::typing::register_type<Physics2D::DynamicBody>(guard, "Physics2D::DynamicBody");
+            jeecs::typing::register_type<Physics2D::KinematicBody>(guard, "Physics2D::KinematicBody");
+            jeecs::typing::register_type<Physics2D::Bullet>(guard, "Physics2D::Bullet");
 
-            type_info::register_type<Physics2D::LockTranslationX>(guard, "Physics2D::LockTranslationX");
-            type_info::register_type<Physics2D::LockTranslationY>(guard, "Physics2D::LockTranslationY");
-            type_info::register_type<Physics2D::LockRotation>(guard, "Physics2D::LockRotation");
+            jeecs::typing::register_type<Physics2D::LockTranslationX>(guard, "Physics2D::LockTranslationX");
+            jeecs::typing::register_type<Physics2D::LockTranslationY>(guard, "Physics2D::LockTranslationY");
+            jeecs::typing::register_type<Physics2D::LockRotation>(guard, "Physics2D::LockRotation");
 
-            type_info::register_type<Physics2D::LinearVelocity>(guard, "Physics2D::LinearVelocity");
-            type_info::register_type<Physics2D::AngularVelocity>(guard, "Physics2D::AngularVelocity");
-            type_info::register_type<Physics2D::LinearDamping>(guard, "Physics2D::LinearDamping");
-            type_info::register_type<Physics2D::AngularDamping>(guard, "Physics2D::AngularDamping");
-            type_info::register_type<Physics2D::GravityScale>(guard, "Physics2D::GravityScale");
+            jeecs::typing::register_type<Physics2D::LinearVelocity>(guard, "Physics2D::LinearVelocity");
+            jeecs::typing::register_type<Physics2D::AngularVelocity>(guard, "Physics2D::AngularVelocity");
+            jeecs::typing::register_type<Physics2D::LinearDamping>(guard, "Physics2D::LinearDamping");
+            jeecs::typing::register_type<Physics2D::AngularDamping>(guard, "Physics2D::AngularDamping");
+            jeecs::typing::register_type<Physics2D::GravityScale>(guard, "Physics2D::GravityScale");
 
-            type_info::register_type<Physics2D::Collider::Box>(guard, "Physics2D::Collider::Box");
-            type_info::register_type<Physics2D::Collider::Circle>(guard, "Physics2D::Collider::Circle");
-            type_info::register_type<Physics2D::Collider::Capsule>(guard, "Physics2D::Collider::Capsule");
+            jeecs::typing::register_type<Physics2D::Collider::Box>(guard, "Physics2D::Collider::Box");
+            jeecs::typing::register_type<Physics2D::Collider::Circle>(guard, "Physics2D::Collider::Circle");
+            jeecs::typing::register_type<Physics2D::Collider::Capsule>(guard, "Physics2D::Collider::Capsule");
 
-            type_info::register_type<Physics2D::Density>(guard, "Physics2D::Density");
-            type_info::register_type<Physics2D::Friction>(guard, "Physics2D::Friction");
-            type_info::register_type<Physics2D::Restitution>(guard, "Physics2D::Restitution");
-            type_info::register_type<Physics2D::IsTrigger>(guard, "Physics2D::IsTrigger");
+            jeecs::typing::register_type<Physics2D::Density>(guard, "Physics2D::Density");
+            jeecs::typing::register_type<Physics2D::Friction>(guard, "Physics2D::Friction");
+            jeecs::typing::register_type<Physics2D::Restitution>(guard, "Physics2D::Restitution");
+            jeecs::typing::register_type<Physics2D::IsTrigger>(guard, "Physics2D::IsTrigger");
 
-            type_info::register_type<Physics2D::Offset::Position>(guard, "Physics2D::Offset::Position");
-            type_info::register_type<Physics2D::Offset::Rotation>(guard, "Physics2D::Offset::Rotation");
-            type_info::register_type<Physics2D::Offset::Scale>(guard, "Physics2D::Offset::Scale");
+            jeecs::typing::register_type<Physics2D::Offset::Position>(guard, "Physics2D::Offset::Position");
+            jeecs::typing::register_type<Physics2D::Offset::Rotation>(guard, "Physics2D::Offset::Rotation");
+            jeecs::typing::register_type<Physics2D::Offset::Scale>(guard, "Physics2D::Offset::Scale");
 
-            type_info::register_type<Physics2D::CollisionResult>(guard, "Physics2D::CollisionResult");
+            jeecs::typing::register_type<Physics2D::CollisionResult>(guard, "Physics2D::CollisionResult");
 
-            type_info::register_type<Audio::Source>(guard, "Audio::Source");
-            type_info::register_type<Audio::Listener>(guard, "Audio::Listener");
-            type_info::register_type<Audio::Playing>(guard, "Audio::Playing");
+            jeecs::typing::register_type<Audio::Source>(guard, "Audio::Source");
+            jeecs::typing::register_type<Audio::Listener>(guard, "Audio::Listener");
+            jeecs::typing::register_type<Audio::Playing>(guard, "Audio::Playing");
 
-            type_info::register_type<Input::VirtualGamepad>(guard, "Input::VirtualGamepad");
+            jeecs::typing::register_type<Input::VirtualGamepad>(guard, "Input::VirtualGamepad");
 
             // 1. register basic types
-            type_info::register_type<math::ivec2>(guard, nullptr);
+            jeecs::typing::register_type<math::ivec2>(guard, nullptr);
 
             auto file_resource_uniform_parser_c2w =
                 [](const auto* v, woort_value value)
@@ -13191,5 +13204,5 @@ namespace jeecs
         }
     };
 }
-#endif
-#endif
+#endif // __cplusplus （C++ 包装层结束）
+#endif // !JE_MSVC_RC_INCLUDE

@@ -65,24 +65,24 @@ WOORT_API woort_api wojeapi_entity_set_prefab_path(void)
 
 void _jeecs_entry_register_core_systems(jeecs::typing::type_unregister_guard* guard)
 {
-    jeecs::typing::type_info::register_type<jeecs::script::woovalue>(guard, nullptr);
+    jeecs::typing::register_type<jeecs::script::woovalue>(guard, nullptr);
 
-    jeecs::typing::type_info::register_type<jeecs::Editor::Name>(guard, "Editor::Name");
-    jeecs::typing::type_info::register_type<jeecs::Editor::Prefab>(guard, "Editor::Prefab");
-    jeecs::typing::type_info::register_type<jeecs::Editor::EditorWalker>(guard, "Editor::EditorWalker");
-    jeecs::typing::type_info::register_type<jeecs::Editor::Invisible>(guard, "Editor::Invisible");
-    jeecs::typing::type_info::register_type<jeecs::Editor::EntityMover>(guard, "Editor::EntityMover");
-    jeecs::typing::type_info::register_type<jeecs::Editor::EntityMoverRoot>(guard, "Editor::EntityMoverRoot");
-    jeecs::typing::type_info::register_type<jeecs::Editor::BadShadersUniform>(guard, "Editor::BadShadersUniform");
-    jeecs::typing::type_info::register_type<jeecs::Editor::EntitySelectBox>(guard, "Editor::EntitySelectBox");
-    jeecs::typing::type_info::register_type<jeecs::Editor::EntityId>(guard, "Editor::EntityId");
+    jeecs::typing::register_type<jeecs::Editor::Name>(guard, "Editor::Name");
+    jeecs::typing::register_type<jeecs::Editor::Prefab>(guard, "Editor::Prefab");
+    jeecs::typing::register_type<jeecs::Editor::EditorWalker>(guard, "Editor::EditorWalker");
+    jeecs::typing::register_type<jeecs::Editor::Invisible>(guard, "Editor::Invisible");
+    jeecs::typing::register_type<jeecs::Editor::EntityMover>(guard, "Editor::EntityMover");
+    jeecs::typing::register_type<jeecs::Editor::EntityMoverRoot>(guard, "Editor::EntityMoverRoot");
+    jeecs::typing::register_type<jeecs::Editor::BadShadersUniform>(guard, "Editor::BadShadersUniform");
+    jeecs::typing::register_type<jeecs::Editor::EntitySelectBox>(guard, "Editor::EntitySelectBox");
+    jeecs::typing::register_type<jeecs::Editor::EntityId>(guard, "Editor::EntityId");
 
-    jeecs::typing::type_info::register_type<jeecs::TranslationUpdatingSystem>(guard, "Translation::TranslationUpdatingSystem");
-    jeecs::typing::type_info::register_type<jeecs::Physics2DUpdatingSystem>(guard, "Physics::Physics2DUpdatingSystem");
-    jeecs::typing::type_info::register_type<jeecs::FrameAnimationSystem>(guard, "Animation::FrameAnimationSystem");
-    jeecs::typing::type_info::register_type<jeecs::UserInterfaceGraphicPipelineSystem>(guard, "Graphic::UserInterfaceGraphicPipelineSystem");
-    jeecs::typing::type_info::register_type<jeecs::UnlitGraphicPipelineSystem>(guard, "Graphic::UnlitGraphicPipelineSystem");
-    jeecs::typing::type_info::register_type<jeecs::DeferLight2DGraphicPipelineSystem>(guard, "Graphic::DeferLight2DGraphicPipelineSystem");
-    jeecs::typing::type_info::register_type<jeecs::AudioUpdatingSystem>(guard, "Audio::AudioUpdatingSystem");
-    jeecs::typing::type_info::register_type<jeecs::VirtualGamepadInputSystem>(guard, "Input::VirtualGamepadInputSystem");
+    jeecs::typing::register_type<jeecs::TranslationUpdatingSystem>(guard, "Translation::TranslationUpdatingSystem");
+    jeecs::typing::register_type<jeecs::Physics2DUpdatingSystem>(guard, "Physics::Physics2DUpdatingSystem");
+    jeecs::typing::register_type<jeecs::FrameAnimationSystem>(guard, "Animation::FrameAnimationSystem");
+    jeecs::typing::register_type<jeecs::UserInterfaceGraphicPipelineSystem>(guard, "Graphic::UserInterfaceGraphicPipelineSystem");
+    jeecs::typing::register_type<jeecs::UnlitGraphicPipelineSystem>(guard, "Graphic::UnlitGraphicPipelineSystem");
+    jeecs::typing::register_type<jeecs::DeferLight2DGraphicPipelineSystem>(guard, "Graphic::DeferLight2DGraphicPipelineSystem");
+    jeecs::typing::register_type<jeecs::AudioUpdatingSystem>(guard, "Audio::AudioUpdatingSystem");
+    jeecs::typing::register_type<jeecs::VirtualGamepadInputSystem>(guard, "Input::VirtualGamepadInputSystem");
 }

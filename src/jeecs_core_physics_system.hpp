@@ -107,7 +107,7 @@ namespace jeecs
 
         struct group_filter_rule
         {
-            const jeecs::typing::type_info* m_type;
+            const je_TypeInfo* m_type;
             jeecs::requirement::type        m_requirement;
         };
         struct group_definition
@@ -310,7 +310,7 @@ namespace jeecs
                     woort_struct_get(requirement_slot, filter_value, 1); // Requirement
 
                     group.m_filters.push_back(group_filter_rule{
-                        static_cast<const typing::type_info*>(woort_pointer(typeinfo_slot)),
+                        static_cast<const je_TypeInfo*>(woort_pointer(typeinfo_slot)),
                         static_cast<requirement::type>(woort_int(requirement_slot)),
                         });
                 }
