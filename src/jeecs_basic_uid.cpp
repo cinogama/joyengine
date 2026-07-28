@@ -14,7 +14,7 @@ namespace jeecs
         inline static thread_local std::mt19937 mt = std::mt19937(std::random_device()());
     };
 }
-void je_uid_generate(jeecs::typing::uid_t *uid)
+void je_uid_generate(je_Uuid *uid)
 {
     std::uniform_int_distribution<uint16_t> dist_ushort(0, UINT16_MAX);
     std::uniform_int_distribution<uint32_t> dist_uint(0, UINT32_MAX);

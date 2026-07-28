@@ -183,6 +183,47 @@ typedef uint32_t je_Version;      // 版本号（实体索引版本、图形线�
 typedef uint64_t je_TimestampMs;  // 毫秒时间戳
 typedef uint64_t je_DebugEid;     // 调试用实体 ID（仅编辑器）
 
+// je_Uuid：全局唯一标识符（平凡布局）。C++ 端 jeecs::typing::uuid 以公开继承方式扩展它（加方法）。
+typedef struct je_Uuid {
+    union {
+        struct {
+            uint64_t a;
+            uint64_t b;
+        };
+        struct {
+            uint32_t x; // Time stamp
+            uint16_t y; // Time stamp
+            uint16_t z; // Random
+
+            uint16_t w; // Inc L16
+            uint16_t u; // Inc H16
+            uint32_t v; // Random
+        };
+    };
+} je_Uuid;
+
+// ---- 实体（game_entity）C 类型 ----
+// jeecs::game_entity（C++ 包装）以组合方式持有 je_GameEntity 作为成员；
+// je_EntityStat / meta 不再提供 C++ 别名，直接使用 je_EntityStat / je_GameEntityMeta。
+typedef uint32_t je_EntityIdInChunk;
+
+typedef enum je_EntityStat {
+    JE_ENTITY_STAT_UNAVAILABLE = 0, // Entity is destroyed or just not ready.
+    JE_ENTITY_STAT_READY,           // Entity is OK, works as normal.
+    JE_ENTITY_STAT_PREFAB,          // Current entity is prefab.
+} je_EntityStat;
+
+typedef struct je_GameEntityMeta {
+    je_Version m_version;
+    je_EntityStat m_stat;
+} je_GameEntityMeta;
+
+typedef struct je_GameEntity {
+    void* _m_in_chunk;
+    je_EntityIdInChunk _m_id;
+    je_Version _m_version;
+} je_GameEntity;
+
 // ---- C ABI 不透明句柄（opaque handle）前向声明 ----
 // 这些类型对外仅暴露指针；完整定义在引擎内部（src/）。C/C++ 通用，二进制兼容。
 typedef struct je_GraphicUhost    je_GraphicUhost;      // 图形渲染宿主上下文
@@ -246,7 +287,6 @@ namespace jeecs
         using module_entry_t = void (*)(woort_Dylib*);
         using module_leave_t = void (*)(void);
 
-        using entity_id_in_chunk_t = uint32_t;
 
         /*
         jeecs::typing::uuid [类型]
@@ -254,27 +294,8 @@ namespace jeecs
         请参见：
             jeecs::typing::uid_t
         */
-        struct uuid
+        struct uuid : public je_Uuid
         {
-            union
-            {
-                struct
-                {
-                    uint64_t a;
-                    uint64_t b;
-                };
-                struct
-                {
-                    uint32_t x; // Time stamp
-                    uint16_t y; // Time stamp
-                    uint16_t z; // Random
-
-                    uint16_t w; // Inc L16
-                    uint16_t u; // Inc H16
-                    uint32_t v; // Random
-                };
-            };
-
             static uuid generate() noexcept;
 
             inline bool operator==(const uuid& uid) const noexcept
@@ -525,33 +546,21 @@ namespace jeecs
     Chunk都会对指定位置记录的版本信息进行更新。只需要校验Chunk内的版本和索引的版本
     即可。
     */
-    struct game_entity
+    class game_entity
     {
-        enum class entity_stat : uint8_t
-        {
-            UNAVAILABLE = 0, // Entity is destroied or just not ready,
-            READY,           // Entity is OK, and just work as normal.
-            PREFAB,          // Current entity is prefab, cannot be selected from arch-system and cannot
-        };
-
-        struct meta
-        {
-            je_Version m_version;
-            jeecs::game_entity::entity_stat m_stat;
-        };
-
-        void* _m_in_chunk;
-        jeecs::typing::entity_id_in_chunk_t _m_id;
-        je_Version _m_version;
+    public:
+        // C ABI 实体句柄（平凡布局）。game_entity 以组合方式持有它，方法操作 _m_raw。
+        // je_EntityStat / meta 不再嵌套于此，请使用 C 类型 je_EntityStat / je_GameEntityMeta。
+        je_GameEntity _m_raw;
 
         inline game_entity& _set_arch_chunk_info(
             void* chunk,
-            jeecs::typing::entity_id_in_chunk_t index,
+            je_EntityIdInChunk index,
             je_Version ver) noexcept
         {
-            _m_in_chunk = chunk;
-            _m_id = index;
-            _m_version = ver;
+            _m_raw._m_in_chunk = chunk;
+            _m_raw._m_id = index;
+            _m_raw._m_version = ver;
 
             return *this;
         }
@@ -604,18 +613,19 @@ namespace jeecs
 
         inline bool operator==(const game_entity& e) const noexcept
         {
-            return _m_in_chunk == e._m_in_chunk &&
-                _m_id == e._m_id &&
-                _m_version == e._m_version;
+            return _m_raw._m_in_chunk == e._m_raw._m_in_chunk &&
+                _m_raw._m_id == e._m_raw._m_id &&
+                _m_raw._m_version == e._m_raw._m_version;
         }
         inline bool operator!=(const game_entity& e) const noexcept
         {
-            return _m_in_chunk != e._m_in_chunk ||
-                _m_id != e._m_id ||
-                _m_version != e._m_version;
+            return _m_raw._m_in_chunk != e._m_raw._m_in_chunk ||
+                _m_raw._m_id != e._m_raw._m_id ||
+                _m_raw._m_version != e._m_raw._m_version;
         }
     };
     static_assert(std::is_trivial_v<game_entity>);
+    static_assert(std::is_standard_layout_v<game_entity>);
 
     struct dependence;
 
@@ -1204,7 +1214,7 @@ JE_API void* je_arch_next_chunk(void* chunk);
 je_arch_entity_meta_addr_in_chunk [基本接口]
 通过给定的Chunk，获取Chunk中的实体元数据起始地址。
 */
-JE_API const jeecs::game_entity::meta* je_arch_entity_meta_addr_in_chunk(void* chunk);
+JE_API const je_GameEntityMeta* je_arch_entity_meta_addr_in_chunk(void* chunk);
 
 ////////////////////// ECS //////////////////////
 
@@ -1531,12 +1541,12 @@ component_ids 应该指向一个储存有N+1个je_TypeId实例的连续空间，
 请参见：
     je_TypeId
     jeecs::typing::INVALID_TYPE_ID
-    jeecs::game_entity
+    je_GameEntity
     jeecs::game_world::add_entity
 */
 JE_API void je_ecs_world_create_entity_with_components(
     void* world,
-    jeecs::game_entity* out_entity,
+    je_GameEntity* out_entity,
     const je_TypeId* component_ids);
 
 /*
@@ -1549,7 +1559,7 @@ je_ecs_world_create_prefab_with_components [基本接口]
 */
 JE_API void je_ecs_world_create_prefab_with_components(
     void* world,
-    jeecs::game_entity* out_entity,
+    je_GameEntity* out_entity,
     const je_TypeId* component_ids);
 
 /*
@@ -1565,19 +1575,19 @@ je_ecs_world_create_entity_with_prefab [基本接口]
 */
 JE_API void je_ecs_world_create_entity_with_prefab(
     void* world,
-    jeecs::game_entity* out_entity,
-    const jeecs::game_entity* prefab);
+    je_GameEntity* out_entity,
+    const je_GameEntity* prefab);
 
 /*
 je_ecs_world_destroy_entity [基本接口]
 从世界中销毁一个实体索引指定的相关组件
 若实体索引是`无效值`或已失效，则无事发生
 请参见：
-    jeecs::game_entity::close
+    je_GameEntity::close
 */
 JE_API void je_ecs_world_destroy_entity(
     void* world,
-    const jeecs::game_entity* entity);
+    const je_GameEntity* entity);
 
 /*
 je_ecs_world_entity_add_component [基本接口]
@@ -1588,10 +1598,10 @@ je_ecs_world_entity_add_component [基本接口]
     1. 若实体已经存在同类型组件，则替换之
     2. 若实体不存在同类型组件，则更新实体
 请参见：
-    jeecs::game_entity::add_component
+    je_GameEntity::add_component
 */
 JE_API void* je_ecs_world_entity_add_component(
-    const jeecs::game_entity* entity,
+    const je_GameEntity* entity,
     je_TypeId type);
 
 /*
@@ -1603,10 +1613,10 @@ je_ecs_world_entity_remove_component [基本接口]
     1. 若实体已经存在同类型组件，则移除之
     2. 若实体不存在同类型组件，则无事发生
 请参见：
-    jeecs::game_entity::remove_component
+    je_GameEntity::remove_component
 */
 JE_API void je_ecs_world_entity_remove_component(
-    const jeecs::game_entity* entity,
+    const je_GameEntity* entity,
     je_TypeId type);
 
 /*
@@ -1614,10 +1624,10 @@ je_ecs_world_entity_get_component [基本接口]
 从实体中获取一个组件
 若实体索引是`无效值`或已失效，或者实体不存在指定类型的组件，则返回nullptr
 请参见：
-    jeecs::game_entity::get_component
+    je_GameEntity::get_component
 */
 JE_API void* je_ecs_world_entity_get_component(
-    const jeecs::game_entity* entity,
+    const je_GameEntity* entity,
     je_TypeId type);
 
 /*
@@ -1625,10 +1635,10 @@ je_ecs_world_of_entity [基本接口]
 获取实体所在的世界
 若实体索引是`无效值`，则返回nullptr
 请参见：
-    jeecs::game_entity::game_world
+    je_GameEntity::game_world
 */
 JE_API void* je_ecs_world_of_entity(
-    const jeecs::game_entity* entity);
+    const je_GameEntity* entity);
 
 /*
 je_ecs_world_set_enable [基本接口]
@@ -1662,7 +1672,7 @@ je_ecs_get_name_of_entity [基本接口]
 或者其他操作，取出的字符串可能失效
 */
 JE_API const char* je_ecs_get_name_of_entity(
-    const jeecs::game_entity* entity);
+    const je_GameEntity* entity);
 
 /*
 je_ecs_set_name_of_entity [基本接口]
@@ -1676,7 +1686,7 @@ je_ecs_set_name_of_entity [基本接口]
 若实体不包含 Editor::Name，则创建后再进行设置
 */
 JE_API const char* je_ecs_set_name_of_entity(
-    const jeecs::game_entity* entity,
+    const je_GameEntity* entity,
     const char* name);
 /////////////////////////// Time&Sleep /////////////////////////////////
 
@@ -1734,7 +1744,7 @@ je_uid_generate [基本接口]
 请参见：
     jeecs::typing::uid_t
 */
-JE_API void je_uid_generate(jeecs::typing::uid_t* out_uid);
+JE_API void je_uid_generate(je_Uuid* out_uid);
 
 /////////////////////////// FILE /////////////////////////////////
 
@@ -4695,13 +4705,13 @@ JE_API bool je_main_script_entry();
 // [world1, world2,..., nullptr]
 JE_API void** jedbg_get_all_worlds_in_universe(void* _universes);
 
-JE_API void jedbg_free_entity(jeecs::game_entity* _entity_list);
+JE_API void jedbg_free_entity(je_GameEntity* _entity_list);
 
 // NOTE: need free the return result by 'je_mem_free'(and elem with jedbg_free_entity)
-JE_API jeecs::game_entity** jedbg_get_all_entities_in_world(void* _world);
+JE_API je_GameEntity** jedbg_get_all_entities_in_world(void* _world);
 
 // NOTE: need free the return result by 'je_mem_free'
-JE_API const je_TypeInfo** jedbg_get_all_components_from_entity(const jeecs::game_entity* _entity);
+JE_API const je_TypeInfo** jedbg_get_all_components_from_entity(const je_GameEntity* _entity);
 
 // NOTE: need free the return result by 'je_mem_free'
 JE_API const je_TypeInfo** jedbg_get_all_registed_types(void);
@@ -4711,10 +4721,10 @@ JE_API size_t jedbg_get_unregister_type_count(void);
 // NOTE: need free the return result by 'je_mem_free'
 JE_API const je_TypeInfo** jedbg_get_all_system_attached_in_world(void* _world);
 
-JE_API je_DebugEid jedbg_get_entity_uid(const jeecs::game_entity* e);
+JE_API je_DebugEid jedbg_get_entity_uid(const je_GameEntity* e);
 
 JE_API void jedbg_get_entity_arch_information(
-    jeecs::game_entity* _entity,
+    je_GameEntity* _entity,
     size_t* _out_chunk_size,
     size_t* _out_entity_size,
     size_t* _out_all_entity_count_in_chunk);
@@ -6816,7 +6826,7 @@ namespace jeecs
             game_entity gentity;
 
             je_ecs_world_create_entity_with_components(
-                handle(), &gentity, component_ids);
+                handle(), &gentity._m_raw, component_ids);
 
             return gentity;
         }
@@ -6824,7 +6834,7 @@ namespace jeecs
         {
             game_entity gentity;
             je_ecs_world_create_entity_with_prefab(
-                handle(), &gentity, &prefab);
+                handle(), &gentity._m_raw, &prefab._m_raw);
 
             return gentity;
         }
@@ -6840,7 +6850,7 @@ namespace jeecs
             game_entity gentity;
 
             je_ecs_world_create_prefab_with_components(
-                handle(), &gentity, component_ids);
+                handle(), &gentity._m_raw, component_ids);
 
             return gentity;
         }
@@ -6887,7 +6897,7 @@ namespace jeecs
 
             game_entity gentity;
             je_ecs_world_create_entity_with_components(
-                handle(), &gentity, components.data());
+                handle(), &gentity._m_raw, components.data());
 
             return gentity;
         }
@@ -6898,14 +6908,14 @@ namespace jeecs
 
             game_entity gentity;
             je_ecs_world_create_prefab_with_components(
-                handle(), &gentity, components.data());
+                handle(), &gentity._m_raw, components.data());
 
             return gentity;
         }
 
         inline void remove_entity(const game_entity& entity)
         {
-            je_ecs_world_destroy_entity(handle(), &entity);
+            je_ecs_world_destroy_entity(handle(), &entity._m_raw);
         }
 
         inline operator bool() const noexcept
@@ -6949,7 +6959,7 @@ namespace jeecs
         struct arch_chunks_info
         {
             void* m_arch;
-            typing::entity_id_in_chunk_t m_entity_count;
+            je_EntityIdInChunk m_entity_count;
 
             /* An arch will contain a chain of chunks
             --------------------------------------
@@ -7034,7 +7044,7 @@ namespace jeecs
                 inline static void* get_component_by_index(
                     const dependence::arch_chunks_info* archinfo,
                     void* chunkbuf,
-                    typing::entity_id_in_chunk_t entity_id,
+                    je_EntityIdInChunk entity_id,
                     size_t cid)
                 {
                     assert(cid < archinfo->m_component_infos.size());
@@ -7045,7 +7055,7 @@ namespace jeecs
                 inline static void* get_component_by_cached_info(
                     const component_info* info,
                     void* chunkbuf,
-                    typing::entity_id_in_chunk_t entity_id)
+                    je_EntityIdInChunk entity_id)
                 {
                     if (info->m_component_offset_of_unit != 0)
                     {
@@ -7063,7 +7073,7 @@ namespace jeecs
                 inline static ComponentT get_component_from_archchunk(
                     const component_info* cached_infos,
                     void* chunkbuf,
-                    typing::entity_id_in_chunk_t entity_id)
+                    je_EntityIdInChunk entity_id)
                 {
                     constexpr size_t cid = typing::pack_index_v<ComponentT, ArgTs...>;
                     static_assert(cid != SIZE_MAX, "ComponentT must be one of ArgTs...");
@@ -7156,7 +7166,7 @@ namespace jeecs
             static components fetch_component_slice_from_chunk(
                 const component_info* cached_infos,
                 void* chunkbuf,
-                typing::entity_id_in_chunk_t entity_id)
+                je_EntityIdInChunk entity_id)
             {
                 return components{
                     get_component_from_archchunk<Components, Components...>(
@@ -7165,7 +7175,7 @@ namespace jeecs
             static entity_with_components fetch_entity_and_component_slice_from_chunk(
                 const component_info* cached_infos,
                 void* chunkbuf,
-                typing::entity_id_in_chunk_t entity_id,
+                je_EntityIdInChunk entity_id,
                 je_Version entity_version)
             {
                 return entity_with_components{
@@ -7305,8 +7315,8 @@ namespace jeecs
             const dependence::arch_chunks_info* m_archs_end;
 
             void* m_chunk_current;
-            const jeecs::game_entity::meta* m_chunk_current_entity_meta;
-            typing::entity_id_in_chunk_t m_chunk_entity_current_index;
+            const je_GameEntityMeta* m_chunk_current_entity_meta;
+            je_EntityIdInChunk m_chunk_entity_current_index;
 
             // 预缓存本视图所需的 component_info（按 SliceView::Components... 顺序）。
             // 在进入新 arch 时一次性刷新，避免每次解引用都走 arch_chunks_info::m_component_infos
@@ -7365,7 +7375,7 @@ namespace jeecs
                         }
                     }
 
-                    if (jeecs::game_entity::entity_stat::READY
+                    if (JE_ENTITY_STAT_READY
                         == m_chunk_current_entity_meta[m_chunk_entity_current_index].m_stat)
                         break;
 
@@ -7541,8 +7551,8 @@ namespace jeecs
         // 回调签名（ft 被同步调用一次/chunk）：
         //   void(const dependence::arch_chunks_info::component_info* infos,
         //        void* chunkbuf,
-        //        const game_entity::meta* meta,
-        //        typing::entity_id_in_chunk_t entity_count)
+        //        const je_GameEntityMeta* meta,
+        //        je_EntityIdInChunk entity_count)
         //
         // 注意：entity_count 是该 chunk 所属 arch 的容量上限（所有 chunk 一致），
         //       实际有效实体需调用方根据 meta[eid].m_stat == READY 自行过滤；
@@ -7576,8 +7586,8 @@ namespace jeecs
             {
                 const dependence::arch_chunks_info::component_info* infos;
                 void* chunk;
-                const game_entity::meta* meta;
-                typing::entity_id_in_chunk_t count;
+                const je_GameEntityMeta* meta;
+                je_EntityIdInChunk count;
             };
 
             basic::vector<chunk_handle> chunks;
@@ -7772,29 +7782,29 @@ namespace jeecs
     template <typename T>
     inline T* game_entity::get_component() const noexcept
     {
-        return (T*)je_ecs_world_entity_get_component(this,
+        return (T*)je_ecs_world_entity_get_component(&_m_raw,
             typing::id<T>());
     }
     template <typename T>
     inline T* game_entity::add_component() const noexcept
     {
-        return (T*)je_ecs_world_entity_add_component(this,
+        return (T*)je_ecs_world_entity_add_component(&_m_raw,
             typing::id<T>());
     }
     template <typename T>
     inline void game_entity::remove_component() const noexcept
     {
-        return je_ecs_world_entity_remove_component(this,
+        return je_ecs_world_entity_remove_component(&_m_raw,
             typing::id<T>());
     }
 
     inline jeecs::game_world game_entity::game_world() const noexcept
     {
-        return jeecs::game_world(je_ecs_world_of_entity(this));
+        return jeecs::game_world(je_ecs_world_of_entity(&_m_raw));
     }
     inline void game_entity::close() const noexcept
     {
-        if (_m_in_chunk == nullptr)
+        if (_m_raw._m_in_chunk == nullptr)
             return;
 
         game_world().remove_entity(*this);

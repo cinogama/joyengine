@@ -243,10 +243,10 @@ namespace jeecs
                     {
                         auto entity_meta_addr = je_arch_entity_meta_addr_in_chunk(cur_chunk);
                         je_Version version;
-                        for (typing::entity_id_in_chunk_t eid = 0;
+                        for (je_EntityIdInChunk eid = 0;
                             eid < archinfo.m_entity_count; ++eid)
                         {
-                            if (game_entity::entity_stat::READY != entity_meta_addr[eid].m_stat)
+                            if (JE_ENTITY_STAT_READY != entity_meta_addr[eid].m_stat)
                                 continue;
 
                             version = entity_meta_addr[eid].m_version;
@@ -860,7 +860,7 @@ import je::towoo::types;
 
 WOORT_API woort_api wojeapi_towoo_add_component(void)
 {
-    auto* e = static_cast<jeecs::game_entity*>(woort_gcpointer(0));
+    auto* e = static_cast<je_GameEntity*>(woort_gcpointer(0));
     auto* ty = static_cast<const je_TypeInfo*>(woort_pointer(1));
 
     void* comp = je_ecs_world_entity_add_component(e, ty->m_id);
@@ -878,7 +878,7 @@ WOORT_API woort_api wojeapi_towoo_add_component(void)
 }
 WOORT_API woort_api wojeapi_towoo_get_component(void)
 {
-    auto* e = static_cast<jeecs::game_entity*>(woort_gcpointer(0));
+    auto* e = static_cast<je_GameEntity*>(woort_gcpointer(0));
     auto* ty = static_cast<const je_TypeInfo*>(woort_pointer(1));
 
     void* comp = je_ecs_world_entity_get_component(e, ty->m_id);
@@ -896,7 +896,7 @@ WOORT_API woort_api wojeapi_towoo_get_component(void)
 }
 WOORT_API woort_api wojeapi_towoo_remove_component(void)
 {
-    auto* e = static_cast<jeecs::game_entity*>(woort_gcpointer(0));
+    auto* e = static_cast<je_GameEntity*>(woort_gcpointer(0));
     auto* ty = static_cast<const je_TypeInfo*>(woort_pointer(1));
 
     je_ecs_world_entity_remove_component(e, ty->m_id);
