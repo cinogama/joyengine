@@ -403,7 +403,7 @@ namespace jeecs::graphic::api::gl3
         je_log(jelog_level, "(%d)%s-%s: %s", id, source_type, msg_type, message);
     }
 #endif
-    jegl_graphic_impl_context_t gl_startup(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
+    je_GraphicImplContext gl_startup(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
     {
         jegl_gl3_context* context = new jegl_gl3_context(gthread, config, reboot);
 
@@ -460,7 +460,7 @@ namespace jeecs::graphic::api::gl3
         return context;
     }
 
-    jegl_update_action gl_pre_update(jegl_graphic_impl_context_t ctx)
+    jegl_update_action gl_pre_update(je_GraphicImplContext ctx)
     {
         jegl_gl3_context* context = static_cast<jegl_gl3_context*>(ctx);
 
@@ -495,7 +495,7 @@ namespace jeecs::graphic::api::gl3
     }
 
     jegl_update_action gl_commit_update(
-        jegl_graphic_impl_context_t, jegl_update_action)
+        je_GraphicImplContext, jegl_update_action)
     {
         // 回到默认帧缓冲区
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
@@ -506,10 +506,10 @@ namespace jeecs::graphic::api::gl3
         glFlush();
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
-    void gl_pre_shutdown(jegl_context*, jegl_graphic_impl_context_t, bool)
+    void gl_pre_shutdown(jegl_context*, je_GraphicImplContext, bool)
     {
     }
-    void gl_shutdown(jegl_context*, jegl_graphic_impl_context_t userdata, bool reboot)
+    void gl_shutdown(jegl_context*, je_GraphicImplContext userdata, bool reboot)
     {
         jegl_gl3_context* context = static_cast<jegl_gl3_context*>(userdata);
 
@@ -522,7 +522,7 @@ namespace jeecs::graphic::api::gl3
         delete context;
     }
     void gl_set_uniform(
-        jegl_graphic_impl_context_t ctx,
+        je_GraphicImplContext ctx,
         uint32_t location,
         jegl_shader::uniform_type type,
         const void* val)
@@ -621,7 +621,7 @@ namespace jeecs::graphic::api::gl3
     }
 
     jegl_resource_blob shader_create_resource_blob(
-        jegl_graphic_impl_context_t ctx, jegl_shader* resource)
+        je_GraphicImplContext ctx, jegl_shader* resource)
     {
         GLuint vs = glCreateShader(GL_VERTEX_SHADER);
         GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
@@ -952,33 +952,33 @@ namespace jeecs::graphic::api::gl3
         }
     }
     void shader_close_resource_blob(
-        jegl_graphic_impl_context_t ctx, jegl_resource_blob blob)
+        je_GraphicImplContext ctx, jegl_resource_blob blob)
     {
         delete static_cast<jegl3_shader_blob*>(blob);
     }
 
     jegl_resource_blob texture_create_resource_blob(
-        jegl_graphic_impl_context_t ctx, jegl_texture* resource)
+        je_GraphicImplContext ctx, jegl_texture* resource)
     {
         return nullptr;
     }
     void texture_close_resource_blob(
-        jegl_graphic_impl_context_t ctx, jegl_resource_blob blob)
+        je_GraphicImplContext ctx, jegl_resource_blob blob)
     {
     }
 
     jegl_resource_blob vertex_create_resource_blob(
-        jegl_graphic_impl_context_t ctx, jegl_vertex* resource)
+        je_GraphicImplContext ctx, jegl_vertex* resource)
     {
         return nullptr;
     }
     void vertex_close_resource_blob(
-        jegl_graphic_impl_context_t ctx, jegl_resource_blob blob)
+        je_GraphicImplContext ctx, jegl_resource_blob blob)
     {
     }
 
     void shader_init(
-        jegl_graphic_impl_context_t ctx,
+        je_GraphicImplContext ctx,
         jegl_resource_blob blob,
         jegl_shader* resource)
     {
@@ -1065,12 +1065,12 @@ namespace jeecs::graphic::api::gl3
         }
     }
     void shader_update(
-        jegl_graphic_impl_context_t,
+        je_GraphicImplContext,
         jegl_shader* resource)
     {
     }
     void shader_close(
-        jegl_graphic_impl_context_t,
+        je_GraphicImplContext,
         jegl_shader* resource)
     {
         jegl_gl3_shader* shader_instance =
@@ -1081,7 +1081,7 @@ namespace jeecs::graphic::api::gl3
     }
 
     void texture_init(
-        jegl_graphic_impl_context_t,
+        je_GraphicImplContext,
         jegl_resource_blob,
         jegl_texture* resource)
     {
@@ -1188,7 +1188,7 @@ namespace jeecs::graphic::api::gl3
         resource->m_handle.m_ptr = new jegl_gl3_texture(texture, resource->m_format, resource->m_width, resource->m_height);
     }
     void texture_update(
-        jegl_graphic_impl_context_t,
+        je_GraphicImplContext,
         jegl_texture* resource)
     {
         jegl_gl3_texture* texture_instance =
@@ -1262,14 +1262,14 @@ namespace jeecs::graphic::api::gl3
         }
     }
     void texture_close(
-        jegl_graphic_impl_context_t,
+        je_GraphicImplContext,
         jegl_texture* resource)
     {
         delete static_cast<jegl_gl3_texture*>(resource->m_handle.m_ptr);
     }
 
     void vertex_init(
-        jegl_graphic_impl_context_t,
+        je_GraphicImplContext,
         jegl_resource_blob,
         jegl_vertex* resource)
     {
@@ -1338,25 +1338,25 @@ namespace jeecs::graphic::api::gl3
         resource->m_handle.m_ptr = vertex_data;
     }
     void vertex_update(
-        jegl_graphic_impl_context_t,
+        je_GraphicImplContext,
         jegl_vertex* resource)
     {
     }
     void vertex_close(
-        jegl_graphic_impl_context_t,
+        je_GraphicImplContext,
         jegl_vertex* resource)
     {
         delete static_cast<jegl3_vertex_data*>(resource->m_handle.m_ptr);
     }
 
     void ubuffer_init(
-        jegl_graphic_impl_context_t,
+        je_GraphicImplContext,
         jegl_uniform_buffer* resource)
     {
         resource->m_handle.m_ptr = new jegl_gl3_uniformbuf(resource);
     }
     void ubuffer_update(
-        jegl_graphic_impl_context_t,
+        je_GraphicImplContext,
         jegl_uniform_buffer* resource)
     {
         jegl_gl3_uniformbuf* ubuf =
@@ -1373,14 +1373,14 @@ namespace jeecs::graphic::api::gl3
             resource->m_buffer + resource->m_update_begin_offset);
     }
     void ubuffer_close(
-        jegl_graphic_impl_context_t,
+        je_GraphicImplContext,
         jegl_uniform_buffer* resource)
     {
         delete static_cast<jegl_gl3_uniformbuf*>(resource->m_handle.m_ptr);
     }
 
     void framebuffer_init(
-        jegl_graphic_impl_context_t,
+        je_GraphicImplContext,
         jegl_frame_buffer* resource)
     {
         GLuint fbo;
@@ -1448,12 +1448,12 @@ namespace jeecs::graphic::api::gl3
             fbo);
     }
     void framebuffer_update(
-        jegl_graphic_impl_context_t,
+        je_GraphicImplContext,
         jegl_frame_buffer* resource)
     {
     }
     void framebuffer_close(
-        jegl_graphic_impl_context_t,
+        je_GraphicImplContext,
         jegl_frame_buffer* resource)
     {
         delete static_cast<jegl_gl3_framebuf*>(resource->m_handle.m_ptr);
@@ -1553,13 +1553,13 @@ namespace jeecs::graphic::api::gl3
         return true;
     }
 
-    bool gl_bind_shader(jegl_graphic_impl_context_t context, jegl_shader* shader)
+    bool gl_bind_shader(je_GraphicImplContext context, jegl_shader* shader)
     {
         jegl_gl3_context* ctx = static_cast<jegl_gl3_context*>(context);
         return _gl_using_shader_program(ctx, shader);
     }
 
-    void gl_bind_uniform_buffer(jegl_graphic_impl_context_t, jegl_uniform_buffer* uniformbuf)
+    void gl_bind_uniform_buffer(je_GraphicImplContext, jegl_uniform_buffer* uniformbuf)
     {
         jegl_gl3_uniformbuf* ubuf =
             static_cast<jegl_gl3_uniformbuf*>(uniformbuf->m_handle.m_ptr);
@@ -1572,7 +1572,7 @@ namespace jeecs::graphic::api::gl3
             ubuf->m_uniform_buffer_size);
     }
 
-    void gl_bind_texture(jegl_graphic_impl_context_t ctx, jegl_texture* texture, size_t pass)
+    void gl_bind_texture(je_GraphicImplContext ctx, jegl_texture* texture, size_t pass)
     {
         jegl_gl3_context* context = static_cast<jegl_gl3_context*>(ctx);
         jegl_gl3_texture* texture_instance =
@@ -1586,7 +1586,7 @@ namespace jeecs::graphic::api::gl3
             texture_instance->m_texture_id);
     }
 
-    void gl_draw_vertex_with_shader(jegl_graphic_impl_context_t ctx, jegl_vertex* vert)
+    void gl_draw_vertex_with_shader(je_GraphicImplContext ctx, jegl_vertex* vert)
     {
         jegl_gl3_context* context = static_cast<jegl_gl3_context*>(ctx);
         jegl3_vertex_data* vdata = static_cast<jegl3_vertex_data*>(vert->m_handle.m_ptr);
@@ -1624,7 +1624,7 @@ namespace jeecs::graphic::api::gl3
     }
 
     void gl_set_rend_to_framebuffer(
-        jegl_graphic_impl_context_t ctx,
+        je_GraphicImplContext ctx,
         jegl_frame_buffer* framebuffer,
         const int32_t(*viewport_xywh)[4],
         const jegl_frame_buffer_clear_operation* clear_operations)

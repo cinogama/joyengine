@@ -179,6 +179,7 @@
 // ==========================================================================
 typedef size_t   je_TypeHash;     // 类型哈希值
 typedef size_t   je_TypeId;       // 引擎类型工厂管理的类型 ID（无效值 = (je_TypeId)-1）
+#define JE_INVALID_TYPE_ID ((je_TypeId)SIZE_MAX) /* je_TypeId 的无效值，与 JE_INVALID_TYPE_ID 等价 */
 typedef uint32_t je_Version;      // 版本号（实体索引版本、图形线程版本等）
 typedef uint64_t je_TimestampMs;  // 毫秒时间戳
 typedef uint64_t je_DebugEid;     // 调试用实体 ID（仅编辑器）
@@ -441,13 +442,13 @@ namespace jeecs
 
         /*
         je_TypeId [类型别名]
-        用于储存引擎的类型工厂管理的类型ID，规定的无效值是 jeecs::typing::INVALID_TYPE_ID
+        用于储存引擎的类型工厂管理的类型ID，规定的无效值是 JE_INVALID_TYPE_ID
             请参见：
-            jeecs::typing::INVALID_TYPE_ID
+            JE_INVALID_TYPE_ID
         */
 
         /*
-        jeecs::typing::INVALID_TYPE_ID [常量]
+        JE_INVALID_TYPE_ID [常量]
         je_TypeId 类型的无效值
         请参见：
             je_TypeId
@@ -1492,6 +1493,21 @@ je_ecs_world_destroy [基本接口]
 */
 JE_API void je_ecs_world_destroy(void* world);
 
+typedef enum je_ComponentRequirementKind
+{
+    JE_COMPONENT_REQUIRE_CONTAINS, // Must have spcify component
+    JE_COMPONENT_REQUIRE_MAYNOT,  // May have or not have
+    JE_COMPONENT_REQUIRE_ANYOF,   // Must have one of 'ANYOF' components
+    JE_COMPONENT_REQUIRE_EXCEPT,  // Must not contain spcify component
+
+}je_ComponentRequirementKind;
+
+typedef struct je_ComponentRequirement {
+    je_ComponentRequirementKind m_kind;
+    size_t                      m_group_id;
+    je_TypeId                   m_typeid;
+}je_ComponentRequirement;
+
 /*
 je_ecs_world_update_dependences_archinfo [基本接口]
 从当前世界更新类型依赖信息（即 ArchType 缓存）
@@ -1538,12 +1554,12 @@ JE_API void je_ecs_world_remove_system_instance(
 je_ecs_world_create_entity_with_components [基本接口]
 向指定世界中创建一个用于指定组件集合的实体，创建结果通过参数 out_entity 返回
 component_ids 应该指向一个储存有N+1个je_TypeId实例的连续空间，
-其中，N是组件种类数量且不应该为0，空间的最后应该是jeecs::typing::INVALID_TYPE_ID
+其中，N是组件种类数量且不应该为0，空间的最后应该是JE_INVALID_TYPE_ID
 以表示结束。
     * 若向一个正在销毁中的世界创建实体，则创建失败，out_entity将被写入`无效值`
 请参见：
     je_TypeId
-    jeecs::typing::INVALID_TYPE_ID
+    JE_INVALID_TYPE_ID
     je_GameEntity
     jeecs::game_world::add_entity
 */
@@ -2061,7 +2077,7 @@ jegl_context [类型]
 图形上下文，储存有当前图形线程的各项信息
 */
 // 图形实现上下文指针（提升到文件作用域，供 jegl_graphic_api 的函数指针别名直接使用，避免 C++ 的 :: 作用域解析）。
-typedef void* jegl_graphic_impl_context_t;
+typedef void* je_GraphicImplContext;
 struct jegl_context
 {
     // 图形帧渲染任务函数类型定义，图形线程负责每帧调用一次此函数
@@ -2078,7 +2094,7 @@ struct jegl_context
     je_Version m_version;
     jegl_interface_config m_config;
     jegl_graphic_api* m_apis;
-    jegl_graphic_impl_context_t m_graphic_impl_context;
+    je_GraphicImplContext m_graphic_impl_context;
 };
 
 using jegl_resource_blob = void*;
@@ -2482,84 +2498,84 @@ struct jegl_graphic_api
 {
     // 图形基本启动和关闭接口
     using startup_func_t =
-        jegl_graphic_impl_context_t(*)(jegl_context*, const jegl_interface_config*, bool);
+        je_GraphicImplContext(*)(jegl_context*, const jegl_interface_config*, bool);
     using shutdown_func_t =
-        void (*)(jegl_context*, jegl_graphic_impl_context_t, bool);
+        void (*)(jegl_context*, je_GraphicImplContext, bool);
 
     using update_func_t =
-        jegl_update_action(*)(jegl_graphic_impl_context_t);
+        jegl_update_action(*)(je_GraphicImplContext);
     using commit_func_t =
-        jegl_update_action(*)(jegl_graphic_impl_context_t, jegl_update_action);
+        jegl_update_action(*)(je_GraphicImplContext, jegl_update_action);
 
     // 资源创建相关接口
     using shader_create_blob_func_t =
-        jegl_resource_blob(*)(jegl_graphic_impl_context_t, jegl_shader*);
+        jegl_resource_blob(*)(je_GraphicImplContext, jegl_shader*);
     using shader_close_blob_func_t =
-        void (*)(jegl_graphic_impl_context_t, jegl_resource_blob);
+        void (*)(je_GraphicImplContext, jegl_resource_blob);
     using shader_init_func_t =
-        void (*)(jegl_graphic_impl_context_t, jegl_resource_blob, jegl_shader*);
+        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_shader*);
     using shader_update_func_t =
-        void (*)(jegl_graphic_impl_context_t, jegl_shader*);
+        void (*)(je_GraphicImplContext, jegl_shader*);
     using shader_close_func_t =
-        void (*)(jegl_graphic_impl_context_t, jegl_shader*);
+        void (*)(je_GraphicImplContext, jegl_shader*);
 
     using texture_create_blob_func_t =
-        jegl_resource_blob(*)(jegl_graphic_impl_context_t, jegl_texture*);
+        jegl_resource_blob(*)(je_GraphicImplContext, jegl_texture*);
     using texture_close_blob_func_t =
-        void (*)(jegl_graphic_impl_context_t, jegl_resource_blob);
+        void (*)(je_GraphicImplContext, jegl_resource_blob);
     using texture_init_func_t =
-        void (*)(jegl_graphic_impl_context_t, jegl_resource_blob, jegl_texture*);
+        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_texture*);
     using texture_update_func_t =
-        void (*)(jegl_graphic_impl_context_t, jegl_texture*);
+        void (*)(je_GraphicImplContext, jegl_texture*);
     using texture_close_func_t =
-        void (*)(jegl_graphic_impl_context_t, jegl_texture*);
+        void (*)(je_GraphicImplContext, jegl_texture*);
 
     using vertex_create_blob_func_t =
-        jegl_resource_blob(*)(jegl_graphic_impl_context_t, jegl_vertex*);
+        jegl_resource_blob(*)(je_GraphicImplContext, jegl_vertex*);
     using vertex_close_blob_func_t =
-        void (*)(jegl_graphic_impl_context_t, jegl_resource_blob);
+        void (*)(je_GraphicImplContext, jegl_resource_blob);
     using vertex_init_func_t =
-        void (*)(jegl_graphic_impl_context_t, jegl_resource_blob, jegl_vertex*);
+        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_vertex*);
     using vertex_update_func_t =
-        void (*)(jegl_graphic_impl_context_t, jegl_vertex*);
+        void (*)(je_GraphicImplContext, jegl_vertex*);
     using vertex_close_func_t =
-        void (*)(jegl_graphic_impl_context_t, jegl_vertex*);
+        void (*)(je_GraphicImplContext, jegl_vertex*);
 
     using framebuffer_init_func_t =
-        void (*)(jegl_graphic_impl_context_t, jegl_frame_buffer*);
+        void (*)(je_GraphicImplContext, jegl_frame_buffer*);
     using framebuffer_update_func_t =
-        void (*)(jegl_graphic_impl_context_t, jegl_frame_buffer*);
+        void (*)(je_GraphicImplContext, jegl_frame_buffer*);
     using framebuffer_close_func_t =
-        void (*)(jegl_graphic_impl_context_t, jegl_frame_buffer*);
+        void (*)(je_GraphicImplContext, jegl_frame_buffer*);
 
     using ubuffer_init_func_t =
-        void (*)(jegl_graphic_impl_context_t, jegl_uniform_buffer*);
+        void (*)(je_GraphicImplContext, jegl_uniform_buffer*);
     using ubuffer_update_func_t =
-        void (*)(jegl_graphic_impl_context_t, jegl_uniform_buffer*);
+        void (*)(je_GraphicImplContext, jegl_uniform_buffer*);
     using ubuffer_close_func_t =
-        void (*)(jegl_graphic_impl_context_t, jegl_uniform_buffer*);
+        void (*)(je_GraphicImplContext, jegl_uniform_buffer*);
 
     // Shader uniform 设置相关接口
     using set_uniform_func_t =
-        void (*)(jegl_graphic_impl_context_t, uint32_t, jegl_shader::uniform_type, const void*);
+        void (*)(je_GraphicImplContext, uint32_t, jegl_shader::uniform_type, const void*);
 
     // 绘制相关接口
     using viewport_xyzw_t = int32_t[4];
     using bind_framebuf_func_t =
         void (*)(
-            jegl_graphic_impl_context_t,
+            je_GraphicImplContext,
             jegl_frame_buffer* /* MAY NULL */,
             const viewport_xyzw_t*,
             const jegl_frame_buffer_clear_operation*);
 
     using bind_ubuffer_func_t =
-        void (*)(jegl_graphic_impl_context_t, jegl_uniform_buffer*);
+        void (*)(je_GraphicImplContext, jegl_uniform_buffer*);
     using bind_shader_func_t =
-        bool (*)(jegl_graphic_impl_context_t, jegl_shader*);
+        bool (*)(je_GraphicImplContext, jegl_shader*);
     using bind_texture_func_t =
-        void (*)(jegl_graphic_impl_context_t, jegl_texture*, size_t);
+        void (*)(je_GraphicImplContext, jegl_texture*, size_t);
     using draw_vertex_func_t =
-        void (*)(jegl_graphic_impl_context_t, jegl_vertex*);
+        void (*)(je_GraphicImplContext, jegl_vertex*);
 
 
     /*

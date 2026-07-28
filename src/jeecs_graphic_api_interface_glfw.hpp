@@ -169,23 +169,23 @@ namespace jeecs::graphic
         }
         static void glfw_callback_mouse_key_clicked(GLFWwindow* fw, int key, int state, int mod)
         {
-            je_Mousecode je_Keycode;
+            je_Mousecode code;
             switch (key)
             {
             case GLFW_MOUSE_BUTTON_LEFT:
-                je_Keycode = JE_MOUSE_LEFT;
+                code = JE_MOUSE_LEFT;
                 break;
             case GLFW_MOUSE_BUTTON_MIDDLE:
-                je_Keycode = JE_MOUSE_MID;
+                code = JE_MOUSE_MID;
                 break;
             case GLFW_MOUSE_BUTTON_RIGHT:
-                je_Keycode = JE_MOUSE_RIGHT;
+                code = JE_MOUSE_RIGHT;
                 break;
             default:
                 // do nothing.
                 return;
             }
-            je_io_update_mouse_state(0, je_Keycode, state != 0);
+            je_io_update_mouse_state(0, code, state != 0);
         }
         static void glfw_callback_mouse_scroll_changed(GLFWwindow* fw, double xoffset, double yoffset)
         {
@@ -198,39 +198,39 @@ namespace jeecs::graphic
             static_assert(GLFW_KEY_A == 'A');
             static_assert(GLFW_KEY_0 == '0');
 
-            je_Keycode je_Keycode;
+            je_Keycode code;
 
             switch (key)
             {
             case GLFW_KEY_LEFT_SHIFT:
-                je_Keycode = JE_KEY_L_SHIFT;
+                code = JE_KEY_L_SHIFT;
                 break;
             case GLFW_KEY_RIGHT_SHIFT:
-                je_Keycode = JE_KEY_R_SHIFT;
+                code = JE_KEY_R_SHIFT;
                 break;
             case GLFW_KEY_LEFT_ALT:
-                je_Keycode = JE_KEY_L_ALT;
+                code = JE_KEY_L_ALT;
                 break;
             case GLFW_KEY_RIGHT_ALT:
-                je_Keycode = JE_KEY_R_ALT;
+                code = JE_KEY_R_ALT;
                 break;
             case GLFW_KEY_LEFT_CONTROL:
-                je_Keycode = JE_KEY_L_CTRL;
+                code = JE_KEY_L_CTRL;
                 break;
             case GLFW_KEY_RIGHT_CONTROL:
-                je_Keycode = JE_KEY_R_CTRL;
+                code = JE_KEY_R_CTRL;
                 break;
             case GLFW_KEY_TAB:
-                je_Keycode = JE_KEY_TAB;
+                code = JE_KEY_TAB;
                 break;
             case GLFW_KEY_ENTER:
-                je_Keycode = JE_KEY_ENTER;
+                code = JE_KEY_ENTER;
                 break;
             case GLFW_KEY_ESCAPE:
-                je_Keycode = JE_KEY_ESC;
+                code = JE_KEY_ESC;
                 break;
             case GLFW_KEY_BACKSPACE:
-                je_Keycode = JE_KEY_BACKSPACE;
+                code = JE_KEY_BACKSPACE;
                 break;
             case GLFW_KEY_KP_0:
             case GLFW_KEY_KP_1:
@@ -242,38 +242,38 @@ namespace jeecs::graphic
             case GLFW_KEY_KP_7:
             case GLFW_KEY_KP_8:
             case GLFW_KEY_KP_9:
-                je_Keycode = (je_Keycode)(
+                code = (je_Keycode)(
                     (uint16_t)JE_KEY_NP_0 + (key - GLFW_KEY_KP_0));
                 break;
             case GLFW_KEY_KP_ADD:
-                je_Keycode = JE_KEY_NP_ADD;
+                code = JE_KEY_NP_ADD;
                 break;
             case GLFW_KEY_KP_SUBTRACT:
-                je_Keycode = JE_KEY_NP_SUBTRACT;
+                code = JE_KEY_NP_SUBTRACT;
                 break;
             case GLFW_KEY_KP_MULTIPLY:
-                je_Keycode = JE_KEY_NP_MULTIPLY;
+                code = JE_KEY_NP_MULTIPLY;
                 break;
             case GLFW_KEY_KP_DIVIDE:
-                je_Keycode = JE_KEY_NP_DIVIDE;
+                code = JE_KEY_NP_DIVIDE;
                 break;
             case GLFW_KEY_KP_DECIMAL:
-                je_Keycode = JE_KEY_NP_DECIMAL;
+                code = JE_KEY_NP_DECIMAL;
                 break;
             case GLFW_KEY_KP_ENTER:
-                je_Keycode = JE_KEY_NP_ENTER;
+                code = JE_KEY_NP_ENTER;
                 break;
             case GLFW_KEY_UP:
-                je_Keycode = JE_KEY_UP;
+                code = JE_KEY_UP;
                 break;
             case GLFW_KEY_DOWN:
-                je_Keycode = JE_KEY_DOWN;
+                code = JE_KEY_DOWN;
                 break;
             case GLFW_KEY_LEFT:
-                je_Keycode = JE_KEY_LEFT;
+                code = JE_KEY_LEFT;
                 break;
             case GLFW_KEY_RIGHT:
-                je_Keycode = JE_KEY_RIGHT;
+                code = JE_KEY_RIGHT;
                 break;
             case GLFW_KEY_F1:
             case GLFW_KEY_F2:
@@ -291,18 +291,18 @@ namespace jeecs::graphic
             case GLFW_KEY_F14:
             case GLFW_KEY_F15:
             case GLFW_KEY_F16:
-                je_Keycode = (je_Keycode)(
+                code = (je_Keycode)(
                     (uint16_t)JE_KEY_F1 + (key - GLFW_KEY_F1));
                 break;
             default:
                 if (key >= 0 && key <= 127)
-                    je_Keycode = (je_Keycode)key;
+                    code = (je_Keycode)key;
                 else
                     return;
                 break;
             }
 
-            je_io_update_key_state(je_Keycode, stage != 0);
+            je_io_update_key_state(code, stage != 0);
         }
     public:
         glfw(interface_type type)
