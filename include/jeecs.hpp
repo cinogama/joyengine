@@ -208,8 +208,8 @@ typedef struct je_Uuid {
 // 在引擎内部以空结构体作为公开基类，实际实现类（jeecs_impl::ecs_universe 等）继承它们，
 // 因此 C ABI 边界处可使用干净的 derived↔base static_cast，无需 reinterpret_cast。
 // 此处提前声明是因为 je_GameEntity（见下方）需要引用 je_Chunk。
-typedef struct je_Universe je_Universe;   // ECS 宇宙（全局上下文）
-typedef struct je_World    je_World;      // ECS 世界
+typedef struct je_GameUniverse je_GameUniverse;   // ECS 宇宙（全局上下文）
+typedef struct je_GameWorld    je_GameWorld;      // ECS 世界
 typedef struct je_Archtype je_Archtype;   // ECS 原型（ArchType）
 typedef struct je_Chunk    je_Chunk;      // ECS 原型分块（ArchChunk）
 
@@ -407,7 +407,7 @@ typedef enum je_Joystickcode {
 
 // ---- C ABI 不透明句柄（opaque handle）前向声明 ----
 // 这些类型对外仅暴露指针；完整定义在引擎内部（src/）。C/C++ 通用，二进制兼容。
-// 注：je_Universe/je_World/je_Archtype/je_Chunk 的前向声明位于文件更上方（实体类型段之前），
+// 注：je_GameUniverse/je_GameWorld/je_Archtype/je_Chunk 的前向声明位于文件更上方（实体类型段之前），
 // 因为 je_GameEntity 等早期定义的类型需要引用 je_Chunk。
 typedef struct je_GraphicUhost    je_GraphicUhost;      // 图形渲染宿主上下文
 typedef struct je_RendchainBranch je_RendchainBranch;   // 可编程绘制分支
@@ -1249,7 +1249,7 @@ je_ecs_universe_create [基本接口]
         3. 解除注册所有Job
     完成全部操作后，宇宙将处于可销毁状态。
 */
-JE_API je_Universe* je_ecs_universe_create(void);
+JE_API je_GameUniverse* je_ecs_universe_create(void);
 
 /*
 je_ecs_universe_loop [基本接口]
@@ -1260,7 +1260,7 @@ je_ecs_universe_loop [基本接口]
 请参见：
     je_ecs_universe_register_exit_callback
 */
-JE_API void je_ecs_universe_loop(je_Universe* universe);
+JE_API void je_ecs_universe_loop(je_GameUniverse* universe);
 
 /*
 je_ecs_universe_destroy [基本接口]
@@ -1269,7 +1269,7 @@ je_ecs_universe_destroy [基本接口]
 请参见：
     je_ecs_universe_loop
 */
-JE_API void je_ecs_universe_destroy(je_Universe* universe);
+JE_API void je_ecs_universe_destroy(je_GameUniverse* universe);
 
 /*
 je_ecs_universe_grow_lifetime [基本接口]
@@ -1279,7 +1279,7 @@ je_ecs_universe_grow_lifetime [基本接口]
 请参见：
     je_ecs_universe_trim_lifetime
 */
-JE_API void je_ecs_universe_grow_lifetime(je_Universe* universe);
+JE_API void je_ecs_universe_grow_lifetime(je_GameUniverse* universe);
 
 /*
 je_ecs_universe_trim_lifetime [基本接口]
@@ -1292,7 +1292,7 @@ je_ecs_universe_trim_lifetime [基本接口]
     请参见：
         je_ecs_universe_grow_lifetime
 */
-JE_API void je_ecs_universe_trim_lifetime(je_Universe* universe);
+JE_API void je_ecs_universe_trim_lifetime(je_GameUniverse* universe);
 
 /*
 je_ecs_universe_register_exit_callback [基本接口]
@@ -1302,11 +1302,11 @@ je_ecs_universe_register_exit_callback [基本接口]
     je_ecs_universe_create
 */
 JE_API void je_ecs_universe_register_exit_callback(
-    je_Universe* universe,
+    je_GameUniverse* universe,
     void (*callback)(void*),
     void* arg);
 
-typedef void (*je_job_for_worlds_t)(je_World* /*world*/, void* /*custom_data*/);
+typedef void (*je_job_for_worlds_t)(je_GameWorld* /*world*/, void* /*custom_data*/);
 typedef void (*je_job_call_once_t)(void* /*custom_data*/);
 
 /*
@@ -1314,7 +1314,7 @@ je_ecs_universe_register_pre_for_worlds_job [基本接口]
 向指定宇宙中注册优先遍历世界任务（Pre job for worlds）
 */
 JE_API void je_ecs_universe_register_pre_for_worlds_job(
-    je_Universe* universe,
+    je_GameUniverse* universe,
     je_job_for_worlds_t job,
     void* data,
     void (*freefunc)(void*));
@@ -1324,7 +1324,7 @@ je_ecs_universe_register_pre_for_worlds_job [基本接口]
 向指定宇宙中注册优先单独任务（Pre job for once）
 */
 JE_API void je_ecs_universe_register_pre_call_once_job(
-    je_Universe* universe,
+    je_GameUniverse* universe,
     je_job_call_once_t job,
     void* data,
     void (*freefunc)(void*));
@@ -1334,7 +1334,7 @@ je_ecs_universe_register_for_worlds_job [基本接口]
 向指定宇宙中注册普通遍历世界任务（Job for worlds）
 */
 JE_API void je_ecs_universe_register_for_worlds_job(
-    je_Universe* universe,
+    je_GameUniverse* universe,
     je_job_for_worlds_t job,
     void* data,
     void (*freefunc)(void*));
@@ -1344,7 +1344,7 @@ je_ecs_universe_register_call_once_job [基本接口]
 向指定宇宙中注册普通单独任务（Job for once）
 */
 JE_API void je_ecs_universe_register_call_once_job(
-    je_Universe* universe,
+    je_GameUniverse* universe,
     je_job_call_once_t job,
     void* data,
     void (*freefunc)(void*));
@@ -1354,7 +1354,7 @@ je_ecs_universe_register_after_for_worlds_job [基本接口]
 向指定宇宙中注册延后遍历世界任务（Defer job for worlds）
 */
 JE_API void je_ecs_universe_register_after_for_worlds_job(
-    je_Universe* universe,
+    je_GameUniverse* universe,
     je_job_for_worlds_t job,
     void* data,
     void (*freefunc)(void*));
@@ -1364,7 +1364,7 @@ je_ecs_universe_register_after_call_once_job [基本接口]
 向指定宇宙中注册延后单独任务（Defer job for once）
 */
 JE_API void je_ecs_universe_register_after_call_once_job(
-    je_Universe* universe,
+    je_GameUniverse* universe,
     je_job_call_once_t job,
     void* data,
     void (*freefunc)(void*));
@@ -1374,7 +1374,7 @@ je_ecs_universe_unregister_pre_for_worlds_job [基本接口]
 从指定宇宙中取消优先遍历世界任务（Pre job for worlds）
 */
 JE_API void je_ecs_universe_unregister_pre_for_worlds_job(
-    je_Universe* universe,
+    je_GameUniverse* universe,
     je_job_for_worlds_t job);
 
 /*
@@ -1382,7 +1382,7 @@ je_ecs_universe_unregister_pre_call_once_job [基本接口]
 从指定宇宙中取消优先单独任务（Pre job for once）
 */
 JE_API void je_ecs_universe_unregister_pre_call_once_job(
-    je_Universe* universe,
+    je_GameUniverse* universe,
     je_job_call_once_t job);
 
 /*
@@ -1390,7 +1390,7 @@ je_ecs_universe_unregister_for_worlds_job [基本接口]
 从指定宇宙中取消普通遍历世界任务（Job for worlds）
 */
 JE_API void je_ecs_universe_unregister_for_worlds_job(
-    je_Universe* universe,
+    je_GameUniverse* universe,
     je_job_for_worlds_t job);
 
 /*
@@ -1398,7 +1398,7 @@ je_ecs_universe_unregister_call_once_job [基本接口]
 从指定宇宙中取消普通单独任务（Job for once）
 */
 JE_API void je_ecs_universe_unregister_call_once_job(
-    je_Universe* universe,
+    je_GameUniverse* universe,
     je_job_call_once_t job);
 
 /*
@@ -1406,7 +1406,7 @@ je_ecs_universe_unregister_after_for_worlds_job [基本接口]
 从指定宇宙中取消延后遍历世界任务（After job for worlds）
 */
 JE_API void je_ecs_universe_unregister_after_for_worlds_job(
-    je_Universe* universe,
+    je_GameUniverse* universe,
     je_job_for_worlds_t job);
 
 /*
@@ -1414,7 +1414,7 @@ je_ecs_universe_unregister_after_call_once_job [基本接口]
 从指定宇宙中取消延后单独任务（After job for once）
 */
 JE_API void je_ecs_universe_unregister_after_call_once_job(
-    je_Universe* universe,
+    je_GameUniverse* universe,
     je_job_call_once_t job);
 
 /*
@@ -1424,33 +1424,33 @@ je_ecs_universe_get_frame_deltatime [基本接口]
     je_ecs_universe_set_deltatime
 */
 JE_API double je_ecs_universe_get_frame_deltatime(
-    je_Universe* universe);
+    je_GameUniverse* universe);
 
 /*
 je_ecs_universe_set_frame_deltatime [基本接口]
 设置当前宇宙的帧更新间隔时间
 */
 JE_API void je_ecs_universe_set_frame_deltatime(
-    je_Universe* universe,
+    je_GameUniverse* universe,
     double delta);
 
 /*
 je_ecs_universe_get_real_deltatime [基本接口]
 获取当前宇宙的实际更新间隔，即距离上次更新的实际时间差异
 */
-JE_API double je_ecs_universe_get_real_deltatime(je_Universe* universe);
+JE_API double je_ecs_universe_get_real_deltatime(je_GameUniverse* universe);
 
 /*
 je_ecs_universe_get_smooth_deltatime [基本接口]
 获取当前宇宙的平滑更新间隔，是过去若干帧的间隔平均值
 */
-JE_API double je_ecs_universe_get_smooth_deltatime(je_Universe* universe);
+JE_API double je_ecs_universe_get_smooth_deltatime(je_GameUniverse* universe);
 
 /*
 je_ecs_universe_get_max_deltatime [基本接口]
 获取当前宇宙的最大时间间隔，deltatime的最大值即为此值
 */
-JE_API double je_ecs_universe_get_max_deltatime(je_Universe* universe);
+JE_API double je_ecs_universe_get_max_deltatime(je_GameUniverse* universe);
 
 /*
 je_ecs_universe_set_max_deltatime [基本接口]
@@ -1459,25 +1459,25 @@ je_ecs_universe_set_max_deltatime [基本接口]
 请参见：
     je_ecs_universe_set_time_scale
 */
-JE_API void je_ecs_universe_set_max_deltatime(je_Universe* universe, double val);
+JE_API void je_ecs_universe_set_max_deltatime(je_GameUniverse* universe, double val);
 
 /*
 je_ecs_universe_set_time_scale [基本接口]
 设置当前宇宙的时间缩放系数
 */
-JE_API void je_ecs_universe_set_time_scale(je_Universe* universe, double scale);
+JE_API void je_ecs_universe_set_time_scale(je_GameUniverse* universe, double scale);
 
 /*
 je_ecs_universe_get_time_scale [基本接口]
 获取当前宇宙的时间缩放系数
 */
-JE_API double je_ecs_universe_get_time_scale(je_Universe* universe);
+JE_API double je_ecs_universe_get_time_scale(je_GameUniverse* universe);
 
 /*
 je_ecs_world_in_universe [基本接口]
 获取指定世界所属的宇宙
 */
-JE_API je_Universe* je_ecs_world_in_universe(je_World* world);
+JE_API je_GameUniverse* je_ecs_world_in_universe(je_GameWorld* world);
 
 /*
 je_ecs_world_create [基本接口]
@@ -1487,7 +1487,7 @@ je_ecs_world_create [基本接口]
 请参见：
     je_ecs_world_set_enable
 */
-JE_API je_World* je_ecs_world_create(je_Universe* in_universe);
+JE_API je_GameWorld* je_ecs_world_create(je_GameUniverse* in_universe);
 
 /*
 je_ecs_world_destroy [基本接口]
@@ -1504,7 +1504,7 @@ je_ecs_world_destroy [基本接口]
     je_ecs_world_add_system_instance
     je_ecs_world_create_entity_with_components
 */
-JE_API void je_ecs_world_destroy(je_World* world);
+JE_API void je_ecs_world_destroy(je_GameWorld* world);
 
 typedef enum je_ComponentRequirementKind
 {
@@ -1534,19 +1534,19 @@ typedef struct je_DependenceArchInfos
 typedef struct je_CollectedRequirements je_CollectedRequirements;
 
 typedef struct je_RequirementCollection {
-    je_DependenceArchInfos*     m_cached_archs;
+    je_DependenceArchInfos* m_cached_archs;
     size_t                      m_cached_arch_count;
 
-    je_CollectedRequirements*   m_collected_requirement;
+    je_CollectedRequirements* m_collected_requirement;
 }je_RequirementCollection;
 
 JE_API je_CollectedRequirements* je_ecs_collect_requirements(
-    const je_ComponentRequirement* requirements, 
-    size_t view_requiremnt_count, 
+    const je_ComponentRequirement* requirements,
+    size_t view_requiremnt_count,
     size_t other_requiremnts_count);
 
 JE_API void je_ecs_world_update_collection(
-    je_World* world,
+    je_GameWorld* world,
     je_RequirementCollection* collection);
 
 typedef void* je_System;
@@ -1561,7 +1561,7 @@ je_ecs_world_add_system_instance [基本接口]
     * 若向一个正在销毁中的世界添加系统实例，返回 nullptr
 */
 JE_API je_System je_ecs_world_add_system_instance(
-    je_World* world,
+    je_GameWorld* world,
     je_TypeId type);
 
 /*
@@ -1570,7 +1570,7 @@ je_ecs_world_get_system_instance [基本接口]
 若世界中不存在此类型的系统，返回nullptr
 */
 JE_API je_System je_ecs_world_get_system_instance(
-    je_World* world,
+    je_GameWorld* world,
     je_TypeId type);
 
 /*
@@ -1581,7 +1581,7 @@ je_ecs_world_remove_system_instance [基本接口]
     2. 若此前世界中已经存在同类型系统，则无事发生
 */
 JE_API void je_ecs_world_remove_system_instance(
-    je_World* world,
+    je_GameWorld* world,
     je_TypeId type);
 
 /*
@@ -1598,7 +1598,7 @@ component_ids 应该指向一个储存有N+1个je_TypeId实例的连续空间，
     jeecs::game_world::add_entity
 */
 JE_API void je_ecs_world_create_entity_with_components(
-    je_World* world,
+    je_GameWorld* world,
     je_GameEntity* out_entity,
     const je_TypeId* component_ids);
 
@@ -1611,7 +1611,7 @@ je_ecs_world_create_prefab_with_components [基本接口]
     je_ecs_world_create_entity_with_components
 */
 JE_API void je_ecs_world_create_prefab_with_components(
-    je_World* world,
+    je_GameWorld* world,
     je_GameEntity* out_entity,
     const je_TypeId* component_ids);
 
@@ -1627,7 +1627,7 @@ je_ecs_world_create_entity_with_prefab [基本接口]
     je_ecs_world_create_prefab_with_components
 */
 JE_API void je_ecs_world_create_entity_with_prefab(
-    je_World* world,
+    je_GameWorld* world,
     je_GameEntity* out_entity,
     const je_GameEntity* prefab);
 
@@ -1639,7 +1639,7 @@ je_ecs_world_destroy_entity [基本接口]
     je_GameEntity::close
 */
 JE_API void je_ecs_world_destroy_entity(
-    je_World* world,
+    je_GameWorld* world,
     const je_GameEntity* entity);
 
 /*
@@ -1690,7 +1690,7 @@ je_ecs_world_of_entity [基本接口]
 请参见：
     je_GameEntity::game_world
 */
-JE_API je_World* je_ecs_world_of_entity(
+JE_API je_GameWorld* je_ecs_world_of_entity(
     const je_GameEntity* entity);
 
 /*
@@ -1701,7 +1701,7 @@ je_ecs_world_set_enable [基本接口]
     * 世界在激活/取消激活时，所有系统的对应回调会被执行；如果系统实例创建时，
         世界尚未激活，则系统的回调函数不会被执行
 */
-JE_API void je_ecs_world_set_enable(je_World* world, bool enable);
+JE_API void je_ecs_world_set_enable(je_GameWorld* world, bool enable);
 
 /*
 je_ecs_world_query_dependence [基本接口]
@@ -1710,7 +1710,7 @@ je_ecs_world_query_dependence [基本接口]
   * 获取到的查询缓存仅在当前帧有效，不应当被持久化保存
 */
 JE_API bool je_ecs_world_query_slice_dependence(
-    je_World* world,
+    je_GameWorld* world,
     jeecs::game_system* system_instance,
     je_TypeHash slice_type_hash,
     je_RequirementCollection** out_collection);
@@ -2124,7 +2124,7 @@ struct jegl_context
     jegl_context_notifier* _m_thread_notifier;
     void* _m_interface_handle;
 
-    je_Universe* m_universe_instance;
+    je_GameUniverse* m_universe_instance;
     je_Version m_version;
     jegl_interface_config m_config;
     jegl_graphic_api* m_apis;
@@ -2968,7 +2968,7 @@ jegl_start_graphic_thread [基本接口]
 */
 JE_API jegl_context* jegl_start_graphic_thread(
     jegl_interface_config config,
-    je_Universe* universe_instance,
+    je_GameUniverse* universe_instance,
     jeecs_api_register_func_t register_func,
     jegl_context::frame_job_func_t frame_rend_work,
     void* arg);
@@ -3744,7 +3744,7 @@ jegl_uhost_get_or_create_for_universe [基本接口]
     je_ecs_universe_register_exit_callback
 */
 JE_API je_GraphicUhost* jegl_uhost_get_or_create_for_universe(
-    je_Universe* universe,
+    je_GameUniverse* universe,
     const jegl_interface_config* config);
 
 /*
@@ -4753,12 +4753,12 @@ JE_API bool je_main_script_entry();
 // NOTE: need free the return result by 'je_mem_free'
 // will return all alive world pointer in the universe.
 // [world1, world2,..., nullptr]
-JE_API je_World** jedbg_get_all_worlds_in_universe(je_Universe* _universes);
+JE_API je_GameWorld** jedbg_get_all_worlds_in_universe(je_GameUniverse* _universes);
 
 JE_API void jedbg_free_entity(je_GameEntity* _entity_list);
 
 // NOTE: need free the return result by 'je_mem_free'(and elem with jedbg_free_entity)
-JE_API je_GameEntity** jedbg_get_all_entities_in_world(je_World* _world);
+JE_API je_GameEntity** jedbg_get_all_entities_in_world(je_GameWorld* _world);
 
 // NOTE: need free the return result by 'je_mem_free'
 JE_API const je_TypeInfo** jedbg_get_all_components_from_entity(const je_GameEntity* _entity);
@@ -4769,7 +4769,7 @@ JE_API const je_TypeInfo** jedbg_get_all_registed_types(void);
 JE_API size_t jedbg_get_unregister_type_count(void);
 
 // NOTE: need free the return result by 'je_mem_free'
-JE_API const je_TypeInfo** jedbg_get_all_system_attached_in_world(je_World* _world);
+JE_API const je_TypeInfo** jedbg_get_all_system_attached_in_world(je_GameWorld* _world);
 
 JE_API je_DebugEid jedbg_get_entity_uid(const je_GameEntity* e);
 
@@ -4918,6 +4918,16 @@ namespace jeecs
                 new U(ptr);
             };
             template <typename U>
+            concept has_game_system_typeinfo_constructor_function = requires(je_GameWorld * ptr, const je_TypeInfo * tinfo)
+            {
+                new U(ptr, tinfo);
+            };
+            template <typename U>
+            concept has_game_system_constructor_function = requires(je_GameWorld * ptr)
+            {
+                new U(ptr);
+            };
+            template <typename U>
             concept has_typeinfo_constructor_function = requires(const je_TypeInfo * tinfo)
             {
                 new U(tinfo);
@@ -4996,6 +5006,10 @@ namespace jeecs
                     new (_ptr) T(arg_ptr, tinfo);
                 else if constexpr (traits::has_pointer_constructor_function<T>)
                     new (_ptr) T(arg_ptr);
+                else if constexpr (traits::has_game_system_typeinfo_constructor_function<T>)
+                    new (_ptr) T(static_cast<je_GameWorld*>(arg_ptr), tinfo);
+                else if constexpr (traits::has_game_system_constructor_function<T>)
+                    new (_ptr) T(static_cast<je_GameWorld*>(arg_ptr));
                 else if constexpr (traits::has_typeinfo_constructor_function<T>)
                     new (_ptr) T(tinfo);
                 else
@@ -6855,10 +6869,10 @@ namespace jeecs
 
     class game_world
     {
-        je_World* _m_ecs_world_addr;
+        je_GameWorld* _m_ecs_world_addr;
 
     public:
-        game_world(je_World* ecs_world_addr)
+        game_world(je_GameWorld* ecs_world_addr)
             : _m_ecs_world_addr(ecs_world_addr)
         {
         }
@@ -6867,7 +6881,7 @@ namespace jeecs
         friend class game_system;
 
     public:
-        inline je_World* handle() const noexcept
+        inline je_GameWorld* handle() const noexcept
         {
             return _m_ecs_world_addr;
         }
@@ -7074,8 +7088,8 @@ namespace jeecs
 
                     out_requirements->push_back(
                         je_ComponentRequirement{
-                            std::is_pointer_v<T> 
-                                ? JE_COMPONENT_REQUIRE_MAYNOT 
+                            std::is_pointer_v<T>
+                                ? JE_COMPONENT_REQUIRE_MAYNOT
                                 : JE_COMPONENT_REQUIRE_CONTAINS,
                             typing::id<typing::origin_t<T>>() });
 
@@ -7503,14 +7517,14 @@ namespace jeecs
 
     class game_universe
     {
-        je_Universe* _m_universe_addr;
+        je_GameUniverse* _m_universe_addr;
 
     public:
-        game_universe(je_Universe* universe_addr)
+        game_universe(je_GameUniverse* universe_addr)
             : _m_universe_addr(universe_addr)
         {
         }
-        inline je_Universe* handle() const noexcept
+        inline je_GameUniverse* handle() const noexcept
         {
             return _m_universe_addr;
         }
@@ -7592,7 +7606,7 @@ namespace jeecs
         je_RequirementCollection* _fetch_query_slice_cache()
         {
             je_RequirementCollection* requirement_collection;
-            je_World* const world_inst = get_world().handle();
+            je_GameWorld* const world_inst = get_world().handle();
 
             if (!je_ecs_world_query_slice_dependence(
                 world_inst,

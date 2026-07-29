@@ -789,7 +789,7 @@ void jegl_register_sync_thread_callback(
 
 jegl_context* jegl_start_graphic_thread(
     jegl_interface_config config,
-    je_Universe* universe_instance,
+    je_GameUniverse* universe_instance,
     jeecs_api_register_func_t register_func,
     jegl_context::frame_job_func_t frame_rend_work,
     void* arg)

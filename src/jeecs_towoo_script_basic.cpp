@@ -240,7 +240,7 @@ namespace jeecs
 
             void _invoke_multi_work(towoo_step_work& work, bool& aborted)
             {
-                je_World* const world_handle = get_world().handle();
+                je_GameWorld* const world_handle = get_world().handle();
 
                 // 复用世界切片缓存（与原生 collection::query 路径一致）：首次查询返回 false
                 // 时，用运行时收集的 je_ComponentRequirement[] 初始化 je_CollectedRequirements
