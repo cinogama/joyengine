@@ -39,7 +39,7 @@ namespace JEEditor::GUI
         }
         public func update(self: Shortcut)
         {
-            let is_focused = IsWindowFocused();
+            let is_focused = IsWindowFocusedFlags(FocusedFlags::ImGuiFocusedFlags_RootAndChildWindows);
             shortcuts_walk@ for (let (keys, action, triggered) : self.m_shortcut_records)
             {
                 if (!is_focused)
@@ -57,6 +57,7 @@ namespace JEEditor::GUI
                         continue shortcuts_walk;
                     }
                 }
+
                 if (!triggered->get())
                 {
                     triggered->set(true);

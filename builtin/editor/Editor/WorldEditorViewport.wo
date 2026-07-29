@@ -197,7 +197,7 @@ namespace JEEditor::Editor
         
         public func run(self: WorldEditorViewport)=> bool
         {
-            if (IsWindowFocused())
+            if (IsWindowFocusedFlags(FocusedFlags::ImGuiFocusedFlags_RootAndChildWindows))
                 s_last_focusd_world_view = option::value(self);
                 
             self->updateWalkCameraFramebuffer();

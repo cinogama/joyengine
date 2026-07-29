@@ -808,6 +808,10 @@ WOORT_API woort_api je_gui_is_window_focused(void)
 {
     return woort_ret_bool(ImGui::IsWindowFocused());
 }
+WOORT_API woort_api je_gui_is_window_focused_flags(void)
+{
+    return woort_ret_bool(ImGui::IsWindowFocused((ImGuiFocusedFlags)woort_int(0)));
+}
 
 WOORT_API woort_api je_gui_end(void)
 {

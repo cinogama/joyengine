@@ -119,8 +119,21 @@ namespace je::gui
     extern("libjoyecs", "je_gui_begin_child_size_flags")
         public func BeginChildSizeFlags(title:string, sizex: real, sizey: real, attr: WindowsAttribute)=> bool;
         
+    public enum FocusedFlags
+    {
+        ImGuiFocusedFlags_None                          = 0x0000,
+        ImGuiFocusedFlags_ChildWindows                  = 0x0001,   // Return true if any children of the window is focused
+        ImGuiFocusedFlags_RootWindow                    = 0x0002,   // Test from root window (top most parent of the current hierarchy)
+        ImGuiFocusedFlags_AnyWindow                     = 0x0004,   // Return true if any window is focused. Important: If you are trying to tell how to dispatch your low-level inputs, do NOT use this. Use 'io.WantCaptureMouse' instead! Please read the FAQ!
+        ImGuiFocusedFlags_NoPopupHierarchy              = 0x0008,   // Do not consider popup hierarchy (do not treat popup emitter as parent of popup) (when used with _ChildWindows or _RootWindow)
+        ImGuiFocusedFlags_DockHierarchy                 = 0x0010,   // Consider docking hierarchy (treat dockspace host as parent of docked window) (when used with _ChildWindows or _RootWindow)
+        ImGuiFocusedFlags_RootAndChildWindows           = ImGuiFocusedFlags_RootWindow + ImGuiFocusedFlags_ChildWindows,
+    }
+    
     extern("libjoyecs", "je_gui_is_window_focused")
         public func IsWindowFocused()=> bool;
+    extern("libjoyecs", "je_gui_is_window_focused_flags")
+        public func IsWindowFocusedFlags(flags: FocusedFlags)=> bool;
         
     extern("libjoyecs", "je_gui_end_child")
         public func EndChild()=> void;
