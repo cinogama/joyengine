@@ -240,7 +240,7 @@ namespace jeecs
 
             void _invoke_multi_work(towoo_step_work& work, bool& aborted)
             {
-                void* const world_handle = get_world().handle();
+                je_World* const world_handle = get_world().handle();
 
                 // 复用世界切片缓存（与原生 collection::query 路径一致）：首次查询返回 false
                 // 时，用运行时收集的 je_ComponentRequirement[] 初始化 je_CollectedRequirements
@@ -288,7 +288,7 @@ namespace jeecs
                                 const size_t cmpid = cmpidx - work.m_used_components.begin();
                                 const size_t unit_size = archinfo.m_view_component_size[cmpid];
                                 void* component = unit_size != 0
-                                    ? static_cast<char*>(cur_chunk)
+                                    ? static_cast<char*>(static_cast<void*>(cur_chunk))
                                         + archinfo.m_view_component_offset[cmpid]
                                         + unit_size * eid
                                     : nullptr;

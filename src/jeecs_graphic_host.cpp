@@ -295,7 +295,7 @@
         }
 
         inline static std::shared_mutex _m_instance_universe_host_mx;
-        inline static std::unordered_map<void*, je_GraphicUhost*> _m_instance_universe_host;
+        inline static std::unordered_map<je_Universe*, je_GraphicUhost*> _m_instance_universe_host;
 
         static je_GraphicUhost* get_default_graphic_pipeline_instance(
             jeecs::game_universe universe, const jegl_interface_config* config)
@@ -344,7 +344,7 @@
 
 
 je_GraphicUhost* jegl_uhost_get_or_create_for_universe(
-    void* universe, const jegl_interface_config* config)
+    je_Universe* universe, const jegl_interface_config* config)
 {
     return je_GraphicUhost::get_default_graphic_pipeline_instance(universe, config);
 }

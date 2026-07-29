@@ -112,7 +112,7 @@ WOORT_API woort_api wojeapi_file_cache_read_all(void)
 
 WOORT_API woort_api wojeapi_mark_shared_glresource_outdated(void)
 {
-    auto* uhost = jegl_uhost_get_or_create_for_universe(woort_pointer(0), nullptr);
+    auto* uhost = jegl_uhost_get_or_create_for_universe(static_cast<je_Universe*>(woort_pointer(0)), nullptr);
     return woort_ret_bool(
         jegl_mark_shared_resources_outdated(
             jegl_uhost_get_context(uhost),
@@ -121,7 +121,7 @@ WOORT_API woort_api wojeapi_mark_shared_glresource_outdated(void)
 
 WOORT_API woort_api wojeapi_init_graphic_pipeline_for_editor(void)
 {
-    auto* uhost = jegl_uhost_get_or_create_for_universe(woort_pointer(0), nullptr);
+    auto* uhost = jegl_uhost_get_or_create_for_universe(static_cast<je_Universe*>(woort_pointer(0)), nullptr);
     jegl_uhost_set_skip_behavior(uhost, false);
 
     return woort_ret_void();
@@ -274,29 +274,29 @@ WOORT_API woort_api wojeapi_create_universe(void)
 
 WOORT_API woort_api wojeapi_close_universe(void)
 {
-    je_ecs_universe_destroy(woort_pointer(0));
+    je_ecs_universe_destroy(static_cast<je_Universe*>(woort_pointer(0)));
     return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_get_universe_from_world(void)
 {
-    void* universe = je_ecs_world_in_universe(woort_pointer(0));
+    je_Universe* universe = je_ecs_world_in_universe(static_cast<je_World*>(woort_pointer(0)));
     return woort_ret_pointer(universe);
 }
 
 WOORT_API woort_api wojeapi_universe_extend_life(void)
 {
-    jeecs::game_universe(woort_pointer(0)).grow();
+    jeecs::game_universe(static_cast<je_Universe*>(woort_pointer(0))).grow();
     return woort_ret_void();
 }
 WOORT_API woort_api wojeapi_universe_reduce_life(void)
 {
-    jeecs::game_universe(woort_pointer(0)).trim();
+    jeecs::game_universe(static_cast<je_Universe*>(woort_pointer(0))).trim();
     return woort_ret_void();
 }
 WOORT_API woort_api wojeapi_universe_wait(void)
 {
-    jeecs::game_universe u(woort_pointer(0));
+    jeecs::game_universe u(static_cast<je_Universe*>(woort_pointer(0)));
     woort_vm* const last = woort_vm_swap(nullptr);
     {
         u.wait();
@@ -313,43 +313,49 @@ WOORT_API woort_api wojeapi_time(void)
 
 WOORT_API woort_api wojeapi_universe_get_frame_deltatime(void)
 {
-    return woort_ret_real(je_ecs_universe_get_frame_deltatime(woort_pointer(0)));
+    return woort_ret_real(je_ecs_universe_get_frame_deltatime(
+        static_cast<je_Universe*>(woort_pointer(0))));
 }
 
 WOORT_API woort_api wojeapi_universe_set_frame_deltatime(void)
 {
-    je_ecs_universe_set_frame_deltatime(woort_pointer(0), woort_real(1));
+    je_ecs_universe_set_frame_deltatime(
+        static_cast<je_Universe*>(woort_pointer(0)), woort_real(1));
     return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_universe_get_max_deltatime(void)
 {
-    return woort_ret_real(je_ecs_universe_get_max_deltatime(woort_pointer(0)));
+    return woort_ret_real(je_ecs_universe_get_max_deltatime(
+        static_cast<je_Universe*>(woort_pointer(0))));
 }
 WOORT_API woort_api wojeapi_universe_set_max_deltatime(void)
 {
-    je_ecs_universe_set_max_deltatime(woort_pointer(0), woort_real(1));
+    je_ecs_universe_set_max_deltatime(
+        static_cast<je_Universe*>(woort_pointer(0)), woort_real(1));
     return woort_ret_void();
 }
 WOORT_API woort_api wojeapi_universe_get_timescale(void)
 {
-    return woort_ret_real(je_ecs_universe_get_time_scale(woort_pointer(0)));
+    return woort_ret_real(je_ecs_universe_get_time_scale(
+        static_cast<je_Universe*>(woort_pointer(0))));
 }
 WOORT_API woort_api wojeapi_universe_set_timescale(void)
 {
-    je_ecs_universe_set_time_scale(woort_pointer(0), woort_real(1));
+    je_ecs_universe_set_time_scale(
+        static_cast<je_Universe*>(woort_pointer(0)), woort_real(1));
     return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_create_world_in_universe(void)
 {
     return woort_ret_pointer(
-        jeecs::game_universe(woort_pointer(0)).create_world().handle());
+        jeecs::game_universe(static_cast<je_Universe*>(woort_pointer(0))).create_world().handle());
 }
 
 WOORT_API woort_api wojeapi_get_all_worlds_in_universe(void)
 {
-    void* universe = woort_pointer(0);
+    je_Universe* universe = static_cast<je_Universe*>(woort_pointer(0));
 
     woort_value s;
 
@@ -377,13 +383,13 @@ WOORT_API woort_api wojeapi_get_all_worlds_in_universe(void)
 // ECS WORLD
 WOORT_API woort_api wojeapi_close_world(void)
 {
-    jeecs::game_world(woort_pointer(0)).close();
+    jeecs::game_world(static_cast<je_World*>(woort_pointer(0))).close();
     return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_set_enable_world(void)
 {
-    jeecs::game_world(woort_pointer(0)).set_enable(woort_bool(1));
+    jeecs::game_world(static_cast<je_World*>(woort_pointer(0))).set_enable(woort_bool(1));
     return woort_ret_void();
 }
 
@@ -393,7 +399,7 @@ WOORT_API woort_api wojeapi_add_system_to_world(void)
     extern("libjoyecs", "wojeapi_add_system_to_world")
     func add_system(self: world, systype : typeinfo) = > bool;
     */
-    jeecs::game_world gworld(woort_pointer(0));
+    jeecs::game_world gworld(static_cast<je_World*>(woort_pointer(0)));
     const je_TypeInfo* system_type =
         static_cast<const je_TypeInfo*>(woort_pointer(1));
 
@@ -410,7 +416,7 @@ WOORT_API woort_api wojeapi_add_system_to_world(void)
 
 WOORT_API woort_api wojeapi_get_system_from_world(void)
 {
-    jeecs::game_world gworld(woort_pointer(0));
+    jeecs::game_world gworld(static_cast<je_World*>(woort_pointer(0)));
     const je_TypeInfo* system_type =
         static_cast<const je_TypeInfo*>(woort_pointer(1));
 
@@ -428,7 +434,7 @@ WOORT_API woort_api wojeapi_remove_system_from_world(void)
     extern("libjoyecs", "wojeapi_remove_system_from_world")
     func remove_system(self: world, sysinfo: typeinfo)=> void;
     */
-    jeecs::game_world gworld(woort_pointer(0));
+    jeecs::game_world gworld(static_cast<je_World*>(woort_pointer(0)));
     const je_TypeInfo* system_type =
         static_cast<const je_TypeInfo*>(woort_pointer(1));
 
@@ -443,7 +449,8 @@ WOORT_API woort_api wojeapi_get_all_systems_from_world(void)
     private func _get_systems_from_world(self: world, out_result: array<typeinfo>)=> array<typeinfo>;
     */
     const je_TypeInfo** types =
-        jedbg_get_all_system_attached_in_world(woort_pointer(0));
+        jedbg_get_all_system_attached_in_world(
+            static_cast<je_World*>(woort_pointer(0)));
 
     woort_value s;
 
@@ -468,7 +475,7 @@ WOORT_API woort_api wojeapi_get_all_systems_from_world(void)
 
 WOORT_API woort_api wojeapi_add_entity_to_world_with_components(void)
 {
-    jeecs::game_world gworld = woort_pointer(0);
+    jeecs::game_world gworld = static_cast<je_World*>(woort_pointer(0));
     woort_value components_list = 1;
 
     std::vector<je_TypeId> components;
@@ -499,7 +506,7 @@ WOORT_API woort_api wojeapi_add_entity_to_world_with_components(void)
 
 WOORT_API woort_api wojeapi_add_entity_to_world_with_prefab(void)
 {
-    jeecs::game_world gworld(woort_pointer(0));
+    jeecs::game_world gworld(static_cast<je_World*>(woort_pointer(0)));
     je_GameEntity* const prefab_entity = static_cast<je_GameEntity*>(woort_gcpointer(1));
 
     je_GameEntity* _e = new je_GameEntity{};
@@ -517,7 +524,7 @@ WOORT_API woort_api wojeapi_add_entity_to_world_with_prefab(void)
 
 WOORT_API woort_api wojeapi_add_prefab_to_world_with_components(void)
 {
-    jeecs::game_world gworld(woort_pointer(0));
+    jeecs::game_world gworld(static_cast<je_World*>(woort_pointer(0)));
     woort_value components_list = 1;
 
     std::vector<je_TypeId> components;
@@ -571,7 +578,9 @@ WOORT_API woort_api wojeapi_get_all_entities_from_world(void)
             static_cast<const je_TypeInfo*>(woort_unbox_pointer(elem))->m_id;
     }
 
-    auto entities = jedbg_get_all_entities_in_world(world_instance);
+    auto entities = jedbg_get_all_entities_in_world(
+        static_cast<je_World*>(world_instance));
+
     auto entity_iter = entities;
 
     while (*entity_iter)
@@ -614,7 +623,7 @@ WOORT_API woort_api wojeapi_close_entity(void)
     je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
     if (entity->_m_in_chunk != nullptr)
     {
-        void* _w = je_ecs_world_of_entity(entity);
+        je_World* _w = je_ecs_world_of_entity(entity);
         if (_w != nullptr)
             je_ecs_world_destroy_entity(_w, entity);
     }
@@ -624,7 +633,7 @@ WOORT_API woort_api wojeapi_close_entity(void)
 WOORT_API woort_api wojeapi_get_world_from_entity(void)
 {
     je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
-    void* world = je_ecs_world_of_entity(entity);
+    je_World* world = je_ecs_world_of_entity(entity);
     return woort_ret_pointer(world);
 }
 
@@ -1349,9 +1358,9 @@ WOORT_API woort_api wojeapi_texture_open(void)
 {
     const woort_value universe_ptr = WOORT_RETURN_SLOT;
 
-    void* universe_addr = nullptr;
+    je_Universe* universe_addr = nullptr;
     if (woort_option_get(universe_ptr, 0))
-        universe_addr = woort_pointer(universe_ptr);
+        universe_addr = static_cast<je_Universe*>(woort_pointer(universe_ptr));
 
     std::optional<jeecs::basic::resource<jeecs::graphic::texture>> loaded_texture;
 
@@ -1654,7 +1663,7 @@ WOORT_API woort_api wojeapi_shader_open(void)
     {
         gcontext = jegl_uhost_get_context(
             jegl_uhost_get_or_create_for_universe(
-                woort_pointer(universe_ptr), nullptr));
+                static_cast<je_Universe*>(woort_pointer(universe_ptr)), nullptr));
     }
 
     std::optional<jeecs::basic::resource<jeecs::graphic::shader>> loaded_shader;
@@ -1689,7 +1698,7 @@ WOORT_API woort_api wojeapi_shader_create(void)
     {
         gcontext = jegl_uhost_get_context(
             jegl_uhost_get_or_create_for_universe(
-                woort_pointer(universe_ptr), nullptr));
+                static_cast<je_Universe*>(woort_pointer(universe_ptr)), nullptr));
     }
 
     std::optional<jeecs::basic::resource<jeecs::graphic::shader>> loaded_shader;
@@ -1816,7 +1825,7 @@ WOORT_API woort_api wojeapi_vertex_load(void)
     {
         gcontext = jegl_uhost_get_context(
             jegl_uhost_get_or_create_for_universe(
-                woort_pointer(universe_ptr), nullptr));
+                static_cast<je_Universe*>(woort_pointer(universe_ptr)), nullptr));
     }
 
     const woort_U8CString path = woort_string(1);
@@ -3926,7 +3935,7 @@ WOORT_API woort_api wojeapi_uniformbuffer_update(void)
 
 WOORT_API woort_api wojeapi_uhost_get_or_create_for_universe(void)
 {
-    void* universe = woort_pointer(0);
+    je_Universe* universe = static_cast<je_Universe*>(woort_pointer(0));
 
     je_GraphicUhost* host;
 
