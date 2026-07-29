@@ -23,6 +23,47 @@
 
 #define jeoffsetof(T, M) ((::size_t)&reinterpret_cast<char const volatile &>((((T *)0)->M)))
 
+namespace jeecs_impl
+{
+    class arch_type;
+}
+
+struct je_SelectedArchCache
+{
+    size_t* m_view_component_offset;
+    size_t* m_view_component_size;
+
+    je_SelectedArchCache(size_t view_size)
+    {
+        m_view_component_offset =
+            static_cast<size_t*>(malloc(2 * view_size * sizeof(size_t)));
+        m_view_component_size = m_view_component_offset + view_size;
+
+        assert(m_view_component_offset != nullptr);
+    }
+    ~je_SelectedArchCache()
+    {
+        if (m_view_component_offset != nullptr)
+            free(m_view_component_offset);
+    }
+    je_SelectedArchCache(je_SelectedArchCache&& another)
+        : m_view_component_offset(another.m_view_component_offset)
+        , m_view_component_size(another.m_view_component_size)
+    {
+        another.m_view_component_offset = nullptr;
+    }
+    je_SelectedArchCache& operator = (je_SelectedArchCache&& another)
+    {
+        m_view_component_offset = another.m_view_component_offset;
+        m_view_component_size = another.m_view_component_size;
+        another.m_view_component_offset = nullptr;
+
+        return *this;
+    }
+    je_SelectedArchCache(const je_SelectedArchCache&) = delete;
+    je_SelectedArchCache& operator = (const je_SelectedArchCache&) = delete;
+};
+
 struct je_CollectedRequirements
 {
     using types_set = std::set<je_TypeId>;
@@ -31,8 +72,11 @@ struct je_CollectedRequirements
     types_set m_except_set;
     std::map<int /*je_ComponentRequirementKind*/, types_set> m_anyof_sets;
 
-    size_t m_view_required;
+    std::vector<je_ComponentRequirement> m_view_required;
     std::vector<je_DependenceArchInfos> m_selected_archs;
+
+    std::unordered_map<const jeecs_impl::arch_type*, je_SelectedArchCache>
+        m_selected_arch_cache;
 };
 
 /*
@@ -69,6 +113,24 @@ struct je_CollectedRequirements
 
 namespace jeecs_impl
 {
+    struct HoldedRequirementCollection : public je_RequirementCollection
+    {
+        HoldedRequirementCollection()
+        {
+            m_collected_requirement = nullptr;
+        }
+        ~HoldedRequirementCollection()
+        {
+            if (m_collected_requirement != nullptr)
+                delete m_collected_requirement;
+        }
+
+        HoldedRequirementCollection(const HoldedRequirementCollection&) = delete;
+        HoldedRequirementCollection(HoldedRequirementCollection&&) = delete;
+        HoldedRequirementCollection& operator = (const HoldedRequirementCollection&) = delete;
+        HoldedRequirementCollection& operator = (HoldedRequirementCollection&&) = delete;
+    };
+
     using types_set = je_CollectedRequirements::types_set;
 
     constexpr size_t CHUNK_SIZE = 16 * 1024; // 16K
@@ -779,36 +841,39 @@ namespace jeecs_impl
         }
 
         inline void create_chunk_info(
-            const je_CollectedRequirements* depend, 
+            je_CollectedRequirements* depend,
             je_DependenceArchInfos* out_arch_info) const noexcept
         {
             out_arch_info->m_arch = const_cast<arch_type*>(this);
             out_arch_info->m_entity_count = get_entity_count_per_chunk();
 
-            for (const auto& requirement : depend->m_requirements)
+            auto& arch_cache = depend->m_selected_arch_cache.emplace(
+                this, depend->m_view_required.size()).first->second;
+
+            size_t i = 0;
+            for (const auto& view_requirement : depend->m_view_required)
             {
-                auto* arch_typeinfo = get_arch_type_info_by_type_id(requirement.m_typeid);
+                auto* arch_typeinfo = get_arch_type_info_by_type_id(view_requirement.m_typeid);
                 if (arch_typeinfo != nullptr)
                 {
-                    out_arch_info->m_component_infos.emplace_back(
-                        jeecs::dependence::arch_chunks_info::component_info{
-                            arch_typeinfo->m_begin_offset_in_chunk,
-                            arch_typeinfo->m_typeinfo->m_size
-                        });
+                    arch_cache.m_view_component_offset[i] = arch_typeinfo->m_begin_offset_in_chunk;
+                    arch_cache.m_view_component_size[i] = arch_typeinfo->m_typeinfo->m_size;
                 }
                 else
                 {
                     assert(
-                        requirement.m_kind == JE_COMPONENT_REQUIRE_MAYNOT
-                        || requirement.m_kind == JE_COMPONENT_REQUIRE_EXCEPT
-                        || requirement.m_kind >= JE_COMPONENT_REQUIRE_ANYOF_0);
+                        view_requirement.m_kind == JE_COMPONENT_REQUIRE_MAYNOT
+                        || view_requirement.m_kind == JE_COMPONENT_REQUIRE_EXCEPT
+                        || view_requirement.m_kind >= JE_COMPONENT_REQUIRE_ANYOF_0);
 
-                    out_arch_info->m_component_infos.emplace_back(
-                        jeecs::dependence::arch_chunks_info::component_info{
-                            0,
-                            0 });
+                    arch_cache.m_view_component_offset[i] = 0;
+                    arch_cache.m_view_component_size[i] = 0;
                 }
+                ++i;
             }
+
+            out_arch_info->m_view_component_offset = arch_cache.m_view_component_offset;
+            out_arch_info->m_view_component_size = arch_cache.m_view_component_size;
         }
     };
     class arch_manager
@@ -825,7 +890,8 @@ namespace jeecs_impl
 
     public:
         arch_manager(ecs_world* world) : _m_world(world)
-        {}
+        {
+        }
         ~arch_manager()
         {
             for (auto& [types, archtype] : _m_arch_types_mapping)
@@ -898,12 +964,15 @@ namespace jeecs_impl
                 };
 
             auto* const collected_requirement = collection->m_collected_requirement;
-            collected_requirement->m_selected_archs.clear();
             do
             {
                 std::shared_lock sg1(_m_arch_types_mapping_mx);
                 for (auto& [typeset, arch] : _m_arch_types_mapping)
                 {
+                    if (collected_requirement->m_selected_arch_cache.contains(arch))
+                        // Has been founded.
+                        continue;
+
                     if (contains(typeset, collected_requirement->m_contain_set)
                         && except(typeset, collected_requirement->m_except_set)
                         && contain_all_any(typeset, collected_requirement->m_anyof_sets))
@@ -916,8 +985,10 @@ namespace jeecs_impl
                 }
             } while (0);
 
-            collection->m_cached_archs = collected_requirement->m_selected_archs.data();
-            collection->m_cached_arch_count = collected_requirement->m_selected_archs.size();
+            collection->m_cached_archs =
+                collected_requirement->m_selected_archs.data();
+            collection->m_cached_arch_count =
+                collected_requirement->m_selected_archs.size();
         }
         inline void close_all_entity(ecs_world* by_world)
         {
@@ -1054,7 +1125,7 @@ namespace jeecs_impl
                 jeecs::game_system* m_system_instance_may_not_exist;
 
                 je_TypeHash m_query_slice_typehash;
-                je_RequirementCollection* m_created_collection;
+                std::unique_ptr<HoldedRequirementCollection> m_created_collection;
 
                 append_slice_query_cache* last;
             };
@@ -1131,7 +1202,8 @@ namespace jeecs_impl
     public:
         command_buffer(ecs_world* world)
             : _m_world(world), _m_world_command_buffer(nullptr)
-        {}
+        {
+        }
         ~command_buffer()
         {
             assert(_m_entity_command_buffers.empty() && _m_world_command_buffer == nullptr);
@@ -1221,7 +1293,7 @@ namespace jeecs_impl
         void add_system_query_cache(
             jeecs::game_system* system_instance,
             je_TypeHash hash,
-            je_RequirementCollection* dependence)
+            std::unique_ptr<HoldedRequirementCollection>&& collection)
         {
             std::shared_lock sl(_m_command_executer_guard_mx);
 
@@ -1229,7 +1301,7 @@ namespace jeecs_impl
                 new _world_command_buffer::append_slice_query_cache{
                     system_instance,
                     hash,
-                    dependence,
+                    std::move(collection),
                 });
         }
 
@@ -1366,7 +1438,7 @@ namespace jeecs_impl
         void append_slice_cache_for_system_instance(
             jeecs::game_system* sys,
             je_TypeHash hash,
-            je_RequirementCollection* collection)
+            std::unique_ptr<HoldedRequirementCollection>&& collection)
         {
             auto fnd = m_system_slice_caches.find(sys);
             if (fnd != m_system_slice_caches.end())
@@ -1388,8 +1460,6 @@ namespace jeecs_impl
                     this);
             }
 #endif
-            // Drop created collection.
-            _drop_collection_instance(collection);
         }
 
         arch_manager& _get_arch_mgr() noexcept
@@ -1438,14 +1508,14 @@ namespace jeecs_impl
             }
             if (_m_arch_manager._arch_modified())
             {
-                // Arch types modified, all dependence arch info need to be updated.
+                // Arch types modified, all collection arch info need to be updated.
                 for (auto& [system_instance, slice_cache] : m_system_slice_caches)
                 {
                     (void)system_instance;
-                    for (auto& [hash, depend] : slice_cache)
+                    for (auto& [hash, collection] : slice_cache)
                     {
                         (void)hash;
-                        depend->update(this);
+                        je_ecs_world_update_collection(this, collection);
                     }
                 }
             }
@@ -1504,14 +1574,16 @@ namespace jeecs_impl
                 }
             }
 
-            je_RequirementCollection* const created_collection = new je_RequirementCollection();
-            *out_collection = created_collection;
+            std::unique_ptr<HoldedRequirementCollection> created_collection = 
+                std::make_unique<HoldedRequirementCollection>();
+
+            *out_collection = created_collection.get();
 
             // NOTE: dependence 的需求将在外部初始化，更新也需要由外部执行
             get_command_buffer().add_system_query_cache(
                 system_instance,
                 hash,
-                created_collection);
+                std::move(created_collection));
 
             return false;
         }
@@ -1856,7 +1928,7 @@ namespace jeecs_impl
                     _m_world->append_slice_cache_for_system_instance(
                         cur_append_query_caches->m_system_instance_may_not_exist,
                         cur_append_query_caches->m_query_slice_typehash,
-                        cur_append_query_caches->m_created_collection);
+                        std::move(cur_append_query_caches->m_created_collection));
 
                     delete cur_append_query_caches;
                 }
@@ -2747,9 +2819,15 @@ je_CollectedRequirements* je_ecs_collect_requirements(
 {
     je_CollectedRequirements* const new_collected = new je_CollectedRequirements();
 
-    new_collected->m_view_required = view_requiremnt_count;
+    new_collected->m_view_required.resize(view_requiremnt_count);
+    memcpy(
+        new_collected->m_view_required.data(),
+        requirements,
+        view_requiremnt_count * sizeof(je_ComponentRequirement));
 
-    const size_t total_requiremet_count = view_requiremnt_count + other_requiremnts_count;
+    const size_t total_requiremet_count =
+        view_requiremnt_count + other_requiremnts_count;
+
     for (size_t i = 0; i < total_requiremet_count; ++i)
     {
         const auto& requirement = requirements[i];

@@ -7059,7 +7059,7 @@ namespace jeecs
             auto* world_handle = aim_world.handle();
             assert(world_handle != nullptr);
 
-            je_ecs_world_update_dependences_archinfo(world_handle, this);
+            // je_ecs_world_update_dependences_archinfo(world_handle, this);
         }
     };
 
@@ -7748,18 +7748,20 @@ namespace jeecs
             slice_requirement::traits::is_requirement... SliceRequirements>
         jeecs::dependence* _fetch_query_slice_cache()
         {
-            jeecs::dependence* dep;
+            je_RequirementCollection* requirement_collection;
+            void* const world_inst = get_world().handle();
+
             if (!je_ecs_world_query_slice_dependence(
-                get_world().handle(),
+                world_inst,
                 this,
                 typeid(collection<SliceView, SliceRequirements...>).hash_code(),
-                &dep))
+                &requirement_collection))
             {
                 // This dependence is just created, need to apply requirements.
-                collection<SliceView, SliceRequirements...>::apply_requirements(dep);
-                dep->update(get_world());
+                // collection<SliceView, SliceRequirements...>::apply_requirements(dep);
+                je_ecs_world_update_collection(world_inst, requirement_collection);
             }
-            return dep;
+            return requirement_collection;
         }
 
     public:
