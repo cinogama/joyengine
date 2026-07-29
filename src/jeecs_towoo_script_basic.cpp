@@ -26,33 +26,39 @@ namespace jeecs
             struct towoo_step_work
             {
                 woort_Value m_function;
+
+                je_TypeHash m_work_sequence /* Single job if zero. */;
+
                 std::vector<const je_TypeInfo*> m_used_components;
+
                 // 运行时收集的需求（视图需求排在最前，与 je_ecs_collect_requirements 约定一致），
                 // 仅在首次查询切片缓存时用于初始化 je_CollectedRequirements。
                 std::vector<je_ComponentRequirement> m_requirements;
-                std::vector<int> m_view_requirement_kinds;
-                size_t m_view_requirement_count = 0;
-                je_TypeHash m_slice_hash = 0;
-                bool m_is_single_work;
             };
             struct towoo_system_info
             {
                 JECS_DISABLE_MOVE_AND_COPY(towoo_system_info);
 
                 woort_CodeEnv* m_code_env;
-                bool m_is_good;
 
                 std::optional<woort_Value> m_on_enable_function;
                 std::optional<woort_Value> m_on_disable_function;
                 woort_Value m_create_function;
                 woort_Value m_close_function;
 
+                bool m_is_good;
+
+                size_t m_registered_system_work_count;
                 std::vector<towoo_step_work> m_preworks;
                 std::vector<towoo_step_work> m_works;
                 std::vector<towoo_step_work> m_lateworks;
 
                 towoo_system_info(woort_CodeEnv* cenv)
                     : m_code_env(cenv)
+                    , m_on_enable_function(std::nullopt)
+                    , m_on_disable_function(std::nullopt)
+                    , m_is_good(false)
+                    , m_registered_system_work_count(0)
                 {
                 }
                 ~towoo_system_info()
@@ -241,12 +247,12 @@ namespace jeecs
                 // 并刷新 arch 信息；后续每帧由 _arch_modified 统一驱动更新，生命周期由世界托管。
                 je_RequirementCollection* collection = nullptr;
                 if (!je_ecs_world_query_slice_dependence(
-                        world_handle, this, work.m_slice_hash, &collection))
+                        world_handle, this, work.m_work_sequence, &collection))
                 {
                     collection->m_collected_requirement = je_ecs_collect_requirements(
                         work.m_requirements.data(),
-                        work.m_view_requirement_count,
-                        work.m_requirements.size() - work.m_view_requirement_count);
+                        work.m_used_components.size(),
+                        work.m_requirements.size() - work.m_used_components.size());
                     je_ecs_world_update_collection(world_handle, collection);
                 }
 
@@ -288,7 +294,7 @@ namespace jeecs
                                 const auto* typeinfo = *cmpidx;
                                 const woort_value component_st = stack_base + 2 + cmpid;
 
-                                switch (work.m_view_requirement_kinds[cmpid])
+                                switch (work.m_requirements[cmpid].m_kind)
                                 {
                                 case JE_COMPONENT_REQUIRE_CONTAINS:
                                     create_component_struct(component_st, m_work_function, component, typeinfo);
@@ -344,7 +350,7 @@ namespace jeecs
                 {
                     for (auto& work : works)
                     {
-                        if (work.m_is_single_work)
+                        if (work.m_work_sequence == 0)
                             _invoke_single_work(work, aborted);
                         else
                             _invoke_multi_work(work, aborted);
@@ -1039,10 +1045,6 @@ const je_TypeInfo* je_towoo_register_system(
 
     auto systinfo =
         std::make_unique<jeecs::towoo::ToWooBaseSystem::towoo_system_info>(cenv);
-    systinfo->m_on_enable_function = std::nullopt;
-    systinfo->m_on_disable_function = std::nullopt;
-    systinfo->m_is_good = false;
-
     auto* sysinfo_ptr = systinfo.get();
 
     woort_vm* const vmm = woort_vm_create();
@@ -1145,15 +1147,9 @@ WOORT_API woort_api wojeapi_towoo_register_system_job(void)
     const woort_value requirement_info = stack_base + 0;
     const woort_value elem = stack_base + 1;
 
-    stepwork.m_is_single_work = is_single_work;
-
-    if (!stepwork.m_is_single_work)
+    if (!is_single_work)
     {
-        // 为本 step_work 分配一个全局唯一的切片哈希，用于在世界切片缓存中索引对应的
-        // je_RequirementCollection（与原生 collection 的 query 路径一致）。
-        static std::atomic<je_TypeHash> _slice_hash_seed{ 1 };
-        stepwork.m_slice_hash = _slice_hash_seed.fetch_add(1);
-        stepwork.m_view_requirement_count = component_arg_count;
+        stepwork.m_work_sequence = ++works->m_registered_system_work_count;
 
         const size_t requirements_count = woort_vec_len(requirements);
         for (size_t i = 0; i < requirements_count; ++i)
@@ -1172,19 +1168,18 @@ WOORT_API woort_api wojeapi_towoo_register_system_job(void)
 
             const int req_kind =
                 ty >= JE_COMPONENT_REQUIRE_ANYOF_0
-                    ? ty + static_cast<int>(woort_int(elem))
-                    : ty;
+                ? ty + static_cast<int>(woort_int(elem))
+                : ty;
 
             stepwork.m_requirements.push_back(
                 je_ComponentRequirement{ req_kind, typeinfo->m_id });
 
             if (i < component_arg_count)
-            {
                 stepwork.m_used_components.push_back(typeinfo);
-                stepwork.m_view_requirement_kinds.push_back(req_kind);
-            }
         }
     }
+    else
+        stepwork.m_work_sequence = 0;
 
     switch (que)
     {
