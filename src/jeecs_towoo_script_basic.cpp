@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <optional>
 #include <memory>
+#include <atomic>
 #include <cmath>
 
 /*
@@ -24,9 +25,14 @@ namespace jeecs
         {
             struct towoo_step_work
             {
-                dependence m_dependence;
                 woort_Value m_function;
                 std::vector<const je_TypeInfo*> m_used_components;
+                // 运行时收集的需求（视图需求排在最前，与 je_ecs_collect_requirements 约定一致），
+                // 仅在首次查询切片缓存时用于初始化 je_CollectedRequirements。
+                std::vector<je_ComponentRequirement> m_requirements;
+                std::vector<int> m_view_requirement_kinds;
+                size_t m_view_requirement_count = 0;
+                je_TypeHash m_slice_hash = 0;
                 bool m_is_single_work;
             };
             struct towoo_system_info
@@ -228,9 +234,26 @@ namespace jeecs
 
             void _invoke_multi_work(towoo_step_work& work, bool& aborted)
             {
-                work.m_dependence.update(get_world());
-                for (const auto& archinfo : work.m_dependence.m_archs)
+                void* const world_handle = get_world().handle();
+
+                // 复用世界切片缓存（与原生 collection::query 路径一致）：首次查询返回 false
+                // 时，用运行时收集的 je_ComponentRequirement[] 初始化 je_CollectedRequirements
+                // 并刷新 arch 信息；后续每帧由 _arch_modified 统一驱动更新，生命周期由世界托管。
+                je_RequirementCollection* collection = nullptr;
+                if (!je_ecs_world_query_slice_dependence(
+                        world_handle, this, work.m_slice_hash, &collection))
                 {
+                    collection->m_collected_requirement = je_ecs_collect_requirements(
+                        work.m_requirements.data(),
+                        work.m_view_requirement_count,
+                        work.m_requirements.size() - work.m_view_requirement_count);
+                    je_ecs_world_update_collection(world_handle, collection);
+                }
+
+                for (size_t arch_idx = 0;
+                    arch_idx < collection->m_cached_arch_count; ++arch_idx)
+                {
+                    const auto& archinfo = collection->m_cached_archs[arch_idx];
                     auto cur_chunk = je_arch_get_chunk(archinfo.m_arch);
                     const size_t used_component_count = work.m_used_components.size();
 
@@ -256,12 +279,16 @@ namespace jeecs
                                 cmpidx != work.m_used_components.end(); ++cmpidx)
                             {
                                 const size_t cmpid = cmpidx - work.m_used_components.begin();
-                                void* component = slice_requirement::base::view_base::get_component_by_index(
-                                    &archinfo, cur_chunk, eid, cmpid);
+                                const size_t unit_size = archinfo.m_view_component_size[cmpid];
+                                void* component = unit_size != 0
+                                    ? static_cast<char*>(cur_chunk)
+                                        + archinfo.m_view_component_offset[cmpid]
+                                        + unit_size * eid
+                                    : nullptr;
                                 const auto* typeinfo = *cmpidx;
                                 const woort_value component_st = stack_base + 2 + cmpid;
 
-                                switch (work.m_dependence.m_requirements[cmpid].m_kind)
+                                switch (work.m_view_requirement_kinds[cmpid])
                                 {
                                 case JE_COMPONENT_REQUIRE_CONTAINS:
                                     create_component_struct(component_st, m_work_function, component, typeinfo);
@@ -1122,6 +1149,12 @@ WOORT_API woort_api wojeapi_towoo_register_system_job(void)
 
     if (!stepwork.m_is_single_work)
     {
+        // 为本 step_work 分配一个全局唯一的切片哈希，用于在世界切片缓存中索引对应的
+        // je_RequirementCollection（与原生 collection 的 query 路径一致）。
+        static std::atomic<je_TypeHash> _slice_hash_seed{ 1 };
+        stepwork.m_slice_hash = _slice_hash_seed.fetch_add(1);
+        stepwork.m_view_requirement_count = component_arg_count;
+
         const size_t requirements_count = woort_vec_len(requirements);
         for (size_t i = 0; i < requirements_count; ++i)
         {
@@ -1137,16 +1170,19 @@ WOORT_API woort_api wojeapi_towoo_register_system_job(void)
 
             woort_struct_get(elem, requirement_info, 1);
 
-            stepwork.m_dependence.m_requirements.push_back(
-                je_ComponentRequirement{
-                    ty >= JE_COMPONENT_REQUIRE_ANYOF_0
-                        ? ty + static_cast<int>(woort_int(elem))
-                        : ty,
-                    typeinfo->m_id
-                });
+            const int req_kind =
+                ty >= JE_COMPONENT_REQUIRE_ANYOF_0
+                    ? ty + static_cast<int>(woort_int(elem))
+                    : ty;
+
+            stepwork.m_requirements.push_back(
+                je_ComponentRequirement{ req_kind, typeinfo->m_id });
 
             if (i < component_arg_count)
+            {
                 stepwork.m_used_components.push_back(typeinfo);
+                stepwork.m_view_requirement_kinds.push_back(req_kind);
+            }
         }
     }
 

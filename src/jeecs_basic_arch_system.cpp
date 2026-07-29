@@ -1316,7 +1316,7 @@ namespace jeecs_impl
         using system_container_t =
             std::unordered_map<const je_TypeInfo*, jeecs::game_system*>;
         using slice_cache_container_t =
-            std::unordered_map<je_TypeHash, je_RequirementCollection*>;
+            std::unordered_map<je_TypeHash, std::unique_ptr<HoldedRequirementCollection>>;
 
         // NOTE: 此处之所以要根据不同系统实例缓存不同的切片，是考虑到编译防火墙，不同编译器/库对
         //      相同/不同的切片类型哈希可能不同/相同；为了规避因此导致的哈希冲突或者重复，针对不同
@@ -1445,7 +1445,7 @@ namespace jeecs_impl
             {
                 auto& slice_caches = fnd->second;
 
-                if (slice_caches.emplace(hash, collection).second)
+                if (slice_caches.emplace(hash, std::move(collection)).second)
                     return;
 
                 // Else, already exist, do nothing.
@@ -1515,7 +1515,7 @@ namespace jeecs_impl
                     for (auto& [hash, collection] : slice_cache)
                     {
                         (void)hash;
-                        je_ecs_world_update_collection(this, collection);
+                        je_ecs_world_update_collection(this, collection.get());
                     }
                 }
             }
@@ -1569,7 +1569,7 @@ namespace jeecs_impl
                 auto fnd2 = fnd->second.find(hash);
                 if (fnd2 != fnd->second.end())
                 {
-                    *out_collection = fnd2->second;
+                    *out_collection = fnd2->second.get();
                     return true;
                 }
             }

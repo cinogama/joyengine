@@ -801,8 +801,6 @@ namespace jeecs
     static_assert(std::is_trivial_v<game_entity>);
     static_assert(std::is_standard_layout_v<game_entity>);
 
-    struct dependence;
-
     /*
     jeecs::input [命名空间]
     此处定义引擎IO相关的接口、常量等
@@ -6986,106 +6984,20 @@ namespace jeecs
     // 字段对应：m_kind / m_group_id / m_typeid，枚举值 JE_COMPONENT_REQUIRE_*。
     static_assert(std::is_trivial_v<je_ComponentRequirement>);
 
-    struct dependence
-    {
-        // archs of dependences:
-        struct arch_chunks_info
-        {
-            void* m_arch;
-            je_EntityIdInChunk m_entity_count;
-
-            /* An arch will contain a chain of chunks
-            --------------------------------------
-            | ArchType
-            | chunk5->chunk4->chunk3->chunk2...
-            --------------------------------------
-
-            Components data buf will store at chunk' head.
-            --------------------------------------
-            | Chunk
-            | [COMPONENT_BUFFER 64KByte] [OTHER DATAS ..Byte]
-            --------------------------------------
-
-            In buffer, components will store like this:
-            --------------------------------------
-            | Buffer
-            | [COMPONENT_1 0 1 2...] [COMPONENT_2 0 1 2...]...
-            --------------------------------------
-
-            Each type of components will have a size, and begin-offset in buffer.
-            We can use these informations to get all components to walk through.
-            */
-
-            struct component_info
-            {
-                size_t m_component_offset_in_chunk;
-                size_t m_component_offset_of_unit;
-            };
-            basic::vector<component_info> m_component_infos;
-        };
-
-        basic::vector<je_ComponentRequirement> m_requirements;
-        basic::vector<arch_chunks_info> m_archs;
-
-        dependence() = default;
-        dependence(const dependence& d)
-            : m_requirements(d.m_requirements)
-            , m_archs({})
-        {
-        }
-        dependence(dependence&& d)
-            : m_requirements(std::move(d.m_requirements))
-            , m_archs(std::move(d.m_archs))
-        {
-        }
-        dependence& operator=(const dependence& d)
-        {
-            m_requirements = d.m_requirements;
-            m_archs = {};
-
-            return *this;
-        }
-        dependence& operator=(dependence&& d)
-        {
-            m_requirements = std::move(d.m_requirements);
-            m_archs = std::move(d.m_archs);
-
-            return *this;
-        }
-        ~dependence() = default;
-
-        void update(game_world aim_world) noexcept
-        {
-            auto* world_handle = aim_world.handle();
-            assert(world_handle != nullptr);
-
-            // je_ecs_world_update_dependences_archinfo(world_handle, this);
-        }
-    };
-
     namespace slice_requirement
     {
         namespace base
         {
             struct view_base
             {
-                using component_info = dependence::arch_chunks_info::component_info;
+                struct component_info
+                {
+                    size_t m_component_offset_in_chunk;
+                    size_t m_component_offset_of_unit;
+                };
 
             public:
-                // 运行时按 cid 取组件，供脚本绑定等无法在编译期决定类型的场景使用。
-                // 形参 archinfo 仅用于读取 component_info；若调用方已缓存 component_info，
-                // 请直接调用 get_component_by_cached_info。
-                inline static void* get_component_by_index(
-                    const dependence::arch_chunks_info* archinfo,
-                    void* chunkbuf,
-                    je_EntityIdInChunk entity_id,
-                    size_t cid)
-                {
-                    assert(cid < archinfo->m_component_infos.size());
-                    return get_component_by_cached_info(
-                        &archinfo->m_component_infos.at(cid), chunkbuf, entity_id);
-                }
-                // 接收预缓存的单个 component_info，避免重复查 arch_chunks_info::m_component_infos。
+                // 接收预缓存的单个 component_info，避免每次解引用都走扁平偏移数组的双重间接。
                 inline static void* get_component_by_cached_info(
                     const component_info* info,
                     void* chunkbuf,
@@ -7139,12 +7051,12 @@ namespace jeecs
                 }
             protected:
                 template<typename T, typename ... Ts>
-                static void _apply_dependence_impl(dependence* out_dependence)
+                static void _apply_dependence_impl(basic::vector<je_ComponentRequirement>* out_requirements)
                 {
                     static_assert(
                         std::is_pointer_v<T> || std::is_reference_v<T>);
 
-                    out_dependence->m_requirements.push_back(
+                    out_requirements->push_back(
                         je_ComponentRequirement{
                             std::is_pointer_v<T> 
                                 ? JE_COMPONENT_REQUIRE_MAYNOT 
@@ -7152,14 +7064,14 @@ namespace jeecs
                             typing::id<typing::origin_t<T>>() });
 
                     if constexpr (sizeof...(Ts) > 0)
-                        _apply_dependence_impl<Ts...>(out_dependence);
+                        _apply_dependence_impl<Ts...>(out_requirements);
                 }
 
                 template<typename ... Ts>
-                static void _apply_dependence(dependence* out_dependence)
+                static void _apply_dependence(basic::vector<je_ComponentRequirement>* out_requirements)
                 {
                     if constexpr (sizeof...(Ts) > 0)
-                        _apply_dependence_impl<Ts...>(out_dependence);
+                        _apply_dependence_impl<Ts...>(out_requirements);
                 }
             };
 
@@ -7167,9 +7079,9 @@ namespace jeecs
             struct requirement_base
             {
                 template<typename T, typename ... Ts>
-                static void _apply_dependence_impl(int group, dependence* out_dependence)
+                static void _apply_dependence_impl(int group, basic::vector<je_ComponentRequirement>* out_requirements)
                 {
-                    out_dependence->m_requirements.push_back(
+                    out_requirements->push_back(
                         je_ComponentRequirement{
                             RequireType >= JE_COMPONENT_REQUIRE_ANYOF_0
                                 ? RequireType + group
@@ -7177,14 +7089,14 @@ namespace jeecs
                             typing::id<typing::origin_t<T>>() });
 
                     if constexpr (sizeof...(Ts) > 0)
-                        _apply_dependence_impl<Ts...>(group, out_dependence);
+                        _apply_dependence_impl<Ts...>(group, out_requirements);
                 }
 
                 template<typename ... Ts>
-                static void _apply_dependence(int group, dependence* out_dependence)
+                static void _apply_dependence(int group, basic::vector<je_ComponentRequirement>* out_requirements)
                 {
                     if constexpr (sizeof...(Ts) > 0)
-                        _apply_dependence_impl<Ts...>(group, out_dependence);
+                        _apply_dependence_impl<Ts...>(group, out_requirements);
                 }
             };
             struct contains_base : requirement_base<JE_COMPONENT_REQUIRE_CONTAINS> {};
@@ -7197,9 +7109,9 @@ namespace jeecs
         {
             using components = std::tuple<Components...>;
             using entity_with_components = std::tuple<const game_entity, Components...>;
-            static void apply_dependence(dependence* out_dependence)
+            static void apply_dependence(basic::vector<je_ComponentRequirement>* out_requirements)
             {
-                _apply_dependence<Components...>(out_dependence);
+                _apply_dependence<Components...>(out_requirements);
             }
 
             static components fetch_component_slice_from_chunk(
@@ -7231,27 +7143,27 @@ namespace jeecs
         struct contains : base::contains_base
         {
             using components = std::tuple<Components...>;
-            static void apply_dependence(int group, dependence* out_dependence)
+            static void apply_dependence(int group, basic::vector<je_ComponentRequirement>* out_requirements)
             {
-                _apply_dependence<Components...>(group, out_dependence);
+                _apply_dependence<Components...>(group, out_requirements);
             }
         };
         template<typename ... Components>
         struct except : base::except_base
         {
             using components = std::tuple<Components...>;
-            static void apply_dependence(int group, dependence* out_dependence)
+            static void apply_dependence(int group, basic::vector<je_ComponentRequirement>* out_requirements)
             {
-                _apply_dependence<Components...>(group, out_dependence);
+                _apply_dependence<Components...>(group, out_requirements);
             }
         };
         template<typename ... Components>
         struct anyof : base::anyof_base
         {
             using components = std::tuple<Components...>;
-            static void apply_dependence(int group, dependence* out_dependence)
+            static void apply_dependence(int group, basic::vector<je_ComponentRequirement>* out_requirements)
             {
-                _apply_dependence<Components...>(group, out_dependence);
+                _apply_dependence<Components...>(group, out_requirements);
             }
         };
 
@@ -7310,38 +7222,49 @@ namespace jeecs
         slice_requirement::traits::is_requirement ... SliceRequirements>
     class collection
     {
-        dependence m_dependence;
-
         template<int Group, typename T, typename ... Ts>
-        static void _apply_requirements_impl(dependence* dep)
+        static void _apply_requirements_impl(basic::vector<je_ComponentRequirement>* reqs)
         {
             static_assert(
                 std::is_base_of_v<slice_requirement::base::contains_base, T>
                 || std::is_base_of_v<slice_requirement::base::except_base, T>
                 || std::is_base_of_v<slice_requirement::base::anyof_base, T>);
 
-            T::apply_dependence(Group, dep);
+            T::apply_dependence(Group, reqs);
 
             if constexpr (sizeof...(Ts) > 0)
-                _apply_requirements_impl<Group + 1, Ts...>(dep);
+                _apply_requirements_impl<Group + 1, Ts...>(reqs);
         }
         template<int Group, typename ... Ts>
-        static void _apply_requirements(dependence* dep)
+        static void _apply_requirements(basic::vector<je_ComponentRequirement>* reqs)
         {
             if constexpr (sizeof...(Ts) > 0)
-                _apply_requirements_impl<Group, Ts...>(dep);
+                _apply_requirements_impl<Group, Ts...>(reqs);
         }
     public:
-        static void apply_requirements(dependence* dep)
+        // 首次初始化：收集视图需求（CONTAINS/MAYNOT）与其它需求（contain/except/anyof），
+        // 交由 C ABI 的 je_ecs_collect_requirements 生成不透明的 je_CollectedRequirements
+        // 并挂到 collection->m_collected_requirement 上。视图需求必须排在最前。
+        static void apply_requirements(je_RequirementCollection* collection)
         {
-            SliceView::apply_dependence(dep);
-            _apply_requirements<1, SliceRequirements...>(dep);
+            static_assert(std::is_base_of_v<slice_requirement::base::view_base, SliceView>,
+                "First template argument of collection must be collection::view.");
+
+            basic::vector<je_ComponentRequirement> reqs;
+            SliceView::apply_dependence(&reqs);
+            const size_t view_requirement_count = reqs.size();
+            _apply_requirements<1, SliceRequirements...>(&reqs);
+
+            collection->m_collected_requirement = je_ecs_collect_requirements(
+                reqs.data(),
+                view_requirement_count,
+                reqs.size() - view_requirement_count);
         }
 
     public:
         // CRTP 基类：封装 slice / entity_slice 共享的迭代逻辑与状态。
         // 派生类只需提供 value_type、iterator typedefs、operator* 以及接受
-        // const dependence::arch_chunks_info* 的构造函数。
+        // const je_RequirementCollection* / const je_DependenceArchInfos* 的构造函数。
         template <typename Derived>
         class slice_base
         {
@@ -7350,22 +7273,22 @@ namespace jeecs
                 std::tuple_size_v<typename SliceView::components>;
 
         protected:
-            const dependence::arch_chunks_info* m_archs_current;
-            const dependence::arch_chunks_info* m_archs_end;
+            const je_DependenceArchInfos* m_archs_current;
+            const je_DependenceArchInfos* m_archs_end;
 
             void* m_chunk_current;
             const je_GameEntityMeta* m_chunk_current_entity_meta;
             je_EntityIdInChunk m_chunk_entity_current_index;
 
             // 预缓存本视图所需的 component_info（按 SliceView::Components... 顺序）。
-            // 在进入新 arch 时一次性刷新，避免每次解引用都走 arch_chunks_info::m_component_infos
-            // 的双重间接。
-            std::array<typename dependence::arch_chunks_info::component_info, _component_count> m_cached_infos{};
+            // 在进入新 arch 时一次性刷新，避免每次解引用都走 je_DependenceArchInfos 的
+            // m_view_component_offset / m_view_component_size 双重间接。
+            std::array<typename SliceView::component_info, _component_count> m_cached_infos{};
 
             slice_base() = default;
 
             // For `end()` only.
-            explicit slice_base(const dependence::arch_chunks_info* _archs_end)
+            explicit slice_base(const je_DependenceArchInfos* _archs_end)
                 : m_archs_current(_archs_end)
                 , m_archs_end(_archs_end)
                 , m_chunk_current(nullptr)
@@ -7381,9 +7304,13 @@ namespace jeecs
                 assert(m_chunk_current != nullptr);
                 m_chunk_current_entity_meta = je_arch_entity_meta_addr_in_chunk(m_chunk_current);
 
-                const auto& src = m_archs_current->m_component_infos;
                 for (size_t i = 0; i < _component_count; ++i)
-                    m_cached_infos[i] = src[i];
+                {
+                    m_cached_infos[i].m_component_offset_in_chunk =
+                        m_archs_current->m_view_component_offset[i];
+                    m_cached_infos[i].m_component_offset_of_unit =
+                        m_archs_current->m_view_component_size[i];
+                }
             }
             // 在同一 arch 内切换 chunk：仅刷新 meta 指针。
             inline void _enter_current_chunk()
@@ -7423,11 +7350,11 @@ namespace jeecs
                 }
             }
 
-            // 由派生类的 dependence 构造函数调用，统一初始化路径。
-            void _init_from_dependence(const dependence* dep)
+            // 由派生类的 collection 构造函数调用，统一初始化路径。
+            void _init_from_collection(const je_RequirementCollection* collection)
             {
-                m_archs_current = dep->m_archs.begin();
-                m_archs_end = dep->m_archs.end();
+                m_archs_current = collection->m_cached_archs;
+                m_archs_end = collection->m_cached_archs + collection->m_cached_arch_count;
                 m_chunk_entity_current_index = 0;
 
                 if (m_archs_current != m_archs_end)
@@ -7480,9 +7407,6 @@ namespace jeecs
 
             // 注意：slice 是 forward_iterator，调用 std::for_each(par_unseq, ...)
             // 时大多数标准库实现难以有效切分工作（无法随机访问）。
-            // 对规模较大的实体集合，请改用 collection::foreach_chunk 或
-            // collection::foreach_parallel_chunks，它们以 chunk 为粒度切分，
-            // 内层循环可由调用方写为紧凑 SOA 形式并获得真正并行加速。
             template<typename FT>
             void foreach_parallel(FT&& ft)
             {
@@ -7509,12 +7433,12 @@ namespace jeecs
             slice& operator=(const slice&) = default;
             slice& operator=(slice&&) = default;
 
-            explicit slice(const dependence::arch_chunks_info* _archs_end)
+            explicit slice(const je_DependenceArchInfos* _archs_end)
                 : base_t(_archs_end) {
             }
-            explicit slice(const dependence* dep)
+            explicit slice(const je_RequirementCollection* collection)
             {
-                this->_init_from_dependence(dep);
+                this->_init_from_collection(collection);
             }
 
             value_type operator*()
@@ -7542,12 +7466,12 @@ namespace jeecs
             entity_slice& operator=(const entity_slice&) = default;
             entity_slice& operator=(entity_slice&&) = default;
 
-            explicit entity_slice(const dependence::arch_chunks_info* _archs_end)
+            explicit entity_slice(const je_DependenceArchInfos* _archs_end)
                 : base_t(_archs_end) {
             }
-            explicit entity_slice(const dependence* dep)
+            explicit entity_slice(const je_RequirementCollection* collection)
             {
-                this->_init_from_dependence(dep);
+                this->_init_from_collection(collection);
             }
 
             value_type operator*()
@@ -7559,103 +7483,6 @@ namespace jeecs
                     this->m_chunk_current_entity_meta[this->m_chunk_entity_current_index].m_version);
             }
         };
-
-        collection()
-        {
-            static_assert(std::is_base_of_v<slice_requirement::base::view_base, SliceView>,
-                "First template argument of collection must be collection::view.");
-
-            apply_requirements(&m_dependence);
-        }
-
-        slice fetch(game_world w)
-        {
-            m_dependence.update(w);
-            return slice(&m_dependence);
-        }
-        entity_slice fetch_with_entity(game_world w)
-        {
-            m_dependence.update(w);
-            return entity_slice(&m_dependence);
-        }
-
-        // ============================================================
-        // foreach_chunk / foreach_parallel_chunks
-        //
-        // 设计动机：slice 是 forward iterator，foreach_parallel 走
-        // std::for_each(par_unseq, ...) 时实际难以并行（无法随机切分）。
-        // 这两个接口改以 chunk 为粒度遍历：
-        //   * foreach_chunk           —— 串行遍历所有 chunk
-        //   * foreach_parallel_chunks —— chunk 间并行（不同 chunk 处理无共享数据）
-        //
-        // 调用方在内层写紧凑 SOA 循环，可获得真正的并行加速。
-        //
-        // 回调签名（ft 被同步调用一次/chunk）：
-        //   void(const dependence::arch_chunks_info::component_info* infos,
-        //        void* chunkbuf,
-        //        const je_GameEntityMeta* meta,
-        //        je_EntityIdInChunk entity_count)
-        //
-        // 注意：entity_count 是该 chunk 所属 arch 的容量上限（所有 chunk 一致），
-        //       实际有效实体需调用方根据 meta[eid].m_stat == READY 自行过滤；
-        //       infos 已包含视图组件的 offset/stride，可用
-        //       view_base::get_component_by_cached_info 解出每个组件地址。
-        //       对于 foreach_parallel_chunks，ft 必须是线程安全的。
-        // ============================================================
-        template <typename FT>
-        void foreach_chunk(game_world w, FT&& ft)
-        {
-            m_dependence.update(w);
-            for (const auto& arch : m_dependence.m_archs)
-            {
-                const auto infos = arch.m_component_infos.data();
-                void* chunk = je_arch_get_chunk(arch.m_arch);
-                while (chunk != nullptr)
-                {
-                    const auto* meta = je_arch_entity_meta_addr_in_chunk(chunk);
-                    ft(infos, chunk, meta, arch.m_entity_count);
-                    chunk = je_arch_next_chunk(chunk);
-                }
-            }
-        }
-
-        template <typename FT>
-        void foreach_parallel_chunks(game_world w, FT&& ft)
-        {
-            m_dependence.update(w);
-
-            struct chunk_handle
-            {
-                const dependence::arch_chunks_info::component_info* infos;
-                void* chunk;
-                const je_GameEntityMeta* meta;
-                je_EntityIdInChunk count;
-            };
-
-            basic::vector<chunk_handle> chunks;
-            for (const auto& arch : m_dependence.m_archs)
-            {
-                const auto infos = arch.m_component_infos.data();
-                void* chunk = je_arch_get_chunk(arch.m_arch);
-                while (chunk != nullptr)
-                {
-                    chunks.push_back(chunk_handle{
-                        infos,
-                        chunk,
-                        je_arch_entity_meta_addr_in_chunk(chunk),
-                        arch.m_entity_count });
-                    chunk = je_arch_next_chunk(chunk);
-                }
-            }
-
-            // basic::vector::begin()/end() 返回原生指针，是 random-access iterator，
-            // 能被 std::for_each(par_unseq, ...) 有效切分到工作线程。
-            ::jeecs::parallel_foreach(
-                chunks.begin(), chunks.end(),
-                [&ft](const chunk_handle& h) {
-                    ft(h.infos, h.chunk, h.meta, h.count);
-                });
-        }
     };
 
     class game_universe
@@ -7746,7 +7573,7 @@ namespace jeecs
         template<
             slice_requirement::traits::is_view SliceView,
             slice_requirement::traits::is_requirement... SliceRequirements>
-        jeecs::dependence* _fetch_query_slice_cache()
+        je_RequirementCollection* _fetch_query_slice_cache()
         {
             je_RequirementCollection* requirement_collection;
             void* const world_inst = get_world().handle();
@@ -7757,8 +7584,10 @@ namespace jeecs
                 typeid(collection<SliceView, SliceRequirements...>).hash_code(),
                 &requirement_collection))
             {
-                // This dependence is just created, need to apply requirements.
-                // collection<SliceView, SliceRequirements...>::apply_requirements(dep);
+                // This collection is just created, need to apply requirements
+                // for first-time initialization, then update arch info.
+                collection<SliceView, SliceRequirements...>::apply_requirements(
+                    requirement_collection);
                 je_ecs_world_update_collection(world_inst, requirement_collection);
             }
             return requirement_collection;
