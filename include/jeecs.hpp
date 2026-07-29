@@ -1537,6 +1537,8 @@ JE_API void je_ecs_world_update_collection(
     void* world,
     je_RequirementCollection* collection);
 
+typedef void* je_System;
+
 /*
 je_ecs_world_add_system_instance [基本接口]
 向指定世界中添加一个指定类型的系统实例，返回此实例的指针
@@ -1546,7 +1548,7 @@ je_ecs_world_add_system_instance [基本接口]
 
     * 若向一个正在销毁中的世界添加系统实例，返回 nullptr
 */
-JE_API jeecs::game_system* je_ecs_world_add_system_instance(
+JE_API je_System je_ecs_world_add_system_instance(
     void* world,
     je_TypeId type);
 
@@ -1555,7 +1557,7 @@ je_ecs_world_get_system_instance [基本接口]
 从指定世界中获取一个指定类型的系统实例，返回此实例的指针
 若世界中不存在此类型的系统，返回nullptr
 */
-JE_API jeecs::game_system* je_ecs_world_get_system_instance(
+JE_API je_System je_ecs_world_get_system_instance(
     void* world,
     je_TypeId type);
 
@@ -6899,9 +6901,10 @@ namespace jeecs
             return gentity;
         }
 
-        inline jeecs::game_system* add_system(je_TypeId type)
+        inline game_system* add_system(je_TypeId type)
         {
-            return je_ecs_world_add_system_instance(handle(), type);
+            return static_cast<game_system*>(
+                je_ecs_world_add_system_instance(handle(), type));
         }
 
         template <typename SystemT>
@@ -6911,9 +6914,10 @@ namespace jeecs
                 typing::id<SystemT>()));
         }
 
-        inline jeecs::game_system* get_system(je_TypeId type)
+        inline game_system* get_system(je_TypeId type)
         {
-            return je_ecs_world_get_system_instance(handle(), type);
+            return static_cast<game_system*>(
+                je_ecs_world_get_system_instance(handle(), type));
         }
 
         template <typename SystemT>

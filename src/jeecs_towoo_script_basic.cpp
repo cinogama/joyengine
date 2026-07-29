@@ -274,7 +274,8 @@ namespace jeecs
                         auto entity_meta_addr = je_arch_entity_meta_addr_in_chunk(cur_chunk);
                         je_Version version;
                         for (je_EntityIdInChunk eid = 0;
-                            eid < archinfo.m_entity_count; ++eid)
+                            eid < archinfo.m_entity_count; 
+                            ++eid)
                         {
                             if (JE_ENTITY_STAT_READY != entity_meta_addr[eid].m_stat)
                                 continue;
