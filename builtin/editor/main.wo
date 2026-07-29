@@ -19,6 +19,7 @@ import Editor::EntityList;
 import Editor::LogBrowser;
 import Editor::MainMenu;
 import Editor::Inspector;
+import Editor::ReplConsole;
 
 import Inspector::Universe;
 

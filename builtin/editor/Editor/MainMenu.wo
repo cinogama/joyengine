@@ -3,6 +3,7 @@ import builtin::editor::GUI::Menu;
 import Browser;
 import EntityList;
 import LogBrowser;
+import ReplConsole;
 import WorldEditorViewport;
 
 namespace JEEditor::Editor::MainMenu
@@ -46,6 +47,16 @@ namespace JEEditor::Editor::MainMenu
                         LogBrowser::showLogBrowser();
                 })
             ->      checkWhen(LogBrowser::isLogBrowserExist)
+            ->      endItem
+            ->  subItem("Woolang REPL",
+                func()
+                {
+                    if (ReplConsole::isReplConsoleExist())
+                        ReplConsole::closeReplConsole();
+                    else
+                        ReplConsole::showReplConsole();
+                })
+            ->      checkWhen(ReplConsole::isReplConsoleExist)
             ->      endItem
             ->  endMenu
             -> subMenu("编辑")

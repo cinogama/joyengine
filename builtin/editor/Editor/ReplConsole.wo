@@ -1,0 +1,333 @@
+import woo::std;
+
+import je;
+import je::gui;
+
+import pkg::dumpling;
+import pkg::interface;
+
+import builtin::editor::GUI::Shortcut;
+import builtin::editor::GUI::Windows;
+
+using std;
+using je;
+using je::gui;
+using JEEditor::GUI::Windows;
+
+namespace JEEditor::Editor
+{
+    // Woolang REPL 交互控制台
+    // 基于 pkg::dumpling::Repl 提供交互式代码求值：
+    //   - 单行输入框，回车提交（或点击“运行”按钮）
+    //   - 当求值返回 Incomplete 时自动进入多行续接（“...”提示符）
+    //   - 命令历史（上/下方向键浏览）
+    //   - 输出着色、自动滚动、缓冲上限裁剪
+    using ReplConsole = struct{
+        m_close: mut bool,
+
+        // dumpling REPL 句柄
+        m_repl: dumpling::Repl,
+
+        // 输出历史: (行类别, 文本)
+        m_lines: vec<(int, string)>,
+
+        // 当前输入缓冲
+        m_input: mut string,
+
+        // 多行续接累积：当 eval 返回 Incomplete 时缓存已输入内容
+        m_pending: mut string,
+
+        // 命令历史与浏览游标
+        m_history: vec<string>,
+        m_history_pos: mut int,
+
+        // 自动滚动
+        m_auto_scroll: mut bool,
+        m_last_count: mut int,
+
+        // 提交后重新聚焦输入框
+        m_refocus: mut bool,
+    }
+    {
+        // 行类别
+        let KIND_PROMPT = 0;
+        let KIND_OUTPUT = 1;
+        let KIND_ERROR  = 2;
+        let KIND_INFO   = 3;
+
+        // 输出缓冲上限
+        let MAX_LINES = 10000;
+
+        let mut s_repl_singleton = option::none: option<ReplConsole>;
+
+        public func isReplConsoleExist()
+        {
+            return s_repl_singleton->is_value;
+        }
+        public func showReplConsole()
+        {
+            do show(create());
+        }
+        public func closeReplConsole()
+        {
+            match (s_repl_singleton)
+            {
+                none?;
+                value(inst)?
+                    inst->close();
+            }
+        }
+
+        public func create()=> ReplConsole
+            where require!(ReplConsole: IWindows);
+        {
+            return ReplConsole{
+                m_close = mut false,
+                m_repl = dumpling::Repl::create(),
+                m_lines = []mut as vec<(int, string)>,
+                m_input = mut "",
+                m_pending = mut "",
+                m_history = []mut as vec<string>,
+                m_history_pos = mut -1,
+                m_auto_scroll = mut true,
+                m_last_count = mut 0,
+                m_refocus = mut true,
+            };
+        }
+
+        func close(self: ReplConsole)
+        {
+            self.m_close = true;
+        }
+        public func getTitle(_: ReplConsole)=> string
+        {
+            return "Woolang REPL";
+        }
+        public func getSizeConstraints(_: ReplConsole)=> SizeConstraints
+        {
+            return SizeConstraints::Limited(((420., 200.), (4096., 4096.)));
+        }
+        public func getShortcut(self: ReplConsole)=> option<JEEditor::GUI::Shortcut>
+        {
+            return option::value <|
+                JEEditor::GUI::Shortcut::begin()
+                    -> shortCut([ImGuiKey::ImGuiKey_Enter], \= self->commitInput();)
+                    -> finish
+                ;
+        }
+        public func onCreate(self: ReplConsole)=> void
+        {
+            s_repl_singleton = option::value(self);
+            self->appendLine(KIND_INFO, "Woolang REPL 已就绪。输入 Woolang 表达式并按回车执行。");
+        }
+        public func onClose(self: ReplConsole)=> void
+        {
+            s_repl_singleton = option::none;
+            do self.m_repl->close();
+        }
+
+        // 追加一行输出，超限时裁剪保留最近 MAX_LINES 条
+        func appendLine(self: ReplConsole, kind: int, text: string)=> void
+        {
+            self.m_lines->add((kind, text));
+            let cur = self.m_lines->len;
+            if (cur > MAX_LINES)
+                self.m_lines->copy_from(self.m_lines->sub(cur - MAX_LINES));
+        }
+
+        func lineColor(kind: int)=> Color32RGBA
+        {
+            if (kind == KIND_PROMPT)
+                return (130, 200, 130, 255);
+            if (kind == KIND_OUTPUT)
+                return (215, 215, 215, 255);
+            if (kind == KIND_ERROR)
+                return (240, 110, 110, 255);
+            return (140, 140, 160, 255);
+        }
+
+        // 提交当前输入缓冲：回显提示符 + 求值
+        func commitInput(self: ReplConsole)=> void
+        {
+            let src = self.m_input;
+            self.m_input = "";
+            self.m_refocus = true;
+
+            let pending_empty = self.m_pending->len == 0;
+            let prompt = pending_empty ? "woo> " | "... ";
+            self->appendLine(KIND_PROMPT, prompt + src);
+
+            // 空输入且无续接：忽略
+            if (src->len == 0 && pending_empty)
+                return;
+
+            // 记录历史（仅续接开始时的首条非空输入）
+            if (src->len > 0 && pending_empty)
+            {
+                self.m_history->add(src);
+                self.m_history_pos = self.m_history->len;
+            }
+
+            // 累积多行源码
+            let full = pending_empty ? src | self.m_pending + "\n" + src;
+            self->evalFull(full);
+        }
+
+        // 通过 dumpling::dispatch 在运行时线程上求值
+        func evalFull(self: ReplConsole, full_src: string)=> void
+        {
+            let repl_handle = self.m_repl;
+            match (dumpling::dispatch(func() { return repl_handle->eval(full_src); }))
+            {
+                err(msg)?
+                    self->appendLine(KIND_ERROR, F"调度失败: {msg}");
+                ok(res)?
+                {
+                    match (res)
+                    {
+                        Ok(out)?
+                        {
+                            self.m_pending = "";
+                            match (out)
+                            {
+                                none?;
+                                value(s)?
+                                    self->appendLine(KIND_OUTPUT, s);
+                            }
+                        }
+                        CompileError(errs)?
+                        {
+                            self.m_pending = "";
+                            self->appendLine(KIND_ERROR, errs->to_string());
+                        }
+                        RuntimeError(rmsg)?
+                        {
+                            self.m_pending = "";
+                            self->appendLine(KIND_ERROR, F"运行时错误: {rmsg}");
+                        }
+                        Incomplete?
+                            self.m_pending = full_src;
+                    }
+                }
+            }
+        }
+
+        func clearScreen(self: ReplConsole)=> void
+        {
+            self.m_lines->clear();
+            self.m_pending = "";
+        }
+
+        func historyPrev(self: ReplConsole)=> void
+        {
+            if (self.m_history->len == 0)
+                return;
+            if (self.m_history_pos > 0)
+                self.m_history_pos -= 1;
+            self.m_input = self.m_history[self.m_history_pos];
+        }
+
+        func historyNext(self: ReplConsole)=> void
+        {
+            if (self.m_history->len == 0)
+                return;
+            if (self.m_history_pos < self.m_history->len)
+                self.m_history_pos += 1;
+            if (self.m_history_pos >= self.m_history->len)
+                self.m_input = "";
+            else
+                self.m_input = self.m_history[self.m_history_pos];
+        }
+
+        func drawOutput(self: ReplConsole)=> void
+        {
+            PushTextWrapPos(0.);
+            defer PopTextWrapPos();
+
+            let mut drew_any = false;
+            for (let (kind, text) : self.m_lines)
+            {
+                drew_any = true;
+                TextColored(lineColor(kind), text);
+            }
+
+            if (!drew_any)
+                TextDisabled("(等待输入...)");
+
+            let cur_count = self.m_lines->len;
+            if (self.m_auto_scroll && cur_count != self.m_last_count)
+                SetScrollHereY(1.);
+            self.m_last_count = cur_count;
+        }
+
+        func drawInput(self: ReplConsole)=> void
+        {
+            let pending = self.m_pending->len > 0;
+            TextDisabled(pending ? "... " | "woo> ");
+            SameLine();
+
+            if (self.m_refocus)
+            {
+                SetKeyboardFocusHere(0);
+                self.m_refocus = false;
+            }
+
+            PushItemWidth(-72.);
+            match (InputText("##ReplInput", self.m_input))
+            {
+                none?;
+                value(s)?
+                    self.m_input = s;
+            }
+            PopItemWidth();
+
+            let focused = IsItemFocused();
+            if (focused)
+            {
+                if (IsKeyPressed(ImGuiKey::ImGuiKey_UpArrow, false))
+                    self->historyPrev();
+                if (IsKeyPressed(ImGuiKey::ImGuiKey_DownArrow, false))
+                    self->historyNext();
+            }
+
+            SameLine();
+            if (Button("运行"))
+                self->commitInput();
+        }
+
+        public func run(self: ReplConsole)=> bool
+        {
+            if (Button("清除"))
+                self->clearScreen();
+            SameLine();
+            match (CheckBox("自动滚动##repl_autoscroll", self.m_auto_scroll))
+            {
+                none?;
+                value(v)?
+                    self.m_auto_scroll = v;
+            }
+            if (self.m_pending->len > 0)
+            {
+                SameLine();
+                TextDisabled(F"(多行续接中: {self.m_pending->len} 字符)");
+            }
+
+            Separator();
+
+            let avail = GetContentRegionAvail();
+            let input_h = GetTextLineHeight() + 10.;
+            let output_h = avail.1 - input_h;
+
+            if (BeginChildSizeFlags("##ReplOutput", avail.0, output_h,
+                    WindowsAttribute::ImGuiWindowFlags_HorizontalScrollbar))
+                self->drawOutput();
+            EndChild();
+
+            Separator();
+
+            self->drawInput();
+
+            return !self.m_close;
+        }
+    }
+}
