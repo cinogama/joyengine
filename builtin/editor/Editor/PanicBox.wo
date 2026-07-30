@@ -1,0 +1,129 @@
+import woo::std;
+
+import je::gui;
+
+import pkg::interface;
+
+import builtin::editor::GUI::Icons;
+import builtin::editor::GUI::Windows;
+
+using std;
+using je::gui;
+
+using JEEditor::GUI;
+using JEEditor::GUI::Windows;
+
+namespace JEEditor::Editor
+{
+    // Woolang Panic 提示窗口
+    //
+    // 当引擎通过 je::internal::register_panic_hook 注册的回调被触发时，
+    // 调用 PanicBox::show 即可弹出一个展示 panic 原因、发生位置与调用栈的窗口。
+    //
+    // 回调签名 (string, int, string, int, string, string) 对应:
+    //   src_file, lineno, functionname, rterrcode, reason, trace
+    using PanicBox = struct{
+        m_file: string,
+        m_line: int,
+        m_func: string,
+        m_code: int,
+        m_reason: string,
+        m_trace: string,
+
+        m_closed: mut bool,
+    }
+    {
+        public func create(
+            file: string, line: int, funcname: string,
+            errcode: int, reason: string, trace: string)=> PanicBox
+            where require!(PanicBox: Windows::IWindows);
+        {
+            return PanicBox{
+                m_file = file,
+                m_line = line,
+                m_func = funcname,
+                m_code = errcode,
+                m_reason = reason,
+                m_trace = trace,
+                m_closed = mut false,
+            };
+        }
+
+        public func getTitle(_: PanicBox)=> string
+        {
+            return "Woolang Panic$ID";
+        }
+        public func getAttrib(_: PanicBox)=> WindowsAttribute
+        {
+            return WindowsAttribute::ImGuiWindowFlags_NoDocking
+                + WindowsAttribute::ImGuiWindowFlags_NoCollapse
+                + WindowsAttribute::ImGuiWindowFlags_NoResize
+                ;
+        }
+        public func getSizeConstraints(_: PanicBox)=> SizeConstraints
+        {
+            return SizeConstraints::Limited(((440., 300.), (4096., 4096.)));
+        }
+        public func getSpawnPos(_: PanicBox)=> option<ImVec2>
+        {
+            return option::value(GetMousePos());
+        }
+
+        func summary(self: PanicBox)=> string
+        {
+            return F"reason: {self.m_reason}\n  at {self.m_func} ({self.m_file}:{self.m_line}) [code: {self.m_code}]\n{self.m_trace}";
+        }
+
+        public func run(self: PanicBox)=> bool
+        {
+            match (Icons::WARNING)
+            {
+                none?;
+                value(icon)?
+                {
+                    ImageSize(icon, 48., 48.);
+                    SameLine();
+                    TextColored((255, 80, 80, 255), "Woolang 运行时发生 Panic！");
+                }
+            }
+
+            Separator();
+
+            Text("原因:");
+            PushTextWrapPos(0.);
+            TextColored((240, 110, 110, 255), self.m_reason);
+            PopTextWrapPos();
+
+            Text(F"位置: {self.m_func} ({self.m_file}:{self.m_line})");
+            Text(F"错误码: {self.m_code}");
+
+            Separator();
+
+            Text("调用栈:");
+            let avail = GetContentRegionAvail();
+            if (BeginChildSizeFlags("##PanicTrace", avail.0, avail.1 - 30.,
+                    WindowsAttribute::ImGuiWindowFlags_HorizontalScrollbar))
+            {
+                PushTextWrapPos(0.);
+                Text(self.m_trace);
+                PopTextWrapPos();
+            }
+            EndChild();
+
+            if (Button("复制信息"))
+                SetClipboardText(self->summary());
+            SameLine();
+            if (Button("关闭"))
+                self.m_closed = true;
+
+            return !self.m_closed;
+        }
+
+        public func show(
+            file: string, line: int, funcname: string,
+            errcode: int, reason: string, trace: string)=> void
+        {
+            do Windows::show(PanicBox::create(file, line, funcname, errcode, reason, trace));
+        }
+    }
+}

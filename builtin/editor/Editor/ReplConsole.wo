@@ -59,7 +59,7 @@ namespace JEEditor::Editor
         let MAX_LINES = 10000;
         
         // 输入编辑器高度（行数）
-        let EDITOR_LINES = 6;
+        let EDITOR_LINES = 2;
         
         let mut s_repl_singleton = option::none: option<ReplConsole>;
         
@@ -146,12 +146,9 @@ namespace JEEditor::Editor
         {
             return option::value <|
                 JEEditor::GUI::Shortcut::begin()
-                    -> shortCut([ImGuiKey::ImGuiKey_LeftCtrl, ImGuiKey::ImGuiKey_Enter], \= self->commitInput();)
-                    -> shortCut([ImGuiKey::ImGuiKey_RightCtrl, ImGuiKey::ImGuiKey_Enter], \= self->commitInput();)
-                    -> shortCut([ImGuiKey::ImGuiKey_LeftAlt, ImGuiKey::ImGuiKey_UpArrow], \= self->historyPrev();)
-                    -> shortCut([ImGuiKey::ImGuiKey_RightAlt, ImGuiKey::ImGuiKey_UpArrow], \= self->historyPrev();)
-                    -> shortCut([ImGuiKey::ImGuiKey_LeftAlt, ImGuiKey::ImGuiKey_DownArrow], \= self->historyNext();)
-                    -> shortCut([ImGuiKey::ImGuiKey_RightAlt, ImGuiKey::ImGuiKey_DownArrow], \= self->historyNext();)
+                    -> shortCut([ImGuiKey::ImGuiKey_Enter], \= self->commitInput();)
+                    -> shortCut([ImGuiKey::ImGuiKey_UpArrow], \= self->historyPrev();)
+                    -> shortCut([ImGuiKey::ImGuiKey_DownArrow], \= self->historyNext();)
                     -> finish
                     ;
         }
@@ -164,7 +161,6 @@ namespace JEEditor::Editor
         {
             s_repl_singleton = option::none;
             do self.m_repl->close();
-            do self.m_editor as gchandle->close();
         }
         
         // 追加一行输出，超限时裁剪保留最近 MAX_LINES 条
@@ -335,8 +331,7 @@ namespace JEEditor::Editor
                     self.m_auto_scroll = v;
             }
             SameLine();
-            if (Button("运行"))
-                self->commitInput();
+            
             if (self.m_continuing)
             {
                 SameLine();

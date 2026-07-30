@@ -20,6 +20,7 @@ import Editor::LogBrowser;
 import Editor::MainMenu;
 import Editor::Inspector;
 import Editor::ReplConsole;
+import Editor::PanicBox;
 
 import Inspector::Universe;
 
@@ -34,6 +35,13 @@ func main()
 {
     // 编辑器脚本退出之前清掉所有单例实例
     defer singleton::unsafe::reset_all_singleton();
+        
+    // 注册 Woolang Panic 回调：当脚本运行时发生 panic 时，
+    // 弹出 PanicBox 展示错误原因、位置与调用栈。
+    // 回调参数依次为: src_file, lineno, functionname, rterrcode, reason, trace
+    internal::register_panic_hook(
+        \file, line, funcname, errcode, reason, trace =
+            Editor::PanicBox::show(file, line, funcname, errcode, reason, trace););
     
     // 创建一个 Universe，之后编辑器将在这上面运行
     let u = Inspector::Universe::UniverseCtx::instance()->getUniverse();
@@ -43,7 +51,7 @@ func main()
     je::internal::init_graphic_pipeline_for_editor(u);
     
     JEEditor::Editor::MainMenu::registerMainMenu();
-    
+
     do Browser::showBrowser();
     do EntityList::showEntityList();
     do LogBrowser::showLogBrowser();
