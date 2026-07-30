@@ -24,27 +24,27 @@ namespace JEEditor::Editor
     //   - 输出着色、自动滚动、缓冲上限裁剪
     using ReplConsole = struct{
         m_close: mut bool,
-
+        
         // dumpling REPL 句柄
         m_repl: dumpling::Repl,
-
+        
         // 输出历史: (行类别, 文本)
         m_lines: vec<(int, string)>,
-
+        
         // 代码编辑器输入上下文（取代单行 InputText）
         m_editor: CodeEditorContext,
-
+        
         // 多行续接标志：当 eval 返回 Incomplete 时为 true，输入区保留已输入源码
         m_continuing: mut bool,
-
+        
         // 命令历史与浏览游标
         m_history: vec<string>,
         m_history_pos: mut int,
-
+        
         // 自动滚动
         m_auto_scroll: mut bool,
         m_last_count: mut int,
-
+        
         // 提交后重新聚焦输入框
         m_refocus: mut bool,
     }
@@ -54,15 +54,15 @@ namespace JEEditor::Editor
         let KIND_OUTPUT = 1;
         let KIND_ERROR  = 2;
         let KIND_INFO   = 3;
-
+        
         // 输出缓冲上限
         let MAX_LINES = 10000;
-
+        
         // 输入编辑器高度（行数）
         let EDITOR_LINES = 6;
-
+        
         let mut s_repl_singleton = option::none: option<ReplConsole>;
-
+        
         public func isReplConsoleExist()
         {
             return s_repl_singleton->is_value;
@@ -80,12 +80,12 @@ namespace JEEditor::Editor
                     inst->close();
             }
         }
-
+        
         // 创建并配置 Woolang 语法高亮的代码编辑器上下文
         func makeEditor()=> CodeEditorContext
         {
             let ctx = CodeEditorContext::create();
-
+            
             let ldef = CodeEditorContext::LanguageDefinition::create("woolang");
             let keywords = [
                 "alias", "as", "break", "continue", "defer", "do", "else", "enum",
@@ -93,14 +93,14 @@ namespace JEEditor::Editor
                 "is", "let", "match", "mut", "namespace", "nil", "operator",
                 "private", "protected", "public", "return", "static", "struct",
                 "true", "typeid", "typeof", "union", "using", "where", "while"
-            ];
+                ];
             for (let kw : keywords)
                 ldef->AddKeyword(kw);
             ldef->SetSingleLineComment("//");
             ldef->SetMultilineComment("/*", "*/");
             ldef->SetCaseSensitive(true);
             ldef->SetAutoIndentation(true);
-
+            
             // ImGuiColorTextEdit 仅在正则/分词器把某段文本识别为 Identifier 后，
             // 才会比对关键字表。若不添加任何 AddTokenRegex，所有字符都会停留在
             // PaletteIndex::Default（灰色），导致关键字/数字等高亮全部失效。
@@ -108,11 +108,11 @@ namespace JEEditor::Editor
             ldef->AddTokenRegex(@"0[xX][0-9A-Fa-f]+"@, CodeEditorContext::PaletteIndex::Number);
             ldef->AddTokenRegex(@"[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?"@, CodeEditorContext::PaletteIndex::Number);
             ldef->AddTokenRegex(@""(\\.|[^"\\])*""@, CodeEditorContext::PaletteIndex::String);
-
+            
             ctx->SetLanguageDefinition(ldef);
             return ctx;
         }
-
+        
         public func create()=> ReplConsole
             where require!(ReplConsole: IWindows);
         {
@@ -129,7 +129,7 @@ namespace JEEditor::Editor
                 m_refocus = mut true,
             };
         }
-
+        
         func close(self: ReplConsole)
         {
             self.m_close = true;
@@ -153,7 +153,7 @@ namespace JEEditor::Editor
                     -> shortCut([ImGuiKey::ImGuiKey_LeftAlt, ImGuiKey::ImGuiKey_DownArrow], \= self->historyNext();)
                     -> shortCut([ImGuiKey::ImGuiKey_RightAlt, ImGuiKey::ImGuiKey_DownArrow], \= self->historyNext();)
                     -> finish
-                ;
+                    ;
         }
         public func onCreate(self: ReplConsole)=> void
         {
@@ -166,7 +166,7 @@ namespace JEEditor::Editor
             do self.m_repl->close();
             do self.m_editor as gchandle->close();
         }
-
+        
         // 追加一行输出，超限时裁剪保留最近 MAX_LINES 条
         func appendLine(self: ReplConsole, kind: int, text: string)=> void
         {
@@ -175,7 +175,7 @@ namespace JEEditor::Editor
             if (cur > MAX_LINES)
                 self.m_lines->copy_from(self.m_lines->sub(cur - MAX_LINES));
         }
-
+        
         func lineColor(kind: int)=> Color32RGBA
         {
             if (kind == KIND_PROMPT)
@@ -186,84 +186,84 @@ namespace JEEditor::Editor
                 return (240, 110, 110, 255);
             return (140, 140, 160, 255);
         }
-
+        
         // 重置输入编辑器：清空文本并把光标移回首行
         func resetEditor(self: ReplConsole)=> void
         {
             self.m_editor->SetText("");
             self.m_editor->SetCursorPosition((0, 0));
         }
-
+        
         // 提交当前输入：回显提示符 + 求值
         func commitInput(self: ReplConsole)=> void
         {
             let src = self.m_editor->GetText();
             self.m_refocus = true;
-
+            
             let prompt = self.m_continuing ? "... " | "woo> ";
             self->appendLine(KIND_PROMPT, prompt + src);
-
+            
             // 空输入且无续接：忽略
             if (src->len == 0 && !self.m_continuing)
                 return;
-
+                
             self->evalAndCommit(src);
         }
-
+        
         // 通过 dumpling::dispatch 在运行时线程上求值；依据结果管理续接状态与输入区
         func evalAndCommit(self: ReplConsole, src: string)=> void
         {
             let repl_handle = self.m_repl;
-            match (dumpling::dispatch(func() { return repl_handle->eval(src); }))
+            
+            match (repl_handle->eval(src))
             {
-                err(msg)?
-                    self->appendLine(KIND_ERROR, F"调度失败: {msg}");
-                ok(res)?
+            
+                Ok(out)?
                 {
-                    match (res)
+                    self.m_continuing = false;
+                    if (src->len > 0)
                     {
-                        Ok(out)?
-                        {
-                            self.m_continuing = false;
-                            if (src->len > 0)
-                            {
-                                self.m_history->add(src);
-                                self.m_history_pos = self.m_history->len;
-                            }
-                            self->resetEditor();
-                            match (out)
-                            {
-                                none?;
-                                value(s)?
-                                    self->appendLine(KIND_OUTPUT, s);
-                            }
-                        }
-                        CompileError(errs)?
-                        {
-                            self.m_continuing = false;
-                            self->resetEditor();
-                            self->appendLine(KIND_ERROR, errs->to_string());
-                        }
-                        RuntimeError(rmsg)?
-                        {
-                            self.m_continuing = false;
-                            self->resetEditor();
-                            self->appendLine(KIND_ERROR, F"运行时错误: {rmsg}");
-                        }
-                        Incomplete?
-                            self.m_continuing = true;
+                        self.m_history->add(src);
+                        self.m_history_pos = self.m_history->len;
+                    }
+                    self->resetEditor();
+                    match (out)
+                    {
+                        none?;
+                        value(s)?
+                            self->appendLine(KIND_OUTPUT, s);
                     }
                 }
+                CompileError(errs)?
+                {
+                    self.m_continuing = false;
+                    self->resetEditor();
+                    self->appendLine(KIND_ERROR, errs->to_string());
+                }
+                RuntimeError?
+                {
+                    self.m_continuing = false;
+                    self->resetEditor();
+                    self->appendLine(KIND_ERROR, F"已终止");
+                }
+                OutOfMemory?
+                {
+                    self.m_continuing = false;
+                    self->resetEditor();
+                    self->appendLine(KIND_ERROR, F"内存不足");
+                }
+                Incomplete?
+                    self.m_continuing = true;
             }
         }
-
+        
         func clearScreen(self: ReplConsole)=> void
         {
             self.m_lines->clear();
             self.m_continuing = false;
             self->resetEditor();
         }
-
+        
         func historyPrev(self: ReplConsole)=> void
         {
             if (self.m_history->len == 0)
@@ -272,7 +272,7 @@ namespace JEEditor::Editor
                 self.m_history_pos -= 1;
             self.m_editor->SetText(self.m_history[self.m_history_pos]);
         }
-
+        
         func historyNext(self: ReplConsole)=> void
         {
             if (self.m_history->len == 0)
@@ -284,33 +284,33 @@ namespace JEEditor::Editor
             else
                 self.m_editor->SetText(self.m_history[self.m_history_pos]);
         }
-
+        
         func drawOutput(self: ReplConsole)=> void
         {
             PushTextWrapPos(0.);
             defer PopTextWrapPos();
-
+            
             let mut drew_any = false;
             for (let (kind, text) : self.m_lines)
             {
                 drew_any = true;
                 TextColored(lineColor(kind), text);
             }
-
+            
             if (!drew_any)
                 TextDisabled("(等待输入...)");
-
+                
             let cur_count = self.m_lines->len;
             if (self.m_auto_scroll && cur_count != self.m_last_count)
                 SetScrollHereY(1.);
             self.m_last_count = cur_count;
         }
-
+        
         func editorHeight()=> real
         {
             return GetTextLineHeight() * (EDITOR_LINES as real) + 8.;
         }
-
+        
         func drawInput(self: ReplConsole)=> void
         {
             if (self.m_refocus)
@@ -318,11 +318,11 @@ namespace JEEditor::Editor
                 SetKeyboardFocusHere(0);
                 self.m_refocus = false;
             }
-
+            
             let avail = GetContentRegionAvail();
             CodeEditorSize(self.m_editor, "##ReplEditor", (avail.0, editorHeight()), true);
         }
-
+        
         public func run(self: ReplConsole)=> bool
         {
             if (Button("清除"))
@@ -342,21 +342,21 @@ namespace JEEditor::Editor
                 SameLine();
                 TextDisabled("(多行续接中: 继续 Ctrl+Enter 提交)");
             }
-
+            
             Separator();
-
+            
             let avail = GetContentRegionAvail();
             let output_h = avail.1 - editorHeight();
-
+            
             if (output_h > 0. && BeginChildSizeFlags("##ReplOutput", avail.0, output_h,
                     WindowsAttribute::ImGuiWindowFlags_HorizontalScrollbar))
                 self->drawOutput();
             EndChild();
-
+            
             Separator();
-
+            
             self->drawInput();
-
+            
             return !self.m_close;
         }
     }
