@@ -101,6 +101,14 @@ namespace JEEditor::Editor
             ldef->SetCaseSensitive(true);
             ldef->SetAutoIndentation(true);
 
+            // ImGuiColorTextEdit 仅在正则/分词器把某段文本识别为 Identifier 后，
+            // 才会比对关键字表。若不添加任何 AddTokenRegex，所有字符都会停留在
+            // PaletteIndex::Default（灰色），导致关键字/数字等高亮全部失效。
+            ldef->AddTokenRegex(@"[A-Za-z_][A-Za-z0-9_]*"@, CodeEditorContext::PaletteIndex::Identifier);
+            ldef->AddTokenRegex(@"0[xX][0-9A-Fa-f]+"@, CodeEditorContext::PaletteIndex::Number);
+            ldef->AddTokenRegex(@"[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?"@, CodeEditorContext::PaletteIndex::Number);
+            ldef->AddTokenRegex(@""(\\.|[^"\\])*""@, CodeEditorContext::PaletteIndex::String);
+
             ctx->SetLanguageDefinition(ldef);
             return ctx;
         }
