@@ -19,7 +19,8 @@ namespace JEEditor::Editor
     // Woolang REPL 交互控制台
     // 基于 pkg::dumpling::Repl 提供交互式代码求值：
     //   - CodeEditor 多行输入框（语法高亮），Ctrl+Enter 提交（或点击“运行”按钮）
-    //   - 当求值返回 Incomplete 时进入多行续接（“...”提示符），输入区保留已输入内容
+    //   - 当求值返回 Incomplete 时进入多行续接（“...”提示符）：已输入源码累积到缓冲，
+    //     后续输入追加到缓冲后整体求值（对齐 wo_driver 的 buffer 累积模型）
     //   - 命令历史（Alt+上/下方向键浏览）
     //   - 输出着色、自动滚动、缓冲上限裁剪
     using ReplConsole = struct{
@@ -34,8 +35,9 @@ namespace JEEditor::Editor
         // 代码编辑器输入上下文（取代单行 InputText）
         m_editor: CodeEditorContext,
         
-        // 多行续接标志：当 eval 返回 Incomplete 时为 true，输入区保留已输入源码
-        m_continuing: mut bool,
+        // 多行续接累积缓冲：当 eval 返回 Incomplete 时缓存已输入源码，
+        // 后续输入追加到此后整体求值（对齐 wo_driver 的 buffer 累积模型）
+        m_buffer: mut string,
         
         // 命令历史与浏览游标
         m_history: vec<string>,
@@ -121,7 +123,7 @@ namespace JEEditor::Editor
                 m_repl = dumpling::Repl::create(),
                 m_lines = []mut as vec<(int, string)>,
                 m_editor = makeEditor(),
-                m_continuing = mut false,
+                m_buffer = mut "",
                 m_history = []mut as vec<string>,
                 m_history_pos = mut -1,
                 m_auto_scroll = mut true,
@@ -196,30 +198,34 @@ namespace JEEditor::Editor
             let src = self.m_editor->GetText();
             self.m_refocus = true;
             
-            let prompt = self.m_continuing ? "... " | "woo> ";
+            let continuing = self.m_buffer->len > 0;
+            
+            // 空输入且无续接：忽略（对齐 wo_driver: buffer 与 line 均为空时跳过）
+            if (src->len == 0 && !continuing)
+                return;
+            
+            let prompt = continuing ? "... " | "woo> ";
             self->appendLine(KIND_PROMPT, prompt + src);
             
-            // 空输入且无续接：忽略
-            if (src->len == 0 && !self.m_continuing)
-                return;
-                
-            self->evalAndCommit(src);
+            // 累积多行源码：将本次输入追加到续接缓冲后整体求值
+            let full = continuing ? self.m_buffer + "\n" + src | src;
+            self->evalAndCommit(full);
         }
         
-        // 通过 dumpling::dispatch 在运行时线程上求值；依据结果管理续接状态与输入区
-        func evalAndCommit(self: ReplConsole, src: string)=> void
+        // 求值并依据结果管理续接缓冲与输入区（对齐 wo_driver 的 REPL 循环）
+        func evalAndCommit(self: ReplConsole, full_src: string)=> void
         {
             let repl_handle = self.m_repl;
             
-            match (repl_handle->eval(src))
+            match (repl_handle->eval(full_src))
             {
             
                 Ok(out)?
                 {
-                    self.m_continuing = false;
-                    if (src->len > 0)
+                    self.m_buffer = "";
+                    if (full_src->len > 0)
                     {
-                        self.m_history->add(src);
+                        self.m_history->add(full_src->trim);
                         self.m_history_pos = self.m_history->len;
                     }
                     self->resetEditor();
@@ -232,31 +238,36 @@ namespace JEEditor::Editor
                 }
                 CompileError(errs)?
                 {
-                    self.m_continuing = false;
+                    self.m_buffer = "";
                     self->resetEditor();
                     self->appendLine(KIND_ERROR, errs->to_string());
                 }
                 RuntimeError?
                 {
-                    self.m_continuing = false;
+                    self.m_buffer = "";
                     self->resetEditor();
                     self->appendLine(KIND_ERROR, F"已终止");
                 }
                 OutOfMemory?
                 {
-                    self.m_continuing = false;
+                    self.m_buffer = "";
                     self->resetEditor();
                     self->appendLine(KIND_ERROR, F"内存不足");
                 }
                 Incomplete?
-                    self.m_continuing = true;
+                {
+                    // 需要更多输入：保留累积缓冲，清空输入区等待下一行
+                    // （对齐 wo_driver: WO_REPL_INCOMPLETE_INPUT 时保持 buffer 继续读取）
+                    self.m_buffer = full_src;
+                    self->resetEditor();
+                }
             }
         }
         
         func clearScreen(self: ReplConsole)=> void
         {
             self.m_lines->clear();
-            self.m_continuing = false;
+            self.m_buffer = "";
             self->resetEditor();
         }
         
@@ -332,7 +343,7 @@ namespace JEEditor::Editor
             }
             SameLine();
             
-            if (self.m_continuing)
+            if (self.m_buffer->len > 0)
             {
                 SameLine();
                 TextDisabled("(多行续接中: 继续 Ctrl+Enter 提交)");

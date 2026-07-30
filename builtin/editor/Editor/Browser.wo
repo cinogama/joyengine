@@ -28,32 +28,65 @@ using JEEditor::GUI::Icons;
 
 namespace JEEditor::Editor
 {
-    using FilePayload = struct
-    {
+    using FilePayload = struct{
         m_path: fsys::path_t,
     }
     {
         public let type = "JE_EDITOR_BROWSER_FILE_PATH";
         
-        public func restore(data: string) => option<FilePayload>
+        public func create(p: fsys::path_t)=> FilePayload
+            where require!(FilePayload : Drag::IDragPayload);
         {
-            return option::value(FilePayload { m_path = normalize(data) });
+            return FilePayload{
+                m_path = p,
+            };
         }
         
+        public func restore(data: string) => option<FilePayload>
+        {
+            return option::value(FilePayload::create(normalize(data)));
+        }
         public func dump(self: FilePayload) => string
         {
             return self.m_path->to_string;
         }
-        
         public func tips(self: FilePayload) => string
         {
             return F"移动: {filename(self.m_path)}";
         }
     }
     
+    using SavingRequestPayload = struct{
+    }
+    {
+        public let type = "JE_EDITOR_BROWSER_SAVING_REQUEST";
+        
+        public func create()=> SavingRequestPayload
+            where require!(SavingRequestPayload : Drag::IDragPayload);
+        {
+            return SavingRequestPayload{};
+        }
+        
+        public func restore(data: string) => option<SavingRequestPayload>
+        {
+            do data;
+            return option::value(SavingRequestPayload {  });
+        }
+        public func dump(self: SavingRequestPayload) => string
+        {
+            do self;
+            return "";
+        }
+        public func tips(self: SavingRequestPayload) => string
+        {
+            do self;
+            return F"保存: ...";
+        }
+    }
+    
     using Browser = struct{
         m_close: mut bool,
-
+        
         m_root: fsys::path_t,
         m_current: mut fsys::path_t,
         m_selected: mut option<fsys::path_t>,
@@ -93,7 +126,7 @@ namespace JEEditor::Editor
                     browser_instance->close();
             }
         }
-
+        
         func childDirs(dir: fsys::path_t)=> array<fsys::path_t>
         {
             return walk(dir)
@@ -157,7 +190,7 @@ namespace JEEditor::Editor
             let root = workpath();
             return Browser{
                 m_close = mut false,
-
+                
                 m_root = root,
                 m_current = mut root,
                 m_selected = mut option::none,
@@ -217,6 +250,8 @@ namespace JEEditor::Editor
                 self->drawFileList();
             }
             EndChild();
+
+            self->acceptSavingDrop();
             
             return !self.m_close;
         }
@@ -442,7 +477,7 @@ namespace JEEditor::Editor
                     let clicked = SelectableSelected(
                         F"{name}/##{d->to_string()}", is_selected);
                         
-                    Drag::DragPayload(FilePayload { m_path = d });
+                    Drag::DragPayload(FilePayload::create(d));
                     
                     if (IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Right))
                         self.m_selected = option::value(d);
@@ -464,7 +499,7 @@ namespace JEEditor::Editor
                     let clicked = SelectableSelected(
                         F"{name}##{f->to_string()}", is_selected);
                         
-                    Drag::DragPayload(FilePayload { m_path = f });
+                    Drag::DragPayload(FilePayload::create(f));
                     
                     if (IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Right))
                         self.m_selected = option::value(f);
@@ -555,6 +590,16 @@ namespace JEEditor::Editor
                 none?;
                 value(payload)?
                     self->requestMove(payload.m_path, target_dir);
+            }
+        }
+        
+        func acceptSavingDrop(_: Browser)
+        {
+            match (Drag::AcceptDrag:<SavingRequestPayload>())
+            {
+                none?;
+                value(_)?
+                    ;
             }
         }
         

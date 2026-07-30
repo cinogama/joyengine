@@ -21,7 +21,7 @@ namespace JEEditor::GUI::Drag
     public func DragPayload<T>(payload: T)
         where require!(T: IDragPayload);
     {
-        if (BeginDragDropSource())
+        if (BeginDragDropSourceAttr(DragAttribute::ImGuiDragDropFlags_SourceAllowNullID))
         {
             defer EndDragDropSource();
             do SetDragDropPayload(typeof<T>::type, payload->dump);

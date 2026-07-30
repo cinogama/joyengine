@@ -28,6 +28,8 @@ import builtin::editor::GUI::Forms::InputBox;
 import builtin::editor::Inspector::World;
 import builtin::editor::Inspector::Universe;
 
+import Browser;
+
 using std;
 
 using je;
@@ -197,6 +199,22 @@ namespace JEEditor::Editor
         
         public func run(self: WorldEditorViewport)=> bool
         {
+            if (self.m_saving_path->is_none)
+            {
+                match(Icons::WORLD)
+                {
+                    value(icon)?
+                    {
+                        ImageSize(icon, 32., 32.);
+                        Drag::DragPayload(SavingRequestPayload::create());
+
+                        SameLine();
+                        TextDisabled("当前世界尚未保存到文件中，拖动图标到资源管理器以保存");
+                    }
+                    none?;
+                }
+            }
+            
             if (IsWindowFocusedFlags(FocusedFlags::ImGuiFocusedFlags_RootAndChildWindows))
                 s_last_focusd_world_view = option::value(self);
                 
@@ -352,7 +370,7 @@ namespace JEEditor::Editor
                 {
                     if (e->towoo::get_component:<Editor::Invisible>->is_value)
                         continue;
-
+                        
                     let result = camera_ray->intersect(
                         e->towoo::get_component:<Transform::Translation>->unwrap,
                         e->towoo::get_component:<Renderer::Shape>,
