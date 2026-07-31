@@ -508,6 +508,11 @@ namespace Camera
        extern("libjoyecs", "wojeapi_towoo_camera_rendtoframebuffer_set")
             public func set(self: RendToFramebuffer, framebuf: option<je::graphic::framebuffer>)=> void;
     }
+    namespace Projection
+    {
+        extern("libjoyecs", "wojeapi_towoo_camera_projection_get_default_uniform_buf")
+            public func get_default_uniform_buffer()=> je::graphic::uniformbuffer;
+    }
 }
 namespace Animation
 {

@@ -1702,16 +1702,19 @@ WOORT_API woort_api wojeapi_shader_create(void)
     }
 
     std::optional<jeecs::basic::resource<jeecs::graphic::shader>> loaded_shader;
+    const woort_U8CString shader_path = woort_string(1);
+    const woort_U8CString shader_content = woort_string(2);
+
     woort_vm* const last = woort_vm_swap(nullptr);
     {
         loaded_shader = jeecs::graphic::shader::create(
-            gcontext, woort_string(1), woort_string(2));
+            gcontext, shader_path, shader_content);
     }
     (void)woort_vm_swap(last);
 
     if (loaded_shader.has_value())
     {
-        return woort_ret_gchandle(
+        return woort_ret_option_gchandle(
             new jeecs::basic::resource<jeecs::graphic::shader>(loaded_shader.value()),
             WOORT_IGNORE,
             [](void* ptr)
@@ -1890,7 +1893,7 @@ WOORT_API woort_api wojeapi_vertex_create(void)
     (void)woort_vm_swap(last);
 
     if (loaded_vertex.has_value())
-        return woort_ret_gchandle(
+        return woort_ret_option_gchandle(
             new jeecs::basic::resource<jeecs::graphic::vertex>(loaded_vertex.value()),
             WOORT_IGNORE,
             [](void* ptr)
@@ -1899,7 +1902,7 @@ WOORT_API woort_api wojeapi_vertex_create(void)
             },
             nullptr);
 
-    return woort_ret_panic("Bad vertex format.");
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api wojeapi_vertex_path(void)

@@ -1834,3 +1834,18 @@ WOORT_API woort_api wojeapi_towoo_camera_rendtoframebuffer_set(void)
 
     return woort_ret_void();
 }
+
+WOORT_API woort_api wojeapi_towoo_camera_projection_get_default_uniform_buf(void)
+{
+    auto& projection =
+        wo_component<jeecs::Camera::Projection>(0, WOORT_RETURN_SLOT);
+
+    return woort_ret_option_gchandle(
+        new jeecs::basic::resource<jeecs::graphic::uniformbuffer>(projection.default_uniform_buffer),
+        WOORT_IGNORE,
+        [](void* ptr)
+        {
+            delete (jeecs::basic::resource<jeecs::graphic::uniformbuffer> *)ptr;
+        },
+        nullptr);
+}

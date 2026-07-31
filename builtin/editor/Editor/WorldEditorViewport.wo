@@ -70,6 +70,9 @@ namespace JEEditor::Editor
         m_orbit_distance: mut real,
         m_rotation_x: mut quat,
         m_rotation_y: mut quat,
+
+        // Gizmo
+        m_gizmo_draw_branch : rendchain_branch,
     }
     {
         let TRASNLATION_SYSTEM_TYPE =
@@ -104,6 +107,9 @@ namespace JEEditor::Editor
         func create(w: world, name: string, path: option<path_t>)=> WorldEditorViewport
             where require!(WorldEditorViewport: IWindows);
         {
+            let graphic_uhost = graphic_uhost::get_or_create(
+                    w->get_universe);
+
             // 注意：按照设计，WorldEditorViewport 的生命周期应当比 world 实例更长
             //      因此，世界实例的释放将由 WorldEditorViewport 在 onClose 时执行
             return WorldEditorViewport{
@@ -128,6 +134,8 @@ namespace JEEditor::Editor
                 m_orbit_distance = mut CAMERA_DEFAULT_ORBIT_DISTANCE,
                 m_rotation_x = mut quat::ident,
                 m_rotation_y = mut quat::ident,
+
+                m_gizmo_draw_branch = graphic_uhost->alloc_branch(),
             };
         }
         
@@ -148,6 +156,11 @@ namespace JEEditor::Editor
         }
         public func onClose(self: WorldEditorViewport)=> void
         {
+            let graphic_uhost = graphic_uhost::get_or_create(
+                    self.m_world_instance->get_universe);
+
+            graphic_uhost->free_branch(self.m_gizmo_draw_branch);
+
             if (self.m_is_look_active)
                 input::set_lock_mouse(false);
                 
@@ -197,6 +210,93 @@ namespace JEEditor::Editor
             return SizeConstraints::Limited(((320., 240.), (4096., 4096.)));
         }
         
+        public func drawGizmos(self: WorldEditorViewport)=> void
+        {
+            do try!{
+                try! fb = self.m_editor_walk_camera_frame_buffer;
+
+                let GIZMO_REND_QUEUE = 1000000;
+                self.m_gizmo_draw_branch->new_frame(GIZMO_REND_QUEUE);
+
+                let gizmo_rend_chain = self.m_gizmo_draw_branch->new_chain(
+                    option::value(fb), 0, 0, 0, 0);
+
+                static let s = shader::create(
+                    option::none,
+                    "!/demo.shader",
+                    @"
+import woo::std;
+
+import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
+SHARED  (true);
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+CULL    (NONE);
+
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex  : float3,
+        uv      : float2,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos     : float4,
+        uv      : float2,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        color   : float4,
+    };
+    
+public func vert(v: vin)
+{
+    return v2f{
+        pos = vec4!(v.vertex, 1.),
+        uv = v.uv,
+    };
+}
+
+let NearestSampler  = Sampler2D::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+WOSHADER_UNIFORM!
+    let Main        = texture2d::uniform(0, NearestSampler);
+    
+public func frag(vf: v2f)
+{
+    return fout{
+        color = alphatest(tex2d(Main, vf.uv)),
+    };
+}
+                    "@,
+                );
+
+                static let v = vertex::create(
+                    vertex::type::TRIANGLESTRIP,
+                    [
+                        -0.5,  0.5, 0.0,  0.0, 1.0,  0.0, 0.0, -1.0,  1.0, 0.0, 0.0,
+                        -0.5, -0.5, 0.0,  0.0, 0.0,  0.0, 0.0, -1.0,  1.0, 0.0, 0.0,
+                        0.5,  0.5, 0.0,  1.0, 1.0,  0.0, 0.0, -1.0,  1.0, 0.0, 0.0,
+                        0.5, -0.5, 0.0,  1.0, 0.0,  0.0, 0.0, -1.0,  1.0, 0.0, 0.0,
+                    ],
+                    [0, 1, 2, 3],
+                    [3, 2, 3, 3],
+                );
+
+                let g = gizmo_rend_chain->allocate_texture_group();
+                gizmo_rend_chain->bind_texture(g, 0, Icons::ENTITY->unwrap);
+
+                do gizmo_rend_chain->draw(s->unwrap, v->unwrap, option::value(g));
+                
+                return_value!;
+            };
+        }
+
         public func run(self: WorldEditorViewport)=> bool
         {
             if (self.m_saving_path->is_none)
@@ -221,7 +321,8 @@ namespace JEEditor::Editor
             self->updateWalkCameraFramebuffer();
             
             let mut viewport_hovered = false;
-            
+            self->drawGizmos();
+
             match (self.m_editor_walk_camera_frame_buffer=>>\fb = fb->attachment(0);)
             {
                 none?
@@ -578,7 +679,8 @@ namespace JEEditor::Editor
         {
             if (self->isCurrentViewportAvailable && self.m_name != new_name)
             {
-                match (Windows::show(create(self.m_world_instance, new_name, self.m_saving_path)))
+                match (Windows::show(
+                    create(self.m_world_instance, new_name, self.m_saving_path)))
                 {
                     none?
                     {
