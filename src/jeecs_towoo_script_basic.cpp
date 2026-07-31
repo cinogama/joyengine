@@ -247,7 +247,7 @@ namespace jeecs
                 // 并刷新 arch 信息；后续每帧由 _arch_modified 统一驱动更新，生命周期由世界托管。
                 je_RequirementCollection* collection = nullptr;
                 if (!je_ecs_world_query_slice_dependence(
-                        world_handle, this, work.m_work_sequence, &collection))
+                    world_handle, this, work.m_work_sequence, &collection))
                 {
                     collection->m_collected_requirement = je_ecs_collect_requirements(
                         work.m_requirements.data(),
@@ -274,7 +274,7 @@ namespace jeecs
                         auto entity_meta_addr = je_arch_entity_meta_addr_in_chunk(cur_chunk);
                         je_Version version;
                         for (je_EntityIdInChunk eid = 0;
-                            eid < archinfo.m_entity_count; 
+                            eid < archinfo.m_entity_count;
                             ++eid)
                         {
                             if (JE_ENTITY_STAT_READY != entity_meta_addr[eid].m_stat)
@@ -289,8 +289,8 @@ namespace jeecs
                                 const size_t unit_size = archinfo.m_view_component_size[cmpid];
                                 void* component = unit_size != 0
                                     ? static_cast<char*>(static_cast<void*>(cur_chunk))
-                                        + archinfo.m_view_component_offset[cmpid]
-                                        + unit_size * eid
+                                    + archinfo.m_view_component_offset[cmpid]
+                                    + unit_size * eid
                                     : nullptr;
                                 const auto* typeinfo = *cmpidx;
                                 const woort_value component_st = stack_base + 2 + cmpid;
@@ -1848,4 +1848,72 @@ WOORT_API woort_api wojeapi_towoo_camera_projection_get_default_uniform_buf(void
             delete (jeecs::basic::resource<jeecs::graphic::uniformbuffer> *)ptr;
         },
         nullptr);
+}
+
+WOORT_API woort_api wojeapi_towoo_camera_projection_get_view_mat(void)
+{
+    auto& projection =
+        wo_component<jeecs::Camera::Projection>(0, WOORT_RETURN_SLOT);
+
+    woort_set_struct(WOORT_RETURN_SLOT, 16);
+    for (size_t i = 0; i < 16; ++i)
+    {
+        woort_struct_set_float(
+            WOORT_RETURN_SLOT, 
+            i, 
+            (reinterpret_cast<float*>(projection.view))[i]);
+    }
+
+    return woort_ret();
+}
+
+WOORT_API woort_api wojeapi_towoo_camera_projection_get_proj_mat(void)
+{
+    auto& projection =
+        wo_component<jeecs::Camera::Projection>(0, WOORT_RETURN_SLOT);
+
+    woort_set_struct(WOORT_RETURN_SLOT, 16);
+    for (size_t i = 0; i < 16; ++i)
+    {
+        woort_struct_set_float(
+            WOORT_RETURN_SLOT,
+            i,
+            (reinterpret_cast<float*>(projection.projection))[i]);
+    }
+
+    return woort_ret();
+}
+
+WOORT_API woort_api wojeapi_towoo_camera_projection_get_inv_proj_mat(void)
+{
+    auto& projection =
+        wo_component<jeecs::Camera::Projection>(0, WOORT_RETURN_SLOT);
+
+    woort_set_struct(WOORT_RETURN_SLOT, 16);
+    for (size_t i = 0; i < 16; ++i)
+    {
+        woort_struct_set_float(
+            WOORT_RETURN_SLOT,
+            i,
+            (reinterpret_cast<float*>(projection.inv_projection))[i]);
+    }
+
+    return woort_ret();
+}
+
+WOORT_API woort_api wojeapi_towoo_camera_projection_get_view_proj_mat(void)
+{
+    auto& projection =
+        wo_component<jeecs::Camera::Projection>(0, WOORT_RETURN_SLOT);
+
+    woort_set_struct(WOORT_RETURN_SLOT, 16);
+    for (size_t i = 0; i < 16; ++i)
+    {
+        woort_struct_set_float(
+            WOORT_RETURN_SLOT,
+            i,
+            (reinterpret_cast<float*>(projection.view_projection))[i]);
+    }
+
+    return woort_ret();
 }

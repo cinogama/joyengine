@@ -120,6 +120,24 @@ namespace je
     }
 }
 
+using mat4 = (
+    /* mat[x][y] ------> y */
+    real, real, real, real,
+    real, real, real, real,
+    real, real, real, real,
+    real, real, real, real,)
+{
+    /* extern("libjoyecs", "wojeapi_towoo_math_mat4_multi_vec4") */
+    /* extern("libjoyecs", "wojeapi_towoo_math_mat4_multi_mat4") */
+    extern("libjoyecs",
+        another is vec4
+            ? "wojeapi_towoo_math_mat4_multi_vec4"
+            | "wojeapi_towoo_math_mat4_multi_mat4")
+        public func operator * <T>(self: mat4, another: T)=> T
+            where another is vec4 || another is mat4;
+        ;
+}
+
 namespace vec2
 {
     public func operator + (a: vec2, b: vec2)
@@ -437,7 +455,7 @@ namespace UserInterface
     namespace Origin
     {
         extern("libjoyecs", "wojeapi_towoo_userinterface_origin_layout")
-            public func get_layout(self: Origin, display_range: vec2)=> (vec2, vec2, vec2);   
+            public func get_layout(self: Origin, display_range: vec2)=> (vec2, vec2, vec2);
         extern("libjoyecs", "wojeapi_towoo_userinterface_origin_mouse_on")
             public func mouse_on(self: Origin, display_range: vec2, angle: real, mouse_pos: vec2)=> bool;
     }
@@ -505,13 +523,22 @@ namespace Camera
     {
         extern("libjoyecs", "wojeapi_towoo_camera_rendtoframebuffer_get")
             public func get(self: RendToFramebuffer)=> option<je::graphic::framebuffer>;
-       extern("libjoyecs", "wojeapi_towoo_camera_rendtoframebuffer_set")
+        extern("libjoyecs", "wojeapi_towoo_camera_rendtoframebuffer_set")
             public func set(self: RendToFramebuffer, framebuf: option<je::graphic::framebuffer>)=> void;
     }
     namespace Projection
     {
         extern("libjoyecs", "wojeapi_towoo_camera_projection_get_default_uniform_buf")
-            public func get_default_uniform_buffer()=> je::graphic::uniformbuffer;
+            public func get_default_uniform_buffer(self: Projection)=> je::graphic::uniformbuffer;
+            
+        extern("libjoyecs", "wojeapi_towoo_camera_projection_get_view_mat")
+            public func get_view_mat(self: Projection)=> mat4;
+        extern("libjoyecs", "wojeapi_towoo_camera_projection_get_proj_mat")
+            public func get_proj_mat(self: Projection)=> mat4;
+        extern("libjoyecs", "wojeapi_towoo_camera_projection_get_inv_proj_mat")
+            public func get_inv_proj_mat(self: Projection)=> mat4;
+        extern("libjoyecs", "wojeapi_towoo_camera_projection_get_view_proj_mat")
+            public func get_view_proj_mat(self: Projection)=> mat4;
     }
 }
 namespace Animation

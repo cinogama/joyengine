@@ -1,6 +1,8 @@
 // Joyengine 4.x
 import woo::std;
+
 import je::ecs;
+
 import pkg::buffer;
 
 namespace je
@@ -196,7 +198,6 @@ namespace je
         {
             extern("libjoyecs", "wojeapi_uniformbuffer_create")
                 public func create(binding_place: int, buffer_size: int)=> option<uniformbuffer>;
-            
             extern("libjoyecs", "wojeapi_uniformbuffer_update")
                 public func update(self: uniformbuffer, offset: int, data: buffer)=> void;
         }
@@ -307,17 +308,29 @@ namespace je
                     std::panic("Here should not been exec.");
             }
             
-            public func set_uniform_mat4x4(self: rend_action, shad: shader, name: string, val: (real, real, real, real, real, real, real, real, real, real, real, real, real, real, real, real))
+            public func set_uniform_mat4x4(
+                self: rend_action, 
+                shad: shader, 
+                name: string, 
+                val: (real, real, real, real, real, real, real, real, real, real, real, real, real, real, real, real))
             {
                 _set_uniform_float4x4(self, shad, name, val...);
             }
             
-            public func set_uniform_mat3x3(self: rend_action, shad: shader, name: string, val: (real, real, real, real, real, real, real, real, real))
+            public func set_uniform_mat3x3(
+                self: rend_action, 
+                shad: shader, 
+                name: string, 
+                val: (real, real, real, real, real, real, real, real, real))
             {
                 _set_uniform_float3x3(self, shad, name, val...);
             }
             
-            public func set_uniform_mat2x2(self: rend_action, shad: shader, name: string, val: (real, real, real, real))
+            public func set_uniform_mat2x2(
+                self: rend_action, 
+                shad: shader, 
+                name: string, 
+                val: (real, real, real, real))
             {
                 _set_uniform_float2x2(self, shad, name, val...);
             }
