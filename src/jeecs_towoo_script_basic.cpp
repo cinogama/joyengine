@@ -1321,6 +1321,17 @@ void wo_set_quat(woort_value target, const jeecs::math::quat& v)
     woort_struct_set_float(target, 2, v.z);
     woort_struct_set_float(target, 3, v.w);
 }
+void wo_mat4(float* out_mat, woort_value val)
+{
+    for (size_t i = 0; i < 16; ++i)
+        out_mat[i] = woort_struct_get_float(val, i);
+}
+void wo_set_mat4(woort_value target, const float* mat)
+{
+    woort_set_struct(target, 16);
+    for (size_t i = 0; i < 16; ++i)
+        woort_struct_set_float(target, i, mat[i]);
+}
 
 template <typename T>
 T& wo_component(woort_value val, woort_value tmp)
@@ -1432,6 +1443,51 @@ WOORT_API woort_api wojeapi_towoo_math_quat_slerp(void)
             wo_quat(0),
             wo_quat(1),
             woort_float(2)));
+    return woort_ret();
+}
+WOORT_API woort_api wojeapi_towoo_math_mat4_multi_vec4(void)
+{
+    float left_mat[16];
+    wo_mat4(left_mat, 0);
+
+    auto right_vec = wo_vec4(1);
+
+    float result[4];
+    jeecs::math::mat4xvec4(result, left_mat, &right_vec.x);
+    wo_set_vec4(WOORT_RETURN_SLOT, jeecs::math::vec4(result[0], result[1], result[2], result[3]));
+    return woort_ret();
+}
+WOORT_API woort_api wojeapi_towoo_math_mat4_multi_mat4(void)
+{
+    float left_mat[16];
+    wo_mat4(left_mat, 0);
+
+    float right_mat[16];
+    wo_mat4(right_mat, 1);
+
+    float result[16];
+    jeecs::math::mat4xmat4(result, left_mat, right_mat);
+    wo_set_mat4(WOORT_RETURN_SLOT, result);
+    return woort_ret();
+}
+WOORT_API woort_api wojeapi_towoo_math_quat_to_mat(void)
+{
+    auto quat = wo_quat(0);
+
+    float result[16];
+    quat.create_matrix(result);
+    wo_set_mat4(WOORT_RETURN_SLOT, result);
+    return woort_ret();
+}
+WOORT_API woort_api wojeapi_towoo_math_mat4_transform(void)
+{
+    float result[16];
+    jeecs::math::transform(
+        result,
+        wo_vec3(0),
+        wo_quat(1),
+        wo_vec3(2));
+    wo_set_mat4(WOORT_RETURN_SLOT, result);
     return woort_ret();
 }
 

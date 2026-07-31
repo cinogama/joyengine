@@ -136,6 +136,9 @@ using mat4 = (
         public func operator * <T>(self: mat4, another: T)=> T
             where another is vec4 || another is mat4;
         ;
+
+    extern("libjoyecs", "wojeapi_towoo_math_mat4_transform")
+        public func transform(trans: vec3, rotation: quat, scale: vec3)=> mat4;
 }
 
 namespace vec2
@@ -380,6 +383,9 @@ namespace quat
     extern("libjoyecs", "wojeapi_towoo_math_quat_slerp")
         public func slerp(a: quat, b: quat, t: real)=> quat;
         
+    extern("libjoyecs", "wojeapi_towoo_math_quat_to_mat")
+        public func to_mat(self: quat)=> mat4;
+
     public func operator * (self: quat, b)
         where b is vec3 || b is quat;
     {

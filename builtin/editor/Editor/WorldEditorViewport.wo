@@ -61,6 +61,9 @@ namespace JEEditor::Editor
         m_fb_pending_size: mut ImVec2,
         m_fb_settle_counter: mut int,
         
+        m_choice_entity_ray: mut option<towoo::ray>,
+        m_selected_entity_id: mut option<entity::internal::euid_t>,
+        
         // Camera control state:
         m_last_time: mut real,
         m_is_look_active: mut bool,
@@ -70,7 +73,7 @@ namespace JEEditor::Editor
         m_orbit_distance: mut real,
         m_rotation_x: mut quat,
         m_rotation_y: mut quat,
-
+        
         // Gizmo
         m_gizmo_draw_branch : rendchain_branch,
     }
@@ -108,8 +111,8 @@ namespace JEEditor::Editor
             where require!(WorldEditorViewport: IWindows);
         {
             let graphic_uhost = graphic_uhost::get_or_create(
-                    w->get_universe);
-
+                w->get_universe);
+                
             // 注意：按照设计，WorldEditorViewport 的生命周期应当比 world 实例更长
             //      因此，世界实例的释放将由 WorldEditorViewport 在 onClose 时执行
             return WorldEditorViewport{
@@ -125,6 +128,9 @@ namespace JEEditor::Editor
                 m_fb_pending_size = mut (0., 0.),
                 m_fb_settle_counter = mut 0,
                 
+                m_choice_entity_ray = mut option::none,
+                m_selected_entity_id = mut option::none,
+                
                 // Camera control state:
                 m_last_time = mut 0.,
                 m_is_look_active = mut false,
@@ -134,7 +140,7 @@ namespace JEEditor::Editor
                 m_orbit_distance = mut CAMERA_DEFAULT_ORBIT_DISTANCE,
                 m_rotation_x = mut quat::ident,
                 m_rotation_y = mut quat::ident,
-
+                
                 m_gizmo_draw_branch = graphic_uhost->alloc_branch(),
             };
         }
@@ -157,10 +163,10 @@ namespace JEEditor::Editor
         public func onClose(self: WorldEditorViewport)=> void
         {
             let graphic_uhost = graphic_uhost::get_or_create(
-                    self.m_world_instance->get_universe);
-
+                self.m_world_instance->get_universe);
+                
             graphic_uhost->free_branch(self.m_gizmo_draw_branch);
-
+            
             if (self.m_is_look_active)
                 input::set_lock_mouse(false);
                 
@@ -213,14 +219,18 @@ namespace JEEditor::Editor
         public func drawGizmos(self: WorldEditorViewport)=> void
         {
             do try!{
+                // 获取目标纹理缓冲区，如果没有就不绘制 gizmo 了。
                 try! fb = self.m_editor_walk_camera_frame_buffer;
-
+                
+                // GIZMO 的绘制层级，需要一个足够大的数字以确保 GIZMO 总是最后绘制
                 let GIZMO_REND_QUEUE = 1000000;
+                
+                // 开始新的一帧~
                 self.m_gizmo_draw_branch->new_frame(GIZMO_REND_QUEUE);
-
+                
                 let gizmo_rend_chain = self.m_gizmo_draw_branch->new_chain(
                     option::value(fb), 0, 0, 0, 0);
-
+                    
                 static let s = shader::create(
                     option::none,
                     "!/demo.shader",
@@ -274,8 +284,8 @@ public func frag(vf: v2f)
     };
 }
                     "@,
-                );
-
+                    );
+                    
                 static let v = vertex::create(
                     vertex::type::TRIANGLESTRIP,
                     [
@@ -287,16 +297,16 @@ public func frag(vf: v2f)
                     [0, 1, 2, 3],
                     [3, 2, 3, 3],
                 );
-
+                
                 let g = gizmo_rend_chain->allocate_texture_group();
                 gizmo_rend_chain->bind_texture(g, 0, Icons::ENTITY->unwrap);
-
+                
                 do gizmo_rend_chain->draw(s->unwrap, v->unwrap, option::value(g));
                 
                 return_value!;
             };
         }
-
+        
         public func run(self: WorldEditorViewport)=> bool
         {
             if (self.m_saving_path->is_none)
@@ -307,7 +317,7 @@ public func frag(vf: v2f)
                     {
                         ImageSize(icon, 32., 32.);
                         Drag::DragPayload(SavingRequestPayload::create());
-
+                        
                         SameLine();
                         TextDisabled("当前世界尚未保存到文件中，拖动图标到资源管理器以保存");
                     }
@@ -322,7 +332,7 @@ public func frag(vf: v2f)
             
             let mut viewport_hovered = false;
             self->drawGizmos();
-
+            
             match (self.m_editor_walk_camera_frame_buffer=>>\fb = fb->attachment(0);)
             {
                 none?
@@ -411,6 +421,30 @@ public func frag(vf: v2f)
             }
         }
         
+        func sendMouseClickToChoiceEntityRequest(self: WorldEditorViewport, camera_ray: towoo::ray)
+        {
+            let mut clicked_entity = []mut: vec<entity>;
+            
+            for (let e : self.m_world_instance->internal::get_all_entities([
+                        Transform::Translation::type::typeinfo,
+                    ]))
+            {
+                if (e->towoo::get_component:<Editor::Invisible>->is_value)
+                    continue;
+                    
+                let result = camera_ray->intersect(
+                    e->towoo::get_component:<Transform::Translation>->unwrap,
+                    e->towoo::get_component:<Renderer::Shape>,
+                    true,
+                );
+                
+                if (result->is_value && e->towoo::get_component:<Editor::EntityId>->is_value)
+                {
+                    clicked_entity->add(e);
+                }
+            }
+        }
+        
         // 根据输入控制编辑器摄像机（三维/二维游走）。
         // 操作方式参考 Unity / Blender 等编辑器视口：
         //
@@ -458,29 +492,12 @@ public func frag(vf: v2f)
                 let (vpx, vpy) =
                     ((mouse_diff / viewport_size) - (0.5, 0.5) as vec2) * 2.;
                     
-                let camera_ray =
+                self->sendMouseClickToChoiceEntityRequest(
                     towoo::ray::from(
                         trans,
                         proj,
                         (vpx, -vpy) as vec2,
-                        perspectiveProjection->is_none);
-                        
-                for (let e : self.m_world_instance->internal::get_all_entities([
-                            Transform::Translation::type::typeinfo,
-                        ]))
-                {
-                    if (e->towoo::get_component:<Editor::Invisible>->is_value)
-                        continue;
-                        
-                    let result = camera_ray->intersect(
-                        e->towoo::get_component:<Transform::Translation>->unwrap,
-                        e->towoo::get_component:<Renderer::Shape>,
-                        true,
-                    );
-                    
-                    if (result->is_value)
-                        je::log(result->unwrap);
-                }
+                        perspectiveProjection->is_none));
             }
             
             match (perspectiveProjection)
@@ -680,7 +697,7 @@ public func frag(vf: v2f)
             if (self->isCurrentViewportAvailable && self.m_name != new_name)
             {
                 match (Windows::show(
-                    create(self.m_world_instance, new_name, self.m_saving_path)))
+                        create(self.m_world_instance, new_name, self.m_saving_path)))
                 {
                     none?
                     {
