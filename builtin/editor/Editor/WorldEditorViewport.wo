@@ -28,6 +28,9 @@ import builtin::editor::GUI::Forms::InputBox;
 import builtin::editor::Inspector::World;
 import builtin::editor::Inspector::Universe;
 
+import Gizmo::Shaders;
+import Gizmo::Shapes;
+
 import Browser;
 
 using std;
@@ -42,6 +45,8 @@ using JEEditor::GUI::Windows;
 using JEEditor::GUI::Drag;
 using JEEditor::GUI::Forms;
 using JEEditor::GUI::Icons;
+using JEEditor::Editor::Gizmo::Shaders;
+using JEEditor::Editor::Gizmo::Shapes;
 
 namespace JEEditor::Editor
 {
@@ -61,7 +66,6 @@ namespace JEEditor::Editor
         m_fb_pending_size: mut ImVec2,
         m_fb_settle_counter: mut int,
         
-        m_choice_entity_ray: mut option<towoo::ray>,
         m_selected_entity_id: mut option<entity::internal::euid_t>,
         
         // Camera control state:
@@ -128,7 +132,6 @@ namespace JEEditor::Editor
                 m_fb_pending_size = mut (0., 0.),
                 m_fb_settle_counter = mut 0,
                 
-                m_choice_entity_ray = mut option::none,
                 m_selected_entity_id = mut option::none,
                 
                 // Camera control state:
@@ -215,10 +218,12 @@ namespace JEEditor::Editor
         {
             return SizeConstraints::Limited(((320., 240.), (4096., 4096.)));
         }
-        
-        public func drawGizmos(self: WorldEditorViewport)=> void
+        public func drawGizmos(self: WorldEditorViewport, debug_camera: option<entity>)=> void
         {
             do try!{
+                try! camera_entity = debug_camera;
+                try! camera_projection = camera_entity->towoo::get_component:<Camera::Projection>();
+                
                 // 获取目标纹理缓冲区，如果没有就不绘制 gizmo 了。
                 try! fb = self.m_editor_walk_camera_frame_buffer;
                 
@@ -231,78 +236,56 @@ namespace JEEditor::Editor
                 let gizmo_rend_chain = self.m_gizmo_draw_branch->new_chain(
                     option::value(fb), 0, 0, 0, 0);
                     
-                static let s = shader::create(
-                    option::none,
-                    "!/demo.shader",
-                    @"
-import woo::std;
-
-import je::shader;
-import pkg::woshader;
-
-using woshader;
-using je::shader;
-
-SHARED  (true);
-ZTEST   (ALWAYS);
-ZWRITE  (DISABLE);
-CULL    (NONE);
-
-WOSHADER_VERTEX_IN!
-    using vin = struct {
-        vertex  : float3,
-        uv      : float2,
-    };
-    
-WOSHADER_VERTEX_TO_FRAGMENT!
-    using v2f = struct {
-        pos     : float4,
-        uv      : float2,
-    };
-    
-WOSHADER_FRAGMENT_OUT!
-    using fout = struct {
-        color   : float4,
-    };
-    
-public func vert(v: vin)
-{
-    return v2f{
-        pos = vec4!(v.vertex, 1.),
-        uv = v.uv,
-    };
-}
-
-let NearestSampler  = Sampler2D::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
-WOSHADER_UNIFORM!
-    let Main        = texture2d::uniform(0, NearestSampler);
-    
-public func frag(vf: v2f)
-{
-    return fout{
-        color = alphatest(tex2d(Main, vf.uv)),
-    };
-}
-                    "@,
-                    );
+                // 绑定默认 ubo
+                gizmo_rend_chain->bind_uniform_buffer(
+                    camera_projection->get_default_uniform_buffer);
                     
-                static let v = vertex::create(
-                    vertex::type::TRIANGLESTRIP,
-                    [
-                        -0.5,  0.5, 0.0,  0.0, 1.0,  0.0, 0.0, -1.0,  1.0, 0.0, 0.0,
-                        -0.5, -0.5, 0.0,  0.0, 0.0,  0.0, 0.0, -1.0,  1.0, 0.0, 0.0,
-                        0.5,  0.5, 0.0,  1.0, 1.0,  0.0, 0.0, -1.0,  1.0, 0.0, 0.0,
-                        0.5, -0.5, 0.0,  1.0, 0.0,  0.0, 0.0, -1.0,  1.0, 0.0, 0.0,
-                    ],
-                    [0, 1, 2, 3],
-                    [3, 2, 3, 3],
-                );
-                
-                let g = gizmo_rend_chain->allocate_texture_group();
-                gizmo_rend_chain->bind_texture(g, 0, Icons::ENTITY->unwrap);
-                
-                do gizmo_rend_chain->draw(s->unwrap, v->unwrap, option::value(g));
-                
+                func drawGizmo(
+                    pos: vec3,
+                    rot: quat, 
+                    scale: vec3, 
+                    shader: option<shader>, 
+                    texture: option<texture>, 
+                    shape: option<vertex>)
+                {
+                    do try!{
+                        try! shader_instance = shader;
+                        try! shape_instance = shape;
+                        
+                        let model = mat4::transform(pos, rot, scale);
+                        let model_view = camera_projection->get_view_mat * model;
+                        let model_view_proj = camera_projection->get_view_proj_mat * model;
+                        
+                        let mut texture_group = option::none: option<texture_group>;
+                        match (texture)
+                        {
+                            none?;
+                            value(texture_instance)?
+                            {
+                                let group = gizmo_rend_chain->allocate_texture_group;
+                                gizmo_rend_chain->bind_texture(group, 0, texture_instance);
+
+                                texture_group = option::value(group);
+                            }
+                        }
+
+                        let draw_action = gizmo_rend_chain->draw(shader_instance, shape_instance, texture_group);
+                        draw_action->set_uniform_mat4x4(shader_instance, "JE_M", model as raw mat4);
+                        draw_action->set_uniform_mat4x4(shader_instance, "JE_MV", model_view as raw mat4);
+                        draw_action->set_uniform_mat4x4(shader_instance, "JE_MVP", model_view_proj as raw mat4);
+                        return_value!;
+                    };
+                }
+
+                // 绘制被选中的实体
+                drawGizmo(
+                    (0., 0., 3.) as vec3, 
+                    quat::ident, 
+                    (1., 1., 1.) as vec3, 
+                    SELECTED_ENTITY_HILIGHT, 
+                    option::none, 
+                    DEFAULT_SQUARE_SHAPE);
+
                 return_value!;
             };
         }
@@ -328,10 +311,16 @@ public func frag(vf: v2f)
             if (IsWindowFocusedFlags(FocusedFlags::ImGuiFocusedFlags_RootAndChildWindows))
                 s_last_focusd_world_view = option::value(self);
                 
-            self->updateWalkCameraFramebuffer();
+            let debug_camera = self.m_world_instance->internal::get_all_entities([
+                    Camera::Projection::type::typeinfo,
+                    Camera::RendToFramebuffer::type::typeinfo,
+                    Editor::Invisible::type::typeinfo,
+                ])->get(0);
+                
+            self->updateWalkCameraFramebuffer(debug_camera);
             
             let mut viewport_hovered = false;
-            self->drawGizmos();
+            self->drawGizmos(debug_camera);
             
             match (self.m_editor_walk_camera_frame_buffer=>>\fb = fb->attachment(0);)
             {
@@ -357,14 +346,10 @@ public func frag(vf: v2f)
         
         // 根据 GetContentRegionAvail 自动创建/重建摄像机 framebuffer；
         // 若窗口尺寸仍在变化（正在拖拽缩放），则等待尺寸稳定后再更新。
-        func updateWalkCameraFramebuffer(self: WorldEditorViewport)=> void
+        func updateWalkCameraFramebuffer(
+            self: WorldEditorViewport, debug_cameras: option<entity>)=> void
         {
-            let debug_cameras = self.m_world_instance->internal::get_all_entities([
-                    Camera::RendToFramebuffer::type::typeinfo,
-                    Editor::Invisible::type::typeinfo,
-                ]);
-                
-            if (debug_cameras->empty)
+            if (debug_cameras->is_none)
                 // 未找到调试摄像机，跳过本轮更新
                 return;
                 
@@ -415,7 +400,7 @@ public func frag(vf: v2f)
                 {
                     self.m_editor_walk_camera_frame_buffer = option::value(fb);
                     
-                    let r2b = debug_cameras[0]->towoo::get_component:<Camera::RendToFramebuffer>->unwrap;
+                    let r2b = debug_cameras->unwrap->towoo::get_component:<Camera::RendToFramebuffer>->unwrap;
                     r2b->set(self.m_editor_walk_camera_frame_buffer);
                 }
             }
@@ -423,7 +408,8 @@ public func frag(vf: v2f)
         
         func sendMouseClickToChoiceEntityRequest(self: WorldEditorViewport, camera_ray: towoo::ray)
         {
-            let mut clicked_entity = []mut: vec<entity>;
+            // 收集所有被射线命中的实体，并记录命中距离。
+            let mut hits = []mut: vec<mut (real, entity::internal::euid_t)>;
             
             for (let e : self.m_world_instance->internal::get_all_entities([
                         Transform::Translation::type::typeinfo,
@@ -438,11 +424,44 @@ public func frag(vf: v2f)
                     true,
                 );
                 
-                if (result->is_value && e->towoo::get_component:<Editor::EntityId>->is_value)
+                if (result->is_value)
                 {
-                    clicked_entity->add(e);
+                    hits->add(mut (
+                            (result->unwrap - camera_ray->origin)->length,
+                            e->internal::get_entity_uid->or(0h as entity::internal::euid_t)));
                 }
             }
+            
+            // 射线未命中任何实体：清空当前选中。
+            if (hits->empty)
+            {
+                self.m_selected_entity_id = option::none;
+                return;
+            }
+            
+            // 按命中距离由近及远排序。
+            sort_in_place(hits, \(da, _), (db, _) = da < db;);
+            
+            // 每次点击沿“由近及远”的顺序循环选中下一个实体；
+            // 若当前选中实体不在本次命中列表中，则选中最近的实体。
+            let mut next_index = 0;
+            match (self.m_selected_entity_id)
+            {
+                value(current_uid)?
+                {
+                    for (let mut i = 0; i < hits->len; i += 1)
+                    {
+                        if (hits[i].1 == current_uid)
+                        {
+                            next_index = (i + 1) % hits->len;
+                            break;
+                        }
+                    }
+                }
+                none?;
+            }
+            
+            self.m_selected_entity_id = option::value(hits[next_index].1);
         }
         
         // 根据输入控制编辑器摄像机（三维/二维游走）。

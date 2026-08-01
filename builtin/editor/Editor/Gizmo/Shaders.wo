@@ -1,0 +1,11 @@
+import woo::std;
+import je::graphic;
+
+using je::graphic;
+
+namespace JEEditor::Editor::Gizmo::Shaders
+{
+    public let SELECTED_ENTITY_HILIGHT = shader::load(
+        option::none,
+        "!/builtin/editor/Editor/Gizmo/Shaders/SelectedEntity.shader");
+}

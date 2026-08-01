@@ -1,0 +1,19 @@
+import woo::std;
+import je::graphic;
+
+using je::graphic;
+
+namespace JEEditor::Editor::Gizmo::Shapes
+{
+    public let DEFAULT_SQUARE_SHAPE = vertex::create(
+        vertex::type::TRIANGLESTRIP,
+        [
+            -0.5,  0.5, 0.0,  0.0, 1.0,  0.0, 0.0, -1.0,  1.0, 0.0, 0.0,
+            -0.5, -0.5, 0.0,  0.0, 0.0,  0.0, 0.0, -1.0,  1.0, 0.0, 0.0,
+            0.5,  0.5, 0.0,  1.0, 1.0,  0.0, 0.0, -1.0,  1.0, 0.0, 0.0,
+            0.5, -0.5, 0.0,  1.0, 0.0,  0.0, 0.0, -1.0,  1.0, 0.0, 0.0,
+        ],
+        [0, 1, 2, 3],
+        [3, 2, 3, 3],
+    );
+}

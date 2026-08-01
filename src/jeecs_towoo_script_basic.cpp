@@ -1896,7 +1896,7 @@ WOORT_API woort_api wojeapi_towoo_camera_projection_get_default_uniform_buf(void
     auto& projection =
         wo_component<jeecs::Camera::Projection>(0, WOORT_RETURN_SLOT);
 
-    return woort_ret_option_gchandle(
+    return woort_ret_gchandle(
         new jeecs::basic::resource<jeecs::graphic::uniformbuffer>(projection.default_uniform_buffer),
         WOORT_IGNORE,
         [](void* ptr)
