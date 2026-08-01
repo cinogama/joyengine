@@ -10587,6 +10587,7 @@ namespace jeecs
             }
             void set_global_rotation(const math::quat& _rot, LocalRotation* rot)
             {
+            
                 if (rot)
                     rot->rot = _rot * get_parent_rotation(rot).inverse();
                 world_rotation = _rot;
