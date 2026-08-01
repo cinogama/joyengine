@@ -152,4 +152,46 @@ namespace je
         extern("libjoyecs", "wojeapi_component_get_all_members")
             public func get_members(self: component)=> array<(string, typeinfo, handle)>;
     }
+
+    // Requirement kind for entity selectors. Values are aligned with the native
+    // je_ComponentRequirementKind enum (CONTAINS=0, MAYNOT=1, EXCEPT=2, ANYOF=3).
+    public enum requirement_kind
+    {
+        CONTAINS = 0,
+        MAYNOT = 1,
+        EXCEPT = 2,
+        ANYOF = 3,
+    }
+
+    // A persistent selector over the entities of a world, backed by a cached
+    // je_RequirementCollection. It is iterable: iter() returns an
+    // entity_selector_iter. The cached arch info is refreshed in native code
+    // when the iterator is created (only if the world's arch-type set changed).
+    public using entity_selector = gchandle;
+
+    // Iterator over an entity_selector. Advanced via next() in a `for` loop.
+    public using entity_selector_iter = gchandle;
+
+    namespace entity_selector
+    {
+        // Create an iterator over the matching entities. Native code checks the
+        // world's arch-type change version here and refreshes the cache if needed.
+        extern("libjoyecs", "wojeapi_entity_selector_iter")
+            public func iter(self: entity_selector)=> entity_selector_iter;
+    }
+
+    namespace entity_selector_iter
+    {
+        extern("libjoyecs", "wojeapi_entity_selector_iter_next")
+            public func next(self: entity_selector_iter)=> option<entity>;
+    }
+
+    namespace world
+    {
+        // Create a persistent entity selector matching the given requirements.
+        // Each requirement is a tuple (kind, anyof_group, typeinfo); kind uses
+        // requirement_kind values, anyof_group distinguishes different ANYOF groups.
+        extern("libjoyecs", "wojeapi_entity_selector_create")
+            public func create_selector(self: world, requirements: array<(requirement_kind, int, typeinfo)>)=> entity_selector;
+    }
 }

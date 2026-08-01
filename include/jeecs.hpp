@@ -1534,7 +1534,7 @@ typedef struct je_DependenceArchInfos
 typedef struct je_CollectedRequirements je_CollectedRequirements;
 
 typedef struct je_RequirementCollection {
-    je_DependenceArchInfos* m_cached_archs;
+    je_DependenceArchInfos*     m_cached_archs;
     size_t                      m_cached_arch_count;
 
     je_CollectedRequirements* m_collected_requirement;
@@ -1548,6 +1548,15 @@ JE_API je_CollectedRequirements* je_ecs_collect_requirements(
 JE_API void je_ecs_world_update_collection(
     je_GameWorld* world,
     je_RequirementCollection* collection);
+
+/*
+je_ecs_world_get_arch_change_version [基本接口]
+返回世界内 arch-type 的变更版本号（单调递增）。每当世界中创建了新的 arch-type 时
+该值递增。此函数为非消费式读取：调用不会影响 ecs_world::update 对内部系统切片
+缓存的刷新逻辑。外部持久化的 je_RequirementCollection 可通过比较两次观测值来
+判断是否需要刷新（调用 je_ecs_world_update_collection）。
+*/
+JE_API size_t je_ecs_world_get_arch_change_version(je_GameWorld* world);
 
 typedef void* je_System;
 

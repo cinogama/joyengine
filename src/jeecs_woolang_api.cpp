@@ -617,6 +617,173 @@ WOORT_API woort_api wojeapi_get_all_entities_from_world(void)
     return woort_ret_value(out_arr);
 }
 
+// ===========================================================================
+// Persistent entity selector based on je_RequirementCollection.
+//
+// entity_selector holds a long-lived je_RequirementCollection. It is iterable:
+// iter() produces an entity_selector_iter. The version-change check and the
+// cache refresh happen in native code when the iterator is created (iter),
+// not on every step - so a single `for` loop observes a consistent arch set.
+// ===========================================================================
+struct wo_entity_selector_state
+{
+    je_GameWorld* world = nullptr;
+    je_RequirementCollection collection{};
+    // arch-change version captured at the selector's last refresh.
+    woort_Int arch_version = 0;
+
+    ~wo_entity_selector_state()
+    {
+        delete collection.m_collected_requirement;
+    }
+};
+
+// Per-iteration cursor. Lives only for the duration of a single `for` pass;
+// holds a non-owning back-pointer to the selector (kept alive by woolang GC
+// for at least as long as the loop is running).
+struct wo_entity_iter_state
+{
+    wo_entity_selector_state* selector = nullptr;
+    size_t arch_index = 0;
+    je_Chunk* chunk = nullptr;
+    je_EntityIdInChunk entity_index = 0;
+};
+
+// woort_pointer(0) = world
+// woort_vec(1)    = array<(int kind, int anyof_group, typeinfo)>
+//   kind values are aligned with je_ComponentRequirementKind:
+//     CONTAINS=0, MAYNOT=1, EXCEPT=2, ANYOF=3(=JE_COMPONENT_REQUIRE_ANYOF_0)
+WOORT_API woort_api wojeapi_entity_selector_create(void)
+{
+    je_GameWorld* const world = static_cast<je_GameWorld*>(woort_pointer(0));
+
+    const size_t requirement_count = woort_vec_len(1);
+    std::vector<je_ComponentRequirement> requirements(requirement_count);
+
+    if (requirement_count > 0)
+    {
+        woort_value s;
+        if (!woort_push_reserve(2, &s))
+            return woort_ret_panic("Stack overflow.");
+
+        const woort_value requirement_info = s + 0;
+        const woort_value elem = s + 1;
+
+        for (size_t i = 0; i < requirement_count; ++i)
+        {
+            (void)woort_vec_get(requirement_info, 1, i);
+
+            woort_struct_get(elem, requirement_info, 2);
+            const auto* typeinfo =
+                static_cast<const je_TypeInfo*>(woort_pointer(elem));
+
+            woort_struct_get(elem, requirement_info, 0);
+            const int kind = static_cast<int>(woort_int(elem));
+
+            woort_struct_get(elem, requirement_info, 1);
+            const int group = static_cast<int>(woort_int(elem));
+
+            requirements[i] = je_ComponentRequirement{
+                kind >= JE_COMPONENT_REQUIRE_ANYOF_0 ? kind + group : kind,
+                typeinfo->m_id };
+        }
+    }
+
+    auto* state = new wo_entity_selector_state{};
+    state->world = world;
+    state->collection.m_collected_requirement = je_ecs_collect_requirements(
+        requirements.data(), 0, requirements.size());
+    je_ecs_world_update_collection(world, &state->collection);
+    state->arch_version =
+        (woort_Int)je_ecs_world_get_arch_change_version(world);
+
+    return woort_ret_gchandle(
+        state,
+        WOORT_IGNORE,
+        [](void* p) { delete static_cast<wo_entity_selector_state*>(p); },
+        nullptr);
+}
+
+// Produce an iterator over the selector. This is where the arch-type change
+// check runs: if the world's arch-change version differs from the version
+// captured at the selector's last refresh, the cached arch info is refreshed
+// before the cursor starts.
+WOORT_API woort_api wojeapi_entity_selector_iter(void)
+{
+    auto* selector = static_cast<wo_entity_selector_state*>(woort_gcpointer(0));
+
+    const woort_Int current_version =
+        (woort_Int)je_ecs_world_get_arch_change_version(selector->world);
+    if (current_version != selector->arch_version)
+    {
+        je_ecs_world_update_collection(selector->world, &selector->collection);
+        selector->arch_version = current_version;
+    }
+
+    auto* iter = new wo_entity_iter_state{};
+    iter->selector = selector;
+
+    return woort_ret_gchandle(
+        iter,
+        WOORT_IGNORE,
+        [](void* p) { delete static_cast<wo_entity_iter_state*>(p); },
+        nullptr);
+}
+
+// Advance the cursor to the next READY entity, or option::none when exhausted.
+WOORT_API woort_api wojeapi_entity_selector_iter_next(void)
+{
+    auto* iter = static_cast<wo_entity_iter_state*>(woort_gcpointer(0));
+    auto& col = iter->selector->collection;
+
+    for (;;)
+    {
+        if (iter->chunk == nullptr)
+        {
+            if (iter->arch_index >= col.m_cached_arch_count)
+                return woort_ret_option_none();
+
+            iter->chunk = je_arch_get_chunk(
+                col.m_cached_archs[iter->arch_index].m_arch);
+            iter->entity_index = 0;
+
+            if (iter->chunk == nullptr)
+            {
+                ++iter->arch_index;
+                continue;
+            }
+        }
+
+        const auto& archinfo = col.m_cached_archs[iter->arch_index];
+        const auto* meta = je_arch_entity_meta_addr_in_chunk(iter->chunk);
+
+        while (iter->entity_index < archinfo.m_entity_count)
+        {
+            if (meta[iter->entity_index].m_stat == JE_ENTITY_STAT_READY)
+            {
+                auto* entity = new je_GameEntity{
+                    iter->chunk,
+                    iter->entity_index,
+                    meta[iter->entity_index].m_version };
+                ++iter->entity_index;
+
+                return woort_ret_option_gchandle(
+                    entity,
+                    WOORT_IGNORE,
+                    [](void* p) { delete (je_GameEntity*)p; },
+                    nullptr);
+            }
+            ++iter->entity_index;
+        }
+
+        // current chunk exhausted -> next chunk (or next arch)
+        iter->chunk = je_arch_next_chunk(iter->chunk);
+        iter->entity_index = 0;
+        if (iter->chunk == nullptr)
+            ++iter->arch_index;
+    }
+}
+
 // ECS ENTITY
 WOORT_API woort_api wojeapi_close_entity(void)
 {
