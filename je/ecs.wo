@@ -163,6 +163,13 @@ namespace je
         ANYOF = 3,
     }
 
+    public union requirement
+    {
+        contains(typeinfo),
+        except(typeinfo),
+        anyof(array<typeinfo>),
+    }
+
     // A persistent selector over the entities of a world, backed by a cached
     // je_RequirementCollection. It is iterable: iter() returns an
     // entity_selector_iter. The cached arch info is refreshed in native code
@@ -189,9 +196,9 @@ namespace je
     namespace world
     {
         // Create a persistent entity selector matching the given requirements.
-        // Each requirement is a tuple (kind, anyof_group, typeinfo); kind uses
-        // requirement_kind values, anyof_group distinguishes different ANYOF groups.
+        // Each entry is a requirement union: contains(typeinfo), except(typeinfo)
+        // or anyof(array<typeinfo>); each anyof(...) entry forms its own ANYOF group.
         extern("libjoyecs", "wojeapi_entity_selector_create")
-            public func create_selector(self: world, requirements: array<(requirement_kind, int, typeinfo)>)=> entity_selector;
+            public func create_selector(self: world, requirements: array<requirement>)=> entity_selector;
     }
 }

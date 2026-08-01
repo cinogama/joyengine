@@ -650,15 +650,19 @@ struct wo_entity_iter_state
 };
 
 // woort_pointer(0) = world
-// woort_vec(1)    = array<(int kind, int anyof_group, typeinfo)>
-//   kind values are aligned with je_ComponentRequirementKind:
-//     CONTAINS=0, MAYNOT=1, EXCEPT=2, ANYOF=3(=JE_COMPONENT_REQUIRE_ANYOF_0)
+// woort_vec(1)    = array<requirement>
+//   requirement is a union:
+//     contains(typeinfo)     -> JE_COMPONENT_REQUIRE_CONTAINS
+//     except(typeinfo)       -> JE_COMPONENT_REQUIRE_EXCEPT
+//     anyof(array<typeinfo>) -> JE_COMPONENT_REQUIRE_ANYOF_0 + group,
+//                                each anyof(...) entry gets its own group
 WOORT_API woort_api wojeapi_entity_selector_create(void)
 {
     je_GameWorld* const world = static_cast<je_GameWorld*>(woort_pointer(0));
 
     const size_t requirement_count = woort_vec_len(1);
-    std::vector<je_ComponentRequirement> requirements(requirement_count);
+    std::vector<je_ComponentRequirement> requirements;
+    requirements.reserve(requirement_count);
 
     if (requirement_count > 0)
     {
@@ -669,23 +673,49 @@ WOORT_API woort_api wojeapi_entity_selector_create(void)
         const woort_value requirement_info = s + 0;
         const woort_value elem = s + 1;
 
+        int anyof_group = 0;
+
         for (size_t i = 0; i < requirement_count; ++i)
         {
             (void)woort_vec_get(requirement_info, 1, i);
 
-            woort_struct_get(elem, requirement_info, 2);
-            const auto* typeinfo =
-                static_cast<const je_TypeInfo*>(woort_pointer(elem));
-
-            woort_struct_get(elem, requirement_info, 0);
-            const int kind = static_cast<int>(woort_int(elem));
-
-            woort_struct_get(elem, requirement_info, 1);
-            const int group = static_cast<int>(woort_int(elem));
-
-            requirements[i] = je_ComponentRequirement{
-                kind >= JE_COMPONENT_REQUIRE_ANYOF_0 ? kind + group : kind,
-                typeinfo->m_id };
+            const woort_Int variant = woort_union_get(elem, requirement_info);
+            switch (variant)
+            {
+            case 0: // contains(typeinfo)
+            {
+                const auto* typeinfo =
+                    static_cast<const je_TypeInfo*>(woort_pointer(elem));
+                requirements.push_back(je_ComponentRequirement{
+                    JE_COMPONENT_REQUIRE_CONTAINS, typeinfo->m_id });
+                break;
+            }
+            case 1: // except(typeinfo)
+            {
+                const auto* typeinfo =
+                    static_cast<const je_TypeInfo*>(woort_pointer(elem));
+                requirements.push_back(je_ComponentRequirement{
+                    JE_COMPONENT_REQUIRE_EXCEPT, typeinfo->m_id });
+                break;
+            }
+            case 2: // anyof(array<typeinfo>)
+            {
+                const size_t anyof_count = woort_vec_len(elem);
+                for (size_t j = 0; j < anyof_count; ++j)
+                {
+                    (void)woort_vec_get(requirement_info, elem, j);
+                    const auto* typeinfo =
+                        static_cast<const je_TypeInfo*>(woort_pointer(requirement_info));
+                    requirements.push_back(je_ComponentRequirement{
+                        JE_COMPONENT_REQUIRE_ANYOF_0 + anyof_group,
+                        typeinfo->m_id });
+                }
+                ++anyof_group;
+                break;
+            }
+            default:
+                return woort_ret_panic("Unknown requirement union variant.");
+            }
         }
     }
 
