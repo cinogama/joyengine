@@ -442,10 +442,10 @@ WOORT_API woort_api wojeapi_remove_system_from_world(void)
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_get_all_systems_from_world(void)
+WOORT_API woort_api wojeapi_world_get_all_systems(void)
 {
     /*
-    extern("libjoyecs", "wojeapi_get_all_systems_from_world")
+    extern("libjoyecs", "wojeapi_world_get_all_systems")
     private func _get_systems_from_world(self: world, out_result: array<typeinfo>)=> array<typeinfo>;
     */
     const je_TypeInfo** types =
@@ -553,7 +553,7 @@ WOORT_API woort_api wojeapi_add_prefab_to_world_with_components(void)
         nullptr);
 }
 
-WOORT_API woort_api wojeapi_get_all_entities_from_world(void)
+WOORT_API woort_api wojeapi_world_get_all_entities(void)
 {
     woort_value s;
 
@@ -567,17 +567,6 @@ WOORT_API woort_api wojeapi_get_all_entities_from_world(void)
 
     void* world_instance = woort_pointer(0);
 
-    auto required_components_len = woort_vec_len(1);
-    std::vector<je_TypeId> required_components(required_components_len);
-
-    for (size_t i = 0; i < required_components_len; ++i)
-    {
-        (void)woort_vec_get(elem, 1, i);
-
-        required_components[i] =
-            static_cast<const je_TypeInfo*>(woort_unbox_pointer(elem))->m_id;
-    }
-
     auto entities = jedbg_get_all_entities_in_world(
         static_cast<je_GameWorld*>(world_instance));
 
@@ -586,31 +575,16 @@ WOORT_API woort_api wojeapi_get_all_entities_from_world(void)
     while (*entity_iter)
     {
         auto* current_e = *(entity_iter++);
-
-        bool has_required = true;
-        for (auto& required_component : required_components)
-        {
-            if (nullptr == je_ecs_world_entity_get_component(current_e, required_component))
+        woort_set_gchandle(
+            elem,
+            current_e,
+            WOORT_IGNORE,
+            [](void* entity_ptr)
             {
-                jedbg_free_entity(current_e);
-                has_required = false;
-                break;
-            }
-        }
-
-        if (has_required)
-        {
-            woort_set_gchandle(
-                elem,
-                current_e,
-                WOORT_IGNORE,
-                [](void* entity_ptr)
-                {
-                    jedbg_free_entity((je_GameEntity*)entity_ptr);
-                },
-                nullptr);
-            woort_vec_push(out_arr, elem);
-        }
+                jedbg_free_entity((je_GameEntity*)entity_ptr);
+            },
+            nullptr);
+        woort_vec_push(out_arr, elem);
     }
     je_mem_free(entities);
 

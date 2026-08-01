@@ -441,7 +441,6 @@ namespace Transform
     {
         extern("libjoyecs", "wojeapi_towoo_transform_translation_global_pos")
             public func get_global_pos(self: Translation)=> vec3;
-            
         extern("libjoyecs", "wojeapi_towoo_transform_translation_global_rot")
             public func get_global_rot(self: Translation)=> quat;
             
@@ -449,6 +448,9 @@ namespace Transform
             public func get_parent_pos(self: Translation, lpos: option<LocalPosition>, lrot: option<LocalRotation>)=> vec3;
         extern("libjoyecs", "wojeapi_towoo_transform_translation_parent_rot")
             public func get_parent_rot(self: Translation, lrot: option<LocalRotation>)=> quat;
+
+        extern("libjoyecs", "wojeapi_towoo_transform_translation_local_scale")
+            public func get_local_scale(self: Translation)=> vec3;
             
         extern("libjoyecs", "wojeapi_towoo_transform_translation_set_global_pos")
             public func set_global_pos(self: Translation, pos: vec3, wlpos: option<LocalPosition>, lrot: option<LocalRotation>)=> void;

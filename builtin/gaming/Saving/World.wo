@@ -23,7 +23,7 @@ namespace JEGaming::Saving::World
         let world_dat = new_table();
         
         // Save entities
-        let entities_dat = w->internal::get_all_entities([])
+        let entities_dat = w->internal::get_all_entities()
             ->> \e = mut (
                     e->internal::get_entity_uid->or(0h as entity::internal::euid_t),
                     Entity::save(e),

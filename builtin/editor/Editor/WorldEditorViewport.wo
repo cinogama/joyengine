@@ -39,6 +39,7 @@ using je;
 using je::gui;
 using je::graphic;
 using fsys;
+using iterator;
 
 using JEEditor::GUI;
 using JEEditor::GUI::Windows;
@@ -69,6 +70,9 @@ namespace JEEditor::Editor
         m_selected_entity_id: mut option<entity::internal::euid_t>,
         
         // Camera control state:
+        m_debug_camera_selector: entity_selector,
+        m_selectable_entity_selector: entity_selector,
+        
         m_last_time: mut real,
         m_is_look_active: mut bool,
         m_is_pan_active: mut bool,
@@ -133,7 +137,20 @@ namespace JEEditor::Editor
                 m_fb_settle_counter = mut 0,
                 
                 m_selected_entity_id = mut option::none,
-                
+                m_debug_camera_selector = w->create_selector([
+                        requirement::contains(Editor::Invisible::type::typeinfo),
+                        requirement::contains(Camera::RendToFramebuffer::type::typeinfo),
+                        requirement::contains(Camera::Projection::type::typeinfo),
+                        requirement::contains(Transform::LocalPosition::type::typeinfo),
+                        requirement::contains(Transform::LocalRotation::type::typeinfo),
+                        requirement::contains(Transform::Translation::type::typeinfo),
+                    ]),
+                    
+                m_selectable_entity_selector = w->create_selector([
+                        requirement::except(Editor::Invisible::type::typeinfo),
+                        requirement::contains(Transform::Translation::type::typeinfo),
+                    ]),
+                    
                 // Camera control state:
                 m_last_time = mut 0.,
                 m_is_look_active = mut false,
@@ -242,10 +259,10 @@ namespace JEEditor::Editor
                     
                 func drawGizmo(
                     pos: vec3,
-                    rot: quat, 
-                    scale: vec3, 
-                    shader: option<shader>, 
-                    texture: option<texture>, 
+                    rot: quat,
+                    scale: vec3,
+                    shader: option<shader>,
+                    texture: option<texture>,
                     shape: option<vertex>)
                 {
                     do try!{
@@ -264,11 +281,11 @@ namespace JEEditor::Editor
                             {
                                 let group = gizmo_rend_chain->allocate_texture_group;
                                 gizmo_rend_chain->bind_texture(group, 0, texture_instance);
-
+                                
                                 texture_group = option::value(group);
                             }
                         }
-
+                        
                         let draw_action = gizmo_rend_chain->draw(shader_instance, shape_instance, texture_group);
                         draw_action->set_uniform_mat4x4(shader_instance, "JE_M", model as raw mat4);
                         draw_action->set_uniform_mat4x4(shader_instance, "JE_MV", model_view as raw mat4);
@@ -276,16 +293,34 @@ namespace JEEditor::Editor
                         return_value!;
                     };
                 }
-
+                
                 // 绘制被选中的实体
-                drawGizmo(
-                    (0., 0., 3.) as vec3, 
-                    quat::ident, 
-                    (1., 1., 1.) as vec3, 
-                    SELECTED_ENTITY_HILIGHT, 
-                    option::none, 
-                    DEFAULT_SQUARE_SHAPE);
-
+                do try!{
+                    try! selected_euid = self.m_selected_entity_id;
+                    for (let e : self.m_selectable_entity_selector)
+                    {
+                        match (e->internal::get_entity_uid)
+                        {
+                            none?;
+                            value(euid)?
+                                if (selected_euid == euid)
+                                {
+                                    let trans = e->towoo::get_component:<Transform::Translation>->unwrap;
+                                    drawGizmo(
+                                        trans->get_global_pos,
+                                        trans->get_global_rot,
+                                        trans->get_local_scale,
+                                        SELECTED_ENTITY_HILIGHT,
+                                        e->towoo::get_component:<Renderer::Textures>()=>> \textures = textures->get_texture(0);,
+                                        DEFAULT_SQUARE_SHAPE);
+                                        
+                                    break;
+                                }
+                        }
+                    }
+                    return_value!;
+                };
+                
                 return_value!;
             };
         }
@@ -311,17 +346,11 @@ namespace JEEditor::Editor
             if (IsWindowFocusedFlags(FocusedFlags::ImGuiFocusedFlags_RootAndChildWindows))
                 s_last_focusd_world_view = option::value(self);
                 
-            let debug_camera = self.m_world_instance->internal::get_all_entities([
-                    Camera::Projection::type::typeinfo,
-                    Camera::RendToFramebuffer::type::typeinfo,
-                    Editor::Invisible::type::typeinfo,
-                ])->get(0);
-                
+            let debug_camera = self.m_debug_camera_selector->iter |> collect->get(0);
+            
             self->updateWalkCameraFramebuffer(debug_camera);
             
             let mut viewport_hovered = false;
-            self->drawGizmos(debug_camera);
-            
             match (self.m_editor_walk_camera_frame_buffer=>>\fb = fb->attachment(0);)
             {
                 none?
@@ -339,7 +368,10 @@ namespace JEEditor::Editor
             let now = time();
             let dt = mathf::clamp(now - self.m_last_time, 0., 0.1);
             self.m_last_time = now;
-            self->updateCameraControl(dt, viewport_hovered);
+            self->updateCameraControl(debug_camera, dt, viewport_hovered);
+            
+            // Draw gizmo here.
+            self->drawGizmos(debug_camera);
             
             return self.m_close == CloseRequest::NORMALLY;
         }
@@ -411,13 +443,8 @@ namespace JEEditor::Editor
             // 收集所有被射线命中的实体，并记录命中距离。
             let mut hits = []mut: vec<mut (real, entity::internal::euid_t)>;
             
-            for (let e : self.m_world_instance->internal::get_all_entities([
-                        Transform::Translation::type::typeinfo,
-                    ]))
+            for (let e : self.m_selectable_entity_selector)
             {
-                if (e->towoo::get_component:<Editor::Invisible>->is_value)
-                    continue;
-                    
                 let result = camera_ray->intersect(
                     e->towoo::get_component:<Transform::Translation>->unwrap,
                     e->towoo::get_component:<Renderer::Shape>,
@@ -479,21 +506,16 @@ namespace JEEditor::Editor
         //     鼠标中键拖拽       — 屏幕平面平移
         //     鼠标滚轮           — 缩放（调整正交 scale）
         //
-        func updateCameraControl(self: WorldEditorViewport, dt: real, hovered: bool)=> void
+        func updateCameraControl(
+            self: WorldEditorViewport,
+            debug_camera: option<entity>,
+            dt: real,
+            hovered: bool)=> void
         {
-            let cameras = self.m_world_instance->internal::get_all_entities([
-                    Camera::RendToFramebuffer::type::typeinfo,
-                    Camera::Projection::type::typeinfo,
-                    Editor::Invisible::type::typeinfo,
-                    Transform::LocalPosition::type::typeinfo,
-                    Transform::LocalRotation::type::typeinfo,
-                    Transform::Translation::type::typeinfo,
-                ]);
-                
-            if (cameras->empty)
+            if (debug_camera->is_none)
                 return;
                 
-            let cam = cameras[0];
+            let cam = debug_camera->unwrap;
             let pos = cam->towoo::get_component:<Transform::LocalPosition>->unwrap;
             let rot = cam->towoo::get_component:<Transform::LocalRotation>->unwrap;
             let trans = cam->towoo::get_component:<Transform::Translation>->unwrap;

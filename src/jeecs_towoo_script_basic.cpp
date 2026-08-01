@@ -1714,6 +1714,15 @@ WOORT_API woort_api wojeapi_towoo_transform_translation_global_rot(void)
     return woort_ret();
 }
 
+WOORT_API woort_api wojeapi_towoo_transform_translation_local_scale(void)
+{
+    auto& trans =
+        wo_component<jeecs::Transform::Translation>(0, WOORT_RETURN_SLOT);
+
+    wo_set_vec3(WOORT_RETURN_SLOT, trans.local_scale);
+    return woort_ret();
+}
+
 WOORT_API woort_api wojeapi_towoo_transform_translation_parent_pos(void)
 {
     auto& trans =

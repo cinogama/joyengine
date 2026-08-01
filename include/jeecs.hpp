@@ -10585,7 +10585,6 @@ namespace jeecs
                     return world_position - get_parent_rotation(rotation) * local_pos->pos;
                 return world_position;
             }
-
             void set_global_rotation(const math::quat& _rot, LocalRotation* rot)
             {
                 if (rot)

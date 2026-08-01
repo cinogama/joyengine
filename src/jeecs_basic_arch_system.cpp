@@ -897,14 +897,10 @@ namespace jeecs_impl
         mutable std::shared_mutex _m_arch_types_mapping_mx;
 
         std::atomic_flag _m_arch_modified = {};
-        // Monotonically increasing counter bumped whenever the arch-type set changes.
-        // Unlike _m_arch_modified (which is test-and-set / consumed by ecs_world::update),
-        // this counter is never consumed, so external observers (e.g. persistent
-        // RequirementCollection caches) can reliably detect that a refresh is needed.
-        uint64_t _m_arch_change_counter = 0;
 
     public:
-        arch_manager(ecs_world* world) : _m_world(world)
+        arch_manager(ecs_world* world) 
+            : _m_world(world)
         {
         }
         ~arch_manager()
@@ -932,7 +928,6 @@ namespace jeecs_impl
             if (nullptr == atype)
                 atype = new arch_type(this, _types);
             _m_arch_modified.clear();
-            ++_m_arch_change_counter;
             return atype;
         }
         arch_type::entity create_an_entity_with_component(const types_set& _types) noexcept
@@ -946,12 +941,6 @@ namespace jeecs_impl
         inline bool _arch_modified() noexcept
         {
             return !_m_arch_modified.test_and_set();
-        }
-        // Non-consuming peek of the arch-type change counter. Two observations of this
-        // value being equal guarantees no new arch-type was created in between.
-        inline uint64_t get_arch_change_version() const noexcept
-        {
-            return _m_arch_change_counter;
         }
         inline void update_collection_archinfo(je_RequirementCollection* collection) const noexcept
         {
@@ -1352,6 +1341,12 @@ namespace jeecs_impl
         command_buffer _m_command_buffer;
         arch_manager _m_arch_manager;
 
+        // Monotonically increasing counter bumped in update() whenever the arch-type set
+        // changed. Unlike _m_arch_modified (which is test-and-set / consumed by update()),
+        // this counter is never consumed, so external observers (e.g. persistent
+        // RequirementCollection caches) can reliably detect that a refresh is needed.
+        uint64_t _m_arch_change_counter;
+
         bool _m_world_enabled;
         bool _m_destroying_flag;
 
@@ -1366,6 +1361,7 @@ namespace jeecs_impl
             : _m_universe(universe)
             , _m_command_buffer(this)
             , _m_arch_manager(this)
+            , _m_arch_change_counter(100)
             , _m_world_enabled(false)
             , _m_destroying_flag(false)
         {
@@ -1497,6 +1493,13 @@ namespace jeecs_impl
             return _m_arch_manager;
         }
 
+        // Non-consuming peek of the arch-type change counter. Two observations of this
+        // value being equal guarantees no new arch-type was created in between.
+        inline uint64_t get_arch_change_version() const noexcept
+        {
+            return _m_arch_change_counter;
+        }
+
     public:
         void update_collection_archinfo(je_RequirementCollection* collection) const noexcept
         {
@@ -1532,6 +1535,7 @@ namespace jeecs_impl
             if (_m_arch_manager._arch_modified())
             {
                 // Arch types modified, all collection arch info need to be updated.
+                ++_m_arch_change_counter;
                 for (auto& [system_instance, slice_cache] : m_system_slice_caches)
                 {
                     (void)system_instance;
@@ -2882,8 +2886,7 @@ void je_ecs_world_update_collection(
 
 size_t je_ecs_world_get_arch_change_version(je_GameWorld* world)
 {
-    return static_cast<jeecs_impl::ecs_world*>(world)
-        ->_get_arch_mgr().get_arch_change_version();
+    return static_cast<jeecs_impl::ecs_world*>(world)->get_arch_change_version();
 }
 
 void* je_ecs_world_entity_add_component(

@@ -153,16 +153,6 @@ namespace je
             public func get_members(self: component)=> array<(string, typeinfo, handle)>;
     }
 
-    // Requirement kind for entity selectors. Values are aligned with the native
-    // je_ComponentRequirementKind enum (CONTAINS=0, MAYNOT=1, EXCEPT=2, ANYOF=3).
-    public enum requirement_kind
-    {
-        CONTAINS = 0,
-        MAYNOT = 1,
-        EXCEPT = 2,
-        ANYOF = 3,
-    }
-
     public union requirement
     {
         contains(typeinfo),

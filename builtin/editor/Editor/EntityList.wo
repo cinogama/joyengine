@@ -73,7 +73,7 @@ namespace JEEditor::Editor
         }
         func showEntitiesInWorld(w: world)
         {
-            let entities = w->internal::get_all_entities([])->iter
+            let entities = w->internal::get_all_entities()->iter
                 |> filter(\e = e->towoo::get_component:<Editor::Invisible>->is_none;)
                 |> collect
                 : array<entity> |> unsafe::cast:<array<mut entity>>
