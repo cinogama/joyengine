@@ -51,7 +51,7 @@ func main()
     gui::register_exit_callback(func(){
             match (AskBox::showUnique(
                 "即将退出编辑器", 
-                "JoyEngine 将在所有编辑器窗口关闭后退出，是否继续？"))
+                "JoyEngine 将在所有编辑器窗口关闭后退出，继续关闭？"))
             {
                 none?;
                 value(askbox)?

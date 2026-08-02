@@ -44,6 +44,7 @@ namespace JEEditor::GUI::Forms
         {
             return WindowsAttribute::ImGuiWindowFlags_NoDocking
                 + WindowsAttribute::ImGuiWindowFlags_NoCollapse
+                + WindowsAttribute::ImGuiWindowFlags_NoSavedSettings
                 ;
         }
         public func getShortcut(self: InputBox)=> option<Shortcut>

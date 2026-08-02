@@ -113,7 +113,7 @@ namespace JEEditor::GUI::Windows
                 }
             }
         }
-
+        
         public func isUnique(self: WindowsState)
         {
             return self.m_is_unique;
@@ -135,17 +135,21 @@ namespace JEEditor::GUI::Windows
             let mut attrib = i->getAttrib;
             
             if (!state.m_is_unique)
-                attrib += WindowsAttribute::ImGuiWindowFlags_NoSavedSettings;
-                
+                attrib = attrib as int->bor(
+                    WindowsAttribute::ImGuiWindowFlags_NoSavedSettings as int) as WindowsAttribute;
+                    
             if (menu->is_value)
-                attrib += WindowsAttribute::ImGuiWindowFlags_MenuBar;
-                
+                attrib = attrib as int->bor(
+                    WindowsAttribute::ImGuiWindowFlags_MenuBar as int) as WindowsAttribute;
+                    
             match (i->getSizeConstraints)
             {
                 Unlimited?;
                 AutoSize?
-                    attrib += WindowsAttribute::ImGuiWindowFlags_NoResize
-                        + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize;
+                    attrib = attrib as int->bor(
+                        (WindowsAttribute::ImGuiWindowFlags_NoResize
+                            + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize)
+                            as int) as WindowsAttribute;
                 Limited((min, max))?
                     SetNextWindowSizeConstraints(min, max);
             }
@@ -159,7 +163,7 @@ namespace JEEditor::GUI::Windows
                 state.m_closing_request = false;
                 open = false;
             }
-
+            
             if (!open)
                 open = !i->onPreClose;
                 
@@ -228,7 +232,7 @@ namespace JEEditor::GUI::Windows
         launch_coroutine(\= i->_show(window_state););
         return option::value(i);
     }
-
+    
     // 仅限特殊情况使用：
     namespace internal
     {

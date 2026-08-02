@@ -51,6 +51,11 @@ using JEEditor::Editor::Gizmo::Shapes;
 
 namespace JEEditor::Editor
 {
+    using EditHistory = struct{}
+    {
+        
+    }
+
     using WorldEditorViewport = struct{
         m_close: mut CloseRequest,
         
@@ -311,7 +316,8 @@ namespace JEEditor::Editor
                                         trans->get_global_rot,
                                         trans->get_local_scale,
                                         SELECTED_ENTITY_HILIGHT,
-                                        e->towoo::get_component:<Renderer::Textures>()=>> \textures = textures->get_texture(0);,
+                                        e->towoo::get_component:<Renderer::Textures>()
+                                            =>> \textures = textures->get_texture(0);,
                                         DEFAULT_SQUARE_SHAPE);
                                         
                                     break;
