@@ -4,6 +4,7 @@ import je;
 import je::gui;
 
 import pkg::interface;
+import pkg::try;
 
 import Menu;
 import Shortcut;
@@ -66,25 +67,74 @@ namespace JEEditor::GUI::Windows
         public func run(self)=> bool;
     };
     
-    namespace IWindows
+    using WindowsState = struct{
+        m_is_unique: bool,
+        m_title: string,
+        
+        m_closing_request: mut bool,
+    }
     {
         let s_unique_window_record = {}mut: map<string, IWindows>;
+        let s_windows_states = {}mut: map<IWindows, WindowsState>;
         
-        func try_register_unique_window(self: IWindows, title: string)
+        func try_register_window(iw: IWindows, title: string, is_unique: bool)=> option<WindowsState>
         {
-            if (s_unique_window_record->contains(title))
-                return false;
+            if (is_unique)
+            {
+                if (s_unique_window_record->contains(title))
+                    return option::none;
+                s_unique_window_record->set(title, iw);
+            }
+            
+            let window_state = WindowsState{
+                m_is_unique = is_unique,
+                m_title = title,
                 
-            s_unique_window_record->set(title, self);
-            return true;
+                m_closing_request = mut false,
+            };
+            s_windows_states->set(iw, window_state);
+            
+            return option::value(window_state);
         }
-        
+        func unregister_window(iw: IWindows)
+        {
+            match (s_windows_states->get(iw))
+            {
+                none?
+                    logerr("Unexpected window instance, not registered yet.");
+                value(state)?
+                {
+                    if (state.m_is_unique)
+                    {
+                        if (!s_unique_window_record->remove(state.m_title))
+                            logerr(F"Unique window named `{state.m_title}` not found in s_unique_window_record.");
+                    }
+                    do s_windows_states->remove(iw);
+                }
+            }
+        }
+
+        public func isUnique(self: WindowsState)
+        {
+            return self.m_is_unique;
+        }
+        public func getTitle(self: WindowsState)
+        {
+            return self.m_title;
+        }
+        public func requestToClose(self: WindowsState)
+        {
+            self.m_closing_request = true;
+        }
+    }
+    namespace IWindows
+    {
         func _engine_imgui_show_job(
-            i: IWindows, title: string, is_unique: bool, menu: option<Menu>, shortcut: option<Shortcut>)=> bool
+            i: IWindows, title: string, state: WindowsState, menu: option<Menu>, shortcut: option<Shortcut>)=> bool
         {
             let mut attrib = i->getAttrib;
             
-            if (!is_unique)
+            if (!state.m_is_unique)
                 attrib += WindowsAttribute::ImGuiWindowFlags_NoSavedSettings;
                 
             if (menu->is_value)
@@ -103,6 +153,13 @@ namespace JEEditor::GUI::Windows
             let (show, mut open) = BeginAttrOpen(title, attrib);
             defer End();
             
+            // 来自外部的关闭请求
+            if (state.m_closing_request)
+            {
+                state.m_closing_request = false;
+                open = false;
+            }
+
             if (!open)
                 open = !i->onPreClose;
                 
@@ -128,10 +185,12 @@ namespace JEEditor::GUI::Windows
             
             return open;
         }
-        func _show(i: IWindows, mut title: string, is_unique: bool)
+        func _show(i: IWindows, state: WindowsState)
         {
-            if (!is_unique)
-                title = title->replace("$ID", F"##{JobID()}");
+            let title = state.m_is_unique
+                ? state.m_title
+                | state.m_title->replace("$ID", F"##{JobID()}")
+                ;
                 
             let menu_instance = i->getMenu;
             let shortcut_instance = i->getShortcut;
@@ -146,13 +205,12 @@ namespace JEEditor::GUI::Windows
             i->onCreate();
             {
                 while (i->_engine_imgui_show_job(
-                        title, is_unique, menu_instance, shortcut_instance))
+                        title, state, menu_instance, shortcut_instance))
                 {
                     std::yield();
                 }
                 
-                if (is_unique)
-                    assert(s_unique_window_record->remove(title));
+                WindowsState::unregister_window(i);
             }
             i->onClose();
         }
@@ -165,13 +223,22 @@ namespace JEEditor::GUI::Windows
         let is_unique = title->find("$ID")->is_none;
         
         let i = IWindows::create(window_instance);
-        if (is_unique)
-        {
-            if (!i->try_register_unique_window(title))
-                return option::none;
-        }
+        try! window_state = WindowsState::try_register_window(i, title, is_unique);
         
-        launch_coroutine(\= i->_show(title, is_unique););
+        launch_coroutine(\= i->_show(window_state););
         return option::value(i);
+    }
+
+    // 仅限特殊情况使用：
+    namespace internal
+    {
+        public func getAllWindows()=> array<IWindows>
+        {
+            return WindowsState::s_windows_states->keys;
+        }
+        public func tryGetWindowState(iw: IWindows)=> option<WindowsState>
+        {
+            return WindowsState::s_windows_states->get(iw);
+        }
     }
 }

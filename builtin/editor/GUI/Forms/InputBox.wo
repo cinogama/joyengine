@@ -23,7 +23,7 @@ namespace JEEditor::GUI::Forms
         m_close: mut bool,
     }
     {
-        public func create(title: string, text: string, default: string)=> InputBox
+        func create(title: string, text: string, default: string)=> InputBox
             where require!(InputBox: Windows::IWindows);
         {
             return InputBox{
@@ -38,7 +38,7 @@ namespace JEEditor::GUI::Forms
         
         public func getTitle(self: InputBox)=> string
         {
-            return F"输入: {self.m_title}$ID";
+            return F"输入: {self.m_title}";
         }
         public func getAttrib(_: InputBox)=> WindowsAttribute
         {
@@ -81,7 +81,7 @@ namespace JEEditor::GUI::Forms
                 
             if (Button("确认"))
                 self->onEnter();
-            
+                
             SameLine();
             
             if (Button("取消"))
@@ -90,12 +90,20 @@ namespace JEEditor::GUI::Forms
             return !self.m_close;
         }
         
+        public func showUnique(title: string, text: string, default: string)
+        {
+            let inputbox = InputBox::create(title, text, default);
+            match (Windows::show(inputbox))
+            {
+            value(_)?
+                return option::value(inputbox);
+            none?
+                return option::none;
+            }
+        }
         public func show(title: string, text: string, default: string)
         {
-            let askbox = InputBox::create(title, text, default);
-            do Windows::show(askbox);
-            
-            return askbox;
+            return showUnique(title + "$ID", text, default)->unwrap;
         }
         public func then(self: InputBox, callback: (string)=> void)
         {

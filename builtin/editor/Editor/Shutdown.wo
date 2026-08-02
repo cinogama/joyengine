@@ -1,0 +1,96 @@
+import woo::std;
+
+import je::gui;
+import je::ecs;
+
+import pkg::interface;
+
+import builtin::editor::GUI::Windows;
+
+using std;
+using je;
+using je::gui;
+using JEEditor::GUI::Windows;
+
+namespace JEEditor::Editor
+{
+    using Shutdown = struct{
+        m_closing_universe: universe,
+    }
+    {
+        let mut s_shutdown_singleton = option::none: option<Shutdown>;
+        public func isShutdownExist()
+        {
+            return s_shutdown_singleton->is_value;
+        }
+        
+        public func editorShutdownRequest(u: universe)
+        {
+            match (show(create(u)))
+            {
+                none?;
+                value(shutdownWindow)?
+                {
+                    for (let iw : internal::getAllWindows())
+                    {
+                        if (is_same(iw, shutdownWindow))
+                            continue;
+                            
+                        do internal::tryGetWindowState(iw)
+                            ->> \state = state->requestToClose();
+                            ;
+                    }
+                }
+            }
+            
+        }
+        
+        func create(u: universe)=> Shutdown
+            where require!(Shutdown: IWindows);
+        {
+            return Shutdown{
+                m_closing_universe = u,
+            };
+        }
+        public func getAttrib(_: Shutdown)=> WindowsAttribute
+        {
+            return WindowsAttribute::ImGuiWindowFlags_NoTitleBar
+                + WindowsAttribute::ImGuiWindowFlags_NoCollapse;
+        }
+        public func getTitle(_: Shutdown)=> string
+        {
+            return "关闭编辑器……";
+        }
+        public func run(self: Shutdown)=> bool
+        {
+            Text("正在等待窗口退出……");
+            
+            let cancel = Button("取消关闭流程");
+            Separator();
+            
+            let mut alive_window_count = 0;
+
+            for (let iw : internal::getAllWindows())
+            {
+                alive_window_count += 1;
+
+                let window_state = internal::tryGetWindowState(iw);
+                match (window_state)
+                {
+                    none?;
+                    value(state)?
+                        TextDisabled(state->getTitle());
+                }
+            }
+
+            // 只剩下当前窗口了
+            if (alive_window_count == 1)
+            {
+                self.m_closing_universe->trim();
+                return false;
+            }
+            
+            return !cancel;
+        }
+    }
+}

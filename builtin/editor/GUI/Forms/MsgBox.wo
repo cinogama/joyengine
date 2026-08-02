@@ -53,10 +53,10 @@ namespace JEEditor::GUI::Forms
                     -> finish
                     ;
         }
-        public func getSpawnPos(_: MsgBox)=> option<ImVec2>
-        {
-            return option::value(GetMousePos());
-        }
+        // public func getSpawnPos(_: MsgBox)=> option<ImVec2>
+        // {
+        //     return option::value(GetMousePos());
+        // }
         public func run(self: MsgBox)=> bool
         {
             match (self.m_icon)

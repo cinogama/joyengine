@@ -1,6 +1,7 @@
 import woo::std;
 
 import je;
+import je::gui;
 import je::ecs;
 import je::graphic;
 import je::internal;
@@ -21,6 +22,7 @@ import Editor::MainMenu;
 import Editor::Inspector;
 import Editor::ReplConsole;
 import Editor::PanicBox;
+import Editor::Shutdown;
 
 import Inspector::Universe;
 
@@ -30,28 +32,54 @@ using je;
 using JEEditor;
 using JEEditor::Editor;
 using JEEditor::GUI::Windows;
+using JEEditor::GUI::Forms;
 
 func main()
 {
     // 编辑器脚本退出之前清掉所有单例实例
     defer singleton::unsafe::reset_all_singleton();
-        
+    
     // 注册 Woolang Panic 回调：当脚本运行时发生 panic 时，
     // 弹出 PanicBox 展示错误原因、位置与调用栈。
     // 回调参数依次为: src_file, lineno, functionname, rterrcode, reason, trace
     internal::register_panic_hook(
         \file, line, funcname, errcode, reason, trace =
             Editor::PanicBox::show(file, line, funcname, errcode, reason, trace););
-    
+            
     // 创建一个 Universe，之后编辑器将在这上面运行
     let u = Inspector::Universe::UniverseCtx::instance()->getUniverse();
-    defer u->wait();
+    gui::register_exit_callback(func(){
+            match (AskBox::showUnique(
+                "即将退出编辑器", 
+                "JoyEngine 将在所有编辑器窗口关闭后退出，是否继续？"))
+            {
+                none?;
+                value(askbox)?
+                {
+                    do askbox->onYes(
+                        func()
+                        {
+                            Shutdown::editorShutdownRequest(u);
+                        });
+                }
+            }
+            return false;
+        });
+    defer {
+        u->wait();
+        gui::unregister_exit_callback();
+        
+        // 关闭上下文
+        u->close();
+    }
     
     // 编辑器，直接初始化图形处理流程。
     je::internal::init_graphic_pipeline_for_editor(u);
     
+    // 开启主菜单
     JEEditor::Editor::MainMenu::registerMainMenu();
-
+    
+    // 默认启动的编辑器窗口
     do Browser::showBrowser();
     do EntityList::showEntityList();
     do LogBrowser::showLogBrowser();

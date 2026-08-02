@@ -13,7 +13,7 @@ namespace JEEditor::Editor
     }
     {
         let mut s_inspector_singleton = option::none: option<Inspector>;
-        public func isInspector()
+        public func isInspectorExist()
         {
             return s_inspector_singleton->is_value;
         }

@@ -37,7 +37,7 @@ namespace JEEditor::GUI::Forms
         
         public func getTitle(self: AskBox)=> string
         {
-            return F"确认: {self.m_title}$ID";
+            return F"确认: {self.m_title}";
         }
         public func getAttrib(_: AskBox)=> WindowsAttribute
         {
@@ -55,10 +55,10 @@ namespace JEEditor::GUI::Forms
                     -> finish
                     ;
         }
-        public func getSpawnPos(_: AskBox)=> option<ImVec2>
-        {
-            return option::value(GetMousePos());
-        }
+        // public func getSpawnPos(_: AskBox)=> option<ImVec2>
+        // {
+        //     return option::value(GetMousePos());
+        // }
         public func onEnter(self: AskBox)
         {
             self.m_close = true;
@@ -95,12 +95,20 @@ namespace JEEditor::GUI::Forms
             return !self.m_close;
         }
         
-        public func show(title: string, text: string)
+        public func showUnique(title: string, text: string)
         {
             let askbox = AskBox::create(title, text);
-            do Windows::show(askbox);
-            
-            return askbox;
+            match (Windows::show(askbox))
+            {
+            value(_)?
+                return option::value(askbox);
+            none?
+                return option::none;
+            }
+        }
+        public func show(title: string, text: string)
+        {
+            return showUnique(title + "$ID", text)->unwrap;
         }
         public func onYes(self: AskBox, callback: ()=> void)
         {
