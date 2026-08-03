@@ -397,6 +397,35 @@ namespace jeecs::graphic::api::dx11
                 break;
         }
 
+        // 如果因为系统未安装 D3D11 SDK Layers（例如未开启 "图形工具" 可选组件的 Win10）
+        // 导致 D3D11_CREATE_DEVICE_DEBUG 失败，则去掉该标志后重试一次。
+        if (!SUCCEEDED(result) && (dx_device_flag & D3D11_CREATE_DEVICE_DEBUG))
+        {
+            dx_device_flag &= ~D3D11_CREATE_DEVICE_DEBUG;
+            jeecs::debug::logwarn(
+                "D3D11 debug layer is not available on this system. "
+                "Retrying D3D11CreateDevice without D3D11_CREATE_DEVICE_DEBUG.");
+
+            for (size_t i = 0; i < dx_driver_type_count; i++)
+            {
+                dx_used_driver_type = dx_driver_types[i];
+                result = D3D11CreateDevice(
+                    nullptr,
+                    dx_used_driver_type,
+                    nullptr,
+                    dx_device_flag,
+                    dx_feature_levels,
+                    dx_feature_level_count,
+                    D3D11_SDK_VERSION,
+                    context->m_dx_device.GetAddressOf(),
+                    &dx_used_feature_level,
+                    context->m_dx_context.GetAddressOf());
+
+                if (SUCCEEDED(result))
+                    break;
+            }
+        }
+
         if (!SUCCEEDED(result) || dx_used_feature_level != D3D_FEATURE_LEVEL_11_0)
         {
             jeecs::debug::logfatal("Failed to create dx11 device.");
