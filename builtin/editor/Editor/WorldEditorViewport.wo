@@ -493,7 +493,6 @@ namespace JEEditor::Editor
                 }
                 none?;
             }
-            
             self.m_selected_entity_id = option::value(hits[next_index].1);
         }
         
