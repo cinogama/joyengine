@@ -7,6 +7,9 @@ using je::graphic;
 
 namespace JEEditor::GUI::Icons
 {
+    public let WHITE = texture::create(1, 1);
+    WHITE->pix((0, 0))->set_color((1., 1., 1., 1.));
+
     public let WARNING = texture::load(option::none, "!/builtin/icon/Warning.png");
     public let ASK = texture::load(option::none, "!/builtin/icon/Ask.png");
     

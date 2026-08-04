@@ -53,9 +53,9 @@ namespace JEEditor::Editor
 {
     using EditHistory = struct{}
     {
-        
+    
     }
-
+    
     using WorldEditorViewport = struct{
         m_close: mut CloseRequest,
         
@@ -267,7 +267,7 @@ namespace JEEditor::Editor
                     rot: quat,
                     scale: vec3,
                     shader: option<shader>,
-                    texture: option<texture>,
+                    texture: option<(texture, vec2, vec2)>,
                     shape: option<vertex>)
                 {
                     do try!{
@@ -282,7 +282,7 @@ namespace JEEditor::Editor
                         match (texture)
                         {
                             none?;
-                            value(texture_instance)?
+                            value((texture_instance, _, _))?
                             {
                                 let group = gizmo_rend_chain->allocate_texture_group;
                                 gizmo_rend_chain->bind_texture(group, 0, texture_instance);
@@ -295,6 +295,16 @@ namespace JEEditor::Editor
                         draw_action->set_uniform_mat4x4(shader_instance, "JE_M", model as raw mat4);
                         draw_action->set_uniform_mat4x4(shader_instance, "JE_MV", model_view as raw mat4);
                         draw_action->set_uniform_mat4x4(shader_instance, "JE_MVP", model_view_proj as raw mat4);
+                        
+                        match (texture)
+                        {
+                            none?;
+                            value((_, tiling, offset))?
+                            {
+                                draw_action->set_uniform(shader_instance, "JE_UV_TILING", tiling as raw vec2);
+                                draw_action->set_uniform(shader_instance, "JE_UV_OFFSET", offset as raw vec2);
+                            }
+                        }
                         return_value!;
                     };
                 }
@@ -311,15 +321,25 @@ namespace JEEditor::Editor
                                 if (selected_euid == euid)
                                 {
                                     let trans = e->towoo::get_component:<Transform::Translation>->unwrap;
+                                    let texture = e->towoo::get_component:<Renderer::Textures>;
+                                    
                                     drawGizmo(
                                         trans->get_global_pos,
                                         trans->get_global_rot,
                                         trans->get_local_scale,
                                         SELECTED_ENTITY_HILIGHT,
-                                        e->towoo::get_component:<Renderer::Textures>()
-                                            =>> \textures = textures->get_texture(0);,
-                                        DEFAULT_SQUARE_SHAPE);
-                                        
+                                        option::value <|
+                                            texture
+                                                =>> \textures = textures->get_texture(0)
+                                                    ->> \texture_instance = (
+                                                            texture_instance,
+                                                            textures.tiling->get,
+                                                            textures.offset->get,)
+                                                        ;
+                                                    ;
+                                                -> or((WHITE, (1., 1.) as vec2, (0.,0.) as vec2)),
+                                            DEFAULT_SQUARE_SHAPE);
+                                            
                                     break;
                                 }
                         }
