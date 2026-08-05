@@ -69,11 +69,11 @@ namespace JEEditor::Editor
             Separator();
             
             let mut alive_window_count = 0;
-
+            
             for (let iw : internal::getAllWindows())
             {
                 alive_window_count += 1;
-
+                
                 let window_state = internal::tryGetWindowState(iw);
                 match (window_state)
                 {
@@ -82,11 +82,12 @@ namespace JEEditor::Editor
                         TextDisabled(state->getTitle());
                 }
             }
-
+            
             // 只剩下当前窗口了
             if (alive_window_count == 1)
             {
-                self.m_closing_universe->trim();
+                // Note: 考虑到关闭世界的操作可能未立刻同步，关闭 universe 的操作延迟一帧发生：
+                launch_coroutine(\= self.m_closing_universe->trim(););
                 return false;
             }
             

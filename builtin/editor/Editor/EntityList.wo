@@ -71,29 +71,38 @@ namespace JEEditor::Editor
         {
             return SizeConstraints::Limited(((300., 200.), (400., 4096.)));
         }
-        func showEntitiesInWorld(w: world)
+        func showEntitiesInWorld(world_view: WorldEditorViewport)
         {
-            let entities = w->internal::get_all_entities()->iter
+            let entity_selector = world_view->getEntitySelector();
+            
+            let entities = entity_selector->iter
                 |> filter(\e = e->towoo::get_component:<Editor::Invisible>->is_none;)
-                |> collect
-                : array<entity> |> unsafe::cast:<array<mut entity>>
+                |> map(\e = (e, e->internal::get_entity_uid);)
+                |> collect_as_mut
                 ;
                 
             std::sort_in_place(
                 entities,
-                \l, r = lid < rid
-                    where lid = l->internal::get_entity_uid->or(0h as entity::internal::euid_t)
-                        , rid = r->internal::get_entity_uid->or(0h as entity::internal::euid_t)
+                \(_, lid), (_, rid) = lid->or(ZERO) < rid->or(ZERO)
+                    where ZERO = 0h as entity::internal::euid_t
                     ;);
                     
-            for (let e : entities: array<mut entity> |> unsafe::cast:<array<entity>>)
+            let current_selected_entity_id = world_view->getSelectedEntityId();
+            for (let (e, euid) : entities)
             {
                 // TODO: 目前只是简单实现了一个清单，需要更进一步
                 let mut entity_name = e->internal::name;
                 if (entity_name == "")
                     entity_name = "<匿名实体>";
-                
-                Text(entity_name);
+                    
+                if (current_selected_entity_id->is_value
+                    && euid->is_value
+                    && current_selected_entity_id->unwrap == euid->unwrap)
+                {
+                    Text(entity_name);
+                }
+                else
+                    TextDisabled(entity_name);
             }
         }
         public func run(self: EntityList)=> bool
@@ -104,7 +113,7 @@ namespace JEEditor::Editor
                     TextDisabled("（没有待编辑的世界）");
                 value(wctx)?
                 {
-                    showEntitiesInWorld(wctx->getWorld);
+                    showEntitiesInWorld(wctx);
                 }
             }
             return !self.m_close;

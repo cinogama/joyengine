@@ -742,6 +742,17 @@ namespace JEEditor::Editor
         }
         
         // ==========================
+        public func getEntitySelector(self: WorldEditorViewport)
+        {
+            return self.m_selectable_entity_selector;
+        }
+
+        public func getSelectedEntityId(self: WorldEditorViewport)
+        {
+            return self.m_selected_entity_id;
+        }
+
+        // ==========================
         
         public func getRuntimeSystems(self: WorldEditorViewport)=> array<typeinfo>
         {
