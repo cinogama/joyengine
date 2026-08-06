@@ -63,7 +63,10 @@ namespace JEEditor::GUI::Windows
         {
             do self;
         }
-        
+        public func onDestroy(self)=> void
+        {
+            do self;
+        }
         public func run(self)=> bool;
     };
     
@@ -213,10 +216,10 @@ namespace JEEditor::GUI::Windows
                 {
                     std::yield();
                 }
-                
-                WindowsState::unregister_window(i);
             }
             i->onClose();
+            i->onDestroy();
+            WindowsState::unregister_window(i);
         }
     }
     
@@ -227,10 +230,18 @@ namespace JEEditor::GUI::Windows
         let is_unique = title->find("$ID")->is_none;
         
         let i = IWindows::create(window_instance);
-        try! window_state = WindowsState::try_register_window(i, title, is_unique);
         
-        launch_coroutine(\= i->_show(window_state););
-        return option::value(i);
+        match (WindowsState::try_register_window(i, title, is_unique))
+        {
+            none?
+                i->onDestroy();
+            value(window_state)?
+            {
+                launch_coroutine(\= i->_show(window_state););
+                return option::value(i);
+            }
+        }
+        return option::none;
     }
     
     // 仅限特殊情况使用：

@@ -88,7 +88,7 @@ namespace JEEditor::Editor
         m_rotation_y: mut quat,
         
         // Gizmo
-        m_gizmo_draw_branch : rendchain_branch,
+        m_gizmo_draw_branch: rendchain_branch,
     }
     {
         let TRASNLATION_SYSTEM_TYPE =
@@ -185,13 +185,15 @@ namespace JEEditor::Editor
         {
             s_world_viewports->set(self.m_world_instance, self);
         }
-        public func onClose(self: WorldEditorViewport)=> void
+        public func onDestroy(self: WorldEditorViewport)=> void
         {
             let graphic_uhost = graphic_uhost::get_or_create(
                 self.m_world_instance->get_universe);
                 
             graphic_uhost->free_branch(self.m_gizmo_draw_branch);
-            
+        }
+        public func onClose(self: WorldEditorViewport)=> void
+        {
             if (self.m_is_look_active)
                 input::set_lock_mouse(false);
                 
@@ -746,12 +748,12 @@ namespace JEEditor::Editor
         {
             return self.m_selectable_entity_selector;
         }
-
+        
         public func getSelectedEntityId(self: WorldEditorViewport)
         {
             return self.m_selected_entity_id;
         }
-
+        
         // ==========================
         
         public func getRuntimeSystems(self: WorldEditorViewport)=> array<typeinfo>
