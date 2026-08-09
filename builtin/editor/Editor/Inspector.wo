@@ -1,5 +1,6 @@
 import woo::std;
 
+import je;
 import je::ecs;
 import je::internal;
 import je::gui;
@@ -15,6 +16,7 @@ import WorldEditorViewport;
 using std;
 using je;
 using je::gui;
+using je::towoo;
 using JEEditor::GUI::Windows;
 
 namespace JEEditor::Editor
@@ -64,18 +66,25 @@ namespace JEEditor::Editor
         func showEntityComponentEditImpl(e: entity)
         {
             Text(F"实体: {e->internal::name}");
-            for (let ctype : e->internal::get_components_types 
+            for (let ctype : e->internal::get_components_types
                 |> sort(\l, r = l->name < r->name;))
             {
-                Text(ctype->name);
-
+                let cname = ctype->name;
+                Text(cname);
+                
                 let cinst = e->get_component(ctype)->unwrap;
                 for (let (mname, mtype, mhandle) : cinst->get_members)
                 {
                     TextDisabled(mname);
-                    do mname;
-                    do mtype;
-                    do mhandle;
+                    
+                    match (unsafe::dynamic_parser::edit(
+                            mtype, mhandle, F"##{cname}##{mname}##{mhandle}"))
+                    {
+                        none?
+                            TextDisabled(F"编辑器没有为 `{mtype->script_name->or(mtype->name)}` 类型提供编辑组件");
+                        value(updated)?
+                            do updated;
+                    }
                 }
             }
         }
@@ -87,10 +96,10 @@ namespace JEEditor::Editor
             {
                 match (e->internal::get_entity_uid)
                 {
-                none?;
-                value(eeuid)?
-                    if (eeuid == selected_entity_id)
-                        showEntityComponentEditImpl(e);
+                    none?;
+                    value(eeuid)?
+                        if (eeuid == selected_entity_id)
+                            showEntityComponentEditImpl(e);
                 }
             }
         }
@@ -105,8 +114,7 @@ namespace JEEditor::Editor
                     TextDisabled("（没有待编辑的实体）");
                 value((wctx, selected_entity_id))?
                 {
-                    do wctx;
-                    do selected_entity_id;
+                    showEntityComponentEdit(wctx, selected_entity_id);
                 }
             }
             return !self.m_close;
