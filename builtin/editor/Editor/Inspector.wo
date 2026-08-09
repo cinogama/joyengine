@@ -1,9 +1,20 @@
 import woo::std;
 
+import je::ecs;
+import je::internal;
+import je::gui;
+import je::typeinfo;
+
 import pkg::interface;
+import pkg::worst;
 
 import builtin::editor::GUI::Windows;
 
+import WorldEditorViewport;
+
+using std;
+using je;
+using je::gui;
 using JEEditor::GUI::Windows;
 
 namespace JEEditor::Editor
@@ -30,7 +41,7 @@ namespace JEEditor::Editor
                     inst->close();
             }
         }
-
+        
         func create()=> Inspector
             where require!(Inspector: IWindows);
         {
@@ -50,10 +61,54 @@ namespace JEEditor::Editor
         {
             return SizeConstraints::Limited(((300., 200.), (600., 4096.)));
         }
+        func showEntityComponentEditImpl(e: entity)
+        {
+            Text(F"实体: {e->internal::name}");
+            for (let ctype : e->internal::get_components_types 
+                |> sort(\l, r = l->name < r->name;))
+            {
+                Text(ctype->name);
+
+                let cinst = e->get_component(ctype)->unwrap;
+                for (let (mname, mtype, mhandle) : cinst->get_members)
+                {
+                    TextDisabled(mname);
+                    do mname;
+                    do mtype;
+                    do mhandle;
+                }
+            }
+        }
+        func showEntityComponentEdit(
+            wctx: WorldEditorViewport,
+            selected_entity_id: entity::internal::euid_t)
+        {
+            for (let e : wctx->getEntitySelector)
+            {
+                match (e->internal::get_entity_uid)
+                {
+                none?;
+                value(eeuid)?
+                    if (eeuid == selected_entity_id)
+                        showEntityComponentEditImpl(e);
+                }
+            }
+        }
         public func run(self: Inspector)=> bool
         {
-            
-
+            match (WorldEditorViewport::getLastFocused()
+                =>> \wctx = wctx->getSelectedEntityId()
+                    ->> \selected_entity_id = (wctx, selected_entity_id);
+                    ;)
+            {
+                none?
+                    TextDisabled("（没有待编辑的实体）");
+                value((wctx, selected_entity_id))?
+                {
+                    do wctx;
+                    do selected_entity_id;
+                }
+            }
             return !self.m_close;
         }
     }
