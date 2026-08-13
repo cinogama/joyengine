@@ -71,6 +71,18 @@ namespace JEEditor::Editor
         {
             return SizeConstraints::Limited(((300., 200.), (400., 4096.)));
         }
+        func showEntityContextMenu(e: entity)
+        {
+            if (BeginPopupContextItem())
+            {
+                if (MenuItem("销毁"))
+                {
+                    e->close;
+                }
+                
+                defer EndPopup();
+            }
+        }
         func showEntitiesInWorld(world_view: WorldEditorViewport)
         {
             let entity_selector = world_view->getEntitySelector();
@@ -88,21 +100,25 @@ namespace JEEditor::Editor
                     ;);
                     
             let current_selected_entity_id = world_view->getSelectedEntityId();
-            for (let (e, euid) : entities)
+            
+            for (let (i, (e, euid)) : entities->iter |> enumerate)
             {
-                // TODO: 目前只是简单实现了一个清单，需要更进一步
                 let mut entity_name = e->internal::name;
                 if (entity_name == "")
                     entity_name = "<匿名实体>";
                     
-                if (current_selected_entity_id->is_value
+                let is_selected = current_selected_entity_id->is_value
                     && euid->is_value
-                    && current_selected_entity_id->unwrap == euid->unwrap)
-                {
-                    Text(entity_name);
-                }
-                else
-                    TextDisabled(entity_name);
+                    && current_selected_entity_id->unwrap == euid->unwrap;
+                    
+                // 点击实体项可选中对应实体
+                let clicked = SelectableSelected(
+                    F"{entity_name}##{i}", is_selected);
+                if (clicked && euid->is_value)
+                    world_view->setSelectedEntityId(euid);
+                    
+                // 右键打开实体上下文菜单（内容暂留空）
+                showEntityContextMenu(e);
             }
         }
         public func run(self: EntityList)=> bool

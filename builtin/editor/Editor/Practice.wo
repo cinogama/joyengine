@@ -1,0 +1,61 @@
+/*
+Practice: 对实体的一切改动均通过 Practice 对象执行落实。
+
+Practice 是对实体的编辑管理，保留编辑操作的历史，并支持回退功能。
+*/
+
+import je::ecs;
+import je::internal;
+
+import pkg::interface;
+
+using je;
+
+namespace JEEditor::Editor
+{
+    alias EuidT = entity::internal::euid_t;
+    
+    using Practice = struct{}
+    {
+        interface! IAction
+        {
+            func redo(self)=> bool;
+            func undo(self)=> bool;
+        }
+
+        using Create = struct{ eid: EuidT, };
+        using Destroy = struct{ eid: EuidT, };
+        using Rename = struct{ name: string, };
+        using Modify = struct{
+            component_type_name: string,
+            member_name: string,
+            saved_value: string,
+        };
+        
+        using AddComponent = struct{
+            component_type_name: string,
+        };
+        using RemoveComponent = struct{
+            component_type_name: string,
+        };
+        using SetTexture = struct{
+            pass: int,
+            texture_path: string,
+        };
+        using ResetTexture = struct{
+            pass: int,
+        };
+        using InsertShaderPass = struct{
+            index: int,
+            shader_path: string,
+        };
+        using RemoveShaderPass = struct{
+            index: int,
+        };
+        using ModifyShaderUniform = struct{
+            index: int,
+            uniform_name: string,
+            saved_value: string,
+        };
+    }
+}

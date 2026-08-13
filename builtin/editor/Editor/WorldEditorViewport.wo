@@ -754,6 +754,11 @@ namespace JEEditor::Editor
             return self.m_selected_entity_id;
         }
         
+        public func setSelectedEntityId(self: WorldEditorViewport, id: option<entity::internal::euid_t>)=> void
+        {
+            self.m_selected_entity_id = id;
+        }
+        
         // ==========================
         
         public func getRuntimeSystems(self: WorldEditorViewport)=> array<typeinfo>
