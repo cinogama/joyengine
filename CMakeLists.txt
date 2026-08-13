@@ -42,9 +42,6 @@ else()
 endif()
 
 if (JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD)
-    set (WO_CMAKE_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
-    string (TOUPPER ${WO_CMAKE_BUILD_TYPE} WO_CMAKE_BUILD_TYPE_UPPER_CASE)
-    
     message(STATUS "Fetching woolang packages.")
     
     execute_process(
