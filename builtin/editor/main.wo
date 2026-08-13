@@ -38,6 +38,9 @@ func main()
 {
     // 编辑器脚本退出之前清掉所有单例实例
     defer singleton::unsafe::reset_all_singleton();
+
+    // 载入默认的类型值编辑器
+    do towoo::unsafe::dynamic_parser::update_all("!/builtin/script/types.wo")->unwrap;
     
     // 注册 Woolang Panic 回调：当脚本运行时发生 panic 时，
     // 弹出 PanicBox 展示错误原因、位置与调用栈。

@@ -1,0 +1,773 @@
+// types.wo
+
+import woo::std;
+
+import je;
+import je::gui;
+import je::towoo;
+import je::towoo::types;
+
+import pkg::worst;
+
+using std;
+using je;
+using je::gui;
+
+// =============================================
+// 这个脚本用于向编辑器提供各类型的编辑拓展
+// 此脚本如果存在错误，项目将无法被编辑器载入
+// =============================================
+
+namespace bool
+{
+    using parser = void
+    {
+        public extern func saving(val: bool)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> bool
+        {
+            return dat as bool;
+        }
+        public extern func edit(val: bool, tag: string)=> option<bool>
+        {
+            return CheckBox(F"##{tag}", val);
+        }
+    }
+}
+namespace uint8
+{
+    using parser = void
+    {
+        public extern func saving(val: uint8)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> uint8
+        {
+            return dat as uint8;
+        }
+        public extern func edit(val: uint8, tag: string)=> option<uint8>
+        {
+            return InputInt(F"##{tag}", val);
+        }
+    }
+}
+namespace uint16
+{
+    using parser = void
+    {
+        public extern func saving(val: uint16)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> uint16
+        {
+            return dat as uint16;
+        }
+        public extern func edit(val: uint16, tag: string)=> option<uint16>
+        {
+            return InputInt(F"##{tag}", val);
+        }
+    }
+}
+namespace uint32
+{
+    using parser = void
+    {
+        public extern func saving(val: uint32)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> uint32
+        {
+            return dat as uint32;
+        }
+        public extern func edit(val: uint32, tag: string)=> option<uint32>
+        {
+            return InputInt(F"##{tag}", val);
+        }
+    }
+}
+namespace uint64
+{
+    using parser = void
+    {
+        public extern func saving(val: uint64)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> uint64
+        {
+            return dat as uint64;
+        }
+        public extern func edit(val: uint64, tag: string)=> option<uint64>
+        {
+            return InputInt(F"##{tag}", val);
+        }
+    }
+}
+namespace int8
+{
+    using parser = void
+    {
+        public extern func saving(val: int8)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> int8
+        {
+            return dat as int8;
+        }
+        public extern func edit(val: int8, tag: string)=> option<int8>
+        {
+            return InputInt(F"##{tag}", val);
+        }
+    }
+}
+namespace int16
+{
+    using parser = void
+    {
+        public extern func saving(val: int16)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> int16
+        {
+            return dat as int16;
+        }
+        public extern func edit(val: int16, tag: string)=> option<int16>
+        {
+            return InputInt(F"##{tag}", val);
+        }
+    }
+}
+namespace int32
+{
+    using parser = void
+    {
+        public extern func saving(val: int32)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> int32
+        {
+            return dat as int32;
+        }
+        public extern func edit(val: int32, tag: string)=> option<int32>
+        {
+            return InputInt(F"##{tag}", val);
+        }
+    }
+}
+namespace int64
+{
+    using parser = void
+    {
+        public extern func saving(val: int64)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> int64
+        {
+            return dat as int64;
+        }
+        public extern func edit(val: int64, tag: string)=> option<int64>
+        {
+            return InputInt(F"##{tag}", val);
+        }
+    }
+}
+namespace float
+{
+    using parser = void
+    {
+        public extern func saving(val: float)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> float
+        {
+            return dat as float;
+        }
+        public extern func edit(val: float, tag: string)=> option<float>
+        {
+            return InputFloat(F"##{tag}", val);
+        }
+    }
+}
+namespace real
+{
+    using parser = void
+    {
+        public extern func saving(val: real)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> real
+        {
+            return dat as real;
+        }
+        public extern func edit(val: real, tag: string)=> option<real>
+        {
+            return InputFloat(F"##{tag}", val);
+        }
+    }
+}
+namespace ivec2
+{
+    using parser = void
+    {
+        public extern func saving(val: ivec2)=> string
+        {
+            return [val.0, val.1]->serialize->or("[0,0]");
+        }
+        public extern func restoring(dat: string)=> ivec2
+        {
+            let data = dat->array::deserialize->or([0 as dynamic, 0 as dynamic])->> \x = x as int;;
+            return (data->get_or(0, 0), data->get_or(1, 0)) as ivec2;
+        }
+        public extern func edit(val: ivec2, tag: string)=> option<ivec2>
+        {
+            return InputInt2(F"##{tag}", val.0, val.1)->>\v = v as ivec2;;
+        }
+    }
+}
+namespace vec2
+{
+    using parser = void
+    {
+        public extern func saving(val: vec2)=> string
+        {
+            return [val.0, val.1]->serialize->or("[0,0]");
+        }
+        public extern func restoring(dat: string)=> vec2
+        {
+            let data = dat->array::deserialize->or([0 as dynamic, 0 as dynamic])->> \x = x as real;;
+            return (data->get_or(0, 0.), data->get_or(1, 0.)) as vec2;
+        }
+        public extern func edit(val: vec2, tag: string)=> option<vec2>
+        {
+            return InputFloat2(F"##{tag}", val.0, val.1)->>\v = v as vec2;;
+        }
+    }
+}
+namespace vec3
+{
+    using parser = void
+    {
+        public extern func saving(val: vec3)=> string
+        {
+            return [val.0, val.1, val.2]->serialize->or("[0,0,0]");
+        }
+        public extern func restoring(dat: string)=> vec3
+        {
+            let data = dat->array::deserialize->or([0 as dynamic, 0 as dynamic, 0 as dynamic])->> \x = x as real;;
+            return (data->get_or(0, 0.), data->get_or(1, 0.), data->get_or(2, 0.)) as vec3;
+        }
+        public extern func edit(val: vec3, tag: string)=> option<vec3>
+        {
+            return InputFloat3(F"##{tag}", val.0, val.1, val.2)->>\v = v as vec3;;
+        }
+    }
+}
+namespace vec4
+{
+    using parser = void
+    {
+        public extern func saving(val: vec4)=> string
+        {
+            return [val.0, val.1, val.2, val.3]->serialize->or("[0,0,0,0]");
+        }
+        public extern func restoring(dat: string)=> vec4
+        {
+            let data = dat->array::deserialize->or([0 as dynamic, 0 as dynamic, 0 as dynamic, 0 as dynamic])->> \x = x as real;;
+            return (data->get_or(0, 0.), data->get_or(1, 0.), data->get_or(2, 0.), data->get_or(3, 0.)) as vec4;
+        }
+        public extern func edit(val: vec4, tag: string)=> option<vec4>
+        {
+            return InputFloat4(F"##{tag}", val.0, val.1, val.2, val.3)->>\v = v as vec4;;
+        }
+    }
+}
+namespace quat
+{
+    using parser = void
+    {
+        public extern func saving(val: quat)=> string
+        {
+            return [val.0, val.1, val.2, val.3]->serialize->or("[0,0,0,0]");
+        }
+        public extern func restoring(dat: string)=> quat
+        {
+            let data = dat->array::deserialize->or([0 as dynamic, 0 as dynamic, 0 as dynamic, 0 as dynamic])->> \x = x as real;;
+            return (data->get_or(0, 0.), data->get_or(1, 0.), data->get_or(2, 0.), data->get_or(3, 0.)) as quat;
+        }
+        public extern func edit(val: quat, tag: string)=> option<quat>
+        {
+            let angle = val->euler_angle;
+            return InputFloat3(F"##{tag}", angle.0, angle.1, angle.2)->>\v = quat::euler(v...);;
+        }
+    }
+}
+// namespace fileresource_void
+// {
+//     using parser = void
+//     {
+//         public extern func saving(val: fileresource_void)=> string
+//         {
+//             return val.path->or("");
+//         }
+//         public extern func restoring(dat: string)=> fileresource_void
+//         {
+//             if (dat == "")
+//                 return fileresource_void{ path = option::none };
+//             else
+//                 return fileresource_void{ path = option::value(dat) };
+//         }
+//         public extern func edit(val: fileresource_void, tag: string)=> option<fileresource_void>
+//         {
+//             match (jeapi::gui::widget::File(F"文件：##{tag}", val.path->or(""), \=do nil;))
+//             {
+//                 value(p)?
+//                     if (p == "")
+//                         return option::value(fileresource_void{ path = option::none });
+//                 else
+//                     return option::value(fileresource_void{ path = option::value(p) });
+//                 none?
+//                     return option::none;
+//             }
+//         }
+//     }
+// }
+// namespace fileresource_audio_buffer
+// {
+//     using parser = void
+//     {
+//         public extern func saving(val: fileresource_audio_buffer)=> string
+//         {
+//             return val.path->or("");
+//         }
+//         public extern func restoring(dat: string)=> fileresource_audio_buffer
+//         {
+//             if (dat == "")
+//                 return fileresource_audio_buffer{ path = option::none };
+//             else
+//                 return fileresource_audio_buffer{ path = option::value(dat) };
+//         }
+//         public extern func edit(val: fileresource_audio_buffer, tag: string)=> option<fileresource_audio_buffer>
+//         {
+//             match (jeapi::gui::widget::File(F"文件：##{tag}", val.path->or(""), \=do nil;))
+//             {
+//                 value(p)?
+//                     if (p == "")
+//                         return option::value(fileresource_audio_buffer{ path = option::none });
+//                 else
+//                     return option::value(fileresource_audio_buffer{ path = option::value(p) });
+//                 none?
+//                     return option::none;
+//             }
+//         }
+//     }
+// }
+namespace uuid
+{
+    using parser = void
+    {
+        public extern func saving(val: uuid)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> uuid
+        {
+            return dat as uuid;
+        }
+        public extern func edit(val: uuid, tag: string)=> option<uuid>
+        {
+            return InputText(F"##{tag}", val as string)->> \dat = dat as uuid;;
+        }
+    }
+}
+namespace string
+{
+    using parser = void
+    {
+        public extern func saving(val: string)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> string
+        {
+            return dat as string;
+        }
+        public extern func edit(val: string, tag: string)=> option<string>
+        {
+            return InputText(F"##{tag}", val as string);
+        }
+    }
+}
+// namespace Light2D::Range::light_shape
+// {
+//     using parser = void
+//     {
+//         public extern func saving(val: Light2D::Range::light_shape)=> string
+//         {
+//             let dat = {
+//                 ["m_point_count"] = val.m_point_count as dynamic,
+//                 ["m_strength"] = val.m_strength as dynamic,
+//                 ["m_positions"] = val.m_positions->>\v2 = v2->parser::saving; as dynamic,
+//             };
+            
+//             return dat->serialize->unwrap;
+//         }
+//         public extern func restoring(dat: string)=> Light2D::Range::light_shape
+//         {
+//             let data = dat->dict::deserialize->or({});
+//             return Light2D::Range::light_shape
+//             {
+//                 m_point_count = data->get_or("m_point_count" as dynamic, 0 as dynamic)->or(0),
+//                 m_strength = data->get_or("m_strength" as dynamic, [] as dynamic)->or([] as array<dynamic>)->> \e = e->or(0.0);,
+//                 m_positions = data->get_or("m_positions" as dynamic, [] as dynamic)->or([] as array<dynamic>)->> \v2 = vec2::parser::restoring(v2 as string);,
+//             };
+//         }
+//         public extern func edit(val: Light2D::Range::light_shape, tag: string)=> option<Light2D::Range::light_shape>
+//         {
+//             let mut need_update = false;
+            
+//             let mut strength_data = val.m_strength;
+//             let mut point_data = val.m_positions;
+            
+//             match (InputInt(F"层数##{tag}", strength_data->len)->>\n = n < 0 ? 0 | n;)
+//             {
+//                 value(count)?
+//                 {
+//                     strength_data = strength_data->resize(count, 0.0 as real);
+//                     point_data = point_data->resize(count * val.m_point_count, (0., 0.) as vec2);
+                    
+//                     need_update = true;
+//                 }
+//                 none?;
+//             }
+            
+//             let layer_count = strength_data->len;
+//             let mut point_count = val.m_point_count;
+            
+//             match (InputInt(F"顶点##{tag}", point_count)->>\n = n < 0 ? 0 | n;)
+//             {
+//                 value(count)?
+//                 {
+//                     let v = vec::create(count * layer_count, mut (0., 0.) as vec2);
+//                     for (let mut ilayer = 0; ilayer < layer_count; ilayer += 1)
+//                     {
+//                         for (let mut ipoint = 0; ipoint < math::min(count, point_count); ipoint += 1)
+//                         {
+//                             v[ilayer * count + ipoint] = point_data[ilayer * point_count + ipoint];
+//                         }
+//                     }
+//                     point_count = count;
+//                     point_data = v->unsafe::cast:<array<vec2>>;
+                    
+//                     need_update = true;
+//                 }
+//                 none?;
+//             }
+            
+//             let layered_positions = []mut as vec<array<vec2>>;
+//             for (let mut offset = 0; offset < layer_count; offset += 1)
+//                 layered_positions->add(
+//                     point_data->sub_len(offset * point_count, point_count));
+                    
+//             Text("形状网格");
+//             TextDisabled("* 请保持最内层为凸多边形");
+//             match (jeapi::gui::widget::poseditor(
+//                     F"##shape##{tag}",
+//                     math::min(GetContentRegionAvail().0, 400.),
+//                     layered_positions: vec<array<vec2>>->unsafe::cast:<array<array<(real, real)>>>,
+//                     0.01,
+//                     func(a, i)
+//                     {
+//                         let r = []mut as vec<((real, real), (real, real))>;
+//                         for (let (idx, p) : a[i]->iter |> iterator::enumerate)
+//                         {
+//                             r->add((a[i][(idx > 0 ? idx | a[i]->len) - 1], p));
+                            
+//                             if (i > 0)
+//                                 r->add((a[i - 1][idx], p));
+//                         }
+//                         return r->to_array;
+//                     },
+//                 ))
+//             {
+//                 value(posgroups)?
+//                 {
+//                     point_data = posgroups
+//                         ->  reduce(\l, r = l->connect(r);)
+//                         ->  or([])
+//                         ->> \e = e as vec2;
+//                         ;
+//                     need_update = true;
+//                 }
+//                 none?
+//                     ;
+//             }
+            
+//             let new_strength_data = []mut as vec<real>;
+//             for (let (i, st) : strength_data->iter |> iterator::enumerate)
+//             {
+//                 Text(F"强度 {i}");
+//                 SameLine();
+//                 match (DragFloat(F"##strength_{i}##{tag}", st, 0.01, 0., 1.))
+//                 {
+//                     value(newst)?
+//                     {
+//                         new_strength_data->add(newst);
+//                         need_update = true;
+//                     }
+//                     none?
+//                         new_strength_data->add(st);
+//                 }
+//             }
+            
+//             if (need_update)
+//                 return option::value(
+//                     Light2D::Range::light_shape
+//                     {
+//                         m_point_count = point_count,
+//                         m_strength = new_strength_data->unsafe::cast:<array<real>>,
+//                         m_positions = point_data,
+//                     }
+//                 );
+                
+//             return option::none;
+//         }
+//     }
+    
+// }
+// namespace Light2D::BlockShadow::block_mesh
+// {
+//     using parser = void
+//     {
+//         public extern func saving(val: Light2D::BlockShadow::block_mesh)=> string
+//         {
+//             return val as array<vec2>
+//                 ->> \v2 = v2->parser::saving;
+//                 -> serialize->unwrap
+//                 ;
+//         }
+//         public extern func restoring(dat: string)=> Light2D::BlockShadow::block_mesh
+//         {
+//             return dat->array::deserialize->or([])
+//                 ->> \v2 = vec2::parser::restoring(v2 as string);
+//                 as block_mesh;
+//         }
+//         public extern func edit(mut val: Light2D::BlockShadow::block_mesh, tag: string)=> option<Light2D::BlockShadow::block_mesh>
+//         {
+//             let mut size_changed = false;
+//             match (InputInt(F"size##{tag}", val as array<vec2>->len)->>\n = n < 0 ? 0 | n;)
+//             {
+//                 value(newsize)?
+//                 {
+//                     val = val as array<vec2>->resize(newsize, (0., 0.) as vec2) as Light2D::BlockShadow::block_mesh;
+//                     size_changed = true;
+//                 }
+//                 none?;
+//             }
+            
+//             match (jeapi::gui::widget::poseditor(
+//                     F"##block_mesh##{tag}",
+//                     math::min(GetContentRegionAvail().0, 400.),
+//                     [val as array<vec2>->>\p = p as (real, real);],
+//                     0.01,
+//                     func(a, i)
+//                     {
+//                         let r = []mut as vec<((real, real), (real, real))>;
+//                         for (let (idx, p) : a[i]->iter |> iterator::enumerate)
+//                         {
+//                             if (idx > 0)
+//                                 r->add((a[i][idx - 1], p));
+//                         }
+//                         return r->to_array;
+//                     },
+//                 ))
+//             {
+//                 value(posgroups)?
+//                     return option::value(posgroups[0]: array<(real, real)>->>\p = p as vec2; as Light2D::BlockShadow::block_mesh);
+//                 none?
+//                     if (size_changed)
+//                         return option::value(val);
+//                 else
+//                     return option::none;
+//             }
+//         }
+//     }
+// }
+namespace UserInterface::Origin::origin_center
+{
+    using parser = void
+    {
+        public extern func saving(val: UserInterface::Origin::origin_center)=> string
+        {
+            return val as int as string;
+        }
+        public extern func restoring(dat: string)=> UserInterface::Origin::origin_center
+        {
+            return dat as int as UserInterface::Origin::origin_center;
+        }
+        public extern func edit(val: UserInterface::Origin::origin_center, tag: string)=> option<UserInterface::Origin::origin_center>
+        {
+            let mut newval = val;
+            BeginGroup();
+            {
+                if (CheckBox(F"##{tag}_lu", origin_center::left + origin_center::top == val)->is_value)
+                    newval = origin_center::left + origin_center::top;
+                SameLine();
+                if (CheckBox(F"##{tag}_u", origin_center::top == val)->is_value)
+                    newval = origin_center::top;
+                SameLine();
+                if (CheckBox(F"##{tag}_ru", origin_center::right + origin_center::top == val)->is_value)
+                    newval = origin_center::right + origin_center::top;
+                    
+                if (CheckBox(F"##{tag}_l", origin_center::left == val)->is_value)
+                    newval = origin_center::left;
+                SameLine();
+                if (CheckBox(F"##{tag}_c", origin_center::center == val)->is_value)
+                    newval = origin_center::center;
+                SameLine();
+                if (CheckBox(F"##{tag}_r", origin_center::right == val)->is_value)
+                    newval = origin_center::right;
+                    
+                if (CheckBox(F"##{tag}_lb", origin_center::left + origin_center::bottom == val)->is_value)
+                    newval = origin_center::left + origin_center::bottom;
+                SameLine();
+                if (CheckBox(F"##{tag}_b", origin_center::bottom == val)->is_value)
+                    newval = origin_center::bottom;
+                SameLine();
+                if (CheckBox(F"##{tag}_rb", origin_center::right + origin_center::bottom == val)->is_value)
+                    newval = origin_center::right + origin_center::bottom;
+            }
+            EndGroup();
+            
+            if (newval != val)
+                return option::value(newval);
+            else
+                return option::none;
+        }
+    }
+}
+// namespace Animation::FrameAnimation::animation_list
+// {
+//     using parser = void
+//     {
+//         public extern func saving(val: Animation::FrameAnimation::animation_list)=> string
+//         {
+//             return val as array<animation_state>
+//                 ->> \state = [
+//                         state.m_path as dynamic,
+//                         state.m_action->is_value ? state.m_action->unwrap as dynamic | nil as dynamic,
+//                         state.m_loop as dynamic];
+//                     ->  serialize
+//                     ->  unwrap;
+//         }
+//         public extern func restoring(dat: string)=> Animation::FrameAnimation::animation_list
+//         {
+//             return dat->array::deserialize->or([])
+//                 ->> \state =
+//                     animation_state
+//                     {
+//                         m_path = state_dat->get_or(0, "" as dynamic)->or(""),
+//                         m_action = state_dat->get_or(1, nil as dynamic)->trycast:<string>,
+//                         m_loop = state_dat->get_or(2, false as dynamic)->or(false),
+//                     }
+//                     where 
+//                         state_dat = state->or([] as array<dynamic>)
+//                     ;
+//                 as animation_list;
+//             ;
+//         }
+//         public extern func edit(mut val: Animation::FrameAnimation::animation_list, tag: string)=> option<Animation::FrameAnimation::animation_list>
+//         {
+//             let mut need_update = false;
+            
+//             match (InputInt(F"size##{tag}", val as array<animation_state>->len)->>\n = n < 0 ? 0 | n;)
+//             {
+//                 value(newsize)?
+//                 {
+//                     val = val as array<animation_state>
+//                         ->resize(newsize,
+//                             animation_state
+//                             {
+//                                 m_path = "",
+//                                 m_action = option::none,
+//                                 m_loop = false,
+//                             }) as Animation::FrameAnimation::animation_list;
+//                     need_update = true;
+//                 }
+//                 none?;
+//             }
+            
+//             let mut newval = []mut as vec<animation_state>;
+            
+//             for (let (idx, state) : val as array<animation_state>->iter |> iterator::enumerate)
+//             {
+//                 let mut path = state.m_path;
+//                 let mut animation = state.m_action;
+//                 let mut loop = state.m_loop;
+                
+//                 if (TreeNodeEx(F"动画 {idx}",
+//                         TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow
+//                             + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick
+//                             + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
+//                             + TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
+//                 {
+//                     match (CheckBox(F"循环##{tag}", loop))
+//                     {
+//                         value(newloop)?
+//                         {
+//                             loop = newloop;
+//                             need_update = true;
+//                         }
+//                         none?;
+//                     }
+//                     SameLine();
+                    
+//                     match (jeapi::gui::widget::File(F"路径##{tag}", path, \=do nil;))
+//                     {
+//                         value(newpath)?
+//                         {
+//                             path = newpath;
+//                             need_update = true;
+//                         }
+//                         none?;
+//                     }
+                    
+//                     match (InputText(F"动作##{tag}", animation->or("")))
+//                     {
+//                         value(newanimation)?
+//                         {
+//                             animation = option::value(newanimation);
+//                             need_update = true;
+//                         }
+//                         none?;
+//                     }
+                    
+//                     newval->add(
+//                         animation_state
+//                         {
+//                             m_path = path,
+//                             m_action = animation,
+//                             m_loop = loop,
+//                         }
+//                     );
+//                     TreePop();
+//                 }
+//             }
+            
+//             if (need_update)
+//                 return option::value(newval->to_array as Animation::FrameAnimation::animation_list);
+//             else
+//                 return option::none;
+//         }
+//     }
+// }

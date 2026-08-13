@@ -85,7 +85,7 @@ namespace jeecs
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(guard, &EntityId::eid, "eid");
+                // typing::register_member(guard, &EntityId::eid, "eid");
             }
         };
 
