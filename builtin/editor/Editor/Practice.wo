@@ -3,13 +3,22 @@ Practice: 对实体的一切改动均通过 Practice 对象执行落实。
 
 Practice 是对实体的编辑管理，保留编辑操作的历史，并支持回退功能。
 */
+import woo::std;
 
+import je;
 import je::ecs;
 import je::internal;
 
 import pkg::interface;
+import pkg::toml;
+import pkg::try;
+
+import WorldEditorViewport;
+import builtin::gaming::Saving::Entity;
 
 using je;
+using toml;
+using JEGaming::Saving;
 
 namespace JEEditor::Editor
 {
@@ -19,24 +28,84 @@ namespace JEEditor::Editor
     {
         interface! IAction
         {
-            func redo(self)=> bool;
-            func undo(self)=> bool;
+            func redo(self, w: WorldEditorViewport)=> bool;
+            func undo(self, w: WorldEditorViewport)=> bool;
         }
-
-        using CreateEntity = struct{}
+        
+        using FullEntityContent = struct{
+            m_eid: EuidT,
+            m_entity_content: Toml,
+        }
         {
-            func create()=> CreateEntity
-                where require!(CreateEntity: IAction);
-            {   
-                return CreateEntity{};
-            }
-            func redo(_: CreateEntity)=> bool
+            func try_create(e: entity)
             {
+                try! eid = e->internal::get_entity_uid;
+                return_value! FullEntityContent{
+                    m_eid = eid,
+                    m_entity_content = Entity::save(e),
+                };
+            }
+        }
+        
+        using CreateEntity = struct{
+            m_content: FullEntityContent,
+        }
+        {
+            func try_create(new_created: entity)=> option<CreateEntity>
+                where require!(CreateEntity: IAction);
+            {
+                return try!{
+                    try! full_entity_content = FullEntityContent::try_create(new_created);
+                    return_value! CreateEntity{
+                        m_content = full_entity_content,
+                    };
+                } catch! {
+                    logerr("传入的实体应当有对应的 EUID，请检查创建/销毁的实体流程");
+                };
+            }
+            func redo(self: CreateEntity, w: WorldEditorViewport)=> bool
+            {
+                let e = Entity::restore(w->getWorld(), self.m_content.m_entity_content);
+                
+                // Force apply eid.
+                e->internal::unsafe::set_entity_uid(self.m_content.m_eid);
+                
+                return true;
+            }
+            func undo(self: CreateEntity, w: WorldEditorViewport)=> bool
+            {
+                for (let e : w->getEntitySelector())
+                {
+                    match (e->internal::get_entity_uid)
+                    {
+                        none?;
+                        value(eid)?
+                            if (eid == self.m_content.m_eid)
+                            {
+                                e->close;
+                                return true;
+                            }
+                    }
+                }
                 return false;
             }
-            func undo(_: CreateEntity)=> bool
+        }
+        using DestroyEntity = CreateEntity
+        {
+            func try_create(e: entity)=> option<DestroyEntity>
+                where require!(DestroyEntity: IAction);
             {
-                return false;   
+                return CreateEntity::try_create(e)
+                    ->> \ce = ce as raw DestroyEntity as DestroyEntity;
+                    ;
+            }
+            func redo(self: DestroyEntity, w: WorldEditorViewport)=> bool
+            {
+                return self as raw CreateEntity as CreateEntity->undo(w);
+            }
+            func undo(self: DestroyEntity, w: WorldEditorViewport)=> bool
+            {
+                return self as raw CreateEntity as CreateEntity->redo(w);
             }
         }
     }

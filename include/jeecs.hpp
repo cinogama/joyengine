@@ -4782,6 +4782,8 @@ JE_API const je_TypeInfo** jedbg_get_all_system_attached_in_world(je_GameWorld* 
 
 JE_API je_DebugEid jedbg_get_entity_uid(const je_GameEntity* e);
 
+JE_API void jedbg_set_entity_uid(const je_GameEntity* e, je_DebugEid uid);
+
 JE_API void jedbg_get_entity_arch_information(
     je_GameEntity* _entity,
     size_t* _out_chunk_size,

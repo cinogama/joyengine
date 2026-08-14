@@ -49,6 +49,12 @@ namespace je
     {
         public using euid_t = handle;
         
+        namespace unsafe
+        {
+            extern("libjoyecs", "wojeapi_set_entity_uid")
+                public func set_entity_uid(self: entity, uid: euid_t)=> void;
+        }
+
         extern("libjoyecs", "wojeapi_get_entity_uid")
             public func get_entity_uid(self: entity)=> option<euid_t>;
             

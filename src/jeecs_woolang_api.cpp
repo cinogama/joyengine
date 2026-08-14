@@ -821,6 +821,13 @@ WOORT_API woort_api wojeapi_get_entity_uid(void)
     return woort_ret_option_none();
 }
 
+WOORT_API woort_api wojeapi_set_entity_uid(void)
+{
+    je_GameEntity *entity = (je_GameEntity *)woort_gcpointer(0);
+    jedbg_set_entity_uid(entity, static_cast<je_DebugEid>(woort_int(1)));
+    return woort_ret_void();
+}
+
 WOORT_API woort_api wojeapi_get_entity_anchor_uuid(void)
 {
     je_GameEntity *entity = (je_GameEntity *)woort_gcpointer(0);
