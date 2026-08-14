@@ -12,6 +12,7 @@ import je::internal;
 import pkg::interface;
 import pkg::toml;
 import pkg::try;
+import pkg::list;
 
 import WorldEditorViewport;
 import builtin::gaming::Saving::Entity;
@@ -24,8 +25,134 @@ namespace JEEditor::Editor
 {
     alias EuidT = entity::internal::euid_t;
     
-    using Practice = struct{}
+    using Practice = struct{
+        m_history: vec<IAction>,
+        m_history_place_index: mut int,
+        
+        m_operation_queue: list<ActionInQueue>,
+    }
     {
+        using ActionInQueue = struct{
+            m_mode: Mode,
+            m_action: IAction,
+            m_delayed: mut bool,
+        }
+        {
+            enum Mode
+            {
+                ACTION,
+                REDO,
+                UNDO,
+            }
+            
+            func create<T>(action: T, mode: Mode)
+                where require!(T: IAction);
+            {
+                return ActionInQueue{
+                    m_mode = mode,
+                    m_action = IAction::create(action),
+                    m_delayed = mut false,
+                };
+            }
+        }
+        
+        public func create()=> Practice
+        {
+            return Practice{
+                m_history = []mut,
+                m_history_place_index = mut 0,
+                m_operation_queue = list::create:<ActionInQueue>(),
+            };
+        }
+        
+        public func doAction<T>(self: Practice, action: T)
+            where require!(T: IAction);
+        {
+            self.m_operation_queue->add(
+                ActionInQueue::create(action, ActionInQueue::Mode::ACTION));
+        }
+        
+        public func undo(self: Practice)=> bool
+        {
+            let undo_cmd_index = self.m_history_place_index - 1;
+            
+            if (undo_cmd_index >= 0 && undo_cmd_index < self.m_history->len)
+            {
+                self.m_operation_queue->add(
+                    ActionInQueue::create(self.m_history[undo_cmd_index], ActionInQueue::Mode::UNDO));
+                    
+                self.m_history_place_index = undo_cmd_index;
+                return true;
+            }
+            return false;
+        }
+        
+        public func redo(self: Practice)=> bool
+        {
+            let redo_cmd_index = self.m_history_place_index + 1;
+            
+            if (redo_cmd_index < self.m_history->len)
+            {
+                self.m_operation_queue->add(
+                    ActionInQueue::create(self.m_history[redo_cmd_index], ActionInQueue::Mode::REDO));
+                    
+                self.m_history_place_index = redo_cmd_index;
+                return true;
+            }
+            return false;
+        }
+        
+        public func update(self: Practice, w: WorldEditorViewport)
+        {
+            for (;;)
+            {
+                match (self.m_operation_queue->pop_front())
+                {
+                    none? break;
+                    value(action)?
+                    {
+                        let action_succ =
+                            action.m_mode == ActionInQueue::Mode::UNDO
+                                ? action.m_action->undo(w)
+                                | action.m_action->redo(w)
+                                ;
+                                
+                        if (action_succ)
+                        {
+                            if (action.m_mode == ActionInQueue::Mode::ACTION)
+                            {
+                                // 需要更新历史
+                                // TODO: 这部分得考虑一下 redo 和 undo 的处理应当在何处执行。
+
+                                if (self.m_history_place_index != self.m_history->len)
+                                    assert(self.m_history->shrink(self.m_history_place_index));
+
+                                self.m_history->add(action.m_action);
+                                self.m_history_place_index += 1;                                
+                            }
+                        }
+                        else
+                        {
+                            if (!action.m_delayed)
+                            {
+                                // 操作失败？可能是实体刚刚创建，下一个 action 未立刻生效。
+                                // 暂时先收摊，等待一帧之后再说.
+                                action.m_delayed = true;
+                                return;
+                            }
+                            // 已经推迟过一帧了，操作切实地失败了。
+                            // TODO: 更显眼和正式地通知操作失败
+                            logerr("有操作未能按预期生效");
+                        }
+                        
+                    }
+                }
+                
+            }
+        }
+        
+        // ========================================================
+        
         interface! IAction
         {
             func redo(self, w: WorldEditorViewport)=> bool;
