@@ -1,0 +1,82 @@
+import woo::std;
+
+import je;
+import je::ecs;
+import je::internal;
+
+import pkg::toml;
+import pkg::try;
+import pkg::interface;
+
+import builtin::gaming::Saving::Entity;
+import builtin::editor::Editor::WorldEditorViewport;
+
+import IAction;
+
+using je;
+using toml;
+using JEGaming::Saving;
+
+namespace JEEditor::Editor::Action
+{
+    using FullEntityContent = struct{
+        m_eid: EuidT,
+        m_entity_content: Toml,
+    }
+    {
+        alias EuidT = entity::internal::euid_t;
+        
+        func try_create(e: entity)
+        {
+            try! eid = e->internal::get_entity_uid;
+            return_value! FullEntityContent{
+                m_eid = eid,
+                m_entity_content = Entity::save(e),
+            };
+        }
+    }
+    
+    protected using CreateEntity = struct{
+        m_content: FullEntityContent,
+    }
+    {
+        public func try_create(new_created: entity)=> option<CreateEntity>
+            where require!(CreateEntity: IAction);
+        {
+            return try!{
+                try! full_entity_content = FullEntityContent::try_create(new_created);
+                return_value! CreateEntity{
+                    m_content = full_entity_content,
+                };
+            } catch! {
+                logerr("传入的实体应当有对应的 EUID，请检查创建/销毁的实体流程");
+            };
+        }
+        public func redo(self: CreateEntity, w: WorldEditorViewport)=> bool
+        {
+            let e = Entity::restore(w->getWorld(), self.m_content.m_entity_content);
+            
+            // Force apply eid.
+            e->internal::unsafe::set_entity_uid(self.m_content.m_eid);
+            
+            return true;
+        }
+        public func undo(self: CreateEntity, w: WorldEditorViewport)=> bool
+        {
+            for (let e : w->getEntitySelector())
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(eid)?
+                        if (eid == self.m_content.m_eid)
+                        {
+                            e->close;
+                            return true;
+                        }
+                }
+            }
+            return false;
+        }
+    }
+}

@@ -15,45 +15,25 @@ import pkg::try;
 import pkg::list;
 
 import WorldEditorViewport;
-import builtin::gaming::Saving::Entity;
+import Action::IAction;
 
 using je;
-using toml;
-using JEGaming::Saving;
+using JEEditor::Editor::Action;
 
 namespace JEEditor::Editor
 {
-    alias EuidT = entity::internal::euid_t;
-    
     using Practice = struct{
         m_history: vec<IAction>,
         m_history_place_index: mut int,
         
-        m_operation_queue: list<ActionInQueue>,
+        m_operation_queue: list<ActionRequest>,
     }
     {
-        using ActionInQueue = struct{
-            m_mode: Mode,
-            m_action: IAction,
-            m_delayed: mut bool,
-        }
+        union ActionRequest
         {
-            enum Mode
-            {
-                ACTION,
-                REDO,
-                UNDO,
-            }
-            
-            func create<T>(action: T, mode: Mode)
-                where require!(T: IAction);
-            {
-                return ActionInQueue{
-                    m_mode = mode,
-                    m_action = IAction::create(action),
-                    m_delayed = mut false,
-                };
-            }
+            Undo(bool /*retried*/),
+            Redo(bool /*retried*/),
+            Action((IAction, bool /* retried */)),
         }
         
         public func create()=> Practice
@@ -61,7 +41,7 @@ namespace JEEditor::Editor
             return Practice{
                 m_history = []mut,
                 m_history_place_index = mut 0,
-                m_operation_queue = list::create:<ActionInQueue>(),
+                m_operation_queue = list::create:<ActionRequest>(),
             };
         }
         
@@ -69,40 +49,20 @@ namespace JEEditor::Editor
             where require!(T: IAction);
         {
             self.m_operation_queue->add(
-                ActionInQueue::create(action, ActionInQueue::Mode::ACTION));
+                ActionRequest::Action((IAction::create(action), false)));
         }
         
-        public func undo(self: Practice)=> bool
+        public func undo(self: Practice)
         {
-            let undo_cmd_index = self.m_history_place_index - 1;
-            
-            if (undo_cmd_index >= 0 && undo_cmd_index < self.m_history->len)
-            {
-                self.m_operation_queue->add(
-                    ActionInQueue::create(self.m_history[undo_cmd_index], ActionInQueue::Mode::UNDO));
-                    
-                self.m_history_place_index = undo_cmd_index;
-                return true;
-            }
-            return false;
+            self.m_operation_queue->add(ActionRequest::Undo(false));
         }
         
-        public func redo(self: Practice)=> bool
+        public func redo(self: Practice)
         {
-            let redo_cmd_index = self.m_history_place_index + 1;
-            
-            if (redo_cmd_index < self.m_history->len)
-            {
-                self.m_operation_queue->add(
-                    ActionInQueue::create(self.m_history[redo_cmd_index], ActionInQueue::Mode::REDO));
-                    
-                self.m_history_place_index = redo_cmd_index;
-                return true;
-            }
-            return false;
+            self.m_operation_queue->add(ActionRequest::Redo(false));
         }
         
-        public func update(self: Practice, w: WorldEditorViewport)
+        public func update(self: Practice, w: WorldEditorViewport)=> result<bool, string>
         {
             for (;;)
             {
@@ -111,129 +71,79 @@ namespace JEEditor::Editor
                     none? break;
                     value(action)?
                     {
-                        let action_succ =
-                            action.m_mode == ActionInQueue::Mode::UNDO
-                                ? action.m_action->undo(w)
-                                | action.m_action->redo(w)
-                                ;
-                                
-                        if (action_succ)
+                        match (action)
                         {
-                            if (action.m_mode == ActionInQueue::Mode::ACTION)
+                            Redo(retried)?
                             {
-                                // 需要更新历史
-                                // TODO: 这部分得考虑一下 redo 和 undo 的处理应当在何处执行。
-
-                                if (self.m_history_place_index != self.m_history->len)
-                                    assert(self.m_history->shrink(self.m_history_place_index));
-
-                                self.m_history->add(action.m_action);
-                                self.m_history_place_index += 1;                                
+                                if (self.m_history_place_index < self.m_history->len)
+                                {
+                                    if (self.m_history[self.m_history_place_index]->redo(w))
+                                        self.m_history_place_index += 1;
+                                    else
+                                    {
+                                        if (!retried)
+                                        {
+                                            self.m_operation_queue->add_front(
+                                                ActionRequest::Redo(true));
+                                                
+                                            return_ok! false;
+                                        }
+                                        // 已经推迟过一帧了，操作切实地失败了。
+                                        throw! "重做操作失败";
+                                    }
+                                }
+                            }
+                            Undo(retried)?
+                            {
+                                let undo_action_index = self.m_history_place_index - 1;
+                                if (undo_action_index >= 0)
+                                {
+                                    if (self.m_history[undo_action_index]->undo(w))
+                                        self.m_history_place_index = undo_action_index;
+                                    else
+                                    {
+                                        if (!retried)
+                                        {
+                                            self.m_operation_queue->add_front(
+                                                ActionRequest::Undo(true));
+                                                
+                                            return_ok! false;
+                                        }
+                                        // 已经推迟过一帧了，操作切实地失败了。
+                                        throw! "撤销操作失败";
+                                    }
+                                }
+                            }
+                            Action((action, retried))?
+                            {
+                                if (action->redo(w))
+                                {
+                                    if (self.m_history_place_index != self.m_history->len)
+                                        assert(self.m_history->shrink(self.m_history_place_index));
+                                        
+                                    self.m_history->add(action);
+                                    self.m_history_place_index += 1;
+                                }
+                                else
+                                {
+                                    if (!retried)
+                                    {
+                                        // 操作失败？可能是实体刚刚创建，下一个 action 未立刻生效。
+                                        // 暂时先收摊，等待一帧之后再说.
+                                        self.m_operation_queue->add_front(
+                                            ActionRequest::Action((action, true)));
+                                            
+                                        return_ok! false;
+                                    }
+                                    // 已经推迟过一帧了，操作切实地失败了。
+                                    throw! "操作失败";
+                                }
                             }
                         }
-                        else
-                        {
-                            if (!action.m_delayed)
-                            {
-                                // 操作失败？可能是实体刚刚创建，下一个 action 未立刻生效。
-                                // 暂时先收摊，等待一帧之后再说.
-                                action.m_delayed = true;
-                                return;
-                            }
-                            // 已经推迟过一帧了，操作切实地失败了。
-                            // TODO: 更显眼和正式地通知操作失败
-                            logerr("有操作未能按预期生效");
-                        }
-                        
                     }
                 }
-                
             }
-        }
-        
-        // ========================================================
-        
-        interface! IAction
-        {
-            func redo(self, w: WorldEditorViewport)=> bool;
-            func undo(self, w: WorldEditorViewport)=> bool;
-        }
-        
-        using FullEntityContent = struct{
-            m_eid: EuidT,
-            m_entity_content: Toml,
-        }
-        {
-            func try_create(e: entity)
-            {
-                try! eid = e->internal::get_entity_uid;
-                return_value! FullEntityContent{
-                    m_eid = eid,
-                    m_entity_content = Entity::save(e),
-                };
-            }
-        }
-        
-        using CreateEntity = struct{
-            m_content: FullEntityContent,
-        }
-        {
-            func try_create(new_created: entity)=> option<CreateEntity>
-                where require!(CreateEntity: IAction);
-            {
-                return try!{
-                    try! full_entity_content = FullEntityContent::try_create(new_created);
-                    return_value! CreateEntity{
-                        m_content = full_entity_content,
-                    };
-                } catch! {
-                    logerr("传入的实体应当有对应的 EUID，请检查创建/销毁的实体流程");
-                };
-            }
-            func redo(self: CreateEntity, w: WorldEditorViewport)=> bool
-            {
-                let e = Entity::restore(w->getWorld(), self.m_content.m_entity_content);
-                
-                // Force apply eid.
-                e->internal::unsafe::set_entity_uid(self.m_content.m_eid);
-                
-                return true;
-            }
-            func undo(self: CreateEntity, w: WorldEditorViewport)=> bool
-            {
-                for (let e : w->getEntitySelector())
-                {
-                    match (e->internal::get_entity_uid)
-                    {
-                        none?;
-                        value(eid)?
-                            if (eid == self.m_content.m_eid)
-                            {
-                                e->close;
-                                return true;
-                            }
-                    }
-                }
-                return false;
-            }
-        }
-        using DestroyEntity = CreateEntity
-        {
-            func try_create(e: entity)=> option<DestroyEntity>
-                where require!(DestroyEntity: IAction);
-            {
-                return CreateEntity::try_create(e)
-                    ->> \ce = ce as raw DestroyEntity as DestroyEntity;
-                    ;
-            }
-            func redo(self: DestroyEntity, w: WorldEditorViewport)=> bool
-            {
-                return self as raw CreateEntity as CreateEntity->undo(w);
-            }
-            func undo(self: DestroyEntity, w: WorldEditorViewport)=> bool
-            {
-                return self as raw CreateEntity as CreateEntity->redo(w);
-            }
+            return_ok! true;
         }
     }
 }

@@ -24,6 +24,7 @@ import builtin::editor::GUI::Icons;
 import builtin::editor::GUI::Drag;
 import builtin::editor::GUI::Forms::MsgBox;
 import builtin::editor::GUI::Forms::InputBox;
+import builtin::editor::GUI::Shortcut;
 
 import builtin::editor::Inspector::World;
 import builtin::editor::Inspector::Universe;
@@ -32,6 +33,8 @@ import Gizmo::Shaders;
 import Gizmo::Shapes;
 
 import Browser;
+import Practice;
+import Action::IAction;
 
 using std;
 
@@ -48,14 +51,10 @@ using JEEditor::GUI::Forms;
 using JEEditor::GUI::Icons;
 using JEEditor::Editor::Gizmo::Shaders;
 using JEEditor::Editor::Gizmo::Shapes;
+using JEEditor::Editor::Action;
 
 namespace JEEditor::Editor
 {
-    using EditHistory = struct{}
-    {
-    
-    }
-    
     using WorldEditorViewport = struct{
         m_close: mut CloseRequest,
         
@@ -73,6 +72,8 @@ namespace JEEditor::Editor
         m_fb_settle_counter: mut int,
         
         m_selected_entity_id: mut option<entity::internal::euid_t>,
+        
+        m_action_history: Practice,
         
         // Camera control state:
         m_debug_camera_selector: entity_selector,
@@ -142,6 +143,7 @@ namespace JEEditor::Editor
                 m_fb_settle_counter = mut 0,
                 
                 m_selected_entity_id = mut option::none,
+                m_action_history = Practice::create(),
                 m_debug_camera_selector = w->create_selector([
                         requirement::contains(Editor::Invisible::type::typeinfo),
                         requirement::contains(Camera::RendToFramebuffer::type::typeinfo),
@@ -352,7 +354,25 @@ namespace JEEditor::Editor
                 return_value!;
             };
         }
-        
+        public func getShortcut(self: WorldEditorViewport)=> option<Shortcut>
+        {
+            return option::value <|
+                Shortcut::begin()
+                    ->shortCut(
+                        [ImGuiKey::ImGuiMod_Ctrl, ImGuiKey::ImGuiKey_Z], \= self.m_action_history->undo();)
+                    ->shortCut(
+                        [ImGuiKey::ImGuiMod_Ctrl, ImGuiKey::ImGuiKey_Y], \= self.m_action_history->redo();)
+                    ->finish();
+        }
+        public func onUpdate(self: WorldEditorViewport)
+        {
+            match (self.m_action_history->update(self))
+            {
+                ok(_)?;
+                err(msg)?
+                    MsgBox::err("操作失败", F"有操作失败：{msg}");
+            }
+        }
         public func run(self: WorldEditorViewport)=> bool
         {
             if (self.m_saving_path->is_none)
@@ -803,6 +823,12 @@ namespace JEEditor::Editor
             return self.m_world_instance;
         }
         
+        public func doAction<T>(self: WorldEditorViewport, action: T)
+            where require!(T: IAction);
+        {
+            self.m_action_history->doAction(action);
+        }
+
         // ==========================
         
         public func findWorldEditorViewport(w: world)

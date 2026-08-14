@@ -1,0 +1,12 @@
+import pkg::interface;
+
+import builtin::editor::Editor::WorldEditorViewport;
+
+namespace JEEditor::Editor::Action
+{
+    interface! IAction
+    {
+        public func redo(self, w: WorldEditorViewport)=> bool;
+        public func undo(self, w: WorldEditorViewport)=> bool;
+    }
+}

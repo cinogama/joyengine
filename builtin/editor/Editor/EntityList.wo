@@ -13,11 +13,13 @@ import pkg::worst;
 import builtin::editor::GUI::Windows;
 
 import WorldEditorViewport;
+import Action::DestroyEntity;
 
 using iterator;
 using je;
 using je::gui;
 using JEEditor::GUI::Windows;
+using JEEditor::Editor::Action;
 
 namespace JEEditor::Editor
 {
@@ -71,13 +73,14 @@ namespace JEEditor::Editor
         {
             return SizeConstraints::Limited(((300., 200.), (400., 4096.)));
         }
-        func showEntityContextMenu(e: entity)
+        func showEntityContextMenu(world_view: WorldEditorViewport, e: entity)
         {
             if (BeginPopupContextItem())
             {
                 if (MenuItem("销毁"))
                 {
-                    e->close;
+                    // 使用 Action 机制发布销毁实体的指令
+                    world_view->doAction(DestroyEntity::try_create(e)->unwrap);
                 }
                 
                 defer EndPopup();
@@ -118,7 +121,7 @@ namespace JEEditor::Editor
                     world_view->setSelectedEntityId(euid);
                     
                 // 右键打开实体上下文菜单（内容暂留空）
-                showEntityContextMenu(e);
+                showEntityContextMenu(world_view, e);
             }
         }
         public func run(self: EntityList)=> bool

@@ -67,6 +67,10 @@ namespace JEEditor::GUI::Windows
         {
             do self;
         }
+        public func onUpdate(self)=> void
+        {
+            do self;
+        }
         public func run(self)=> bool;
     };
     
@@ -170,6 +174,8 @@ namespace JEEditor::GUI::Windows
             if (!open)
                 open = !i->onPreClose;
                 
+            i->onUpdate();
+            
             if (show)
             {
                 match (shortcut)

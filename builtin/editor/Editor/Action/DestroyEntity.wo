@@ -1,0 +1,34 @@
+import woo::std;
+
+import je::ecs;
+
+import pkg::interface;
+
+import builtin::editor::Editor::WorldEditorViewport;
+
+import IAction;
+import CreateEntity;
+
+using je;
+
+namespace JEEditor::Editor::Action
+{
+    using DestroyEntity = CreateEntity
+    {
+        public func try_create(e: entity)=> option<DestroyEntity>
+            where require!(DestroyEntity: IAction);
+        {
+            return CreateEntity::try_create(e)
+                ->> \ce = ce as raw DestroyEntity as DestroyEntity;
+                ;
+        }
+        public func redo(self: DestroyEntity, w: WorldEditorViewport)=> bool
+        {
+            return self as raw CreateEntity as CreateEntity->undo(w);
+        }
+        public func undo(self: DestroyEntity, w: WorldEditorViewport)=> bool
+        {
+            return self as raw CreateEntity as CreateEntity->redo(w);
+        }
+    }
+}
