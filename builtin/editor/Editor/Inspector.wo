@@ -63,30 +63,87 @@ namespace JEEditor::Editor
         {
             return SizeConstraints::Limited(((300., 200.), (600., 4096.)));
         }
+        // 将 "Transform::LocalPosition" 拆为 ("Transform", "LocalPosition")，
+        // 不带命名空间的类型名返回 ("", 原名)。
+        func splitTypeName(cname: string)=> (string, string)
+        {
+            let sep_pos = cname->find("::")->or(-1);
+            if (sep_pos < 0)
+                return ("", cname);
+            return (cname->sub_len(0, sep_pos), cname->sub(sep_pos + 2));
+        }
+        func showEntityNameEdit(e: entity)
+        {
+            TextDisabled("名称");
+            SameLine();
+            SetNextItemWidth(-1.);
+            match (InputText("##entity_name", e->internal::name))
+            {
+                none?;
+                value(new_name)?
+                    e->internal::set_name(new_name);
+            }
+        }
+        func showComponentMembersEdit(
+            e: entity, ctype: typeinfo, cname: string)
+        {
+            let cinst = e->get_component(ctype)->unwrap;
+            Indent(0.);
+            for (let (mname, mtype, mhandle) : cinst->get_members)
+            {
+                TextDisabled(mname);
+                SameLine();
+                SetNextItemWidth(-1.);
+                match (unsafe::dynamic_parser::edit(
+                        mtype, mhandle, F"##{cname}##{mname}##{mhandle}"))
+                {
+                    none?
+                    {
+                        NewLine();
+                        TextDisabled(F"编辑器没有为 `{mtype->script_name->or(mtype->name)}` 类型提供编辑组件");
+                    }
+                    value(updated)?
+                        do updated;
+                }
+            }
+            Unindent(0.);
+        }
         func showEntityComponentEditImpl(e: entity)
         {
-            Text(F"实体: {e->internal::name}");
+            showEntityNameEdit(e);
+            SeparatorText("组件");
+
+            // 组件按全名排序后同一命名空间的组件自然相邻，
+            // 命名空间发生变化时输出一个分组标题。
+            let mut visible_count = 0;
+            let mut last_namespace = "";
             for (let ctype : e->internal::get_components_types
                 |> sort(\l, r = l->name < r->name;))
             {
                 let cname = ctype->name;
-                Text(cname);
-                
-                let cinst = e->get_component(ctype)->unwrap;
-                for (let (mname, mtype, mhandle) : cinst->get_members)
+                // 编辑器内部组件（Editor::*）不在检视面板中显示
+                if (cname->begin_with("Editor::"))
+                    continue;
+
+                visible_count += 1;
+                let (ns, short_name) = splitTypeName(cname);
+                if (ns != last_namespace)
                 {
-                    TextDisabled(mname);
-                    
-                    match (unsafe::dynamic_parser::edit(
-                            mtype, mhandle, F"##{cname}##{mname}##{mhandle}"))
-                    {
-                        none?
-                            TextDisabled(F"编辑器没有为 `{mtype->script_name->or(mtype->name)}` 类型提供编辑组件");
-                        value(updated)?
-                            do updated;
-                    }
+                    if (ns != "")
+                        SeparatorText(ns);
+                    last_namespace = ns;
                 }
+
+                if (CollapsingHeaderFlags(
+                        F"{short_name}##{cname}",
+                        TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
+                {
+                    showComponentMembersEdit(e, ctype, cname);
+                }
+                Spacing();
             }
+            if (visible_count == 0)
+                TextDisabled("（没有可显示的组件）");
         }
         func showEntityComponentEdit(
             wctx: WorldEditorViewport,

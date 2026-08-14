@@ -1,0 +1,36 @@
+import woo::std;
+
+import je::ecs;
+import je::internal;
+
+import pkg::toml;
+
+import builtin::gaming::Saving::Entity;
+
+using je;
+using toml;
+
+namespace JEEditor::Saving::Entity
+{
+    public func save(e: entity)=> Toml
+    {
+        let toml = JEGaming::Saving::Entity::save(e);
+
+        toml->set("name", e->internal::name);
+
+        return toml;
+    }
+    public func restore(w: world, edat: Toml)=> entity
+    {
+        let e = JEGaming::Saving::Entity::restore(w, edat);
+
+        match (edat->get("name")=>> \v = v->as_string;)
+        {
+            none?;
+            value(name)?
+                e->internal::set_name(name);
+        }
+
+        return e;
+    }
+}

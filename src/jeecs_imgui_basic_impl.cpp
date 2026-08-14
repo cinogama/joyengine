@@ -961,6 +961,46 @@ WOORT_API woort_api je_gui_separator(void)
     ImGui::Separator();
     return woort_ret_void();
 }
+WOORT_API woort_api je_gui_separator_text(void)
+{
+    ImGui::SeparatorText(woort_string(0));
+    return woort_ret_void();
+}
+WOORT_API woort_api je_gui_spacing(void)
+{
+    ImGui::Spacing();
+    return woort_ret_void();
+}
+WOORT_API woort_api je_gui_newline(void)
+{
+    ImGui::NewLine();
+    return woort_ret_void();
+}
+WOORT_API woort_api je_gui_indent(void)
+{
+    ImGui::Indent(woort_float(0));
+    return woort_ret_void();
+}
+WOORT_API woort_api je_gui_unindent(void)
+{
+    ImGui::Unindent(woort_float(0));
+    return woort_ret_void();
+}
+WOORT_API woort_api je_gui_bullet(void)
+{
+    ImGui::Bullet();
+    return woort_ret_void();
+}
+WOORT_API woort_api je_gui_bullet_text(void)
+{
+    ImGui::BulletText("%s", woort_string(0));
+    return woort_ret_void();
+}
+WOORT_API woort_api je_gui_label_text(void)
+{
+    ImGui::LabelText(woort_string(0), "%s", woort_string(1));
+    return woort_ret_void();
+}
 
 WOORT_API woort_api je_gui_image(void)
 {

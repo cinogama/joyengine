@@ -8,14 +8,14 @@ import pkg::toml;
 import pkg::try;
 import pkg::interface;
 
-import builtin::gaming::Saving::Entity;
+import builtin::editor::Editor::Saving::Entity;
 import builtin::editor::Editor::WorldEditorViewport;
 
 import IAction;
 
 using je;
 using toml;
-using JEGaming::Saving;
+using JEEditor::Saving;
 
 namespace JEEditor::Editor::Action
 {

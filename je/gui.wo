@@ -563,7 +563,24 @@ namespace je::gui
         
     extern("libjoyecs", "je_gui_separator")
         public func Separator()=> void;
-        
+
+    extern("libjoyecs", "je_gui_separator_text")
+        public func SeparatorText(label: string)=> void;
+    extern("libjoyecs", "je_gui_spacing")
+        public func Spacing()=> void;
+    extern("libjoyecs", "je_gui_newline")
+        public func NewLine()=> void;
+    extern("libjoyecs", "je_gui_indent")
+        public func Indent(indent_w: real)=> void;
+    extern("libjoyecs", "je_gui_unindent")
+        public func Unindent(indent_w: real)=> void;
+    extern("libjoyecs", "je_gui_bullet")
+        public func Bullet()=> void;
+    extern("libjoyecs", "je_gui_bullet_text")
+        public func BulletText(msg: string)=> void;
+    extern("libjoyecs", "je_gui_label_text")
+        public func LabelText(label: string, msg: string)=> void;
+
     extern("libjoyecs", "je_gui_image")
         public func Image(tex: je::graphic::texture)=> void;
     extern("libjoyecs", "je_gui_image_scale")
