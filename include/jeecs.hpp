@@ -9210,7 +9210,7 @@ namespace jeecs
                     if (jegl_shad_uniforms->m_name == name)
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
-                            jegl_shader::uniform_type::INT)
+                            jegl_shader::uniform_type::INT2)
                             debug::logerr(
                                 "Trying set uniform('%s' = %d, %d) to shader(%p), but current uniform type is not 'INT2'.",
                                 name.c_str(), x, y, this);
@@ -9237,7 +9237,7 @@ namespace jeecs
                     if (jegl_shad_uniforms->m_name == name)
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
-                            jegl_shader::uniform_type::INT)
+                            jegl_shader::uniform_type::INT3)
                             debug::logerr(
                                 "Trying set uniform('%s' = %d, %d, %d) to shader(%p), but current uniform type is not 'INT3'.",
                                 name.c_str(), x, y, z, this);
@@ -9265,7 +9265,7 @@ namespace jeecs
                     if (jegl_shad_uniforms->m_name == name)
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
-                            jegl_shader::uniform_type::INT)
+                            jegl_shader::uniform_type::INT4)
                             debug::logerr(
                                 "Trying set uniform('%s' = %d, %d, %d, %d) to shader(%p), but current uniform type is not 'INT4'.",
                                 name.c_str(), x, y, z, w, this);
