@@ -212,6 +212,16 @@ namespace JEEditor::Editor
             self->evalAndCommit(full);
         }
         
+        // 将一条已提交的输入记入命令历史（无论求值成败）
+        func pushHistory(self: ReplConsole, src: string)=> void
+        {
+            let trimmed = src->trim;
+            if (trimmed->len == 0)
+                return;
+            self.m_history->add(trimmed);
+            self.m_history_pos = self.m_history->len;
+        }
+
         // 求值并依据结果管理续接缓冲与输入区（对齐 wo_driver 的 REPL 循环）
         func evalAndCommit(self: ReplConsole, full_src: string)=> void
         {
@@ -223,11 +233,7 @@ namespace JEEditor::Editor
                 Ok(out)?
                 {
                     self.m_buffer = "";
-                    if (full_src->len > 0)
-                    {
-                        self.m_history->add(full_src->trim);
-                        self.m_history_pos = self.m_history->len;
-                    }
+                    self->pushHistory(full_src);
                     self->resetEditor();
                     match (out)
                     {
@@ -239,18 +245,21 @@ namespace JEEditor::Editor
                 CompileError(errs)?
                 {
                     self.m_buffer = "";
+                    self->pushHistory(full_src);
                     self->resetEditor();
                     self->appendLine(KIND_ERROR, errs->to_string());
                 }
                 RuntimeError?
                 {
                     self.m_buffer = "";
+                    self->pushHistory(full_src);
                     self->resetEditor();
                     self->appendLine(KIND_ERROR, F"已终止");
                 }
                 OutOfMemory?
                 {
                     self.m_buffer = "";
+                    self->pushHistory(full_src);
                     self->resetEditor();
                     self->appendLine(KIND_ERROR, F"内存不足");
                 }
