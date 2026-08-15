@@ -1,0 +1,65 @@
+import woo::std;
+
+import je;
+import je::ecs;
+import je::internal;
+
+import pkg::interface;
+
+import builtin::editor::Editor::WorldEditorViewport;
+
+import IAction;
+
+using je;
+
+namespace JEEditor::Editor::Action
+{
+    protected using RenameEntity = struct{
+        m_eid: entity::internal::euid_t,
+        m_old_name: string,
+        m_new_name: string,
+    }
+    {
+        public func create(
+            eid: entity::internal::euid_t,
+            old_name: string,
+            new_name: string)=> RenameEntity
+            where require!(RenameEntity: IAction);
+        {
+            return RenameEntity{
+                m_eid = eid,
+                m_old_name = old_name,
+                m_new_name = new_name,
+            };
+        }
+
+        func renameEntity(
+            w: WorldEditorViewport,
+            eid: entity::internal::euid_t,
+            name: string)=> bool
+        {
+            for (let e : w->getEntitySelector())
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(ueid)?
+                        if (ueid == eid)
+                        {
+                            e->internal::set_name(name);
+                            return true;
+                        }
+                }
+            }
+            return false;
+        }
+        public func redo(self: RenameEntity, w: WorldEditorViewport)=> bool
+        {
+            return renameEntity(w, self.m_eid, self.m_new_name);
+        }
+        public func undo(self: RenameEntity, w: WorldEditorViewport)=> bool
+        {
+            return renameEntity(w, self.m_eid, self.m_old_name);
+        }
+    }
+}

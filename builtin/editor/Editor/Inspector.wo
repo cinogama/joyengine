@@ -12,20 +12,125 @@ import pkg::worst;
 import builtin::editor::GUI::Windows;
 
 import WorldEditorViewport;
+import Action::RenameEntity;
+import Action::ModifyComponentMember;
 
 using std;
 using je;
 using je::gui;
 using je::towoo;
 using JEEditor::GUI::Windows;
+using JEEditor::Editor::Action;
 
 namespace JEEditor::Editor
 {
+    // 一次进行中的编辑手势（如一次连续输入、一次连续拖拽）。
+    // 手势结束后将汇总为一个可撤销的 Action 提交到 Practice。
+    using EditSession = struct{
+        m_tag: string,                     // 触发本次手势的控件标签
+        m_world_view: WorldEditorViewport, // 提交 Action 的目标视口
+        m_eid: entity::internal::euid_t,   // 被编辑的实体
+        m_component_type: option<typeinfo>, // none 表示这是一次实体重命名手势
+        m_member_name: string,             // 被编辑的组件成员名（重命名时为空）
+        m_old_value: string,               // 手势开始前的值（名字或序列化的成员值）
+        m_new_value: string,               // 手势过程中的最新值
+    };
+
     using Inspector = struct{
         m_close: mut bool,
     }
     {
         let mut s_inspector_singleton = option::none: option<Inspector>;
+        let mut s_active_edit_session = option::none: option<EditSession>;
+
+        // 提交进行中的编辑手势：值确有变化时发布一个可撤销的 Action
+        func commitEditSession()=> void
+        {
+            match (s_active_edit_session)
+            {
+                none?;
+                value(session)?
+                {
+                    if (session.m_old_value != session.m_new_value)
+                    {
+                        match (session.m_component_type)
+                        {
+                            none?
+                                session.m_world_view->doAction(
+                                    RenameEntity::create(
+                                        session.m_eid,
+                                        session.m_old_value,
+                                        session.m_new_value));
+                            value(component_type)?
+                                session.m_world_view->doAction(
+                                    ModifyComponentMember::create(
+                                        session.m_eid,
+                                        component_type,
+                                        session.m_member_name,
+                                        session.m_old_value,
+                                        session.m_new_value));
+                        }
+                    }
+                    s_active_edit_session = option::none;
+                }
+            }
+        }
+
+        // 仅当进行中的手势属于 tag 对应的控件时提交它
+        func commitEditSessionIfTag(tag: string)=> void
+        {
+            match (s_active_edit_session)
+            {
+                none?;
+                value(session)?
+                    if (session.m_tag == tag)
+                        commitEditSession();
+            }
+        }
+
+        // 追踪进行中的编辑手势：同一控件的连续编辑（逐键输入、连续拖拽等）
+        // 归并为一次手势，仅保留手势开始时的旧值与最新的新值。
+        func trackEditSession(
+            tag: string,
+            wctx: WorldEditorViewport,
+            eid: entity::internal::euid_t,
+            component_type: option<typeinfo>,
+            member_name: string,
+            old_value: string,
+            new_value: string)=> void
+        {
+            match (s_active_edit_session)
+            {
+                none?;
+                value(session)?
+                    if (session.m_tag == tag)
+                    {
+                        s_active_edit_session = option::value(EditSession{
+                            m_tag = session.m_tag,
+                            m_world_view = session.m_world_view,
+                            m_eid = session.m_eid,
+                            m_component_type = session.m_component_type,
+                            m_member_name = session.m_member_name,
+                            m_old_value = session.m_old_value,
+                            m_new_value = new_value,
+                        });
+                        return;
+                    }
+                    else
+                        // 新手势打断了尚未结束的旧手势，先把旧手势提交掉
+                        commitEditSession();
+            }
+
+            s_active_edit_session = option::value(EditSession{
+                m_tag = tag,
+                m_world_view = wctx,
+                m_eid = eid,
+                m_component_type = component_type,
+                m_member_name = member_name,
+                m_old_value = old_value,
+                m_new_value = new_value,
+            });
+        }
         public func isInspectorExist()
         {
             return s_inspector_singleton->is_value;
@@ -72,30 +177,60 @@ namespace JEEditor::Editor
                 return ("", cname);
             return (cname->sub_len(0, sep_pos), cname->sub(sep_pos + 2));
         }
-        func showEntityNameEdit(e: entity)
+        func showEntityNameEdit(wctx: WorldEditorViewport, e: entity)
         {
             TextDisabled("名称");
             SameLine();
             SetNextItemWidth(-1.);
-            match (InputText("##entity_name", e->internal::name))
+
+            let NAME_EDIT_TAG = "##entity_name";
+
+            match (InputText(NAME_EDIT_TAG, e->internal::name))
             {
                 none?;
                 value(new_name)?
-                    e->internal::set_name(new_name);
+                {
+                    match (e->internal::get_entity_uid)
+                    {
+                        none?
+                            // 没有 EUID 的实体无法支持撤销
+                            e->internal::set_name(new_name);
+                        value(eid)?
+                        {
+                            // 手势首帧时新名字尚未写入，此刻的名字即撤销点；
+                            // 输入期间的每一步改名立即生效，保证输入框状态连续
+                            trackEditSession(
+                                NAME_EDIT_TAG, wctx, eid, option::none, "",
+                                e->internal::name, new_name);
+                            e->internal::set_name(new_name);
+                        }
+                    }
+                }
             }
+
+            // 输入框失活（结束输入）时提交本次重命名
+            if (!IsItemActive())
+                commitEditSessionIfTag(NAME_EDIT_TAG);
         }
         func showComponentMembersEdit(
-            e: entity, ctype: typeinfo, cname: string)
+            wctx: WorldEditorViewport, e: entity, ctype: typeinfo, cname: string)
         {
             let cinst = e->get_component(ctype)->unwrap;
+            let eid = e->internal::get_entity_uid;
+
             Indent(0.);
             for (let (mname, mtype, mhandle) : cinst->get_members)
             {
                 TextDisabled(mname);
                 SameLine();
                 SetNextItemWidth(-1.);
-                match (unsafe::dynamic_parser::edit(
-                        mtype, mhandle, F"##{cname}##{mname}##{mhandle}"))
+
+                let member_tag = F"##{cname}##{mname}##{mhandle}";
+
+                // edit 一旦返回 true，成员值已被就地修改，先留档修改前的序列化值
+                let old_value = eid=>> \_ = unsafe::dynamic_parser::save(mtype, mhandle);;
+
+                match (unsafe::dynamic_parser::edit(mtype, mhandle, member_tag))
                 {
                     none?
                     {
@@ -103,14 +238,38 @@ namespace JEEditor::Editor
                         TextDisabled(F"编辑器没有为 `{mtype->script_name->or(mtype->name)}` 类型提供编辑组件");
                     }
                     value(updated)?
-                        do updated;
+                    {
+                        if (updated)
+                        {
+                            match (eid)
+                            {
+                                none?;
+                                value(eidv)?
+                                    match (old_value)
+                                    {
+                                        none?;
+                                        value(before)?
+                                            trackEditSession(
+                                                member_tag, wctx, eidv,
+                                                option::value(ctype), mname,
+                                                before,
+                                                unsafe::dynamic_parser::save(mtype, mhandle)
+                                                    ->or(before));
+                                    }
+                            }
+                        }
+
+                        // 控件失活（手势结束）时提交本次修改
+                        if (!IsItemActive())
+                            commitEditSessionIfTag(member_tag);
+                    }
                 }
             }
             Unindent(0.);
         }
-        func showEntityComponentEditImpl(e: entity)
+        func showEntityComponentEditImpl(wctx: WorldEditorViewport, e: entity)
         {
-            showEntityNameEdit(e);
+            showEntityNameEdit(wctx, e);
             SeparatorText("组件");
 
             // 组件按全名排序后同一命名空间的组件自然相邻，
@@ -138,7 +297,7 @@ namespace JEEditor::Editor
                         F"{short_name}##{cname}",
                         TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
                 {
-                    showComponentMembersEdit(e, ctype, cname);
+                    showComponentMembersEdit(wctx, e, ctype, cname);
                 }
                 Spacing();
             }
@@ -156,7 +315,7 @@ namespace JEEditor::Editor
                     none?;
                     value(eeuid)?
                         if (eeuid == selected_entity_id)
-                            showEntityComponentEditImpl(e);
+                            showEntityComponentEditImpl(wctx, e);
                 }
             }
         }
@@ -168,9 +327,24 @@ namespace JEEditor::Editor
                     ;)
             {
                 none?
+                {
                     TextDisabled("（没有待编辑的实体）");
+
+                    // 失去编辑目标时，结束任何遗留的编辑手势
+                    commitEditSession();
+                }
                 value((wctx, selected_entity_id))?
                 {
+                    // 正在编辑的实体不再是当前选中实体（手势中途切换了选中项）时，
+                    // 先提交被中断的手势
+                    match (s_active_edit_session)
+                    {
+                        none?;
+                        value(session)?
+                            if (session.m_eid != selected_entity_id)
+                                commitEditSession();
+                    }
+
                     showEntityComponentEdit(wctx, selected_entity_id);
                 }
             }

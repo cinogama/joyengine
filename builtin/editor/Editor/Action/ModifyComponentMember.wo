@@ -1,0 +1,87 @@
+import woo::std;
+
+import je;
+import je::ecs;
+import je::internal;
+import je::typeinfo;
+
+import pkg::interface;
+
+import builtin::editor::Editor::WorldEditorViewport;
+
+import IAction;
+
+using je;
+
+namespace JEEditor::Editor::Action
+{
+    protected using ModifyComponentMember = struct{
+        m_eid: entity::internal::euid_t,
+        m_component_type: typeinfo,
+        m_member_name: string,
+        // 以 dynamic_parser 序列化形式保存的成员旧值/新值
+        m_old_value: string,
+        m_new_value: string,
+    }
+    {
+        public func create(
+            eid: entity::internal::euid_t,
+            component_type: typeinfo,
+            member_name: string,
+            old_value: string,
+            new_value: string)=> ModifyComponentMember
+            where require!(ModifyComponentMember: IAction);
+        {
+            return ModifyComponentMember{
+                m_eid = eid,
+                m_component_type = component_type,
+                m_member_name = member_name,
+                m_old_value = old_value,
+                m_new_value = new_value,
+            };
+        }
+
+        func restoreMemberValue(
+            w: WorldEditorViewport,
+            eid: entity::internal::euid_t,
+            component_type: typeinfo,
+            member_name: string,
+            dat: string)=> bool
+        {
+            for (let e : w->getEntitySelector())
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(ueid)?
+                        if (ueid == eid)
+                        {
+                            match (e->get_component(component_type))
+                            {
+                                none? return false;
+                                value(cinst)?
+                                    match (cinst->get_member(member_name))
+                                    {
+                                        none? return false;
+                                        value((mtype, mhandle))?
+                                            return towoo::unsafe::dynamic_parser::restore(
+                                                mtype, mhandle, dat);
+                                    }
+                            }
+                        }
+                }
+            }
+            return false;
+        }
+        public func redo(self: ModifyComponentMember, w: WorldEditorViewport)=> bool
+        {
+            return restoreMemberValue(
+                w, self.m_eid, self.m_component_type, self.m_member_name, self.m_new_value);
+        }
+        public func undo(self: ModifyComponentMember, w: WorldEditorViewport)=> bool
+        {
+            return restoreMemberValue(
+                w, self.m_eid, self.m_component_type, self.m_member_name, self.m_old_value);
+        }
+    }
+}
