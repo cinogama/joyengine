@@ -6,6 +6,7 @@ import je::internal;
 import je::typeinfo;
 
 import pkg::interface;
+import pkg::try;
 
 import builtin::editor::Editor::WorldEditorViewport;
 
@@ -17,7 +18,9 @@ namespace JEEditor::Editor::Action
 {
     protected using ModifyComponentMember = struct{
         m_eid: entity::internal::euid_t,
-        m_component_type: typeinfo,
+        // 只保存组件类型名，redo/undo 执行时再通过 typeinfo::load 加载，
+        // 避免 typeinfo 句柄在类型热重载等情况下失效。
+        m_component_type_name: string,
         m_member_name: string,
         // 以 dynamic_parser 序列化形式保存的成员旧值/新值
         m_old_value: string,
@@ -26,7 +29,7 @@ namespace JEEditor::Editor::Action
     {
         public func create(
             eid: entity::internal::euid_t,
-            component_type: typeinfo,
+            component_type_name: string,
             member_name: string,
             old_value: string,
             new_value: string)=> ModifyComponentMember
@@ -34,54 +37,56 @@ namespace JEEditor::Editor::Action
         {
             return ModifyComponentMember{
                 m_eid = eid,
-                m_component_type = component_type,
+                m_component_type_name = component_type_name,
                 m_member_name = member_name,
                 m_old_value = old_value,
                 m_new_value = new_value,
             };
         }
-
+        
         func restoreMemberValue(
             w: WorldEditorViewport,
             eid: entity::internal::euid_t,
-            component_type: typeinfo,
+            component_type_name: string,
             member_name: string,
             dat: string)=> bool
         {
-            for (let e : w->getEntitySelector())
-            {
-                match (e->internal::get_entity_uid)
+            return or(false) <| try!{
+                for (let e : w->getEntitySelector())
                 {
-                    none?;
-                    value(ueid)?
-                        if (ueid == eid)
+                    match (e->internal::get_entity_uid)
+                    {
+                        none?;
+                        value(ueid)?
                         {
-                            match (e->get_component(component_type))
-                            {
-                                none? return false;
-                                value(cinst)?
-                                    match (cinst->get_member(member_name))
-                                    {
-                                        none? return false;
-                                        value((mtype, mhandle))?
-                                            return towoo::unsafe::dynamic_parser::restore(
-                                                mtype, mhandle, dat);
-                                    }
-                            }
+                            if (ueid != eid)
+                                continue;
+                                
+                            // 类型名可能已失效（类型被卸载等），加载失败则本次操作失败
+                            try! component_type = typeinfo::load(component_type_name);
+                            
+                            try! component_instance = e->get_component(component_type);
+                            try! (member_type, member_addr) = component_instance->get_member(member_name);
+                            
+                            return_value! towoo::unsafe::dynamic_parser::restore(
+                                member_type, member_addr, dat);
                         }
+                    }
                 }
-            }
-            return false;
+                // 没有找到 euid 对应的实体……
+                return_value! false;
+            };
+            
         }
         public func redo(self: ModifyComponentMember, w: WorldEditorViewport)=> bool
         {
             return restoreMemberValue(
-                w, self.m_eid, self.m_component_type, self.m_member_name, self.m_new_value);
+                w, self.m_eid, self.m_component_type_name, self.m_member_name, self.m_new_value);
         }
         public func undo(self: ModifyComponentMember, w: WorldEditorViewport)=> bool
         {
             return restoreMemberValue(
-                w, self.m_eid, self.m_component_type, self.m_member_name, self.m_old_value);
+                w, self.m_eid, self.m_component_type_name, self.m_member_name, self.m_old_value);
         }
     }
 }
