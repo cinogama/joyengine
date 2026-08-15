@@ -20,6 +20,7 @@ import Editor::EntityList;
 import Editor::LogBrowser;
 import Editor::MainMenu;
 import Editor::Inspector;
+import Editor::Material;
 import Editor::ReplConsole;
 import Editor::PanicBox;
 import Editor::Shutdown;
