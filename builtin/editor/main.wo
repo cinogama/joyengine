@@ -88,6 +88,7 @@ func main()
     do EntityList::showEntityList();
     do LogBrowser::showLogBrowser();
     do Inspector::showInspector();
+    do Material::showMaterial();
 }
 
 main();
