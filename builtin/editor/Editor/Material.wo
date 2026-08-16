@@ -275,18 +275,6 @@ namespace JEEditor::Editor
             EndDisabled();
             SameLine();
 
-            match (sinst->path)
-            {
-                none?;
-                value(p)?
-                {
-                    // 以 新路径=旧路径 的方式热重载，uniform 值由引擎在重载时保留
-                    if (Button(F"重载##material_shader_{idx}"))
-                        do e->internal::graphic::try_reload_shaders(p, p);
-                    SameLine();
-                }
-            }
-
             if (Button(F"移除##material_shader_{idx}"))
                 e->set_shaders(shaders->erase(idx));
         }
@@ -471,7 +459,7 @@ namespace JEEditor::Editor
             wctx: WorldEditorViewport, e: entity)=> void
         {
             SeparatorText("纹理通道");
-            TextDisabled("通道由着色器的采样 uniform 声明，拖动纹理文件到通道上可绑定");
+            TextDisabled("通道由着色器的采样 uniform 声明，拖动纹理文件到通道上可绑定，悬浮查看详情");
 
             let univ = option::value(wctx->getWorld->get_universe);
             let textures = e->get_textures();
@@ -494,6 +482,32 @@ namespace JEEditor::Editor
             {
                 let tex_opt = textures->get(pass);
 
+                // 悬浮气泡内容：纹理路径 + 采样引用，每项一行
+                let mut tips = []: array<string>;
+                match (tex_opt)
+                {
+                    none?;
+                    value(tex)?
+                    {
+                        match (tex->path)
+                        {
+                            none?;
+                            value(p)?
+                                tips = tips->append(p);
+                        }
+                    }
+                }
+                match (channels->get(pass))
+                {
+                    none?
+                        tips = tips->append("（未被任何着色器采样）");
+                    value(refs)?
+                    {
+                        for (let ref_name : refs |> sort(\l, r = l < r;))
+                            tips = tips->append(F"采样于 {ref_name}");
+                    }
+                }
+
                 BeginGroup();
 
                 match (tex_opt)
@@ -503,55 +517,10 @@ namespace JEEditor::Editor
                     value(tex)?
                     {
                         ImageSize(tex, 32., 32.);
-                        // 不直接展示路径，悬浮缩略图时以气泡显示
-                        match (tex->path)
-                        {
-                            none?;
-                            value(p)?
-                            {
-                                if (IsItemHovered())
-                                    do SetTooltip(p);
-                            }
-                        }
                         SameLine();
                         Text(F"通道 {pass}");
-                    }
-                }
 
-                // 该通道被哪些着色器的 uniform 采样（与通道同行展示）
-                match (channels->get(pass))
-                {
-                    none?
-                    {
-                        SameLine();
-                        TextDisabled("（未被任何着色器采样）");
-                    }
-                    value(refs)?
-                    {
-                        for (let ref_name : refs |> sort(\l, r = l < r;))
-                        {
-                            SameLine();
-                            TextDisabled(F"采样于 {ref_name}");
-                        }
-                    }
-                }
-
-                match (tex_opt)
-                {
-                    none?;
-                    value(tex)?
-                    {
-                        // 重载/移除与通道同行
-                        match (tex->path)
-                        {
-                            none?;
-                            value(p)?
-                            {
-                                SameLine();
-                                if (Button(F"重载##material_texture_{pass}"))
-                                    do e->internal::graphic::try_reload_textures(p, p);
-                            }
-                        }
+                        // 移除与通道同行
                         SameLine();
                         if (Button(F"移除##material_texture_{pass}"))
                             do e->bind_texture(pass, option::none);
@@ -559,6 +528,14 @@ namespace JEEditor::Editor
                 }
 
                 EndGroup();
+
+                // 悬浮整行时以气泡显示路径与采样引用
+                if (tips->len != 0)
+                {
+                    let tips_text = tips->reduce(\l, r = l + "\n" + r;)->unwrap;
+                    if (IsItemHovered())
+                        do SetTooltip(tips_text);
+                }
 
                 // 拖动资源浏览器中的纹理文件到该行可绑定/替换此通道
                 match (Drag::AcceptDrag:<FilePayload>())

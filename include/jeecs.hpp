@@ -10919,7 +10919,6 @@ namespace jeecs
 
                 return std::nullopt;
             }
-
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Textures::tiling, "tiling");
