@@ -19,6 +19,7 @@ import builtin::editor::GUI::Forms::MsgBox;
 import Browser;
 import WorldEditorViewport;
 import EditSession;
+import Action::AddComponent;
 import Action::ModifyEntityShaders;
 import Action::ModifyEntityTexture;
 
@@ -122,13 +123,25 @@ namespace JEEditor::Editor
 
         // 实体缺少组件时显示添加按钮；返回组件当前是否存在。
         // 点击添加后本帧仍返回 false，内容自下一帧起渲染。
-        func ensureComponentEditor(e: entity, ctype: typeinfo, cname: string)=> bool
+        func ensureComponentEditor(
+            wctx: WorldEditorViewport, e: entity, ctype: typeinfo, cname: string)=> bool
         {
             if (e->get_component(ctype)->is_value)
                 return true;
 
             if (Button(F"添加 {cname} 组件"))
-                do e->add_component(ctype);
+            {
+                // 先结束可能进行中的编辑手势，再发布添加组件的操作
+                EditSession::commit();
+                match (AddComponent::try_create(e, ctype))
+                {
+                    none?
+                        // 没有 EUID 的实体退化为直接添加（无法支持撤销）
+                        do e->add_component(ctype);
+                    value(action)?
+                        wctx->doAction(action);
+                }
+            }
             return false;
         }
 
@@ -425,7 +438,7 @@ namespace JEEditor::Editor
         {
             SeparatorText("着色器 Renderer::Shaders");
 
-            if (!ensureComponentEditor(e, SHADERS_TYPE, "Renderer::Shaders"))
+            if (!ensureComponentEditor(wctx, e, SHADERS_TYPE, "Renderer::Shaders"))
                 return;
 
             let shaders = e->get_shaders();
@@ -653,7 +666,7 @@ namespace JEEditor::Editor
         {
             SeparatorText("纹理 Renderer::Textures");
 
-            if (!ensureComponentEditor(e, TEXTURES_TYPE, "Renderer::Textures"))
+            if (!ensureComponentEditor(wctx, e, TEXTURES_TYPE, "Renderer::Textures"))
                 return;
 
             // tiling/offset 是反射成员，沿用与检视面板一致的通用值编辑器

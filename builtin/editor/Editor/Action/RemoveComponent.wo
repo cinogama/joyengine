@@ -1,0 +1,129 @@
+import woo::std;
+
+import je;
+import je::ecs;
+import je::internal;
+import je::typeinfo;
+
+import pkg::interface;
+import pkg::try;
+
+import builtin::editor::Editor::WorldEditorViewport;
+
+import IAction;
+
+using je;
+
+namespace JEEditor::Editor::Action
+{
+    // 从实体移除组件；undo 时重新添加并恢复移除前的成员值。
+    // 创建 Action 时即对组件的反射成员做序列化快照（着色器列表与纹理通道
+    // 不属于反射成员，它们挂在实体上，移除/重加组件不影响其内容）。
+    // 只保存组件类型名，redo/undo 执行时再通过 typeinfo::load 加载，
+    // 避免 typeinfo 句柄在类型热重载等情况下失效。
+    protected using RemoveComponent = struct{
+        m_eid: entity::internal::euid_t,
+        m_component_type_name: string,
+        // 成员快照：(成员名, dynamic_parser 序列化值)
+        m_saved_members: array<(string, string)>,
+    }
+    {
+        public func try_create(e: entity, ctype: typeinfo)=> option<RemoveComponent>
+            where require!(RemoveComponent: IAction);
+        {
+            return try!{
+                try! eid = e->internal::get_entity_uid;
+                try! cinst = e->get_component(ctype);
+
+                let mut saved_members = []: array<(string, string)>;
+                for (let (mname, mtype, mhandle) : cinst->get_members)
+                {
+                    match (towoo::unsafe::dynamic_parser::save(mtype, mhandle))
+                    {
+                        none?;
+                        value(dat)?
+                            saved_members = saved_members->append((mname, dat));
+                    }
+                }
+
+                return_value! RemoveComponent{
+                    m_eid = eid,
+                    m_component_type_name = ctype->name,
+                    m_saved_members = saved_members,
+                };
+            } catch! {
+                logerr("传入的实体应当有对应的 EUID 与待移除的组件");
+            };
+        }
+
+        // 组件已不存在时视为成功（幂等），避免撤销/重做交错时重复移除
+        public func redo(self: RemoveComponent, w: WorldEditorViewport)=> bool
+        {
+            for (let e : w->getEntitySelector())
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(ueid)?
+                        if (ueid == self.m_eid)
+                        {
+                            match (typeinfo::load(self.m_component_type_name))
+                            {
+                                none? return false;
+                                value(ctype)?
+                                {
+                                    if (e->get_component(ctype)->is_value)
+                                        do e->remove_component(ctype);
+                                    return true;
+                                }
+                            }
+                        }
+                }
+            }
+            return false;
+        }
+
+        // 重新添加组件并恢复快照的成员值
+        public func undo(self: RemoveComponent, w: WorldEditorViewport)=> bool
+        {
+            for (let e : w->getEntitySelector())
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(ueid)?
+                        if (ueid == self.m_eid)
+                        {
+                            match (typeinfo::load(self.m_component_type_name))
+                            {
+                                none? return false;
+                                value(ctype)?
+                                {
+                                    if (e->get_component(ctype)->is_none)
+                                        do e->add_component(ctype);
+
+                                    match (e->get_component(ctype))
+                                    {
+                                        none? return false;
+                                        value(cinst)?
+                                            for (let (mname, dat) : self.m_saved_members)
+                                            {
+                                                match (cinst->get_member(mname))
+                                                {
+                                                    none?;
+                                                    value((mtype, mhandle))?
+                                                        do towoo::unsafe::dynamic_parser::restore(
+                                                            mtype, mhandle, dat);
+                                                }
+                                            }
+                                    }
+                                    return true;
+                                }
+                            }
+                        }
+                }
+            }
+            return false;
+        }
+    }
+}

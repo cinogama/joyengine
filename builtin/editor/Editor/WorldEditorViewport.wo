@@ -78,6 +78,7 @@ namespace JEEditor::Editor
         // Camera control state:
         m_debug_camera_selector: entity_selector,
         m_selectable_entity_selector: entity_selector,
+        m_all_entity_selector: entity_selector,
         
         m_last_time: mut real,
         m_is_look_active: mut bool,
@@ -156,6 +157,9 @@ namespace JEEditor::Editor
                 m_selectable_entity_selector = w->create_selector([
                         requirement::except(Editor::Invisible::type::typeinfo),
                         requirement::contains(Transform::Translation::type::typeinfo),
+                    ]),
+                m_all_entity_selector = w->create_selector([
+                        requirement::except(Editor::Invisible::type::typeinfo),
                     ]),
                     
                 // Camera control state:
@@ -766,7 +770,7 @@ namespace JEEditor::Editor
         // ==========================
         public func getEntitySelector(self: WorldEditorViewport)
         {
-            return self.m_selectable_entity_selector;
+            return self.m_all_entity_selector;
         }
         
         public func getSelectedEntityId(self: WorldEditorViewport)

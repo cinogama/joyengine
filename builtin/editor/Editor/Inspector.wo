@@ -13,6 +13,7 @@ import builtin::editor::GUI::Windows;
 
 import WorldEditorViewport;
 import EditSession;
+import Action::RemoveComponent;
 
 using std;
 using je;
@@ -20,6 +21,7 @@ using je::gui;
 using je::towoo;
 using JEEditor::GUI::Windows;
 using JEEditor::Editor::EditSession;
+using JEEditor::Editor::Action;
 
 namespace JEEditor::Editor
 {
@@ -198,6 +200,27 @@ namespace JEEditor::Editor
                         TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
                 {
                     showComponentMembersEdit(wctx, e, ctype, cname);
+                }
+
+                // 右键组件标题可移除该组件；显式绑定到标题的标签上，
+                // 避免展开时误绑到最后绘制的成员控件
+                if (BeginPopupContextItemLabel(F"{short_name}##{cname}"))
+                {
+                    if (MenuItem(F"移除组件 {short_name}"))
+                    {
+                        // 先结束可能进行中的编辑手势，再发布移除组件的操作
+                        EditSession::commit();
+                        match (RemoveComponent::try_create(e, ctype))
+                        {
+                            none?
+                                // 没有 EUID 的实体退化为直接移除（无法支持撤销）
+                                do e->remove_component(ctype);
+                            value(action)?
+                                wctx->doAction(action);
+                        }
+                    }
+
+                    defer EndPopup();
                 }
                 Spacing();
             }

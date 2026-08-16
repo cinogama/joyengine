@@ -1,0 +1,95 @@
+import woo::std;
+
+import je;
+import je::ecs;
+import je::internal;
+import je::typeinfo;
+
+import pkg::interface;
+import pkg::try;
+
+import builtin::editor::Editor::WorldEditorViewport;
+
+import IAction;
+
+using je;
+
+namespace JEEditor::Editor::Action
+{
+    // 为实体添加组件；undo 时移除该组件。
+    // 只保存组件类型名，redo/undo 执行时再通过 typeinfo::load 加载，
+    // 避免 typeinfo 句柄在类型热重载等情况下失效。
+    protected using AddComponent = struct{
+        m_eid: entity::internal::euid_t,
+        m_component_type_name: string,
+    }
+    {
+        public func try_create(e: entity, ctype: typeinfo)=> option<AddComponent>
+            where require!(AddComponent: IAction);
+        {
+            return try!{
+                try! eid = e->internal::get_entity_uid;
+                return_value! AddComponent{
+                    m_eid = eid,
+                    m_component_type_name = ctype->name,
+                };
+            } catch! {
+                logerr("传入的实体应当有对应的 EUID，请检查组件添加的流程");
+            };
+        }
+
+        // 组件已存在时视为成功（幂等），避免撤销/重做交错时重复添加
+        public func redo(self: AddComponent, w: WorldEditorViewport)=> bool
+        {
+            for (let e : w->getEntitySelector())
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(ueid)?
+                        if (ueid == self.m_eid)
+                        {
+                            match (typeinfo::load(self.m_component_type_name))
+                            {
+                                none? return false;
+                                value(ctype)?
+                                {
+                                    if (e->get_component(ctype)->is_none)
+                                        do e->add_component(ctype);
+                                    return true;
+                                }
+                            }
+                        }
+                }
+            }
+            return false;
+        }
+
+        // 组件已不存在时视为成功（幂等）
+        public func undo(self: AddComponent, w: WorldEditorViewport)=> bool
+        {
+            for (let e : w->getEntitySelector())
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(ueid)?
+                        if (ueid == self.m_eid)
+                        {
+                            match (typeinfo::load(self.m_component_type_name))
+                            {
+                                none? return false;
+                                value(ctype)?
+                                {
+                                    if (e->get_component(ctype)->is_value)
+                                        do e->remove_component(ctype);
+                                    return true;
+                                }
+                            }
+                        }
+                }
+            }
+            return false;
+        }
+    }
+}
