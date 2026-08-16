@@ -40,10 +40,6 @@ namespace JEEditor::Editor
     // 编辑与撤销管线，这里通过 entity 的着色器/纹理 API 就地修改。
     using Material = struct{
         m_close: mut bool,
-        // 当前选中的着色器列表项下标（-1 表示未选中）
-        m_selected_shader: mut int,
-        // 手动追加着色器的路径输入缓冲（ImGui 输入控件本身无状态，需调用方保存）
-        m_new_shader_path: mut string,
     }
     {
         let SHADERS_TYPE = typeinfo::load("Renderer::Shaders")->unwrap;
@@ -74,8 +70,6 @@ namespace JEEditor::Editor
         {
             return Material{
                 m_close = mut false,
-                m_selected_shader = mut -1,
-                m_new_shader_path = mut "",
             };
         }
         func close(self: Material)
@@ -267,23 +261,17 @@ namespace JEEditor::Editor
         }
 
         func showShaderItemOps(
-            self: Material, e: entity, shaders: array<shader>, sinst: shader, idx: int)=> void
+            e: entity, shaders: array<shader>, sinst: shader, idx: int)=> void
         {
             BeginDisabled(idx == 0);
             if (Button(F"上移##material_shader_{idx}"))
-            {
                 e->set_shaders(shaders->erase(idx)->inlay(idx - 1, sinst));
-                self.m_selected_shader = idx - 1;
-            }
             EndDisabled();
             SameLine();
 
             BeginDisabled(idx + 1 >= shaders->len);
             if (Button(F"下移##material_shader_{idx}"))
-            {
                 e->set_shaders(shaders->erase(idx)->inlay(idx + 1, sinst));
-                self.m_selected_shader = idx + 1;
-            }
             EndDisabled();
             SameLine();
 
@@ -300,16 +288,12 @@ namespace JEEditor::Editor
             }
 
             if (Button(F"移除##material_shader_{idx}"))
-            {
                 e->set_shaders(shaders->erase(idx));
-                self.m_selected_shader = -1;
-            }
         }
 
         // 加载着色器并插入到列表 insert_at 位置（越界时收敛到首/尾）
         func tryInsertShader(
-            self: Material, e: entity, univ: option<universe>,
-            path: string, insert_at: int)=> void
+            e: entity, univ: option<universe>, path: string, insert_at: int)=> void
         {
             if (path == "")
             {
@@ -335,39 +319,23 @@ namespace JEEditor::Editor
                     if (at > shaders->len)
                         at = shaders->len;
                     e->set_shaders(shaders->inlay(at, sinst));
-                    self.m_new_shader_path = "";
                 }
             }
         }
 
-        // 列表末尾的追加行：拖动 .shader 文件到该行追加到末尾，也可手动输入路径
-        func showAddShaderEdit(
-            self: Material, e: entity, univ: option<universe>, append_at: int)=> void
+        // 列表末尾的追加行：拖动 .shader 文件到该行追加到列表末尾
+        func showAppendShaderRow(e: entity, univ: option<universe>, append_at: int)=> void
         {
             do Selectable("＋ 添加着色器##material_shader_append");
             match (Drag::AcceptDrag:<FilePayload>())
             {
                 none?;
                 value(payload)?
-                    tryInsertShader(self, e, univ, payload->dump, append_at);
+                    tryInsertShader(e, univ, payload->dump, append_at);
             }
-
-            TextDisabled("路径");
-            SameLine();
-            SetNextItemWidth(-1.);
-            match (InputText("##material_new_shader_path", self.m_new_shader_path))
-            {
-                none?;
-                value(new_path)?
-                    self.m_new_shader_path = new_path;
-            }
-
-            if (Button("添加##material_new_shader"))
-                tryInsertShader(self, e, univ, self.m_new_shader_path, append_at);
         }
 
-        func showShadersEdit(
-            self: Material, wctx: WorldEditorViewport, e: entity)=> void
+        func showShadersEdit(wctx: WorldEditorViewport, e: entity)=> void
         {
             SeparatorText("着色器 Renderer::Shaders");
 
@@ -377,25 +345,16 @@ namespace JEEditor::Editor
             let shaders = e->get_shaders();
             let univ = option::value(wctx->getWorld->get_universe);
 
-            // 选中的列表项可能因移除着色器而越界，这里收回选中态
-            if (self.m_selected_shader >= shaders->len)
-                self.m_selected_shader = -1;
-
             if (shaders->len == 0)
                 TextDisabled("（没有着色器）");
             TextDisabled("拖动 .shader 文件到列表项上可插入到该位置");
 
             for (let (idx, sinst) : shaders->iter |> enumerate)
             {
-                if (SelectableSelected(
-                        F"{idx}: {shaderDisplayName(sinst)}##material_shader_{idx}",
-                        self.m_selected_shader == idx))
-                {
-                    if (self.m_selected_shader == idx)
-                        self.m_selected_shader = -1;
-                    else
-                        self.m_selected_shader = idx;
-                }
+                // 树节点行：箭头示意可展开编辑 uniform，整行同时是拖放目标
+                let opened = TreeNodeEx(
+                    F"{idx}: {shaderDisplayName(sinst)}##material_shader_{idx}",
+                    TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth);
 
                 match (sinst->path)
                 {
@@ -412,21 +371,20 @@ namespace JEEditor::Editor
                 {
                     none?;
                     value(payload)?
-                        tryInsertShader(self, e, univ, payload->dump, idx);
+                        tryInsertShader(e, univ, payload->dump, idx);
                 }
 
-                if (self.m_selected_shader == idx)
+                if (opened)
                 {
-                    Indent(0.);
-                    showShaderItemOps(self, e, shaders, sinst, idx);
+                    showShaderItemOps(e, shaders, sinst, idx);
                     SeparatorText("Uniform 变量");
                     showShaderUniformsEdit(sinst, idx);
-                    Unindent(0.);
+                    TreePop();
                 }
                 Spacing();
             }
 
-            showAddShaderEdit(self, e, univ, shaders->len);
+            showAppendShaderRow(e, univ, shaders->len);
         }
 
         func isTextureFile(path: string)=> bool
@@ -534,55 +492,69 @@ namespace JEEditor::Editor
 
             for (let pass : passes)
             {
+                let tex_opt = textures->get(pass);
+
                 BeginGroup();
 
-                match (textures->get(pass))
+                match (tex_opt)
                 {
                     none?
-                    {
-                        Text(F"通道 {pass}");
-                        TextDisabled("（未绑定纹理）");
-                    }
+                        Text(F"通道 {pass}（未绑定纹理）");
                     value(tex)?
                     {
                         ImageSize(tex, 32., 32.);
-                        SameLine();
-                        Text(F"通道 {pass}");
-
-                        let mut display_path = "（内置纹理）";
-                        match (tex->path)
-                        {
-                            none?;
-                            value(p)?
-                                display_path = p;
-                        }
-                        TextDisabled(display_path);
-
+                        // 不直接展示路径，悬浮缩略图时以气泡显示
                         match (tex->path)
                         {
                             none?;
                             value(p)?
                             {
-                                // 以 新路径=旧路径 的方式热重载
-                                if (Button(F"重载##material_texture_{pass}"))
-                                    do e->internal::graphic::try_reload_textures(p, p);
-                                SameLine();
+                                if (IsItemHovered())
+                                    do SetTooltip(p);
                             }
                         }
-                        if (Button(F"移除##material_texture_{pass}"))
-                            do e->bind_texture(pass, option::none);
+                        SameLine();
+                        Text(F"通道 {pass}");
                     }
                 }
 
-                // 该通道被哪些着色器的 uniform 采样
+                // 该通道被哪些着色器的 uniform 采样（与通道同行展示）
                 match (channels->get(pass))
                 {
                     none?
+                    {
+                        SameLine();
                         TextDisabled("（未被任何着色器采样）");
+                    }
                     value(refs)?
                     {
                         for (let ref_name : refs |> sort(\l, r = l < r;))
+                        {
+                            SameLine();
                             TextDisabled(F"采样于 {ref_name}");
+                        }
+                    }
+                }
+
+                match (tex_opt)
+                {
+                    none?;
+                    value(tex)?
+                    {
+                        // 重载/移除与通道同行
+                        match (tex->path)
+                        {
+                            none?;
+                            value(p)?
+                            {
+                                SameLine();
+                                if (Button(F"重载##material_texture_{pass}"))
+                                    do e->internal::graphic::try_reload_textures(p, p);
+                            }
+                        }
+                        SameLine();
+                        if (Button(F"移除##material_texture_{pass}"))
+                            do e->bind_texture(pass, option::none);
                     }
                 }
 
@@ -658,7 +630,7 @@ namespace JEEditor::Editor
                             SameLine();
                             Text(e->internal::name);
 
-                            showShadersEdit(self, wctx, e);
+                            showShadersEdit(wctx, e);
                             showTexturesEdit(wctx, e);
                         }
                     }
