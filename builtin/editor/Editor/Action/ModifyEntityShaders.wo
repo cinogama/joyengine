@@ -1,0 +1,70 @@
+import woo::std;
+
+import je;
+import je::ecs;
+import je::graphic;
+import je::internal;
+
+import pkg::interface;
+
+import builtin::editor::Editor::WorldEditorViewport;
+
+import IAction;
+
+using je;
+using je::graphic;
+
+namespace JEEditor::Editor::Action
+{
+    // 修改实体的着色器列表（新增/移除/移动着色器 pass）。
+    // 以旧/新两个完整列表保存快照，redo/undo 时整体写回；
+    // 列表中的着色器句柄由引擎资源系统持有，被 Action 引用期间不会失效。
+    protected using ModifyEntityShaders = struct{
+        m_eid: entity::internal::euid_t,
+        m_old_shaders: array<shader>,
+        m_new_shaders: array<shader>,
+    }
+    {
+        public func create(
+            eid: entity::internal::euid_t,
+            old_shaders: array<shader>,
+            new_shaders: array<shader>)=> ModifyEntityShaders
+            where require!(ModifyEntityShaders: IAction);
+        {
+            return ModifyEntityShaders{
+                m_eid = eid,
+                m_old_shaders = old_shaders,
+                m_new_shaders = new_shaders,
+            };
+        }
+
+        func applyShaders(
+            w: WorldEditorViewport,
+            eid: entity::internal::euid_t,
+            shaders: array<shader>)=> bool
+        {
+            for (let e : w->getEntitySelector())
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(ueid)?
+                        if (ueid == eid)
+                        {
+                            e->set_shaders(shaders);
+                            return true;
+                        }
+                }
+            }
+            return false;
+        }
+        public func redo(self: ModifyEntityShaders, w: WorldEditorViewport)=> bool
+        {
+            return applyShaders(w, self.m_eid, self.m_new_shaders);
+        }
+        public func undo(self: ModifyEntityShaders, w: WorldEditorViewport)=> bool
+        {
+            return applyShaders(w, self.m_eid, self.m_old_shaders);
+        }
+    }
+}

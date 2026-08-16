@@ -1,0 +1,110 @@
+import woo::std;
+
+import je;
+import je::ecs;
+import je::graphic;
+import je::internal;
+
+import pkg::interface;
+
+import builtin::editor::Editor::WorldEditorViewport;
+
+import IAction;
+
+using je;
+using je::graphic;
+
+namespace JEEditor::Editor::Action
+{
+    // 修改实体着色器列表中某个着色器的 uniform 变量值。
+    // 通过（实体 EUID, 着色器下标, uniform 名）在执行时重新定位目标，
+    // 不持有跨帧的着色器句柄。
+    protected using ModifyShaderUniform = struct{
+        m_eid: entity::internal::euid_t,
+        m_shader_index: int,
+        m_uniform_name: string,
+        m_old_value: shader::uniform_variable,
+        m_new_value: shader::uniform_variable,
+    }
+    {
+        public func create(
+            eid: entity::internal::euid_t,
+            shader_index: int,
+            uniform_name: string,
+            old_value: shader::uniform_variable,
+            new_value: shader::uniform_variable)=> ModifyShaderUniform
+            where require!(ModifyShaderUniform: IAction);
+        {
+            return ModifyShaderUniform{
+                m_eid = eid,
+                m_shader_index = shader_index,
+                m_uniform_name = uniform_name,
+                m_old_value = old_value,
+                m_new_value = new_value,
+            };
+        }
+
+        func applyUniformValue(
+            sinst: shader, uname: string, val: shader::uniform_variable)=> bool
+        {
+            match (val)
+            {
+                integer(v)?
+                    do sinst->set_uniform(uname, v);
+                integer2((v1, v2))?
+                    do sinst->set_uniform(uname, (v1, v2));
+                integer3((v1, v2, v3))?
+                    do sinst->set_uniform(uname, (v1, v2, v3));
+                integer4((v1, v2, v3, v4))?
+                    do sinst->set_uniform(uname, (v1, v2, v3, v4));
+                float(v)?
+                    do sinst->set_uniform(uname, v);
+                float2((v1, v2))?
+                    do sinst->set_uniform(uname, (v1, v2));
+                float3((v1, v2, v3))?
+                    do sinst->set_uniform(uname, (v1, v2, v3));
+                float4((v1, v2, v3, v4))?
+                    do sinst->set_uniform(uname, (v1, v2, v3, v4));
+                // 采样器与未知类型的 uniform 没有写入口径
+                _? return false;
+            }
+            return true;
+        }
+
+        func restoreUniformValue(
+            w: WorldEditorViewport,
+            eid: entity::internal::euid_t,
+            shader_index: int,
+            uname: string,
+            val: shader::uniform_variable)=> bool
+        {
+            for (let e : w->getEntitySelector())
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(ueid)?
+                        if (ueid == eid)
+                        {
+                            let shaders = e->get_shaders();
+                            // 着色器列表在操作创建后可能已变化，下标越界则操作失败
+                            if (shader_index < 0 || shader_index >= shaders->len)
+                                return false;
+                            return applyUniformValue(shaders[shader_index], uname, val);
+                        }
+                }
+            }
+            return false;
+        }
+        public func redo(self: ModifyShaderUniform, w: WorldEditorViewport)=> bool
+        {
+            return restoreUniformValue(
+                w, self.m_eid, self.m_shader_index, self.m_uniform_name, self.m_new_value);
+        }
+        public func undo(self: ModifyShaderUniform, w: WorldEditorViewport)=> bool
+        {
+            return restoreUniformValue(
+                w, self.m_eid, self.m_shader_index, self.m_uniform_name, self.m_old_value);
+        }
+    }
+}

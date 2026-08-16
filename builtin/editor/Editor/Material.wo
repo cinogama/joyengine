@@ -18,6 +18,9 @@ import builtin::editor::GUI::Forms::MsgBox;
 
 import Browser;
 import WorldEditorViewport;
+import EditSession;
+import Action::ModifyEntityShaders;
+import Action::ModifyEntityTexture;
 
 using std;
 using iterator;
@@ -30,6 +33,8 @@ using JEEditor::GUI;
 using JEEditor::GUI::Windows;
 using JEEditor::GUI::Drag;
 using JEEditor::GUI::Forms;
+using JEEditor::Editor::EditSession;
+using JEEditor::Editor::Action;
 
 namespace JEEditor::Editor
 {
@@ -44,6 +49,9 @@ namespace JEEditor::Editor
     {
         let SHADERS_TYPE = typeinfo::load("Renderer::Shaders")->unwrap;
         let TEXTURES_TYPE = typeinfo::load("Renderer::Textures")->unwrap;
+
+        // EditSession 中的面板标识，用于编辑手势的焦点归属判定
+        let PANEL_OWNER = "Material";
 
         let mut s_material_singleton = option::none: option<Material>;
 
@@ -82,6 +90,8 @@ namespace JEEditor::Editor
         }
         public func onClose(_: Material)=> void
         {
+            // 面板被关闭时，结束任何遗留的编辑手势
+            EditSession::commit();
             s_material_singleton = option::none;
         }
         public func getTitle(_: Material)=> string
@@ -122,6 +132,36 @@ namespace JEEditor::Editor
             return false;
         }
 
+        // 将着色器列表变更发布为可撤销操作；无 EUID 的实体退化为直接修改
+        func applyShadersChange(
+            wctx: WorldEditorViewport, e: entity, new_shaders: array<shader>)=> void
+        {
+            match (e->internal::get_entity_uid)
+            {
+                none?
+                    e->set_shaders(new_shaders);
+                value(eid)?
+                    wctx->doAction(
+                        ModifyEntityShaders::create(eid, e->get_shaders(), new_shaders));
+            }
+        }
+
+        // 将纹理通道变更发布为可撤销操作；无 EUID 的实体退化为直接修改
+        func applyTextureChange(
+            wctx: WorldEditorViewport, e: entity,
+            pass: int, new_texture: option<texture>)=> void
+        {
+            match (e->internal::get_entity_uid)
+            {
+                none?
+                    do e->bind_texture(pass, new_texture);
+                value(eid)?
+                    wctx->doAction(
+                        ModifyEntityTexture::create(
+                            eid, pass, e->get_textures()->get(pass), new_texture));
+            }
+        }
+
         // JE_ 前缀的 uniform 是引擎内部渲染使用的变量，由引擎在渲染时写入，
         // 不在材质编辑器中展示与编辑（与引擎热重载时跳过它们的行为一致）。
         func isInternalUniformName(uname: string)=> bool
@@ -129,11 +169,38 @@ namespace JEEditor::Editor
             return uname->begin_with("JE_");
         }
 
-        // 渲染一个 uniform 变量的编辑控件；值变化时立即写回着色器。
+        // 追踪 uniform 编辑手势；无 EUID 的实体跳过追踪（无法支持撤销）。
+        // uvar 为本帧编辑前的值，手势首帧的它将被留档为撤销点。
+        func trackUniformEdit(
+            wctx: WorldEditorViewport,
+            eid: option<entity::internal::euid_t>,
+            shader_index: int,
+            uname: string,
+            tag: string,
+            old_value: shader::uniform_variable,
+            new_value: shader::uniform_variable)=> void
+        {
+            match (eid)
+            {
+                none?;
+                value(eidv)?
+                    EditSession::trackUniform(
+                        tag, PANEL_OWNER, wctx, eidv, shader_index, uname,
+                        old_value, new_value);
+            }
+        }
+
+        // 渲染一个 uniform 变量的编辑控件；值变化时立即写回着色器，
+        // 并追踪为可撤销的编辑手势。
         // uniform 名字即其在着色器内的名字，不可编辑。
         func showUniformEdit(
-            sinst: shader, uname: string,
-            uvar: shader::uniform_variable, tag: string)=> void
+            wctx: WorldEditorViewport,
+            eid: option<entity::internal::euid_t>,
+            sinst: shader,
+            uname: string,
+            uvar: shader::uniform_variable,
+            shader_index: int,
+            tag: string)=> void
         {
             TextDisabled(uname);
             SameLine();
@@ -147,7 +214,10 @@ namespace JEEditor::Editor
                     {
                         none?;
                         value(nv)?
+                        {
+                            trackUniformEdit(wctx, eid, shader_index, uname, tag, uvar, shader::uniform_variable::integer(nv));
                             sinst->set_uniform(uname, nv);
+                        }
                     }
                 }
                 integer2((v1, v2))?
@@ -156,7 +226,10 @@ namespace JEEditor::Editor
                     {
                         none?;
                         value((n1, n2))?
+                        {
+                            trackUniformEdit(wctx, eid, shader_index, uname, tag, uvar, shader::uniform_variable::integer2((n1, n2)));
                             sinst->set_uniform(uname, (n1, n2));
+                        }
                     }
                 }
                 integer3((v1, v2, v3))?
@@ -165,7 +238,10 @@ namespace JEEditor::Editor
                     {
                         none?;
                         value((n1, n2, n3))?
+                        {
+                            trackUniformEdit(wctx, eid, shader_index, uname, tag, uvar, shader::uniform_variable::integer3((n1, n2, n3)));
                             sinst->set_uniform(uname, (n1, n2, n3));
+                        }
                     }
                 }
                 integer4((v1, v2, v3, v4))?
@@ -174,7 +250,10 @@ namespace JEEditor::Editor
                     {
                         none?;
                         value((n1, n2, n3, n4))?
+                        {
+                            trackUniformEdit(wctx, eid, shader_index, uname, tag, uvar, shader::uniform_variable::integer4((n1, n2, n3, n4)));
                             sinst->set_uniform(uname, (n1, n2, n3, n4));
+                        }
                     }
                 }
                 float(v)?
@@ -183,7 +262,10 @@ namespace JEEditor::Editor
                     {
                         none?;
                         value(nv)?
+                        {
+                            trackUniformEdit(wctx, eid, shader_index, uname, tag, uvar, shader::uniform_variable::float(nv));
                             sinst->set_uniform(uname, nv);
+                        }
                     }
                 }
                 float2((v1, v2))?
@@ -192,7 +274,10 @@ namespace JEEditor::Editor
                     {
                         none?;
                         value((n1, n2))?
+                        {
+                            trackUniformEdit(wctx, eid, shader_index, uname, tag, uvar, shader::uniform_variable::float2((n1, n2)));
                             sinst->set_uniform(uname, (n1, n2));
+                        }
                     }
                 }
                 float3((v1, v2, v3))?
@@ -201,7 +286,10 @@ namespace JEEditor::Editor
                     {
                         none?;
                         value((n1, n2, n3))?
+                        {
+                            trackUniformEdit(wctx, eid, shader_index, uname, tag, uvar, shader::uniform_variable::float3((n1, n2, n3)));
                             sinst->set_uniform(uname, (n1, n2, n3));
+                        }
                     }
                 }
                 float4((v1, v2, v3, v4))?
@@ -210,7 +298,10 @@ namespace JEEditor::Editor
                     {
                         none?;
                         value((n1, n2, n3, n4))?
+                        {
+                            trackUniformEdit(wctx, eid, shader_index, uname, tag, uvar, shader::uniform_variable::float4((n1, n2, n3, n4)));
                             sinst->set_uniform(uname, (n1, n2, n3, n4));
+                        }
                     }
                 }
                 texture(pass_id)?
@@ -225,7 +316,10 @@ namespace JEEditor::Editor
             }
         }
 
-        func showShaderUniformsEdit(sinst: shader, shader_index: int)=> void
+        func showShaderUniformsEdit(
+            wctx: WorldEditorViewport,
+            eid: option<entity::internal::euid_t>,
+            sinst: shader, shader_index: int)=> void
         {
             let uniforms = sinst->get_uniforms;
             let names = uniforms->keys
@@ -243,7 +337,7 @@ namespace JEEditor::Editor
             {
                 let uvar = uniforms->get(uname)->unwrap;
                 showUniformEdit(
-                    sinst, uname, uvar,
+                    wctx, eid, sinst, uname, uvar, shader_index,
                     F"##material_uniform_{shader_index}_{uname}");
             }
         }
@@ -261,26 +355,28 @@ namespace JEEditor::Editor
         }
 
         func showShaderItemOps(
+            wctx: WorldEditorViewport,
             e: entity, shaders: array<shader>, sinst: shader, idx: int)=> void
         {
             BeginDisabled(idx == 0);
             if (Button(F"上移##material_shader_{idx}"))
-                e->set_shaders(shaders->erase(idx)->inlay(idx - 1, sinst));
+                applyShadersChange(wctx, e, shaders->erase(idx)->inlay(idx - 1, sinst));
             EndDisabled();
             SameLine();
 
             BeginDisabled(idx + 1 >= shaders->len);
             if (Button(F"下移##material_shader_{idx}"))
-                e->set_shaders(shaders->erase(idx)->inlay(idx + 1, sinst));
+                applyShadersChange(wctx, e, shaders->erase(idx)->inlay(idx + 1, sinst));
             EndDisabled();
             SameLine();
 
             if (Button(F"移除##material_shader_{idx}"))
-                e->set_shaders(shaders->erase(idx));
+                applyShadersChange(wctx, e, shaders->erase(idx));
         }
 
         // 加载着色器并插入到列表 insert_at 位置（越界时收敛到首/尾）
         func tryInsertShader(
+            wctx: WorldEditorViewport,
             e: entity, univ: option<universe>, path: string, insert_at: int)=> void
         {
             if (path == "")
@@ -306,20 +402,22 @@ namespace JEEditor::Editor
                         at = 0;
                     if (at > shaders->len)
                         at = shaders->len;
-                    e->set_shaders(shaders->inlay(at, sinst));
+                    applyShadersChange(wctx, e, shaders->inlay(at, sinst));
                 }
             }
         }
 
         // 列表末尾的追加行：拖动 .shader 文件到该行追加到列表末尾
-        func showAppendShaderRow(e: entity, univ: option<universe>, append_at: int)=> void
+        func showAppendShaderRow(
+            wctx: WorldEditorViewport,
+            e: entity, univ: option<universe>, append_at: int)=> void
         {
             do Selectable("＋ 添加着色器##material_shader_append");
             match (Drag::AcceptDrag:<FilePayload>())
             {
                 none?;
                 value(payload)?
-                    tryInsertShader(e, univ, payload->dump, append_at);
+                    tryInsertShader(wctx, e, univ, payload->dump, append_at);
             }
         }
 
@@ -332,6 +430,7 @@ namespace JEEditor::Editor
 
             let shaders = e->get_shaders();
             let univ = option::value(wctx->getWorld->get_universe);
+            let eid = e->internal::get_entity_uid;
 
             if (shaders->len == 0)
                 TextDisabled("（没有着色器）");
@@ -359,20 +458,20 @@ namespace JEEditor::Editor
                 {
                     none?;
                     value(payload)?
-                        tryInsertShader(e, univ, payload->dump, idx);
+                        tryInsertShader(wctx, e, univ, payload->dump, idx);
                 }
 
                 if (opened)
                 {
-                    showShaderItemOps(e, shaders, sinst, idx);
+                    showShaderItemOps(wctx, e, shaders, sinst, idx);
                     SeparatorText("Uniform 变量");
-                    showShaderUniformsEdit(sinst, idx);
+                    showShaderUniformsEdit(wctx, eid, sinst, idx);
                     TreePop();
                 }
                 Spacing();
             }
 
-            showAppendShaderRow(e, univ, shaders->len);
+            showAppendShaderRow(wctx, e, univ, shaders->len);
         }
 
         func isTextureFile(path: string)=> bool
@@ -400,6 +499,7 @@ namespace JEEditor::Editor
         }
 
         func tryBindTexture(
+            wctx: WorldEditorViewport,
             e: entity, univ: option<universe>, pass: int, path: string)=> void
         {
             if (pass < 0)
@@ -423,7 +523,7 @@ namespace JEEditor::Editor
                 none?
                     MsgBox::err("绑定纹理失败", F"无法加载纹理：`{path}`");
                 value(tex)?
-                    do e->bind_texture(pass, option::value(tex));
+                    applyTextureChange(wctx, e, pass, option::value(tex));
             }
         }
 
@@ -523,7 +623,7 @@ namespace JEEditor::Editor
                         // 移除与通道同行
                         SameLine();
                         if (Button(F"移除##material_texture_{pass}"))
-                            do e->bind_texture(pass, option::none);
+                            applyTextureChange(wctx, e, pass, option::none);
                     }
                 }
 
@@ -542,7 +642,7 @@ namespace JEEditor::Editor
                 {
                     none?;
                     value(payload)?
-                        tryBindTexture(e, univ, pass, payload->dump);
+                        tryBindTexture(wctx, e, univ, pass, payload->dump);
                 }
 
                 Spacing();
@@ -557,6 +657,8 @@ namespace JEEditor::Editor
                 return;
 
             // tiling/offset 是反射成员，沿用与检视面板一致的通用值编辑器
+            let eid = e->internal::get_entity_uid;
+
             let textures_component = e->get_component(TEXTURES_TYPE)->unwrap;
             Indent(0.);
             for (let (mname, mtype, mhandle) : textures_component->get_members)
@@ -565,8 +667,12 @@ namespace JEEditor::Editor
                 SameLine();
                 SetNextItemWidth(-1.);
 
-                match (unsafe::dynamic_parser::edit(
-                        mtype, mhandle, F"##material_textures_{mname}_{mhandle}"))
+                let member_tag = F"##material_textures_{mname}_{mhandle}";
+
+                // edit 一旦返回 true，成员值已被就地修改，先留档修改前的序列化值
+                let old_value = eid=>> \_ = unsafe::dynamic_parser::save(mtype, mhandle);;
+
+                match (unsafe::dynamic_parser::edit(mtype, mhandle, member_tag))
                 {
                     none?
                     {
@@ -576,8 +682,25 @@ namespace JEEditor::Editor
                     }
                     value(edited)?
                     {
-                        // edited 为 false 表示本次没有改动，无需处理
-                        do edited;
+                        if (edited)
+                        {
+                            match (eid)
+                            {
+                                none?;
+                                value(eidv)?
+                                    match (old_value)
+                                    {
+                                        none?;
+                                        value(before)?
+                                            EditSession::trackMember(
+                                                member_tag, PANEL_OWNER, wctx, eidv,
+                                                TEXTURES_TYPE->name, mname,
+                                                before,
+                                                unsafe::dynamic_parser::save(mtype, mhandle)
+                                                    ->or(before));
+                                    }
+                            }
+                        }
                     }
                 }
             }
@@ -588,10 +711,17 @@ namespace JEEditor::Editor
 
         public func run(self: Material)=> bool
         {
-            match (WorldEditorViewport::getLastFocused()
+            let selection = WorldEditorViewport::getLastFocused()
                 =>> \wctx = wctx->getSelectedEntityId
                     ->> \selected_entity_id = (wctx, selected_entity_id);
-                    ;)
+                    ;
+                ;
+
+            // 手势结束判定（超时/选中实体变化/本面板失去焦点），见 EditSession
+            EditSession::update(
+                PANEL_OWNER, IsWindowFocused(), selection->> \sel = sel.1;);
+
+            match (selection)
             {
                 none?
                     TextDisabled("（没有待编辑的实体）");

@@ -1,0 +1,315 @@
+import woo::std;
+
+import je;
+import je::ecs;
+import je::graphic;
+import je::internal;
+
+import WorldEditorViewport;
+
+import Action::RenameEntity;
+import Action::ModifyComponentMember;
+import Action::ModifyShaderUniform;
+
+using je;
+using je::graphic;
+using JEEditor::Editor::Action;
+
+/*
+EditSession：编辑器各面板（检视、材质等）共用的编辑手势管理。
+
+一次进行中的编辑手势（如一次连续输入、一次连续拖拽）会把同一目标的
+连续改动归并起来，直到手势结束：
+
+  1. 连续 SESSION_TIMEOUT 之久没有新的改动（编辑控件持续返回 false）；
+  2. 被编辑的实体不再是当前选中实体；
+  3. 其他目标的编辑产生了新的改动；
+  4. 手势所属面板（owner）的窗体失去焦点。
+
+手势结束后将汇总为一个可撤销的 Action 提交到 Practice。
+使用手势的面板需在自身 run() 中调用 update()（传入面板标识与焦点状态），
+并在 onClose 时调用 commit()。
+*/
+namespace JEEditor::Editor::EditSession
+{
+    // 手势待提交的编辑内容；手势结束时会被汇总为对应的 Action
+    public union PendingEdit
+    {
+        // 实体重命名：(旧名, 新名)
+        Rename((string, string)),
+        // 组件成员值编辑：(组件类型名, 成员名, 旧值, 新值)，值为序列化字符串
+        Member((string, string, string, string)),
+        // 着色器 uniform 编辑：(着色器下标, uniform 名, 旧值, 新值)
+        Uniform((int, string, shader::uniform_variable, shader::uniform_variable)),
+    }
+
+    public using Session = struct{
+        m_tag: string,                     // 触发本次手势的控件标签
+        m_owner: string,                   // 手势所属的面板，用于焦点判定
+        m_world_view: WorldEditorViewport, // 提交 Action 的目标视口
+        m_eid: entity::internal::euid_t,   // 被编辑的实体
+        m_pending: PendingEdit,
+        m_last_active_time: real,          // 最近一次改动发生的时间
+    };
+
+    // 连续这么久没有新的改动即视为手势结束
+    let SESSION_TIMEOUT = 2.;
+
+    // 用于与“没有选中实体”比较的哨兵值
+    let ZERO_EUID = 0h as entity::internal::euid_t;
+
+    let mut s_active = option::none: option<Session>;
+
+    // 提交进行中的编辑手势：值确有变化时发布一个可撤销的 Action
+    public func commit()=> void
+    {
+        match (s_active)
+        {
+            none?;
+            value(session)?
+            {
+                match (session.m_pending)
+                {
+                    Rename((old_name, new_name))?
+                        if (old_name != new_name)
+                            session.m_world_view->doAction(
+                                RenameEntity::create(
+                                    session.m_eid, old_name, new_name));
+                    Member((ctype_name, mname, old_value, new_value))?
+                        if (old_value != new_value)
+                            session.m_world_view->doAction(
+                                ModifyComponentMember::create(
+                                    session.m_eid, ctype_name, mname,
+                                    old_value, new_value));
+                    Uniform((shader_index, uname, old_value, new_value))?
+                        if (!isSameUniformValue(old_value, new_value))
+                            session.m_world_view->doAction(
+                                ModifyShaderUniform::create(
+                                    session.m_eid, shader_index, uname,
+                                    old_value, new_value));
+                }
+                s_active = option::none;
+            }
+        }
+    }
+
+    // 每个使用编辑手势的面板在自身 run() 中调用：
+    // owner 为面板标识，focused 为该面板窗体当前是否被选中，
+    // selected_entity_id 为当前选中的实体（none 表示没有选中）。
+    public func update(
+        owner: string,
+        focused: bool,
+        selected_entity_id: option<entity::internal::euid_t>)=> void
+    {
+        match (s_active)
+        {
+            none?;
+            value(session)?
+                if ((session.m_owner == owner && !focused)
+                    || session.m_eid != selected_entity_id->or(ZERO_EUID)
+                    || time() - session.m_last_active_time >= SESSION_TIMEOUT)
+                    commit();
+        }
+    }
+
+    // 追踪实体重命名的编辑手势；参数说明见 trackImpl。
+    public func trackRename(
+        tag: string,
+        owner: string,
+        wctx: WorldEditorViewport,
+        eid: entity::internal::euid_t,
+        old_name: string,
+        new_name: string)=> void
+    {
+        match (s_active)
+        {
+            none?;
+            value(session)?
+                if (session.m_tag == tag)
+                    match (session.m_pending)
+                    {
+                        Rename((keep_old, _))?
+                        {
+                            s_active = option::value(Session{
+                                m_tag = session.m_tag,
+                                m_owner = session.m_owner,
+                                m_world_view = session.m_world_view,
+                                m_eid = session.m_eid,
+                                m_pending = PendingEdit::Rename((keep_old, new_name)),
+                                m_last_active_time = time(),
+                            });
+                            return;
+                        }
+                        _?;
+                    }
+        }
+
+        commit();
+        s_active = option::value(Session{
+            m_tag = tag,
+            m_owner = owner,
+            m_world_view = wctx,
+            m_eid = eid,
+            m_pending = PendingEdit::Rename((old_name, new_name)),
+            m_last_active_time = time(),
+        });
+    }
+
+    // 追踪组件成员值编辑的编辑手势；值为序列化字符串。
+    public func trackMember(
+        tag: string,
+        owner: string,
+        wctx: WorldEditorViewport,
+        eid: entity::internal::euid_t,
+        component_type_name: string,
+        member_name: string,
+        old_value: string,
+        new_value: string)=> void
+    {
+        match (s_active)
+        {
+            none?;
+            value(session)?
+                if (session.m_tag == tag)
+                    match (session.m_pending)
+                    {
+                        Member((ctype_name, mname, keep_old, _))?
+                        {
+                            s_active = option::value(Session{
+                                m_tag = session.m_tag,
+                                m_owner = session.m_owner,
+                                m_world_view = session.m_world_view,
+                                m_eid = session.m_eid,
+                                m_pending = PendingEdit::Member((ctype_name, mname, keep_old, new_value)),
+                                m_last_active_time = time(),
+                            });
+                            return;
+                        }
+                        _?;
+                    }
+        }
+
+        commit();
+        s_active = option::value(Session{
+            m_tag = tag,
+            m_owner = owner,
+            m_world_view = wctx,
+            m_eid = eid,
+            m_pending = PendingEdit::Member((component_type_name, member_name, old_value, new_value)),
+            m_last_active_time = time(),
+        });
+    }
+
+    // 追踪着色器 uniform 编辑的编辑手势。
+    public func trackUniform(
+        tag: string,
+        owner: string,
+        wctx: WorldEditorViewport,
+        eid: entity::internal::euid_t,
+        shader_index: int,
+        uniform_name: string,
+        old_value: shader::uniform_variable,
+        new_value: shader::uniform_variable)=> void
+    {
+        match (s_active)
+        {
+            none?;
+            value(session)?
+                if (session.m_tag == tag)
+                    match (session.m_pending)
+                    {
+                        Uniform((sidx, uname, keep_old, _))?
+                        {
+                            s_active = option::value(Session{
+                                m_tag = session.m_tag,
+                                m_owner = session.m_owner,
+                                m_world_view = session.m_world_view,
+                                m_eid = session.m_eid,
+                                m_pending = PendingEdit::Uniform((sidx, uname, keep_old, new_value)),
+                                m_last_active_time = time(),
+                            });
+                            return;
+                        }
+                        _?;
+                    }
+        }
+
+        commit();
+        s_active = option::value(Session{
+            m_tag = tag,
+            m_owner = owner,
+            m_world_view = wctx,
+            m_eid = eid,
+            m_pending = PendingEdit::Uniform((shader_index, uniform_name, old_value, new_value)),
+            m_last_active_time = time(),
+        });
+    }
+
+    func isSameUniformValue(
+        a: shader::uniform_variable, b: shader::uniform_variable)=> bool
+    {
+        match (a)
+        {
+            integer(av)?
+                match (b)
+                {
+                    integer(bv)? return av == bv;
+                    _? return false;
+                }
+            integer2(av)?
+                match (b)
+                {
+                    integer2((bx, by))? return av.0 == bx && av.1 == by;
+                    _? return false;
+                }
+            integer3(av)?
+                match (b)
+                {
+                    integer3((bx, by, bz))?
+                        return av.0 == bx && av.1 == by && av.2 == bz;
+                    _? return false;
+                }
+            integer4(av)?
+                match (b)
+                {
+                    integer4((bx, by, bz, bw))?
+                        return av.0 == bx && av.1 == by && av.2 == bz && av.3 == bw;
+                    _? return false;
+                }
+            float(av)?
+                match (b)
+                {
+                    float(bv)? return av == bv;
+                    _? return false;
+                }
+            float2(av)?
+                match (b)
+                {
+                    float2((bx, by))? return av.0 == bx && av.1 == by;
+                    _? return false;
+                }
+            float3(av)?
+                match (b)
+                {
+                    float3((bx, by, bz))?
+                        return av.0 == bx && av.1 == by && av.2 == bz;
+                    _? return false;
+                }
+            float4(av)?
+                match (b)
+                {
+                    float4((bx, by, bz, bw))?
+                        return av.0 == bx && av.1 == by && av.2 == bz && av.3 == bw;
+                    _? return false;
+                }
+            texture(ap)?
+                match (b)
+                {
+                    texture(bp)? return ap == bp;
+                    _? return false;
+                }
+            // others 类型的 uniform 不会出现在编辑手势中，视为不相等
+            _? return false;
+        }
+    }
+}

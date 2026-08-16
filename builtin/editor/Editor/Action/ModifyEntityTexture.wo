@@ -1,0 +1,74 @@
+import woo::std;
+
+import je;
+import je::ecs;
+import je::graphic;
+import je::internal;
+
+import pkg::interface;
+
+import builtin::editor::Editor::WorldEditorViewport;
+
+import IAction;
+
+using je;
+using je::graphic;
+
+namespace JEEditor::Editor::Action
+{
+    // 修改实体某个纹理通道绑定的纹理（绑定/替换/解绑）。
+    // 以旧/新纹理快照保存；纹理句柄由引擎资源系统持有，
+    // 被 Action 引用期间不会失效，撤销时可直接恢复绑定。
+    protected using ModifyEntityTexture = struct{
+        m_eid: entity::internal::euid_t,
+        m_pass: int,
+        m_old_texture: option<texture>,
+        m_new_texture: option<texture>,
+    }
+    {
+        public func create(
+            eid: entity::internal::euid_t,
+            pass: int,
+            old_texture: option<texture>,
+            new_texture: option<texture>)=> ModifyEntityTexture
+            where require!(ModifyEntityTexture: IAction);
+        {
+            return ModifyEntityTexture{
+                m_eid = eid,
+                m_pass = pass,
+                m_old_texture = old_texture,
+                m_new_texture = new_texture,
+            };
+        }
+
+        func applyTexture(
+            w: WorldEditorViewport,
+            eid: entity::internal::euid_t,
+            pass: int,
+            tex: option<texture>)=> bool
+        {
+            for (let e : w->getEntitySelector())
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(ueid)?
+                        if (ueid == eid)
+                        {
+                            do e->bind_texture(pass, tex);
+                            return true;
+                        }
+                }
+            }
+            return false;
+        }
+        public func redo(self: ModifyEntityTexture, w: WorldEditorViewport)=> bool
+        {
+            return applyTexture(w, self.m_eid, self.m_pass, self.m_new_texture);
+        }
+        public func undo(self: ModifyEntityTexture, w: WorldEditorViewport)=> bool
+        {
+            return applyTexture(w, self.m_eid, self.m_pass, self.m_old_texture);
+        }
+    }
+}
