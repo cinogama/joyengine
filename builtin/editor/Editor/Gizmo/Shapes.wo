@@ -1,6 +1,11 @@
 import woo::std;
-import je::graphic;
 
+import je;
+import je::graphic;
+import je::towoo;
+import je::towoo::types;
+
+using je;
 using je::graphic;
 
 namespace JEEditor::Editor::Gizmo::Shapes
@@ -16,4 +21,104 @@ namespace JEEditor::Editor::Gizmo::Shapes
         [0, 1, 2, 3],
         [3, 2, 3, 3],
     );
+
+    // ==================== 变换游标形状 ====================
+    // 以下形状均为“单位”几何体：轴长/半径为 1，绘制时通过模型矩阵
+    // （位置=游标原点，旋转=游标姿态，缩放=游标大小）变换到世界空间。
+
+    // 用位置序列创建只含顶点坐标的形状
+    func makeShape(
+        vtype: vertex::type, positions: vec<real>, indices: vec<int>)=> option<vertex>
+    {
+        return vertex::create(vtype, positions->to_array(), indices->to_array(), [3]);
+    }
+
+    // 从原点指向 dir 的单位线段
+    func makeAxisLine(dir: vec3)=> option<vertex>
+    {
+        return makeShape(
+            vertex::type::LINESTRIP,
+            [0., 0., 0., dir[0], dir[1], dir[2]]mut,
+            [0, 1]mut);
+    }
+
+    // 在 (a, b) 张成的平面内、以原点为圆心的单位圆环（闭合折线）
+    func makeRing(a: vec3, b: vec3, segments: int)=> option<vertex>
+    {
+        let mut positions = []mut: vec<real>;
+        let mut indices = []mut: vec<int>;
+        for (let mut i = 0; i <= segments; i += 1)
+        {
+            let ang = 2. * mathf::PI * (i as real / segments as real);
+            let p = a * mathf::cos(ang) + b * mathf::sin(ang);
+            positions->add(p[0]);
+            positions->add(p[1]);
+            positions->add(p[2]);
+            indices->add(i);
+        }
+        return makeShape(vertex::type::LINESTRIP, positions, indices);
+    }
+
+    // 指向 dir 的单位箭头圆锥（位于轴末端，供平移/缩放游标使用）
+    func makeArrowCone(dir: vec3, up: vec3)=> option<vertex>
+    {
+        let d = dir->unit;
+        let side = d->cross(up)->unit;
+        let side2 = d->cross(side)->unit;
+
+        let BASE_AT = 0.86;
+        let TIP_AT = 1.08;
+        let RADIUS = 0.09;
+        let SEGMENTS = 12;
+
+        let mut positions = []mut: vec<real>;
+        let mut indices = []mut: vec<int>;
+
+        // 顶点 0：锥尖
+        positions->add(d[0] * TIP_AT);
+        positions->add(d[1] * TIP_AT);
+        positions->add(d[2] * TIP_AT);
+        indices->add(0);
+
+        // 顶点 1..SEGMENTS：锥底圆环
+        for (let mut i = 0; i < SEGMENTS; i += 1)
+        {
+            let ang = 2. * mathf::PI * (i as real / SEGMENTS as real);
+            let offset = side * (mathf::cos(ang) * RADIUS) + side2 * (mathf::sin(ang) * RADIUS);
+            positions->add(d[0] * BASE_AT + offset[0]);
+            positions->add(d[1] * BASE_AT + offset[1]);
+            positions->add(d[2] * BASE_AT + offset[2]);
+            indices->add(i + 1);
+        }
+
+        // 三角形序列：（锥尖, 环 i, 环 i+1）
+        let mut triangles = []mut: vec<int>;
+        for (let mut i = 1; i < SEGMENTS; i += 1)
+        {
+            triangles->add(0);
+            triangles->add(i);
+            triangles->add(i + 1);
+        }
+        triangles->add(0);
+        triangles->add(SEGMENTS);
+        triangles->add(1);
+
+        return makeShape(vertex::type::TRIANGLES, positions, triangles);
+    }
+
+    // 平移/缩放游标：三根轴的线段与箭头
+    public let GIZMO_LINE_X = makeAxisLine((1., 0., 0.) as vec3);
+    public let GIZMO_LINE_Y = makeAxisLine((0., 1., 0.) as vec3);
+    public let GIZMO_LINE_Z = makeAxisLine((0., 0., 1.) as vec3);
+    public let GIZMO_CONE_X = makeArrowCone((1., 0., 0.) as vec3, (0., 1., 0.) as vec3);
+    public let GIZMO_CONE_Y = makeArrowCone((0., 1., 0.) as vec3, (0., 0., 1.) as vec3);
+    public let GIZMO_CONE_Z = makeArrowCone((0., 0., 1.) as vec3, (1., 0., 0.) as vec3);
+
+    // 旋转游标：围绕 X/Y/Z 轴的三个圆环
+    public let GIZMO_RING_AROUND_X = makeRing(
+        (0., 1., 0.) as vec3, (0., 0., 1.) as vec3, 64);
+    public let GIZMO_RING_AROUND_Y = makeRing(
+        (0., 0., 1.) as vec3, (1., 0., 0.) as vec3, 64);
+    public let GIZMO_RING_AROUND_Z = makeRing(
+        (1., 0., 0.) as vec3, (0., 1., 0.) as vec3, 64);
 }

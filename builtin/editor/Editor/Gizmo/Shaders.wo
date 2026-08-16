@@ -8,4 +8,9 @@ namespace JEEditor::Editor::Gizmo::Shaders
     public let SELECTED_ENTITY_HILIGHT = shader::load(
         option::none,
         "!/builtin/editor/Editor/Gizmo/Shaders/SelectedEntity.shader");
+
+    // 变换游标使用的纯色着色器，颜色通过 JE_COLOR 逐次绘制设置
+    public let GIZMO_SOLID = shader::load(
+        option::none,
+        "!/builtin/editor/Editor/Gizmo/Shaders/GizmoSolid.shader");
 }

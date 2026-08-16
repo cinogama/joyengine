@@ -35,6 +35,7 @@ import Gizmo::Shapes;
 import Browser;
 import Practice;
 import Action::IAction;
+import Action::ModifyComponentMember;
 
 using std;
 
@@ -91,6 +92,40 @@ namespace JEEditor::Editor
         
         // Gizmo
         m_gizmo_draw_branch: rendchain_branch,
+
+        // ---- 变换游标（操作手柄）状态 ----
+        m_gizmo_mode: mut GizmoMode,
+        m_gizmo_space: mut GizmoSpace,
+
+        m_gizmo_hover_handle: mut int,
+        m_gizmo_drag_handle: mut int,
+        m_gizmo_dragging: mut bool,
+
+        // 拖拽开始时捕获的快照（世界空间）：
+        m_gizmo_drag_euid: mut entity::internal::euid_t,
+        m_gizmo_drag_origin: mut vec3,
+        m_gizmo_drag_rotation: mut quat,
+        m_gizmo_drag_axis: mut vec3,
+        m_gizmo_drag_plane_normal: mut vec3,
+        m_gizmo_drag_plane_hit: mut vec3,
+        m_gizmo_drag_basis_a: mut vec3,
+        m_gizmo_drag_basis_b: mut vec3,
+        m_gizmo_drag_start_param: mut real,
+        m_gizmo_drag_start_angle: mut real,
+        m_gizmo_drag_start_pos: mut vec3,
+        m_gizmo_drag_start_rot: mut quat,
+        m_gizmo_drag_start_scale: mut vec3,
+        // 撤销记录所需的目标组件/成员与旧值序列
+        m_gizmo_drag_undo_component: mut string,
+        m_gizmo_drag_undo_member: mut string,
+        m_gizmo_drag_undo_old_value: mut string,
+
+        // 本帧绘制游标所需的快照（由 updateTransformGizmo 写入）：
+        m_gizmo_draw_visible: mut bool,
+        m_gizmo_draw_origin: mut vec3,
+        m_gizmo_draw_rotation: mut quat,
+        m_gizmo_draw_size: mut real,
+        m_gizmo_draw_center_size: mut real,
     }
     {
         let TRASNLATION_SYSTEM_TYPE =
@@ -112,6 +147,42 @@ namespace JEEditor::Editor
         let CAMERA_PITCH_LIMIT = 88.;
         let CAMERA_DEFAULT_ORBIT_DISTANCE = 10.;
         let CAMERA_MIN_ORTHO_SCALE = 0.05;
+
+        // ---- 变换游标参数 ----
+        let GIZMO_SIZE_PX = 96.;              // 游标轴在屏幕上的长度（像素）
+        let GIZMO_HIT_PX = 10.;               // 手柄命中判定半径（像素）
+        let GIZMO_RING_RADIUS_RATIO = 1.15;   // 旋转圆环半径相对轴长的比例
+        let GIZMO_SCALE_AXIS_RATIO = 0.85;    // 缩放游标轴长相对平移轴长的比例
+        let GIZMO_CENTER_SIZE_PX = 16.;       // 中央手柄边长（像素）
+        let GIZMO_SCALE_FACTOR_MIN = 0.01;
+        let GIZMO_SCALE_FACTOR_MAX = 100.;
+
+        // 手柄编号：三根轴 + 中央手柄（屏幕平面移动 / 整体缩放）
+        let GIZMO_HANDLE_NONE = -1;
+        let GIZMO_HANDLE_X = 0;
+        let GIZMO_HANDLE_Y = 1;
+        let GIZMO_HANDLE_Z = 2;
+        let GIZMO_HANDLE_CENTER = 3;
+
+        // 游标各部件的颜色（RGBA），悬停/拖拽时高亮为黄色
+        let GIZMO_COLOR_X = (0.92, 0.32, 0.32, 0.9);
+        let GIZMO_COLOR_Y = (0.38, 0.85, 0.38, 0.9);
+        let GIZMO_COLOR_Z = (0.38, 0.56, 0.98, 0.9);
+        let GIZMO_COLOR_CENTER = (0.85, 0.85, 0.85, 0.9);
+        let GIZMO_COLOR_HOVER = (1., 1., 0.25, 1.);
+
+        enum GizmoMode
+        {
+            TRANSLATE,
+            ROTATE,
+            SCALE,
+        }
+        // 平移/旋转支持 Local/Global 两种参考系；缩放仅支持 Local
+        enum GizmoSpace
+        {
+            LOCAL,
+            GLOBAL,
+        }
         
         enum CloseRequest
         {
@@ -173,6 +244,36 @@ namespace JEEditor::Editor
                 m_rotation_y = mut quat::ident,
                 
                 m_gizmo_draw_branch = graphic_uhost->alloc_branch(),
+
+                m_gizmo_mode = mut GizmoMode::TRANSLATE,
+                m_gizmo_space = mut GizmoSpace::GLOBAL,
+
+                m_gizmo_hover_handle = mut GIZMO_HANDLE_NONE,
+                m_gizmo_drag_handle = mut GIZMO_HANDLE_NONE,
+                m_gizmo_dragging = mut false,
+
+                m_gizmo_drag_euid = mut (0h as entity::internal::euid_t),
+                m_gizmo_drag_origin = mut ((0., 0., 0.) as vec3),
+                m_gizmo_drag_rotation = mut quat::ident,
+                m_gizmo_drag_axis = mut ((1., 0., 0.) as vec3),
+                m_gizmo_drag_plane_normal = mut ((0., 0., 1.) as vec3),
+                m_gizmo_drag_plane_hit = mut ((0., 0., 0.) as vec3),
+                m_gizmo_drag_basis_a = mut ((1., 0., 0.) as vec3),
+                m_gizmo_drag_basis_b = mut ((0., 1., 0.) as vec3),
+                m_gizmo_drag_start_param = mut 0.,
+                m_gizmo_drag_start_angle = mut 0.,
+                m_gizmo_drag_start_pos = mut ((0., 0., 0.) as vec3),
+                m_gizmo_drag_start_rot = mut quat::ident,
+                m_gizmo_drag_start_scale = mut ((1., 1., 1.) as vec3),
+                m_gizmo_drag_undo_component = mut "",
+                m_gizmo_drag_undo_member = mut "",
+                m_gizmo_drag_undo_old_value = mut "",
+
+                m_gizmo_draw_visible = mut false,
+                m_gizmo_draw_origin = mut ((0., 0., 0.) as vec3),
+                m_gizmo_draw_rotation = mut quat::ident,
+                m_gizmo_draw_size = mut 1.,
+                m_gizmo_draw_center_size = mut 0.1,
             };
         }
         
@@ -320,41 +421,105 @@ namespace JEEditor::Editor
                 // 绘制被选中的实体
                 do try!{
                     try! selected_euid = self.m_selected_entity_id;
-                    for (let e : self.m_selectable_entity_selector)
-                    {
-                        match (e->internal::get_entity_uid)
-                        {
-                            none?;
-                            value(euid)?
-                                if (selected_euid == euid)
-                                {
-                                    let trans = e->towoo::get_component:<Transform::Translation>->unwrap;
-                                    let texture = e->towoo::get_component:<Renderer::Textures>;
-                                    
-                                    drawGizmo(
-                                        trans->get_global_pos,
-                                        trans->get_global_rot,
-                                        trans->get_local_scale,
-                                        SELECTED_ENTITY_HILIGHT,
-                                        option::value <|
-                                            texture
-                                                =>> \textures = textures->get_texture(0)
-                                                    ->> \texture_instance = (
-                                                            texture_instance,
-                                                            textures.tiling->get,
-                                                            textures.offset->get,)
-                                                        ;
-                                                    ;
-                                                -> or((WHITE, (1., 1.) as vec2, (0.,0.) as vec2)),
-                                            DEFAULT_SQUARE_SHAPE);
-                                            
-                                    break;
-                                }
-                        }
-                    }
+                    try! selected_entity = self->findEntityByEuid(selected_euid);
+
+                    let trans = selected_entity->towoo::get_component:<Transform::Translation>->unwrap;
+                    let texture = selected_entity->towoo::get_component:<Renderer::Textures>;
+
+                    drawGizmo(
+                        trans->get_global_pos,
+                        trans->get_global_rot,
+                        trans->get_local_scale,
+                        SELECTED_ENTITY_HILIGHT,
+                        option::value <|
+                            texture
+                                =>> \textures = textures->get_texture(0)
+                                    ->> \texture_instance = (
+                                            texture_instance,
+                                            textures.tiling->get,
+                                            textures.offset->get,)
+                                        ;
+                                    ;
+                                -> or((WHITE, (1., 1.) as vec2, (0.,0.) as vec2)),
+                        DEFAULT_SQUARE_SHAPE);
                     return_value!;
                 };
-                
+
+                // 绘制变换游标（纯色，颜色由每次绘制的 JE_COLOR 提供）
+                func drawSolid(
+                    pos: vec3,
+                    rot: quat,
+                    scale: vec3,
+                    shape: option<vertex>,
+                    color: (real, real, real, real))
+                {
+                    do try!{
+                        try! shape_instance = shape;
+                        try! shader_instance = GIZMO_SOLID;
+
+                        let model = mat4::transform(pos, rot, scale);
+                        let model_view = camera_projection->get_view_mat * model;
+                        let model_view_proj = camera_projection->get_view_proj_mat * model;
+
+                        let draw_action = gizmo_rend_chain->draw(
+                            shader_instance, shape_instance, option::none);
+                        draw_action->set_uniform_mat4x4(shader_instance, "JE_M", model as raw mat4);
+                        draw_action->set_uniform_mat4x4(shader_instance, "JE_MV", model_view as raw mat4);
+                        draw_action->set_uniform_mat4x4(shader_instance, "JE_MVP", model_view_proj as raw mat4);
+                        draw_action->set_uniform(shader_instance, "JE_COLOR", color);
+                        return_value!;
+                    };
+                }
+
+                if (self.m_gizmo_draw_visible)
+                {
+                    let origin = self.m_gizmo_draw_origin;
+                    let orientation = self.m_gizmo_draw_rotation;
+                    let active_handle = self.m_gizmo_dragging
+                        ? self.m_gizmo_drag_handle
+                        | self.m_gizmo_hover_handle;
+
+                    let axis_colors = [
+                        (active_handle == GIZMO_HANDLE_X) ? GIZMO_COLOR_HOVER | GIZMO_COLOR_X,
+                        (active_handle == GIZMO_HANDLE_Y) ? GIZMO_COLOR_HOVER | GIZMO_COLOR_Y,
+                        (active_handle == GIZMO_HANDLE_Z) ? GIZMO_COLOR_HOVER | GIZMO_COLOR_Z,
+                    ];
+
+                    if (self.m_gizmo_mode == GizmoMode::ROTATE)
+                    {
+                        let ring_size = self.m_gizmo_draw_size * GIZMO_RING_RADIUS_RATIO;
+                        let ring_scale = (ring_size, ring_size, ring_size) as vec3;
+
+                        drawSolid(origin, orientation, ring_scale, GIZMO_RING_AROUND_X, axis_colors[0]);
+                        drawSolid(origin, orientation, ring_scale, GIZMO_RING_AROUND_Y, axis_colors[1]);
+                        drawSolid(origin, orientation, ring_scale, GIZMO_RING_AROUND_Z, axis_colors[2]);
+                    }
+                    else
+                    {
+                        let axis_len = (self.m_gizmo_mode == GizmoMode::SCALE)
+                            ? self.m_gizmo_draw_size * GIZMO_SCALE_AXIS_RATIO
+                            | self.m_gizmo_draw_size;
+                        let axis_scale = (axis_len, axis_len, axis_len) as vec3;
+
+                        let lines = [GIZMO_LINE_X, GIZMO_LINE_Y, GIZMO_LINE_Z];
+                        let cones = [GIZMO_CONE_X, GIZMO_CONE_Y, GIZMO_CONE_Z];
+                        for (let mut axis = 0; axis < 3; axis += 1)
+                        {
+                            drawSolid(origin, orientation, axis_scale, lines[axis], axis_colors[axis]);
+                            drawSolid(origin, orientation, axis_scale, cones[axis], axis_colors[axis]);
+                        }
+
+                        // 中央手柄：屏幕平面移动 / 整体缩放
+                        let center = self.m_gizmo_draw_center_size;
+                        drawSolid(
+                            origin, orientation, (center, center, center) as vec3,
+                            DEFAULT_SQUARE_SHAPE,
+                            (active_handle == GIZMO_HANDLE_CENTER)
+                                ? GIZMO_COLOR_HOVER
+                                | GIZMO_COLOR_CENTER);
+                    }
+                }
+
                 return_value!;
             };
         }
@@ -395,14 +560,17 @@ namespace JEEditor::Editor
                 }
             }
             
-            if (IsWindowFocusedFlags(FocusedFlags::ImGuiFocusedFlags_RootAndChildWindows))
+            let viewport_focused =
+                IsWindowFocusedFlags(FocusedFlags::ImGuiFocusedFlags_RootAndChildWindows);
+            if (viewport_focused)
                 s_last_focusd_world_view = option::value(self);
-                
+
             let debug_camera = self.m_debug_camera_selector->iter |> collect->get(0);
-            
+
             self->updateWalkCameraFramebuffer(debug_camera);
-            
+
             let mut viewport_hovered = false;
+            let mut viewport_rect = option::none: option<(ImVec2, ImVec2)>;
             match (self.m_editor_walk_camera_frame_buffer=>>\fb = fb->attachment(0);)
             {
                 none?
@@ -414,17 +582,45 @@ namespace JEEditor::Editor
                     let (w, h) = GetContentRegionAvail();
                     ImageSize(fbtex, w, h);
                     viewport_hovered = IsItemHovered();
+                    viewport_rect = option::value <| GetItemRect();
                 }
             }
-            
+
+            // 变换游标工具栏（覆盖绘制在视口左上角）
+            let mut toolbar_hovered = false;
+            match (viewport_rect)
+            {
+                none?;
+                value((rect_min, _))?
+                    toolbar_hovered = self->drawGizmoToolbar(
+                        rect_min, viewport_focused && viewport_hovered);
+            }
+
             let now = time();
             let dt = mathf::clamp(now - self.m_last_time, 0., 0.1);
             self.m_last_time = now;
-            self->updateCameraControl(debug_camera, dt, viewport_hovered);
-            
+
+            // 游标交互需先于摄像机控制，以抑制点击选中/摄像机操作
+            match (viewport_rect)
+            {
+                none?;
+                value((rect_min, rect_max))?
+                    self->updateTransformGizmo(
+                        debug_camera,
+                        viewport_hovered && !toolbar_hovered,
+                        rect_min,
+                        (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
+            }
+
+            self->updateCameraControl(
+                debug_camera,
+                dt,
+                viewport_hovered && !toolbar_hovered,
+                viewport_rect);
+
             // Draw gizmo here.
             self->drawGizmos(debug_camera);
-            
+
             return self.m_close == CloseRequest::NORMALLY;
         }
         
@@ -561,35 +757,43 @@ namespace JEEditor::Editor
             self: WorldEditorViewport,
             debug_camera: option<entity>,
             dt: real,
-            hovered: bool)=> void
+            hovered: bool,
+            viewport_rect: option<(ImVec2, ImVec2)>)=> void
         {
             if (debug_camera->is_none)
                 return;
-                
+
             let cam = debug_camera->unwrap;
             let pos = cam->towoo::get_component:<Transform::LocalPosition>->unwrap;
             let rot = cam->towoo::get_component:<Transform::LocalRotation>->unwrap;
             let trans = cam->towoo::get_component:<Transform::Translation>->unwrap;
             let proj = cam->towoo::get_component:<Camera::Projection>->unwrap;
-            
+
             let perspectiveProjection = cam->towoo::get_component:<Camera::PerspectiveProjection>;
-            
-            if (hovered && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left))
+
+            // 游标手柄被悬停/拖拽时，点击不用于选取实体
+            if (hovered && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left)
+                && self.m_gizmo_hover_handle == GIZMO_HANDLE_NONE)
             {
-                let (rect_min, rect_max) = GetItemRect();
-                
-                let mouse_diff = GetMousePos() as vec2 - rect_min as vec2;
-                let viewport_size = rect_max as vec2 - rect_min as vec2;
-                
-                let (vpx, vpy) =
-                    ((mouse_diff / viewport_size) - (0.5, 0.5) as vec2) * 2.;
-                    
-                self->sendMouseClickToChoiceEntityRequest(
-                    towoo::ray::from(
-                        trans,
-                        proj,
-                        (vpx, -vpy) as vec2,
-                        perspectiveProjection->is_none));
+                match (viewport_rect)
+                {
+                    none?;
+                    value((rect_min, rect_max))?
+                    {
+                        let mouse_diff = GetMousePos() as vec2 - rect_min as vec2;
+                        let viewport_size = rect_max as vec2 - rect_min as vec2;
+
+                        let (vpx, vpy) =
+                            ((mouse_diff / viewport_size) - (0.5, 0.5) as vec2) * 2.;
+
+                        self->sendMouseClickToChoiceEntityRequest(
+                            towoo::ray::from(
+                                trans,
+                                proj,
+                                (vpx, -vpy) as vec2,
+                                perspectiveProjection->is_none));
+                    }
+                }
             }
             
             match (perspectiveProjection)
@@ -766,6 +970,705 @@ namespace JEEditor::Editor
             if (moved)
                 pos.pos->set(newPos);
         }
+
+        // ==========================
+        //  变换游标（操作手柄）
+        // ==========================
+
+        func gizmoUnitAxis(axis: int)=> vec3
+        {
+            if (axis == GIZMO_HANDLE_Y)
+                return (0., 1., 0.) as vec3;
+            if (axis == GIZMO_HANDLE_Z)
+                return (0., 0., 1.) as vec3;
+            return (1., 0., 0.) as vec3;
+        }
+
+        func gizmoMat4MulPoint(m: mat4, p: vec3)=> vec3
+        {
+            let h = m * ((p[0], p[1], p[2], 1.) as vec4);
+            if (h[3] == 0.)
+                return (h[0], h[1], h[2]) as vec3;
+            return (h[0] / h[3], h[1] / h[3], h[2] / h[3]) as vec3;
+        }
+
+        // 世界坐标 -> 视口像素坐标（rect 为显示区域）
+        func gizmoWorldToScreen(
+            view_proj: mat4, p: vec3, rect_min: vec2, rect_size: vec2)=> vec2
+        {
+            let ndc = gizmoMat4MulPoint(view_proj, p);
+            return (
+                (ndc[0] * 0.5 + 0.5) * rect_size[0] + rect_min[0],
+                (0.5 - ndc[1] * 0.5) * rect_size[1] + rect_min[1],
+            ) as vec2;
+        }
+
+        // 射线与平面求交（平面过 plane_point、法线 normal）
+        func gizmoRayPlaneHit(
+            ray_origin: vec3, ray_dir: vec3, normal: vec3, plane_point: vec3)=> option<vec3>
+        {
+            let denom = ray_dir->dot(normal);
+            if (mathf::abs(denom) < 0.0001)
+                return option::none;
+            let t = (plane_point - ray_origin)->dot(normal) / denom;
+            if (t < 0.)
+                return option::none;
+            return option::value(ray_origin + ray_dir * t);
+        }
+
+        // 过 o、方向 d 的轴线与鼠标射线最近点处的轴线参数（d 需为单位向量）
+        func gizmoClosestAxisParam(
+            o: vec3, d: vec3, ray_origin: vec3, ray_dir: vec3)=> option<real>
+        {
+            let w0 = o - ray_origin;
+            let b = d->dot(ray_dir);
+            let dd = d->dot(w0);
+            let e = ray_dir->dot(w0);
+            let denom = 1. - b * b;
+            if (denom < 0.0001)
+                return option::none;
+            return option::value((b * e - dd) / denom);
+        }
+
+        func gizmoScreenDistToSegment(p: vec2, a: vec2, b: vec2)=> real
+        {
+            let ab = b - a;
+            let len2 = ab->dot(ab);
+            if (len2 < 0.000001)
+                return (p - a)->length;
+            let t = mathf::clamp((p - a)->dot(ab) / len2, 0., 1.);
+            return (p - (a + ab * t))->length;
+        }
+
+        // 与法线 n 正交的正交基（用于旋转平面内的角度计算）
+        func gizmoPlaneBasis(n: vec3)=> (vec3, vec3)
+        {
+            let t = (mathf::abs(n[1]) < 0.9)
+                ? ((0., 1., 0.) as vec3)
+                | ((1., 0., 0.) as vec3);
+            let e1 = n->cross(t)->unit;
+            let e2 = n->cross(e1);
+            return (e1, e2);
+        }
+
+        // 按钮序列化组件成员值（供撤销记录使用）
+        func serializeMemberValue(
+            e: entity, component_type_name: string, member_name: string)=> option<string>
+        {
+            return or(option::none: option<string>) <| try!{
+                try! component_type = typeinfo::load(component_type_name);
+                try! component_instance = e->get_component(component_type);
+                try! (member_type, member_addr) = component_instance->get_member(member_name);
+                return_value! towoo::unsafe::dynamic_parser::save(member_type, member_addr);
+            };
+        }
+
+        func findEntityByEuid(
+            self: WorldEditorViewport, euid: entity::internal::euid_t)=> option<entity>
+        {
+            for (let e : self.m_selectable_entity_selector)
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(entity_uid)?
+                        if (entity_uid == euid)
+                            return option::value(e);
+                }
+            }
+            return option::none;
+        }
+
+        // 估算“每像素对应的世界单位数”，让游标保持近似恒定的屏幕尺寸
+        func gizmoWorldPerPixel(
+            camera_entity: entity,
+            camera_trans: Transform::Translation,
+            view_proj: mat4,
+            gizmo_pos: vec3,
+            rect_size: vec2)=> real
+        {
+            match (camera_entity->towoo::get_component:<Camera::PerspectiveProjection>())
+            {
+                value(persp)?
+                {
+                    let dist = (gizmo_pos - camera_trans->get_global_pos)->length;
+                    let half_fov_rad = persp.angle->get * 0.5 * mathf::DEG2RAD;
+                    return 2. * dist * mathf::tan(half_fov_rad) / mathf::abs(rect_size[1]);
+                }
+                none?
+                    match (camera_entity->towoo::get_component:<Camera::OrthoProjection>())
+                    {
+                        value(ortho)?
+                            // 正交投影纵向可视半高为 ORTHO_PROJECTION_RATIO / scale（取 5.0）
+                            return 10. / ortho.scale->get / mathf::abs(rect_size[1]);
+                        none?;
+                    }
+            }
+
+            // 未知投影类型时，用摄像机右方向在屏幕上的投影长度估算
+            let cam_right = camera_trans->get_global_rot * ((1., 0., 0.) as vec3);
+            let p0 = gizmoWorldToScreen(view_proj, gizmo_pos, (0., 0.) as vec2, rect_size);
+            let p1 = gizmoWorldToScreen(
+                view_proj, gizmo_pos + cam_right, (0., 0.) as vec2, rect_size);
+            let pixels = (p1 - p0)->length;
+            if (pixels < 1.)
+                return 0.001;
+            return 1. / pixels;
+        }
+
+        // 检测当前鼠标悬停的手柄（屏幕空间距离判定），返回手柄编号
+        func pickGizmoHandle(
+            self: WorldEditorViewport,
+            view_proj: mat4,
+            origin: vec3,
+            orientation: quat,
+            gizmo_size: real,
+            mouse: vec2,
+            rect_min: vec2,
+            rect_size: vec2)=> int
+        {
+            let center_screen = gizmoWorldToScreen(view_proj, origin, rect_min, rect_size);
+
+            // 中央手柄（屏幕平面移动 / 整体缩放）优先
+            if (self.m_gizmo_mode != GizmoMode::ROTATE
+                && gizmoScreenDistToSegment(mouse, center_screen, center_screen) < GIZMO_HIT_PX)
+                return GIZMO_HANDLE_CENTER;
+
+            let mut best = GIZMO_HANDLE_NONE;
+            let mut best_dist = GIZMO_HIT_PX;
+
+            if (self.m_gizmo_mode == GizmoMode::ROTATE)
+            {
+                let ring_radius = gizmo_size * GIZMO_RING_RADIUS_RATIO;
+                let samples = 32;
+                for (let mut axis = 0; axis < 3; axis += 1)
+                {
+                    let ring_normal = orientation * gizmoUnitAxis(axis);
+                    let (ba, bb) = gizmoPlaneBasis(ring_normal);
+                    let mut prev = gizmoWorldToScreen(
+                        view_proj, origin + ba * ring_radius, rect_min, rect_size);
+                    for (let mut s = 1; s <= samples; s += 1)
+                    {
+                        let ang = 2. * mathf::PI * (s as real / samples as real);
+                        let cur = gizmoWorldToScreen(
+                            view_proj,
+                            origin + (ba * mathf::cos(ang) + bb * mathf::sin(ang)) * ring_radius,
+                            rect_min, rect_size);
+                        let d = gizmoScreenDistToSegment(mouse, prev, cur);
+                        if (d < best_dist)
+                        {
+                            best_dist = d;
+                            best = axis;
+                        }
+                        prev = cur;
+                    }
+                }
+            }
+            else
+            {
+                let axis_len = (self.m_gizmo_mode == GizmoMode::SCALE)
+                    ? gizmo_size * GIZMO_SCALE_AXIS_RATIO
+                    | gizmo_size;
+                for (let mut axis = 0; axis < 3; axis += 1)
+                {
+                    let tip = origin + (orientation * gizmoUnitAxis(axis)) * axis_len;
+                    let tip_screen = gizmoWorldToScreen(view_proj, tip, rect_min, rect_size);
+                    let d = gizmoScreenDistToSegment(mouse, center_screen, tip_screen);
+                    if (d < best_dist)
+                    {
+                        best_dist = d;
+                        best = axis;
+                    }
+                }
+            }
+            return best;
+        }
+
+        // 每帧更新游标状态：悬停检测、拖拽开始/进行/结束
+        func updateTransformGizmo(
+            self: WorldEditorViewport,
+            debug_camera: option<entity>,
+            hovered: bool,
+            rect_min: ImVec2,
+            rect_size: ImVec2)=> void
+        {
+            self.m_gizmo_draw_visible = false;
+
+            // 松开左键时结束拖拽并提交撤销记录
+            if (self.m_gizmo_dragging
+                && !IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left))
+            {
+                self->finishGizmoDrag();
+                self.m_gizmo_dragging = false;
+                self.m_gizmo_drag_handle = GIZMO_HANDLE_NONE;
+            }
+
+            if (debug_camera->is_none || self.m_selected_entity_id->is_none)
+            {
+                self.m_gizmo_hover_handle = GIZMO_HANDLE_NONE;
+                return;
+            }
+
+            do try!{
+                try! camera_entity = debug_camera;
+                try! camera_trans =
+                    camera_entity->towoo::get_component:<Transform::Translation>();
+                try! camera_proj =
+                    camera_entity->towoo::get_component:<Camera::Projection>();
+                try! selected_euid = self.m_selected_entity_id;
+                try! selected_entity = self->findEntityByEuid(selected_euid);
+                try! trans =
+                    selected_entity->towoo::get_component:<Transform::Translation>();
+
+                let rmin = rect_min as vec2;
+                let rsize = rect_size as vec2;
+                if (rsize[0] <= 0. || rsize[1] <= 0.)
+                    return_value!;
+
+                let lpos =
+                    selected_entity->towoo::get_component:<Transform::LocalPosition>();
+                let lrot =
+                    selected_entity->towoo::get_component:<Transform::LocalRotation>();
+                let lscale =
+                    selected_entity->towoo::get_component:<Transform::LocalScale>();
+
+                // 当前模式所需的组件缺失时（如缺少 LocalScale），不显示游标
+                let mut mode_ok = true;
+                if (self.m_gizmo_mode == GizmoMode::TRANSLATE && lpos->is_none)
+                    mode_ok = false;
+                else if (self.m_gizmo_mode == GizmoMode::ROTATE && lrot->is_none)
+                    mode_ok = false;
+                else if (self.m_gizmo_mode == GizmoMode::SCALE && lscale->is_none)
+                    mode_ok = false;
+                if (!mode_ok)
+                    return_value!;
+
+                let cam_pos = camera_trans->get_global_pos;
+                let cam_forward = camera_trans->get_global_rot * ((0., 0., 1.) as vec3);
+                let view_proj = camera_proj->get_view_proj_mat;
+
+                let gizmo_pos = trans->get_global_pos;
+                let gizmo_rot = trans->get_global_rot;
+
+                // LOCAL 模式下游标跟随实体姿态；GLOBAL 模式对齐世界轴；
+                // 缩放只支持 Local。拖拽期间冻结姿态，避免游标跟着实体转动。
+                let is_dragging = self.m_gizmo_dragging;
+                let mut origin = gizmo_pos;
+                let mut orientation = quat::ident;
+                if (is_dragging)
+                {
+                    origin = self.m_gizmo_drag_origin;
+                    orientation = self.m_gizmo_drag_rotation;
+                }
+                else if (self.m_gizmo_mode == GizmoMode::SCALE
+                    || self.m_gizmo_space == GizmoSpace::LOCAL)
+                {
+                    orientation = gizmo_rot;
+                }
+
+                let world_per_pixel = gizmoWorldPerPixel(
+                    camera_entity, camera_trans, view_proj, origin, rsize);
+
+                // 写入本帧绘制快照
+                self.m_gizmo_draw_visible = true;
+                self.m_gizmo_draw_origin = origin;
+                self.m_gizmo_draw_rotation = orientation;
+                self.m_gizmo_draw_size = GIZMO_SIZE_PX * world_per_pixel;
+                self.m_gizmo_draw_center_size = GIZMO_CENTER_SIZE_PX * world_per_pixel;
+
+                let mouse = GetMousePos() as vec2;
+                let mouse_local = (mouse - rmin) / rsize;
+                let mouse_ndc = (mouse_local - (0.5, 0.5) as vec2) * 2.;
+
+                let mouse_ray = towoo::ray::from(
+                    camera_trans, camera_proj,
+                    (mouse_ndc[0], -mouse_ndc[1]) as vec2,
+                    camera_entity->towoo::get_component:<Camera::PerspectiveProjection>->is_none);
+                let ray_origin = mouse_ray->origin;
+                let ray_dir = mouse_ray->direction;
+
+                // 拖拽进行中：每帧按当前射线应用变换
+                if (is_dragging)
+                {
+                    self.m_gizmo_hover_handle = self.m_gizmo_drag_handle;
+                    self->applyGizmoDrag(
+                        trans, lpos, lrot, lscale, ray_origin, ray_dir);
+                    return_value!;
+                }
+
+                self.m_gizmo_hover_handle = GIZMO_HANDLE_NONE;
+
+                let hoverable = hovered
+                    && !self.m_is_look_active
+                    && !self.m_is_pan_active
+                    && !self.m_is_orbit_active
+                    // 透视摄像机下，游标须位于摄像机前方
+                    && ((origin - cam_pos)->dot(cam_forward) > 0.);
+
+                if (hoverable)
+                    self.m_gizmo_hover_handle = self->pickGizmoHandle(
+                        view_proj, origin, orientation,
+                        self.m_gizmo_draw_size, mouse, rmin, rsize);
+
+                // 悬停手柄上按下左键：开始拖拽
+                if (self.m_gizmo_hover_handle != GIZMO_HANDLE_NONE
+                    && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left))
+                {
+                    self->beginGizmoDrag(
+                        selected_entity, selected_euid, trans, lpos, lrot, lscale,
+                        orientation, origin,
+                        cam_forward, ray_origin, ray_dir);
+                }
+
+                return_value!;
+            };
+        }
+
+        // 开始一次游标拖拽：捕获快照，条件不满足时放弃
+        func beginGizmoDrag(
+            self: WorldEditorViewport,
+            selected_entity: entity,
+            selected_euid: entity::internal::euid_t,
+            trans: Transform::Translation,
+            lpos: option<Transform::LocalPosition>,
+            lrot: option<Transform::LocalRotation>,
+            lscale: option<Transform::LocalScale>,
+            orientation: quat,
+            origin: vec3,
+            cam_forward: vec3,
+            ray_origin: vec3,
+            ray_dir: vec3)=> void
+        {
+            let handle = self.m_gizmo_hover_handle;
+
+            let mut ok = true;
+
+            self.m_gizmo_dragging = true;
+            self.m_gizmo_drag_handle = handle;
+            self.m_gizmo_drag_euid = selected_euid;
+            self.m_gizmo_drag_origin = origin;
+            self.m_gizmo_drag_rotation = orientation;
+            self.m_gizmo_drag_axis = orientation * gizmoUnitAxis(handle);
+            self.m_gizmo_drag_start_pos = trans->get_global_pos;
+            self.m_gizmo_drag_start_rot = trans->get_global_rot;
+            self.m_gizmo_drag_undo_component = "";
+            self.m_gizmo_drag_undo_member = "";
+            self.m_gizmo_drag_undo_old_value = "";
+
+            if (self.m_gizmo_mode == GizmoMode::TRANSLATE)
+            {
+                match (lpos)
+                {
+                    none? ok = false;
+                    value(_)?
+                    {
+                        self.m_gizmo_drag_undo_component = "Transform::LocalPosition";
+                        self.m_gizmo_drag_undo_member = "pos";
+                    }
+                }
+
+                if (ok)
+                {
+                    if (handle == GIZMO_HANDLE_CENTER)
+                    {
+                        // 屏幕平面移动：以起始点为中心、面向摄像机的平面
+                        self.m_gizmo_drag_plane_normal = cam_forward;
+                        match (gizmoRayPlaneHit(ray_origin, ray_dir, cam_forward, origin))
+                        {
+                            none? ok = false;
+                            value(hit)? self.m_gizmo_drag_plane_hit = hit;
+                        }
+                    }
+                    else
+                    {
+                        match (gizmoClosestAxisParam(
+                                origin, self.m_gizmo_drag_axis, ray_origin, ray_dir))
+                        {
+                            none? ok = false;
+                            value(t0)? self.m_gizmo_drag_start_param = t0;
+                        }
+                    }
+                }
+            }
+            else if (self.m_gizmo_mode == GizmoMode::ROTATE)
+            {
+                match (lrot)
+                {
+                    none? ok = false;
+                    value(_)?
+                    {
+                        self.m_gizmo_drag_undo_component = "Transform::LocalRotation";
+                        self.m_gizmo_drag_undo_member = "rot";
+                    }
+                }
+
+                if (ok)
+                {
+                    let axis = self.m_gizmo_drag_axis;
+                    self.m_gizmo_drag_plane_normal = axis;
+                    match (gizmoRayPlaneHit(ray_origin, ray_dir, axis, origin))
+                    {
+                        none? ok = false;
+                        value(hit)?
+                        {
+                            self.m_gizmo_drag_plane_hit = hit;
+                            let (ba, bb) = gizmoPlaneBasis(axis);
+                            self.m_gizmo_drag_basis_a = ba;
+                            self.m_gizmo_drag_basis_b = bb;
+                            let v = hit - origin;
+                            self.m_gizmo_drag_start_angle =
+                                mathf::atan2(v->dot(bb), v->dot(ba));
+                        }
+                    }
+                }
+            }
+            else
+            {
+                match (lscale)
+                {
+                    none? ok = false;
+                    value(sc)?
+                    {
+                        self.m_gizmo_drag_start_scale = sc.scale->get;
+                        self.m_gizmo_drag_undo_component = "Transform::LocalScale";
+                        self.m_gizmo_drag_undo_member = "scale";
+                    }
+                }
+
+                if (ok)
+                {
+                    if (handle == GIZMO_HANDLE_CENTER)
+                    {
+                        self.m_gizmo_drag_plane_normal = cam_forward;
+                        match (gizmoRayPlaneHit(ray_origin, ray_dir, cam_forward, origin))
+                        {
+                            none? ok = false;
+                            value(hit)? self.m_gizmo_drag_plane_hit = hit;
+                        }
+                    }
+                    else
+                    {
+                        match (gizmoClosestAxisParam(
+                                origin, self.m_gizmo_drag_axis, ray_origin, ray_dir))
+                        {
+                            none? ok = false;
+                            value(t0)? self.m_gizmo_drag_start_param = t0;
+                        }
+                    }
+                }
+            }
+
+            // 记录撤销用的旧值
+            if (ok)
+            {
+                match (serializeMemberValue(
+                        selected_entity,
+                        self.m_gizmo_drag_undo_component,
+                        self.m_gizmo_drag_undo_member))
+                {
+                    none? ok = false;
+                    value(dat)? self.m_gizmo_drag_undo_old_value = dat;
+                }
+            }
+
+            if (!ok)
+            {
+                self.m_gizmo_dragging = false;
+                self.m_gizmo_drag_handle = GIZMO_HANDLE_NONE;
+            }
+        }
+
+        // 拖拽进行中：按当前鼠标射线应用平移/旋转/缩放
+        func applyGizmoDrag(
+            self: WorldEditorViewport,
+            trans: Transform::Translation,
+            lpos: option<Transform::LocalPosition>,
+            lrot: option<Transform::LocalRotation>,
+            lscale: option<Transform::LocalScale>,
+            ray_origin: vec3,
+            ray_dir: vec3)=> void
+        {
+            let handle = self.m_gizmo_drag_handle;
+
+            if (self.m_gizmo_mode == GizmoMode::TRANSLATE)
+            {
+                do try!{
+                    let mut new_pos = self.m_gizmo_drag_start_pos;
+                    if (handle == GIZMO_HANDLE_CENTER)
+                    {
+                        try! hit = gizmoRayPlaneHit(
+                            ray_origin, ray_dir,
+                            self.m_gizmo_drag_plane_normal,
+                            self.m_gizmo_drag_origin);
+                        new_pos = self.m_gizmo_drag_start_pos
+                            + (hit - self.m_gizmo_drag_plane_hit);
+                    }
+                    else
+                    {
+                        try! t = gizmoClosestAxisParam(
+                            self.m_gizmo_drag_origin, self.m_gizmo_drag_axis,
+                            ray_origin, ray_dir);
+                        new_pos = self.m_gizmo_drag_start_pos
+                            + self.m_gizmo_drag_axis * (t - self.m_gizmo_drag_start_param);
+                    }
+                    trans->set_global_pos(new_pos, lpos, lrot);
+                    return_value!;
+                };
+            }
+            else if (self.m_gizmo_mode == GizmoMode::ROTATE)
+            {
+                do try!{
+                    try! hit = gizmoRayPlaneHit(
+                        ray_origin, ray_dir,
+                        self.m_gizmo_drag_plane_normal,
+                        self.m_gizmo_drag_origin);
+
+                    let v = hit - self.m_gizmo_drag_origin;
+                    let angle = mathf::atan2(
+                        v->dot(self.m_gizmo_drag_basis_b),
+                        v->dot(self.m_gizmo_drag_basis_a));
+                    let delta_deg = (angle - self.m_gizmo_drag_start_angle) * mathf::RAD2DEG;
+
+                    // 绕（世界空间中的）环轴旋转；对 LOCAL 模式等价于在实体自身坐标系内旋转
+                    let delta_rot = quat::axis(self.m_gizmo_drag_plane_normal, delta_deg);
+                    trans->set_global_rot(delta_rot * self.m_gizmo_drag_start_rot, lrot);
+                    return_value!;
+                };
+            }
+            else
+            {
+                do try!{
+                    try! ls = lscale;
+
+                    let mut factor = 1.;
+                    if (handle == GIZMO_HANDLE_CENTER)
+                    {
+                        // 整体缩放：用平面命中点到游标原点的距离比例
+                        try! hit = gizmoRayPlaneHit(
+                            ray_origin, ray_dir,
+                            self.m_gizmo_drag_plane_normal,
+                            self.m_gizmo_drag_origin);
+                        let d0 = (self.m_gizmo_drag_plane_hit - self.m_gizmo_drag_origin)->length;
+                        let d1 = (hit - self.m_gizmo_drag_origin)->length;
+                        let ref = self.m_gizmo_draw_center_size * 0.5;
+                        factor = (d0 > ref)
+                            ? (d1 / d0)
+                            | (1. + (d1 - d0) / ref);
+                    }
+                    else
+                    {
+                        // 轴向缩放：用轴上参数比例；起始参数过小时退化为增量式
+                        try! t = gizmoClosestAxisParam(
+                            self.m_gizmo_drag_origin, self.m_gizmo_drag_axis,
+                            ray_origin, ray_dir);
+                        factor = (mathf::abs(self.m_gizmo_drag_start_param) > 0.0001)
+                            ? (t / self.m_gizmo_drag_start_param)
+                            | (1. + (t - self.m_gizmo_drag_start_param) / self.m_gizmo_draw_size);
+                    }
+                    factor = mathf::clamp(factor, GIZMO_SCALE_FACTOR_MIN, GIZMO_SCALE_FACTOR_MAX);
+
+                    let s = self.m_gizmo_drag_start_scale;
+                    let mut new_scale = s * factor;
+                    if (handle == GIZMO_HANDLE_X)
+                        new_scale = (s[0] * factor, s[1], s[2]) as vec3;
+                    else if (handle == GIZMO_HANDLE_Y)
+                        new_scale = (s[0], s[1] * factor, s[2]) as vec3;
+                    else if (handle == GIZMO_HANDLE_Z)
+                        new_scale = (s[0], s[1], s[2] * factor) as vec3;
+                    ls.scale->set(new_scale);
+                    return_value!;
+                };
+            }
+        }
+
+        // 结束拖拽：值有变化时发布一条可撤销的 Action
+        func finishGizmoDrag(self: WorldEditorViewport)=> void
+        {
+            if (self.m_gizmo_drag_undo_old_value == "")
+                return;
+
+            do try!{
+                try! selected_entity = self->findEntityByEuid(self.m_gizmo_drag_euid);
+                let new_value = serializeMemberValue(
+                    selected_entity,
+                    self.m_gizmo_drag_undo_component,
+                    self.m_gizmo_drag_undo_member)->or("");
+
+                if (new_value != "" && new_value != self.m_gizmo_drag_undo_old_value)
+                    self->doAction(ModifyComponentMember::create(
+                        self.m_gizmo_drag_euid,
+                        self.m_gizmo_drag_undo_component,
+                        self.m_gizmo_drag_undo_member,
+                        self.m_gizmo_drag_undo_old_value,
+                        new_value));
+                return_value!;
+            };
+        }
+
+        // 在视口左上角绘制变换游标工具栏；返回工具栏是否被悬停
+        func drawGizmoToolbar(
+            self: WorldEditorViewport, rect_min: ImVec2, input_active: bool)=> bool
+        {
+            SetCursorScreenPos((rect_min.0 + 8., rect_min.1 + 8.));
+
+            let mut toolbar_hovered = false;
+
+            if (RadioButton("移动", self.m_gizmo_mode == GizmoMode::TRANSLATE))
+                self.m_gizmo_mode = GizmoMode::TRANSLATE;
+            if (IsItemHovered())
+                toolbar_hovered = true;
+            SameLine();
+
+            if (RadioButton("旋转", self.m_gizmo_mode == GizmoMode::ROTATE))
+                self.m_gizmo_mode = GizmoMode::ROTATE;
+            if (IsItemHovered())
+                toolbar_hovered = true;
+            SameLine();
+
+            if (RadioButton("缩放", self.m_gizmo_mode == GizmoMode::SCALE))
+                self.m_gizmo_mode = GizmoMode::SCALE;
+            if (IsItemHovered())
+                toolbar_hovered = true;
+            SameLine();
+
+            // 缩放只支持 Local，处于缩放模式时不提供 Global 选项
+            if (self.m_gizmo_mode == GizmoMode::SCALE)
+            {
+                do RadioButton("Local", true);
+                if (IsItemHovered())
+                    toolbar_hovered = true;
+            }
+            else
+            {
+                if (RadioButton("Local", self.m_gizmo_space == GizmoSpace::LOCAL))
+                    self.m_gizmo_space = GizmoSpace::LOCAL;
+                if (IsItemHovered())
+                    toolbar_hovered = true;
+                SameLine();
+
+                if (RadioButton("Global", self.m_gizmo_space == GizmoSpace::GLOBAL))
+                    self.m_gizmo_space = GizmoSpace::GLOBAL;
+                if (IsItemHovered())
+                    toolbar_hovered = true;
+            }
+
+            // 快捷键（与 Unity 一致）：W/E/R 切换模式，G 切换 Local/Global
+            if (input_active && !toolbar_hovered && !self.m_gizmo_dragging)
+            {
+                if (IsKeyPressed(ImGuiKey::ImGuiKey_W, false))
+                    self.m_gizmo_mode = GizmoMode::TRANSLATE;
+                if (IsKeyPressed(ImGuiKey::ImGuiKey_E, false))
+                    self.m_gizmo_mode = GizmoMode::ROTATE;
+                if (IsKeyPressed(ImGuiKey::ImGuiKey_R, false))
+                    self.m_gizmo_mode = GizmoMode::SCALE;
+                if (IsKeyPressed(ImGuiKey::ImGuiKey_G, false))
+                    self.m_gizmo_space = (self.m_gizmo_space == GizmoSpace::LOCAL)
+                        ? GizmoSpace::GLOBAL
+                        | GizmoSpace::LOCAL;
+            }
+
+            return toolbar_hovered;
+        }
         
         // ==========================
         public func getEntitySelector(self: WorldEditorViewport)
@@ -871,18 +1774,20 @@ namespace JEEditor::Editor
                     Transform::Translation::type::typeinfo,
                     Transform::LocalPosition::type::typeinfo,
                     Transform::LocalRotation::type::typeinfo,
+                    Transform::LocalScale::type::typeinfo,
                     Transform::LocalToWorld::type::typeinfo,
                     Renderer::Shaders::type::typeinfo,
                     Renderer::Shape::type::typeinfo,
                 ]);
-                
+
             e->towoo::get_component:<Transform::LocalPosition>->unwrap.pos->set(
                 (0., 0., 1.) as vec3);
-                
+
             let e2 = new_world->add_entity([
                     Transform::Translation::type::typeinfo,
                     Transform::LocalPosition::type::typeinfo,
                     Transform::LocalRotation::type::typeinfo,
+                    Transform::LocalScale::type::typeinfo,
                     Transform::LocalToWorld::type::typeinfo,
                     Renderer::Shaders::type::typeinfo,
                     Renderer::Shape::type::typeinfo,
