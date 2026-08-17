@@ -534,6 +534,14 @@ namespace JEEditor::Editor
                         [ImGuiKey::ImGuiMod_Ctrl, ImGuiKey::ImGuiKey_Z], \= self.m_action_history->undo();)
                     ->shortCut(
                         [ImGuiKey::ImGuiMod_Ctrl, ImGuiKey::ImGuiKey_Y], \= self.m_action_history->redo();)
+                    ->shortCut(
+                        [ImGuiKey::ImGuiKey_W], \= self->switchGizmoModeByShortcut(GizmoMode::TRANSLATE);)
+                    ->shortCut(
+                        [ImGuiKey::ImGuiKey_E], \= self->switchGizmoModeByShortcut(GizmoMode::ROTATE);)
+                    ->shortCut(
+                        [ImGuiKey::ImGuiKey_R], \= self->switchGizmoModeByShortcut(GizmoMode::SCALE);)
+                    ->shortCut(
+                        [ImGuiKey::ImGuiKey_G], \= self->toggleGizmoSpaceByShortcut();)
                     ->finish();
         }
         public func onUpdate(self: WorldEditorViewport)
@@ -595,8 +603,7 @@ namespace JEEditor::Editor
             {
                 none?;
                 value((rect_min, _))?
-                    toolbar_hovered = self->drawGizmoToolbar(
-                        rect_min, viewport_focused && viewport_hovered);
+                    toolbar_hovered = self->drawGizmoToolbar(rect_min);
             }
 
             let now = time();
@@ -1608,9 +1615,32 @@ namespace JEEditor::Editor
             };
         }
 
+        // 快捷键切换游标模式（W/E/R）：正在操作调试摄像机（环视/平移/环绕，
+        // 此时 WASD 用于飞行移动）或游标拖拽进行中时不响应。
+        func switchGizmoModeByShortcut(self: WorldEditorViewport, mode: GizmoMode)=> void
+        {
+            if (self.m_is_look_active || self.m_is_pan_active || self.m_is_orbit_active
+                || self.m_gizmo_dragging)
+                return;
+            self.m_gizmo_mode = mode;
+        }
+
+        // 快捷键切换 Local/Global（G）：守卫条件同上；缩放仅支持 Local，不做切换
+        func toggleGizmoSpaceByShortcut(self: WorldEditorViewport)=> void
+        {
+            if (self.m_is_look_active || self.m_is_pan_active || self.m_is_orbit_active
+                || self.m_gizmo_dragging)
+                return;
+            if (self.m_gizmo_mode == GizmoMode::SCALE)
+                return;
+            self.m_gizmo_space = (self.m_gizmo_space == GizmoSpace::LOCAL)
+                ? GizmoSpace::GLOBAL
+                | GizmoSpace::LOCAL;
+        }
+
         // 在视口左上角绘制变换游标工具栏；返回工具栏是否被悬停
         func drawGizmoToolbar(
-            self: WorldEditorViewport, rect_min: ImVec2, input_active: bool)=> bool
+            self: WorldEditorViewport, rect_min: ImVec2)=> bool
         {
             SetCursorScreenPos((rect_min.0 + 8., rect_min.1 + 8.));
 
@@ -1653,21 +1683,6 @@ namespace JEEditor::Editor
                     self.m_gizmo_space = GizmoSpace::GLOBAL;
                 if (IsItemHovered())
                     toolbar_hovered = true;
-            }
-
-            // 快捷键（与 Unity 一致）：W/E/R 切换模式，G 切换 Local/Global
-            if (input_active && !toolbar_hovered && !self.m_gizmo_dragging)
-            {
-                if (IsKeyPressed(ImGuiKey::ImGuiKey_W, false))
-                    self.m_gizmo_mode = GizmoMode::TRANSLATE;
-                if (IsKeyPressed(ImGuiKey::ImGuiKey_E, false))
-                    self.m_gizmo_mode = GizmoMode::ROTATE;
-                if (IsKeyPressed(ImGuiKey::ImGuiKey_R, false))
-                    self.m_gizmo_mode = GizmoMode::SCALE;
-                if (IsKeyPressed(ImGuiKey::ImGuiKey_G, false))
-                    self.m_gizmo_space = (self.m_gizmo_space == GizmoSpace::LOCAL)
-                        ? GizmoSpace::GLOBAL
-                        | GizmoSpace::LOCAL;
             }
 
             return toolbar_hovered;
