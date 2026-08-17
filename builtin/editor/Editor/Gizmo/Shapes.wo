@@ -59,7 +59,7 @@ namespace JEEditor::Editor::Gizmo::Shapes
         return makeShape(vertex::type::LINESTRIP, positions, indices);
     }
 
-    // 指向 dir 的单位箭头圆锥（位于轴末端，供平移/缩放游标使用）
+    // 指向 dir 的单位箭头圆锥（位于轴末端，供平移游标使用）
     func makeArrowCone(dir: vec3, up: vec3)=> option<vertex>
     {
         let d = dir->unit;
@@ -106,6 +106,59 @@ namespace JEEditor::Editor::Gizmo::Shapes
         return makeShape(vertex::type::TRIANGLES, positions, triangles);
     }
 
+    // 以（a,b,c,d）为四边形顶点顺序追加两个三角形
+    func addQuadIndices(indices: vec<int>, a: int, b: int, c: int, d: int)=> void
+    {
+        indices->add(a);
+        indices->add(b);
+        indices->add(c);
+        indices->add(a);
+        indices->add(c);
+        indices->add(d);
+    }
+
+    // 指向 dir 的单位方块手柄（位于轴末端，供缩放游标使用）
+    func makeAxisBox(dir: vec3, up: vec3)=> option<vertex>
+    {
+        let d = dir->unit;
+        let side = d->cross(up)->unit;
+        let side2 = d->cross(side)->unit;
+
+        let CENTER_AT = 0.92;
+        let HALF = 0.08;
+
+        let mut positions = []mut: vec<real>;
+        let mut indices = []mut: vec<int>;
+
+        // 8 个角点，编号为 sd*4 + sa*2 + sb（sd 沿轴、sa/sb 侧向）
+        for (let mut sd = 0; sd < 2; sd += 1)
+        {
+            let along = d * (CENTER_AT + (sd == 0 ? HALF | -HALF));
+            for (let mut sa = 0; sa < 2; sa += 1)
+            {
+                let va = side * (sa == 0 ? HALF | -HALF);
+                for (let mut sb = 0; sb < 2; sb += 1)
+                {
+                    let vb = side2 * (sb == 0 ? HALF | -HALF);
+                    let p = along + va + vb;
+                    positions->add(p[0]);
+                    positions->add(p[1]);
+                    positions->add(p[2]);
+                }
+            }
+        }
+
+        // 6 个面（CULL 为 NONE，绕序不影响显示）
+        addQuadIndices(indices, 0, 1, 3, 2); // +轴端面
+        addQuadIndices(indices, 4, 5, 7, 6); // -轴端面
+        addQuadIndices(indices, 0, 1, 5, 4); // +side 侧面
+        addQuadIndices(indices, 2, 3, 7, 6); // -side 侧面
+        addQuadIndices(indices, 0, 2, 6, 4); // +side2 侧面
+        addQuadIndices(indices, 1, 3, 7, 5); // -side2 侧面
+
+        return makeShape(vertex::type::TRIANGLES, positions, indices);
+    }
+
     // 平移/缩放游标：三根轴的线段与箭头
     public let GIZMO_LINE_X = makeAxisLine((1., 0., 0.) as vec3);
     public let GIZMO_LINE_Y = makeAxisLine((0., 1., 0.) as vec3);
@@ -113,6 +166,9 @@ namespace JEEditor::Editor::Gizmo::Shapes
     public let GIZMO_CONE_X = makeArrowCone((1., 0., 0.) as vec3, (0., 1., 0.) as vec3);
     public let GIZMO_CONE_Y = makeArrowCone((0., 1., 0.) as vec3, (0., 0., 1.) as vec3);
     public let GIZMO_CONE_Z = makeArrowCone((0., 0., 1.) as vec3, (1., 0., 0.) as vec3);
+    public let GIZMO_BOX_X = makeAxisBox((1., 0., 0.) as vec3, (0., 1., 0.) as vec3);
+    public let GIZMO_BOX_Y = makeAxisBox((0., 1., 0.) as vec3, (0., 0., 1.) as vec3);
+    public let GIZMO_BOX_Z = makeAxisBox((0., 0., 1.) as vec3, (1., 0., 0.) as vec3);
 
     // 旋转游标：围绕 X/Y/Z 轴的三个圆环
     public let GIZMO_RING_AROUND_X = makeRing(

@@ -502,11 +502,14 @@ namespace JEEditor::Editor
                         let axis_scale = (axis_len, axis_len, axis_len) as vec3;
 
                         let lines = [GIZMO_LINE_X, GIZMO_LINE_Y, GIZMO_LINE_Z];
-                        let cones = [GIZMO_CONE_X, GIZMO_CONE_Y, GIZMO_CONE_Z];
+                        // 平移用箭头锥，缩放用方块手柄
+                        let mut tips = [GIZMO_CONE_X, GIZMO_CONE_Y, GIZMO_CONE_Z];
+                        if (self.m_gizmo_mode == GizmoMode::SCALE)
+                            tips = [GIZMO_BOX_X, GIZMO_BOX_Y, GIZMO_BOX_Z];
                         for (let mut axis = 0; axis < 3; axis += 1)
                         {
                             drawSolid(origin, orientation, axis_scale, lines[axis], axis_colors[axis]);
-                            drawSolid(origin, orientation, axis_scale, cones[axis], axis_colors[axis]);
+                            drawSolid(origin, orientation, axis_scale, tips[axis], axis_colors[axis]);
                         }
 
                         // 中央手柄：屏幕平面移动 / 整体缩放
