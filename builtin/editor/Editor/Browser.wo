@@ -11,6 +11,8 @@ import pkg::iterator;
 import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Icons;
 import builtin::editor::GUI::Drag;
+import builtin::editor::GUI::Menu;
+import builtin::editor::GUI::Shortcut;
 import builtin::editor::GUI::Forms::InputBox;
 import builtin::editor::GUI::Forms::AskBox;
 
@@ -91,6 +93,8 @@ namespace JEEditor::Editor
         m_current: mut fsys::path_t,
         m_selected: mut option<fsys::path_t>,
         m_filter: mut string,
+        // 是否显示以 '.' 开头的文件/目录及 *.je4cache 缓存文件，默认隐藏。
+        m_show_hidden: mut bool,
         m_last_click_time: mut real,
         m_last_clicked: mut option<fsys::path_t>,
         
@@ -146,6 +150,33 @@ namespace JEEditor::Editor
                 |> std::sort(\a, b = filename(a) < filename(b);)
                 ;
         }
+
+        // 默认隐藏的名称：以 '.' 开头的文件/目录，以及引擎生成的 *.je4cache 缓存文件。
+        func isHiddenName(name: string)=> bool
+        {
+            return name->begin_with(".") || name->end_with(".je4cache");
+        }
+
+        func isEntryVisible(self: Browser, name: string)=> bool
+        {
+            return self.m_show_hidden || !isHiddenName(name);
+        }
+
+        func visibleEntryCount(self: Browser, entries: array<fsys::path_t>)=> int
+        {
+            let mut count = 0;
+            for (let entry : entries)
+            {
+                if (self->isEntryVisible(filename(entry)))
+                    count += 1;
+            }
+            return count;
+        }
+
+        func toggleShowHidden(self: Browser)=> void
+        {
+            self.m_show_hidden = !self.m_show_hidden;
+        }
         
         // Flush the global dirty flag: clear the tree cache and force the
         // file-list cache to reload on next access.
@@ -195,6 +226,7 @@ namespace JEEditor::Editor
                 m_current = mut root,
                 m_selected = mut option::none,
                 m_filter = mut "",
+                m_show_hidden = mut false,
                 m_last_click_time = mut 0.,
                 m_last_clicked = mut option::none,
                 
@@ -216,6 +248,27 @@ namespace JEEditor::Editor
         public func getSizeConstraints(_: Browser)=> SizeConstraints
         {
             return SizeConstraints::Limited(((600., 200.), (4096., 4096.)));
+        }
+        public func getMenu(self: Browser)=> option<Menu>
+        {
+            return option::value <|
+                Menu::create("")
+                    -> subMenu("视图")
+                    ->  subItem("显示隐藏文件", \= self->toggleShowHidden();)
+                    ->  checkWhen(\= self.m_show_hidden;)
+                    ->  shortCut("Ctrl+H")
+                    ->  endItem
+                    -> endMenu
+                    ;
+        }
+        public func getShortcut(self: Browser)=> option<Shortcut>
+        {
+            return option::value <|
+                Shortcut::begin()
+                    ->shortCut(
+                        [ImGuiKey::ImGuiMod_Ctrl, ImGuiKey::ImGuiKey_H],
+                        \= self->toggleShowHidden();)
+                    ->finish();
         }
         public func onCreate(self: Browser)=> void
         {
@@ -351,6 +404,9 @@ namespace JEEditor::Editor
             for (let d : self->getSubDirs(dir))
             {
                 let name = filename(d);
+                if (!self->isEntryVisible(name))
+                    continue;
+
                 let is_selected = self.m_selected->is_value
                     && self.m_selected->unwrap == d;
                     
@@ -461,14 +517,15 @@ namespace JEEditor::Editor
             
             let filter_lower = self.m_filter->lower;
             let has_filter = filter_lower->len > 0;
-            
-            if (dirs->len + files->len == 0)
+
+            let visible_count = self->visibleEntryCount(dirs) + self->visibleEntryCount(files);
+            if (visible_count == 0)
                 TextDisabled("(空目录)");
                 
             for (let d : dirs)
             {
                 let name = filename(d);
-                if (!name->begin_with(".") && (!has_filter || name->lower->find(filter_lower)->is_value))
+                if (self->isEntryVisible(name) && (!has_filter || name->lower->find(filter_lower)->is_value))
                 {
                     let is_selected = self.m_selected->is_value
                         && self.m_selected->unwrap == d;
@@ -490,7 +547,7 @@ namespace JEEditor::Editor
             for (let f : files)
             {
                 let name = filename(f);
-                if (!name->begin_with(".") && (!has_filter || name->lower->find(filter_lower)->is_value))
+                if (self->isEntryVisible(name) && (!has_filter || name->lower->find(filter_lower)->is_value))
                 {
                     let is_selected = self.m_selected->is_value
                         && self.m_selected->unwrap == f;
