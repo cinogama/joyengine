@@ -8,6 +8,8 @@ import je;
 import je::ecs;
 import je::typeinfo;
 import je::internal;
+import je::towoo;
+import je::towoo::components;
 
 import Entity;
 
@@ -21,15 +23,19 @@ namespace JEGaming::Saving::World
     public func save(w: world)=> Toml
     {
         let world_dat = new_table();
-        
+
         // Save entities
-        let entities_dat = w->internal::get_all_entities()
-            ->> \e = mut (
+        let entities_dat = []mut: vec<mut (entity::internal::euid_t, Toml)>;
+        for (let e : w->internal::get_all_entities())
+        {
+            if (e->towoo::get_component:<Editor::Invisible>->is_value)
+                continue;
+
+            entities_dat->add(mut (
                     e->internal::get_entity_uid->or(0h as entity::internal::euid_t),
                     Entity::save(e),
-                )
-                ;
-            ;
+                ));
+        }
         sort_in_place(entities_dat, \(ida, _), (idb, _) = ida < idb;);
         
         world_dat->set("entities", from(entities_dat->> \(_, edat) = edat;));

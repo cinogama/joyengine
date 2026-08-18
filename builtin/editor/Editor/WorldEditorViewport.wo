@@ -1883,17 +1883,25 @@ namespace JEEditor::Editor
             return s_last_focusd_world_view;
         }
         
-        public func createNewWorldToEdit()
+        // 确保世界中存在编辑器调试摄像机（带 Editor::Invisible 标记的透视摄像机），
+        // 没有则创建默认的一个。调试摄像机是编辑器内部实体，不会随世界文件保存
+        // （Editor:: 前缀组件在保存时被跳过），因此新建/载入世界时都需调用本函数重建。
+        public func ensureDebugCamera(w: world)=> void
         {
-            let new_world = world::create(
-                Inspector::Universe::UniverseCtx::instance()->getUniverse());
+            let debug_camera_selector = w->create_selector([
+                    requirement::contains(Editor::Invisible::type::typeinfo),
+                    requirement::contains(Camera::RendToFramebuffer::type::typeinfo),
+                    requirement::contains(Camera::Projection::type::typeinfo),
+                    requirement::contains(Transform::LocalPosition::type::typeinfo),
+                    requirement::contains(Transform::LocalRotation::type::typeinfo),
+                    requirement::contains(Transform::Translation::type::typeinfo),
+                ]);
                 
-            // Create default graphic pipe line.
-            do new_world->add_system(DEFAULT_GRAPHIC_SYSTEM_TYPE);
-            do new_world->add_system(TRASNLATION_SYSTEM_TYPE);
+            if ((debug_camera_selector->iter |> collect->get(0))->is_value)
+                return;
             
             // Create editor camera.
-            do new_world->add_entity([
+            do w->add_entity([
                     Transform::Translation::type::typeinfo,
                     Transform::LocalPosition::type::typeinfo,
                     Transform::LocalRotation::type::typeinfo,
@@ -1904,6 +1912,19 @@ namespace JEEditor::Editor
                     Camera::Clear::type::typeinfo,
                     Editor::Invisible::type::typeinfo,
                 ]);
+        }
+        
+        public func createNewWorldToEdit()
+        {
+            let new_world = world::create(
+                Inspector::Universe::UniverseCtx::instance()->getUniverse());
+                
+            // Create default graphic pipe line.
+            do new_world->add_system(DEFAULT_GRAPHIC_SYSTEM_TYPE);
+            do new_world->add_system(TRASNLATION_SYSTEM_TYPE);
+            
+            // Create editor camera.
+            ensureDebugCamera(new_world);
                 
             let e = new_world->add_entity([
                     Transform::Translation::type::typeinfo,
@@ -1978,6 +1999,7 @@ namespace JEEditor::Editor
                     let w = JEGaming::Saving::World::restore(
                         Inspector::Universe::UniverseCtx::instance()->getUniverse(),
                         wdat);
+                    ensureDebugCamera(w);
                     w->set_enable(true);
 
                     match (Windows::show(
