@@ -4,6 +4,7 @@ import je::graphic;
 import je::gui;
 
 import pkg::fsys;
+import pkg::toml;
 import pkg::interface;
 import pkg::worst;
 import pkg::iterator;
@@ -15,6 +16,11 @@ import builtin::editor::GUI::Menu;
 import builtin::editor::GUI::Shortcut;
 import builtin::editor::GUI::Forms::InputBox;
 import builtin::editor::GUI::Forms::AskBox;
+import builtin::editor::GUI::Forms::MsgBox;
+
+import builtin::editor::Editor::WorldEditorViewport;
+
+import builtin::gaming::Saving::World;
 
 using std;
 
@@ -58,31 +64,40 @@ namespace JEEditor::Editor
         }
     }
     
+    // “保存世界”拖拽载荷：携带发起保存的世界视口。
+    // ImGui 拖拽载荷只能以字符串传递，dump 时序列化为视口窗口标题
+    // （标题对唯一窗口而言是唯一的），restore 时再反查回视口实例。
     using SavingRequestPayload = struct{
+        m_viewport: WorldEditorViewport,
     }
     {
         public let type = "JE_EDITOR_BROWSER_SAVING_REQUEST";
         
-        public func create()=> SavingRequestPayload
+        public func create(viewport: WorldEditorViewport)=> SavingRequestPayload
             where require!(SavingRequestPayload : Drag::IDragPayload);
         {
-            return SavingRequestPayload{};
+            return SavingRequestPayload{
+                m_viewport = viewport,
+            };
         }
         
         public func restore(data: string) => option<SavingRequestPayload>
         {
-            do data;
-            return option::value(SavingRequestPayload {  });
+            match (WorldEditorViewport::findWorldEditorViewportByTitle(data))
+            {
+                none?
+                    return option::none;
+                value(viewport)?
+                    return option::value(SavingRequestPayload::create(viewport));
+            }
         }
         public func dump(self: SavingRequestPayload) => string
         {
-            do self;
-            return "";
+            return self.m_viewport->getTitle;
         }
         public func tips(self: SavingRequestPayload) => string
         {
-            do self;
-            return F"保存: ...";
+            return F"保存: {self.m_viewport->getName}.je4world";
         }
     }
     
@@ -648,15 +663,90 @@ namespace JEEditor::Editor
                 value(payload)?
                     self->requestMove(payload.m_path, target_dir);
             }
+            
+            match (Drag::AcceptDrag:<SavingRequestPayload>())
+            {
+                none?;
+                value(payload)?
+                    self->requestSaveWorld(payload.m_viewport, target_dir);
+            }
         }
         
-        func acceptSavingDrop(_: Browser)
+        // 拖到资源管理器窗口的空白/文件列表区域：保存到当前目录
+        func acceptSavingDrop(self: Browser)=> void
         {
             match (Drag::AcceptDrag:<SavingRequestPayload>())
             {
                 none?;
-                value(_)?
-                    ;
+                value(payload)?
+                    self->requestSaveWorld(payload.m_viewport, self.m_current);
+            }
+        }
+        
+        // 把未保存的世界保存到 target_dir：先弹输入框让用户指定文件名，
+        // 成功后让视口以新的保存路径重开，并刷新文件列表。
+        func requestSaveWorld(
+            self: Browser, viewport: WorldEditorViewport, target_dir: fsys::path_t)=> void
+        {
+            let dirty = self.m_fs_dirty;
+
+            func saveTo(dst: fsys::path_t)=> void
+            {
+                // 对话框等待期间视口可能已被关闭
+                if (!viewport->isCurrentViewportAvailable)
+                    return;
+
+                match (toml::save(
+                        JEGaming::Saving::World::save(viewport->getWorld), dst))
+                {
+                    err(msg)?
+                        MsgBox::err(
+                            "保存失败", F"保存世界到 \"{dst->to_string()}\" 失败：{msg}");
+                    ok(_)?
+                    {
+                        dirty->set(true);
+                        viewport->dropAndSaveAs(dst);
+                    }
+                }
+            }
+
+            func saveWorldAs(file_name: string)=> void
+            {
+                if (file_name->len == 0)
+                {
+                    MsgBox::err("保存失败", "文件名不能为空");
+                    return;
+                }
+
+                // 未带后缀时自动补全 .je4world
+                let full_name = file_name->end_with(".je4world")
+                    ? file_name
+                    | F"{file_name}.je4world";
+
+                let dst = target_dir / full_name;
+
+                if (isfile(dst))
+                {
+                    // 唯一窗口：已有覆盖确认对话框打开时忽略
+                    match (AskBox::showUnique(
+                            "保存", F"目录中已存在 \"{full_name}\"，确认覆盖吗？"))
+                    {
+                        none?;
+                        value(askbox)?
+                            do askbox->onYes(\= saveTo(dst););
+                    }
+                }
+                else
+                    saveTo(dst);
+            }
+
+            // 唯一窗口：已有保存对话框打开时忽略本次放置请求
+            match (InputBox::showUnique(
+                    "保存世界", "请输入保存的文件名：", F"{viewport->getName}.je4world"))
+            {
+                none?;
+                value(inputbox)?
+                    do inputbox->then(saveWorldAs);
             }
         }
         

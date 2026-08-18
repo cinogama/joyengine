@@ -13,6 +13,7 @@ import je::towoo::types;
 import je::towoo::components;
 
 import pkg::fsys;
+import pkg::toml;
 import pkg::interface;
 import pkg::worst;
 import pkg::iterator;
@@ -24,6 +25,9 @@ import builtin::editor::GUI::Icons;
 import builtin::editor::GUI::Drag;
 import builtin::editor::GUI::Forms::MsgBox;
 import builtin::editor::GUI::Forms::InputBox;
+import builtin::editor::GUI::Forms::AskBox;
+
+import builtin::gaming::Saving::World;
 import builtin::editor::GUI::Shortcut;
 
 import builtin::editor::Inspector::World;
@@ -187,7 +191,8 @@ namespace JEEditor::Editor
         enum CloseRequest
         {
             NORMALLY,
-            CLOSE_BUT_KEEP_WORLD,
+            CLOSE_AND_DESTROY_WORLD,    // 确认关闭后销毁 world（用户主动关闭）
+            CLOSE_BUT_KEEP_WORLD,       // 关闭窗口但保留 world（重命名/另存后重开）
         }
         
         let s_world_viewports = {}mut: map<world, WorldEditorViewport>;
@@ -277,7 +282,7 @@ namespace JEEditor::Editor
             };
         }
         
-        func isCurrentViewportAvailable(self: WorldEditorViewport)
+        public func isCurrentViewportAvailable(self: WorldEditorViewport)
         {
             match (s_world_viewports->get(self.m_world_instance))
             {
@@ -318,6 +323,71 @@ namespace JEEditor::Editor
                 do s_world_viewports->remove(self.m_world_instance);
                 self.m_world_instance->close;
             }
+        }
+        // 关闭前确认：
+        //   已保存到文件的世界 —— 询问是否在关闭前保存；
+        //   未保存的世界     —— 询问是否继续关闭。
+        // 确认对话框为异步回调，本函数返回 false 暂时否决关闭，
+        // 待用户确认后再通过 m_close 程序化关闭。
+        public func onPreClose(self: WorldEditorViewport)=> bool
+        {
+            // 程序化关闭（重命名/另存重开/确认后的关闭）不拦截
+            if (self.m_close != CloseRequest::NORMALLY)
+                return true;
+
+            match (self.m_saving_path)
+            {
+                value(path)?
+                {
+                    // 已保存：是=保存后关闭，否=不保存直接关闭，取消=留在原地
+                    match (AskBox::showUnique(
+                            "关闭", F"关闭前保存对 \"{self.m_name}\" 的修改吗？"))
+                    {
+                        none?;
+                        value(askbox)?
+                        {
+                            do askbox
+                                ->onYes(func() {
+                                        match (toml::save(
+                                                JEGaming::Saving::World::save(self.m_world_instance),
+                                                path))
+                                        {
+                                            err(msg)?
+                                                MsgBox::err(
+                                                    "保存失败", F"保存世界失败：{msg}");
+                                            ok(_)?
+                                                self.m_close =
+                                                    CloseRequest::CLOSE_AND_DESTROY_WORLD;
+                                        }
+                                    })
+                                ->onNo(func() {
+                                        self.m_close =
+                                            CloseRequest::CLOSE_AND_DESTROY_WORLD;
+                                    })
+                            ;
+                        }
+                    }
+                }
+                none?
+                {
+                    // 未保存：是=继续关闭，否/取消=留在原地
+                    match (AskBox::showUnique(
+                            "关闭", F"世界 \"{self.m_name}\" 尚未保存，确认关闭吗？"))
+                    {
+                        none?;
+                        value(askbox)?
+                            do askbox
+                                ->onYes(func() {
+                                        self.m_close =
+                                            CloseRequest::CLOSE_AND_DESTROY_WORLD;
+                                    })
+                            ;
+                    }
+                }
+            }
+
+            // 等待用户在对话框中确认，本次先不关闭
+            return false;
         }
         public func getTitle(self: WorldEditorViewport)=> string
         {
@@ -562,7 +632,7 @@ namespace JEEditor::Editor
                     value(icon)?
                     {
                         ImageSize(icon, 32., 32.);
-                        Drag::DragPayload(SavingRequestPayload::create());
+                        Drag::DragPayload(SavingRequestPayload::create(self));
                         
                         SameLine();
                         TextDisabled("当前世界尚未保存到文件中，拖动图标到资源管理器以保存");
@@ -1743,6 +1813,26 @@ namespace JEEditor::Editor
             }
         }
         
+        // 保存世界成功后，以新的保存路径重开本视口（沿用重命名的“重建窗口”逻辑），
+        // 使窗口标题中的保存路径立即生效。
+        public func dropAndSaveAs(self: WorldEditorViewport, new_path: path_t)=> void
+        {
+            if (self->isCurrentViewportAvailable && self.m_saving_path->is_none)
+            {
+                match (Windows::show(
+                        create(self.m_world_instance, self.m_name, option::value(new_path))))
+                {
+                    none?
+                    {
+                        MsgBox::err(
+                            "保存失败", "世界已写入文件，但以新的保存路径重开视口失败：存在使用该路径的世界视口");
+                    }
+                    value(_)?
+                        self.m_close = CloseRequest::CLOSE_BUT_KEEP_WORLD;
+                }
+            }
+        }
+
         public func getWorld(self: WorldEditorViewport)=> world
         {
             return self.m_world_instance;
@@ -1759,6 +1849,17 @@ namespace JEEditor::Editor
         public func findWorldEditorViewport(w: world)
         {
             return s_world_viewports->get(w);
+        }
+
+        // 按窗口标题反查视口；标题对唯一窗口是唯一的，用于拖拽载荷的还原。
+        public func findWorldEditorViewportByTitle(title: string)
+        {
+            for (let (_, viewport) : s_world_viewports)
+            {
+                if (viewport->getTitle == title)
+                    return option::value(viewport);
+            }
+            return option::none;
         }
         
         public func getLastFocused()
