@@ -91,5 +91,10 @@ namespace JEEditor::Editor::Action
             }
             return false;
         }
+
+        public func describe(self: AddComponent)=> string
+        {
+            return F"添加组件 {self.m_component_type_name}";
+        }
     }
 }

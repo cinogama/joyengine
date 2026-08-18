@@ -70,5 +70,9 @@ namespace JEEditor::Editor::Action
         {
             return applyTexture(w, self.m_eid, self.m_pass, self.m_old_texture);
         }
+        public func describe(self: ModifyEntityTexture)=> string
+        {
+            return F"修改实体纹理（通道 {self.m_pass}）";
+        }
     }
 }

@@ -88,5 +88,9 @@ namespace JEEditor::Editor::Action
             return restoreMemberValue(
                 w, self.m_eid, self.m_component_type_name, self.m_member_name, self.m_old_value);
         }
+        public func describe(self: ModifyComponentMember)=> string
+        {
+            return F"修改组件成员 {self.m_component_type_name}.{self.m_member_name}";
+        }
     }
 }

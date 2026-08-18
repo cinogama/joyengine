@@ -30,5 +30,12 @@ namespace JEEditor::Editor::Action
         {
             return self as raw CreateEntity as CreateEntity->redo(w);
         }
+        public func describe(self: DestroyEntity)=> string
+        {
+            let name = self.m_content->entity_name();
+            if (name == "")
+                return "销毁实体";
+            return F"销毁实体 {name}";
+        }
     }
 }

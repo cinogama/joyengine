@@ -61,5 +61,11 @@ namespace JEEditor::Editor::Action
         {
             return renameEntity(w, self.m_eid, self.m_old_name);
         }
+        public func describe(self: RenameEntity)=> string
+        {
+            if (self.m_new_name == "")
+                return "重命名实体";
+            return F"重命名实体为 {self.m_new_name}";
+        }
     }
 }

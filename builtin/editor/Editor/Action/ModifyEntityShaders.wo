@@ -66,5 +66,9 @@ namespace JEEditor::Editor::Action
         {
             return applyShaders(w, self.m_eid, self.m_old_shaders);
         }
+        public func describe(_: ModifyEntityShaders)=> string
+        {
+            return "修改实体着色器列表";
+        }
     }
 }

@@ -8,5 +8,6 @@ namespace JEEditor::Editor::Action
     {
         public func redo(self, w: WorldEditorViewport)=> bool;
         public func undo(self, w: WorldEditorViewport)=> bool;
+        public func describe(self)=> string;
     }
 }

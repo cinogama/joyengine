@@ -66,5 +66,9 @@ namespace JEEditor::Editor::Action
         {
             return applyShape(w, self.m_eid, self.m_old_shape);
         }
+        public func describe(_: ModifyEntityShape)=> string
+        {
+            return "修改实体模型";
+        }
     }
 }

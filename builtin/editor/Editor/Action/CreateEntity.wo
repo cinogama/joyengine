@@ -34,6 +34,12 @@ namespace JEEditor::Editor::Action
                 m_entity_content = Entity::save(e),
             };
         }
+
+        // 实体名快照；快照未记录名字时返回空串
+        public func entity_name(self: FullEntityContent)=> string
+        {
+            return (self.m_entity_content->get("name")=>> \v = v->as_string;)->or("");
+        }
     }
     
     protected using CreateEntity = struct{
@@ -77,6 +83,14 @@ namespace JEEditor::Editor::Action
                 }
             }
             return false;
+        }
+
+        public func describe(self: CreateEntity)=> string
+        {
+            let name = self.m_content->entity_name();
+            if (name == "")
+                return "创建实体";
+            return F"创建实体 {name}";
         }
     }
 }
