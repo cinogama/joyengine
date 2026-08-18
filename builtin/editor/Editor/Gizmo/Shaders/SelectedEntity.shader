@@ -44,8 +44,8 @@ WOSHADER_UNIFORM!
     
 public func frag(vf: v2f)
 {
-    let alpha = tex2d(Main, vf.uv)->w;
+    let alpha = 0.5 * tex2d(Main, vf.uv)->w;
     return fout{
-        color = alphatest(JE_TIME->z * vec4!(1., 0.5, 0., alpha)),
+        color = alphatest(JE_TIME->w * vec4!(1., 0.5, 0., alpha)),
     };
 }
