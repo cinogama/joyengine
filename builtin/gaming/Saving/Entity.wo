@@ -632,7 +632,7 @@ namespace JEGaming::Saving::Entity
         }
         
         // Apply textures.
-        let textures_dat = edat->get("components")
+        let textures_dat = edat->get("textures")
             =>> \v = v->as_table;->or({});
 
         for (let (tpass, tpath) : textures_dat)
