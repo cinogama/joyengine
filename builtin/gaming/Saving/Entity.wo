@@ -69,6 +69,10 @@ namespace JEGaming::Saving::Entity
         
         for (let (uname, uinst) : sinst->get_uniforms)
         {
+            if (uname->begin_with("JE_"))
+                /* Donot save engine builtin uniforms. */
+                continue;
+
             match (uinst)
             {
                 integer(vi)?
