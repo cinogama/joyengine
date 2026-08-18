@@ -126,6 +126,18 @@ namespace JEGaming::Saving::Entity
         }
         return textures_dat;
     }
+
+    func _save_shape(e: entity)=> option<string>
+    {
+        match (e->get_shape())
+        {
+            none?
+                return option::none;
+            value(shp)?
+                /* Skip builtin shape (created by vertex::create, no path). */
+                return shp->path;
+        }
+    }
     
     func _diff_component(ecdat: Toml, pcdat: option<Toml>)=> option<Toml>
     {
@@ -414,7 +426,18 @@ namespace JEGaming::Saving::Entity
         do _diff_shaders(entity_shaders_dat, prefab_shaders_dat)
             ->> \sdiff = diff_dat->set("shaders", sdiff);
             ;
-            
+
+        // -- shape --
+        // 与预设体路径不同才记录；空串哨兵表示实体移除了预设体的模型
+        //（apply 时以此擦除键，restore 不再加载模型）。
+        let entity_shape_path =
+            entity_dat->get("shape")=>> \v = v->as_string;->or("");
+        let prefab_shape_path =
+            prefab_entity_dat->get("shape")=>> \v = v->as_string;->or("");
+
+        if (entity_shape_path != prefab_shape_path)
+            diff_dat->set("shape", entity_shape_path);
+
         return diff_dat;
     }
     
@@ -516,6 +539,20 @@ namespace JEGaming::Saving::Entity
                 modifing_exist_dat->set("shaders", result_shaders);
             }
         }
+
+        // 5. Shape.
+        // Empty string means the shape was removed relative to the prefab.
+        match (patching_dat->get("shape")=>> \v = v->as_string;)
+        {
+            none?;
+            value(shape_path)?
+            {
+                if (shape_path == "")
+                    modifing_exist_dat->erase_key("shape");
+                else
+                    modifing_exist_dat->set("shape", shape_path);
+            }
+        }
     }
     
     func load(engine_path: string)=> option<Toml>
@@ -562,11 +599,15 @@ namespace JEGaming::Saving::Entity
         
         // 2. Save shaders.
         toml->set("shaders", _save_shaders(e));
-        
+
         // 3. Save textures.
         toml->set("textures", _save_textures(e));
-        
-        // 4. Calc diff by prefab data.
+
+        // 4. Save shape.
+        do _save_shape(e)->> \shape_path = toml->set("shape", shape_path);
+        ;
+
+        // 5. Calc diff by prefab data.
         match (e->internal::get_prefab_path())
         {
             none?
@@ -647,7 +688,18 @@ namespace JEGaming::Saving::Entity
                 return_value!;
             };
         }
-            
+
+        // Apply shape.
+        // set_shape only takes effect when the entity has the
+        // Renderer::Shape component, which is created above from
+        // the components table.
+        match (edat->get("shape")=>> \v = v->as_string;)
+        {
+            none?;
+            value(shape_path)?
+                e->set_shape(vertex::load(universe, shape_path));
+        }
+
         // Apply shaders.
         let shaders = []mut: vec<shader>;
         let shaders_dat = edat->get("shaders")=>> \v = v->as_array;->or([]);

@@ -1,0 +1,70 @@
+import woo::std;
+
+import je;
+import je::ecs;
+import je::graphic;
+import je::internal;
+
+import pkg::interface;
+
+import builtin::editor::Editor::WorldEditorViewport;
+
+import IAction;
+
+using je;
+using je::graphic;
+
+namespace JEEditor::Editor::Action
+{
+    // 修改实体绑定的模型（Renderer::Shape 持有的顶点资源）。
+    // 以旧/新两个顶点快照保存；顶点句柄由引擎资源系统持有，
+    // 被 Action 引用期间不会失效，撤销时可直接恢复绑定。
+    protected using ModifyEntityShape = struct{
+        m_eid: entity::internal::euid_t,
+        m_old_shape: option<vertex>,
+        m_new_shape: option<vertex>,
+    }
+    {
+        public func create(
+            eid: entity::internal::euid_t,
+            old_shape: option<vertex>,
+            new_shape: option<vertex>)=> ModifyEntityShape
+            where require!(ModifyEntityShape: IAction);
+        {
+            return ModifyEntityShape{
+                m_eid = eid,
+                m_old_shape = old_shape,
+                m_new_shape = new_shape,
+            };
+        }
+
+        func applyShape(
+            w: WorldEditorViewport,
+            eid: entity::internal::euid_t,
+            shape: option<vertex>)=> bool
+        {
+            for (let e : w->getEntitySelector())
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(ueid)?
+                        if (ueid == eid)
+                        {
+                            do e->set_shape(shape);
+                            return true;
+                        }
+                }
+            }
+            return false;
+        }
+        public func redo(self: ModifyEntityShape, w: WorldEditorViewport)=> bool
+        {
+            return applyShape(w, self.m_eid, self.m_new_shape);
+        }
+        public func undo(self: ModifyEntityShape, w: WorldEditorViewport)=> bool
+        {
+            return applyShape(w, self.m_eid, self.m_old_shape);
+        }
+    }
+}

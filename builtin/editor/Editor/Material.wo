@@ -21,6 +21,7 @@ import WorldEditorViewport;
 import EditSession;
 import Action::AddComponent;
 import Action::ModifyEntityShaders;
+import Action::ModifyEntityShape;
 import Action::ModifyEntityTexture;
 
 using std;
@@ -39,15 +40,18 @@ using JEEditor::Editor::Action;
 
 namespace JEEditor::Editor
 {
-    // 材质面板：编辑选中实体的 Renderer::Shaders（着色器列表与 uniform 变量）
-    // 和 Renderer::Textures（tiling/offset 与纹理通道）。
-    // 着色器列表与纹理通道不是反射成员（Renderer::Shaders 未注册任何成员，
-    // Renderer::Textures 也只反射了 tiling/offset），无法走检视面板的通用成员
-    // 编辑与撤销管线，这里通过 entity 的着色器/纹理 API 就地修改。
+    // 材质面板：编辑选中实体的 Renderer::Shape（模型顶点资源）、
+    // Renderer::Shaders（着色器列表与 uniform 变量）和
+    // Renderer::Textures（tiling/offset 与纹理通道）。
+    // 模型、着色器列表与纹理通道不是反射成员（Renderer::Shape 与
+    // Renderer::Shaders 未注册任何成员，Renderer::Textures 也只反射了
+    // tiling/offset），无法走检视面板的通用成员编辑与撤销管线，
+    // 这里通过 entity 的模型/着色器/纹理 API 就地修改。
     using Material = struct{
         m_close: mut bool,
     }
     {
+        let SHAPE_TYPE = typeinfo::load("Renderer::Shape")->unwrap;
         let SHADERS_TYPE = typeinfo::load("Renderer::Shaders")->unwrap;
         let TEXTURES_TYPE = typeinfo::load("Renderer::Textures")->unwrap;
 
@@ -172,6 +176,21 @@ namespace JEEditor::Editor
                     wctx->doAction(
                         ModifyEntityTexture::create(
                             eid, pass, e->get_textures()->get(pass), new_texture));
+            }
+        }
+
+        // 将模型变更发布为可撤销操作；无 EUID 的实体退化为直接修改
+        func applyShapeChange(
+            wctx: WorldEditorViewport, e: entity,
+            new_shape: option<vertex>)=> void
+        {
+            match (e->internal::get_entity_uid)
+            {
+                none?
+                    do e->set_shape(new_shape);
+                value(eid)?
+                    wctx->doAction(
+                        ModifyEntityShape::create(eid, e->get_shape(), new_shape));
             }
         }
 
@@ -432,6 +451,107 @@ namespace JEEditor::Editor
                 value(payload)?
                     tryInsertShader(wctx, e, univ, payload->dump, append_at);
             }
+        }
+
+        func isModelFile(path: string)=> bool
+        {
+            // 引擎经 Assimp 解析模型文件（jegl_load_vertex），
+            // 此处列出常见可拖入的模型扩展名
+            static let model_exts = {
+                [".obj"] = true,
+                [".fbx"] = true,
+                [".gltf"] = true,
+                [".glb"] = true,
+                [".dae"] = true,
+                [".3ds"] = true,
+                [".stl"] = true,
+                [".ply"] = true,
+                [".blend"] = true,
+                [".x"] = true,
+                [".ms3d"] = true,
+                [".lwo"] = true,
+                [".md2"] = true,
+                [".md3"] = true,
+                [".md5mesh"] = true,
+                [".bvh"] = true,
+                [".ac"] = true,
+                [".ase"] = true,
+            };
+            return model_exts->contains(string::lower(extension(normalize(path))));
+        }
+
+        func trySetShape(
+            wctx: WorldEditorViewport,
+            e: entity, univ: option<universe>, path: string)=> void
+        {
+            if (path == "")
+            {
+                MsgBox::err("设置模型失败", "模型路径不能为空");
+                return;
+            }
+            if (!isModelFile(path))
+            {
+                MsgBox::err("设置模型失败", F"`{path}` 不是模型文件");
+                return;
+            }
+
+            match (vertex::load(univ, path))
+            {
+                none?
+                    MsgBox::err("设置模型失败", F"无法加载模型：`{path}`");
+                value(shp)?
+                    applyShapeChange(wctx, e, option::value(shp));
+            }
+        }
+
+        func showShapeEdit(wctx: WorldEditorViewport, e: entity)=> void
+        {
+            SeparatorText("模型 Renderer::Shape");
+
+            // set_shape 只在组件存在时生效，缺少组件时先引导添加
+            if (!ensureComponentEditor(wctx, e, SHAPE_TYPE, "Renderer::Shape"))
+                return;
+
+            let univ = option::value(wctx->getWorld->get_universe);
+
+            BeginGroup();
+
+            match (e->get_shape())
+            {
+                none?
+                    Text("（未设置模型）");
+                value(shp)?
+                {
+                    match (shp->path)
+                    {
+                        none?
+                            // vertex::create 创建的顶点没有来源路径
+                            Text("模型：（内置顶点）");
+                        value(p)?
+                        {
+                            Text(F"模型：{filename(normalize(p))}");
+                            if (IsItemHovered())
+                                do SetTooltip(p);
+                        }
+                    }
+
+                    SameLine();
+                    if (Button("移除##material_shape"))
+                        applyShapeChange(wctx, e, option::none);
+                }
+            }
+
+            EndGroup();
+
+            // 拖动资源浏览器中的模型文件到该行可设置/替换模型
+            match (Drag::AcceptDrag:<FilePayload>())
+            {
+                none?;
+                value(payload)?
+                    trySetShape(wctx, e, univ, payload->dump);
+            }
+
+            TextDisabled("拖动模型文件到上行可设置模型（.obj/.fbx/.gltf 等）");
         }
 
         func showShadersEdit(wctx: WorldEditorViewport, e: entity)=> void
@@ -750,6 +870,7 @@ namespace JEEditor::Editor
                             SameLine();
                             Text(e->internal::name);
 
+                            showShapeEdit(wctx, e);
                             showShadersEdit(wctx, e);
                             showTexturesEdit(wctx, e);
                         }
