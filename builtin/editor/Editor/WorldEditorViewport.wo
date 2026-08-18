@@ -1861,6 +1861,22 @@ namespace JEEditor::Editor
             }
             return option::none;
         }
+
+        // 按保存路径反查视口；资源管理器打开 .je4world 前用它去重。
+        public func findWorldEditorViewportByPath(path: path_t)
+        {
+            for (let (_, viewport) : s_world_viewports)
+            {
+                match (viewport.m_saving_path)
+                {
+                    none?;
+                    value(opened_path)?
+                        if (opened_path == path)
+                            return option::value(viewport);
+                }
+            }
+            return option::none;
+        }
         
         public func getLastFocused()
         {
@@ -1930,6 +1946,52 @@ namespace JEEditor::Editor
                     none?;
                     value(_)?
                         break;
+                }
+            }
+        }
+
+        // 从 .je4world 文件加载世界并打开编辑视口；
+        // 该路径已有打开的视口或文件读取失败时以 MsgBox 报错。
+        public func openWorldEditorViewportFromFile(path: path_t)=> void
+        {
+            match (findWorldEditorViewportByPath(path))
+            {
+                none?;
+                value(_)?
+                {
+                    MsgBox::err(
+                        "打开失败", F"世界文件 \"{path->to_string()}\" 已在编辑器中打开");
+                    return;
+                }
+            }
+
+            match (toml::load(path))
+            {
+                err(msg)?
+                {
+                    MsgBox::err(
+                        "打开失败", F"读取世界文件 \"{path->to_string()}\" 失败：{msg}");
+                    return;
+                }
+                ok(wdat)?
+                {
+                    let w = JEGaming::Saving::World::restore(
+                        Inspector::Universe::UniverseCtx::instance()->getUniverse(),
+                        wdat);
+                    w->set_enable(true);
+
+                    match (Windows::show(
+                            create(w, purename(path), option::value(path))))
+                    {
+                        none?
+                        {
+                            // 极短时间内的重复打开：窗口注册失败，释放刚创建的世界
+                            MsgBox::err(
+                                "打开失败", F"世界 \"{purename(path)}\" 已在编辑器中打开");
+                            w->close;
+                        }
+                        value(_)?;
+                    }
                 }
             }
         }

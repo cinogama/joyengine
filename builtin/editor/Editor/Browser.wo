@@ -606,6 +606,9 @@ namespace JEEditor::Editor
                     
                     if (isdir(sel) && MenuItem("打开"))
                         self.m_current = sel;
+
+                    if (isWorldFile(sel) && MenuItem("打开"))
+                        WorldEditorViewport::openWorldEditorViewportFromFile(sel);
                         
                     if (MenuItem("重命名"))
                     {
@@ -640,19 +643,29 @@ namespace JEEditor::Editor
             }
         }
         
+        // .je4world 世界文件判定（双击 / 右键菜单可打开为世界编辑视口）
+        func isWorldFile(path: fsys::path_t)=> bool
+        {
+            return isfile(path)
+                && string::lower(extension(path)) == ".je4world";
+        }
+
         func handleItemClick(self: Browser, path: fsys::path_t)=> void
         {
             let now = GetTime();
             let is_double = self.m_last_clicked->is_value
                 && self.m_last_clicked->unwrap == path
                 && (now - self.m_last_click_time) < 0.5;
-                
+
             self.m_last_click_time = now;
             self.m_last_clicked = option::value(path);
             self.m_selected = option::value(path);
-            
+
             if (is_double && isdir(path))
                 self.m_current = path;
+
+            if (is_double && isWorldFile(path))
+                WorldEditorViewport::openWorldEditorViewportFromFile(path);
         }
         
         func acceptDirDrop(self: Browser, target_dir: fsys::path_t)=> void
