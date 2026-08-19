@@ -341,7 +341,8 @@ namespace JEEditor::Editor
                 {
                     // 已保存：是=保存后关闭，否=不保存直接关闭，取消=留在原地
                     match (AskBox::showUnique(
-                            "关闭", F"关闭前保存对 \"{self.m_name}\" 的修改吗？"))
+                            F"关闭##{self.m_world_instance}",
+                            F"关闭前保存对 \"{self.m_name}\" 的修改吗？"))
                     {
                         none?;
                         value(askbox)?
@@ -364,7 +365,8 @@ namespace JEEditor::Editor
                 {
                     // 未保存：是=继续关闭，否/取消=留在原地
                     match (AskBox::showUnique(
-                            "关闭", F"世界 \"{self.m_name}\" 尚未保存，确认关闭吗？"))
+                            F"关闭##{self.m_world_instance}", 
+                            F"世界 \"{self.m_name}\" 尚未保存，确认关闭吗？"))
                     {
                         none?;
                         value(askbox)?
