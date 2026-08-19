@@ -39,8 +39,10 @@ using JEEditor::GUI::Forms;
 func main()
 {
     // 设置当前引擎的运行时路径
+    let origin_runtime_path = get_runtime_path();
+
     set_runtime_path(fsys::workpath()->to_string);
-    defer set_runtime_path(host_path());
+    defer set_runtime_path(origin_runtime_path);
 
     // 编辑器脚本退出之前清掉所有单例实例
     defer singleton::unsafe::reset_all_singleton();

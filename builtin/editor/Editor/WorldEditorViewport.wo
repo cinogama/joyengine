@@ -27,7 +27,7 @@ import builtin::editor::GUI::Forms::MsgBox;
 import builtin::editor::GUI::Forms::InputBox;
 import builtin::editor::GUI::Forms::AskBox;
 
-import builtin::gaming::Saving::World;
+import builtin::editor::Editor::Saving::World;
 import builtin::editor::GUI::Shortcut;
 
 import builtin::editor::Inspector::World;
@@ -348,17 +348,9 @@ namespace JEEditor::Editor
                         {
                             do askbox
                                 ->onYes(func() {
-                                        match (toml::save(
-                                                JEGaming::Saving::World::save(self.m_world_instance),
-                                                path))
-                                        {
-                                            err(msg)?
-                                                MsgBox::err(
-                                                    "保存失败", F"保存世界失败：{msg}");
-                                            ok(_)?
-                                                self.m_close =
-                                                    CloseRequest::CLOSE_AND_DESTROY_WORLD;
-                                        }
+                                        if (self->saveWorldTo(path))
+                                            self.m_close =
+                                                CloseRequest::CLOSE_AND_DESTROY_WORLD;
                                     })
                                 ->onNo(func() {
                                         self.m_close =
@@ -1790,7 +1782,25 @@ namespace JEEditor::Editor
         {
             return self.m_saving_path;
         }
-        
+
+        // 把世界序列化并写入 path；失败时弹错误对话框并返回 false。
+        // 编辑器中世界落盘的唯一入口。
+        public func saveWorldTo(self: WorldEditorViewport, path: path_t)=> bool
+        {
+            match (toml::save(
+                    JEEditor::Saving::World::save(self.m_world_instance), path))
+            {
+                err(msg)?
+                {
+                    MsgBox::err(
+                        "保存失败", F"保存世界到 \"{path->to_string()}\" 失败：{msg}");
+                    return false;
+                }
+                ok(_)?
+                    return true;
+            }
+        }
+
         public func dropAndRename(self: WorldEditorViewport, new_name: string)=> void
         {
             if (self->isCurrentViewportAvailable && self.m_name != new_name)
@@ -1830,6 +1840,65 @@ namespace JEEditor::Editor
                     value(_)?
                         self.m_close = CloseRequest::CLOSE_BUT_KEEP_WORLD;
                 }
+            }
+        }
+
+        // 另存为流程（原资源管理器 requestSaveWorld）：弹输入框要文件名 →
+        // 已存在则确认覆盖 → 写盘 → 以新保存路径重开视口。
+        // on_saved 在写盘成功后回调（供资源管理器刷新文件缓存）。
+        public func requestSaveAs(
+            self: WorldEditorViewport, target_dir: path_t, on_saved: ()=> void)=> void
+        {
+            func saveTo(dst: path_t)=> void
+            {
+                // 对话框等待期间视口可能已被关闭
+                if (!self->isCurrentViewportAvailable)
+                    return;
+
+                if (self->saveWorldTo(dst))
+                {
+                    do on_saved();
+                    self->dropAndSaveAs(dst);
+                }
+            }
+
+            func saveWorldAs(file_name: string)=> void
+            {
+                if (file_name->len == 0)
+                {
+                    MsgBox::err("保存失败", "文件名不能为空");
+                    return;
+                }
+
+                // 未带后缀时自动补全 .je4world
+                let full_name = file_name->end_with(".je4world")
+                    ? file_name
+                    | F"{file_name}.je4world";
+
+                let dst = target_dir / full_name;
+
+                if (isfile(dst))
+                {
+                    // 唯一窗口：已有覆盖确认对话框打开时忽略
+                    match (AskBox::showUnique(
+                            "保存", F"目录中已存在 \"{full_name}\"，确认覆盖吗？"))
+                    {
+                        none?;
+                        value(askbox)?
+                            do askbox->onYes(\= saveTo(dst););
+                    }
+                }
+                else
+                    saveTo(dst);
+            }
+
+            // 唯一窗口：已有保存对话框打开时忽略本次放置请求
+            match (InputBox::showUnique(
+                    "保存世界", "请输入保存的文件名：", F"{self.m_name}.je4world"))
+            {
+                none?;
+                value(inputbox)?
+                    do inputbox->then(saveWorldAs);
             }
         }
 
@@ -1996,7 +2065,7 @@ namespace JEEditor::Editor
                 }
                 ok(wdat)?
                 {
-                    let w = JEGaming::Saving::World::restore(
+                    let w = JEEditor::Saving::World::restore(
                         Inspector::Universe::UniverseCtx::instance()->getUniverse(),
                         wdat);
                     ensureDebugCamera(w);
