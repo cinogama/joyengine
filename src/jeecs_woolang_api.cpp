@@ -8,16 +8,13 @@
 #include <optional>
 #include <unordered_map>
 
-// 每个日志钩子持有一条独立通道：注册时创建，反注册时销毁。
-// 多个消费者（日志窗口、状态栏通知等）各自排空自己的队列，互不抢占、也不会重复。
 struct _jewo_log_channel
 {
-    std::atomic_flag mx = {};
-    std::list<std::pair<int, std::string>> buffer;
-};
+    std::atomic_flag                        m_mx;
 
-static std::atomic_flag _jewo_log_channels_mx = {};
-static std::unordered_map<je_log_regid_t, _jewo_log_channel*> _jewo_log_channels;
+    je_log_regid_t                          m_fact_log_id;
+    std::list<std::pair<int, std::string>>  m_buffer;
+};
 
 WOORT_API woort_api wojeapi_get_current_platform(void)
 {
@@ -207,37 +204,29 @@ WOORT_API woort_api wojeapi_crc64_string(void)
 WOORT_API woort_api wojeapi_register_log_callback(void)
 {
     auto* channel = new _jewo_log_channel();
+    channel->m_mx.clear();
 
-    // 通道指针作为 userdata 直接传给回调，写入时只需锁通道自身的自旋锁。
-    const je_log_regid_t regid = je_log_register_callback(
+    channel->m_fact_log_id = je_log_register_callback(
         [](int level, const char* msg, void* userdata)
         {
-            auto* channel = static_cast<_jewo_log_channel*>(userdata);
-            while (channel->mx.test_and_set());
-            channel->buffer.push_back({ level, msg });
-            channel->mx.clear();
+            auto* const channel = static_cast<_jewo_log_channel*>(userdata);
+            while (channel->m_mx.test_and_set());
+            do
+            {
+                channel->m_buffer.push_back({ level, msg });
+
+            } while (0);
+            channel->m_mx.clear();
         },
         channel);
 
-    while (_jewo_log_channels_mx.test_and_set());
-    _jewo_log_channels[regid] = channel;
-    _jewo_log_channels_mx.clear();
-
-    return woort_ret_int(static_cast<woort_Int>(regid));
+    return woort_ret_pointer(channel);
 }
 
 WOORT_API woort_api wojeapi_unregister_log_callback(void)
 {
-    const je_log_regid_t regid = static_cast<je_log_regid_t>(woort_int(0));
-
-    // je_log 在共享锁下触发回调、反注册需要独占锁，
-    // 因此 unregister 返回后不会再有并发回调访问该通道，可以安全销毁。
-    auto* channel = static_cast<_jewo_log_channel*>(
-        je_log_unregister_callback(regid));
-
-    while (_jewo_log_channels_mx.test_and_set());
-    _jewo_log_channels.erase(regid);
-    _jewo_log_channels_mx.clear();
+    auto* const channel = static_cast<_jewo_log_channel*>(woort_pointer(0));
+    (void)je_log_unregister_callback(channel->m_fact_log_id);
 
     delete channel;
 
@@ -246,6 +235,8 @@ WOORT_API woort_api wojeapi_unregister_log_callback(void)
 
 WOORT_API woort_api wojeapi_get_all_logs(void)
 {
+    auto* const channel = static_cast<_jewo_log_channel*>(woort_pointer(0));
+
     woort_value s;
     if (!woort_push_reserve(2, &s))
         return woort_ret_panic("Stack overflow.");
@@ -257,17 +248,12 @@ WOORT_API woort_api wojeapi_get_all_logs(void)
 
     std::list<std::pair<int, std::string>> logs;
 
-    while (_jewo_log_channels_mx.test_and_set())
-        ;
-    auto found = _jewo_log_channels.find(static_cast<je_log_regid_t>(woort_int(0)));
-    if (found != _jewo_log_channels.end())
+    while (channel->m_mx.test_and_set());
+    do
     {
-        auto* channel = found->second;
-        while (channel->mx.test_and_set());
-        logs.swap(channel->buffer);
-        channel->mx.clear();
-    }
-    _jewo_log_channels_mx.clear();
+        logs.swap(channel->m_buffer);
+    } while (0);
+    channel->m_mx.clear();
 
     for (auto& [i, s] : logs)
     {

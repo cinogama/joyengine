@@ -55,12 +55,14 @@ namespace JEEditor::Editor::LogStatebar
         {
             let (lvl, msg) = entry;
 
-            if (lvl == internal::loglevel::WARNING)
-                showLogState(Icons::WARNING, (240, 200, 80, 255), F"[警告] {msg}", 4.);
-            if (lvl == internal::loglevel::ERROR)
-                showLogState(Icons::ERROR, (240, 110, 110, 255), F"[错误] {msg}", 6.);
-            if (lvl == internal::loglevel::FATAL)
-                showLogState(Icons::ERROR, (255, 70, 70, 255), F"[致命] {msg}", 8.);
+            if (lvl == internal::loglevel::INFO)
+                showLogState(option::none, (200, 200, 200, 255), msg, 0.);
+            else if (lvl == internal::loglevel::WARNING)
+                showLogState(Icons::WARNING, (240, 200, 80, 255), msg, 1.);
+            else if (lvl == internal::loglevel::ERROR)
+                showLogState(Icons::ERROR, (240, 110, 110, 255), msg, 1.);
+            else if (lvl == internal::loglevel::FATAL)
+                showLogState(Icons::ERROR, (255, 70, 70, 255), msg, 1.);
         }
     }
 
