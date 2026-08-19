@@ -3,25 +3,51 @@ import woo::std;
 import je;
 import je::gui;
 
+import pkg::list;
+import pkg::try;
+
 using std;
 using je;
 using je::gui;
 
 namespace JEEditor::GUI::Statebar
 {
+    let s_state_showing_queue = list::create:<(()=> void, mut real, real)>();
+    
     public func start()
     {
         launch(func(){
-                if (BeginViewportSideBar(
-                        "EditorStatebar",
-                        Direction::ImGuiDir_Down,
-                        24.,
-                        WindowsAttribute::ImGuiWindowFlags_None))
+                while (s_state_showing_queue->len >= 2)
                 {
-                    
+                    let (_, _, tm) = s_state_showing_queue->front->unwrap;
+                    if (time() < tm)
+                        break;
+                        
+                    do s_state_showing_queue->pop_front();
                 }
+                
+                do try!{
+                    try! (state, mut height, _) = s_state_showing_queue->front;
+                    
+                    if (BeginViewportSideBar(
+                            "EditorStatebar",
+                            Direction::ImGuiDir_Down,
+                            immut height,
+                            WindowsAttribute::ImGuiWindowFlags_None))
+                    {
+                        state();
+                    }
+                    
+                    return_value!;
+                };
+                
+                
                 End();
                 return true;
             });
+    }
+    public func showState(job: ()=> void, keep_time_at_least: real)
+    {
+        s_state_showing_queue->add((job, mut 24., time() + keep_time_at_least));
     }
 }
