@@ -8,6 +8,7 @@ import je::internal;
 
 import pkg::singleton;
 import pkg::interface;
+import pkg::fsys;
 
 import GUI::Windows;
 import GUI::Menu;
@@ -29,7 +30,7 @@ import Inspector::Universe;
 
 using std;
 using je;
-
+using je::internal;
 using JEEditor;
 using JEEditor::Editor;
 using JEEditor::GUI::Windows;
@@ -37,6 +38,10 @@ using JEEditor::GUI::Forms;
 
 func main()
 {
+    // 设置当前引擎的运行时路径
+    set_runtime_path(fsys::workpath()->to_string);
+    defer set_runtime_path(host_path());
+
     // 编辑器脚本退出之前清掉所有单例实例
     defer singleton::unsafe::reset_all_singleton();
 

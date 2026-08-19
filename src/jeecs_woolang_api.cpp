@@ -127,6 +127,11 @@ WOORT_API woort_api wojeapi_init_graphic_pipeline_for_editor(void)
     return woort_ret_void();
 }
 
+WOORT_API woort_api wojeapi_get_runtime_path(void)
+{
+    return woort_ret_string(jeecs_file_get_runtime_path());
+}
+
 WOORT_API woort_api wojeapi_set_runtime_path(void)
 {
     jeecs_file_set_runtime_path(woort_string(0));
