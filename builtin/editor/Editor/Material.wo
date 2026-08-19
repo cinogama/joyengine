@@ -527,105 +527,113 @@ namespace JEEditor::Editor
 
         func showShapeEdit(wctx: WorldEditorViewport, e: entity)=> void
         {
-            SeparatorText("模型 Renderer::Shape");
-
-            // set_shape 只在组件存在时生效，缺少组件时先引导添加
-            if (!ensureComponentEditor(wctx, e, SHAPE_TYPE, "Renderer::Shape"))
-                return;
-
-            let univ = option::value(wctx->getWorld->get_universe);
-
-            BeginGroup();
-
-            match (e->get_shape())
+            if (CollapsingHeaderFlags(
+                    "模型",
+                    TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
             {
-                none?
-                    Text("（未设置模型）");
-                value(shp)?
+                // set_shape 只在组件存在时生效，缺少组件时先引导添加
+                if (!ensureComponentEditor(wctx, e, SHAPE_TYPE, "Renderer::Shape"))
+                    return;
+
+                let univ = option::value(wctx->getWorld->get_universe);
+
+                BeginGroup();
+
+                match (e->get_shape())
                 {
-                    match (shp->path)
+                    none?
+                        Text("（未设置模型）");
+                    value(shp)?
                     {
-                        none?
-                            // vertex::create 创建的顶点没有来源路径
-                            Text("模型：（内置顶点）");
+                        match (shp->path)
+                        {
+                            none?
+                                // vertex::create 创建的顶点没有来源路径
+                                Text("模型：（内置顶点）");
+                            value(p)?
+                            {
+                                Text(F"模型：{filename(normalize(p))}");
+                                if (IsItemHovered())
+                                    do SetTooltip(p);
+                            }
+                        }
+
+                        SameLine();
+                        if (Button("移除##material_shape"))
+                            applyShapeChange(wctx, e, option::none);
+                    }
+                }
+
+                EndGroup();
+
+                // 拖动资源浏览器中的模型文件到该行可设置/替换模型
+                match (Drag::AcceptDrag:<FilePayload>())
+                {
+                    none?;
+                    value(payload)?
+                        trySetShape(wctx, e, univ, payload->dump);
+                }
+
+                TextDisabled("拖动模型文件到上行可设置模型（.obj/.fbx/.gltf 等）");
+            }
+            Spacing();
+        }
+
+        func showShadersEdit(wctx: WorldEditorViewport, e: entity)=> void
+        {
+            if (CollapsingHeaderFlags(
+                    "着色器",
+                    TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                if (!ensureComponentEditor(wctx, e, SHADERS_TYPE, "Renderer::Shaders"))
+                    return;
+
+                let shaders = e->get_shaders();
+                let univ = option::value(wctx->getWorld->get_universe);
+                let eid = e->internal::get_entity_uid;
+
+                if (shaders->len == 0)
+                    TextDisabled("（没有着色器）");
+                TextDisabled("拖动 .shader 文件到列表项上可插入到该位置");
+
+                for (let (idx, sinst) : shaders->iter |> enumerate)
+                {
+                    // 树节点行：箭头示意可展开编辑 uniform，整行同时是拖放目标
+                    let opened = TreeNodeEx(
+                        F"{idx}: {shaderDisplayName(sinst)}##material_shader_{idx}",
+                        TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth);
+
+                    match (sinst->path)
+                    {
+                        none?;
                         value(p)?
                         {
-                            Text(F"模型：{filename(normalize(p))}");
                             if (IsItemHovered())
                                 do SetTooltip(p);
                         }
                     }
 
-                    SameLine();
-                    if (Button("移除##material_shape"))
-                        applyShapeChange(wctx, e, option::none);
-                }
-            }
-
-            EndGroup();
-
-            // 拖动资源浏览器中的模型文件到该行可设置/替换模型
-            match (Drag::AcceptDrag:<FilePayload>())
-            {
-                none?;
-                value(payload)?
-                    trySetShape(wctx, e, univ, payload->dump);
-            }
-
-            TextDisabled("拖动模型文件到上行可设置模型（.obj/.fbx/.gltf 等）");
-        }
-
-        func showShadersEdit(wctx: WorldEditorViewport, e: entity)=> void
-        {
-            SeparatorText("着色器 Renderer::Shaders");
-
-            if (!ensureComponentEditor(wctx, e, SHADERS_TYPE, "Renderer::Shaders"))
-                return;
-
-            let shaders = e->get_shaders();
-            let univ = option::value(wctx->getWorld->get_universe);
-            let eid = e->internal::get_entity_uid;
-
-            if (shaders->len == 0)
-                TextDisabled("（没有着色器）");
-            TextDisabled("拖动 .shader 文件到列表项上可插入到该位置");
-
-            for (let (idx, sinst) : shaders->iter |> enumerate)
-            {
-                // 树节点行：箭头示意可展开编辑 uniform，整行同时是拖放目标
-                let opened = TreeNodeEx(
-                    F"{idx}: {shaderDisplayName(sinst)}##material_shader_{idx}",
-                    TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth);
-
-                match (sinst->path)
-                {
-                    none?;
-                    value(p)?
+                    // 拖动 .shader 文件到该列表项上，新的着色器 pass 插入到该位置
+                    match (Drag::AcceptDrag:<FilePayload>())
                     {
-                        if (IsItemHovered())
-                            do SetTooltip(p);
+                        none?;
+                        value(payload)?
+                            tryInsertShader(wctx, e, univ, payload->dump, idx);
                     }
+
+                    if (opened)
+                    {
+                        showShaderItemOps(wctx, e, shaders, sinst, idx);
+                        SeparatorText("Uniform 变量");
+                        showShaderUniformsEdit(wctx, eid, sinst, idx);
+                        TreePop();
+                    }
+                    Spacing();
                 }
 
-                // 拖动 .shader 文件到该列表项上，新的着色器 pass 插入到该位置
-                match (Drag::AcceptDrag:<FilePayload>())
-                {
-                    none?;
-                    value(payload)?
-                        tryInsertShader(wctx, e, univ, payload->dump, idx);
-                }
-
-                if (opened)
-                {
-                    showShaderItemOps(wctx, e, shaders, sinst, idx);
-                    SeparatorText("Uniform 变量");
-                    showShaderUniformsEdit(wctx, eid, sinst, idx);
-                    TreePop();
-                }
-                Spacing();
+                showAppendShaderRow(wctx, e, univ, shaders->len);
             }
-
-            showAppendShaderRow(wctx, e, univ, shaders->len);
+            Spacing();
         }
 
         func isTextureFile(path: string)=> bool
@@ -805,62 +813,66 @@ namespace JEEditor::Editor
 
         func showTexturesEdit(wctx: WorldEditorViewport, e: entity)=> void
         {
-            SeparatorText("纹理 Renderer::Textures");
-
-            if (!ensureComponentEditor(wctx, e, TEXTURES_TYPE, "Renderer::Textures"))
-                return;
-
-            // tiling/offset 是反射成员，沿用与检视面板一致的通用值编辑器
-            let eid = e->internal::get_entity_uid;
-
-            let textures_component = e->get_component(TEXTURES_TYPE)->unwrap;
-            Indent(0.);
-            for (let (mname, mtype, mhandle) : textures_component->get_members)
+            if (CollapsingHeaderFlags(
+                    "纹理",
+                    TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
             {
-                TextDisabled(mname);
-                SameLine();
-                SetNextItemWidth(-1.);
+                if (!ensureComponentEditor(wctx, e, TEXTURES_TYPE, "Renderer::Textures"))
+                    return;
 
-                let member_tag = F"##material_textures_{mname}_{mhandle}";
+                // tiling/offset 是反射成员，沿用与检视面板一致的通用值编辑器
+                let eid = e->internal::get_entity_uid;
 
-                // edit 一旦返回 true，成员值已被就地修改，先留档修改前的序列化值
-                let old_value = eid=>> \_ = unsafe::dynamic_parser::save(mtype, mhandle);;
-
-                match (unsafe::dynamic_parser::edit(mtype, mhandle, member_tag))
+                let textures_component = e->get_component(TEXTURES_TYPE)->unwrap;
+                Indent(0.);
+                for (let (mname, mtype, mhandle) : textures_component->get_members)
                 {
-                    none?
+                    TextDisabled(mname);
+                    SameLine();
+                    SetNextItemWidth(-1.);
+
+                    let member_tag = F"##material_textures_{mname}_{mhandle}";
+
+                    // edit 一旦返回 true，成员值已被就地修改，先留档修改前的序列化值
+                    let old_value = eid=>> \_ = unsafe::dynamic_parser::save(mtype, mhandle);;
+
+                    match (unsafe::dynamic_parser::edit(mtype, mhandle, member_tag))
                     {
-                        NewLine();
-                        TextDisabled(
-                            F"编辑器没有为 `{mtype->script_name->or(mtype->name)}` 类型提供编辑组件");
-                    }
-                    value(edited)?
-                    {
-                        if (edited)
+                        none?
                         {
-                            match (eid)
+                            NewLine();
+                            TextDisabled(
+                                F"编辑器没有为 `{mtype->script_name->or(mtype->name)}` 类型提供编辑组件");
+                        }
+                        value(edited)?
+                        {
+                            if (edited)
                             {
-                                none?;
-                                value(eidv)?
-                                    match (old_value)
-                                    {
-                                        none?;
-                                        value(before)?
-                                            EditSession::trackMember(
-                                                member_tag, PANEL_OWNER, wctx, eidv,
-                                                TEXTURES_TYPE->name, mname,
-                                                before,
-                                                unsafe::dynamic_parser::save(mtype, mhandle)
-                                                    ->or(before));
-                                    }
+                                match (eid)
+                                {
+                                    none?;
+                                    value(eidv)?
+                                        match (old_value)
+                                        {
+                                            none?;
+                                            value(before)?
+                                                EditSession::trackMember(
+                                                    member_tag, PANEL_OWNER, wctx, eidv,
+                                                    TEXTURES_TYPE->name, mname,
+                                                    before,
+                                                    unsafe::dynamic_parser::save(mtype, mhandle)
+                                                        ->or(before));
+                                        }
+                                }
                             }
                         }
                     }
                 }
-            }
-            Unindent(0.);
+                Unindent(0.);
 
-            showTextureChannelsEdit(wctx, e);
+                showTextureChannelsEdit(wctx, e);
+            }
+            Spacing();
         }
 
         public func run(self: Material)=> bool
