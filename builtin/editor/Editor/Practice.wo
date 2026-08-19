@@ -7,6 +7,7 @@ import woo::std;
 
 import je;
 import je::ecs;
+import je::gui;
 import je::internal;
 
 import pkg::interface;
@@ -16,6 +17,8 @@ import pkg::list;
 
 import WorldEditorViewport;
 import Action::IAction;
+
+import builtin::editor::GUI::Statebar;
 
 using je;
 using JEEditor::Editor::Action;
@@ -42,6 +45,14 @@ namespace JEEditor::Editor
                 m_history = []mut,
                 m_history_place_index = mut 0,
                 m_operation_queue = list::create:<ActionRequest>(),
+            };
+        }
+        
+        // 在独立函数里创建闭包：闭包按创建时的值捕获文本，之后每帧由 Statebar 调用绘制。
+        func showActionState(text: string)=> void
+        {
+            JEEditor::GUI::Statebar::showState(0.1) <| func(){
+                je::gui::Text(text);
             };
         }
         
@@ -77,8 +88,12 @@ namespace JEEditor::Editor
                             {
                                 if (self.m_history_place_index < self.m_history->len)
                                 {
-                                    if (self.m_history[self.m_history_place_index]->redo(w))
+                                    let redo_action = self.m_history[self.m_history_place_index];
+                                    if (redo_action->redo(w))
+                                    {
                                         self.m_history_place_index += 1;
+                                        showActionState(F"重做: {redo_action->describe()}");
+                                    }
                                     else
                                     {
                                         if (!retried)
@@ -98,8 +113,12 @@ namespace JEEditor::Editor
                                 let undo_action_index = self.m_history_place_index - 1;
                                 if (undo_action_index >= 0)
                                 {
-                                    if (self.m_history[undo_action_index]->undo(w))
+                                    let undo_action = self.m_history[undo_action_index];
+                                    if (undo_action->undo(w))
+                                    {
                                         self.m_history_place_index = undo_action_index;
+                                        showActionState(F"撤销: {undo_action->describe()}");
+                                    }
                                     else
                                     {
                                         if (!retried)
@@ -123,6 +142,7 @@ namespace JEEditor::Editor
                                         
                                     self.m_history->add(action);
                                     self.m_history_place_index += 1;
+                                    showActionState(action->describe());
                                 }
                                 else
                                 {
