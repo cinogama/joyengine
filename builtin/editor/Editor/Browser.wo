@@ -602,30 +602,30 @@ namespace JEEditor::Editor
                     
                     if (isdir(sel) && MenuItem("打开"))
                         self.m_current = sel;
-                        
-                    if (isWorldFile(sel) && MenuItem("打开"))
-                        WorldEditorViewport::openWorldEditorViewportFromFile(sel);
+
+                    match (openActionForPath(sel))
+                    {
+                        none?;
+                        value(open_action)?
+                            if (MenuItem("打开"))
+                                open_action(sel);
+                    }
                         
                     if (MenuItem("重命名"))
                     {
                         do InputBox::show("重命名", "请输入新名称：", sel_name)
                             ->then(func(new_name: string) {
                                     let new_path = sel_parent / new_name;
-                                    
+
+                                    match (renameActionForPath(sel))
+                                    {
+                                        none?;
+                                        value(on_renamed)?
+                                            on_renamed(sel, new_path);
+                                    }
+
                                     do move(sel, new_path);
                                     dirty->set(true);
-                                    
-                                    if (extension(sel)->lower == ".je4world")
-                                    {
-                                        // 重命名的世界文件若已有打开的视口：按新路径重开视口
-                                        //（同首次保存的逻辑），确保视口的保存路径与文件一致。
-                                        match (WorldEditorViewport::findWorldEditorViewportByPath(sel))
-                                        {
-                                            none?;
-                                            value(viewport)?
-                                                viewport->dropAndRetargetPath(new_path);
-                                        }
-                                    }
                                 })
                             ;
                     }
@@ -653,11 +653,40 @@ namespace JEEditor::Editor
             }
         }
         
-        // .je4world 世界文件判定（双击 / 右键菜单可打开为世界编辑视口）
-        func isWorldFile(path: fsys::path_t)=> bool
+        // 双击 / 右键“打开”时按扩展名查找打开回调：目录与未注册的扩展名返回 none。
+        func openActionForPath(path: fsys::path_t)=> option<(fsys::path_t)=> void>
         {
-            return isfile(path)
-                && string::lower(extension(path)) == ".je4world";
+            // 扩展名 -> 打开回调 的查找表；新增可打开的文件类型时在此注册。
+            static let ext_open_map = {
+                [".je4world"] = func(p: fsys::path_t) {
+                    WorldEditorViewport::openWorldEditorViewportFromFile(p);
+                },
+            };
+
+            if (!isfile(path))
+                return option::none;
+
+            return ext_open_map->get(string::lower(extension(path)));
+        }
+
+        // 文件被重命名后按扩展名查找联动回调（参数为 旧路径, 新路径）：未注册返回 none。
+        func renameActionForPath(path: fsys::path_t)=> option<(fsys::path_t, fsys::path_t)=> void>
+        {
+            // 扩展名 -> 重命名联动回调 的查找表；新增需要联动同步的文件类型时在此注册。
+            static let ext_rename_map = {
+                // 重命名的世界文件若已有打开的视口：按新路径重开视口
+                //（同首次保存的逻辑），确保视口的保存路径与文件一致。
+                [".je4world"] = func(old_path: fsys::path_t, new_path: fsys::path_t) {
+                    match (WorldEditorViewport::findWorldEditorViewportByPath(old_path))
+                    {
+                        none?;
+                        value(viewport)?
+                            viewport->dropAndRetargetPath(new_path);
+                    }
+                },
+            };
+
+            return ext_rename_map->get(string::lower(extension(path)));
         }
         
         func handleItemClick(self: Browser, path: fsys::path_t)=> void
@@ -673,9 +702,16 @@ namespace JEEditor::Editor
             
             if (is_double && isdir(path))
                 self.m_current = path;
-                
-            if (is_double && isWorldFile(path))
-                WorldEditorViewport::openWorldEditorViewportFromFile(path);
+
+            if (is_double)
+            {
+                match (openActionForPath(path))
+                {
+                    none?;
+                    value(open_action)?
+                        open_action(path);
+                }
+            }
         }
         
         func acceptDirDrop(self: Browser, target_dir: fsys::path_t)=> void
