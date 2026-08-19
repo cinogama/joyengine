@@ -66,6 +66,15 @@ namespace je::gui
         ImGuiMouseButton_Middle = 2,
         ImGuiMouseButton_COUNT = 5
         };
+
+    public enum Direction  // ImGuiDir
+    {
+        ImGuiDir_None    = -1,
+        ImGuiDir_Left    = 0,
+        ImGuiDir_Right   = 1,
+        ImGuiDir_Up      = 2,
+        ImGuiDir_Down    = 3,
+    };
         
     extern("libjoyecs", "je_gui_job_vm_handle")
         public func JobID()=> handle;
@@ -163,7 +172,12 @@ namespace je::gui
         
     extern("libjoyecs", "je_gui_invisible_button")
         public func InvisibleButton(msg:string, size: ImVec2)=> bool;
-        
+
+    // Attach a sidebar window to the main viewport (ImGui internal API).
+    // Always pair a `true` return with End().
+    extern("libjoyecs", "je_gui_begin_viewport_side_bar")
+        public func BeginViewportSideBar(name:string, dir: Direction, size: real, attribute: WindowsAttribute)=> bool;
+
     extern("libjoyecs", "je_gui_begin_main_menu_bar")
         public func BeginMainMenuBar()=> bool;
         

@@ -1,0 +1,27 @@
+import woo::std;
+
+import je;
+import je::gui;
+
+using std;
+using je;
+using je::gui;
+
+namespace JEEditor::GUI::Statebar
+{
+    public func start()
+    {
+        launch(func(){
+                if (BeginViewportSideBar(
+                        "EditorStatebar",
+                        Direction::ImGuiDir_Down,
+                        24.,
+                        WindowsAttribute::ImGuiWindowFlags_None))
+                {
+                    
+                }
+                End();
+                return true;
+            });
+    }
+}

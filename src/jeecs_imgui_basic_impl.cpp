@@ -1793,6 +1793,16 @@ WOORT_API woort_api je_gui_dock_space_over_viewport(void)
     return woort_ret_void();
 }
 
+WOORT_API woort_api je_gui_begin_viewport_side_bar(void)
+{
+    return woort_ret_bool(ImGui::BeginViewportSideBar(
+        woort_string(0),
+        ImGui::GetMainViewport(),
+        (ImGuiDir)woort_int(1),
+        woort_float(2),
+        (ImGuiWindowFlags)woort_int(3)));
+}
+
 WOORT_API woort_api je_gui_push_style_real(void)
 {
     ImGui::PushStyleVar((ImGuiStyleVar)woort_int(0), woort_float(1));

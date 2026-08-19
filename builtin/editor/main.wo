@@ -12,6 +12,7 @@ import pkg::fsys;
 
 import GUI::Windows;
 import GUI::Menu;
+import GUI::Statebar;
 
 import GUI::Forms::MsgBox;
 import GUI::Forms::AskBox;
@@ -87,6 +88,9 @@ func main()
     // 编辑器，直接初始化图形处理流程。
     je::internal::init_graphic_pipeline_for_editor(u);
     
+    // 开启状态栏
+    JEEditor::GUI::Statebar::start();
+
     // 开启主菜单
     JEEditor::Editor::MainMenu::registerMainMenu();
     
