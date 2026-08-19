@@ -1,0 +1,84 @@
+import woo::std;
+
+import je;
+import je::gui;
+import je::graphic;
+import je::internal;
+
+import builtin::editor::GUI::Icons;
+import builtin::editor::GUI::Statebar;
+
+using std;
+using je;
+using je::gui;
+using je::graphic;
+using JEEditor::GUI;
+using JEEditor::GUI::Icons;
+using JEEditor::GUI::Statebar;
+
+namespace JEEditor::Editor::LogStatebar
+{
+    // 引擎日志 → 底部状态栏通知器。
+    //
+    // 独立注册一个日志钩子（每个钩子持有独立队列，与 LogBrowser 互不干扰），
+    // 每帧排空增量日志，把 WARNING/ERROR/FATAL 以“图标 + 彩色文本”的形式
+    // 经 Statebar::showState 展示到状态栏；
+    // NORMAL/INFO 属于常规输出，不打扰用户，不展示。
+    let mut s_hook = 0h;
+    let mut s_running = false;
+
+    public func start()
+    {
+        if (s_running)
+            return;
+        s_running = true;
+
+        s_hook = internal::hooklog();
+        launch(func(){
+                drainNewLogs();
+                return true;
+            });
+    }
+    public func shutdown()
+    {
+        if (!s_running)
+            return;
+        s_running = false;
+
+        internal::unhooklog(s_hook);
+        s_hook = 0h;
+    }
+
+    func drainNewLogs()=> void
+    {
+        for (let entry : internal::getlogs(s_hook))
+        {
+            let (lvl, msg) = entry;
+
+            if (lvl == internal::loglevel::WARNING)
+                showLogState(Icons::WARNING, (240, 200, 80, 255), F"[警告] {msg}", 4.);
+            if (lvl == internal::loglevel::ERROR)
+                showLogState(Icons::ERROR, (240, 110, 110, 255), F"[错误] {msg}", 6.);
+            if (lvl == internal::loglevel::FATAL)
+                showLogState(Icons::ERROR, (255, 70, 70, 255), F"[致命] {msg}", 8.);
+        }
+    }
+
+    // 在独立函数里创建闭包：闭包按创建时的值捕获图标、颜色与文本，
+    // 之后每帧由 Statebar 调用绘制。
+    func showLogState(icon: option<graphic::texture>, color: Color32RGBA, text: string, keep_time: real)=> void
+    {
+        JEEditor::GUI::Statebar::showState(keep_time) <| func(){
+            match (icon)
+            {
+                none?;
+                value(tex)?
+                {
+                    ImageSize(tex, 16., 16.);
+                    SameLine();
+                }
+            }
+            TextColored(color, text);
+        };
+    }
+}

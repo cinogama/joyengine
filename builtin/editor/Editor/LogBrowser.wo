@@ -16,7 +16,7 @@ using JEEditor::GUI::Windows;
 namespace JEEditor::Editor
 {
     // 日志浏览器
-    // je::internal::getlogs() 是“排空式”接口：每次调用只返回自上次调用以来新增的日志。
+    // je::internal::getlogs(钩子) 是“排空式”接口：每次调用只返回该钩子自上次调用以来新增的日志。
     // 因此这里维护一个本地累积缓冲 m_logs，每帧排空 getlogs() 追加进去，
     // 并提供过滤、着色、自动滚动与上限裁剪。
     using LogBrowser = struct{
@@ -107,7 +107,7 @@ namespace JEEditor::Editor
         // 排空 getlogs() 的增量日志到本地缓冲，并在超限时裁剪
         func drainLogs(self: LogBrowser)=> void
         {
-            for (let entry : internal::getlogs())
+            for (let entry : internal::getlogs(self.m_hook))
                 self.m_logs->add(entry);
                 
             let cur = self.m_logs->len;

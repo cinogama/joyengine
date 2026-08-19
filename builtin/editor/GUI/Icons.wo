@@ -11,6 +11,7 @@ namespace JEEditor::GUI::Icons
     WHITE->pix((0, 0))->set_color((1., 1., 1., 1.));
 
     public let WARNING = texture::load(option::none, "!/builtin/icon/Warning.png");
+    public let ERROR = texture::load(option::none, "!/builtin/icon/Error.png");
     public let ASK = texture::load(option::none, "!/builtin/icon/Ask.png");
     
     // ---- 文件 / 文件夹类型图标 ----

@@ -241,12 +241,14 @@ namespace je
         
         extern("libjoyecs", "wojeapi_register_log_callback")
             public func hooklog()=> handle;
-            
+
         extern("libjoyecs", "wojeapi_unregister_log_callback")
             public func unhooklog(i: handle)=> void;
-            
+
+        // 每个钩子持有独立队列：getlogs(i) 只返回该钩子自上次调用以来新增的日志，
+        // 多个钩子各自排空互不影响。
         extern("libjoyecs", "wojeapi_get_all_logs")
-            public func getlogs()=> array<(loglevel, string)>;
+            public func getlogs(i: handle)=> array<(loglevel, string)>;
             
         extern("libjoyecs", "wojeapi_get_entity_arch_information")
             public func get_entity_arch_information(e: entity)=> (int, int, int); // chunk_size, entity_size, entity_count

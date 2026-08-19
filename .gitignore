@@ -370,3 +370,6 @@ _deps
 # macOS Finder metadata
 .DS_Store
 
+
+# ZCode agent local data
+.zcode/

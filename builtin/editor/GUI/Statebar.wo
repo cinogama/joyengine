@@ -54,6 +54,15 @@ namespace JEEditor::GUI::Statebar
     }
     public func showState(job: ()=> void, keep_time_at_least: real)
     {
+        if (false)
+        {
+            // 防止调用方灌爆队列（例如日志刷屏时）：超过上限则优先丢弃最旧的待展示状态
+            while (s_state_showing_queue->len >= 16)
+            {
+                do s_state_showing_queue->pop_front();
+            }
+        }
+
         s_state_showing_queue->add((job, mut 24., time() + keep_time_at_least));
     }
 }

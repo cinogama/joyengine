@@ -20,6 +20,7 @@ import GUI::Forms::AskBox;
 import Editor::Browser;
 import Editor::EntityList;
 import Editor::LogBrowser;
+import Editor::LogStatebar;
 import Editor::MainMenu;
 import Editor::Inspector;
 import Editor::Material;
@@ -77,6 +78,11 @@ func main()
             }
             return false;
         });
+        
+    // 开启状态栏的引擎日志通知（WARNING/ERROR/FATAL 以图标 + 彩色文本展示）
+    JEEditor::Editor::LogStatebar::start();
+    defer JEEditor::Editor::LogStatebar::shutdown();
+
     defer {
         u->wait();
         gui::unregister_exit_callback();
