@@ -27,7 +27,8 @@ namespace JEEditor::GUI::Statebar
                 }
                 
                 do try!{
-                    try! (state, mut height, _) = s_state_showing_queue->front;
+                    try! current_state = s_state_showing_queue->front;
+                    let (state, height, _) = current_state;
                     
                     if (BeginViewportSideBar(
                             "EditorStatebar",
@@ -36,6 +37,11 @@ namespace JEEditor::GUI::Statebar
                             WindowsAttribute::ImGuiWindowFlags_None))
                     {
                         state();
+
+                        let (_, avail_y) = GetContentRegionAvail();
+
+                        // 本帧窗口被强制为传入的 height,剩余空间是 avail_y
+                        current_state.1 = (immut height) - avail_y;   // 即 cursor.y + 下边距,自动含内边距
                     }
                     
                     return_value!;

@@ -102,8 +102,8 @@ func main()
     do Material::showMaterial();
 
     // 展示第一条信息
-    JEEditor::GUI::Statebar::showState(24., 3.) <| func(){
-        je::gui::Text(F"当前工作路径: {fsys::workpath()->to_string}");
+    JEEditor::GUI::Statebar::showState(3.) <| func(){
+        je::gui::TextDisabled(F"JoyEngine 4.X, 当前工作路径: {fsys::workpath()->to_string}");
     };
 }
 
