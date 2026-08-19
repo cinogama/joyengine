@@ -1,0 +1,25 @@
+import je::ecs;
+
+import pkg::toml;
+
+import builtin::gaming::Saving::World;
+import Entity;
+
+using je;
+using JEGaming::Saving;
+using toml;
+
+namespace JEEditor::Saving::World
+{
+    public func save(w: world)
+    {
+        let wdat = World::saveWithCustomEntitySaver(
+            w, JEEditor::Saving::Entity::save);
+        return wdat;
+    }
+    public func restore(u: universe, wdat: Toml)
+    {
+        return World::restoreWithCustomEntityRestorer(
+            u, wdat, JEEditor::Saving::Entity::restore);
+    }
+}

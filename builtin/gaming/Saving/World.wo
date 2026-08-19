@@ -20,7 +20,7 @@ using iterator;
 
 namespace JEGaming::Saving::World
 {
-    public func save(w: world)=> Toml
+    public func saveWithCustomEntitySaver(w: world, entity_saver: (entity)=> Toml)=> Toml
     {
         let world_dat = new_table();
 
@@ -33,7 +33,7 @@ namespace JEGaming::Saving::World
 
             entities_dat->add(mut (
                     e->internal::get_entity_uid->or(0h as entity::internal::euid_t),
-                    Entity::save(e),
+                    entity_saver(e),
                 ));
         }
         sort_in_place(entities_dat, \(ida, _), (idb, _) = ida < idb;);
@@ -47,8 +47,13 @@ namespace JEGaming::Saving::World
                     
         return world_dat;
     }
-    public func restore(u: universe, wdat: Toml)=> world
+    public func save(w: world)=> Toml
     {
+        return saveWithCustomEntitySaver(w, Entity::save);
+    }
+    public func restoreWithCustomEntityRestorer(
+        u: universe, wdat: Toml, entity_restorer: (world, Toml)=> entity)=> world
+        {
         let w = world::create(u);
         
         // Restore systems.
@@ -72,8 +77,12 @@ namespace JEGaming::Saving::World
         // Restore entities.
         let entities_dat = wdat->get("entities")=>> \v = v->as_array;->or([]);
         for (let edat : entities_dat)
-            do Entity::restore(w, edat);
+            do entity_restorer(w, edat);
             
         return w;
+    }
+    public func restore(u: universe, wdat: Toml)=> world
+    {
+        return restoreWithCustomEntityRestorer(u, wdat, Entity::restore);
     }
 }
