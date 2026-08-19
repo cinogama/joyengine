@@ -6,6 +6,7 @@ import LogBrowser;
 import Material;
 import ReplConsole;
 import WorldEditorViewport;
+import Inspector;
 
 namespace JEEditor::Editor::MainMenu
 {
@@ -29,6 +30,16 @@ namespace JEEditor::Editor::MainMenu
                 })
             ->      checkWhen(Browser::isBrowserExist)
             ->      endItem
+            ->  subItem("日志浏览器",
+                func()
+                {
+                    if (LogBrowser::isLogBrowserExist())
+                        LogBrowser::closeLogBrowser();
+                    else
+                        LogBrowser::showLogBrowser();
+                })
+            ->      checkWhen(LogBrowser::isLogBrowserExist)
+            ->      endItem
             ->  subItem("实体列表",
                 func()
                 {
@@ -39,15 +50,15 @@ namespace JEEditor::Editor::MainMenu
                 })
             ->      checkWhen(EntityList::isEntityListExist)
             ->      endItem
-            ->  subItem("日志浏览器",
+            ->  subItem("检视面板",
                 func()
                 {
-                    if (LogBrowser::isLogBrowserExist())
-                        LogBrowser::closeLogBrowser();
+                    if (Inspector::isInspectorExist())
+                        Inspector::closeInspector();
                     else
-                        LogBrowser::showLogBrowser();
+                        Inspector::showInspector();
                 })
-            ->      checkWhen(LogBrowser::isLogBrowserExist)
+            ->      checkWhen(EntityList::isEntityListExist)
             ->      endItem
             ->  subItem("材质编辑器",
                 func()
