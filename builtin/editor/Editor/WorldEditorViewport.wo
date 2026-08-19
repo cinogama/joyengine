@@ -1806,7 +1806,8 @@ namespace JEEditor::Editor
         public func saveWorldTo(self: WorldEditorViewport, path: path_t)=> bool
         {
             match (toml::save(
-                    JEEditor::Saving::World::save(self.m_world_instance), path))
+                    JEEditor::Saving::World::save(
+                        self.m_world_instance, self.m_name), path))
             {
                 err(msg)?
                 {
@@ -2121,14 +2122,19 @@ namespace JEEditor::Editor
                     ensureDebugCamera(w);
                     w->set_enable(true);
 
+                    // 优先使用文件中保存的世界名（与文件名无关）；
+                    // 旧版本文件未保存名字，退回文件名。
+                    let name = JEEditor::Saving::World::getName(wdat)
+                        ->or(purename(path));
+
                     match (Windows::show(
-                            create(w, purename(path), option::value(path))))
+                            create(w, name, option::value(path))))
                     {
                         none?
                         {
                             // 极短时间内的重复打开：窗口注册失败，释放刚创建的世界
                             MsgBox::err(
-                                "打开失败", F"世界 \"{purename(path)}\" 已在编辑器中打开");
+                                "打开失败", F"世界 \"{name}\" 已在编辑器中打开");
                             w->close;
                         }
                         value(_)?;

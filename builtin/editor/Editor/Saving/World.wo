@@ -1,3 +1,5 @@
+import woo::std;
+
 import je::ecs;
 
 import pkg::toml;
@@ -11,15 +13,24 @@ using toml;
 
 namespace JEEditor::Saving::World
 {
-    public func save(w: world)
+    public func save(w: world, name: string)
     {
         let wdat = World::saveWithCustomEntitySaver(
             w, JEEditor::Saving::Entity::save);
+
+        // 世界的名字与文件名（保存路径）无关，须随文件单独保存
+        wdat->set("name", name);
+
         return wdat;
     }
     public func restore(u: universe, wdat: Toml)
     {
         return World::restoreWithCustomEntityRestorer(
             u, wdat, JEEditor::Saving::Entity::restore);
+    }
+    // 读取保存在文件中的世界名；旧版本文件未保存名字时返回 none。
+    public func getName(wdat: Toml)=> option<string>
+    {
+        return wdat->get("name")=>> \v = v->as_string;;
     }
 }
