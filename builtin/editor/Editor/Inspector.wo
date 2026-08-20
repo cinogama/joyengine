@@ -193,7 +193,11 @@ namespace JEEditor::Editor
         // 已添加的组件自下一帧起从候选中消失。
         func showAddComponentPicker(wctx: WorldEditorViewport, e: entity)=> void
         {
-            SetNextItemWidth(-1.);
+            // 弹窗大小由内容自适应；若控件用 -1 占满宽度，弹窗自身没有
+            // 可参考的实宽，会塌缩成细条，因此这里给控件显式像素宽度
+            let picker_width = 300.;
+
+            SetNextItemWidth(picker_width);
             if (s_add_component_focus)
             {
                 SetKeyboardFocusHere(0);
@@ -219,7 +223,7 @@ namespace JEEditor::Editor
                 |> sort(\l, r = l->name < r->name;);
 
             // 列表高度固定为约 8 行，避免候选过多时撑爆弹窗
-            if (BeginListBox("##add_component_candidates", -1.,
+            if (BeginListBox("##add_component_candidates", picker_width,
                     GetFrameHeightWithSpacing() * 8.))
             {
                 // 与上方组件区一致的命名空间分组标题
