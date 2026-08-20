@@ -291,7 +291,15 @@ WOORT_API woort_api wojeapi_create_universe(void)
 
 WOORT_API woort_api wojeapi_close_universe(void)
 {
-    je_ecs_universe_destroy(static_cast<je_GameUniverse*>(woort_pointer(0)));
+    je_GameUniverse* const universe = 
+        static_cast<je_GameUniverse*>(woort_pointer(0));
+
+    woort_vm* const last = woort_vm_swap(nullptr);
+    {
+        je_ecs_universe_destroy(universe);
+    }
+    (void)woort_vm_swap(last);
+
     return woort_ret_void();
 }
 
