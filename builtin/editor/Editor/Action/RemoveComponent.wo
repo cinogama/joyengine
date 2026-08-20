@@ -17,8 +17,9 @@ using je;
 namespace JEEditor::Editor::Action
 {
     // 从实体移除组件；undo 时重新添加并恢复移除前的成员值。
-    // 创建 Action 时即对组件的反射成员做序列化快照（着色器列表与纹理通道
-    // 不属于反射成员，它们挂在实体上，移除/重加组件不影响其内容）。
+    // 创建 Action 时即对组件的反射成员做序列化快照。
+    // Renderer 三件套（Shape/Shaders/Textures）的数据不走反射成员，
+    // 由 RemoveRendererComponent 中的专用 Action 处理。
     // 只保存组件类型名，redo/undo 执行时再通过 typeinfo::load 加载，
     // 避免 typeinfo 句柄在类型热重载等情况下失效。
     protected using RemoveComponent = struct{

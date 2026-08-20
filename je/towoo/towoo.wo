@@ -470,6 +470,13 @@ namespace UserInterface
 }
 namespace Renderer
 {
+    namespace Shape
+    {
+        extern("libjoyecs", "wojeapi_towoo_renderer_shape_get_vertex")
+            public func get_vertex(self: Shape)=> option<je::graphic::vertex>;
+        extern("libjoyecs", "wojeapi_towoo_renderer_shape_set_vertex")
+            public func set_vertex(self: Shape, vertex: option<je::graphic::vertex>)=> void;
+    }
     namespace Textures
     {
         extern("libjoyecs", "wojeapi_towoo_renderer_textures_bind_texture")

@@ -1,0 +1,332 @@
+import woo::std;
+
+import je;
+import je::ecs;
+import je::graphic;
+import je::internal;
+import je::typeinfo;
+
+import je::towoo;
+import je::towoo::types;
+import je::towoo::components;
+
+import pkg::interface;
+import pkg::try;
+
+import builtin::editor::Editor::WorldEditorViewport;
+
+import IAction;
+
+using je;
+using je::graphic;
+
+namespace JEEditor::Editor::Action
+{
+    // 渲染器三件套（Renderer::Shape/Shaders/Textures）的专用移除 Action。
+    // 它们的数据（模型、着色器列表、纹理通道、tiling/offset）不走反射成员，
+    // 而是存放在组件实例里，移除即销毁、重加得到空实例；因此移除前通过
+    // 强类型接口做句柄快照（引擎资源系统持有，Action 引用期间不失效），
+    // undo 时用 towoo::add_component 重加——它返回当帧即可写入的暂存
+    // 实例——再经强类型方法整体恢复，无需等待命令缓冲刷新。
+
+    protected using RemoveRendererShaders = struct{
+        m_eid: entity::internal::euid_t,
+        m_saved_shaders: array<shader>,
+    }
+    {
+        public func try_create(e: entity)=> option<RemoveRendererShaders>
+            where require!(RemoveRendererShaders: IAction);
+        {
+            return try!{
+                try! eid = e->internal::get_entity_uid;
+                try! cinst = e->towoo::get_component:<Renderer::Shaders>;
+
+                return_value! RemoveRendererShaders{
+                    m_eid = eid,
+                    m_saved_shaders = cinst->get_shaders(),
+                };
+            } catch! {
+                logerr("传入的实体应当有对应的 EUID 与 Renderer::Shaders 组件");
+            };
+        }
+
+        // 创建并提交移除操作；无法创建（如实体缺少 EUID）时返回 false，
+        // 由调用方退回通用移除流程
+        public func remove(wctx: WorldEditorViewport, e: entity)=> bool
+        {
+            match (RemoveRendererShaders::try_create(e))
+            {
+                none? return false;
+                value(action)? wctx->doAction(action);
+            }
+            return true;
+        }
+
+        // 组件已不存在时视为成功（幂等）
+        public func redo(self: RemoveRendererShaders, w: WorldEditorViewport)=> bool
+        {
+            for (let e : w->getEntitySelector())
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(ueid)?
+                        if (ueid == self.m_eid)
+                        {
+                            if (e->towoo::get_component:<Renderer::Shaders>->is_value)
+                                do e->towoo::remove_component:<Renderer::Shaders>();
+                            return true;
+                        }
+                }
+            }
+            return false;
+        }
+
+        // 重加组件并恢复着色器列表；已存在时仅恢复数据（幂等）
+        public func undo(self: RemoveRendererShaders, w: WorldEditorViewport)=> bool
+        {
+            for (let e : w->getEntitySelector())
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(ueid)?
+                        if (ueid == self.m_eid)
+                            return self->restoreTo(e);
+                }
+            }
+            return false;
+        }
+
+        func restoreTo(self: RemoveRendererShaders, e: entity)=> bool
+        {
+            match (e->towoo::get_component:<Renderer::Shaders>)
+            {
+                value(cinst)?
+                    do cinst->set_shaders(self.m_saved_shaders);
+                none?
+                    match (e->towoo::add_component:<Renderer::Shaders>())
+                    {
+                        none? return false;
+                        value(cinst)?
+                            do cinst->set_shaders(self.m_saved_shaders);
+                    }
+            }
+            return true;
+        }
+
+        public func describe(_: RemoveRendererShaders)=> string
+        {
+            return "移除组件 Renderer::Shaders";
+        }
+    }
+
+    protected using RemoveRendererTextures = struct{
+        m_eid: entity::internal::euid_t,
+        m_saved_tiling: vec2,
+        m_saved_offset: vec2,
+        m_saved_textures: array<(int, texture)>,
+    }
+    {
+        public func try_create(e: entity)=> option<RemoveRendererTextures>
+            where require!(RemoveRendererTextures: IAction);
+        {
+            return try!{
+                try! eid = e->internal::get_entity_uid;
+                try! cinst = e->towoo::get_component:<Renderer::Textures>;
+
+                // 纹理通道没有强类型枚举接口，经实体级字典枚举快照
+                let mut saved_textures = []: array<(int, texture)>;
+                for (let (tpass, tinst) : e->get_textures)
+                    saved_textures = saved_textures->append((tpass, tinst));
+
+                return_value! RemoveRendererTextures{
+                    m_eid = eid,
+                    m_saved_tiling = cinst.tiling->get(),
+                    m_saved_offset = cinst.offset->get(),
+                    m_saved_textures = saved_textures,
+                };
+            } catch! {
+                logerr("传入的实体应当有对应的 EUID 与 Renderer::Textures 组件");
+            };
+        }
+
+        public func remove(wctx: WorldEditorViewport, e: entity)=> bool
+        {
+            match (RemoveRendererTextures::try_create(e))
+            {
+                none? return false;
+                value(action)? wctx->doAction(action);
+            }
+            return true;
+        }
+
+        public func redo(self: RemoveRendererTextures, w: WorldEditorViewport)=> bool
+        {
+            for (let e : w->getEntitySelector())
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(ueid)?
+                        if (ueid == self.m_eid)
+                        {
+                            if (e->towoo::get_component:<Renderer::Textures>->is_value)
+                                do e->towoo::remove_component:<Renderer::Textures>();
+                            return true;
+                        }
+                }
+            }
+            return false;
+        }
+
+        public func undo(self: RemoveRendererTextures, w: WorldEditorViewport)=> bool
+        {
+            for (let e : w->getEntitySelector())
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(ueid)?
+                        if (ueid == self.m_eid)
+                            return self->restoreTo(e);
+                }
+            }
+            return false;
+        }
+
+        func restoreTo(self: RemoveRendererTextures, e: entity)=> bool
+        {
+            match (e->towoo::get_component:<Renderer::Textures>)
+            {
+                value(cinst)?
+                    self->restoreToInstance(cinst);
+                none?
+                    match (e->towoo::add_component:<Renderer::Textures>())
+                    {
+                        none? return false;
+                        value(cinst)?
+                            self->restoreToInstance(cinst);
+                    }
+            }
+            return true;
+        }
+
+        func restoreToInstance(
+            self: RemoveRendererTextures, cinst: Renderer::Textures)=> void
+        {
+            do cinst.tiling->set(self.m_saved_tiling);
+            do cinst.offset->set(self.m_saved_offset);
+            for (let (tpass, tinst) : self.m_saved_textures)
+                cinst->bind_texture(tpass, tinst);
+        }
+
+        public func describe(_: RemoveRendererTextures)=> string
+        {
+            return "移除组件 Renderer::Textures";
+        }
+    }
+
+    protected using RemoveRendererShape = struct{
+        m_eid: entity::internal::euid_t,
+        m_saved_vertex: option<vertex>,
+    }
+    {
+        public func try_create(e: entity)=> option<RemoveRendererShape>
+            where require!(RemoveRendererShape: IAction);
+        {
+            return try!{
+                try! eid = e->internal::get_entity_uid;
+                try! cinst = e->towoo::get_component:<Renderer::Shape>;
+
+                return_value! RemoveRendererShape{
+                    m_eid = eid,
+                    m_saved_vertex = cinst->get_vertex(),
+                };
+            } catch! {
+                logerr("传入的实体应当有对应的 EUID 与 Renderer::Shape 组件");
+            };
+        }
+
+        public func remove(wctx: WorldEditorViewport, e: entity)=> bool
+        {
+            match (RemoveRendererShape::try_create(e))
+            {
+                none? return false;
+                value(action)? wctx->doAction(action);
+            }
+            return true;
+        }
+
+        public func redo(self: RemoveRendererShape, w: WorldEditorViewport)=> bool
+        {
+            for (let e : w->getEntitySelector())
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(ueid)?
+                        if (ueid == self.m_eid)
+                        {
+                            if (e->towoo::get_component:<Renderer::Shape>->is_value)
+                                do e->towoo::remove_component:<Renderer::Shape>();
+                            return true;
+                        }
+                }
+            }
+            return false;
+        }
+
+        public func undo(self: RemoveRendererShape, w: WorldEditorViewport)=> bool
+        {
+            for (let e : w->getEntitySelector())
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(ueid)?
+                        if (ueid == self.m_eid)
+                            return self->restoreTo(e);
+                }
+            }
+            return false;
+        }
+
+        func restoreTo(self: RemoveRendererShape, e: entity)=> bool
+        {
+            match (e->towoo::get_component:<Renderer::Shape>)
+            {
+                value(cinst)?
+                    do cinst->set_vertex(self.m_saved_vertex);
+                none?
+                    match (e->towoo::add_component:<Renderer::Shape>())
+                    {
+                        none? return false;
+                        value(cinst)?
+                            do cinst->set_vertex(self.m_saved_vertex);
+                    }
+            }
+            return true;
+        }
+
+        public func describe(_: RemoveRendererShape)=> string
+        {
+            return "移除组件 Renderer::Shape";
+        }
+    }
+
+    // 渲染器三件套的移除入口：按类型名分发到专用 Action，命中并成功
+    // 提交时返回 true；未命中或无法创建（如缺少 EUID）返回 false，
+    // 由调用方退回通用 RemoveComponent 流程。
+    public func tryRemoveRendererComponent(
+        wctx: WorldEditorViewport, e: entity, ctype: typeinfo)=> bool
+    {
+        if (ctype->name == "Renderer::Shaders")
+            return RemoveRendererShaders::remove(wctx, e);
+        if (ctype->name == "Renderer::Textures")
+            return RemoveRendererTextures::remove(wctx, e);
+        if (ctype->name == "Renderer::Shape")
+            return RemoveRendererShape::remove(wctx, e);
+        return false;
+    }
+}

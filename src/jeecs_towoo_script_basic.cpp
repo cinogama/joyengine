@@ -1605,6 +1605,44 @@ WOORT_API woort_api wojeapi_towoo_renderer_textures_get_texture(void)
     return woort_ret_option_none();
 }
 
+WOORT_API woort_api wojeapi_towoo_renderer_shape_get_vertex(void)
+{
+    auto& shape =
+        wo_component<jeecs::Renderer::Shape>(0, WOORT_RETURN_SLOT);
+
+    if (shape.vertex.has_value())
+    {
+        return woort_ret_option_gchandle(
+            new jeecs::basic::resource<jeecs::graphic::vertex>(shape.vertex.value()),
+            WOORT_IGNORE,
+            [](void* p)
+            {
+                delete static_cast<jeecs::basic::resource<jeecs::graphic::vertex>*>(p);
+            },
+            nullptr);
+    }
+    return woort_ret_option_none();
+}
+
+WOORT_API woort_api wojeapi_towoo_renderer_shape_set_vertex(void)
+{
+    auto& shape =
+        wo_component<jeecs::Renderer::Shape>(0, WOORT_RETURN_SLOT);
+
+    if (woort_option_get(WOORT_RETURN_SLOT, 1))
+    {
+        shape.vertex.emplace(
+            *static_cast<jeecs::basic::resource<jeecs::graphic::vertex>*>(
+                woort_gcpointer(WOORT_RETURN_SLOT)));
+    }
+    else
+    {
+        shape.vertex.reset();
+    }
+
+    return woort_ret_void();
+}
+
 WOORT_API woort_api wojeapi_towoo_renderer_shaders_set_uniform_i(void)
 {
     auto& shaders =
