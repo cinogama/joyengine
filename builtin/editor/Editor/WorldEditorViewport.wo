@@ -78,7 +78,7 @@ namespace JEEditor::Editor
         
         m_selected_entity_id: mut option<entity::internal::euid_t>,
         
-        m_action_history: Practice,
+        m_action_history: mut Practice,
         
         // Camera control state:
         m_debug_camera_selector: entity_selector,
@@ -223,7 +223,7 @@ namespace JEEditor::Editor
                 m_fb_settle_counter = mut 0,
                 
                 m_selected_entity_id = mut option::none,
-                m_action_history = Practice::create(),
+                m_action_history = mut Practice::create(),
                 m_debug_camera_selector = w->create_selector([
                         requirement::contains(Editor::Invisible::type::typeinfo),
                         requirement::contains(Camera::RendToFramebuffer::type::typeinfo),
@@ -1820,24 +1820,41 @@ namespace JEEditor::Editor
             }
         }
 
+        // 以新的名称/保存路径重建本视口（沿用当前世界实例与未保存的修改）。
+        // 重建成功时把编辑历史（m_action_history）迁移到新视口以保持撤销/重做连续，
+        // 再以 CLOSE_BUT_KEEP_WORLD 关闭旧视口；窗口创建失败时返回 false。
+        func reopenWith(
+            self: WorldEditorViewport,
+            new_name: string,
+            new_path: option<path_t>)=> bool
+        {
+            let new_viewport = create(self.m_world_instance, new_name, new_path);
+
+            match (Windows::show(new_viewport))
+            {
+                none?
+                    return false;
+                value(_)?
+                {
+                    new_viewport.m_action_history = self.m_action_history;
+                    self.m_close = CloseRequest::CLOSE_BUT_KEEP_WORLD;
+                    return true;
+                }
+            }
+        }
+
         public func dropAndRename(self: WorldEditorViewport, new_name: string)=> void
         {
             if (self->isCurrentViewportAvailable && self.m_name != new_name)
             {
-                match (Windows::show(
-                        create(self.m_world_instance, new_name, self.m_saving_path)))
+                if (!self->reopenWith(new_name, self.m_saving_path))
                 {
-                    none?
-                    {
-                        MsgBox::err(
-                            "重命名失败", "重命名世界失败，存在同名的未保存世界");
-                            
-                        if (!self.m_saving_path->is_none)
-                            // 这种情况通常情况下不应该发生
-                            logerr("Failed to rename world: duplicated opened world?");
-                    }
-                    value(_)?
-                        self.m_close = CloseRequest::CLOSE_BUT_KEEP_WORLD;
+                    MsgBox::err(
+                        "重命名失败", "重命名世界失败，存在同名的未保存世界");
+
+                    if (!self.m_saving_path->is_none)
+                        // 这种情况通常情况下不应该发生
+                        logerr("Failed to rename world: duplicated opened world?");
                 }
             }
         }
@@ -1848,22 +1865,14 @@ namespace JEEditor::Editor
         {
             if (self->isCurrentViewportAvailable && self.m_saving_path->is_none)
             {
-                match (Windows::show(
-                        create(self.m_world_instance, self.m_name, option::value(new_path))))
-                {
-                    none?
-                    {
-                        MsgBox::err(
-                            "保存失败", "世界已写入文件，但以新的保存路径重开视口失败：存在使用该路径的世界视口");
-                    }
-                    value(_)?
-                        self.m_close = CloseRequest::CLOSE_BUT_KEEP_WORLD;
-                }
+                if (!self->reopenWith(self.m_name, option::value(new_path)))
+                    MsgBox::err(
+                        "保存失败", "世界已写入文件，但以新的保存路径重开视口失败：存在使用该路径的世界视口");
             }
         }
 
         // 资源管理器中重命名世界文件后调用：把视口的保存路径重定向到新路径。
-        // 沿用首次保存的“重建窗口”逻辑（保留世界实例与未保存的修改），
+        // 沿用首次保存的“重建窗口”逻辑（保留世界实例、未保存的修改与编辑历史），
         // 关闭旧视口并以新路径重开，确保窗口标题与后续保存路径立即匹配重命名后的文件。
         public func dropAndRetargetPath(self: WorldEditorViewport, new_path: path_t)=> void
         {
@@ -1879,17 +1888,9 @@ namespace JEEditor::Editor
                     if (old_path == new_path)
                         return;
 
-                    match (Windows::show(
-                            create(self.m_world_instance, self.m_name, option::value(new_path))))
-                    {
-                        none?
-                        {
-                            MsgBox::err(
-                                "重命名失败", "文件已重命名，但以新路径重开视口失败：存在使用该路径的世界视口");
-                        }
-                        value(_)?
-                            self.m_close = CloseRequest::CLOSE_BUT_KEEP_WORLD;
-                    }
+                    if (!self->reopenWith(self.m_name, option::value(new_path)))
+                        MsgBox::err(
+                            "重命名失败", "文件已重命名，但以新路径重开视口失败：存在使用该路径的世界视口");
                 }
             }
         }
