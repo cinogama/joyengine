@@ -13,6 +13,7 @@ import builtin::editor::GUI::Windows;
 
 import WorldEditorViewport;
 import EditSession;
+import Action::AddComponent;
 import Action::RemoveComponent;
 
 using std;
@@ -33,6 +34,10 @@ namespace JEEditor::Editor
         let PANEL_OWNER = "Inspector";
         
         let mut s_inspector_singleton = option::none: option<Inspector>;
+
+        // “添加组件”选择弹窗的状态；检视面板是单例，用模块级状态即可
+        let mut s_add_component_filter = "";
+        let mut s_add_component_focus = false;
         
         public func isInspectorExist()
         {
@@ -169,6 +174,86 @@ namespace JEEditor::Editor
             }
             Unindent(0.);
         }
+        // 移除组件的统一入口：先结束可能进行中的编辑手势，再发布可撤销的
+        // 移除操作；没有 EUID 的实体退化为直接移除（无法支持撤销）
+        func removeComponentFromEntity(
+            wctx: WorldEditorViewport, e: entity, ctype: typeinfo)=> void
+        {
+            EditSession::commit();
+            match (RemoveComponent::try_create(e, ctype))
+            {
+                none?
+                    do e->remove_component(ctype);
+                value(action)?
+                    wctx->doAction(action);
+            }
+        }
+        // “添加组件”选择弹窗：搜索过滤 + 按命名空间分组的候选列表。
+        // 选中一项立即发布添加操作且保持弹窗打开，便于连续添加；
+        // 已添加的组件自下一帧起从候选中消失。
+        func showAddComponentPicker(wctx: WorldEditorViewport, e: entity)=> void
+        {
+            SetNextItemWidth(-1.);
+            if (s_add_component_focus)
+            {
+                SetKeyboardFocusHere(0);
+                s_add_component_focus = false;
+            }
+            match (InputText("##add_component_filter", s_add_component_filter))
+            {
+                none?;
+                value(new_filter)?
+                    s_add_component_filter = new_filter;
+            }
+
+            let filter_lower = s_add_component_filter->lower;
+            let has_filter = filter_lower->len > 0;
+
+            // 候选为全部已注册组件，排除编辑器内部组件（Editor::*）、
+            // 实体已有的组件以及不匹配搜索词的组件（按含命名空间的全名匹配）
+            let candidates = typeinfo::get_all_components_types()
+                ->forall(\ctype = !ctype->name->begin_with("Editor::") &&
+                            e->get_component(ctype)->is_none &&
+                            (!has_filter ||
+                                ctype->name->lower->find(filter_lower)->is_value);)
+                |> sort(\l, r = l->name < r->name;);
+
+            // 列表高度固定为约 8 行，避免候选过多时撑爆弹窗
+            if (BeginListBox("##add_component_candidates", -1.,
+                    GetFrameHeightWithSpacing() * 8.))
+            {
+                // 与上方组件区一致的命名空间分组标题
+                let mut last_namespace = "";
+                for (let ctype : candidates)
+                {
+                    let (ns, short_name) = splitTypeName(ctype->name);
+                    if (ns != last_namespace)
+                    {
+                        if (ns != "")
+                            SeparatorText(ns);
+                        last_namespace = ns;
+                    }
+
+                    if (Selectable(F"{short_name}##add_{ctype->name}"))
+                    {
+                        // 先结束可能进行中的编辑手势，再发布添加组件的操作
+                        EditSession::commit();
+                        match (AddComponent::try_create(e, ctype))
+                        {
+                            none?
+                                // 没有 EUID 的实体退化为直接添加（无法支持撤销）
+                                do e->add_component(ctype);
+                            value(action)?
+                                wctx->doAction(action);
+                        }
+                    }
+                }
+                if (candidates->len == 0)
+                    TextDisabled("（没有匹配的组件）");
+
+                EndListBox();
+            }
+        }
         func showEntityComponentEditImpl(wctx: WorldEditorViewport, e: entity)
         {
             showEntityNameEdit(wctx, e);
@@ -195,37 +280,54 @@ namespace JEEditor::Editor
                     last_namespace = ns;
                 }
                 
-                if (CollapsingHeaderFlags(
-                        F"{short_name}##{cname}",
-                        TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
-                {
-                    showComponentMembersEdit(wctx, e, ctype, cname);
-                }
+                // AllowItemOverlap 允许后绘制的行尾 × 按钮抢占重叠区域的
+                // 悬停与点击；折叠头的命中区总是横跨整行且忽略
+                // SetNextItemWidth，不加此标志 × 的点击会被标题吞掉
+                let expanded = CollapsingHeaderFlags(
+                    F"{short_name}##{cname}",
+                    TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen
+                        + TreeNodeAttribute::ImGuiTreeNodeFlags_AllowItemOverlap);
 
                 // 右键组件标题可移除该组件；显式绑定到标题的标签上，
-                // 避免展开时误绑到最后绘制的成员控件
+                // 且必须紧跟标题项调用（悬停检测基于最后绘制的项），
+                // 避免展开时误绑到成员控件或行尾按钮
                 if (BeginPopupContextItemLabel(F"{short_name}##{cname}"))
                 {
                     if (MenuItem(F"移除组件 {short_name}"))
-                    {
-                        // 先结束可能进行中的编辑手势，再发布移除组件的操作
-                        EditSession::commit();
-                        match (RemoveComponent::try_create(e, ctype))
-                        {
-                            none?
-                                // 没有 EUID 的实体退化为直接移除（无法支持撤销）
-                                do e->remove_component(ctype);
-                            value(action)?
-                                wctx->doAction(action);
-                        }
-                    }
+                        removeComponentFromEntity(wctx, e, ctype);
 
                     defer EndPopup();
                 }
+
+                // 折叠头的布局宽度只覆盖文字，× 需手动定位到行尾
+                SameLine();
+                let (cursor_x, cursor_y) = GetCursorPos();
+                let (avail_width, _) = GetContentRegionAvail();
+                SetCursorPos((cursor_x + avail_width - 28., cursor_y));
+                if (ButtonSize(F"×##remove_{cname}", (24., 0.)))
+                    removeComponentFromEntity(wctx, e, ctype);
+
+                if (expanded)
+                    showComponentMembersEdit(wctx, e, ctype, cname);
                 Spacing();
             }
             if (visible_count == 0)
                 TextDisabled("（没有可显示的组件）");
+
+            Spacing();
+            if (ButtonSize("添加组件", (-1., 0.)))
+            {
+                // 每次打开弹窗都复位搜索词，并将焦点设到搜索框
+                s_add_component_filter = "";
+                s_add_component_focus = true;
+                OpenPopup("##add_component_picker");
+            }
+
+            if (BeginPopup("##add_component_picker"))
+            {
+                showAddComponentPicker(wctx, e);
+                defer EndPopup();
+            }
         }
         func showEntityComponentEdit(
             wctx: WorldEditorViewport,
