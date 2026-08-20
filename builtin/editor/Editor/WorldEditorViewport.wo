@@ -26,6 +26,7 @@ import builtin::editor::GUI::Drag;
 import builtin::editor::GUI::Forms::MsgBox;
 import builtin::editor::GUI::Forms::InputBox;
 import builtin::editor::GUI::Forms::AskBox;
+import builtin::editor::GUI::Statebar;
 
 import builtin::editor::Editor::Saving::World;
 import builtin::editor::GUI::Shortcut;
@@ -53,6 +54,7 @@ using JEEditor::GUI;
 using JEEditor::GUI::Windows;
 using JEEditor::GUI::Drag;
 using JEEditor::GUI::Forms;
+using JEEditor::GUI::Statebar;
 using JEEditor::GUI::Icons;
 using JEEditor::Editor::Gizmo::Shaders;
 using JEEditor::Editor::Gizmo::Shapes;
@@ -601,6 +603,8 @@ namespace JEEditor::Editor
                         [ImGuiKey::ImGuiMod_Ctrl, ImGuiKey::ImGuiKey_Z], \= self.m_action_history->undo();)
                     ->shortCut(
                         [ImGuiKey::ImGuiMod_Ctrl, ImGuiKey::ImGuiKey_Y], \= self.m_action_history->redo();)
+                    ->shortCut(
+                        [ImGuiKey::ImGuiMod_Ctrl, ImGuiKey::ImGuiKey_S], \= self->saveByShortcut();)
                     ->shortCut(
                         [ImGuiKey::ImGuiKey_W], \= self->switchGizmoModeByShortcut(GizmoMode::TRANSLATE);)
                     ->shortCut(
@@ -1816,7 +1820,31 @@ namespace JEEditor::Editor
                     return false;
                 }
                 ok(_)?
+                {
+                    // 在独立作用域中先取出字符串：闭包按创建时的值捕获文本，
+                    // 之后每帧由 Statebar 调用绘制保存成功提示。
+                    let name = self.m_name;
+                    let path_str = path->to_string();
+                    Statebar::showState(3.) <| func(){
+                        Text(F"世界 \"{name}\" 已保存到 \"{path_str}\"");
+                    };
                     return true;
+                }
+            }
+        }
+
+        // 快捷键保存（Ctrl+S）：已保存过的世界直接写回原路径；
+        // 尚未保存过的世界没有目标目录，提示改用拖拽图标到资源管理器的保存流程。
+        func saveByShortcut(self: WorldEditorViewport)=> void
+        {
+            match (self.m_saving_path)
+            {
+                value(path)?
+                    do self->saveWorldTo(path);
+                none?
+                    MsgBox::msg(
+                        "保存",
+                        F"世界 \"{self.m_name}\" 尚未保存到文件中，请拖动视口顶部的图标到资源管理器以保存");
             }
         }
 
