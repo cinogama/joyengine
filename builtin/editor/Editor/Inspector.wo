@@ -14,6 +14,7 @@ import builtin::editor::GUI::Windows;
 import WorldEditorViewport;
 import EditSession;
 import Action::AddComponent;
+import Action::DestroyEntity;
 import Action::RemoveComponent;
 import Action::RemoveRendererComponent;
 
@@ -177,11 +178,23 @@ namespace JEEditor::Editor
         }
         // 移除组件的统一入口：先结束可能进行中的编辑手势，再发布可撤销的
         // 移除操作；渲染器三件套的数据不在反射成员里，走专用 Action。
-        // 没有 EUID 的实体退化为直接移除（无法支持撤销）
+        // 当待移除的是最后一个可见组件（Editor::* 之外）时，改为销毁整个
+        // 实体——空实体没有保留意义，销毁同样可撤销。
+        // 没有 EUID 的实体退化为直接移除（无法支持撤销）。
         func removeComponentFromEntity(
             wctx: WorldEditorViewport, e: entity, ctype: typeinfo)=> void
         {
             EditSession::commit();
+
+            // 待移除组件必在可见组件之列；可见组件仅剩一个即为它
+            let visible_count = e->internal::get_components_types
+                ->forall(\t = !t->name->begin_with("Editor::");)->len;
+            if (visible_count == 1)
+            {
+                wctx->doAction(DestroyEntity::try_create(e)->unwrap);
+                return;
+            }
+
             if (tryRemoveRendererComponent(wctx, e, ctype))
                 return;
             match (RemoveComponent::try_create(e, ctype))
