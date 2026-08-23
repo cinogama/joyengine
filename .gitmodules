@@ -65,3 +65,7 @@
 	path = 3rd/metal-cpp
 	url = https://git.cinogama.net/cinogamaproject/joyengineecs/metal-cpp.git
 	branch = master
+[submodule "3rd/woort"]
+	path = 3rd/woort
+	url = https://git.cinogama.net/cinogamaproject/woort.git
+    branch = release

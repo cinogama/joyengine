@@ -12,7 +12,6 @@ src = "3rd/pkg"
 
 [dependence.iterator]
 path = "pkg"
-src = "3rd/pkg"
 
 [dependence.async]
 path = "pkg"
@@ -61,7 +60,6 @@ src = "3rd/pkg"
 
 [dependence.interface]
 path = "pkg"
-src = "3rd/pkg"
 
 [dependence.list]
 path = "pkg"
@@ -73,7 +71,6 @@ src = "3rd/pkg"
 
 [dependence.makenew]
 path = "pkg"
-src = "3rd/pkg"
 
 [dependence.node_editor]
 path = "pkg"
@@ -92,7 +89,6 @@ src = "3rd/pkg"
 
 [dependence.try]
 path = "pkg"
-src = "3rd/pkg"
 
 [dependence.woshader]
 path = "pkg"

@@ -173,6 +173,7 @@ endif()
 
 target_include_directories(joyengine_configs INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_include_directories(joyengine_configs INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/3rd/woolang/include")
+target_include_directories(joyengine_configs INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/3rd/woort/include")
 
 # Scan /3rd/pkg/* to build the pkg and then static link them into joyecs.
 set(JE4_STATIC_LINKED_PKG_AND_MODULE_LIST "")
@@ -180,10 +181,10 @@ if (JE4_STATIC_LINK_MODULE_AND_PKGS)
     target_compile_definitions(joyengine_configs INTERFACE -DJE4_STATIC_LINK_MODULE_AND_PKGS=1)
 
     set(BAOZI_BUILD_BY_MGR          OFF     CACHE BOOL "Donot apply something for baozi, we will compile it ourself." FORCE)
-    set(BAOZI_INCLUDE_PATH          "${CMAKE_CURRENT_SOURCE_DIR}/3rd/woolang/include"
+    set(BAOZI_INCLUDE_PATH          "${CMAKE_CURRENT_SOURCE_DIR}/3rd/woolang/include;${CMAKE_CURRENT_SOURCE_DIR}/3rd/woort/include"
                                             CACHE STRING "Specify package include path for compiling." FORCE)
     set(BAOZI_BUILD_SHARED          OFF     CACHE BOOL "Build static link library." FORCE)
-    set(BAOZI_CMAKE_FORMAT_VERSION  "1.1.0" CACHE STRING "Used baozi cmake-doc version." FORCE)
+    set(BAOZI_CMAKE_FORMAT_VERSION  "1.2.0" CACHE STRING "Used baozi cmake-doc version." FORCE)
     set(BUILD_SHARED_LIBS           OFF     CACHE BOOL "Build static modules." FORCE)
 
     macro(JE4_GET_SUB_DIR_LIST result curdir)
@@ -220,7 +221,7 @@ if (JE4_STATIC_LINK_MODULE_AND_PKGS)
                 target_link_libraries(${pkg_name} PRIVATE joyengine_core_pre_define_macro)
                 target_compile_definitions(${pkg_name} PRIVATE -Dwoort_lib_entry=je_static_wo_pkg_${pkg_name}_entry)
                 target_compile_definitions(${pkg_name} PRIVATE -Dwoort_lib_leave=je_static_wo_pkg_${pkg_name}_leave)
-                target_include_directories(${pkg_name} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/3rd/woolang/include")
+                # target_include_directories(${pkg_name} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/3rd/woolang/include")
 
                 if (JE4_BUILD_SHARED_CORE AND NOT MSVC)
                     target_compile_options(${pkg_name} PRIVATE -fPIC)
@@ -269,7 +270,12 @@ if (JE4_BUILD_SHARED_CORE)
 else()
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static joyengine core." FORCE)
 endif()
+
+set(WO_USE_WOORT_DIRECTLY OFF CACHE BOOL "Donot use woort directly." FORCE)
+set(WO_USE_OS_DYLIB_LOADER OFF CACHE BOOL "Donot use os dylib loader." FORCE)
+
 add_subdirectory("3rd/woolang")
+add_subdirectory("3rd/woort")
 add_subdirectory("src")
 
 ##############################################################################

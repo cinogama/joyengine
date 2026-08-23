@@ -217,7 +217,14 @@ void je_init(int argc, char** argv)
 
     jegl_shader_generator_init();
 
-    wo_init(argc, argv);
+    const wo_WooDyn_Functions funcs = {
+        &woort_init,
+        &woort_shutdown,
+        &woort_dylib_load,
+        &woort_dylib_load_func,
+        &woort_dylib_unload,
+    };
+    wo_init(argc, argv, &funcs);
 
     for (int i = 1; i < argc - 1; ++i)
     {
