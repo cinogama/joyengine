@@ -329,7 +329,8 @@ namespace JEEditor::Editor
                 self.m_world_instance->close;
             }
         }
-        // 关闭前确认：
+        // 关闭前确认：仅当世界存在未保存的修改（以 doAction/撤销/重做为准，
+        // 见 Practice::isDirty）时才询问，否则直接放行关闭：
         //   已保存到文件的世界 —— 询问是否在关闭前保存；
         //   未保存的世界     —— 询问是否继续关闭。
         // 确认对话框为异步回调，本函数返回 false 暂时否决关闭，
@@ -338,6 +339,10 @@ namespace JEEditor::Editor
         {
             // 程序化关闭（重命名/另存重开/确认后的关闭）不拦截
             if (self.m_close != CloseRequest::NORMALLY)
+                return true;
+
+            // 自上次保存后没有执行过任何编辑动作，与已保存状态一致，直接关闭
+            if (!self.m_action_history->isDirty)
                 return true;
 
             match (self.m_saving_path)
@@ -673,8 +678,13 @@ namespace JEEditor::Editor
             match (viewport_rect)
             {
                 none?;
-                value((rect_min, _))?
+                value((rect_min, rect_max))?
+                {
                     toolbar_hovered = self->drawGizmoToolbar(rect_min);
+                    // 未保存标记悬停时同样抑制视口内的点击选取
+                    if (self->drawUnsavedMark(rect_min, rect_max))
+                        toolbar_hovered = true;
+                }
             }
 
             let now = time();
@@ -1771,7 +1781,35 @@ namespace JEEditor::Editor
 
             return toolbar_hovered;
         }
-        
+
+        // 未保存修改标记：自上次保存后执行过编辑动作（doAction/撤销/重做）时，
+        // 在视口左下角显示一个小圆点（与关闭确认的判定一致，见 onPreClose）。
+        // 返回标记区域是否被悬停（悬停时应抑制视口内的点击选取）。
+        func drawUnsavedMark(
+            self: WorldEditorViewport, rect_min: ImVec2, rect_max: ImVec2)=> bool
+        {
+            if (!self.m_action_history->isDirty)
+                return false;
+
+            let line_h = GetFrameHeight();
+
+            // 不可见按钮仅用于在左下角占位并获得悬停判定
+            SetCursorScreenPos((rect_min.0 + 8., rect_max.1 - 8. - line_h));
+            do InvisibleButton("##unsaved_mark", (line_h, line_h));
+            let hovered = IsItemHovered();
+            if (hovered)
+                do SetTooltip("存在未保存的修改");
+
+            let (dot_rect_min, dot_rect_max) = GetItemRect();
+            GetWindowDrawList()->AddCircleFilled(
+                ((dot_rect_min.0 + dot_rect_max.0) * 0.5,
+                    (dot_rect_min.1 + dot_rect_max.1) * 0.5),
+                line_h * 0.22,
+                (240, 200, 80, 255));
+
+            return hovered;
+        }
+
         // ==========================
         public func getEntitySelector(self: WorldEditorViewport)
         {
@@ -1821,6 +1859,9 @@ namespace JEEditor::Editor
                 }
                 ok(_)?
                 {
+                    // 已落盘：记录当前编辑历史位置为“已保存”状态
+                    self.m_action_history->markSaved();
+
                     // 在独立作用域中先取出字符串：闭包按创建时的值捕获文本，
                     // 之后每帧由 Statebar 调用绘制保存成功提示。
                     let name = self.m_name;

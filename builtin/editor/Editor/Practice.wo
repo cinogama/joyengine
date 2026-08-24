@@ -28,6 +28,9 @@ namespace JEEditor::Editor
     using Practice = struct{
         m_history: vec<IAction>,
         m_history_place_index: mut int,
+        // 最近一次成功保存到文件时的历史位置；
+        // 与 m_history_place_index 不一致即视为存在未保存的修改。
+        m_saved_place_index: mut int,
         
         m_operation_queue: list<ActionRequest>,
     }
@@ -44,6 +47,7 @@ namespace JEEditor::Editor
             return Practice{
                 m_history = []mut,
                 m_history_place_index = mut 0,
+                m_saved_place_index = mut 0,
                 m_operation_queue = list::create:<ActionRequest>(),
             };
         }
@@ -71,6 +75,18 @@ namespace JEEditor::Editor
         public func redo(self: Practice)
         {
             self.m_operation_queue->add(ActionRequest::Redo(false));
+        }
+
+        // 记录“当前状态已保存”：此后再次编辑/撤销/重做即视为弄脏。
+        public func markSaved(self: Practice)=> void
+        {
+            self.m_saved_place_index = self.m_history_place_index;
+        }
+
+        // 自上次保存后是否执行过编辑动作（含撤销/重做后偏离已保存位置）。
+        public func isDirty(self: Practice)=> bool
+        {
+            return self.m_history_place_index != self.m_saved_place_index;
         }
         
         public func update(self: Practice, w: WorldEditorViewport)=> result<bool, string>
@@ -107,6 +123,10 @@ namespace JEEditor::Editor
                                         throw! "重做操作失败";
                                     }
                                 }
+                                else
+                                {
+                                    showActionState("没有可重做的操作");
+                                }
                             }
                             Undo(retried)?
                             {
@@ -131,6 +151,10 @@ namespace JEEditor::Editor
                                         // 已经推迟过一帧了，操作切实地失败了。
                                         throw! "撤销操作失败";
                                     }
+                                }
+                                else
+                                {
+                                    showActionState("没有可撤销的操作");
                                 }
                             }
                             Action((action, retried))?
