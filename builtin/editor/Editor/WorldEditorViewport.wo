@@ -81,8 +81,7 @@ namespace JEEditor::Editor
         m_selected_entity_id: mut option<entity::internal::euid_t>,
         
         m_action_history: mut Practice,
-        m_not_saved_dirty_flag: mut bool,
-        
+
         // Camera control state:
         m_debug_camera_selector: entity_selector,
         m_selectable_entity_selector: entity_selector,
@@ -227,7 +226,6 @@ namespace JEEditor::Editor
                 
                 m_selected_entity_id = mut option::none,
                 m_action_history = mut Practice::create(),
-                m_not_saved_dirty_flag = mut false,
 
                 m_debug_camera_selector = w->create_selector([
                         requirement::contains(Editor::Invisible::type::typeinfo),
@@ -345,7 +343,7 @@ namespace JEEditor::Editor
                 return true;
 
             // 自上次保存后没有执行过任何编辑动作，与已保存状态一致，直接关闭
-            if (!self.m_not_saved_dirty_flag && self.m_saving_path->is_value)
+            if (!self.m_action_history->isDirty && self.m_saving_path->is_value)
                 return true;
 
             match (self.m_saving_path)
@@ -1791,7 +1789,7 @@ namespace JEEditor::Editor
         func drawUnsavedMark(
             self: WorldEditorViewport, rect_min: ImVec2, rect_max: ImVec2)=> bool
         {
-            if (!self.m_not_saved_dirty_flag && self.m_saving_path->is_value)
+            if (!self.m_action_history->isDirty && self.m_saving_path->is_value)
                 return false;
 
             let line_h = GetFrameHeight();
@@ -1862,8 +1860,8 @@ namespace JEEditor::Editor
                 }
                 ok(_)?
                 {
-                    // 已落盘：记录当前编辑历史位置为“已保存”状态
-                    self.m_not_saved_dirty_flag = false;
+                    // 已落盘：清除编辑历史的未保存标记（见 Practice::markSaved）
+                    self.m_action_history->markSaved();
 
                     // 在独立作用域中先取出字符串：闭包按创建时的值捕获文本，
                     // 之后每帧由 Statebar 调用绘制保存成功提示。
@@ -2034,18 +2032,15 @@ namespace JEEditor::Editor
         public func redo(self: WorldEditorViewport)
         {
             self.m_action_history->redo();
-            self.m_not_saved_dirty_flag = true;
         }
         public func undo(self: WorldEditorViewport)
         {
             self.m_action_history->undo();
-            self.m_not_saved_dirty_flag = true;
         }
         public func doAction<T>(self: WorldEditorViewport, action: T)
             where require!(T: IAction);
         {
             self.m_action_history->doAction(action);
-            self.m_not_saved_dirty_flag = true;
         }
 
         // ==========================

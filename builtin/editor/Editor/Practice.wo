@@ -29,6 +29,7 @@ namespace JEEditor::Editor
         m_history: vec<IAction>,
         m_history_place_index: mut int,        
         m_operation_queue: list<ActionRequest>,
+        m_not_saved_dirty_flag: mut bool,
     }
     {
         union ActionRequest
@@ -44,7 +45,21 @@ namespace JEEditor::Editor
                 m_history = []mut,
                 m_history_place_index = mut 0,
                 m_operation_queue = list::create:<ActionRequest>(),
+                m_not_saved_dirty_flag = mut false,
             };
+        }
+
+        // 自上次 markSaved（世界成功写入文件）以来落实过编辑动作（doAction/撤销/重做）、
+        // 或操作队列中仍有未落实的请求时，视为存在未保存的修改。
+        public func isDirty(self: Practice)=> bool
+        {
+            return self.m_not_saved_dirty_flag || !self.m_operation_queue->empty;
+        }
+
+        // 世界成功写入文件后调用：清除未保存标记。
+        public func markSaved(self: Practice)=> void
+        {
+            self.m_not_saved_dirty_flag = false;
         }
         
         // 在独立函数里创建闭包：闭包按创建时的值捕获文本，之后每帧由 Statebar 调用绘制。
@@ -90,6 +105,7 @@ namespace JEEditor::Editor
                                     if (redo_action->redo(w))
                                     {
                                         self.m_history_place_index += 1;
+                                        self.m_not_saved_dirty_flag = true;
                                         showActionState(F"重做: {redo_action->describe()}");
                                     }
                                     else
@@ -119,6 +135,7 @@ namespace JEEditor::Editor
                                     if (undo_action->undo(w))
                                     {
                                         self.m_history_place_index = undo_action_index;
+                                        self.m_not_saved_dirty_flag = true;
                                         showActionState(F"撤销: {undo_action->describe()}");
                                     }
                                     else
@@ -148,6 +165,7 @@ namespace JEEditor::Editor
                                         
                                     self.m_history->add(action);
                                     self.m_history_place_index += 1;
+                                    self.m_not_saved_dirty_flag = true;
                                     showActionState(action->describe());
                                 }
                                 else
