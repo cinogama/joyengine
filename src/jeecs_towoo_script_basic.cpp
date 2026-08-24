@@ -671,8 +671,11 @@ import je::towoo::types;
     void _dump_towoo_decl_to_project(
         const char* filename, const std::string& file_content)
     {
-        const std::string dump_file =
-            std::string(jeecs_file_get_runtime_path()) + "/je/towoo/" + filename;
+        std::vector<char> file_loc;
+        file_loc.resize(woort_get_file_loc(__FILE__, nullptr, 0) + 1);
+        (void)woort_get_file_loc(__FILE__, file_loc.data(), file_loc.size());
+
+        const std::string dump_file = std::string(file_loc.data()) + "/../je/towoo/" + filename;
 
         if (FILE* file = fopen(dump_file.c_str(), "wb"))
         {
