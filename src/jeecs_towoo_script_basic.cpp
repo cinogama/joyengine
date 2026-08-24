@@ -11,6 +11,7 @@
 #include <memory>
 #include <atomic>
 #include <cmath>
+#include <cstdio>
 
 /*
 TooWooo~
@@ -660,6 +661,34 @@ import je::towoo::types;
         return component_decl;
     }
 
+#ifndef NDEBUG
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS \
+    || JE4_CURRENT_PLATFORM == JE4_PLATFORM_LINUX \
+    || JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS
+    // Debug builds on desktop platforms also dump the generated decl files into
+    // the project directory, so editors/IDEs can inspect and complete them.
+    // The 'je/towoo' directory is guaranteed to exist by the project.
+    void _dump_towoo_decl_to_project(
+        const char* filename, const std::string& file_content)
+    {
+        const std::string dump_file =
+            std::string(jeecs_file_get_runtime_path()) + "/je/towoo/" + filename;
+
+        if (FILE* file = fopen(dump_file.c_str(), "wb"))
+        {
+            fwrite(file_content.data(), sizeof(char), file_content.size(), file);
+            fclose(file);
+        }
+        else
+        {
+            jeecs::debug::logwarn(
+                "Unable to dump '%s' to project directory, please check.",
+                dump_file.c_str());
+        }
+    }
+#endif
+#endif
+
     //
     // Helpers for je_towoo_register_system
     //
@@ -988,6 +1017,15 @@ void je_towoo_update_api()
     {
         jeecs::debug::logfatal("Unable to regenerate 'je/towoo/components.wo' please check.");
     }
+
+#ifndef NDEBUG
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS \
+    || JE4_CURRENT_PLATFORM == JE4_PLATFORM_LINUX \
+    || JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS
+    _dump_towoo_decl_to_project("types.wo", woolang_parsing_type_decl);
+    _dump_towoo_decl_to_project("components.wo", woolang_component_type_decl);
+#endif
+#endif
 }
 
 void je_towoo_unregister_system(const je_TypeInfo* tinfo)
