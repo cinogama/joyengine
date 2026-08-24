@@ -98,8 +98,7 @@ namespace jeecs::graphic::api::gl3
                 , m_sampler_count(sampler_count)
                 , m_uniform_locations{}
                 , m_uniform_size(0)
-            {
-            }
+            {}
             ~jegl3_shader_blob_shared()
             {
                 glDeleteProgram(m_shader_program_instance);
@@ -120,8 +119,7 @@ namespace jeecs::graphic::api::gl3
 
         jegl3_shader_blob(jeecs::basic::resource<jegl3_shader_blob_shared> s)
             : m_shared_blob_data(s)
-        {
-        }
+        {}
     };
     struct jegl_gl3_shader
     {
@@ -183,8 +181,7 @@ namespace jeecs::graphic::api::gl3
             , m_texture_format(fmt)
             , m_width(w)
             , m_height(h)
-        {
-        }
+        {}
         ~jegl_gl3_texture()
         {
             glDeleteTextures(1, &m_texture_id);
@@ -203,8 +200,7 @@ namespace jeecs::graphic::api::gl3
             : m_frame_width(w)
             , m_frame_height(h)
             , m_fbo(fbo)
-        {
-        }
+        {}
         ~jegl_gl3_framebuf()
         {
             glDeleteFramebuffers(1, &m_fbo);
@@ -217,7 +213,7 @@ namespace jeecs::graphic::api::gl3
 
         size_t RESOLUTION_WIDTH = 0;
         size_t RESOLUTION_HEIGHT = 0;
-                
+
         // 缓存当前绑定在 binding point 0 的 uniform buffer
         GLuint m_current_shader_ubo = 0;
 
@@ -421,10 +417,14 @@ namespace jeecs::graphic::api::gl3
 
 #ifdef JE_ENABLE_GL330_GAPI
 #if JE4_CURRENT_PLATFORM != JE4_PLATFORM_MACOS && !defined(NDEBUG)
-        glEnable(GL_DEBUG_OUTPUT);
-        glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-        glDebugMessageCallback(glDebugOutput, nullptr);
-        glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
+        if (glDebugMessageCallback != nullptr && glDebugMessageControl != nullptr)
+        {
+            glEnable(GL_DEBUG_OUTPUT);
+            glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+
+            glDebugMessageCallback(glDebugOutput, nullptr);
+            glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
+        }
 #endif
 #endif
         glEnable(GL_DEPTH_TEST);
@@ -507,8 +507,7 @@ namespace jeecs::graphic::api::gl3
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
     void gl_pre_shutdown(jegl_context*, je_GraphicImplContext, bool)
-    {
-    }
+    {}
     void gl_shutdown(jegl_context*, je_GraphicImplContext userdata, bool reboot)
     {
         jegl_gl3_context* context = static_cast<jegl_gl3_context*>(userdata);
@@ -964,8 +963,7 @@ namespace jeecs::graphic::api::gl3
     }
     void texture_close_resource_blob(
         je_GraphicImplContext ctx, jegl_resource_blob blob)
-    {
-    }
+    {}
 
     jegl_resource_blob vertex_create_resource_blob(
         je_GraphicImplContext ctx, jegl_vertex* resource)
@@ -974,8 +972,7 @@ namespace jeecs::graphic::api::gl3
     }
     void vertex_close_resource_blob(
         je_GraphicImplContext ctx, jegl_resource_blob blob)
-    {
-    }
+    {}
 
     void shader_init(
         je_GraphicImplContext ctx,
@@ -1067,8 +1064,7 @@ namespace jeecs::graphic::api::gl3
     void shader_update(
         je_GraphicImplContext,
         jegl_shader* resource)
-    {
-    }
+    {}
     void shader_close(
         je_GraphicImplContext,
         jegl_shader* resource)
@@ -1340,8 +1336,7 @@ namespace jeecs::graphic::api::gl3
     void vertex_update(
         je_GraphicImplContext,
         jegl_vertex* resource)
-    {
-    }
+    {}
     void vertex_close(
         je_GraphicImplContext,
         jegl_vertex* resource)
@@ -1450,8 +1445,7 @@ namespace jeecs::graphic::api::gl3
     void framebuffer_update(
         je_GraphicImplContext,
         jegl_frame_buffer* resource)
-    {
-    }
+    {}
     void framebuffer_close(
         je_GraphicImplContext,
         jegl_frame_buffer* resource)
