@@ -81,7 +81,7 @@ namespace JEEditor::Editor
         m_selected_entity_id: mut option<entity::internal::euid_t>,
         
         m_action_history: mut Practice,
-
+        
         // Camera control state:
         m_debug_camera_selector: entity_selector,
         m_selectable_entity_selector: entity_selector,
@@ -98,15 +98,15 @@ namespace JEEditor::Editor
         
         // Gizmo
         m_gizmo_draw_branch: rendchain_branch,
-
+        
         // ---- 变换游标（操作手柄）状态 ----
         m_gizmo_mode: mut GizmoMode,
         m_gizmo_space: mut GizmoSpace,
-
+        
         m_gizmo_hover_handle: mut int,
         m_gizmo_drag_handle: mut int,
         m_gizmo_dragging: mut bool,
-
+        
         // 拖拽开始时捕获的快照（世界空间）：
         m_gizmo_drag_euid: mut entity::internal::euid_t,
         m_gizmo_drag_origin: mut vec3,
@@ -125,7 +125,7 @@ namespace JEEditor::Editor
         m_gizmo_drag_undo_component: mut string,
         m_gizmo_drag_undo_member: mut string,
         m_gizmo_drag_undo_old_value: mut string,
-
+        
         // 本帧绘制游标所需的快照（由 updateTransformGizmo 写入）：
         m_gizmo_draw_visible: mut bool,
         m_gizmo_draw_origin: mut vec3,
@@ -153,7 +153,7 @@ namespace JEEditor::Editor
         let CAMERA_PITCH_LIMIT = 88.;
         let CAMERA_DEFAULT_ORBIT_DISTANCE = 10.;
         let CAMERA_MIN_ORTHO_SCALE = 0.05;
-
+        
         // ---- 变换游标参数 ----
         let GIZMO_SIZE_PX = 96.;              // 游标轴在屏幕上的长度（像素）
         let GIZMO_HIT_PX = 10.;               // 手柄命中判定半径（像素）
@@ -162,21 +162,21 @@ namespace JEEditor::Editor
         let GIZMO_CENTER_SIZE_PX = 16.;       // 中央手柄边长（像素）
         let GIZMO_SCALE_FACTOR_MIN = 0.01;
         let GIZMO_SCALE_FACTOR_MAX = 100.;
-
+        
         // 手柄编号：三根轴 + 中央手柄（屏幕平面移动 / 整体缩放）
         let GIZMO_HANDLE_NONE = -1;
         let GIZMO_HANDLE_X = 0;
         let GIZMO_HANDLE_Y = 1;
         let GIZMO_HANDLE_Z = 2;
         let GIZMO_HANDLE_CENTER = 3;
-
+        
         // 游标各部件的颜色（RGBA），悬停/拖拽时高亮为黄色
         let GIZMO_COLOR_X = (0.92, 0.32, 0.32, 0.9);
         let GIZMO_COLOR_Y = (0.38, 0.85, 0.38, 0.9);
         let GIZMO_COLOR_Z = (0.38, 0.56, 0.98, 0.9);
         let GIZMO_COLOR_CENTER = (0.85, 0.85, 0.85, 0.9);
         let GIZMO_COLOR_HOVER = (1., 1., 0.25, 1.);
-
+        
         enum GizmoMode
         {
             TRANSLATE,
@@ -199,7 +199,7 @@ namespace JEEditor::Editor
         
         let s_world_viewports = {}mut: map<world, WorldEditorViewport>;
         let mut s_last_focusd_world_view = option::none: option<WorldEditorViewport>;
-
+        
         // 右键环视时是否锁定鼠标。虚拟机等环境下锁定鼠标会导致指针漂移，默认不锁定。
         let mut s_lock_mouse_on_look = false;
         
@@ -226,7 +226,7 @@ namespace JEEditor::Editor
                 
                 m_selected_entity_id = mut option::none,
                 m_action_history = mut Practice::create(),
-
+                
                 m_debug_camera_selector = w->create_selector([
                         requirement::contains(Editor::Invisible::type::typeinfo),
                         requirement::contains(Camera::RendToFramebuffer::type::typeinfo),
@@ -255,14 +255,14 @@ namespace JEEditor::Editor
                 m_rotation_y = mut quat::ident,
                 
                 m_gizmo_draw_branch = graphic_uhost->alloc_branch(),
-
+                
                 m_gizmo_mode = mut GizmoMode::TRANSLATE,
                 m_gizmo_space = mut GizmoSpace::GLOBAL,
-
+                
                 m_gizmo_hover_handle = mut GIZMO_HANDLE_NONE,
                 m_gizmo_drag_handle = mut GIZMO_HANDLE_NONE,
                 m_gizmo_dragging = mut false,
-
+                
                 m_gizmo_drag_euid = mut (0h as entity::internal::euid_t),
                 m_gizmo_drag_origin = mut ((0., 0., 0.) as vec3),
                 m_gizmo_drag_rotation = mut quat::ident,
@@ -279,7 +279,7 @@ namespace JEEditor::Editor
                 m_gizmo_drag_undo_component = mut "",
                 m_gizmo_drag_undo_member = mut "",
                 m_gizmo_drag_undo_old_value = mut "",
-
+                
                 m_gizmo_draw_visible = mut false,
                 m_gizmo_draw_origin = mut ((0., 0., 0.) as vec3),
                 m_gizmo_draw_rotation = mut quat::ident,
@@ -341,11 +341,11 @@ namespace JEEditor::Editor
             // 程序化关闭（重命名/另存重开/确认后的关闭）不拦截
             if (self.m_close != CloseRequest::NORMALLY)
                 return true;
-
+                
             // 自上次保存后没有执行过任何编辑动作，与已保存状态一致，直接关闭
             if (!self.m_action_history->isDirty && self.m_saving_path->is_value)
                 return true;
-
+                
             match (self.m_saving_path)
             {
                 value(path)?
@@ -368,7 +368,7 @@ namespace JEEditor::Editor
                                         self.m_close =
                                             CloseRequest::CLOSE_AND_DESTROY_WORLD;
                                     })
-                            ;
+                                ;
                         }
                     }
                 }
@@ -376,7 +376,7 @@ namespace JEEditor::Editor
                 {
                     // 未保存：是=继续关闭，否/取消=留在原地
                     match (AskBox::showUnique(
-                            F"关闭##{self.m_world_instance}", 
+                            F"关闭##{self.m_world_instance}",
                             F"世界 \"{self.m_name}\" 尚未保存，确认关闭吗？"))
                     {
                         none?;
@@ -386,11 +386,11 @@ namespace JEEditor::Editor
                                         self.m_close =
                                             CloseRequest::CLOSE_AND_DESTROY_WORLD;
                                     })
-                            ;
+                                ;
                     }
                 }
             }
-
+            
             // 等待用户在对话框中确认，本次先不关闭
             return false;
         }
@@ -404,12 +404,18 @@ namespace JEEditor::Editor
         {
             func inputForRenamingWorld()=> void
             {
-                InputBox::show("新世界名", "请输入新的世界名称", self.m_name)
-                    -> then(
-                        func(new_name)
-                        {
-                            self->dropAndRename(new_name);
-                        });
+                match (InputBox::showUnique("重命名世界", "请输入新的世界名称", self.m_name))
+                {
+                    value(form)?
+                        form -> then(
+                            func(new_name)
+                            {
+                                self->dropAndRename(new_name);
+                            });
+                    none?
+                        MsgBox::err("重命名失败", "已经有一个正在重命名的世界，无法执行操作");
+                }
+                
             }
             
             return option::value <|
@@ -497,10 +503,10 @@ namespace JEEditor::Editor
                 do try!{
                     try! selected_euid = self.m_selected_entity_id;
                     try! selected_entity = self->findEntityByEuid(selected_euid);
-
+                    
                     let trans = selected_entity->towoo::get_component:<Transform::Translation>->unwrap;
                     let texture = selected_entity->towoo::get_component:<Renderer::Textures>;
-
+                    
                     drawGizmo(
                         trans->get_global_pos,
                         trans->get_global_rot,
@@ -516,10 +522,10 @@ namespace JEEditor::Editor
                                         ;
                                     ;
                                 -> or((WHITE, (1., 1.) as vec2, (0.,0.) as vec2)),
-                        DEFAULT_SQUARE_SHAPE);
+                            DEFAULT_SQUARE_SHAPE);
                     return_value!;
                 };
-
+                
                 // 绘制变换游标（纯色，颜色由每次绘制的 JE_COLOR 提供）
                 func drawSolid(
                     pos: vec3,
@@ -531,11 +537,11 @@ namespace JEEditor::Editor
                     do try!{
                         try! shape_instance = shape;
                         try! shader_instance = GIZMO_SOLID;
-
+                        
                         let model = mat4::transform(pos, rot, scale);
                         let model_view = camera_projection->get_view_mat * model;
                         let model_view_proj = camera_projection->get_view_proj_mat * model;
-
+                        
                         let draw_action = gizmo_rend_chain->draw(
                             shader_instance, shape_instance, option::none);
                         draw_action->set_uniform_mat4x4(shader_instance, "JE_M", model as raw mat4);
@@ -545,7 +551,7 @@ namespace JEEditor::Editor
                         return_value!;
                     };
                 }
-
+                
                 if (self.m_gizmo_draw_visible)
                 {
                     let origin = self.m_gizmo_draw_origin;
@@ -553,18 +559,18 @@ namespace JEEditor::Editor
                     let active_handle = self.m_gizmo_dragging
                         ? self.m_gizmo_drag_handle
                         | self.m_gizmo_hover_handle;
-
+                        
                     let axis_colors = [
                         (active_handle == GIZMO_HANDLE_X) ? GIZMO_COLOR_HOVER | GIZMO_COLOR_X,
                         (active_handle == GIZMO_HANDLE_Y) ? GIZMO_COLOR_HOVER | GIZMO_COLOR_Y,
                         (active_handle == GIZMO_HANDLE_Z) ? GIZMO_COLOR_HOVER | GIZMO_COLOR_Z,
                     ];
-
+                    
                     if (self.m_gizmo_mode == GizmoMode::ROTATE)
                     {
                         let ring_size = self.m_gizmo_draw_size * GIZMO_RING_RADIUS_RATIO;
                         let ring_scale = (ring_size, ring_size, ring_size) as vec3;
-
+                        
                         drawSolid(origin, orientation, ring_scale, GIZMO_RING_AROUND_X, axis_colors[0]);
                         drawSolid(origin, orientation, ring_scale, GIZMO_RING_AROUND_Y, axis_colors[1]);
                         drawSolid(origin, orientation, ring_scale, GIZMO_RING_AROUND_Z, axis_colors[2]);
@@ -575,7 +581,7 @@ namespace JEEditor::Editor
                             ? self.m_gizmo_draw_size * GIZMO_SCALE_AXIS_RATIO
                             | self.m_gizmo_draw_size;
                         let axis_scale = (axis_len, axis_len, axis_len) as vec3;
-
+                        
                         let lines = [GIZMO_LINE_X, GIZMO_LINE_Y, GIZMO_LINE_Z];
                         // 平移用箭头锥，缩放用方块手柄
                         let mut tips = [GIZMO_CONE_X, GIZMO_CONE_Y, GIZMO_CONE_Z];
@@ -586,18 +592,18 @@ namespace JEEditor::Editor
                             drawSolid(origin, orientation, axis_scale, lines[axis], axis_colors[axis]);
                             drawSolid(origin, orientation, axis_scale, tips[axis], axis_colors[axis]);
                         }
-
+                        
                         // 中央手柄：屏幕平面移动 / 整体缩放
                         let center = self.m_gizmo_draw_center_size;
                         drawSolid(
                             origin, orientation, (center, center, center) as vec3,
                             DEFAULT_SQUARE_SHAPE,
                             (active_handle == GIZMO_HANDLE_CENTER)
-                                ? GIZMO_COLOR_HOVER
-                                | GIZMO_COLOR_CENTER);
+                            ? GIZMO_COLOR_HOVER
+                            | GIZMO_COLOR_CENTER);
                     }
                 }
-
+                
                 return_value!;
             };
         }
@@ -652,11 +658,11 @@ namespace JEEditor::Editor
                 IsWindowFocusedFlags(FocusedFlags::ImGuiFocusedFlags_RootAndChildWindows);
             if (viewport_focused)
                 s_last_focusd_world_view = option::value(self);
-
+                
             let debug_camera = self.m_debug_camera_selector->iter |> collect->get(0);
-
+            
             self->updateWalkCameraFramebuffer(debug_camera);
-
+            
             let mut viewport_hovered = false;
             let mut viewport_rect = option::none: option<(ImVec2, ImVec2)>;
             match (self.m_editor_walk_camera_frame_buffer=>>\fb = fb->attachment(0);)
@@ -673,7 +679,7 @@ namespace JEEditor::Editor
                     viewport_rect = option::value <| GetItemRect();
                 }
             }
-
+            
             // 变换游标工具栏（覆盖绘制在视口左上角）
             let mut toolbar_hovered = false;
             match (viewport_rect)
@@ -687,11 +693,11 @@ namespace JEEditor::Editor
                         toolbar_hovered = true;
                 }
             }
-
+            
             let now = time();
             let dt = mathf::clamp(now - self.m_last_time, 0., 0.1);
             self.m_last_time = now;
-
+            
             // 游标交互需先于摄像机控制，以抑制点击选中/摄像机操作
             match (viewport_rect)
             {
@@ -703,16 +709,16 @@ namespace JEEditor::Editor
                         rect_min,
                         (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
             }
-
+            
             self->updateCameraControl(
                 debug_camera,
                 dt,
                 viewport_hovered && !toolbar_hovered,
                 viewport_rect);
-
+                
             // Draw gizmo here.
             self->drawGizmos(debug_camera);
-
+            
             return self.m_close == CloseRequest::NORMALLY;
         }
         
@@ -854,15 +860,15 @@ namespace JEEditor::Editor
         {
             if (debug_camera->is_none)
                 return;
-
+                
             let cam = debug_camera->unwrap;
             let pos = cam->towoo::get_component:<Transform::LocalPosition>->unwrap;
             let rot = cam->towoo::get_component:<Transform::LocalRotation>->unwrap;
             let trans = cam->towoo::get_component:<Transform::Translation>->unwrap;
             let proj = cam->towoo::get_component:<Camera::Projection>->unwrap;
-
+            
             let perspectiveProjection = cam->towoo::get_component:<Camera::PerspectiveProjection>;
-
+            
             // 游标手柄被悬停/拖拽时，点击不用于选取实体
             if (hovered && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left)
                 && self.m_gizmo_hover_handle == GIZMO_HANDLE_NONE)
@@ -874,10 +880,10 @@ namespace JEEditor::Editor
                     {
                         let mouse_diff = GetMousePos() as vec2 - rect_min as vec2;
                         let viewport_size = rect_max as vec2 - rect_min as vec2;
-
+                        
                         let (vpx, vpy) =
                             ((mouse_diff / viewport_size) - (0.5, 0.5) as vec2) * 2.;
-
+                            
                         self->sendMouseClickToChoiceEntityRequest(
                             towoo::ray::from(
                                 trans,
@@ -1063,11 +1069,11 @@ namespace JEEditor::Editor
             if (moved)
                 pos.pos->set(newPos);
         }
-
+        
         // ==========================
         //  变换游标（操作手柄）
         // ==========================
-
+        
         func gizmoUnitAxis(axis: int)=> vec3
         {
             if (axis == GIZMO_HANDLE_Y)
@@ -1076,7 +1082,7 @@ namespace JEEditor::Editor
                 return (0., 0., 1.) as vec3;
             return (1., 0., 0.) as vec3;
         }
-
+        
         func gizmoMat4MulPoint(m: mat4, p: vec3)=> vec3
         {
             let h = m * ((p[0], p[1], p[2], 1.) as vec4);
@@ -1084,7 +1090,7 @@ namespace JEEditor::Editor
                 return (h[0], h[1], h[2]) as vec3;
             return (h[0] / h[3], h[1] / h[3], h[2] / h[3]) as vec3;
         }
-
+        
         // 世界坐标 -> 视口像素坐标（rect 为显示区域）
         func gizmoWorldToScreen(
             view_proj: mat4, p: vec3, rect_min: vec2, rect_size: vec2)=> vec2
@@ -1095,7 +1101,7 @@ namespace JEEditor::Editor
                 (0.5 - ndc[1] * 0.5) * rect_size[1] + rect_min[1],
             ) as vec2;
         }
-
+        
         // 射线与平面求交（平面过 plane_point、法线 normal）
         func gizmoRayPlaneHit(
             ray_origin: vec3, ray_dir: vec3, normal: vec3, plane_point: vec3)=> option<vec3>
@@ -1108,7 +1114,7 @@ namespace JEEditor::Editor
                 return option::none;
             return option::value(ray_origin + ray_dir * t);
         }
-
+        
         // 过 o、方向 d 的轴线与鼠标射线最近点处的轴线参数（d 需为单位向量）
         func gizmoClosestAxisParam(
             o: vec3, d: vec3, ray_origin: vec3, ray_dir: vec3)=> option<real>
@@ -1122,7 +1128,7 @@ namespace JEEditor::Editor
                 return option::none;
             return option::value((b * e - dd) / denom);
         }
-
+        
         func gizmoScreenDistToSegment(p: vec2, a: vec2, b: vec2)=> real
         {
             let ab = b - a;
@@ -1132,7 +1138,7 @@ namespace JEEditor::Editor
             let t = mathf::clamp((p - a)->dot(ab) / len2, 0., 1.);
             return (p - (a + ab * t))->length;
         }
-
+        
         // 与法线 n 正交的正交基（用于旋转平面内的角度计算）
         func gizmoPlaneBasis(n: vec3)=> (vec3, vec3)
         {
@@ -1143,7 +1149,7 @@ namespace JEEditor::Editor
             let e2 = n->cross(e1);
             return (e1, e2);
         }
-
+        
         // 按钮序列化组件成员值（供撤销记录使用）
         func serializeMemberValue(
             e: entity, component_type_name: string, member_name: string)=> option<string>
@@ -1155,7 +1161,7 @@ namespace JEEditor::Editor
                 return_value! towoo::unsafe::dynamic_parser::save(member_type, member_addr);
             };
         }
-
+        
         func findEntityByEuid(
             self: WorldEditorViewport, euid: entity::internal::euid_t)=> option<entity>
         {
@@ -1171,7 +1177,7 @@ namespace JEEditor::Editor
             }
             return option::none;
         }
-
+        
         // 估算“每像素对应的世界单位数”，让游标保持近似恒定的屏幕尺寸
         func gizmoWorldPerPixel(
             camera_entity: entity,
@@ -1197,7 +1203,7 @@ namespace JEEditor::Editor
                         none?;
                     }
             }
-
+            
             // 未知投影类型时，用摄像机右方向在屏幕上的投影长度估算
             let cam_right = camera_trans->get_global_rot * ((1., 0., 0.) as vec3);
             let p0 = gizmoWorldToScreen(view_proj, gizmo_pos, (0., 0.) as vec2, rect_size);
@@ -1208,7 +1214,7 @@ namespace JEEditor::Editor
                 return 0.001;
             return 1. / pixels;
         }
-
+        
         // 检测当前鼠标悬停的手柄（屏幕空间距离判定），返回手柄编号
         func pickGizmoHandle(
             self: WorldEditorViewport,
@@ -1221,15 +1227,15 @@ namespace JEEditor::Editor
             rect_size: vec2)=> int
         {
             let center_screen = gizmoWorldToScreen(view_proj, origin, rect_min, rect_size);
-
+            
             // 中央手柄（屏幕平面移动 / 整体缩放）优先
             if (self.m_gizmo_mode != GizmoMode::ROTATE
                 && gizmoScreenDistToSegment(mouse, center_screen, center_screen) < GIZMO_HIT_PX)
                 return GIZMO_HANDLE_CENTER;
-
+                
             let mut best = GIZMO_HANDLE_NONE;
             let mut best_dist = GIZMO_HIT_PX;
-
+            
             if (self.m_gizmo_mode == GizmoMode::ROTATE)
             {
                 let ring_radius = gizmo_size * GIZMO_RING_RADIUS_RATIO;
@@ -1276,7 +1282,7 @@ namespace JEEditor::Editor
             }
             return best;
         }
-
+        
         // 每帧更新游标状态：悬停检测、拖拽开始/进行/结束
         func updateTransformGizmo(
             self: WorldEditorViewport,
@@ -1286,7 +1292,7 @@ namespace JEEditor::Editor
             rect_size: ImVec2)=> void
         {
             self.m_gizmo_draw_visible = false;
-
+            
             // 松开左键时结束拖拽并提交撤销记录
             if (self.m_gizmo_dragging
                 && !IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left))
@@ -1295,13 +1301,13 @@ namespace JEEditor::Editor
                 self.m_gizmo_dragging = false;
                 self.m_gizmo_drag_handle = GIZMO_HANDLE_NONE;
             }
-
+            
             if (debug_camera->is_none || self.m_selected_entity_id->is_none)
             {
                 self.m_gizmo_hover_handle = GIZMO_HANDLE_NONE;
                 return;
             }
-
+            
             do try!{
                 try! camera_entity = debug_camera;
                 try! camera_trans =
@@ -1312,19 +1318,19 @@ namespace JEEditor::Editor
                 try! selected_entity = self->findEntityByEuid(selected_euid);
                 try! trans =
                     selected_entity->towoo::get_component:<Transform::Translation>();
-
+                    
                 let rmin = rect_min as vec2;
                 let rsize = rect_size as vec2;
                 if (rsize[0] <= 0. || rsize[1] <= 0.)
                     return_value!;
-
+                    
                 let lpos =
                     selected_entity->towoo::get_component:<Transform::LocalPosition>();
                 let lrot =
                     selected_entity->towoo::get_component:<Transform::LocalRotation>();
                 let lscale =
                     selected_entity->towoo::get_component:<Transform::LocalScale>();
-
+                    
                 // 当前模式所需的组件缺失时（如缺少 LocalScale），不显示游标
                 let mut mode_ok = true;
                 if (self.m_gizmo_mode == GizmoMode::TRANSLATE && lpos->is_none)
@@ -1335,14 +1341,14 @@ namespace JEEditor::Editor
                     mode_ok = false;
                 if (!mode_ok)
                     return_value!;
-
+                    
                 let cam_pos = camera_trans->get_global_pos;
                 let cam_forward = camera_trans->get_global_rot * ((0., 0., 1.) as vec3);
                 let view_proj = camera_proj->get_view_proj_mat;
-
+                
                 let gizmo_pos = trans->get_global_pos;
                 let gizmo_rot = trans->get_global_rot;
-
+                
                 // LOCAL 模式下游标跟随实体姿态；GLOBAL 模式对齐世界轴；
                 // 缩放只支持 Local。拖拽期间冻结姿态，避免游标跟着实体转动。
                 let is_dragging = self.m_gizmo_dragging;
@@ -1358,28 +1364,28 @@ namespace JEEditor::Editor
                 {
                     orientation = gizmo_rot;
                 }
-
+                
                 let world_per_pixel = gizmoWorldPerPixel(
                     camera_entity, camera_trans, view_proj, origin, rsize);
-
+                    
                 // 写入本帧绘制快照
                 self.m_gizmo_draw_visible = true;
                 self.m_gizmo_draw_origin = origin;
                 self.m_gizmo_draw_rotation = orientation;
                 self.m_gizmo_draw_size = GIZMO_SIZE_PX * world_per_pixel;
                 self.m_gizmo_draw_center_size = GIZMO_CENTER_SIZE_PX * world_per_pixel;
-
+                
                 let mouse = GetMousePos() as vec2;
                 let mouse_local = (mouse - rmin) / rsize;
                 let mouse_ndc = (mouse_local - (0.5, 0.5) as vec2) * 2.;
-
+                
                 let mouse_ray = towoo::ray::from(
                     camera_trans, camera_proj,
                     (mouse_ndc[0], -mouse_ndc[1]) as vec2,
                     camera_entity->towoo::get_component:<Camera::PerspectiveProjection>->is_none);
                 let ray_origin = mouse_ray->origin;
                 let ray_dir = mouse_ray->direction;
-
+                
                 // 拖拽进行中：每帧按当前射线应用变换
                 if (is_dragging)
                 {
@@ -1388,21 +1394,21 @@ namespace JEEditor::Editor
                         trans, lpos, lrot, lscale, ray_origin, ray_dir);
                     return_value!;
                 }
-
+                
                 self.m_gizmo_hover_handle = GIZMO_HANDLE_NONE;
-
+                
                 let hoverable = hovered
                     && !self.m_is_look_active
                     && !self.m_is_pan_active
                     && !self.m_is_orbit_active
                     // 透视摄像机下，游标须位于摄像机前方
                     && ((origin - cam_pos)->dot(cam_forward) > 0.);
-
+                    
                 if (hoverable)
                     self.m_gizmo_hover_handle = self->pickGizmoHandle(
                         view_proj, origin, orientation,
                         self.m_gizmo_draw_size, mouse, rmin, rsize);
-
+                        
                 // 悬停手柄上按下左键：开始拖拽
                 if (self.m_gizmo_hover_handle != GIZMO_HANDLE_NONE
                     && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left))
@@ -1412,11 +1418,11 @@ namespace JEEditor::Editor
                         orientation, origin,
                         cam_forward, ray_origin, ray_dir);
                 }
-
+                
                 return_value!;
             };
         }
-
+        
         // 开始一次游标拖拽：捕获快照，条件不满足时放弃
         func beginGizmoDrag(
             self: WorldEditorViewport,
@@ -1433,9 +1439,9 @@ namespace JEEditor::Editor
             ray_dir: vec3)=> void
         {
             let handle = self.m_gizmo_hover_handle;
-
+            
             let mut ok = true;
-
+            
             self.m_gizmo_dragging = true;
             self.m_gizmo_drag_handle = handle;
             self.m_gizmo_drag_euid = selected_euid;
@@ -1447,7 +1453,7 @@ namespace JEEditor::Editor
             self.m_gizmo_drag_undo_component = "";
             self.m_gizmo_drag_undo_member = "";
             self.m_gizmo_drag_undo_old_value = "";
-
+            
             if (self.m_gizmo_mode == GizmoMode::TRANSLATE)
             {
                 match (lpos)
@@ -1459,7 +1465,7 @@ namespace JEEditor::Editor
                         self.m_gizmo_drag_undo_member = "pos";
                     }
                 }
-
+                
                 if (ok)
                 {
                     if (handle == GIZMO_HANDLE_CENTER)
@@ -1494,7 +1500,7 @@ namespace JEEditor::Editor
                         self.m_gizmo_drag_undo_member = "rot";
                     }
                 }
-
+                
                 if (ok)
                 {
                     let axis = self.m_gizmo_drag_axis;
@@ -1527,7 +1533,7 @@ namespace JEEditor::Editor
                         self.m_gizmo_drag_undo_member = "scale";
                     }
                 }
-
+                
                 if (ok)
                 {
                     if (handle == GIZMO_HANDLE_CENTER)
@@ -1550,7 +1556,7 @@ namespace JEEditor::Editor
                     }
                 }
             }
-
+            
             // 记录撤销用的旧值
             if (ok)
             {
@@ -1563,14 +1569,14 @@ namespace JEEditor::Editor
                     value(dat)? self.m_gizmo_drag_undo_old_value = dat;
                 }
             }
-
+            
             if (!ok)
             {
                 self.m_gizmo_dragging = false;
                 self.m_gizmo_drag_handle = GIZMO_HANDLE_NONE;
             }
         }
-
+        
         // 拖拽进行中：按当前鼠标射线应用平移/旋转/缩放
         func applyGizmoDrag(
             self: WorldEditorViewport,
@@ -1582,7 +1588,7 @@ namespace JEEditor::Editor
             ray_dir: vec3)=> void
         {
             let handle = self.m_gizmo_drag_handle;
-
+            
             if (self.m_gizmo_mode == GizmoMode::TRANSLATE)
             {
                 do try!{
@@ -1615,13 +1621,13 @@ namespace JEEditor::Editor
                         ray_origin, ray_dir,
                         self.m_gizmo_drag_plane_normal,
                         self.m_gizmo_drag_origin);
-
+                        
                     let v = hit - self.m_gizmo_drag_origin;
                     let angle = mathf::atan2(
                         v->dot(self.m_gizmo_drag_basis_b),
                         v->dot(self.m_gizmo_drag_basis_a));
                     let delta_deg = (angle - self.m_gizmo_drag_start_angle) * mathf::RAD2DEG;
-
+                    
                     // 绕（世界空间中的）环轴旋转；对 LOCAL 模式等价于在实体自身坐标系内旋转
                     let delta_rot = quat::axis(self.m_gizmo_drag_plane_normal, delta_deg);
                     trans->set_global_rot(delta_rot * self.m_gizmo_drag_start_rot, lrot);
@@ -1632,7 +1638,7 @@ namespace JEEditor::Editor
             {
                 do try!{
                     try! ls = lscale;
-
+                    
                     let mut factor = 1.;
                     if (handle == GIZMO_HANDLE_CENTER)
                     {
@@ -1659,7 +1665,7 @@ namespace JEEditor::Editor
                             | (1. + (t - self.m_gizmo_drag_start_param) / self.m_gizmo_draw_size);
                     }
                     factor = mathf::clamp(factor, GIZMO_SCALE_FACTOR_MIN, GIZMO_SCALE_FACTOR_MAX);
-
+                    
                     let s = self.m_gizmo_drag_start_scale;
                     let mut new_scale = s * factor;
                     if (handle == GIZMO_HANDLE_X)
@@ -1673,31 +1679,31 @@ namespace JEEditor::Editor
                 };
             }
         }
-
+        
         // 结束拖拽：值有变化时发布一条可撤销的 Action
         func finishGizmoDrag(self: WorldEditorViewport)=> void
         {
             if (self.m_gizmo_drag_undo_old_value == "")
                 return;
-
+                
             do try!{
                 try! selected_entity = self->findEntityByEuid(self.m_gizmo_drag_euid);
                 let new_value = serializeMemberValue(
                     selected_entity,
                     self.m_gizmo_drag_undo_component,
                     self.m_gizmo_drag_undo_member)->or("");
-
+                    
                 if (new_value != "" && new_value != self.m_gizmo_drag_undo_old_value)
                     self->doAction(ModifyComponentMember::create(
-                        self.m_gizmo_drag_euid,
-                        self.m_gizmo_drag_undo_component,
-                        self.m_gizmo_drag_undo_member,
-                        self.m_gizmo_drag_undo_old_value,
-                        new_value));
+                            self.m_gizmo_drag_euid,
+                            self.m_gizmo_drag_undo_component,
+                            self.m_gizmo_drag_undo_member,
+                            self.m_gizmo_drag_undo_old_value,
+                            new_value));
                 return_value!;
             };
         }
-
+        
         // 快捷键切换游标模式（W/E/R）：正在操作调试摄像机（环视/平移/环绕，
         // 此时 WASD 用于飞行移动）或游标拖拽进行中时不响应。
         func switchGizmoModeByShortcut(self: WorldEditorViewport, mode: GizmoMode)=> void
@@ -1707,7 +1713,7 @@ namespace JEEditor::Editor
                 return;
             self.m_gizmo_mode = mode;
         }
-
+        
         // 快捷键切换 Local/Global（G）：守卫条件同上；缩放仅支持 Local，不做切换
         func toggleGizmoSpaceByShortcut(self: WorldEditorViewport)=> void
         {
@@ -1720,33 +1726,33 @@ namespace JEEditor::Editor
                 ? GizmoSpace::GLOBAL
                 | GizmoSpace::LOCAL;
         }
-
+        
         // 在视口左上角绘制变换游标工具栏；返回工具栏是否被悬停
         func drawGizmoToolbar(
             self: WorldEditorViewport, rect_min: ImVec2)=> bool
         {
             SetCursorScreenPos((rect_min.0 + 8., rect_min.1 + 8.));
-
+            
             let mut toolbar_hovered = false;
-
+            
             if (RadioButton("移动", self.m_gizmo_mode == GizmoMode::TRANSLATE))
                 self.m_gizmo_mode = GizmoMode::TRANSLATE;
             if (IsItemHovered())
                 toolbar_hovered = true;
             SameLine();
-
+            
             if (RadioButton("旋转", self.m_gizmo_mode == GizmoMode::ROTATE))
                 self.m_gizmo_mode = GizmoMode::ROTATE;
             if (IsItemHovered())
                 toolbar_hovered = true;
             SameLine();
-
+            
             if (RadioButton("缩放", self.m_gizmo_mode == GizmoMode::SCALE))
                 self.m_gizmo_mode = GizmoMode::SCALE;
             if (IsItemHovered())
                 toolbar_hovered = true;
             SameLine();
-
+            
             // 缩放只支持 Local，处于缩放模式时不提供 Global 选项
             if (self.m_gizmo_mode == GizmoMode::SCALE)
             {
@@ -1761,15 +1767,15 @@ namespace JEEditor::Editor
                 if (IsItemHovered())
                     toolbar_hovered = true;
                 SameLine();
-
+                
                 if (RadioButton("Global", self.m_gizmo_space == GizmoSpace::GLOBAL))
                     self.m_gizmo_space = GizmoSpace::GLOBAL;
                 if (IsItemHovered())
                     toolbar_hovered = true;
             }
-
+            
             SameLine();
-
+            
             // 右键环视时是否锁定鼠标（虚拟机等环境下建议关闭）
             match (CheckBox("锁定鼠标", s_lock_mouse_on_look))
             {
@@ -1779,10 +1785,10 @@ namespace JEEditor::Editor
             }
             if (IsItemHovered())
                 toolbar_hovered = true;
-
+                
             return toolbar_hovered;
         }
-
+        
         // 未保存修改标记：自上次保存后执行过编辑动作（doAction/撤销/重做）时，
         // 在视口左下角显示一个小圆点（与关闭确认的判定一致，见 onPreClose）。
         // 返回标记区域是否被悬停（悬停时应抑制视口内的点击选取）。
@@ -1791,26 +1797,26 @@ namespace JEEditor::Editor
         {
             if (!self.m_action_history->isDirty && self.m_saving_path->is_value)
                 return false;
-
+                
             let line_h = GetFrameHeight();
-
+            
             // 不可见按钮仅用于在左下角占位并获得悬停判定
             SetCursorScreenPos((rect_min.0 + 8., rect_max.1 - 8. - line_h));
             do InvisibleButton("##unsaved_mark", (line_h, line_h));
             let hovered = IsItemHovered();
             if (hovered)
                 do SetTooltip("存在未保存的修改");
-
+                
             let (dot_rect_min, dot_rect_max) = GetItemRect();
             GetWindowDrawList()->AddCircleFilled(
                 ((dot_rect_min.0 + dot_rect_max.0) * 0.5,
                     (dot_rect_min.1 + dot_rect_max.1) * 0.5),
                 line_h * 0.22,
                 (240, 200, 80, 255));
-
+                
             return hovered;
         }
-
+        
         // ==========================
         public func getEntitySelector(self: WorldEditorViewport)
         {
@@ -1843,7 +1849,7 @@ namespace JEEditor::Editor
         {
             return self.m_saving_path;
         }
-
+        
         // 把世界序列化并写入 path；失败时弹错误对话框并返回 false。
         // 编辑器中世界落盘的唯一入口。
         public func saveWorldTo(self: WorldEditorViewport, path: path_t)=> bool
@@ -1862,7 +1868,7 @@ namespace JEEditor::Editor
                 {
                     // 已落盘：清除编辑历史的未保存标记（见 Practice::markSaved）
                     self.m_action_history->markSaved();
-
+                    
                     // 在独立作用域中先取出字符串：闭包按创建时的值捕获文本，
                     // 之后每帧由 Statebar 调用绘制保存成功提示。
                     let name = self.m_name;
@@ -1874,7 +1880,7 @@ namespace JEEditor::Editor
                 }
             }
         }
-
+        
         // 快捷键保存（Ctrl+S）：已保存过的世界直接写回原路径；
         // 尚未保存过的世界没有目标目录，提示改用拖拽图标到资源管理器的保存流程。
         func saveByShortcut(self: WorldEditorViewport)=> void
@@ -1889,7 +1895,7 @@ namespace JEEditor::Editor
                         F"世界 \"{self.m_name}\" 尚未保存到文件中，请拖动视口顶部的图标到资源管理器以保存");
             }
         }
-
+        
         // 以新的名称/保存路径重建本视口（沿用当前世界实例与未保存的修改）。
         // 重建成功时把编辑历史（m_action_history）迁移到新视口以保持撤销/重做连续，
         // 再以 CLOSE_BUT_KEEP_WORLD 关闭旧视口；窗口创建失败时返回 false。
@@ -1899,7 +1905,7 @@ namespace JEEditor::Editor
             new_path: option<path_t>)=> bool
         {
             let new_viewport = create(self.m_world_instance, new_name, new_path);
-
+            
             match (Windows::show(new_viewport))
             {
                 none?
@@ -1912,7 +1918,7 @@ namespace JEEditor::Editor
                 }
             }
         }
-
+        
         public func dropAndRename(self: WorldEditorViewport, new_name: string)=> void
         {
             if (self->isCurrentViewportAvailable && self.m_name != new_name)
@@ -1921,7 +1927,7 @@ namespace JEEditor::Editor
                 {
                     MsgBox::err(
                         "重命名失败", "重命名世界失败，存在同名的未保存世界");
-
+                        
                     if (!self.m_saving_path->is_none)
                         // 这种情况通常情况下不应该发生
                         logerr("Failed to rename world: duplicated opened world?");
@@ -1940,7 +1946,7 @@ namespace JEEditor::Editor
                         "保存失败", "世界已写入文件，但以新的保存路径重开视口失败：存在使用该路径的世界视口");
             }
         }
-
+        
         // 资源管理器中重命名世界文件后调用：把视口的保存路径重定向到新路径。
         // 沿用首次保存的“重建窗口”逻辑（保留世界实例、未保存的修改与编辑历史），
         // 关闭旧视口并以新路径重开，确保窗口标题与后续保存路径立即匹配重命名后的文件。
@@ -1948,7 +1954,7 @@ namespace JEEditor::Editor
         {
             if (!self->isCurrentViewportAvailable)
                 return;
-
+                
             match (self.m_saving_path)
             {
                 none?;
@@ -1957,14 +1963,14 @@ namespace JEEditor::Editor
                     // 名称未变化时无需重开视口（窗口标题不会改变）
                     if (old_path == new_path)
                         return;
-
+                        
                     if (!self->reopenWith(self.m_name, option::value(new_path)))
                         MsgBox::err(
                             "重命名失败", "文件已重命名，但以新路径重开视口失败：存在使用该路径的世界视口");
                 }
             }
         }
-
+        
         // 另存为流程（原资源管理器 requestSaveWorld）：弹输入框要文件名 →
         // 已存在则确认覆盖 → 写盘 → 以新保存路径重开视口。
         // on_saved 在写盘成功后回调（供资源管理器刷新文件缓存）。
@@ -1976,14 +1982,14 @@ namespace JEEditor::Editor
                 // 对话框等待期间视口可能已被关闭
                 if (!self->isCurrentViewportAvailable)
                     return;
-
+                    
                 if (self->saveWorldTo(dst))
                 {
                     do on_saved();
                     self->dropAndSaveAs(dst);
                 }
             }
-
+            
             func saveWorldAs(file_name: string)=> void
             {
                 if (file_name->len == 0)
@@ -1991,14 +1997,14 @@ namespace JEEditor::Editor
                     MsgBox::err("保存失败", "文件名不能为空");
                     return;
                 }
-
+                
                 // 未带后缀时自动补全 .je4world
                 let full_name = file_name->end_with(".je4world")
                     ? file_name
                     | F"{file_name}.je4world";
-
+                    
                 let dst = target_dir / full_name;
-
+                
                 if (isfile(dst))
                 {
                     // 唯一窗口：已有覆盖确认对话框打开时忽略
@@ -2013,7 +2019,7 @@ namespace JEEditor::Editor
                 else
                     saveTo(dst);
             }
-
+            
             // 唯一窗口：已有保存对话框打开时忽略本次放置请求
             match (InputBox::showUnique(
                     "保存世界", "请输入保存的文件名：", F"{self.m_name}.je4world"))
@@ -2023,7 +2029,7 @@ namespace JEEditor::Editor
                     do inputbox->then(saveWorldAs);
             }
         }
-
+        
         public func getWorld(self: WorldEditorViewport)=> world
         {
             return self.m_world_instance;
@@ -2042,14 +2048,14 @@ namespace JEEditor::Editor
         {
             self.m_action_history->doAction(action);
         }
-
+        
         // ==========================
         
         public func findWorldEditorViewport(w: world)
         {
             return s_world_viewports->get(w);
         }
-
+        
         // 按窗口标题反查视口；标题对唯一窗口是唯一的，用于拖拽载荷的还原。
         public func findWorldEditorViewportByTitle(title: string)
         {
@@ -2060,7 +2066,7 @@ namespace JEEditor::Editor
             }
             return option::none;
         }
-
+        
         // 按保存路径反查视口；资源管理器打开 .je4world 前用它去重。
         public func findWorldEditorViewportByPath(path: path_t)
         {
@@ -2098,7 +2104,7 @@ namespace JEEditor::Editor
                 
             if ((debug_camera_selector->iter |> collect->get(0))->is_value)
                 return;
-            
+                
             // Create editor camera.
             do w->add_entity([
                     Transform::Translation::type::typeinfo,
@@ -2124,7 +2130,7 @@ namespace JEEditor::Editor
             
             // Create editor camera.
             ensureDebugCamera(new_world);
-                
+            
             let e = new_world->add_entity([
                     Transform::Translation::type::typeinfo,
                     Transform::LocalPosition::type::typeinfo,
@@ -2134,10 +2140,10 @@ namespace JEEditor::Editor
                     Renderer::Shaders::type::typeinfo,
                     Renderer::Shape::type::typeinfo,
                 ]);
-
+                
             e->towoo::get_component:<Transform::LocalPosition>->unwrap.pos->set(
                 (0., 0., 1.) as vec3);
-
+                
             let e2 = new_world->add_entity([
                     Transform::Translation::type::typeinfo,
                     Transform::LocalPosition::type::typeinfo,
@@ -2169,7 +2175,7 @@ namespace JEEditor::Editor
                 }
             }
         }
-
+        
         // 从 .je4world 文件加载世界并打开编辑视口；
         // 该路径已有打开的视口或文件读取失败时以 MsgBox 报错。
         public func openWorldEditorViewportFromFile(path: path_t)=> void
@@ -2184,7 +2190,7 @@ namespace JEEditor::Editor
                     return;
                 }
             }
-
+            
             match (toml::load(path))
             {
                 err(msg)?
@@ -2200,12 +2206,12 @@ namespace JEEditor::Editor
                         wdat);
                     ensureDebugCamera(w);
                     w->set_enable(true);
-
+                    
                     // 优先使用文件中保存的世界名（与文件名无关）；
                     // 旧版本文件未保存名字，退回文件名。
                     let name = JEEditor::Saving::World::getName(wdat)
                         ->or(purename(path));
-
+                        
                     match (Windows::show(
                             create(w, name, option::value(path))))
                     {
