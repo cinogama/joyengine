@@ -7,6 +7,7 @@ import pkg::fsys;
 import pkg::interface;
 import pkg::worst;
 import pkg::iterator;
+import pkg::platform;
 
 import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Icons;
@@ -647,6 +648,9 @@ namespace JEEditor::Editor
                     
                     if (MenuItem("复制路径"))
                         SetClipboardText(sel->to_string());
+
+                    if (MenuItem("在资源管理器中展示"))
+                        revealInSystemExplorer(sel);
                 }
                 
                 EndPopup();
@@ -687,6 +691,26 @@ namespace JEEditor::Editor
             };
 
             return ext_rename_map->get(string::lower(extension(path)));
+        }
+
+        // 在系统文件管理器中展示指定路径：Windows 用 explorer /select 选中该项，
+        // macOS 用 open -R 在 Finder 中定位；其余平台的 xdg-open 不支持定位，
+        // 退化为打开所在目录。fsys 的路径统一为正斜杠，而 explorer /select 只认
+        // 反斜杠，不转换的话定位会失败并回退打开默认位置（桌面）。
+        func revealInSystemExplorer(path: fsys::path_t)=> void
+        {
+            let target = path->to_string();
+            let current_os = platform::get_os();
+
+            if (current_os == platform::Os::WINDOWS)
+            {
+                let win_path = target->replace("/", "\\");
+                do platform::shell(F"explorer.exe /select,\"{win_path}\"");
+            }
+            else if (current_os == platform::Os::MACOS)
+                do platform::shell(F"open -R \"{target}\"");
+            else
+                do platform::shell(F"xdg-open \"{parent(path)->to_string()}\"");
         }
         
         func handleItemClick(self: Browser, path: fsys::path_t)=> void
