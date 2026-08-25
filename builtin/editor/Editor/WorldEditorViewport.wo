@@ -81,8 +81,8 @@ namespace JEEditor::Editor
         
         m_selected_entity_id: mut option<entity::internal::euid_t>,
 
-        // 右键实体上下文菜单：右键按下起点与“按下发生在视口内”标记，
-        // 用于在松开时区分“点击实体弹菜单”与“拖拽环视”。
+        // 右键按下起点与“按下发生在视口内”标记：环视以起点为基准延迟到
+        // 位移超过阈值后才激活；松开时用于区分“点击实体弹菜单”与“拖拽环视”。
         m_rmb_press_pos: mut ImVec2,
         m_rmb_press_in_viewport: mut bool,
         
@@ -183,8 +183,9 @@ namespace JEEditor::Editor
         let GIZMO_COLOR_CENTER = (0.85, 0.85, 0.85, 0.9);
         let GIZMO_COLOR_HOVER = (1., 1., 0.25, 1.);
 
-        // 右键同时承担“拖拽环视”职责：按下到松开的鼠标位移不超过该像素
-        // 阈值时视为“点击实体”（弹出上下文菜单），超过则视为环视拖拽。
+        // 右键同时承担“拖拽环视”职责：以按下起点为基准，位移切实超过该
+        // 像素阈值后才激活环视（阈值内的位移不转动摄像机）；松开时位移
+        // 仍不超过该阈值则视为“点击实体”，弹出上下文菜单。
         let RMB_CLICK_MAX_DRAG_PX = 6.;
         // 视口内实体右键菜单的弹窗 ID
         let VIEWPORT_ENTITY_CONTEXT_MENU_ID = "##viewport_entity_context";
@@ -760,6 +761,14 @@ namespace JEEditor::Editor
                         (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
             }
             
+            // 先处理右键状态（记录按下起点、松开时按位移决定是否弹实体菜单），
+            // 再进行摄像机控制：环视以这里记录的按下起点为基准，位移切实
+            // 超过阈值后才会激活，因此本调用必须先于 updateCameraControl。
+            self->updateViewportRightClick(
+                debug_camera,
+                viewport_hovered && !toolbar_hovered,
+                viewport_rect);
+
             self->updateCameraControl(
                 debug_camera,
                 dt,
@@ -767,10 +776,6 @@ namespace JEEditor::Editor
                 viewport_rect);
 
             // 视口内右键点击实体：选中并在鼠标处弹出与实体列表一致的上下文菜单
-            self->updateEntityContextMenu(
-                debug_camera,
-                viewport_hovered && !toolbar_hovered,
-                viewport_rect);
             if (BeginPopup(VIEWPORT_ENTITY_CONTEXT_MENU_ID))
             {
                 do try!{
@@ -951,11 +956,11 @@ namespace JEEditor::Editor
             return option::value(hits[0].1);
         }
 
-        // 视口内右键点击实体：选中该实体并在鼠标处弹出上下文菜单
-        // （菜单内容与实体列表一致，见 drawEntityContextMenuItems）。
-        // 右键按下即激活环视，因此在松开时按位移区分：按下到松开位移
-        // 不超过 RMB_CLICK_MAX_DRAG_PX 才视为点击并做射线拾取。
-        func updateEntityContextMenu(
+        // 视口右键的生命周期：记录按下起点（供环视的延迟激活使用，须先于
+        // updateCameraControl 调用），并在松开时按位移分流——位移不超过
+        // RMB_CLICK_MAX_DRAG_PX 视为点击实体：选中该实体并在鼠标处弹出
+        // 上下文菜单（内容与实体列表一致，见 drawEntityContextMenuItems）。
+        func updateViewportRightClick(
             self: WorldEditorViewport,
             debug_camera: option<entity>,
             hovered: bool,
@@ -1105,17 +1110,20 @@ namespace JEEditor::Editor
             let worldUp = (0., 1., 0.) as vec3;
             
             // ---- 激活 / 停止各项操作 ----
-            if (hovered)
+            // 右键不在按下瞬间激活环视：以 updateViewportRightClick 记录的
+            // 按下起点为基准，位移切实超过 RMB_CLICK_MAX_DRAG_PX 后才激活；
+            // 阈值内的位移不转动摄像机，松开则视为点击实体弹菜单。
+            if (self.m_rmb_press_in_viewport
+                && !self.m_is_look_active
+                && (GetMousePos() as vec2 - self.m_rmb_press_pos as vec2)->length
+                    > RMB_CLICK_MAX_DRAG_PX)
             {
-                if (IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Right))
-                {
-                    self.m_is_look_active = true;
-                    if (s_lock_mouse_on_look)
-                        input::set_lock_mouse(true);
-                }
-                if (IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Middle))
-                    self.m_is_pan_active = true;
+                self.m_is_look_active = true;
+                if (s_lock_mouse_on_look)
+                    input::set_lock_mouse(true);
             }
+            if (hovered && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Middle))
+                self.m_is_pan_active = true;
             
             if (!IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Right))
             {
