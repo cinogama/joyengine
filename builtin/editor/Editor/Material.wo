@@ -466,6 +466,8 @@ namespace JEEditor::Editor
             e: entity, univ: option<universe>, append_at: int)=> void
         {
             do Selectable("＋ 添加着色器##material_shader_append");
+            if (IsItemHovered())
+                do SetTooltip("拖动 .shader 文件到此处追加到列表末尾");
             match (Drag::AcceptDrag:<FilePayload>())
             {
                 none?;
@@ -537,6 +539,10 @@ namespace JEEditor::Editor
 
                 let univ = option::value(wctx->getWorld->get_universe);
 
+                // 模型行：文件名/状态文字 + 行尾移除按钮；悬浮整行时
+                // 以气泡展示完整路径与拖放说明
+                let mut shape_tip = "拖动模型文件到此处设置模型（.obj/.fbx/.gltf 等）";
+
                 BeginGroup();
 
                 match (e->get_shape())
@@ -547,14 +553,13 @@ namespace JEEditor::Editor
                     {
                         match (shp->path)
                         {
+                            // vertex::create 创建的顶点没有来源路径
                             none?
-                                // vertex::create 创建的顶点没有来源路径
-                                Text("模型：（内置顶点）");
+                                Text("（内置顶点）");
                             value(p)?
                             {
-                                Text(F"模型：{filename(normalize(p))}");
-                                if (IsItemHovered())
-                                    do SetTooltip(p);
+                                Text(filename(normalize(p)));
+                                shape_tip = F"{p}\n拖动模型文件到此处替换模型";
                             }
                         }
 
@@ -565,6 +570,8 @@ namespace JEEditor::Editor
                 }
 
                 EndGroup();
+                if (IsItemHovered())
+                    do SetTooltip(shape_tip);
 
                 // 拖动资源浏览器中的模型文件到该行可设置/替换模型
                 match (Drag::AcceptDrag:<FilePayload>())
@@ -573,8 +580,6 @@ namespace JEEditor::Editor
                     value(payload)?
                         trySetShape(wctx, e, univ, payload->dump);
                 }
-
-                TextDisabled("拖动模型文件到上行可设置模型（.obj/.fbx/.gltf 等）");
             }
             Spacing();
         }
@@ -594,7 +599,6 @@ namespace JEEditor::Editor
 
                 if (shaders->len == 0)
                     TextDisabled("（没有着色器）");
-                TextDisabled("拖动 .shader 文件到列表项上可插入到该位置");
 
                 for (let (idx, sinst) : shaders->iter |> enumerate)
                 {
@@ -603,13 +607,18 @@ namespace JEEditor::Editor
                         F"{idx}: {shaderDisplayName(sinst)}##material_shader_{idx}",
                         TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth);
 
+                    // 悬浮提示完整路径与该行的拖放插入说明
                     match (sinst->path)
                     {
-                        none?;
+                        none?
+                        {
+                            if (IsItemHovered())
+                                do SetTooltip("拖动 .shader 文件到此处插入到该位置");
+                        }
                         value(p)?
                         {
                             if (IsItemHovered())
-                                do SetTooltip(p);
+                                do SetTooltip(F"{p}\n拖动 .shader 文件到此处插入到该位置");
                         }
                     }
 
@@ -721,7 +730,8 @@ namespace JEEditor::Editor
             wctx: WorldEditorViewport, e: entity)=> void
         {
             SeparatorText("纹理通道");
-            TextDisabled("通道由着色器的采样 uniform 声明，拖动纹理文件到通道上可绑定，悬浮查看详情");
+            if (IsItemHovered())
+                do SetTooltip("采样通道由着色器的 uniform 声明");
 
             let univ = option::value(wctx->getWorld->get_universe);
             let textures = e->get_textures();
@@ -744,7 +754,7 @@ namespace JEEditor::Editor
             {
                 let tex_opt = textures->get(pass);
 
-                // 悬浮气泡内容：纹理路径 + 采样引用，每项一行
+                // 悬浮气泡内容：纹理路径 + 采样引用 + 拖放说明，每项一行
                 let mut tips = []: array<string>;
                 match (tex_opt)
                 {
@@ -769,6 +779,7 @@ namespace JEEditor::Editor
                             tips = tips->append(F"采样于 {ref_name}");
                     }
                 }
+                tips = tips->append("拖动纹理文件到此处绑定/替换纹理");
 
                 BeginGroup();
 
@@ -791,13 +802,10 @@ namespace JEEditor::Editor
 
                 EndGroup();
 
-                // 悬浮整行时以气泡显示路径与采样引用
-                if (tips->len != 0)
-                {
-                    let tips_text = tips->reduce(\l, r = l + "\n" + r;)->unwrap;
-                    if (IsItemHovered())
-                        do SetTooltip(tips_text);
-                }
+                // 悬浮整行时以气泡显示路径、采样引用与拖放说明
+                let tips_text = tips->reduce(\l, r = l + "\n" + r;)->unwrap;
+                if (IsItemHovered())
+                    do SetTooltip(tips_text);
 
                 // 拖动资源浏览器中的纹理文件到该行可绑定/替换此通道
                 match (Drag::AcceptDrag:<FilePayload>())

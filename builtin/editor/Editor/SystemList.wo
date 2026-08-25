@@ -28,11 +28,12 @@ using JEEditor::Editor::Action;
 namespace JEEditor::Editor
 {
     // 系统列表：展示并管理当前编辑世界的两组系统——
-    //   立即启用：已 add_system 到世界，编辑器内正在运行（如图形系统）；
-    //   调试运行时启用：保存在 WorldEditorViewport 中，仅在开始调试执行
+    //   运行时：已 add_system 到世界，编辑器内正在运行（如图形系统）；
+    //   调试时：保存在 WorldEditorViewport 中，仅在开始调试执行
     //   或导出时才会 add_system（调试/导出功能暂未支持）。
-    // 增删与两组之间的转换均通过 doAction 发布，支持撤销/重做并参与
-    // 未保存判定；移除操作会先弹窗确认。
+    // 组的含义通过悬浮分组标题的气泡提示展示。增删与两组之间的转换
+    // 均通过 doAction 发布，支持撤销/重做并参与未保存判定；
+    // 移除操作会先弹窗确认。
     using SystemList = struct{
         m_close: mut bool,
     }
@@ -42,7 +43,7 @@ namespace JEEditor::Editor
         // “添加系统”选择弹窗的状态；面板是单例，用模块级状态即可
         let mut s_add_system_filter = "";
         let mut s_add_system_focus = false;
-        // 弹窗中“添加到哪一组”的选择：true=立即启用，false=调试运行时启用
+        // 弹窗中“添加到哪一组”的选择：true=运行时，false=调试时
         let mut s_add_system_immediate = true;
 
         public func isSystemListExist()
@@ -115,8 +116,8 @@ namespace JEEditor::Editor
             ;
         }
 
-        // 一行系统条目：整行命中的叶子节点 + 行尾 × 移除按钮（悬停红色）+
-        // 右键上下文菜单。命名空间已由分组标题展示，行内只显示短名
+        // 一行系统条目：与检视面板组件栏一致的带底色整行 + 行尾 × 移除按钮
+        // （悬停红色）+ 右键上下文菜单。行内只显示短名
         // （悬停提示完整类型名）。
         func showSystemEntryRow(
             wctx: WorldEditorViewport, tag: string, systype: typeinfo, is_world_system: bool)=> void
@@ -124,10 +125,12 @@ namespace JEEditor::Editor
             let (_, short_name) = splitTypeName(systype->name);
             let row_label = F"{short_name}##{tag}";
 
-            // 叶子节点无折叠箭头；SpanAvailWidth 让命中区横跨整行，
+            // Framed 叶子节点：无折叠箭头但带底色框，样式与检视面板的
+            // 组件折叠头一致；SpanAvailWidth 让命中区横跨整行，
             // AllowItemOverlap 允许行尾 × 按钮抢占重叠区域的悬停与点击
             do TreeNodeEx(row_label,
                 TreeNodeAttribute::ImGuiTreeNodeFlags_Leaf
+                    + TreeNodeAttribute::ImGuiTreeNodeFlags_Framed
                     + TreeNodeAttribute::ImGuiTreeNodeFlags_AllowItemOverlap
                     + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
                     + TreeNodeAttribute::ImGuiTreeNodeFlags_NoTreePushOnOpen);
@@ -144,7 +147,7 @@ namespace JEEditor::Editor
                 Separator();
 
                 let switch_label = is_world_system
-                    ? "转换为调试运行时启用" | "转换为立即启用";
+                    ? "转换为调试时启用" | "转换为运行时启用";
                 if (MenuItem(switch_label))
                     wctx->doAction(SwitchSystemGroup::create(
                         systype, wctx->getWorld, !is_world_system));
@@ -165,15 +168,15 @@ namespace JEEditor::Editor
             PopStyleColor(3);
         }
 
-        // 绘制一组系统：带数量的分组标题 + 按命名空间分小节的条目列表
+        // 绘制一组系统：带数量的分组标题 + 条目列表。组的含义通过悬浮
+        // 标题的气泡提示展示；系统不按命名空间分小节，仅区分两组。
         func showSystemGroup(
             wctx: WorldEditorViewport,
             systems: array<typeinfo>,
             tag_prefix: string,
             is_world_system: bool,
             title: string,
-            description: string,
-            empty_hint: string)=> void
+            description: string)=> void
         {
             // 编辑器内部系统（Editor::*）不在系统列表中显示
             let visible = systems
@@ -181,42 +184,33 @@ namespace JEEditor::Editor
                 |> sort(\l, r = l->name < r->name;);
 
             SeparatorText(F"{title}（{visible->len}）");
-            TextDisabled(description);
+            if (IsItemHovered())
+                do SetTooltip(description);
 
-            let mut last_namespace = "";
             for (let systype : visible)
-            {
-                let (ns, _) = splitTypeName(systype->name);
-                if (ns != last_namespace)
-                {
-                    if (ns != "")
-                        SeparatorText(ns);
-                    last_namespace = ns;
-                }
-
                 showSystemEntryRow(wctx, F"{tag_prefix}_{systype->name}", systype, is_world_system);
-            }
 
             if (visible->len == 0)
-                TextDisabled(empty_hint);
+                TextDisabled("（空）");
         }
 
         // “添加系统”选择弹窗：先选择添加到哪一组，再搜索过滤 +
-        // 按命名空间分组的候选列表。选中一项立即发布添加操作且保持
-        // 弹窗打开，便于连续添加；已在任意一组中的系统自下一帧起从候选中消失。
+        // 候选列表（悬停提示完整类型名）。选中一项立即发布添加操作且
+        // 保持弹窗打开，便于连续添加；已在任意一组中的系统自下一帧起
+        // 从候选中消失。
         func showAddSystemPicker(wctx: WorldEditorViewport)=> void
         {
             // 弹窗大小由内容自适应；若控件用 -1 占满宽度，弹窗自身没有
             // 可参考的实宽，会塌缩成细条，因此这里给控件显式像素宽度
             let picker_width = 300.;
 
-            if (RadioButton("立即启用", s_add_system_immediate))
+            if (RadioButton("运行时", s_add_system_immediate))
                 s_add_system_immediate = true;
             if (IsItemHovered())
                 do SetTooltip("添加后立即 add_system 到世界，编辑器内马上运行");
 
             SameLine();
-            if (RadioButton("调试运行时启用", !s_add_system_immediate))
+            if (RadioButton("调试时", !s_add_system_immediate))
                 s_add_system_immediate = false;
             if (IsItemHovered())
                 do SetTooltip("保存在世界中，仅在开始调试执行或导出时才会 add_system");
@@ -253,17 +247,10 @@ namespace JEEditor::Editor
             if (BeginListBox("##add_system_candidates", picker_width,
                     GetFrameHeightWithSpacing() * 8.))
             {
-                let mut last_namespace = "";
                 for (let stype : candidates)
                 {
                     let name = stype->name;
-                    let (ns, short_name) = splitTypeName(name);
-                    if (ns != last_namespace)
-                    {
-                        if (ns != "")
-                            SeparatorText(ns);
-                        last_namespace = ns;
-                    }
+                    let (_, short_name) = splitTypeName(name);
 
                     if (Selectable(F"{short_name}##add_{name}"))
                     {
@@ -272,6 +259,8 @@ namespace JEEditor::Editor
                         else
                             wctx->doAction(AddRuntimeSystem::create(stype));
                     }
+                    if (IsItemHovered())
+                        do SetTooltip(name);
                 }
                 if (candidates->len == 0)
                     TextDisabled("（没有匹配的系统）");
@@ -287,9 +276,8 @@ namespace JEEditor::Editor
                 wctx->getWorld->internal::get_all_systems,
                 "world",
                 true,
-                "立即启用",
-                "已添加到世界，正在编辑器中运行",
-                "（没有立即启用的系统）");
+                "运行时",
+                "已 add_system 到世界，编辑器内正在运行的系统");
 
             Spacing();
 
@@ -298,9 +286,8 @@ namespace JEEditor::Editor
                 wctx->getRuntimeSystems(),
                 "runtime",
                 false,
-                "调试运行时启用",
-                "保存在世界中，开始调试执行或导出时才会运行",
-                "（没有调试运行时启用的系统）");
+                "调试时",
+                "保存在世界中，仅在开始调试执行或导出时运行的系统");
 
             Spacing();
             if (ButtonSize("添加系统", (-1., 0.)))
