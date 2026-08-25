@@ -1,8 +1,10 @@
 import woo::std;
 
+import je;
 import je::internal;
 import je::ecs;
 import je::gui;
+import je::typeinfo;
 import je::towoo;
 import je::towoo::components;
 
@@ -13,6 +15,7 @@ import pkg::worst;
 import builtin::editor::GUI::Windows;
 
 import WorldEditorViewport;
+import Action::CreateEntity;
 import Action::DestroyEntity;
 
 using iterator;
@@ -28,6 +31,13 @@ namespace JEEditor::Editor
     }
     {
         let mut s_entitylist_singleton = option::none: option<EntityList>;
+
+        // “新建实体”弹窗的状态；实体列表面板是单例，用模块级状态即可。
+        // 勾选记录保存组件类型名而非 typeinfo 句柄，
+        // 避免句柄在类型热重载等情况下失效（同 AddComponent 的做法）
+        let mut s_new_entity_filter = "";
+        let mut s_new_entity_focus = false;
+        let mut s_new_entity_selected = map::create:<string, bool>(0);
         public func isEntityListExist()
         {
             return s_entitylist_singleton->is_value;
@@ -124,6 +134,128 @@ namespace JEEditor::Editor
                 showEntityContextMenu(world_view, e);
             }
         }
+        // 将 "Transform::LocalPosition" 拆为 ("Transform", "LocalPosition")，
+        // 不带命名空间的类型名返回 ("", 原名)。
+        func splitTypeName(cname: string)=> (string, string)
+        {
+            let sep_pos = cname->find("::")->or(-1);
+            if (sep_pos < 0)
+                return ("", cname);
+            return (cname->sub_len(0, sep_pos), cname->sub(sep_pos + 2));
+        }
+        // 按勾选的组件创建新实体，并额外附加编辑器依赖的 Editor::EntityId
+        // （原生侧构造该组件时即分配有效的调试 EUID，选中/撤销等依赖它）：
+        // 发布可撤销的 CreateEntity 操作并选中新实体。组件类型名在创建时
+        // 才通过 typeinfo::load 解析，失效的类型会被跳过；全部失效时拒绝
+        // 创建，避免产生没有任何组件的实体。
+        func createNewEntity(wctx: WorldEditorViewport)=> void
+        {
+            let selected_ctypes = s_new_entity_selected->keys->iter
+                |> filter_map(\cname = typeinfo::load(cname);)
+                |> collect;
+            if (selected_ctypes->len == 0)
+            {
+                logerr("新建实体：勾选的组件类型均已失效");
+                return;
+            }
+
+            let ctypes = selected_ctypes
+                ->append(Editor::EntityId::type::typeinfo);
+
+            let e = wctx->getWorld()->add_entity(ctypes);
+
+            // 以创建后的完整快照发布撤销操作；缺少 EUID 时仅记录日志并保留实体
+            match (CreateEntity::try_create(e))
+            {
+                none?
+                    logerr("新建实体缺少 EUID，该实体将不支持撤销");
+                value(action)?
+                    wctx->doAction(action);
+            }
+
+            // 选中新实体，便于立刻在检视面板中编辑
+            do wctx->setSelectedEntityId(e->internal::get_entity_uid);
+            CloseCurrentPopup();
+        }
+        // “新建实体”弹窗：搜索过滤 + 按命名空间分组的组件候选，
+        // 自由勾选组合若干组件后确认创建；不允许一个组件都不选。
+        func showNewEntityPicker(wctx: WorldEditorViewport)=> void
+        {
+            // 弹窗大小由内容自适应；若控件用 -1 占满宽度，弹窗自身没有
+            // 可参考的实宽，会塌缩成细条，因此这里给控件显式像素宽度
+            let picker_width = 300.;
+
+            SetNextItemWidth(picker_width);
+            if (s_new_entity_focus)
+            {
+                SetKeyboardFocusHere(0);
+                s_new_entity_focus = false;
+            }
+            match (InputText("##new_entity_filter", s_new_entity_filter))
+            {
+                none?;
+                value(new_filter)?
+                    s_new_entity_filter = new_filter;
+            }
+
+            let filter_lower = s_new_entity_filter->lower;
+            let has_filter = filter_lower->len > 0;
+
+            // 候选为全部已注册组件，排除编辑器内部组件（Editor::*）以及
+            // 不匹配搜索词的组件（按含命名空间的全名匹配）
+            let candidates = typeinfo::get_all_components_types()
+                ->forall(\ctype = !ctype->name->begin_with("Editor::") &&
+                            (!has_filter ||
+                                ctype->name->lower->find(filter_lower)->is_value);)
+                |> std::sort(\l, r = l->name < r->name;);
+
+            // 列表高度固定为约 8 行，避免候选过多时撑爆弹窗
+            if (BeginListBox("##new_entity_candidates", picker_width,
+                    GetFrameHeightWithSpacing() * 8.))
+            {
+                // 与检视面板一致的命名空间分组标题
+                let mut last_namespace = "";
+                for (let ctype : candidates)
+                {
+                    let cname = ctype->name;
+                    let (ns, short_name) = splitTypeName(cname);
+                    if (ns != last_namespace)
+                    {
+                        if (ns != "")
+                            SeparatorText(ns);
+                        last_namespace = ns;
+                    }
+
+                    match (CheckBox(F"{short_name}##new_{cname}",
+                            s_new_entity_selected->contains(cname)))
+                    {
+                        none?;
+                        value(checked)?
+                        {
+                            if (checked)
+                                s_new_entity_selected->set(cname, true);
+                            else
+                                do s_new_entity_selected->remove(cname);
+                        }
+                    }
+                }
+                if (candidates->len == 0)
+                    TextDisabled("（没有匹配的组件）");
+
+                EndListBox();
+            }
+
+            // 空实体没有保留意义：一个组件都没勾选时禁用创建按钮
+            BeginDisabled(s_new_entity_selected->len == 0);
+            if (ButtonSize("创建", (picker_width, 0.)))
+                createNewEntity(wctx);
+            EndDisabled();
+
+            if (s_new_entity_selected->len == 0)
+                TextDisabled("（至少勾选一个组件才能创建）");
+            else
+                Text(F"已勾选 {s_new_entity_selected->len} 个组件");
+        }
         public func run(self: EntityList)=> bool
         {
             match (WorldEditorViewport::getLastFocused())
@@ -133,6 +265,22 @@ namespace JEEditor::Editor
                 value(wctx)?
                 {
                     showEntitiesInWorld(wctx);
+
+                    Spacing();
+                    if (ButtonSize("新建实体", (-1., 0.)))
+                    {
+                        // 每次打开弹窗都复位搜索词与勾选，并将焦点设到搜索框
+                        s_new_entity_filter = "";
+                        s_new_entity_focus = true;
+                        s_new_entity_selected->clear();
+                        OpenPopup("##new_entity_picker");
+                    }
+
+                    if (BeginPopup("##new_entity_picker"))
+                    {
+                        showNewEntityPicker(wctx);
+                        defer EndPopup();
+                    }
                 }
             }
             return !self.m_close;
