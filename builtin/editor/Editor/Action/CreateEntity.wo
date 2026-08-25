@@ -4,7 +4,6 @@ import je;
 import je::ecs;
 import je::internal;
 import je::typeinfo;
-import je::towoo;
 import je::towoo::components;
 
 import pkg::toml;
@@ -46,6 +45,12 @@ namespace JEEditor::Editor::Action
             let components_dat = new_table();
             for (let ctype : ctypes)
                 components_dat->set(ctype->name, new_table());
+
+            // Editor::EntityId 必须包含在起始组件集合里：当前帧事后新增的
+            // 组件 get 不到，而 get_entity_uid 依赖 get component；放进起始
+            // 集合后，原生侧构造该组件时即分配有效的调试 EUID
+            components_dat->set(
+                Editor::EntityId::type::typeinfo->name, new_table());
 
             let entity_dat = new_table();
             entity_dat->set("components", components_dat);
@@ -94,16 +99,17 @@ namespace JEEditor::Editor::Action
 
             match (self.m_content.m_eid)
             {
-                // 首次落实：原生侧构造 Editor::EntityId 时即分配调试 EUID，
-                // 回填到动作里，供撤销定位与后续重做复用
+                // 首次落实：Editor::EntityId 已包含在起始组件集合中，原生侧
+                // 构造时即分配调试 EUID，读取并回填到动作里，供撤销定位
+                // 与后续重做复用
                 none?
                 {
-                    do e->towoo::add_component:<Editor::EntityId>;
                     match (e->internal::get_entity_uid)
                     {
                         none?
                         {
-                            logerr("创建实体：Editor::EntityId 构造后仍未分配 EUID");
+                            logerr(
+                                "创建实体：起始组件集合中的 Editor::EntityId 未分配 EUID");
                             return false;
                         }
                         value(eid)?
