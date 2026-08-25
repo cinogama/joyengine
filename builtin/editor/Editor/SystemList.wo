@@ -116,8 +116,8 @@ namespace JEEditor::Editor
             ;
         }
 
-        // 一行系统条目：与检视面板组件栏一致的带底色整行 + 行尾 × 移除按钮
-        // （悬停红色）+ 右键上下文菜单。行内只显示短名
+        // 一行系统条目：行首 × 移除按钮（悬停红色）+ 与检视面板组件栏
+        // 一致的带底色整行 + 右键上下文菜单。行内只显示短名
         // （悬停提示完整类型名）。
         func showSystemEntryRow(
             wctx: WorldEditorViewport, tag: string, systype: typeinfo, is_world_system: bool)=> void
@@ -125,20 +125,30 @@ namespace JEEditor::Editor
             let (_, short_name) = splitTypeName(systype->name);
             let row_label = F"{short_name}##{tag}";
 
+            // 行首 × 移除按钮：先画按钮再同行画行本体，按钮固定在
+            // 左端，长名称不会再与按钮重叠；平时与背景融为一体，
+            // 悬停时红色提示危险操作
+            PushStyleColor(ImGuiCol::ImGuiCol_Button, (0, 0, 0, 0));
+            PushStyleColor(ImGuiCol::ImGuiCol_ButtonHovered, (140, 40, 40, 255));
+            PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive, (190, 55, 55, 255));
+            if (ButtonSize(F"×##{tag}_remove", (24., 0.)))
+                requestRemoveSystem(wctx, systype, is_world_system);
+            PopStyleColor(3);
+
             // Framed 叶子节点：无折叠箭头但带底色框，样式与检视面板的
-            // 组件折叠头一致；SpanAvailWidth 让命中区横跨整行，
-            // AllowItemOverlap 允许行尾 × 按钮抢占重叠区域的悬停与点击
+            // 组件折叠头一致；SpanAvailWidth 让命中区横跨按钮之后的
+            // 整行剩余宽度，与按钮互不重叠
+            SameLine();
             do TreeNodeEx(row_label,
                 TreeNodeAttribute::ImGuiTreeNodeFlags_Leaf
                     + TreeNodeAttribute::ImGuiTreeNodeFlags_Framed
-                    + TreeNodeAttribute::ImGuiTreeNodeFlags_AllowItemOverlap
                     + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
                     + TreeNodeAttribute::ImGuiTreeNodeFlags_NoTreePushOnOpen);
             if (IsItemHovered())
                 do SetTooltip(systype->name);
 
             // 右键系统项弹出菜单；显式绑定到行的标签上，且紧跟行项调用
-            // （悬停检测基于最后绘制的项），避免误绑到随后的 × 按钮
+            // （悬停检测基于最后绘制的项，此处行项即最后绘制的项）
             if (BeginPopupContextItemLabel(row_label))
             {
                 if (MenuItem("移除"))
@@ -154,18 +164,6 @@ namespace JEEditor::Editor
 
                 defer EndPopup();
             }
-
-            // 行尾 × 移除按钮：平时与行融为一体，悬停时红色提示危险操作
-            SameLine();
-            let (cursor_x, cursor_y) = GetCursorPos();
-            let (avail_width, _) = GetContentRegionAvail();
-            SetCursorPos((cursor_x + avail_width - 28., cursor_y));
-            PushStyleColor(ImGuiCol::ImGuiCol_Button, (0, 0, 0, 0));
-            PushStyleColor(ImGuiCol::ImGuiCol_ButtonHovered, (140, 40, 40, 255));
-            PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive, (190, 55, 55, 255));
-            if (ButtonSize(F"×##{tag}_remove", (24., 0.)))
-                requestRemoveSystem(wctx, systype, is_world_system);
-            PopStyleColor(3);
         }
 
         // 绘制一组系统：带数量的分组标题 + 条目列表。组的含义通过悬浮
