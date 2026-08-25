@@ -27,4 +27,7 @@ namespace JEEditor::GUI::Icons
     public let WOOLANG   = texture::load(option::none, "!/builtin/icon/Script.png");
     public let WORLD     = texture::load(option::none, "!/builtin/icon/World.png");
     public let ENTITY    = texture::load(option::none, "!/builtin/icon/Entity.png");
+
+    // ---- 视口 gizmo 图标 ----
+    public let GIZMO_CAMERA = texture::load(option::none, "!/builtin/icon/gizmo_camera.png");
 }

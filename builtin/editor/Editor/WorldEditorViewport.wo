@@ -92,6 +92,10 @@ namespace JEEditor::Editor
         m_debug_camera_selector: entity_selector,
         m_selectable_entity_selector: entity_selector,
         m_all_entity_selector: entity_selector,
+
+        // 摄像机实体（含 Translation+Projection 且不带 Invisible）选择器，
+        // 其图标/视锥体 gizmo 与点击拾取均以它为准
+        m_camera_entity_selector: entity_selector,
         
         m_last_time: mut real,
         m_is_look_active: mut bool,
@@ -138,6 +142,11 @@ namespace JEEditor::Editor
         m_gizmo_draw_rotation: mut quat,
         m_gizmo_draw_size: mut real,
         m_gizmo_draw_center_size: mut real,
+
+        // 摄像机实体图标 gizmo 的屏幕命中矩形（EUID、屏幕中心、命中半径px）
+        // 与当前悬停的摄像机实体，每帧由 updateCameraGizmos 重建
+        m_camera_gizmo_rects: vec<mut (entity::internal::euid_t, vec2, real)>,
+        m_camera_gizmo_hover: mut option<entity::internal::euid_t>,
     }
     {
         let TRASNLATION_SYSTEM_TYPE =
@@ -182,6 +191,12 @@ namespace JEEditor::Editor
         let GIZMO_COLOR_Z = (0.38, 0.56, 0.98, 0.9);
         let GIZMO_COLOR_CENTER = (0.85, 0.85, 0.85, 0.9);
         let GIZMO_COLOR_HOVER = (1., 1., 0.25, 1.);
+
+        // ---- 摄像机实体 gizmo 参数 ----
+        let CAMERA_GIZMO_ICON_SIZE_PX = 32.;   // 摄像机图标边长（像素）
+        // 视锥体线框配色：常态浅蓝，悬停提亮，选中复用游标高亮黄
+        let CAMERA_GIZMO_COLOR = (0.35, 0.78, 0.95, 0.55);
+        let CAMERA_GIZMO_COLOR_HOVER = (0.55, 0.9, 1., 0.8);
 
         // 右键同时承担“拖拽环视”职责：以按下起点为基准，位移切实超过该
         // 像素阈值后才激活环视（阈值内的位移不转动摄像机）；松开时位移
@@ -262,6 +277,12 @@ namespace JEEditor::Editor
                 m_all_entity_selector = w->create_selector([
                         requirement::except(Editor::Invisible::type::typeinfo),
                     ]),
+
+                m_camera_entity_selector = w->create_selector([
+                        requirement::except(Editor::Invisible::type::typeinfo),
+                        requirement::contains(Transform::Translation::type::typeinfo),
+                        requirement::contains(Camera::Projection::type::typeinfo),
+                    ]),
                     
                 // Camera control state:
                 m_last_time = mut 0.,
@@ -304,6 +325,9 @@ namespace JEEditor::Editor
                 m_gizmo_draw_rotation = mut quat::ident,
                 m_gizmo_draw_size = mut 1.,
                 m_gizmo_draw_center_size = mut 0.1,
+
+                m_camera_gizmo_rects = []mut: vec<mut (entity::internal::euid_t, vec2, real)>,
+                m_camera_gizmo_hover = mut option::none,
             };
 
             // “调试执行/导出时才启用”的系统保存在视口中（编辑器内不 add_system），
@@ -509,12 +533,50 @@ namespace JEEditor::Editor
                         return_value!;
                     };
                 }
+
+                // 绘制摄像机图标：公告板四边形采样图标纹理（Icons::GIZMO_CAMERA），
+                // 染色（悬停/选中高亮）通过 JE_COLOR 提供
+                func drawCameraIcon(
+                    pos: vec3,
+                    rot: quat,
+                    icon_size: real,
+                    icon: texture,
+                    tint: (real, real, real, real))
+                {
+                    do try!{
+                        try! shader_instance = GIZMO_ICON;
+                        try! shape_instance = DEFAULT_SQUARE_SHAPE;
+
+                        let scale = (icon_size, icon_size, icon_size) as vec3;
+                        let model = mat4::transform(pos, rot, scale);
+                        let model_view = camera_projection->get_view_mat * model;
+                        let model_view_proj = camera_projection->get_view_proj_mat * model;
+
+                        let texture_group = gizmo_rend_chain->allocate_texture_group;
+                        gizmo_rend_chain->bind_texture(texture_group, 0, icon);
+
+                        let draw_action = gizmo_rend_chain->draw(
+                            shader_instance, shape_instance, option::value(texture_group));
+                        draw_action->set_uniform_mat4x4(shader_instance, "JE_M", model as raw mat4);
+                        draw_action->set_uniform_mat4x4(shader_instance, "JE_MV", model_view as raw mat4);
+                        draw_action->set_uniform_mat4x4(shader_instance, "JE_MVP", model_view_proj as raw mat4);
+                        draw_action->set_uniform(shader_instance, "JE_UV_TILING", (1., 1.) as raw vec2);
+                        draw_action->set_uniform(shader_instance, "JE_UV_OFFSET", (0., 0.) as raw vec2);
+                        draw_action->set_uniform(shader_instance, "JE_COLOR", tint);
+                        return_value!;
+                    };
+                }
                 
                 // 绘制被选中的实体
                 do try!{
                     try! selected_euid = self.m_selected_entity_id;
                     try! selected_entity = self->findEntityByEuid(selected_euid);
-                    
+
+                    // 摄像机实体的选中高亮由其 gizmo（图标染色 + 视锥体高亮，
+                    // 见下方摄像机实体 gizmo 段）承担，不再叠加闪烁四边形
+                    if (isCameraEntity(selected_entity))
+                        return_value!;
+
                     let trans = selected_entity->towoo::get_component:<Transform::Translation>->unwrap;
                     let texture = selected_entity->towoo::get_component:<Renderer::Textures>;
                     
@@ -562,6 +624,124 @@ namespace JEEditor::Editor
                         return_value!;
                     };
                 }
+
+                // 绘制摄像机实体 gizmo（视锥体线框 + 图标）：
+                // 含 Translation 与 Projection 且不带 Invisible 的实体视为摄像机
+                // 实体（编辑器调试摄像机带 Invisible，不在此列）。
+                do try!{
+                    try! debug_camera_trans =
+                        camera_entity->towoo::get_component:<Transform::Translation>();
+                    let (fbw, fbh) = fb->size();
+                    let fb_rsize = (fbw as real, fbh as real) as vec2;
+                    let debug_view_proj = camera_projection->get_view_proj_mat;
+                    let debug_cam_pos = debug_camera_trans->get_global_pos;
+                    let debug_cam_forward =
+                        debug_camera_trans->get_global_rot * ((0., 0., 1.) as vec3);
+
+                    // 单条视锥体棱：单位 X 轴线段旋到 ab 方向绘制
+                    func drawFrustumEdge(
+                        a: vec3, b: vec3, color: (real, real, real, real))=> void
+                    {
+                        let ab = b - a;
+                        let len = ab->length;
+                        if (len < 0.0001)
+                            return;
+                        drawSolid(
+                            a, gizmoEdgeRotation(ab), (len, len, len) as vec3,
+                            GIZMO_LINE_X, color);
+                    }
+
+                    for (let e : self.m_camera_entity_selector)
+                    {
+                        do try!{
+                            try! cam_trans =
+                                e->towoo::get_component:<Transform::Translation>();
+                            try! cam_proj =
+                                e->towoo::get_component:<Camera::Projection>();
+                            try! euid = e->internal::get_entity_uid;
+
+                            let pos = cam_trans->get_global_pos;
+                            let rot = cam_trans->get_global_rot;
+
+                            let mut is_selected = false;
+                            match (self.m_selected_entity_id)
+                            {
+                                none?;
+                                value(selected)?
+                                    is_selected = selected == euid;
+                            }
+                            let mut is_hover = false;
+                            match (self.m_camera_gizmo_hover)
+                            {
+                                none?;
+                                value(hovered)?
+                                    is_hover = hovered == euid;
+                            }
+
+                            let mut frustum_color = CAMERA_GIZMO_COLOR;
+                            if (is_hover)
+                                frustum_color = CAMERA_GIZMO_COLOR_HOVER;
+                            if (is_selected)
+                                frustum_color = GIZMO_COLOR_HOVER;
+                            let mut icon_tint = (1., 1., 1., 1.);
+                            if (is_hover)
+                                icon_tint = (1., 1., 0.6, 1.);
+                            if (is_selected)
+                                icon_tint = (1., 1., 0.25, 1.);
+
+                            // ---- 视锥体线框 ----
+                            // 用该摄像机自己的逆投影矩阵反变换 NDC 角点
+                            //（近/远平面 z 分别为 0/1），宽高比随之与其渲染
+                            // 目标一致，无需手工推算
+                            let inv_proj = cam_proj->get_inv_proj_mat;
+                            let near_rect = [
+                                gizmoCameraUnprojectPoint(inv_proj, pos, rot, -1., -1., 0.),
+                                gizmoCameraUnprojectPoint(inv_proj, pos, rot,  1., -1., 0.),
+                                gizmoCameraUnprojectPoint(inv_proj, pos, rot,  1.,  1., 0.),
+                                gizmoCameraUnprojectPoint(inv_proj, pos, rot, -1.,  1., 0.),
+                            ];
+                            let far_rect = [
+                                gizmoCameraUnprojectPoint(inv_proj, pos, rot, -1., -1., 1.),
+                                gizmoCameraUnprojectPoint(inv_proj, pos, rot,  1., -1., 1.),
+                                gizmoCameraUnprojectPoint(inv_proj, pos, rot,  1.,  1., 1.),
+                                gizmoCameraUnprojectPoint(inv_proj, pos, rot, -1.,  1., 1.),
+                            ];
+                            for (let mut i = 0; i < 4; i += 1)
+                            {
+                                let j = (i + 1) % 4;
+                                drawFrustumEdge(near_rect[i], near_rect[j], frustum_color);
+                                drawFrustumEdge(far_rect[i], far_rect[j], frustum_color);
+                                drawFrustumEdge(near_rect[i], far_rect[i], frustum_color);
+                            }
+
+                            // ---- 图标 ----
+                            // 绘制在 Translation 位置、面向调试摄像机（公告板），
+                            // 大小按屏幕像素恒定（与变换游标同一套估算）；
+                            // 位于调试摄像机身后的摄像机不绘制图标（避免镜像投影）
+                            if ((pos - debug_cam_pos)->dot(debug_cam_forward) > 0.)
+                            {
+                                match (Icons::GIZMO_CAMERA)
+                                {
+                                    none?;
+                                    value(icon)?
+                                    {
+                                        let world_per_pixel = gizmoWorldPerPixel(
+                                            camera_entity, debug_camera_trans,
+                                            debug_view_proj, pos, fb_rsize);
+                                        drawCameraIcon(
+                                            pos,
+                                            debug_camera_trans->get_global_rot,
+                                            CAMERA_GIZMO_ICON_SIZE_PX * world_per_pixel,
+                                            icon,
+                                            icon_tint);
+                                    }
+                                }
+                            }
+                            return_value!;
+                        };
+                    }
+                    return_value!;
+                };
                 
                 if (self.m_gizmo_draw_visible)
                 {
@@ -749,6 +929,12 @@ namespace JEEditor::Editor
             let dt = mathf::clamp(now - self.m_last_time, 0., 0.1);
             self.m_last_time = now;
             
+            // 摄像机实体图标 gizmo 的命中矩形与悬停（供点击拾取与绘制染色使用）
+            self->updateCameraGizmos(
+                debug_camera,
+                viewport_hovered && !toolbar_hovered,
+                viewport_rect);
+
             // 游标交互需先于摄像机控制，以抑制点击选中/摄像机操作
             match (viewport_rect)
             {
@@ -859,9 +1045,13 @@ namespace JEEditor::Editor
         {
             // 收集所有被射线命中的实体，并记录命中距离。
             let mut hits = []mut: vec<mut (real, entity::internal::euid_t)>;
-            
+
             for (let e : self.m_selectable_entity_selector)
             {
+                // 摄像机实体不参与渲染射线拾取（由图标 gizmo 的点击拾取负责）
+                if (isCameraEntity(e))
+                    continue;
+
                 let result = camera_ray->intersect(
                     e->towoo::get_component:<Transform::Translation>->unwrap,
                     e->towoo::get_component:<Renderer::Shape>,
@@ -918,6 +1108,10 @@ namespace JEEditor::Editor
 
             for (let e : self.m_selectable_entity_selector)
             {
+                // 摄像机实体不参与渲染射线拾取（由图标 gizmo 的点击拾取负责）
+                if (isCameraEntity(e))
+                    continue;
+
                 let result = camera_ray->intersect(
                     e->towoo::get_component:<Transform::Translation>->unwrap,
                     e->towoo::get_component:<Renderer::Shape>,
@@ -954,6 +1148,109 @@ namespace JEEditor::Editor
 
             // 否则选中并作用于最近的命中实体。
             return option::value(hits[0].1);
+        }
+
+        // 鼠标位置命中的摄像机图标 gizmo（返回实体 EUID）：命中按到图标中心的
+        // 距离由近及远排序；cycle 为真时沿用实体拾取的“循环选中下一个”规则，
+        // 否则已选中的摄像机在命中列表中时保持其选中（右键菜单语义）。
+        func pickCameraGizmo(
+            self: WorldEditorViewport,
+            mouse: vec2,
+            cycle: bool)=> option<entity::internal::euid_t>
+        {
+            let mut hits = []mut: vec<mut (real, entity::internal::euid_t)>;
+
+            for (let (euid, center, half) : self.m_camera_gizmo_rects)
+            {
+                let dist = (mouse - center)->length;
+                if (dist <= half)
+                    hits->add(mut (dist, euid));
+            }
+
+            if (hits->empty)
+                return option::none;
+
+            // 按到图标中心的距离由近及远排序。
+            sort_in_place(hits, \(da, _), (db, _) = da < db;);
+
+            let mut next_index = 0;
+            match (self.m_selected_entity_id)
+            {
+                none?;
+                value(current)?
+                {
+                    for (let mut i = 0; i < hits->len; i += 1)
+                    {
+                        if (hits[i].1 == current)
+                        {
+                            next_index = cycle ? ((i + 1) % hits->len) | i;
+                            break;
+                        }
+                    }
+                }
+            }
+            return option::value(hits[next_index].1);
+        }
+
+        // 每帧重建摄像机实体图标 gizmo 的屏幕命中矩形（Translation 位置投影到
+        // 屏幕，半径 = 图标半边长 + 手柄命中余量）与悬停状态；位于调试摄像机
+        // 身后的摄像机实体不参与命中。
+        func updateCameraGizmos(
+            self: WorldEditorViewport,
+            debug_camera: option<entity>,
+            hovered: bool,
+            viewport_rect: option<(ImVec2, ImVec2)>)=> void
+        {
+            self.m_camera_gizmo_rects->clear();
+            self.m_camera_gizmo_hover = option::none;
+
+            do try!{
+                try! camera_entity = debug_camera;
+                try! camera_trans =
+                    camera_entity->towoo::get_component:<Transform::Translation>();
+                try! camera_proj =
+                    camera_entity->towoo::get_component:<Camera::Projection>();
+                try! (rect_min, rect_max) = viewport_rect;
+
+                let rmin = rect_min as vec2;
+                let rsize = rect_max as vec2 - rect_min as vec2;
+                if (rsize[0] <= 0. || rsize[1] <= 0.)
+                    return_value!;
+
+                let view_proj = camera_proj->get_view_proj_mat;
+                let cam_pos = camera_trans->get_global_pos;
+                let cam_forward =
+                    camera_trans->get_global_rot * ((0., 0., 1.) as vec3);
+
+                for (let e : self.m_camera_entity_selector)
+                {
+                    do try!{
+                        try! trans =
+                            e->towoo::get_component:<Transform::Translation>();
+                        try! euid = e->internal::get_entity_uid;
+
+                        let pos = trans->get_global_pos;
+                        if ((pos - cam_pos)->dot(cam_forward) <= 0.)
+                            return_value!;
+
+                        self.m_camera_gizmo_rects->add(mut (
+                            euid,
+                            gizmoWorldToScreen(view_proj, pos, rmin, rsize),
+                            CAMERA_GIZMO_ICON_SIZE_PX * 0.5 + GIZMO_HIT_PX));
+                        return_value!;
+                    };
+                }
+
+                if (hovered
+                    && !self.m_is_look_active
+                    && !self.m_is_pan_active
+                    && !self.m_is_orbit_active)
+                {
+                    self.m_camera_gizmo_hover =
+                        self->pickCameraGizmo(GetMousePos() as vec2, false);
+                }
+                return_value!;
+            };
         }
 
         // 视口右键的生命周期：记录按下起点（供环视的延迟激活使用，须先于
@@ -994,16 +1291,27 @@ namespace JEEditor::Editor
                         try! trans = camera_entity->towoo::get_component:<Transform::Translation>();
                         try! proj = camera_entity->towoo::get_component:<Camera::Projection>();
 
-                        let mouse_diff = GetMousePos() as vec2 - rect_min as vec2;
-                        let viewport_size = rect_max as vec2 - rect_min as vec2;
-                        let (vpx, vpy) =
-                            ((mouse_diff / viewport_size) - (0.5, 0.5) as vec2) * 2.;
+                        // 摄像机实体：命中其图标 gizmo 时直接选中（右键菜单作用于它），
+                        // 不走渲染实体的射线拾取
+                        match (self->pickCameraGizmo(GetMousePos() as vec2, false))
+                        {
+                            value(camera_euid)?
+                                self.m_selected_entity_id = option::value(camera_euid);
+                            none?
+                            {
+                                let mouse_diff = GetMousePos() as vec2 - rect_min as vec2;
+                                let viewport_size = rect_max as vec2 - rect_min as vec2;
+                                let (vpx, vpy) =
+                                    ((mouse_diff / viewport_size) - (0.5, 0.5) as vec2) * 2.;
 
-                        try! euid = self->pickEntityForContextMenu(towoo::ray::from(
-                            trans, proj, (vpx, -vpy) as vec2,
-                            camera_entity->towoo::get_component:<Camera::PerspectiveProjection>->is_none));
+                                try! euid = self->pickEntityForContextMenu(towoo::ray::from(
+                                    trans, proj, (vpx, -vpy) as vec2,
+                                    camera_entity->towoo::get_component:<Camera::PerspectiveProjection>->is_none));
 
-                        self.m_selected_entity_id = option::value(euid);
+                                self.m_selected_entity_id = option::value(euid);
+                            }
+                        }
+
                         OpenPopup(VIEWPORT_ENTITY_CONTEXT_MENU_ID);
                         return_value!;
                     };
@@ -1059,24 +1367,32 @@ namespace JEEditor::Editor
             if (hovered && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left)
                 && self.m_gizmo_hover_handle == GIZMO_HANDLE_NONE)
             {
-                match (viewport_rect)
+                // 摄像机实体：点击其图标 gizmo 即选中（沿用实体拾取的循环规则），
+                // 未命中图标时才走渲染实体的射线拾取
+                match (self->pickCameraGizmo(GetMousePos() as vec2, true))
                 {
-                    none?;
-                    value((rect_min, rect_max))?
-                    {
-                        let mouse_diff = GetMousePos() as vec2 - rect_min as vec2;
-                        let viewport_size = rect_max as vec2 - rect_min as vec2;
-                        
-                        let (vpx, vpy) =
-                            ((mouse_diff / viewport_size) - (0.5, 0.5) as vec2) * 2.;
-                            
-                        self->sendMouseClickToChoiceEntityRequest(
-                            towoo::ray::from(
-                                trans,
-                                proj,
-                                (vpx, -vpy) as vec2,
-                                perspectiveProjection->is_none));
-                    }
+                    value(camera_euid)?
+                        self.m_selected_entity_id = option::value(camera_euid);
+                    none?
+                        match (viewport_rect)
+                        {
+                            none?;
+                            value((rect_min, rect_max))?
+                            {
+                                let mouse_diff = GetMousePos() as vec2 - rect_min as vec2;
+                                let viewport_size = rect_max as vec2 - rect_min as vec2;
+
+                                let (vpx, vpy) =
+                                    ((mouse_diff / viewport_size) - (0.5, 0.5) as vec2) * 2.;
+
+                                self->sendMouseClickToChoiceEntityRequest(
+                                    towoo::ray::from(
+                                        trans,
+                                        proj,
+                                        (vpx, -vpy) as vec2,
+                                        perspectiveProjection->is_none));
+                            }
+                        }
                 }
             }
             
@@ -1337,6 +1653,47 @@ namespace JEEditor::Editor
             let e1 = n->cross(t)->unit;
             let e2 = n->cross(e1);
             return (e1, e2);
+        }
+
+        // 摄像机实体 gizmo：用该摄像机自身的逆投影矩阵把 NDC 角点反变换到
+        // 世界空间（近/远平面分别对应 z=0/z=1；眼空间 +x/+y/+z 即该摄像机
+        // 的右/上/前方向，与 ray::from 的重建方式一致）
+        func gizmoCameraUnprojectPoint(
+            inv_proj: mat4,
+            cam_pos: vec3,
+            cam_rot: quat,
+            x: real,
+            y: real,
+            z: real)=> vec3
+        {
+            return cam_pos + cam_rot * gizmoMat4MulPoint(inv_proj, (x, y, z) as vec3);
+        }
+
+        // 把单位 X 轴线段旋转到 dir 方向的四元数（用于绘制视锥体棱）：
+        // dir 与 -X 反向平行时叉积退化，需特殊处理
+        func gizmoEdgeRotation(dir: vec3)=> quat
+        {
+            let d = dir->unit;
+            if (d[0] < -0.99999)
+                return quat::axis((0., 1., 0.) as vec3, 180.);
+
+            let axis = ((1., 0., 0.) as vec3)->cross(d);
+            let axis_len = axis->length;
+            if (axis_len < 0.00001)
+                return quat::ident;
+
+            return quat::axis(
+                axis * (1. / axis_len),
+                mathf::RAD2DEG * mathf::acos(mathf::clamp(d[0], -1., 1.)));
+        }
+
+        // 是否为摄像机实体（含 Translation 与 Projection 且不带 Invisible；
+        // 编辑器调试摄像机带 Invisible，不算在内）
+        func isCameraEntity(e: entity)=> bool
+        {
+            return !(e->towoo::get_component:<Camera::Projection>->is_none)
+                && !(e->towoo::get_component:<Transform::Translation>->is_none)
+                && e->towoo::get_component:<Editor::Invisible>->is_none;
         }
         
         // 按钮序列化组件成员值（供撤销记录使用）
