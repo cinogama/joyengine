@@ -27,7 +27,7 @@ namespace JEEditor::Editor::Action
     }
     {
         alias EuidT = entity::internal::euid_t;
-
+        
         // 从活的实体做全量快照（销毁实体等需要完整还原内容的场合）
         func try_create(e: entity)
         {
@@ -37,7 +37,7 @@ namespace JEEditor::Editor::Action
                 m_entity_content = Entity::save(e),
             };
         }
-
+        
         // 只按组件类型构造：不依赖活的实体，组件成员由 ECS 默认构造
         // （成员表留空即默认值）；EUID 延迟到动作首次落实时分配并回填
         func try_create_with_types(ctypes: array<typeinfo>)=> FullEntityContent
@@ -45,29 +45,29 @@ namespace JEEditor::Editor::Action
             let components_dat = new_table();
             for (let ctype : ctypes)
                 components_dat->set(ctype->name, new_table());
-
+                
             // Editor::EntityId 必须包含在起始组件集合里：当前帧事后新增的
             // 组件 get 不到，而 get_entity_uid 依赖 get component；放进起始
             // 集合后，原生侧构造该组件时即分配有效的调试 EUID
             components_dat->set(
                 Editor::EntityId::type::typeinfo->name, new_table());
-
+                
             let entity_dat = new_table();
             entity_dat->set("components", components_dat);
-
+            
             return FullEntityContent{
                 m_eid = mut option::none,
                 m_entity_content = entity_dat,
             };
         }
-
+        
         // 实体名快照；快照未记录名字时返回空串
         public func entity_name(self: FullEntityContent)=> string
         {
             return (self.m_entity_content->get("name")=>> \v = v->as_string;)->or("");
         }
     }
-
+    
     protected using CreateEntity = struct{
         m_content: FullEntityContent,
     }
@@ -96,8 +96,9 @@ namespace JEEditor::Editor::Action
         public func redo(self: CreateEntity, w: WorldEditorViewport)=> bool
         {
             let e = Entity::restore(w->getWorld(), self.m_content.m_entity_content);
-
-            match (self.m_content.m_eid)
+            let mut entity_id = self.m_content.m_eid;
+            
+            match (entity_id)
             {
                 // 首次落实：Editor::EntityId 已包含在起始组件集合中，原生侧
                 // 构造时即分配调试 EUID，读取并回填到动作里，供撤销定位
@@ -113,16 +114,17 @@ namespace JEEditor::Editor::Action
                             return false;
                         }
                         value(eid)?
-                            self.m_content.m_eid = option::value(eid);
+                            self.m_content.m_eid = entity_id := option::value(eid);
                     }
                 }
                 // 撤销后的重做：以记录的 EUID 还原，保持实体标识稳定
                 value(eid)?
                     e->internal::unsafe::set_entity_uid(eid);
             }
-
+            
             // 选中新实体，便于立刻在检视面板中编辑
-            do w->setSelectedEntityId(e->internal::get_entity_uid);
+            do w->setSelectedEntityId(entity_id);
+
             return true;
         }
         public func undo(self: CreateEntity, w: WorldEditorViewport)=> bool
@@ -151,7 +153,7 @@ namespace JEEditor::Editor::Action
                 }
             }
         }
-
+        
         public func describe(self: CreateEntity)=> string
         {
             let name = self.m_content->entity_name();
