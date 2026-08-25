@@ -2,24 +2,90 @@ import woo::std;
 
 import je;
 import je::ecs;
+import je::internal;
 import je::typeinfo;
+import je::towoo;
+import je::towoo::components;
 
+import pkg::toml;
 import pkg::interface;
 import pkg::try;
+import pkg::worst;
 
+import builtin::editor::Editor::Saving::Entity;
 import builtin::editor::Editor::WorldEditorViewport;
 
 import IAction;
 
 using je;
+using toml;
 
 namespace JEEditor::Editor::Action
 {
-    // 向世界添加立即启用的系统（马上 add_system 运行）；undo 时移除该系统。
-    // 只保存系统类型名，redo/undo 执行时再通过 typeinfo::load 加载，
-    // 避免 typeinfo 句柄在类型热重载等情况下失效。
+    // 世界中所有非编辑器内部实体的完整快照（与世界存档的收集规则一致）。
+    // 已启用的系统在运行期间可能修改实体组件数据、增删实体，因此在添加/
+    // 移除系统时需要记录快照，撤销时把世界还原回操作之前的样子。
+    using FullWorldContent = struct{
+        m_entities_content: vec<mut (entity::internal::euid_t, Toml)>,
+    }
+    {
+        // 记录当前世界状态；按 euid 排序保证还原时实体重建顺序稳定
+        func try_create(w: world)=> FullWorldContent
+        {
+            let entities_content = []mut: vec<mut (entity::internal::euid_t, Toml)>;
+            for (let e : w->internal::get_all_entities())
+            {
+                if (e->towoo::get_component:<Editor::Invisible>->is_value)
+                    continue;
+
+                entities_content->add(mut (
+                    e->internal::get_entity_uid->or(0h as entity::internal::euid_t),
+                    JEEditor::Saving::Entity::save(e),));
+            }
+            std::sort_in_place(entities_content, \(ida, _), (idb, _) = ida < idb;);
+
+            return FullWorldContent{
+                m_entities_content = entities_content,
+            };
+        }
+
+        // 用当前世界状态刷新本快照（就地更新容器内容）
+        public func refresh_from(self: FullWorldContent, w: world)=> void
+        {
+            let new_content = try_create(w);
+
+            self.m_entities_content->clear();
+            for (let entity_content : new_content.m_entities_content)
+                self.m_entities_content->add(entity_content);
+        }
+
+        // 销毁世界中所有非编辑器内部实体，并按快照重建（沿用原 euid，
+        // 保持引用 euid 的撤销历史与视口选中状态有效）
+        public func restore_to(self: FullWorldContent, w: world)=> void
+        {
+            // 先收集再销毁，避免在迭代实体的同时修改实体集合
+            let destroying = w->internal::get_all_entities()
+                ->forall(\e = e->towoo::get_component:<Editor::Invisible>->is_none;);
+            for (let e : destroying)
+                e->close;
+
+            for (let (eid, edat) : self.m_entities_content)
+            {
+                let e = JEEditor::Saving::Entity::restore(w, edat);
+
+                // Force apply eid.
+                e->internal::unsafe::set_entity_uid(eid);
+            }
+        }
+    }
+
+    // 向世界添加立即启用的系统（马上 add_system 运行）；undo 时移除该系统
+    // 并把世界还原回添加之前的状态。只保存系统类型名，redo/undo 执行时再
+    // 通过 typeinfo::load 加载，避免 typeinfo 句柄在类型热重载等情况下失效。
     protected using AddWorldSystem = struct{
         m_system_type_name: string,
+        // redo 添加系统之前的世界状态快照，undo 移除系统时据此还原
+        m_world_content: FullWorldContent,
     }
     {
         public func create(systype: typeinfo)=> AddWorldSystem
@@ -27,6 +93,9 @@ namespace JEEditor::Editor::Action
         {
             return AddWorldSystem{
                 m_system_type_name = systype->name,
+                m_world_content = FullWorldContent{
+                    m_entities_content = []mut,
+                },
             };
         }
 
@@ -40,7 +109,14 @@ namespace JEEditor::Editor::Action
                 {
                     if (w->hasWorldSystem(systype))
                         return true;
-                    return w->getWorld->add_system(systype);
+
+                    let world_instance = w->getWorld;
+
+                    // 添加之前记录完整世界状态：系统一旦启用就可能修改实体
+                    // 组件数据，undo 移除系统时据此把世界还原回添加前的样子
+                    do self.m_world_content->refresh_from(world_instance);
+
+                    return world_instance->add_system(systype);
                 }
             }
         }
@@ -53,8 +129,14 @@ namespace JEEditor::Editor::Action
                 none? return false;
                 value(systype)?
                 {
-                    if (w->hasWorldSystem(systype))
-                        do w->getWorld->remove_system(systype);
+                    if (!w->hasWorldSystem(systype))
+                        return true;
+
+                    do w->getWorld->remove_system(systype);
+
+                    // 还原快照，撤销该系统运行期间对实体组件造成的修改
+                    do self.m_world_content->restore_to(w->getWorld);
+
                     return true;
                 }
             }

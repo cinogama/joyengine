@@ -148,7 +148,8 @@ namespace JEEditor::Editor
 
         func requestRemoveWorldSystem(wctx: WorldEditorViewport, systype: typeinfo)=> void
         {
-            wctx->doAction(RemoveWorldSystem::create(systype));
+            // 创建时系统仍在运行，RemoveWorldSystem 会先记录当前世界状态
+            wctx->doAction(RemoveWorldSystem::create(systype, wctx->getWorld));
         }
         func requestRemoveRuntimeSystem(wctx: WorldEditorViewport, systype: typeinfo)=> void
         {

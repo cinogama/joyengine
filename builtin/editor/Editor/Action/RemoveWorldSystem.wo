@@ -5,61 +5,43 @@ import je::ecs;
 import je::typeinfo;
 
 import pkg::interface;
-import pkg::try;
 
 import builtin::editor::Editor::WorldEditorViewport;
 
 import IAction;
+import AddWorldSystem;
 
 using je;
 
 namespace JEEditor::Editor::Action
 {
-    // 从世界移除立即启用的系统；undo 时重新 add_system。
-    // 只保存系统类型名，redo/undo 执行时再通过 typeinfo::load 加载，
-    // 避免 typeinfo 句柄在类型热重载等情况下失效。
-    protected using RemoveWorldSystem = struct{
-        m_system_type_name: string,
-    }
+    // 从世界移除立即启用的系统。与 DestroyEntity 相同的范式：作为
+    // AddWorldSystem 的反操作实现，redo/undo 交换。创建时系统仍在运行，
+    // 先记录当前世界状态（含该系统运行期间对实体组件的修改）；
+    // redo 移除系统，undo 重新添加系统并按 AddWorldSystem 的 redo 逻辑
+    // 刷新快照后再启用，后续再次 redo（移除）时即还原到该状态。
+    using RemoveWorldSystem = AddWorldSystem
     {
-        public func create(systype: typeinfo)=> RemoveWorldSystem
+        public func create(systype: typeinfo, w: world)=> RemoveWorldSystem
             where require!(RemoveWorldSystem: IAction);
         {
-            return RemoveWorldSystem{
-                m_system_type_name = systype->name,
-            };
-        }
+            let action = AddWorldSystem::create(systype)
+                as raw RemoveWorldSystem as RemoveWorldSystem;
 
-        // 系统已不在世界中时视为成功（幂等）
+            // 移除操作创建时系统仍在运行：记录当前世界状态，
+            // redo 移除系统后世界即停留在该状态
+            do action.m_world_content->refresh_from(w);
+
+            return action;
+        }
         public func redo(self: RemoveWorldSystem, w: WorldEditorViewport)=> bool
         {
-            match (typeinfo::load(self.m_system_type_name))
-            {
-                none? return false;
-                value(systype)?
-                {
-                    if (w->hasWorldSystem(systype))
-                        do w->getWorld->remove_system(systype);
-                    return true;
-                }
-            }
+            return self as raw AddWorldSystem as AddWorldSystem->undo(w);
         }
-
-        // 系统已存在于世界中时视为成功（幂等），避免撤销/重做交错时重复添加
         public func undo(self: RemoveWorldSystem, w: WorldEditorViewport)=> bool
         {
-            match (typeinfo::load(self.m_system_type_name))
-            {
-                none? return false;
-                value(systype)?
-                {
-                    if (w->hasWorldSystem(systype))
-                        return true;
-                    return w->getWorld->add_system(systype);
-                }
-            }
+            return self as raw AddWorldSystem as AddWorldSystem->redo(w);
         }
-
         public func describe(self: RemoveWorldSystem)=> string
         {
             return F"移除系统 {self.m_system_type_name}";
