@@ -24,7 +24,7 @@ namespace JEEditor::GUI::Forms
     }
     {
         func create(title: string, text: string, default: string)=> InputBox
-            where require!(InputBox: Windows::IWindows);
+            where require!(InputBox: Windows::IWindows, Windows::IModalWindow);
         {
             return InputBox{
                 m_title = title,
@@ -47,6 +47,10 @@ namespace JEEditor::GUI::Forms
                 + WindowsAttribute::ImGuiWindowFlags_NoSavedSettings
                 ;
         }
+        public func isModal(_: InputBox)=> bool
+        {
+            return true;
+        }
         public func getShortcut(self: InputBox)=> option<Shortcut>
         {
             return option::value <|
@@ -54,10 +58,6 @@ namespace JEEditor::GUI::Forms
                     -> shortCut([ImGuiKey::ImGuiKey_Enter], \= self->onEnter;)
                     -> finish
                     ;
-        }
-        public func getSpawnPos(_: InputBox)=> option<ImVec2>
-        {
-            return option::value(GetMousePos());
         }
         func onEnter(self: InputBox)=> void
         {

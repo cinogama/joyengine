@@ -24,7 +24,7 @@ namespace JEEditor::GUI::Forms
     }
     {
         public func create(title: string, text: string, icon: option<texture>)=> MsgBox
-            where require!(MsgBox: Windows::IWindows);
+            where require!(MsgBox: Windows::IWindows, Windows::IModalWindow);
         {
             return MsgBox{
                 m_title = title,
@@ -44,6 +44,10 @@ namespace JEEditor::GUI::Forms
             return WindowsAttribute::ImGuiWindowFlags_NoDocking
                 + WindowsAttribute::ImGuiWindowFlags_NoCollapse
                 ;
+        }
+        public func isModal(_: MsgBox)=> bool
+        {
+            return true;
         }
         public func getShortcut(self: MsgBox)=> option<Shortcut>
         {

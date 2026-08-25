@@ -564,6 +564,43 @@ WOORT_API woort_api je_gui_endpopup(void)
     return woort_ret_void();
 }
 
+WOORT_API woort_api je_gui_beginpopup_modal(void)
+{
+    return woort_ret_bool(ImGui::BeginPopupModal(woort_string(0)));
+}
+WOORT_API woort_api je_gui_beginpopup_modal_attr(void)
+{
+    return woort_ret_bool(
+        ImGui::BeginPopupModal(woort_string(0), nullptr, (ImGuiWindowFlags)woort_int(1)));
+}
+WOORT_API woort_api je_gui_beginpopup_modal_open(void)
+{
+    bool open_flag = true;
+    bool showing = ImGui::BeginPopupModal(woort_string(0), &open_flag);
+
+    woort_set_struct(WOORT_RETURN_SLOT, 2);
+    woort_struct_set_bool(WOORT_RETURN_SLOT, 0, showing);
+    woort_struct_set_bool(WOORT_RETURN_SLOT, 1, open_flag);
+
+    return woort_ret();
+}
+WOORT_API woort_api je_gui_beginpopup_modal_attr_open(void)
+{
+    bool open_flag = true;
+    bool showing = ImGui::BeginPopupModal(
+        woort_string(0), &open_flag, (ImGuiWindowFlags)woort_int(1));
+
+    woort_set_struct(WOORT_RETURN_SLOT, 2);
+    woort_struct_set_bool(WOORT_RETURN_SLOT, 0, showing);
+    woort_struct_set_bool(WOORT_RETURN_SLOT, 1, open_flag);
+
+    return woort_ret();
+}
+WOORT_API woort_api je_gui_ispopup_open(void)
+{
+    return woort_ret_bool(ImGui::IsPopupOpen(woort_string(0)));
+}
+
 WOORT_API woort_api je_gui_begin_listbox(void)
 {
     return woort_ret_bool(ImGui::BeginListBox(woort_string(0), ImVec2(woort_float(1), woort_float(2))));

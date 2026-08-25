@@ -473,6 +473,22 @@ namespace je::gui
     extern("libjoyecs", "je_gui_endpopup")
         public func EndPopup()=>void;
         
+    // Modal dialog: call OpenPopup(label) once (e.g. when a button is clicked),
+    // then every frame: if (BeginPopupModal(label)) { ...; EndPopup(); }
+    // The modal window is centered on the viewport and dims everything behind it.
+    extern("libjoyecs", "je_gui_beginpopup_modal")
+        public func BeginPopupModal(label:string)=>bool;
+    extern("libjoyecs", "je_gui_beginpopup_modal_attr")
+        public func BeginPopupModalAttr(label:string, attr:WindowsAttribute)=>bool;
+    // p_open variant: shows the close (X) button; returns (show, open).
+    extern("libjoyecs", "je_gui_beginpopup_modal_open")
+        public func BeginPopupModalOpen(label:string)=> (bool /* show */, bool /* open */);
+    extern("libjoyecs", "je_gui_beginpopup_modal_attr_open")
+        public func BeginPopupModalAttrOpen(label:string, attr:WindowsAttribute)=> (bool /* show */, bool /* open */);
+        
+    extern("libjoyecs", "je_gui_ispopup_open")
+        public func IsPopupOpen(label:string)=>bool;
+        
     extern("libjoyecs", "je_gui_push_id")
         public func PushIDInt(id:int)=>void;
         

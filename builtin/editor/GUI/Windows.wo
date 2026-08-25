@@ -50,6 +50,12 @@ namespace JEEditor::GUI::Windows
             do self;
             return option::none;
         }
+        // 模态窗口：渲染为居中的模态弹窗并屏蔽其后所有窗口的输入。
+        public func isModal(self)=> bool
+        {
+            do self;
+            return false;
+        }
         public func onPreClose(self)=> bool
         {
             do self;
@@ -73,18 +79,31 @@ namespace JEEditor::GUI::Windows
         }
         public func run(self)=> bool;
     };
+
+    // 模态窗口契约：实现 `isModal` 并返回 true 的窗口由 Windows::show 以模态弹窗展示。
+    // 也可用 Windows::showModal 强制任意窗口以模态方式展示。
+    interface! IModalWindow
+    {
+        public func isModal(self)=> bool
+        {
+            do self;
+            return true;
+        }
+    };
     
     using WindowsState = struct{
         m_is_unique: bool,
+        m_is_modal: bool,
         m_title: string,
-        
+
         m_closing_request: mut bool,
     }
     {
         let s_unique_window_record = {}mut: map<string, IWindows>;
         let s_windows_states = {}mut: map<IWindows, WindowsState>;
-        
-        func try_register_window(iw: IWindows, title: string, is_unique: bool)=> option<WindowsState>
+
+        func try_register_window(
+            iw: IWindows, title: string, is_unique: bool, is_modal: bool)=> option<WindowsState>
         {
             if (is_unique)
             {
@@ -92,15 +111,16 @@ namespace JEEditor::GUI::Windows
                     return option::none;
                 s_unique_window_record->set(title, iw);
             }
-            
+
             let window_state = WindowsState{
                 m_is_unique = is_unique,
+                m_is_modal = is_modal,
                 m_title = title,
-                
+
                 m_closing_request = mut false,
             };
             s_windows_states->set(iw, window_state);
-            
+
             return option::value(window_state);
         }
         func unregister_window(iw: IWindows)
@@ -136,19 +156,68 @@ namespace JEEditor::GUI::Windows
     }
     namespace IWindows
     {
-        func _engine_imgui_show_job(
-            i: IWindows, title: string, state: WindowsState, menu: option<Menu>, shortcut: option<Shortcut>)=> bool
+        // 模态弹窗的隐藏载体窗口：
+        // 协程顶层的 CurrentWindow 取决于同帧内其他协程的提交顺序，
+        // 直接在协程顶层 OpenPopup/BeginPopupModal 会导致 popup ID 逐帧漂移。
+        // 载体窗口标题固定，在它内部开弹窗可保证 ID 恒定。
+        let s_modal_carrier_title = "##JEEditorModalCarrier";
+        let s_modal_carrier_attrib = WindowsAttribute::ImGuiWindowFlags_NoTitleBar
+            + WindowsAttribute::ImGuiWindowFlags_NoResize
+            + WindowsAttribute::ImGuiWindowFlags_NoMove
+            + WindowsAttribute::ImGuiWindowFlags_NoScrollbar
+            + WindowsAttribute::ImGuiWindowFlags_NoCollapse
+            + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
+            + WindowsAttribute::ImGuiWindowFlags_NoBackground
+            + WindowsAttribute::ImGuiWindowFlags_NoSavedSettings
+            + WindowsAttribute::ImGuiWindowFlags_NoMouseInputs
+            + WindowsAttribute::ImGuiWindowFlags_NoFocusOnAppearing
+            + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus
+            + WindowsAttribute::ImGuiWindowFlags_NoNavInputs
+            + WindowsAttribute::ImGuiWindowFlags_NoNavFocus
+            + WindowsAttribute::ImGuiWindowFlags_NoDocking
+            ;
+
+        // 模态窗口互斥队列（FIFO 票据）：同一时刻只展示一个模态弹窗，
+        // 其余排队等待（ImGui popup 栈中并发的两个模态会互相关闭对方）。
+        let s_modal_waiting_tickets = []mut: vec<int>;
+        let s_modal_next_ticket = mutable::create(0);
+
+        func _wait_for_modal_slot()=> int
+        {
+            let ticket = s_modal_next_ticket->get;
+            s_modal_next_ticket->set(ticket + 1);
+            s_modal_waiting_tickets->add(ticket);
+
+            while (s_modal_waiting_tickets[0] != ticket)
+                std::yield();
+
+            return ticket;
+        }
+        func _release_modal_slot(ticket: int)
+        {
+            for (let mut idx = 0; idx < s_modal_waiting_tickets->len; idx += 1)
+            {
+                if (s_modal_waiting_tickets[idx] == ticket)
+                {
+                    do s_modal_waiting_tickets->remove(idx);
+                    return;
+                }
+            }
+        }
+
+        func _make_window_attrib(
+            i: IWindows, state: WindowsState, menu: option<Menu>)=> WindowsAttribute
         {
             let mut attrib = i->getAttrib;
-            
+
             if (!state.m_is_unique)
                 attrib = attrib as int->bor(
                     WindowsAttribute::ImGuiWindowFlags_NoSavedSettings as int) as WindowsAttribute;
-                    
+
             if (menu->is_value)
                 attrib = attrib as int->bor(
                     WindowsAttribute::ImGuiWindowFlags_MenuBar as int) as WindowsAttribute;
-                    
+
             match (i->getSizeConstraints)
             {
                 Unlimited?;
@@ -160,22 +229,28 @@ namespace JEEditor::GUI::Windows
                 Limited((min, max))?
                     SetNextWindowSizeConstraints(min, max);
             }
-            
-            let (show, mut open) = BeginAttrOpen(title, attrib);
-            defer End();
-            
+            return attrib;
+        }
+
+        func _update_window_lifetime(
+            i: IWindows, state: WindowsState,
+            menu: option<Menu>, shortcut: option<Shortcut>,
+            show: bool, open: bool)=> bool
+        {
+            let mut keep_open = open;
+
             // 来自外部的关闭请求
             if (state.m_closing_request)
             {
                 state.m_closing_request = false;
-                open = false;
+                keep_open = false;
             }
-            
-            if (!open)
-                open = !i->onPreClose;
-                
+
+            if (!keep_open)
+                keep_open = !i->onPreClose;
+
             i->onUpdate();
-            
+
             if (show)
             {
                 match (shortcut)
@@ -184,38 +259,98 @@ namespace JEEditor::GUI::Windows
                     value(shortcut_instance)?
                         shortcut_instance->update();
                 }
-                
+
                 match (menu)
                 {
                     none?;
                     value(menu_instance)?
                         menu_instance->showMenuBar();
                 }
-                
+
                 if (!i->run())
-                    open = false;
+                    keep_open = false;
             }
-            
-            return open;
+            return keep_open;
         }
+
+        func _engine_imgui_show_job(
+            i: IWindows, title: string, state: WindowsState, menu: option<Menu>, shortcut: option<Shortcut>)=> bool
+        {
+            let attrib = _make_window_attrib(i, state, menu);
+
+            let (show, open) = BeginAttrOpen(title, attrib);
+            defer End();
+
+            return _update_window_lifetime(i, state, menu, shortcut, show, open);
+        }
+
+        // 模态展示：先渲染隐藏载体窗口，再在载体上弹出模态弹窗。
+        // 弹窗由 ImGui 自动居中于视口并使背景变暗（ImGuiCol_ModalWindowDimBg）。
+        func _engine_imgui_modal_show_job(
+            i: IWindows, title: string, state: WindowsState,
+            menu: option<Menu>, shortcut: option<Shortcut>,
+            first_frame: mutable<bool>)=> bool
+        {
+            do BeginAttrOpen(s_modal_carrier_title, s_modal_carrier_attrib);
+            defer End();
+
+            // 尺寸约束等 NextWindowData 需在载体 Begin 之后设置，才能作用到弹窗本身。
+            let attrib = _make_window_attrib(i, state, menu);
+
+            if (first_frame->get)
+            {
+                OpenPopup(title);
+                first_frame->set(false);
+            }
+
+            let (show, _) = BeginPopupModalAttrOpen(title, attrib);
+            if (!show)
+                return false;
+
+            let keep_open = _update_window_lifetime(i, state, menu, shortcut, true, true);
+
+            if (!keep_open)
+                CloseCurrentPopup();
+            EndPopup();
+
+            return keep_open;
+        }
+
         func _show(i: IWindows, state: WindowsState)
         {
             let title = state.m_is_unique
                 ? state.m_title
                 | state.m_title->replace("$ID", F"##{JobID()}")
                 ;
-                
+
             let menu_instance = i->getMenu;
             let shortcut_instance = i->getShortcut;
-            
-            match (i->getSpawnPos)
+
+            // 模态弹窗由 ImGui 自动居中，忽略 SpawnPos
+            if (!state.m_is_modal)
             {
-                none?;
-                value(pos)?
-                    SetNextWindowPos(pos);
+                match (i->getSpawnPos)
+                {
+                    none?;
+                    value(pos)?
+                        SetNextWindowPos(pos);
+                }
             }
-            
+
             i->onCreate();
+
+            if (state.m_is_modal)
+            {
+                let ticket = _wait_for_modal_slot();
+                let first_frame = mutable::create(true);
+                while (i->_engine_imgui_modal_show_job(
+                        title, state, menu_instance, shortcut_instance, first_frame))
+                {
+                    std::yield();
+                }
+                _release_modal_slot(ticket);
+            }
+            else
             {
                 while (i->_engine_imgui_show_job(
                         title, state, menu_instance, shortcut_instance))
@@ -223,21 +358,33 @@ namespace JEEditor::GUI::Windows
                     std::yield();
                 }
             }
+
             i->onClose();
             i->onDestroy();
             WindowsState::unregister_window(i);
         }
     }
-    
+
     public func show<T>(window_instance: T)=> option<IWindows>
     // where require!(T: IWindows);
     {
-        let mut title = window_instance->getTitle;
-        let is_unique = title->find("$ID")->is_none;
-        
         let i = IWindows::create(window_instance);
-        
-        match (WindowsState::try_register_window(i, title, is_unique))
+        return _launch_window(i, i->isModal);
+    }
+
+    // 强制以模态方式展示任意窗口（无需实现 isModal）
+    public func showModal<T>(window_instance: T)=> option<IWindows>
+    {
+        return _launch_window(IWindows::create(window_instance), true);
+    }
+
+    func _launch_window(i: IWindows, is_modal: bool)=> option<IWindows>
+    // where require!(T: IWindows);
+    {
+        let mut title = i->getTitle;
+        let is_unique = title->find("$ID")->is_none;
+
+        match (WindowsState::try_register_window(i, title, is_unique, is_modal))
         {
             none?
                 i->onDestroy();

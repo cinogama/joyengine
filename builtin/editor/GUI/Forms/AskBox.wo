@@ -24,7 +24,7 @@ namespace JEEditor::GUI::Forms
     }
     {
         public func create(title: string, text: string)=> AskBox
-            where require!(AskBox: Windows::IWindows);
+            where require!(AskBox: Windows::IWindows, Windows::IModalWindow);
         {
             return AskBox{
                 m_title = title,
@@ -45,6 +45,10 @@ namespace JEEditor::GUI::Forms
                 + WindowsAttribute::ImGuiWindowFlags_NoCollapse
                 + WindowsAttribute::ImGuiWindowFlags_NoSavedSettings
                 ;
+        }
+        public func isModal(_: AskBox)=> bool
+        {
+            return true;
         }
         public func getShortcut(self: AskBox)=> option<Shortcut>
         {
