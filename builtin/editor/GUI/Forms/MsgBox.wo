@@ -37,7 +37,7 @@ namespace JEEditor::GUI::Forms
         
         public func getTitle(self: MsgBox)=> string
         {
-            return F"消息: {self.m_title}$ID";
+            return F"消息: {self.m_title}";
         }
         public func getAttrib(_: MsgBox)=> WindowsAttribute
         {

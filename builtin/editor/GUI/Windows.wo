@@ -51,6 +51,8 @@ namespace JEEditor::GUI::Windows
             return option::none;
         }
         // 模态窗口：渲染为居中的模态弹窗并屏蔽其后所有窗口的输入。
+        // 模态窗口永远不是 Unique：同名模态由模态队列串行展示而非被拒绝，
+        // 系统会自动向标题追加 $ID，无需（也不应）手动添加。
         public func isModal(self)=> bool
         {
             do self;
@@ -372,7 +374,15 @@ namespace JEEditor::GUI::Windows
     // where require!(T: IWindows);
     {
         let mut title = i->getTitle;
-        let is_unique = title->find("$ID")->is_none;
+        let mut is_unique = title->find("$ID")->is_none;
+
+        // 模态与 unique 语义重叠：同一时刻仅展示一个弹窗已由模态队列保证，
+        // 同名模态应排队而非被 unique 拒绝，故自动追加 $ID 使其非 Unique。
+        if (is_modal && is_unique)
+        {
+            title = title + "$ID";
+            is_unique = false;
+        }
 
         match (WindowsState::try_register_window(i, title, is_unique, is_modal))
         {

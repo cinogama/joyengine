@@ -102,7 +102,7 @@ namespace JEEditor::GUI::Forms
         
         public func show(title: string, text: string)
         {
-            let askbox = AskBox::create(title + "$ID", text);
+            let askbox = AskBox::create(title, text);
             do Windows::show(askbox);
             return askbox;
         }

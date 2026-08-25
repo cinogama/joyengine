@@ -93,7 +93,7 @@ namespace JEEditor::GUI::Forms
         
         public func show(title: string, text: string, default: string)
         {
-            let inputbox = InputBox::create(title + "$ID", text, default);
+            let inputbox = InputBox::create(title, text, default);
             do Windows::show(inputbox);
             return inputbox;
         }
