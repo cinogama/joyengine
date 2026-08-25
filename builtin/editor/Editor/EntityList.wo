@@ -234,39 +234,30 @@ namespace JEEditor::Editor
                     s_new_entity_selected->set(cname, true);
             }
         }
-        // “常用组合”区：分组标题下每行两个组合按钮，整组勾选时按钮
-        // 高亮显示；悬停提示该组合会勾选的全部组件
-        func showComponentPresetChips(picker_width: real)=> void
+        // “常用组合”菜单：分组为一级子菜单，子项即预设，整组勾选的项
+        // 高亮显示，点击切换整组；悬停提示该组合会勾选的全部组件。
+        // 点击子项只收起子菜单以上的弹窗层，菜单与外层“新建实体”弹窗
+        // 保持打开，可连续挑选多个组合
+        func showComponentPresetMenu()=> void
         {
-            let chip_width = picker_width * 0.5 - 4.;
             for (let (group_title, presets) : s_component_presets)
             {
-                SeparatorText(group_title);
-                let mut chip_in_row = 0;
-                for (let (preset_name, cnames) : presets)
+                if (BeginMenu(group_title))
                 {
-                    if (chip_in_row > 0)
-                        SameLine();
-                    chip_in_row += 1;
-
-                    let all_selected = isPresetAllSelected(cnames);
-                    if (all_selected)
+                    defer EndMenu();
+                    for (let (preset_name, cnames) : presets)
                     {
-                        PushStyleColor(ImGuiCol::ImGuiCol_Button, (76, 132, 216, 170));
-                        PushStyleColor(ImGuiCol::ImGuiCol_ButtonHovered, (96, 152, 236, 210));
-                        PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive, (116, 172, 246, 240));
-                    }
-                    if (ButtonSize(F"{preset_name}##preset_{preset_name}", (chip_width, 0.)))
-                        togglePreset(cnames);
-                    if (all_selected)
-                        PopStyleColor(3);
+                        if (SelectableSelected(F"{preset_name}##preset_{preset_name}",
+                                isPresetAllSelected(cnames)))
+                            togglePreset(cnames);
 
-                    if (IsItemHovered())
-                    {
-                        let mut tip = "";
-                        for (let cname : cnames)
-                            tip = (tip->len == 0) ? cname | F"{tip}、{cname}";
-                        do SetTooltip(tip);
+                        if (IsItemHovered())
+                        {
+                            let mut tip = "";
+                            for (let cname : cnames)
+                                tip = (tip->len == 0) ? cname | F"{tip}、{cname}";
+                            do SetTooltip(tip);
+                        }
                     }
                 }
             }
@@ -313,8 +304,10 @@ namespace JEEditor::Editor
             // 弹窗大小由内容自适应；若控件用 -1 占满宽度，弹窗自身没有
             // 可参考的实宽，会塌缩成细条，因此这里给控件显式像素宽度
             let picker_width = 300.;
+            let preset_button_width = 92.;
 
-            SetNextItemWidth(picker_width);
+            // 搜索框与“常用组合”按钮同排，合计宽度与下方列表对齐
+            SetNextItemWidth(picker_width - preset_button_width - 8.);
             if (s_new_entity_focus)
             {
                 SetKeyboardFocusHere(0);
@@ -327,10 +320,14 @@ namespace JEEditor::Editor
                     s_new_entity_filter = new_filter;
             }
 
-            // 常用组合：点击即整组勾选/取消，可与候选列表的勾选自由搭配
-            if (CollapsingHeaderFlags("常用组合", TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
-                showComponentPresetChips(picker_width);
-            Spacing();
+            SameLine();
+            if (ButtonSize("常用组合", (preset_button_width, 0.)))
+                OpenPopup("##component_preset_menu");
+            if (BeginPopup("##component_preset_menu"))
+            {
+                showComponentPresetMenu();
+                defer EndPopup();
+            }
 
             let filter_lower = s_new_entity_filter->lower;
             let has_filter = filter_lower->len > 0;
