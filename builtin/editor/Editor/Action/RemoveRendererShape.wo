@@ -1,0 +1,120 @@
+import woo::std;
+
+import je;
+import je::ecs;
+import je::graphic;
+import je::internal;
+
+import je::towoo;
+import je::towoo::types;
+import je::towoo::components;
+
+import pkg::interface;
+import pkg::try;
+
+import builtin::editor::Editor::WorldEditorViewport;
+
+import IAction;
+
+using je;
+using je::graphic;
+
+namespace JEEditor::Editor::Action
+{
+    // 移除 Renderer::Shape 组件的专用 Action。
+    // 顶点数据不走反射成员，而是存放在组件实例里，移除即销毁、重加得到
+    // 空实例；因此移除前通过强类型接口做快照（引擎资源系统持有，Action
+    // 引用期间不失效），undo 时用 towoo::add_component 重加——它返回当帧
+    // 即可写入的暂存实例——再经强类型方法整体恢复，无需等待命令缓冲刷新。
+    protected using RemoveRendererShape = struct{
+        m_eid: entity::internal::euid_t,
+        m_saved_vertex: option<vertex>,
+    }
+    {
+        public func try_create(e: entity)=> option<RemoveRendererShape>
+            where require!(RemoveRendererShape: IAction);
+        {
+            return try!{
+                try! eid = e->internal::get_entity_uid;
+                try! cinst = e->towoo::get_component:<Renderer::Shape>;
+
+                return_value! RemoveRendererShape{
+                    m_eid = eid,
+                    m_saved_vertex = cinst->get_vertex(),
+                };
+            } catch! {
+                logerr("传入的实体应当有对应的 EUID 与 Renderer::Shape 组件");
+            };
+        }
+
+        // 创建并提交移除操作；无法创建（如实体缺少 EUID）时返回 false，
+        // 由调用方退回通用移除流程
+        public func remove(wctx: WorldEditorViewport, e: entity)=> bool
+        {
+            match (RemoveRendererShape::try_create(e))
+            {
+                none? return false;
+                value(action)? wctx->doAction(action);
+            }
+            return true;
+        }
+
+        // 组件已不存在时视为成功（幂等）
+        public func redo(self: RemoveRendererShape, w: WorldEditorViewport)=> bool
+        {
+            for (let e : w->getEntitySelector())
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(ueid)?
+                        if (ueid == self.m_eid)
+                        {
+                            if (e->towoo::get_component:<Renderer::Shape>->is_value)
+                                do e->towoo::remove_component:<Renderer::Shape>();
+                            return true;
+                        }
+                }
+            }
+            return false;
+        }
+
+        // 重加组件并恢复顶点数据；已存在时仅恢复数据（幂等）
+        public func undo(self: RemoveRendererShape, w: WorldEditorViewport)=> bool
+        {
+            for (let e : w->getEntitySelector())
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(ueid)?
+                        if (ueid == self.m_eid)
+                            return self->restoreTo(e);
+                }
+            }
+            return false;
+        }
+
+        func restoreTo(self: RemoveRendererShape, e: entity)=> bool
+        {
+            match (e->towoo::get_component:<Renderer::Shape>)
+            {
+                value(cinst)?
+                    do cinst->set_vertex(self.m_saved_vertex);
+                none?
+                    match (e->towoo::add_component:<Renderer::Shape>())
+                    {
+                        none? return false;
+                        value(cinst)?
+                            do cinst->set_vertex(self.m_saved_vertex);
+                    }
+            }
+            return true;
+        }
+
+        public func describe(_: RemoveRendererShape)=> string
+        {
+            return "移除组件 Renderer::Shape";
+        }
+    }
+}

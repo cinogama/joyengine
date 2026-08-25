@@ -16,7 +16,9 @@ import EditSession;
 import Action::AddComponent;
 import Action::DestroyEntity;
 import Action::RemoveComponent;
-import Action::RemoveRendererComponent;
+import Action::RemoveRendererShaders;
+import Action::RemoveRendererShape;
+import Action::RemoveRendererTextures;
 
 using std;
 using je;
@@ -175,6 +177,22 @@ namespace JEEditor::Editor
                 }
             }
             Unindent(0.);
+        }
+        // 渲染器三件套（Renderer::Shape/Shaders/Textures）的移除分发：
+        // 按类型名转交 Action 目录下的专用 Action（RemoveRendererShaders /
+        // RemoveRendererTextures / RemoveRendererShape），命中并成功提交时
+        // 返回 true；未命中或无法创建（如缺少 EUID）返回 false，由调用方
+        // 退回通用 RemoveComponent 流程。
+        func tryRemoveRendererComponent(
+            wctx: WorldEditorViewport, e: entity, ctype: typeinfo)=> bool
+        {
+            if (ctype->name == "Renderer::Shaders")
+                return RemoveRendererShaders::remove(wctx, e);
+            if (ctype->name == "Renderer::Textures")
+                return RemoveRendererTextures::remove(wctx, e);
+            if (ctype->name == "Renderer::Shape")
+                return RemoveRendererShape::remove(wctx, e);
+            return false;
         }
         // 移除组件的统一入口：先结束可能进行中的编辑手势，再发布可撤销的
         // 移除操作；渲染器三件套的数据不在反射成员里，走专用 Action。
