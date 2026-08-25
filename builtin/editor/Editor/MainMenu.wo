@@ -3,6 +3,7 @@ import builtin::editor::GUI::Menu;
 import Browser;
 import EntityList;
 import LogBrowser;
+import SystemList;
 import Material;
 import ReplConsole;
 import WorldEditorViewport;
@@ -49,6 +50,16 @@ namespace JEEditor::Editor::MainMenu
                         EntityList::showEntityList();
                 })
             ->      checkWhen(EntityList::isEntityListExist)
+            ->      endItem
+            ->  subItem("系统列表",
+                func()
+                {
+                    if (SystemList::isSystemListExist())
+                        SystemList::closeSystemList();
+                    else
+                        SystemList::showSystemList();
+                })
+            ->      checkWhen(SystemList::isSystemListExist)
             ->      endItem
             ->  subItem("检视面板",
                 func()

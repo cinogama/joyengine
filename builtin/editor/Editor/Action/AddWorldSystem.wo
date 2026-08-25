@@ -1,0 +1,68 @@
+import woo::std;
+
+import je;
+import je::ecs;
+import je::typeinfo;
+
+import pkg::interface;
+import pkg::try;
+
+import builtin::editor::Editor::WorldEditorViewport;
+
+import IAction;
+
+using je;
+
+namespace JEEditor::Editor::Action
+{
+    // 向世界添加立即启用的系统（马上 add_system 运行）；undo 时移除该系统。
+    // 只保存系统类型名，redo/undo 执行时再通过 typeinfo::load 加载，
+    // 避免 typeinfo 句柄在类型热重载等情况下失效。
+    protected using AddWorldSystem = struct{
+        m_system_type_name: string,
+    }
+    {
+        public func create(systype: typeinfo)=> AddWorldSystem
+            where require!(AddWorldSystem: IAction);
+        {
+            return AddWorldSystem{
+                m_system_type_name = systype->name,
+            };
+        }
+
+        // 系统已存在于世界中时视为成功（幂等），避免撤销/重做交错时重复添加
+        public func redo(self: AddWorldSystem, w: WorldEditorViewport)=> bool
+        {
+            match (typeinfo::load(self.m_system_type_name))
+            {
+                none? return false;
+                value(systype)?
+                {
+                    if (w->hasWorldSystem(systype))
+                        return true;
+                    return w->getWorld->add_system(systype);
+                }
+            }
+        }
+
+        // 系统已不在世界中时视为成功（幂等）
+        public func undo(self: AddWorldSystem, w: WorldEditorViewport)=> bool
+        {
+            match (typeinfo::load(self.m_system_type_name))
+            {
+                none? return false;
+                value(systype)?
+                {
+                    if (w->hasWorldSystem(systype))
+                        do w->getWorld->remove_system(systype);
+                    return true;
+                }
+            }
+        }
+
+        public func describe(self: AddWorldSystem)=> string
+        {
+            return F"添加系统 {self.m_system_type_name}";
+        }
+    }
+}

@@ -1,0 +1,68 @@
+import woo::std;
+
+import je;
+import je::ecs;
+import je::typeinfo;
+
+import pkg::interface;
+import pkg::try;
+
+import builtin::editor::Editor::WorldEditorViewport;
+
+import IAction;
+
+using je;
+
+namespace JEEditor::Editor::Action
+{
+    // 添加“调试执行/导出时才启用”的系统：这类系统保存在 WorldEditorViewport
+    // 中（m_runtime_systems），编辑器内不 add_system，待开始调试执行或导出时
+    // 才加入世界；undo 时从列表移除。
+    // 只保存系统类型名，redo/undo 执行时再通过 typeinfo::load 加载，
+    // 避免 typeinfo 句柄在类型热重载等情况下失效。
+    protected using AddRuntimeSystem = struct{
+        m_system_type_name: string,
+    }
+    {
+        public func create(systype: typeinfo)=> AddRuntimeSystem
+            where require!(AddRuntimeSystem: IAction);
+        {
+            return AddRuntimeSystem{
+                m_system_type_name = systype->name,
+            };
+        }
+
+        // 系统已在调试系统列表中时视为成功（幂等）
+        public func redo(self: AddRuntimeSystem, w: WorldEditorViewport)=> bool
+        {
+            match (typeinfo::load(self.m_system_type_name))
+            {
+                none? return false;
+                value(systype)?
+                {
+                    do w->addRuntimeSystem(systype);
+                    return true;
+                }
+            }
+        }
+
+        // 系统已不在调试系统列表中时视为成功（幂等）
+        public func undo(self: AddRuntimeSystem, w: WorldEditorViewport)=> bool
+        {
+            match (typeinfo::load(self.m_system_type_name))
+            {
+                none? return false;
+                value(systype)?
+                {
+                    do w->removeRuntimeSystem(systype);
+                    return true;
+                }
+            }
+        }
+
+        public func describe(self: AddRuntimeSystem)=> string
+        {
+            return F"添加调试系统 {self.m_system_type_name}";
+        }
+    }
+}

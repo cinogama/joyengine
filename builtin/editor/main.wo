@@ -20,6 +20,7 @@ import GUI::Forms::AskBox;
 import Editor::Browser;
 import Editor::EntityList;
 import Editor::LogBrowser;
+import Editor::SystemList;
 import Editor::LogStatebar;
 import Editor::MainMenu;
 import Editor::Inspector;
@@ -103,6 +104,7 @@ func main()
     // 默认启动的编辑器窗口
     do Browser::showBrowser();
     do EntityList::showEntityList();
+    do SystemList::showSystemList();
     do LogBrowser::showLogBrowser();
     do Inspector::showInspector();
     do Material::showMaterial();

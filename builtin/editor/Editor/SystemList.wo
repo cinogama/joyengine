@@ -1,0 +1,293 @@
+import woo::std;
+
+import je::internal;
+import je::ecs;
+import je::gui;
+import je::typeinfo;
+
+import pkg::interface;
+import pkg::worst;
+
+import builtin::editor::GUI::Windows;
+
+import WorldEditorViewport;
+import Action::AddWorldSystem;
+import Action::RemoveWorldSystem;
+import Action::AddRuntimeSystem;
+import Action::RemoveRuntimeSystem;
+
+using std;
+using je;
+using je::gui;
+using JEEditor::GUI::Windows;
+using JEEditor::Editor::Action;
+
+namespace JEEditor::Editor
+{
+    // 系统列表：展示并管理当前编辑世界的两组系统——
+    //   立即启用：已 add_system 到世界，编辑器内正在运行（如图形系统）；
+    //   调试运行时启用：保存在 WorldEditorViewport 中，仅在开始调试执行
+    //   或导出时才会 add_system（调试/导出功能暂未支持）。
+    // 增删均通过 doAction 发布，支持撤销/重做并参与未保存判定。
+    using SystemList = struct{
+        m_close: mut bool,
+    }
+    {
+        let mut s_systemlist_singleton = option::none: option<SystemList>;
+
+        // “添加系统”选择弹窗的状态；面板是单例，用模块级状态即可
+        let mut s_add_system_filter = "";
+        let mut s_add_system_focus = false;
+        // 弹窗中“添加到哪一组”的选择：true=立即启用，false=调试运行时启用
+        let mut s_add_system_immediate = true;
+
+        public func isSystemListExist()
+        {
+            return s_systemlist_singleton->is_value;
+        }
+        public func showSystemList()
+        {
+            do show(create());
+        }
+        public func closeSystemList()
+        {
+            match (s_systemlist_singleton)
+            {
+                none?;
+                value(systemlist_instance)?
+                    systemlist_instance->close();
+            }
+        }
+
+        func create()=> SystemList
+            where require!(SystemList: IWindows);
+        {
+            return SystemList{
+                m_close = mut false,
+            };
+        }
+        func close(self: SystemList)
+        {
+            self.m_close = true;
+        }
+        public func onCreate(self: SystemList)=> void
+        {
+            s_systemlist_singleton = option::value(self);
+        }
+        public func onClose(_: SystemList)=> void
+        {
+            s_systemlist_singleton = option::none;
+        }
+        public func getTitle(_: SystemList)=> string
+        {
+            return "系统列表";
+        }
+        public func getSizeConstraints(_: SystemList)=> SizeConstraints
+        {
+            return SizeConstraints::Limited(((260., 200.), (420., 4096.)));
+        }
+
+        // 将 "Transform::LocalPosition" 拆为 ("Transform", "LocalPosition")，
+        // 不带命名空间的类型名返回 ("", 原名)。
+        func splitTypeName(cname: string)=> (string, string)
+        {
+            let sep_pos = cname->find("::")->or(-1);
+            if (sep_pos < 0)
+                return ("", cname);
+            return (cname->sub_len(0, sep_pos), cname->sub(sep_pos + 2));
+        }
+
+        // 一行系统条目：短名（悬停提示全名）+ 行尾 × 移除按钮；
+        // 返回 true 表示请求移除该系统，具体操作由调用者发布。
+        func showSystemEntryRow(tag: string, full_name: string)=> bool
+        {
+            let (ns, short_name) = splitTypeName(full_name);
+            let display_name = (ns != "") ? F"{short_name}（{ns}）" | short_name;
+
+            do Selectable(F"{display_name}##{tag}");
+            if (IsItemHovered())
+                do SetTooltip(full_name);
+
+            SameLine();
+            let (cursor_x, cursor_y) = GetCursorPos();
+            let (avail_width, _) = GetContentRegionAvail();
+            SetCursorPos((cursor_x + avail_width - 28., cursor_y));
+            return ButtonSize(F"×##{tag}_remove", (24., 0.));
+        }
+
+        // 按命名空间分组绘制一组系统；返回该组绘制的条目数
+        func showSystemGroup(
+            wctx: WorldEditorViewport,
+            systems: array<typeinfo>,
+            tag_prefix: string,
+            on_remove: (WorldEditorViewport, typeinfo)=> void)=> int
+        {
+            let mut visible_count = 0;
+            let mut last_namespace = "";
+            for (let systype : systems |> sort(\l, r = l->name < r->name;))
+            {
+                let name = systype->name;
+                // 编辑器内部系统（Editor::*）不在系统列表中显示
+                if (name->begin_with("Editor::"))
+                    continue;
+
+                visible_count += 1;
+                let (ns, _) = splitTypeName(name);
+                if (ns != last_namespace)
+                {
+                    if (ns != "")
+                        SeparatorText(ns);
+                    last_namespace = ns;
+                }
+
+                if (showSystemEntryRow(F"{tag_prefix}_{name}", name))
+                    do on_remove(wctx, systype);
+            }
+            return visible_count;
+        }
+
+        func requestRemoveWorldSystem(wctx: WorldEditorViewport, systype: typeinfo)=> void
+        {
+            wctx->doAction(RemoveWorldSystem::create(systype));
+        }
+        func requestRemoveRuntimeSystem(wctx: WorldEditorViewport, systype: typeinfo)=> void
+        {
+            wctx->doAction(RemoveRuntimeSystem::create(systype));
+        }
+
+        // “添加系统”选择弹窗：先选择添加到哪一组，再搜索过滤 +
+        // 按命名空间分组的候选列表。选中一项立即发布添加操作且保持
+        // 弹窗打开，便于连续添加；已在任意一组中的系统自下一帧起从候选中消失。
+        func showAddSystemPicker(wctx: WorldEditorViewport)=> void
+        {
+            // 弹窗大小由内容自适应；若控件用 -1 占满宽度，弹窗自身没有
+            // 可参考的实宽，会塌缩成细条，因此这里给控件显式像素宽度
+            let picker_width = 300.;
+
+            if (RadioButton("立即启用", s_add_system_immediate))
+                s_add_system_immediate = true;
+            if (IsItemHovered())
+                do SetTooltip("添加后立即 add_system 到世界，编辑器内马上运行");
+
+            SameLine();
+            if (RadioButton("调试运行时启用", !s_add_system_immediate))
+                s_add_system_immediate = false;
+            if (IsItemHovered())
+                do SetTooltip("保存在世界中，仅在开始调试执行或导出时才会 add_system");
+
+            Spacing();
+
+            SetNextItemWidth(picker_width);
+            if (s_add_system_focus)
+            {
+                SetKeyboardFocusHere(0);
+                s_add_system_focus = false;
+            }
+            match (InputText("##add_system_filter", s_add_system_filter))
+            {
+                none?;
+                value(new_filter)?
+                    s_add_system_filter = new_filter;
+            }
+
+            let filter_lower = s_add_system_filter->lower;
+            let has_filter = filter_lower->len > 0;
+
+            // 候选为全部已注册系统，排除编辑器内部系统（Editor::*）、
+            // 两组中已存在的系统以及不匹配搜索词的系统（按含命名空间的全名匹配）
+            let candidates = typeinfo::get_all_systems_types()
+                ->forall(\stype = !stype->name->begin_with("Editor::") &&
+                            !wctx->hasWorldSystem(stype) &&
+                            !wctx->hasRuntimeSystem(stype) &&
+                            (!has_filter ||
+                                stype->name->lower->find(filter_lower)->is_value);)
+                |> sort(\l, r = l->name < r->name;);
+
+            // 列表高度固定为约 8 行，避免候选过多时撑爆弹窗
+            if (BeginListBox("##add_system_candidates", picker_width,
+                    GetFrameHeightWithSpacing() * 8.))
+            {
+                let mut last_namespace = "";
+                for (let stype : candidates)
+                {
+                    let name = stype->name;
+                    let (ns, short_name) = splitTypeName(name);
+                    if (ns != last_namespace)
+                    {
+                        if (ns != "")
+                            SeparatorText(ns);
+                        last_namespace = ns;
+                    }
+
+                    if (Selectable(F"{short_name}##add_{name}"))
+                    {
+                        if (s_add_system_immediate)
+                            wctx->doAction(AddWorldSystem::create(stype));
+                        else
+                            wctx->doAction(AddRuntimeSystem::create(stype));
+                    }
+                }
+                if (candidates->len == 0)
+                    TextDisabled("（没有匹配的系统）");
+
+                EndListBox();
+            }
+        }
+
+        func showWorldSystems(wctx: WorldEditorViewport)
+        {
+            SeparatorText("立即启用");
+            TextDisabled("已添加到世界，正在编辑器中运行");
+
+            let world_systems_count = showSystemGroup(
+                wctx,
+                wctx->getWorld->internal::get_all_systems,
+                "world",
+                requestRemoveWorldSystem);
+            if (world_systems_count == 0)
+                TextDisabled("（没有立即启用的系统）");
+
+            SeparatorText("调试运行时启用");
+            TextDisabled("保存在世界中，开始调试执行或导出时才会运行");
+
+            let runtime_systems_count = showSystemGroup(
+                wctx,
+                wctx->getRuntimeSystems(),
+                "runtime",
+                requestRemoveRuntimeSystem);
+            if (runtime_systems_count == 0)
+                TextDisabled("（没有调试运行时启用的系统）");
+
+            Spacing();
+            if (ButtonSize("添加系统", (-1., 0.)))
+            {
+                // 每次打开弹窗都复位搜索词，并将焦点设到搜索框
+                s_add_system_filter = "";
+                s_add_system_focus = true;
+                OpenPopup("##add_system_picker");
+            }
+
+            if (BeginPopup("##add_system_picker"))
+            {
+                showAddSystemPicker(wctx);
+                defer EndPopup();
+            }
+        }
+
+        public func run(self: SystemList)=> bool
+        {
+            match (WorldEditorViewport::getLastFocused())
+            {
+                none?
+                    TextDisabled("（没有待编辑的世界）");
+                value(wctx)?
+                {
+                    showWorldSystems(wctx);
+                }
+            }
+            return !self.m_close;
+        }
+
+    // ===============
+    }
+}

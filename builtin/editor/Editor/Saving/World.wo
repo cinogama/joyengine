@@ -1,8 +1,11 @@
 import woo::std;
 
+import je;
 import je::ecs;
+import je::typeinfo;
 
 import pkg::toml;
+import pkg::iterator;
 
 import builtin::gaming::Saving::World;
 import Entity;
@@ -10,23 +13,67 @@ import Entity;
 using je;
 using JEGaming::Saving;
 using toml;
+using iterator;
 
 namespace JEEditor::Saving::World
 {
-    public func save(w: world, name: string)
+    // runtime_systems：编辑器中“调试执行/导出时才启用”的系统（保存在
+    // WorldEditorViewport 中，编辑器内不 add_system）。这类系统以类型名
+    // 单独存放在 "running_systems" 键下；游戏运行时 restore 会把它们与
+    // 立即启用的系统一并加入世界（见 JEGaming::Saving::World::restore）。
+    public func save(w: world, name: string, runtime_systems: array<typeinfo>)
     {
         let wdat = World::saveWithCustomEntitySaver(
             w, JEEditor::Saving::Entity::save);
 
         // 世界的名字与文件名（保存路径）无关，须随文件单独保存
         wdat->set("name", name);
+        wdat->set("running_systems", from(
+            runtime_systems->iter |> map(\tinfo = tinfo->name;)));
 
         return wdat;
     }
-    public func restore(u: universe, wdat: Toml)
+
+    // 编辑器侧恢复：只把 "systems"（立即启用）中的系统 add_system 到新世界；
+    // "running_systems"（调试执行/导出时才启用）中的系统不加入世界，
+    // 以类型名返回，由调用方保存到 WorldEditorViewport 的 m_runtime_systems。
+    public func restore(u: universe, wdat: Toml)=> (world, array<string>)
     {
-        return World::restoreWithCustomEntityRestorer(
-            u, wdat, JEEditor::Saving::Entity::restore);
+        let w = world::create(u);
+
+        // Restore systems.
+        let systems_dat =
+            wdat->get("systems")
+                =>> \v = v->as_array;->or([]);
+        for (let sdat : systems_dat)
+        {
+            match (sdat->as_string=>> \tname = typeinfo::load(tname);)
+            {
+                none?;
+                value(systype)?
+                    do w->add_system(systype);
+            }
+        }
+
+        // Collect runtime systems.
+        let runtime_system_names = []mut: vec<string>;
+        for (let sdat : wdat->get("running_systems")
+                =>> \v = v->as_array;->or([]))
+        {
+            match (sdat->as_string)
+            {
+                none?;
+                value(tname)?
+                    runtime_system_names->add(tname);
+            }
+        }
+
+        // Restore entities.
+        let entities_dat = wdat->get("entities")=>> \v = v->as_array;->or([]);
+        for (let edat : entities_dat)
+            do JEEditor::Saving::Entity::restore(w, edat);
+
+        return (w, runtime_system_names->to_array());
     }
     // 读取保存在文件中的世界名；旧版本文件未保存名字时返回 none。
     public func getName(wdat: Toml)=> option<string>

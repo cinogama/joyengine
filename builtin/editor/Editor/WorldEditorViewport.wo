@@ -203,19 +203,23 @@ namespace JEEditor::Editor
         // 右键环视时是否锁定鼠标。虚拟机等环境下锁定鼠标会导致指针漂移，默认不锁定。
         let mut s_lock_mouse_on_look = false;
         
-        func create(w: world, name: string, path: option<path_t>)=> WorldEditorViewport
+        func create(
+            w: world,
+            name: string,
+            path: option<path_t>,
+            runtime_systems: array<typeinfo>)=> WorldEditorViewport
             where require!(WorldEditorViewport: IWindows);
         {
             let graphic_uhost = graphic_uhost::get_or_create(
                 w->get_universe);
-                
+
             // 注意：按照设计，WorldEditorViewport 的生命周期应当比 world 实例更长
             //      因此，世界实例的释放将由 WorldEditorViewport 在 onClose 时执行
-            return WorldEditorViewport{
+            let new_viewport = WorldEditorViewport{
                 m_close = mut CloseRequest::NORMALLY,
-                
+
                 m_world_instance = w,
-                
+
                 m_name = name,
                 m_runtime_systems = []mut,
                 m_saving_path = path,
@@ -286,6 +290,13 @@ namespace JEEditor::Editor
                 m_gizmo_draw_size = mut 1.,
                 m_gizmo_draw_center_size = mut 0.1,
             };
+
+            // “调试执行/导出时才启用”的系统保存在视口中（编辑器内不 add_system），
+            // 待开始调试执行或导出时才会加入世界执行。
+            for (let systype : runtime_systems)
+                new_viewport.m_runtime_systems->add(systype);
+
+            return new_viewport;
         }
         
         public func isCurrentViewportAvailable(self: WorldEditorViewport)
@@ -1834,10 +1845,56 @@ namespace JEEditor::Editor
         }
         
         // ==========================
-        
+
         public func getRuntimeSystems(self: WorldEditorViewport)=> array<typeinfo>
         {
             return self.m_runtime_systems->to_array();
+        }
+
+        // ==========================
+        //  系统管理
+        // ==========================
+
+        // 系统是否已通过 add_system 加入世界（立即启用，编辑器内正在运行）；
+        // 以类型名比较，避免类型热重载后 typeinfo 句柄不一致。
+        public func hasWorldSystem(self: WorldEditorViewport, systype: typeinfo)=> bool
+        {
+            for (let added : self.m_world_instance->internal::get_all_systems)
+            {
+                if (added->name == systype->name)
+                    return true;
+            }
+            return false;
+        }
+
+        // 系统是否在“调试执行/导出时才启用”的列表中
+        public func hasRuntimeSystem(self: WorldEditorViewport, systype: typeinfo)=> bool
+        {
+            for (let added : self.m_runtime_systems)
+            {
+                if (added->name == systype->name)
+                    return true;
+            }
+            return false;
+        }
+
+        // 添加一个“调试执行/导出时才启用”的系统；已存在时保持不变（幂等）
+        public func addRuntimeSystem(self: WorldEditorViewport, systype: typeinfo)=> void
+        {
+            if (self->hasRuntimeSystem(systype))
+                return;
+            self.m_runtime_systems->add(systype);
+        }
+
+        // 移除一个“调试执行/导出时才启用”的系统；不存在时保持不变（幂等）
+        public func removeRuntimeSystem(self: WorldEditorViewport, systype: typeinfo)=> void
+        {
+            let remaining = self.m_runtime_systems->to_array()
+                ->forall(\added = added->name != systype->name;);
+
+            self.m_runtime_systems->clear();
+            for (let added : remaining)
+                self.m_runtime_systems->add(added);
         }
         
         public func getName(self: WorldEditorViewport)=> string
@@ -1856,7 +1913,7 @@ namespace JEEditor::Editor
         {
             match (toml::save(
                     JEEditor::Saving::World::save(
-                        self.m_world_instance, self.m_name), path))
+                        self.m_world_instance, self.m_name, self->getRuntimeSystems()), path))
             {
                 err(msg)?
                 {
@@ -1904,7 +1961,8 @@ namespace JEEditor::Editor
             new_name: string,
             new_path: option<path_t>)=> bool
         {
-            let new_viewport = create(self.m_world_instance, new_name, new_path);
+            let new_viewport = create(
+                self.m_world_instance, new_name, new_path, self->getRuntimeSystems());
             
             match (Windows::show(new_viewport))
             {
@@ -2167,7 +2225,8 @@ namespace JEEditor::Editor
                         create(
                             new_world,
                             i == 0 ? "New world" | F"New world {i + 1}",
-                            option::none)))
+                            option::none,
+                            [])))
                 {
                     none?;
                     value(_)?
@@ -2201,19 +2260,33 @@ namespace JEEditor::Editor
                 }
                 ok(wdat)?
                 {
-                    let w = JEEditor::Saving::World::restore(
+                    let (w, runtime_system_names) = JEEditor::Saving::World::restore(
                         Inspector::Universe::UniverseCtx::instance()->getUniverse(),
                         wdat);
                     ensureDebugCamera(w);
                     w->set_enable(true);
-                    
+
+                    // “调试执行/导出时才启用”的系统以类型名保存，此处解析为
+                    // typeinfo 后交由视口保存；类型已卸载时跳过并记录日志。
+                    let runtime_systems = []mut: vec<typeinfo>;
+                    for (let tname : runtime_system_names)
+                    {
+                        match (typeinfo::load(tname))
+                        {
+                            none?
+                                logerr(F"Failed to load system type `{tname}`, skipped.");
+                            value(systype)?
+                                runtime_systems->add(systype);
+                        }
+                    }
+
                     // 优先使用文件中保存的世界名（与文件名无关）；
                     // 旧版本文件未保存名字，退回文件名。
                     let name = JEEditor::Saving::World::getName(wdat)
                         ->or(purename(path));
-                        
+
                     match (Windows::show(
-                            create(w, name, option::value(path))))
+                        create(w, name, option::value(path), runtime_systems->to_array())))
                     {
                         none?
                         {
