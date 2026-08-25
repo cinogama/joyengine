@@ -3,6 +3,9 @@ import woo::std;
 import je;
 import je::ecs;
 import je::internal;
+import je::typeinfo;
+import je::towoo;
+import je::towoo::components;
 
 import pkg::toml;
 import pkg::try;
@@ -20,18 +23,36 @@ using JEEditor::Saving;
 namespace JEEditor::Editor::Action
 {
     using FullEntityContent = struct{
-        m_eid: EuidT,
+        m_eid: mut option<EuidT>,
         m_entity_content: Toml,
     }
     {
         alias EuidT = entity::internal::euid_t;
-        
+
+        // 从活的实体做全量快照（销毁实体等需要完整还原内容的场合）
         func try_create(e: entity)
         {
             try! eid = e->internal::get_entity_uid;
             return_value! FullEntityContent{
-                m_eid = eid,
+                m_eid = mut option::value(eid),
                 m_entity_content = Entity::save(e),
+            };
+        }
+
+        // 只按组件类型构造：不依赖活的实体，组件成员由 ECS 默认构造
+        // （成员表留空即默认值）；EUID 延迟到动作首次落实时分配并回填
+        func try_create_with_types(ctypes: array<typeinfo>)=> FullEntityContent
+        {
+            let components_dat = new_table();
+            for (let ctype : ctypes)
+                components_dat->set(ctype->name, new_table());
+
+            let entity_dat = new_table();
+            entity_dat->set("components", components_dat);
+
+            return FullEntityContent{
+                m_eid = mut option::none,
+                m_entity_content = entity_dat,
             };
         }
 
@@ -41,7 +62,7 @@ namespace JEEditor::Editor::Action
             return (self.m_entity_content->get("name")=>> \v = v->as_string;)->or("");
         }
     }
-    
+
     protected using CreateEntity = struct{
         m_content: FullEntityContent,
     }
@@ -58,31 +79,71 @@ namespace JEEditor::Editor::Action
                 logerr("传入的实体应当有对应的 EUID，请检查创建/销毁的实体流程");
             };
         }
+        // 按组件类型直接构造可撤销的“创建实体”动作：实体与 EUID 均由
+        // 动作首次落实（redo）时创建/分配，调用方无需也不应预先创建实体
+        public func try_create_with_types(ctypes: array<typeinfo>)=> CreateEntity
+            where require!(CreateEntity: IAction);
+        {
+            return CreateEntity{
+                m_content = FullEntityContent::try_create_with_types(ctypes),
+            };
+        }
         public func redo(self: CreateEntity, w: WorldEditorViewport)=> bool
         {
             let e = Entity::restore(w->getWorld(), self.m_content.m_entity_content);
-            
-            // Force apply eid.
-            e->internal::unsafe::set_entity_uid(self.m_content.m_eid);
-            
+
+            match (self.m_content.m_eid)
+            {
+                // 首次落实：原生侧构造 Editor::EntityId 时即分配调试 EUID，
+                // 回填到动作里，供撤销定位与后续重做复用
+                none?
+                {
+                    do e->towoo::add_component:<Editor::EntityId>;
+                    match (e->internal::get_entity_uid)
+                    {
+                        none?
+                        {
+                            logerr("创建实体：Editor::EntityId 构造后仍未分配 EUID");
+                            return false;
+                        }
+                        value(eid)?
+                            self.m_content.m_eid = option::value(eid);
+                    }
+                }
+                // 撤销后的重做：以记录的 EUID 还原，保持实体标识稳定
+                value(eid)?
+                    e->internal::unsafe::set_entity_uid(eid);
+            }
+
+            // 选中新实体，便于立刻在检视面板中编辑
+            do w->setSelectedEntityId(e->internal::get_entity_uid);
             return true;
         }
         public func undo(self: CreateEntity, w: WorldEditorViewport)=> bool
         {
-            for (let e : w->getEntitySelector())
+            match (self.m_content.m_eid)
             {
-                match (e->internal::get_entity_uid)
+                // 尚未落实过的动作无从定位实体
+                none?
+                    return false;
+                value(target_eid)?
                 {
-                    none?;
-                    value(eid)?
-                        if (eid == self.m_content.m_eid)
+                    for (let e : w->getEntitySelector())
+                    {
+                        match (e->internal::get_entity_uid)
                         {
-                            e->close;
-                            return true;
+                            none?;
+                            value(eid)?
+                                if (eid == target_eid)
+                                {
+                                    e->close;
+                                    return true;
+                                }
                         }
+                    }
+                    return false;
                 }
             }
-            return false;
         }
 
         public func describe(self: CreateEntity)=> string

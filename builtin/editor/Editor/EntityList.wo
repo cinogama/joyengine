@@ -262,11 +262,10 @@ namespace JEEditor::Editor
                 }
             }
         }
-        // 按勾选的组件创建新实体，并额外附加编辑器依赖的 Editor::EntityId
-        // （原生侧构造该组件时即分配有效的调试 EUID，选中/撤销等依赖它）：
-        // 发布可撤销的 CreateEntity 操作并选中新实体。组件类型名在创建时
-        // 才通过 typeinfo::load 解析，失效的类型会被跳过；全部失效时拒绝
-        // 创建，避免产生没有任何组件的实体。
+        // 按勾选的组件发布可撤销的 CreateEntity 操作：实体与调试 EUID 均由
+        // 动作首次落实（redo）时创建/分配（redo 会选中新实体），调用方不再
+        // 预创建实体，避免动作落实时二次创建。组件类型名在发布时才通过
+        // typeinfo::load 解析，失效的类型会被跳过；全部失效时拒绝发布。
         func createNewEntity(wctx: WorldEditorViewport)=> void
         {
             let selected_ctypes = s_new_entity_selected->keys->iter
@@ -278,22 +277,7 @@ namespace JEEditor::Editor
                 return;
             }
 
-            let ctypes = selected_ctypes
-                ->append(Editor::EntityId::type::typeinfo);
-
-            let e = wctx->getWorld()->add_entity(ctypes);
-
-            // 以创建后的完整快照发布撤销操作；缺少 EUID 时仅记录日志并保留实体
-            match (CreateEntity::try_create(e))
-            {
-                none?
-                    logerr("新建实体缺少 EUID，该实体将不支持撤销");
-                value(action)?
-                    wctx->doAction(action);
-            }
-
-            // 选中新实体，便于立刻在检视面板中编辑
-            do wctx->setSelectedEntityId(e->internal::get_entity_uid);
+            wctx->doAction(CreateEntity::try_create_with_types(selected_ctypes));
             CloseCurrentPopup();
         }
         // “新建实体”弹窗：搜索过滤 + 常用组合一键整组勾选 + 按命名空间
