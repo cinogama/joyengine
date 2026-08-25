@@ -15,7 +15,7 @@ namespace JEEditor::Editor::Gizmo::Shaders
         "!/builtin/editor/Editor/Gizmo/Shaders/GizmoSolid.shader");
 
     // 世界坐标网格着色器：全屏四边形内按像素射线与 y=0 平面求交，
-    // 摄像机位姿与投影参数通过 JE_GRID_* uniform 逐次绘制设置
+    // 摄像机位姿与逆投影矩阵通过 JE_GRID_* uniform 逐次绘制设置
     public let WORLD_GRID = shader::load(
         option::none,
         "!/builtin/editor/Editor/Gizmo/Shaders/WorldGrid.shader");

@@ -446,7 +446,7 @@ namespace JEEditor::Editor
                     camera_projection->get_default_uniform_buffer);
 
                 // 世界坐标网格铺在最底层，先于其余 gizmo 绘制
-                self->drawWorldGrid(camera_entity, gizmo_rend_chain);
+                drawWorldGrid(camera_entity, camera_projection, gizmo_rend_chain);
 
                 func drawGizmo(
                     pos: vec3,
@@ -605,12 +605,12 @@ namespace JEEditor::Editor
         }
         // 绘制半透明的世界坐标网格（XZ 平面，y=0）：
         // 输入为覆盖整个屏幕的 NDC 四边形，WorldGrid.shader 内按像素重建视线
-        // 并与地面求交；网格密度、颜色与距离衰减均在 shader 中定义，
-        // 此处仅按摄像机位姿与投影方式提供 JE_GRID_* uniform
-        //（透视 = tan半FOV，正交 = 可视半宽高，与 ray::from 的视线重建方式一致）。
+        // 并与地面求交；网格密度、颜色与距离衰减均在 shader 中定义。
+        // 视线重建与 towoo::ray::from 一致：直接把 Camera::Projection 的
+        // 逆投影矩阵交给 shader，无需手动推算 tan半FOV / 正交可视半宽高。
         func drawWorldGrid(
-            self: WorldEditorViewport,
             camera_entity: entity,
+            camera_projection: Camera::Projection,
             rend_chain: rendchain)=> void
         {
             do try!{
@@ -622,40 +622,23 @@ namespace JEEditor::Editor
                 let rot = camera_trans->get_global_rot;
                 let pos = camera_trans->get_global_pos;
 
-                let (fbw, fbh) = self.m_editor_walk_camera_frame_buffer->unwrap->size();
-                let aspect = (fbh > 0) ? (fbw as real / fbh as real) | 1.;
-
-                let mut proj_param = (1., 1., 0., 0.);
-                match (camera_entity->towoo::get_component:<Camera::PerspectiveProjection>())
-                {
-                    value(persp)?
-                    {
-                        let tan_half = mathf::tan(persp.angle->get * 0.5 * mathf::DEG2RAD);
-                        proj_param = (tan_half, tan_half * aspect, 0., 0.);
-                    }
-                    none?
-                        match (camera_entity->towoo::get_component:<Camera::OrthoProjection>())
-                        {
-                            value(ortho)?
-                            {
-                                // 正交可视半高 = ORTHO_PROJECTION_RATIO(5) / scale
-                                let half_h = 5. / ortho.scale->get;
-                                proj_param = (half_h, half_h * aspect, 1., 0.);
-                            }
-                            none?;
-                        }
-                }
+                // 与 ray::from 的 orth 参数一致：无透视投影组件即按正交处理
+                let is_ortho =
+                    camera_entity->towoo::get_component:<Camera::PerspectiveProjection>()->is_none;
 
                 let right = rot * ((1., 0., 0.) as vec3);
                 let up = rot * ((0., 1., 0.) as vec3);
                 let forward = rot * ((0., 0., 1.) as vec3);
 
                 let draw_action = rend_chain->draw(shader_instance, shape_instance, option::none);
+                draw_action->set_uniform_mat4x4(
+                    shader_instance, "JE_GRID_INV_PROJ",
+                    camera_projection->get_inv_proj_mat as raw mat4);
+                draw_action->set_uniform(shader_instance, "JE_GRID_IS_ORTHO", is_ortho ? 1. | 0.);
                 draw_action->set_uniform(shader_instance, "JE_GRID_CAM_POS", (pos[0], pos[1], pos[2]));
                 draw_action->set_uniform(shader_instance, "JE_GRID_CAM_RIGHT", (right[0], right[1], right[2]));
                 draw_action->set_uniform(shader_instance, "JE_GRID_CAM_UP", (up[0], up[1], up[2]));
                 draw_action->set_uniform(shader_instance, "JE_GRID_CAM_FORWARD", (forward[0], forward[1], forward[2]));
-                draw_action->set_uniform(shader_instance, "JE_GRID_PROJ", proj_param);
                 return_value!;
             };
         }
