@@ -16,7 +16,6 @@ import builtin::editor::GUI::Windows;
 
 import WorldEditorViewport;
 import Action::CreateEntity;
-import Action::DestroyEntity;
 
 using iterator;
 using je;
@@ -87,12 +86,7 @@ namespace JEEditor::Editor
         {
             if (BeginPopupContextItem())
             {
-                if (MenuItem("销毁"))
-                {
-                    // 使用 Action 机制发布销毁实体的指令
-                    world_view->doAction(DestroyEntity::try_create(e)->unwrap);
-                }
-                
+                world_view->drawEntityContextMenuItems(e);
                 defer EndPopup();
             }
         }
@@ -130,7 +124,7 @@ namespace JEEditor::Editor
                 if (clicked && euid->is_value)
                     world_view->setSelectedEntityId(euid);
                     
-                // 右键打开实体上下文菜单（内容暂留空）
+                // 右键打开实体上下文菜单（菜单内容与视口右键菜单共用）
                 showEntityContextMenu(world_view, e);
             }
         }

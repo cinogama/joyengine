@@ -41,6 +41,7 @@ import Browser;
 import Practice;
 import Action::IAction;
 import Action::ModifyComponentMember;
+import Action::DestroyEntity;
 
 using std;
 
@@ -79,6 +80,11 @@ namespace JEEditor::Editor
         m_fb_settle_counter: mut int,
         
         m_selected_entity_id: mut option<entity::internal::euid_t>,
+
+        // 右键实体上下文菜单：右键按下起点与“按下发生在视口内”标记，
+        // 用于在松开时区分“点击实体弹菜单”与“拖拽环视”。
+        m_rmb_press_pos: mut ImVec2,
+        m_rmb_press_in_viewport: mut bool,
         
         m_action_history: mut Practice,
         
@@ -176,6 +182,12 @@ namespace JEEditor::Editor
         let GIZMO_COLOR_Z = (0.38, 0.56, 0.98, 0.9);
         let GIZMO_COLOR_CENTER = (0.85, 0.85, 0.85, 0.9);
         let GIZMO_COLOR_HOVER = (1., 1., 0.25, 1.);
+
+        // 右键同时承担“拖拽环视”职责：按下到松开的鼠标位移不超过该像素
+        // 阈值时视为“点击实体”（弹出上下文菜单），超过则视为环视拖拽。
+        let RMB_CLICK_MAX_DRAG_PX = 6.;
+        // 视口内实体右键菜单的弹窗 ID
+        let VIEWPORT_ENTITY_CONTEXT_MENU_ID = "##viewport_entity_context";
         
         enum GizmoMode
         {
@@ -229,6 +241,8 @@ namespace JEEditor::Editor
                 m_fb_settle_counter = mut 0,
                 
                 m_selected_entity_id = mut option::none,
+                m_rmb_press_pos = mut (0., 0.),
+                m_rmb_press_in_viewport = mut false,
                 m_action_history = mut Practice::create(),
                 
                 m_debug_camera_selector = w->create_selector([
@@ -751,6 +765,22 @@ namespace JEEditor::Editor
                 dt,
                 viewport_hovered && !toolbar_hovered,
                 viewport_rect);
+
+            // 视口内右键点击实体：选中并在鼠标处弹出与实体列表一致的上下文菜单
+            self->updateEntityContextMenu(
+                debug_camera,
+                viewport_hovered && !toolbar_hovered,
+                viewport_rect);
+            if (BeginPopup(VIEWPORT_ENTITY_CONTEXT_MENU_ID))
+            {
+                do try!{
+                    try! euid = self.m_selected_entity_id;
+                    try! e = self->findEntityByEuid(euid);
+                    self->drawEntityContextMenuItems(e);
+                    return_value!;
+                };
+                defer EndPopup();
+            }
                 
             // Draw gizmo here.
             self->drawGizmos(debug_camera);
@@ -871,7 +901,122 @@ namespace JEEditor::Editor
             }
             self.m_selected_entity_id = option::value(hits[next_index].1);
         }
-        
+
+        // 右键点击的射线拾取：已选实体在命中列表中时保持其选中（右键作用于
+        // 选中的实体，被部分遮挡时依然有效），否则选中最近的命中实体；
+        // 未命中返回 none 且不改变当前选中（右键空白处不应清空选中）。
+        func pickEntityForContextMenu(
+            self: WorldEditorViewport,
+            camera_ray: towoo::ray)=> option<entity::internal::euid_t>
+        {
+            let mut hits = []mut: vec<mut (real, entity::internal::euid_t)>;
+
+            for (let e : self.m_selectable_entity_selector)
+            {
+                let result = camera_ray->intersect(
+                    e->towoo::get_component:<Transform::Translation>->unwrap,
+                    e->towoo::get_component:<Renderer::Shape>,
+                    true,
+                );
+
+                if (result->is_value)
+                {
+                    hits->add(mut (
+                            (result->unwrap - camera_ray->origin)->length,
+                            e->internal::get_entity_uid->or(0h as entity::internal::euid_t)));
+                }
+            }
+
+            if (hits->empty)
+                return option::none;
+
+            // 按命中距离由近及远排序。
+            sort_in_place(hits, \(da, _), (db, _) = da < db;);
+
+            // 已选实体在命中列表中：菜单作用于它。
+            match (self.m_selected_entity_id)
+            {
+                none?;
+                value(current)?
+                {
+                    for (let (_, euid) : hits)
+                    {
+                        if (euid == current)
+                            return option::value(current);
+                    }
+                }
+            }
+
+            // 否则选中并作用于最近的命中实体。
+            return option::value(hits[0].1);
+        }
+
+        // 视口内右键点击实体：选中该实体并在鼠标处弹出上下文菜单
+        // （菜单内容与实体列表一致，见 drawEntityContextMenuItems）。
+        // 右键按下即激活环视，因此在松开时按位移区分：按下到松开位移
+        // 不超过 RMB_CLICK_MAX_DRAG_PX 才视为点击并做射线拾取。
+        func updateEntityContextMenu(
+            self: WorldEditorViewport,
+            debug_camera: option<entity>,
+            hovered: bool,
+            viewport_rect: option<(ImVec2, ImVec2)>)=> void
+        {
+            // 记录右键按下起点与“按下发生在视口内”标记。
+            if (hovered && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Right))
+            {
+                self.m_rmb_press_pos = GetMousePos();
+                self.m_rmb_press_in_viewport = true;
+            }
+
+            // 未在视口内按下 / 按住（环视）中：不处理。
+            if (!self.m_rmb_press_in_viewport
+                || IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Right))
+                return;
+            self.m_rmb_press_in_viewport = false;
+
+            // 位移超过阈值：这是一次拖拽环视，不弹菜单。
+            let drag = GetMousePos() as vec2 - self.m_rmb_press_pos as vec2;
+            if (drag->length > RMB_CLICK_MAX_DRAG_PX)
+                return;
+
+            match (viewport_rect)
+            {
+                none?;
+                value((rect_min, rect_max))?
+                {
+                    do try!{
+                        try! camera_entity = debug_camera;
+                        try! trans = camera_entity->towoo::get_component:<Transform::Translation>();
+                        try! proj = camera_entity->towoo::get_component:<Camera::Projection>();
+
+                        let mouse_diff = GetMousePos() as vec2 - rect_min as vec2;
+                        let viewport_size = rect_max as vec2 - rect_min as vec2;
+                        let (vpx, vpy) =
+                            ((mouse_diff / viewport_size) - (0.5, 0.5) as vec2) * 2.;
+
+                        try! euid = self->pickEntityForContextMenu(towoo::ray::from(
+                            trans, proj, (vpx, -vpy) as vec2,
+                            camera_entity->towoo::get_component:<Camera::PerspectiveProjection>->is_none));
+
+                        self.m_selected_entity_id = option::value(euid);
+                        OpenPopup(VIEWPORT_ENTITY_CONTEXT_MENU_ID);
+                        return_value!;
+                    };
+                }
+            }
+        }
+
+        // 实体右键菜单内容（视口与实体列表共用，两处由各自的弹出逻辑调用）。
+        public func drawEntityContextMenuItems(
+            self: WorldEditorViewport, e: entity)=> void
+        {
+            if (MenuItem("销毁"))
+            {
+                // 使用 Action 机制发布销毁实体的指令
+                self->doAction(DestroyEntity::try_create(e)->unwrap);
+            }
+        }
+
         // 根据输入控制编辑器摄像机（三维/二维游走）。
         // 操作方式参考 Unity / Blender 等编辑器视口：
         //
