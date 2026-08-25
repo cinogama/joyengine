@@ -85,7 +85,9 @@ namespace JEEditor::Editor::Action
     protected using AddWorldSystem = struct{
         m_system_type_name: string,
         // redo 添加系统之前的世界状态快照，undo 移除系统时据此还原
-        m_world_content: FullWorldContent,
+        // protected：同命名空间的组合动作（如 SwitchSystemGroup）需要
+        // 在移除运行中的系统之前写入此快照
+        protected m_world_content: FullWorldContent,
     }
     {
         public func create(systype: typeinfo)=> AddWorldSystem

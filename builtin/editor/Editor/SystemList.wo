@@ -9,17 +9,20 @@ import pkg::interface;
 import pkg::worst;
 
 import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Forms::AskBox;
 
 import WorldEditorViewport;
 import Action::AddWorldSystem;
 import Action::RemoveWorldSystem;
 import Action::AddRuntimeSystem;
 import Action::RemoveRuntimeSystem;
+import Action::SwitchSystemGroup;
 
 using std;
 using je;
 using je::gui;
 using JEEditor::GUI::Windows;
+using JEEditor::GUI::Forms;
 using JEEditor::Editor::Action;
 
 namespace JEEditor::Editor
@@ -28,7 +31,8 @@ namespace JEEditor::Editor
     //   立即启用：已 add_system 到世界，编辑器内正在运行（如图形系统）；
     //   调试运行时启用：保存在 WorldEditorViewport 中，仅在开始调试执行
     //   或导出时才会 add_system（调试/导出功能暂未支持）。
-    // 增删均通过 doAction 发布，支持撤销/重做并参与未保存判定。
+    // 增删与两组之间的转换均通过 doAction 发布，支持撤销/重做并参与
+    // 未保存判定；移除操作会先弹窗确认。
     using SystemList = struct{
         m_close: mut bool,
     }
@@ -97,42 +101,92 @@ namespace JEEditor::Editor
             return (cname->sub_len(0, sep_pos), cname->sub(sep_pos + 2));
         }
 
-        // 一行系统条目：短名（悬停提示全名）+ 行尾 × 移除按钮；
-        // 返回 true 表示请求移除该系统，具体操作由调用者发布。
-        func showSystemEntryRow(tag: string, full_name: string)=> bool
+        // 移除系统前弹窗确认，避免误触；确认后才发布移除动作
+        func requestRemoveSystem(wctx: WorldEditorViewport, systype: typeinfo, is_world_system: bool)=> void
         {
-            let (ns, short_name) = splitTypeName(full_name);
-            let display_name = (ns != "") ? F"{short_name}（{ns}）" | short_name;
+            let name = systype->name;
+            do AskBox::show("移除系统", F"确认移除系统 \"{name}\" 吗？")
+                ->onYes(func() {
+                    if (is_world_system)
+                        wctx->doAction(RemoveWorldSystem::create(systype, wctx->getWorld));
+                    else
+                        wctx->doAction(RemoveRuntimeSystem::create(systype));
+                })
+            ;
+        }
 
-            do Selectable(F"{display_name}##{tag}");
+        // 一行系统条目：整行命中的叶子节点 + 行尾 × 移除按钮（悬停红色）+
+        // 右键上下文菜单。命名空间已由分组标题展示，行内只显示短名
+        // （悬停提示完整类型名）。
+        func showSystemEntryRow(
+            wctx: WorldEditorViewport, tag: string, systype: typeinfo, is_world_system: bool)=> void
+        {
+            let (_, short_name) = splitTypeName(systype->name);
+            let row_label = F"{short_name}##{tag}";
+
+            // 叶子节点无折叠箭头；SpanAvailWidth 让命中区横跨整行，
+            // AllowItemOverlap 允许行尾 × 按钮抢占重叠区域的悬停与点击
+            do TreeNodeEx(row_label,
+                TreeNodeAttribute::ImGuiTreeNodeFlags_Leaf
+                    + TreeNodeAttribute::ImGuiTreeNodeFlags_AllowItemOverlap
+                    + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
+                    + TreeNodeAttribute::ImGuiTreeNodeFlags_NoTreePushOnOpen);
             if (IsItemHovered())
-                do SetTooltip(full_name);
+                do SetTooltip(systype->name);
 
+            // 右键系统项弹出菜单；显式绑定到行的标签上，且紧跟行项调用
+            // （悬停检测基于最后绘制的项），避免误绑到随后的 × 按钮
+            if (BeginPopupContextItemLabel(row_label))
+            {
+                if (MenuItem("移除"))
+                    requestRemoveSystem(wctx, systype, is_world_system);
+
+                Separator();
+
+                let switch_label = is_world_system
+                    ? "转换为调试运行时启用" | "转换为立即启用";
+                if (MenuItem(switch_label))
+                    wctx->doAction(SwitchSystemGroup::create(
+                        systype, wctx->getWorld, !is_world_system));
+
+                defer EndPopup();
+            }
+
+            // 行尾 × 移除按钮：平时与行融为一体，悬停时红色提示危险操作
             SameLine();
             let (cursor_x, cursor_y) = GetCursorPos();
             let (avail_width, _) = GetContentRegionAvail();
             SetCursorPos((cursor_x + avail_width - 28., cursor_y));
-            return ButtonSize(F"×##{tag}_remove", (24., 0.));
+            PushStyleColor(ImGuiCol::ImGuiCol_Button, (0, 0, 0, 0));
+            PushStyleColor(ImGuiCol::ImGuiCol_ButtonHovered, (140, 40, 40, 255));
+            PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive, (190, 55, 55, 255));
+            if (ButtonSize(F"×##{tag}_remove", (24., 0.)))
+                requestRemoveSystem(wctx, systype, is_world_system);
+            PopStyleColor(3);
         }
 
-        // 按命名空间分组绘制一组系统；返回该组绘制的条目数
+        // 绘制一组系统：带数量的分组标题 + 按命名空间分小节的条目列表
         func showSystemGroup(
             wctx: WorldEditorViewport,
             systems: array<typeinfo>,
             tag_prefix: string,
-            on_remove: (WorldEditorViewport, typeinfo)=> void)=> int
+            is_world_system: bool,
+            title: string,
+            description: string,
+            empty_hint: string)=> void
         {
-            let mut visible_count = 0;
-            let mut last_namespace = "";
-            for (let systype : systems |> sort(\l, r = l->name < r->name;))
-            {
-                let name = systype->name;
-                // 编辑器内部系统（Editor::*）不在系统列表中显示
-                if (name->begin_with("Editor::"))
-                    continue;
+            // 编辑器内部系统（Editor::*）不在系统列表中显示
+            let visible = systems
+                ->forall(\stype = !stype->name->begin_with("Editor::");)
+                |> sort(\l, r = l->name < r->name;);
 
-                visible_count += 1;
-                let (ns, _) = splitTypeName(name);
+            SeparatorText(F"{title}（{visible->len}）");
+            TextDisabled(description);
+
+            let mut last_namespace = "";
+            for (let systype : visible)
+            {
+                let (ns, _) = splitTypeName(systype->name);
                 if (ns != last_namespace)
                 {
                     if (ns != "")
@@ -140,20 +194,11 @@ namespace JEEditor::Editor
                     last_namespace = ns;
                 }
 
-                if (showSystemEntryRow(F"{tag_prefix}_{name}", name))
-                    do on_remove(wctx, systype);
+                showSystemEntryRow(wctx, F"{tag_prefix}_{systype->name}", systype, is_world_system);
             }
-            return visible_count;
-        }
 
-        func requestRemoveWorldSystem(wctx: WorldEditorViewport, systype: typeinfo)=> void
-        {
-            // 创建时系统仍在运行，RemoveWorldSystem 会先记录当前世界状态
-            wctx->doAction(RemoveWorldSystem::create(systype, wctx->getWorld));
-        }
-        func requestRemoveRuntimeSystem(wctx: WorldEditorViewport, systype: typeinfo)=> void
-        {
-            wctx->doAction(RemoveRuntimeSystem::create(systype));
+            if (visible->len == 0)
+                TextDisabled(empty_hint);
         }
 
         // “添加系统”选择弹窗：先选择添加到哪一组，再搜索过滤 +
@@ -237,27 +282,25 @@ namespace JEEditor::Editor
 
         func showWorldSystems(wctx: WorldEditorViewport)
         {
-            SeparatorText("立即启用");
-            TextDisabled("已添加到世界，正在编辑器中运行");
-
-            let world_systems_count = showSystemGroup(
+            showSystemGroup(
                 wctx,
                 wctx->getWorld->internal::get_all_systems,
                 "world",
-                requestRemoveWorldSystem);
-            if (world_systems_count == 0)
-                TextDisabled("（没有立即启用的系统）");
+                true,
+                "立即启用",
+                "已添加到世界，正在编辑器中运行",
+                "（没有立即启用的系统）");
 
-            SeparatorText("调试运行时启用");
-            TextDisabled("保存在世界中，开始调试执行或导出时才会运行");
+            Spacing();
 
-            let runtime_systems_count = showSystemGroup(
+            showSystemGroup(
                 wctx,
                 wctx->getRuntimeSystems(),
                 "runtime",
-                requestRemoveRuntimeSystem);
-            if (runtime_systems_count == 0)
-                TextDisabled("（没有调试运行时启用的系统）");
+                false,
+                "调试运行时启用",
+                "保存在世界中，开始调试执行或导出时才会运行",
+                "（没有调试运行时启用的系统）");
 
             Spacing();
             if (ButtonSize("添加系统", (-1., 0.)))

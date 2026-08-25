@@ -1,0 +1,90 @@
+import woo::std;
+
+import je;
+import je::ecs;
+import je::typeinfo;
+
+import pkg::interface;
+
+import builtin::editor::Editor::WorldEditorViewport;
+
+import IAction;
+import AddWorldSystem;
+import AddRuntimeSystem;
+
+using je;
+
+namespace JEEditor::Editor::Action
+{
+    // 在“立即启用”与“调试运行时启用”两组之间移动系统。复用既有动作组合实现：
+    //   立即启用侧 —— AddWorldSystem：redo=刷新快照后 add_system，
+    //     undo=移除系统并按快照还原世界（与 RemoveWorldSystem 相同的范式）；
+    //   调试运行时侧 —— AddRuntimeSystem：redo=加入调试列表，undo=移出调试列表。
+    // 转换在操作历史中作为单个动作出现，撤销/重做一次即可整组还原。
+    protected using SwitchSystemGroup = struct{
+        m_system_type_name: string,
+        // 转换目标分组：true=立即启用，false=调试运行时启用
+        m_to_immediate: bool,
+        m_world_side: AddWorldSystem,
+        m_runtime_side: AddRuntimeSystem,
+    }
+    {
+        public func create(systype: typeinfo, w: world, to_immediate: bool)=> SwitchSystemGroup
+            where require!(SwitchSystemGroup: IAction);
+        {
+            let world_side = AddWorldSystem::create(systype);
+
+            // 从立即启用转出时系统仍在运行：记录当前世界状态（含该系统
+            // 运行期间对实体组件的修改），移除后世界停留在此状态；
+            // 反向转换无需此快照，重新启用前会按需刷新
+            if (!to_immediate)
+                do world_side.m_world_content->refresh_from(w);
+
+            return SwitchSystemGroup{
+                m_system_type_name = systype->name,
+                m_to_immediate = to_immediate,
+                m_world_side = world_side,
+                m_runtime_side = AddRuntimeSystem::create(systype),
+            };
+        }
+
+        public func redo(self: SwitchSystemGroup, w: WorldEditorViewport)=> bool
+        {
+            // 调试运行时 -> 立即启用：移出调试列表，刷新快照后 add_system
+            if (self.m_to_immediate)
+            {
+                do self.m_runtime_side->undo(w);
+                return self.m_world_side->redo(w);
+            }
+
+            // 立即启用 -> 调试运行时：移除系统并按快照还原世界，加入调试列表
+            let ok = self.m_world_side->undo(w);
+            if (ok)
+                do self.m_runtime_side->redo(w);
+            return ok;
+        }
+
+        public func undo(self: SwitchSystemGroup, w: WorldEditorViewport)=> bool
+        {
+            // 撤销“转立即启用”：移除系统并按快照还原世界，放回调试列表
+            if (self.m_to_immediate)
+            {
+                let ok = self.m_world_side->undo(w);
+                if (ok)
+                    do self.m_runtime_side->redo(w);
+                return ok;
+            }
+
+            // 撤销“转调试运行时”：移出调试列表，刷新快照后重新 add_system
+            do self.m_runtime_side->undo(w);
+            return self.m_world_side->redo(w);
+        }
+
+        public func describe(self: SwitchSystemGroup)=> string
+        {
+            if (self.m_to_immediate)
+                return F"转换系统 {self.m_system_type_name} 为立即启用";
+            return F"转换系统 {self.m_system_type_name} 为调试运行时启用";
+        }
+    }
+}
