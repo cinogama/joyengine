@@ -79,17 +79,6 @@ namespace JEEditor::GUI::Windows
         }
         public func run(self)=> bool;
     };
-
-    // 模态窗口契约：实现 `isModal` 并返回 true 的窗口由 Windows::show 以模态弹窗展示。
-    // 也可用 Windows::showModal 强制任意窗口以模态方式展示。
-    interface! IModalWindow
-    {
-        public func isModal(self)=> bool
-        {
-            do self;
-            return true;
-        }
-    };
     
     using WindowsState = struct{
         m_is_unique: bool,
@@ -374,6 +363,7 @@ namespace JEEditor::GUI::Windows
 
     // 强制以模态方式展示任意窗口（无需实现 isModal）
     public func showModal<T>(window_instance: T)=> option<IWindows>
+    // where require!(T: IWindows);
     {
         return _launch_window(IWindows::create(window_instance), true);
     }

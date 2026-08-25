@@ -24,7 +24,7 @@ namespace JEEditor::GUI::Forms
     }
     {
         func create(title: string, text: string, default: string)=> InputBox
-            where require!(InputBox: Windows::IWindows, Windows::IModalWindow);
+            where require!(InputBox: Windows::IWindows);
         {
             return InputBox{
                 m_title = title,
@@ -91,20 +91,11 @@ namespace JEEditor::GUI::Forms
             return !self.m_close;
         }
         
-        public func showUnique(title: string, text: string, default: string)
-        {
-            let inputbox = InputBox::create(title, text, default);
-            match (Windows::show(inputbox))
-            {
-            value(_)?
-                return option::value(inputbox);
-            none?
-                return option::none;
-            }
-        }
         public func show(title: string, text: string, default: string)
         {
-            return showUnique(title + "$ID", text, default)->unwrap;
+            let inputbox = InputBox::create(title + "$ID", text, default);
+            do Windows::show(inputbox);
+            return inputbox;
         }
         public func then(self: InputBox, callback: (string)=> void)
         {

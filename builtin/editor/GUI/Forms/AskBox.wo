@@ -24,7 +24,7 @@ namespace JEEditor::GUI::Forms
     }
     {
         public func create(title: string, text: string)=> AskBox
-            where require!(AskBox: Windows::IWindows, Windows::IModalWindow);
+            where require!(AskBox: Windows::IWindows);
         {
             return AskBox{
                 m_title = title,
@@ -100,20 +100,11 @@ namespace JEEditor::GUI::Forms
             return !self.m_close;
         }
         
-        public func showUnique(title: string, text: string)
-        {
-            let askbox = AskBox::create(title, text);
-            match (Windows::show(askbox))
-            {
-            value(_)?
-                return option::value(askbox);
-            none?
-                return option::none;
-            }
-        }
         public func show(title: string, text: string)
         {
-            return showUnique(title + "$ID", text)->unwrap;
+            let askbox = AskBox::create(title + "$ID", text);
+            do Windows::show(askbox);
+            return askbox;
         }
         public func onYes(self: AskBox, callback: ()=> void)
         {

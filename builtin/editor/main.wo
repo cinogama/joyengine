@@ -63,20 +63,14 @@ func main()
     // 创建一个 Universe，之后编辑器将在这上面运行
     let u = Inspector::Universe::UniverseCtx::instance()->getUniverse();
     gui::register_exit_callback(func(){
-            match (AskBox::showUnique(
-                "即将退出编辑器", 
-                "JoyEngine 将在所有编辑器窗口关闭后退出，继续关闭？"))
-            {
-                none?;
-                value(askbox)?
-                {
-                    do askbox->onYes(
-                        func()
-                        {
-                            Shutdown::editorShutdownRequest(u);
-                        });
-                }
-            }
+            do AskBox::show(
+                "即将退出编辑器",
+                "JoyEngine 将在所有编辑器窗口关闭后退出，继续关闭？")
+                ->onYes(
+                    func()
+                    {
+                        Shutdown::editorShutdownRequest(u);
+                    });
             return false;
         });
         

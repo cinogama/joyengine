@@ -362,43 +362,31 @@ namespace JEEditor::Editor
                 value(path)?
                 {
                     // 已保存：是=保存后关闭，否=不保存直接关闭，取消=留在原地
-                    match (AskBox::showUnique(
+                    do AskBox::show(
                             F"关闭##{self.m_world_instance}",
-                            F"关闭前保存对 \"{self.m_name}\" 的修改吗？"))
-                    {
-                        none?;
-                        value(askbox)?
-                        {
-                            do askbox
-                                ->onYes(func() {
-                                        if (self->saveWorldTo(path))
-                                            self.m_close =
-                                                CloseRequest::CLOSE_AND_DESTROY_WORLD;
-                                    })
-                                ->onNo(func() {
-                                        self.m_close =
-                                            CloseRequest::CLOSE_AND_DESTROY_WORLD;
-                                    })
-                                ;
-                        }
-                    }
+                            F"关闭前保存对 \"{self.m_name}\" 的修改吗？")
+                        ->onYes(func() {
+                                if (self->saveWorldTo(path))
+                                    self.m_close =
+                                        CloseRequest::CLOSE_AND_DESTROY_WORLD;
+                            })
+                        ->onNo(func() {
+                                self.m_close =
+                                    CloseRequest::CLOSE_AND_DESTROY_WORLD;
+                            })
+                        ;
                 }
                 none?
                 {
                     // 未保存：是=继续关闭，否/取消=留在原地
-                    match (AskBox::showUnique(
+                    do AskBox::show(
                             F"关闭##{self.m_world_instance}",
-                            F"世界 \"{self.m_name}\" 尚未保存，确认关闭吗？"))
-                    {
-                        none?;
-                        value(askbox)?
-                            do askbox
-                                ->onYes(func() {
-                                        self.m_close =
-                                            CloseRequest::CLOSE_AND_DESTROY_WORLD;
-                                    })
-                                ;
-                    }
+                            F"世界 \"{self.m_name}\" 尚未保存，确认关闭吗？")
+                        ->onYes(func() {
+                                self.m_close =
+                                    CloseRequest::CLOSE_AND_DESTROY_WORLD;
+                            })
+                        ;
                 }
             }
             
@@ -415,18 +403,12 @@ namespace JEEditor::Editor
         {
             func inputForRenamingWorld()=> void
             {
-                match (InputBox::showUnique("重命名世界", "请输入新的世界名称", self.m_name))
-                {
-                    value(form)?
-                        form -> then(
-                            func(new_name)
-                            {
-                                self->dropAndRename(new_name);
-                            });
-                    none?
-                        MsgBox::err("重命名失败", "已经有一个正在重命名的世界，无法执行操作");
-                }
-                
+                do InputBox::show("重命名世界", "请输入新的世界名称", self.m_name)
+                    -> then(
+                        func(new_name)
+                        {
+                            self->dropAndRename(new_name);
+                        });
             }
             
             return option::value <|
@@ -2065,27 +2047,18 @@ namespace JEEditor::Editor
                 
                 if (isfile(dst))
                 {
-                    // 唯一窗口：已有覆盖确认对话框打开时忽略
-                    match (AskBox::showUnique(
-                            "保存", F"目录中已存在 \"{full_name}\"，确认覆盖吗？"))
-                    {
-                        none?;
-                        value(askbox)?
-                            do askbox->onYes(\= saveTo(dst););
-                    }
+                    // 已存在同名文件时弹出覆盖确认
+                    do AskBox::show(
+                            "保存", F"目录中已存在 \"{full_name}\"，确认覆盖吗？")
+                        ->onYes(\= saveTo(dst););
                 }
                 else
                     saveTo(dst);
             }
-            
-            // 唯一窗口：已有保存对话框打开时忽略本次放置请求
-            match (InputBox::showUnique(
-                    "保存世界", "请输入保存的文件名：", F"{self.m_name}.je4world"))
-            {
-                none?;
-                value(inputbox)?
-                    do inputbox->then(saveWorldAs);
-            }
+
+            do InputBox::show(
+                    "保存世界", "请输入保存的文件名：", F"{self.m_name}.je4world")
+                ->then(saveWorldAs);
         }
         
         public func getWorld(self: WorldEditorViewport)=> world

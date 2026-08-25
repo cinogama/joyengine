@@ -24,7 +24,7 @@ namespace JEEditor::GUI::Forms
     }
     {
         public func create(title: string, text: string, icon: option<texture>)=> MsgBox
-            where require!(MsgBox: Windows::IWindows, Windows::IModalWindow);
+            where require!(MsgBox: Windows::IWindows);
         {
             return MsgBox{
                 m_title = title,
