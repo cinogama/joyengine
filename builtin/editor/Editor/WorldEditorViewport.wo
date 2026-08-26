@@ -1260,6 +1260,74 @@ namespace JEEditor::Editor
             }
         }
 
+        // 调试游走摄像机是否处于 2D（正交）模式：不单独记录状态，直接以
+        // 摄像机实际投影组件为准（挂 OrthoProjection 视为 2D），与渲染
+        // 系统 anyof(OrthoProjection, PerspectiveProjection) 的选择规则
+        // 一致，调试摄像机被重建后天然回到透视模式。
+        func isDebugCamera2DMode(camera: entity)=> bool
+        {
+            return !(camera->towoo::get_component:<Camera::OrthoProjection>->is_none);
+        }
+
+        // 切换调试游走摄像机的 2D（正交）模式：
+        // 开 = 摘下 PerspectiveProjection、挂上 OrthoProjection（scale 取
+        //      默认值 1），并把旋转归零（quat::ident，正对 XY 平面）；
+        // 关 = 摘下 OrthoProjection、挂回 PerspectiveProjection（angle 取
+        //      默认值 75），旋转保持 2D 模式下的 ident，可继续环视。
+        // 组件增删走命令缓冲延迟生效（增删的是不同组件，无同帧冲突）；
+        // 只挂在编辑器内部摄像机上（Editor::Invisible，保存时整个实体
+        // 被跳过），不进入编辑历史与存档。
+        func setDebugCamera2DMode(
+            self: WorldEditorViewport, camera: entity, enabled: bool)=> void
+        {
+            if (enabled)
+            {
+                // 切换瞬间不应处于环视中：结束环视并解锁鼠标
+                if (self.m_is_look_active)
+                {
+                    self.m_is_look_active = false;
+                    input::set_lock_mouse(false);
+                }
+
+                if (camera->towoo::get_component:<Camera::PerspectiveProjection>->is_value)
+                    do camera->towoo::remove_component:<Camera::PerspectiveProjection>();
+                if (camera->towoo::get_component:<Camera::OrthoProjection>->is_none)
+                {
+                    match (camera->towoo::add_component:<Camera::OrthoProjection>())
+                    {
+                        none?
+                            MsgBox::err(
+                                "2D 模式", "无法为调试摄像机创建 Camera::OrthoProjection 组件");
+                        value(ortho)?
+                            ortho.scale->set(1.);
+                    }
+                }
+
+                // 旋转归零：2D 镜头正对 XY 平面；环视累积量（m_rotation_x/y）
+                // 一并复位，保证切回 3D 后环视从当前朝向继续
+                camera->towoo::get_component:<Transform::LocalRotation>
+                    ->unwrap.rot->set(quat::ident);
+                self.m_rotation_x = quat::ident;
+                self.m_rotation_y = quat::ident;
+            }
+            else
+            {
+                if (camera->towoo::get_component:<Camera::OrthoProjection>->is_value)
+                    do camera->towoo::remove_component:<Camera::OrthoProjection>();
+                if (camera->towoo::get_component:<Camera::PerspectiveProjection>->is_none)
+                {
+                    match (camera->towoo::add_component:<Camera::PerspectiveProjection>())
+                    {
+                        none?
+                            MsgBox::err(
+                                "2D 模式", "无法为调试摄像机创建 Camera::PerspectiveProjection 组件");
+                        value(persp)?
+                            persp.angle->set(75.);
+                    }
+                }
+            }
+        }
+
         func sendMouseClickToChoiceEntityRequest(self: WorldEditorViewport, camera_ray: towoo::ray)
         {
             // 收集所有被射线命中的实体，并记录命中距离。
@@ -1572,8 +1640,15 @@ namespace JEEditor::Editor
         //     鼠标滚轮           — 沿视线方向推拉
         //
         //   二维（正交）摄像机：
+        //     鼠标右键拖拽       — 屏幕平面平移（阈值内松开仍为点击实体弹菜单）
         //     鼠标中键拖拽       — 屏幕平面平移
-        //     鼠标滚轮           — 缩放（调整正交 scale）
+        //     Ctrl + 滚轮        — 缩放画面（调整正交 scale；方向与透视推拉相反）
+        //     滚轮               — 调整摄像机深度（LocalPosition 的 z 轴）
+        //
+        //   投影模式由工具栏“2D 模式”开关切换（setDebugCamera2DMode），
+        //   以摄像机当前挂着的 PerspectiveProjection / OrthoProjection
+        //   组件决定走哪套操作；右键环视仅透视模式提供，2D 模式下旋转
+        //   恒为 quat::ident（正对 XY 平面）。
         //
         func updateCameraControl(
             self: WorldEditorViewport,
@@ -1768,39 +1843,64 @@ namespace JEEditor::Editor
         {
             let curPos = pos.pos->get;
             let curRot = rot.rot->get;
-            
+
             let right = curRot * ((1., 0., 0.) as vec3);
             let up = curRot * ((0., 1., 0.) as vec3);
-            
+
+            // ---- 激活 / 停止平移 ----
+            // 右键按住拖动平移：与透视环视共用同一套“位移超过阈值才激活”
+            // 的规则（阈值内松开视为点击实体弹菜单，见 updateViewportRightClick）；
+            // 中键拖拽同样保持平移。
+            if (self.m_rmb_press_in_viewport
+                && !self.m_is_pan_active
+                && (GetMousePos() as vec2 - self.m_rmb_press_pos as vec2)->length
+                    > RMB_CLICK_MAX_DRAG_PX)
+            {
+                self.m_is_pan_active = true;
+            }
             if (hovered && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Middle))
                 self.m_is_pan_active = true;
-            if (!IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Middle))
+            if (!IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Right)
+                && !IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Middle))
                 self.m_is_pan_active = false;
-                
+
             let (mdx, mdy) = GetMouseDeltaPos();
             let wheel = GetMouseWheel();
             let wv = wheel.1;
-            
+
             let mut newPos = curPos;
             let mut moved = false;
-            
+
+            // ---- 平移（右键/中键拖拽）----
             if (self.m_is_pan_active)
             {
                 let scale = ortho.scale->get;
                 let panFactor = scale * CAMERA_PAN_SENSITIVITY;
-                newPos = newPos + right * (mdx * panFactor);
-                newPos = newPos - up * (mdy * panFactor);
+                // 与透视平移同向：内容跟随鼠标移动
+                newPos = newPos + right * (-mdx * panFactor);
+                newPos = newPos - up * (-mdy * panFactor);
                 moved = true;
             }
-            
+
+            // ---- 滚轮 ----
             if (hovered && wv != 0.)
             {
                 let scale = ortho.scale->get;
-                ortho.scale->set(mathf::clamp(
-                        scale * (1. - wv * 0.1),
-                        CAMERA_MIN_ORTHO_SCALE, 10000.));
+                if (IsKeyDown(ImGuiKey::ImGuiMod_Ctrl))
+                    // Ctrl+滚轮缩放画面；方向与透视推拉相反（滚轮向上 = 画面远离）
+                    ortho.scale->set(mathf::clamp(
+                            scale * (1. + wv * 0.1),
+                            CAMERA_MIN_ORTHO_SCALE, 10000.));
+                else
+                {
+                    // 裸滚轮调整摄像机深度（LocalPosition 的 z 轴），
+                    // 步长随当前缩放比例缩放，与平移保持同一手感
+                    newPos = (newPos[0], newPos[1], newPos[2]
+                        + wv * CAMERA_WHEEL_DOLLY * scale) as vec3;
+                    moved = true;
+                }
             }
-            
+
             if (moved)
                 pos.pos->set(newPos);
         }
@@ -2633,6 +2733,31 @@ namespace JEEditor::Editor
                     toolbar_hovered = true;
             }
             
+            SameLine();
+
+            // 编辑器摄像机的 2D（正交）模式开关：切换透视/正交投影；
+            // 切到 2D 时旋转归零，操作变为中键平移 + 滚轮缩放，
+            // 见 setDebugCamera2DMode 与 updateCameraControl 的注释。
+            match (debug_camera)
+            {
+                none?;
+                value(camera)?
+                {
+                    match (CheckBox("2D 模式", isDebugCamera2DMode(camera)))
+                    {
+                        none?;
+                        value(v)?
+                            self->setDebugCamera2DMode(camera, v);
+                    }
+                    if (IsItemHovered())
+                    {
+                        toolbar_hovered = true;
+                        do SetTooltip(
+                            "切换编辑器摄像机透视/正交投影（2D 模式下旋转归零，右键/中键平移，Ctrl+滚轮缩放，滚轮调深度）");
+                    }
+                }
+            }
+
             SameLine();
 
             // 右键环视时是否锁定鼠标（虚拟机等环境下建议关闭）
