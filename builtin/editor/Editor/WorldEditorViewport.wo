@@ -634,20 +634,50 @@ namespace JEEditor::Editor
                     let (fbw, fbh) = fb->size();
                     let fb_rsize = (fbw as real, fbh as real) as vec2;
                     let debug_view_proj = camera_projection->get_view_proj_mat;
+                    let debug_view = camera_projection->get_view_mat;
                     let debug_cam_pos = debug_camera_trans->get_global_pos;
+                    let debug_cam_rot = debug_camera_trans->get_global_rot;
                     let debug_cam_forward =
-                        debug_camera_trans->get_global_rot * ((0., 0., 1.) as vec3);
+                        debug_cam_rot * ((0., 0., 1.) as vec3);
 
-                    // 单条视锥体棱：单位 X 轴线段旋到 ab 方向绘制
+                    // 视锥体棱线的眼空间裁剪参数（见 gizmoClipEyeSegmentToScreen）：
+                    // 透视为 tan 半 FOV（乘纵横比得横向），正交为可视半宽高
+                    let debug_znear = camera_projection.znear->get;
+                    let debug_is_persp = !(
+                        camera_entity->towoo::get_component:<Camera::PerspectiveProjection>()->is_none);
+                    let mut clip_sy = 0.;
+                    if (debug_is_persp)
+                        clip_sy = mathf::tan(
+                            camera_entity->towoo::get_component:<Camera::PerspectiveProjection>->unwrap.angle->get
+                            * 0.5 * mathf::DEG2RAD);
+                    else
+                        // 正交纵向可视半高为 ORTHO_PROJECTION_RATIO（5.0）/ scale
+                        clip_sy = 5. / camera_entity
+                            ->towoo::get_component:<Camera::OrthoProjection>->unwrap.scale->get;
+                    let clip_sx = clip_sy * fb_rsize[0] / fb_rsize[1];
+
+                    // 单条视锥体棱：先在眼空间对调试摄像机做屏幕边界裁剪
+                    //（远平面不裁，超出 zfar 的部分由 GizmoSolid 钳制 z 绘制），
+                    // 再把单位 X 轴线段旋到 ab 方向绘制
                     func drawFrustumEdge(
                         a: vec3, b: vec3, color: (real, real, real, real))=> void
                     {
-                        let ab = b - a;
+                        let clipped = gizmoClipEyeSegmentToScreen(
+                            gizmoMat4MulPoint(debug_view, a),
+                            gizmoMat4MulPoint(debug_view, b),
+                            debug_znear, clip_sx, clip_sy, debug_is_persp);
+                        if (clipped->is_none)
+                            return;
+                        let (ca, cb) = clipped->unwrap;
+                        let wa = debug_cam_pos + debug_cam_rot * ca;
+                        let wb = debug_cam_pos + debug_cam_rot * cb;
+
+                        let ab = wb - wa;
                         let len = ab->length;
                         if (len < 0.0001)
                             return;
                         drawSolid(
-                            a, gizmoEdgeRotation(ab), (len, len, len) as vec3,
+                            wa, gizmoEdgeRotation(ab), (len, len, len) as vec3,
                             GIZMO_LINE_X, color);
                     }
 
@@ -1667,6 +1697,67 @@ namespace JEEditor::Editor
             z: real)=> vec3
         {
             return cam_pos + cam_rot * gizmoMat4MulPoint(inv_proj, (x, y, z) as vec3);
+        }
+
+        // 眼空间线段对“屏幕边界 + 近平面”的参数化裁剪（Liang-Barsky），
+        // 返回裁剪后的线段，整段在外时为 none。
+        // 透视的屏幕边界是过摄像机原点的四个锥面（|x| ≤ sx*z、|y| ≤ sy*z），
+        // 正交是四个竖直面（|x| ≤ sx、|y| ≤ sy）；二者均附加近平面 z ≥ znear，
+        // 使裁剪后的端点恒在摄像机前方（w > 0，避免投影退化）。不含远平面：
+        // 超出 zfar 的部分交由 GizmoSolid 顶点着色器钳制 z 绘制。把线段
+        // 裁进屏幕边界之内，是为了避免两端都远超视口的线段被 GPU 按保护带
+        //（guardband）整段剔除——那会让穿越屏幕的视锥体棱线整条消失。
+        func gizmoClipEyeSegmentToScreen(
+            a: vec3, b: vec3,
+            znear: real, sx: real, sy: real, is_persp: bool)=> option<(vec3, vec3)>
+        {
+            let d = b - a;
+
+            // 各半空间约束 c·p ≤ 0 的系数（cx, cy, cz, off）
+            let planes = is_persp
+                ? ([
+                    (1., 0., -sx, 0.),
+                    (-1., 0., -sx, 0.),
+                    (0., 1., -sy, 0.),
+                    (0., -1., -sy, 0.),
+                    (0., 0., -1., znear),])
+                | ([
+                    (1., 0., 0., -sx),
+                    (-1., 0., 0., -sx),
+                    (0., 1., 0., -sy),
+                    (0., -1., 0., -sy),
+                    (0., 0., -1., znear),]);
+
+            let mut t0 = 0.;
+            let mut t1 = 1.;
+            for (let (cx, cy, cz, off) : planes)
+            {
+                let fa = cx * a[0] + cy * a[1] + cz * a[2] + off;
+                let fd = cx * d[0] + cy * d[1] + cz * d[2];
+
+                // 两端都在该平面外：整段不可见
+                if (fa > 0. && fa + fd > 0.)
+                    return option::none;
+                if (mathf::abs(fd) > 0.0000001)
+                {
+                    let t = -fa / fd;
+                    if (fa > 0.)
+                    {
+                        // 从平面外进入：抬高起点
+                        if (t > t0)
+                            t0 = t;
+                    }
+                    else if (fa + fd > 0.)
+                    {
+                        // 从平面内离开：压低终点
+                        if (t < t1)
+                            t1 = t;
+                    }
+                }
+            }
+            if (t0 >= t1)
+                return option::none;
+            return option::value((a + d * t0, a + d * t1));
         }
 
         // 把单位 X 轴线段旋转到 dir 方向的四元数（用于绘制视锥体棱）：

@@ -35,8 +35,13 @@ WOSHADER_FRAGMENT_OUT!
 
 public func vert(v: vin)
 {
+    // 裁剪空间 z 钳制回 [0, w]（同 GizmoSolid）：绕过 GPU 固定功能的
+    // 视锥体裁剪，摄像机实体位于游走摄像机 zfar 之外时图标仍作为
+    // 视锥体线框的锚点完整绘制；w <= 0（摄像机身后）仍被 x/y 裁剪剔除。
+    let clip = JE_MVP * vec4!(v.vertex, 1.);
+    let clip_w = max(clip->w, 0.);
     return v2f{
-        pos = JE_MVP * vec4!(v.vertex, 1.),
+        pos = vec4!(clip->x, clip->y, clamp(clip->z, 0., clip_w), clip->w),
         uv = uvtrans(v.uv, JE_UV_TILING, JE_UV_OFFSET),
     };
 }
