@@ -77,7 +77,18 @@ namespace JEEditor::Editor::Action
                         Editor::EntityId::type::typeinfo->name,
                         new_table());
                 none?
-                    logerr("粘贴实体：实体快照缺少 components 数据");
+                {
+                    // 差异数据（挂预设体且与预设体完全一致的实体快照）
+                    // 没有 components 键，这是合法形态：补建空表并加上
+                    // Editor::EntityId——还原端展开差异数据时（apply）会
+                    // 把它并入预设体的组件集合，由原生侧构造时分配全新
+                    // 的调试 EUID
+                    let components_dat = new_table();
+                    components_dat->set(
+                        Editor::EntityId::type::typeinfo->name,
+                        new_table());
+                    content->set("components", components_dat);
+                }
             }
 
             return FullEntityContent{
@@ -147,6 +158,10 @@ namespace JEEditor::Editor::Action
                         {
                             logerr(
                                 "创建实体：起始组件集合中的 Editor::EntityId 未分配 EUID");
+                            // 销毁刚创建的实体再报失败：Practice 对失败的
+                            // 动作会推迟一帧重试，留着它会重复创建出多个
+                            // 无 EUID 的泄漏实体
+                            do e->close;
                             return false;
                         }
                         value(eid)?
