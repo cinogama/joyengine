@@ -2420,7 +2420,9 @@ public func frag(vf: v2f)
                     {
                         auto& light2d = *light2d_p;
 
-                        assert(light2d.translation != nullptr && light2d.color != nullptr && light2d.shaders != nullptr && light2d.shape != nullptr);
+                        assert(light2d.translation != nullptr
+                            && light2d.shaders != nullptr 
+                            && light2d.shape != nullptr);
 
                         // bind_entity_textures allocates the group, binds default at slot 0,
                         // and binds user textures (which may override slot 0 or other slots).
@@ -2456,7 +2458,8 @@ public func frag(vf: v2f)
                             : m_default_resources.default_shaders_list;
 
                         // 传入 Light2D 所需的颜色、衰减信息
-                        math::vec4 light_color = light2d.color == nullptr ? math::vec4(1.f, 1.f, 1.f, 1.f) : light2d.color->color;
+                        math::vec4 light_color = 
+                            light2d.color == nullptr ? math::vec4(1.f, 1.f, 1.f, 1.f) : light2d.color->color;
                         if (light2d.gain != nullptr)
                             light_color.w *= light2d.gain->gain;
 
