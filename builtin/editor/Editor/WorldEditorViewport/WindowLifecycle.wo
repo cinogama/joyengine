@@ -372,7 +372,6 @@ namespace JEEditor::Editor::WorldEditorViewport
             {
                 let (w, h) = GetContentRegionAvail();
                 ImageSize(fbtex, w, h);
-                viewport_hovered = IsItemHovered();
                 viewport_rect = option::value <| GetItemRect();
             }
         }
@@ -388,6 +387,28 @@ namespace JEEditor::Editor::WorldEditorViewport
                 // 未保存标记悬停时同样抑制视口内的点击选取
                 if (self->drawUnsavedMark(rect_min, rect_max))
                     toolbar_hovered = true;
+            }
+        }
+
+        // 视口输入保护：Image 是无 ID 的展示型 widget，悬停它时 ImGui 的
+        // g.HoveredId 恒为 0，未 dock 的浮动窗口会把视口内按下左键当成
+        // “点击窗口空白处”而进入窗口移动状态，拖拽游标时窗口会跟着鼠标走。
+        // 在所有覆盖 UI 之后提交一个与视口同矩形的隐形按钮，让视口成为
+        // 真正的交互 item（悬停/按下时 HoveredId/ActiveId 非空，ImGui 不再
+        // 启动窗口移动）；放最后提交，则不会抢占先提交的工具栏按钮的悬停。
+        match (viewport_rect)
+        {
+            none?;
+            value((rect_min, rect_max))?
+            {
+                let rect_size =
+                    (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1);
+                if (rect_size.0 > 0. && rect_size.1 > 0.)
+                {
+                    SetCursorScreenPos(rect_min);
+                    do InvisibleButton("##viewport_mouse_guard", rect_size);
+                    viewport_hovered = IsItemHovered();
+                }
             }
         }
 
