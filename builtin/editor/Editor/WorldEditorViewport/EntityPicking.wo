@@ -19,6 +19,7 @@ import pkg::try;
 import pkg::worst;
 
 import builtin::editor::Editor::Action::DestroyEntity;
+import builtin::editor::Editor::ComponentPresets;
 
 import Definition;
 import GizmoMath;
@@ -30,6 +31,7 @@ using je::gui;
 using iterator;
 
 using JEEditor::Editor::Action;
+using JEEditor::Editor::ComponentPresets;
 
 namespace JEEditor::Editor::WorldEditorViewport
 {
@@ -328,6 +330,13 @@ namespace JEEditor::Editor::WorldEditorViewport
     public func drawEntityContextMenuItems(
         self: WorldEditorViewport, e: entity)=> void
     {
+        // 常用组件组合子菜单：点击即把该组合内实体缺少的组件整组添加
+        if (BeginMenu("添加常用组件"))
+        {
+            ComponentPresets::showAddPresetMenu(self, e);
+            defer EndMenu();
+        }
+
         if (MenuItem("销毁"))
         {
             // 使用 Action 机制发布销毁实体的指令

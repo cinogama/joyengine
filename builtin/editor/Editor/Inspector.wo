@@ -13,6 +13,7 @@ import builtin::editor::GUI::Windows;
 
 import WorldEditorViewport;
 import EditSession;
+import ComponentPresets;
 import Action::AddComponent;
 import Action::DestroyEntity;
 import Action::RemoveComponent;
@@ -27,6 +28,7 @@ using je::towoo;
 using JEEditor::GUI::Windows;
 using JEEditor::Editor::EditSession;
 using JEEditor::Editor::Action;
+using JEEditor::Editor::ComponentPresets;
 
 namespace JEEditor::Editor
 {
@@ -223,16 +225,18 @@ namespace JEEditor::Editor
                     wctx->doAction(action);
             }
         }
-        // “添加组件”选择弹窗：搜索过滤 + 按命名空间分组的候选列表。
-        // 选中一项立即发布添加操作且保持弹窗打开，便于连续添加；
-        // 已添加的组件自下一帧起从候选中消失。
+        // “添加组件”选择弹窗：搜索过滤 + 常用组合一键整组添加 + 按命名
+        // 空间分组的候选列表。选中一项立即发布添加操作且保持弹窗打开，
+        // 便于连续添加；已添加的组件自下一帧起从候选中消失。
         func showAddComponentPicker(wctx: WorldEditorViewport, e: entity)=> void
         {
             // 弹窗大小由内容自适应；若控件用 -1 占满宽度，弹窗自身没有
             // 可参考的实宽，会塌缩成细条，因此这里给控件显式像素宽度
             let picker_width = 300.;
+            let preset_button_width = 92.;
 
-            SetNextItemWidth(picker_width);
+            // 搜索框与“常用组合”按钮同排，合计宽度与下方列表对齐
+            SetNextItemWidth(picker_width - preset_button_width - 8.);
             if (s_add_component_focus)
             {
                 SetKeyboardFocusHere(0);
@@ -243,6 +247,15 @@ namespace JEEditor::Editor
                 none?;
                 value(new_filter)?
                     s_add_component_filter = new_filter;
+            }
+
+            SameLine();
+            if (ButtonSize("常用组合", (preset_button_width, 0.)))
+                OpenPopup("##add_component_preset_menu");
+            if (BeginPopup("##add_component_preset_menu"))
+            {
+                ComponentPresets::showAddPresetMenu(wctx, e);
+                defer EndPopup();
             }
 
             let filter_lower = s_add_component_filter->lower;

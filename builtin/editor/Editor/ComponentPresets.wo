@@ -1,0 +1,174 @@
+import woo::std;
+
+import je;
+import je::ecs;
+import je::gui;
+import je::typeinfo;
+
+import pkg::iterator;
+
+import WorldEditorViewport;
+import EditSession;
+import Action::AddComponentBatch;
+
+using std;
+using je;
+using je::gui;
+using iterator;
+using JEEditor::Editor::Action;
+
+/*
+ComponentPresets：“常用组件组合”的共享数据与操作。
+组合表供三处消费：“新建实体”弹窗（勾选式，见 EntityList.wo）、
+“添加组件”弹窗与实体右键菜单（点击即整组添加，见 showAddPresetMenu）。
+组件名与 je::towoo::components 中的注册名保持一致；组合只负责整组
+操作，若日后组件改名或被删除，失效类型会在添加时被 typeinfo::load
+过滤跳过，不影响其余部分。
+*/
+namespace JEEditor::Editor::ComponentPresets
+{
+    // 常用组件组合表：(分组标题, [(组合名, [组件类型全名...])...])
+    public let s_component_presets = [
+        ("变换", [
+            ("一般变换", [
+                "Transform::LocalPosition", "Transform::LocalRotation",
+                "Transform::LocalScale", "Transform::LocalToWorld",
+                "Transform::Translation"]),
+            ("UI变换", [
+                "UserInterface::Origin", "UserInterface::Absolute",
+                "UserInterface::Relatively", "Transform::Translation"]),
+        ]),
+        ("渲染", [
+            ("基本渲染", [
+                "Renderer::Shape", "Renderer::Shaders",
+                "Renderer::Textures"]),
+            ("帧动画", ["Animation::FrameAnimation"]),
+        ]),
+        ("2D光照", [
+            ("点光源", [
+                "Light2D::Point", "Light2D::Gain",
+                "Light2D::ShadowBuffer"]),
+            ("范围光源", [
+                "Light2D::Range", "Light2D::Gain",
+                "Light2D::ShadowBuffer"]),
+            ("平行光源", [
+                "Light2D::Parallel", "Light2D::Gain",
+                "Light2D::ShadowBuffer"]),
+            ("常用阴影", [
+                "Light2D::ShapeShadow", "Light2D::BlockShadow",
+                "Light2D::SelfShadow"]),
+        ]),
+        ("摄像机", [
+            ("透视相机", [
+                "Camera::Projection", "Camera::PerspectiveProjection",
+                "Camera::Viewport", "Camera::FrustumCulling"]),
+            ("正交相机", [
+                "Camera::Projection", "Camera::OrthoProjection",
+                "Camera::Viewport", "Camera::FrustumCulling"]),
+            ("仅UI投影", ["Camera::Projection"]),
+            ("光照后处理", [
+                "Light2D::CameraPostPass", "Renderer::Shaders"]),
+        ]),
+        ("2D物理", [
+            ("静态刚体", [
+                "Physics2D::Rigidbody", "Physics2D::Collider::Box"]),
+            ("动力学刚体", [
+                "Physics2D::Rigidbody", "Physics2D::DynamicBody",
+                "Physics2D::Collider::Box", "Physics2D::Density",
+                "Physics2D::Friction"]),
+            ("高速动力学", [
+                "Physics2D::Rigidbody", "Physics2D::DynamicBody",
+                "Physics2D::Bullet", "Physics2D::Collider::Box",
+                "Physics2D::Density", "Physics2D::Friction"]),
+            ("运动学刚体", [
+                "Physics2D::Rigidbody", "Physics2D::KinematicBody",
+                "Physics2D::Collider::Box"]),
+            ("触发器", [
+                "Physics2D::Rigidbody", "Physics2D::Collider::Box",
+                "Physics2D::IsTrigger"]),
+            ("物理场景", ["Physics2D::Scene"]),
+        ]),
+        ("音频", [
+            ("音源", ["Audio::Source", "Audio::Playing"]),
+            ("音频监听器", ["Audio::Listener"]),
+        ]),
+    ];
+
+    // 组合内组件名拼接为悬停提示文本（顿号分隔）
+    public func presetTipText(cnames: array<string>)=> string
+    {
+        let mut tip = "";
+        for (let cname : cnames)
+            tip = (tip->len == 0) ? cname | F"{tip}、{cname}";
+        return tip;
+    }
+
+    // 统计组合内可添加到该实体的组件数（类型已注册且实体尚未持有），
+    // 为 0 时组合项整体禁用
+    func countAddableComponents(e: entity, cnames: array<string>)=> int
+    {
+        let mut addable_count = 0;
+        for (let cname : cnames)
+        {
+            match (typeinfo::load(cname))
+            {
+                none?;
+                value(ctype)?
+                    if (e->get_component(ctype)->is_none)
+                        addable_count = addable_count + 1;
+            }
+        }
+        return addable_count;
+    }
+
+    // 将组合内实体还缺少的组件作为一步可撤销操作批量添加；
+    // 没有 EUID 的实体退化为逐个直接添加（无法支持撤销）
+    public func addPresetToEntity(
+        wctx: WorldEditorViewport, e: entity, cnames: array<string>)=> void
+    {
+        // 先结束可能进行中的编辑手势，再发布整组添加的操作
+        EditSession::commit();
+
+        let ctypes = cnames->iter
+            |> filter_map(\cname = typeinfo::load(cname);)
+            |> filter(\ctype = e->get_component(ctype)->is_none;)
+            |> collect;
+        if (ctypes->len == 0)
+            return;
+
+        match (AddComponentBatch::try_create(e, ctypes))
+        {
+            none?
+                for (let ctype : ctypes)
+                    do e->add_component(ctype);
+            value(action)?
+                wctx->doAction(action);
+        }
+    }
+
+    // “点击即整组添加”的常用组合菜单：分组为一级子菜单，子项即组合，
+    // 悬停提示该组合包含的全部组件，实体已持有的组件不计入添加，
+    // 全部已持有（或类型全部失效）的组合项禁用。供“添加组件”弹窗与
+    // 实体右键菜单共用；点击子项只收起子菜单以上的弹窗层，调用方的
+    // 外层弹窗/菜单保持打开，可连续添加多个组合
+    public func showAddPresetMenu(wctx: WorldEditorViewport, e: entity)=> void
+    {
+        for (let (group_title, presets) : s_component_presets)
+        {
+            if (BeginMenu(group_title))
+            {
+                defer EndMenu();
+                for (let (preset_name, cnames) : presets)
+                {
+                    BeginDisabled(countAddableComponents(e, cnames) == 0);
+                    if (Selectable(F"{preset_name}##add_preset_{group_title}"))
+                        addPresetToEntity(wctx, e, cnames);
+                    EndDisabled();
+
+                    if (IsItemHovered())
+                        do SetTooltip(presetTipText(cnames));
+                }
+            }
+        }
+    }
+}
