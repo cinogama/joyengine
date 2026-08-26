@@ -1,0 +1,223 @@
+// 世界编辑器视口 —— 类型定义与共享状态。
+// struct 尾部的语法糖块（= namespace JEEditor::Editor::WorldEditorViewport）
+// 在此保留，存放各部分文件共享的枚举、常量与静态量；其余方法按功能
+// 拆分在兄弟文件中，声明于同一命名空间下（命名空间跨文件开放合并）。
+// 字段/常量标 protected：private 仅限同文件，protected 允许同命名空间
+//（含嵌套）的兄弟文件访问。
+
+import woo::std;
+
+import je;
+import je::ecs;
+import je::graphic;
+import je::gui;
+import je::typeinfo;
+import je::internal;
+
+import je::towoo;
+import je::towoo::types;
+import je::towoo::components;
+
+import pkg::fsys;
+
+import builtin::editor::Editor::Practice;
+import builtin::editor::Editor::Action::IAction;
+
+using std;
+
+using je;
+using je::gui;
+using je::graphic;
+using fsys;
+
+using JEEditor::Editor::Action;
+
+namespace JEEditor::Editor
+{
+    protected using WorldEditorViewport = struct{
+        protected m_close: mut CloseRequest,
+
+        protected m_world_instance: world,
+
+        // World context:
+        protected m_name: string,
+
+        protected m_runtime_systems: vec<typeinfo>,
+        protected m_saving_path: option<path_t>,
+
+        // Editor context:
+        protected m_editor_walk_camera_frame_buffer: mut option<graphic::framebuffer>,
+        protected m_fb_pending_size: mut ImVec2,
+        protected m_fb_settle_counter: mut int,
+
+        protected m_selected_entity_id: mut option<entity::internal::euid_t>,
+
+        // 右键按下起点与“按下发生在视口内”标记：环视以起点为基准延迟到
+        // 位移超过阈值后才激活；松开时用于区分“点击实体弹菜单”与“拖拽环视”。
+        protected m_rmb_press_pos: mut ImVec2,
+        protected m_rmb_press_in_viewport: mut bool,
+
+        protected m_action_history: mut Practice,
+
+        // Camera control state:
+        protected m_debug_camera_selector: entity_selector,
+        protected m_selectable_entity_selector: entity_selector,
+        protected m_all_entity_selector: entity_selector,
+
+        // 摄像机实体（含 Translation+Projection 且不带 Invisible）选择器，
+        // 其图标/视锥体 gizmo 与点击拾取均以它为准
+        protected m_camera_entity_selector: entity_selector,
+
+        // 2D 光源实体（含 Translation 与对应光源组件且不带 Invisible）选择器：
+        // 点光源图标以 Point/Range 两个选择器为准（同一图标），
+        // 平行光源图标以 Parallel 选择器为准
+        protected m_point_light2d_entity_selector: entity_selector,
+        protected m_range_light2d_entity_selector: entity_selector,
+        protected m_parallel_light2d_entity_selector: entity_selector,
+
+        protected m_last_time: mut real,
+        protected m_is_look_active: mut bool,
+        protected m_is_pan_active: mut bool,
+        protected m_is_orbit_active: mut bool,
+        protected m_orbit_pivot: mut vec3,
+        protected m_orbit_distance: mut real,
+        protected m_rotation_x: mut quat,
+        protected m_rotation_y: mut quat,
+
+        // Gizmo
+        protected m_gizmo_draw_branch: rendchain_branch,
+
+        // ---- 变换游标（操作手柄）状态 ----
+        protected m_gizmo_mode: mut GizmoMode,
+        protected m_gizmo_space: mut GizmoSpace,
+
+        protected m_gizmo_hover_handle: mut int,
+        protected m_gizmo_drag_handle: mut int,
+        protected m_gizmo_dragging: mut bool,
+
+        // 拖拽开始时捕获的快照（世界空间）：
+        protected m_gizmo_drag_euid: mut entity::internal::euid_t,
+        protected m_gizmo_drag_origin: mut vec3,
+        protected m_gizmo_drag_rotation: mut quat,
+        protected m_gizmo_drag_axis: mut vec3,
+        protected m_gizmo_drag_plane_normal: mut vec3,
+        protected m_gizmo_drag_plane_hit: mut vec3,
+        protected m_gizmo_drag_basis_a: mut vec3,
+        protected m_gizmo_drag_basis_b: mut vec3,
+        protected m_gizmo_drag_start_param: mut real,
+        protected m_gizmo_drag_start_angle: mut real,
+        protected m_gizmo_drag_start_pos: mut vec3,
+        protected m_gizmo_drag_start_rot: mut quat,
+        protected m_gizmo_drag_start_scale: mut vec3,
+        // 撤销记录所需的目标组件/成员与旧值序列
+        protected m_gizmo_drag_undo_component: mut string,
+        protected m_gizmo_drag_undo_member: mut string,
+        protected m_gizmo_drag_undo_old_value: mut string,
+
+        // 本帧绘制游标所需的快照（由 updateTransformGizmo 写入）：
+        protected m_gizmo_draw_visible: mut bool,
+        protected m_gizmo_draw_origin: mut vec3,
+        protected m_gizmo_draw_rotation: mut quat,
+        protected m_gizmo_draw_size: mut real,
+        protected m_gizmo_draw_center_size: mut real,
+
+        // 实体图标 gizmo（摄像机/2D 光源）的屏幕命中矩形（EUID、屏幕中心、
+        // 命中半径px）与当前悬停的实体，每帧由 updateIconGizmos 重建
+        protected m_icon_gizmo_rects: vec<mut (entity::internal::euid_t, vec2, real)>,
+        protected m_icon_gizmo_hover: mut option<entity::internal::euid_t>,
+    }
+    {
+        // ---- 摄像机游走参数（跨文件共享的部分） ----
+        protected let CAMERA_DEFAULT_ORBIT_DISTANCE = 10.;
+
+        // ---- 变换游标参数 ----
+        protected let GIZMO_SIZE_PX = 96.;              // 游标轴在屏幕上的长度（像素）
+        protected let GIZMO_HIT_PX = 10.;               // 手柄命中判定半径（像素）
+        protected let GIZMO_RING_RADIUS_RATIO = 1.15;   // 旋转圆环半径相对轴长的比例
+        protected let GIZMO_SCALE_AXIS_RATIO = 0.85;    // 缩放游标轴长相对平移轴长的比例
+        protected let GIZMO_CENTER_SIZE_PX = 16.;       // 中央手柄边长（像素）
+        protected let GIZMO_SCALE_FACTOR_MIN = 0.01;
+        protected let GIZMO_SCALE_FACTOR_MAX = 100.;
+
+        // 手柄编号：三根轴 + 中央手柄（屏幕平面移动 / 整体缩放）
+        protected let GIZMO_HANDLE_NONE = -1;
+        protected let GIZMO_HANDLE_X = 0;
+        protected let GIZMO_HANDLE_Y = 1;
+        protected let GIZMO_HANDLE_Z = 2;
+        protected let GIZMO_HANDLE_CENTER = 3;
+
+        // 游标各部件的颜色（RGBA），悬停/拖拽时高亮为黄色
+        protected let GIZMO_COLOR_X = (0.92, 0.32, 0.32, 0.9);
+        protected let GIZMO_COLOR_Y = (0.38, 0.85, 0.38, 0.9);
+        protected let GIZMO_COLOR_Z = (0.38, 0.56, 0.98, 0.9);
+        protected let GIZMO_COLOR_CENTER = (0.85, 0.85, 0.85, 0.9);
+        protected let GIZMO_COLOR_HOVER = (1., 1., 0.25, 1.);
+
+        // ---- 摄像机实体 gizmo 参数 ----
+        protected let CAMERA_GIZMO_ICON_SIZE_PX = 32.;   // 摄像机图标边长（像素）
+        // 视锥体线框配色：常态浅蓝，悬停提亮，选中复用游标高亮黄
+        protected let CAMERA_GIZMO_COLOR = (0.35, 0.78, 0.95, 0.55);
+        protected let CAMERA_GIZMO_COLOR_HOVER = (0.55, 0.9, 1., 0.8);
+
+        // ---- 2D 光源实体 gizmo 参数 ----
+        protected let LIGHT2D_GIZMO_ICON_SIZE_PX = 32.;  // 光源图标边长（像素）
+
+        // 右键同时承担“拖拽环视”职责：以按下起点为基准，位移切实超过该
+        // 像素阈值后才激活环视（阈值内的位移不转动摄像机）；松开时位移
+        // 仍不超过该阈值则视为“点击实体”，弹出上下文菜单。
+        protected let RMB_CLICK_MAX_DRAG_PX = 6.;
+        // 视口内实体右键菜单的弹窗 ID
+        protected let VIEWPORT_ENTITY_CONTEXT_MENU_ID = "##viewport_entity_context";
+
+        // 枚举成员的可见性继承枚举声明且挂在枚举自身的类型命名空间下，
+        // protected 无法被兄弟文件访问，跨文件使用的枚举须为 public。
+        public enum GizmoMode
+        {
+            TRANSLATE,
+            ROTATE,
+            SCALE,
+        }
+        // 平移/旋转支持 Local/Global 两种参考系；缩放仅支持 Local
+        public enum GizmoSpace
+        {
+            LOCAL,
+            GLOBAL,
+        }
+
+        public enum CloseRequest
+        {
+            NORMALLY,
+            CLOSE_AND_DESTROY_WORLD,    // 确认关闭后销毁 world（用户主动关闭）
+            CLOSE_BUT_KEEP_WORLD,       // 关闭窗口但保留 world（重命名/另存后重开）
+        }
+
+        protected let s_world_viewports = {}mut: map<world, WorldEditorViewport>;
+        protected let mut s_last_focusd_world_view = option::none: option<WorldEditorViewport>;
+
+        // 右键环视时是否锁定鼠标。虚拟机等环境下锁定鼠标会导致指针漂移，默认不锁定。
+        protected let mut s_lock_mouse_on_look = false;
+
+        // 是否为摄像机实体（含 Translation 与 Projection 且不带 Invisible；
+        // 编辑器调试摄像机带 Invisible，不算在内）
+        protected func isCameraEntity(e: entity)=> bool
+        {
+            return !(e->towoo::get_component:<Camera::Projection>->is_none)
+                && !(e->towoo::get_component:<Transform::Translation>->is_none)
+                && e->towoo::get_component:<Editor::Invisible>->is_none;
+        }
+
+        public func redo(self: WorldEditorViewport)
+        {
+            self.m_action_history->redo();
+        }
+        public func undo(self: WorldEditorViewport)
+        {
+            self.m_action_history->undo();
+        }
+        public func doAction<T>(self: WorldEditorViewport, action: T)
+            where require!(T: IAction);
+        {
+            self.m_action_history->doAction(action);
+        }
+    }
+}

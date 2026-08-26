@@ -1,0 +1,555 @@
+// 世界编辑器视口 —— 调试游走摄像机。
+// framebuffer 的按需重建、2D（正交）/2D 光照模式的组件级切换，
+// 以及透视/正交两套输入操控（环视、飞行、平移、滚轮）。
+
+import woo::std;
+
+import je;
+import je::ecs;
+import je::graphic;
+import je::gui;
+import je::input;
+
+import je::towoo;
+import je::towoo::types;
+import je::towoo::components;
+
+import builtin::editor::GUI::Forms::MsgBox;
+
+import Definition;
+import EntityPicking;
+
+using std;
+
+using je;
+using je::gui;
+using je::graphic;
+
+using JEEditor::GUI::Forms;
+
+namespace JEEditor::Editor::WorldEditorViewport
+{
+    // 拖拽缩放窗口时 content 尺寸每帧都在变化；等待尺寸连续稳定这么多帧后
+    // 再重建摄像机 framebuffer，避免在拖拽过程中频繁分配 GPU 资源。
+    let FRAMEBUFFER_RESIZE_SETTLE_FRAMES = 30;
+
+    // ---- 摄像机游走参数（仅本文件使用） ----
+    let CAMERA_MOVE_SPEED = 8.;
+    let CAMERA_FAST_MOVE_MULTIPLIER = 3.;
+    let CAMERA_LOOK_SENSITIVITY = 0.15;
+    let CAMERA_ORBIT_SENSITIVITY = 0.3;
+    let CAMERA_PAN_SENSITIVITY = 0.01;
+    let CAMERA_WHEEL_DOLLY = 5.;
+    let CAMERA_PITCH_LIMIT = 88.;
+    let CAMERA_MIN_ORTHO_SCALE = 0.05;
+    // 2D 模式 Ctrl+滚轮单格滚动的 z 步进基准（随正交 scale 缩放），
+    // 刻意比透视推拉的 CAMERA_WHEEL_DOLLY 小，便于细调深度
+    let ORTHO_WHEEL_Z_STEP = 1.;
+
+    // ---- 调试游走摄像机 2D 光照模式 ----
+    // 开启后为调试摄像机挂上 Light2D::CameraPostPass 与 Renderer::Shaders
+    //（着色器列表为空时填入该默认合成着色器），运行中的
+    // Graphic::DeferLight2DGraphicPipelineSystem 会据此让摄像机走
+    // “G-buffer → 光照 → 全屏合成”的延迟光照路径。
+    let DEBUG_CAMERA_LIGHT2D_COMPOSITE_SHADER_PATH =
+        "@/builtin/shader/CameraDefer2DPass.shader";
+
+    // 根据 GetContentRegionAvail 自动创建/重建摄像机 framebuffer；
+    // 若窗口尺寸仍在变化（正在拖拽缩放），则等待尺寸稳定后再更新。
+    protected func updateWalkCameraFramebuffer(
+        self: WorldEditorViewport, debug_cameras: option<entity>)=> void
+    {
+        if (debug_cameras->is_none)
+            // 未找到调试摄像机，跳过本轮更新
+            return;
+
+        let avail = GetContentRegionAvail();
+        let target_w = avail.0 as int;
+        let target_h = avail.1 as int;
+
+        // 尺寸退化（窗口折叠/尚未布局）时跳过。
+        if (target_w <= 0 || target_h <= 0)
+            return;
+
+        // 当前 framebuffer 已与目标尺寸一致，则无需重建。
+        match (self.m_editor_walk_camera_frame_buffer)
+        {
+            none?;
+            value(fb)?
+            {
+                let (cw, ch) = fb->size();
+                if (cw == target_w && ch == target_h)
+                {
+                    self.m_fb_settle_counter = 0;
+                    return;
+                }
+            }
+        }
+
+        // 尺寸不一致（或尚无 framebuffer）：仅在尺寸连续稳定若干帧后重建，
+        // 避免拖拽过程中每帧都重新分配。
+        if (avail.0 != self.m_fb_pending_size.0
+            || avail.1 != self.m_fb_pending_size.1)
+        {
+            self.m_fb_pending_size = avail;
+            self.m_fb_settle_counter = 0;
+        }
+        self.m_fb_settle_counter += 1;
+
+        if (self.m_fb_settle_counter < FRAMEBUFFER_RESIZE_SETTLE_FRAMES)
+            return;
+
+        // 尺寸已稳定，按目标尺寸（重新）创建 framebuffer。
+        match (graphic::framebuffer::create(
+                target_w, target_h,
+                [graphic::framebuffer::color_format::RGBA as int],
+                true))
+        {
+            none?;
+            value(fb)?
+            {
+                self.m_editor_walk_camera_frame_buffer = option::value(fb);
+
+                let r2b = debug_cameras->unwrap->towoo::get_component:<Camera::RendToFramebuffer>->unwrap;
+                r2b->set(self.m_editor_walk_camera_frame_buffer);
+            }
+        }
+    }
+
+    // 调试游走摄像机 2D 光照模式是否开启：不单独记录状态，直接以摄像机
+    // 实际组件为准（CameraPostPass 与 Shaders 同时存在视为开），
+    // 调试摄像机被重建后天然回到关闭状态。
+    protected func isDebugCameraLight2DEnabled(camera: entity)=> bool
+    {
+        return camera->get_component(Light2D::CameraPostPass::type::typeinfo)->is_value
+            && camera->get_component(Renderer::Shaders::type::typeinfo)->is_value;
+    }
+
+    // 切换调试游走摄像机的 2D 光照模式：
+    // 开 = 挂 Light2D::CameraPostPass，并在着色器列表为空时填入默认
+    // 合成着色器（CameraDefer2DPass）；关 = 移除这两个组件，回到直接渲染。
+    // 组件只挂在编辑器内部摄像机上（Editor::Invisible），不进入编辑历史与存档。
+    // 注意 add_component 走命令缓冲延迟生效，着色器列表必须写入
+    // towoo::add_component 返回的当帧暂存实例（同帧经 set_shaders 生效），
+    // 实体级 set_shaders 读的是已生效组件，同帧调用会静默失效。
+    protected func setDebugCameraLight2DEnabled(camera: entity, enabled: bool)=> void
+    {
+        let post_pass_type = Light2D::CameraPostPass::type::typeinfo;
+
+        if (enabled)
+        {
+            if (camera->get_component(post_pass_type)->is_none)
+                do camera->add_component(post_pass_type);
+
+            // 已有着色器（如用户自定义的合成 pass）时保持不变
+            if (camera->towoo::get_component:<Renderer::Shaders>->is_none)
+            {
+                match (camera->towoo::add_component:<Renderer::Shaders>())
+                {
+                    none?
+                        MsgBox::err("2D 光照模式", "无法为调试摄像机创建 Renderer::Shaders 组件");
+                    value(shaders_inst)?
+                    {
+                        match (shader::load(option::none, DEBUG_CAMERA_LIGHT2D_COMPOSITE_SHADER_PATH))
+                        {
+                            none?
+                            {
+                                // 默认着色器加载失败：回滚本帧挂上的组件
+                                //（命令缓冲同帧 add+remove 时 remove 生效），保持关闭
+                                do camera->remove_component(Renderer::Shaders::type::typeinfo);
+                                do camera->remove_component(post_pass_type);
+                                MsgBox::err(
+                                    "2D 光照模式",
+                                    F"无法加载相机默认着色器：`{DEBUG_CAMERA_LIGHT2D_COMPOSITE_SHADER_PATH}`");
+                            }
+                            value(sinst)?
+                                do shaders_inst->set_shaders([sinst]);
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            if (camera->get_component(post_pass_type)->is_value)
+                do camera->remove_component(post_pass_type);
+            if (camera->towoo::get_component:<Renderer::Shaders>->is_value)
+                do camera->towoo::remove_component:<Renderer::Shaders>();
+        }
+    }
+
+    // 调试游走摄像机是否处于 2D（正交）模式：不单独记录状态，直接以
+    // 摄像机实际投影组件为准（挂 OrthoProjection 视为 2D），与渲染
+    // 系统 anyof(OrthoProjection, PerspectiveProjection) 的选择规则
+    // 一致，调试摄像机被重建后天然回到透视模式。
+    protected func isDebugCamera2DMode(camera: entity)=> bool
+    {
+        return !(camera->towoo::get_component:<Camera::OrthoProjection>->is_none);
+    }
+
+    // 切换调试游走摄像机的 2D（正交）模式：
+    // 开 = 摘下 PerspectiveProjection、挂上 OrthoProjection（scale 取
+    //      默认值 1），并把旋转归零（quat::ident，正对 XY 平面）；
+    // 关 = 摘下 OrthoProjection、挂回 PerspectiveProjection（angle 取
+    //      默认值 75），旋转保持 2D 模式下的 ident，可继续环视。
+    // 组件增删走命令缓冲延迟生效（增删的是不同组件，无同帧冲突）；
+    // 只挂在编辑器内部摄像机上（Editor::Invisible，保存时整个实体
+    // 被跳过），不进入编辑历史与存档。
+    protected func setDebugCamera2DMode(
+        self: WorldEditorViewport, camera: entity, enabled: bool)=> void
+    {
+        if (enabled)
+        {
+            // 切换瞬间不应处于环视中：结束环视并解锁鼠标
+            if (self.m_is_look_active)
+            {
+                self.m_is_look_active = false;
+                input::set_lock_mouse(false);
+            }
+
+            if (camera->towoo::get_component:<Camera::PerspectiveProjection>->is_value)
+                do camera->towoo::remove_component:<Camera::PerspectiveProjection>();
+            if (camera->towoo::get_component:<Camera::OrthoProjection>->is_none)
+            {
+                match (camera->towoo::add_component:<Camera::OrthoProjection>())
+                {
+                    none?
+                        MsgBox::err(
+                            "2D 模式", "无法为调试摄像机创建 Camera::OrthoProjection 组件");
+                    value(ortho)?
+                        ortho.scale->set(1.);
+                }
+            }
+
+            // 旋转归零：2D 镜头正对 XY 平面；环视累积量（m_rotation_x/y）
+            // 一并复位，保证切回 3D 后环视从当前朝向继续
+            camera->towoo::get_component:<Transform::LocalRotation>
+                ->unwrap.rot->set(quat::ident);
+            self.m_rotation_x = quat::ident;
+            self.m_rotation_y = quat::ident;
+        }
+        else
+        {
+            if (camera->towoo::get_component:<Camera::OrthoProjection>->is_value)
+                do camera->towoo::remove_component:<Camera::OrthoProjection>();
+            if (camera->towoo::get_component:<Camera::PerspectiveProjection>->is_none)
+            {
+                match (camera->towoo::add_component:<Camera::PerspectiveProjection>())
+                {
+                    none?
+                        MsgBox::err(
+                            "2D 模式", "无法为调试摄像机创建 Camera::PerspectiveProjection 组件");
+                    value(persp)?
+                        persp.angle->set(75.);
+                }
+            }
+        }
+    }
+
+    // 根据输入控制编辑器摄像机（三维/二维游走）。
+    // 操作方式参考 Unity / Blender 等编辑器视口：
+    //
+    //   三维（透视）摄像机：
+    //     鼠标右键拖拽       — 自由环视（FPS 风格；是否锁定鼠标由工具栏开关控制）
+    //     右键 + WASD        — 前后左右移动
+    //     右键 + Q / E       — 下 / 上移动
+    //     右键 + Shift       — 加速移动
+    //     鼠标中键拖拽       — 屏幕平面平移
+    //     鼠标滚轮           — 沿视线方向推拉
+    //
+    //   二维（正交）摄像机：
+    //     鼠标右键拖拽       — 屏幕平面平移（阈值内松开仍为点击实体弹菜单）
+    //     右键 + WASD        — 在当前深度的 xOy 平面上移动
+    //     右键 + Shift       — 加速移动
+    //     鼠标中键拖拽       — 屏幕平面平移
+    //     Ctrl + 滚轮        — 调整摄像机深度（LocalPosition 的 z 轴）
+    //     滚轮               — 缩放画面（调整正交 scale；方向与透视推拉相反）
+    //
+    //   投影模式由工具栏“2D 模式”开关切换（setDebugCamera2DMode），
+    //   以摄像机当前挂着的 PerspectiveProjection / OrthoProjection
+    //   组件决定走哪套操作；右键环视仅透视模式提供，2D 模式下旋转
+    //   恒为 quat::ident（正对 XY 平面）。
+    //
+    protected func updateCameraControl(
+        self: WorldEditorViewport,
+        debug_camera: option<entity>,
+        dt: real,
+        hovered: bool,
+        viewport_rect: option<(ImVec2, ImVec2)>)=> void
+    {
+        if (debug_camera->is_none)
+            return;
+
+        let cam = debug_camera->unwrap;
+        let pos = cam->towoo::get_component:<Transform::LocalPosition>->unwrap;
+        let rot = cam->towoo::get_component:<Transform::LocalRotation>->unwrap;
+        let trans = cam->towoo::get_component:<Transform::Translation>->unwrap;
+        let proj = cam->towoo::get_component:<Camera::Projection>->unwrap;
+
+        let perspectiveProjection = cam->towoo::get_component:<Camera::PerspectiveProjection>;
+
+        // 游标手柄被悬停/拖拽时，点击不用于选取实体
+        if (hovered && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left)
+            && self.m_gizmo_hover_handle == GIZMO_HANDLE_NONE)
+        {
+            // 摄像机/2D 光源实体：点击其图标 gizmo 即选中（沿用实体拾取的
+            // 循环规则），未命中图标时才走渲染实体的射线拾取
+            match (self->pickIconGizmo(GetMousePos() as vec2, true))
+            {
+                value(icon_euid)?
+                    self.m_selected_entity_id = option::value(icon_euid);
+                none?
+                    match (viewport_rect)
+                    {
+                        none?;
+                        value((rect_min, rect_max))?
+                        {
+                            let mouse_diff = GetMousePos() as vec2 - rect_min as vec2;
+                            let viewport_size = rect_max as vec2 - rect_min as vec2;
+
+                            let (vpx, vpy) =
+                                ((mouse_diff / viewport_size) - (0.5, 0.5) as vec2) * 2.;
+
+                            self->sendMouseClickToChoiceEntityRequest(
+                                towoo::ray::from(
+                                    trans,
+                                    proj,
+                                    (vpx, -vpy) as vec2,
+                                    perspectiveProjection->is_none));
+                        }
+                    }
+            }
+        }
+
+        match (perspectiveProjection)
+        {
+            value(_)?
+                self->controlPerspectiveCamera(pos, rot, dt, hovered);
+            none?
+                match (cam->towoo::get_component:<Camera::OrthoProjection>)
+                {
+                    value(ortho)?
+                        self->controlOrthoCamera(pos, rot, ortho, dt, hovered);
+                    none?;
+                }
+        }
+    }
+
+    protected func controlPerspectiveCamera(
+        self: WorldEditorViewport,
+        pos: Transform::LocalPosition,
+        rot: Transform::LocalRotation,
+        dt: real,
+        hovered: bool)=> void
+    {
+        let curPos = pos.pos->get;
+        let curRot = rot.rot->get;
+
+        let forward = curRot * ((0., 0., 1.) as vec3);
+        let right = curRot * ((1., 0., 0.) as vec3);
+        let up = curRot * ((0., 1., 0.) as vec3);
+        let worldUp = (0., 1., 0.) as vec3;
+
+        // ---- 激活 / 停止各项操作 ----
+        // 右键不在按下瞬间激活环视：以 updateViewportRightClick 记录的
+        // 按下起点为基准，位移切实超过 RMB_CLICK_MAX_DRAG_PX 后才激活；
+        // 阈值内的位移不转动摄像机，松开则视为点击实体弹菜单。
+        if (self.m_rmb_press_in_viewport
+            && !self.m_is_look_active
+            && (GetMousePos() as vec2 - self.m_rmb_press_pos as vec2)->length
+                > RMB_CLICK_MAX_DRAG_PX)
+        {
+            self.m_is_look_active = true;
+            if (s_lock_mouse_on_look)
+                input::set_lock_mouse(true);
+        }
+        if (hovered && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Middle))
+            self.m_is_pan_active = true;
+
+        if (!IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Right))
+        {
+            if (self.m_is_look_active)
+            {
+                self.m_is_look_active = false;
+                input::set_lock_mouse(false);
+            }
+        }
+        if (!IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Middle))
+            self.m_is_pan_active = false;
+
+        let (mdx, mdy) = GetMouseDeltaPos();
+        let wheel = GetMouseWheel();
+        let wv = wheel.1;
+
+        let mut newPos = curPos;
+        let mut newRot = curRot;
+        let mut changed = false;
+
+        // ---- 自由环视（右键拖拽）----
+        if (self.m_is_look_active)
+        {
+            self.m_rotation_x *= quat::euler(mdy * CAMERA_LOOK_SENSITIVITY, 0., 0.);
+            self.m_rotation_y *= quat::euler(0., mdx * CAMERA_LOOK_SENSITIVITY, 0.);
+            newRot = self.m_rotation_y * self.m_rotation_x;
+            changed = true;
+        }
+
+        // ---- WASD / QE 飞行（右键按住时）----
+        if (self.m_is_look_active)
+        {
+            let speed = CAMERA_MOVE_SPEED
+                * (IsKeyDown(ImGuiKey::ImGuiKey_LeftShift)
+                    ? CAMERA_FAST_MOVE_MULTIPLIER | 1.)
+                * dt;
+
+            let mf = (IsKeyDown(ImGuiKey::ImGuiKey_W) ? 1. | 0.)
+                - (IsKeyDown(ImGuiKey::ImGuiKey_S) ? 1. | 0.);
+            let mr = (IsKeyDown(ImGuiKey::ImGuiKey_D) ? 1. | 0.)
+                - (IsKeyDown(ImGuiKey::ImGuiKey_A) ? 1. | 0.);
+            let mu = (IsKeyDown(ImGuiKey::ImGuiKey_E) ? 1. | 0.)
+                - (IsKeyDown(ImGuiKey::ImGuiKey_Q) ? 1. | 0.);
+
+            if (mf != 0. || mr != 0. || mu != 0.)
+            {
+                newPos = newPos + forward * (mf * speed);
+                newPos = newPos + right * (mr * speed);
+                newPos = newPos + worldUp * (mu * speed);
+                changed = true;
+            }
+        }
+
+        // ---- 平移（中键拖拽）----
+        if (self.m_is_pan_active)
+        {
+            newPos = newPos + right * (-mdx * CAMERA_PAN_SENSITIVITY);
+            newPos = newPos - up * (-mdy * CAMERA_PAN_SENSITIVITY);
+            changed = true;
+        }
+
+        // ---- 滚轮缩放 ----
+        if (hovered && wv != 0.)
+        {
+            if (self.m_is_orbit_active)
+            {
+                self.m_orbit_distance = mathf::clamp(
+                    self.m_orbit_distance * (1. - wv * 0.1),
+                    0.1, 10000.);
+                let toCam = newPos - self.m_orbit_pivot;
+                let dist = toCam->length;
+                if (dist > 0.0001)
+                    newPos = self.m_orbit_pivot + toCam->unit * self.m_orbit_distance;
+                changed = true;
+            }
+            else
+            {
+                newPos = newPos + forward * (wv * CAMERA_WHEEL_DOLLY);
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            pos.pos->set(newPos);
+            rot.rot->set(newRot);
+        }
+    }
+
+    protected func controlOrthoCamera(
+        self: WorldEditorViewport,
+        pos: Transform::LocalPosition,
+        rot: Transform::LocalRotation,
+        ortho: Camera::OrthoProjection,
+        dt: real,
+        hovered: bool)=> void
+    {
+        let curPos = pos.pos->get;
+        let curRot = rot.rot->get;
+
+        let right = curRot * ((1., 0., 0.) as vec3);
+        let up = curRot * ((0., 1., 0.) as vec3);
+
+        // ---- 激活 / 停止平移 ----
+        // 右键按住拖动平移：与透视环视共用同一套“位移超过阈值才激活”
+        // 的规则（阈值内松开视为点击实体弹菜单，见 updateViewportRightClick）；
+        // 中键拖拽同样保持平移。
+        if (self.m_rmb_press_in_viewport
+            && !self.m_is_pan_active
+            && (GetMousePos() as vec2 - self.m_rmb_press_pos as vec2)->length
+                > RMB_CLICK_MAX_DRAG_PX)
+        {
+            self.m_is_pan_active = true;
+        }
+        if (hovered && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Middle))
+            self.m_is_pan_active = true;
+        if (!IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Right)
+            && !IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Middle))
+            self.m_is_pan_active = false;
+
+        let (mdx, mdy) = GetMouseDeltaPos();
+        let wheel = GetMouseWheel();
+        let wv = wheel.1;
+
+        let mut newPos = curPos;
+        let mut moved = false;
+
+        // ---- 平移（右键/中键拖拽）----
+        if (self.m_is_pan_active)
+        {
+            let scale = ortho.scale->get;
+            let panFactor = scale * CAMERA_PAN_SENSITIVITY;
+            // 与透视平移同向：内容跟随鼠标移动
+            newPos = newPos + right * (-mdx * panFactor);
+            newPos = newPos - up * (-mdy * panFactor);
+            moved = true;
+        }
+
+        // ---- WASD 平移（右键按住时）----
+        // 与透视模式的右键飞行对应：按住右键期间 WASD 在当前深度的
+        // xOy 平面上移动（2D 模式旋转恒为 ident，right/up 即世界 X/Y 轴），
+        // 速度随正交 scale 缩放（与平移/滚轮步长同一手感），Shift 加速；
+        // m_rmb_press_in_viewport 在右键按住期间恒为真（松开当帧即被
+        // updateViewportRightClick 清除），无需再查 IsMouseDown。
+        if (self.m_rmb_press_in_viewport)
+        {
+            let speed = CAMERA_MOVE_SPEED
+                * (IsKeyDown(ImGuiKey::ImGuiKey_LeftShift)
+                    ? CAMERA_FAST_MOVE_MULTIPLIER | 1.)
+                * ortho.scale->get
+                * dt;
+
+            let mu = (IsKeyDown(ImGuiKey::ImGuiKey_W) ? 1. | 0.)
+                - (IsKeyDown(ImGuiKey::ImGuiKey_S) ? 1. | 0.);
+            let mr = (IsKeyDown(ImGuiKey::ImGuiKey_D) ? 1. | 0.)
+                - (IsKeyDown(ImGuiKey::ImGuiKey_A) ? 1. | 0.);
+
+            if (mu != 0. || mr != 0.)
+            {
+                newPos = newPos + up * (mu * speed);
+                newPos = newPos + right * (mr * speed);
+                moved = true;
+            }
+        }
+
+        // ---- 滚轮 ----
+        if (hovered && wv != 0.)
+        {
+            let scale = ortho.scale->get;
+            if (IsKeyDown(ImGuiKey::ImGuiMod_Ctrl))
+            {
+                // Ctrl+滚轮调整摄像机深度（LocalPosition 的 z 轴），
+                // 步长随当前缩放比例缩放，与平移保持同一手感
+                newPos = (newPos[0], newPos[1], newPos[2]
+                    + wv * ORTHO_WHEEL_Z_STEP * scale) as vec3;
+                moved = true;
+            }
+            else
+                // 裸滚轮缩放画面；方向与透视推拉相反（滚轮向上 = 画面远离）
+                ortho.scale->set(mathf::clamp(
+                        scale * (1. + wv * 0.1),
+                        CAMERA_MIN_ORTHO_SCALE, 10000.));
+        }
+
+        if (moved)
+            pos.pos->set(newPos);
+    }
+}

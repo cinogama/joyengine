@@ -1,0 +1,539 @@
+// 世界编辑器视口 —— gizmo 绘制。
+// 世界坐标网格、被选中实体高亮、摄像机实体 gizmo（视锥体线框 + 图标）、
+// 2D 光源实体图标与变换游标本体的渲染，走视口自有的 rendchain 分支。
+
+import woo::std;
+
+import je;
+import je::ecs;
+import je::graphic;
+import je::gui;
+import je::internal;
+
+import je::towoo;
+import je::towoo::types;
+import je::towoo::components;
+
+import pkg::try;
+
+import builtin::editor::GUI::Icons;
+
+import builtin::editor::Editor::Gizmo::Shaders;
+import builtin::editor::Editor::Gizmo::Shapes;
+
+import Definition;
+import GizmoMath;
+import EntityPicking;
+
+using std;
+
+using je;
+using je::gui;
+using je::graphic;
+
+using JEEditor::GUI;
+using JEEditor::GUI::Icons;
+using JEEditor::Editor::Gizmo::Shaders;
+using JEEditor::Editor::Gizmo::Shapes;
+
+namespace JEEditor::Editor::WorldEditorViewport
+{
+    public func drawGizmos(self: WorldEditorViewport, debug_camera: option<entity>)=> void
+    {
+        do try!{
+            try! camera_entity = debug_camera;
+            try! camera_projection = camera_entity->towoo::get_component:<Camera::Projection>();
+
+            // 获取目标纹理缓冲区，如果没有就不绘制 gizmo 了。
+            try! fb = self.m_editor_walk_camera_frame_buffer;
+
+            // GIZMO 的绘制层级，需要一个足够大的数字以确保 GIZMO 总是最后绘制
+            let GIZMO_REND_QUEUE = 1000000;
+
+            // 开始新的一帧~
+            self.m_gizmo_draw_branch->new_frame(GIZMO_REND_QUEUE);
+
+            let gizmo_rend_chain = self.m_gizmo_draw_branch->new_chain(
+                option::value(fb), 0, 0, 0, 0);
+
+            // 绑定默认 ubo
+            gizmo_rend_chain->bind_uniform_buffer(
+                camera_projection->get_default_uniform_buffer);
+
+            // 世界坐标网格铺在最底层，先于其余 gizmo 绘制
+            drawWorldGrid(camera_entity, camera_projection, gizmo_rend_chain);
+
+            func drawGizmo(
+                pos: vec3,
+                rot: quat,
+                scale: vec3,
+                shader: option<shader>,
+                texture: option<(texture, vec2, vec2)>,
+                shape: option<vertex>)
+            {
+                do try!{
+                    try! shader_instance = shader;
+                    try! shape_instance = shape;
+
+                    let model = mat4::transform(pos, rot, scale);
+                    let model_view = camera_projection->get_view_mat * model;
+                    let model_view_proj = camera_projection->get_view_proj_mat * model;
+
+                    let mut texture_group = option::none: option<texture_group>;
+                    match (texture)
+                    {
+                        none?;
+                        value((texture_instance, _, _))?
+                        {
+                            let group = gizmo_rend_chain->allocate_texture_group;
+                            gizmo_rend_chain->bind_texture(group, 0, texture_instance);
+
+                            texture_group = option::value(group);
+                        }
+                    }
+
+                    let draw_action = gizmo_rend_chain->draw(shader_instance, shape_instance, texture_group);
+                    draw_action->set_uniform_mat4x4(shader_instance, "JE_M", model as raw mat4);
+                    draw_action->set_uniform_mat4x4(shader_instance, "JE_MV", model_view as raw mat4);
+                    draw_action->set_uniform_mat4x4(shader_instance, "JE_MVP", model_view_proj as raw mat4);
+
+                    match (texture)
+                    {
+                        none?;
+                        value((_, tiling, offset))?
+                        {
+                            draw_action->set_uniform(shader_instance, "JE_UV_TILING", tiling as raw vec2);
+                            draw_action->set_uniform(shader_instance, "JE_UV_OFFSET", offset as raw vec2);
+                        }
+                    }
+                    return_value!;
+                };
+            }
+
+            // 绘制实体图标（摄像机/2D 光源）：公告板四边形采样图标纹理，
+            // 染色（悬停/选中高亮）通过 JE_COLOR 提供
+            func drawBillboardIcon(
+                pos: vec3,
+                rot: quat,
+                icon_size: real,
+                icon: texture,
+                tint: (real, real, real, real))
+            {
+                do try!{
+                    try! shader_instance = GIZMO_ICON;
+                    try! shape_instance = DEFAULT_SQUARE_SHAPE;
+
+                    let scale = (icon_size, icon_size, icon_size) as vec3;
+                    let model = mat4::transform(pos, rot, scale);
+                    let model_view = camera_projection->get_view_mat * model;
+                    let model_view_proj = camera_projection->get_view_proj_mat * model;
+
+                    let texture_group = gizmo_rend_chain->allocate_texture_group;
+                    gizmo_rend_chain->bind_texture(texture_group, 0, icon);
+
+                    let draw_action = gizmo_rend_chain->draw(
+                        shader_instance, shape_instance, option::value(texture_group));
+                    draw_action->set_uniform_mat4x4(shader_instance, "JE_M", model as raw mat4);
+                    draw_action->set_uniform_mat4x4(shader_instance, "JE_MV", model_view as raw mat4);
+                    draw_action->set_uniform_mat4x4(shader_instance, "JE_MVP", model_view_proj as raw mat4);
+                    draw_action->set_uniform(shader_instance, "JE_UV_TILING", (1., 1.) as raw vec2);
+                    draw_action->set_uniform(shader_instance, "JE_UV_OFFSET", (0., 0.) as raw vec2);
+                    draw_action->set_uniform(shader_instance, "JE_COLOR", tint);
+                    return_value!;
+                };
+            }
+
+            // 绘制被选中的实体
+            do try!{
+                try! selected_euid = self.m_selected_entity_id;
+                try! selected_entity = self->findEntityByEuid(selected_euid);
+
+                // 摄像机实体的选中高亮由其 gizmo（图标染色 + 视锥体高亮，
+                // 见下方摄像机实体 gizmo 段）承担，不再叠加闪烁四边形
+                if (isCameraEntity(selected_entity))
+                    return_value!;
+
+                let trans = selected_entity->towoo::get_component:<Transform::Translation>->unwrap;
+                let texture = selected_entity->towoo::get_component:<Renderer::Textures>;
+
+                drawGizmo(
+                    trans->get_global_pos,
+                    trans->get_global_rot,
+                    trans->get_local_scale,
+                    SELECTED_ENTITY_HILIGHT,
+                    option::value <|
+                        texture
+                            =>> \textures = textures->get_texture(0)
+                                ->> \texture_instance = (
+                                        texture_instance,
+                                        textures.tiling->get,
+                                        textures.offset->get,)
+                                    ;
+                                ;
+                            -> or((WHITE, (1., 1.) as vec2, (0.,0.) as vec2)),
+                    DEFAULT_SQUARE_SHAPE);
+                return_value!;
+            };
+
+            // 绘制变换游标（纯色，颜色由每次绘制的 JE_COLOR 提供）
+            func drawSolid(
+                pos: vec3,
+                rot: quat,
+                scale: vec3,
+                shape: option<vertex>,
+                color: (real, real, real, real))
+            {
+                do try!{
+                    try! shape_instance = shape;
+                    try! shader_instance = GIZMO_SOLID;
+
+                    let model = mat4::transform(pos, rot, scale);
+                    let model_view = camera_projection->get_view_mat * model;
+                    let model_view_proj = camera_projection->get_view_proj_mat * model;
+
+                    let draw_action = gizmo_rend_chain->draw(
+                        shader_instance, shape_instance, option::none);
+                    draw_action->set_uniform_mat4x4(shader_instance, "JE_M", model as raw mat4);
+                    draw_action->set_uniform_mat4x4(shader_instance, "JE_MV", model_view as raw mat4);
+                    draw_action->set_uniform_mat4x4(shader_instance, "JE_MVP", model_view_proj as raw mat4);
+                    draw_action->set_uniform(shader_instance, "JE_COLOR", color);
+                    return_value!;
+                };
+            }
+
+            // 绘制摄像机实体 gizmo（视锥体线框 + 图标）：
+            // 含 Translation 与 Projection 且不带 Invisible 的实体视为摄像机
+            // 实体（编辑器调试摄像机带 Invisible，不在此列）。
+            do try!{
+                try! debug_camera_trans =
+                    camera_entity->towoo::get_component:<Transform::Translation>();
+                let (fbw, fbh) = fb->size();
+                let fb_rsize = (fbw as real, fbh as real) as vec2;
+                let debug_view_proj = camera_projection->get_view_proj_mat;
+                let debug_view = camera_projection->get_view_mat;
+                let debug_cam_pos = debug_camera_trans->get_global_pos;
+                let debug_cam_rot = debug_camera_trans->get_global_rot;
+                let debug_cam_forward =
+                    debug_cam_rot * ((0., 0., 1.) as vec3);
+
+                // 视锥体棱线的眼空间裁剪参数（见 gizmoClipEyeSegmentToScreen）：
+                // 透视为 tan 半 FOV（乘纵横比得横向），正交为可视半宽高
+                let debug_znear = camera_projection.znear->get;
+                let debug_is_persp = !(
+                    camera_entity->towoo::get_component:<Camera::PerspectiveProjection>()->is_none);
+                let mut clip_sy = 0.;
+                if (debug_is_persp)
+                    clip_sy = mathf::tan(
+                        camera_entity->towoo::get_component:<Camera::PerspectiveProjection>->unwrap.angle->get
+                        * 0.5 * mathf::DEG2RAD);
+                else
+                    // 正交纵向可视半高为 ORTHO_PROJECTION_RATIO（5.0）/ scale
+                    clip_sy = 5. / camera_entity
+                        ->towoo::get_component:<Camera::OrthoProjection>->unwrap.scale->get;
+                let clip_sx = clip_sy * fb_rsize[0] / fb_rsize[1];
+
+                // 单条视锥体棱：先在眼空间对调试摄像机做屏幕边界裁剪
+                //（远平面不裁，超出 zfar 的部分由 GizmoSolid 钳制 z 绘制），
+                // 再把单位 X 轴线段旋到 ab 方向绘制
+                func drawFrustumEdge(
+                    a: vec3, b: vec3, color: (real, real, real, real))=> void
+                {
+                    let clipped = gizmoClipEyeSegmentToScreen(
+                        gizmoMat4MulPoint(debug_view, a),
+                        gizmoMat4MulPoint(debug_view, b),
+                        debug_znear, clip_sx, clip_sy, debug_is_persp);
+                    if (clipped->is_none)
+                        return;
+                    let (ca, cb) = clipped->unwrap;
+                    let wa = debug_cam_pos + debug_cam_rot * ca;
+                    let wb = debug_cam_pos + debug_cam_rot * cb;
+
+                    let ab = wb - wa;
+                    let len = ab->length;
+                    if (len < 0.0001)
+                        return;
+                    drawSolid(
+                        wa, gizmoEdgeRotation(ab), (len, len, len) as vec3,
+                        GIZMO_LINE_X, color);
+                }
+
+                for (let e : self.m_camera_entity_selector)
+                {
+                    do try!{
+                        try! cam_trans =
+                            e->towoo::get_component:<Transform::Translation>();
+                        try! cam_proj =
+                            e->towoo::get_component:<Camera::Projection>();
+                        try! euid = e->internal::get_entity_uid;
+
+                        let pos = cam_trans->get_global_pos;
+                        let rot = cam_trans->get_global_rot;
+
+                        let mut is_selected = false;
+                        match (self.m_selected_entity_id)
+                        {
+                            none?;
+                            value(selected)?
+                                is_selected = selected == euid;
+                        }
+                        let mut is_hover = false;
+                        match (self.m_icon_gizmo_hover)
+                        {
+                            none?;
+                            value(hovered)?
+                                is_hover = hovered == euid;
+                        }
+
+                        let mut frustum_color = CAMERA_GIZMO_COLOR;
+                        if (is_hover)
+                            frustum_color = CAMERA_GIZMO_COLOR_HOVER;
+                        if (is_selected)
+                            frustum_color = GIZMO_COLOR_HOVER;
+                        let mut icon_tint = (1., 1., 1., 1.);
+                        if (is_hover)
+                            icon_tint = (1., 1., 0.6, 1.);
+                        if (is_selected)
+                            icon_tint = (1., 1., 0.25, 1.);
+
+                        // ---- 视锥体线框 ----
+                        // 用该摄像机自己的逆投影矩阵反变换 NDC 角点
+                        //（近/远平面 z 分别为 0/1），宽高比随之与其渲染
+                        // 目标一致，无需手工推算
+                        let inv_proj = cam_proj->get_inv_proj_mat;
+                        let near_rect = [
+                            gizmoCameraUnprojectPoint(inv_proj, pos, rot, -1., -1., 0.),
+                            gizmoCameraUnprojectPoint(inv_proj, pos, rot,  1., -1., 0.),
+                            gizmoCameraUnprojectPoint(inv_proj, pos, rot,  1.,  1., 0.),
+                            gizmoCameraUnprojectPoint(inv_proj, pos, rot, -1.,  1., 0.),
+                        ];
+                        let far_rect = [
+                            gizmoCameraUnprojectPoint(inv_proj, pos, rot, -1., -1., 1.),
+                            gizmoCameraUnprojectPoint(inv_proj, pos, rot,  1., -1., 1.),
+                            gizmoCameraUnprojectPoint(inv_proj, pos, rot,  1.,  1., 1.),
+                            gizmoCameraUnprojectPoint(inv_proj, pos, rot, -1.,  1., 1.),
+                        ];
+                        for (let mut i = 0; i < 4; i += 1)
+                        {
+                            let j = (i + 1) % 4;
+                            drawFrustumEdge(near_rect[i], near_rect[j], frustum_color);
+                            drawFrustumEdge(far_rect[i], far_rect[j], frustum_color);
+                            drawFrustumEdge(near_rect[i], far_rect[i], frustum_color);
+                        }
+
+                        // ---- 图标 ----
+                        // 绘制在 Translation 位置、面向调试摄像机（公告板），
+                        // 大小按屏幕像素恒定（与变换游标同一套估算）；
+                        // 位于调试摄像机身后的摄像机不绘制图标（避免镜像投影）
+                        if ((pos - debug_cam_pos)->dot(debug_cam_forward) > 0.)
+                        {
+                            match (Icons::GIZMO_CAMERA)
+                            {
+                                none?;
+                                value(icon)?
+                                {
+                                    let world_per_pixel = gizmoWorldPerPixel(
+                                        camera_entity, debug_camera_trans,
+                                        debug_view_proj, pos, fb_rsize);
+                                    drawBillboardIcon(
+                                        pos,
+                                        debug_camera_trans->get_global_rot,
+                                        CAMERA_GIZMO_ICON_SIZE_PX * world_per_pixel,
+                                        icon,
+                                        icon_tint);
+                                }
+                            }
+                        }
+                        return_value!;
+                    };
+                }
+                return_value!;
+            };
+
+            // 绘制 2D 光源实体 gizmo（仅图标，无附加线框）：
+            // 点光源（Translation+Point/Range 且不带 Invisible）绘制
+            // gizmo_point_light2d，平行光源（Translation+Parallel 且不带
+            // Invisible）绘制 gizmo_parallel_light2d；绘制规则与摄像机
+            // 图标一致（Translation 位置、面向调试摄像机的公告板、屏幕
+            // 像素恒定大小、身后不绘制），悬停提亮/选中染黄；
+            // 平行光源图标额外随实体最终旋转自转（箭头指向照射方向）。
+            do try!{
+                try! debug_camera_trans =
+                    camera_entity->towoo::get_component:<Transform::Translation>();
+                let (fbw, fbh) = fb->size();
+                let fb_rsize = (fbw as real, fbh as real) as vec2;
+                let debug_view_proj = camera_projection->get_view_proj_mat;
+                let debug_cam_pos = debug_camera_trans->get_global_pos;
+                let debug_cam_forward =
+                    debug_camera_trans->get_global_rot * ((0., 0., 1.) as vec3);
+
+                // follow_rotation 为真时（平行光源）图标随实体最终旋转在
+                // 公告板面内自转，箭头指向实际照射方向；点/范围光源全向
+                // 发光，图标不随旋转
+                func drawLight2DIcon(
+                    e: entity,
+                    icon: option<texture>,
+                    follow_rotation: bool)=> void
+                {
+                    do try!{
+                        try! trans =
+                            e->towoo::get_component:<Transform::Translation>();
+                        try! euid = e->internal::get_entity_uid;
+                        try! icon_instance = icon;
+
+                        let pos = trans->get_global_pos;
+
+                        let billboard_rot = debug_camera_trans->get_global_rot;
+                        let mut icon_rot = billboard_rot;
+                        if (follow_rotation)
+                            icon_rot = billboard_rot * gizmoDirectionalIconSpin(
+                                trans->get_global_rot, billboard_rot);
+
+                        let mut is_selected = false;
+                        match (self.m_selected_entity_id)
+                        {
+                            none?;
+                            value(selected)?
+                                is_selected = selected == euid;
+                        }
+                        let mut is_hover = false;
+                        match (self.m_icon_gizmo_hover)
+                        {
+                            none?;
+                            value(hovered)?
+                                is_hover = hovered == euid;
+                        }
+
+                        let mut icon_tint = (1., 1., 1., 1.);
+                        if (is_hover)
+                            icon_tint = (1., 1., 0.6, 1.);
+                        if (is_selected)
+                            icon_tint = (1., 1., 0.25, 1.);
+
+                        // 位于调试摄像机身后的光源不绘制图标（避免镜像投影）
+                        if ((pos - debug_cam_pos)->dot(debug_cam_forward) > 0.)
+                        {
+                            let world_per_pixel = gizmoWorldPerPixel(
+                                camera_entity, debug_camera_trans,
+                                debug_view_proj, pos, fb_rsize);
+                            drawBillboardIcon(
+                                pos,
+                                icon_rot,
+                                LIGHT2D_GIZMO_ICON_SIZE_PX * world_per_pixel,
+                                icon_instance,
+                                icon_tint);
+                        }
+                        return_value!;
+                    };
+                }
+
+                for (let e : self.m_point_light2d_entity_selector)
+                {
+                    drawLight2DIcon(e, Icons::GIZMO_POINT_LIGHT2D, false);
+                }
+                for (let e : self.m_range_light2d_entity_selector)
+                {
+                    drawLight2DIcon(e, Icons::GIZMO_POINT_LIGHT2D, false);
+                }
+                for (let e : self.m_parallel_light2d_entity_selector)
+                {
+                    drawLight2DIcon(e, Icons::GIZMO_PARALLEL_LIGHT2D, true);
+                }
+                return_value!;
+            };
+
+            if (self.m_gizmo_draw_visible)
+            {
+                let origin = self.m_gizmo_draw_origin;
+                let orientation = self.m_gizmo_draw_rotation;
+                let active_handle = self.m_gizmo_dragging
+                    ? self.m_gizmo_drag_handle
+                    | self.m_gizmo_hover_handle;
+
+                let axis_colors = [
+                    (active_handle == GIZMO_HANDLE_X) ? GIZMO_COLOR_HOVER | GIZMO_COLOR_X,
+                    (active_handle == GIZMO_HANDLE_Y) ? GIZMO_COLOR_HOVER | GIZMO_COLOR_Y,
+                    (active_handle == GIZMO_HANDLE_Z) ? GIZMO_COLOR_HOVER | GIZMO_COLOR_Z,
+                ];
+
+                if (self.m_gizmo_mode == GizmoMode::ROTATE)
+                {
+                    let ring_size = self.m_gizmo_draw_size * GIZMO_RING_RADIUS_RATIO;
+                    let ring_scale = (ring_size, ring_size, ring_size) as vec3;
+
+                    drawSolid(origin, orientation, ring_scale, GIZMO_RING_AROUND_X, axis_colors[0]);
+                    drawSolid(origin, orientation, ring_scale, GIZMO_RING_AROUND_Y, axis_colors[1]);
+                    drawSolid(origin, orientation, ring_scale, GIZMO_RING_AROUND_Z, axis_colors[2]);
+                }
+                else
+                {
+                    let axis_len = (self.m_gizmo_mode == GizmoMode::SCALE)
+                        ? self.m_gizmo_draw_size * GIZMO_SCALE_AXIS_RATIO
+                        | self.m_gizmo_draw_size;
+                    let axis_scale = (axis_len, axis_len, axis_len) as vec3;
+
+                    let lines = [GIZMO_LINE_X, GIZMO_LINE_Y, GIZMO_LINE_Z];
+                    // 平移用箭头锥，缩放用方块手柄
+                    let mut tips = [GIZMO_CONE_X, GIZMO_CONE_Y, GIZMO_CONE_Z];
+                    if (self.m_gizmo_mode == GizmoMode::SCALE)
+                        tips = [GIZMO_BOX_X, GIZMO_BOX_Y, GIZMO_BOX_Z];
+                    for (let mut axis = 0; axis < 3; axis += 1)
+                    {
+                        drawSolid(origin, orientation, axis_scale, lines[axis], axis_colors[axis]);
+                        drawSolid(origin, orientation, axis_scale, tips[axis], axis_colors[axis]);
+                    }
+
+                    // 中央手柄：屏幕平面移动 / 整体缩放
+                    let center = self.m_gizmo_draw_center_size;
+                    drawSolid(
+                        origin, orientation, (center, center, center) as vec3,
+                        DEFAULT_SQUARE_SHAPE,
+                        (active_handle == GIZMO_HANDLE_CENTER)
+                        ? GIZMO_COLOR_HOVER
+                        | GIZMO_COLOR_CENTER);
+                }
+            }
+
+            return_value!;
+        };
+    }
+
+    // 绘制半透明的世界坐标网格（XZ 平面，y=0）：
+    // 输入为覆盖整个屏幕的 NDC 四边形，WorldGrid.shader 内按像素重建视线
+    // 并与地面求交；网格密度、颜色与距离衰减均在 shader 中定义。
+    // 视线重建与 towoo::ray::from 一致：直接把 Camera::Projection 的
+    // 逆投影矩阵交给 shader，无需手动推算 tan半FOV / 正交可视半宽高。
+    protected func drawWorldGrid(
+        camera_entity: entity,
+        camera_projection: Camera::Projection,
+        rend_chain: rendchain)=> void
+    {
+        do try!{
+            try! camera_trans =
+                camera_entity->towoo::get_component:<Transform::Translation>();
+            try! shader_instance = WORLD_GRID;
+            try! shape_instance = FULLSCREEN_NDC_QUAD;
+
+            let rot = camera_trans->get_global_rot;
+            let pos = camera_trans->get_global_pos;
+
+            // 与 ray::from 的 orth 参数一致：无透视投影组件即按正交处理
+            let is_ortho =
+                camera_entity->towoo::get_component:<Camera::PerspectiveProjection>()->is_none;
+
+            let right = rot * ((1., 0., 0.) as vec3);
+            let up = rot * ((0., 1., 0.) as vec3);
+            let forward = rot * ((0., 0., 1.) as vec3);
+
+            let draw_action = rend_chain->draw(shader_instance, shape_instance, option::none);
+            draw_action->set_uniform_mat4x4(
+                shader_instance, "JE_GRID_INV_PROJ",
+                camera_projection->get_inv_proj_mat as raw mat4);
+            draw_action->set_uniform(shader_instance, "JE_GRID_IS_ORTHO", is_ortho ? 1. | 0.);
+            draw_action->set_uniform(shader_instance, "JE_GRID_CAM_POS", (pos[0], pos[1], pos[2]));
+            draw_action->set_uniform(shader_instance, "JE_GRID_CAM_RIGHT", (right[0], right[1], right[2]));
+            draw_action->set_uniform(shader_instance, "JE_GRID_CAM_UP", (up[0], up[1], up[2]));
+            draw_action->set_uniform(shader_instance, "JE_GRID_CAM_FORWARD", (forward[0], forward[1], forward[2]));
+            return_value!;
+        };
+    }
+}

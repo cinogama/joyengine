@@ -1,0 +1,368 @@
+// 世界编辑器视口 —— 实体拾取与右键菜单。
+// 渲染实体的射线拾取（循环选中）、实体图标 gizmo 的屏幕命中、
+// 右键生命周期（点击 vs 拖拽分流）与实体上下文菜单，
+// 以及选中状态/实体选择器的对外访问接口。
+
+import woo::std;
+
+import je;
+import je::ecs;
+import je::gui;
+import je::internal;
+
+import je::towoo;
+import je::towoo::types;
+import je::towoo::components;
+
+import pkg::iterator;
+import pkg::try;
+import pkg::worst;
+
+import builtin::editor::Editor::Action::DestroyEntity;
+
+import Definition;
+import GizmoMath;
+
+using std;
+
+using je;
+using je::gui;
+using iterator;
+
+using JEEditor::Editor::Action;
+
+namespace JEEditor::Editor::WorldEditorViewport
+{
+    protected func sendMouseClickToChoiceEntityRequest(self: WorldEditorViewport, camera_ray: towoo::ray)
+    {
+        // 收集所有被射线命中的实体，并记录命中距离。
+        let mut hits = []mut: vec<mut (real, entity::internal::euid_t)>;
+
+        for (let e : self.m_selectable_entity_selector)
+        {
+            // 摄像机实体不参与渲染射线拾取（由图标 gizmo 的点击拾取负责）
+            if (isCameraEntity(e))
+                continue;
+
+            let result = camera_ray->intersect(
+                e->towoo::get_component:<Transform::Translation>->unwrap,
+                e->towoo::get_component:<Renderer::Shape>,
+                true,
+            );
+
+            if (result->is_value)
+            {
+                hits->add(mut (
+                        (result->unwrap - camera_ray->origin)->length,
+                        e->internal::get_entity_uid->or(0h as entity::internal::euid_t)));
+            }
+        }
+
+        // 射线未命中任何实体：清空当前选中。
+        if (hits->empty)
+        {
+            self.m_selected_entity_id = option::none;
+            return;
+        }
+
+        // 按命中距离由近及远排序。
+        sort_in_place(hits, \(da, _), (db, _) = da < db;);
+
+        // 每次点击沿“由近及远”的顺序循环选中下一个实体；
+        // 若当前选中实体不在本次命中列表中，则选中最近的实体。
+        let mut next_index = 0;
+        match (self.m_selected_entity_id)
+        {
+            value(current_uid)?
+            {
+                for (let mut i = 0; i < hits->len; i += 1)
+                {
+                    if (hits[i].1 == current_uid)
+                    {
+                        next_index = (i + 1) % hits->len;
+                        break;
+                    }
+                }
+            }
+            none?;
+        }
+        self.m_selected_entity_id = option::value(hits[next_index].1);
+    }
+
+    // 右键点击的射线拾取：已选实体在命中列表中时保持其选中（右键作用于
+    // 选中的实体，被部分遮挡时依然有效），否则选中最近的命中实体；
+    // 未命中返回 none 且不改变当前选中（右键空白处不应清空选中）。
+    protected func pickEntityForContextMenu(
+        self: WorldEditorViewport,
+        camera_ray: towoo::ray)=> option<entity::internal::euid_t>
+    {
+        let mut hits = []mut: vec<mut (real, entity::internal::euid_t)>;
+
+        for (let e : self.m_selectable_entity_selector)
+        {
+            // 摄像机实体不参与渲染射线拾取（由图标 gizmo 的点击拾取负责）
+            if (isCameraEntity(e))
+                continue;
+
+            let result = camera_ray->intersect(
+                e->towoo::get_component:<Transform::Translation>->unwrap,
+                e->towoo::get_component:<Renderer::Shape>,
+                true,
+            );
+
+            if (result->is_value)
+            {
+                hits->add(mut (
+                        (result->unwrap - camera_ray->origin)->length,
+                        e->internal::get_entity_uid->or(0h as entity::internal::euid_t)));
+            }
+        }
+
+        if (hits->empty)
+            return option::none;
+
+        // 按命中距离由近及远排序。
+        sort_in_place(hits, \(da, _), (db, _) = da < db;);
+
+        // 已选实体在命中列表中：菜单作用于它。
+        match (self.m_selected_entity_id)
+        {
+            none?;
+            value(current)?
+            {
+                for (let (_, euid) : hits)
+                {
+                    if (euid == current)
+                        return option::value(current);
+                }
+            }
+        }
+
+        // 否则选中并作用于最近的命中实体。
+        return option::value(hits[0].1);
+    }
+
+    // 鼠标位置命中的实体图标 gizmo（摄像机/2D 光源，返回实体 EUID）：
+    // 命中按到图标中心的距离由近及远排序；cycle 为真时沿用实体拾取的
+    // “循环选中下一个”规则，否则已选中的实体在命中列表中时保持其选中
+    //（右键菜单语义）。
+    protected func pickIconGizmo(
+        self: WorldEditorViewport,
+        mouse: vec2,
+        cycle: bool)=> option<entity::internal::euid_t>
+    {
+        let mut hits = []mut: vec<mut (real, entity::internal::euid_t)>;
+
+        for (let (euid, center, half) : self.m_icon_gizmo_rects)
+        {
+            let dist = (mouse - center)->length;
+            if (dist <= half)
+                hits->add(mut (dist, euid));
+        }
+
+        if (hits->empty)
+            return option::none;
+
+        // 按到图标中心的距离由近及远排序。
+        sort_in_place(hits, \(da, _), (db, _) = da < db;);
+
+        let mut next_index = 0;
+        match (self.m_selected_entity_id)
+        {
+            none?;
+            value(current)?
+            {
+                for (let mut i = 0; i < hits->len; i += 1)
+                {
+                    if (hits[i].1 == current)
+                    {
+                        next_index = cycle ? ((i + 1) % hits->len) | i;
+                        break;
+                    }
+                }
+            }
+        }
+        return option::value(hits[next_index].1);
+    }
+
+    // 每帧重建实体图标 gizmo（摄像机/2D 光源）的屏幕命中矩形
+    //（Translation 位置投影到屏幕，半径 = 图标半边长 + 手柄命中余量）
+    // 与悬停状态；位于调试摄像机身后的实体不参与命中。
+    protected func updateIconGizmos(
+        self: WorldEditorViewport,
+        debug_camera: option<entity>,
+        hovered: bool,
+        viewport_rect: option<(ImVec2, ImVec2)>)=> void
+    {
+        self.m_icon_gizmo_rects->clear();
+        self.m_icon_gizmo_hover = option::none;
+
+        do try!{
+            try! camera_entity = debug_camera;
+            try! camera_trans =
+                camera_entity->towoo::get_component:<Transform::Translation>();
+            try! camera_proj =
+                camera_entity->towoo::get_component:<Camera::Projection>();
+            try! (rect_min, rect_max) = viewport_rect;
+
+            let rmin = rect_min as vec2;
+            let rsize = rect_max as vec2 - rect_min as vec2;
+            if (rsize[0] <= 0. || rsize[1] <= 0.)
+                return_value!;
+
+            let view_proj = camera_proj->get_view_proj_mat;
+            let cam_pos = camera_trans->get_global_pos;
+            let cam_forward =
+                camera_trans->get_global_rot * ((0., 0., 1.) as vec3);
+
+            // 把选择器内全部实体的 Translation 位置登记为命中矩形，
+            // icon_size_px 为对应图标的屏幕边长（像素）
+            func addIconRects(selector: entity_selector, icon_size_px: real)=> void
+            {
+                for (let e : selector)
+                {
+                    do try!{
+                        try! trans =
+                            e->towoo::get_component:<Transform::Translation>();
+                        try! euid = e->internal::get_entity_uid;
+
+                        let pos = trans->get_global_pos;
+                        if ((pos - cam_pos)->dot(cam_forward) <= 0.)
+                            return_value!;
+
+                        self.m_icon_gizmo_rects->add(mut (
+                            euid,
+                            gizmoWorldToScreen(view_proj, pos, rmin, rsize),
+                            icon_size_px * 0.5 + GIZMO_HIT_PX));
+                        return_value!;
+                    };
+                }
+            }
+
+            addIconRects(self.m_camera_entity_selector, CAMERA_GIZMO_ICON_SIZE_PX);
+            addIconRects(self.m_point_light2d_entity_selector, LIGHT2D_GIZMO_ICON_SIZE_PX);
+            addIconRects(self.m_range_light2d_entity_selector, LIGHT2D_GIZMO_ICON_SIZE_PX);
+            addIconRects(self.m_parallel_light2d_entity_selector, LIGHT2D_GIZMO_ICON_SIZE_PX);
+
+            if (hovered
+                && !self.m_is_look_active
+                && !self.m_is_pan_active
+                && !self.m_is_orbit_active)
+            {
+                self.m_icon_gizmo_hover =
+                    self->pickIconGizmo(GetMousePos() as vec2, false);
+            }
+            return_value!;
+        };
+    }
+
+    // 视口右键的生命周期：记录按下起点（供环视的延迟激活使用，须先于
+    // updateCameraControl 调用），并在松开时按位移分流——位移不超过
+    // RMB_CLICK_MAX_DRAG_PX 视为点击实体：选中该实体并在鼠标处弹出
+    // 上下文菜单（内容与实体列表一致，见 drawEntityContextMenuItems）。
+    protected func updateViewportRightClick(
+        self: WorldEditorViewport,
+        debug_camera: option<entity>,
+        hovered: bool,
+        viewport_rect: option<(ImVec2, ImVec2)>)=> void
+    {
+        // 记录右键按下起点与“按下发生在视口内”标记。
+        if (hovered && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Right))
+        {
+            self.m_rmb_press_pos = GetMousePos();
+            self.m_rmb_press_in_viewport = true;
+        }
+
+        // 未在视口内按下 / 按住（环视）中：不处理。
+        if (!self.m_rmb_press_in_viewport
+            || IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Right))
+            return;
+        self.m_rmb_press_in_viewport = false;
+
+        // 位移超过阈值：这是一次拖拽环视，不弹菜单。
+        let drag = GetMousePos() as vec2 - self.m_rmb_press_pos as vec2;
+        if (drag->length > RMB_CLICK_MAX_DRAG_PX)
+            return;
+
+        match (viewport_rect)
+        {
+            none?;
+            value((rect_min, rect_max))?
+            {
+                do try!{
+                    try! camera_entity = debug_camera;
+                    try! trans = camera_entity->towoo::get_component:<Transform::Translation>();
+                    try! proj = camera_entity->towoo::get_component:<Camera::Projection>();
+
+                    // 摄像机/2D 光源实体：命中其图标 gizmo 时直接选中
+                    //（右键菜单作用于它），不走渲染实体的射线拾取
+                    match (self->pickIconGizmo(GetMousePos() as vec2, false))
+                    {
+                        value(icon_euid)?
+                            self.m_selected_entity_id = option::value(icon_euid);
+                        none?
+                        {
+                            let mouse_diff = GetMousePos() as vec2 - rect_min as vec2;
+                            let viewport_size = rect_max as vec2 - rect_min as vec2;
+                            let (vpx, vpy) =
+                                ((mouse_diff / viewport_size) - (0.5, 0.5) as vec2) * 2.;
+
+                            try! euid = self->pickEntityForContextMenu(towoo::ray::from(
+                                trans, proj, (vpx, -vpy) as vec2,
+                                camera_entity->towoo::get_component:<Camera::PerspectiveProjection>->is_none));
+
+                            self.m_selected_entity_id = option::value(euid);
+                        }
+                    }
+
+                    OpenPopup(VIEWPORT_ENTITY_CONTEXT_MENU_ID);
+                    return_value!;
+                };
+            }
+        }
+    }
+
+    // 实体右键菜单内容（视口与实体列表共用，两处由各自的弹出逻辑调用）。
+    public func drawEntityContextMenuItems(
+        self: WorldEditorViewport, e: entity)=> void
+    {
+        if (MenuItem("销毁"))
+        {
+            // 使用 Action 机制发布销毁实体的指令
+            self->doAction(DestroyEntity::try_create(e)->unwrap);
+        }
+    }
+
+    protected func findEntityByEuid(
+        self: WorldEditorViewport, euid: entity::internal::euid_t)=> option<entity>
+    {
+        for (let e : self.m_selectable_entity_selector)
+        {
+            match (e->internal::get_entity_uid)
+            {
+                none?;
+                value(entity_uid)?
+                    if (entity_uid == euid)
+                        return option::value(e);
+            }
+        }
+        return option::none;
+    }
+
+    // ==========================
+
+    public func getEntitySelector(self: WorldEditorViewport)
+    {
+        return self.m_all_entity_selector;
+    }
+
+    public func getSelectedEntityId(self: WorldEditorViewport)
+    {
+        return self.m_selected_entity_id;
+    }
+
+    public func setSelectedEntityId(self: WorldEditorViewport, id: option<entity::internal::euid_t>)=> void
+    {
+        self.m_selected_entity_id = id;
+    }
+}

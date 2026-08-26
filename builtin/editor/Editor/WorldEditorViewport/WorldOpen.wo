@@ -1,0 +1,203 @@
+// 世界编辑器视口 —— 世界创建与打开（静态入口）。
+// 新建默认世界（含默认管线、调试摄像机与两个示例实体）与从
+// .je4world 文件载入并打开编辑视口；供主菜单/资源管理器调用。
+
+import woo::std;
+
+import je;
+import je::ecs;
+import je::gui;
+import je::typeinfo;
+
+import je::towoo;
+import je::towoo::types;
+import je::towoo::components;
+
+import pkg::fsys;
+import pkg::interface;
+import pkg::iterator;
+import pkg::toml;
+
+import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Forms::MsgBox;
+
+import builtin::editor::Editor::Saving::World;
+
+import builtin::editor::Inspector::Universe;
+
+import Definition;
+import WindowLifecycle;
+
+using std;
+
+using je;
+using je::gui;
+using fsys;
+using iterator;
+
+using JEEditor::GUI;
+using JEEditor::GUI::Windows;
+using JEEditor::GUI::Forms;
+
+namespace JEEditor::Editor::WorldEditorViewport
+{
+    let TRASNLATION_SYSTEM_TYPE =
+        typeinfo::load("Translation::TranslationUpdatingSystem")->unwrap;
+    let DEFAULT_GRAPHIC_SYSTEM_TYPE =
+        typeinfo::load("Graphic::UnlitGraphicPipelineSystem")->unwrap;
+
+    // 确保世界中存在编辑器调试摄像机（带 Editor::Invisible 标记的透视摄像机），
+    // 没有则创建默认的一个。调试摄像机是编辑器内部实体，不会随世界文件保存
+    //（Editor:: 前缀组件在保存时被跳过），因此新建/载入世界时都需调用本函数重建。
+    public func ensureDebugCamera(w: world)=> void
+    {
+        let debug_camera_selector = w->create_selector([
+                requirement::contains(Editor::Invisible::type::typeinfo),
+                requirement::contains(Camera::RendToFramebuffer::type::typeinfo),
+                requirement::contains(Camera::Projection::type::typeinfo),
+                requirement::contains(Transform::LocalPosition::type::typeinfo),
+                requirement::contains(Transform::LocalRotation::type::typeinfo),
+                requirement::contains(Transform::Translation::type::typeinfo),
+            ]);
+
+        if ((debug_camera_selector->iter |> collect->get(0))->is_value)
+            return;
+
+        // Create editor camera.
+        do w->add_entity([
+                Transform::Translation::type::typeinfo,
+                Transform::LocalPosition::type::typeinfo,
+                Transform::LocalRotation::type::typeinfo,
+                Transform::LocalToWorld::type::typeinfo,
+                Camera::Projection::type::typeinfo,
+                Camera::PerspectiveProjection::type::typeinfo,
+                Camera::RendToFramebuffer::type::typeinfo,
+                Camera::Clear::type::typeinfo,
+                Editor::Invisible::type::typeinfo,
+            ]);
+    }
+
+    public func createNewWorldToEdit()
+    {
+        let new_world = world::create(
+            Inspector::Universe::UniverseCtx::instance()->getUniverse());
+
+        // Create default graphic pipe line.
+        do new_world->add_system(DEFAULT_GRAPHIC_SYSTEM_TYPE);
+        do new_world->add_system(TRASNLATION_SYSTEM_TYPE);
+
+        // Create editor camera.
+        ensureDebugCamera(new_world);
+
+        let e = new_world->add_entity([
+                Transform::Translation::type::typeinfo,
+                Transform::LocalPosition::type::typeinfo,
+                Transform::LocalRotation::type::typeinfo,
+                Transform::LocalScale::type::typeinfo,
+                Transform::LocalToWorld::type::typeinfo,
+                Renderer::Shaders::type::typeinfo,
+                Renderer::Shape::type::typeinfo,
+            ]);
+
+        e->towoo::get_component:<Transform::LocalPosition>->unwrap.pos->set(
+            (0., 0., 1.) as vec3);
+
+        let e2 = new_world->add_entity([
+                Transform::Translation::type::typeinfo,
+                Transform::LocalPosition::type::typeinfo,
+                Transform::LocalRotation::type::typeinfo,
+                Transform::LocalScale::type::typeinfo,
+                Transform::LocalToWorld::type::typeinfo,
+                Renderer::Shaders::type::typeinfo,
+                Renderer::Shape::type::typeinfo,
+            ]);
+
+        e2->towoo::get_component:<Transform::LocalPosition>->unwrap.pos->set(
+            (0., 1.5, 1.) as vec3);
+        e2->towoo::get_component:<Transform::LocalRotation>->unwrap.rot->set(
+            quat::euler(0., 0., 15.));
+
+        new_world->set_enable(true);
+
+        for (let mut i = 0;; i += 1)
+        {
+            match (Windows::show(
+                    create(
+                        new_world,
+                        i == 0 ? "New world" | F"New world {i + 1}",
+                        option::none,
+                        [])))
+            {
+                none?;
+                value(_)?
+                    break;
+            }
+        }
+    }
+
+    // 从 .je4world 文件加载世界并打开编辑视口；
+    // 该路径已有打开的视口或文件读取失败时以 MsgBox 报错。
+    public func openWorldEditorViewportFromFile(path: path_t)=> void
+    {
+        match (findWorldEditorViewportByPath(path))
+        {
+            none?;
+            value(_)?
+            {
+                MsgBox::err(
+                    "打开失败", F"世界文件 \"{path->to_string()}\" 已在编辑器中打开");
+                return;
+            }
+        }
+
+        match (toml::load(path))
+        {
+            err(msg)?
+            {
+                MsgBox::err(
+                    "打开失败", F"读取世界文件 \"{path->to_string()}\" 失败：{msg}");
+                return;
+            }
+            ok(wdat)?
+            {
+                let (w, runtime_system_names) = JEEditor::Saving::World::restore(
+                    Inspector::Universe::UniverseCtx::instance()->getUniverse(),
+                    wdat);
+                ensureDebugCamera(w);
+                w->set_enable(true);
+
+                // “调试执行/导出时才启用”的系统以类型名保存，此处解析为
+                // typeinfo 后交由视口保存；类型已卸载时跳过并记录日志。
+                let runtime_systems = []mut: vec<typeinfo>;
+                for (let tname : runtime_system_names)
+                {
+                    match (typeinfo::load(tname))
+                    {
+                        none?
+                            logerr(F"Failed to load system type `{tname}`, skipped.");
+                        value(systype)?
+                            runtime_systems->add(systype);
+                    }
+                }
+
+                // 优先使用文件中保存的世界名（与文件名无关）；
+                // 旧版本文件未保存名字，退回文件名。
+                let name = JEEditor::Saving::World::getName(wdat)
+                    ->or(purename(path));
+
+                match (Windows::show(
+                    create(w, name, option::value(path), runtime_systems->to_array())))
+                {
+                    none?
+                    {
+                        // 极短时间内的重复打开：窗口注册失败，释放刚创建的世界
+                        MsgBox::err(
+                            "打开失败", F"世界 \"{name}\" 已在编辑器中打开");
+                        w->close;
+                    }
+                    value(_)?;
+                }
+            }
+        }
+    }
+}

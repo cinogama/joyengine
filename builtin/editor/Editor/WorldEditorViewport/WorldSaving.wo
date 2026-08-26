@@ -1,0 +1,284 @@
+// 世界编辑器视口 —— 世界保存/重命名/重开与调试系统管理。
+// 世界落盘（saveWorldTo 是编辑器中唯一入口）、另存为流程、重命名/
+// 路径重定向的“重建窗口”逻辑，以及“调试执行/导出时才启用”的
+// 运行时系统列表管理。
+
+import woo::std;
+
+import je;
+import je::ecs;
+import je::gui;
+import je::internal;
+import je::typeinfo;
+
+import je::towoo;
+import je::towoo::types;
+import je::towoo::components;
+
+import pkg::fsys;
+import pkg::interface;
+import pkg::toml;
+
+import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Forms::MsgBox;
+import builtin::editor::GUI::Forms::InputBox;
+import builtin::editor::GUI::Forms::AskBox;
+import builtin::editor::GUI::Statebar;
+
+import builtin::editor::Editor::Saving::World;
+import builtin::editor::Editor::Practice;
+
+import Definition;
+import WindowLifecycle;
+
+using std;
+
+using je;
+using je::gui;
+using fsys;
+
+using JEEditor::GUI;
+using JEEditor::GUI::Windows;
+using JEEditor::GUI::Forms;
+using JEEditor::GUI::Statebar;
+
+namespace JEEditor::Editor::WorldEditorViewport
+{
+    // ==========================
+    //  系统管理
+    // ==========================
+
+    public func getRuntimeSystems(self: WorldEditorViewport)=> array<typeinfo>
+    {
+        return self.m_runtime_systems->to_array();
+    }
+
+    // 系统是否已通过 add_system 加入世界（立即启用，编辑器内正在运行）；
+    // 以类型名比较，避免类型热重载后 typeinfo 句柄不一致。
+    public func hasWorldSystem(self: WorldEditorViewport, systype: typeinfo)=> bool
+    {
+        for (let added : self.m_world_instance->internal::get_all_systems)
+        {
+            if (added->name == systype->name)
+                return true;
+        }
+        return false;
+    }
+
+    // 系统是否在“调试执行/导出时才启用”的列表中
+    public func hasRuntimeSystem(self: WorldEditorViewport, systype: typeinfo)=> bool
+    {
+        for (let added : self.m_runtime_systems)
+        {
+            if (added->name == systype->name)
+                return true;
+        }
+        return false;
+    }
+
+    // 添加一个“调试执行/导出时才启用”的系统；已存在时保持不变（幂等）
+    public func addRuntimeSystem(self: WorldEditorViewport, systype: typeinfo)=> void
+    {
+        if (self->hasRuntimeSystem(systype))
+            return;
+        self.m_runtime_systems->add(systype);
+    }
+
+    // 移除一个“调试执行/导出时才启用”的系统；不存在时保持不变（幂等）
+    public func removeRuntimeSystem(self: WorldEditorViewport, systype: typeinfo)=> void
+    {
+        let remaining = self.m_runtime_systems->to_array()
+            ->forall(\added = added->name != systype->name;);
+
+        self.m_runtime_systems->clear();
+        for (let added : remaining)
+            self.m_runtime_systems->add(added);
+    }
+
+    public func getName(self: WorldEditorViewport)=> string
+    {
+        return self.m_name;
+    }
+
+    public func getSavingPath(self: WorldEditorViewport)=> option<path_t>
+    {
+        return self.m_saving_path;
+    }
+
+    // 把世界序列化并写入 path；失败时弹错误对话框并返回 false。
+    // 编辑器中世界落盘的唯一入口。
+    public func saveWorldTo(self: WorldEditorViewport, path: path_t)=> bool
+    {
+        match (toml::save(
+                JEEditor::Saving::World::save(
+                    self.m_world_instance, self.m_name, self->getRuntimeSystems()), path))
+        {
+            err(msg)?
+            {
+                MsgBox::err(
+                    "保存失败", F"保存世界到 \"{path->to_string()}\" 失败：{msg}");
+                return false;
+            }
+            ok(_)?
+            {
+                // 已落盘：清除编辑历史的未保存标记（见 Practice::markSaved）
+                self.m_action_history->markSaved();
+
+                // 在独立作用域中先取出字符串：闭包按创建时的值捕获文本，
+                // 之后每帧由 Statebar 调用绘制保存成功提示。
+                let name = self.m_name;
+                let path_str = path->to_string();
+                Statebar::showState(3.) <| func(){
+                    Text(F"世界 \"{name}\" 已保存到 \"{path_str}\"");
+                };
+                return true;
+            }
+        }
+    }
+
+    // 快捷键保存（Ctrl+S）：已保存过的世界直接写回原路径；
+    // 尚未保存过的世界没有目标目录，提示改用拖拽图标到资源管理器的保存流程。
+    protected func saveByShortcut(self: WorldEditorViewport)=> void
+    {
+        match (self.m_saving_path)
+        {
+            value(path)?
+                do self->saveWorldTo(path);
+            none?
+                MsgBox::msg(
+                    "保存",
+                    F"世界 \"{self.m_name}\" 尚未保存到文件中，请拖动视口顶部的图标到资源管理器以保存");
+        }
+    }
+
+    // 以新的名称/保存路径重建本视口（沿用当前世界实例与未保存的修改）。
+    // 重建成功时把编辑历史（m_action_history）迁移到新视口以保持撤销/重做连续，
+    // 再以 CLOSE_BUT_KEEP_WORLD 关闭旧视口；窗口创建失败时返回 false。
+    protected func reopenWith(
+        self: WorldEditorViewport,
+        new_name: string,
+        new_path: option<path_t>)=> bool
+    {
+        let new_viewport = create(
+            self.m_world_instance, new_name, new_path, self->getRuntimeSystems());
+
+        match (Windows::show(new_viewport))
+        {
+            none?
+                return false;
+            value(_)?
+            {
+                new_viewport.m_action_history = self.m_action_history;
+                self.m_close = CloseRequest::CLOSE_BUT_KEEP_WORLD;
+                return true;
+            }
+        }
+    }
+
+    public func dropAndRename(self: WorldEditorViewport, new_name: string)=> void
+    {
+        if (self->isCurrentViewportAvailable && self.m_name != new_name)
+        {
+            if (!self->reopenWith(new_name, self.m_saving_path))
+            {
+                MsgBox::err(
+                    "重命名失败", "重命名世界失败，存在同名的未保存世界");
+
+                if (!self.m_saving_path->is_none)
+                    // 这种情况通常情况下不应该发生
+                    logerr("Failed to rename world: duplicated opened world?");
+            }
+        }
+    }
+
+    // 保存世界成功后，以新的保存路径重开本视口（沿用重命名的“重建窗口”逻辑），
+    // 使窗口标题中的保存路径立即生效。
+    public func dropAndSaveAs(self: WorldEditorViewport, new_path: path_t)=> void
+    {
+        if (self->isCurrentViewportAvailable && self.m_saving_path->is_none)
+        {
+            if (!self->reopenWith(self.m_name, option::value(new_path)))
+                MsgBox::err(
+                    "保存失败", "世界已写入文件，但以新的保存路径重开视口失败：存在使用该路径的世界视口");
+        }
+    }
+
+    // 资源管理器中重命名世界文件后调用：把视口的保存路径重定向到新路径。
+    // 沿用首次保存的“重建窗口”逻辑（保留世界实例、未保存的修改与编辑历史），
+    // 关闭旧视口并以新路径重开，确保窗口标题与后续保存路径立即匹配重命名后的文件。
+    public func dropAndRetargetPath(self: WorldEditorViewport, new_path: path_t)=> void
+    {
+        if (!self->isCurrentViewportAvailable)
+            return;
+
+        match (self.m_saving_path)
+        {
+            none?;
+            value(old_path)?
+            {
+                // 名称未变化时无需重开视口（窗口标题不会改变）
+                if (old_path == new_path)
+                    return;
+
+                if (!self->reopenWith(self.m_name, option::value(new_path)))
+                    MsgBox::err(
+                        "重命名失败", "文件已重命名，但以新路径重开视口失败：存在使用该路径的世界视口");
+            }
+        }
+    }
+
+    // 另存为流程（原资源管理器 requestSaveWorld）：弹输入框要文件名 →
+    // 已存在则确认覆盖 → 写盘 → 以新保存路径重开视口。
+    // on_saved 在写盘成功后回调（供资源管理器刷新文件缓存）。
+    public func requestSaveAs(
+        self: WorldEditorViewport, target_dir: path_t, on_saved: ()=> void)=> void
+    {
+        func saveTo(dst: path_t)=> void
+        {
+            // 对话框等待期间视口可能已被关闭
+            if (!self->isCurrentViewportAvailable)
+                return;
+
+            if (self->saveWorldTo(dst))
+            {
+                do on_saved();
+                self->dropAndSaveAs(dst);
+            }
+        }
+
+        func saveWorldAs(file_name: string)=> void
+        {
+            if (file_name->len == 0)
+            {
+                MsgBox::err("保存失败", "文件名不能为空");
+                return;
+            }
+
+            // 未带后缀时自动补全 .je4world
+            let full_name = file_name->end_with(".je4world")
+                ? file_name
+                | F"{file_name}.je4world";
+
+            let dst = target_dir / full_name;
+
+            if (isfile(dst))
+            {
+                // 已存在同名文件时弹出覆盖确认
+                do AskBox::show(
+                        "保存", F"目录中已存在 \"{full_name}\"，确认覆盖吗？")
+                    ->onYes(\= saveTo(dst););
+            }
+            else
+                saveTo(dst);
+        }
+
+        do InputBox::show(
+                "保存世界", "请输入保存的文件名：", F"{self.m_name}.je4world")
+            ->then(saveWorldAs);
+    }
+
+    public func getWorld(self: WorldEditorViewport)=> world
+    {
+        return self.m_world_instance;
+    }
+}

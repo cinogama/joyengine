@@ -1,0 +1,248 @@
+// 世界编辑器视口 —— gizmo 数学工具。
+// 变换游标交互（TransformGizmo.wo）、gizmo 绘制（GizmoDrawing.wo）与
+// 图标命中（EntityPicking.wo）共用的纯函数：屏幕投影、射线求交、
+// 裁剪与旋转计算等，均不持有状态。
+
+import woo::std;
+
+import je;
+import je::ecs;
+
+import je::towoo;
+import je::towoo::types;
+import je::towoo::components;
+
+import Definition;
+
+using std;
+
+using je;
+
+namespace JEEditor::Editor::WorldEditorViewport
+{
+    protected func gizmoUnitAxis(axis: int)=> vec3
+    {
+        if (axis == GIZMO_HANDLE_Y)
+            return (0., 1., 0.) as vec3;
+        if (axis == GIZMO_HANDLE_Z)
+            return (0., 0., 1.) as vec3;
+        return (1., 0., 0.) as vec3;
+    }
+
+    protected func gizmoMat4MulPoint(m: mat4, p: vec3)=> vec3
+    {
+        let h = m * ((p[0], p[1], p[2], 1.) as vec4);
+        if (h[3] == 0.)
+            return (h[0], h[1], h[2]) as vec3;
+        return (h[0] / h[3], h[1] / h[3], h[2] / h[3]) as vec3;
+    }
+
+    // 世界坐标 -> 视口像素坐标（rect 为显示区域）
+    protected func gizmoWorldToScreen(
+        view_proj: mat4, p: vec3, rect_min: vec2, rect_size: vec2)=> vec2
+    {
+        let ndc = gizmoMat4MulPoint(view_proj, p);
+        return (
+            (ndc[0] * 0.5 + 0.5) * rect_size[0] + rect_min[0],
+            (0.5 - ndc[1] * 0.5) * rect_size[1] + rect_min[1],
+        ) as vec2;
+    }
+
+    // 射线与平面求交（平面过 plane_point、法线 normal）
+    protected func gizmoRayPlaneHit(
+        ray_origin: vec3, ray_dir: vec3, normal: vec3, plane_point: vec3)=> option<vec3>
+    {
+        let denom = ray_dir->dot(normal);
+        if (mathf::abs(denom) < 0.0001)
+            return option::none;
+        let t = (plane_point - ray_origin)->dot(normal) / denom;
+        if (t < 0.)
+            return option::none;
+        return option::value(ray_origin + ray_dir * t);
+    }
+
+    // 过 o、方向 d 的轴线与鼠标射线最近点处的轴线参数（d 需为单位向量）
+    protected func gizmoClosestAxisParam(
+        o: vec3, d: vec3, ray_origin: vec3, ray_dir: vec3)=> option<real>
+    {
+        let w0 = o - ray_origin;
+        let b = d->dot(ray_dir);
+        let dd = d->dot(w0);
+        let e = ray_dir->dot(w0);
+        let denom = 1. - b * b;
+        if (denom < 0.0001)
+            return option::none;
+        return option::value((b * e - dd) / denom);
+    }
+
+    protected func gizmoScreenDistToSegment(p: vec2, a: vec2, b: vec2)=> real
+    {
+        let ab = b - a;
+        let len2 = ab->dot(ab);
+        if (len2 < 0.000001)
+            return (p - a)->length;
+        let t = mathf::clamp((p - a)->dot(ab) / len2, 0., 1.);
+        return (p - (a + ab * t))->length;
+    }
+
+    // 与法线 n 正交的正交基（用于旋转平面内的角度计算）
+    protected func gizmoPlaneBasis(n: vec3)=> (vec3, vec3)
+    {
+        let t = (mathf::abs(n[1]) < 0.9)
+            ? ((0., 1., 0.) as vec3)
+            | ((1., 0., 0.) as vec3);
+        let e1 = n->cross(t)->unit;
+        let e2 = n->cross(e1);
+        return (e1, e2);
+    }
+
+    // 摄像机实体 gizmo：用该摄像机自身的逆投影矩阵把 NDC 角点反变换到
+    // 世界空间（近/远平面分别对应 z=0/z=1；眼空间 +x/+y/+z 即该摄像机
+    // 的右/上/前方向，与 ray::from 的重建方式一致）
+    protected func gizmoCameraUnprojectPoint(
+        inv_proj: mat4,
+        cam_pos: vec3,
+        cam_rot: quat,
+        x: real,
+        y: real,
+        z: real)=> vec3
+    {
+        return cam_pos + cam_rot * gizmoMat4MulPoint(inv_proj, (x, y, z) as vec3);
+    }
+
+    // 眼空间线段对“屏幕边界 + 近平面”的参数化裁剪（Liang-Barsky），
+    // 返回裁剪后的线段，整段在外时为 none。
+    // 透视的屏幕边界是过摄像机原点的四个锥面（|x| ≤ sx*z、|y| ≤ sy*z），
+    // 正交是四个竖直面（|x| ≤ sx、|y| ≤ sy）；二者均附加近平面 z ≥ znear，
+    // 使裁剪后的端点恒在摄像机前方（w > 0，避免投影退化）。不含远平面：
+    // 超出 zfar 的部分交由 GizmoSolid 顶点着色器钳制 z 绘制。把线段
+    // 裁进屏幕边界之内，是为了避免两端都远超视口的线段被 GPU 按保护带
+    //（guardband）整段剔除——那会让穿越屏幕的视锥体棱线整条消失。
+    protected func gizmoClipEyeSegmentToScreen(
+        a: vec3, b: vec3,
+        znear: real, sx: real, sy: real, is_persp: bool)=> option<(vec3, vec3)>
+    {
+        let d = b - a;
+
+        // 各半空间约束 c·p ≤ 0 的系数（cx, cy, cz, off）
+        let planes = is_persp
+            ? ([
+                (1., 0., -sx, 0.),
+                (-1., 0., -sx, 0.),
+                (0., 1., -sy, 0.),
+                (0., -1., -sy, 0.),
+                (0., 0., -1., znear),])
+            | ([
+                (1., 0., 0., -sx),
+                (-1., 0., 0., -sx),
+                (0., 1., 0., -sy),
+                (0., -1., 0., -sy),
+                (0., 0., -1., znear),]);
+
+        let mut t0 = 0.;
+        let mut t1 = 1.;
+        for (let (cx, cy, cz, off) : planes)
+        {
+            let fa = cx * a[0] + cy * a[1] + cz * a[2] + off;
+            let fd = cx * d[0] + cy * d[1] + cz * d[2];
+
+            // 两端都在该平面外：整段不可见
+            if (fa > 0. && fa + fd > 0.)
+                return option::none;
+            if (mathf::abs(fd) > 0.0000001)
+            {
+                let t = -fa / fd;
+                if (fa > 0.)
+                {
+                    // 从平面外进入：抬高起点
+                    if (t > t0)
+                        t0 = t;
+                }
+                else if (fa + fd > 0.)
+                {
+                    // 从平面内离开：压低终点
+                    if (t < t1)
+                        t1 = t;
+                }
+            }
+        }
+        if (t0 >= t1)
+            return option::none;
+        return option::value((a + d * t0, a + d * t1));
+    }
+
+    // 把单位 X 轴线段旋转到 dir 方向的四元数（用于绘制视锥体棱）：
+    // dir 与 -X 反向平行时叉积退化，需特殊处理
+    protected func gizmoEdgeRotation(dir: vec3)=> quat
+    {
+        let d = dir->unit;
+        if (d[0] < -0.99999)
+            return quat::axis((0., 1., 0.) as vec3, 180.);
+
+        let axis = ((1., 0., 0.) as vec3)->cross(d);
+        let axis_len = axis->length;
+        if (axis_len < 0.00001)
+            return quat::ident;
+
+        return quat::axis(
+            axis * (1. / axis_len),
+            mathf::RAD2DEG * mathf::acos(mathf::clamp(d[0], -1., 1.)));
+    }
+
+    // 平行光源图标在公告板面内的自转角：把实体最终朝向（Translation 的
+    // 全局旋转作用于默认方向 -Y，即 0° 指向正下方）投影到公告板平面
+    //（摄像机右/上张成的平面）换算而来，使图样箭头始终指向光源的
+    // 实际照射方向；方向正对/背对摄像机时投影退化，atan2(0, 0) = 0，
+    // 退回默认朝下。
+    protected func gizmoDirectionalIconSpin(
+        entity_rot: quat,
+        billboard_rot: quat)=> quat
+    {
+        let dir = entity_rot * ((0., -1., 0.) as vec3);
+        let cam_right = billboard_rot * ((1., 0., 0.) as vec3);
+        let cam_up = billboard_rot * ((0., 1., 0.) as vec3);
+
+        let dr = dir->dot(cam_right);
+        let du = dir->dot(cam_up);
+        return quat::axis(
+            (0., 0., 1.) as vec3,
+            mathf::RAD2DEG * mathf::atan2(dr, -du));
+    }
+
+    // 估算“每像素对应的世界单位数”，让游标保持近似恒定的屏幕尺寸
+    protected func gizmoWorldPerPixel(
+        camera_entity: entity,
+        camera_trans: Transform::Translation,
+        view_proj: mat4,
+        gizmo_pos: vec3,
+        rect_size: vec2)=> real
+    {
+        match (camera_entity->towoo::get_component:<Camera::PerspectiveProjection>())
+        {
+            value(persp)?
+            {
+                let dist = (gizmo_pos - camera_trans->get_global_pos)->length;
+                let half_fov_rad = persp.angle->get * 0.5 * mathf::DEG2RAD;
+                return 2. * dist * mathf::tan(half_fov_rad) / mathf::abs(rect_size[1]);
+            }
+            none?
+                match (camera_entity->towoo::get_component:<Camera::OrthoProjection>())
+                {
+                    value(ortho)?
+                        // 正交投影纵向可视半高为 ORTHO_PROJECTION_RATIO / scale（取 5.0）
+                        return 10. / ortho.scale->get / mathf::abs(rect_size[1]);
+                    none?;
+                }
+        }
+
+        // 未知投影类型时，用摄像机右方向在屏幕上的投影长度估算
+        let cam_right = camera_trans->get_global_rot * ((1., 0., 0.) as vec3);
+        let p0 = gizmoWorldToScreen(view_proj, gizmo_pos, (0., 0.) as vec2, rect_size);
+        let p1 = gizmoWorldToScreen(
+            view_proj, gizmo_pos + cam_right, (0., 0.) as vec2, rect_size);
+        let pixels = (p1 - p0)->length;
+        if (pixels < 1.)
+            return 0.001;
+        return 1. / pixels;
+    }
+}

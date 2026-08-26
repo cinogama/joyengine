@@ -1,0 +1,164 @@
+// 世界编辑器视口 —— 视口覆盖 UI。
+// 绘制在视口左上角的变换游标工具栏（模式/参考系/2D 模式/锁定鼠标/
+// 2D 光照开关）与左下角的未保存修改标记。
+
+import woo::std;
+
+import je;
+import je::ecs;
+import je::gui;
+
+import builtin::editor::Editor::Practice;
+
+import Definition;
+import CameraControl;
+
+using std;
+
+using je;
+using je::gui;
+
+namespace JEEditor::Editor::WorldEditorViewport
+{
+    // 在视口左上角绘制变换游标工具栏；返回工具栏是否被悬停
+    protected func drawGizmoToolbar(
+        self: WorldEditorViewport,
+        debug_camera: option<entity>,
+        rect_min: ImVec2)=> bool
+    {
+        SetCursorScreenPos((rect_min.0 + 8., rect_min.1 + 8.));
+
+        let mut toolbar_hovered = false;
+
+        if (RadioButton("移动", self.m_gizmo_mode == GizmoMode::TRANSLATE))
+            self.m_gizmo_mode = GizmoMode::TRANSLATE;
+        if (IsItemHovered())
+            toolbar_hovered = true;
+        SameLine();
+
+        if (RadioButton("旋转", self.m_gizmo_mode == GizmoMode::ROTATE))
+            self.m_gizmo_mode = GizmoMode::ROTATE;
+        if (IsItemHovered())
+            toolbar_hovered = true;
+        SameLine();
+
+        if (RadioButton("缩放", self.m_gizmo_mode == GizmoMode::SCALE))
+            self.m_gizmo_mode = GizmoMode::SCALE;
+        if (IsItemHovered())
+            toolbar_hovered = true;
+        SameLine();
+
+        // 缩放只支持 Local，处于缩放模式时不提供 Global 选项
+        if (self.m_gizmo_mode == GizmoMode::SCALE)
+        {
+            do RadioButton("Local", true);
+            if (IsItemHovered())
+                toolbar_hovered = true;
+        }
+        else
+        {
+            if (RadioButton("Local", self.m_gizmo_space == GizmoSpace::LOCAL))
+                self.m_gizmo_space = GizmoSpace::LOCAL;
+            if (IsItemHovered())
+                toolbar_hovered = true;
+            SameLine();
+
+            if (RadioButton("Global", self.m_gizmo_space == GizmoSpace::GLOBAL))
+                self.m_gizmo_space = GizmoSpace::GLOBAL;
+            if (IsItemHovered())
+                toolbar_hovered = true;
+        }
+
+        SameLine();
+
+        // 编辑器摄像机的 2D（正交）模式开关：切换透视/正交投影；
+        // 切到 2D 时旋转归零，操作变为中键平移 + 滚轮缩放，
+        // 见 setDebugCamera2DMode 与 updateCameraControl 的注释。
+        match (debug_camera)
+        {
+            none?;
+            value(camera)?
+            {
+                match (CheckBox("2D 模式", isDebugCamera2DMode(camera)))
+                {
+                    none?;
+                    value(v)?
+                        self->setDebugCamera2DMode(camera, v);
+                }
+                if (IsItemHovered())
+                {
+                    toolbar_hovered = true;
+                    do SetTooltip(
+                        "切换编辑器摄像机透视/正交投影（2D 模式下旋转归零，右键/中键平移，Ctrl+滚轮缩放，滚轮调深度）");
+                }
+            }
+        }
+
+        SameLine();
+
+        // 右键环视时是否锁定鼠标（虚拟机等环境下建议关闭）
+        match (CheckBox("锁定鼠标", s_lock_mouse_on_look))
+        {
+            none?;
+            value(v)?
+                s_lock_mouse_on_look = v;
+        }
+        if (IsItemHovered())
+            toolbar_hovered = true;
+
+        SameLine();
+
+        // 调试游走摄像机的 2D 光照模式（开/关）：开 = 摄像机走延迟光照
+        // 渲染路径，关 = 回到直接渲染；组件增删见 setDebugCameraLight2DEnabled。
+        // 需要世界正在运行 Graphic::DeferLight2DGraphicPipelineSystem 才会生效。
+        match (debug_camera)
+        {
+            none?;
+            value(camera)?
+            {
+                match (CheckBox("2D 光照", isDebugCameraLight2DEnabled(camera)))
+                {
+                    none?;
+                    value(v)?
+                        setDebugCameraLight2DEnabled(camera, v);
+                }
+                if (IsItemHovered())
+                {
+                    toolbar_hovered = true;
+                    do SetTooltip(
+                        "开启后调试摄像机以 2D 延迟光照渲染（需要世界正在运行 Graphic::DeferLight2DGraphicPipelineSystem）");
+                }
+            }
+        }
+
+        return toolbar_hovered;
+    }
+
+    // 未保存修改标记：自上次保存后执行过编辑动作（doAction/撤销/重做）时，
+    // 在视口左下角显示一个小圆点（与关闭确认的判定一致，见 onPreClose）。
+    // 返回标记区域是否被悬停（悬停时应抑制视口内的点击选取）。
+    protected func drawUnsavedMark(
+        self: WorldEditorViewport, rect_min: ImVec2, rect_max: ImVec2)=> bool
+    {
+        if (!self.m_action_history->isDirty && self.m_saving_path->is_value)
+            return false;
+
+        let line_h = GetFrameHeight();
+
+        // 不可见按钮仅用于在左下角占位并获得悬停判定
+        SetCursorScreenPos((rect_min.0 + 8., rect_max.1 - 8. - line_h));
+        do InvisibleButton("##unsaved_mark", (line_h, line_h));
+        let hovered = IsItemHovered();
+        if (hovered)
+            do SetTooltip("存在未保存的修改");
+
+        let (dot_rect_min, dot_rect_max) = GetItemRect();
+        GetWindowDrawList()->AddCircleFilled(
+            ((dot_rect_min.0 + dot_rect_max.0) * 0.5,
+                (dot_rect_min.1 + dot_rect_max.1) * 0.5),
+            line_h * 0.22,
+            (240, 200, 80, 255));
+
+        return hovered;
+    }
+}
