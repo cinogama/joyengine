@@ -175,6 +175,9 @@ namespace JEEditor::Editor
         let CAMERA_PITCH_LIMIT = 88.;
         let CAMERA_DEFAULT_ORBIT_DISTANCE = 10.;
         let CAMERA_MIN_ORTHO_SCALE = 0.05;
+        // 2D 模式 Ctrl+滚轮单格滚动的 z 步进基准（随正交 scale 缩放），
+        // 刻意比透视推拉的 CAMERA_WHEEL_DOLLY 小，便于细调深度
+        let ORTHO_WHEEL_Z_STEP = 1.;
         
         // ---- 变换游标参数 ----
         let GIZMO_SIZE_PX = 96.;              // 游标轴在屏幕上的长度（像素）
@@ -1641,9 +1644,11 @@ namespace JEEditor::Editor
         //
         //   二维（正交）摄像机：
         //     鼠标右键拖拽       — 屏幕平面平移（阈值内松开仍为点击实体弹菜单）
+        //     右键 + WASD        — 在当前深度的 xOy 平面上移动
+        //     右键 + Shift       — 加速移动
         //     鼠标中键拖拽       — 屏幕平面平移
-        //     Ctrl + 滚轮        — 缩放画面（调整正交 scale；方向与透视推拉相反）
-        //     滚轮               — 调整摄像机深度（LocalPosition 的 z 轴）
+        //     Ctrl + 滚轮        — 调整摄像机深度（LocalPosition 的 z 轴）
+        //     滚轮               — 缩放画面（调整正交 scale；方向与透视推拉相反）
         //
         //   投影模式由工具栏“2D 模式”开关切换（setDebugCamera2DMode），
         //   以摄像机当前挂着的 PerspectiveProjection / OrthoProjection
@@ -1709,7 +1714,7 @@ namespace JEEditor::Editor
                     match (cam->towoo::get_component:<Camera::OrthoProjection>)
                     {
                         value(ortho)?
-                            self->controlOrthoCamera(pos, rot, ortho, hovered);
+                            self->controlOrthoCamera(pos, rot, ortho, dt, hovered);
                         none?;
                     }
             }
@@ -1839,6 +1844,7 @@ namespace JEEditor::Editor
             pos: Transform::LocalPosition,
             rot: Transform::LocalRotation,
             ortho: Camera::OrthoProjection,
+            dt: real,
             hovered: bool)=> void
         {
             let curPos = pos.pos->get;
@@ -1882,23 +1888,50 @@ namespace JEEditor::Editor
                 moved = true;
             }
 
+            // ---- WASD 平移（右键按住时）----
+            // 与透视模式的右键飞行对应：按住右键期间 WASD 在当前深度的
+            // xOy 平面上移动（2D 模式旋转恒为 ident，right/up 即世界 X/Y 轴），
+            // 速度随正交 scale 缩放（与平移/滚轮步长同一手感），Shift 加速；
+            // m_rmb_press_in_viewport 在右键按住期间恒为真（松开当帧即被
+            // updateViewportRightClick 清除），无需再查 IsMouseDown。
+            if (self.m_rmb_press_in_viewport)
+            {
+                let speed = CAMERA_MOVE_SPEED
+                    * (IsKeyDown(ImGuiKey::ImGuiKey_LeftShift)
+                        ? CAMERA_FAST_MOVE_MULTIPLIER | 1.)
+                    * ortho.scale->get
+                    * dt;
+
+                let mu = (IsKeyDown(ImGuiKey::ImGuiKey_W) ? 1. | 0.)
+                    - (IsKeyDown(ImGuiKey::ImGuiKey_S) ? 1. | 0.);
+                let mr = (IsKeyDown(ImGuiKey::ImGuiKey_D) ? 1. | 0.)
+                    - (IsKeyDown(ImGuiKey::ImGuiKey_A) ? 1. | 0.);
+
+                if (mu != 0. || mr != 0.)
+                {
+                    newPos = newPos + up * (mu * speed);
+                    newPos = newPos + right * (mr * speed);
+                    moved = true;
+                }
+            }
+
             // ---- 滚轮 ----
             if (hovered && wv != 0.)
             {
                 let scale = ortho.scale->get;
                 if (IsKeyDown(ImGuiKey::ImGuiMod_Ctrl))
-                    // Ctrl+滚轮缩放画面；方向与透视推拉相反（滚轮向上 = 画面远离）
+                {
+                    // Ctrl+滚轮调整摄像机深度（LocalPosition 的 z 轴），
+                    // 步长随当前缩放比例缩放，与平移保持同一手感
+                    newPos = (newPos[0], newPos[1], newPos[2]
+                        + wv * ORTHO_WHEEL_Z_STEP * scale) as vec3;
+                    moved = true;
+                }
+                else
+                    // 裸滚轮缩放画面；方向与透视推拉相反（滚轮向上 = 画面远离）
                     ortho.scale->set(mathf::clamp(
                             scale * (1. + wv * 0.1),
                             CAMERA_MIN_ORTHO_SCALE, 10000.));
-                else
-                {
-                    // 裸滚轮调整摄像机深度（LocalPosition 的 z 轴），
-                    // 步长随当前缩放比例缩放，与平移保持同一手感
-                    newPos = (newPos[0], newPos[1], newPos[2]
-                        + wv * CAMERA_WHEEL_DOLLY * scale) as vec3;
-                    moved = true;
-                }
             }
 
             if (moved)
