@@ -206,6 +206,15 @@ namespace JEEditor::Editor
                 && e->towoo::get_component:<Editor::Invisible>->is_none;
         }
 
+        // 是否为 2D 光源实体（含 Light2D::Point / Light2D::Range /
+        // Light2D::Parallel 任一组件），其选中态由光源图标 gizmo 呈现
+        protected func isLight2DEntity(e: entity)=> bool
+        {
+            return !(e->towoo::get_component:<Light2D::Point>->is_none)
+                || !(e->towoo::get_component:<Light2D::Range>->is_none)
+                || !(e->towoo::get_component:<Light2D::Parallel>->is_none);
+        }
+
         public func redo(self: WorldEditorViewport)
         {
             self.m_action_history->redo();

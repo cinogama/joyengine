@@ -153,6 +153,11 @@ namespace JEEditor::Editor::WorldEditorViewport
                 if (isCameraEntity(selected_entity))
                     return_value!;
 
+                // 2D 光源实体同理（见下方 2D 光源实体 gizmo 段），
+                // 选中高亮由图标染色承担，不绘制闪烁四边形
+                if (isLight2DEntity(selected_entity))
+                    return_value!;
+
                 let trans = selected_entity->towoo::get_component:<Transform::Translation>->unwrap;
                 let texture = selected_entity->towoo::get_component:<Renderer::Textures>;
 

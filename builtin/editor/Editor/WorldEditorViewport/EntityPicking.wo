@@ -40,8 +40,9 @@ namespace JEEditor::Editor::WorldEditorViewport
 
         for (let e : self.m_selectable_entity_selector)
         {
-            // 摄像机实体不参与渲染射线拾取（由图标 gizmo 的点击拾取负责）
-            if (isCameraEntity(e))
+            // 摄像机/2D 光源实体不参与渲染射线拾取（由图标 gizmo 的
+            // 点击拾取负责）
+            if (isCameraEntity(e) || isLight2DEntity(e))
                 continue;
 
             let result = camera_ray->intersect(
@@ -100,8 +101,9 @@ namespace JEEditor::Editor::WorldEditorViewport
 
         for (let e : self.m_selectable_entity_selector)
         {
-            // 摄像机实体不参与渲染射线拾取（由图标 gizmo 的点击拾取负责）
-            if (isCameraEntity(e))
+            // 摄像机/2D 光源实体不参与渲染射线拾取（由图标 gizmo 的
+            // 点击拾取负责）
+            if (isCameraEntity(e) || isLight2DEntity(e))
                 continue;
 
             let result = camera_ray->intersect(
