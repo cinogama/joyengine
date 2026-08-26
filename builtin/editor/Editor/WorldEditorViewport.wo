@@ -804,7 +804,8 @@ namespace JEEditor::Editor
                 // gizmo_point_light2d，平行光源（Translation+Parallel 且不带
                 // Invisible）绘制 gizmo_parallel_light2d；绘制规则与摄像机
                 // 图标一致（Translation 位置、面向调试摄像机的公告板、屏幕
-                // 像素恒定大小、身后不绘制），悬停提亮/选中染黄。
+                // 像素恒定大小、身后不绘制），悬停提亮/选中染黄；
+                // 平行光源图标额外随实体最终旋转自转（箭头指向照射方向）。
                 do try!{
                     try! debug_camera_trans =
                         camera_entity->towoo::get_component:<Transform::Translation>();
@@ -815,7 +816,13 @@ namespace JEEditor::Editor
                     let debug_cam_forward =
                         debug_camera_trans->get_global_rot * ((0., 0., 1.) as vec3);
 
-                    func drawLight2DIcon(e: entity, icon: option<texture>)=> void
+                    // follow_rotation 为真时（平行光源）图标随实体最终旋转在
+                    // 公告板面内自转，箭头指向实际照射方向；点/范围光源全向
+                    // 发光，图标不随旋转
+                    func drawLight2DIcon(
+                        e: entity,
+                        icon: option<texture>,
+                        follow_rotation: bool)=> void
                     {
                         do try!{
                             try! trans =
@@ -824,6 +831,12 @@ namespace JEEditor::Editor
                             try! icon_instance = icon;
 
                             let pos = trans->get_global_pos;
+
+                            let billboard_rot = debug_camera_trans->get_global_rot;
+                            let mut icon_rot = billboard_rot;
+                            if (follow_rotation)
+                                icon_rot = billboard_rot * gizmoDirectionalIconSpin(
+                                    trans->get_global_rot, billboard_rot);
 
                             let mut is_selected = false;
                             match (self.m_selected_entity_id)
@@ -854,7 +867,7 @@ namespace JEEditor::Editor
                                     debug_view_proj, pos, fb_rsize);
                                 drawBillboardIcon(
                                     pos,
-                                    debug_camera_trans->get_global_rot,
+                                    icon_rot,
                                     LIGHT2D_GIZMO_ICON_SIZE_PX * world_per_pixel,
                                     icon_instance,
                                     icon_tint);
@@ -865,15 +878,15 @@ namespace JEEditor::Editor
 
                     for (let e : self.m_point_light2d_entity_selector)
                     {
-                        drawLight2DIcon(e, Icons::GIZMO_POINT_LIGHT2D);
+                        drawLight2DIcon(e, Icons::GIZMO_POINT_LIGHT2D, false);
                     }
                     for (let e : self.m_range_light2d_entity_selector)
                     {
-                        drawLight2DIcon(e, Icons::GIZMO_POINT_LIGHT2D);
+                        drawLight2DIcon(e, Icons::GIZMO_POINT_LIGHT2D, false);
                     }
                     for (let e : self.m_parallel_light2d_entity_selector)
                     {
-                        drawLight2DIcon(e, Icons::GIZMO_PARALLEL_LIGHT2D);
+                        drawLight2DIcon(e, Icons::GIZMO_PARALLEL_LIGHT2D, true);
                     }
                     return_value!;
                 };
@@ -1893,6 +1906,26 @@ namespace JEEditor::Editor
             return quat::axis(
                 axis * (1. / axis_len),
                 mathf::RAD2DEG * mathf::acos(mathf::clamp(d[0], -1., 1.)));
+        }
+
+        // 平行光源图标在公告板面内的自转角：把实体最终朝向（Translation 的
+        // 全局旋转作用于默认方向 -Y，即 0° 指向正下方）投影到公告板平面
+        //（摄像机右/上张成的平面）换算而来，使图样箭头始终指向光源的
+        // 实际照射方向；方向正对/背对摄像机时投影退化，atan2(0, 0) = 0，
+        // 退回默认朝下。
+        func gizmoDirectionalIconSpin(
+            entity_rot: quat,
+            billboard_rot: quat)=> quat
+        {
+            let dir = entity_rot * ((0., -1., 0.) as vec3);
+            let cam_right = billboard_rot * ((1., 0., 0.) as vec3);
+            let cam_up = billboard_rot * ((0., 1., 0.) as vec3);
+
+            let dr = dir->dot(cam_right);
+            let du = dir->dot(cam_up);
+            return quat::axis(
+                (0., 0., 1.) as vec3,
+                mathf::RAD2DEG * mathf::atan2(dr, -du));
         }
 
         // 是否为摄像机实体（含 Translation 与 Projection 且不带 Invisible；
