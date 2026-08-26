@@ -587,16 +587,20 @@ namespace JEGaming::Saving::Entity
         return_value! prefab_dat;
     }
     
-    public func save(e: entity)=> Toml
+    // 完整保存实体：无论实体当前是否挂有预设体，都输出完整数据
+    //（不含 prefab 差异分支）。落盘预设体文件时必须用它——编辑器的
+    // add/remove component 走命令缓冲延迟落实，保存时无法可靠地先
+    // 解除旧预设体关系再序列化。
+    func saveFull(e: entity)=> Toml
     {
         let toml = new_table();
-        
+
         // 0. Save name.
         toml->set("name", e->internal::name);
-        
+
         // 1. Walk through all components.
         toml->set("components", _save_components(e));
-        
+
         // 2. Save shaders.
         toml->set("shaders", _save_shaders(e));
 
@@ -607,7 +611,20 @@ namespace JEGaming::Saving::Entity
         do _save_shape(e)->> \shape_path = toml->set("shape", shape_path);
         ;
 
-        // 5. Calc diff by prefab data.
+        return toml;
+    }
+
+    // 与 save_full 同为完整数据，供编辑器侧（JEEditor::Saving::Entity）转发使用
+    public func save_full(e: entity)=> Toml
+    {
+        return saveFull(e);
+    }
+
+    public func save(e: entity)=> Toml
+    {
+        let toml = saveFull(e);
+
+        // Calc diff by prefab data.
         match (e->internal::get_prefab_path())
         {
             none?
@@ -616,13 +633,13 @@ namespace JEGaming::Saving::Entity
             {
                 let diff_dat_may_none = try!{
                     try! prefab_dat = Entity::load(prefab_path);
-                    
+
                     let diff_dat = diff(toml, prefab_dat);
                     diff_dat->set("prefab", prefab_path);
-                    
+
                     return_value! diff_dat;
                 };
-                
+
                 match (diff_dat_may_none)
                 {
                     value(diff_dat)?

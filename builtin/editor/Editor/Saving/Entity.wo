@@ -24,6 +24,17 @@ namespace JEEditor::Saving::Entity
 
         return toml;
     }
+
+    // 完整保存（不按 prefab 差异展开）：落盘预设体文件（.je4entity）用，
+    // 见 Browser.wo 的 savePrefabEntityTo
+    public func save_full(e: entity)=> Toml
+    {
+        let toml = JEGaming::Saving::Entity::save_full(e);
+
+        toml->set("name", e->internal::name);
+
+        return toml;
+    }
     public func restore(w: world, edat: Toml)=> entity
     {
         // 挂预设体的实体保存为相对预设体的差异数据（带 "prefab" 键）：

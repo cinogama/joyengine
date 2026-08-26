@@ -130,14 +130,14 @@ namespace JEEditor::Editor
                     && euid->is_value
                     && current_selected_entity_id->unwrap == euid->unwrap;
 
-                // 挂预设体的实体以金色显示，直观区分派生自预设体文件的实体
-                //（Editor::Prefab 组件的 path 非空即视为有效挂载）
+                // 派生自预设体的实体以蓝色显示，直观区分挂有预设体文件的
+                // 实体（Editor::Prefab 组件的 path 非空即视为有效挂载）
                 let prefab_path = e->internal::get_prefab_path();
                 let is_prefab_instance = prefab_path->is_value
                     && prefab_path->unwrap->len > 0;
                 if (is_prefab_instance)
                     PushStyleColor(
-                        ImGuiCol::ImGuiCol_Text, (230, 190, 100, 255));
+                        ImGuiCol::ImGuiCol_Text, (100, 160, 230, 255));
 
                 // 点击实体项可选中对应实体
                 let clicked = SelectableSelected(
