@@ -54,10 +54,6 @@ public func frag(vf: v2f)
 {
     let texcolor = tex2d(Main, vf.uv);
     return fout{
-        color = vec4!(
-            texcolor->x * JE_COLOR->x,
-            texcolor->y * JE_COLOR->y,
-            texcolor->z * JE_COLOR->z,
-            texcolor->w * JE_COLOR->w),
+        color = texcolor * JE_COLOR,
     };
 }

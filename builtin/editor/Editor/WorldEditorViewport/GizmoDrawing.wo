@@ -111,7 +111,8 @@ namespace JEEditor::Editor::WorldEditorViewport
             }
 
             // 绘制实体图标（摄像机/2D 光源）：公告板四边形采样图标纹理，
-            // 染色（悬停/选中高亮）通过 JE_COLOR 提供
+            // 染色（悬停/选中高亮）通过 JE_COLOR 提供；图标统一半透明
+            // 渲染，JE_COLOR 的 alpha 固定为 0.5（悬停/选中只改 rgb）
             func drawBillboardIcon(
                 pos: vec3,
                 rot: quat,
@@ -138,7 +139,9 @@ namespace JEEditor::Editor::WorldEditorViewport
                     draw_action->set_uniform_mat4x4(shader_instance, "JE_MVP", model_view_proj as raw mat4);
                     draw_action->set_uniform(shader_instance, "JE_UV_TILING", (1., 1.) as raw vec2);
                     draw_action->set_uniform(shader_instance, "JE_UV_OFFSET", (0., 0.) as raw vec2);
-                    draw_action->set_uniform(shader_instance, "JE_COLOR", tint);
+                    // 半透明图标：沿用染色的 rgb，alpha 固定 0.5
+                    let icon_color = (tint.0, tint.1, tint.2, 0.5);
+                    draw_action->set_uniform(shader_instance, "JE_COLOR", icon_color);
                     return_value!;
                 };
             }
@@ -359,7 +362,8 @@ namespace JEEditor::Editor::WorldEditorViewport
             // gizmo_point_light2d，平行光源（Translation+Parallel 且不带
             // Invisible）绘制 gizmo_parallel_light2d；绘制规则与摄像机
             // 图标一致（Translation 位置、面向调试摄像机的公告板、屏幕
-            // 像素恒定大小、身后不绘制），悬停提亮/选中染黄；
+            // 像素恒定大小、身后不绘制），默认染色跟随光源自身的
+            // Renderer::Color（无该组件则白色），悬停提亮/选中染黄；
             // 平行光源图标额外随实体最终旋转自转（箭头指向照射方向）。
             do try!{
                 try! debug_camera_trans =
@@ -408,7 +412,19 @@ namespace JEEditor::Editor::WorldEditorViewport
                                 is_hover = hovered == euid;
                         }
 
+                        // 默认状态下图标 rgb 跟随光源自身的颜色
+                        //（Renderer::Color 的 color），没有该组件的
+                        // 光源实体回退白色；悬停/选中仍用各自高亮色
                         let mut icon_tint = (1., 1., 1., 1.);
+                        match (e->towoo::get_component:<Renderer::Color>())
+                        {
+                            none?;
+                            value(light_color)?
+                            {
+                                let c = light_color.color->get;
+                                icon_tint = (c.0, c.1, c.2, 1.);
+                            }
+                        }
                         if (is_hover)
                             icon_tint = (1., 1., 0.6, 1.);
                         if (is_selected)
