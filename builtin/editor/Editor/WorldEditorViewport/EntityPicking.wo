@@ -20,6 +20,7 @@ import pkg::worst;
 
 import builtin::editor::Editor::Action::DestroyEntity;
 import builtin::editor::Editor::ComponentPresets;
+import builtin::editor::Editor::EntityClipboard;
 
 import Definition;
 import GizmoMath;
@@ -32,6 +33,7 @@ using iterator;
 
 using JEEditor::Editor::Action;
 using JEEditor::Editor::ComponentPresets;
+using JEEditor::Editor::EntityClipboard;
 
 namespace JEEditor::Editor::WorldEditorViewport
 {
@@ -262,8 +264,10 @@ namespace JEEditor::Editor::WorldEditorViewport
 
     // 视口右键的生命周期：记录按下起点（供环视的延迟激活使用，须先于
     // updateCameraControl 调用），并在松开时按位移分流——位移不超过
-    // RMB_CLICK_MAX_DRAG_PX 视为点击实体：选中该实体并在鼠标处弹出
-    // 上下文菜单（内容与实体列表一致，见 drawEntityContextMenuItems）。
+    // RMB_CLICK_MAX_DRAG_PX 视为点击：命中实体（渲染实体或摄像机/
+    // 2D 光源图标）时选中该实体并在鼠标处弹出上下文菜单（内容与实体
+    // 列表一致，见 drawEntityContextMenuItems）；点击空白处则弹出仅含
+    // “粘贴”的菜单（run 中的 VIEWPORT_BLANK_CONTEXT_MENU_ID）。
     protected func updateViewportRightClick(
         self: WorldEditorViewport,
         debug_camera: option<entity>,
@@ -303,7 +307,10 @@ namespace JEEditor::Editor::WorldEditorViewport
                     match (self->pickIconGizmo(GetMousePos() as vec2, false))
                     {
                         value(icon_euid)?
+                        {
                             self.m_selected_entity_id = option::value(icon_euid);
+                            OpenPopup(VIEWPORT_ENTITY_CONTEXT_MENU_ID);
+                        }
                         none?
                         {
                             let mouse_diff = GetMousePos() as vec2 - rect_min as vec2;
@@ -311,15 +318,27 @@ namespace JEEditor::Editor::WorldEditorViewport
                             let (vpx, vpy) =
                                 ((mouse_diff / viewport_size) - (0.5, 0.5) as vec2) * 2.;
 
-                            try! euid = self->pickEntityForContextMenu(towoo::ray::from(
-                                trans, proj, (vpx, -vpy) as vec2,
-                                camera_entity->towoo::get_component:<Camera::PerspectiveProjection>->is_none));
+                            // 命中渲染实体：选中并弹实体菜单；未命中
+                            //（空白处）：保持当前选中不变，弹出仅含
+                            //“粘贴”的空白菜单
+                            let picked_euid = self->pickEntityForContextMenu(
+                                towoo::ray::from(
+                                    trans, proj, (vpx, -vpy) as vec2,
+                                    camera_entity->towoo::get_component:<Camera::PerspectiveProjection>->is_none));
 
-                            self.m_selected_entity_id = option::value(euid);
+                            match (picked_euid)
+                            {
+                                value(euid)?
+                                {
+                                    self.m_selected_entity_id = option::value(euid);
+                                    OpenPopup(VIEWPORT_ENTITY_CONTEXT_MENU_ID);
+                                }
+                                none?
+                                    OpenPopup(VIEWPORT_BLANK_CONTEXT_MENU_ID);
+                            }
                         }
                     }
 
-                    OpenPopup(VIEWPORT_ENTITY_CONTEXT_MENU_ID);
                     return_value!;
                 };
             }
@@ -336,6 +355,14 @@ namespace JEEditor::Editor::WorldEditorViewport
             ComponentPresets::showAddPresetMenu(self, e);
             defer EndMenu();
         }
+
+        // 复制实体到剪贴板（快照不含 EUID），可在各处空白区域粘贴出
+        // 拥有全新 EUID 的新实体；粘贴出的新实体与本实体没有关联，
+        // 菜单放在这里只是提供入口
+        if (MenuItem("复制"))
+            EntityClipboard::copy(e);
+
+        EntityClipboard::showPasteMenuItem(self);
 
         if (MenuItem("销毁"))
         {

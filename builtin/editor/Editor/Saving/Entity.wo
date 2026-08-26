@@ -1,9 +1,13 @@
 import woo::std;
 
+import je;
 import je::ecs;
 import je::internal;
+import je::typeinfo;
+import je::towoo::components;
 
 import pkg::toml;
+import pkg::try;
 
 import builtin::gaming::Saving::Entity;
 
@@ -22,7 +26,57 @@ namespace JEEditor::Saving::Entity
     }
     public func restore(w: world, edat: Toml)=> entity
     {
-        let e = JEGaming::Saving::Entity::restore(w, edat);
+        // 挂预设体的实体保存为相对预设体的差异数据（带 "prefab" 键）：
+        // 还原前加载预设体并应用差异，展开为完整数据，并把重建出的
+        // 实体重新挂回预设体（保持派生关系，此后保存仍按差异记录）。
+        // 预设体读取失败时退回差异数据尽力还原，且不保留派生关系
+        let mut restore_dat = edat;
+        let mut prefab_path = option::none: option<string>;
+
+        match (edat->get("prefab")=>> \v = v->as_string;)
+        {
+            none?;
+            value(p_path)?
+            {
+                let expanded = try!{
+                    try! prefab_dat =
+                        JEGaming::Saving::Entity::load(p_path);
+
+                    JEGaming::Saving::Entity::apply(prefab_dat, edat);
+
+                    return_value! prefab_dat;
+                };
+
+                match (expanded)
+                {
+                    none?
+                        logerr(F"还原实体：无法读取预设体 \"{p_path}\"，按差异数据尽力还原");
+                    value(full_dat)?
+                    {
+                        // 序列化产物不含 Editor:: 组件，而 set_prefab_path
+                        // 需要 Editor::Prefab 组件存在：往起始组件集合补
+                        // 一张空表，由通用还原随实体构造
+                        match (full_dat->get("components"))
+                        {
+                            value(components_dat)?
+                                components_dat->set(
+                                    Editor::Prefab::type::typeinfo->name,
+                                    new_table());
+                            none?
+                                logerr("还原实体：实体数据缺少 components 表");
+                        }
+
+                        restore_dat = full_dat;
+                        prefab_path = option::value(p_path);
+                    }
+                }
+            }
+        }
+
+        let e = JEGaming::Saving::Entity::restore(w, restore_dat);
+
+        if (prefab_path->is_value)
+            e->internal::set_prefab_path(prefab_path->unwrap);
 
         match (edat->get("name")=>> \v = v->as_string;)
         {

@@ -16,6 +16,7 @@ import builtin::editor::GUI::Windows;
 
 import WorldEditorViewport;
 import ComponentPresets;
+import EntityClipboard;
 import Action::CreateEntity;
 
 using iterator;
@@ -24,6 +25,7 @@ using je::gui;
 using JEEditor::GUI::Windows;
 using JEEditor::Editor::Action;
 using JEEditor::Editor::ComponentPresets;
+using JEEditor::Editor::EntityClipboard;
 
 namespace JEEditor::Editor
 {
@@ -324,6 +326,15 @@ namespace JEEditor::Editor
                     if (BeginPopup("##new_entity_picker"))
                     {
                         showNewEntityPicker(wctx);
+                        defer EndPopup();
+                    }
+
+                    // 右键窗口空白区域（列表下方、项间空隙以及没有实体
+                    // 时的整个区域）：弹出粘贴菜单；悬停在实体项上时由
+                    // 各项自己的右键菜单处理，不会走到这里
+                    if (BeginPopupContextWindow())
+                    {
+                        EntityClipboard::showPasteMenuItem(wctx);
                         defer EndPopup();
                     }
                 }

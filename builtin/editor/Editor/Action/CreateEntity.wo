@@ -60,6 +60,31 @@ namespace JEEditor::Editor::Action
                 m_entity_content = entity_dat,
             };
         }
+
+        // 从既有实体数据（复制到剪贴板的实体快照等）构造：快照不含
+        // Editor:: 组件（save 跳过），补上空的 Editor::EntityId 让原生侧
+        // 构造时分配全新的调试 EUID（同 try_create_with_types）；
+        // 挂预设体的差异数据由还原端展开并挂回预设体（见
+        // Saving::Entity::restore）；m_eid 保持 none，动作首次落实时回填
+        func try_create_with_content(entity_content: Toml)=> FullEntityContent
+        {
+            let content = entity_content->clone();
+
+            match (content->get("components"))
+            {
+                value(components_dat)?
+                    components_dat->set(
+                        Editor::EntityId::type::typeinfo->name,
+                        new_table());
+                none?
+                    logerr("粘贴实体：实体快照缺少 components 数据");
+            }
+
+            return FullEntityContent{
+                m_eid = mut option::none,
+                m_entity_content = content,
+            };
+        }
         
         // 实体名快照；快照未记录名字时返回空串
         public func entity_name(self: FullEntityContent)=> string
@@ -91,6 +116,17 @@ namespace JEEditor::Editor::Action
         {
             return CreateEntity{
                 m_content = FullEntityContent::try_create_with_types(ctypes),
+            };
+        }
+        // 从既有实体数据（复制到剪贴板的实体快照）构造可撤销的“创建
+        // 实体”动作：EUID 由动作首次落实时新分配，粘贴出的实体与源
+        // 实体拥有不同的 EUID
+        public func try_create_with_content(entity_content: Toml)=> CreateEntity
+            where require!(CreateEntity: IAction);
+        {
+            return CreateEntity{
+                m_content = FullEntityContent::try_create_with_content(
+                    entity_content),
             };
         }
         public func redo(self: CreateEntity, w: WorldEditorViewport)=> bool

@@ -168,6 +168,8 @@ namespace JEEditor::Editor
         protected let RMB_CLICK_MAX_DRAG_PX = 6.;
         // 视口内实体右键菜单的弹窗 ID
         protected let VIEWPORT_ENTITY_CONTEXT_MENU_ID = "##viewport_entity_context";
+        // 视口内空白处右键菜单（仅含“粘贴实体”）的弹窗 ID
+        protected let VIEWPORT_BLANK_CONTEXT_MENU_ID = "##viewport_blank_context";
 
         // 枚举成员的可见性继承枚举声明且挂在枚举自身的类型命名空间下，
         // protected 无法被兄弟文件访问，跨文件使用的枚举须为 public。

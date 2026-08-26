@@ -441,7 +441,7 @@ namespace JEGaming::Saving::Entity
         return diff_dat;
     }
     
-    func apply(modifing_exist_dat: Toml, patching_dat: Toml)
+    public func apply(modifing_exist_dat: Toml, patching_dat: Toml)
     {
         // 1. Name - always take from patch.
         modifing_exist_dat->set("name", patching_dat["name"]);
@@ -555,7 +555,7 @@ namespace JEGaming::Saving::Entity
         }
     }
     
-    func load(engine_path: string)=> option<Toml>
+    public func load(engine_path: string)=> option<Toml>
     {
         try! prefab_content = file::readall(engine_path);
         try! mut prefab_dat = parse(prefab_content)->okay;

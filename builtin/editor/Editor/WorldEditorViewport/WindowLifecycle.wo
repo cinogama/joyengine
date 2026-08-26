@@ -32,6 +32,7 @@ import builtin::editor::GUI::Shortcut;
 
 import builtin::editor::Editor::Browser;
 import builtin::editor::Editor::Practice;
+import builtin::editor::Editor::EntityClipboard;
 
 import Definition;
 import CameraControl;
@@ -54,6 +55,7 @@ using JEEditor::GUI::Windows;
 using JEEditor::GUI::Drag;
 using JEEditor::GUI::Forms;
 using JEEditor::GUI::Icons;
+using JEEditor::Editor::EntityClipboard;
 
 namespace JEEditor::Editor::WorldEditorViewport
 {
@@ -458,6 +460,14 @@ namespace JEEditor::Editor::WorldEditorViewport
                 self->drawEntityContextMenuItems(e);
                 return_value!;
             };
+            defer EndPopup();
+        }
+
+        // 视口内右键点击空白处：弹出仅含“粘贴”的菜单（与实体列表
+        // 空白处的菜单一致）
+        if (BeginPopup(VIEWPORT_BLANK_CONTEXT_MENU_ID))
+        {
+            EntityClipboard::showPasteMenuItem(self);
             defer EndPopup();
         }
 

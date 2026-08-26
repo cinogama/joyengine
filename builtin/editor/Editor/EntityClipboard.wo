@@ -1,0 +1,63 @@
+import woo::std;
+
+import je;
+import je::ecs;
+import je::gui;
+
+import pkg::toml;
+
+import builtin::editor::Editor::Saving::Entity;
+
+import WorldEditorViewport;
+import Action::CreateEntity;
+
+using je;
+using je::gui;
+using toml;
+
+using JEEditor::Saving;
+using JEEditor::Editor::Action;
+
+/*
+EntityClipboard：实体复制/粘贴的剪贴板。
+复制保存实体的完整序列化快照（不含 EUID —— 序列化会跳过 Editor::*
+组件）；挂预设体的实体保存为相对预设体的差异数据（带 "prefab" 键），
+粘贴出的副本同样派生自原预设体（展开数据与挂回关联在还原时进行，
+见 Saving::Entity::restore）。粘贴以快照为模板发布可撤销的创建实体
+动作，新实体由原生侧分配全新的 EUID，与源实体互不影响。
+剪贴板为编辑器级共享状态，可跨视口/世界连续粘贴。供实体列表
+（EntityList.wo）与世界编辑器视口（WorldEditorViewport/ 下的
+EntityPicking.wo、WindowLifecycle.wo）共用。
+*/
+namespace JEEditor::Editor::EntityClipboard
+{
+    // 最近一次复制的实体快照；粘贴不清空，可连续粘贴出多个副本
+    let mut s_copied_entity_content = option::none: option<Toml>;
+
+    // 复制实体：原样保存快照（挂预设体的实体为差异数据 + "prefab" 键，
+    // 派生关系随之保留）
+    public func copy(e: entity)=> void
+    {
+        s_copied_entity_content =
+            option::value(Entity::save(e));
+    }
+
+    // “粘贴”菜单项：剪贴板为空时禁用；点击发布可撤销的创建实体动作，
+    // 落实（redo）时以快照为模板创建全新实体并自动选中。
+    // 供实体右键菜单与实体列表/视口空白处的右键菜单共用
+    public func showPasteMenuItem(wctx: WorldEditorViewport)=> void
+    {
+        BeginDisabled(s_copied_entity_content->is_none);
+        if (MenuItem("粘贴"))
+        {
+            match (s_copied_entity_content)
+            {
+                none?;
+                value(content)?
+                    wctx->doAction(
+                        CreateEntity::try_create_with_content(content));
+            }
+        }
+        EndDisabled();
+    }
+}
