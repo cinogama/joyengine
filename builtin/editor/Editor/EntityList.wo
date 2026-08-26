@@ -13,16 +13,19 @@ import pkg::iterator;
 import pkg::worst;
 
 import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Drag;
 
 import WorldEditorViewport;
 import ComponentPresets;
 import EntityClipboard;
 import Action::CreateEntity;
+import Browser;
 
 using iterator;
 using je;
 using je::gui;
 using JEEditor::GUI::Windows;
+using JEEditor::GUI::Drag;
 using JEEditor::Editor::Action;
 using JEEditor::Editor::ComponentPresets;
 using JEEditor::Editor::EntityClipboard;
@@ -118,20 +121,41 @@ namespace JEEditor::Editor
             
             for (let (i, (e, euid)) : entities->iter |> enumerate)
             {
-                let mut entity_name = e->internal::name;
+                let raw_name = e->internal::name;
+                let mut entity_name = raw_name;
                 if (entity_name == "")
                     entity_name = "<匿名实体>";
-                    
+
                 let is_selected = current_selected_entity_id->is_value
                     && euid->is_value
                     && current_selected_entity_id->unwrap == euid->unwrap;
-                    
+
+                // 挂预设体的实体以金色显示，直观区分派生自预设体文件的实体
+                //（Editor::Prefab 组件的 path 非空即视为有效挂载）
+                let prefab_path = e->internal::get_prefab_path();
+                let is_prefab_instance = prefab_path->is_value
+                    && prefab_path->unwrap->len > 0;
+                if (is_prefab_instance)
+                    PushStyleColor(
+                        ImGuiCol::ImGuiCol_Text, (230, 190, 100, 255));
+
                 // 点击实体项可选中对应实体
                 let clicked = SelectableSelected(
                     F"{entity_name}##{i}", is_selected);
+
+                if (is_prefab_instance)
+                    PopStyleColor(1);
+
                 if (clicked && euid->is_value)
                     world_view->setSelectedEntityId(euid);
-                    
+
+                // 按住实体项拖出：拖到资源管理器可保存为 .je4entity
+                // 预设体文件（载荷只携带 EUID，entity 句柄不跨帧）
+                if (euid->is_value)
+                    DragPayload(EntitySavingRequestPayload::create(
+                        world_view, euid->unwrap,
+                        raw_name->len > 0 ? raw_name | "Entity"));
+
                 // 右键打开实体上下文菜单（菜单内容与视口右键菜单共用）
                 showEntityContextMenu(world_view, e);
             }

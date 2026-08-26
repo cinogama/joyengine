@@ -24,6 +24,7 @@ import builtin::editor::Editor::EntityClipboard;
 
 import Definition;
 import GizmoMath;
+import WindowLifecycle;
 
 using std;
 
@@ -375,6 +376,29 @@ namespace JEEditor::Editor::WorldEditorViewport
         self: WorldEditorViewport, euid: entity::internal::euid_t)=> option<entity>
     {
         for (let e : self.m_selectable_entity_selector)
+        {
+            match (e->internal::get_entity_uid)
+            {
+                none?;
+                value(entity_uid)?
+                    if (entity_uid == euid)
+                        return option::value(e);
+            }
+        }
+        return option::none;
+    }
+
+    // 按调试 EUID 在“全部实体”（实体列表所见范围，不含 Editor::Invisible）
+    // 中反查实体；视口已关闭时返回 none。与 findEntityByEuid（可拾取实体
+    // 范围）不同：供预设体保存这类以实体列表为出发点的流程在跨帧后
+    // 重新取得实体实例（entity 句柄不允许跨帧持有）。
+    public func findListedEntityByEuid(
+        self: WorldEditorViewport, euid: entity::internal::euid_t)=> option<entity>
+    {
+        if (!self->isCurrentViewportAvailable)
+            return option::none;
+
+        for (let e : self.m_all_entity_selector)
         {
             match (e->internal::get_entity_uid)
             {

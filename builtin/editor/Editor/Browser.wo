@@ -1,13 +1,18 @@
 import woo::std;
 
+import je;
+import je::ecs;
 import je::graphic;
 import je::gui;
+import je::internal;
+import je::typeinfo;
 
 import pkg::fsys;
 import pkg::interface;
 import pkg::worst;
 import pkg::iterator;
 import pkg::platform;
+import pkg::toml;
 
 import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Icons;
@@ -16,20 +21,27 @@ import builtin::editor::GUI::Menu;
 import builtin::editor::GUI::Shortcut;
 import builtin::editor::GUI::Forms::InputBox;
 import builtin::editor::GUI::Forms::AskBox;
+import builtin::editor::GUI::Forms::MsgBox;
+import builtin::editor::GUI::Statebar;
 
 import builtin::editor::Editor::WorldEditorViewport;
+import builtin::editor::Editor::Saving::Entity;
 
 using std;
 
+using je;
 using je::gui;
 using je::graphic;
 using fsys;
+using toml;
 
 using JEEditor::GUI;
 using JEEditor::GUI::Windows;
 using JEEditor::GUI::Drag;
 using JEEditor::GUI::Forms;
 using JEEditor::GUI::Icons;
+using JEEditor::GUI::Statebar;
+using JEEditor::Saving;
 
 namespace JEEditor::Editor
 {
@@ -97,7 +109,69 @@ namespace JEEditor::Editor
             return F"保存: {self.m_viewport->getName}.je4world";
         }
     }
-    
+
+    // “保存实体为预设体”拖拽载荷：携带发起的世界视口与目标实体的调试
+    // EUID。entity 句柄不允许跨帧持有，这里跨帧只持有 EUID，待文件名
+    // 确认后再按 EUID 反查实体实例执行保存（见 requestSavePrefabAs）。
+    // ImGui 拖拽载荷只能以字符串传递：EUID 与实体名在 create 时暂存于
+    // 模块级 s_pending_dragging（ImGui 同一时刻只有一个拖拽进行中，不会
+    // 被并发覆盖），dump 时序列化为视口标题，restore 时反查回视口实例
+    // 并取回暂存内容。
+    using EntitySavingRequestPayload = struct{
+        m_viewport: WorldEditorViewport,
+        m_euid: entity::internal::euid_t,
+        m_entity_name: string,
+    }
+    {
+        public let type = "JE_EDITOR_BROWSER_ENTITY_SAVING_REQUEST";
+
+        let mut s_pending_dragging =
+            option::none: option<(entity::internal::euid_t, string)>;
+
+        public func create(
+            viewport: WorldEditorViewport,
+            euid: entity::internal::euid_t,
+            entity_name: string)=> EntitySavingRequestPayload
+            where require!(EntitySavingRequestPayload : Drag::IDragPayload);
+        {
+            s_pending_dragging = option::value((euid, entity_name));
+            return EntitySavingRequestPayload{
+                m_viewport = viewport,
+                m_euid = euid,
+                m_entity_name = entity_name,
+            };
+        }
+
+        public func restore(data: string) => option<EntitySavingRequestPayload>
+        {
+            match (WorldEditorViewport::findWorldEditorViewportByTitle(data))
+            {
+                none?
+                    return option::none;
+                value(viewport)?
+                    match (s_pending_dragging)
+                    {
+                        none?
+                            return option::none;
+                        value(pending)?
+                            return option::value(EntitySavingRequestPayload{
+                                m_viewport = viewport,
+                                m_euid = pending.0,
+                                m_entity_name = pending.1,
+                            });
+                    }
+            }
+        }
+        public func dump(self: EntitySavingRequestPayload) => string
+        {
+            return self.m_viewport->getTitle;
+        }
+        public func tips(self: EntitySavingRequestPayload) => string
+        {
+            return F"保存预设体: {self.m_entity_name}.je4entity";
+        }
+    }
+
     using Browser = struct{
         m_close: mut bool,
         
@@ -746,7 +820,7 @@ namespace JEEditor::Editor
                 value(payload)?
                     self->requestMove(payload.m_path, target_dir);
             }
-            
+
             match (Drag::AcceptDrag:<SavingRequestPayload>())
             {
                 none?;
@@ -757,8 +831,15 @@ namespace JEEditor::Editor
                         target_dir, \= dirty->set(true););
                 }
             }
+
+            match (Drag::AcceptDrag:<EntitySavingRequestPayload>())
+            {
+                none?;
+                value(payload)?
+                    requestSavePrefabAs(payload, target_dir, self.m_fs_dirty);
+            }
         }
-        
+
         // 拖到资源管理器窗口的空白/文件列表区域：保存到当前目录
         func acceptSavingDrop(self: Browser)=> void
         {
@@ -772,6 +853,145 @@ namespace JEEditor::Editor
                         self.m_current, \= dirty->set(true););
                 }
             }
+
+            match (Drag::AcceptDrag:<EntitySavingRequestPayload>())
+            {
+                none?;
+                value(payload)?
+                    requestSavePrefabAs(payload, self.m_current, self.m_fs_dirty);
+            }
+        }
+
+        // 资源路径的传入形式转换：引擎按 @/ 前缀相对运行时路径（workpath）
+        // 解析资源（见 jeecs_file_open），预设体路径也存成这种形式，使存档
+        // 不依赖具体的机器目录。规则与 Material.wo 的 toRuntimeResourcePath
+        // 一致：目标不在工作路径之下时退回原绝对路径。
+        func toEngineResourcePath(path: fsys::path_t)=> string
+        {
+            match (relative(normalize(path->to_string()), workpath()))
+            {
+                err(_)?
+                    return path->to_string();
+                ok(rel)?
+                {
+                    if (rel == "" || rel == "." || rel->begin_with(".."))
+                        return path->to_string();
+                    return "@/" + rel;
+                }
+            }
+        }
+
+        // 把实体完整快照写入 dst，并将实体挂为该文件的预设体（同一帧内
+        // 完成，entity 句柄不跨帧）。实体此前挂有预设体时：序列化前先
+        // 解除（保证写入的是完整数据而非相对旧预设体的差异数据），写盘
+        // 成功后统一挂到新文件；写盘失败则恢复原有关联。
+        // dirty 在写盘成功后被置位以刷新资源管理器的文件缓存。
+        func savePrefabEntityTo(
+            e: entity, dst: fsys::path_t, dirty: mutable<bool>)=> void
+        {
+            let prefab_type = typeinfo::load("Editor::Prefab");
+            let old_prefab_path = e->internal::get_prefab_path();
+            let had_prefab_component = prefab_type->is_value
+                && e->get_component(prefab_type->unwrap)->is_value;
+
+            if (had_prefab_component)
+                do e->remove_component(prefab_type->unwrap);
+
+            match (toml::save(Entity::save(e), dst))
+            {
+                err(msg)?
+                {
+                    // 写盘失败：恢复原有的预设体关联
+                    if (had_prefab_component)
+                    {
+                        do e->add_component(prefab_type->unwrap);
+                        match (old_prefab_path)
+                        {
+                            none?;
+                            value(old_path)?
+                                e->internal::set_prefab_path(old_path);
+                        }
+                    }
+
+                    MsgBox::err("保存失败",
+                        F"保存预设体到 \"{dst->to_string()}\" 失败：{msg}");
+                }
+                ok(_)?
+                {
+                    // 文件创建成功：实体自此成为预设体
+                    if (prefab_type->is_value)
+                    {
+                        do e->add_component(prefab_type->unwrap);
+                        e->internal::set_prefab_path(toEngineResourcePath(dst));
+                    }
+                    else
+                        logerr("保存预设体：无法解析 Editor::Prefab 组件类型，预设体关联未建立");
+
+                    dirty->set(true);
+
+                    // 闭包按创建时的值捕获文本，之后每帧由 Statebar 调用绘制
+                    let name = e->internal::name;
+                    let path_str = dst->to_string();
+                    Statebar::showState(3.) <| func(){
+                        Text(F"预设体 \"{name}\" 已保存到 \"{path_str}\"");
+                    };
+                }
+            }
+        }
+
+        // 拖拽实体到资源管理器后的保存流程（原资源管理器 requestSaveAs 的
+        // 实体版）：弹输入框要文件名 → 已存在则确认覆盖 → 按载荷中的 EUID
+        // 反查实体（entity 不跨帧持有，对话框确认时才反查；反查内部会检查
+        // 视口存活性，实体已不存在则取消保存）→ 写盘并挂预设体。回调不
+        // 捕获 Browser 实例，文件缓存刷新经 dirty 传出。
+        func requestSavePrefabAs(
+            payload: EntitySavingRequestPayload,
+            target_dir: fsys::path_t,
+            dirty: mutable<bool>)=> void
+        {
+            func saveTo(dst: fsys::path_t)=> void
+            {
+                match (payload.m_viewport->findListedEntityByEuid(payload.m_euid))
+                {
+                    none?
+                        MsgBox::err("保存失败", "目标实体已不存在，预设体保存已取消");
+                    value(e)?
+                        savePrefabEntityTo(e, dst, dirty);
+                }
+            }
+
+            func savePrefabAs(file_name: string)=> void
+            {
+                if (file_name->len == 0)
+                {
+                    MsgBox::err("保存失败", "文件名不能为空");
+                    return;
+                }
+
+                // 未带后缀时自动补全 .je4entity
+                let full_name = file_name->end_with(".je4entity")
+                    ? file_name
+                    | F"{file_name}.je4entity";
+
+                let dst = target_dir / full_name;
+
+                if (isfile(dst))
+                {
+                    // 已存在同名文件时弹出覆盖确认
+                    do AskBox::show(
+                            "保存", F"目录中已存在 \"{full_name}\"，确认覆盖吗？")
+                        ->onYes(\= saveTo(dst);)
+                    ;
+                }
+                else
+                    saveTo(dst);
+            }
+
+            do InputBox::show(
+                    "保存预设体", "请输入保存的文件名：",
+                    F"{payload.m_entity_name}.je4entity")
+                ->then(savePrefabAs)
+            ;
         }
         
         func requestMove(self: Browser, src: fsys::path_t, target_dir: fsys::path_t)=> void
