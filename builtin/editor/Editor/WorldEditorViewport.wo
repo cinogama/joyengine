@@ -208,6 +208,14 @@ namespace JEEditor::Editor
         // ---- 2D 光源实体 gizmo 参数 ----
         let LIGHT2D_GIZMO_ICON_SIZE_PX = 32.;  // 光源图标边长（像素）
 
+        // ---- 调试游走摄像机 2D 光照模式 ----
+        // 开启后为调试摄像机挂上 Light2D::CameraPostPass 与 Renderer::Shaders
+        //（着色器列表为空时填入该默认合成着色器），运行中的
+        // Graphic::DeferLight2DGraphicPipelineSystem 会据此让摄像机走
+        // “G-buffer → 光照 → 全屏合成”的延迟光照路径。
+        let DEBUG_CAMERA_LIGHT2D_COMPOSITE_SHADER_PATH =
+            "@/builtin/shader/CameraDefer2DPass.shader";
+
         // 右键同时承担“拖拽环视”职责：以按下起点为基准，位移切实超过该
         // 像素阈值后才激活环视（阈值内的位移不转动摄像机）；松开时位移
         // 仍不超过该阈值则视为“点击实体”，弹出上下文菜单。
@@ -1066,7 +1074,7 @@ namespace JEEditor::Editor
                 none?;
                 value((rect_min, rect_max))?
                 {
-                    toolbar_hovered = self->drawGizmoToolbar(rect_min);
+                    toolbar_hovered = self->drawGizmoToolbar(debug_camera, rect_min);
                     // 未保存标记悬停时同样抑制视口内的点击选取
                     if (self->drawUnsavedMark(rect_min, rect_max))
                         toolbar_hovered = true;
@@ -1183,13 +1191,75 @@ namespace JEEditor::Editor
                 value(fb)?
                 {
                     self.m_editor_walk_camera_frame_buffer = option::value(fb);
-                    
+
                     let r2b = debug_cameras->unwrap->towoo::get_component:<Camera::RendToFramebuffer>->unwrap;
                     r2b->set(self.m_editor_walk_camera_frame_buffer);
                 }
             }
         }
-        
+
+        // 调试游走摄像机 2D 光照模式是否开启：不单独记录状态，直接以摄像机
+        // 实际组件为准（CameraPostPass 与 Shaders 同时存在视为开），
+        // 调试摄像机被重建后天然回到关闭状态。
+        func isDebugCameraLight2DEnabled(camera: entity)=> bool
+        {
+            return camera->get_component(Light2D::CameraPostPass::type::typeinfo)->is_value
+                && camera->get_component(Renderer::Shaders::type::typeinfo)->is_value;
+        }
+
+        // 切换调试游走摄像机的 2D 光照模式：
+        // 开 = 挂 Light2D::CameraPostPass，并在着色器列表为空时填入默认
+        // 合成着色器（CameraDefer2DPass）；关 = 移除这两个组件，回到直接渲染。
+        // 组件只挂在编辑器内部摄像机上（Editor::Invisible），不进入编辑历史与存档。
+        // 注意 add_component 走命令缓冲延迟生效，着色器列表必须写入
+        // towoo::add_component 返回的当帧暂存实例（同帧经 set_shaders 生效），
+        // 实体级 set_shaders 读的是已生效组件，同帧调用会静默失效。
+        func setDebugCameraLight2DEnabled(camera: entity, enabled: bool)=> void
+        {
+            let post_pass_type = Light2D::CameraPostPass::type::typeinfo;
+
+            if (enabled)
+            {
+                if (camera->get_component(post_pass_type)->is_none)
+                    do camera->add_component(post_pass_type);
+
+                // 已有着色器（如用户自定义的合成 pass）时保持不变
+                if (camera->towoo::get_component:<Renderer::Shaders>->is_none)
+                {
+                    match (camera->towoo::add_component:<Renderer::Shaders>())
+                    {
+                        none?
+                            MsgBox::err("2D 光照模式", "无法为调试摄像机创建 Renderer::Shaders 组件");
+                        value(shaders_inst)?
+                        {
+                            match (shader::load(option::none, DEBUG_CAMERA_LIGHT2D_COMPOSITE_SHADER_PATH))
+                            {
+                                none?
+                                {
+                                    // 默认着色器加载失败：回滚本帧挂上的组件
+                                    //（命令缓冲同帧 add+remove 时 remove 生效），保持关闭
+                                    do camera->remove_component(Renderer::Shaders::type::typeinfo);
+                                    do camera->remove_component(post_pass_type);
+                                    MsgBox::err(
+                                        "2D 光照模式",
+                                        F"无法加载相机默认着色器：`{DEBUG_CAMERA_LIGHT2D_COMPOSITE_SHADER_PATH}`");
+                                }
+                                value(sinst)?
+                                    do shaders_inst->set_shaders([sinst]);
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                if (camera->get_component(post_pass_type)->is_value)
+                    do camera->remove_component(post_pass_type);
+                if (camera->towoo::get_component:<Renderer::Shaders>->is_value)
+                    do camera->towoo::remove_component:<Renderer::Shaders>();
+            }
+        }
+
         func sendMouseClickToChoiceEntityRequest(self: WorldEditorViewport, camera_ray: towoo::ray)
         {
             // 收集所有被射线命中的实体，并记录命中距离。
@@ -2516,7 +2586,9 @@ namespace JEEditor::Editor
         
         // 在视口左上角绘制变换游标工具栏；返回工具栏是否被悬停
         func drawGizmoToolbar(
-            self: WorldEditorViewport, rect_min: ImVec2)=> bool
+            self: WorldEditorViewport,
+            debug_camera: option<entity>,
+            rect_min: ImVec2)=> bool
         {
             SetCursorScreenPos((rect_min.0 + 8., rect_min.1 + 8.));
             
@@ -2562,7 +2634,7 @@ namespace JEEditor::Editor
             }
             
             SameLine();
-            
+
             // 右键环视时是否锁定鼠标（虚拟机等环境下建议关闭）
             match (CheckBox("锁定鼠标", s_lock_mouse_on_look))
             {
@@ -2572,7 +2644,32 @@ namespace JEEditor::Editor
             }
             if (IsItemHovered())
                 toolbar_hovered = true;
-                
+
+            SameLine();
+
+            // 调试游走摄像机的 2D 光照模式（开/关）：开 = 摄像机走延迟光照
+            // 渲染路径，关 = 回到直接渲染；组件增删见 setDebugCameraLight2DEnabled。
+            // 需要世界正在运行 Graphic::DeferLight2DGraphicPipelineSystem 才会生效。
+            match (debug_camera)
+            {
+                none?;
+                value(camera)?
+                {
+                    match (CheckBox("2D 光照", isDebugCameraLight2DEnabled(camera)))
+                    {
+                        none?;
+                        value(v)?
+                            setDebugCameraLight2DEnabled(camera, v);
+                    }
+                    if (IsItemHovered())
+                    {
+                        toolbar_hovered = true;
+                        do SetTooltip(
+                            "开启后调试摄像机以 2D 延迟光照渲染（需要世界正在运行 Graphic::DeferLight2DGraphicPipelineSystem）");
+                    }
+                }
+            }
+
             return toolbar_hovered;
         }
         
