@@ -30,4 +30,6 @@ namespace JEEditor::GUI::Icons
 
     // ---- 视口 gizmo 图标 ----
     public let GIZMO_CAMERA = texture::load(option::none, "!/builtin/icon/gizmo_camera.png");
+    public let GIZMO_POINT_LIGHT2D = texture::load(option::none, "!/builtin/icon/gizmo_point_light2d.png");
+    public let GIZMO_PARALLEL_LIGHT2D = texture::load(option::none, "!/builtin/icon/gizmo_parallel_light2d.png");
 }

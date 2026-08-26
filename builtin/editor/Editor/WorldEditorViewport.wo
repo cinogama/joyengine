@@ -96,7 +96,14 @@ namespace JEEditor::Editor
         // 摄像机实体（含 Translation+Projection 且不带 Invisible）选择器，
         // 其图标/视锥体 gizmo 与点击拾取均以它为准
         m_camera_entity_selector: entity_selector,
-        
+
+        // 2D 光源实体（含 Translation 与对应光源组件且不带 Invisible）选择器：
+        // 点光源图标以 Point/Range 两个选择器为准（同一图标），
+        // 平行光源图标以 Parallel 选择器为准
+        m_point_light2d_entity_selector: entity_selector,
+        m_range_light2d_entity_selector: entity_selector,
+        m_parallel_light2d_entity_selector: entity_selector,
+
         m_last_time: mut real,
         m_is_look_active: mut bool,
         m_is_pan_active: mut bool,
@@ -143,10 +150,10 @@ namespace JEEditor::Editor
         m_gizmo_draw_size: mut real,
         m_gizmo_draw_center_size: mut real,
 
-        // 摄像机实体图标 gizmo 的屏幕命中矩形（EUID、屏幕中心、命中半径px）
-        // 与当前悬停的摄像机实体，每帧由 updateCameraGizmos 重建
-        m_camera_gizmo_rects: vec<mut (entity::internal::euid_t, vec2, real)>,
-        m_camera_gizmo_hover: mut option<entity::internal::euid_t>,
+        // 实体图标 gizmo（摄像机/2D 光源）的屏幕命中矩形（EUID、屏幕中心、
+        // 命中半径px）与当前悬停的实体，每帧由 updateIconGizmos 重建
+        m_icon_gizmo_rects: vec<mut (entity::internal::euid_t, vec2, real)>,
+        m_icon_gizmo_hover: mut option<entity::internal::euid_t>,
     }
     {
         let TRASNLATION_SYSTEM_TYPE =
@@ -197,6 +204,9 @@ namespace JEEditor::Editor
         // 视锥体线框配色：常态浅蓝，悬停提亮，选中复用游标高亮黄
         let CAMERA_GIZMO_COLOR = (0.35, 0.78, 0.95, 0.55);
         let CAMERA_GIZMO_COLOR_HOVER = (0.55, 0.9, 1., 0.8);
+
+        // ---- 2D 光源实体 gizmo 参数 ----
+        let LIGHT2D_GIZMO_ICON_SIZE_PX = 32.;  // 光源图标边长（像素）
 
         // 右键同时承担“拖拽环视”职责：以按下起点为基准，位移切实超过该
         // 像素阈值后才激活环视（阈值内的位移不转动摄像机）；松开时位移
@@ -283,7 +293,23 @@ namespace JEEditor::Editor
                         requirement::contains(Transform::Translation::type::typeinfo),
                         requirement::contains(Camera::Projection::type::typeinfo),
                     ]),
-                    
+
+                m_point_light2d_entity_selector = w->create_selector([
+                        requirement::except(Editor::Invisible::type::typeinfo),
+                        requirement::contains(Transform::Translation::type::typeinfo),
+                        requirement::contains(Light2D::Point::type::typeinfo),
+                    ]),
+                m_range_light2d_entity_selector = w->create_selector([
+                        requirement::except(Editor::Invisible::type::typeinfo),
+                        requirement::contains(Transform::Translation::type::typeinfo),
+                        requirement::contains(Light2D::Range::type::typeinfo),
+                    ]),
+                m_parallel_light2d_entity_selector = w->create_selector([
+                        requirement::except(Editor::Invisible::type::typeinfo),
+                        requirement::contains(Transform::Translation::type::typeinfo),
+                        requirement::contains(Light2D::Parallel::type::typeinfo),
+                    ]),
+
                 // Camera control state:
                 m_last_time = mut 0.,
                 m_is_look_active = mut false,
@@ -326,8 +352,8 @@ namespace JEEditor::Editor
                 m_gizmo_draw_size = mut 1.,
                 m_gizmo_draw_center_size = mut 0.1,
 
-                m_camera_gizmo_rects = []mut: vec<mut (entity::internal::euid_t, vec2, real)>,
-                m_camera_gizmo_hover = mut option::none,
+                m_icon_gizmo_rects = []mut: vec<mut (entity::internal::euid_t, vec2, real)>,
+                m_icon_gizmo_hover = mut option::none,
             };
 
             // “调试执行/导出时才启用”的系统保存在视口中（编辑器内不 add_system），
@@ -534,9 +560,9 @@ namespace JEEditor::Editor
                     };
                 }
 
-                // 绘制摄像机图标：公告板四边形采样图标纹理（Icons::GIZMO_CAMERA），
+                // 绘制实体图标（摄像机/2D 光源）：公告板四边形采样图标纹理，
                 // 染色（悬停/选中高亮）通过 JE_COLOR 提供
-                func drawCameraIcon(
+                func drawBillboardIcon(
                     pos: vec3,
                     rot: quat,
                     icon_size: real,
@@ -701,7 +727,7 @@ namespace JEEditor::Editor
                                     is_selected = selected == euid;
                             }
                             let mut is_hover = false;
-                            match (self.m_camera_gizmo_hover)
+                            match (self.m_icon_gizmo_hover)
                             {
                                 none?;
                                 value(hovered)?
@@ -758,7 +784,7 @@ namespace JEEditor::Editor
                                         let world_per_pixel = gizmoWorldPerPixel(
                                             camera_entity, debug_camera_trans,
                                             debug_view_proj, pos, fb_rsize);
-                                        drawCameraIcon(
+                                        drawBillboardIcon(
                                             pos,
                                             debug_camera_trans->get_global_rot,
                                             CAMERA_GIZMO_ICON_SIZE_PX * world_per_pixel,
@@ -772,7 +798,86 @@ namespace JEEditor::Editor
                     }
                     return_value!;
                 };
-                
+
+                // 绘制 2D 光源实体 gizmo（仅图标，无附加线框）：
+                // 点光源（Translation+Point/Range 且不带 Invisible）绘制
+                // gizmo_point_light2d，平行光源（Translation+Parallel 且不带
+                // Invisible）绘制 gizmo_parallel_light2d；绘制规则与摄像机
+                // 图标一致（Translation 位置、面向调试摄像机的公告板、屏幕
+                // 像素恒定大小、身后不绘制），悬停提亮/选中染黄。
+                do try!{
+                    try! debug_camera_trans =
+                        camera_entity->towoo::get_component:<Transform::Translation>();
+                    let (fbw, fbh) = fb->size();
+                    let fb_rsize = (fbw as real, fbh as real) as vec2;
+                    let debug_view_proj = camera_projection->get_view_proj_mat;
+                    let debug_cam_pos = debug_camera_trans->get_global_pos;
+                    let debug_cam_forward =
+                        debug_camera_trans->get_global_rot * ((0., 0., 1.) as vec3);
+
+                    func drawLight2DIcon(e: entity, icon: option<texture>)=> void
+                    {
+                        do try!{
+                            try! trans =
+                                e->towoo::get_component:<Transform::Translation>();
+                            try! euid = e->internal::get_entity_uid;
+                            try! icon_instance = icon;
+
+                            let pos = trans->get_global_pos;
+
+                            let mut is_selected = false;
+                            match (self.m_selected_entity_id)
+                            {
+                                none?;
+                                value(selected)?
+                                    is_selected = selected == euid;
+                            }
+                            let mut is_hover = false;
+                            match (self.m_icon_gizmo_hover)
+                            {
+                                none?;
+                                value(hovered)?
+                                    is_hover = hovered == euid;
+                            }
+
+                            let mut icon_tint = (1., 1., 1., 1.);
+                            if (is_hover)
+                                icon_tint = (1., 1., 0.6, 1.);
+                            if (is_selected)
+                                icon_tint = (1., 1., 0.25, 1.);
+
+                            // 位于调试摄像机身后的光源不绘制图标（避免镜像投影）
+                            if ((pos - debug_cam_pos)->dot(debug_cam_forward) > 0.)
+                            {
+                                let world_per_pixel = gizmoWorldPerPixel(
+                                    camera_entity, debug_camera_trans,
+                                    debug_view_proj, pos, fb_rsize);
+                                drawBillboardIcon(
+                                    pos,
+                                    debug_camera_trans->get_global_rot,
+                                    LIGHT2D_GIZMO_ICON_SIZE_PX * world_per_pixel,
+                                    icon_instance,
+                                    icon_tint);
+                            }
+                            return_value!;
+                        };
+                    }
+
+                    for (let e : self.m_point_light2d_entity_selector)
+                    {
+                        drawLight2DIcon(e, Icons::GIZMO_POINT_LIGHT2D);
+                    }
+                    for (let e : self.m_range_light2d_entity_selector)
+                    {
+                        drawLight2DIcon(e, Icons::GIZMO_POINT_LIGHT2D);
+                    }
+                    for (let e : self.m_parallel_light2d_entity_selector)
+                    {
+                        drawLight2DIcon(e, Icons::GIZMO_PARALLEL_LIGHT2D);
+                    }
+                    return_value!;
+                };
+
                 if (self.m_gizmo_draw_visible)
                 {
                     let origin = self.m_gizmo_draw_origin;
@@ -959,8 +1064,9 @@ namespace JEEditor::Editor
             let dt = mathf::clamp(now - self.m_last_time, 0., 0.1);
             self.m_last_time = now;
             
-            // 摄像机实体图标 gizmo 的命中矩形与悬停（供点击拾取与绘制染色使用）
-            self->updateCameraGizmos(
+            // 实体图标 gizmo（摄像机/2D 光源）的命中矩形与悬停
+            //（供点击拾取与绘制染色使用）
+            self->updateIconGizmos(
                 debug_camera,
                 viewport_hovered && !toolbar_hovered,
                 viewport_rect);
@@ -1180,17 +1286,18 @@ namespace JEEditor::Editor
             return option::value(hits[0].1);
         }
 
-        // 鼠标位置命中的摄像机图标 gizmo（返回实体 EUID）：命中按到图标中心的
-        // 距离由近及远排序；cycle 为真时沿用实体拾取的“循环选中下一个”规则，
-        // 否则已选中的摄像机在命中列表中时保持其选中（右键菜单语义）。
-        func pickCameraGizmo(
+        // 鼠标位置命中的实体图标 gizmo（摄像机/2D 光源，返回实体 EUID）：
+        // 命中按到图标中心的距离由近及远排序；cycle 为真时沿用实体拾取的
+        // “循环选中下一个”规则，否则已选中的实体在命中列表中时保持其选中
+        //（右键菜单语义）。
+        func pickIconGizmo(
             self: WorldEditorViewport,
             mouse: vec2,
             cycle: bool)=> option<entity::internal::euid_t>
         {
             let mut hits = []mut: vec<mut (real, entity::internal::euid_t)>;
 
-            for (let (euid, center, half) : self.m_camera_gizmo_rects)
+            for (let (euid, center, half) : self.m_icon_gizmo_rects)
             {
                 let dist = (mouse - center)->length;
                 if (dist <= half)
@@ -1222,17 +1329,17 @@ namespace JEEditor::Editor
             return option::value(hits[next_index].1);
         }
 
-        // 每帧重建摄像机实体图标 gizmo 的屏幕命中矩形（Translation 位置投影到
-        // 屏幕，半径 = 图标半边长 + 手柄命中余量）与悬停状态；位于调试摄像机
-        // 身后的摄像机实体不参与命中。
-        func updateCameraGizmos(
+        // 每帧重建实体图标 gizmo（摄像机/2D 光源）的屏幕命中矩形
+        //（Translation 位置投影到屏幕，半径 = 图标半边长 + 手柄命中余量）
+        // 与悬停状态；位于调试摄像机身后的实体不参与命中。
+        func updateIconGizmos(
             self: WorldEditorViewport,
             debug_camera: option<entity>,
             hovered: bool,
             viewport_rect: option<(ImVec2, ImVec2)>)=> void
         {
-            self.m_camera_gizmo_rects->clear();
-            self.m_camera_gizmo_hover = option::none;
+            self.m_icon_gizmo_rects->clear();
+            self.m_icon_gizmo_hover = option::none;
 
             do try!{
                 try! camera_entity = debug_camera;
@@ -1252,32 +1359,42 @@ namespace JEEditor::Editor
                 let cam_forward =
                     camera_trans->get_global_rot * ((0., 0., 1.) as vec3);
 
-                for (let e : self.m_camera_entity_selector)
+                // 把选择器内全部实体的 Translation 位置登记为命中矩形，
+                // icon_size_px 为对应图标的屏幕边长（像素）
+                func addIconRects(selector: entity_selector, icon_size_px: real)=> void
                 {
-                    do try!{
-                        try! trans =
-                            e->towoo::get_component:<Transform::Translation>();
-                        try! euid = e->internal::get_entity_uid;
+                    for (let e : selector)
+                    {
+                        do try!{
+                            try! trans =
+                                e->towoo::get_component:<Transform::Translation>();
+                            try! euid = e->internal::get_entity_uid;
 
-                        let pos = trans->get_global_pos;
-                        if ((pos - cam_pos)->dot(cam_forward) <= 0.)
+                            let pos = trans->get_global_pos;
+                            if ((pos - cam_pos)->dot(cam_forward) <= 0.)
+                                return_value!;
+
+                            self.m_icon_gizmo_rects->add(mut (
+                                euid,
+                                gizmoWorldToScreen(view_proj, pos, rmin, rsize),
+                                icon_size_px * 0.5 + GIZMO_HIT_PX));
                             return_value!;
-
-                        self.m_camera_gizmo_rects->add(mut (
-                            euid,
-                            gizmoWorldToScreen(view_proj, pos, rmin, rsize),
-                            CAMERA_GIZMO_ICON_SIZE_PX * 0.5 + GIZMO_HIT_PX));
-                        return_value!;
-                    };
+                        };
+                    }
                 }
+
+                addIconRects(self.m_camera_entity_selector, CAMERA_GIZMO_ICON_SIZE_PX);
+                addIconRects(self.m_point_light2d_entity_selector, LIGHT2D_GIZMO_ICON_SIZE_PX);
+                addIconRects(self.m_range_light2d_entity_selector, LIGHT2D_GIZMO_ICON_SIZE_PX);
+                addIconRects(self.m_parallel_light2d_entity_selector, LIGHT2D_GIZMO_ICON_SIZE_PX);
 
                 if (hovered
                     && !self.m_is_look_active
                     && !self.m_is_pan_active
                     && !self.m_is_orbit_active)
                 {
-                    self.m_camera_gizmo_hover =
-                        self->pickCameraGizmo(GetMousePos() as vec2, false);
+                    self.m_icon_gizmo_hover =
+                        self->pickIconGizmo(GetMousePos() as vec2, false);
                 }
                 return_value!;
             };
@@ -1321,12 +1438,12 @@ namespace JEEditor::Editor
                         try! trans = camera_entity->towoo::get_component:<Transform::Translation>();
                         try! proj = camera_entity->towoo::get_component:<Camera::Projection>();
 
-                        // 摄像机实体：命中其图标 gizmo 时直接选中（右键菜单作用于它），
-                        // 不走渲染实体的射线拾取
-                        match (self->pickCameraGizmo(GetMousePos() as vec2, false))
+                        // 摄像机/2D 光源实体：命中其图标 gizmo 时直接选中
+                        //（右键菜单作用于它），不走渲染实体的射线拾取
+                        match (self->pickIconGizmo(GetMousePos() as vec2, false))
                         {
-                            value(camera_euid)?
-                                self.m_selected_entity_id = option::value(camera_euid);
+                            value(icon_euid)?
+                                self.m_selected_entity_id = option::value(icon_euid);
                             none?
                             {
                                 let mouse_diff = GetMousePos() as vec2 - rect_min as vec2;
@@ -1397,12 +1514,12 @@ namespace JEEditor::Editor
             if (hovered && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left)
                 && self.m_gizmo_hover_handle == GIZMO_HANDLE_NONE)
             {
-                // 摄像机实体：点击其图标 gizmo 即选中（沿用实体拾取的循环规则），
-                // 未命中图标时才走渲染实体的射线拾取
-                match (self->pickCameraGizmo(GetMousePos() as vec2, true))
+                // 摄像机/2D 光源实体：点击其图标 gizmo 即选中（沿用实体拾取的
+                // 循环规则），未命中图标时才走渲染实体的射线拾取
+                match (self->pickIconGizmo(GetMousePos() as vec2, true))
                 {
-                    value(camera_euid)?
-                        self.m_selected_entity_id = option::value(camera_euid);
+                    value(icon_euid)?
+                        self.m_selected_entity_id = option::value(icon_euid);
                     none?
                         match (viewport_rect)
                         {
