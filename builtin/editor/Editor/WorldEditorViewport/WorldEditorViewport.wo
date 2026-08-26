@@ -34,14 +34,14 @@ import builtin::editor::GUI::Shortcut;
 import builtin::editor::Inspector::World;
 import builtin::editor::Inspector::Universe;
 
-import Gizmo::Shaders;
-import Gizmo::Shapes;
+import builtin::editor::Editor::Gizmo::Shaders;
+import builtin::editor::Editor::Gizmo::Shapes;
 
-import Browser;
-import Practice;
-import Action::IAction;
-import Action::ModifyComponentMember;
-import Action::DestroyEntity;
+import builtin::editor::Editor::Browser;
+import builtin::editor::Editor::Practice;
+import builtin::editor::Editor::Action::IAction;
+import builtin::editor::Editor::Action::ModifyComponentMember;
+import builtin::editor::Editor::Action::DestroyEntity;
 
 using std;
 
