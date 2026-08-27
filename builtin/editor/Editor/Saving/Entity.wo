@@ -47,7 +47,8 @@ namespace JEEditor::Saving::Entity
                 for (let ctype_name : [
                     "Transform::LocalPosition",
                     "Transform::LocalRotation",
-                    "Transform::LocalScale"])
+                    "Transform::LocalScale",
+                    "Transform::Anchor"])
                 {
                     if (components_dat->contains(ctype_name))
                         components_dat->set(ctype_name, new_table());
