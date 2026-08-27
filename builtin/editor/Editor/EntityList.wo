@@ -10,6 +10,7 @@ import je::towoo::components;
 
 import pkg::interface;
 import pkg::iterator;
+import pkg::try;
 import pkg::worst;
 
 import builtin::editor::GUI::Windows;
@@ -19,11 +20,13 @@ import WorldEditorViewport;
 import ComponentPresets;
 import EntityClipboard;
 import Action::CreateEntity;
+import Action::AttachEntity;
 import Browser;
 
 using iterator;
 using je;
 using je::gui;
+using JEEditor::GUI;
 using JEEditor::GUI::Windows;
 using JEEditor::GUI::Drag;
 using JEEditor::Editor::Action;
@@ -49,6 +52,17 @@ namespace JEEditor::Editor
         // 须像视口（VIEWPORT_BLANK_CONTEXT_MENU_ID）那样用显式 ID
         // 手动 OpenPopup/BeginPopup（见 run）
         let ENTITYLIST_BLANK_CONTEXT_MENU_ID = "##entitylist_blank_context";
+
+        // ---- 父子层级显示 ----
+        // 每级缩进宽度（像素）：箭头占一列，名字从箭头列之后起
+        let HIERARCHY_INDENT_PX = 20.;
+        // 展开状态按调试 EUID 记录（跨帧只持 EUID）；缺省视为展开，
+        // 新挂接的子实体立即可见。实体销毁后条目在渲染时顺手清理
+        let mut s_hierarchy_expanded =
+            map::create:<entity::internal::euid_t, bool>(0);
+        // 实体项标签 ID 计数器：树形递归渲染无法用 enumerate 顺序号，
+        // 每帧渲染前清零、每项递增，保证 ##id 唯一
+        let mut s_item_serial = 0;
 
         // 常用组件组合表（分组/组合/组件全名）共享自 ComponentPresets.wo，
         // 同时供“添加组件”弹窗与实体右键菜单使用
@@ -107,72 +121,279 @@ namespace JEEditor::Editor
                 defer EndPopup();
             }
         }
-        // 返回值：本帧鼠标是否悬停在任一实体项上（供 run 里空白右键
-        // 菜单的判定使用）
+        // 渲染一个实体项（含层级缩进/展开箭头）并递归渲染其子层级。
+        // 返回本项（箭头与名字）是否被悬停。rendering 记录当前渲染
+        // 路径上的实体，防御父链成环的坏数据导致递归不终止（环上实体
+        // 不会出现在任何根链上，由 showEntitiesInWorld 兜底平铺显示）。
+        func drawEntityNode(
+            world_view: WorldEditorViewport,
+            entity_entry: (entity, option<entity::internal::euid_t>),
+            children_map: map<entity::internal::euid_t,
+                vec<mut (entity, option<entity::internal::euid_t>)>>,
+            depth: int,
+            rendering: map<entity::internal::euid_t, bool>)=> bool
+        {
+            let (e, euid) = entity_entry;
+            let mut any_hovered = false;
+
+            // 环防御：已在当前渲染路径上的实体不再进入
+            match (euid)
+            {
+                none?;
+                value(eid)?
+                {
+                    if (rendering->contains(eid))
+                        return false;
+                    do rendering->set(eid, true);
+                }
+            }
+
+            // 本项的子列表（=>> 链：EUID 反查子列表，无 EUID/无子得 none）
+            let children = euid =>> \eid = children_map->get(eid);;
+            let has_children = children->is_value && children->unwrap->len > 0;
+
+            // 展开状态：缺省展开（新挂接的子实体立即可见）
+            let mut expanded = true;
+            match (euid)
+            {
+                none?;
+                value(eid)?
+                    match (s_hierarchy_expanded->get(eid))
+                    {
+                        none?;
+                        value(v)?
+                            expanded = v;
+                    }
+            }
+
+            // 行起点（窗口局部坐标）：箭头画在 depth 级缩进处，名字对齐
+            // 到箭头列之后；叶子无箭头，名字多缩进一级保持列对齐
+            let row_pos = GetCursorPos();
+            let arrow_x = row_pos.0 + depth as real * HIERARCHY_INDENT_PX;
+            SetCursorPos((arrow_x, row_pos.1));
+            if (has_children)
+            {
+                let arrow = expanded ? "▾" | "▸";
+                if (SelectableSelected(
+                        F"{arrow}##entitylist_exp_{s_item_serial}", false))
+                {
+                    match (euid)
+                    {
+                        none?;
+                        value(eid)?
+                            s_hierarchy_expanded->set(eid, !expanded);
+                    }
+                }
+                if (IsItemHovered())
+                    any_hovered = true;
+                SameLine();
+            }
+            else
+                SetCursorPos(
+                    (arrow_x + HIERARCHY_INDENT_PX, row_pos.1));
+            s_item_serial += 1;
+
+            let raw_name = e->internal::name;
+            let mut entity_name = raw_name;
+            if (entity_name == "")
+                entity_name = "<匿名实体>";
+
+            let current_selected_entity_id = world_view->getSelectedEntityId();
+            let is_selected = current_selected_entity_id->is_value
+                && euid->is_value
+                && current_selected_entity_id->unwrap == euid->unwrap;
+
+            // 派生自预设体的实体以蓝色显示，直观区分挂有预设体文件的
+            // 实体（Editor::Prefab 组件的 path 非空即视为有效挂载）
+            let prefab_path = e->internal::get_prefab_path();
+            let is_prefab_instance = prefab_path->is_value
+                && prefab_path->unwrap->len > 0;
+            if (is_prefab_instance)
+                PushStyleColor(
+                    ImGuiCol::ImGuiCol_Text, (100, 160, 230, 255));
+
+            // 点击实体项可选中对应实体
+            let clicked = SelectableSelected(
+                F"{entity_name}##{s_item_serial}", is_selected);
+
+            if (is_prefab_instance)
+                PopStyleColor(1);
+
+            // 紧随 Selectable 采样悬停状态：此时最后一个 item 仍是
+            // 本实体项（后面的 DragPayload 不得插在两者之间）
+            if (IsItemHovered())
+                any_hovered = true;
+
+            if (clicked && euid->is_value)
+                world_view->setSelectedEntityId(euid);
+
+            // 按住实体项拖出：拖到资源管理器可保存为 .je4entity
+            // 预设体文件；拖到另一实体项上则挂接为其子实体（载荷只
+            // 携带 EUID，entity 句柄不跨帧）
+            if (euid->is_value)
+                DragPayload(EntitySavingRequestPayload::create(
+                    world_view, euid->unwrap,
+                    raw_name->len > 0 ? raw_name | "Entity"));
+
+            // 拖拽接收：把拖来的实体挂到本项之下，发布可撤销的
+            // AttachEntity 操作（无效目标——自己、已是其子、成环——
+            // 由 try_create 拒绝，静默无操作）
+            match (Drag::AcceptDrag:<EntitySavingRequestPayload>())
+            {
+                none?;
+                value(payload)?
+                {
+                    do try!{
+                        try! dragged_entity =
+                            world_view->findListedEntityByEuid(
+                                payload->dragged_euid());
+                        try! attach_action = AttachEntity::try_create(
+                            world_view, dragged_entity, e);
+                        world_view->doAction(attach_action);
+                        return_value!;
+                    };
+                }
+            }
+
+            // 右键打开实体上下文菜单（菜单内容与视口右键菜单共用）
+            showEntityContextMenu(world_view, e);
+
+            // 子层级（展开时）
+            if (has_children && expanded)
+            {
+                for (let (child_e, child_euid) : children->unwrap)
+                {
+                    if (drawEntityNode(
+                            world_view, (child_e, child_euid), children_map,
+                            depth + 1, rendering))
+                        any_hovered = true;
+                }
+            }
+
+            return any_hovered;
+        }
+        // 返回值：本帧鼠标是否悬停在任一实体项（含展开箭头）上
+        //（供 run 里空白右键菜单的判定使用）。实体按父子层级显示：
+        // 根级与各级子项均按 EUID 升序；父实体不在可见范围（编辑器
+        // 内部实体/锚点缺失）的子实体按根显示；父链成环的坏数据由
+        // rendering 防御并兜底平铺，保证列表始终显示全部实体。
         func showEntitiesInWorld(world_view: WorldEditorViewport)=> bool
         {
             let mut any_item_hovered = false;
             let entity_selector = world_view->getEntitySelector();
-            
+
             let entities = entity_selector->iter
                 |> filter(\e = e->towoo::get_component:<Editor::Invisible>->is_none;)
                 |> map(\e = (e, e->internal::get_entity_uid);)
                 |> collect_as_mut
                 ;
-                
+
             std::sort_in_place(
                 entities,
                 \(_, lid), (_, rid) = lid->or(ZERO) < rid->or(ZERO)
                     where ZERO = 0h as entity::internal::euid_t
                     ;);
-                    
-            let current_selected_entity_id = world_view->getSelectedEntityId();
-            
-            for (let (i, (e, euid)) : entities->iter |> enumerate)
+
+            // 锚点 uid → euid（仅可见实体）：子的 parent_uid 据此认父
+            let anchor_to_euid =
+                map::create:<string, entity::internal::euid_t>(0);
+            for (let (e, euid) : entities)
             {
-                let raw_name = e->internal::name;
-                let mut entity_name = raw_name;
-                if (entity_name == "")
-                    entity_name = "<匿名实体>";
-
-                let is_selected = current_selected_entity_id->is_value
-                    && euid->is_value
-                    && current_selected_entity_id->unwrap == euid->unwrap;
-
-                // 派生自预设体的实体以蓝色显示，直观区分挂有预设体文件的
-                // 实体（Editor::Prefab 组件的 path 非空即视为有效挂载）
-                let prefab_path = e->internal::get_prefab_path();
-                let is_prefab_instance = prefab_path->is_value
-                    && prefab_path->unwrap->len > 0;
-                if (is_prefab_instance)
-                    PushStyleColor(
-                        ImGuiCol::ImGuiCol_Text, (100, 160, 230, 255));
-
-                // 点击实体项可选中对应实体
-                let clicked = SelectableSelected(
-                    F"{entity_name}##{i}", is_selected);
-
-                if (is_prefab_instance)
-                    PopStyleColor(1);
-
-                // 紧随 Selectable 采样悬停状态：此时最后一个 item 仍是
-                // 本实体项（后面的 DragPayload 不得插在两者之间）
-                if (IsItemHovered())
-                    any_item_hovered = true;
-
-                if (clicked && euid->is_value)
-                    world_view->setSelectedEntityId(euid);
-
-                // 按住实体项拖出：拖到资源管理器可保存为 .je4entity
-                // 预设体文件（载荷只携带 EUID，entity 句柄不跨帧）
-                if (euid->is_value)
-                    DragPayload(EntitySavingRequestPayload::create(
-                        world_view, euid->unwrap,
-                        raw_name->len > 0 ? raw_name | "Entity"));
-
-                // 右键打开实体上下文菜单（菜单内容与视口右键菜单共用）
-                showEntityContextMenu(world_view, e);
+                match (e->internal::get_anchor_uid)
+                {
+                    none?;
+                    value(anchor_uid)?
+                        match (euid)
+                        {
+                            none?;
+                            value(eid)? anchor_to_euid->set(anchor_uid, eid);
+                        }
+                }
             }
+
+            // 分组：根列表 + 各父实体的子列表（组内顺序继承整体排序）
+            let children_map = map::create:<entity::internal::euid_t,
+                vec<mut (entity, option<entity::internal::euid_t>)>>(0);
+            let roots = []mut:
+                vec<mut (entity, option<entity::internal::euid_t>)>;
+            for (let (e, euid) : entities)
+            {
+                // 父锚点可反查到可见实体才认父（=>> 链：无 LocalToParent
+                // 或父不在可见范围得 none，按根显示）
+                let parent_eid = e->internal::get_parent_anchor_uid
+                    =>> \parent_uid = anchor_to_euid->get(parent_uid);
+                    ;
+
+                match (parent_eid)
+                {
+                    // 无父/父不在可见范围：按根显示
+                    none?
+                        roots->add(mut (e, euid));
+                    value(peid)?
+                        match (children_map->get(peid))
+                        {
+                            none?
+                            {
+                                let child_list = []mut:
+                                    vec<mut (entity, option<entity::internal::euid_t>)>;
+                                child_list->add(mut (e, euid));
+                                children_map->set(peid, child_list);
+                            }
+                            value(child_list)?
+                                child_list->add(mut (e, euid));
+                        }
+                }
+            }
+
+            // 渲染：从各根递归展开
+            s_item_serial = 0;
+            let rendering = map::create:<entity::internal::euid_t, bool>(0);
+            for (let (root_e, root_euid) : roots)
+            {
+                if (drawEntityNode(
+                        world_view, (root_e, root_euid),
+                        children_map, 0, rendering))
+                    any_item_hovered = true;
+            }
+
+            // 兜底：不在任何根链上的实体（父链成环等坏数据）平铺到
+            // 根级，保证列表始终可见全部实体。无 EUID 的实体必然已随
+            // roots/children 渲染（分组不依赖 EUID），跳过以防重复
+            for (let (rest_e, rest_euid) : entities)
+            {
+                match (rest_euid)
+                {
+                    none?;
+                    value(rest_eid)?
+                        if (!rendering->contains(rest_eid))
+                        {
+                            if (drawEntityNode(
+                                    world_view, (rest_e, rest_euid),
+                                    children_map, 0, rendering))
+                                any_item_hovered = true;
+                        }
+                }
+            }
+
+            // 顺手清理已销毁实体的展开状态条目
+            let live_euids = map::create:<entity::internal::euid_t, bool>(0);
+            for (let (_, euid) : entities)
+            {
+                match (euid)
+                {
+                    none?;
+                    value(eid)?
+                        live_euids->set(eid, true);
+                }
+            }
+            let stale_euids = s_hierarchy_expanded->iter
+                |> filter_map(\(eid, _) = live_euids->contains(eid)
+                    ? option::none: option<entity::internal::euid_t>
+                    | option::value(eid);)
+                |> collect;
+            for (let stale_eid : stale_euids)
+                do s_hierarchy_expanded->remove(stale_eid);
+
             return any_item_hovered;
         }
         // 将 "Transform::LocalPosition" 拆为 ("Transform", "LocalPosition")，

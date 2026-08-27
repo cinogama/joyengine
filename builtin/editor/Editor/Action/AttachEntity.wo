@@ -1,0 +1,126 @@
+import woo::std;
+
+import je;
+import je::ecs;
+import je::internal;
+import je::towoo;
+import je::towoo::components;
+
+import pkg::interface;
+import pkg::try;
+
+import builtin::editor::Editor::WorldEditorViewport;
+
+import IAction;
+
+using je;
+
+namespace JEEditor::Editor::Action
+{
+    // 挂接实体（建立父子关系）：把子实体挂到父实体之下。组件变更由原生
+    // internal::set_parent(force=true) 一次完成——为子补 LocalToParent 并
+    // 写入父的 Anchor.uid、为父补 Anchor、移除子身上与 LocalToParent 互斥
+    // 的 LocalToWorld（两个组件同时存在时变换系统不再更新该实体，见
+    // jeecs_core_translation_system.hpp 的两个互斥查询）。
+    // 撤销恢复原状：原先挂在别的父下则把原父锚点 uid 写回（parent_uid
+    // 仍指向原父，父实体无需变更）；原先为根则移除 LocalToParent、按
+    // 记录补回 LocalToWorld。
+    using AttachEntity = struct{
+        // 跨帧只持调试 EUID，落实（redo/undo）时反查实体
+        //（entity 句柄不允许跨帧持有）
+        m_child_eid: entity::internal::euid_t,
+        m_parent_eid: entity::internal::euid_t,
+        // 实体名快照（describe 用，字符串不怕失效）
+        m_child_name: string,
+        m_parent_name: string,
+        // 子实体的原父锚点 uid；none = 原先没有 LocalToParent（根实体）
+        m_old_parent_uid: option<string>,
+        // 子实体原先是否挂 LocalToWorld（撤销回根时据此补回）
+        m_had_local_to_world: bool,
+    }
+    {
+        // 拒绝挂接：自己挂自己、已是其直接子（is_child_of 只比一层，
+        // 含 parent_uid 已指向该父的情况）、父是子的后代（会成环，
+        // 变换系统将停止更新两者的 Translation）、实体缺调试 EUID
+        public func try_create(
+            w: WorldEditorViewport,
+            child: entity,
+            parent: entity)=> option<AttachEntity>
+            where require!(AttachEntity: IAction);
+        {
+            return or(option::none: option<AttachEntity>) <| try!{
+                try! child_eid = child->internal::get_entity_uid;
+                try! parent_eid = parent->internal::get_entity_uid;
+
+                if (std::is_same(child, parent)
+                    || child->internal::is_child_of(parent)
+                    || w->isAncestorOf(child, parent))
+                    return_value! option::none: option<AttachEntity>;
+
+                return_value! option::value(AttachEntity{
+                    m_child_eid = child_eid,
+                    m_parent_eid = parent_eid,
+                    m_child_name = child->internal::name,
+                    m_parent_name = parent->internal::name,
+                    m_old_parent_uid = child->internal::get_parent_anchor_uid,
+                    m_had_local_to_world =
+                        child->towoo::get_component:<Transform::LocalToWorld>
+                            ->is_value,
+                });
+            };
+        }
+
+        public func redo(self: AttachEntity, w: WorldEditorViewport)=> bool
+        {
+            return or(false) <| try!{
+                try! child = w->findListedEntityByEuid(self.m_child_eid);
+                try! parent = w->findListedEntityByEuid(self.m_parent_eid);
+
+                // set_parent 失败（组件补不上等）返回 false，
+                // Practice 会推迟一帧重试
+                return_value! child->internal::set_parent(parent, true);
+            };
+        }
+
+        public func undo(self: AttachEntity, w: WorldEditorViewport)=> bool
+        {
+            match (w->findListedEntityByEuid(self.m_child_eid))
+            {
+                none?
+                    return false;
+                value(child)?
+                    match (self.m_old_parent_uid)
+                    {
+                        // 原先挂在别的父下：写回原父锚点。挂接与撤销同帧
+                        // 发生时 LocalToParent 可能仍在命令缓冲中落实，
+                        // set_parent_with_uid 拿不到组件会返回 false，
+                        // 交给 Practice 推迟一帧重试
+                        value(old_uid)?
+                            return child->internal::set_parent_with_uid(
+                                old_uid, false);
+                        // 原先是根：移除 LocalToParent，按记录补回
+                        // LocalToWorld。组件增删走命令缓冲，与挂接同帧
+                        // 提交时按“最后提交者生效”合并
+                        none?
+                        {
+                            do child->remove_component(
+                                Transform::LocalToParent::type::typeinfo);
+                            if (self.m_had_local_to_world)
+                                do child->add_component(
+                                    Transform::LocalToWorld::type::typeinfo);
+                            return true;
+                        }
+                    }
+            }
+        }
+
+        public func describe(self: AttachEntity)=> string
+        {
+            let child_name = self.m_child_name->len > 0
+                ? self.m_child_name | "<匿名实体>";
+            let parent_name = self.m_parent_name->len > 0
+                ? self.m_parent_name | "<匿名实体>";
+            return F"挂接实体 {child_name} → {parent_name}";
+        }
+    }
+}

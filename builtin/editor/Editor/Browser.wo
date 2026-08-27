@@ -167,6 +167,12 @@ namespace JEEditor::Editor
                     }
             }
         }
+
+        // 被拖拽实体的调试 EUID（字段私有，供实体列表等接收方读取）
+        public func dragged_euid(self: EntitySavingRequestPayload)=> entity::internal::euid_t
+        {
+            return self.m_euid;
+        }
         public func dump(self: EntitySavingRequestPayload) => string
         {
             // 只在成为拖拽源的项上被调用（拖拽期间每帧一次，幂等覆盖）

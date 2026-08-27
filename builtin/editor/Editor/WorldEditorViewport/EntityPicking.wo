@@ -464,6 +464,59 @@ namespace JEEditor::Editor::WorldEditorViewport
         }
     }
 
+    // 按父锚点 uid 反查挂它的实体（即 uid 主人的父实体）：遍历锚点父
+    // 实体选择器（Translation+Anchor，含编辑器内部实体——与变换系统
+    // 的锚点解析范围一致）。供 worldToLocalPos、挂接防环
+    //（isAncestorOf）等使用。
+    public func findEntityByAnchorUid(
+        self: WorldEditorViewport, anchor_uid_to_find: string)=> option<entity>
+    {
+        for (let e : self.m_anchor_parent_entity_selector)
+        {
+            match (e->internal::get_anchor_uid)
+            {
+                none?;
+                value(entity_anchor_uid)?
+                    if (entity_anchor_uid == anchor_uid_to_find)
+                        return option::value(e);
+            }
+        }
+        return option::none;
+    }
+
+    // 判断 ancestor 是否为 e 的祖先（沿 e 的父链向上走，不含 e 自身；
+    // 链断——某层父的锚点反查不到——即止，与变换系统“父缺失则停更”
+    // 的口径一致）。步数上限仅防御坏数据父链成环（正常挂接经
+    // AttachEntity 防环不会成环）。
+    public func isAncestorOf(
+        self: WorldEditorViewport, ancestor: entity, e: entity)=> bool
+    {
+        let mut current = e;
+        for (let mut i = 0; i < 100000; i += 1)
+        {
+            match (current->internal::get_parent_anchor_uid)
+            {
+                // 没挂 LocalToParent：到根了
+                none?
+                    return false;
+                value(parent_uid)?
+                    match (self->findEntityByAnchorUid(parent_uid))
+                    {
+                        // 父锚点找不到主人：链断
+                        none?
+                            return false;
+                        value(parent)?
+                        {
+                            if (std::is_same(parent, ancestor))
+                                return true;
+                            current = parent;
+                        }
+                    }
+            }
+        }
+        return false;
+    }
+
     // ==========================
 
     public func getEntitySelector(self: WorldEditorViewport)
