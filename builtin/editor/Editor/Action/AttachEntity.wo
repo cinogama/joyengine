@@ -62,9 +62,11 @@ namespace JEEditor::Editor::Action
                 try! child_eid = child->internal::get_entity_uid;
                 try! parent_eid = parent->internal::get_entity_uid;
 
-                if (std::is_same(child, parent)
+                // 实体同一性按调试 EUID 判定（entity 句柄是 GC 包装
+                // 单元，不同来源的句柄不可用 is_same 比较）
+                if (child_eid == parent_eid
                     || child->internal::is_child_of(parent)
-                    || w->isAncestorOf(child, parent))
+                    || w->isAncestorOf(child_eid, parent))
                     return_value! option::none: option<AttachEntity>;
 
                 return_value! option::value(AttachEntity{
@@ -190,18 +192,22 @@ namespace JEEditor::Editor::Action
                         }
                     }
 
-                    // 本次挂接给父新挂的 Anchor：没有其他实体还挂在
-                    // 该锚点下时摘除（有则保留，否则会毁掉它们的
-                    // 父子关系）。Anchor 尚未落实（挂接与撤销同帧，
-                    // 读不到 uid）时返回 false 推迟一帧重试
+                    // 撤销只回滚本次操作造成的变更：本次挂接给父
+                    // 新挂的 Anchor 在没有其他实体引用（子已被本函数
+                    // 恢复原关系）时摘除；父在挂接前就有的 Anchor
+                    // 保持原状，不是本次操作该动的。Anchor 尚未落实
+                    //（挂接与撤销同帧，读不到 uid）时返回 false 推迟
+                    // 一帧重试
                     if (!self.m_parent_had_anchor)
                     {
                         match (w->findListedEntityByEuid(self.m_parent_eid))
                         {
+                            // 父实体已不在：无事可做
                             none?;
                             value(parent)?
                                 match (parent->internal::get_anchor_uid)
                                 {
+                                    // 仍在命令缓冲中未落实 → 推迟重试
                                     none?
                                         return false;
                                     value(parent_anchor_uid)?
@@ -209,8 +215,24 @@ namespace JEEditor::Editor::Action
                                         let mut anchor_still_used = false;
                                         for (let other : w->getEntitySelector())
                                         {
-                                            if (std::is_same(other, child)
-                                                || std::is_same(other, parent))
+                                            // 跳过参与本次挂接的子与父
+                                            // 自身：实体同一性按调试
+                                            // EUID 判定（entity 句柄是
+                                            // GC 包装单元，不同来源的
+                                            // 句柄 is_same 恒假）；子的
+                                            // 解除命令可能尚未落实，
+                                            // parent_uid 仍指向该锚点，
+                                            // 必须跳过
+                                            let mut is_related_entity = false;
+                                            match (other->internal::get_entity_uid)
+                                            {
+                                                none?;
+                                                value(other_eid)?
+                                                    if (other_eid == self.m_child_eid
+                                                        || other_eid == self.m_parent_eid)
+                                                        is_related_entity = true;
+                                            }
+                                            if (is_related_entity)
                                                 continue;
                                             match (other->internal::get_parent_anchor_uid)
                                             {

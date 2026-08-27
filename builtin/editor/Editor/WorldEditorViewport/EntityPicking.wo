@@ -484,12 +484,16 @@ namespace JEEditor::Editor::WorldEditorViewport
         return option::none;
     }
 
-    // 判断 ancestor 是否为 e 的祖先（沿 e 的父链向上走，不含 e 自身；
-    // 链断——某层父的锚点反查不到——即止，与变换系统“父缺失则停更”
-    // 的口径一致）。步数上限仅防御坏数据父链成环（正常挂接经
-    // AttachEntity 防环不会成环）。
+    // 判断 ancestor_eid 对应的实体是否为 e 的祖先（沿 e 的父链向上
+    // 走，不含 e 自身；链断——某层父的锚点反查不到——即止，与变换
+    // 系统“父缺失则停更”的口径一致）。祖先按调试 EUID 判定：entity
+    // 句柄是 GC 包装单元，不同来源的句柄不可用 is_same 比较，Action
+    // 与跨帧状态只被允许持有 EUID。步数上限仅防御坏数据父链成环
+    //（正常挂接经 AttachEntity 防环不会成环）。
     public func isAncestorOf(
-        self: WorldEditorViewport, ancestor: entity, e: entity)=> bool
+        self: WorldEditorViewport,
+        ancestor_eid: entity::internal::euid_t,
+        e: entity)=> bool
     {
         let mut current = e;
         for (let mut i = 0; i < 100000; i += 1)
@@ -507,8 +511,14 @@ namespace JEEditor::Editor::WorldEditorViewport
                             return false;
                         value(parent)?
                         {
-                            if (std::is_same(parent, ancestor))
-                                return true;
+                            match (parent->internal::get_entity_uid)
+                            {
+                                // 无调试 EUID 的实体无从比对，按不匹配处理
+                                none?;
+                                value(parent_eid)?
+                                    if (parent_eid == ancestor_eid)
+                                        return true;
+                            }
                             current = parent;
                         }
                     }
