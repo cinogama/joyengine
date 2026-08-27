@@ -26,6 +26,7 @@ import builtin::editor::GUI::Statebar;
 
 import builtin::editor::Editor::WorldEditorViewport;
 import builtin::editor::Editor::Saving::Entity;
+import ResourcePath;
 
 using std;
 
@@ -42,6 +43,7 @@ using JEEditor::GUI::Forms;
 using JEEditor::GUI::Icons;
 using JEEditor::GUI::Statebar;
 using JEEditor::Saving;
+using JEEditor::Editor::ResourcePath;
 
 namespace JEEditor::Editor
 {
@@ -866,25 +868,6 @@ namespace JEEditor::Editor
             }
         }
 
-        // 资源路径的传入形式转换：引擎按 @/ 前缀相对运行时路径（workpath）
-        // 解析资源（见 jeecs_file_open），预设体路径也存成这种形式，使存档
-        // 不依赖具体的机器目录。规则与 Material.wo 的 toRuntimeResourcePath
-        // 一致：目标不在工作路径之下时退回原绝对路径。
-        func toEngineResourcePath(path: fsys::path_t)=> string
-        {
-            match (relative(normalize(path->to_string()), workpath()))
-            {
-                err(_)?
-                    return path->to_string();
-                ok(rel)?
-                {
-                    if (rel == "" || rel == "." || rel->begin_with(".."))
-                        return path->to_string();
-                    return "@/" + rel;
-                }
-            }
-        }
-
         // 把实体完整快照写入 dst，并将实体挂为该文件的预设体。
         // 落盘用 save_full：编辑器的 add/remove component 走命令缓冲
         // 延迟落实，remove 后当帧序列化仍能查到旧 Editor::Prefab 组件，
@@ -921,7 +904,7 @@ namespace JEEditor::Editor
                                     logerr("保存预设体：Editor::Prefab 缺少 path 成员，预设体关联未建立");
                                 value((mtype, minst))?
                                     do towoo::unsafe::dynamic_parser::restore(
-                                        mtype, minst, toEngineResourcePath(dst));
+                                        mtype, minst, ResourcePath::toRuntimeResourcePath(dst->to_string()));
                             }
                         }
                     }

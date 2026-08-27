@@ -1,0 +1,36 @@
+import woo::std;
+
+import pkg::fsys;
+
+using std;
+
+// 引擎按 @/ 前缀相对运行时路径（workpath）解析资源（见 jeecs_file_open），
+// 存档中记录 @/ 相对形式可以不依赖具体的机器目录。@ 路径的正向/反向
+// 转换是编辑器的常用需求，统一在此提供，不要在调用点拼接字符串。
+namespace JEEditor::Editor::ResourcePath
+{
+    // 反向：真实路径 -> @/ 相对形式。目标不在工作路径之下（相对路径
+    // 为空、指向工作路径本身或以 .. 开头逃逸）时退回原路径。
+    public func toRuntimeResourcePath(path: string)=> string
+    {
+        match (fsys::relative(fsys::normalize(path), fsys::workpath()))
+        {
+            err(_)? return path;
+            ok(rel)?
+            {
+                if (rel == "" || rel == "." || rel->begin_with(".."))
+                    return path;
+                return "@/" + rel;
+            }
+        }
+    }
+
+    // 正向：@/ 相对形式 -> 真实路径。非 @/ 前缀（绝对路径等）原样
+    // 返回（仅做 normalize 转成 path_t）。
+    public func toLocalResourcePath(path: string)=> fsys::path_t
+    {
+        if (path->begin_with("@/"))
+            return fsys::workpath() / path->sub(2);
+        return fsys::normalize(path);
+    }
+}

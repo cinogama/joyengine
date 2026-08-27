@@ -16,6 +16,7 @@ import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Drag;
 import builtin::editor::GUI::Forms::MsgBox;
 
+import ResourcePath;
 import Browser;
 import WorldEditorViewport;
 import EditSession;
@@ -36,6 +37,7 @@ using JEEditor::GUI::Windows;
 using JEEditor::GUI::Drag;
 using JEEditor::GUI::Forms;
 using JEEditor::Editor::EditSession;
+using JEEditor::Editor::ResourcePath;
 using JEEditor::Editor::Action;
 
 namespace JEEditor::Editor
@@ -406,27 +408,6 @@ namespace JEEditor::Editor
                 applyShadersChange(wctx, e, shaders->erase(idx));
         }
 
-        // 资源路径的传入形式转换：引擎按 @/ 前缀相对运行时路径解析资源
-        //（见 jeecs_file_open），资源会记住传入的路径并随实体存档保存，
-        // 传入 @/ 相对路径可以让存档不依赖具体的机器目录。
-        // 规则：目标路径 X 相对当前工作路径 Y 取相对路径并加 @/ 前缀，
-        // 如 X=/a/b/c/d/e/s.shader、Y=/a/b/c 时得到 @/d/e/s.shader；
-        // 目标不在工作路径之下（相对路径为空或以 .. 开头）时退回原绝对路径。
-        func toRuntimeResourcePath(path: string)=> string
-        {
-            match (relative(normalize(path), workpath()))
-            {
-                err(_)?
-                    return path;
-                ok(rel)?
-                {
-                    if (rel == "" || rel == "." || rel->begin_with(".."))
-                        return path;
-                    return "@/" + rel;
-                }
-            }
-        }
-
         // 加载着色器并插入到列表 insert_at 位置（越界时收敛到首/尾）
         func tryInsertShader(
             wctx: WorldEditorViewport,
@@ -443,7 +424,7 @@ namespace JEEditor::Editor
                 return;
             }
 
-            match (shader::load(univ, toRuntimeResourcePath(path)))
+            match (shader::load(univ, ResourcePath::toRuntimeResourcePath(path)))
             {
                 none?
                     MsgBox::err("添加着色器失败", F"无法加载着色器：`{path}`");
@@ -518,7 +499,7 @@ namespace JEEditor::Editor
                 return;
             }
 
-            match (vertex::load(univ, toRuntimeResourcePath(path)))
+            match (vertex::load(univ, ResourcePath::toRuntimeResourcePath(path)))
             {
                 none?
                     MsgBox::err("设置模型失败", F"无法加载模型：`{path}`");
@@ -689,7 +670,7 @@ namespace JEEditor::Editor
                 return;
             }
 
-            match (texture::load(univ, toRuntimeResourcePath(path)))
+            match (texture::load(univ, ResourcePath::toRuntimeResourcePath(path)))
             {
                 none?
                     MsgBox::err("绑定纹理失败", F"无法加载纹理：`{path}`");
