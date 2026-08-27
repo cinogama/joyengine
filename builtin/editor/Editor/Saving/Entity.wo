@@ -10,9 +10,11 @@ import pkg::toml;
 import pkg::try;
 
 import builtin::gaming::Saving::Entity;
+import builtin::editor::Editor::ResourcePath;
 
 using je;
 using toml;
+using JEEditor::Editor;
 
 namespace JEEditor::Saving::Entity
 {
@@ -25,9 +27,12 @@ namespace JEEditor::Saving::Entity
         return toml;
     }
 
-    // 保存预设体（完整数据，不按 prefab 差异展开）：落盘预设体文件
-    //（.je4entity）专用，见 Browser.wo 的 savePrefabEntityTo
-    public func save_prefab(e: entity)=> Toml
+    // 保存预设体（落盘预设体文件 .je4entity 专用，见 Browser.wo 的
+    // savePrefabEntityTo），dst 为落盘路径。未挂预设体时输出完整数据；
+    // 已挂预设体且 dst 不是该预设体源文件时，输出相对该预设体的变体
+    //（差异 + "prefab" 键，与普通实体的差异保存同构）；覆盖预设体
+    // 源文件本体时仍输出完整数据。
+    public func save_prefab(e: entity, dst: string)=> Toml
     {
         let toml = JEGaming::Saving::Entity::save_full(e);
 
@@ -36,7 +41,8 @@ namespace JEEditor::Saving::Entity
         // 预设体不固化局部变换：这三个组件只记录存在（空表）而不保存
         // 成员值。还原时空表照常构造组件并保留默认值；派生实体的实际
         // 变换在 prefab 差异保存中以成员级差异完整记录，apply 展开时
-        // 逐成员写入空表，合并不受影响。
+        // 逐成员写入空表，合并不受影响。变体保存在抹除之后做差异：
+        // 父预设体的这三张表同为空表，变体不会引入变换成员差异。
         match (toml->get("components"))
         {
             none?;
@@ -49,6 +55,42 @@ namespace JEEditor::Saving::Entity
                     if (components_dat->contains(ctype_name))
                         components_dat->set(ctype_name, new_table());
                 }
+        }
+
+        // 已挂预设体的实体再次保存 = 旧预设体的变体。路径不区分大小写
+        // 地比对：dst 与源文件相同（覆盖本体）时若仍写成变体，文件会
+        // 指向自身，load 的递归展开将无限循环，此时退回完整数据更新
+        // 预设体本体；误判为相同仅损失变体关系，代价可接受。
+        match (e->internal::get_prefab_path())
+        {
+            none?;
+            value(prefab_path)?
+            {
+                let dst_runtime = ResourcePath::toRuntimeResourcePath(dst);
+                if (prefab_path->len > 0
+                    && prefab_path->lower != dst_runtime->lower)
+                {
+                    let diff_dat_may_none = try!{
+                        try! prefab_dat =
+                            JEGaming::Saving::Entity::load(prefab_path);
+
+                        let diff_dat =
+                            JEGaming::Saving::Entity::diff(toml, prefab_dat);
+                        diff_dat->set("prefab", prefab_path);
+
+                        return_value! diff_dat;
+                    };
+
+                    match (diff_dat_may_none)
+                    {
+                        value(diff_dat)?
+                            return diff_dat;
+                        none?
+                            // 尽管无法读取父预设体数据，依然保留派生关系
+                            toml->set("prefab", prefab_path);
+                    }
+                }
+            }
         }
 
         return toml;

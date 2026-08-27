@@ -383,7 +383,8 @@ namespace JEGaming::Saving::Entity
         return any_change ? option::value(result) | option::none;
     }
     
-    func diff(entity_dat: Toml, prefab_entity_dat: Toml)=> Toml
+    // public：编辑器侧 save_prefab 落盘预设体变体时复用此差异。
+    public func diff(entity_dat: Toml, prefab_entity_dat: Toml)=> Toml
     {
         let diff_dat = new_table();
         
