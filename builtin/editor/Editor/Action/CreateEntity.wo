@@ -210,14 +210,14 @@ namespace JEEditor::Editor::Action
                     e->internal::unsafe::set_entity_uid(eid);
             }
 
-            // 生成点（世界坐标）：写入新实体的局部位置。LocalPosition
-            // 属于起始组件集合时随实体构造已生效，同帧可取（同
-            // Editor::EntityId 的读取时机）。挂 LocalToParent 的实体
+            // 生成点（世界坐标）：换算为局部坐标后写入新实体的
+            // LocalPosition（无父实体时局部即世界，见 worldToLocalPos）。
+            // LocalPosition 属于起始组件集合时随实体构造已生效，同帧可取
+            //（同 Editor::EntityId 的读取时机）。挂 LocalToParent 的实体
             //（粘贴快照保留了源实体的父子关系，副本会挂到源实体的父下）
-            // 须先换算到父锚点的局部空间，否则局部坐标被当成世界坐标
-            // 写入会偏掉（见 getLocalPosUnderParentAnchor）；父不在本
-            // 世界时无从换算，保持快照原值。实体没有 LocalPosition
-            // 组件则无从放置，同样保持数据原值
+            // 会换算到父锚点的局部空间，否则局部坐标被当成世界坐标写入
+            // 会偏掉；父不在本世界时局部空间无从确定，保持快照原值。
+            // 实体没有 LocalPosition 组件则无从放置，同样保持数据原值
             match (self.m_spawn_pos)
             {
                 none?;
@@ -226,8 +226,7 @@ namespace JEEditor::Editor::Action
                     {
                         none?;
                         value(local_pos)?
-                            match (w->getLocalPosUnderParentAnchor(
-                                    e, spawn_pos))
+                            match (w->worldToLocalPos(e, spawn_pos))
                             {
                                 none?;
                                 value(local_spawn_pos)?

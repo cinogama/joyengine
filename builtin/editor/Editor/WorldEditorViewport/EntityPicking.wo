@@ -419,41 +419,49 @@ namespace JEEditor::Editor::WorldEditorViewport
         return option::none;
     }
 
-    // 把世界坐标换算为实体在其父锚点下的局部坐标。子的
-    // LocalToParent.parent_uid 指向父的 Anchor.uid，在锚点父实体选择器
-    //（Translation+Anchor）里按 uid 反查父实体，用父 Translation 缓存
-    // 的世界变换（存活实体由变换系统逐帧级联合成，含祖先链）按合成
-    // 公式 world = parent_rot * local + parent_pos 逆解：
+    // 把世界坐标换算为实体的局部坐标（LocalPosition 空间）。
+    // 没挂 LocalToParent 时实体即变换根，局部坐标就是世界坐标，原样返回；
+    // 挂了 LocalToParent 的实体：其 parent_uid 指向父的 Anchor.uid，在
+    // 锚点父实体选择器（Translation+Anchor）里按 uid 反查父实体，用父
+    // Translation 缓存的世界变换（存活实体由变换系统逐帧级联合成，含
+    // 祖先链）按合成公式 world = parent_rot * local + parent_pos 逆解：
     // local = parent_rot⁻¹ * (world - parent_pos)；位置合成不传递缩放
     //（translation system 的约定），无需考虑父的 scale。
     // 不能用 Translation::set_global_pos——它靠实体自身的旧世界变换
     // 反推父变换，刚创建的实体还没有。
-    // 实体没挂 LocalToParent（局部即世界）、或父不在这世界里（锚点
-    // 反查不到，如跨世界粘贴；此时变换系统对其 Translation 停止更新）
-    // 时返回 none，由调用方决定回退。
-    public func getLocalPosUnderParentAnchor(
+    // 挂了父但父不在这世界里（锚点反查不到，如跨世界粘贴；此时变换
+    // 系统对其 Translation 停止更新）时返回 none：局部空间无从确定，
+    // 由调用方保持数据原值。
+    public func worldToLocalPos(
         self: WorldEditorViewport,
         e: entity,
         world_pos: vec3)=> option<vec3>
     {
-        return or(option::none: option<vec3>) <| try!{
-            try! l2p = e->towoo::get_component:<Transform::LocalToParent>();
-            // member 取值是直接量（非 option），uuid 为 string 别名
-            let parent_uid = l2p.parent_uid->get;
+        match (e->towoo::get_component:<Transform::LocalToParent>)
+        {
+            // 无父：局部坐标即世界坐标
+            none?
+                return option::value(world_pos);
+            value(l2p)?
+                return or(option::none: option<vec3>) <| try!{
+                    // member 取值是直接量（非 option），uuid 为 string 别名
+                    let parent_uid = l2p.parent_uid->get;
 
-            // 反查锚点 uid 匹配的父实体；父必然挂 Translation（无
-            // Translation 的锚点实体无法参与变换系统解析），选择器已保证
-            try! parent = (self.m_anchor_parent_entity_selector->iter
-                |> filter(\p = p->towoo::get_component:<Transform::Anchor>
-                    ->unwrap.uid->get == parent_uid;)
-                |> collect->get(0));
-            try! parent_trans =
-                parent->towoo::get_component:<Transform::Translation>();
+                    // 反查锚点 uid 匹配的父实体；父必然挂 Translation
+                    //（无 Translation 的锚点实体无法参与变换系统解析），
+                    // 选择器已保证
+                    try! parent = (self.m_anchor_parent_entity_selector->iter
+                        |> filter(\p = p->towoo::get_component:<Transform::Anchor>
+                            ->unwrap.uid->get == parent_uid;)
+                        |> collect->get(0));
+                    try! parent_trans =
+                        parent->towoo::get_component:<Transform::Translation>();
 
-            return_value! option::value(
-                parent_trans->get_global_rot->inverse
-                    * (world_pos - parent_trans->get_global_pos));
-        };
+                    return_value! option::value(
+                        parent_trans->get_global_rot->inverse
+                            * (world_pos - parent_trans->get_global_pos));
+                };
+        }
     }
 
     // ==========================
