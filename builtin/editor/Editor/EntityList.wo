@@ -45,6 +45,11 @@ namespace JEEditor::Editor
         let mut s_new_entity_focus = false;
         let mut s_new_entity_selected = map::create:<string, bool>(0);
 
+        // 空白处右键“粘贴”菜单的弹窗 ID。空白菜单不挂在任何 item 上，
+        // 须像视口（VIEWPORT_BLANK_CONTEXT_MENU_ID）那样用显式 ID
+        // 手动 OpenPopup/BeginPopup（见 run）
+        let ENTITYLIST_BLANK_CONTEXT_MENU_ID = "##entitylist_blank_context";
+
         // 常用组件组合表（分组/组合/组件全名）共享自 ComponentPresets.wo，
         // 同时供“添加组件”弹窗与实体右键菜单使用
 
@@ -101,8 +106,11 @@ namespace JEEditor::Editor
                 defer EndPopup();
             }
         }
-        func showEntitiesInWorld(world_view: WorldEditorViewport)
+        // 返回值：本帧鼠标是否悬停在任一实体项上（供 run 里空白右键
+        // 菜单的判定使用）
+        func showEntitiesInWorld(world_view: WorldEditorViewport)=> bool
         {
+            let mut any_item_hovered = false;
             let entity_selector = world_view->getEntitySelector();
             
             let entities = entity_selector->iter
@@ -146,6 +154,11 @@ namespace JEEditor::Editor
                 if (is_prefab_instance)
                     PopStyleColor(1);
 
+                // 紧随 Selectable 采样悬停状态：此时最后一个 item 仍是
+                // 本实体项（后面的 DragPayload 不得插在两者之间）
+                if (IsItemHovered())
+                    any_item_hovered = true;
+
                 if (clicked && euid->is_value)
                     world_view->setSelectedEntityId(euid);
 
@@ -159,6 +172,7 @@ namespace JEEditor::Editor
                 // 右键打开实体上下文菜单（菜单内容与视口右键菜单共用）
                 showEntityContextMenu(world_view, e);
             }
+            return any_item_hovered;
         }
         // 将 "Transform::LocalPosition" 拆为 ("Transform", "LocalPosition")，
         // 不带命名空间的类型名返回 ("", 原名)。
@@ -335,7 +349,7 @@ namespace JEEditor::Editor
                     TextDisabled("（没有待编辑的世界）");
                 value(wctx)?
                 {
-                    showEntitiesInWorld(wctx);
+                    let mut item_hovered = showEntitiesInWorld(wctx);
 
                     Spacing();
                     if (ButtonSize("新建实体", (-1., 0.)))
@@ -347,6 +361,10 @@ namespace JEEditor::Editor
                         OpenPopup("##new_entity_picker");
                     }
 
+                    // “新建实体”按钮同样是 item：悬停其上右键不算点空白
+                    if (IsItemHovered())
+                        item_hovered = true;
+
                     if (BeginPopup("##new_entity_picker"))
                     {
                         showNewEntityPicker(wctx);
@@ -354,9 +372,24 @@ namespace JEEditor::Editor
                     }
 
                     // 右键窗口空白区域（列表下方、项间空隙以及没有实体
-                    // 时的整个区域）：弹出粘贴菜单；悬停在实体项上时由
-                    // 各项自己的右键菜单处理，不会走到这里
-                    if (BeginPopupContextWindow())
+                    // 时的整个区域）：弹出仅含“粘贴”的菜单。绑定层没有
+                    // 带 NoOpenOverItems 标志的 BeginPopupContextWindow，
+                    // 直接用它会在悬停实体项时也打开并叠在实体菜单上
+                    // （右键实体项于是只剩“粘贴”），因此这里手动判定：
+                    // 松开右键时鼠标位于本窗口内且没有任何 item 被悬停
+                    // 才视为点击空白；“新建实体”弹窗打开期间覆盖的区域
+                    // 也不算空白。悬停实体项时由各项自己的右键菜单
+                    // （showEntityContextMenu）处理，不会走到这里
+                    let wpos = GetWindowPos();
+                    let wsize = GetWindowSize();
+                    if (!item_hovered
+                        && !IsPopupOpen("##new_entity_picker")
+                        && IsMouseHoveringRect(
+                            (wpos.0, wpos.1), (wpos.0 + wsize.0, wpos.1 + wsize.1))
+                        && IsMouseReleased(ImGuiMouseButton::ImGuiMouseButton_Right))
+                        OpenPopup(ENTITYLIST_BLANK_CONTEXT_MENU_ID);
+
+                    if (BeginPopup(ENTITYLIST_BLANK_CONTEXT_MENU_ID))
                     {
                         EntityClipboard::showPasteMenuItem(wctx);
                         defer EndPopup();
