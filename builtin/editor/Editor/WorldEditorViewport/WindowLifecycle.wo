@@ -502,30 +502,21 @@ namespace JEEditor::Editor::WorldEditorViewport
         return self.m_close == CloseRequest::NORMALLY;
     }
 
-    // 拖放接收：把资源管理器拖来的 .je4entity 预设体文件创建为实例。
-    // 须在 run 中紧随视口交互守卫按钮调用（以守卫按钮为拖放目标，
-    // 仅视口图像区域内接收）；非预设体文件留给未来的其他拖放用途，
-    // 静默忽略。
-    // 不走 Drag::AcceptDrag:<FilePayload>：该显式泛型载荷的约束检查
-    // 在 Browser 与本模块循环 import 的位置上会类型解析递归失败
-    //（FilePayload 定义于 Browser.wo），按载荷约定直接读底层字符串
-    // 载荷——类型名与 FilePayload::type 一致，dump 的内容即文件路径。
+    // 拖放接收：把资源管理器（Browser 的 FilePayload）拖来的
+    // .je4entity 预设体文件创建为实例。须在 run 中紧随视口交互守卫
+    // 按钮调用（以守卫按钮为拖放目标，仅视口图像区域内接收）；
+    // 非预设体文件留给未来的其他拖放用途，静默忽略。
     protected func acceptPrefabFileDrop(
         self: WorldEditorViewport,
         rect_min: ImVec2,
         rect_max: ImVec2)=> void
     {
-        if (BeginDragDropTarget())
+        match (Drag::AcceptDrag:<FilePayload>())
         {
-            defer EndDragDropTarget();
-
-            match (AcceptDragDropPayload("JE_EDITOR_BROWSER_FILE_PATH"))
-            {
-                none?;
-                value(payload)?
-                    self->spawnPrefabInstanceFromFile(
-                        payload, rect_min, rect_max);
-            }
+            none?;
+            value(payload)?
+                self->spawnPrefabInstanceFromFile(
+                    payload->path->to_string(), rect_min, rect_max);
         }
     }
 

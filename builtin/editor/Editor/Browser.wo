@@ -56,13 +56,17 @@ namespace JEEditor::Editor
         public let type = "JE_EDITOR_BROWSER_FILE_PATH";
         
         public func create(p: fsys::path_t)=> FilePayload
-            where require!(FilePayload : Drag::IDragPayload);
+            // where require!(FilePayload : Drag::IDragPayload);
+            // ↑ 保留但注释：声明本类型服从 IDragPayload（鸭子类型，
+            // 注释不影响服从）。不写成生效的 require 是因为接口校验
+            // restore 时会递归依赖尚在 where 检查阶段的 create 本身，
+            // 类型检查在此循环失败
         {
             return FilePayload{
                 m_path = p,
             };
         }
-        
+
         public func restore(data: string) => option<FilePayload>
         {
             return option::value(FilePayload::create(normalize(data)));
@@ -74,6 +78,11 @@ namespace JEEditor::Editor
         public func tips(self: FilePayload) => string
         {
             return F"移动: {filename(self.m_path)}";
+        }
+        // 被拖拽文件的路径（字段私有，供视口等接收方读取）
+        public func path(self: FilePayload)=> fsys::path_t
+        {
+            return self.m_path;
         }
     }
     
