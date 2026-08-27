@@ -54,14 +54,9 @@ namespace JEEditor::Editor
         let ENTITYLIST_BLANK_CONTEXT_MENU_ID = "##entitylist_blank_context";
 
         // ---- 父子层级显示 ----
-        // 每级缩进宽度（像素）：箭头占一列，名字从箭头列之后起
-        let HIERARCHY_INDENT_PX = 20.;
-        // 展开状态按调试 EUID 记录（跨帧只持 EUID）；缺省视为展开，
-        // 新挂接的子实体立即可见。实体销毁后条目在渲染时顺手清理
-        let mut s_hierarchy_expanded =
-            map::create:<entity::internal::euid_t, bool>(0);
         // 实体项标签 ID 计数器：树形递归渲染无法用 enumerate 顺序号，
-        // 每帧渲染前清零、每项递增，保证 ##id 唯一
+        // 无调试 EUID 的实体以帧内序号做 TreeNodeEx 的 ID 兜底
+        //（有 EUID 的用 EUID 本身，保证展开状态不随列表内容变化错乱）
         let mut s_item_serial = 0;
 
         // 常用组件组合表（分组/组合/组件全名）共享自 ComponentPresets.wo，
@@ -121,16 +116,20 @@ namespace JEEditor::Editor
                 defer EndPopup();
             }
         }
-        // 渲染一个实体项（含层级缩进/展开箭头）并递归渲染其子层级。
-        // 返回本项（箭头与名字）是否被悬停。rendering 记录当前渲染
-        // 路径上的实体，防御父链成环的坏数据导致递归不终止（环上实体
-        // 不会出现在任何根链上，由 showEntitiesInWorld 兜底平铺显示）。
+        // 渲染一个实体项并递归渲染其子层级。树节点用 TreeNodeEx：
+        // 点箭头=展开/收起、点名字区域=选中，由 ImGui 的
+        // IsItemToggledOpen 分流（不会互相劫持）；层级缩进由
+        // TreeNode/TreePop 自动管理。节点 ID 用调试 EUID（稳定，
+        // 展开状态不随列表内容变化而错乱），DefaultOpen 让新出现的
+        // 父节点默认展开（新挂接的子实体立即可见）。
+        // rendering 记录当前渲染路径上的实体，防御父链成环的坏数据
+        // 导致递归不终止（环上实体不会出现在任何根链上，由
+        // showEntitiesInWorld 兜底平铺显示）。
         func drawEntityNode(
             world_view: WorldEditorViewport,
             entity_entry: (entity, option<entity::internal::euid_t>),
             children_map: map<entity::internal::euid_t,
                 vec<mut (entity, option<entity::internal::euid_t>)>>,
-            depth: int,
             rendering: map<entity::internal::euid_t, bool>)=> bool
         {
             let (e, euid) = entity_entry;
@@ -152,47 +151,6 @@ namespace JEEditor::Editor
             let children = euid =>> \eid = children_map->get(eid);;
             let has_children = children->is_value && children->unwrap->len > 0;
 
-            // 展开状态：缺省展开（新挂接的子实体立即可见）
-            let mut expanded = true;
-            match (euid)
-            {
-                none?;
-                value(eid)?
-                    match (s_hierarchy_expanded->get(eid))
-                    {
-                        none?;
-                        value(v)?
-                            expanded = v;
-                    }
-            }
-
-            // 行起点（窗口局部坐标）：箭头画在 depth 级缩进处，名字对齐
-            // 到箭头列之后；叶子无箭头，名字多缩进一级保持列对齐
-            let row_pos = GetCursorPos();
-            let arrow_x = row_pos.0 + depth as real * HIERARCHY_INDENT_PX;
-            SetCursorPos((arrow_x, row_pos.1));
-            if (has_children)
-            {
-                let arrow = expanded ? "▾" | "▸";
-                if (SelectableSelected(
-                        F"{arrow}##entitylist_exp_{s_item_serial}", false))
-                {
-                    match (euid)
-                    {
-                        none?;
-                        value(eid)?
-                            s_hierarchy_expanded->set(eid, !expanded);
-                    }
-                }
-                if (IsItemHovered())
-                    any_hovered = true;
-                SameLine();
-            }
-            else
-                SetCursorPos(
-                    (arrow_x + HIERARCHY_INDENT_PX, row_pos.1));
-            s_item_serial += 1;
-
             let raw_name = e->internal::name;
             let mut entity_name = raw_name;
             if (entity_name == "")
@@ -208,23 +166,48 @@ namespace JEEditor::Editor
             let prefab_path = e->internal::get_prefab_path();
             let is_prefab_instance = prefab_path->is_value
                 && prefab_path->unwrap->len > 0;
+
+            let mut node_flags =
+                TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
+            if (!has_children)
+                node_flags += TreeNodeAttribute::ImGuiTreeNodeFlags_Leaf;
+            if (is_selected)
+                node_flags += TreeNodeAttribute::ImGuiTreeNodeFlags_Selected;
+
+            // 节点 ID：优先用稳定的调试 EUID，无 EUID 的实体以帧内
+            // 序号兜底
+            let mut label_id = "";
+            match (euid)
+            {
+                none?
+                {
+                    label_id = F"{s_item_serial}";
+                    s_item_serial += 1;
+                }
+                value(eid)?
+                    label_id = F"{eid}";
+            }
+
             if (is_prefab_instance)
                 PushStyleColor(
                     ImGuiCol::ImGuiCol_Text, (100, 160, 230, 255));
 
-            // 点击实体项可选中对应实体
-            let clicked = SelectableSelected(
-                F"{entity_name}##{s_item_serial}", is_selected);
+            let node_open = TreeNodeEx(
+                F"{entity_name}##{label_id}", node_flags);
 
             if (is_prefab_instance)
                 PopStyleColor(1);
 
-            // 紧随 Selectable 采样悬停状态：此时最后一个 item 仍是
+            // 紧随 TreeNodeEx 采样悬停状态：此时最后一个 item 仍是
             // 本实体项（后面的 DragPayload 不得插在两者之间）
             if (IsItemHovered())
                 any_hovered = true;
 
-            if (clicked && euid->is_value)
+            // 点击名字区域选中（IsItemToggledOpen 为真表示这次点击
+            // 作用在箭头上，只切展开不改选中）
+            if (IsItemClickedLeft() && !IsItemToggledOpen() && euid->is_value)
                 world_view->setSelectedEntityId(euid);
 
             // 按住实体项拖出：拖到资源管理器可保存为 .je4entity
@@ -258,25 +241,31 @@ namespace JEEditor::Editor
             // 右键打开实体上下文菜单（菜单内容与视口右键菜单共用）
             showEntityContextMenu(world_view, e);
 
-            // 子层级（展开时）
-            if (has_children && expanded)
+            // 子层级（展开时；缩进由 TreeNode/TreePop 自动管理）。
+            // 注意：Leaf 节点的 TreeNodeEx 同样返回 true（ImGui 约定，
+            // 也须配对 TreePop），只是没有子列表可画
+            if (node_open)
             {
-                for (let (child_e, child_euid) : children->unwrap)
+                if (has_children)
                 {
-                    if (drawEntityNode(
-                            world_view, (child_e, child_euid), children_map,
-                            depth + 1, rendering))
-                        any_hovered = true;
+                    for (let (child_e, child_euid) : children->unwrap)
+                    {
+                        if (drawEntityNode(
+                                world_view, (child_e, child_euid),
+                                children_map, rendering))
+                            any_hovered = true;
+                    }
                 }
+                TreePop();
             }
 
             return any_hovered;
         }
-        // 返回值：本帧鼠标是否悬停在任一实体项（含展开箭头）上
-        //（供 run 里空白右键菜单的判定使用）。实体按父子层级显示：
-        // 根级与各级子项均按 EUID 升序；父实体不在可见范围（编辑器
-        // 内部实体/锚点缺失）的子实体按根显示；父链成环的坏数据由
-        // rendering 防御并兜底平铺，保证列表始终显示全部实体。
+        // 返回值：本帧鼠标是否悬停在任一实体项上（供 run 里空白右键
+        // 菜单的判定使用）。实体按父子层级显示：根级与各级子项均按
+        // EUID 升序；父实体不在可见范围（编辑器内部实体/锚点缺失）的
+        // 子实体按根显示；父链成环的坏数据由 rendering 防御并兜底
+        // 平铺，保证列表始终显示全部实体。
         func showEntitiesInWorld(world_view: WorldEditorViewport)=> bool
         {
             let mut any_item_hovered = false;
@@ -352,7 +341,7 @@ namespace JEEditor::Editor
             {
                 if (drawEntityNode(
                         world_view, (root_e, root_euid),
-                        children_map, 0, rendering))
+                        children_map, rendering))
                     any_item_hovered = true;
             }
 
@@ -369,30 +358,11 @@ namespace JEEditor::Editor
                         {
                             if (drawEntityNode(
                                     world_view, (rest_e, rest_euid),
-                                    children_map, 0, rendering))
+                                    children_map, rendering))
                                 any_item_hovered = true;
                         }
                 }
             }
-
-            // 顺手清理已销毁实体的展开状态条目
-            let live_euids = map::create:<entity::internal::euid_t, bool>(0);
-            for (let (_, euid) : entities)
-            {
-                match (euid)
-                {
-                    none?;
-                    value(eid)?
-                        live_euids->set(eid, true);
-                }
-            }
-            let stale_euids = s_hierarchy_expanded->iter
-                |> filter_map(\(eid, _) = live_euids->contains(eid)
-                    ? option::none: option<entity::internal::euid_t>
-                    | option::value(eid);)
-                |> collect;
-            for (let stale_eid : stale_euids)
-                do s_hierarchy_expanded->remove(stale_eid);
 
             return any_item_hovered;
         }
