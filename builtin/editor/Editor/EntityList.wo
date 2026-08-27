@@ -102,7 +102,8 @@ namespace JEEditor::Editor
         {
             if (BeginPopupContextItem())
             {
-                world_view->drawEntityContextMenuItems(e);
+                // 列表内的粘贴保持快照原位置（false：不放到摄像机前方）
+                world_view->drawEntityContextMenuItems(e, false);
                 defer EndPopup();
             }
         }
@@ -236,6 +237,7 @@ namespace JEEditor::Editor
         // 动作首次落实（redo）时创建/分配（redo 会选中新实体），调用方不再
         // 预创建实体，避免动作落实时二次创建。组件类型名在发布时才通过
         // typeinfo::load 解析，失效的类型会被跳过；全部失效时拒绝发布。
+        // 新实体生成在（最后聚焦视口的）调试游走摄像机前方
         func createNewEntity(wctx: WorldEditorViewport)=> void
         {
             let selected_ctypes = s_new_entity_selected->keys->iter
@@ -247,7 +249,8 @@ namespace JEEditor::Editor
                 return;
             }
 
-            wctx->doAction(CreateEntity::try_create_with_types(selected_ctypes));
+            wctx->doAction(CreateEntity::try_create_with_types_at(
+                selected_ctypes, wctx->getSpawnPosInFrontOfCamera()));
             CloseCurrentPopup();
         }
         // “新建实体”弹窗：搜索过滤 + 常用组合一键整组勾选 + 按命名空间

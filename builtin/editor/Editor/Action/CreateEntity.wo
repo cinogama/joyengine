@@ -4,6 +4,8 @@ import je;
 import je::ecs;
 import je::internal;
 import je::typeinfo;
+import je::towoo;
+import je::towoo::types;
 import je::towoo::components;
 
 import pkg::toml;
@@ -106,6 +108,10 @@ namespace JEEditor::Editor::Action
     
     protected using CreateEntity = struct{
         m_content: FullEntityContent,
+        // 生成点（世界坐标）：落实（redo）时写入新实体
+        // Transform::LocalPosition 的 pos；none = 不干预位置
+        //（组件默认值/快照原位置）。构造时固定，撤销重做保持一致
+        m_spawn_pos: option<vec3>,
     }
     {
         public func try_create(new_created: entity)=> option<CreateEntity>
@@ -115,6 +121,7 @@ namespace JEEditor::Editor::Action
                 try! full_entity_content = FullEntityContent::try_create(new_created);
                 return_value! CreateEntity{
                     m_content = full_entity_content,
+                    m_spawn_pos = option::none,
                 };
             } catch! {
                 logerr("传入的实体应当有对应的 EUID，请检查创建/销毁的实体流程");
@@ -127,6 +134,21 @@ namespace JEEditor::Editor::Action
         {
             return CreateEntity{
                 m_content = FullEntityContent::try_create_with_types(ctypes),
+                m_spawn_pos = option::none,
+            };
+        }
+        // 同 try_create_with_types，但落实时把新实体的
+        // Transform::LocalPosition 放到 spawn_pos（编辑器“新建实体放到
+        // 摄像机前方”用，见 WorldEditorViewport 的
+        // getSpawnPosInFrontOfCamera）
+        public func try_create_with_types_at(
+            ctypes: array<typeinfo>,
+            spawn_pos: option<vec3>)=> CreateEntity
+            where require!(CreateEntity: IAction);
+        {
+            return CreateEntity{
+                m_content = FullEntityContent::try_create_with_types(ctypes),
+                m_spawn_pos = spawn_pos,
             };
         }
         // 从既有实体数据（复制到剪贴板的实体快照）构造可撤销的“创建
@@ -138,6 +160,21 @@ namespace JEEditor::Editor::Action
             return CreateEntity{
                 m_content = FullEntityContent::try_create_with_content(
                     entity_content),
+                m_spawn_pos = option::none,
+            };
+        }
+        // 同 try_create_with_content，但落实时把新实体的
+        // Transform::LocalPosition 放到 spawn_pos（视口内“粘贴到摄像机
+        // 前方”用）；组件集合中没有该组件的实体无从放置，保持数据原值
+        public func try_create_with_content_at(
+            entity_content: Toml,
+            spawn_pos: option<vec3>)=> CreateEntity
+            where require!(CreateEntity: IAction);
+        {
+            return CreateEntity{
+                m_content = FullEntityContent::try_create_with_content(
+                    entity_content),
+                m_spawn_pos = spawn_pos,
             };
         }
         public func redo(self: CreateEntity, w: WorldEditorViewport)=> bool
@@ -172,7 +209,33 @@ namespace JEEditor::Editor::Action
                 value(eid)?
                     e->internal::unsafe::set_entity_uid(eid);
             }
-            
+
+            // 生成点（世界坐标）：写入新实体的局部位置。LocalPosition
+            // 属于起始组件集合时随实体构造已生效，同帧可取（同
+            // Editor::EntityId 的读取时机）。挂 LocalToParent 的实体
+            //（粘贴快照保留了源实体的父子关系，副本会挂到源实体的父下）
+            // 须先换算到父锚点的局部空间，否则局部坐标被当成世界坐标
+            // 写入会偏掉（见 getLocalPosUnderParentAnchor）；父不在本
+            // 世界时无从换算，保持快照原值。实体没有 LocalPosition
+            // 组件则无从放置，同样保持数据原值
+            match (self.m_spawn_pos)
+            {
+                none?;
+                value(spawn_pos)?
+                    match (e->towoo::get_component:<Transform::LocalPosition>)
+                    {
+                        none?;
+                        value(local_pos)?
+                            match (w->getLocalPosUnderParentAnchor(
+                                    e, spawn_pos))
+                            {
+                                none?;
+                                value(local_spawn_pos)?
+                                    local_pos.pos->set(local_spawn_pos);
+                            }
+                    }
+            }
+
             // 选中新实体，便于立刻在检视面板中编辑
             do w->setSelectedEntityId(entity_id);
 

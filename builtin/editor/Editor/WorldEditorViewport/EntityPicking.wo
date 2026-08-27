@@ -23,6 +23,7 @@ import builtin::editor::Editor::ComponentPresets;
 import builtin::editor::Editor::EntityClipboard;
 
 import Definition;
+import CameraControl;
 import GizmoMath;
 import WindowLifecycle;
 
@@ -347,8 +348,12 @@ namespace JEEditor::Editor::WorldEditorViewport
     }
 
     // 实体右键菜单内容（视口与实体列表共用，两处由各自的弹出逻辑调用）。
+    // paste_at_camera_front：菜单中“粘贴”是否把实体生成在调试摄像机
+    // 前方——视口内调用传 true；实体列表保持快照原位置行为传 false
     public func drawEntityContextMenuItems(
-        self: WorldEditorViewport, e: entity)=> void
+        self: WorldEditorViewport,
+        e: entity,
+        paste_at_camera_front: bool)=> void
     {
         // 常用组件组合子菜单：点击即把该组合内实体缺少的组件整组添加
         if (BeginMenu("添加常用组件"))
@@ -363,7 +368,10 @@ namespace JEEditor::Editor::WorldEditorViewport
         if (MenuItem("复制"))
             EntityClipboard::copy(e);
 
-        EntityClipboard::showPasteMenuItem(self);
+        let mut paste_spawn_pos = option::none: option<vec3>;
+        if (paste_at_camera_front)
+            paste_spawn_pos = self->getSpawnPosInFrontOfCamera();
+        EntityClipboard::showPasteMenuItemAt(self, paste_spawn_pos);
 
         if (MenuItem("销毁"))
         {
@@ -409,6 +417,43 @@ namespace JEEditor::Editor::WorldEditorViewport
             }
         }
         return option::none;
+    }
+
+    // 把世界坐标换算为实体在其父锚点下的局部坐标。子的
+    // LocalToParent.parent_uid 指向父的 Anchor.uid，在锚点父实体选择器
+    //（Translation+Anchor）里按 uid 反查父实体，用父 Translation 缓存
+    // 的世界变换（存活实体由变换系统逐帧级联合成，含祖先链）按合成
+    // 公式 world = parent_rot * local + parent_pos 逆解：
+    // local = parent_rot⁻¹ * (world - parent_pos)；位置合成不传递缩放
+    //（translation system 的约定），无需考虑父的 scale。
+    // 不能用 Translation::set_global_pos——它靠实体自身的旧世界变换
+    // 反推父变换，刚创建的实体还没有。
+    // 实体没挂 LocalToParent（局部即世界）、或父不在这世界里（锚点
+    // 反查不到，如跨世界粘贴；此时变换系统对其 Translation 停止更新）
+    // 时返回 none，由调用方决定回退。
+    public func getLocalPosUnderParentAnchor(
+        self: WorldEditorViewport,
+        e: entity,
+        world_pos: vec3)=> option<vec3>
+    {
+        return or(option::none: option<vec3>) <| try!{
+            try! l2p = e->towoo::get_component:<Transform::LocalToParent>();
+            // member 取值是直接量（非 option），uuid 为 string 别名
+            let parent_uid = l2p.parent_uid->get;
+
+            // 反查锚点 uid 匹配的父实体；父必然挂 Translation（无
+            // Translation 的锚点实体无法参与变换系统解析），选择器已保证
+            try! parent = (self.m_anchor_parent_entity_selector->iter
+                |> filter(\p = p->towoo::get_component:<Transform::Anchor>
+                    ->unwrap.uid->get == parent_uid;)
+                |> collect->get(0));
+            try! parent_trans =
+                parent->towoo::get_component:<Transform::Translation>();
+
+            return_value! option::value(
+                parent_trans->get_global_rot->inverse
+                    * (world_pos - parent_trans->get_global_pos));
+        };
     }
 
     // ==========================

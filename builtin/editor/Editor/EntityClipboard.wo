@@ -3,6 +3,7 @@ import woo::std;
 import je;
 import je::ecs;
 import je::gui;
+import je::towoo::types;
 
 import pkg::toml;
 
@@ -42,10 +43,12 @@ namespace JEEditor::Editor::EntityClipboard
             option::value(Entity::save(e));
     }
 
-    // “粘贴”菜单项：剪贴板为空时禁用；点击发布可撤销的创建实体动作，
-    // 落实（redo）时以快照为模板创建全新实体并自动选中。
-    // 供实体右键菜单与实体列表/视口空白处的右键菜单共用
-    public func showPasteMenuItem(wctx: WorldEditorViewport)=> void
+    // “粘贴”菜单项（生成点版本）：spawn_pos 有值时，粘贴出的实体被
+    // 放置到该世界坐标（视口内粘贴传入调试摄像机前方的生成点，见
+    // WorldEditorViewport 的 getSpawnPosInFrontOfCamera）；none 时与
+    // showPasteMenuItem 一致，保持快照原位置
+    public func showPasteMenuItemAt(
+        wctx: WorldEditorViewport, spawn_pos: option<vec3>)=> void
     {
         BeginDisabled(s_copied_entity_content->is_none);
         if (MenuItem("粘贴"))
@@ -55,9 +58,18 @@ namespace JEEditor::Editor::EntityClipboard
                 none?;
                 value(content)?
                     wctx->doAction(
-                        CreateEntity::try_create_with_content(content));
+                        CreateEntity::try_create_with_content_at(
+                            content, spawn_pos));
             }
         }
         EndDisabled();
+    }
+
+    // “粘贴”菜单项：剪贴板为空时禁用；点击发布可撤销的创建实体动作，
+    // 落实（redo）时以快照为模板创建全新实体并自动选中。
+    // 供实体右键菜单与实体列表/视口空白处的右键菜单共用
+    public func showPasteMenuItem(wctx: WorldEditorViewport)=> void
+    {
+        showPasteMenuItemAt(wctx, option::none);
     }
 }

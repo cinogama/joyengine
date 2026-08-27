@@ -75,6 +75,12 @@ namespace JEEditor::Editor
         protected m_range_light2d_entity_selector: entity_selector,
         protected m_parallel_light2d_entity_selector: entity_selector,
 
+        // 锚点父实体（含 Translation+Anchor）选择器：子的
+        // LocalToParent.parent_uid 指向父的 Anchor.uid；新建/粘贴实体
+        // 放置到摄像机前方时用它反查父实体并换算局部坐标
+        //（见 EntityPicking.wo 的 getLocalPosUnderParentAnchor）
+        protected m_anchor_parent_entity_selector: entity_selector,
+
         protected m_last_time: mut real,
         protected m_is_look_active: mut bool,
         protected m_is_pan_active: mut bool,

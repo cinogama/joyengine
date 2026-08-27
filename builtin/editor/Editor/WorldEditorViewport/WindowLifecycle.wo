@@ -128,6 +128,14 @@ namespace JEEditor::Editor::WorldEditorViewport
                     requirement::contains(Light2D::Parallel::type::typeinfo),
                 ]),
 
+            // 锚点父实体（Translation+Anchor）：按子的 LocalToParent.
+            // parent_uid 反查父实体用（不加 except Invisible，与变换
+            // 系统的锚点解析范围一致）
+            m_anchor_parent_entity_selector = w->create_selector([
+                    requirement::contains(Transform::Translation::type::typeinfo),
+                    requirement::contains(Transform::Anchor::type::typeinfo),
+                ]),
+
             // Camera control state:
             m_last_time = mut 0.,
             m_is_look_active = mut false,
@@ -452,22 +460,24 @@ namespace JEEditor::Editor::WorldEditorViewport
             viewport_rect);
 
         // 视口内右键点击实体：选中并在鼠标处弹出与实体列表一致的上下文菜单
+        //（粘贴项把实体生成在摄像机前方）
         if (BeginPopup(VIEWPORT_ENTITY_CONTEXT_MENU_ID))
         {
             do try!{
                 try! euid = self.m_selected_entity_id;
                 try! e = self->findEntityByEuid(euid);
-                self->drawEntityContextMenuItems(e);
+                self->drawEntityContextMenuItems(e, true);
                 return_value!;
             };
             defer EndPopup();
         }
 
         // 视口内右键点击空白处：弹出仅含“粘贴”的菜单（与实体列表
-        // 空白处的菜单一致）
+        // 空白处的菜单一致；不同点在于粘贴出的实体生成在摄像机前方）
         if (BeginPopup(VIEWPORT_BLANK_CONTEXT_MENU_ID))
         {
-            EntityClipboard::showPasteMenuItem(self);
+            EntityClipboard::showPasteMenuItemAt(
+                self, self->getSpawnPosInFrontOfCamera());
             defer EndPopup();
         }
 
