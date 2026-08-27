@@ -105,7 +105,7 @@ namespace jeapi
                 // 在编辑器环境下，使用 @/ 目录会导致相对路径导入出现一些问题
                 // 获取实际路径给 VM 使用以确保导入顺利执行。
                 let fact_runtime_path = rumtime_path->begin_with("@/")
-                    ? fsys::workpath()->to_string() + rumtime_path->sub(1)
+                    ? (fsys::workpath() / rumtime_path->sub(2))->to_string()
                     | rumtime_path;
                     
                 try! runtime_content = je::file::readall(rumtime_path)
