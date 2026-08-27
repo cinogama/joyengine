@@ -22,6 +22,7 @@ import ComponentPresets;
 import ResourcePath;
 import Action::AddComponent;
 import Action::DestroyEntity;
+import Action::ModifyPrefab;
 import Action::RemoveComponent;
 import Action::RemoveRendererShaders;
 import Action::RemoveRendererShape;
@@ -441,6 +442,30 @@ namespace JEEditor::Editor
                     wctx->doAction(action);
             }
         }
+        // 解除实体的预设体关联：先结束可能进行中的编辑手势，再发布可
+        // 撤销的 ModifyPrefab（当前路径→none，撤销时还原）。没有 EUID
+        // 的实体退化为直接移除（无法支持撤销）。
+        func unlinkPrefabFromEntity(
+            wctx: WorldEditorViewport, e: entity)=> void
+        {
+            EditSession::commit();
+
+            match (typeinfo::load("Editor::Prefab"))
+            {
+                none?
+                    logerr("解除预设：无法解析 Editor::Prefab 组件类型");
+                value(pt)?
+                    match (e->internal::get_entity_uid)
+                    {
+                        none?
+                            do e->remove_component(pt);
+                        value(eid)?
+                            wctx->doAction(ModifyPrefab::create(
+                                eid, e->internal::get_prefab_path,
+                                option::none: option<string>));
+                    }
+            }
+        }
         // “添加组件”选择弹窗：搜索过滤 + 常用组合一键整组添加 + 按命名
         // 空间分组的候选列表。选中一项立即发布添加操作且保持弹窗打开，
         // 便于连续添加；已添加的组件自下一帧起从候选中消失。
@@ -530,8 +555,10 @@ namespace JEEditor::Editor
             showEntityNameEdit(wctx, e, prefab);
 
             // 预设体来源信息：正常加载时显示来源文件（悬停看完整路径），
-            // 点击在资源管理器中定位到该文件；不可读时提示差异高亮已停用
-            // （保存/还原侧会另行报错），点击同样定位到所在目录以便排查
+            // 点击在资源管理器中定位到该文件，右键可解除预设；不可读时
+            // 提示差异高亮已停用（保存/还原侧会另行报错），点击定位到
+            // 所在目录以便排查。右键菜单需传与 Selectable 完全一致的
+            // 标签，故标签提为局部变量。
             match (prefab)
             {
                 none?;
@@ -539,19 +566,35 @@ namespace JEEditor::Editor
                 {
                     if (ref.m_dat->is_none)
                     {
+                        let label =
+                            F"预设体 \"{ref.m_path}\" 无法读取，差异高亮已停用##prefab_src";
                         PushStyleColor(ImGuiCol::ImGuiCol_Text, (220, 130, 90, 255));
-                        if (Selectable(F"预设体 \"{ref.m_path}\" 无法读取，差异高亮已停用##prefab_src"))
+                        if (Selectable(label))
                             Browser::requestNavigateTo(
                                 ResourcePath::toLocalResourcePath(ref.m_path));
                         PopStyleColor(1);
+                        if (BeginPopupContextItemLabel(label))
+                        {
+                            if (MenuItem("解除预设"))
+                                unlinkPrefabFromEntity(wctx, e);
+                            defer EndPopup();
+                        }
                     }
                     else
                     {
-                        if (Selectable(F"预设体: {fsys::filename(fsys::normalize(ref.m_path))}##prefab_src"))
+                        let label =
+                            F"预设体: {fsys::filename(fsys::normalize(ref.m_path))}##prefab_src";
+                        if (Selectable(label))
                             Browser::requestNavigateTo(
                                 ResourcePath::toLocalResourcePath(ref.m_path));
                         if (IsItemHovered())
-                            do SetTooltip(F"{ref.m_path}\n点击在资源管理器中定位");
+                            do SetTooltip(F"{ref.m_path}\n点击在资源管理器中定位，右键解除预设");
+                        if (BeginPopupContextItemLabel(label))
+                        {
+                            if (MenuItem("解除预设"))
+                                unlinkPrefabFromEntity(wctx, e);
+                            defer EndPopup();
+                        }
                     }
                 }
             }

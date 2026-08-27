@@ -1,0 +1,132 @@
+import woo::std;
+
+import je;
+import je::ecs;
+import je::internal;
+import je::typeinfo;
+
+import pkg::interface;
+import pkg::fsys;
+
+import builtin::editor::Editor::WorldEditorViewport;
+
+import IAction;
+
+using je;
+
+namespace JEEditor::Editor::Action
+{
+    // 修改实体的预设体关联。m_before/m_after 为 Editor::Prefab 组件记录
+    // 的资源路径（@/ 相对形式），none 表示该侧不挂预设体：保存/变更预设
+    // 体为 before→after（此前未挂时 before 为 none），解除预设为 路径→none。
+    // redo/undo 把实体的 Editor::Prefab 组件调整到对应侧的状态。
+    protected using ModifyPrefab = struct{
+        m_eid: entity::internal::euid_t,
+        m_before: option<string>,
+        m_after: option<string>,
+    }
+    {
+        public func create(
+            eid: entity::internal::euid_t,
+            before: option<string>,
+            after: option<string>)=> ModifyPrefab
+            where require!(ModifyPrefab: IAction);
+        {
+            return ModifyPrefab{
+                m_eid = eid,
+                m_before = normalizePath(before),
+                m_after = normalizePath(after),
+            };
+        }
+
+        // get_prefab_path 在组件存在但路径为空时返回空串，与未挂载同义
+        //（检视面板/实体列表的判定一致），统一归一为 none
+        func normalizePath(p: option<string>)=> option<string>
+        {
+            match (p)
+            {
+                none?;
+                value(v)?
+                {
+                    if (v->len > 0)
+                        return option::value(v);
+                }
+            }
+            return option::none: option<string>;
+        }
+
+        // 把实体的 Editor::Prefab 组件调整到 path 描述的状态：none 移除
+        // 组件（组件已不在视为成功，幂等，避免撤销/重做交错时重复操作）；
+        // 有路径则添加组件并写入 path。写入必须走 add_component 返回的
+        // 命令缓冲临时实例（落实时原样搬入 chunk）——set_prefab_path 与
+        // get_component 都即时直查 chunk，命令缓冲未落实前查不到组件会
+        // 静默失败；同类型的重复添加在落实时替换旧实例，无需先移除。
+        func applyPrefabState(
+            w: WorldEditorViewport,
+            eid: entity::internal::euid_t,
+            path: option<string>)=> bool
+        {
+            for (let e : w->getEntitySelector())
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(ueid)?
+                        if (ueid == eid)
+                        {
+                            match (typeinfo::load("Editor::Prefab"))
+                            {
+                                none? return false;
+                                value(ctype)?
+                                    match (path)
+                                    {
+                                        none?
+                                        {
+                                            if (e->get_component(ctype)->is_value)
+                                                do e->remove_component(ctype);
+                                            return true;
+                                        }
+                                        value(p)?
+                                        {
+                                            let cinst = e->add_component(ctype);
+                                            match (cinst->get_member("path"))
+                                            {
+                                                none? return false;
+                                                value((mtype, minst))?
+                                                    return towoo::unsafe::dynamic_parser::restore(
+                                                        mtype, minst, p);
+                                            }
+                                        }
+                                    }
+                            }
+                        }
+                }
+            }
+            return false;
+        }
+
+        public func redo(self: ModifyPrefab, w: WorldEditorViewport)=> bool
+        {
+            return applyPrefabState(w, self.m_eid, self.m_after);
+        }
+        public func undo(self: ModifyPrefab, w: WorldEditorViewport)=> bool
+        {
+            return applyPrefabState(w, self.m_eid, self.m_before);
+        }
+        public func describe(self: ModifyPrefab)=> string
+        {
+            match (self.m_after)
+            {
+                none? return "解除预设体";
+                value(p)?
+                {
+                    let pfile = fsys::filename(fsys::normalize(p));
+                    if (self.m_before->is_none)
+                        return F"保存为预设体 {pfile}";
+                    return F"变更预设体为 {pfile}";
+                }
+            }
+            return "修改预设体";
+        }
+    }
+}
