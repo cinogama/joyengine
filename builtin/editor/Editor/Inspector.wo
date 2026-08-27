@@ -6,14 +6,19 @@ import je::internal;
 import je::gui;
 import je::typeinfo;
 
+import pkg::toml;
+import pkg::fsys;
 import pkg::interface;
 import pkg::worst;
+
+import builtin::gaming::Saving::Entity;
 
 import builtin::editor::GUI::Windows;
 
 import WorldEditorViewport;
 import EditSession;
 import ComponentPresets;
+import ResourcePath;
 import Action::AddComponent;
 import Action::DestroyEntity;
 import Action::RemoveComponent;
@@ -29,9 +34,27 @@ using JEEditor::GUI::Windows;
 using JEEditor::Editor::EditSession;
 using JEEditor::Editor::Action;
 using JEEditor::Editor::ComponentPresets;
+using JEEditor::Editor::ResourcePath;
 
 namespace JEEditor::Editor
 {
+    // 检视面板预设体差异对比用的引用：m_path 为 Editor::Prefab 组件
+    // 记录的资源路径；m_dat 为按缓存加载的预设体数据，不可读时为 none
+    using PrefabRef = struct{
+        m_path: string,
+        m_dat: option<toml::Toml>,
+    };
+
+    // 组件成员与预设体的差异判定结果：m_comparable 为 false 表示无从
+    // 比较（未挂预设体/预设体不可读/成员无法序列化）；m_overridden 为
+    // true 表示与预设体不一致（含预设体缺该成员）；m_prefab_value 为
+    // 预设体侧的序列化值（预设体缺该成员时为 none）
+    using MemberDiff = struct{
+        m_comparable: bool,
+        m_overridden: bool,
+        m_prefab_value: option<string>,
+    };
+
     using Inspector = struct{
         m_close: mut bool,
     }
@@ -44,6 +67,16 @@ namespace JEEditor::Editor
         // “添加组件”选择弹窗的状态；检视面板是单例，用模块级状态即可
         let mut s_add_component_filter = "";
         let mut s_add_component_focus = false;
+
+        // 与预设体不一致的数据（成员名/组件标题）的高亮色
+        let PREFAB_OVERRIDE_COLOR = (230, 190, 80, 255);
+
+        // 预设体数据缓存：检视面板每帧重绘，不能每帧读盘解析；按
+        // 「路径 + 最后写入时间」缓存解析结果，预设体文件被重新保存
+        // （如再次拖拽实体生成预设体）或被外部修改后自动重载
+        let mut s_prefab_cache_path = "";
+        let mut s_prefab_cache_stamp = 0 as fsys::unix1970_time_t;
+        let mut s_prefab_cache_dat = option::none: option<toml::Toml>;
         
         public func isInspectorExist()
         {
@@ -96,9 +129,168 @@ namespace JEEditor::Editor
                 return ("", cname);
             return (cname->sub_len(0, sep_pos), cname->sub(sep_pos + 2));
         }
-        func showEntityNameEdit(wctx: WorldEditorViewport, e: entity)
+        // 加载预设体数据（带缓存，见 s_prefab_cache_*）。"@/xxx" 是
+        // 相对 workpath 的资源路径，fsys::lastwrite 只认真实路径，
+        // 判缓存失效前需先经 ResourcePath 展开
+        func loadPrefabDatCached(prefab_path: string)=> option<toml::Toml>
         {
-            TextDisabled("名称");
+            let stamp = fsys::lastwrite(ResourcePath::toLocalResourcePath(prefab_path))
+                ->or(0 as fsys::unix1970_time_t);
+
+            if (prefab_path == s_prefab_cache_path && stamp == s_prefab_cache_stamp)
+                return s_prefab_cache_dat;
+
+            s_prefab_cache_path = prefab_path;
+            s_prefab_cache_stamp = stamp;
+            s_prefab_cache_dat =
+                JEGaming::Saving::Entity::load(prefab_path);
+            return s_prefab_cache_dat;
+        }
+        // 取实体挂载的预设体引用；未挂载（无 Editor::Prefab 组件或
+        // 路径为空，与实体列表的判定一致）返回 none
+        func getPrefabRef(e: entity)=> option<PrefabRef>
+        {
+            match (e->internal::get_prefab_path)
+            {
+                none?;
+                value(path)?
+                {
+                    if (path->len == 0)
+                        return option::none;
+                    return option::value(PrefabRef{
+                        m_path = path,
+                        m_dat = loadPrefabDatCached(path),
+                    });
+                }
+            }
+            return option::none;
+        }
+        // 预设体数据中记录的实体名称
+        func prefabNameOf(prefab_dat: toml::Toml)=> option<string>
+        {
+            return prefab_dat->get("name")=>> \v = v->as_string;;
+        }
+        // 预设体数据中某组件成员的序列化值；预设体缺该组件/该成员
+        // 或数据不是字符串时返回 none
+        func prefabMemberValue(
+            prefab_dat: toml::Toml, cname: string, mname: string)=> option<string>
+        {
+            match (prefab_dat->get("components")=>> \v = v->as_table;)
+            {
+                none?;
+                value(components)?
+                    match (components->get(cname)=>> \v = v->as_table;)
+                    {
+                        none?;
+                        value(comp)?
+                            return comp->get(mname)=>> \v = v->as_string;;
+                    }
+            }
+            return option::none;
+        }
+        // 判定成员当前序列化值与预设体记录的差异：序列化字符串相等
+        // 即一致，与保存时的差异展开判定保持一致（见
+        // JEGaming::Saving::Entity 的 _compare_component_field）
+        func memberDiffVsPrefab(
+            prefab: option<PrefabRef>,
+            cname: string, mname: string,
+            cur_value: option<string>)=> MemberDiff
+        {
+            match (prefab)
+            {
+                none?;
+                value(ref)?
+                    match (ref.m_dat)
+                    {
+                        none?;
+                        value(pdat)?
+                        {
+                            let pv = prefabMemberValue(pdat, cname, mname);
+                            match (cur_value)
+                            {
+                                none?;
+                                value(cur)?
+                                {
+                                    let mut overridden = true;
+                                    match (pv)
+                                    {
+                                        none?;
+                                        value(p)?
+                                            overridden = cur != p;
+                                    }
+                                    return MemberDiff{
+                                        m_comparable = true,
+                                        m_overridden = overridden,
+                                        m_prefab_value = pv,
+                                    };
+                                }
+                            }
+                        }
+                    }
+            }
+            return MemberDiff{
+                m_comparable = false,
+                m_overridden = false,
+                m_prefab_value = option::none: option<string>,
+            };
+        }
+        // 组件是否为预设体之外新增（实体有、预设体没有）；未挂预设体
+        // 或预设体不可读时返回 false（不标记）
+        func isComponentAddedVsPrefab(
+            prefab: option<PrefabRef>, cname: string)=> bool
+        {
+            match (prefab)
+            {
+                none? return false;
+                value(ref)?
+                    match (ref.m_dat)
+                    {
+                        none? return false;
+                        value(pdat)?
+                            match (pdat->get("components")=>> \v = v->as_table;)
+                            {
+                                none? return true;
+                                value(components)?
+                                    return !components->contains(cname);
+                            }
+                    }
+            }
+            return false;
+        }
+        func showEntityNameEdit(
+            wctx: WorldEditorViewport, e: entity, prefab: option<PrefabRef>)
+        {
+            // 名称不参与差异展开（总是随实体单独保存），与预设体记录的
+            // 名称不同即视为改写，同样以高亮 + "*" 标记
+            let mut prefab_name = option::none: option<string>;
+            match (prefab)
+            {
+                none?;
+                value(ref)?
+                    match (ref.m_dat)
+                    {
+                        none?;
+                        value(pdat)? prefab_name = prefabNameOf(pdat);
+                    }
+            }
+
+            let mut name_overridden = false;
+            match (prefab_name)
+            {
+                none?;
+                value(pname)? name_overridden = e->internal::name != pname;
+            }
+
+            if (name_overridden)
+            {
+                TextColored(PREFAB_OVERRIDE_COLOR, "名称 *");
+                if (IsItemHovered())
+                    do SetTooltip(F"名称与预设体不一致\n预设体: {prefab_name->unwrap}\n当前: {e->internal::name}");
+            }
+            else
+            {
+                TextDisabled("名称");
+            }
             SameLine();
             SetNextItemWidth(-1.);
             
@@ -128,7 +320,8 @@ namespace JEEditor::Editor
             }
         }
         func showComponentMembersEdit(
-            wctx: WorldEditorViewport, e: entity, ctype: typeinfo, cname: string)
+            wctx: WorldEditorViewport, e: entity, ctype: typeinfo, cname: string,
+            prefab: option<PrefabRef>)
         {
             let cinst = e->get_component(ctype)->unwrap;
             let eid = e->internal::get_entity_uid;
@@ -136,15 +329,37 @@ namespace JEEditor::Editor
             Indent(0.);
             for (let (mname, mtype, mhandle) : cinst->get_members)
             {
-                TextDisabled(mname);
+                // 序列化当前成员值：既用于与预设体的差异判定，也作为
+                // 撤销留档——edit 一旦返回 true，成员值已被就地修改，
+                // 此刻的值即修改前的序列化值
+                let old_value = unsafe::dynamic_parser::save(mtype, mhandle);;
+
+                // 与预设体不一致的成员以高亮 + "*" 标记，悬停显示两侧
+                // 的值；一致/未比较的成员保持灰色弱化显示
+                let diff = memberDiffVsPrefab(prefab, cname, mname, old_value);
+                if (diff.m_comparable && diff.m_overridden)
+                {
+                    TextColored(PREFAB_OVERRIDE_COLOR, F"{mname} *");
+                    if (IsItemHovered())
+                    {
+                        match (diff.m_prefab_value)
+                        {
+                            none?
+                                do SetTooltip("该成员不在预设体中（新增）");
+                            value(pv)?
+                                do SetTooltip(F"与预设体不一致\n预设体: {pv}\n当前: {old_value->unwrap}");
+                        }
+                    }
+                }
+                else
+                {
+                    TextDisabled(mname);
+                }
                 SameLine();
                 SetNextItemWidth(-1.);
                 
                 let member_tag = F"##{cname}##{mname}##{mhandle}";
-                
-                // edit 一旦返回 true，成员值已被就地修改，先留档修改前的序列化值
-                let old_value = eid=>> \_ = unsafe::dynamic_parser::save(mtype, mhandle);;
-                
+
                 match (unsafe::dynamic_parser::edit(mtype, mhandle, member_tag))
                 {
                     none?
@@ -308,7 +523,33 @@ namespace JEEditor::Editor
         }
         func showEntityComponentEditImpl(wctx: WorldEditorViewport, e: entity)
         {
-            showEntityNameEdit(wctx, e);
+            // 挂有预设体的实体：加载预设体数据供差异对比使用
+            let prefab = getPrefabRef(e);
+
+            showEntityNameEdit(wctx, e, prefab);
+
+            // 预设体来源信息：正常加载时显示来源文件（悬停看完整路径）；
+            // 不可读时提示差异高亮已停用（保存/还原侧会另行报错）
+            match (prefab)
+            {
+                none?;
+                value(ref)?
+                {
+                    if (ref.m_dat->is_none)
+                    {
+                        TextColored((220, 130, 90, 255),
+                            F"预设体 \"{ref.m_path}\" 无法读取，差异高亮已停用");
+                    }
+                    else
+                    {
+                        TextDisabled(
+                            F"预设体: {fsys::filename(fsys::normalize(ref.m_path))}");
+                        if (IsItemHovered())
+                            do SetTooltip(ref.m_path);
+                    }
+                }
+            }
+
             SeparatorText("组件");
             
             // 组件按全名排序后同一命名空间的组件自然相邻，
@@ -332,6 +573,11 @@ namespace JEEditor::Editor
                     last_namespace = ns;
                 }
                 
+                // 预设体之外新增的组件：标题同样以高亮标记
+                let comp_added = isComponentAddedVsPrefab(prefab, cname);
+                if (comp_added)
+                    PushStyleColor(ImGuiCol::ImGuiCol_Text, PREFAB_OVERRIDE_COLOR);
+
                 // AllowItemOverlap 允许后绘制的行尾 × 按钮抢占重叠区域的
                 // 悬停与点击；折叠头的命中区总是横跨整行且忽略
                 // SetNextItemWidth，不加此标志 × 的点击会被标题吞掉
@@ -339,6 +585,13 @@ namespace JEEditor::Editor
                     F"{short_name}##{cname}",
                     TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen
                         + TreeNodeAttribute::ImGuiTreeNodeFlags_AllowItemOverlap);
+
+                if (comp_added)
+                {
+                    PopStyleColor(1);
+                    if (IsItemHovered())
+                        do SetTooltip("该组件不在预设体中（新增）");
+                }
 
                 // 右键组件标题可移除该组件；显式绑定到标题的标签上，
                 // 且必须紧跟标题项调用（悬停检测基于最后绘制的项），
@@ -360,7 +613,7 @@ namespace JEEditor::Editor
                     removeComponentFromEntity(wctx, e, ctype);
 
                 if (expanded)
-                    showComponentMembersEdit(wctx, e, ctype, cname);
+                    showComponentMembersEdit(wctx, e, ctype, cname, prefab);
                 Spacing();
             }
             if (visible_count == 0)
