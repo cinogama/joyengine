@@ -51,10 +51,11 @@ namespace JEEditor::Editor::WorldEditorViewport
     let ORTHO_WHEEL_Z_STEP = 1.;
 
     // ---- 新建/粘贴实体的生成点 ----
-    // 生成点在摄像机前方的距离：透视取较远距离（Unity 等编辑器“新建
-    // 对象出现在场景相机前方”的行为）；2D 正交紧贴镜头即可——正交下
-    // 远近不改变呈现大小，只要落在近/远裁剪面之间就可见
-    let SPAWN_DISTANCE_PERSPECTIVE = 10.;
+    // 生成点在摄像机前方的距离：透视取中距（Unity 等编辑器“新建对象
+    // 出现在场景相机前方”的行为，太远看不清、太近被裁剪）；2D 正交
+    // 紧贴镜头即可——正交下远近不改变呈现大小，只要落在近/远裁剪面
+    // 之间就可见
+    let SPAWN_DISTANCE_PERSPECTIVE = 5.;
     let SPAWN_DISTANCE_ORTHO = 1.;
 
     // ---- 调试游走摄像机 2D 光照模式 ----
