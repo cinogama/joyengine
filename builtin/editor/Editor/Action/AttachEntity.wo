@@ -4,6 +4,7 @@ import je;
 import je::ecs;
 import je::internal;
 import je::towoo;
+import je::towoo::types;
 import je::towoo::components;
 
 import pkg::interface;
@@ -22,9 +23,13 @@ namespace JEEditor::Editor::Action
     // 写入父的 Anchor.uid、为父补 Anchor、移除子身上与 LocalToParent 互斥
     // 的 LocalToWorld（两个组件同时存在时变换系统不再更新该实体，见
     // jeecs_core_translation_system.hpp 的两个互斥查询）。
-    // 撤销恢复原状：原先挂在别的父下则把原父锚点 uid 写回（parent_uid
-    // 仍指向原父，父实体无需变更）；原先为根则移除 LocalToParent、按
-    // 记录补回 LocalToWorld。
+    // 挂接前后子实体的世界位置保持不变：挂接前快照子的世界坐标，
+    // 落实时换算到（新）父锚点的局部空间写入 LocalPosition（父为存活
+    // 实体，Translation 缓存可靠；不用 worldToLocalPos——子的
+    // LocalToParent 可能仍在命令缓冲中落实，get 不到会被误判为根）。
+    // 撤销对称恢复：写回原父锚点 uid / 回根（移除 LocalToParent、按
+    // 记录补回 LocalToWorld），同样按快照保持世界位置；本次挂接给父
+    // 新挂的 Anchor 在没有其他实体引用时摘除。
     using AttachEntity = struct{
         // 跨帧只持调试 EUID，落实（redo/undo）时反查实体
         //（entity 句柄不允许跨帧持有）
@@ -37,6 +42,11 @@ namespace JEEditor::Editor::Action
         m_old_parent_uid: option<string>,
         // 子实体原先是否挂 LocalToWorld（撤销回根时据此补回）
         m_had_local_to_world: bool,
+        // 挂接前父实体是否已有 Anchor（撤销时决定是否摘除本次新挂的）
+        m_parent_had_anchor: bool,
+        // 挂接前子实体的世界位置快照；子没有 Translation 时为 none
+        //（无从保持，放任局部坐标原样解释）
+        m_world_pos: option<vec3>,
     }
     {
         // 拒绝挂接：自己挂自己、已是其直接子（is_child_of 只比一层，
@@ -66,7 +76,33 @@ namespace JEEditor::Editor::Action
                     m_had_local_to_world =
                         child->towoo::get_component:<Transform::LocalToWorld>
                             ->is_value,
+                    m_parent_had_anchor =
+                        parent->towoo::get_component:<Transform::Anchor>
+                            ->is_value,
+                    m_world_pos = child->towoo::get_component:<Transform::Translation>
+                        =>> \trans = option::value(trans->get_global_pos);
+                        ,
                 });
+            };
+        }
+
+        // 把世界坐标换算到 parent 实体锚点的局部空间并写入子的
+        // LocalPosition（幂等；父缺 Translation 或子缺 LocalPosition
+        // 时静默跳过——无从保持位置）
+        func keepWorldPosUnderParent(
+            child: entity,
+            parent: entity,
+            world_pos: vec3)=> void
+        {
+            do try!{
+                try! parent_trans =
+                    parent->towoo::get_component:<Transform::Translation>();
+                try! local_pos =
+                    child->towoo::get_component:<Transform::LocalPosition>();
+                local_pos.pos->set(
+                    parent_trans->get_global_rot->inverse
+                        * (world_pos - parent_trans->get_global_pos));
+                return_value!;
             };
         }
 
@@ -76,9 +112,21 @@ namespace JEEditor::Editor::Action
                 try! child = w->findListedEntityByEuid(self.m_child_eid);
                 try! parent = w->findListedEntityByEuid(self.m_parent_eid);
 
-                // set_parent 失败（组件补不上等）返回 false，
+                // set_parent 失败（组件补不上等）让 redo 返回 false，
                 // Practice 会推迟一帧重试
-                return_value! child->internal::set_parent(parent, true);
+                try! _ = child->internal::set_parent(parent, true)
+                    ? option::value(true)
+                    | option::none: option<bool>;
+
+                // 挂接保持子的世界位置不变：换算到新父局部空间
+                match (self.m_world_pos)
+                {
+                    none?;
+                    value(world_pos)?
+                        keepWorldPosUnderParent(child, parent, world_pos);
+                }
+
+                return_value! true;
             };
         }
 
@@ -86,21 +134,22 @@ namespace JEEditor::Editor::Action
         {
             match (w->findListedEntityByEuid(self.m_child_eid))
             {
+                // 子实体已不在：无从恢复
                 none?
                     return false;
                 value(child)?
+                {
+                    // 恢复原父子关系。挂接与撤销同帧发生时
+                    // LocalToParent 可能仍在命令缓冲中落实，
+                    // set_parent_with_uid 拿不到组件会返回 false，
+                    // 交给 Practice 推迟一帧重试（此前提交过的恢复
+                    // 操作均为幂等）
+                    let mut restored = false;
                     match (self.m_old_parent_uid)
                     {
-                        // 原先挂在别的父下：写回原父锚点。挂接与撤销同帧
-                        // 发生时 LocalToParent 可能仍在命令缓冲中落实，
-                        // set_parent_with_uid 拿不到组件会返回 false，
-                        // 交给 Practice 推迟一帧重试
                         value(old_uid)?
-                            return child->internal::set_parent_with_uid(
+                            restored = child->internal::set_parent_with_uid(
                                 old_uid, false);
-                        // 原先是根：移除 LocalToParent，按记录补回
-                        // LocalToWorld。组件增删走命令缓冲，与挂接同帧
-                        // 提交时按“最后提交者生效”合并
                         none?
                         {
                             do child->remove_component(
@@ -108,9 +157,81 @@ namespace JEEditor::Editor::Action
                             if (self.m_had_local_to_world)
                                 do child->add_component(
                                     Transform::LocalToWorld::type::typeinfo);
-                            return true;
+                            restored = true;
                         }
                     }
+                    if (!restored)
+                        return false;
+
+                    // 撤销同样保持子的世界位置：恢复后的父为根时局部
+                    // 即世界；原父已不在这世界时无从换算，写世界坐标
+                    match (self.m_world_pos)
+                    {
+                        none?;
+                        value(world_pos)?
+                        {
+                            match (self.m_old_parent_uid
+                                =>> \old_uid = w->findEntityByAnchorUid(old_uid);
+                                )
+                            {
+                                // 原父实体还在：换算到其局部空间
+                                value(old_parent)?
+                                    keepWorldPosUnderParent(
+                                        child, old_parent, world_pos);
+                                // 原为根，或原父锚点已无人持有：
+                                // 局部坐标即世界坐标
+                                none?
+                                    do try!{
+                                        try! local_pos = child->towoo::get_component:<Transform::LocalPosition>();
+                                        local_pos.pos->set(world_pos);
+                                        return_value!;
+                                    };
+                            }
+                        }
+                    }
+
+                    // 本次挂接给父新挂的 Anchor：没有其他实体还挂在
+                    // 该锚点下时摘除（有则保留，否则会毁掉它们的
+                    // 父子关系）。Anchor 尚未落实（挂接与撤销同帧，
+                    // 读不到 uid）时返回 false 推迟一帧重试
+                    if (!self.m_parent_had_anchor)
+                    {
+                        match (w->findListedEntityByEuid(self.m_parent_eid))
+                        {
+                            none?;
+                            value(parent)?
+                                match (parent->internal::get_anchor_uid)
+                                {
+                                    none?
+                                        return false;
+                                    value(parent_anchor_uid)?
+                                    {
+                                        let mut anchor_still_used = false;
+                                        for (let other : w->getEntitySelector())
+                                        {
+                                            if (std::is_same(other, child)
+                                                || std::is_same(other, parent))
+                                                continue;
+                                            match (other->internal::get_parent_anchor_uid)
+                                            {
+                                                none?;
+                                                value(other_parent_uid)?
+                                                    if (other_parent_uid == parent_anchor_uid)
+                                                        anchor_still_used = true;
+                                            }
+                                            if (anchor_still_used)
+                                                break;
+                                        }
+                                        if (!anchor_still_used)
+                                            do parent->remove_component(
+                                                Transform::Anchor::type::typeinfo);
+                                    }
+                                }
+                        }
+                    }
+
+                    return true;
+                }
             }
         }
 
