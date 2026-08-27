@@ -15,6 +15,7 @@ import builtin::gaming::Saving::Entity;
 
 import builtin::editor::GUI::Windows;
 
+import Browser;
 import WorldEditorViewport;
 import EditSession;
 import ComponentPresets;
@@ -528,8 +529,9 @@ namespace JEEditor::Editor
 
             showEntityNameEdit(wctx, e, prefab);
 
-            // 预设体来源信息：正常加载时显示来源文件（悬停看完整路径）；
-            // 不可读时提示差异高亮已停用（保存/还原侧会另行报错）
+            // 预设体来源信息：正常加载时显示来源文件（悬停看完整路径），
+            // 点击在资源管理器中定位到该文件；不可读时提示差异高亮已停用
+            // （保存/还原侧会另行报错），点击同样定位到所在目录以便排查
             match (prefab)
             {
                 none?;
@@ -537,15 +539,19 @@ namespace JEEditor::Editor
                 {
                     if (ref.m_dat->is_none)
                     {
-                        TextColored((220, 130, 90, 255),
-                            F"预设体 \"{ref.m_path}\" 无法读取，差异高亮已停用");
+                        PushStyleColor(ImGuiCol::ImGuiCol_Text, (220, 130, 90, 255));
+                        if (Selectable(F"预设体 \"{ref.m_path}\" 无法读取，差异高亮已停用##prefab_src"))
+                            Browser::requestNavigateTo(
+                                ResourcePath::toLocalResourcePath(ref.m_path));
+                        PopStyleColor(1);
                     }
                     else
                     {
-                        TextDisabled(
-                            F"预设体: {fsys::filename(fsys::normalize(ref.m_path))}");
+                        if (Selectable(F"预设体: {fsys::filename(fsys::normalize(ref.m_path))}##prefab_src"))
+                            Browser::requestNavigateTo(
+                                ResourcePath::toLocalResourcePath(ref.m_path));
                         if (IsItemHovered())
-                            do SetTooltip(ref.m_path);
+                            do SetTooltip(F"{ref.m_path}\n点击在资源管理器中定位");
                     }
                 }
             }

@@ -205,6 +205,8 @@ namespace JEEditor::Editor
     }
     {
         let mut s_browser_singleton = option::none: option<Browser>;
+        // 待消费的定位请求（见 requestNavigateTo）
+        let mut s_pending_navigate = option::none: option<fsys::path_t>;
         public func isBrowserExist()
         {
             return s_browser_singleton->is_value;
@@ -221,6 +223,16 @@ namespace JEEditor::Editor
                 value(browser_instance)?
                     browser_instance->close();
             }
+        }
+        // 外部（如检视面板的预设体来源行）请求在资源管理器中定位到指定
+        // 路径。浏览器窗口经协程创建，showBrowser 返回时 onCreate 尚未
+        // 执行、单例未就绪，不能立即取实例导航：请求一律先暂存，由浏览器
+        // 首帧（或已打开时的下一帧）run() 统一消费。
+        public func requestNavigateTo(path: fsys::path_t)=> void
+        {
+            s_pending_navigate = option::value(path);
+            if (s_browser_singleton->is_none)
+                do showBrowser();
         }
         
         func childDirs(dir: fsys::path_t)=> array<fsys::path_t>
@@ -372,6 +384,17 @@ namespace JEEditor::Editor
         }
         public func run(self: Browser)=> bool
         {
+            // 消费外部请求的定位（见 requestNavigateTo）
+            match (s_pending_navigate)
+            {
+                none?;
+                value(path)?
+                {
+                    s_pending_navigate = option::none;
+                    self->navigateTo(path);
+                }
+            }
+
             self->processDirty();
             self->drawToolbar();
             Separator();
@@ -459,6 +482,20 @@ namespace JEEditor::Editor
                 self.m_current = parent(self.m_current);
                 self.m_selected = option::none;
             }
+        }
+
+        // 定位到指定路径：目录则进入该目录，文件则进入所在目录并选中
+        // 该项；搜索过滤一并清除，保证目标项在列表中立即可见。目标所
+        // 在目录不存在（如预设体文件已被移走）时静默放弃。
+        func navigateTo(self: Browser, path: fsys::path_t)=> void
+        {
+            let target_dir = isdir(path) ? path | parent(path);
+            if (!isdir(target_dir))
+                return;
+
+            self.m_current = target_dir;
+            self.m_selected = option::value(path);
+            self.m_filter = "";
         }
         
         func drawTree(self: Browser)=> void
