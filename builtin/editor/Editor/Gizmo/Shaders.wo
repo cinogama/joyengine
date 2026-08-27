@@ -24,4 +24,10 @@ namespace JEEditor::Editor::Gizmo::Shaders
     public let WORLD_GRID = shader::load(
         option::none,
         "!/builtin/editor/Editor/Gizmo/Shaders/WorldGrid.shader");
+
+    // 2D（正交）模式的世界坐标网格着色器：与 z=0（xOy）平面求交，
+    // uniform 约定与 WORLD_GRID 一致
+    public let WORLD_GRID_2D = shader::load(
+        option::none,
+        "!/builtin/editor/Editor/Gizmo/Shaders/WorldGrid2D.shader");
 }

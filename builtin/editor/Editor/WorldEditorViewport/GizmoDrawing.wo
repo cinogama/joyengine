@@ -22,6 +22,7 @@ import builtin::editor::Editor::Gizmo::Shaders;
 import builtin::editor::Editor::Gizmo::Shapes;
 
 import Definition;
+import CameraControl;
 import GizmoMath;
 import EntityPicking;
 
@@ -518,9 +519,10 @@ namespace JEEditor::Editor::WorldEditorViewport
         };
     }
 
-    // 绘制半透明的世界坐标网格（XZ 平面，y=0）：
-    // 输入为覆盖整个屏幕的 NDC 四边形，WorldGrid.shader 内按像素重建视线
-    // 并与地面求交；网格密度、颜色与距离衰减均在 shader 中定义。
+    // 绘制半透明的世界坐标网格，输入为覆盖整个屏幕的 NDC 四边形，
+    // shader 内按像素重建视线再与网格平面求交；网格密度、颜色与距离
+    // 衰减均在 shader 中定义。3D 模式铺在 XZ 地面（y=0，WorldGrid），
+    // 2D（正交）模式立在 xOy 平面（z=0，WorldGrid2D）。
     // 视线重建与 towoo::ray::from 一致：直接把 Camera::Projection 的
     // 逆投影矩阵交给 shader，无需手动推算 tan半FOV / 正交可视半宽高。
     protected func drawWorldGrid(
@@ -531,7 +533,9 @@ namespace JEEditor::Editor::WorldEditorViewport
         do try!{
             try! camera_trans =
                 camera_entity->towoo::get_component:<Transform::Translation>();
-            try! shader_instance = WORLD_GRID;
+            try! shader_instance = isDebugCamera2DMode(camera_entity)
+                ? WORLD_GRID_2D
+                | WORLD_GRID;
             try! shape_instance = FULLSCREEN_NDC_QUAD;
 
             let rot = camera_trans->get_global_rot;
