@@ -588,4 +588,45 @@ namespace JEEditor::Editor::WorldEditorViewport
                         * distance);
         };
     }
+
+    // 拖放生成点（getSpawnPosInFrontOfCamera 的定点版）：把拖放释放的
+    // 屏幕位置（rect 为视口显示区域）反投影为拾取射线，取射线上距
+    // 摄像机 SPAWN_DISTANCE_* 的点——实体出现在拖放处对应的世界位置
+    //（透视下射线过拖放点；正交下射线平行视线，横向位置仍与拖放点
+    // 对应）。视口矩形退化或调试摄像机/投影组件不存在时返回 none，
+    // 调用方回退为 getSpawnPosInFrontOfCamera /数据原值。
+    public func getSpawnPosAtScreenPos(
+        self: WorldEditorViewport,
+        rect_min: ImVec2,
+        rect_max: ImVec2,
+        screen_pos: vec2)=> option<vec3>
+    {
+        return or(option::none: option<vec3>) <| try!{
+            try! camera =
+                self.m_debug_camera_selector->iter |> collect->get(0);
+            try! trans =
+                camera->towoo::get_component:<Transform::Translation>();
+            try! proj =
+                camera->towoo::get_component:<Camera::Projection>();
+
+            let rect_size = rect_max as vec2 - rect_min as vec2;
+            if (rect_size[0] <= 0. || rect_size[1] <= 0.)
+                return_value! option::none: option<vec3>;
+
+            // 屏幕坐标 -> NDC（与实体拾取同款换算，含 y 翻转）
+            let ndc = ((screen_pos - rect_min as vec2) / rect_size
+                - (0.5, 0.5) as vec2) * 2.;
+
+            let ray = towoo::ray::from(
+                trans, proj, (ndc[0], -ndc[1]) as vec2,
+                isDebugCamera2DMode(camera));
+
+            let distance = isDebugCamera2DMode(camera)
+                ? SPAWN_DISTANCE_ORTHO
+                | SPAWN_DISTANCE_PERSPECTIVE;
+
+            return_value! option::value <|
+                (trans->get_global_pos + ray->direction->unit * distance);
+        };
+    }
 }

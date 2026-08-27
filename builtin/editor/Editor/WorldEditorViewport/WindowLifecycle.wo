@@ -1,6 +1,7 @@
 // 世界编辑器视口 —— 窗口生命周期、注册表与主循环。
 // create 构造（IWindows 接口实现）、关闭前确认流程、每帧 run 的
-// 更新编排，以及按 world/标题/保存路径反查视口的注册表。
+// 更新编排（含预设体文件的拖放创建实例），以及按 world/标题/保存
+// 路径反查视口的注册表。
 
 import woo::std;
 
@@ -19,6 +20,7 @@ import je::towoo::components;
 import pkg::fsys;
 import pkg::interface;
 import pkg::iterator;
+import pkg::toml;
 import pkg::try;
 
 import builtin::editor::GUI::Windows;
@@ -29,10 +31,15 @@ import builtin::editor::GUI::Forms::MsgBox;
 import builtin::editor::GUI::Forms::InputBox;
 import builtin::editor::GUI::Forms::AskBox;
 import builtin::editor::GUI::Shortcut;
+import builtin::editor::GUI::Statebar;
+
+import builtin::gaming::Saving::Entity;
 
 import builtin::editor::Editor::Browser;
 import builtin::editor::Editor::Practice;
 import builtin::editor::Editor::EntityClipboard;
+import builtin::editor::Editor::ResourcePath;
+import builtin::editor::Editor::Action::CreateEntity;
 
 import Definition;
 import CameraControl;
@@ -55,7 +62,10 @@ using JEEditor::GUI::Windows;
 using JEEditor::GUI::Drag;
 using JEEditor::GUI::Forms;
 using JEEditor::GUI::Icons;
+using JEEditor::GUI::Statebar;
 using JEEditor::Editor::EntityClipboard;
+using JEEditor::Editor::Action;
+using JEEditor::Editor::ResourcePath;
 
 namespace JEEditor::Editor::WorldEditorViewport
 {
@@ -418,6 +428,11 @@ namespace JEEditor::Editor::WorldEditorViewport
                     SetCursorScreenPos(rect_min);
                     do InvisibleButton("##viewport_mouse_guard", rect_size);
                     viewport_hovered = IsItemHovered();
+
+                    // 拖 .je4entity 预设体文件到视口创建实例：以守卫
+                    // 按钮为拖放目标（须紧随其后调用），仅视口图像
+                    // 区域内接收
+                    self->acceptPrefabFileDrop(rect_min, rect_max);
                 }
             }
         }
@@ -485,6 +500,90 @@ namespace JEEditor::Editor::WorldEditorViewport
         self->drawGizmos(debug_camera);
 
         return self.m_close == CloseRequest::NORMALLY;
+    }
+
+    // 拖放接收：把资源管理器拖来的 .je4entity 预设体文件创建为实例。
+    // 须在 run 中紧随视口交互守卫按钮调用（以守卫按钮为拖放目标，
+    // 仅视口图像区域内接收）；非预设体文件留给未来的其他拖放用途，
+    // 静默忽略。
+    // 不走 Drag::AcceptDrag:<FilePayload>：该显式泛型载荷的约束检查
+    // 在 Browser 与本模块循环 import 的位置上会类型解析递归失败
+    //（FilePayload 定义于 Browser.wo），按载荷约定直接读底层字符串
+    // 载荷——类型名与 FilePayload::type 一致，dump 的内容即文件路径。
+    protected func acceptPrefabFileDrop(
+        self: WorldEditorViewport,
+        rect_min: ImVec2,
+        rect_max: ImVec2)=> void
+    {
+        if (BeginDragDropTarget())
+        {
+            defer EndDragDropTarget();
+
+            match (AcceptDragDropPayload("JE_EDITOR_BROWSER_FILE_PATH"))
+            {
+                none?;
+                value(payload)?
+                    self->spawnPrefabInstanceFromFile(
+                        payload, rect_min, rect_max);
+            }
+        }
+    }
+
+    // 由预设体文件创建实例：文件可能本身是其他预设体的变体（原始
+    // 内容带 "prefab" 键），先以 load 展开为完整数据，再把 "prefab"
+    // 键改指该文件自身——还原端（Saving::Entity::restore，经
+    // CreateEntity 落实）展开同一文件（幂等合并）后把新实体挂回该
+    // 预设体，实例的直属预设体即被拖文件，此后保存仍按差异记录。
+    // 不能把变体的原始差异数据直接当内容：差异中的 shader "from"
+    // 索引基于父预设体数据，还原端二次 apply 时会按展开结果错位
+    // 取条目。
+    // 预设体不固化局部变换，实例位置由生成点写入：拖放位置反投影
+    //（getSpawnPosAtScreenPos），摄像机不可用时退回摄像机前方，再退回
+    // none 保持数据原值。创建走 CreateEntity，可撤销/重做。
+    protected func spawnPrefabInstanceFromFile(
+        self: WorldEditorViewport,
+        path_str: string,
+        rect_min: ImVec2,
+        rect_max: ImVec2)=> void
+    {
+        let path = normalize(path_str);
+
+        // 只接收 .je4entity 预设体文件（目录/其余类型忽略）
+        if (!isfile(path)
+            || string::lower(extension(path)) != ".je4entity")
+            return;
+
+        // 展开变体链为完整数据；失败（文件损坏/已被移走）放弃
+        match (JEGaming::Saving::Entity::load(path->to_string()))
+        {
+            none?
+                MsgBox::err("创建预设体实例",
+                    F"无法读取预设体文件 \"{path->to_string()}\"");
+            value(dat)?
+            {
+                dat->set("prefab",
+                    ResourcePath::toRuntimeResourcePath(path->to_string()));
+
+                let mut spawn_pos = self->getSpawnPosInFrontOfCamera();
+                match (self->getSpawnPosAtScreenPos(
+                    rect_min, rect_max, GetMousePos() as vec2))
+                {
+                    none?;
+                    value(pos)?
+                        spawn_pos = option::value(pos);
+                }
+
+                self->doAction(
+                    CreateEntity::try_create_with_content_at(
+                        dat, spawn_pos));
+
+                // 闭包按创建时的值捕获文本，之后每帧由 Statebar 调用绘制
+                let prefab_name = filename(path);
+                Statebar::showState(3.) <| func(){
+                    Text(F"已创建预设体 \"{prefab_name}\" 的实例");
+                };
+            }
+        }
     }
 
     // ==========================
