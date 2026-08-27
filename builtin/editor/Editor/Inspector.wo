@@ -14,6 +14,8 @@ import pkg::worst;
 import builtin::gaming::Saving::Entity;
 
 import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Forms::MsgBox;
+import builtin::editor::Editor::Saving::Entity;
 
 import Browser;
 import WorldEditorViewport;
@@ -33,6 +35,7 @@ using je;
 using je::gui;
 using je::towoo;
 using JEEditor::GUI::Windows;
+using JEEditor::GUI::Forms;
 using JEEditor::Editor::EditSession;
 using JEEditor::Editor::Action;
 using JEEditor::Editor::ComponentPresets;
@@ -466,6 +469,34 @@ namespace JEEditor::Editor
                     }
             }
         }
+        // 更新到预设：把实体当前数据写回直属预设体文件。直属预设体
+        // 自身是其他预设体的变体时只更新直属文件本体、保持其与父
+        // 预设体的差异关系（不修改父预设体），见 JEEditor::Saving::
+        // Entity 的 update_prefab。纯文件写盘不产生 Action（与拖拽
+        // 生成预设体一致）；实体的挂载关系不变，差异高亮随预设体
+        // 缓存按文件 mtime 自动刷新；写盘失败弹窗报错。
+        func updatePrefabFromEntity(e: entity)=> void
+        {
+            EditSession::commit();
+
+            match (JEEditor::Saving::Entity::update_prefab(e))
+            {
+                none?
+                    logerr("更新到预设：实体未挂预设体");
+                value(dat)?
+                {
+                    let path = e->internal::get_prefab_path->unwrap;
+                    match (toml::save(
+                        dat, ResourcePath::toLocalResourcePath(path)))
+                    {
+                        err(msg)?
+                            MsgBox::err("更新失败",
+                                F"更新预设体 \"{path}\" 失败：{msg}");
+                        ok(_)?;
+                    }
+                }
+            }
+        }
         // “添加组件”选择弹窗：搜索过滤 + 常用组合一键整组添加 + 按命名
         // 空间分组的候选列表。选中一项立即发布添加操作且保持弹窗打开，
         // 便于连续添加；已添加的组件自下一帧起从候选中消失。
@@ -555,10 +586,10 @@ namespace JEEditor::Editor
             showEntityNameEdit(wctx, e, prefab);
 
             // 预设体来源信息：正常加载时显示来源文件（悬停看完整路径），
-            // 点击在资源管理器中定位到该文件，右键可解除预设；不可读时
-            // 提示差异高亮已停用（保存/还原侧会另行报错），点击定位到
-            // 所在目录以便排查。右键菜单需传与 Selectable 完全一致的
-            // 标签，故标签提为局部变量。
+            // 点击在资源管理器中定位到该文件，右键可更新到预设/解除
+            // 预设；不可读时提示差异高亮已停用（保存/还原侧会另行报错），
+            // 点击定位到所在目录以便排查。右键菜单需传与 Selectable
+            // 完全一致的标签，故标签提为局部变量。
             match (prefab)
             {
                 none?;
@@ -575,6 +606,8 @@ namespace JEEditor::Editor
                         PopStyleColor(1);
                         if (BeginPopupContextItemLabel(label))
                         {
+                            if (MenuItem("更新到预设"))
+                                updatePrefabFromEntity(e);
                             if (MenuItem("解除预设"))
                                 unlinkPrefabFromEntity(wctx, e);
                             defer EndPopup();
@@ -588,9 +621,11 @@ namespace JEEditor::Editor
                             Browser::requestNavigateTo(
                                 ResourcePath::toLocalResourcePath(ref.m_path));
                         if (IsItemHovered())
-                            do SetTooltip(F"{ref.m_path}\n点击在资源管理器中定位，右键解除预设");
+                            do SetTooltip(F"{ref.m_path}\n点击在资源管理器中定位，右键更新到预设/解除预设");
                         if (BeginPopupContextItemLabel(label))
                         {
+                            if (MenuItem("更新到预设"))
+                                updatePrefabFromEntity(e);
                             if (MenuItem("解除预设"))
                                 unlinkPrefabFromEntity(wctx, e);
                             defer EndPopup();

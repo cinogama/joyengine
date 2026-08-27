@@ -27,22 +27,19 @@ namespace JEEditor::Saving::Entity
         return toml;
     }
 
-    // 保存预设体（落盘预设体文件 .je4entity 专用，见 Browser.wo 的
-    // savePrefabEntityTo），dst 为落盘路径。未挂预设体时输出完整数据；
-    // 已挂预设体且 dst 不是该预设体源文件时，输出相对该预设体的变体
-    //（差异 + "prefab" 键，与普通实体的差异保存同构）；覆盖预设体
-    // 源文件本体时仍输出完整数据。
-    public func save_prefab(e: entity, dst: string)=> Toml
+    // 预设体完整数据：save_full + 实体名 + Transform 三组件抹除，供
+    // save_prefab / update_prefab 复用。预设体不固化局部变换：这三个
+    // 组件只记录存在（空表）而不保存成员值。还原时空表照常构造组件
+    // 并保留默认值；派生实体的实际变换在 prefab 差异保存中以成员级
+    // 差异完整记录，apply 展开时逐成员写入空表，合并不受影响。变体
+    // 保存在抹除之后做差异：父预设体的这三张表同为空表，变体不会
+    // 引入变换成员差异。
+    func _prefab_full(e: entity)=> Toml
     {
         let toml = JEGaming::Saving::Entity::save_full(e);
 
         toml->set("name", e->internal::name);
 
-        // 预设体不固化局部变换：这三个组件只记录存在（空表）而不保存
-        // 成员值。还原时空表照常构造组件并保留默认值；派生实体的实际
-        // 变换在 prefab 差异保存中以成员级差异完整记录，apply 展开时
-        // 逐成员写入空表，合并不受影响。变体保存在抹除之后做差异：
-        // 父预设体的这三张表同为空表，变体不会引入变换成员差异。
         match (toml->get("components"))
         {
             none?;
@@ -56,6 +53,18 @@ namespace JEEditor::Saving::Entity
                         components_dat->set(ctype_name, new_table());
                 }
         }
+
+        return toml;
+    }
+
+    // 保存预设体（落盘预设体文件 .je4entity 专用，见 Browser.wo 的
+    // savePrefabEntityTo），dst 为落盘路径。未挂预设体时输出完整数据；
+    // 已挂预设体且 dst 不是该预设体源文件时，输出相对该预设体的变体
+    //（差异 + "prefab" 键，与普通实体的差异保存同构）；覆盖预设体
+    // 源文件本体时仍输出完整数据。
+    public func save_prefab(e: entity, dst: string)=> Toml
+    {
+        let toml = _prefab_full(e);
 
         // 已挂预设体的实体再次保存 = 旧预设体的变体。路径不区分大小写
         // 地比对：dst 与源文件相同（覆盖本体）时若仍写成变体，文件会
@@ -95,6 +104,65 @@ namespace JEEditor::Saving::Entity
 
         return toml;
     }
+
+    // 更新到预设（检视面板右键「更新到预设」）：把实体当前数据写回
+    // 直属预设体文件本体。直属预设体文件自身是其他预设体的变体
+    //（原始内容带 "prefab" 键）时保持变体关系：与父预设体做差异、
+    // 记录父路径，只更新直属文件，不修改父预设体；非变体则更新为
+    // 完整数据。判定变体必须解析直属文件的原始内容——load 会递归
+    // 展开变体链并抹掉 "prefab" 键。返回待落盘的数据；实体未挂预设
+    // 体时返回 none，由调用方报错。
+    public func update_prefab(e: entity)=> option<Toml>
+    {
+        let prefab_path = e->internal::get_prefab_path()->or("");
+        if (prefab_path->len == 0)
+            return option::none;
+
+        let toml = _prefab_full(e);
+
+        // 直属文件不可读取时无从判定变体关系，按非变体更新为完整
+        // 数据（覆盖重建该文件）
+        let parent_may = try!{
+            try! content = file::readall(prefab_path);
+            try! dat = parse(content)->okay;
+            try! parent_path = dat->get("prefab")=>> \v = v->as_string;;
+
+            return_value! parent_path;
+        };
+
+        match (parent_may)
+        {
+            none? return option::value(toml);
+            value(parent_path)?
+            {
+                let diff_may = try!{
+                    try! parent_dat =
+                        JEGaming::Saving::Entity::load(parent_path);
+
+                    let diff_dat =
+                        JEGaming::Saving::Entity::diff(toml, parent_dat);
+                    diff_dat->set("prefab", parent_path);
+
+                    return_value! diff_dat;
+                };
+
+                match (diff_may)
+                {
+                    // 父预设体不可读时无法计算差异，退回完整数据会
+                    // 静默丢失变体关系；与 save_prefab 一致，仍保留
+                    // 派生关系，load 展开时会按完整差异记录尽力还原
+                    none?
+                    {
+                        toml->set("prefab", parent_path);
+                        return option::value(toml);
+                    }
+                    value(diff_dat)?
+                        return option::value(diff_dat);
+                }
+            }
+        }
+    }
+
     public func restore(w: world, edat: Toml)=> entity
     {
         // 挂预设体的实体保存为相对预设体的差异数据（带 "prefab" 键）：
