@@ -25,13 +25,31 @@ namespace JEEditor::Saving::Entity
         return toml;
     }
 
-    // 完整保存（不按 prefab 差异展开）：落盘预设体文件（.je4entity）用，
-    // 见 Browser.wo 的 savePrefabEntityTo
-    public func save_full(e: entity)=> Toml
+    // 保存预设体（完整数据，不按 prefab 差异展开）：落盘预设体文件
+    //（.je4entity）专用，见 Browser.wo 的 savePrefabEntityTo
+    public func save_prefab(e: entity)=> Toml
     {
         let toml = JEGaming::Saving::Entity::save_full(e);
 
         toml->set("name", e->internal::name);
+
+        // 预设体不固化局部变换：这三个组件只记录存在（空表）而不保存
+        // 成员值。还原时空表照常构造组件并保留默认值；派生实体的实际
+        // 变换在 prefab 差异保存中以成员级差异完整记录，apply 展开时
+        // 逐成员写入空表，合并不受影响。
+        match (toml->get("components"))
+        {
+            none?;
+            value(components_dat)?
+                for (let ctype_name : [
+                    "Transform::LocalPosition",
+                    "Transform::LocalRotation",
+                    "Transform::LocalScale"])
+                {
+                    if (components_dat->contains(ctype_name))
+                        components_dat->set(ctype_name, new_table());
+                }
+        }
 
         return toml;
     }

@@ -869,7 +869,7 @@ namespace JEEditor::Editor
         }
 
         // 把实体完整快照写入 dst，并将实体挂为该文件的预设体。
-        // 落盘用 save_full：编辑器的 add/remove component 走命令缓冲
+        // 落盘用 save_prefab：编辑器的 add/remove component 走命令缓冲
         // 延迟落实，remove 后当帧序列化仍能查到旧 Editor::Prefab 组件，
         // 普通的 save 会因此输出相对旧预设体的差异数据而非完整数据。
         // 挂预设体同理不能依赖“先 add 再 set_prefab_path”——set_prefab_path
@@ -883,7 +883,7 @@ namespace JEEditor::Editor
         {
             let prefab_type = typeinfo::load("Editor::Prefab");
 
-            match (toml::save(Entity::save_full(e), dst))
+            match (toml::save(Entity::save_prefab(e), dst))
             {
                 err(msg)?
                     MsgBox::err("保存失败",
