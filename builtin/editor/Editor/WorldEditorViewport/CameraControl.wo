@@ -42,12 +42,14 @@ namespace JEEditor::Editor::WorldEditorViewport
     let CAMERA_FAST_MOVE_MULTIPLIER = 3.;
     let CAMERA_LOOK_SENSITIVITY = 0.15;
     let CAMERA_ORBIT_SENSITIVITY = 0.3;
+    // 透视平移的像素→世界系数；正交平移改用精确跟手换算
+    //（可视全高/视口像素高），不再使用本常数
     let CAMERA_PAN_SENSITIVITY = 0.01;
     let CAMERA_WHEEL_DOLLY = 5.;
     let CAMERA_PITCH_LIMIT = 88.;
     let CAMERA_MIN_ORTHO_SCALE = 0.05;
-    // 2D 模式 Ctrl+滚轮单格滚动的 z 步进基准（随正交 scale 缩放），
-    // 刻意比透视推拉的 CAMERA_WHEEL_DOLLY 小，便于细调深度
+    // 2D 模式 Ctrl+滚轮单格滚动的 z 步进基准（随正交 scale 反比缩放，
+    // 放大后步进变小便于细调深度），刻意比透视推拉的 CAMERA_WHEEL_DOLLY 小
     let ORTHO_WHEEL_Z_STEP = 1.;
 
     // ---- 新建/粘贴实体的生成点 ----
@@ -340,8 +342,8 @@ namespace JEEditor::Editor::WorldEditorViewport
             none?
                 match (cam->towoo::get_component:<Camera::OrthoProjection>)
                 {
-                    value(ortho)?
-                        self->controlOrthoCamera(pos, rot, ortho, dt, hovered);
+            value(ortho)?
+                self->controlOrthoCamera(pos, rot, ortho, dt, hovered, viewport_rect);
                     none?;
                 }
         }
@@ -472,7 +474,8 @@ namespace JEEditor::Editor::WorldEditorViewport
         rot: Transform::LocalRotation,
         ortho: Camera::OrthoProjection,
         dt: real,
-        hovered: bool)=> void
+        hovered: bool,
+        viewport_rect: option<(ImVec2, ImVec2)>)=> void
     {
         let curPos = pos.pos->get;
         let curRot = rot.rot->get;
@@ -507,8 +510,24 @@ namespace JEEditor::Editor::WorldEditorViewport
         // ---- 平移（右键/中键拖拽）----
         if (self.m_is_pan_active)
         {
+            // 内容跟手：一像素对应的世界长度 = 纵向可视全高（2 *
+            // ORTHO_PROJECTION_RATIO(5) / scale，scale 越大画面越放大）
+            // 除以视口像素高度。视口矩形未知/退化时回退 1000px 标定
+            //（10/1000 与原 CAMERA_PAN_SENSITIVITY 手感一致）。
+            let mut view_h_px = 1000.;
+            match (viewport_rect)
+            {
+                none?;
+                value((rect_min, rect_max))?
+                {
+                    let h = rect_max.1 - rect_min.1;
+                    if (h > 1.)
+                        view_h_px = h;
+                }
+            }
+
             let scale = ortho.scale->get;
-            let panFactor = scale * CAMERA_PAN_SENSITIVITY;
+            let panFactor = 10. / scale / view_h_px;
             // 与透视平移同向：内容跟随鼠标移动
             newPos = newPos + right * (-mdx * panFactor);
             newPos = newPos - up * (-mdy * panFactor);
@@ -518,7 +537,9 @@ namespace JEEditor::Editor::WorldEditorViewport
         // ---- WASD 平移（右键按住时）----
         // 与透视模式的右键飞行对应：按住右键期间 WASD 在当前深度的
         // xOy 平面上移动（2D 模式旋转恒为 ident，right/up 即世界 X/Y 轴），
-        // 速度随正交 scale 缩放（与平移/滚轮步长同一手感），Shift 加速；
+        // 速度随正交 scale 反比缩放（scale 越大画面越放大，同 scale=1 时
+        // 约每秒 0.8 个视口高，任意缩放下屏幕相对速度恒定，与平移/滚轮
+        // 步长同一手感），Shift 加速；
         // m_rmb_press_in_viewport 在右键按住期间恒为真（松开当帧即被
         // updateViewportRightClick 清除），无需再查 IsMouseDown。
         if (self.m_rmb_press_in_viewport)
@@ -526,7 +547,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             let speed = CAMERA_MOVE_SPEED
                 * (IsKeyDown(ImGuiKey::ImGuiKey_LeftShift)
                     ? CAMERA_FAST_MOVE_MULTIPLIER | 1.)
-                * ortho.scale->get
+                / ortho.scale->get
                 * dt;
 
             let mu = (IsKeyDown(ImGuiKey::ImGuiKey_W) ? 1. | 0.)
@@ -549,9 +570,9 @@ namespace JEEditor::Editor::WorldEditorViewport
             if (IsKeyDown(ImGuiKey::ImGuiMod_Ctrl))
             {
                 // Ctrl+滚轮调整摄像机深度（LocalPosition 的 z 轴），
-                // 步长随当前缩放比例缩放，与平移保持同一手感
+                // 步长随当前缩放比例反比缩放（放大后细调），与平移保持同一手感
                 newPos = (newPos[0], newPos[1], newPos[2]
-                    + wv * ORTHO_WHEEL_Z_STEP * scale) as vec3;
+                    + wv * ORTHO_WHEEL_Z_STEP / scale) as vec3;
                 moved = true;
             }
             else
