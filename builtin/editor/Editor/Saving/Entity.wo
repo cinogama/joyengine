@@ -10,11 +10,13 @@ import pkg::toml;
 import pkg::try;
 
 import builtin::gaming::Saving::Entity;
+import builtin::editor::GUI::Forms::MsgBox;
 import builtin::editor::Editor::ResourcePath;
 
 using je;
 using toml;
 using JEEditor::Editor;
+using JEEditor::GUI::Forms;
 
 namespace JEEditor::Saving::Entity
 {
@@ -162,6 +164,114 @@ namespace JEEditor::Saving::Entity
                 }
             }
         }
+    }
+
+    // 把实体与预设体共有组件的成员值合并进预设体数据 prefab_dat：
+    // 只覆盖 prefab_dat 已有组件中实体侧记录的成员，不新增/移除组件，
+    // 也不删除成员。实体侧数据来自 _prefab_full：Transform 三组件与
+    // Anchor 在其中被抹成空表，空表没有可合并的成员，预设体里这些
+    // 组件的记录原样保留（预设体不固化局部变换，与 update_prefab 的
+    // 抹除约定一致）。
+    func _merge_shared_component_values(prefab_dat: Toml, entity_dat: Toml)
+    {
+        match (prefab_dat->get("components"))
+        {
+            none?;
+            value(prefab_components)?
+                match (entity_dat->get("components"))
+                {
+                    none?;
+                    value(entity_components)?
+                        for (let (ctype, ecomp_dat) : entity_components->as_table->or({}))
+                        {
+                            match (prefab_components->get(ctype))
+                            {
+                                none?;
+                                value(pcomp_dat)?
+                                    for (let (mname, mval) : ecomp_dat->as_table->or({}))
+                                        pcomp_dat->set(mname, mval);
+                            }
+                        }
+                }
+        }
+    }
+
+    // 更新数据到预设（检视面板右键「更新数据到预设」）：不改变直属
+    // 预设体文件的组件配置——不新增/移除组件（实体独有的组件不写入
+    // 预设体，预设体独有的组件原样保留），名称/贴图/着色器/模型也
+    // 不动，仅把双方共有组件的成员值更新为实体当前值。共有性按变体
+    // 展开后的完整数据判定：直属文件是变体（原始内容带 "prefab" 键，
+    // 判定方式同 update_prefab）时，以展开后的完整数据为基底合并，
+    // 再与父预设体重新做差异、保持 "prefab" 键，只重写直属文件本体，
+    // 不修改父预设体。基底不可读（直属文件无法解析或父预设体无法
+    // 读取）时弹窗报错并返回 none；实体未挂预设体时 logerr 并返回
+    // none。
+    public func update_prefab_data(e: entity)=> option<Toml>
+    {
+        let prefab_path = e->internal::get_prefab_path()->or("");
+        if (prefab_path->len == 0)
+        {
+            logerr("更新数据到预设：实体未挂预设体");
+            return option::none;
+        }
+
+        // 直属文件的原始内容：变体判定与共有组件判定都以它为基准
+        //（load 会递归展开变体链并抹掉 "prefab" 键，不能直接用，同
+        // update_prefab）
+        let raw_may = try!{
+            try! content = file::readall(prefab_path);
+            try! raw_dat = parse(content)->okay;
+
+            return_value! raw_dat;
+        };
+
+        if (raw_may->is_none)
+        {
+            MsgBox::err("更新数据到预设",
+                F"无法读取预设体 \"{prefab_path}\"，更新中止");
+            return option::none;
+        }
+        let raw_dat = raw_may->unwrap;
+        let entity_dat = _prefab_full(e);
+
+        // 非变体：直属文件本身就是完整数据，直接在其上合并共有组件值
+        let parent_path_may = raw_dat->get("prefab")=>> \v = v->as_string;;
+        if (parent_path_may->is_none)
+        {
+            _merge_shared_component_values(raw_dat, entity_dat);
+            return option::value(raw_dat);
+        }
+
+        // 变体：只更新直属文件本体。父预设体不可读时无法计算差异，
+        // 弹窗报错并中止（不做降级写盘，避免静默丢失部分更新）
+        let parent_path = parent_path_may->unwrap;
+        let parent_dat_may = JEGaming::Saving::Entity::load(parent_path);
+        if (parent_dat_may->is_none)
+        {
+            MsgBox::err("更新数据到预设",
+                F"无法读取父预设体 \"{parent_path}\"，变体 \"{prefab_path}\" 的更新中止");
+            return option::none;
+        }
+
+        // 基底取「直属预设体按变体展开后的完整数据」（父预设体 + 直属
+        // 差异），与上面的父预设体数据各自独立加载：Toml 的 get 取到的
+        // 是内部表的引用，共享同一棵树会让合并成员时写穿差异基准
+        let merged_may = JEGaming::Saving::Entity::load(prefab_path);
+        if (merged_may->is_none)
+        {
+            MsgBox::err("更新数据到预设",
+                F"无法展开预设体 \"{prefab_path}\"，更新中止");
+            return option::none;
+        }
+
+        let merged = merged_may->unwrap;
+        _merge_shared_component_values(merged, entity_dat);
+
+        // 与父预设体重新做差异、保持变体关系（同 update_prefab）
+        let diff_dat =
+            JEGaming::Saving::Entity::diff(merged, parent_dat_may->unwrap);
+        diff_dat->set("prefab", parent_path);
+        return option::value(diff_dat);
     }
 
     public func restore(w: world, edat: Toml)=> entity

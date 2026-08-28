@@ -15,6 +15,7 @@ import builtin::gaming::Saving::Entity;
 
 import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Forms::MsgBox;
+import builtin::editor::GUI::Forms::AskBox;
 import builtin::editor::Editor::Saving::Entity;
 
 import Browser;
@@ -469,7 +470,8 @@ namespace JEEditor::Editor
                     }
             }
         }
-        // 更新到预设：把实体当前数据写回直属预设体文件。直属预设体
+        // 更新全部组件到预设（右键菜单项，经 confirmUpdateAllToPrefab
+        // 弹窗确认后调用）：把实体当前数据写回直属预设体文件。直属预设体
         // 自身是其他预设体的变体时只更新直属文件本体、保持其与父
         // 预设体的差异关系（不修改父预设体），见 JEEditor::Saving::
         // Entity 的 update_prefab。纯文件写盘不产生 Action（与拖拽
@@ -483,6 +485,60 @@ namespace JEEditor::Editor
             {
                 none?
                     logerr("更新到预设：实体未挂预设体");
+                value(dat)?
+                {
+                    let path = e->internal::get_prefab_path->unwrap;
+                    match (toml::save(
+                        dat, ResourcePath::toLocalResourcePath(path)))
+                    {
+                        err(msg)?
+                            MsgBox::err("更新失败",
+                                F"更新预设体 \"{path}\" 失败：{msg}");
+                        ok(_)?;
+                    }
+                }
+            }
+        }
+        // 「更新全部组件到预设」的确认：覆盖式更新会替换预设体文件的
+        // 全部内容且不可撤销，先经 AskBox 向用户确认。确认回调在未来帧
+        // 触发，不能捕获实体句柄（跨帧只持 EUID），确认当帧经视口反查
+        // 实体；视口已关闭或实体已不存在则报错取消，与拖拽实体生成
+        // 预设体的保存流程一致。
+        func confirmUpdateAllToPrefab(
+            wctx: WorldEditorViewport, e: entity, prefab_path: string)=> void
+        {
+            let confirm_wctx = wctx;
+            let confirm_euid = e->internal::get_entity_uid->unwrap;
+            let confirm_text = F"确认将实体 \"{e->internal::name}\" 的全部组件与数值覆盖写入预设体 \"{prefab_path}\" 吗？\n预设体现有内容将被替换，此操作不可撤销。";
+
+            do AskBox::show("更新到预设", confirm_text)
+                ->onYes(func() {
+                        match (confirm_wctx->findListedEntityByEuid(confirm_euid))
+                        {
+                            none?
+                                MsgBox::err("更新失败",
+                                    "目标实体已不存在，预设体更新已取消");
+                            value(cur_e)?
+                                updatePrefabFromEntity(cur_e);
+                        }
+                    })
+                ;
+        }
+        // 更新数据到预设：不改变预设体文件的组件配置（不新增/移除组件，
+        // 名称/贴图/着色器/模型也不动），仅把实体与预设体共有组件的
+        // 成员值写回直属预设体文件；直属预设体是其他预设体的变体时只
+        // 重写直属文件本体、保持其与父预设体的差异关系（不修改父预设
+        // 体），见 JEEditor::Saving::Entity 的 update_prefab_data。纯
+        // 文件写盘不产生 Action（与更新全部组件一致）；基底不可读等
+        // 失败已在 update_prefab_data 内弹窗报告，此处对 none 不再
+        // 重复提示；写盘失败弹窗报错。
+        func updatePrefabDataFromEntity(e: entity)=> void
+        {
+            EditSession::commit();
+
+            match (JEEditor::Saving::Entity::update_prefab_data(e))
+            {
+                none?;
                 value(dat)?
                 {
                     let path = e->internal::get_prefab_path->unwrap;
@@ -606,8 +662,14 @@ namespace JEEditor::Editor
                         PopStyleColor(1);
                         if (BeginPopupContextItemLabel(label))
                         {
-                            if (MenuItem("更新到预设"))
-                                updatePrefabFromEntity(e);
+                            if (MenuItem("更新全部组件到预设"))
+                                confirmUpdateAllToPrefab(wctx, e, ref.m_path);
+                            // 预设体文件不可读时没有可保守合并的基底，
+                            // 仅数据更新不可用（全部更新会覆盖重建该
+                            // 文件，仍可用）
+                            BeginDisabled(true);
+                            do MenuItem("更新数据到预设");
+                            EndDisabled();
                             if (MenuItem("解除预设"))
                                 unlinkPrefabFromEntity(wctx, e);
                             defer EndPopup();
@@ -624,8 +686,10 @@ namespace JEEditor::Editor
                             do SetTooltip(F"{ref.m_path}\n点击在资源管理器中定位，右键更新到预设/解除预设");
                         if (BeginPopupContextItemLabel(label))
                         {
-                            if (MenuItem("更新到预设"))
-                                updatePrefabFromEntity(e);
+                            if (MenuItem("更新全部组件到预设"))
+                                confirmUpdateAllToPrefab(wctx, e, ref.m_path);
+                            if (MenuItem("更新数据到预设"))
+                                updatePrefabDataFromEntity(e);
                             if (MenuItem("解除预设"))
                                 unlinkPrefabFromEntity(wctx, e);
                             defer EndPopup();
