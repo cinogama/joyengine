@@ -1,0 +1,206 @@
+import woo::std;
+
+import je;
+import je::ecs;
+import je::internal;
+import je::towoo::components;
+
+import pkg::toml;
+import pkg::try;
+
+import builtin::gaming::Saving::Entity;
+
+import WorldEditorViewport;
+import Action::SyncPrefabInstances;
+
+using je;
+using toml;
+using JEEditor::Editor::Action;
+
+namespace JEEditor::Editor::PrefabSync
+{
+    // 预设体更新同步的上下文：m_updated_path 为被更新的预设体路径
+    //（@/ 运行时形式）；m_old_expanded 记录写盘前各命中直属预设体
+    // 按变体链展开后的完整数据（键为直属路径的小写形式），供
+    // commitSync 计算实例改写补丁
+    using PrefabSyncContext = struct{
+        m_updated_path: string,
+        m_old_expanded: map<string, Toml>,
+    };
+        // 链上是否含目标：p 自身或任一祖先（沿文件原始内容的 "prefab"
+        // 键上溯；load 会递归展开并抹掉该键，不能用）与目标路径相同
+        //（不区分大小写，与 save_prefab 的比对约定一致）。带访问集与
+        // 深度上限，防坏数据成环死循环
+        func _chainContains(p: string, target_lower: string)=> bool
+        {
+            let visited = {}mut: map<string, bool>;
+            let mut cur = p;
+            let mut depth = 0;
+            while (depth < 32)
+            {
+                let cur_lower = cur->lower;
+                if (cur_lower == target_lower)
+                    return true;
+                if (visited->map::contains(cur_lower))
+                    return false;
+                visited->map::set(cur_lower, true);
+
+                let parent_may = try!{
+                    try! content = file::readall(cur);
+                    try! dat = parse(content)->okay;
+                    try! parent_path =
+                        dat->get("prefab")=>> \v = v->as_string;;
+
+                    return_value! parent_path;
+                };
+
+                match (parent_may)
+                {
+                    // 不可读/非变体：链到头
+                    none? return false;
+                    value(parent)? cur = parent;
+                }
+                depth += 1;
+            }
+            return false;
+        }
+
+        // 收集视口内所有挂 Editor::Prefab 且路径非空的实体与直属路径。
+        // 用「contains(Editor::Prefab)」的临时选择器而非视口的实体列表
+        // 选择器：后者排除 Editor::Invisible，会漏掉被隐藏的实例；先
+        // 收集再改动，不在选择器迭代中增删组件
+        func _collectPrefabEntities(
+            vp: WorldEditorViewport)=> array<(entity, string)>
+        {
+            let result = []mut: vec<(entity, string)>;
+            let selector = vp->getWorld()->create_selector(
+                [requirement::contains(Editor::Prefab::type::typeinfo)]);
+            for (let e : selector)
+            {
+                let prefab_path = e->internal::get_prefab_path->or("");
+                if (prefab_path->len == 0)
+                    continue;
+                result->vec::add((e, prefab_path));
+            }
+            return result->vec::to_array;
+        }
+
+        // 开始一次预设体同步：必须在预设体文件写盘之前调用——旧展开
+        // 数据快照依赖写盘前的文件内容。遍历所有视口，把直属路径在
+        // 目标变体链上的实体登记进上下文（按直属路径去重快照）；直属
+        // 文件不可读的路径不登记，其实例不参与本次同步
+        public func beginSync(updated_path: string)=> PrefabSyncContext
+        {
+            let target_lower = updated_path->lower;
+            let ctx = PrefabSyncContext{
+                m_updated_path = updated_path,
+                m_old_expanded = {}mut: map<string, Toml>,
+            };
+
+            for (let vp : WorldEditorViewport::getAllViewports())
+            {
+                for (let (_, prefab_path) : _collectPrefabEntities(vp))
+                {
+                    if (!_chainContains(prefab_path, target_lower))
+                        continue;
+
+                    let key = prefab_path->lower;
+                    if (ctx.m_old_expanded->map::contains(key))
+                        continue;
+
+                    match (JEGaming::Saving::Entity::load(prefab_path))
+                    {
+                        none?
+                            logerr(F"同步预设体实例：无法读取 \"{prefab_path}\"，其实例不参与本次同步");
+                        value(dat)?
+                            ctx.m_old_expanded->map::set(key, dat);
+                    }
+                }
+            }
+            return ctx;
+        }
+
+        // 提交同步：预设体文件写盘成功后当帧调用（实体尚未被改动，
+        // 实际落实由各视口的 Practice 下帧执行 redo）。对每个命中的
+        // 直属路径重新 load（已含新数据），逐实例计算改写补丁
+        // diff(实例当前, 旧展开) 并套到新展开数据上——非改写成员跟随
+        // 预设体新值、改写保留（名称与局部变换随补丁保留）；按视口
+        // 分组提交可撤销的 SyncPrefabInstances：撤销回滚该视口的实例
+        // 数据、不影响预设体文件，重做套回新数据
+        public func commitSync(ctx: PrefabSyncContext)=> void
+        {
+            let target_lower = ctx.m_updated_path->lower;
+
+            // 新展开数据按直属路径缓存；同一直属路径的多实例共享同一
+            // 份，套补丁前必须 clone，防 apply 写穿共享树
+            let new_expanded = {}mut: map<string, Toml>;
+
+            for (let vp : WorldEditorViewport::getAllViewports())
+            {
+                let records = []mut: vec<PrefabSyncRecord>;
+
+                for (let (e, prefab_path) : _collectPrefabEntities(vp))
+                {
+                    if (!_chainContains(prefab_path, target_lower))
+                        continue;
+
+                    let key = prefab_path->lower;
+                    match (ctx.m_old_expanded->map::get(key))
+                    {
+                        // beginSync 时不可读、未登记的直属路径：跳过
+                        none?;
+                        value(old_dat)?
+                        {
+                            if (!new_expanded->map::contains(key))
+                            {
+                                match (JEGaming::Saving::Entity::load(
+                                        prefab_path))
+                                {
+                                    none?
+                                        logerr(F"同步预设体实例：无法读取 \"{prefab_path}\"，其实例不参与本次同步");
+                                    value(dat)?
+                                        new_expanded->map::set(key, dat);
+                                }
+                            }
+
+                            match (new_expanded->map::get(key))
+                            {
+                                none?;
+                                value(new_dat)?
+                                {
+                                    // 同步前完整快照（save_full 含名称）
+                                    let before =
+                                        JEGaming::Saving::Entity::save_full(e);
+
+                                    // 新展开数据 + 实例改写补丁
+                                    let patch = JEGaming::Saving::Entity::diff(
+                                        before, old_dat);
+                                    let after = new_dat->clone();
+                                    JEGaming::Saving::Entity::apply(
+                                        after, patch);
+
+                                    match (e->internal::get_entity_uid)
+                                    {
+                                        // 没有 EUID 的实体无法支持撤销，跳过
+                                        none?
+                                            logerr(F"同步预设体实例：实体 \"{e->internal::name}\" 没有 EUID，不参与本次同步");
+                                        value(euid)?
+                                            records->vec::add(
+                                                PrefabSyncRecord{
+                                                    m_euid = euid,
+                                                    m_before = before,
+                                                    m_after = after,
+                                                });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (records->len > 0)
+                    vp->doAction(SyncPrefabInstances::create(
+                        records->vec::to_array));
+        }
+    }
+}

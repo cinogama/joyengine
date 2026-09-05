@@ -23,6 +23,7 @@ import WorldEditorViewport;
 import EditSession;
 import ComponentPresets;
 import ResourcePath;
+import PrefabSync;
 import Action::AddComponent;
 import Action::DestroyEntity;
 import Action::ModifyPrefab;
@@ -40,6 +41,7 @@ using JEEditor::GUI::Forms;
 using JEEditor::Editor::EditSession;
 using JEEditor::Editor::Action;
 using JEEditor::Editor::ComponentPresets;
+using JEEditor::Editor::PrefabSync;
 using JEEditor::Editor::ResourcePath;
 
 namespace JEEditor::Editor
@@ -474,13 +476,15 @@ namespace JEEditor::Editor
         // 弹窗确认后调用）：把实体当前数据写回直属预设体文件。直属预设体
         // 自身是其他预设体的变体时只更新直属文件本体、保持其与父
         // 预设体的差异关系（不修改父预设体），见 JEEditor::Saving::
-        // Entity 的 update_prefab。纯文件写盘不产生 Action（与拖拽
-        // 生成预设体一致）；实体的挂载关系不变，差异高亮随预设体
-        // 缓存按文件 mtime 自动刷新；写盘失败弹窗报错。
+        // Entity 的 update_prefab。文件写盘本身不产生 Action（与拖拽
+        // 生成预设体一致）；写盘成功后经 PrefabSync 同步所有场景中的
+        // 同源实例（含变体链，按视口提交可撤销的 SyncPrefabInstances，
+        // 撤销回滚实例数据、不动预设体文件）；实体的挂载关系不变，
+        // 差异高亮随预设体缓存按文件 mtime 自动刷新；写盘失败弹窗报错。
         func updatePrefabFromEntity(e: entity)=> void
         {
             EditSession::commit();
-            
+
             match (JEEditor::Saving::Entity::update_prefab(e))
             {
                 none?
@@ -488,13 +492,16 @@ namespace JEEditor::Editor
                 value(dat)?
                 {
                     let path = e->internal::get_prefab_path->unwrap;
+                    // 写盘前快照同源实例直属预设体的旧展开数据
+                    let sync_ctx = PrefabSync::beginSync(path);
                     match (toml::save(
                             dat, ResourcePath::toLocalResourcePath(path)))
                     {
                         err(msg)?
                             MsgBox::err("更新失败",
                                 F"更新预设体 \"{path}\" 失败：{msg}");
-                        ok(_)?;
+                        ok(_)?
+                            PrefabSync::commitSync(sync_ctx);
                     }
                 }
             }
@@ -509,7 +516,7 @@ namespace JEEditor::Editor
         {
             let confirm_wctx = wctx;
             let confirm_euid = e->internal::get_entity_uid->unwrap;
-            let confirm_text = F"确认将实体 \"{e->internal::name}\" 的全部组件与数值覆盖写入预设体 \"{prefab_path}\" 吗？\n预设体现有内容将被替换，此操作不可撤销。";
+            let confirm_text = F"确认将实体 \"{e->internal::name}\" 的全部组件与数值覆盖写入预设体 \"{prefab_path}\" 吗？\n预设体现有内容将被替换，文件写入不可撤销。\n写盘后各场景中的同源预设体实例（含变体实例）将同步更新；实例改动可在所属世界视口内撤销（撤销只回滚实例数据，不影响预设体文件）。";
             
             do AskBox::show("更新到预设", confirm_text)
                 ->onYes(func() {
@@ -528,27 +535,32 @@ namespace JEEditor::Editor
         // 名称/贴图/着色器/模型也不动），仅把实体与预设体共有组件的
         // 成员值写回直属预设体文件；直属预设体是其他预设体的变体时只
         // 重写直属文件本体、保持其与父预设体的差异关系（不修改父预设
-        // 体），见 JEEditor::Saving::Entity 的 update_prefab_data。纯
-        // 文件写盘不产生 Action（与更新全部组件一致）；基底不可读等
-        // 失败已在 update_prefab_data 内弹窗报告，此处对 none 不再
-        // 重复提示；写盘失败弹窗报错。
+        // 体），见 JEEditor::Saving::Entity 的 update_prefab_data。文件
+        // 写盘本身不产生 Action（与更新全部组件一致）；写盘成功后经
+        // PrefabSync 同步所有场景中的同源实例（含变体链，按视口提交
+        // 可撤销的 SyncPrefabInstances）；基底不可读等失败已在
+        // update_prefab_data 内弹窗报告，此处对 none 不再重复提示；
+        // 写盘失败弹窗报错。
         func updatePrefabDataFromEntity(e: entity)=> void
         {
             EditSession::commit();
-            
+
             match (JEEditor::Saving::Entity::update_prefab_data(e))
             {
                 none?;
                 value(dat)?
                 {
                     let path = e->internal::get_prefab_path->unwrap;
+                    // 写盘前快照同源实例直属预设体的旧展开数据
+                    let sync_ctx = PrefabSync::beginSync(path);
                     match (toml::save(
                             dat, ResourcePath::toLocalResourcePath(path)))
                     {
                         err(msg)?
                             MsgBox::err("更新失败",
                                 F"更新预设体 \"{path}\" 失败：{msg}");
-                        ok(_)?;
+                        ok(_)?
+                            PrefabSync::commitSync(sync_ctx);
                     }
                 }
             }

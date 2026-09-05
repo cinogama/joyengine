@@ -1,0 +1,102 @@
+import woo::std;
+
+import je;
+import je::ecs;
+import je::internal;
+import je::towoo::components;
+
+import pkg::toml;
+import pkg::interface;
+
+import builtin::gaming::Saving::Entity;
+
+import builtin::editor::Editor::WorldEditorViewport;
+
+import IAction;
+
+using je;
+using toml;
+
+namespace JEEditor::Editor::Action
+{
+    // 单个实例的同步记录：m_before/m_after 为同步前后的完整数据快照
+    //（save_full + name 的形态，含贴图/着色器/模型）；PrefabSync 模块
+    // 跨模块构造，类型与字段均需 public
+    public using PrefabSyncRecord = struct{
+        public m_euid: entity::internal::euid_t,
+        public m_before: Toml,
+        public m_after: Toml,
+    };
+
+    // 预设体更新后同步同源实例（JEEditor::Editor::PrefabSync 的
+    // commitSync 按视口分组提交）。redo/undo 用固化的前后快照经
+    // JEGaming::Saving::Entity::refresh 就地迁移实体数据，不依赖预设体
+    // 文件的当前状态——撤销只回滚实例数据（组件/成员值/贴图/着色器/
+    // 模型/名称），预设体文件保持更新后的内容；重做再套回新数据。
+    // 记录各自入所在视口的编辑历史（Practice），撤销粒度即视口粒度。
+    protected using SyncPrefabInstances = struct{
+        m_records: array<PrefabSyncRecord>,
+    }
+    {
+        public func create(
+            records: array<PrefabSyncRecord>)=> SyncPrefabInstances
+            where require!(SyncPrefabInstances: IAction);
+        {
+            return SyncPrefabInstances{
+                m_records = records,
+            };
+        }
+
+        // 把记录的实体迁移到指定侧：refresh(old=对侧, new=本侧)。
+        // 反查用「挂 Editor::Prefab」的临时选择器——视口的实体列表选择器
+        // 排除 Editor::Invisible，会漏掉被隐藏的实例导致撤销失败；实体
+        // 已不存在（被销毁）时自然匹配不到，跳过即可，幂等成功
+        func applySide(
+            self: SyncPrefabInstances,
+            w: WorldEditorViewport,
+            to_after: bool)=> bool
+        {
+            let selector = w->getWorld()->create_selector(
+                [requirement::contains(Editor::Prefab::type::typeinfo)]);
+
+            for (let e : selector)
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(euid)?
+                        for (let record : self.m_records)
+                        {
+                            if (record.m_euid != euid)
+                                continue;
+
+                            if (to_after)
+                                JEGaming::Saving::Entity::refresh(
+                                    w->getWorld(), e,
+                                    record.m_before, record.m_after);
+                            else
+                                JEGaming::Saving::Entity::refresh(
+                                    w->getWorld(), e,
+                                    record.m_after, record.m_before);
+                        }
+                }
+            }
+            return true;
+        }
+
+        public func redo(
+            self: SyncPrefabInstances, w: WorldEditorViewport)=> bool
+        {
+            return self->applySide(w, true);
+        }
+        public func undo(
+            self: SyncPrefabInstances, w: WorldEditorViewport)=> bool
+        {
+            return self->applySide(w, false);
+        }
+        public func describe(self: SyncPrefabInstances)=> string
+        {
+            return F"同步预设体实例 ×{self.m_records->len}";
+        }
+    }
+}

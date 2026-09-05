@@ -654,6 +654,211 @@ namespace JEGaming::Saving::Entity
         return toml;
     }
     
+    // 贴图序列化表中是否记录了指定路径（任意通道）
+    func _texture_paths_contains(
+        textures_dat: dict<string, Toml>, path: string)=> bool
+    {
+        for (let (_, tpath) : textures_dat)
+        {
+            if (tpath->as_string->or("") == path)
+                return true;
+        }
+        return false;
+    }
+
+    // 按序列化数据重建实体的着色器组：逐条 shader::load 并回填 uniforms，
+    // 整组 set_shaders；加载失败的条目跳过（restore 与 refresh 共用）
+    func _apply_shaders_dat(
+        e: entity, universe: option<universe>,
+        shaders_dat: array<Toml>)=> void
+    {
+        let shaders = []mut: vec<shader>;
+        for (let sdat : shaders_dat)
+        {
+            do try!{
+                try! shader_path = sdat->get("path")=>> \v = v->as_string;;
+                try! sinst = shader::load(universe, shader_path);
+
+                for (let (uname, uval) : sdat->as_table->or({}))
+                {
+                    if (uval->is_int)
+                        sinst->set_uniform(uname, uval->as_int->unwrap);
+                    else if (uval->is_float)
+                        sinst->set_uniform(uname, uval->as_float->unwrap);
+                    else if (uval->is_array)
+                    {
+                        let cnt = uval->len;
+                        if (cnt == 2 || cnt == 3 || cnt == 4)
+                        {
+                            if (uval[0]->is_int)
+                            {
+                                if (cnt == 2)
+                                    sinst->set_uniform(uname, (uval[0]->as_int->unwrap, uval[1]->as_int->unwrap));
+                                else if (cnt == 3)
+                                    sinst->set_uniform(uname, (uval[0]->as_int->unwrap, uval[1]->as_int->unwrap, uval[2]->as_int->unwrap));
+                                else
+                                    sinst->set_uniform(uname, (uval[0]->as_int->unwrap, uval[1]->as_int->unwrap, uval[2]->as_int->unwrap, uval[3]->as_int->unwrap));
+                            }
+                            else
+                            {
+                                if (cnt == 2)
+                                    sinst->set_uniform(uname, (uval[0]->as_float->unwrap, uval[1]->as_float->unwrap));
+                                else if (cnt == 3)
+                                    sinst->set_uniform(uname, (uval[0]->as_float->unwrap, uval[1]->as_float->unwrap, uval[2]->as_float->unwrap));
+                                else
+                                    sinst->set_uniform(uname, (uval[0]->as_float->unwrap, uval[1]->as_float->unwrap, uval[2]->as_float->unwrap, uval[3]->as_float->unwrap));
+                            }
+                        }
+                    }
+                }
+
+                shaders->vec::add(sinst);
+                return_value!;
+            };
+        }
+
+        e->set_shaders(shaders->vec::to_array());
+    }
+
+    // 把组件成员的序列化值逐条写回组件实例（数据未记录的成员保持现值，
+    // 无法解析的成员跳过）；restore 与 refresh 共用
+    func _apply_component_dat(cinst: component, cdat: Toml)=> void
+    {
+        for (let (mname, mdat) : cdat->as_table->or({}))
+        {
+            do try!{
+                try! mdata = mdat->as_string;
+                try! (mtype, minst) = cinst->get_member(mname);
+
+                do towoo::unsafe::dynamic_parser::restore(
+                    mtype, minst, mdata);
+                return_value!;
+            };
+        }
+    }
+
+    // 就地把既有实体从 old_dat 描述的状态迁移到 new_dat 描述的状态
+    //（预设体实例同步的 redo/undo 共用，两个方向对称）：
+    // - 名称按 new_dat 设置；
+    // - 组件：new_dat 记录的组件实体缺失则补建（add_component 返回的
+    //   暂存实例同帧即可写入成员），再逐成员回填；old_dat 有、new_dat
+    //   无、实体身上还在的组件移除（预设体更新后遗留的旧组件）；
+    // - 贴图：当前绑定中路径属于 old_dat 记录且 new_dat 不再记录的
+    //   通道解绑，再按 new_dat 绑定（加载失败保持旧绑定）；
+    // - 着色器：按 new_dat 整组重建（_apply_shaders_dat）；
+    // - 模型：new_dat 有则设置；old_dat 有、new_dat 无且实体当前有则
+    //   移除。
+    // 序列化数据不含 Editor:: 组件，移除判定不会波及编辑器内部组件；
+    // 与 restore 一致，无路径的 builtin 着色器/模型不参与序列化。
+    public func refresh(w: world, e: entity, old_dat: Toml, new_dat: Toml)=> void
+    {
+        let universe = option::value(w->get_universe);
+
+        // 1. Name.
+        match (new_dat->get("name")=>> \v = v->as_string;)
+        {
+            none?;
+            value(name)?
+                e->internal::set_name(name);
+        }
+
+        // 2. Components.
+        let new_components =
+            new_dat->get("components")=>> \v = v->as_table;->or({});
+        let old_components =
+            old_dat->get("components")=>> \v = v->as_table;->or({});
+
+        for (let (ctype_name, cdat) : new_components)
+        {
+            match (typeinfo::load(ctype_name))
+            {
+                none?
+                    logerr(F"刷新实体：无法解析组件类型 \"{ctype_name}\"");
+                value(ctype)?
+                    match (e->get_component(ctype))
+                    {
+                        // 已有组件就地写成员；缺失组件走 add_component
+                        // 返回的暂存实例（命令缓冲未落实前 get_component
+                        // 查不到，见 ModifyPrefab 的说明）
+                        value(cinst)?
+                            _apply_component_dat(cinst, cdat);
+                        none?
+                            _apply_component_dat(
+                                e->add_component(ctype), cdat);
+                    }
+            }
+        }
+
+        for (let (ctype_name, _) : old_components)
+        {
+            if (!new_components->contains(ctype_name))
+            {
+                match (typeinfo::load(ctype_name))
+                {
+                    none?;
+                    value(ctype)?
+                        if (e->get_component(ctype)->is_value)
+                            do e->remove_component(ctype);
+                }
+            }
+        }
+
+        // 3. Textures.
+        let new_textures =
+            new_dat->get("textures")=>> \v = v->as_table;->or({});
+        let old_textures =
+            old_dat->get("textures")=>> \v = v->as_table;->or({});
+
+        for (let (tpass, tinst) : e->get_textures)
+        {
+            match (tinst->path)
+            {
+                none?;
+                value(path)?
+                    if (_texture_paths_contains(old_textures, path)
+                        && !_texture_paths_contains(new_textures, path))
+                        e->bind_texture(
+                            tpass, option::none: option<texture>);
+            }
+        }
+        for (let (tpass, tpath) : new_textures)
+        {
+            do try!{
+                try! texture_path = tpath->as_string;
+
+                match (texture::load(universe, texture_path))
+                {
+                    // 加载失败保持旧绑定
+                    none?;
+                    value(tex)?
+                        e->bind_texture(
+                            tpass as int, option::value(tex));
+                }
+                return_value!;
+            };
+        }
+
+        // 4. Shaders.
+        _apply_shaders_dat(
+            e, universe,
+            new_dat->get("shaders")=>> \v = v->as_array;->or([]));
+
+        // 5. Shape.
+        match (new_dat->get("shape")=>> \v = v->as_string;)
+        {
+            value(shape_path)?
+                e->set_shape(vertex::load(universe, shape_path));
+            none?
+                match (old_dat->get("shape")=>> \v = v->as_string;)
+                {
+                    none?;
+                    value(_)?
+                        if (e->get_shape->is_value)
+                            e->set_shape(option::none: option<vertex>);
+                }
+        }
+    }
+
     public func restore(w: world, edat: Toml)=> entity
     {
         let component_dats =
@@ -719,54 +924,9 @@ namespace JEGaming::Saving::Entity
         }
 
         // Apply shaders.
-        let shaders = []mut: vec<shader>;
-        let shaders_dat = edat->get("shaders")=>> \v = v->as_array;->or([]);
-        
-        for (let sdat : shaders_dat)
-        {
-            do try!{
-                try! shader_path = sdat->get("path")=>> \v = v->as_string;;
-                try! sinst = shader::load(universe, shader_path);
-                
-                for (let (uname, uval) : sdat->as_table->or({}))
-                {
-                    if (uval->is_int)
-                        sinst->set_uniform(uname, uval->as_int->unwrap);
-                    else if (uval->is_float)
-                        sinst->set_uniform(uname, uval->as_float->unwrap);
-                    else if (uval->is_array)
-                    {
-                        let cnt = uval->len;
-                        if (cnt == 2 || cnt == 3 || cnt == 4)
-                        {
-                            if (uval[0]->is_int)
-                            {
-                                if (cnt == 2)
-                                    sinst->set_uniform(uname, (uval[0]->as_int->unwrap, uval[1]->as_int->unwrap));
-                                else if (cnt == 3)
-                                    sinst->set_uniform(uname, (uval[0]->as_int->unwrap, uval[1]->as_int->unwrap, uval[2]->as_int->unwrap));
-                                else
-                                    sinst->set_uniform(uname, (uval[0]->as_int->unwrap, uval[1]->as_int->unwrap, uval[2]->as_int->unwrap, uval[3]->as_int->unwrap));
-                            }
-                            else
-                            {
-                                if (cnt == 2)
-                                    sinst->set_uniform(uname, (uval[0]->as_float->unwrap, uval[1]->as_float->unwrap));
-                                else if (cnt == 3)
-                                    sinst->set_uniform(uname, (uval[0]->as_float->unwrap, uval[1]->as_float->unwrap, uval[2]->as_float->unwrap));
-                                else
-                                    sinst->set_uniform(uname, (uval[0]->as_float->unwrap, uval[1]->as_float->unwrap, uval[2]->as_float->unwrap, uval[3]->as_float->unwrap));
-                            }
-                        }
-                    }
-                }
-                
-                shaders->vec::add(sinst);
-                return_value!;
-            };
-        }
-        
-        e->set_shaders(shaders->vec::to_array());
+        _apply_shaders_dat(
+            e, universe,
+            edat->get("shaders")=>> \v = v->as_array;->or([]));
 
         return e;
     }

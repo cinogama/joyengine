@@ -611,6 +611,15 @@ namespace JEEditor::Editor::WorldEditorViewport
         return option::none;
     }
 
+    // 所有打开的世界视口（预设体实例同步等跨视口遍历用）
+    public func getAllViewports()=> array<WorldEditorViewport>
+    {
+        let viewports = []mut: vec<WorldEditorViewport>;
+        for (let (_, viewport) : s_world_viewports)
+            viewports->vec::add(viewport);
+        return viewports->vec::to_array;
+    }
+
     public func getLastFocused()
     {
         return s_last_focusd_world_view;
