@@ -29,7 +29,7 @@ import Editor::ReplConsole;
 import Editor::PanicBox;
 import Editor::Shutdown;
 
-import Inspector::Universe;
+import Singleton::Universe;
 
 using std;
 using je;
@@ -61,7 +61,7 @@ func main()
             Editor::PanicBox::show(file, line, funcname, errcode, reason, trace););
             
     // 创建一个 Universe，之后编辑器将在这上面运行
-    let u = Inspector::Universe::UniverseCtx::instance()->getUniverse();
+    let u = Singleton::Universe::instance()->getUniverse();
     gui::register_exit_callback(func(){
             do AskBox::show(
                 "即将退出编辑器",

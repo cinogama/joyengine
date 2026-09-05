@@ -80,9 +80,9 @@ namespace JEEditor::Editor::PrefabSync
                 let prefab_path = e->internal::get_prefab_path->or("");
                 if (prefab_path->len == 0)
                     continue;
-                result->vec::add((e, prefab_path));
+                result->add((e, prefab_path));
             }
-            return result->vec::to_array;
+            return result->to_array;
         }
 
         // 开始一次预设体同步：必须在预设体文件写盘之前调用——旧展开
@@ -185,7 +185,7 @@ namespace JEEditor::Editor::PrefabSync
                                         none?
                                             logerr(F"同步预设体实例：实体 \"{e->internal::name}\" 没有 EUID，不参与本次同步");
                                         value(euid)?
-                                            records->vec::add(
+                                            records->add(
                                                 PrefabSyncRecord{
                                                     m_euid = euid,
                                                     m_before = before,
@@ -200,7 +200,7 @@ namespace JEEditor::Editor::PrefabSync
 
                 if (records->len > 0)
                     vp->doAction(SyncPrefabInstances::create(
-                        records->vec::to_array));
+                        records->to_array));
         }
     }
 }

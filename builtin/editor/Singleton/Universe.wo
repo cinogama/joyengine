@@ -2,30 +2,28 @@ import woo::std;
 
 import je::ecs;
 
-import World;
-
 using je;
 
-namespace JEEditor::Inspector::Universe
+namespace JEEditor::Singleton
 {
-    using UniverseCtx = struct{
+    using Universe = struct{
         m_universe: universe,
     }
     {
         func create()
         {
-            return UniverseCtx{
+            return Universe{
                 m_universe = universe::create(),
             };
         }
-        public func instance()=> UniverseCtx
+        public func instance()=> Universe
         {
             static let _instance = create();
             
             return _instance;
         }
 
-        public func getUniverse(self: UniverseCtx)
+        public func getUniverse(self: Universe)
         {
             return self.m_universe;
         }

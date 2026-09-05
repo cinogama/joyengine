@@ -23,7 +23,7 @@ import builtin::editor::GUI::Forms::MsgBox;
 
 import builtin::editor::Editor::Saving::World;
 
-import builtin::editor::Inspector::Universe;
+import builtin::editor::Singleton::Universe;
 
 import Definition;
 import WindowLifecycle;
@@ -80,7 +80,7 @@ namespace JEEditor::Editor::WorldEditorViewport
     public func createNewWorldToEdit()
     {
         let new_world = world::create(
-            Inspector::Universe::UniverseCtx::instance()->getUniverse());
+            Singleton::Universe::instance()->getUniverse());
 
         // Create default graphic pipe line.
         do new_world->add_system(DEFAULT_GRAPHIC_SYSTEM_TYPE);
@@ -161,7 +161,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             ok(wdat)?
             {
                 let (w, runtime_system_names) = JEEditor::Saving::World::restore(
-                    Inspector::Universe::UniverseCtx::instance()->getUniverse(),
+                    Singleton::Universe::instance()->getUniverse(),
                     wdat);
                 ensureDebugCamera(w);
                 w->set_enable(true);

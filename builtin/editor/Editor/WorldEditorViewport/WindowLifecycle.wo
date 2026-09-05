@@ -616,8 +616,8 @@ namespace JEEditor::Editor::WorldEditorViewport
     {
         let viewports = []mut: vec<WorldEditorViewport>;
         for (let (_, viewport) : s_world_viewports)
-            viewports->vec::add(viewport);
-        return viewports->vec::to_array;
+            viewports->add(viewport);
+        return viewports->to_array;
     }
 
     public func getLastFocused()

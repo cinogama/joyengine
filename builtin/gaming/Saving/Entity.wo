@@ -342,10 +342,10 @@ namespace JEGaming::Saving::Entity
         
         let epath = []mut: vec<string>;
         for (let sdat : entity_shaders_dat)
-            epath->vec::add(_shader_path(sdat));
+            epath->add(_shader_path(sdat));
         let ppath = []mut: vec<string>;
         for (let sdat : prefab_shaders_dat)
-            ppath->vec::add(_shader_path(sdat));
+            ppath->add(_shader_path(sdat));
             
         let align = _align_shaders(epath, ppath);
         
@@ -490,7 +490,7 @@ namespace JEGaming::Saving::Entity
                     for (let (tpass, tpath) : exist_textures)
                     {
                         if (tpath->as_string->or("") == path)
-                            to_remove->vec::add(tpass);
+                            to_remove->add(tpass);
                     }
                     for (let tpass : to_remove)
                         modifing_exist_dat["textures"]->erase_key(tpass);
@@ -712,12 +712,12 @@ namespace JEGaming::Saving::Entity
                     }
                 }
 
-                shaders->vec::add(sinst);
+                shaders->add(sinst);
                 return_value!;
             };
         }
 
-        e->set_shaders(shaders->vec::to_array());
+        e->set_shaders(shaders->to_array());
     }
 
     // 把组件成员的序列化值逐条写回组件实例（数据未记录的成员保持现值，
