@@ -441,6 +441,16 @@ namespace JEEditor::Editor
             return !self.m_close;
         }
         
+        func askToCreateNewFolder(self: Browser, base: path_t)=> void
+        {
+            do InputBox::show("新建文件夹", "请输入文件夹名称：", "NewFolder")
+                    ->then(func(name: string) {
+                            do mkdir(base / name);
+                            self.m_fs_dirty->set(true);
+                        })
+                    ;
+        }
+
         func drawToolbar(self: Browser)=> void
         {
             if (Button("向上"))
@@ -467,14 +477,7 @@ namespace JEEditor::Editor
             
             if (Button("新建文件夹"))
             {
-                let base = self.m_current;
-                let dirty = self.m_fs_dirty;
-                do InputBox::show("新建文件夹", "请输入文件夹名称：", "NewFolder")
-                    ->then(func(name: string) {
-                            do mkdir(base / name);
-                            dirty->set(true);
-                        })
-                    ;
+                self->askToCreateNewFolder(self.m_current);
             }
             
             SameLine();
@@ -713,18 +716,42 @@ namespace JEEditor::Editor
             }
             
             if (BeginPopupContextWindow())
-            {
-                let base = self.m_current;
-                let dirty = self.m_fs_dirty;
-                
+            {                
+                if (BeginMenu("新建"))
+                {
+                    defer EndMenu();
+
+                    if (BeginMenu("着色器"))
+                    {
+                        defer EndMenu();
+
+                        do MenuItemEnabled("基于内置着色器：", false);
+                        Separator();
+
+                        func getAllBuiltinShadersPath()
+                        {
+                            using iterator;
+
+                            let builtin_shader_path = normalize(host_path()) / "builtin" / "shader";
+                            return walk(builtin_shader_path) |> iter_result
+                                |> filter(\p = isfile(p) && extension(p)->lower == ".shader";)
+                                |> collect;
+                            ;
+                        }
+                        
+                        static let all_builtin_shaders_path = getAllBuiltinShadersPath();
+                        for (let p : all_builtin_shaders_path)
+                        {
+                            if (MenuItem(F"{purename(p)}"))
+                            {
+                                
+                            }
+                        }
+                    }
+                }
                 if (MenuItem("新建文件夹"))
                 {
-                    do InputBox::show("新建文件夹", "请输入文件夹名称：", "NewFolder")
-                        ->then(func(name: string) {
-                                do mkdir(base / name);
-                                dirty->set(true);
-                            })
-                        ;
+                    self->askToCreateNewFolder(self.m_current);
                 }
                 
                 Separator();
@@ -760,7 +787,7 @@ namespace JEEditor::Editor
                                     }
 
                                     do move(sel, new_path);
-                                    dirty->set(true);
+                                    self.m_fs_dirty->set(true);
                                 })
                             ;
                     }
@@ -773,7 +800,7 @@ namespace JEEditor::Editor
                         do AskBox::show("删除", F"确认删除 \"{sel_name}\" 吗？")
                             ->onYes(func() {
                                     do remove(target);
-                                    dirty->set(true);
+                                    self.m_fs_dirty->set(true);
                                 })
                             ;
                     }
