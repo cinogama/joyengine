@@ -17,14 +17,9 @@ import GUI::Statebar;
 import GUI::Forms::MsgBox;
 import GUI::Forms::AskBox;
 
-import Editor::Browser;
-import Editor::EntityList;
-import Editor::LogBrowser;
-import Editor::SystemList;
-import Editor::LogStatebar;
+
 import Editor::MainMenu;
-import Editor::Inspector;
-import Editor::Material;
+import Editor::LogStatebar;
 import Editor::ReplConsole;
 import Editor::PanicBox;
 import Editor::Shutdown;
@@ -44,13 +39,13 @@ func main()
 {
     // 设置当前引擎的运行时路径
     let origin_runtime_path = get_runtime_path();
-
+    
     set_runtime_path(fsys::workpath()->to_string);
     defer set_runtime_path(origin_runtime_path);
-
+    
     // 编辑器脚本退出之前清掉所有单例实例
     defer singleton::unsafe::reset_all_singleton();
-
+    
     // 载入默认的类型值编辑器
     do towoo::unsafe::dynamic_parser::update_all("!/builtin/script/types.wo")->unwrap;
     
@@ -63,22 +58,11 @@ func main()
             
     // 创建一个 Universe，之后编辑器将在这上面运行
     let u = Singleton::Universe::instance()->getUniverse();
-    gui::register_exit_callback(func(){
-            do AskBox::show(
-                "即将退出编辑器",
-                "JoyEngine 将在所有编辑器窗口关闭后退出，继续关闭？")
-                ->onYes(
-                    func()
-                    {
-                        Shutdown::editorShutdownRequest(u);
-                    });
-            return false;
-        });
         
     // 开启状态栏的引擎日志通知（WARNING/ERROR/FATAL 以图标 + 彩色文本展示）
     JEEditor::Editor::LogStatebar::start();
     defer JEEditor::Editor::LogStatebar::shutdown();
-
+    
     defer {
         u->wait();
         gui::unregister_exit_callback();
@@ -92,26 +76,13 @@ func main()
     
     // 开启状态栏
     JEEditor::GUI::Statebar::start();
-
-    // 开启主菜单
-    JEEditor::Editor::MainMenu::registerMainMenu();
     
-    // 默认启动的编辑器窗口
-    do Browser::showBrowser();
-    do EntityList::showEntityList();
-    do SystemList::showSystemList();
-    do LogBrowser::showLogBrowser();
-    do Inspector::showInspector();
-    do Material::showMaterial();
-
-    // 在其他默认窗口之后打开项目创建/打开窗口（模态），
+    // 开启主菜单
+    MainMenu::registerMainMenu();
+    
+    // 打开项目创建/打开窗口（模态），
     // 用于选择工作目录并切换 cwd。
     do Project::showProject();
-
-    // 展示第一条信息
-    JEEditor::GUI::Statebar::showState(3.) <| func(){
-        je::gui::TextDisabled(F"JoyEngine 4.X, 当前工作路径: {fsys::workpath()->to_string}");
-    };
 }
 
 main();

@@ -1124,7 +1124,7 @@ WOORT_API woort_api je_gui_image_size(void)
 
 WOORT_API woort_api je_gui_image_size_color(void)
 {
-    jeecs::basic::resource<jeecs::graphic::texture>* texture = 
+    jeecs::basic::resource<jeecs::graphic::texture>* texture =
         (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(0);
 
     jegl_bind_texture((*texture)->resource(), 0);
@@ -1723,7 +1723,8 @@ WOORT_API woort_api je_gui_register_exit_callback(void)
         return woort_ret_panic("Callback has been registered.");
 
     assert(
-        _je_gui_static_ctx._jegui_exit_callback_handler_vm == nullptr && _je_gui_static_ctx._jegui_exit_callback_function == nullptr);
+        _je_gui_static_ctx._jegui_exit_callback_handler_vm == nullptr 
+        && _je_gui_static_ctx._jegui_exit_callback_function == nullptr);
 
     _je_gui_static_ctx._jegui_exit_callback_handler_vm = woort_vm_create();
     _je_gui_static_ctx._jegui_exit_callback_function = woort_GCPin_create(1);
@@ -1734,15 +1735,14 @@ WOORT_API woort_api je_gui_register_exit_callback(void)
 }
 WOORT_API woort_api je_gui_unregister_exit_callback(void)
 {
-    if (_je_gui_static_ctx._jegui_exit_callback_handler_vm == nullptr)
-        return woort_ret_panic("Callback not found.");
+    if (_je_gui_static_ctx._jegui_exit_callback_handler_vm != nullptr)
+    {
+        woort_vm_close(_je_gui_static_ctx._jegui_exit_callback_handler_vm);
+        woort_GCPin_destroy(_je_gui_static_ctx._jegui_exit_callback_function);
 
-    woort_vm_close(_je_gui_static_ctx._jegui_exit_callback_handler_vm);
-    woort_GCPin_destroy(_je_gui_static_ctx._jegui_exit_callback_function);
-
-    _je_gui_static_ctx._jegui_exit_callback_handler_vm = nullptr;
-    _je_gui_static_ctx._jegui_exit_callback_function = nullptr;
-
+        _je_gui_static_ctx._jegui_exit_callback_handler_vm = nullptr;
+        _je_gui_static_ctx._jegui_exit_callback_function = nullptr;
+    }
     return woort_ret_void();
 }
 
@@ -2073,7 +2073,7 @@ WOORT_API woort_api je_gui_code_editor_create(void)
     text_editor->SetPalette(TextEditor::GetDarkPalette());
 
     return woort_ret_gchandle(
-        text_editor, 
+        text_editor,
         WOORT_IGNORE,
         [](void* p)
         {
@@ -2120,7 +2120,7 @@ WOORT_API woort_api je_gui_node_editor_context_create(void)
 
     ax::NodeEditor::EditorContext* ctx = ax::NodeEditor::CreateEditor(&c);
     return woort_ret_gchandle(
-        ctx, 
+        ctx,
         WOORT_IGNORE,
         [](void* p)
         {

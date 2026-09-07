@@ -30,4 +30,8 @@ namespace JEEditor::Editor::Gizmo::Shaders
     public let WORLD_GRID_2D = shader::load(
         option::none,
         "!/builtin/editor/Editor/Gizmo/Shaders/WorldGrid2D.shader");
+
+    public let EDITOR_DEFAULT_DEFER_2D_LIGHT_CAMERA_SHADER = shader::load(
+        option::none,
+        "!/builtin/shader/CameraDefer2DPass.shader");
 }

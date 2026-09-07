@@ -36,51 +36,51 @@ namespace JEEditor::Editor
 {
     protected using WorldEditorViewport = struct{
         protected m_close: mut CloseRequest,
-
+        
         protected m_world_instance: world,
-
+        
         // World context:
         protected m_name: string,
-
+        
         protected m_runtime_systems: vec<typeinfo>,
         protected m_saving_path: option<path_t>,
-
+        
         // Editor context:
         protected m_editor_walk_camera_frame_buffer: mut option<graphic::framebuffer>,
         protected m_fb_pending_size: mut ImVec2,
         protected m_fb_settle_counter: mut int,
-
+        
         protected m_selected_entity_id: mut option<entity::internal::euid_t>,
-
+        
         // 右键按下起点与“按下发生在视口内”标记：环视以起点为基准延迟到
         // 位移超过阈值后才激活；松开时用于区分“点击实体弹菜单”与“拖拽环视”。
         protected m_rmb_press_pos: mut ImVec2,
         protected m_rmb_press_in_viewport: mut bool,
-
+        
         protected m_action_history: mut Practice,
-
+        
         // Camera control state:
         protected m_debug_camera_selector: entity_selector,
         protected m_selectable_entity_selector: entity_selector,
         protected m_all_entity_selector: entity_selector,
-
+        
         // 摄像机实体（含 Translation+Projection 且不带 Invisible）选择器，
         // 其图标/视锥体 gizmo 与点击拾取均以它为准
         protected m_camera_entity_selector: entity_selector,
-
+        
         // 2D 光源实体（含 Translation 与对应光源组件且不带 Invisible）选择器：
         // 点光源图标以 Point/Range 两个选择器为准（同一图标），
         // 平行光源图标以 Parallel 选择器为准
         protected m_point_light2d_entity_selector: entity_selector,
         protected m_range_light2d_entity_selector: entity_selector,
         protected m_parallel_light2d_entity_selector: entity_selector,
-
+        
         // 锚点父实体（含 Translation+Anchor）选择器：子的
         // LocalToParent.parent_uid 指向父的 Anchor.uid；新建/粘贴实体
         // 放置到摄像机前方时用它反查父实体并换算局部坐标
         //（见 EntityPicking.wo 的 worldToLocalPos）
         protected m_anchor_parent_entity_selector: entity_selector,
-
+        
         protected m_last_time: mut real,
         protected m_is_look_active: mut bool,
         protected m_is_pan_active: mut bool,
@@ -89,18 +89,18 @@ namespace JEEditor::Editor
         protected m_orbit_distance: mut real,
         protected m_rotation_x: mut quat,
         protected m_rotation_y: mut quat,
-
+        
         // Gizmo
         protected m_gizmo_draw_branch: rendchain_branch,
-
+        
         // ---- 变换游标（操作手柄）状态 ----
         protected m_gizmo_mode: mut GizmoMode,
         protected m_gizmo_space: mut GizmoSpace,
-
+        
         protected m_gizmo_hover_handle: mut int,
         protected m_gizmo_drag_handle: mut int,
         protected m_gizmo_dragging: mut bool,
-
+        
         // 拖拽开始时捕获的快照（世界空间）：
         protected m_gizmo_drag_euid: mut entity::internal::euid_t,
         protected m_gizmo_drag_origin: mut vec3,
@@ -119,14 +119,14 @@ namespace JEEditor::Editor
         protected m_gizmo_drag_undo_component: mut string,
         protected m_gizmo_drag_undo_member: mut string,
         protected m_gizmo_drag_undo_old_value: mut string,
-
+        
         // 本帧绘制游标所需的快照（由 updateTransformGizmo 写入）：
         protected m_gizmo_draw_visible: mut bool,
         protected m_gizmo_draw_origin: mut vec3,
         protected m_gizmo_draw_rotation: mut quat,
         protected m_gizmo_draw_size: mut real,
         protected m_gizmo_draw_center_size: mut real,
-
+        
         // 实体图标 gizmo（摄像机/2D 光源）的屏幕命中矩形（EUID、屏幕中心、
         // 命中半径px）与当前悬停的实体，每帧由 updateIconGizmos 重建
         protected m_icon_gizmo_rects: vec<mut (entity::internal::euid_t, vec2, real)>,
@@ -135,7 +135,7 @@ namespace JEEditor::Editor
     {
         // ---- 摄像机游走参数（跨文件共享的部分） ----
         protected let CAMERA_DEFAULT_ORBIT_DISTANCE = 10.;
-
+        
         // ---- 变换游标参数 ----
         protected let GIZMO_SIZE_PX = 96.;              // 游标轴在屏幕上的长度（像素）
         protected let GIZMO_HIT_PX = 10.;               // 手柄命中判定半径（像素）
@@ -144,30 +144,30 @@ namespace JEEditor::Editor
         protected let GIZMO_CENTER_SIZE_PX = 16.;       // 中央手柄边长（像素）
         protected let GIZMO_SCALE_FACTOR_MIN = 0.01;
         protected let GIZMO_SCALE_FACTOR_MAX = 100.;
-
+        
         // 手柄编号：三根轴 + 中央手柄（屏幕平面移动 / 整体缩放）
         protected let GIZMO_HANDLE_NONE = -1;
         protected let GIZMO_HANDLE_X = 0;
         protected let GIZMO_HANDLE_Y = 1;
         protected let GIZMO_HANDLE_Z = 2;
         protected let GIZMO_HANDLE_CENTER = 3;
-
+        
         // 游标各部件的颜色（RGBA），悬停/拖拽时高亮为黄色
         protected let GIZMO_COLOR_X = (0.92, 0.32, 0.32, 0.9);
         protected let GIZMO_COLOR_Y = (0.38, 0.85, 0.38, 0.9);
         protected let GIZMO_COLOR_Z = (0.38, 0.56, 0.98, 0.9);
         protected let GIZMO_COLOR_CENTER = (0.85, 0.85, 0.85, 0.9);
         protected let GIZMO_COLOR_HOVER = (1., 1., 0.25, 1.);
-
+        
         // ---- 摄像机实体 gizmo 参数 ----
         protected let CAMERA_GIZMO_ICON_SIZE_PX = 32.;   // 摄像机图标边长（像素）
         // 视锥体线框配色：常态浅蓝，悬停提亮，选中复用游标高亮黄
         protected let CAMERA_GIZMO_COLOR = (0.35, 0.78, 0.95, 0.55);
         protected let CAMERA_GIZMO_COLOR_HOVER = (0.55, 0.9, 1., 0.8);
-
+        
         // ---- 2D 光源实体 gizmo 参数 ----
         protected let LIGHT2D_GIZMO_ICON_SIZE_PX = 32.;  // 光源图标边长（像素）
-
+        
         // 右键同时承担“拖拽环视”职责：以按下起点为基准，位移切实超过该
         // 像素阈值后才激活环视（阈值内的位移不转动摄像机）；松开时位移
         // 仍不超过该阈值则视为“点击实体”，弹出上下文菜单。
@@ -176,7 +176,7 @@ namespace JEEditor::Editor
         protected let VIEWPORT_ENTITY_CONTEXT_MENU_ID = "##viewport_entity_context";
         // 视口内空白处右键菜单（仅含“粘贴实体”）的弹窗 ID
         protected let VIEWPORT_BLANK_CONTEXT_MENU_ID = "##viewport_blank_context";
-
+        
         // 枚举成员的可见性继承枚举声明且挂在枚举自身的类型命名空间下，
         // protected 无法被兄弟文件访问，跨文件使用的枚举须为 public。
         public enum GizmoMode
@@ -191,20 +191,20 @@ namespace JEEditor::Editor
             LOCAL,
             GLOBAL,
         }
-
+        
         public enum CloseRequest
         {
             NORMALLY,
             CLOSE_AND_DESTROY_WORLD,    // 确认关闭后销毁 world（用户主动关闭）
             CLOSE_BUT_KEEP_WORLD,       // 关闭窗口但保留 world（重命名/另存后重开）
         }
-
+        
         protected let s_world_viewports = {}mut: map<world, WorldEditorViewport>;
         protected let mut s_last_focusd_world_view = option::none: option<WorldEditorViewport>;
-
+        
         // 右键环视时是否锁定鼠标。虚拟机等环境下锁定鼠标会导致指针漂移，默认不锁定。
         protected let mut s_lock_mouse_on_look = false;
-
+        
         // 是否为摄像机实体（含 Translation 与 Projection 且不带 Invisible；
         // 编辑器调试摄像机带 Invisible，不算在内）
         protected func isCameraEntity(e: entity)=> bool
@@ -213,7 +213,7 @@ namespace JEEditor::Editor
                 && !(e->towoo::get_component:<Transform::Translation>->is_none)
                 && e->towoo::get_component:<Editor::Invisible>->is_none;
         }
-
+        
         // 是否为 2D 光源实体（含 Light2D::Point / Light2D::Range /
         // Light2D::Parallel 任一组件），其选中态由光源图标 gizmo 呈现
         protected func isLight2DEntity(e: entity)=> bool
@@ -222,7 +222,7 @@ namespace JEEditor::Editor
                 || !(e->towoo::get_component:<Light2D::Range>->is_none)
                 || !(e->towoo::get_component:<Light2D::Parallel>->is_none);
         }
-
+        
         public func redo(self: WorldEditorViewport)
         {
             self.m_action_history->redo();
@@ -235,6 +235,14 @@ namespace JEEditor::Editor
             where require!(T: IAction);
         {
             self.m_action_history->doAction(action);
+        }
+        
+        // Donot save document for unsafed world viewport.
+        public func getAttrib(self: WorldEditorViewport)=> WindowsAttribute
+        {
+            if (self.m_saving_path->is_none)
+                return WindowsAttribute::ImGuiWindowFlags_UnsavedDocument;
+            return WindowsAttribute::ImGuiWindowFlags_None;
         }
     }
 }

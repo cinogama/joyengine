@@ -16,6 +16,8 @@ import je::towoo::components;
 
 import builtin::editor::GUI::Forms::MsgBox;
 
+import builtin::editor::Editor::Gizmo::Shaders;
+
 import pkg::iterator;
 import pkg::try;
 
@@ -30,6 +32,7 @@ using je::gui;
 using je::graphic;
 
 using JEEditor::GUI::Forms;
+using JEEditor::Editor::Gizmo::Shaders;
 
 namespace JEEditor::Editor::WorldEditorViewport
 {
@@ -59,14 +62,6 @@ namespace JEEditor::Editor::WorldEditorViewport
     // 之间就可见
     let SPAWN_DISTANCE_PERSPECTIVE = 5.;
     let SPAWN_DISTANCE_ORTHO = 1.;
-
-    // ---- 调试游走摄像机 2D 光照模式 ----
-    // 开启后为调试摄像机挂上 Light2D::CameraPostPass 与 Renderer::Shaders
-    //（着色器列表为空时填入该默认合成着色器），运行中的
-    // Graphic::DeferLight2DGraphicPipelineSystem 会据此让摄像机走
-    // “G-buffer → 光照 → 全屏合成”的延迟光照路径。
-    let DEBUG_CAMERA_LIGHT2D_COMPOSITE_SHADER_PATH =
-        "@/builtin/shader/CameraDefer2DPass.shader";
 
     // 根据 GetContentRegionAvail 自动创建/重建摄像机 framebuffer；
     // 若窗口尺寸仍在变化（正在拖拽缩放），则等待尺寸稳定后再更新。
@@ -164,7 +159,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                         MsgBox::err("2D 光照模式", "无法为调试摄像机创建 Renderer::Shaders 组件");
                     value(shaders_inst)?
                     {
-                        match (shader::load(option::none, DEBUG_CAMERA_LIGHT2D_COMPOSITE_SHADER_PATH))
+                        match (EDITOR_DEFAULT_DEFER_2D_LIGHT_CAMERA_SHADER)
                         {
                             none?
                             {
@@ -172,9 +167,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                                 //（命令缓冲同帧 add+remove 时 remove 生效），保持关闭
                                 do camera->remove_component(Renderer::Shaders::type::typeinfo);
                                 do camera->remove_component(post_pass_type);
-                                MsgBox::err(
-                                    "2D 光照模式",
-                                    F"无法加载相机默认着色器：`{DEBUG_CAMERA_LIGHT2D_COMPOSITE_SHADER_PATH}`");
+                                MsgBox::err("2D 光照模式", "无法加载相机默认着色器");
                             }
                             value(sinst)?
                                 do shaders_inst->set_shaders([sinst]);
