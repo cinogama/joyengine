@@ -10,12 +10,14 @@ import pkg::fsys;
 import pkg::interface;
 import pkg::worst;
 import pkg::iterator;
+import pkg::toml;
 
 import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Shortcut;
 import builtin::editor::GUI::Icons;
 import builtin::editor::GUI::Forms::MsgBox;
 import builtin::editor::GUI::Forms::AskBox;
+import builtin::editor::GUI::Forms::InputBox;
 import builtin::editor::GUI::Statebar;
 
 import builtin::editor::Singleton::Universe;
@@ -141,6 +143,10 @@ namespace JEEditor::Editor
         let k_primary_btn_hover_color = (241, 157, 89, 255);
         let k_primary_btn_active_color = (190, 113, 50, 255);
         let k_error_text_color = (255, 128, 128, 255);
+        
+        // 项目目录的标志文件：目录内必须存在此文件才会被当作项目打开，
+        // 「在此处新建」负责在新目录内创建它（TOML 文档，暂无内容）。
+        let k_project_file_name = "project.je4project";
         
         func childDirs(dir: path_t)=> array<path_t>
         {
@@ -275,17 +281,73 @@ namespace JEEditor::Editor
             do Material::showMaterial();
             
             let runtime_path = fsys::workpath();
-
+            
             set_runtime_path(fsys::workpath()->to_string);
-
+            
             // 展示第一条信息
             JEEditor::GUI::Statebar::showState(3.) <| func(){
                 je::gui::TextDisabled(F"JoyEngine 4.X, 当前工作路径: {runtime_path->to_string}");
             };
         }
         
+        // 在当前浏览目录下新建项目：弹输入框要项目名 → 建同名目录 →
+        // 目录内写入空的 TOML 项目文件 → 直接打开新项目。InputBox 以模态
+        // 弹窗压住本窗口，回调触发时本窗口必然仍存活，捕获 self 安全。
+        func askToCreateProjectHere(self: Project)=> void
+        {
+            do InputBox::show("新建项目", "请输入项目文件夹名称：", "NewProject")
+                    ->then(\name = self->createProjectHere(name);)
+                    ;
+        }
+        
+        func createProjectHere(self: Project, name: string)=> void
+        {
+            let trimmed = name->trim;
+            if (trimmed->len == 0)
+            {
+                MsgBox::err("新建项目", "项目名称不能为空。");
+                return;
+            }
+            
+            let project_dir = self.m_current / trimmed;
+            
+            match (mkdir(project_dir))
+            {
+                err(e)?
+                {
+                    MsgBox::err("新建项目",
+                        F"在 \"{self.m_current->to_string}\" 下创建目录 \"{trimmed}\" 失败：{e}");
+                    return;
+                }
+                ok(_)?
+                {
+                    match (toml::save(toml::new_table(), project_dir / k_project_file_name))
+                    {
+                        err(msg)?
+                            MsgBox::err("新建项目",
+                                F"写入项目文件 \"{k_project_file_name}\" 失败：{msg}");
+                        ok(_)?
+                        {
+                            // confirmOpen 以 m_current 为待打开目录，
+                            // 先跳转进新目录再打开；若切换工作目录失败，
+                            // 浏览器也已停在新目录处。
+                            self->navigate(project_dir->to_string);
+                            self->confirmOpen();
+                        }
+                    }
+                }
+            }
+        }
+        
         func confirmOpen(self: Project)=> void
         {
+            if (!isfile(self.m_current / k_project_file_name))
+            {
+                MsgBox::err("打开项目",
+                    F"没有在 \"{self.m_current->to_string}\" 内找到项目文件 {k_project_file_name}。");
+                return;
+            }
+            
             if (!setworkpath(self.m_current))
             {
                 MsgBox::err("打开项目",
@@ -476,7 +538,10 @@ namespace JEEditor::Editor
             PushStyleColor(ImGuiCol::ImGuiCol_Button, k_primary_btn_color);
             PushStyleColor(ImGuiCol::ImGuiCol_ButtonHovered, k_primary_btn_hover_color);
             PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive, k_primary_btn_active_color);
-            if (ButtonSize("打开项目", (avail.0, 34.)))
+            if (ButtonSize("在此处新建", (avail.0 / 2. - 5., 34.)))
+                self->askToCreateProjectHere();
+            SameLine();
+            if (ButtonSize("打开项目", (avail.0 / 2. - 5., 34.)))
                 self->confirmOpen();
             PopStyleColor(3);
         }

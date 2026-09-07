@@ -51,7 +51,7 @@ namespace JEEditor::GUI::Windows
             return option::none;
         }
         // 模态窗口：渲染为居中的模态弹窗并屏蔽其后所有窗口的输入。
-        // 模态窗口永远不是 Unique：同名模态由模态队列串行展示而非被拒绝，
+        // 模态窗口永远不是 Unique：同名模态由模态栈调度展示（最新者抢占显示）而非被拒绝，
         // 系统会自动向标题追加 $ID，无需（也不应）手动添加。
         public func isModal(self)=> bool
         {
@@ -168,29 +168,36 @@ namespace JEEditor::GUI::Windows
             + WindowsAttribute::ImGuiWindowFlags_NoDocking
             ;
 
-        // 模态窗口互斥队列（FIFO 票据）：同一时刻只展示一个模态弹窗，
-        // 其余排队等待（ImGui popup 栈中并发的两个模态会互相关闭对方）。
-        let s_modal_waiting_tickets = []mut: vec<int>;
+        // 模态窗口互斥栈（LIFO 票据）：同一时刻只展示栈顶（最新）的模态弹窗，
+        // 其余被压制挂起（ImGui popup 层级中并发的两个模态会互相关闭对方），
+        // 栈顶关闭后，被压制的模态重新弹出显示。
+        let s_modal_tickets = []mut: vec<int>;
         let s_modal_next_ticket = mutable::create(0);
 
-        func _wait_for_modal_slot()=> int
+        // 新模态入栈即成为栈顶；让出一帧给被抢占者完成最后一次渲染检查，
+        // 避免同帧内两个协程先后 Begin 同一个载体窗口。
+        func _push_modal_slot()=> int
         {
             let ticket = s_modal_next_ticket->get;
             s_modal_next_ticket->set(ticket + 1);
-            s_modal_waiting_tickets->add(ticket);
+            s_modal_tickets->add(ticket);
 
-            while (s_modal_waiting_tickets[0] != ticket)
-                std::yield();
+            std::yield();
 
             return ticket;
         }
+        func _is_modal_top(ticket: int)=> bool
+        {
+            return s_modal_tickets[s_modal_tickets->len - 1] == ticket;
+        }
+        // 允许从栈中任意位置移除（链条场景：旧模态在回调中弹出新模态后立即关闭自身）。
         func _release_modal_slot(ticket: int)
         {
-            for (let mut idx = 0; idx < s_modal_waiting_tickets->len; idx += 1)
+            for (let mut idx = 0; idx < s_modal_tickets->len; idx += 1)
             {
-                if (s_modal_waiting_tickets[idx] == ticket)
+                if (s_modal_tickets[idx] == ticket)
                 {
-                    do s_modal_waiting_tickets->remove(idx);
+                    do s_modal_tickets->remove(idx);
                     return;
                 }
             }
@@ -332,12 +339,34 @@ namespace JEEditor::GUI::Windows
 
             if (state.m_is_modal)
             {
-                let ticket = _wait_for_modal_slot();
+                let ticket = _push_modal_slot();
                 let first_frame = mutable::create(true);
-                while (i->_engine_imgui_modal_show_job(
-                        title, state, menu_instance, shortcut_instance, first_frame))
+                let mut suspended = false;
+                let mut keep_open = true;
+                while (keep_open)
                 {
-                    std::yield();
+                    if (!_is_modal_top(ticket))
+                    {
+                        // 被更新的模态压制：停止渲染（弹窗已被 ImGui 截断），
+                        // 回到栈顶后需重新 OpenPopup。
+                        suspended = true;
+                        first_frame->set(true);
+                        std::yield();
+                        continue;
+                    }
+                    if (suspended)
+                    {
+                        // 重新成为栈顶：多让一帧，避免与刚关闭的原栈顶
+                        // 在同一帧内重复 Begin 载体窗口。
+                        suspended = false;
+                        std::yield();
+                        continue;
+                    }
+
+                    keep_open = i->_engine_imgui_modal_show_job(
+                        title, state, menu_instance, shortcut_instance, first_frame);
+                    if (keep_open)
+                        std::yield();
                 }
                 _release_modal_slot(ticket);
             }
@@ -376,8 +405,8 @@ namespace JEEditor::GUI::Windows
         let mut title = i->getTitle;
         let mut is_unique = title->find("$ID")->is_none;
 
-        // 模态与 unique 语义重叠：同一时刻仅展示一个弹窗已由模态队列保证，
-        // 同名模态应排队而非被 unique 拒绝，故自动追加 $ID 使其非 Unique。
+        // 模态与 unique 语义重叠：同一时刻仅展示一个弹窗已由模态栈保证，
+        // 同名模态应抢占展示而非被 unique 拒绝，故自动追加 $ID 使其非 Unique。
         if (is_modal && is_unique)
         {
             title = title + "$ID";
