@@ -2141,9 +2141,6 @@ WOORT_API woort_api wojeapi_shaders_of_entity(void)
     return woort_ret_value(out_array);
 }
 
-WOORT_API woort_api wojeapi_reload_shader_of_entity(void);
-WOORT_API woort_api wojeapi_reload_texture_of_entity(void);
-
 WOORT_API woort_api wojeapi_set_shaders_of_entity(void)
 {
     je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
@@ -2326,19 +2323,6 @@ WOORT_API woort_api wojeapi_set_uniforms_float4(void)
 
     return woort_ret_void();
 }
-
-// defined in 'jeecs_core_editor_system.hpp'
-WOORT_API woort_api wojeapi_get_bad_shader_list_of_entity(void);
-WOORT_API woort_api wojeapi_store_bad_shader_name(void);
-WOORT_API woort_api wojeapi_remove_bad_shader_name(void);
-WOORT_API woort_api wojeapi_store_bad_shader_uniforms_int(void);
-WOORT_API woort_api wojeapi_store_bad_shader_uniforms_int2(void);
-WOORT_API woort_api wojeapi_store_bad_shader_uniforms_int3(void);
-WOORT_API woort_api wojeapi_store_bad_shader_uniforms_int4(void);
-WOORT_API woort_api wojeapi_store_bad_shader_uniforms_float(void);
-WOORT_API woort_api wojeapi_store_bad_shader_uniforms_float2(void);
-WOORT_API woort_api wojeapi_store_bad_shader_uniforms_float3(void);
-WOORT_API woort_api wojeapi_store_bad_shader_uniforms_float4(void);
 
 WOORT_API woort_api wojeapi_shader_path(void)
 {

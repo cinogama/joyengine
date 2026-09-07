@@ -74,10 +74,6 @@ void _jeecs_entry_register_core_systems(jeecs::typing::type_unregister_guard* gu
     jeecs::typing::register_type<jeecs::Editor::Prefab>(guard, "Editor::Prefab");
     jeecs::typing::register_type<jeecs::Editor::EditorWalker>(guard, "Editor::EditorWalker");
     jeecs::typing::register_type<jeecs::Editor::Invisible>(guard, "Editor::Invisible");
-    jeecs::typing::register_type<jeecs::Editor::EntityMover>(guard, "Editor::EntityMover");
-    jeecs::typing::register_type<jeecs::Editor::EntityMoverRoot>(guard, "Editor::EntityMoverRoot");
-    jeecs::typing::register_type<jeecs::Editor::BadShadersUniform>(guard, "Editor::BadShadersUniform");
-    jeecs::typing::register_type<jeecs::Editor::EntitySelectBox>(guard, "Editor::EntitySelectBox");
     jeecs::typing::register_type<jeecs::Editor::EntityId>(guard, "Editor::EntityId");
 
     jeecs::typing::register_type<jeecs::TranslationUpdatingSystem>(guard, "Translation::TranslationUpdatingSystem");
