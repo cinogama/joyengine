@@ -451,6 +451,70 @@ namespace JEEditor::Editor
                     ;
         }
 
+        // 新建着色器（右键菜单“新建→着色器”）：以选中的内置着色器为模
+        // 板复制到当前目录。流程同 requestSavePrefabAs：弹输入框要文件
+        // 名 → 已存在则确认覆盖 → 复制模板。回调不捕获 Browser 实例，
+        // 文件缓存刷新经 dirty 传出。
+        func askToCreateNewShader(self: Browser, template_path: path_t)=> void
+        {
+            let target_dir = self.m_current;
+            let dirty = self.m_fs_dirty;
+            let template_name = purename(template_path);
+
+            func copyTo(dst: path_t)=> void
+            {
+                match (copy(template_path, dst))
+                {
+                    err(e)?
+                        MsgBox::err("新建着色器",
+                            F"复制内置着色器 \"{template_name}\" 到 \"{dst->to_string()}\" 失败：{e}");
+                    ok(_)?
+                    {
+                        dirty->set(true);
+
+                        // 闭包按创建时的值捕获文本，之后每帧由 Statebar 调用绘制
+                        let path_str = dst->to_string();
+                        Statebar::showState(3.) <| func(){
+                            Text(F"着色器 \"{path_str}\" 已创建（基于内置着色器 \"{template_name}\"）");
+                        };
+                    }
+                }
+            }
+
+            func createAs(file_name: string)=> void
+            {
+                if (file_name->len == 0)
+                {
+                    MsgBox::err("新建着色器", "文件名不能为空");
+                    return;
+                }
+
+                // 未带后缀时自动补全 .shader
+                let full_name = file_name->end_with(".shader")
+                    ? file_name
+                    | F"{file_name}.shader";
+
+                let dst = target_dir / full_name;
+
+                if (isfile(dst))
+                {
+                    // 已存在同名文件时弹出覆盖确认
+                    do AskBox::show(
+                            "新建着色器", F"目录中已存在 \"{full_name}\"，确认覆盖吗？")
+                        ->onYes(\= copyTo(dst);)
+                    ;
+                }
+                else
+                    copyTo(dst);
+            }
+
+            do InputBox::show("新建着色器",
+                    F"基于内置着色器 \"{template_name}\"，请输入着色器名称：",
+                    template_name)
+                ->then(createAs)
+            ;
+        }
+
         func drawToolbar(self: Browser)=> void
         {
             if (Button("向上"))
@@ -735,7 +799,9 @@ namespace JEEditor::Editor
                             let builtin_shader_path = normalize(host_path()) / "builtin" / "shader";
                             return walk(builtin_shader_path) |> iter_result
                                 |> filter(\p = isfile(p) && extension(p)->lower == ".shader";)
-                                |> collect;
+                                |> collect
+                                |> sort(\l, r = purename(l) < purename(r);)
+                                ;
                             ;
                         }
                         
@@ -744,7 +810,7 @@ namespace JEEditor::Editor
                         {
                             if (MenuItem(F"{purename(p)}"))
                             {
-                                
+                                self->askToCreateNewShader(p);
                             }
                         }
                     }
