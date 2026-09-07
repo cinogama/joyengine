@@ -1,0 +1,425 @@
+import woo::std;
+
+import je;
+import je::gui;
+import je::graphic;
+
+import pkg::fsys;
+import pkg::interface;
+import pkg::worst;
+import pkg::iterator;
+
+import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Shortcut;
+import builtin::editor::GUI::Icons;
+import builtin::editor::GUI::Forms::MsgBox;
+import builtin::editor::GUI::Statebar;
+
+using std;
+
+using je;
+using je::gui;
+using je::graphic;
+using fsys;
+
+using JEEditor;
+using JEEditor::GUI;
+using JEEditor::GUI::Windows;
+using JEEditor::GUI::Forms;
+using JEEditor::GUI::Statebar;
+
+namespace JEEditor::Editor
+{
+    // 历史记录文件锚定在宿主路径（exe 所在目录）而非 cwd：
+    // 切换工作目录之后依然读写同一个文件。file::cache 的读写接口会在
+    // 路径后自动追加 ".je4cache" 后缀，因此传入基础名 "history" 即对应
+    // builtin/history.je4cache。
+    func historyFileBase()=> string
+    {
+        return (normalize(host_path()) / "builtin" / "history")->to_string;
+    }
+
+    // 历史记录格式：每行一个绝对路径（路径中不可能包含换行符），
+    // 按最近打开优先排序，即首行是最近一次打开的工作目录。
+    public func loadHistory()=> array<string>
+    {
+        match (file::cache::readall(historyFileBase()))
+        {
+            none?
+                return []: array<string>;
+            value(content)?
+            {
+                let mut history = []mut: vec<string>;
+                for (let line : content->split("\n") |> iterator::collect)
+                {
+                    let path = line->trim;
+                    if (path->len != 0)
+                        history->add(path);
+                }
+                return history->to_array;
+            }
+        }
+    }
+
+    public func saveHistory(history: array<string>)=> void
+    {
+        let mut content = "";
+        for (let path : history)
+        {
+            if (content->len != 0)
+                content += "\n";
+            content += path;
+        }
+
+        if (!file::cache::saveall(historyFileBase(), content))
+            logerr("Failed to save project history file.");
+    }
+
+    // 记录一次成功的工作目录切换：新路径插到最前、去重，最多保留
+    // s_history_limit 条，然后落盘。
+    let s_history_limit = 16;
+
+    public func recordOpened(path: path_t)=> void
+    {
+        let mut updated = []mut: vec<string>;
+        updated->add(path->to_string);
+
+        for (let old : loadHistory())
+        {
+            if (updated->len >= s_history_limit)
+                break;
+            if (normalize(old) == path)
+                continue;
+            updated->add(old);
+        }
+
+        saveHistory(updated->to_array);
+    }
+
+    // 窗口顶部的引擎吉祥物（像素画 Joy，256x256，按 1/4 缩放保持锐利）
+    let s_joy_logo = texture::load(option::none, "!/builtin/icon/Joy.png");
+
+    // 主题色（取自 Joy 的暖橙色系）
+    let k_title_color = (242, 176, 109, 255);
+    let k_panel_bg_color = (37, 37, 42, 255);
+    let k_primary_btn_color = (219, 134, 63, 255);
+    let k_primary_btn_hover_color = (241, 157, 89, 255);
+    let k_primary_btn_active_color = (190, 113, 50, 255);
+    let k_error_text_color = (255, 128, 128, 255);
+
+    // 项目创建/打开窗口：选择一个文件夹作为工作目录，确认后通过
+    // fsys::setworkpath 切换进程 cwd，并把该目录记入最近打开列表。
+    // 引擎没有原生的文件夹选择对话框，这里以内置的迷你浏览器
+    // （盘符 + 上级目录 + 路径输入 + 子目录列表 + 历史列表）完成选择。
+    using Project = struct{
+        m_current: mut path_t,          // 当前浏览目录，即待打开的工作目录
+        m_current_input: mut string,    // 路径输入框内容，跳转成功时与 m_current 同步
+        m_path_invalid: mut bool,       // 输入的路径跳转失败时的提示
+        m_subdirs: mut array<path_t>,  // m_current 下的一级子目录（按名称排序）
+        m_history: mut array<string>,   // 最近打开过的工作目录（最新在前）
+        m_drives: array<string>,        // Windows 下可用的盘符（如 C: D:），其他系统为空
+        m_close: mut bool,
+    }
+    {
+        func childDirs(dir: path_t)=> array<path_t>
+        {
+            return walk(dir)
+                |> iterator::iter_result
+                |> iterator::filter(\v = isdir(v);)
+                |> iterator::collect()
+                |> std::sort(\a, b = filename(a) < filename(b);)
+                ;
+        }
+
+        // 探测 Windows 盘符：逐个检查 A:/ ~ Z:/ 是否为有效目录。
+        // 非 Windows 系统下一个都探测不到，返回空列表（界面隐藏盘符栏）。
+        func detectDrives()=> array<string>
+        {
+            let drive_letters = [
+                "A:", "B:", "C:", "D:", "E:", "F:", "G:", "H:", "I:", "J:", "K:", "L:", "M:",
+                "N:", "O:", "P:", "Q:", "R:", "S:", "T:", "U:", "V:", "W:", "X:", "Y:", "Z:",
+                ];
+            let mut drives = []mut: vec<string>;
+            for (let letter : drive_letters)
+            {
+                if (isdir(normalize(F"{letter}/")))
+                    drives->add(letter);
+            }
+            return drives->to_array;
+        }
+
+        public func create()=> Project
+            where require!(Project: IWindows);
+        {
+            let current = workpath();
+            return Project{
+                m_current = mut current,
+                m_current_input = mut current->to_string,
+                m_path_invalid = mut false,
+                m_subdirs = mut childDirs(current),
+                m_history = mut loadHistory(),
+                m_drives = detectDrives(),
+                m_close = mut false,
+            };
+        }
+
+        public func showProject()
+        {
+            do show(create());
+        }
+
+        public func getTitle(_: Project)=> string
+        {
+            return "项目";
+        }
+        public func getAttrib(_: Project)=> WindowsAttribute
+        {
+            return WindowsAttribute::ImGuiWindowFlags_NoDocking
+                + WindowsAttribute::ImGuiWindowFlags_NoCollapse
+                + WindowsAttribute::ImGuiWindowFlags_NoSavedSettings
+                ;
+        }
+        public func isModal(_: Project)=> bool
+        {
+            return true;
+        }
+        public func getShortcut(self: Project)=> option<Shortcut>
+        {
+            return option::value <|
+                Shortcut::begin()
+                    -> shortCut([ImGuiKey::ImGuiKey_Enter], \= self->navigate(self.m_current_input);)
+                    -> shortCut([ImGuiKey::ImGuiKey_Escape], \= self.m_close = true;)
+                    -> finish
+                ;
+        }
+
+        // 跳转到指定目录：正规化并通过 isdir 校验后才更新浏览状态。
+        func navigate(self: Project, dir: string)=> void
+        {
+            let target = normalize(dir);
+            if (!isdir(target))
+            {
+                self.m_path_invalid = true;
+                return;
+            }
+            self.m_path_invalid = false;
+            self.m_current = target;
+            self.m_current_input = target->to_string;
+            self.m_subdirs = childDirs(target);
+        }
+
+        // 过长的路径只显示末尾部分（len/sub 均按字符计数，中文安全），
+        // 避免撑宽自适应尺寸的模态窗口；完整路径经 tooltip 展示。
+        func shrinkPath(path: string, max_chars: int)=> string
+        {
+            if (path->len <= max_chars)
+                return path;
+            return "..." + path->sub(path->len - max_chars + 3);
+        }
+
+        // 列表项前的文件夹小图标（纹理是 option，加载失败则跳过）
+        func drawFolderIcon()=> void
+        {
+            match (Icons::FOLDER)
+            {
+                none?;
+                value(icon)?
+                {
+                    ImageSize(icon, 16., 16.);
+                    SameLine();
+                }
+            }
+        }
+
+        func confirmOpen(self: Project)=> void
+        {
+            if (!setworkpath(self.m_current))
+            {
+                MsgBox::err("打开项目",
+                    F"切换工作目录到 \"{self.m_current->to_string}\" 失败。");
+                return;
+            }
+
+            recordOpened(self.m_current);
+
+            // 闭包按创建时的值捕获文本，之后每帧由 Statebar 调用绘制
+            let workdir_str = workpath()->to_string;
+            Statebar::showState(3.) <| func(){
+                    TextDisabled(F"当前工作路径: {workdir_str}");
+                };
+
+            self.m_close = true;
+        }
+
+        public func run(self: Project)=> bool
+        {
+            self->drawHeader();
+            Separator();
+
+            // 双栏：左侧最近打开的项目，右侧文件夹浏览器
+            let panel_height = 280.;
+            PushStyleColor(ImGuiCol::ImGuiCol_ChildBg, k_panel_bg_color);
+            if (BeginChildSizeFlags("##project_history", 250., panel_height,
+                    WindowsAttribute::ImGuiWindowFlags_None))
+            {
+                self->drawHistoryPanel();
+            }
+            EndChild();
+
+            SameLine();
+
+            if (BeginChildSizeFlags("##project_browser", 430., panel_height,
+                    WindowsAttribute::ImGuiWindowFlags_None))
+            {
+                self->drawBrowserPanel();
+            }
+            EndChild();
+            PopStyleColor(1);
+
+            Separator();
+            self->drawBottomBar();
+
+            return !self.m_close;
+        }
+
+        // 顶部横幅：Joy 吉祥物 + 引擎名 + 副标题
+        func drawHeader(_: Project)=> void
+        {
+            match (s_joy_logo)
+            {
+                none?;
+                value(logo)?
+                {
+                    ImageSize(logo, 64., 64.);
+                    SameLine();
+                }
+            }
+
+            SetWindowFontScale(1.5);
+            TextColored(k_title_color, "JoyEngine 4.X");
+            SetWindowFontScale(1.);
+
+            TextDisabled("选择一个文件夹作为项目的工作目录");
+        }
+
+        func drawHistoryPanel(self: Project)=> void
+        {
+            SeparatorText("最近打开");
+
+            if (self.m_history->len == 0)
+            {
+                Spacing();
+                TextDisabled("暂无历史记录");
+                TextDisabled("打开过的项目会显示在这里");
+                return;
+            }
+
+            let current_str = self.m_current->to_string;
+            let mut index = 0;
+            for (let history_path : self.m_history)
+            {
+                drawFolderIcon();
+                if (SelectableSelected(
+                        F"{shrinkPath(history_path, 34)}##{index}",
+                        history_path == current_str))
+                {
+                    self->navigate(history_path);
+                }
+                if (IsItemHovered())
+                    do SetTooltip(history_path);
+                index += 1;
+            }
+        }
+
+        func drawBrowserPanel(self: Project)=> void
+        {
+            SeparatorText("选择文件夹");
+
+            // 工具栏第一行：上级目录 + 盘符切换（仅 Windows 探测到盘符时显示）
+            let parent_dir = parent(self.m_current);
+            let can_go_up = parent_dir->to_string->len != 0
+                && !(parent_dir == self.m_current);
+
+            BeginDisabled(!can_go_up);
+            if (Button("上级目录"))
+                self->navigate(parent_dir->to_string);
+            EndDisabled();
+
+            if (self.m_drives->len != 0)
+            {
+                SameLine();
+                for (let drive : self.m_drives)
+                {
+                    if (Button(drive))
+                        self->navigate(F"{drive}/");
+                    SameLine();
+                }
+                // 末尾多出的 SameLine 抵消：换行
+                Dummy((0., 0.));
+            }
+
+            // 工具栏第二行：路径输入 + 跳转
+            let avail = GetContentRegionAvail();
+            PushItemWidth(avail.0 - 58.);
+            match (InputText("##project_path", self.m_current_input))
+            {
+                none?;
+                value(new_text)?
+                {
+                    self.m_current_input = new_text;
+                    self.m_path_invalid = false;
+                }
+            }
+            PopItemWidth();
+
+            SameLine();
+
+            if (Button("跳转"))
+                self->navigate(self.m_current_input);
+
+            if (self.m_path_invalid)
+                TextColored(k_error_text_color, "路径不存在或不是文件夹。");
+
+            // 子目录列表：填满面板剩余空间
+            let list_avail = GetContentRegionAvail();
+            if (BeginChildSizeFlags("##project_subdirs", list_avail.0, list_avail.1,
+                    WindowsAttribute::ImGuiWindowFlags_None))
+            {
+                if (self.m_subdirs->len == 0)
+                {
+                    Spacing();
+                    TextDisabled("（无子文件夹）");
+                }
+
+                for (let dir : self.m_subdirs)
+                {
+                    drawFolderIcon();
+                    if (Selectable(filename(dir)))
+                        self->navigate(dir->to_string);
+                }
+            }
+            EndChild();
+        }
+
+        func drawBottomBar(self: Project)=> void
+        {
+            TextDisabled(F"当前目录: {shrinkPath(self.m_current->to_string, 48)}");
+            if (IsItemHovered())
+                do SetTooltip(self.m_current->to_string);
+            Spacing();
+
+            if (ButtonSize("取消", (80., 34.)))
+                self.m_close = true;
+
+            SameLine();
+
+            let avail = GetContentRegionAvail();
+            PushStyleColor(ImGuiCol::ImGuiCol_Button, k_primary_btn_color);
+            PushStyleColor(ImGuiCol::ImGuiCol_ButtonHovered, k_primary_btn_hover_color);
+            PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive, k_primary_btn_active_color);
+            if (ButtonSize("打开项目", (avail.0, 34.)))
+                self->confirmOpen();
+            PopStyleColor(3);
+        }
+    }
+}

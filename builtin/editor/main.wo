@@ -28,6 +28,7 @@ import Editor::Material;
 import Editor::ReplConsole;
 import Editor::PanicBox;
 import Editor::Shutdown;
+import Editor::Project;
 
 import Singleton::Universe;
 
@@ -102,6 +103,10 @@ func main()
     do LogBrowser::showLogBrowser();
     do Inspector::showInspector();
     do Material::showMaterial();
+
+    // 在其他默认窗口之后打开项目创建/打开窗口（模态），
+    // 用于选择工作目录并切换 cwd。
+    do Project::showProject();
 
     // 展示第一条信息
     JEEditor::GUI::Statebar::showState(3.) <| func(){
