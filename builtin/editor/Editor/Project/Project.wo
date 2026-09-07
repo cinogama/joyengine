@@ -22,13 +22,13 @@ import builtin::editor::GUI::Statebar;
 
 import builtin::editor::Singleton::Universe;
 
-import Browser;
-import EntityList;
-import SystemList;
-import LogBrowser;
-import Inspector;
-import Material;
-import Shutdown;
+import builtin::editor::Editor::Browser;
+import builtin::editor::Editor::EntityList;
+import builtin::editor::Editor::SystemList;
+import builtin::editor::Editor::LogBrowser;
+import builtin::editor::Editor::Inspector;
+import builtin::editor::Editor::Material;
+import builtin::editor::Editor::Shutdown;
 
 using std;
 
@@ -267,7 +267,7 @@ namespace JEEditor::Editor
                             func()
                             {
                                 Shutdown::editorShutdownRequest(
-                                    Singleton::Universe::instance()->getUniverse());
+                                    Singleton::Universe::getUniverse());
                             });
                     return false;
                 });
@@ -368,7 +368,7 @@ namespace JEEditor::Editor
             {
                 launch_coroutine(
                     /* 如果项目窗口在没有打开任何项目的情况下关闭，那就退出整个进程 */
-                    \ = Singleton::Universe::instance()->getUniverse()->trim;);
+                    \ = Singleton::Universe::getUniverse()->trim;);
             }
         }
         

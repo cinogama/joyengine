@@ -80,7 +80,7 @@ namespace JEEditor::Editor::WorldEditorViewport
     public func createNewWorldToEdit()
     {
         let new_world = world::create(
-            Singleton::Universe::instance()->getUniverse());
+            Singleton::Universe::getUniverse());
 
         // Create default graphic pipe line.
         do new_world->add_system(DEFAULT_GRAPHIC_SYSTEM_TYPE);
@@ -161,7 +161,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             ok(wdat)?
             {
                 let (w, runtime_system_names) = JEEditor::Saving::World::restore(
-                    Singleton::Universe::instance()->getUniverse(),
+                    Singleton::Universe::getUniverse(),
                     wdat);
                 ensureDebugCamera(w);
                 w->set_enable(true);

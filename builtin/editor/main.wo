@@ -57,7 +57,8 @@ func main()
             Editor::PanicBox::show(file, line, funcname, errcode, reason, trace););
             
     // 创建一个 Universe，之后编辑器将在这上面运行
-    let u = Singleton::Universe::instance()->getUniverse();
+    let u = Singleton::Universe::createUniverse();
+    defer Singleton::Universe::resetUniverse();
         
     // 开启状态栏的引擎日志通知（WARNING/ERROR/FATAL 以图标 + 彩色文本展示）
     JEEditor::Editor::LogStatebar::start();

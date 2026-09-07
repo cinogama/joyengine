@@ -2,30 +2,39 @@ import woo::std;
 
 import je::ecs;
 
+import pkg::singleton;
+
 using je;
 
-namespace JEEditor::Singleton
+namespace JEEditor::Singleton::Universe
 {
-    using Universe = struct{
-        m_universe: universe,
-    }
+    static let _instance = singleton::create(
+        "JEEditor::Singleton::Universe",
+        0,
+        \= std::mutable::create:<option<universe>>(option::none););
+        
+    public func createUniverse()=> universe
     {
-        func create()
-        {
-            return Universe{
-                m_universe = universe::create(),
-            };
-        }
-        public func instance()=> Universe
-        {
-            static let _instance = create();
-            
-            return _instance;
-        }
+        return _instance->apply(
+            func(u){
+                assert(u->get->is_none);
 
-        public func getUniverse(self: Universe)
-        {
-            return self.m_universe;
-        }
-    };
+                let uni = universe::create();
+                u->set <| option::value(uni);
+
+                return uni;
+            });
+    }
+    public func resetUniverse()
+    {
+        _instance->apply(
+            func(u){
+                assert(u->get->is_value);
+                u->set <| option::none;
+            });
+    }
+    public func getUniverse()=> universe
+    {
+        return _instance->apply(\u = u->get->unwrap;);
+    }
 }
