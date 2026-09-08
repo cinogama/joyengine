@@ -1,0 +1,18 @@
+import pkg::interface;
+import pkg::toml;
+
+using toml;
+
+namespace JEEditor::Editor::Project
+{
+    interface! ITemporary
+    {
+        public func save(self)=> Toml;
+        public func restore(self, toml: Toml)=> void;
+    }
+    
+    namespace ITemporary
+    {
+    
+    }
+}
