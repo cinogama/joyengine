@@ -8,7 +8,7 @@ using je;
 
 namespace JEEditor::Singleton::Universe
 {
-    static let _instance = singleton::create(
+    let _instance = singleton::create(
         "JEEditor::Singleton::Universe",
         0,
         \= std::mutable::create:<option<universe>>(option::none););

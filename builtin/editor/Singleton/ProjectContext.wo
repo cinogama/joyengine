@@ -8,7 +8,7 @@ using JEEditor::Editor::Project;
 
 namespace JEEditor::Singleton::ProjetContext
 {
-    static let _instance = singleton::create(
+    let _instance = singleton::create(
         "JEEditor::Singleton::ProjetContext",
         0,
         \= std::mutable::create:<option<Context>>(option::none););
