@@ -23,7 +23,7 @@ import Editor::LogStatebar;
 import Editor::ReplConsole;
 import Editor::PanicBox;
 import Editor::Shutdown;
-import Editor::Project;
+import Editor::ProjectOpen;
 
 import Singleton::Universe;
 
@@ -83,7 +83,7 @@ func main()
     
     // 打开项目创建/打开窗口（模态），
     // 用于选择工作目录并切换 cwd。
-    do Project::showProject();
+    do ProjectOpen::showProjectOpen();
 }
 
 main();

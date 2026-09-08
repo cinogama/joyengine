@@ -50,7 +50,7 @@ namespace JEEditor::Editor
     // fsys::setworkpath 切换进程 cwd，并把该目录记入最近打开列表。
     // 引擎没有原生的文件夹选择对话框，这里以内置的迷你浏览器
     // （盘符 + 上级目录 + 路径输入 + 子目录列表 + 历史列表）完成选择。
-    using Project = struct{
+    using ProjectOpen = struct{
         m_current: mut path_t,          // 当前浏览目录，即待打开的工作目录
         m_current_input: mut string,    // 路径输入框内容，跳转成功时与 m_current 同步
         m_path_invalid: mut bool,       // 输入的路径跳转失败时的提示
@@ -175,11 +175,11 @@ namespace JEEditor::Editor
             return drives->to_array;
         }
         
-        public func create()=> Project
-            where require!(Project: IWindows);
+        public func create()=> ProjectOpen
+            where require!(ProjectOpen: IWindows);
         {
             let current = workpath();
-            return Project{
+            return ProjectOpen{
                 m_current = mut current,
                 m_current_input = mut current->to_string,
                 m_path_invalid = mut false,
@@ -190,27 +190,27 @@ namespace JEEditor::Editor
             };
         }
         
-        public func showProject()
+        public func showProjectOpen()
         {
             do show(create());
         }
         
-        public func getTitle(_: Project)=> string
+        public func getTitle(_: ProjectOpen)=> string
         {
             return "项目";
         }
-        public func getAttrib(_: Project)=> WindowsAttribute
+        public func getAttrib(_: ProjectOpen)=> WindowsAttribute
         {
             return WindowsAttribute::ImGuiWindowFlags_NoDocking
                 + WindowsAttribute::ImGuiWindowFlags_NoCollapse
                 + WindowsAttribute::ImGuiWindowFlags_NoSavedSettings
                 ;
         }
-        public func isModal(_: Project)=> bool
+        public func isModal(_: ProjectOpen)=> bool
         {
             return true;
         }
-        public func getShortcut(self: Project)=> option<Shortcut>
+        public func getShortcut(self: ProjectOpen)=> option<Shortcut>
         {
             return option::value <|
                 Shortcut::begin()
@@ -220,7 +220,7 @@ namespace JEEditor::Editor
         }
         
         // 跳转到指定目录：正规化并通过 isdir 校验后才更新浏览状态。
-        func navigate(self: Project, dir: string)=> void
+        func navigate(self: ProjectOpen, dir: string)=> void
         {
             let target = normalize(dir);
             if (!isdir(target))
@@ -293,14 +293,14 @@ namespace JEEditor::Editor
         // 在当前浏览目录下新建项目：弹输入框要项目名 → 建同名目录 →
         // 目录内写入空的 TOML 项目文件 → 直接打开新项目。InputBox 以模态
         // 弹窗压住本窗口，回调触发时本窗口必然仍存活，捕获 self 安全。
-        func askToCreateProjectHere(self: Project)=> void
+        func askToCreateProjectHere(self: ProjectOpen)=> void
         {
             do InputBox::show("新建项目", "请输入项目文件夹名称：", "NewProject")
                     ->then(\name = self->createProjectHere(name);)
                     ;
         }
         
-        func createProjectHere(self: Project, name: string)=> void
+        func createProjectHere(self: ProjectOpen, name: string)=> void
         {
             let trimmed = name->trim;
             if (trimmed->len == 0)
@@ -339,7 +339,7 @@ namespace JEEditor::Editor
             }
         }
         
-        func confirmOpen(self: Project)=> void
+        func confirmOpen(self: ProjectOpen)=> void
         {
             if (!isfile(self.m_current / k_project_file_name))
             {
@@ -362,7 +362,7 @@ namespace JEEditor::Editor
             self.m_close_way = CloseWay::OPENED_A_PATH;
         }
         
-        public func onClose(self: Project)
+        public func onClose(self: ProjectOpen)
         {
             if (self.m_close_way != CloseWay::OPENED_A_PATH)
             {
@@ -372,7 +372,7 @@ namespace JEEditor::Editor
             }
         }
         
-        public func run(self: Project)=> bool
+        public func run(self: ProjectOpen)=> bool
         {
             self->drawHeader();
             Separator();
@@ -404,7 +404,7 @@ namespace JEEditor::Editor
         }
         
         // 顶部横幅：Joy 吉祥物 + 引擎名 + 副标题
-        func drawHeader(_: Project)=> void
+        func drawHeader(_: ProjectOpen)=> void
         {
             match (s_joy_logo)
             {
@@ -423,7 +423,7 @@ namespace JEEditor::Editor
             TextDisabled("选择一个文件夹作为项目的工作目录");
         }
         
-        func drawHistoryPanel(self: Project)=> void
+        func drawHistoryPanel(self: ProjectOpen)=> void
         {
             SeparatorText("最近打开");
             
@@ -452,7 +452,7 @@ namespace JEEditor::Editor
             }
         }
         
-        func drawBrowserPanel(self: Project)=> void
+        func drawBrowserPanel(self: ProjectOpen)=> void
         {
             SeparatorText("选择文件夹");
             
@@ -522,7 +522,7 @@ namespace JEEditor::Editor
             EndChild();
         }
         
-        func drawBottomBar(self: Project)=> void
+        func drawBottomBar(self: ProjectOpen)=> void
         {
             TextDisabled(F"当前目录: {shrinkPath(self.m_current->to_string, 48)}");
             if (IsItemHovered())
