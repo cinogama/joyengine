@@ -1,0 +1,35 @@
+import woo::std;
+
+import je;
+
+import pkg::singleton;
+import pkg::interface;
+
+import builtin::editor::Editor::Project::ITemporary;
+
+using je;
+using JEEditor::Editor::Project;
+
+namespace JEEditor::Singleton::ITemporaryCollection
+{
+    let _instance = singleton::create(
+        "JEEditor::Singleton::ITemporaryCollection",
+        0,
+        \= {}mut: map<string, ITemporary>;);
+
+    public func register<T>(name: string, instance: T)=> bool
+        where require!(T: ITemporary);
+    {
+        return _instance->apply(
+            func(u){
+                if (u->contains(name))
+                {
+                    logerr(F"`{name}` has been registered.");
+                    return false;
+                }
+
+                u->set(name, instance);
+                return true;
+            });
+    }
+}

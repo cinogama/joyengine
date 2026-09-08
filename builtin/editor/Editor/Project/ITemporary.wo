@@ -13,6 +13,5 @@ namespace JEEditor::Editor::Project
     
     namespace ITemporary
     {
-    
     }
 }
