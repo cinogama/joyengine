@@ -5,7 +5,7 @@
 // 字段/常量标 protected：private 仅限同文件，protected 允许同命名空间
 //（含嵌套）的兄弟文件访问。
 
-import woo::std;
+import pkg::std;
 
 import je;
 import je::ecs;

@@ -1,5 +1,5 @@
 // Joyengine 4.x
-import woo::std;
+import pkg::std;
 
 import pkg::fsys;
 import pkg::try;
@@ -410,7 +410,8 @@ func generate_je_3rd_pkg_decls(skip_process_and_socket: bool)=> result<void, str
     {
         let entry_func_name = F"je_static_wo_pkg_{pkgname}_entry";
         result += F"WOORT_API void {entry_func_name}(woort_Dylib* lib_instance);\n";
-        libfuncs["lib" + pkgname]->add((entry_func_name, "woort_lib_entry"));
+
+        libfuncs->get_or_set("lib" + pkgname, []mut)->add((entry_func_name, "woort_lib_entry"));
     }
     
     result += "\n";
@@ -419,7 +420,7 @@ func generate_je_3rd_pkg_decls(skip_process_and_socket: bool)=> result<void, str
     {
         let exit_func_name = F"je_static_wo_pkg_{pkgname}_leave";
         result += F"WOORT_API void {exit_func_name}();\n";
-        libfuncs["lib" + pkgname]->add((exit_func_name, "woort_lib_leave"));
+        libfuncs->get_or_set("lib" + pkgname, []mut)->add((exit_func_name, "woort_lib_leave"));
     }
     
     result += @"

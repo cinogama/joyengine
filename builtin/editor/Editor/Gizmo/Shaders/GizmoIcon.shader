@@ -2,7 +2,7 @@
 // 摄像机实体等使用的图标 gizmo 着色器：采样图标纹理的公告板四边形，
 // 染色（悬停/选中高亮）由 JE_COLOR 提供（内置 uniform，默认白色），
 // 关闭深度测试保证图标始终可见。
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;

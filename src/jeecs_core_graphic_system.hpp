@@ -59,7 +59,7 @@ namespace jeecs
                 nullptr,
                 "!/builtin/builtin_default.shader", R"(
 // Default shader
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;
@@ -941,7 +941,7 @@ public let frag =
                         nullptr,
                         "!/builtin/defer_light2d_shadow_point.shader",
                         R"(
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;
@@ -997,7 +997,7 @@ public func frag(_: v2f)
                         nullptr,
                         "!/builtin/defer_light2d_shadow_parallel.shader",
                         R"(
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;
@@ -1053,7 +1053,7 @@ public func frag(_: v2f)
                     nullptr,
                     "!/builtin/defer_light2d_shadow_reverse_point.shader",
                     R"(
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;
@@ -1109,7 +1109,7 @@ public func frag(_: v2f)
                         nullptr,
                         "!/builtin/defer_light2d_shadow_reverse_parallel.shader",
                         R"(
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;
@@ -1165,7 +1165,7 @@ public func frag(_: v2f)
                         nullptr,
                         "!/builtin/defer_light2d_shadow_point_shape.shader",
                         R"(
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;
@@ -1242,7 +1242,7 @@ public func frag(vf: v2f)
                         nullptr,
                         "!/builtin/defer_light2d_shadow_parallel_shape.shader",
                         R"(
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;
@@ -1315,7 +1315,7 @@ public func frag(vf: v2f)
                         nullptr,
                         "!/builtin/defer_light2d_shadow_point_sprite.shader",
                         R"(
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;
@@ -1389,7 +1389,7 @@ public func frag(vf: v2f)
                     nullptr,
                     "!/builtin/defer_light2d_shadow_parallel_sprite.shader"
                     , R"(
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;
@@ -1459,7 +1459,7 @@ public func frag(vf: v2f)
                         nullptr,
                         "!/builtin/defer_light2d_shadow_sub.shader",
                         R"(
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;

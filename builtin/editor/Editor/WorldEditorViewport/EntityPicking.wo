@@ -3,7 +3,7 @@
 // 右键生命周期（点击 vs 拖拽分流）与实体上下文菜单，
 // 以及选中状态/实体选择器的对外访问接口。
 
-import woo::std;
+import pkg::std;
 
 import je;
 import je::ecs;
@@ -371,7 +371,10 @@ namespace JEEditor::Editor::WorldEditorViewport
         let mut paste_spawn_pos = option::none: option<vec3>;
         if (paste_at_camera_front)
             paste_spawn_pos = self->getSpawnPosInFrontOfCamera();
+
+        Separator();
         EntityClipboard::showCreateEntityMenuItemAt(self, paste_spawn_pos);
+        Separator();
 
         if (MenuItem("销毁"))
         {

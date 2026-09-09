@@ -2,7 +2,7 @@
 // 绘制在视口左上角的变换游标工具栏（模式/参考系/2D 模式/锁定鼠标/
 // 2D 光照开关）与左下角的未保存修改标记。
 
-import woo::std;
+import pkg::std;
 
 import je;
 import je::ecs;

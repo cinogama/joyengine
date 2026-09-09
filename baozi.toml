@@ -101,4 +101,8 @@ src = "3rd/pkg"
 path = "pkg"
 src = "3rd/pkg"
 
+[dependence.std]
+path = "pkg"
+src = "3rd/pkg"
+
 [test_dependence]

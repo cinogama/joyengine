@@ -1,5 +1,5 @@
 // CameraDefer2DBloomPass.shader
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import je::shader::light2d;

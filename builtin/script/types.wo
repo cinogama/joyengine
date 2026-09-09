@@ -1,6 +1,6 @@
 // types.wo
 
-import woo::std;
+import pkg::std;
 
 import je;
 import je::gui;

@@ -7,7 +7,7 @@
 //（远处细网格先行溶解，只留下更粗的层级，避免密集网格产生摩尔纹），
 // 整体仅保留远距雾化（地平线端渐隐）。
 // 摄像机位姿与投影矩阵由每次绘制通过 JE_GRID_* uniform 提供。
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;

@@ -6,7 +6,7 @@
 //   3. the collision rules via PHYSICS2D_COLLISIONS!.
 // The collision-group table is shared across ALL layers.
 // The script returns a SceneConfig { layers, collide_groups }.
-import woo::std;
+import pkg::std;
 
 import je::typeinfo;
 import je::towoo;

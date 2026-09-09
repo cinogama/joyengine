@@ -3,7 +3,7 @@ Practice: 对实体的一切改动均通过 Practice 对象执行落实。
 
 Practice 是对实体的编辑管理，保留编辑操作的历史，并支持回退功能。
 */
-import woo::std;
+import pkg::std;
 
 import je;
 import je::ecs;

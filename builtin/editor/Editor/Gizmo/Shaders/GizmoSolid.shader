@@ -1,7 +1,7 @@
 // GizmoSolid.shader
 // 变换游标使用的纯色着色器：颜色由每次绘制的 JE_COLOR uniform 提供，
 // 关闭深度测试以保证游标始终可见。
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;

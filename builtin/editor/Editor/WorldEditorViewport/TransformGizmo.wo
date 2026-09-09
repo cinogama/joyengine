@@ -2,7 +2,7 @@
 // 手柄悬停检测、拖拽开始/进行/结束（平移/旋转/缩放）与拖拽结束后的
 // 撤销记录发布；几何计算复用 GizmoMath.wo 的纯函数。
 
-import woo::std;
+import pkg::std;
 
 import je;
 import je::ecs;

@@ -3,7 +3,7 @@
 // 路径重定向的“重建窗口”逻辑，以及“调试执行/导出时才启用”的
 // 运行时系统列表管理。
 
-import woo::std;
+import pkg::std;
 
 import je;
 import je::ecs;

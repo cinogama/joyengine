@@ -1,4 +1,4 @@
-import woo::std;
+import pkg::std;
 
 import je;
 import je::ecs;
@@ -34,7 +34,7 @@ namespace JEEditor::Editor::EntityClipboard
 {
     // 最近一次复制的实体快照；粘贴不清空，可连续粘贴出多个副本
     let mut s_copied_entity_content = option::none: option<Toml>;
-
+    
     // 复制实体：原样保存快照（挂预设体的实体为差异数据 + "prefab" 键，
     // 派生关系随之保留）
     public func copy(e: entity)=> void
@@ -42,7 +42,7 @@ namespace JEEditor::Editor::EntityClipboard
         s_copied_entity_content =
             option::value(Entity::save(e));
     }
-
+    
     // “创建”/“粘贴”菜单项（生成点版本）：spawn_pos 有值时，粘贴出的实体被
     // 放置到该世界坐标（视口内粘贴传入调试摄像机前方的生成点，见
     // WorldEditorViewport 的 getSpawnPosInFrontOfCamera）；none 时与
@@ -50,13 +50,12 @@ namespace JEEditor::Editor::EntityClipboard
     public func showCreateEntityMenuItemAt(
         wctx: WorldEditorViewport, spawn_pos: option<vec3>)=> void
     {
-        BeginDisabled(s_copied_entity_content->is_none);
         if (BeginMenu("创建..."))
         {
             defer EndMenu();
-
-            
         }
+        BeginDisabled(s_copied_entity_content->is_none);
+        
         if (MenuItem("粘贴"))
         {
             match (s_copied_entity_content)
@@ -70,7 +69,7 @@ namespace JEEditor::Editor::EntityClipboard
         }
         EndDisabled();
     }
-
+    
     // “粘贴”菜单项：剪贴板为空时禁用；点击发布可撤销的创建实体动作，
     // 落实（redo）时以快照为模板创建全新实体并自动选中。
     // 供实体右键菜单与实体列表/视口空白处的右键菜单共用

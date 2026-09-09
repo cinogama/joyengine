@@ -3,7 +3,7 @@
 // 图标命中（EntityPicking.wo）共用的纯函数：屏幕投影、射线求交、
 // 裁剪与旋转计算等，均不持有状态。
 
-import woo::std;
+import pkg::std;
 
 import je;
 import je::ecs;

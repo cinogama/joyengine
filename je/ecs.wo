@@ -1,5 +1,5 @@
 // Joyengine 4.x
-import woo::std;
+import pkg::std;
 import je::typeinfo;
 import je::graphic;
 

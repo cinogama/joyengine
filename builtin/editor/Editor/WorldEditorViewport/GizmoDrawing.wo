@@ -2,7 +2,7 @@
 // 世界坐标网格、被选中实体高亮、摄像机实体 gizmo（视锥体线框 + 图标）、
 // 2D 光源实体图标与变换游标本体的渲染，走视口自有的 rendchain 分支。
 
-import woo::std;
+import pkg::std;
 
 import je;
 import je::ecs;

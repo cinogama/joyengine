@@ -2,7 +2,7 @@
 // 新建默认世界（含默认管线、调试摄像机与两个示例实体）与从
 // .je4world 文件载入并打开编辑视口；供主菜单/资源管理器调用。
 
-import woo::std;
+import pkg::std;
 
 import je;
 import je::ecs;

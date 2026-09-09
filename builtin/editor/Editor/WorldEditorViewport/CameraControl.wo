@@ -2,7 +2,7 @@
 // framebuffer 的按需重建、2D（正交）/2D 光照模式的组件级切换，
 // 以及透视/正交两套输入操控（环视、飞行、平移、滚轮）。
 
-import woo::std;
+import pkg::std;
 
 import je;
 import je::ecs;

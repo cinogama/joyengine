@@ -1,4 +1,4 @@
-import woo::std;
+import pkg::std;
 
 import je::graphic;
 import je::gui;

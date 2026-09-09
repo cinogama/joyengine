@@ -3,7 +3,7 @@
 // 更新编排（含预设体文件的拖放创建实例），以及按 world/标题/保存
 // 路径反查视口的注册表。
 
-import woo::std;
+import pkg::std;
 
 import je;
 import je::ecs;

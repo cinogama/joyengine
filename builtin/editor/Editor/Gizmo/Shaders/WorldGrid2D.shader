@@ -7,7 +7,7 @@
 //（远处细网格先行溶解，只留下更粗的层级，避免密集网格产生摩尔纹），
 // 整体仅保留远距雾化。坐标轴线色与变换游标一致（x 红 / y 绿）。
 // 摄像机位姿与投影矩阵由每次绘制通过 JE_GRID_* uniform 提供。
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;
