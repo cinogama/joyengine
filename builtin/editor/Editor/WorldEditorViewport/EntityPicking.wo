@@ -371,7 +371,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         let mut paste_spawn_pos = option::none: option<vec3>;
         if (paste_at_camera_front)
             paste_spawn_pos = self->getSpawnPosInFrontOfCamera();
-        EntityClipboard::showPasteMenuItemAt(self, paste_spawn_pos);
+        EntityClipboard::showCreateEntityMenuItemAt(self, paste_spawn_pos);
 
         if (MenuItem("销毁"))
         {

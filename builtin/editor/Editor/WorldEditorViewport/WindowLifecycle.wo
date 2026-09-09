@@ -491,7 +491,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         // 空白处的菜单一致；不同点在于粘贴出的实体生成在摄像机前方）
         if (BeginPopup(VIEWPORT_BLANK_CONTEXT_MENU_ID))
         {
-            EntityClipboard::showPasteMenuItemAt(
+            EntityClipboard::showCreateEntityMenuItemAt(
                 self, self->getSpawnPosInFrontOfCamera());
             defer EndPopup();
         }

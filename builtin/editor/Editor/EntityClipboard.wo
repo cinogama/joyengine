@@ -43,14 +43,20 @@ namespace JEEditor::Editor::EntityClipboard
             option::value(Entity::save(e));
     }
 
-    // “粘贴”菜单项（生成点版本）：spawn_pos 有值时，粘贴出的实体被
+    // “创建”/“粘贴”菜单项（生成点版本）：spawn_pos 有值时，粘贴出的实体被
     // 放置到该世界坐标（视口内粘贴传入调试摄像机前方的生成点，见
     // WorldEditorViewport 的 getSpawnPosInFrontOfCamera）；none 时与
     // showPasteMenuItem 一致，保持快照原位置
-    public func showPasteMenuItemAt(
+    public func showCreateEntityMenuItemAt(
         wctx: WorldEditorViewport, spawn_pos: option<vec3>)=> void
     {
         BeginDisabled(s_copied_entity_content->is_none);
+        if (BeginMenu("创建..."))
+        {
+            defer EndMenu();
+
+            
+        }
         if (MenuItem("粘贴"))
         {
             match (s_copied_entity_content)
@@ -70,6 +76,6 @@ namespace JEEditor::Editor::EntityClipboard
     // 供实体右键菜单与实体列表/视口空白处的右键菜单共用
     public func showPasteMenuItem(wctx: WorldEditorViewport)=> void
     {
-        showPasteMenuItemAt(wctx, option::none);
+        showCreateEntityMenuItemAt(wctx, option::none);
     }
 }
