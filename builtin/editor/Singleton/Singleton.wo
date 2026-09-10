@@ -1,0 +1,89 @@
+import pkg::std;
+import pkg::singleton;
+import pkg::interface;
+import pkg::toml;
+import pkg::fsys;
+import pkg::try;
+
+import je;
+
+using std;
+using toml;
+using fsys;
+using je;
+
+namespace JEEditor::Singleton
+{
+    let singleton_loader_concept<T> = concept!(content: option<Toml>){
+        typeof<T>::singleton_label: string;
+        typeof<T>::create_and_load(content): T;
+    };
+    
+    interface! ISingleton
+    {
+        require (singleton_loader_concept:<Self>);
+        public func save(self)=> option<Toml>
+        {
+            do self;
+            return option::none;
+        }
+    }
+    
+    func singleton_record_list()=> singleton<map<string, ISingleton>>
+    {
+        static let s = singleton::create(
+            "jeeditor::singleton_records", 10001, \={}mut;);
+        return s;
+    }
+    
+    public func register<T>()=> singleton<T>
+        where require!(T: ISingleton);
+    {
+        static let singleton_inst = singleton::create(
+            F"jeeditor::singleton::{typeof<T>::singleton_label}",
+            10000,
+            func(){
+                let inst = typeof<T>::create_and_load(option::none);
+                
+                singleton_record_list()->apply(
+                    func(m){
+                        if (!m->insert(typeof<T>::singleton_label, ISingleton::create(inst)))
+                        {
+                            logfatal(F"Singleton `{typeof<T>::singleton_label}` already registered.");
+                        }
+                    });
+                return inst;
+            });
+            
+        return singleton_inst;
+    }
+    
+    public func save_all_singleton()
+    {
+        do try!{
+            let temp_path = workpath() / ".temp";
+            
+            if (!exist(temp_path))
+            {
+                try! _ = mkdir(temp_path)->or_map(\eno = F"无法创建临时目录：{eno}";);
+            }
+            
+            return singleton_record_list()->apply(func(v){
+                    for (let (label, s): v)
+                    {
+                        match (s->save)
+                        {
+                            none?;
+                            value(saved_data)?
+                            {
+                                try! _ = save(saved_data, temp_path / F"{label}.toml");
+                            }
+                        }
+                    }
+                    return_ok!;
+                });
+        } catch! e {
+            logerr(F"保存单例数据失败：{e: string}");
+        };
+    }
+}

@@ -17,7 +17,6 @@ import GUI::Statebar;
 import GUI::Forms::MsgBox;
 import GUI::Forms::AskBox;
 
-
 import Editor::MainMenu;
 import Editor::LogStatebar;
 import Editor::ReplConsole;
@@ -25,6 +24,7 @@ import Editor::PanicBox;
 import Editor::Shutdown;
 import Editor::ProjectOpen;
 
+import Singleton;
 import Singleton::Universe;
 
 using std;
@@ -45,6 +45,7 @@ func main()
     
     // 编辑器脚本退出之前清掉所有单例实例
     defer singleton::unsafe::reset_all_singleton();
+    defer Singleton::save_all_singleton();
     
     // 载入默认的类型值编辑器
     do towoo::unsafe::dynamic_parser::update_all("!/builtin/script/types.wo")->unwrap;
@@ -57,8 +58,7 @@ func main()
             Editor::PanicBox::show(file, line, funcname, errcode, reason, trace););
             
     // 创建一个 Universe，之后编辑器将在这上面运行
-    let u = Singleton::Universe::createUniverse();
-    defer Singleton::Universe::resetUniverse();
+    let u = Singleton::Universe::getUniverse();
         
     // 开启状态栏的引擎日志通知（WARNING/ERROR/FATAL 以图标 + 彩色文本展示）
     JEEditor::Editor::LogStatebar::start();

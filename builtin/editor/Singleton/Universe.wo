@@ -1,40 +1,35 @@
 import pkg::std;
+import pkg::toml;
+import pkg::singleton;
+import pkg::interface;
 
 import je::ecs;
 
-import pkg::singleton;
+import Singleton;
 
 using je;
+using toml;
 
-namespace JEEditor::Singleton::Universe
+namespace JEEditor::Singleton
 {
-    let _instance = singleton::create(
-        "JEEditor::Singleton::Universe",
-        0,
-        \= std::mutable::create:<option<universe>>(option::none););
+    using Universe = struct{
+        m_universe: universe,
+    }
+    {
+        public let singleton_label = "universe";
+        public func create_and_load(_: option<Toml>)=> Universe
+            where require!(Universe: ISingleton);
+        {
+            return Universe{
+                m_universe = universe::create(),
+            };
+        }
         
-    public func createUniverse()=> universe
-    {
-        return _instance->apply(
-            func(u){
-                assert(u->get->is_none);
-
-                let uni = universe::create();
-                u->set <| option::value(uni);
-
-                return uni;
-            });
-    }
-    public func resetUniverse()
-    {
-        _instance->apply(
-            func(u){
-                assert(u->get->is_value);
-                u->set <| option::none;
-            });
-    }
-    public func getUniverse()=> universe
-    {
-        return _instance->apply(\u = u->get->unwrap;);
+        let singleton = register:<Universe>();
+        
+        public func getUniverse()=> universe
+        {
+            return singleton->apply(\v = v.m_universe;);
+        }
     }
 }
