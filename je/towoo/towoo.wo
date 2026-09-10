@@ -579,5 +579,7 @@ namespace Audio
     {
         extern("libjoyecs", "wojeapi_towoo_audio_playing_set_buffer")
             public func set_buffer(self: Playing, buf: je::audio::buffer)=> void;
+        extern("libjoyecs", "wojeapi_towoo_audio_playing_get_buffer")
+            public func get_buffer(self: Playing)=> option<je::audio::buffer>;
     }
 }

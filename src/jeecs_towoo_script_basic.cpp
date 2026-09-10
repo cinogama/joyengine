@@ -1880,6 +1880,23 @@ WOORT_API woort_api wojeapi_towoo_audio_playing_set_buffer(void)
     return woort_ret_void();
 }
 
+WOORT_API woort_api wojeapi_towoo_audio_playing_get_buffer(void)
+{
+    auto& playing = wo_component<jeecs::Audio::Playing>(0, WOORT_RETURN_SLOT);
+
+    auto res = playing.buffer.get_resource();
+    if (res.has_value())
+    {
+        return woort_ret_option_gchandle(
+            new jeecs::basic::resource<jeecs::audio::buffer>(res.value()),
+            WOORT_IGNORE,
+            [](void* p)
+            { delete static_cast<jeecs::basic::resource<jeecs::audio::buffer>*>(p); },
+            nullptr);
+    }
+    return woort_ret_option_none();
+}
+
 WOORT_API woort_api wojeapi_towoo_audio_source_get_source(void)
 {
     auto& source = wo_component<jeecs::Audio::Source>(0, WOORT_RETURN_SLOT);
