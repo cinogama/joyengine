@@ -465,10 +465,10 @@ namespace JEEditor::Editor::WorldEditorViewport
             };
 
             // 绘制 2D 物理碰撞体实体 gizmo（线框 + 编辑手柄）：
-            // 选中实体恒绘制线框（黄色，与游标高亮一致）；“编辑碰撞体”
-            // 模式下所有碰撞体实体均绘制（常态绿色），并为选中实体绘制
-            // 可拖拽的编辑手柄。线段用单位 X 轴线段旋到边方向绘制；
-            // 手柄为面向调试摄像机的方块（屏幕像素恒定大小）。
+            // 所有碰撞体实体恒绘制线框（常态绿色，选中黄色与游标高亮
+            // 一致），并为选中实体绘制可拖拽的编辑手柄（无需模式开关）。
+            // 线段用单位 X 轴线段旋到边方向绘制；手柄为面向调试摄像机
+            // 的方块（屏幕像素恒定大小）。
             do try!{
                 try! debug_camera_trans =
                     camera_entity->towoo::get_component:<Transform::Translation>();
@@ -516,9 +516,6 @@ namespace JEEditor::Editor::WorldEditorViewport
                             value(selected)?
                                 is_selected = selected == euid;
                         }
-                        // 非编辑模式下仅绘制选中实体的碰撞体线框
-                        if (!is_selected && !self.m_collider_edit_mode)
-                            return_value!;
 
                         let color = is_selected
                             ? COLLIDER_GIZMO_COLOR_SELECTED
@@ -527,8 +524,8 @@ namespace JEEditor::Editor::WorldEditorViewport
                             drawColliderEdge(
                                 outline[i], outline[(i + 1) % outline->len], color);
 
-                        // 编辑模式下为选中实体绘制编辑手柄
-                        if (is_selected && self.m_collider_edit_mode)
+                        // 为选中实体绘制编辑手柄
+                        if (is_selected)
                         {
                             match (getColliderHandles(e))
                             {

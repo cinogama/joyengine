@@ -200,7 +200,6 @@ namespace JEEditor::Editor::WorldEditorViewport
             m_icon_gizmo_rects = []mut: vec<mut (entity::internal::euid_t, vec2, real)>,
             m_icon_gizmo_hover = mut option::none,
 
-            m_collider_edit_mode = mut false,
             m_collider_hover_handle = mut GIZMO_HANDLE_NONE,
             m_collider_dragging = mut false,
             m_collider_drag_handle = mut GIZMO_HANDLE_NONE,

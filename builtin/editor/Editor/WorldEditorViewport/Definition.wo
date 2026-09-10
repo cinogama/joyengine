@@ -138,9 +138,7 @@ namespace JEEditor::Editor
         protected m_icon_gizmo_hover: mut option<entity::internal::euid_t>,
 
         // ---- 碰撞体 gizmo（编辑手柄）状态 ----
-        // “编辑碰撞体”模式：选中带碰撞体的实体时可用，视口内显示
-        // 可拖拽的编辑手柄，变换游标的交互被抑制（绘制亦隐藏）
-        protected m_collider_edit_mode: mut bool,
+        // 选中带碰撞体的实体即显示手柄、可直接拖拽（无需模式开关）
         protected m_collider_hover_handle: mut int,
         protected m_collider_dragging: mut bool,
         protected m_collider_drag_handle: mut int,

@@ -130,14 +130,6 @@ namespace JEEditor::Editor::WorldEditorViewport
             self.m_gizmo_drag_handle = GIZMO_HANDLE_NONE;
         }
 
-        // “编辑碰撞体”模式下碰撞体手柄接管视口交互：隐藏变换游标，
-        // 不再做悬停检测/开始拖拽（进行中的拖拽已在上面正常收尾）
-        if (self.m_collider_edit_mode)
-        {
-            self.m_gizmo_hover_handle = GIZMO_HANDLE_NONE;
-            return;
-        }
-
         if (debug_camera->is_none || self.m_selected_entity_id->is_none)
         {
             self.m_gizmo_hover_handle = GIZMO_HANDLE_NONE;

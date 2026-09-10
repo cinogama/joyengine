@@ -1534,7 +1534,7 @@ typedef struct je_DependenceArchInfos
 typedef struct je_CollectedRequirements je_CollectedRequirements;
 
 typedef struct je_RequirementCollection {
-    je_DependenceArchInfos*     m_cached_archs;
+    je_DependenceArchInfos* m_cached_archs;
     size_t                      m_cached_arch_count;
 
     je_CollectedRequirements* m_collected_requirement;
@@ -4917,7 +4917,6 @@ namespace jeecs
                 { t.JEParseFromScriptType(val) } -> std::same_as<void>;
                 { ct.JEParseToScriptType(val) } -> std::same_as<void>;
             };
-
             template <typename U>
             concept has_pointer_typeinfo_constructor_function = requires(void* ptr, const je_TypeInfo * tinfo)
             {
@@ -4948,7 +4947,6 @@ namespace jeecs
             {
                 new U();
             };
-
             template <typename T>
             concept is_reference_or_pointer = std::is_reference_v<T> || std::is_pointer_v<T>;
 
@@ -6486,43 +6484,65 @@ namespace jeecs
         template <typename T>
         using resource = shared_pointer<T>;
 
+        namespace traits
+        {
+            template <typename T>
+            concept is_loadable_resource = requires(const std::string & path)
+            {
+                { T::load(path) } -> std::same_as<std::optional<basic::resource<T>>>;
+            };
+        }
+
+        class file_resource_placeholder
+        {
+            JECS_DISABLE_MOVE_AND_COPY(file_resource_placeholder);
+            file_resource_placeholder() = default;
+        public:
+            static std::optional<resource<file_resource_placeholder>> load(
+                const std::string& path)
+            {
+                return resource<file_resource_placeholder>(new file_resource_placeholder());
+            }
+        };
+
         /*
-        jeecs::basic::fileresource [类型]
+        jeecs::basic::file_resource [类型]
         文件资源包装类型，用于组件内的成员变量
             * 类型T应该有 load 方法以创建和返回自身
             * 类型T如果是void，那么相当于只读取文件名
         */
-        template <typename T>
-        class fileresource
+        template <traits::is_loadable_resource T = file_resource_placeholder>
+        class file_resource
         {
             struct file_content_t
             {
                 basic::string m_path;
                 basic::resource<T> m_resource;
             };
-            std::optional<file_content_t> m_file;
-
+            basic::optional<file_content_t> m_file;
         public:
-            bool load(const std::string& path)
+            auto reset() -> void
             {
-                clear();
-                if (path != "")
+                m_file.reset();
+            }
+            auto load(const std::string& path) -> bool
+            {
+                reset();
+                if (!path.empty())
                 {
                     auto res = T::load(path);
-                    if (res.has_value())
-                    {
-                        m_file.emplace(
-                            file_content_t{
-                                path,
-                                res.value(),
-                            });
-                        return true;
-                    }
-                    return false;
+                    if (!res.has_value())
+                        return false;
+
+                    m_file.emplace(
+                        file_content_t{
+                            path,
+                            res.value(),
+                        });
                 }
                 return true;
             }
-            void set_resource(const basic::resource<T>& res)
+            auto set_resource(const basic::resource<T>& res) -> void
             {
                 m_file.emplace(
                     file_content_t{
@@ -6530,66 +6550,71 @@ namespace jeecs
                         res,
                     });
             }
-            bool has_resource() const
+            auto has_resource() const -> bool
             {
                 return m_file.has_value();
             }
-            std::optional<basic::resource<T>> get_resource() const
+            auto get_resource() const -> std::optional<basic::resource<T>>
             {
                 if (m_file.has_value())
                     return m_file->m_resource;
 
                 return std::nullopt;
             }
-            std::optional<std::string> get_path() const
+            auto get_path() const -> std::optional<std::string>
             {
                 if (m_file.has_value())
                     return m_file->m_path.cpp_str();
 
                 return std::nullopt;
             }
-            void clear()
-            {
-                m_file.reset();
-            }
-        };
-
-        template <>
-        class fileresource<void>
-        {
-            struct file_content_t
-            {
-                basic::string m_path;
-            };
-            std::optional<file_content_t> m_file;
 
         public:
-            bool load(const std::string& path)
+            static const char* JEScriptTypeName()
             {
-                clear();
-                if (path != "")
+                return "file_resource";
+            }
+            static const char* JEScriptTypeDeclare()
+            {
+                if constexpr (std::is_same_v<file_resource_placeholder, T>)
+                    return "using file_resource = struct{public path: option<string>};";
+                else
+                    return "";
+            }
+            void JEParseFromScriptType(woort_value v)
+            {
+                woort_value path;
+                if (!woort_push_reserve(1, &path))
+                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                else
                 {
-                    m_file.emplace(
-                        file_content_t{
-                            path,
-                        });
-                }
-                return true;
-            }
-            std::optional<std::string> get_path() const
-            {
-                if (m_file.has_value())
-                    return m_file->m_path.cpp_str();
+                    woort_struct_get(path, v, 0);
+                    if (woort_option_get(path, path))
+                        (void)load(woort_string(path));
+                    else
+                        reset();
 
-                return std::nullopt;
+                    woort_pop(1);
+                }
             }
-            bool has_resource() const
+            void JEParseToScriptType(woort_value v) const
             {
-                return m_file.has_value();
-            }
-            void clear()
-            {
-                m_file.reset();
+                woort_value field;
+                if (!woort_push_reserve(1, &field))
+                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                else
+                {
+                    auto path = get_path();
+                    if (path.has_value())
+                        woort_set_option_string(field, path.value().c_str());
+                    else
+                        woort_set_option_none(field);
+
+                    woort_set_struct(v, 1);
+                    woort_struct_set(v, 0, field);
+
+                    woort_pop(1);
+                }
             }
         };
     }
@@ -10589,7 +10614,7 @@ namespace jeecs
             }
             void set_global_rotation(const math::quat& _rot, LocalRotation* rot)
             {
-            
+
                 if (rot)
                     rot->rot = _rot * get_parent_rotation(rot).inverse();
                 world_rotation = _rot;
@@ -11064,7 +11089,7 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Scene);
             JECS_DEFAULT_CONSTRUCTOR(Scene);
 
-            basic::fileresource<void> physics_config;
+            basic::file_resource<> physics_config;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
@@ -11188,76 +11213,6 @@ namespace jeecs
             }
         };
 
-        // ===================== Script-visible vertex loop =====================
-        // A dynamic list of 2D points exposed to woolang as `array<vec2>`
-        // (same mapping pattern as Light2D::BlockShadow::block_mesh).
-        // Used by Collider::Mesh to store the polygon outline. Default value
-        // is the unit square, matching Collider::Box's default extents.
-        struct vertex_list
-        {
-            basic::vector<math::vec2> points = {
-                math::vec2(-0.5f, -0.5f),
-                math::vec2( 0.5f, -0.5f),
-                math::vec2( 0.5f,  0.5f),
-                math::vec2(-0.5f,  0.5f),
-            };
-
-            static const char* JEScriptTypeName()
-            {
-                return "Physics2D::vertex_list";
-            }
-            static const char* JEScriptTypeDeclare()
-            {
-                return
-                    "namespace Physics2D\n"
-                    "{\n"
-                    "    public using vertex_list = array<vec2>;\n"
-                    "}";
-            }
-            void JEParseFromScriptType(woort_value v)
-            {
-                woort_value pos;
-                if (!woort_push_reserve(1, &pos))
-                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
-                else
-                {
-                    const size_t point_count = woort_vec_len(v);
-
-                    points.clear();
-
-                    for (size_t i = 0; i < point_count; ++i)
-                    {
-                        (void)woort_vec_get(pos, v, i);
-
-                        math::vec2 position;
-                        position.JEParseFromScriptType(pos);
-
-                        points.push_back(position);
-                    }
-
-                    woort_pop(1);
-                }
-            }
-            void JEParseToScriptType(woort_value v) const
-            {
-                woort_value pos;
-                if (!woort_push_reserve(1, &pos))
-                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
-                else
-                {
-                    woort_set_vec(v);
-                    woort_vec_resize(v, points.size());
-                    for (size_t i = 0; i < points.size(); ++i)
-                    {
-                        points.at(i).JEParseToScriptType(pos);
-                        (void)woort_vec_set(v, i, pos);
-                    }
-
-                    woort_pop(1);
-                }
-            }
-        };
-
         // ===================== Colliders (mutually exclusive) =====================
         namespace Collider
         {
@@ -11305,6 +11260,76 @@ namespace jeecs
             {
                 JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Mesh);
                 JECS_DEFAULT_CONSTRUCTOR(Mesh);
+
+                // ===================== Script-visible vertex loop =====================
+                // A dynamic list of 2D points exposed to woolang as `array<vec2>`
+                // (same mapping pattern as Light2D::BlockShadow::block_mesh).
+                // Used by Collider::Mesh to store the polygon outline. Default value
+                // is the unit square, matching Collider::Box's default extents.
+                struct vertex_list
+                {
+                    basic::vector<math::vec2> points = {
+                        math::vec2(-0.5f, -0.5f),
+                        math::vec2(0.5f, -0.5f),
+                        math::vec2(0.5f,  0.5f),
+                        math::vec2(-0.5f,  0.5f),
+                    };
+
+                    static const char* JEScriptTypeName()
+                    {
+                        return "Physics2D::vertex_list";
+                    }
+                    static const char* JEScriptTypeDeclare()
+                    {
+                        return
+                            "namespace Physics2D\n"
+                            "{\n"
+                            "    public using vertex_list = array<vec2>;\n"
+                            "}";
+                    }
+                    void JEParseFromScriptType(woort_value v)
+                    {
+                        woort_value pos;
+                        if (!woort_push_reserve(1, &pos))
+                            woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                        else
+                        {
+                            const size_t point_count = woort_vec_len(v);
+
+                            points.clear();
+
+                            for (size_t i = 0; i < point_count; ++i)
+                            {
+                                (void)woort_vec_get(pos, v, i);
+
+                                math::vec2 position;
+                                position.JEParseFromScriptType(pos);
+
+                                points.push_back(position);
+                            }
+
+                            woort_pop(1);
+                        }
+                    }
+                    void JEParseToScriptType(woort_value v) const
+                    {
+                        woort_value pos;
+                        if (!woort_push_reserve(1, &pos))
+                            woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                        else
+                        {
+                            woort_set_vec(v);
+                            woort_vec_resize(v, points.size());
+                            for (size_t i = 0; i < points.size(); ++i)
+                            {
+                                points.at(i).JEParseToScriptType(pos);
+                                (void)woort_vec_set(v, i, pos);
+                            }
+
+                            woort_pop(1);
+                        }
+                    }
+                };
 
                 vertex_list vertices;
                 static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
@@ -12271,7 +12296,7 @@ namespace jeecs
                 LOOPED_PLAYING,
             };
             play_state state = play_state::STOPPED;
-            basic::fileresource<audio::buffer> buffer;
+            basic::file_resource<audio::buffer> buffer;
 
             bool play = true;
             bool loop = true;
@@ -12792,60 +12817,8 @@ namespace jeecs
             jeecs::typing::register_type<Input::VirtualGamepad>(guard, "Input::VirtualGamepad");
 
             // 1. register basic types
+            jeecs::typing::register_type<basic::file_resource<>>(guard, nullptr);
             jeecs::typing::register_type<math::ivec2>(guard, nullptr);
-
-            auto file_resource_uniform_parser_c2w =
-                [](const auto* v, woort_value value)
-                {
-                    woort_value s;
-                    if (!woort_push_reserve(1, &s))
-                        woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
-                    else
-                    {
-                        woort_set_struct(value, 1);
-
-                        if (v->has_resource())
-                            woort_set_option_string(s, v->get_path()->c_str());
-                        else
-                            woort_set_option_none(s);
-
-                        woort_struct_set(value, 0, s);
-
-                        woort_pop(1);
-                    }
-                };
-            auto file_resource_uniform_parser_w2c =
-                [](auto* v, woort_value value)
-                {
-                    woort_value s;
-                    if (!woort_push_reserve(1, &s))
-                        woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
-                    else
-                    {
-                        woort_struct_get(s, value, 0);
-
-                        if (woort_option_get(s, s))
-                            v->load(woort_string(s));
-                        else
-                            v->clear();
-
-                        woort_pop(1);
-                    }
-                };
-            typing::register_script_parser<basic::fileresource<void>>(
-                guard,
-                file_resource_uniform_parser_c2w,
-                file_resource_uniform_parser_w2c,
-                "fileresource_void",
-                "public using fileresource_void = struct{ public path: option<string> };");
-
-            typing::register_script_parser<basic::fileresource<audio::buffer>>(
-                guard,
-                file_resource_uniform_parser_c2w,
-                file_resource_uniform_parser_w2c,
-                "fileresource_audio_buffer",
-                "public using fileresource_audio_buffer = fileresource_void;");
-
             typing::register_script_parser<bool>(
                 guard,
                 [](const bool* v, woort_value value)
@@ -12857,7 +12830,6 @@ namespace jeecs
                     *v = woort_bool(value);
                 },
                 "bool", "");
-
             auto integer_uniform_parser_c2w = [](const auto* v, woort_value value)
                 {
                     woort_set_int(value, (woort_Int)*v);
@@ -12903,8 +12875,8 @@ namespace jeecs
                     static_assert(sizeof(size_t) == sizeof(uint64_t) || sizeof(size_t) == sizeof(uint32_t));
                 }
             }
-            // Or size_t is same as uint32_t or uint64_t, skip.
 
+            // Or size_t is same as uint32_t or uint64_t, skip.
             typing::register_script_parser<float>(
                 guard,
                 [](const float* v, woort_value value)

@@ -235,18 +235,24 @@ namespace JEEditor::Editor::WorldEditorViewport
                     // 圆弧圆心纵坐标：h/2 > r 时为 ±(h/2-r)，否则胶囊退化
                     // 为圆（圆心过原点），统一为 max(h/2-r, 0)
                     let hc = (hh > r) ? (hh - r) | 0.;
+                    // 两段半圆弧均“含端点”采样：上半弧止于 (-r,+hc)、下半弧
+                    // 始于 (-r,-hc)，二者之间的边与闭合边即两侧直边，
+                    // 恰好落在 x=±r 上（否则直边会跨过交点一个采样步长而倾斜）
+                    let half = COLLIDER_CIRCLE_SEGMENTS / 2;
                     let pts = []mut: vec<vec3>;
-                    for (let mut i = 0; i < COLLIDER_CIRCLE_SEGMENTS; i += 1)
+                    for (let mut k = 0; k <= half; k += 1)
                     {
-                        let ang = 2. * mathf::PI
-                            * (i as real / COLLIDER_CIRCLE_SEGMENTS as real);
-                        let s = mathf::sin(ang);
-                        // 上半环绕 (0,+hc)、下半环绕 (0,-hc)，在 sin 过零处
-                        // 自然衔接出两侧直边
-                        let yc = (s >= 0.) ? hc | -hc;
+                        let ang = mathf::PI * (k as real / half as real);
                         pts->add(colliderShapeToWorld(
                             center, rotation,
-                            (mathf::cos(ang) * r, yc + s * r) as vec2));
+                            (mathf::cos(ang) * r, hc + mathf::sin(ang) * r) as vec2));
+                    }
+                    for (let mut k = 0; k <= half; k += 1)
+                    {
+                        let ang = mathf::PI + mathf::PI * (k as real / half as real);
+                        pts->add(colliderShapeToWorld(
+                            center, rotation,
+                            (mathf::cos(ang) * r, -hc + mathf::sin(ang) * r) as vec2));
                     }
                     return_value! option::value(pts->to_array);
                 }
@@ -272,9 +278,11 @@ namespace JEEditor::Editor::WorldEditorViewport
 
     // ==================== 交互（悬停 / 拖拽 / 撤销） ====================
 
-    // 每帧更新碰撞体编辑手柄状态：仅“编辑碰撞体”模式下工作。
-    // 松开左键结束拖拽并提交撤销记录；拖拽中按鼠标射线应用编辑；
-    // 否则做屏幕空间悬停检测，悬停手柄上按下左键开始拖拽。
+    // 每帧更新碰撞体编辑手柄状态：选中带碰撞体的实体即显示手柄、
+    // 无需模式开关可直接拖拽（变换游标优先——其手柄被悬停/拖拽中时
+    // 不响应碰撞体手柄）。松开左键结束拖拽并提交撤销记录；拖拽中
+    // 按鼠标射线应用编辑；否则做屏幕空间悬停检测，悬停手柄上按下
+    // 左键开始拖拽。
     protected func updateColliderGizmo(
         self: WorldEditorViewport,
         debug_camera: option<entity>,
@@ -293,7 +301,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             self.m_collider_drag_handle = GIZMO_HANDLE_NONE;
         }
 
-        if (!self.m_collider_edit_mode || self.m_selected_entity_id->is_none)
+        if (self.m_selected_entity_id->is_none)
             return;
 
         do try!{
@@ -336,7 +344,9 @@ namespace JEEditor::Editor::WorldEditorViewport
                 && !self.m_is_look_active
                 && !self.m_is_pan_active
                 && !self.m_is_orbit_active
-                && !self.m_gizmo_dragging))
+                && !self.m_gizmo_dragging
+                // 变换游标的手柄被悬停时由其优先接管
+                && self.m_gizmo_hover_handle == GIZMO_HANDLE_NONE))
                 return_value!;
 
             // 悬停检测：手柄世界坐标投影到屏幕，取距离最近者

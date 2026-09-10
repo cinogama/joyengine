@@ -12,7 +12,6 @@ import builtin::editor::Editor::Practice;
 
 import Definition;
 import CameraControl;
-import EntityPicking;
 
 using std;
 
@@ -93,42 +92,6 @@ namespace JEEditor::Editor::WorldEditorViewport
                         "切换编辑器摄像机透视/正交投影（2D 模式下旋转归零，右键/中键平移，Ctrl+滚轮缩放，滚轮调深度）");
                 }
             }
-        }
-
-        SameLine();
-
-        // “编辑碰撞体”模式开关：选中带碰撞体（Rigidbody + 任一 Collider）
-        // 的实体时可用，开启后视口内显示可拖拽的碰撞体编辑手柄，变换
-        // 游标交互被抑制（交互见 ColliderGizmo.wo）；换选无碰撞体实体
-        // 时自动退出该模式
-        let mut selected_has_collider = false;
-        match (self.m_selected_entity_id)
-        {
-            none?;
-            value(selected_euid)?
-                match (self->findEntityByEuid(selected_euid))
-                {
-                    none?;
-                    value(e)?
-                        selected_has_collider = hasPhysics2DCollider(e);
-                }
-        }
-        if (!selected_has_collider)
-            self.m_collider_edit_mode = false;
-
-        BeginDisabled(!selected_has_collider);
-        match (CheckBox("编辑碰撞体", self.m_collider_edit_mode))
-        {
-            none?;
-            value(v)?
-                self.m_collider_edit_mode = v;
-        }
-        EndDisabled();
-        if (IsItemHovered())
-        {
-            toolbar_hovered = true;
-            do SetTooltip(
-                "在视口中直接拖拽编辑选中实体的碰撞体（盒四角/圆半径/胶囊半径与高度/网格顶点）");
         }
 
         SameLine();
