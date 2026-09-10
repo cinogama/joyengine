@@ -180,13 +180,13 @@ namespace JEEditor::Editor
         protected let GIZMO_COLOR_HOVER = (1., 1., 0.25, 1.);
         
         // ---- 摄像机实体 gizmo 参数 ----
-        protected let CAMERA_GIZMO_ICON_SIZE_PX = 32.;   // 摄像机图标边长（像素）
+        protected let CAMERA_GIZMO_ICON_SIZE_PX = 48.;   // 摄像机图标边长（像素）
         // 视锥体线框配色：常态浅蓝，悬停提亮，选中复用游标高亮黄
         protected let CAMERA_GIZMO_COLOR = (0.35, 0.78, 0.95, 0.55);
         protected let CAMERA_GIZMO_COLOR_HOVER = (0.55, 0.9, 1., 0.8);
         
         // ---- 2D 光源实体 gizmo 参数 ----
-        protected let LIGHT2D_GIZMO_ICON_SIZE_PX = 32.;  // 光源图标边长（像素）
+        protected let LIGHT2D_GIZMO_ICON_SIZE_PX = 48.;  // 光源图标边长（像素）
 
         // ---- 碰撞体 gizmo 参数 ----
         protected let COLLIDER_HANDLE_SIZE_PX = 8.;      // 编辑手柄方块边长（像素）
