@@ -464,11 +464,67 @@ namespace JEEditor::Editor::WorldEditorViewport
                 return_value!;
             };
 
+            // 绘制变换游标（操作手柄）；碰撞体编辑手柄在本块之后提交，
+            // 因此手柄始终绘制在游标上层（见下方碰撞体块注释）。
+            if (self.m_gizmo_draw_visible)
+            {
+                let origin = self.m_gizmo_draw_origin;
+                let orientation = self.m_gizmo_draw_rotation;
+                let active_handle = self.m_gizmo_dragging
+                    ? self.m_gizmo_drag_handle
+                    | self.m_gizmo_hover_handle;
+
+                let axis_colors = [
+                    (active_handle == GIZMO_HANDLE_X) ? GIZMO_COLOR_HOVER | GIZMO_COLOR_X,
+                    (active_handle == GIZMO_HANDLE_Y) ? GIZMO_COLOR_HOVER | GIZMO_COLOR_Y,
+                    (active_handle == GIZMO_HANDLE_Z) ? GIZMO_COLOR_HOVER | GIZMO_COLOR_Z,
+                ];
+
+                if (self.m_gizmo_mode == GizmoMode::ROTATE)
+                {
+                    let ring_size = self.m_gizmo_draw_size * GIZMO_RING_RADIUS_RATIO;
+                    let ring_scale = (ring_size, ring_size, ring_size) as vec3;
+
+                    drawSolid(origin, orientation, ring_scale, GIZMO_RING_AROUND_X, axis_colors[0]);
+                    drawSolid(origin, orientation, ring_scale, GIZMO_RING_AROUND_Y, axis_colors[1]);
+                    drawSolid(origin, orientation, ring_scale, GIZMO_RING_AROUND_Z, axis_colors[2]);
+                }
+                else
+                {
+                    let axis_len = (self.m_gizmo_mode == GizmoMode::SCALE)
+                        ? self.m_gizmo_draw_size * GIZMO_SCALE_AXIS_RATIO
+                        | self.m_gizmo_draw_size;
+                    let axis_scale = (axis_len, axis_len, axis_len) as vec3;
+
+                    let lines = [GIZMO_LINE_X, GIZMO_LINE_Y, GIZMO_LINE_Z];
+                    // 平移用箭头锥，缩放用方块手柄
+                    let mut tips = [GIZMO_CONE_X, GIZMO_CONE_Y, GIZMO_CONE_Z];
+                    if (self.m_gizmo_mode == GizmoMode::SCALE)
+                        tips = [GIZMO_BOX_X, GIZMO_BOX_Y, GIZMO_BOX_Z];
+                    for (let mut axis = 0; axis < 3; axis += 1)
+                    {
+                        drawSolid(origin, orientation, axis_scale, lines[axis], axis_colors[axis]);
+                        drawSolid(origin, orientation, axis_scale, tips[axis], axis_colors[axis]);
+                    }
+
+                    // 中央手柄：屏幕平面移动 / 整体缩放
+                    let center = self.m_gizmo_draw_center_size;
+                    drawSolid(
+                        origin, orientation, (center, center, center) as vec3,
+                        DEFAULT_SQUARE_SHAPE,
+                        (active_handle == GIZMO_HANDLE_CENTER)
+                        ? GIZMO_COLOR_HOVER
+                        | GIZMO_COLOR_CENTER);
+                }
+            }
+
             // 绘制 2D 物理碰撞体实体 gizmo（线框 + 编辑手柄）：
             // 所有碰撞体实体恒绘制线框（常态绿色，选中黄色与游标高亮
             // 一致），并为选中实体绘制可拖拽的编辑手柄（无需模式开关）。
             // 线段用单位 X 轴线段旋到边方向绘制；手柄为面向调试摄像机
-            // 的方块（屏幕像素恒定大小）。
+            // 的方块（屏幕像素恒定大小）。本块在变换游标之后提交，
+            // all gizmo 均 ZTEST(ALWAYS)/ZWRITE(DISABLE)，故手柄与线框
+            // 绘制在游标之上，避免被游标遮挡而无法编辑。
             do try!{
                 try! debug_camera_trans =
                     camera_entity->towoo::get_component:<Transform::Translation>();
@@ -546,58 +602,6 @@ namespace JEEditor::Editor::WorldEditorViewport
                 }
                 return_value!;
             };
-
-            if (self.m_gizmo_draw_visible)
-            {
-                let origin = self.m_gizmo_draw_origin;
-                let orientation = self.m_gizmo_draw_rotation;
-                let active_handle = self.m_gizmo_dragging
-                    ? self.m_gizmo_drag_handle
-                    | self.m_gizmo_hover_handle;
-
-                let axis_colors = [
-                    (active_handle == GIZMO_HANDLE_X) ? GIZMO_COLOR_HOVER | GIZMO_COLOR_X,
-                    (active_handle == GIZMO_HANDLE_Y) ? GIZMO_COLOR_HOVER | GIZMO_COLOR_Y,
-                    (active_handle == GIZMO_HANDLE_Z) ? GIZMO_COLOR_HOVER | GIZMO_COLOR_Z,
-                ];
-
-                if (self.m_gizmo_mode == GizmoMode::ROTATE)
-                {
-                    let ring_size = self.m_gizmo_draw_size * GIZMO_RING_RADIUS_RATIO;
-                    let ring_scale = (ring_size, ring_size, ring_size) as vec3;
-
-                    drawSolid(origin, orientation, ring_scale, GIZMO_RING_AROUND_X, axis_colors[0]);
-                    drawSolid(origin, orientation, ring_scale, GIZMO_RING_AROUND_Y, axis_colors[1]);
-                    drawSolid(origin, orientation, ring_scale, GIZMO_RING_AROUND_Z, axis_colors[2]);
-                }
-                else
-                {
-                    let axis_len = (self.m_gizmo_mode == GizmoMode::SCALE)
-                        ? self.m_gizmo_draw_size * GIZMO_SCALE_AXIS_RATIO
-                        | self.m_gizmo_draw_size;
-                    let axis_scale = (axis_len, axis_len, axis_len) as vec3;
-
-                    let lines = [GIZMO_LINE_X, GIZMO_LINE_Y, GIZMO_LINE_Z];
-                    // 平移用箭头锥，缩放用方块手柄
-                    let mut tips = [GIZMO_CONE_X, GIZMO_CONE_Y, GIZMO_CONE_Z];
-                    if (self.m_gizmo_mode == GizmoMode::SCALE)
-                        tips = [GIZMO_BOX_X, GIZMO_BOX_Y, GIZMO_BOX_Z];
-                    for (let mut axis = 0; axis < 3; axis += 1)
-                    {
-                        drawSolid(origin, orientation, axis_scale, lines[axis], axis_colors[axis]);
-                        drawSolid(origin, orientation, axis_scale, tips[axis], axis_colors[axis]);
-                    }
-
-                    // 中央手柄：屏幕平面移动 / 整体缩放
-                    let center = self.m_gizmo_draw_center_size;
-                    drawSolid(
-                        origin, orientation, (center, center, center) as vec3,
-                        DEFAULT_SQUARE_SHAPE,
-                        (active_handle == GIZMO_HANDLE_CENTER)
-                        ? GIZMO_COLOR_HOVER
-                        | GIZMO_COLOR_CENTER);
-                }
-            }
 
             return_value!;
         };

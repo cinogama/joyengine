@@ -237,6 +237,13 @@ namespace JEEditor::Editor::WorldEditorViewport
                     view_proj, origin, orientation,
                     self.m_gizmo_draw_size, mouse, rmin, rsize);
 
+            // 碰撞体编辑手柄优先：其被悬停或拖拽中时变换游标让位
+            //（不响应悬停高亮与左键拖拽；游标本帧仍照常绘制）。
+            // 本函数在 updateColliderGizmo 之后运行，读到的即本帧结果。
+            if (self.m_collider_hover_handle != GIZMO_HANDLE_NONE
+                || self.m_collider_dragging)
+                self.m_gizmo_hover_handle = GIZMO_HANDLE_NONE;
+
             // 悬停手柄上按下左键：开始拖拽
             if (self.m_gizmo_hover_handle != GIZMO_HANDLE_NONE
                 && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left))

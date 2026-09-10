@@ -468,26 +468,26 @@ namespace JEEditor::Editor::WorldEditorViewport
             viewport_hovered && !toolbar_hovered,
             viewport_rect);
 
-        // 游标交互需先于摄像机控制，以抑制点击选中/摄像机操作
+        // 碰撞体编辑手柄交互需先于变换游标：手柄目标更小更具体，优先
+        // 接管左键拖拽；随后运行的 updateTransformGizmo 读取其悬停状态
+        // 并让位。二者均先于摄像机控制，以抑制点击选中/摄像机操作
         match (viewport_rect)
         {
             none?;
             value((rect_min, rect_max))?
-                self->updateTransformGizmo(
+                self->updateColliderGizmo(
                     debug_camera,
                     viewport_hovered && !toolbar_hovered,
                     rect_min,
                     (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
         }
 
-        // “编辑碰撞体”模式下的手柄交互（编辑模式下变换游标交互已被
-        // updateTransformGizmo 抑制，此处接管左键拖拽），同样先于摄像机
-        // 控制以抑制点击选中
+        // 变换游标交互（碰撞体手柄被悬停/拖拽时让位，见 updateTransformGizmo）
         match (viewport_rect)
         {
             none?;
             value((rect_min, rect_max))?
-                self->updateColliderGizmo(
+                self->updateTransformGizmo(
                     debug_camera,
                     viewport_hovered && !toolbar_hovered,
                     rect_min,

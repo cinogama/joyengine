@@ -279,10 +279,11 @@ namespace JEEditor::Editor::WorldEditorViewport
     // ==================== 交互（悬停 / 拖拽 / 撤销） ====================
 
     // 每帧更新碰撞体编辑手柄状态：选中带碰撞体的实体即显示手柄、
-    // 无需模式开关可直接拖拽（变换游标优先——其手柄被悬停/拖拽中时
-    // 不响应碰撞体手柄）。松开左键结束拖拽并提交撤销记录；拖拽中
-    // 按鼠标射线应用编辑；否则做屏幕空间悬停检测，悬停手柄上按下
-    // 左键开始拖拽。
+    // 无需模式开关可直接拖拽。本函数先于 updateTransformGizmo 运行，
+    // 碰撞体手柄优先——其被悬停/拖拽中时变换游标让位（游标拖拽中
+    // 则不响应手柄）。松开左键结束拖拽并提交撤销记录；拖拽中按鼠标
+    // 射线应用编辑；否则做屏幕空间悬停检测，悬停手柄上按下左键开始
+    // 拖拽。
     protected func updateColliderGizmo(
         self: WorldEditorViewport,
         debug_camera: option<entity>,
@@ -344,9 +345,8 @@ namespace JEEditor::Editor::WorldEditorViewport
                 && !self.m_is_look_active
                 && !self.m_is_pan_active
                 && !self.m_is_orbit_active
-                && !self.m_gizmo_dragging
-                // 变换游标的手柄被悬停时由其优先接管
-                && self.m_gizmo_hover_handle == GIZMO_HANDLE_NONE))
+                // 游标拖拽进行中时由其接管，不响应碰撞体手柄
+                && !self.m_gizmo_dragging))
                 return_value!;
 
             // 悬停检测：手柄世界坐标投影到屏幕，取距离最近者
