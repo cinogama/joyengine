@@ -9,9 +9,14 @@ import je::towoo::types;
 
 import pkg::worst;
 
+import builtin::editor::GUI::FileDrop;
+import builtin::editor::Editor::ResourcePath;
+
 using std;
 using je;
 using je::gui;
+using JEEditor::GUI;
+using JEEditor::Editor;
 
 // =============================================
 // 这个脚本用于向编辑器提供各类型的编辑拓展
@@ -379,66 +384,39 @@ namespace Physics2D::vertex_list
         }
     }
 }
-// namespace fileresource_void
-// {
-//     using parser = void
-//     {
-//         public extern func saving(val: fileresource_void)=> string
-//         {
-//             return val.path->or("");
-//         }
-//         public extern func restoring(dat: string)=> fileresource_void
-//         {
-//             if (dat == "")
-//                 return fileresource_void{ path = option::none };
-//             else
-//                 return fileresource_void{ path = option::value(dat) };
-//         }
-//         public extern func edit(val: fileresource_void, tag: string)=> option<fileresource_void>
-//         {
-//             match (jeapi::gui::widget::File(F"文件：##{tag}", val.path->or(""), \=do nil;))
-//             {
-//                 value(p)?
-//                     if (p == "")
-//                         return option::value(fileresource_void{ path = option::none });
-//                 else
-//                     return option::value(fileresource_void{ path = option::value(p) });
-//                 none?
-//                     return option::none;
-//             }
-//         }
-//     }
-// }
-// namespace fileresource_audio_buffer
-// {
-//     using parser = void
-//     {
-//         public extern func saving(val: fileresource_audio_buffer)=> string
-//         {
-//             return val.path->or("");
-//         }
-//         public extern func restoring(dat: string)=> fileresource_audio_buffer
-//         {
-//             if (dat == "")
-//                 return fileresource_audio_buffer{ path = option::none };
-//             else
-//                 return fileresource_audio_buffer{ path = option::value(dat) };
-//         }
-//         public extern func edit(val: fileresource_audio_buffer, tag: string)=> option<fileresource_audio_buffer>
-//         {
-//             match (jeapi::gui::widget::File(F"文件：##{tag}", val.path->or(""), \=do nil;))
-//             {
-//                 value(p)?
-//                     if (p == "")
-//                         return option::value(fileresource_audio_buffer{ path = option::none });
-//                 else
-//                     return option::value(fileresource_audio_buffer{ path = option::value(p) });
-//                 none?
-//                     return option::none;
-//             }
-//         }
-//     }
-// }
+namespace file_resource
+{
+    using parser = void
+    {
+        public extern func saving(val: file_resource)=> string
+        {
+            return val.path->or("");
+        }
+        public extern func restoring(dat: string)=> file_resource
+        {
+            if (dat == "")
+                return file_resource{ path = option::none };
+            else
+                return file_resource{ path = option::value(dat) };
+        }
+        public extern func edit(val: file_resource, tag: string)=> option<file_resource>
+        {
+            match (FileDrop::File(tag, val.path))
+            {
+                value(p)?
+                    if (p == "")
+                        return option::value(file_resource{ path = option::none });
+                    else
+                        return option::value(file_resource{
+                            path = option::value(
+                                ResourcePath::toRuntimeResourcePath(p)),
+                        });
+                none?
+                    return option::none;
+            }
+        }
+    }
+}
 namespace uuid
 {
     using parser = void

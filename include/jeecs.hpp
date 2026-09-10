@@ -6508,8 +6508,6 @@ namespace jeecs
         /*
         jeecs::basic::file_resource [类型]
         文件资源包装类型，用于组件内的成员变量
-            * 类型T应该有 load 方法以创建和返回自身
-            * 类型T如果是void，那么相当于只读取文件名
         */
         template <traits::is_loadable_resource T = file_resource_placeholder>
         class file_resource
@@ -6576,10 +6574,7 @@ namespace jeecs
             }
             static const char* JEScriptTypeDeclare()
             {
-                if constexpr (std::is_same_v<file_resource_placeholder, T>)
-                    return "using file_resource = struct{public path: option<string>};";
-                else
-                    return "";
+                return "public using file_resource = struct{public path: option<string>};";
             }
             void JEParseFromScriptType(woort_value v)
             {

@@ -1,0 +1,95 @@
+import pkg::std;
+
+import je::gui;
+
+import pkg::fsys;
+
+using std;
+using je::gui;
+using fsys;
+
+// 资源拖放字段：接收从资源管理器（builtin/editor/Editor/Browser.wo）拖来的
+// 文件或目录。ImGui 拖拽按“载荷类型名字符串”匹配，这里直接用字符串接收，
+// 因此本控件不反向依赖 Editor 模块，任何脚本都能复用。
+namespace JEEditor::GUI::FileDrop
+{
+    // 必须与 Browser.wo 中 FilePayload::type 保持一致。
+    let BROWSER_FILE_PAYLOAD = "JE_EDITOR_BROWSER_FILE_PATH";
+
+    // 行尾“清除”按钮的宽度；字段宽度会相应让出这段空间。
+    let CLEAR_BUTTON_WIDTH = 24.;
+
+    func displayName(path: string)=> string
+    {
+        let name = filename(normalize(path));
+        return name->len > 0 ? name | path;
+    }
+
+    // ImGui 风格的文件/目录拖放字段：以整块可交互的按钮展示当前路径的
+    // 文件名（空值显示占位提示），整块区域都是资源管理器的拖放目标；
+    // 已有值时行尾提供“×”清除按钮。
+    //
+    // tag 只作为 ImGui ID 后缀——控件自身不打印标签，成员名由检视面板在
+    // 其左侧打印（与 InputText / CheckBox 等值编辑器保持一致）。
+    //
+    // 返回值按值编辑器的 option 约定：
+    //   option::none      本次无改动
+    //   option::value("") 清除
+    //   option::value(p)  新的本地路径 p（不做 @/ 运行时路径转换，
+    //                     是否需要由调用方经 Editor::ResourcePath 决定）
+    public func File(tag: string, current: option<string>)=> option<string>
+    {
+        let mut result = option::none as option<string>;
+
+        PushIDStr(tag);
+        defer PopID();
+
+        let mut display = "（未设置，拖入文件/目录）";
+        let mut tip = "从资源浏览器拖拽文件或目录到此处";
+        let mut has_value = false;
+
+        match (current)
+        {
+            none?;
+            value(path)?
+            {
+                has_value = true;
+                display = displayName(path);
+                tip = F"{path}\n从资源浏览器拖拽文件或目录到此处替换，右侧 × 可清除";
+            }
+        }
+
+        let mut field_width = GetContentRegionAvail().0;
+        if (has_value)
+        {
+            field_width -= CLEAR_BUTTON_WIDTH;
+            if (field_width < 1.)
+                field_width = 1.;
+        }
+
+        // 整块字段即拖放目标：ButtonSize 会消费自身的 ID，使 AcceptDrag 的
+        // BeginDragDropTarget 恰好落在这块区域上。
+        do ButtonSize(F"{display}###file_drop", (field_width, 0.));
+        if (IsItemHovered())
+            do SetTooltip(tip);
+
+        match (AcceptDrag([BROWSER_FILE_PAYLOAD]))
+        {
+            none?;
+            value((_, path))?
+                result = option::value(path);
+        }
+
+        if (has_value)
+        {
+            // 去掉 SameLine 默认的横向间隔，使字段与清除按钮恰好铺满整行
+            PushStyleVec2(StyleVar::ImGuiStyleVar_ItemSpacing, (0., 0.));
+            SameLine();
+            if (ButtonSize("×###file_drop_clear", (CLEAR_BUTTON_WIDTH, 0.)))
+                result = option::value("");
+            PopStyleVar(1);
+        }
+
+        return result;
+    }
+}
