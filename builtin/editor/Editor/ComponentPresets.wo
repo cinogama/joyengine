@@ -24,47 +24,78 @@ ComponentPresets：“常用组件组合”的共享数据与操作。
 组件名与 je::towoo::components 中的注册名保持一致；组合只负责整组
 操作，若日后组件改名或被删除，失效类型会在添加时被 typeinfo::load
 过滤跳过，不影响其余部分。
+仅在组合表中使用的单次列表保持内联；多处使用的组件名列表提取为
+下方共享常量，同时供“创建...”菜单的实体预设（EntityClipboard.wo）
+引用，保证两处数据一致。
 */
 namespace JEEditor::Editor::ComponentPresets
 {
+    // ===== 共享的组件类型名列表 =====
+    public let BASE_TRANSFORM_COMPONENTS = [
+        "Transform::LocalPosition", "Transform::LocalRotation",
+        "Transform::LocalScale", "Transform::LocalToWorld",
+        "Transform::Translation",
+    ];
+
+    public let UI_TRANSFORM_COMPONENTS = [
+        "UserInterface::Origin", "UserInterface::Absolute",
+        "UserInterface::Relatively", "Transform::Translation",
+    ];
+
+    public let BASE_RENDERER_COMPONENTS = [
+        "Renderer::Shape", "Renderer::Shaders", "Renderer::Textures",
+    ];
+
+    public let LIGHT2D_POINT_COMPONENTS = [
+        "Light2D::Point", "Light2D::Gain", "Light2D::ShadowBuffer",
+    ];
+
+    public let LIGHT2D_RANGE_COMPONENTS = [
+        "Light2D::Range", "Light2D::Gain", "Light2D::ShadowBuffer",
+    ];
+
+    public let LIGHT2D_PARALLEL_COMPONENTS = [
+        "Light2D::Parallel", "Light2D::Gain", "Light2D::ShadowBuffer",
+    ];
+
+    public let LIGHT2D_SHADOW_COMMON_COMPONENTS = [
+        "Light2D::ShapeShadow", "Light2D::BlockShadow",
+        "Light2D::SelfShadow",
+    ];
+
+    public let CAMERA_PERSPECTIVE_COMPONENTS = [
+        "Camera::Projection", "Camera::PerspectiveProjection",
+        "Camera::Viewport", "Camera::FrustumCulling",
+    ];
+
+    public let CAMERA_ORTHO_COMPONENTS = [
+        "Camera::Projection", "Camera::OrthoProjection",
+        "Camera::Viewport", "Camera::FrustumCulling",
+    ];
+
+    public let PHYSICS2D_SCENE_COMPONENTS = [
+        "Physics2D::Scene",
+    ];
+
     // 常用组件组合表：(分组标题, [(组合名, [组件类型全名...])...])
     public let s_component_presets = [
         ("变换", [
-            ("一般变换", [
-                "Transform::LocalPosition", "Transform::LocalRotation",
-                "Transform::LocalScale", "Transform::LocalToWorld",
-                "Transform::Translation"]),
-            ("UI变换", [
-                "UserInterface::Origin", "UserInterface::Absolute",
-                "UserInterface::Relatively", "Transform::Translation"]),
+            ("一般变换", BASE_TRANSFORM_COMPONENTS),
+            ("UI变换", UI_TRANSFORM_COMPONENTS),
         ]),
         ("渲染", [
-            ("基本渲染", [
-                "Renderer::Shape", "Renderer::Shaders",
-                "Renderer::Textures"]),
+            ("基本渲染", BASE_RENDERER_COMPONENTS),
             ("帧动画", ["Animation::FrameAnimation"]),
         ]),
         ("2D光照", [
-            ("点光源", [
-                "Light2D::Point", "Light2D::Gain",
-                "Light2D::ShadowBuffer"]),
-            ("范围光源", [
-                "Light2D::Range", "Light2D::Gain",
-                "Light2D::ShadowBuffer"]),
-            ("平行光源", [
-                "Light2D::Parallel", "Light2D::Gain",
-                "Light2D::ShadowBuffer"]),
-            ("常用阴影", [
-                "Light2D::ShapeShadow", "Light2D::BlockShadow",
-                "Light2D::SelfShadow"]),
+            ("点光源", LIGHT2D_POINT_COMPONENTS),
+            ("范围光源", LIGHT2D_RANGE_COMPONENTS),
+            ("平行光源", LIGHT2D_PARALLEL_COMPONENTS),
+            ("常用阴影", LIGHT2D_SHADOW_COMMON_COMPONENTS),
         ]),
         ("摄像机", [
-            ("透视相机", [
-                "Camera::Projection", "Camera::PerspectiveProjection",
-                "Camera::Viewport", "Camera::FrustumCulling"]),
-            ("正交相机", [
-                "Camera::Projection", "Camera::OrthoProjection",
-                "Camera::Viewport", "Camera::FrustumCulling"]),
+            ("透视相机", CAMERA_PERSPECTIVE_COMPONENTS),
+            ("正交相机", CAMERA_ORTHO_COMPONENTS),
             ("仅UI投影", ["Camera::Projection"]),
             ("光照后处理", [
                 "Light2D::CameraPostPass", "Renderer::Shaders"]),
@@ -86,7 +117,7 @@ namespace JEEditor::Editor::ComponentPresets
             ("触发器", [
                 "Physics2D::Rigidbody", "Physics2D::Collider::Box",
                 "Physics2D::IsTrigger"]),
-            ("物理场景", ["Physics2D::Scene"]),
+            ("物理场景", PHYSICS2D_SCENE_COMPONENTS),
         ]),
         ("音频", [
             ("音源", ["Audio::Source", "Audio::Playing"]),

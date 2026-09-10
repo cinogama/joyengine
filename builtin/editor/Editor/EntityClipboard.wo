@@ -3,6 +3,7 @@ import pkg::std;
 import je;
 import je::ecs;
 import je::gui;
+import je::typeinfo;
 import je::towoo::types;
 
 import pkg::toml;
@@ -11,6 +12,7 @@ import builtin::editor::Editor::Saving::Entity;
 
 import WorldEditorViewport;
 import Action::CreateEntity;
+import ComponentPresets;
 
 using je;
 using je::gui;
@@ -18,6 +20,7 @@ using toml;
 
 using JEEditor::Saving;
 using JEEditor::Editor::Action;
+using JEEditor::Editor::ComponentPresets;
 
 /*
 EntityClipboard：实体复制/粘贴的剪贴板。
@@ -29,12 +32,132 @@ EntityClipboard：实体复制/粘贴的剪贴板。
 剪贴板为编辑器级共享状态，可跨视口/世界连续粘贴。供实体列表
 （EntityList.wo）与世界编辑器视口（WorldEditorViewport/ 下的
 EntityPicking.wo、WindowLifecycle.wo）共用。
+“创建...”子菜单由下方的实体快速创建预设表驱动，提供常用实体的
+一键创建（基本渲染/UI/带阴影实体、2D 光源、摄像机、物理场景配置等），
+预设数据沿自主分支 editor::gui::edit_forms::presets；点击同样发布
+可撤销的 CreateEntity 动作，实体名与默认着色器写入内容表由还原端
+落实。
 */
 namespace JEEditor::Editor::EntityClipboard
 {
     // 最近一次复制的实体快照；粘贴不清空，可连续粘贴出多个副本
     let mut s_copied_entity_content = option::none: option<Toml>;
-    
+
+    // ===== 实体快速创建预设（驱动“创建...”子菜单） =====
+
+    // 快速创建预设：菜单显示文本、创建时的实体名、组件类型名列表与
+    // 创建后自动挂载的默认着色器路径（可选）
+    public using EntityPreset = struct{
+        public menu_label: string,
+        public entity_name: string,
+        public components: array<string>,
+        public default_shader: option<string>,
+    };
+
+    // 预设分组：组前绘制分隔线，区分基础实体/光源/摄像机/物理等类别
+    public using EntityPresetGroup = struct{
+        public separator_before: bool,
+        public presets: array<EntityPreset>,
+    };
+
+    // 共享组件列表见 ComponentPresets；光源实体额外携带
+    // Renderer::Color（光源着色）
+    let ENTITY_PRESET_GROUPS = [
+        EntityPresetGroup{
+            separator_before = false,
+            presets = [
+                EntityPreset{
+                    menu_label = "基本渲染实体",
+                    entity_name = "默认物体",
+                    components = BASE_TRANSFORM_COMPONENTS
+                        ->connect(BASE_RENDERER_COMPONENTS),
+                    default_shader = option::none,
+                },
+                EntityPreset{
+                    menu_label = "基本UI",
+                    entity_name = "默认UI",
+                    components = ["Transform::LocalToWorld"]
+                        ->connect(BASE_RENDERER_COMPONENTS)
+                        ->connect(UI_TRANSFORM_COMPONENTS),
+                    default_shader = option::none,
+                },
+                EntityPreset{
+                    menu_label = "带2D阴影的基本渲染实体",
+                    entity_name = "默认2D阴影物体",
+                    components = BASE_TRANSFORM_COMPONENTS
+                        ->connect(BASE_RENDERER_COMPONENTS)
+                        ->connect(LIGHT2D_SHADOW_COMMON_COMPONENTS),
+                    default_shader = option::none,
+                },
+            ],
+        },
+        EntityPresetGroup{
+            separator_before = true,
+            presets = [
+                EntityPreset{
+                    menu_label = "2D光源（点）",
+                    entity_name = "2D点光源",
+                    components = BASE_TRANSFORM_COMPONENTS
+                        ->connect(BASE_RENDERER_COMPONENTS)
+                        ->connect(["Renderer::Color"])
+                        ->connect(LIGHT2D_POINT_COMPONENTS),
+                    default_shader = option::value(
+                        "@/resource/shader/Light2DPoint.shader"),
+                },
+                EntityPreset{
+                    menu_label = "2D光源（范围）",
+                    entity_name = "2D范围光源",
+                    components = BASE_TRANSFORM_COMPONENTS
+                        ->connect(BASE_RENDERER_COMPONENTS)
+                        ->connect(["Renderer::Color"])
+                        ->connect(LIGHT2D_RANGE_COMPONENTS),
+                    default_shader = option::value(
+                        "@/resource/shader/Light2DRange.shader"),
+                },
+                EntityPreset{
+                    menu_label = "2D光源（平行）",
+                    entity_name = "2D平行光源",
+                    components = BASE_TRANSFORM_COMPONENTS
+                        ->connect(BASE_RENDERER_COMPONENTS)
+                        ->connect(["Renderer::Color"])
+                        ->connect(LIGHT2D_PARALLEL_COMPONENTS),
+                    default_shader = option::value(
+                        "@/resource/shader/Light2DParallel.shader"),
+                },
+            ],
+        },
+        EntityPresetGroup{
+            separator_before = true,
+            presets = [
+                EntityPreset{
+                    menu_label = "摄像机（透视）",
+                    entity_name = "摄像机",
+                    components = BASE_TRANSFORM_COMPONENTS
+                        ->connect(CAMERA_PERSPECTIVE_COMPONENTS),
+                    default_shader = option::none,
+                },
+                EntityPreset{
+                    menu_label = "摄像机（平行）",
+                    entity_name = "摄像机",
+                    components = BASE_TRANSFORM_COMPONENTS
+                        ->connect(CAMERA_ORTHO_COMPONENTS),
+                    default_shader = option::none,
+                },
+            ],
+        },
+        EntityPresetGroup{
+            separator_before = true,
+            presets = [
+                EntityPreset{
+                    menu_label = "物理场景配置",
+                    entity_name = "物理场景配置",
+                    components = PHYSICS2D_SCENE_COMPONENTS,
+                    default_shader = option::none,
+                },
+            ],
+        },
+    ];
+
     // 复制实体：原样保存快照（挂预设体的实体为差异数据 + "prefab" 键，
     // 派生关系随之保留）
     public func copy(e: entity)=> void
@@ -42,17 +165,95 @@ namespace JEEditor::Editor::EntityClipboard
         s_copied_entity_content =
             option::value(Entity::save(e));
     }
-    
-    // “创建”/“粘贴”菜单项（生成点版本）：spawn_pos 有值时，粘贴出的实体被
-    // 放置到该世界坐标（视口内粘贴传入调试摄像机前方的生成点，见
-    // WorldEditorViewport 的 getSpawnPosInFrontOfCamera）；none 时与
-    // showPasteMenuItem 一致，保持快照原位置
+
+    // 按实体预设发布可撤销的“创建实体”动作：实体名、组件集合与默认
+    // 着色器写入内容表的 "name"/"components"/"shaders" 键（与存档同
+    // 格式，见 Saving::Entity），由还原端落实——着色器按路径重新加载，
+    // 撤销（销毁）/重做（重建）语义自洽；组件类型名经 typeinfo::load
+    // 解析，改名/删除导致的失效类型跳过（同 ComponentPresets 的做法），
+    // 全部失效时拒绝创建
+    func quickCreatePresetEntity(
+        wctx: WorldEditorViewport, preset: EntityPreset,
+        spawn_pos: option<vec3>)=> void
+    {
+        let components_dat = new_table();
+        let mut valid_count = 0;
+        for (let cname : preset.components)
+        {
+            match (typeinfo::load(cname))
+            {
+                none?;
+                value(ctype)?
+                {
+                    components_dat->set(ctype->name, new_table());
+                    valid_count += 1;
+                }
+            }
+        }
+        if (valid_count == 0)
+        {
+            logerr(F"快速创建：预设“{preset.menu_label}”的组件类型均已失效");
+            return;
+        }
+
+        let entity_dat = new_table();
+        entity_dat->set("name", preset.entity_name);
+        entity_dat->set("components", components_dat);
+
+        match (preset.default_shader)
+        {
+            none?;
+            value(shader_path)?
+            {
+                let shader_dat = new_table();
+                shader_dat->set("path", shader_path);
+                let shaders_dat = new_array();
+                shaders_dat->push(shader_dat);
+                entity_dat->set("shaders", shaders_dat);
+            }
+        }
+
+        wctx->doAction(
+            CreateEntity::try_create_with_content_at(entity_dat, spawn_pos));
+    }
+
+    // “创建”/“粘贴”菜单项（生成点版本）：spawn_pos 有值时，创建/粘贴出的
+    // 实体被放置到该世界坐标（视口内创建/粘贴传入调试摄像机前方的生成
+    // 点，见 WorldEditorViewport 的 getSpawnPosInFrontOfCamera）；none 时
+    // 与 showPasteMenuItem 一致，保持快照原位置
     public func showCreateEntityMenuItemAt(
         wctx: WorldEditorViewport, spawn_pos: option<vec3>)=> void
     {
         if (BeginMenu("创建..."))
         {
             defer EndMenu();
+
+            // 快速创建预设：组分隔线隔开语义类别；悬停提示预设的全部
+            // 组件（有默认着色器时附注路径）；点击发布 CreateEntity 动作
+            //（MenuItem 点击后自动收起整个弹出层）
+            for (let group : ENTITY_PRESET_GROUPS)
+            {
+                if (group.separator_before)
+                    Separator();
+
+                for (let preset : group.presets)
+                {
+                    if (MenuItem(preset.menu_label))
+                        quickCreatePresetEntity(wctx, preset, spawn_pos);
+
+                    if (IsItemHovered())
+                    {
+                        let tip = ComponentPresets::presetTipText(
+                            preset.components);
+                        match (preset.default_shader)
+                        {
+                            none? do SetTooltip(tip);
+                            value(shader_path)?
+                                do SetTooltip(F"{tip}\n默认着色器：{shader_path}");
+                        }
+                    }
+                }
+            }
         }
         BeginDisabled(s_copied_entity_content->is_none);
         
