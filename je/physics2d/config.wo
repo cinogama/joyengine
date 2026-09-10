@@ -10,6 +10,7 @@ import pkg::std;
 
 import je::typeinfo;
 import je::towoo;
+export import je::towoo::components;
 
 namespace je::physics2d::config
 {
@@ -111,6 +112,8 @@ namespace je::physics2d::config
 
 #macro PHYSICS2D_LAYER
 {
+    import pkg::std;
+    import pkg::std::macro;
     /*
     PHYSICS2D_LAYER! layerId
     {
@@ -203,6 +206,8 @@ namespace je::physics2d::config
 
 #macro PHYSICS2D_GROUP
 {
+    import pkg::std;
+    import pkg::std::macro;
     /*
     PHYSICS2D_GROUP! GroupName
     {
@@ -289,6 +294,9 @@ namespace je::physics2d::config
 
 #macro PHYSICS2D_COLLISIONS
 {
+    import pkg::std;
+    import pkg::std::macro;
+
     if (lexer->next != "{")
     {
         lexer->error("Unexpected token, should be '{'.");

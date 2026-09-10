@@ -10,6 +10,8 @@ import je::towoo;
 import je::towoo::components;
 
 import pkg::fsys;
+import pkg::filestream;
+import pkg::buffer;
 import pkg::interface;
 import pkg::worst;
 import pkg::iterator;
@@ -517,6 +519,108 @@ namespace JEEditor::Editor
                 ;
         }
         
+        // 新建物理世界配置（右键菜单“新建→物理世界配置”）：在当前目录生成
+        // 一个 .je4physics.wo 配置脚本模板。该脚本是场景 Physics2D 物理的
+        // 唯一数据源（见 src/jeecs_core_physics_system.hpp 的
+        // load_scene_physics_config_from_path），必须返回
+        // je::physics2d::config::SceneConfig，内容即 je/physics2d/config.wo
+        // 提供的一组 PHYSICS2D_* 宏。编辑器此前没有落盘文本文件的能力，这里
+        // 用 pkg::filestream 直接写入模板。流程同 askToCreateNewShader：弹输入
+        // 框要文件名 → 已存在则确认覆盖 → 写入模板。
+        func askToCreateNewPhysicsConfig(self: Browser)=> void
+        {
+            let target_dir = self.m_current;
+            let dirty = self.m_fs_dirty;
+            
+            func writeTo(dst: path_t)=> void
+            {
+                // 模板内联在源码里，避免依赖额外的内置模板文件。
+                let content =
+@"import je::physics2d::config;
+
+// 声明一个物理层，一个世界中可以存在若干个不同的层。不同层的实体不会发生碰撞。
+PHYSICS2D_LAYER! 0
+{
+    gravity: (0.0, -9.8);
+    substeps: 4;
+    sleep: true;
+    continuous: false;
+}
+
+// 声明碰撞组：满足指定特征的实体构成一个组，一个实体可以同时属于多个组。
+//          最多允许声明 16 个碰撞组
+PHYSICS2D_GROUP! 默认组
+{
+}
+
+// 声明碰撞关系：声明可以发生碰撞的碰撞对，碰撞对内的两个实体不区分顺序
+PHYSICS2D_COLLISIONS!
+{
+    默认组, 默认组;
+}
+"@;
+                
+                match (filestream::open(dst, filestream::mode::write))
+                {
+                    none?
+                        MsgBox::err("新建物理世界配置",
+                            F"无法创建 \"{dst->to_string()}\"，可能是文件名非法或磁盘已满");
+                    value(fs)?
+                    {
+                        defer do fs->close();
+                        
+                        if (!fs->write(content as buffer, 0, content->byte_len))
+                        {
+                            MsgBox::err("新建物理世界配置",
+                                F"写入 \"{dst->to_string()}\" 失败");
+                            return;
+                        }
+                        
+                        dirty->set(true);
+                        
+                        // 闭包按创建时的值捕获文本，之后每帧由 Statebar 调用绘制
+                        let path_str = dst->to_string();
+                        Statebar::showState(3.) <| func(){
+                            Text(F"物理世界配置 \"{path_str}\" 已创建");
+                        };
+                    }
+                }
+            }
+            
+            func createAs(file_name: string)=> void
+            {
+                if (file_name->len == 0)
+                {
+                    MsgBox::err("新建物理世界配置", "文件名不能为空");
+                    return;
+                }
+                
+                // 未带后缀时自动补全 .je4physics.wo
+                let full_name = file_name->end_with(".je4physics.wo")
+                    ? file_name
+                    | F"{file_name}.je4physics.wo";
+                    
+                let dst = target_dir / full_name;
+                
+                if (isfile(dst))
+                {
+                    // 已存在同名文件时弹出覆盖确认
+                    do AskBox::show(
+                        "新建物理世界配置", F"目录中已存在 \"{full_name}\"，确认覆盖吗？")
+                        ->onYes(\= writeTo(dst);)
+                        ;
+                }
+                else
+                    writeTo(dst);
+            }
+            
+            do InputBox::show("新建物理世界配置",
+                "请输入物理世界配置文件名：",
+                "physics")
+                ->then(createAs)
+                ;
+        }
+        
         func drawToolbar(self: Browser)=> void
         {
             if (Button("向上"))
@@ -815,6 +919,10 @@ namespace JEEditor::Editor
                                 self->askToCreateNewShader(p);
                             }
                         }
+                    }
+                    if (MenuItem("物理世界配置"))
+                    {
+                        self->askToCreateNewPhysicsConfig();
                     }
                 }
                 if (MenuItem("新建文件夹"))
