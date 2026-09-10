@@ -37,7 +37,7 @@ namespace JEEditor::Editor::Action
             return try!{
                 try! eid = e->internal::get_entity_uid;
                 try! cinst = e->towoo::get_component:<Renderer::Shape>;
-
+                
                 return_value! RemoveRendererShape{
                     m_eid = eid,
                     m_saved_vertex = cinst->get_vertex(),
@@ -46,7 +46,7 @@ namespace JEEditor::Editor::Action
                 logerr("传入的实体应当有对应的 EUID 与 Renderer::Shape 组件");
             };
         }
-
+        
         // 创建并提交移除操作；无法创建（如实体缺少 EUID）时返回 false，
         // 由调用方退回通用移除流程
         public func remove(wctx: WorldEditorViewport, e: entity)=> bool
@@ -58,7 +58,7 @@ namespace JEEditor::Editor::Action
             }
             return true;
         }
-
+        
         // 组件已不存在时视为成功（幂等）
         public func redo(self: RemoveRendererShape, w: WorldEditorViewport)=> bool
         {
@@ -78,7 +78,7 @@ namespace JEEditor::Editor::Action
             }
             return false;
         }
-
+        
         // 重加组件并恢复顶点数据；已存在时仅恢复数据（幂等）
         public func undo(self: RemoveRendererShape, w: WorldEditorViewport)=> bool
         {
@@ -94,7 +94,7 @@ namespace JEEditor::Editor::Action
             }
             return false;
         }
-
+        
         func restoreTo(self: RemoveRendererShape, e: entity)=> bool
         {
             match (e->towoo::get_component:<Renderer::Shape>)
@@ -102,16 +102,14 @@ namespace JEEditor::Editor::Action
                 value(cinst)?
                     do cinst->set_vertex(self.m_saved_vertex);
                 none?
-                    match (e->towoo::add_component:<Renderer::Shape>())
-                    {
-                        none? return false;
-                        value(cinst)?
-                            do cinst->set_vertex(self.m_saved_vertex);
-                    }
+                {
+                    let shape = e->towoo::add_component:<Renderer::Shape>();
+                    shape->set_vertex(self.m_saved_vertex);
+                }
             }
             return true;
         }
-
+        
         public func describe(_: RemoveRendererShape)=> string
         {
             return "移除组件 Renderer::Shape";

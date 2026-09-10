@@ -112,7 +112,7 @@ namespace je
         
         public func add_component(self: entity, type: typeinfo)=> component
         {
-            extern("libjoyecs", "wojeapi_add_component_from_entity")
+            extern("libjoyecs", "wojeapi_add_component_to_entity")
                 func _add_component(self: entity, type: typeinfo)=> handle;
                 
             return component{addr = _add_component(self, type), type = type,};

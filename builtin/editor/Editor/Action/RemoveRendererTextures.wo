@@ -112,12 +112,10 @@ namespace JEEditor::Editor::Action
                 value(cinst)?
                     self->restoreToInstance(cinst);
                 none?
-                    match (e->towoo::add_component:<Renderer::Textures>())
-                    {
-                        none? return false;
-                        value(cinst)?
-                            self->restoreToInstance(cinst);
-                    }
+                {
+                    let textures = e->towoo::add_component:<Renderer::Textures>();
+                    self->restoreToInstance(textures);
+                }
             }
             return true;
         }

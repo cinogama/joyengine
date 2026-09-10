@@ -5,6 +5,8 @@ import je::ecs;
 import je::internal;
 import je::gui;
 import je::typeinfo;
+import je::towoo;
+import je::towoo::components;
 
 import pkg::toml;
 import pkg::fsys;
@@ -456,20 +458,14 @@ namespace JEEditor::Editor
         {
             EditSession::commit();
             
-            match (typeinfo::load("Editor::Prefab"))
+            match (e->internal::get_entity_uid)
             {
                 none?
-                    logerr("解除预设：无法解析 Editor::Prefab 组件类型");
-                value(pt)?
-                    match (e->internal::get_entity_uid)
-                    {
-                        none?
-                            do e->remove_component(pt);
-                        value(eid)?
-                            wctx->doAction(ModifyPrefab::create(
-                                    eid, e->internal::get_prefab_path,
-                                    option::none: option<string>));
-                    }
+                    e->towoo::remove_component:<Editor::Prefab>();
+                value(eid)?
+                    wctx->doAction(ModifyPrefab::create(
+                            eid, e->internal::get_prefab_path,
+                            option::none: option<string>));
             }
         }
         // 更新全部组件到预设（右键菜单项，经 confirmUpdateAllToPrefab
@@ -484,7 +480,7 @@ namespace JEEditor::Editor
         func updatePrefabFromEntity(e: entity)=> void
         {
             EditSession::commit();
-
+            
             match (JEEditor::Saving::Entity::update_prefab(e))
             {
                 none?
@@ -544,7 +540,7 @@ namespace JEEditor::Editor
         func updatePrefabDataFromEntity(e: entity)=> void
         {
             EditSession::commit();
-
+            
             match (JEEditor::Saving::Entity::update_prefab_data(e))
             {
                 none?;
@@ -659,7 +655,7 @@ namespace JEEditor::Editor
                 confirmUpdateAllToPrefab(wctx, e, ref.m_path);
                 
             Separator();
-
+            
             if (MenuItem("解除预设"))
                 unlinkPrefabFromEntity(wctx, e);
         }

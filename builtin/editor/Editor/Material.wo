@@ -6,6 +6,8 @@ import je::graphic;
 import je::gui;
 import je::internal;
 import je::typeinfo;
+import je::towoo;
+import je::towoo::components;
 
 import pkg::fsys;
 import pkg::interface;
@@ -53,15 +55,11 @@ namespace JEEditor::Editor
         m_close: mut bool,
     }
     {
-        let SHAPE_TYPE = typeinfo::load("Renderer::Shape")->unwrap;
-        let SHADERS_TYPE = typeinfo::load("Renderer::Shaders")->unwrap;
-        let TEXTURES_TYPE = typeinfo::load("Renderer::Textures")->unwrap;
-
         // EditSession 中的面板标识，用于编辑手势的焦点归属判定
         let PANEL_OWNER = "Material";
-
+        
         let mut s_material_singleton = option::none: option<Material>;
-
+        
         public func isMaterialExist()
         {
             return s_material_singleton->is_value;
@@ -79,7 +77,7 @@ namespace JEEditor::Editor
                     material_instance->close();
             }
         }
-
+        
         func create()=> Material
             where require!(Material: IWindows);
         {
@@ -109,7 +107,7 @@ namespace JEEditor::Editor
         {
             return SizeConstraints::Limited(((320., 200.), (600., 4096.)));
         }
-
+        
         func findSelectedEntity(
             wctx: WorldEditorViewport,
             selected_entity_id: entity::internal::euid_t)=> option<entity>
@@ -126,15 +124,17 @@ namespace JEEditor::Editor
             }
             return option::none;
         }
-
+        
         // 实体缺少组件时显示添加按钮；返回组件当前是否存在。
         // 点击添加后本帧仍返回 false，内容自下一帧起渲染。
         func ensureComponentEditor(
-            wctx: WorldEditorViewport, e: entity, ctype: typeinfo, cname: string)=> bool
+            wctx: WorldEditorViewport, e: entity, ctype: typeinfo)=> bool
         {
             if (e->get_component(ctype)->is_value)
                 return true;
-
+                
+            let cname = ctype->name;
+            
             if (Button(F"添加 {cname} 组件"))
             {
                 // 先结束可能进行中的编辑手势，再发布添加组件的操作
@@ -150,7 +150,7 @@ namespace JEEditor::Editor
             }
             return false;
         }
-
+        
         // 将着色器列表变更发布为可撤销操作；无 EUID 的实体退化为直接修改
         func applyShadersChange(
             wctx: WorldEditorViewport, e: entity, new_shaders: array<shader>)=> void
@@ -164,7 +164,7 @@ namespace JEEditor::Editor
                         ModifyEntityShaders::create(eid, e->get_shaders(), new_shaders));
             }
         }
-
+        
         // 将纹理通道变更发布为可撤销操作；无 EUID 的实体退化为直接修改
         func applyTextureChange(
             wctx: WorldEditorViewport, e: entity,
@@ -180,7 +180,7 @@ namespace JEEditor::Editor
                             eid, pass, e->get_textures()->get(pass), new_texture));
             }
         }
-
+        
         // 将模型变更发布为可撤销操作；无 EUID 的实体退化为直接修改
         func applyShapeChange(
             wctx: WorldEditorViewport, e: entity,
@@ -195,14 +195,14 @@ namespace JEEditor::Editor
                         ModifyEntityShape::create(eid, e->get_shape(), new_shape));
             }
         }
-
+        
         // JE_ 前缀的 uniform 是引擎内部渲染使用的变量，由引擎在渲染时写入，
         // 不在材质编辑器中展示与编辑（与引擎热重载时跳过它们的行为一致）。
         func isInternalUniformName(uname: string)=> bool
         {
             return uname->begin_with("JE_");
         }
-
+        
         // 追踪 uniform 编辑手势；无 EUID 的实体跳过追踪（无法支持撤销）。
         // uvar 为本帧编辑前的值，手势首帧的它将被留档为撤销点。
         func trackUniformEdit(
@@ -223,7 +223,7 @@ namespace JEEditor::Editor
                         old_value, new_value);
             }
         }
-
+        
         // 渲染一个 uniform 变量的编辑控件；值变化时立即写回着色器，
         // 并追踪为可撤销的编辑手势。
         // uniform 名字即其在着色器内的名字，不可编辑。
@@ -239,7 +239,7 @@ namespace JEEditor::Editor
             TextDisabled(uname);
             SameLine();
             SetNextItemWidth(-1.);
-
+            
             match (uvar)
             {
                 integer(v)?
@@ -349,7 +349,7 @@ namespace JEEditor::Editor
                     TextDisabled("（不支持的 uniform 类型）");
             }
         }
-
+        
         func showShaderUniformsEdit(
             wctx: WorldEditorViewport,
             eid: option<entity::internal::euid_t>,
@@ -360,13 +360,13 @@ namespace JEEditor::Editor
                 // 引擎内部 uniform（JE_ 前缀）不在此展示
                 |> forall(\uname = !isInternalUniformName(uname);)
                 |> sort(\l, r = l < r;);
-
+                
             if (names->len == 0)
             {
                 TextDisabled("（没有可编辑的 uniform 变量）");
                 return;
             }
-
+            
             for (let uname : names)
             {
                 let uvar = uniforms->get(uname)->unwrap;
@@ -375,7 +375,7 @@ namespace JEEditor::Editor
                     F"##material_uniform_{shader_index}_{uname}");
             }
         }
-
+        
         // 着色器列表项的显示名：取文件名（完整路径通过悬停提示展示）
         func shaderDisplayName(sinst: shader)=> string
         {
@@ -387,7 +387,7 @@ namespace JEEditor::Editor
                     return filename(normalize(p));
             }
         }
-
+        
         func showShaderItemOps(
             wctx: WorldEditorViewport,
             e: entity, shaders: array<shader>, sinst: shader, idx: int)=> void
@@ -397,17 +397,17 @@ namespace JEEditor::Editor
                 applyShadersChange(wctx, e, shaders->erase(idx)->inlay(idx - 1, sinst));
             EndDisabled();
             SameLine();
-
+            
             BeginDisabled(idx + 1 >= shaders->len);
             if (Button(F"下移##material_shader_{idx}"))
                 applyShadersChange(wctx, e, shaders->erase(idx)->inlay(idx + 1, sinst));
             EndDisabled();
             SameLine();
-
+            
             if (Button(F"移除##material_shader_{idx}"))
                 applyShadersChange(wctx, e, shaders->erase(idx));
         }
-
+        
         // 加载着色器并插入到列表 insert_at 位置（越界时收敛到首/尾）
         func tryInsertShader(
             wctx: WorldEditorViewport,
@@ -423,7 +423,7 @@ namespace JEEditor::Editor
                 MsgBox::err("添加着色器失败", F"`{path}` 不是着色器文件（.shader）");
                 return;
             }
-
+            
             match (shader::load(univ, ResourcePath::toRuntimeResourcePath(path)))
             {
                 none?
@@ -440,7 +440,7 @@ namespace JEEditor::Editor
                 }
             }
         }
-
+        
         // 列表末尾的追加行：拖动 .shader 文件到该行追加到列表末尾
         func showAppendShaderRow(
             wctx: WorldEditorViewport,
@@ -456,7 +456,7 @@ namespace JEEditor::Editor
                     tryInsertShader(wctx, e, univ, payload->dump, append_at);
             }
         }
-
+        
         func isModelFile(path: string)=> bool
         {
             // 引擎经 Assimp 解析模型文件（jegl_load_vertex），
@@ -483,7 +483,7 @@ namespace JEEditor::Editor
             };
             return model_exts->contains(string::lower(extension(normalize(path))));
         }
-
+        
         func trySetShape(
             wctx: WorldEditorViewport,
             e: entity, univ: option<universe>, path: string)=> void
@@ -498,7 +498,7 @@ namespace JEEditor::Editor
                 MsgBox::err("设置模型失败", F"`{path}` 不是模型文件");
                 return;
             }
-
+            
             match (vertex::load(univ, ResourcePath::toRuntimeResourcePath(path)))
             {
                 none?
@@ -507,7 +507,7 @@ namespace JEEditor::Editor
                     applyShapeChange(wctx, e, option::value(shp));
             }
         }
-
+        
         func showShapeEdit(wctx: WorldEditorViewport, e: entity)=> void
         {
             if (CollapsingHeaderFlags(
@@ -515,17 +515,17 @@ namespace JEEditor::Editor
                     TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
             {
                 // set_shape 只在组件存在时生效，缺少组件时先引导添加
-                if (!ensureComponentEditor(wctx, e, SHAPE_TYPE, "Renderer::Shape"))
+                if (!ensureComponentEditor(wctx, e, Renderer::Shape::type::typeinfo))
                     return;
-
+                    
                 let univ = option::value(wctx->getWorld->get_universe);
-
+                
                 // 模型行：文件名/状态文字 + 行尾移除按钮；悬浮整行时
                 // 以气泡展示完整路径与拖放说明
                 let mut shape_tip = "拖动模型文件到此处设置模型（.obj/.fbx/.gltf 等）";
-
+                
                 BeginGroup();
-
+                
                 match (e->get_shape())
                 {
                     none?
@@ -543,17 +543,17 @@ namespace JEEditor::Editor
                                 shape_tip = F"{p}\n拖动模型文件到此处替换模型";
                             }
                         }
-
+                        
                         SameLine();
                         if (Button("移除##material_shape"))
                             applyShapeChange(wctx, e, option::none);
                     }
                 }
-
+                
                 EndGroup();
                 if (IsItemHovered())
                     do SetTooltip(shape_tip);
-
+                    
                 // 拖动资源浏览器中的模型文件到该行可设置/替换模型
                 match (Drag::AcceptDrag:<FilePayload>())
                 {
@@ -564,30 +564,30 @@ namespace JEEditor::Editor
             }
             Spacing();
         }
-
+        
         func showShadersEdit(wctx: WorldEditorViewport, e: entity)=> void
         {
             if (CollapsingHeaderFlags(
                     "着色器",
                     TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
             {
-                if (!ensureComponentEditor(wctx, e, SHADERS_TYPE, "Renderer::Shaders"))
+                if (!ensureComponentEditor(wctx, e, Renderer::Shaders::type::typeinfo))
                     return;
-
+                    
                 let shaders = e->get_shaders();
                 let univ = option::value(wctx->getWorld->get_universe);
                 let eid = e->internal::get_entity_uid;
-
+                
                 if (shaders->len == 0)
                     TextDisabled("（没有着色器）");
-
+                    
                 for (let (idx, sinst) : shaders->iter |> enumerate)
                 {
                     // 树节点行：箭头示意可展开编辑 uniform，整行同时是拖放目标
                     let opened = TreeNodeEx(
                         F"{idx}: {shaderDisplayName(sinst)}##material_shader_{idx}",
                         TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth);
-
+                        
                     // 悬浮提示完整路径与该行的拖放插入说明
                     match (sinst->path)
                     {
@@ -602,7 +602,7 @@ namespace JEEditor::Editor
                                 do SetTooltip(F"{p}\n拖动 .shader 文件到此处插入到该位置");
                         }
                     }
-
+                    
                     // 拖动 .shader 文件到该列表项上，新的着色器 pass 插入到该位置
                     match (Drag::AcceptDrag:<FilePayload>())
                     {
@@ -610,7 +610,7 @@ namespace JEEditor::Editor
                         value(payload)?
                             tryInsertShader(wctx, e, univ, payload->dump, idx);
                     }
-
+                    
                     if (opened)
                     {
                         showShaderItemOps(wctx, e, shaders, sinst, idx);
@@ -620,12 +620,12 @@ namespace JEEditor::Editor
                     }
                     Spacing();
                 }
-
+                
                 showAppendShaderRow(wctx, e, univ, shaders->len);
             }
             Spacing();
         }
-
+        
         func isTextureFile(path: string)=> bool
         {
             // 与资源浏览器的纹理扩展名列表（Browser::iconForPath）保持一致
@@ -649,7 +649,7 @@ namespace JEEditor::Editor
             };
             return texture_exts->contains(string::lower(extension(normalize(path))));
         }
-
+        
         func tryBindTexture(
             wctx: WorldEditorViewport,
             e: entity, univ: option<universe>, pass: int, path: string)=> void
@@ -669,7 +669,7 @@ namespace JEEditor::Editor
                 MsgBox::err("绑定纹理失败", F"`{path}` 不是纹理文件");
                 return;
             }
-
+            
             match (texture::load(univ, ResourcePath::toRuntimeResourcePath(path)))
             {
                 none?
@@ -678,45 +678,45 @@ namespace JEEditor::Editor
                     applyTextureChange(wctx, e, pass, option::value(tex));
             }
         }
-
+        
         // 遍历着色器列表声明的采样通道：通道号 → 采样它的 uniform 引用列表
         //（引用形如 "0: Main"，表示着色器 0 的 Main uniform）。
         // JE_ 前缀的 uniform 由引擎管理，其通道不在此收集。
         func collectSamplerChannels(shaders: array<shader>)
             => map<int, array<string>>
-        {
-            let channels = map::create:<int, array<string>>(0);
-            for (let (idx, sinst) : shaders->iter |> enumerate)
             {
-                for (let (uname, uvar) : sinst->get_uniforms)
+                let channels = map::create:<int, array<string>>(0);
+                for (let (idx, sinst) : shaders->iter |> enumerate)
                 {
-                    if (isInternalUniformName(uname))
-                        continue;
-
-                    match (uvar)
+                    for (let (uname, uvar) : sinst->get_uniforms)
                     {
-                        texture(pass)?
+                        if (isInternalUniformName(uname))
+                            continue;
+                            
+                        match (uvar)
                         {
-                            let refs = channels->get_or(pass, []: array<string>);
-                            channels->set(pass, refs->append(F"{idx}: {uname}"));
+                            texture(pass)?
+                            {
+                                let refs = channels->get_or(pass, []: array<string>);
+                                channels->set(pass, refs->append(F"{idx}: {uname}"));
+                            }
+                            _?;
                         }
-                        _?;
                     }
                 }
+                return channels;
             }
-            return channels;
-        }
-
+            
         func showTextureChannelsEdit(
             wctx: WorldEditorViewport, e: entity)=> void
         {
             SeparatorText("纹理通道");
             if (IsItemHovered())
                 do SetTooltip("采样通道由着色器的 uniform 声明");
-
+                
             let univ = option::value(wctx->getWorld->get_universe);
             let textures = e->get_textures();
-
+            
             // 通道清单 = 着色器声明的采样通道 ∪ 已绑定的通道，按通道号排序，
             // 用户无需手动指定通道号
             let channels = collectSamplerChannels(e->get_shaders());
@@ -727,14 +727,14 @@ namespace JEEditor::Editor
                     passes = passes->append(pass);
             }
             passes = passes |> sort(\l, r = l < r;);
-
+            
             if (passes->len == 0)
                 TextDisabled("（没有着色器声明需要采样的纹理通道）");
-
+                
             for (let pass : passes)
             {
                 let tex_opt = textures->get(pass);
-
+                
                 // 悬浮气泡内容：纹理路径 + 采样引用 + 拖放说明，每项一行
                 let mut tips = []: array<string>;
                 match (tex_opt)
@@ -761,9 +761,9 @@ namespace JEEditor::Editor
                     }
                 }
                 tips = tips->append("拖动纹理文件到此处绑定/替换纹理");
-
+                
                 BeginGroup();
-
+                
                 match (tex_opt)
                 {
                     none?
@@ -773,21 +773,21 @@ namespace JEEditor::Editor
                         ImageSize(tex, 32., 32.);
                         SameLine();
                         Text(F"通道 {pass}");
-
+                        
                         // 移除与通道同行
                         SameLine();
                         if (Button(F"移除##material_texture_{pass}"))
                             applyTextureChange(wctx, e, pass, option::none);
                     }
                 }
-
+                
                 EndGroup();
-
+                
                 // 悬浮整行时以气泡显示路径、采样引用与拖放说明
                 let tips_text = tips->reduce(\l, r = l + "\n" + r;)->unwrap;
                 if (IsItemHovered())
                     do SetTooltip(tips_text);
-
+                    
                 // 拖动资源浏览器中的纹理文件到该行可绑定/替换此通道
                 match (Drag::AcceptDrag:<FilePayload>())
                 {
@@ -795,36 +795,38 @@ namespace JEEditor::Editor
                     value(payload)?
                         tryBindTexture(wctx, e, univ, pass, payload->dump);
                 }
-
+                
                 Spacing();
             }
         }
-
+        
         func showTexturesEdit(wctx: WorldEditorViewport, e: entity)=> void
         {
             if (CollapsingHeaderFlags(
                     "纹理",
                     TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
             {
-                if (!ensureComponentEditor(wctx, e, TEXTURES_TYPE, "Renderer::Textures"))
+                if (!ensureComponentEditor(wctx, e, Renderer::Textures::type::typeinfo))
                     return;
-
+                    
                 // tiling/offset 是反射成员，沿用与检视面板一致的通用值编辑器
                 let eid = e->internal::get_entity_uid;
-
-                let textures_component = e->get_component(TEXTURES_TYPE)->unwrap;
+                
+                let textures_component =
+                    e->get_component(Renderer::Textures::type::typeinfo)->unwrap;
+                    
                 Indent(0.);
                 for (let (mname, mtype, mhandle) : textures_component->get_members)
                 {
                     TextDisabled(mname);
                     SameLine();
                     SetNextItemWidth(-1.);
-
+                    
                     let member_tag = F"##material_textures_{mname}_{mhandle}";
-
+                    
                     // edit 一旦返回 true，成员值已被就地修改，先留档修改前的序列化值
                     let old_value = eid=>> \_ = unsafe::dynamic_parser::save(mtype, mhandle);;
-
+                    
                     match (unsafe::dynamic_parser::edit(mtype, mhandle, member_tag))
                     {
                         none?
@@ -847,7 +849,7 @@ namespace JEEditor::Editor
                                             value(before)?
                                                 EditSession::trackMember(
                                                     member_tag, PANEL_OWNER, wctx, eidv,
-                                                    TEXTURES_TYPE->name, mname,
+                                                    Renderer::Textures::type::typeinfo->name, mname,
                                                     before,
                                                     unsafe::dynamic_parser::save(mtype, mhandle)
                                                         ->or(before));
@@ -858,12 +860,12 @@ namespace JEEditor::Editor
                     }
                 }
                 Unindent(0.);
-
+                
                 showTextureChannelsEdit(wctx, e);
             }
             Spacing();
         }
-
+        
         public func run(self: Material)=> bool
         {
             let selection = WorldEditorViewport::getLastFocused()
@@ -871,11 +873,11 @@ namespace JEEditor::Editor
                     ->> \selected_entity_id = (wctx, selected_entity_id);
                     ;
                 ;
-
+                
             // 手势结束判定（超时/选中实体变化/本面板失去焦点），见 EditSession
             EditSession::update(
                 PANEL_OWNER, IsWindowFocused(), selection->> \sel = sel.1;);
-
+                
             match (selection)
             {
                 none?
@@ -891,7 +893,7 @@ namespace JEEditor::Editor
                             TextDisabled("名称");
                             SameLine();
                             Text(e->internal::name);
-
+                            
                             showShapeEdit(wctx, e);
                             showShadersEdit(wctx, e);
                             showTexturesEdit(wctx, e);

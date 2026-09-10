@@ -4,6 +4,8 @@ import je;
 import je::ecs;
 import je::internal;
 import je::typeinfo;
+import je::towoo;
+import je::towoo::components;
 
 import pkg::interface;
 import pkg::fsys;
@@ -38,7 +40,7 @@ namespace JEEditor::Editor::Action
                 m_after = normalizePath(after),
             };
         }
-
+        
         // get_prefab_path 在组件存在但路径为空时返回空串，与未挂载同义
         //（检视面板/实体列表的判定一致），统一归一为 none
         func normalizePath(p: option<string>)=> option<string>
@@ -54,7 +56,7 @@ namespace JEEditor::Editor::Action
             }
             return option::none: option<string>;
         }
-
+        
         // 把实体的 Editor::Prefab 组件调整到 path 描述的状态：none 移除
         // 组件（组件已不在视为成功，幂等，避免撤销/重做交错时重复操作）；
         // 有路径则添加组件并写入 path。写入必须走 add_component 返回的
@@ -74,37 +76,26 @@ namespace JEEditor::Editor::Action
                     value(ueid)?
                         if (ueid == eid)
                         {
-                            match (typeinfo::load("Editor::Prefab"))
+                            match (path)
                             {
-                                none? return false;
-                                value(ctype)?
-                                    match (path)
-                                    {
-                                        none?
-                                        {
-                                            if (e->get_component(ctype)->is_value)
-                                                do e->remove_component(ctype);
-                                            return true;
-                                        }
-                                        value(p)?
-                                        {
-                                            let cinst = e->add_component(ctype);
-                                            match (cinst->get_member("path"))
-                                            {
-                                                none? return false;
-                                                value((mtype, minst))?
-                                                    return towoo::unsafe::dynamic_parser::restore(
-                                                        mtype, minst, p);
-                                            }
-                                        }
-                                    }
+                                none?
+                                {
+                                    if (e->towoo::get_component:<Editor::Prefab>()->is_value)
+                                        do e->towoo::remove_component:<Editor::Prefab>();
+                                    return true;
+                                }
+                                value(p)?
+                                {
+                                    let cinst = e->towoo::add_component:<Editor::Prefab>();
+                                    cinst.path->set <| p;
+                                }
                             }
                         }
                 }
             }
             return false;
         }
-
+        
         public func redo(self: ModifyPrefab, w: WorldEditorViewport)=> bool
         {
             return applyPrefabState(w, self.m_eid, self.m_after);

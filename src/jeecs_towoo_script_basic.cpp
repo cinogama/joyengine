@@ -930,17 +930,14 @@ WOORT_API woort_api wojeapi_towoo_add_component(void)
     auto* ty = static_cast<const je_TypeInfo*>(woort_pointer(1));
 
     void* comp = je_ecs_world_entity_add_component(e, ty->m_id);
-    if (comp != nullptr)
-    {
-        woort_value stack_base;
-        if (!woort_push_reserve(1, &stack_base))
-            return woort_ret_panic("Stack overflow.");
 
-        jeecs::towoo::ToWooBaseSystem::create_component_struct(
-            WOORT_RETURN_SLOT, stack_base, comp, ty);
-        return woort_ret_option_value(WOORT_RETURN_SLOT);
-    }
-    return woort_ret_option_none();
+    woort_value stack_base;
+    if (!woort_push_reserve(1, &stack_base))
+        return woort_ret_panic("Stack overflow.");
+
+    jeecs::towoo::ToWooBaseSystem::create_component_struct(
+        WOORT_RETURN_SLOT, stack_base, comp, ty);
+    return woort_ret_value(WOORT_RETURN_SLOT);
 }
 WOORT_API woort_api wojeapi_towoo_get_component(void)
 {

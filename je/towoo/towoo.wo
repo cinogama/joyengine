@@ -33,13 +33,13 @@ namespace je
     namespace entity::towoo
     {
         extern("libjoyecs", "wojeapi_towoo_add_component")
-            private func _add_component<T>(self: entity, tid: je::typeinfo)=> option<T>;
+            private func _add_component<T>(self: entity, tid: je::typeinfo)=> T;
         extern("libjoyecs", "wojeapi_towoo_get_component")
             private func _get_component<T>(self: entity, tid: je::typeinfo)=> option<T>;
         extern("libjoyecs", "wojeapi_towoo_remove_component")
             private func _remove_component<T>(self: entity, tid: je::typeinfo)=> void;
             
-        public func add_component<T>(self: entity)=> option<T>
+        public func add_component<T>(self: entity)=> T
             where typeof:<T>::type::typeinfo is je::typeinfo;
         {
             return _add_component:<T>(self, typeof:<T>::type::typeinfo);

@@ -39,7 +39,7 @@ namespace JEEditor::Editor::WorldEditorViewport
     // 拖拽缩放窗口时 content 尺寸每帧都在变化；等待尺寸连续稳定这么多帧后
     // 再重建摄像机 framebuffer，避免在拖拽过程中频繁分配 GPU 资源。
     let FRAMEBUFFER_RESIZE_SETTLE_FRAMES = 30;
-
+    
     // ---- 摄像机游走参数（仅本文件使用） ----
     let CAMERA_MOVE_SPEED = 8.;
     let CAMERA_FAST_MOVE_MULTIPLIER = 3.;
@@ -54,7 +54,7 @@ namespace JEEditor::Editor::WorldEditorViewport
     // 2D 模式 Ctrl+滚轮单格滚动的 z 步进基准（随正交 scale 反比缩放，
     // 放大后步进变小便于细调深度），刻意比透视推拉的 CAMERA_WHEEL_DOLLY 小
     let ORTHO_WHEEL_Z_STEP = 1.;
-
+    
     // ---- 新建/粘贴实体的生成点 ----
     // 生成点在摄像机前方的距离：透视取中距（Unity 等编辑器“新建对象
     // 出现在场景相机前方”的行为，太远看不清、太近被裁剪）；2D 正交
@@ -62,7 +62,7 @@ namespace JEEditor::Editor::WorldEditorViewport
     // 之间就可见
     let SPAWN_DISTANCE_PERSPECTIVE = 5.;
     let SPAWN_DISTANCE_ORTHO = 1.;
-
+    
     // 根据 GetContentRegionAvail 自动创建/重建摄像机 framebuffer；
     // 若窗口尺寸仍在变化（正在拖拽缩放），则等待尺寸稳定后再更新。
     protected func updateWalkCameraFramebuffer(
@@ -71,15 +71,15 @@ namespace JEEditor::Editor::WorldEditorViewport
         if (debug_cameras->is_none)
             // 未找到调试摄像机，跳过本轮更新
             return;
-
+            
         let avail = GetContentRegionAvail();
         let target_w = avail.0 as int;
         let target_h = avail.1 as int;
-
+        
         // 尺寸退化（窗口折叠/尚未布局）时跳过。
         if (target_w <= 0 || target_h <= 0)
             return;
-
+            
         // 当前 framebuffer 已与目标尺寸一致，则无需重建。
         match (self.m_editor_walk_camera_frame_buffer)
         {
@@ -94,7 +94,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 }
             }
         }
-
+        
         // 尺寸不一致（或尚无 framebuffer）：仅在尺寸连续稳定若干帧后重建，
         // 避免拖拽过程中每帧都重新分配。
         if (avail.0 != self.m_fb_pending_size.0
@@ -104,10 +104,10 @@ namespace JEEditor::Editor::WorldEditorViewport
             self.m_fb_settle_counter = 0;
         }
         self.m_fb_settle_counter += 1;
-
+        
         if (self.m_fb_settle_counter < FRAMEBUFFER_RESIZE_SETTLE_FRAMES)
             return;
-
+            
         // 尺寸已稳定，按目标尺寸（重新）创建 framebuffer。
         match (graphic::framebuffer::create(
                 target_w, target_h,
@@ -118,13 +118,13 @@ namespace JEEditor::Editor::WorldEditorViewport
             value(fb)?
             {
                 self.m_editor_walk_camera_frame_buffer = option::value(fb);
-
+                
                 let r2b = debug_cameras->unwrap->towoo::get_component:<Camera::RendToFramebuffer>->unwrap;
                 r2b->set(self.m_editor_walk_camera_frame_buffer);
             }
         }
     }
-
+    
     // 调试游走摄像机 2D 光照模式是否开启：不单独记录状态，直接以摄像机
     // 实际组件为准（CameraPostPass 与 Shaders 同时存在视为开），
     // 调试摄像机被重建后天然回到关闭状态。
@@ -133,7 +133,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         return camera->get_component(Light2D::CameraPostPass::type::typeinfo)->is_value
             && camera->get_component(Renderer::Shaders::type::typeinfo)->is_value;
     }
-
+    
     // 切换调试游走摄像机的 2D 光照模式：
     // 开 = 挂 Light2D::CameraPostPass，并在着色器列表为空时填入默认
     // 合成着色器（CameraDefer2DPass）；关 = 移除这两个组件，回到直接渲染。
@@ -144,35 +144,28 @@ namespace JEEditor::Editor::WorldEditorViewport
     protected func setDebugCameraLight2DEnabled(camera: entity, enabled: bool)=> void
     {
         let post_pass_type = Light2D::CameraPostPass::type::typeinfo;
-
+        
         if (enabled)
         {
             if (camera->get_component(post_pass_type)->is_none)
                 do camera->add_component(post_pass_type);
-
+                
             // 已有着色器（如用户自定义的合成 pass）时保持不变
             if (camera->towoo::get_component:<Renderer::Shaders>->is_none)
             {
-                match (camera->towoo::add_component:<Renderer::Shaders>())
+                let shaders_inst = camera->towoo::add_component:<Renderer::Shaders>();
+                match (EDITOR_DEFAULT_DEFER_2D_LIGHT_CAMERA_SHADER)
                 {
                     none?
-                        MsgBox::err("2D 光照模式", "无法为调试摄像机创建 Renderer::Shaders 组件");
-                    value(shaders_inst)?
                     {
-                        match (EDITOR_DEFAULT_DEFER_2D_LIGHT_CAMERA_SHADER)
-                        {
-                            none?
-                            {
-                                // 默认着色器加载失败：回滚本帧挂上的组件
-                                //（命令缓冲同帧 add+remove 时 remove 生效），保持关闭
-                                do camera->remove_component(Renderer::Shaders::type::typeinfo);
-                                do camera->remove_component(post_pass_type);
-                                MsgBox::err("2D 光照模式", "无法加载相机默认着色器");
-                            }
-                            value(sinst)?
-                                do shaders_inst->set_shaders([sinst]);
-                        }
+                        // 默认着色器加载失败：回滚本帧挂上的组件
+                        //（命令缓冲同帧 add+remove 时 remove 生效），保持关闭
+                        do camera->remove_component(Renderer::Shaders::type::typeinfo);
+                        do camera->remove_component(post_pass_type);
+                        MsgBox::err("2D 光照模式", "无法加载相机默认着色器");
                     }
+                    value(sinst)?
+                        do shaders_inst->set_shaders([sinst]);
                 }
             }
         }
@@ -184,7 +177,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 do camera->towoo::remove_component:<Renderer::Shaders>();
         }
     }
-
+    
     // 调试游走摄像机是否处于 2D（正交）模式：不单独记录状态，直接以
     // 摄像机实际投影组件为准（挂 OrthoProjection 视为 2D），与渲染
     // 系统 anyof(OrthoProjection, PerspectiveProjection) 的选择规则
@@ -193,7 +186,7 @@ namespace JEEditor::Editor::WorldEditorViewport
     {
         return !(camera->towoo::get_component:<Camera::OrthoProjection>->is_none);
     }
-
+    
     // 切换调试游走摄像机的 2D（正交）模式：
     // 开 = 摘下 PerspectiveProjection、挂上 OrthoProjection（scale 取
     //      默认值 1），并把旋转归零（quat::ident，正对 XY 平面）；
@@ -213,21 +206,15 @@ namespace JEEditor::Editor::WorldEditorViewport
                 self.m_is_look_active = false;
                 input::set_lock_mouse(false);
             }
-
+            
             if (camera->towoo::get_component:<Camera::PerspectiveProjection>->is_value)
                 do camera->towoo::remove_component:<Camera::PerspectiveProjection>();
             if (camera->towoo::get_component:<Camera::OrthoProjection>->is_none)
             {
-                match (camera->towoo::add_component:<Camera::OrthoProjection>())
-                {
-                    none?
-                        MsgBox::err(
-                            "2D 模式", "无法为调试摄像机创建 Camera::OrthoProjection 组件");
-                    value(ortho)?
-                        ortho.scale->set(1.);
-                }
+                let ortho = camera->towoo::add_component:<Camera::OrthoProjection>();
+                ortho.scale->set <| 1.;
             }
-
+            
             // 旋转归零：2D 镜头正对 XY 平面；环视累积量（m_rotation_x/y）
             // 一并复位，保证切回 3D 后环视从当前朝向继续
             camera->towoo::get_component:<Transform::LocalRotation>
@@ -241,18 +228,12 @@ namespace JEEditor::Editor::WorldEditorViewport
                 do camera->towoo::remove_component:<Camera::OrthoProjection>();
             if (camera->towoo::get_component:<Camera::PerspectiveProjection>->is_none)
             {
-                match (camera->towoo::add_component:<Camera::PerspectiveProjection>())
-                {
-                    none?
-                        MsgBox::err(
-                            "2D 模式", "无法为调试摄像机创建 Camera::PerspectiveProjection 组件");
-                    value(persp)?
-                        persp.angle->set(75.);
-                }
+                let persp = camera->towoo::add_component:<Camera::PerspectiveProjection>();
+                persp.angle->set <| 75.;
             }
         }
     }
-
+    
     // 根据输入控制编辑器摄像机（三维/二维游走）。
     // 操作方式参考 Unity / Blender 等编辑器视口：
     //
@@ -286,15 +267,15 @@ namespace JEEditor::Editor::WorldEditorViewport
     {
         if (debug_camera->is_none)
             return;
-
+            
         let cam = debug_camera->unwrap;
         let pos = cam->towoo::get_component:<Transform::LocalPosition>->unwrap;
         let rot = cam->towoo::get_component:<Transform::LocalRotation>->unwrap;
         let trans = cam->towoo::get_component:<Transform::Translation>->unwrap;
         let proj = cam->towoo::get_component:<Camera::Projection>->unwrap;
-
+        
         let perspectiveProjection = cam->towoo::get_component:<Camera::PerspectiveProjection>;
-
+        
         // 游标手柄被悬停/拖拽时，点击不用于选取实体
         if (hovered && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left)
             && self.m_gizmo_hover_handle == GIZMO_HANDLE_NONE)
@@ -313,10 +294,10 @@ namespace JEEditor::Editor::WorldEditorViewport
                         {
                             let mouse_diff = GetMousePos() as vec2 - rect_min as vec2;
                             let viewport_size = rect_max as vec2 - rect_min as vec2;
-
+                            
                             let (vpx, vpy) =
                                 ((mouse_diff / viewport_size) - (0.5, 0.5) as vec2) * 2.;
-
+                                
                             self->sendMouseClickToChoiceEntityRequest(
                                 towoo::ray::from(
                                     trans,
@@ -327,7 +308,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                     }
             }
         }
-
+        
         match (perspectiveProjection)
         {
             value(_)?
@@ -335,13 +316,13 @@ namespace JEEditor::Editor::WorldEditorViewport
             none?
                 match (cam->towoo::get_component:<Camera::OrthoProjection>)
                 {
-            value(ortho)?
-                self->controlOrthoCamera(pos, rot, ortho, dt, hovered, viewport_rect);
+                    value(ortho)?
+                        self->controlOrthoCamera(pos, rot, ortho, dt, hovered, viewport_rect);
                     none?;
                 }
         }
     }
-
+    
     protected func controlPerspectiveCamera(
         self: WorldEditorViewport,
         pos: Transform::LocalPosition,
@@ -351,12 +332,12 @@ namespace JEEditor::Editor::WorldEditorViewport
     {
         let curPos = pos.pos->get;
         let curRot = rot.rot->get;
-
+        
         let forward = curRot * ((0., 0., 1.) as vec3);
         let right = curRot * ((1., 0., 0.) as vec3);
         let up = curRot * ((0., 1., 0.) as vec3);
         let worldUp = (0., 1., 0.) as vec3;
-
+        
         // ---- 激活 / 停止各项操作 ----
         // 右键不在按下瞬间激活环视：以 updateViewportRightClick 记录的
         // 按下起点为基准，位移切实超过 RMB_CLICK_MAX_DRAG_PX 后才激活；
@@ -364,7 +345,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         if (self.m_rmb_press_in_viewport
             && !self.m_is_look_active
             && (GetMousePos() as vec2 - self.m_rmb_press_pos as vec2)->length
-                > RMB_CLICK_MAX_DRAG_PX)
+            > RMB_CLICK_MAX_DRAG_PX)
         {
             self.m_is_look_active = true;
             if (s_lock_mouse_on_look)
@@ -372,7 +353,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         }
         if (hovered && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Middle))
             self.m_is_pan_active = true;
-
+            
         if (!IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Right))
         {
             if (self.m_is_look_active)
@@ -383,15 +364,15 @@ namespace JEEditor::Editor::WorldEditorViewport
         }
         if (!IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Middle))
             self.m_is_pan_active = false;
-
+            
         let (mdx, mdy) = GetMouseDeltaPos();
         let wheel = GetMouseWheel();
         let wv = wheel.1;
-
+        
         let mut newPos = curPos;
         let mut newRot = curRot;
         let mut changed = false;
-
+        
         // ---- 自由环视（右键拖拽）----
         if (self.m_is_look_active)
         {
@@ -400,7 +381,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             newRot = self.m_rotation_y * self.m_rotation_x;
             changed = true;
         }
-
+        
         // ---- WASD / QE 飞行（右键按住时）----
         if (self.m_is_look_active)
         {
@@ -408,14 +389,14 @@ namespace JEEditor::Editor::WorldEditorViewport
                 * (IsKeyDown(ImGuiKey::ImGuiKey_LeftShift)
                     ? CAMERA_FAST_MOVE_MULTIPLIER | 1.)
                 * dt;
-
+                
             let mf = (IsKeyDown(ImGuiKey::ImGuiKey_W) ? 1. | 0.)
                 - (IsKeyDown(ImGuiKey::ImGuiKey_S) ? 1. | 0.);
             let mr = (IsKeyDown(ImGuiKey::ImGuiKey_D) ? 1. | 0.)
                 - (IsKeyDown(ImGuiKey::ImGuiKey_A) ? 1. | 0.);
             let mu = (IsKeyDown(ImGuiKey::ImGuiKey_E) ? 1. | 0.)
                 - (IsKeyDown(ImGuiKey::ImGuiKey_Q) ? 1. | 0.);
-
+                
             if (mf != 0. || mr != 0. || mu != 0.)
             {
                 newPos = newPos + forward * (mf * speed);
@@ -424,7 +405,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 changed = true;
             }
         }
-
+        
         // ---- 平移（中键拖拽）----
         if (self.m_is_pan_active)
         {
@@ -432,7 +413,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             newPos = newPos - up * (-mdy * CAMERA_PAN_SENSITIVITY);
             changed = true;
         }
-
+        
         // ---- 滚轮缩放 ----
         if (hovered && wv != 0.)
         {
@@ -453,14 +434,14 @@ namespace JEEditor::Editor::WorldEditorViewport
                 changed = true;
             }
         }
-
+        
         if (changed)
         {
             pos.pos->set(newPos);
             rot.rot->set(newRot);
         }
     }
-
+    
     protected func controlOrthoCamera(
         self: WorldEditorViewport,
         pos: Transform::LocalPosition,
@@ -472,10 +453,10 @@ namespace JEEditor::Editor::WorldEditorViewport
     {
         let curPos = pos.pos->get;
         let curRot = rot.rot->get;
-
+        
         let right = curRot * ((1., 0., 0.) as vec3);
         let up = curRot * ((0., 1., 0.) as vec3);
-
+        
         // ---- 激活 / 停止平移 ----
         // 右键按住拖动平移：与透视环视共用同一套“位移超过阈值才激活”
         // 的规则（阈值内松开视为点击实体弹菜单，见 updateViewportRightClick）；
@@ -483,7 +464,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         if (self.m_rmb_press_in_viewport
             && !self.m_is_pan_active
             && (GetMousePos() as vec2 - self.m_rmb_press_pos as vec2)->length
-                > RMB_CLICK_MAX_DRAG_PX)
+            > RMB_CLICK_MAX_DRAG_PX)
         {
             self.m_is_pan_active = true;
         }
@@ -492,14 +473,14 @@ namespace JEEditor::Editor::WorldEditorViewport
         if (!IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Right)
             && !IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Middle))
             self.m_is_pan_active = false;
-
+            
         let (mdx, mdy) = GetMouseDeltaPos();
         let wheel = GetMouseWheel();
         let wv = wheel.1;
-
+        
         let mut newPos = curPos;
         let mut moved = false;
-
+        
         // ---- 平移（右键/中键拖拽）----
         if (self.m_is_pan_active)
         {
@@ -518,7 +499,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                         view_h_px = h;
                 }
             }
-
+            
             let scale = ortho.scale->get;
             let panFactor = 10. / scale / view_h_px;
             // 与透视平移同向：内容跟随鼠标移动
@@ -526,7 +507,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             newPos = newPos - up * (-mdy * panFactor);
             moved = true;
         }
-
+        
         // ---- WASD 平移（右键按住时）----
         // 与透视模式的右键飞行对应：按住右键期间 WASD 在当前深度的
         // xOy 平面上移动（2D 模式旋转恒为 ident，right/up 即世界 X/Y 轴），
@@ -542,12 +523,12 @@ namespace JEEditor::Editor::WorldEditorViewport
                     ? CAMERA_FAST_MOVE_MULTIPLIER | 1.)
                 / ortho.scale->get
                 * dt;
-
+                
             let mu = (IsKeyDown(ImGuiKey::ImGuiKey_W) ? 1. | 0.)
                 - (IsKeyDown(ImGuiKey::ImGuiKey_S) ? 1. | 0.);
             let mr = (IsKeyDown(ImGuiKey::ImGuiKey_D) ? 1. | 0.)
                 - (IsKeyDown(ImGuiKey::ImGuiKey_A) ? 1. | 0.);
-
+                
             if (mu != 0. || mr != 0.)
             {
                 newPos = newPos + up * (mu * speed);
@@ -555,7 +536,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 moved = true;
             }
         }
-
+        
         // ---- 滚轮 ----
         if (hovered && wv != 0.)
         {
@@ -574,11 +555,11 @@ namespace JEEditor::Editor::WorldEditorViewport
                         scale * (1. + wv * 0.1),
                         CAMERA_MIN_ORTHO_SCALE, 10000.));
         }
-
+        
         if (moved)
             pos.pos->set(newPos);
     }
-
+    
     // 新建/粘贴实体的生成点：调试游走摄像机的全局位置沿视线方向前进
     // 一定距离（透视/正交各自取 SPAWN_DISTANCE_*）；供“新建实体”与
     // 视口内“粘贴”把实体创建在镜头前方。调试摄像机或全局变换组件
@@ -591,18 +572,18 @@ namespace JEEditor::Editor::WorldEditorViewport
                 self.m_debug_camera_selector->iter |> collect->get(0);
             try! trans =
                 camera->towoo::get_component:<Transform::Translation>();
-
+                
             let distance = isDebugCamera2DMode(camera)
                 ? SPAWN_DISTANCE_ORTHO
                 | SPAWN_DISTANCE_PERSPECTIVE;
-
+                
             return_value! option::value <|
                 (trans->get_global_pos
                     + (trans->get_global_rot * ((0., 0., 1.) as vec3))
-                        * distance);
+                    * distance);
         };
     }
-
+    
     // 拖放生成点（getSpawnPosInFrontOfCamera 的定点版）：把拖放释放的
     // 屏幕位置（rect 为视口显示区域）反投影为拾取射线，取射线上距
     // 摄像机 SPAWN_DISTANCE_* 的点——实体出现在拖放处对应的世界位置
@@ -622,23 +603,23 @@ namespace JEEditor::Editor::WorldEditorViewport
                 camera->towoo::get_component:<Transform::Translation>();
             try! proj =
                 camera->towoo::get_component:<Camera::Projection>();
-
+                
             let rect_size = rect_max as vec2 - rect_min as vec2;
             if (rect_size[0] <= 0. || rect_size[1] <= 0.)
                 return_value! option::none: option<vec3>;
-
+                
             // 屏幕坐标 -> NDC（与实体拾取同款换算，含 y 翻转）
             let ndc = ((screen_pos - rect_min as vec2) / rect_size
                 - (0.5, 0.5) as vec2) * 2.;
-
+                
             let ray = towoo::ray::from(
                 trans, proj, (ndc[0], -ndc[1]) as vec2,
                 isDebugCamera2DMode(camera));
-
+                
             let distance = isDebugCamera2DMode(camera)
                 ? SPAWN_DISTANCE_ORTHO
                 | SPAWN_DISTANCE_PERSPECTIVE;
-
+                
             return_value! option::value <|
                 (trans->get_global_pos + ray->direction->unit * distance);
         };

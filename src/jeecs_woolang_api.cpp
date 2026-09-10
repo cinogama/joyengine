@@ -1011,7 +1011,7 @@ WOORT_API woort_api wojeapi_get_component_from_entity(void)
     return woort_ret_option_pointer(component_addr);
 }
 
-WOORT_API woort_api wojeapi_add_component_from_entity(void)
+WOORT_API woort_api wojeapi_add_component_to_entity(void)
 {
     je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 

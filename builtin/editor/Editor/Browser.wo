@@ -6,6 +6,8 @@ import je::graphic;
 import je::gui;
 import je::internal;
 import je::typeinfo;
+import je::towoo;
+import je::towoo::components;
 
 import pkg::fsys;
 import pkg::interface;
@@ -56,17 +58,17 @@ namespace JEEditor::Editor
         public let type = "JE_EDITOR_BROWSER_FILE_PATH";
         
         public func create(p: fsys::path_t)=> FilePayload
-            // where require!(FilePayload : Drag::IDragPayload);
-            // ↑ 保留但注释：声明本类型服从 IDragPayload（鸭子类型，
-            // 注释不影响服从）。不写成生效的 require 是因为接口校验
-            // restore 时会递归依赖尚在 where 检查阶段的 create 本身，
-            // 类型检查在此循环失败
+        // where require!(FilePayload : Drag::IDragPayload);
+        // ↑ 保留但注释：声明本类型服从 IDragPayload（鸭子类型，
+        // 注释不影响服从）。不写成生效的 require 是因为接口校验
+        // restore 时会递归依赖尚在 where 检查阶段的 create 本身，
+        // 类型检查在此循环失败
         {
             return FilePayload{
                 m_path = p,
             };
         }
-
+        
         public func restore(data: string) => option<FilePayload>
         {
             return option::value(FilePayload::create(normalize(data)));
@@ -122,7 +124,7 @@ namespace JEEditor::Editor
             return F"保存: {self.m_viewport->getName}.je4world";
         }
     }
-
+    
     // “保存实体为预设体”拖拽载荷：携带发起的世界视口与目标实体的调试
     // EUID。entity 句柄不允许跨帧持有，这里跨帧只持有 EUID，待文件名
     // 确认后再按 EUID 反查实体实例执行保存（见 requestSavePrefabAs）。
@@ -139,10 +141,10 @@ namespace JEEditor::Editor
     {
         // ImGui 载荷类型名上限 32 字符（ImGuiPayload::DataType 为 char[33]）
         public let type = "JE_EDITOR_ENTITY_SAVING_REQUEST";
-
+        
         let mut s_pending_dragging =
             option::none: option<(entity::internal::euid_t, string)>;
-
+            
         public func create(
             viewport: WorldEditorViewport,
             euid: entity::internal::euid_t,
@@ -155,7 +157,7 @@ namespace JEEditor::Editor
                 m_entity_name = entity_name,
             };
         }
-
+        
         public func restore(data: string) => option<EntitySavingRequestPayload>
         {
             match (WorldEditorViewport::findWorldEditorViewportByTitle(data))
@@ -169,14 +171,14 @@ namespace JEEditor::Editor
                             return option::none;
                         value(pending)?
                             return option::value(EntitySavingRequestPayload{
-                                m_viewport = viewport,
-                                m_euid = pending.0,
-                                m_entity_name = pending.1,
-                            });
+                                    m_viewport = viewport,
+                                    m_euid = pending.0,
+                                    m_entity_name = pending.1,
+                                });
                     }
             }
         }
-
+        
         // 被拖拽实体的调试 EUID（字段私有，供实体列表等接收方读取）
         public func dragged_euid(self: EntitySavingRequestPayload)=> entity::internal::euid_t
         {
@@ -194,7 +196,7 @@ namespace JEEditor::Editor
             return F"保存预设体: {self.m_entity_name}.je4entity";
         }
     }
-
+    
     using Browser = struct{
         m_close: mut bool,
         
@@ -411,7 +413,7 @@ namespace JEEditor::Editor
                     self->navigateTo(path);
                 }
             }
-
+            
             self->processDirty();
             self->drawToolbar();
             Separator();
@@ -444,13 +446,13 @@ namespace JEEditor::Editor
         func askToCreateNewFolder(self: Browser, base: path_t)=> void
         {
             do InputBox::show("新建文件夹", "请输入文件夹名称：", "NewFolder")
-                    ->then(func(name: string) {
-                            do mkdir(base / name);
-                            self.m_fs_dirty->set(true);
-                        })
-                    ;
+                ->then(func(name: string) {
+                        do mkdir(base / name);
+                        self.m_fs_dirty->set(true);
+                    })
+                ;
         }
-
+        
         // 新建着色器（右键菜单“新建→着色器”）：以选中的内置着色器为模
         // 板复制到当前目录。流程同 requestSavePrefabAs：弹输入框要文件
         // 名 → 已存在则确认覆盖 → 复制模板。回调不捕获 Browser 实例，
@@ -460,7 +462,7 @@ namespace JEEditor::Editor
             let target_dir = self.m_current;
             let dirty = self.m_fs_dirty;
             let template_name = purename(template_path);
-
+            
             func copyTo(dst: path_t)=> void
             {
                 match (copy(template_path, dst))
@@ -471,7 +473,7 @@ namespace JEEditor::Editor
                     ok(_)?
                     {
                         dirty->set(true);
-
+                        
                         // 闭包按创建时的值捕获文本，之后每帧由 Statebar 调用绘制
                         let path_str = dst->to_string();
                         Statebar::showState(3.) <| func(){
@@ -480,7 +482,7 @@ namespace JEEditor::Editor
                     }
                 }
             }
-
+            
             func createAs(file_name: string)=> void
             {
                 if (file_name->len == 0)
@@ -488,33 +490,33 @@ namespace JEEditor::Editor
                     MsgBox::err("新建着色器", "文件名不能为空");
                     return;
                 }
-
+                
                 // 未带后缀时自动补全 .shader
                 let full_name = file_name->end_with(".shader")
                     ? file_name
                     | F"{file_name}.shader";
-
+                    
                 let dst = target_dir / full_name;
-
+                
                 if (isfile(dst))
                 {
                     // 已存在同名文件时弹出覆盖确认
                     do AskBox::show(
-                            "新建着色器", F"目录中已存在 \"{full_name}\"，确认覆盖吗？")
+                        "新建着色器", F"目录中已存在 \"{full_name}\"，确认覆盖吗？")
                         ->onYes(\= copyTo(dst);)
-                    ;
+                        ;
                 }
                 else
                     copyTo(dst);
             }
-
+            
             do InputBox::show("新建着色器",
-                    F"基于内置着色器 \"{template_name}\"，请输入着色器名称：",
-                    template_name)
+                F"基于内置着色器 \"{template_name}\"，请输入着色器名称：",
+                template_name)
                 ->then(createAs)
-            ;
+                ;
         }
-
+        
         func drawToolbar(self: Browser)=> void
         {
             if (Button("向上"))
@@ -567,7 +569,7 @@ namespace JEEditor::Editor
                 self.m_selected = option::none;
             }
         }
-
+        
         // 定位到指定路径：目录则进入该目录，文件则进入所在目录并选中
         // 该项；搜索过滤一并清除，保证目标项在列表中立即可见。目标所
         // 在目录不存在（如预设体文件已被移走）时静默放弃。
@@ -576,7 +578,7 @@ namespace JEEditor::Editor
             let target_dir = isdir(path) ? path | parent(path);
             if (!isdir(target_dir))
                 return;
-
+                
             self.m_current = target_dir;
             self.m_selected = option::value(path);
             self.m_filter = "";
@@ -780,22 +782,22 @@ namespace JEEditor::Editor
             }
             
             if (BeginPopupContextWindow())
-            {                
+            {
                 if (BeginMenu("新建"))
                 {
                     defer EndMenu();
-
+                    
                     if (BeginMenu("着色器"))
                     {
                         defer EndMenu();
-
+                        
                         do MenuItemEnabled("基于内置着色器：", false);
                         Separator();
-
+                        
                         func getAllBuiltinShadersPath()
                         {
                             using iterator;
-
+                            
                             let builtin_shader_path = normalize(host_path()) / "builtin" / "shader";
                             return walk(builtin_shader_path) |> iter_result
                                 |> filter(\p = isfile(p) && extension(p)->lower == ".shader";)
@@ -830,7 +832,7 @@ namespace JEEditor::Editor
                     
                     if (isdir(sel) && MenuItem("打开"))
                         self.m_current = sel;
-
+                        
                     match (openActionForPath(sel))
                     {
                         none?;
@@ -838,20 +840,20 @@ namespace JEEditor::Editor
                             if (MenuItem("打开"))
                                 open_action(sel);
                     }
-                        
+                    
                     if (MenuItem("重命名"))
                     {
                         do InputBox::show("重命名", "请输入新名称：", sel_name)
                             ->then(func(new_name: string) {
                                     let new_path = sel_parent / new_name;
-
+                                    
                                     match (renameActionForPath(sel))
                                     {
                                         none?;
                                         value(on_renamed)?
                                             on_renamed(sel, new_path);
                                     }
-
+                                    
                                     do move(sel, new_path);
                                     self.m_fs_dirty->set(true);
                                 })
@@ -875,7 +877,7 @@ namespace JEEditor::Editor
                     
                     if (MenuItem("复制路径"))
                         SetClipboardText(sel->to_string());
-
+                        
                     if (MenuItem("在资源管理器中展示"))
                         revealInSystemExplorer(sel);
                 }
@@ -893,13 +895,13 @@ namespace JEEditor::Editor
                     WorldEditorViewport::openWorldEditorViewportFromFile(p);
                 },
             };
-
+            
             if (!isfile(path))
                 return option::none;
-
+                
             return ext_open_map->get(string::lower(extension(path)));
         }
-
+        
         // 文件被重命名后按扩展名查找联动回调（参数为 旧路径, 新路径）：未注册返回 none。
         func renameActionForPath(path: fsys::path_t)=> option<(fsys::path_t, fsys::path_t)=> void>
         {
@@ -916,10 +918,10 @@ namespace JEEditor::Editor
                     }
                 },
             };
-
+            
             return ext_rename_map->get(string::lower(extension(path)));
         }
-
+        
         // 在系统文件管理器中展示指定路径：Windows 用 explorer /select 选中该项，
         // macOS 用 open -R 在 Finder 中定位；其余平台的 xdg-open 不支持定位，
         // 退化为打开所在目录。fsys 的路径统一为正斜杠，而 explorer /select 只认
@@ -928,7 +930,7 @@ namespace JEEditor::Editor
         {
             let target = path->to_string();
             let current_os = platform::get_os();
-
+            
             if (current_os == platform::Os::WINDOWS)
             {
                 let win_path = target->replace("/", "\\");
@@ -953,7 +955,7 @@ namespace JEEditor::Editor
             
             if (is_double && isdir(path))
                 self.m_current = path;
-
+                
             if (is_double)
             {
                 match (openActionForPath(path))
@@ -973,7 +975,7 @@ namespace JEEditor::Editor
                 value(payload)?
                     self->requestMove(payload.m_path, target_dir);
             }
-
+            
             match (Drag::AcceptDrag:<SavingRequestPayload>())
             {
                 none?;
@@ -984,7 +986,7 @@ namespace JEEditor::Editor
                         target_dir, \= dirty->set(true););
                 }
             }
-
+            
             match (Drag::AcceptDrag:<EntitySavingRequestPayload>())
             {
                 none?;
@@ -992,7 +994,7 @@ namespace JEEditor::Editor
                     requestSavePrefabAs(payload, target_dir, self.m_fs_dirty);
             }
         }
-
+        
         // 拖到资源管理器窗口的空白/文件列表区域：保存到当前目录
         func acceptSavingDrop(self: Browser)=> void
         {
@@ -1006,7 +1008,7 @@ namespace JEEditor::Editor
                         self.m_current, \= dirty->set(true););
                 }
             }
-
+            
             match (Drag::AcceptDrag:<EntitySavingRequestPayload>())
             {
                 none?;
@@ -1014,7 +1016,7 @@ namespace JEEditor::Editor
                     requestSavePrefabAs(payload, self.m_current, self.m_fs_dirty);
             }
         }
-
+        
         // 把实体写入 dst 并将实体挂为该文件的预设体：未挂预设体或覆盖
         // 当前预设体源文件时落盘完整数据（更新预设体本体），已挂其他
         // 预设体时落盘为旧预设体的变体（差异 + "prefab" 键，详见
@@ -1028,9 +1030,8 @@ namespace JEEditor::Editor
             wctx: WorldEditorViewport,
             e: entity, dst: fsys::path_t, dirty: mutable<bool>)=> void
         {
-            let prefab_type = typeinfo::load("Editor::Prefab");
             let runtime_path = ResourcePath::toRuntimeResourcePath(dst->to_string());
-
+            
             match (toml::save(Entity::save_prefab(e, dst->to_string()), dst))
             {
                 err(msg)?
@@ -1044,32 +1045,18 @@ namespace JEEditor::Editor
                         none?
                         {
                             logerr("保存预设体：实体缺少 EUID，预设体关联以不可撤销方式建立");
-                            match (prefab_type)
-                            {
-                                none?
-                                    logerr("保存预设体：无法解析 Editor::Prefab 组件类型，预设体关联未建立");
-                                value(pt)?
-                                {
-                                    let cinst = e->add_component(pt);
-                                    match (cinst->get_member("path"))
-                                    {
-                                        none?
-                                            logerr("保存预设体：Editor::Prefab 缺少 path 成员，预设体关联未建立");
-                                        value((mtype, minst))?
-                                            do towoo::unsafe::dynamic_parser::restore(
-                                                mtype, minst, runtime_path);
-                                    }
-                                }
-                            }
+                            
+                            let prefab = e->towoo::add_component:<Editor::Prefab>();
+                            prefab.path->set <| runtime_path;
                         }
                         value(eid)?
                             wctx->doAction(ModifyPrefab::create(
-                                eid, e->internal::get_prefab_path,
-                                option::value(runtime_path)));
+                                    eid, e->internal::get_prefab_path,
+                                    option::value(runtime_path)));
                     }
-
+                    
                     dirty->set(true);
-
+                    
                     // 闭包按创建时的值捕获文本，之后每帧由 Statebar 调用绘制
                     let name = e->internal::name;
                     let path_str = dst->to_string();
@@ -1079,7 +1066,7 @@ namespace JEEditor::Editor
                 }
             }
         }
-
+        
         // 拖拽实体到资源管理器后的保存流程（原资源管理器 requestSaveAs 的
         // 实体版）：弹输入框要文件名 → 已存在则确认覆盖 → 按载荷中的 EUID
         // 反查实体（entity 不跨帧持有，对话框确认时才反查；反查内部会检查
@@ -1100,7 +1087,7 @@ namespace JEEditor::Editor
                         savePrefabEntityTo(payload.m_viewport, e, dst, dirty);
                 }
             }
-
+            
             func savePrefabAs(file_name: string)=> void
             {
                 if (file_name->len == 0)
@@ -1108,31 +1095,31 @@ namespace JEEditor::Editor
                     MsgBox::err("保存失败", "文件名不能为空");
                     return;
                 }
-
+                
                 // 未带后缀时自动补全 .je4entity
                 let full_name = file_name->end_with(".je4entity")
                     ? file_name
                     | F"{file_name}.je4entity";
-
+                    
                 let dst = target_dir / full_name;
-
+                
                 if (isfile(dst))
                 {
                     // 已存在同名文件时弹出覆盖确认
                     do AskBox::show(
-                            "保存", F"目录中已存在 \"{full_name}\"，确认覆盖吗？")
+                        "保存", F"目录中已存在 \"{full_name}\"，确认覆盖吗？")
                         ->onYes(\= saveTo(dst);)
-                    ;
+                        ;
                 }
                 else
                     saveTo(dst);
             }
-
+            
             do InputBox::show(
-                    "保存预设体", "请输入保存的文件名：",
-                    F"{payload.m_entity_name}.je4entity")
+                "保存预设体", "请输入保存的文件名：",
+                F"{payload.m_entity_name}.je4entity")
                 ->then(savePrefabAs)
-            ;
+                ;
         }
         
         func requestMove(self: Browser, src: fsys::path_t, target_dir: fsys::path_t)=> void
