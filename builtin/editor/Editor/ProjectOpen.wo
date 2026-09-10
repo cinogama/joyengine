@@ -290,9 +290,42 @@ namespace JEEditor::Editor
             };
         }
         
+        // 为新项目准备资源目录：在项目根目录下创建 resource/，再把宿主
+        // builtin/shader 下的内置着色器整体拷贝成 resource/shader，便于项目
+        // 直接引用或改造。任一步失败都返回错误描述，调用方据此提示，
+        // 此时尚未写入项目文件，目录不会被当作有效项目打开。
+        func initProjectResources(project_dir: path_t)=> option<string>
+        {
+            let resource_dir = project_dir / "resource";
+            match (mkdir(resource_dir))
+            {
+                err(e)?
+                    return option::value(
+                        F"创建资源目录 \"{resource_dir->to_string}\" 失败：{e}");
+                ok(_)?;
+            }
+
+            let shader_src = normalize(host_path()) / "builtin" / "shader";
+            if (!isdir(shader_src))
+                return option::value(
+                    F"内置着色器目录 \"{shader_src->to_string}\" 不存在。");
+
+            let shader_dst = resource_dir / "shader";
+            match (copy(shader_src, shader_dst))
+            {
+                err(e)?
+                    return option::value(
+                        F"拷贝内置着色器到 \"{shader_dst->to_string}\" 失败：{e}");
+                ok(_)?;
+            }
+
+            return option::none;
+        }
+
         // 在当前浏览目录下新建项目：弹输入框要项目名 → 建同名目录 →
-        // 目录内写入空的 TOML 项目文件 → 直接打开新项目。InputBox 以模态
-        // 弹窗压住本窗口，回调触发时本窗口必然仍存活，捕获 self 安全。
+        // 初始化资源目录 → 目录内写入空的 TOML 项目文件 → 直接打开新项目。
+        // InputBox 以模态弹窗压住本窗口，回调触发时本窗口必然仍存活，
+        // 捕获 self 安全。
         func askToCreateProjectHere(self: ProjectOpen)=> void
         {
             do InputBox::show("新建项目", "请输入项目文件夹名称：", "NewProject")
@@ -321,6 +354,16 @@ namespace JEEditor::Editor
                 }
                 ok(_)?
                 {
+                    match (initProjectResources(project_dir))
+                    {
+                        value(msg)?
+                        {
+                            MsgBox::err("新建项目", msg);
+                            return;
+                        }
+                        none?;
+                    }
+
                     match (toml::save(toml::new_table(), project_dir / k_project_file_name))
                     {
                         err(msg)?
