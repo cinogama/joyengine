@@ -276,9 +276,11 @@ namespace JEEditor::Editor::WorldEditorViewport
         
         let perspectiveProjection = cam->towoo::get_component:<Camera::PerspectiveProjection>;
         
-        // 游标手柄被悬停/拖拽时，点击不用于选取实体
+        // 游标手柄/碰撞体编辑手柄被悬停或拖拽时，点击不用于选取实体
         if (hovered && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left)
-            && self.m_gizmo_hover_handle == GIZMO_HANDLE_NONE)
+            && self.m_gizmo_hover_handle == GIZMO_HANDLE_NONE
+            && self.m_collider_hover_handle == GIZMO_HANDLE_NONE
+            && !self.m_collider_dragging)
         {
             // 摄像机/2D 光源实体：点击其图标 gizmo 即选中（沿用实体拾取的
             // 循环规则），未命中图标时才走渲染实体的射线拾取

@@ -80,6 +80,11 @@ namespace JEEditor::Editor
         // 放置到摄像机前方时用它反查父实体并换算局部坐标
         //（见 EntityPicking.wo 的 worldToLocalPos）
         protected m_anchor_parent_entity_selector: entity_selector,
+
+        // 2D 物理碰撞体实体（Translation+Rigidbody 且不带 Invisible）选择器：
+        // 碰撞体线框 gizmo 与“编辑碰撞体”手柄以它为准（与物理系统的
+        // 查询语义一致：碰撞体组件只有在 Rigidbody 实体上才生效）
+        protected m_physics2d_body_entity_selector: entity_selector,
         
         protected m_last_time: mut real,
         protected m_is_look_active: mut bool,
@@ -131,6 +136,23 @@ namespace JEEditor::Editor
         // 命中半径px）与当前悬停的实体，每帧由 updateIconGizmos 重建
         protected m_icon_gizmo_rects: vec<mut (entity::internal::euid_t, vec2, real)>,
         protected m_icon_gizmo_hover: mut option<entity::internal::euid_t>,
+
+        // ---- 碰撞体 gizmo（编辑手柄）状态 ----
+        // “编辑碰撞体”模式：选中带碰撞体的实体时可用，视口内显示
+        // 可拖拽的编辑手柄，变换游标的交互被抑制（绘制亦隐藏）
+        protected m_collider_edit_mode: mut bool,
+        protected m_collider_hover_handle: mut int,
+        protected m_collider_dragging: mut bool,
+        protected m_collider_drag_handle: mut int,
+        // 拖拽开始时捕获的快照：碰撞体平面（过 drag_center、法线为
+        // 实体 Z 轴世界方向，拖拽期间冻结）与撤销记录所需的组件成员旧值
+        protected m_collider_drag_euid: mut entity::internal::euid_t,
+        protected m_collider_drag_kind: mut ColliderKind,
+        protected m_collider_drag_center: mut vec3,
+        protected m_collider_drag_normal: mut vec3,
+        protected m_collider_drag_undo_component: mut string,
+        protected m_collider_drag_undo_member: mut string,
+        protected m_collider_drag_undo_old_value: mut string,
     }
     {
         // ---- 摄像机游走参数（跨文件共享的部分） ----
@@ -167,6 +189,15 @@ namespace JEEditor::Editor
         
         // ---- 2D 光源实体 gizmo 参数 ----
         protected let LIGHT2D_GIZMO_ICON_SIZE_PX = 32.;  // 光源图标边长（像素）
+
+        // ---- 碰撞体 gizmo 参数 ----
+        protected let COLLIDER_HANDLE_SIZE_PX = 8.;      // 编辑手柄方块边长（像素）
+        protected let COLLIDER_MIN_SIZE = 0.01;          // 尺寸/半径下限
+        protected let COLLIDER_CIRCLE_SEGMENTS = 32;     // 圆/圆弧线框分段数
+        // 碰撞体线框配色：常态绿（透明），选中黄（不透明，与游标高亮一致）
+        protected let COLLIDER_GIZMO_COLOR = (0.35, 0.9, 0.45, 0.55);
+        protected let COLLIDER_GIZMO_COLOR_SELECTED = (1., 1., 0.25, 0.9);
+        protected let COLLIDER_HANDLE_COLOR = (0.85, 0.85, 0.85, 0.9);
         
         // 右键同时承担“拖拽环视”职责：以按下起点为基准，位移切实超过该
         // 像素阈值后才激活环视（阈值内的位移不转动摄像机）；松开时位移
@@ -190,6 +221,16 @@ namespace JEEditor::Editor
         {
             LOCAL,
             GLOBAL,
+        }
+
+        // 碰撞体种类（与 Physics2D::Collider 的四个互斥组件对应；
+        // 枚举成员可见性继承声明，跨文件使用的枚举须为 public）
+        public enum ColliderKind
+        {
+            BOX,
+            CIRCLE,
+            CAPSULE,
+            MESH,
         }
         
         public enum CloseRequest
@@ -221,6 +262,18 @@ namespace JEEditor::Editor
             return !(e->towoo::get_component:<Light2D::Point>->is_none)
                 || !(e->towoo::get_component:<Light2D::Range>->is_none)
                 || !(e->towoo::get_component:<Light2D::Parallel>->is_none);
+        }
+
+        // 是否为带碰撞体的 2D 物理实体（Rigidbody + 任一 Collider 组件；
+        // 与物理系统的查询语义一致：碰撞体组件只有配 Rigidbody 才生效），
+        // 其碰撞体线框 gizmo 与“编辑碰撞体”手柄以此为准
+        protected func hasPhysics2DCollider(e: entity)=> bool
+        {
+            return !(e->towoo::get_component:<Physics2D::Rigidbody>->is_none)
+                && (!(e->towoo::get_component:<Physics2D::Collider::Box>->is_none)
+                    || !(e->towoo::get_component:<Physics2D::Collider::Circle>->is_none)
+                    || !(e->towoo::get_component:<Physics2D::Collider::Capsule>->is_none)
+                    || !(e->towoo::get_component:<Physics2D::Collider::Mesh>->is_none));
         }
         
         public func redo(self: WorldEditorViewport)

@@ -103,6 +103,8 @@ namespace JEEditor::Editor::ComponentPresets
         ("2D物理", [
             ("静态刚体", [
                 "Physics2D::Rigidbody", "Physics2D::Collider::Box"]),
+            ("静态网格刚体", [
+                "Physics2D::Rigidbody", "Physics2D::Collider::Mesh"]),
             ("动力学刚体", [
                 "Physics2D::Rigidbody", "Physics2D::DynamicBody",
                 "Physics2D::Collider::Box", "Physics2D::Density",

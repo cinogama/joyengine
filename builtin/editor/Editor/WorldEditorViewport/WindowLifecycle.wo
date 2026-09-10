@@ -45,6 +45,7 @@ import Definition;
 import CameraControl;
 import EntityPicking;
 import TransformGizmo;
+import ColliderGizmo;
 import GizmoDrawing;
 import ViewportUI;
 import WorldSaving;
@@ -146,6 +147,14 @@ namespace JEEditor::Editor::WorldEditorViewport
                     requirement::contains(Transform::Anchor::type::typeinfo),
                 ]),
 
+            // 2D 物理碰撞体实体（Translation+Rigidbody 且不带 Invisible）：
+            // 碰撞体线框 gizmo 与“编辑碰撞体”手柄以它为准
+            m_physics2d_body_entity_selector = w->create_selector([
+                    requirement::except(Editor::Invisible::type::typeinfo),
+                    requirement::contains(Transform::Translation::type::typeinfo),
+                    requirement::contains(Physics2D::Rigidbody::type::typeinfo),
+                ]),
+
             // Camera control state:
             m_last_time = mut 0.,
             m_is_look_active = mut false,
@@ -190,6 +199,18 @@ namespace JEEditor::Editor::WorldEditorViewport
 
             m_icon_gizmo_rects = []mut: vec<mut (entity::internal::euid_t, vec2, real)>,
             m_icon_gizmo_hover = mut option::none,
+
+            m_collider_edit_mode = mut false,
+            m_collider_hover_handle = mut GIZMO_HANDLE_NONE,
+            m_collider_dragging = mut false,
+            m_collider_drag_handle = mut GIZMO_HANDLE_NONE,
+            m_collider_drag_euid = mut (0h as entity::internal::euid_t),
+            m_collider_drag_kind = mut ColliderKind::BOX,
+            m_collider_drag_center = mut ((0., 0., 0.) as vec3),
+            m_collider_drag_normal = mut ((0., 0., 1.) as vec3),
+            m_collider_drag_undo_component = mut "",
+            m_collider_drag_undo_member = mut "",
+            m_collider_drag_undo_old_value = mut "",
         };
 
         // “调试执行/导出时才启用”的系统保存在视口中（编辑器内不 add_system），
@@ -454,6 +475,20 @@ namespace JEEditor::Editor::WorldEditorViewport
             none?;
             value((rect_min, rect_max))?
                 self->updateTransformGizmo(
+                    debug_camera,
+                    viewport_hovered && !toolbar_hovered,
+                    rect_min,
+                    (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
+        }
+
+        // “编辑碰撞体”模式下的手柄交互（编辑模式下变换游标交互已被
+        // updateTransformGizmo 抑制，此处接管左键拖拽），同样先于摄像机
+        // 控制以抑制点击选中
+        match (viewport_rect)
+        {
+            none?;
+            value((rect_min, rect_max))?
+                self->updateColliderGizmo(
                     debug_camera,
                     viewport_hovered && !toolbar_hovered,
                     rect_min,

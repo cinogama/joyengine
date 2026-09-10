@@ -11188,6 +11188,76 @@ namespace jeecs
             }
         };
 
+        // ===================== Script-visible vertex loop =====================
+        // A dynamic list of 2D points exposed to woolang as `array<vec2>`
+        // (same mapping pattern as Light2D::BlockShadow::block_mesh).
+        // Used by Collider::Mesh to store the polygon outline. Default value
+        // is the unit square, matching Collider::Box's default extents.
+        struct vertex_list
+        {
+            basic::vector<math::vec2> points = {
+                math::vec2(-0.5f, -0.5f),
+                math::vec2( 0.5f, -0.5f),
+                math::vec2( 0.5f,  0.5f),
+                math::vec2(-0.5f,  0.5f),
+            };
+
+            static const char* JEScriptTypeName()
+            {
+                return "Physics2D::vertex_list";
+            }
+            static const char* JEScriptTypeDeclare()
+            {
+                return
+                    "namespace Physics2D\n"
+                    "{\n"
+                    "    public using vertex_list = array<vec2>;\n"
+                    "}";
+            }
+            void JEParseFromScriptType(woort_value v)
+            {
+                woort_value pos;
+                if (!woort_push_reserve(1, &pos))
+                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                else
+                {
+                    const size_t point_count = woort_vec_len(v);
+
+                    points.clear();
+
+                    for (size_t i = 0; i < point_count; ++i)
+                    {
+                        (void)woort_vec_get(pos, v, i);
+
+                        math::vec2 position;
+                        position.JEParseFromScriptType(pos);
+
+                        points.push_back(position);
+                    }
+
+                    woort_pop(1);
+                }
+            }
+            void JEParseToScriptType(woort_value v) const
+            {
+                woort_value pos;
+                if (!woort_push_reserve(1, &pos))
+                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                else
+                {
+                    woort_set_vec(v);
+                    woort_vec_resize(v, points.size());
+                    for (size_t i = 0; i < points.size(); ++i)
+                    {
+                        points.at(i).JEParseToScriptType(pos);
+                        (void)woort_vec_set(v, i, pos);
+                    }
+
+                    woort_pop(1);
+                }
+            }
+        };
+
         // ===================== Colliders (mutually exclusive) =====================
         namespace Collider
         {
@@ -11224,6 +11294,22 @@ namespace jeecs
                 {
                     typing::register_member(guard, &Capsule::radius, "radius");
                     typing::register_member(guard, &Capsule::height, "height");
+                }
+            };
+            // Arbitrary simple polygon outline (convex or concave; vertices in
+            // body-local space, any winding). Box2D has no native concave
+            // "mesh" shape, so the physics system decomposes the loop into
+            // convex parts (a single polygon when possible, otherwise ear-cut
+            // triangles) and attaches them as compound shapes on one body.
+            struct Mesh
+            {
+                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Mesh);
+                JECS_DEFAULT_CONSTRUCTOR(Mesh);
+
+                vertex_list vertices;
+                static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+                {
+                    typing::register_member(guard, &Mesh::vertices, "vertices");
                 }
             };
         }
@@ -12686,6 +12772,7 @@ namespace jeecs
             jeecs::typing::register_type<Physics2D::Collider::Box>(guard, "Physics2D::Collider::Box");
             jeecs::typing::register_type<Physics2D::Collider::Circle>(guard, "Physics2D::Collider::Circle");
             jeecs::typing::register_type<Physics2D::Collider::Capsule>(guard, "Physics2D::Collider::Capsule");
+            jeecs::typing::register_type<Physics2D::Collider::Mesh>(guard, "Physics2D::Collider::Mesh");
 
             jeecs::typing::register_type<Physics2D::Density>(guard, "Physics2D::Density");
             jeecs::typing::register_type<Physics2D::Friction>(guard, "Physics2D::Friction");

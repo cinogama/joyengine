@@ -312,6 +312,73 @@ namespace quat
         }
     }
 }
+// Physics2D::vertex_list：Collider::Mesh 的多边形顶点环。
+// 序列化为扁平数组 [x0,y0,x1,y1,...]，避开嵌套数组的 dynamic 语义。
+namespace Physics2D::vertex_list
+{
+    using parser = void
+    {
+        public extern func saving(val: Physics2D::vertex_list)=> string
+        {
+            let dat = []mut: vec<real>;
+            for (let p : val as array<vec2>)
+            {
+                dat->add(p.0);
+                dat->add(p.1);
+            }
+            return dat->serialize->or("[]");
+        }
+        public extern func restoring(dat: string)=> Physics2D::vertex_list
+        {
+            let data = dat->array::deserialize->or([0. as dynamic, 0. as dynamic])->> \x = x as real;;
+            let result = []mut: vec<vec2>;
+            for (let mut i = 0; i + 1 < data->len; i += 2)
+                result->add((data->get_or(i, 0.), data->get_or(i + 1, 0.)) as vec2);
+            return result->to_array as Physics2D::vertex_list;
+        }
+        public extern func edit(val: Physics2D::vertex_list, tag: string)=> option<Physics2D::vertex_list>
+        {
+            let mut points = (val as array<vec2>)->to_vec;
+            let mut need_update = false;
+
+            // 顶点数（物理侧要求至少 3 个顶点才能构成多边形）
+            match (InputInt(F"顶点数##{tag}", points->len)->>\n = n < 3 ? 3 | n;)
+            {
+                value(count)?
+                {
+                    if (count != points->len)
+                    {
+                        points->resize(count, (0., 0.) as vec2);
+                        need_update = true;
+                    }
+                }
+                none?;
+            }
+
+            for (let mut i = 0; i < points->len; i += 1)
+            {
+                match (InputFloat2(F"{i}##{tag}", points[i][0], points[i][1])->>\v = v as vec2;)
+                {
+                    value(np)?
+                    {
+                        // 索引结果不可变：重建顶点表替换第 i 项
+                        let updated = []mut: vec<vec2>;
+                        for (let mut j = 0; j < points->len; j += 1)
+                            updated->add(
+                                (j == i) ? np | ((points[j][0], points[j][1]) as vec2));
+                        points = updated;
+                        need_update = true;
+                    }
+                    none?;
+                }
+            }
+
+            if (need_update)
+                return option::value(points->to_array as Physics2D::vertex_list);
+            return option::none;
+        }
+    }
+}
 // namespace fileresource_void
 // {
 //     using parser = void

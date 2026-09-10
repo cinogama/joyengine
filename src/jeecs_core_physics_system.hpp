@@ -101,6 +101,192 @@ namespace jeecs
         };
 
         // ============================================================
+        // Polygon helpers for Collider::Mesh.
+        // Box2D only offers convex polygons (up to b2_maxPolygonVertices),
+        // so a mesh collider is decomposed: a single convex polygon when the
+        // outline is convex and small enough, otherwise ear-cut triangles
+        // attached as compound shapes on the same body.
+        // ============================================================
+
+        // Cross product of (b-a) x (c-b): > 0 left turn (CCW), < 0 right turn.
+        inline float poly_cross(
+            const math::vec2& a, const math::vec2& b, const math::vec2& c) noexcept
+        {
+            return (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+        }
+
+        // True when every turn has the same sign (collinear runs allowed).
+        // Accepts either winding; duplicates/degenerates make it false.
+        inline bool is_convex_polygon(const basic::vector<math::vec2>& pts) noexcept
+        {
+            const size_t n = pts.size();
+            if (n < 3)
+                return false;
+
+            bool has_pos = false, has_neg = false;
+            for (size_t i = 0; i < n; ++i)
+            {
+                const float cr = poly_cross(
+                    pts[i], pts[(i + 1) % n], pts[(i + 2) % n]);
+                if (cr > 0.00001f) has_pos = true;
+                else if (cr < -0.00001f) has_neg = true;
+                if (has_pos && has_neg)
+                    return false;
+            }
+            return true;
+        }
+
+        // Signed area (shoelace); > 0 means CCW.
+        inline float poly_signed_area(const basic::vector<math::vec2>& pts) noexcept
+        {
+            float area = 0.f;
+            const size_t n = pts.size();
+            for (size_t i = 0; i < n; ++i)
+            {
+                const math::vec2& a = pts[i];
+                const math::vec2& b = pts[(i + 1) % n];
+                area += a.x * b.y - b.x * a.y;
+            }
+            return area * 0.5f;
+        }
+
+        // Ear-clipping triangulation of a simple polygon (any winding).
+        // Returns CCW triangles as index triples; degenerate ears are
+        // skipped. An empty result means the outline is not usable.
+        inline std::vector<std::array<int, 3>> triangulate_polygon(
+            const basic::vector<math::vec2>& pts)
+        {
+            std::vector<std::array<int, 3>> triangles;
+
+            const int n = static_cast<int>(pts.size());
+            if (n < 3)
+                return triangles;
+
+            // Walk indices so that consecutive turns are left turns (CCW).
+            std::vector<int> index(n);
+            if (poly_signed_area(pts) >= 0.f)
+                for (int i = 0; i < n; ++i) index[i] = i;
+            else
+                for (int i = 0; i < n; ++i) index[i] = n - 1 - i;
+
+            constexpr float EAR_EPSILON = 0.00001f;
+
+            auto is_ear = [&](size_t ear_pos) -> bool
+            {
+                const size_t m = index.size();
+                const int ia = index[(ear_pos + m - 1) % m];
+                const int ib = index[ear_pos];
+                const int ic = index[(ear_pos + 1) % m];
+                if (ia == ib || ib == ic || ia == ic)
+                    return false;
+
+                const math::vec2& a = pts[static_cast<size_t>(ia)];
+                const math::vec2& b = pts[static_cast<size_t>(ib)];
+                const math::vec2& c = pts[static_cast<size_t>(ic)];
+                if (poly_cross(a, b, c) <= EAR_EPSILON)
+                    return false; // reflex or degenerate corner
+
+                // No other live vertex may lie inside triangle(a, b, c).
+                for (int k = 0; k < static_cast<int>(index.size()); ++k)
+                {
+                    const int ik = index[static_cast<size_t>(k)];
+                    if (ik == ia || ik == ib || ik == ic)
+                        continue;
+                    const math::vec2& p = pts[static_cast<size_t>(ik)];
+
+                    const float d0 = poly_cross(a, b, p);
+                    const float d1 = poly_cross(b, c, p);
+                    const float d2 = poly_cross(c, a, p);
+                    if (d0 >= -EAR_EPSILON && d1 >= -EAR_EPSILON && d2 >= -EAR_EPSILON)
+                        return false; // inside (or on the boundary of) the ear
+                }
+                return true;
+            };
+
+            // Defensive iteration cap: a simple polygon always yields, but
+            // self-intersecting input may stall the walk.
+            const size_t max_steps = static_cast<size_t>(n) * static_cast<size_t>(n) * 2 + 8;
+            size_t steps = 0;
+            size_t pos = 0;
+            while (index.size() > 3 && steps++ < max_steps)
+            {
+                if (is_ear(pos))
+                {
+                    const size_t prev = (pos + index.size() - 1) % index.size();
+                    triangles.push_back({ index[prev], index[pos], index[(pos + 1) % index.size()] });
+                    index.erase(index.begin() + static_cast<ptrdiff_t>(pos));
+                    pos = prev % index.size();
+                }
+                else
+                {
+                    pos = (pos + 1) % index.size();
+                }
+            }
+
+            if (index.size() == 3 && steps <= max_steps)
+            {
+                const math::vec2& a = pts[index[0]];
+                const math::vec2& b = pts[index[1]];
+                const math::vec2& c = pts[index[2]];
+                if (poly_cross(a, b, c) > EAR_EPSILON)
+                    triangles.push_back({ index[0], index[1], index[2] });
+            }
+
+            return triangles;
+        }
+
+        // Build the b2 shape id list for a scaled mesh outline. Convex &
+        // small outlines become one polygon shape; anything else is
+        // triangulated. Returns an empty vector when the outline is invalid
+        // (fewer than 3 points / fully degenerate).
+        inline std::vector<b2ShapeId> create_mesh_shapes(
+            b2BodyId body, const b2ShapeDef* sdef,
+            const basic::vector<math::vec2>& outline)
+        {
+            std::vector<b2ShapeId> shapes;
+
+            if (outline.size() < 3)
+                return shapes;
+
+            if (is_convex_polygon(outline)
+                && outline.size() <= static_cast<size_t>(B2_MAX_POLYGON_VERTICES))
+            {
+                std::vector<b2Vec2> pts(outline.size());
+                for (size_t i = 0; i < outline.size(); ++i)
+                    pts[i] = b2Vec2{ outline[i].x, outline[i].y };
+
+                const b2Hull hull = b2ComputeHull(pts.data(), static_cast<int>(pts.size()));
+                if (hull.count >= 3)
+                {
+                    const b2Polygon poly = b2MakePolygon(&hull, 0.f);
+                    const b2ShapeId shape = b2CreatePolygonShape(body, sdef, &poly);
+                    if (!b2_shape_eq(shape, b2_nullShapeId))
+                        shapes.push_back(shape);
+                }
+                return shapes;
+            }
+
+            for (const auto& tri : triangulate_polygon(outline))
+            {
+                // triangulate_polygon emits CCW triples, as b2 wants them.
+                const b2Vec2 tri_pts[3] = {
+                    b2Vec2{ outline[static_cast<size_t>(tri[0])].x, outline[static_cast<size_t>(tri[0])].y },
+                    b2Vec2{ outline[static_cast<size_t>(tri[1])].x, outline[static_cast<size_t>(tri[1])].y },
+                    b2Vec2{ outline[static_cast<size_t>(tri[2])].x, outline[static_cast<size_t>(tri[2])].y },
+                };
+                const b2Hull hull = b2ComputeHull(tri_pts, 3);
+                if (hull.count < 3)
+                    continue; // degenerate triangle
+
+                const b2Polygon poly = b2MakePolygon(&hull, 0.f);
+                const b2ShapeId shape = b2CreatePolygonShape(body, sdef, &poly);
+                if (!b2_shape_eq(shape, b2_nullShapeId))
+                    shapes.push_back(shape);
+            }
+            return shapes;
+        }
+
+        // ============================================================
         // Collision-group table (max 16 groups, fits in uint16 bitmask).
         // ============================================================
         constexpr size_t MAX_GROUP_COUNT = 16;
@@ -394,14 +580,18 @@ namespace jeecs
                 game_entity     entity;          // Refreshed every frame in phase_sync_bodies_in.
                 b2BodyId        body{};
                 b2ShapeId       shape{};
+                // Collider::Mesh decomposes into compound shapes (convex
+                // polygon or ear-cut triangles); primitive kinds use `shape`.
+                std::vector<b2ShapeId> mesh_shapes{};
 
                 // Diff cache: decides whether the fixture must be rebuilt.
-                enum class ShapeKind : uint8_t { None, Box, Circle, Capsule };
+                enum class ShapeKind : uint8_t { None, Box, Circle, Capsule, Mesh };
                 ShapeKind       cached_kind = ShapeKind::None;
                 math::vec2      cached_box_size = {};
                 float           cached_circle_r = 0.f;
                 float           cached_capsule_r = 0.f;
                 float           cached_capsule_h = 0.f;
+                basic::vector<math::vec2> cached_mesh_vertices{};
                 math::vec2      cached_offset_scale = { 1.f, 1.f };
                 float           cached_density = -1.f;
                 float           cached_friction = -1.f;
@@ -634,7 +824,7 @@ namespace jeecs
                 e, trans, rb, dyn, kinem, bullet,
                 lockx, locky, lockr,
                 lvel, avel, ldamp, adamp, gscale,
-                box, circle, capsule,
+                box, circle, capsule, mesh,
                 density, friction, restitution, trigger,
                 opos, orot, oscale
             ] : query_entity <
@@ -655,6 +845,7 @@ namespace jeecs
                     Physics2D::Collider::Box*,
                     Physics2D::Collider::Circle*,
                     Physics2D::Collider::Capsule*,
+                    Physics2D::Collider::Mesh*,
                     Physics2D::Density*,
                     Physics2D::Friction*,
                     Physics2D::Restitution*,
@@ -666,7 +857,8 @@ namespace jeecs
                 anyof typesof(
                     Physics2D::Collider::Box,
                     Physics2D::Collider::Circle,
-                    Physics2D::Collider::Capsule
+                    Physics2D::Collider::Capsule,
+                    Physics2D::Collider::Mesh
                 )
             > ())
             {
@@ -806,6 +998,7 @@ namespace jeecs
                 if (box)     want_kind = PhysicsWorld::BodyRecord::ShapeKind::Box;
                 else if (circle)  want_kind = PhysicsWorld::BodyRecord::ShapeKind::Circle;
                 else if (capsule) want_kind = PhysicsWorld::BodyRecord::ShapeKind::Capsule;
+                else if (mesh)    want_kind = PhysicsWorld::BodyRecord::ShapeKind::Mesh;
 
                 bool force_rebuild = (rec->cached_kind != want_kind);
                 if (!force_rebuild)
@@ -826,6 +1019,32 @@ namespace jeecs
                             || rec->cached_capsule_h != capsule->height
                             || rec->cached_offset_scale != want_offset_scale) force_rebuild = true;
                         break;
+                    case PhysicsWorld::BodyRecord::ShapeKind::Mesh:
+                        if (rec->cached_mesh_vertices.size()
+                            != mesh->vertices.points.size())
+                        {
+                            force_rebuild = true;
+                        }
+                        else
+                        {
+                            for (size_t vi = 0; vi < mesh->vertices.points.size(); ++vi)
+                            {
+                                if (!math::almost_equal(
+                                        rec->cached_mesh_vertices[vi].x,
+                                        mesh->vertices.points[vi].x)
+                                    || !math::almost_equal(
+                                        rec->cached_mesh_vertices[vi].y,
+                                        mesh->vertices.points[vi].y))
+                                {
+                                    force_rebuild = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (!force_rebuild
+                            && rec->cached_offset_scale != want_offset_scale)
+                            force_rebuild = true;
+                        break;
                     default: break;
                     }
                     if (!force_rebuild)
@@ -840,9 +1059,13 @@ namespace jeecs
 
                 if (force_rebuild)
                 {
-                    // Destroy old shape if any.
+                    // Destroy old shape(s) if any.
                     if (!physics2d_detail::b2_shape_eq(rec->shape, b2_nullShapeId))
                         b2DestroyShape(rec->shape, true);
+                    for (b2ShapeId mesh_shape : rec->mesh_shapes)
+                        if (!physics2d_detail::b2_shape_eq(mesh_shape, b2_nullShapeId))
+                            b2DestroyShape(mesh_shape, true);
+                    rec->mesh_shapes.clear();
 
                     b2ShapeDef sdef = b2DefaultShapeDef();
                     sdef.density = want_density;
@@ -895,6 +1118,29 @@ namespace jeecs
                         rec->cached_capsule_h = capsule->height;
                         break;
                     }
+                    case PhysicsWorld::BodyRecord::ShapeKind::Mesh:
+                    {
+                        // Scale the outline by Offset::Scale, then decompose
+                        // into convex parts (compound shapes on one body).
+                        basic::vector<math::vec2> outline;
+                        for (const math::vec2& p : mesh->vertices.points)
+                            outline.push_back(math::vec2(
+                                p.x * want_offset_scale.x, p.y * want_offset_scale.y));
+
+                        rec->mesh_shapes = physics2d_detail::create_mesh_shapes(
+                            body, &sdef, outline);
+                        if (rec->mesh_shapes.empty())
+                            jeecs::debug::logerr(
+                                "Physics2D::Collider::Mesh: outline with %zu vertices "
+                                "could not be converted to any convex shape (need a "
+                                "simple polygon with 3+ vertices).",
+                                mesh->vertices.points.size());
+
+                        rec->cached_mesh_vertices.clear();
+                        for (const math::vec2& p : mesh->vertices.points)
+                            rec->cached_mesh_vertices.push_back(p);
+                        break;
+                    }
                     default:
                         assert(false && "Unreachable: want_kind must be set by anyof constraint.");
                         break;
@@ -911,10 +1157,13 @@ namespace jeecs
                     // Apply collision-group filter (categoryBits/maskBits).
                     uint64_t cat = 0, msk = 0;
                     physics2d_detail::compute_collision_filter(pw->groups, e, cat, msk);
-                    b2Filter filter = b2Shape_GetFilter(new_shape);
+                    b2Filter filter{};
                     filter.categoryBits = cat;
                     filter.maskBits = msk;
-                    b2Shape_SetFilter(new_shape, filter);
+                    if (!physics2d_detail::b2_shape_eq(new_shape, b2_nullShapeId))
+                        b2Shape_SetFilter(new_shape, filter);
+                    for (b2ShapeId mesh_shape : rec->mesh_shapes)
+                        b2Shape_SetFilter(mesh_shape, filter);
                 }
             }
         }

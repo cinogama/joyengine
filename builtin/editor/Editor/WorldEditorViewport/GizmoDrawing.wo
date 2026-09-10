@@ -25,6 +25,7 @@ import Definition;
 import CameraControl;
 import GizmoMath;
 import EntityPicking;
+import ColliderGizmo;
 
 using std;
 
@@ -459,6 +460,92 @@ namespace JEEditor::Editor::WorldEditorViewport
                 for (let e : self.m_parallel_light2d_entity_selector)
                 {
                     drawLight2DIcon(e, Icons::GIZMO_PARALLEL_LIGHT2D, true);
+                }
+                return_value!;
+            };
+
+            // 绘制 2D 物理碰撞体实体 gizmo（线框 + 编辑手柄）：
+            // 选中实体恒绘制线框（黄色，与游标高亮一致）；“编辑碰撞体”
+            // 模式下所有碰撞体实体均绘制（常态绿色），并为选中实体绘制
+            // 可拖拽的编辑手柄。线段用单位 X 轴线段旋到边方向绘制；
+            // 手柄为面向调试摄像机的方块（屏幕像素恒定大小）。
+            do try!{
+                try! debug_camera_trans =
+                    camera_entity->towoo::get_component:<Transform::Translation>();
+                let (fbw, fbh) = fb->size();
+                let fb_rsize = (fbw as real, fbh as real) as vec2;
+                let debug_view_proj = camera_projection->get_view_proj_mat;
+                let billboard_rot = debug_camera_trans->get_global_rot;
+
+                // 单条碰撞体边：单位 X 轴线段旋到 ab 方向
+                func drawColliderEdge(
+                    a: vec3, b: vec3, color: (real, real, real, real))=> void
+                {
+                    let ab = b - a;
+                    let len = ab->length;
+                    if (len < 0.0001)
+                        return;
+                    drawSolid(
+                        a, gizmoEdgeRotation(ab), (len, len, len) as vec3,
+                        GIZMO_LINE_X, color);
+                }
+
+                // 手柄方块：面向调试摄像机、屏幕像素恒定大小，激活时染黄
+                func drawColliderHandle(pos: vec3, active: bool)=> void
+                {
+                    let world_per_pixel = gizmoWorldPerPixel(
+                        camera_entity, debug_camera_trans,
+                        debug_view_proj, pos, fb_rsize);
+                    let size = COLLIDER_HANDLE_SIZE_PX * world_per_pixel;
+                    drawSolid(
+                        pos, billboard_rot, (size, size, size) as vec3,
+                        DEFAULT_SQUARE_SHAPE,
+                        active ? GIZMO_COLOR_HOVER | COLLIDER_HANDLE_COLOR);
+                }
+
+                for (let e : self.m_physics2d_body_entity_selector)
+                {
+                    do try!{
+                        try! euid = e->internal::get_entity_uid;
+                        try! outline = getColliderOutline(e);
+
+                        let mut is_selected = false;
+                        match (self.m_selected_entity_id)
+                        {
+                            none?;
+                            value(selected)?
+                                is_selected = selected == euid;
+                        }
+                        // 非编辑模式下仅绘制选中实体的碰撞体线框
+                        if (!is_selected && !self.m_collider_edit_mode)
+                            return_value!;
+
+                        let color = is_selected
+                            ? COLLIDER_GIZMO_COLOR_SELECTED
+                            | COLLIDER_GIZMO_COLOR;
+                        for (let mut i = 0; i < outline->len; i += 1)
+                            drawColliderEdge(
+                                outline[i], outline[(i + 1) % outline->len], color);
+
+                        // 编辑模式下为选中实体绘制编辑手柄
+                        if (is_selected && self.m_collider_edit_mode)
+                        {
+                            match (getColliderHandles(e))
+                            {
+                                none?;
+                                value(handles_info)?
+                                {
+                                    let active_handle = self.m_collider_dragging
+                                        ? self.m_collider_drag_handle
+                                        | self.m_collider_hover_handle;
+                                    let handles = handles_info.1;
+                                    for (let mut i = 0; i < handles->len; i += 1)
+                                        drawColliderHandle(handles[i], i == active_handle);
+                                }
+                            }
+                        }
+                        return_value!;
+                    };
                 }
                 return_value!;
             };

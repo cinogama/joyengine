@@ -1,0 +1,530 @@
+// 世界编辑器视口 —— 碰撞体 gizmo（编辑手柄）交互。
+// “编辑碰撞体”模式下为选中实体的 Physics2D::Collider（Box/Circle/
+// Capsule/Mesh）显示可拖拽手柄：盒四角 / 圆半径点 / 胶囊高度点与半径
+// 点 / 网格各顶点。拖拽在碰撞体平面（实体 Z 轴为法线）内进行，命中
+// 点换算回形状局部坐标后直接写回组件值；拖拽结束值有变化时发布可
+// 撤销的 ModifyComponentMember（与变换游标同一套撤销机制）。
+// 线框与手柄的绘制见 GizmoDrawing.wo，几何换算复用本文件的纯函数
+// 与 GizmoMath.wo。
+
+import pkg::std;
+
+import je;
+import je::ecs;
+import je::gui;
+import je::internal;
+import je::typeinfo;
+
+import je::towoo;
+import je::towoo::types;
+import je::towoo::components;
+
+import pkg::try;
+
+import builtin::editor::Editor::Action::ModifyComponentMember;
+
+import Definition;
+import GizmoMath;
+import EntityPicking;
+import TransformGizmo;
+
+using std;
+
+using je;
+using je::gui;
+
+using JEEditor::Editor::Action;
+
+namespace JEEditor::Editor::WorldEditorViewport
+{
+    // ==================== 几何辅助（交互与绘制共用） ====================
+
+    // 碰撞体框架：形状局部坐标 -> 世界坐标的变换。center/rotation 已含
+    // Offset::Position/Offset::Rotation 的合成（与物理系统 compute_body_pose
+    // 一致），oscale 为 Offset::Scale（形状几何按物理系统的口径乘入各
+    // 顶点，见 getColliderHandles/getColliderOutline）。
+    protected func colliderFrame(e: entity)=> option<(vec3, quat, vec2)>
+    {
+        return or(option::none: option<(vec3, quat, vec2)>) <| try!{
+            try! trans = e->towoo::get_component:<Transform::Translation>();
+
+            let entity_pos = trans->get_global_pos;
+            let entity_rot = trans->get_global_rot;
+
+            let mut offset_pos = (0., 0.) as vec2;
+            match (e->towoo::get_component:<Physics2D::Offset::Position>())
+            {
+                none?;
+                value(opos)? offset_pos = opos.value->get;
+            }
+            let mut offset_rot = 0.;
+            match (e->towoo::get_component:<Physics2D::Offset::Rotation>())
+            {
+                none?;
+                value(orot)? offset_rot = orot.degree->get;
+            }
+            let mut offset_scale = (1., 1.) as vec2;
+            match (e->towoo::get_component:<Physics2D::Offset::Scale>())
+            {
+                none?;
+                value(oscale)? offset_scale = oscale.value->get;
+            }
+
+            let center = entity_pos
+                + entity_rot * ((offset_pos[0], offset_pos[1], 0.) as vec3);
+            let rotation = entity_rot * quat::axis((0., 0., 1.) as vec3, offset_rot);
+            return_value! option::value((center, rotation, offset_scale));
+        };
+    }
+
+    // 形状局部坐标（已含 Offset::Scale 的最终几何）-> 世界坐标
+    protected func colliderShapeToWorld(
+        center: vec3, rotation: quat, local: vec2)=> vec3
+    {
+        return center + rotation * ((local[0], local[1], 0.) as vec3);
+    }
+
+    // 世界坐标（碰撞体平面内）-> 组件局部坐标（除回 Offset::Scale），
+    // 供拖拽写回组件值使用；scale 过小时按符号保留极小值避免除零
+    protected func colliderWorldToLocal(
+        center: vec3, rotation: quat, offset_scale: vec2, world: vec3)=> vec2
+    {
+        let local = rotation->inverse * (world - center);
+        let mut sx = offset_scale[0];
+        if (mathf::abs(sx) < 0.0001)
+            sx = (sx < 0.) ? -0.0001 | 0.0001;
+        let mut sy = offset_scale[1];
+        if (mathf::abs(sy) < 0.0001)
+            sy = (sy < 0.) ? -0.0001 | 0.0001;
+        return (local[0] / sx, local[1] / sy) as vec2;
+    }
+
+    // 盒的四角形状局部坐标（±size/2，含 Offset::Scale，与物理系统同口径）
+    protected func colliderBoxCorners(
+        size: vec2, offset_scale: vec2)=> array<vec2>
+    {
+        let hx = mathf::abs(size[0]) * mathf::abs(offset_scale[0]) * 0.5;
+        let hy = mathf::abs(size[1]) * mathf::abs(offset_scale[1]) * 0.5;
+        return [
+            (-hx, -hy) as vec2, (hx, -hy) as vec2,
+            (hx, hy) as vec2, (-hx, hy) as vec2,
+        ];
+    }
+
+    // 圆的有效半径（abs(radius) * 两轴 offset scale 的较大者，与物理系统同口径）
+    protected func colliderCircleRadius(radius: real, offset_scale: vec2)=> real
+    {
+        let ax = mathf::abs(offset_scale[0]);
+        let ay = mathf::abs(offset_scale[1]);
+        return mathf::abs(radius) * ((ax > ay) ? ax | ay);
+    }
+
+    // 选中实体碰撞体的（种类, 手柄世界坐标列表）；无碰撞体时为 none。
+    // 手柄含义按种类：Box=四角；Circle=半径点(+r,0)；Capsule=0 高度点
+    // (0,+h/2)、1 半径点(+r,0)；Mesh=各顶点
+    protected func getColliderHandles(e: entity)=> option<(ColliderKind, array<vec3>)>
+    {
+        return or(option::none: option<(ColliderKind, array<vec3>)>) <| try!{
+            try! frame = colliderFrame(e);
+            let center = frame.0;
+            let rotation = frame.1;
+            let oscale = frame.2;
+
+            match (e->towoo::get_component:<Physics2D::Collider::Box>())
+            {
+                value(box)?
+                {
+                    let pts = []mut: vec<vec3>;
+                    for (let c : colliderBoxCorners(box.size->get, oscale))
+                        pts->add(colliderShapeToWorld(center, rotation, c));
+                    return_value! option::value((ColliderKind::BOX, pts->to_array));
+                }
+                none?;
+            }
+
+            match (e->towoo::get_component:<Physics2D::Collider::Circle>())
+            {
+                value(circle)?
+                {
+                    let r = colliderCircleRadius(circle.radius->get, oscale);
+                    let pts = []mut: vec<vec3>;
+                    pts->add(colliderShapeToWorld(center, rotation, (r, 0.) as vec2));
+                    return_value! option::value((ColliderKind::CIRCLE, pts->to_array));
+                }
+                none?;
+            }
+
+            match (e->towoo::get_component:<Physics2D::Collider::Capsule>())
+            {
+                value(capsule)?
+                {
+                    let r = mathf::abs(capsule.radius->get) * mathf::abs(oscale[0]);
+                    let hh = mathf::abs(capsule.height->get) * mathf::abs(oscale[1]) * 0.5;
+                    let pts = []mut: vec<vec3>;
+                    pts->add(colliderShapeToWorld(center, rotation, (0., hh) as vec2));
+                    pts->add(colliderShapeToWorld(center, rotation, (r, 0.) as vec2));
+                    return_value! option::value((ColliderKind::CAPSULE, pts->to_array));
+                }
+                none?;
+            }
+
+            match (e->towoo::get_component:<Physics2D::Collider::Mesh>())
+            {
+                value(mesh)?
+                {
+                    let pts = []mut: vec<vec3>;
+                    for (let p : mesh.vertices->get as array<vec2>)
+                        pts->add(colliderShapeToWorld(
+                            center, rotation, (p[0] * oscale[0], p[1] * oscale[1]) as vec2));
+                    return_value! option::value((ColliderKind::MESH, pts->to_array));
+                }
+                none?;
+            }
+
+            return_value! option::none: option<(ColliderKind, array<vec3>)>;
+        };
+    }
+
+    // 碰撞体线框顶点环（世界坐标；首尾不重复，绘制时闭合），
+    // 供 GizmoDrawing 绘制碰撞体实体使用；无碰撞体时为 none
+    protected func getColliderOutline(e: entity)=> option<array<vec3>>
+    {
+        return or(option::none: option<array<vec3>>) <| try!{
+            try! frame = colliderFrame(e);
+            let center = frame.0;
+            let rotation = frame.1;
+            let oscale = frame.2;
+
+            match (e->towoo::get_component:<Physics2D::Collider::Box>())
+            {
+                value(box)?
+                {
+                    let pts = []mut: vec<vec3>;
+                    for (let c : colliderBoxCorners(box.size->get, oscale))
+                        pts->add(colliderShapeToWorld(center, rotation, c));
+                    return_value! option::value(pts->to_array);
+                }
+                none?;
+            }
+
+            match (e->towoo::get_component:<Physics2D::Collider::Circle>())
+            {
+                value(circle)?
+                {
+                    let r = colliderCircleRadius(circle.radius->get, oscale);
+                    let pts = []mut: vec<vec3>;
+                    for (let mut i = 0; i < COLLIDER_CIRCLE_SEGMENTS; i += 1)
+                    {
+                        let ang = 2. * mathf::PI
+                            * (i as real / COLLIDER_CIRCLE_SEGMENTS as real);
+                        pts->add(colliderShapeToWorld(
+                            center, rotation,
+                            (mathf::cos(ang) * r, mathf::sin(ang) * r) as vec2));
+                    }
+                    return_value! option::value(pts->to_array);
+                }
+                none?;
+            }
+
+            match (e->towoo::get_component:<Physics2D::Collider::Capsule>())
+            {
+                value(capsule)?
+                {
+                    let r = mathf::abs(capsule.radius->get) * mathf::abs(oscale[0]);
+                    let hh = mathf::abs(capsule.height->get) * mathf::abs(oscale[1]) * 0.5;
+                    // 圆弧圆心纵坐标：h/2 > r 时为 ±(h/2-r)，否则胶囊退化
+                    // 为圆（圆心过原点），统一为 max(h/2-r, 0)
+                    let hc = (hh > r) ? (hh - r) | 0.;
+                    let pts = []mut: vec<vec3>;
+                    for (let mut i = 0; i < COLLIDER_CIRCLE_SEGMENTS; i += 1)
+                    {
+                        let ang = 2. * mathf::PI
+                            * (i as real / COLLIDER_CIRCLE_SEGMENTS as real);
+                        let s = mathf::sin(ang);
+                        // 上半环绕 (0,+hc)、下半环绕 (0,-hc)，在 sin 过零处
+                        // 自然衔接出两侧直边
+                        let yc = (s >= 0.) ? hc | -hc;
+                        pts->add(colliderShapeToWorld(
+                            center, rotation,
+                            (mathf::cos(ang) * r, yc + s * r) as vec2));
+                    }
+                    return_value! option::value(pts->to_array);
+                }
+                none?;
+            }
+
+            match (e->towoo::get_component:<Physics2D::Collider::Mesh>())
+            {
+                value(mesh)?
+                {
+                    let pts = []mut: vec<vec3>;
+                    for (let p : mesh.vertices->get as array<vec2>)
+                        pts->add(colliderShapeToWorld(
+                            center, rotation, (p[0] * oscale[0], p[1] * oscale[1]) as vec2));
+                    return_value! option::value(pts->to_array);
+                }
+                none?;
+            }
+
+            return_value! option::none: option<array<vec3>>;
+        };
+    }
+
+    // ==================== 交互（悬停 / 拖拽 / 撤销） ====================
+
+    // 每帧更新碰撞体编辑手柄状态：仅“编辑碰撞体”模式下工作。
+    // 松开左键结束拖拽并提交撤销记录；拖拽中按鼠标射线应用编辑；
+    // 否则做屏幕空间悬停检测，悬停手柄上按下左键开始拖拽。
+    protected func updateColliderGizmo(
+        self: WorldEditorViewport,
+        debug_camera: option<entity>,
+        hovered: bool,
+        rect_min: ImVec2,
+        rect_size: ImVec2)=> void
+    {
+        self.m_collider_hover_handle = GIZMO_HANDLE_NONE;
+
+        // 松开左键时结束拖拽并提交撤销记录
+        if (self.m_collider_dragging
+            && !IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left))
+        {
+            self->finishColliderDrag();
+            self.m_collider_dragging = false;
+            self.m_collider_drag_handle = GIZMO_HANDLE_NONE;
+        }
+
+        if (!self.m_collider_edit_mode || self.m_selected_entity_id->is_none)
+            return;
+
+        do try!{
+            try! camera_entity = debug_camera;
+            try! camera_trans =
+                camera_entity->towoo::get_component:<Transform::Translation>();
+            try! camera_proj =
+                camera_entity->towoo::get_component:<Camera::Projection>();
+            try! selected_euid = self.m_selected_entity_id;
+            try! selected_entity = self->findEntityByEuid(selected_euid);
+            try! handles_info = getColliderHandles(selected_entity);
+            let kind = handles_info.0;
+            let handles = handles_info.1;
+
+            let rmin = rect_min as vec2;
+            let rsize = rect_size as vec2;
+            if (rsize[0] <= 0. || rsize[1] <= 0.)
+                return_value!;
+
+            let mouse = GetMousePos() as vec2;
+
+            // 拖拽进行中：按当前鼠标射线应用编辑
+            if (self.m_collider_dragging)
+            {
+                self.m_collider_hover_handle = self.m_collider_drag_handle;
+
+                let mouse_local = (mouse - rmin) / rsize;
+                let mouse_ndc = (mouse_local - (0.5, 0.5) as vec2) * 2.;
+                let mouse_ray = towoo::ray::from(
+                    camera_trans, camera_proj,
+                    (mouse_ndc[0], -mouse_ndc[1]) as vec2,
+                    camera_entity->towoo::get_component:<Camera::PerspectiveProjection>->is_none);
+
+                self->applyColliderDrag(
+                    selected_entity, mouse_ray->origin, mouse_ray->direction);
+                return_value!;
+            }
+
+            if (!(hovered
+                && !self.m_is_look_active
+                && !self.m_is_pan_active
+                && !self.m_is_orbit_active
+                && !self.m_gizmo_dragging))
+                return_value!;
+
+            // 悬停检测：手柄世界坐标投影到屏幕，取距离最近者
+            let view_proj = camera_proj->get_view_proj_mat;
+            let mut best = GIZMO_HANDLE_NONE;
+            let mut best_dist = GIZMO_HIT_PX;
+            for (let mut i = 0; i < handles->len; i += 1)
+            {
+                let d = (mouse - gizmoWorldToScreen(
+                        view_proj, handles[i], rmin, rsize))->length;
+                if (d < best_dist)
+                {
+                    best_dist = d;
+                    best = i;
+                }
+            }
+            self.m_collider_hover_handle = best;
+
+            // 悬停手柄上按下左键：开始拖拽
+            if (self.m_collider_hover_handle != GIZMO_HANDLE_NONE
+                && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left))
+            {
+                self->beginColliderDrag(
+                    selected_entity, selected_euid, kind,
+                    self.m_collider_hover_handle);
+            }
+
+            return_value!;
+        };
+    }
+
+    // 开始一次手柄拖拽：捕获碰撞体平面与撤销用旧值，条件不满足时放弃
+    protected func beginColliderDrag(
+        self: WorldEditorViewport,
+        selected_entity: entity,
+        selected_euid: entity::internal::euid_t,
+        kind: ColliderKind,
+        handle: int)=> void
+    {
+        do try!{
+            try! frame = colliderFrame(selected_entity);
+
+            // 撤销记录的目标成员按种类而定（胶囊依手柄：0=高度 1=半径）
+            let mut undo_component = "";
+            let mut undo_member = "";
+            if (kind == ColliderKind::BOX)
+            {
+                undo_component = "Physics2D::Collider::Box";
+                undo_member = "size";
+            }
+            else if (kind == ColliderKind::CIRCLE)
+            {
+                undo_component = "Physics2D::Collider::Circle";
+                undo_member = "radius";
+            }
+            else if (kind == ColliderKind::CAPSULE)
+            {
+                undo_component = "Physics2D::Collider::Capsule";
+                undo_member = (handle == 0) ? "height" | "radius";
+            }
+            else
+            {
+                undo_component = "Physics2D::Collider::Mesh";
+                undo_member = "vertices";
+            }
+
+            try! old_value = serializeMemberValue(
+                selected_entity, undo_component, undo_member);
+
+            self.m_collider_dragging = true;
+            self.m_collider_drag_handle = handle;
+            self.m_collider_drag_euid = selected_euid;
+            self.m_collider_drag_kind = kind;
+            // 拖拽平面：碰撞体所在平面（实体 Z 轴为法线），拖拽期间冻结
+            self.m_collider_drag_center = frame.0;
+            self.m_collider_drag_normal = frame.1 * ((0., 0., 1.) as vec3);
+            self.m_collider_drag_undo_component = undo_component;
+            self.m_collider_drag_undo_member = undo_member;
+            self.m_collider_drag_undo_old_value = old_value;
+            return_value!;
+        };
+    }
+
+    // 拖拽进行中：鼠标射线与拖拽平面求交，命中点换算回组件局部坐标
+    // 后按手柄含义写回组件值（框架取当前帧的，实体移动中拖拽仍跟随）
+    protected func applyColliderDrag(
+        self: WorldEditorViewport,
+        selected_entity: entity,
+        ray_origin: vec3,
+        ray_dir: vec3)=> void
+    {
+        do try!{
+            // 鼠标射线与拖拽平面求交
+            try! hit = gizmoRayPlaneHit(
+                ray_origin, ray_dir,
+                self.m_collider_drag_normal,
+                self.m_collider_drag_center);
+
+            let kind = self.m_collider_drag_kind;
+            let handle = self.m_collider_drag_handle;
+
+            if (kind == ColliderKind::BOX)
+            {
+                try! box =
+                    selected_entity->towoo::get_component:<Physics2D::Collider::Box>();
+                try! frame = colliderFrame(selected_entity);
+                let corner = colliderWorldToLocal(frame.0, frame.1, frame.2, hit);
+                let sx = mathf::abs(corner[0]) * 2.;
+                let sy = mathf::abs(corner[1]) * 2.;
+                box.size->set((
+                    (sx > COLLIDER_MIN_SIZE) ? sx | COLLIDER_MIN_SIZE,
+                    (sy > COLLIDER_MIN_SIZE) ? sy | COLLIDER_MIN_SIZE,) as vec2);
+            }
+            else if (kind == ColliderKind::CIRCLE)
+            {
+                try! circle =
+                    selected_entity->towoo::get_component:<Physics2D::Collider::Circle>();
+                try! frame = colliderFrame(selected_entity);
+                let p = colliderWorldToLocal(frame.0, frame.1, frame.2, hit);
+                circle.radius->set(
+                    (p->length > COLLIDER_MIN_SIZE) ? p->length | COLLIDER_MIN_SIZE);
+            }
+            else if (kind == ColliderKind::CAPSULE)
+            {
+                try! capsule =
+                    selected_entity->towoo::get_component:<Physics2D::Collider::Capsule>();
+                try! frame = colliderFrame(selected_entity);
+                let p = colliderWorldToLocal(frame.0, frame.1, frame.2, hit);
+                if (handle == 0)
+                {
+                    // 高度手柄（顶部）：h = 2*|y|
+                    let h = mathf::abs(p[1]) * 2.;
+                    capsule.height->set(
+                        (h > COLLIDER_MIN_SIZE) ? h | COLLIDER_MIN_SIZE);
+                }
+                else
+                {
+                    // 半径手柄（右侧）：r = |x|，钳制不超过当前半高
+                    let cur_h = mathf::abs(capsule.height->get);
+                    let mut r = mathf::abs(p[0]);
+                    if (r < COLLIDER_MIN_SIZE)
+                        r = COLLIDER_MIN_SIZE;
+                    if (cur_h * 0.5 < r)
+                        r = cur_h * 0.5;
+                    capsule.radius->set(r);
+                }
+            }
+            else
+            {
+                try! mesh =
+                    selected_entity->towoo::get_component:<Physics2D::Collider::Mesh>();
+                try! frame = colliderFrame(selected_entity);
+
+                let pts = mesh.vertices->get as array<vec2>;
+                if (handle < 0 || handle >= pts->len)
+                    return_value!;
+
+                let np = colliderWorldToLocal(frame.0, frame.1, frame.2, hit);
+                let newpts = []mut: vec<vec2>;
+                for (let mut i = 0; i < pts->len; i += 1)
+                    newpts->add((i == handle) ? np | (pts[i][0], pts[i][1]) as vec2);
+                mesh.vertices->set(newpts->to_array as Physics2D::vertex_list);
+            }
+            return_value!;
+        };
+    }
+
+    // 结束拖拽：值有变化时发布一条可撤销的 Action
+    protected func finishColliderDrag(self: WorldEditorViewport)=> void
+    {
+        if (self.m_collider_drag_undo_old_value == "")
+            return;
+
+        do try!{
+            try! selected_entity = self->findEntityByEuid(self.m_collider_drag_euid);
+            let new_value = serializeMemberValue(
+                selected_entity,
+                self.m_collider_drag_undo_component,
+                self.m_collider_drag_undo_member)->or("");
+
+            if (new_value != "" && new_value != self.m_collider_drag_undo_old_value)
+                self->doAction(ModifyComponentMember::create(
+                        self.m_collider_drag_euid,
+                        self.m_collider_drag_undo_component,
+                        self.m_collider_drag_undo_member,
+                        self.m_collider_drag_undo_old_value,
+                        new_value));
+            return_value!;
+        };
+    }
+}
