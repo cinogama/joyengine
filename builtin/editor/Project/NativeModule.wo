@@ -1,0 +1,45 @@
+import pkg::std;
+import pkg::fsys;
+import pkg::try;
+
+import je;
+
+using je;
+using fsys;
+
+namespace JEEditor::Project
+{
+    using NativeModule = struct{
+        m_name: string,
+        m_loaded_module_handle: mut option<(handle, path_t)>,
+    }
+    {
+        public func load(name: string, path: path_t)
+        {
+            try! module_handle = load_module(name, path->to_string);
+            return_value! NativeModule{
+                m_name = name,
+                m_loaded_module_handle = mut option::value((module_handle, path)),
+            };
+        }
+        public func drop(self: NativeModule)
+        {
+            unload_module(self.m_loaded_module_handle->unwrap.0);
+            self.m_loaded_module_handle = option::none;
+        }
+        public func reload(self: NativeModule, path: path_t)
+        {
+            return is_value <| try!{
+                try! new_module_handle = load_module(self.m_name, path->to_string);
+                self->drop();
+                
+                self.m_loaded_module_handle = option::value((new_module_handle, path));
+                return_value!;
+            };
+        }
+        public func tryGetNameAndPath(self: NativeModule)
+        {
+            return self.m_loaded_module_handle->> \(_, path) = (self.m_name, path);;
+        }
+    }
+}

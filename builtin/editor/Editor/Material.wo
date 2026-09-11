@@ -411,14 +411,9 @@ namespace JEEditor::Editor
         // 加载着色器并插入到列表 insert_at 位置（越界时收敛到首/尾）
         func tryInsertShader(
             wctx: WorldEditorViewport,
-            e: entity, univ: option<universe>, path: string, insert_at: int)=> void
+            e: entity, univ: option<universe>, path: path_t, insert_at: int)=> void
         {
-            if (path == "")
-            {
-                MsgBox::err("添加着色器失败", "着色器路径不能为空");
-                return;
-            }
-            if (string::lower(extension(normalize(path))) != ".shader")
+            if (string::lower(extension(path)) != ".shader")
             {
                 MsgBox::err("添加着色器失败", F"`{path}` 不是着色器文件（.shader）");
                 return;
@@ -453,11 +448,11 @@ namespace JEEditor::Editor
             {
                 none?;
                 value(payload)?
-                    tryInsertShader(wctx, e, univ, payload->dump, append_at);
+                    tryInsertShader(wctx, e, univ, payload->path, append_at);
             }
         }
         
-        func isModelFile(path: string)=> bool
+        func isModelFile(path: path_t)=> bool
         {
             // 引擎经 Assimp 解析模型文件（jegl_load_vertex），
             // 此处列出常见可拖入的模型扩展名
@@ -481,18 +476,13 @@ namespace JEEditor::Editor
                 [".ac"] = true,
                 [".ase"] = true,
             };
-            return model_exts->contains(string::lower(extension(normalize(path))));
+            return model_exts->contains(string::lower(extension(path)));
         }
         
         func trySetShape(
             wctx: WorldEditorViewport,
-            e: entity, univ: option<universe>, path: string)=> void
+            e: entity, univ: option<universe>, path: path_t)=> void
         {
-            if (path == "")
-            {
-                MsgBox::err("设置模型失败", "模型路径不能为空");
-                return;
-            }
             if (!isModelFile(path))
             {
                 MsgBox::err("设置模型失败", F"`{path}` 不是模型文件");
@@ -559,7 +549,7 @@ namespace JEEditor::Editor
                 {
                     none?;
                     value(payload)?
-                        trySetShape(wctx, e, univ, payload->dump);
+                        trySetShape(wctx, e, univ, payload->path);
                 }
             }
             Spacing();
@@ -608,7 +598,7 @@ namespace JEEditor::Editor
                     {
                         none?;
                         value(payload)?
-                            tryInsertShader(wctx, e, univ, payload->dump, idx);
+                            tryInsertShader(wctx, e, univ, payload->path, idx);
                     }
                     
                     if (opened)
@@ -626,7 +616,7 @@ namespace JEEditor::Editor
             Spacing();
         }
         
-        func isTextureFile(path: string)=> bool
+        func isTextureFile(path: path_t)=> bool
         {
             // 与资源浏览器的纹理扩展名列表（Browser::iconForPath）保持一致
             static let texture_exts = {
@@ -647,21 +637,16 @@ namespace JEEditor::Editor
                 [".ktx"] = true,
                 [".psd"] = true,
             };
-            return texture_exts->contains(string::lower(extension(normalize(path))));
+            return texture_exts->contains(string::lower(extension(path)));
         }
         
         func tryBindTexture(
             wctx: WorldEditorViewport,
-            e: entity, univ: option<universe>, pass: int, path: string)=> void
+            e: entity, univ: option<universe>, pass: int, path: path_t)=> void
         {
             if (pass < 0)
             {
                 MsgBox::err("绑定纹理失败", "纹理通道号不能是负数");
-                return;
-            }
-            if (path == "")
-            {
-                MsgBox::err("绑定纹理失败", "纹理路径不能为空");
                 return;
             }
             if (!isTextureFile(path))
@@ -793,7 +778,7 @@ namespace JEEditor::Editor
                 {
                     none?;
                     value(payload)?
-                        tryBindTexture(wctx, e, univ, pass, payload->dump);
+                        tryBindTexture(wctx, e, univ, pass, payload->path);
                 }
                 
                 Spacing();

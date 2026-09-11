@@ -6,7 +6,7 @@ import je::ecs;
 import pkg::interface;
 
 import builtin::editor::GUI::Windows;
-import builtin::editor::Singleton::Project;
+import builtin::editor::Project;
 
 using std;
 using je;
@@ -33,7 +33,7 @@ namespace JEEditor::Editor
                 value(shutdownWindow)?
                 {
                     /* 通知 Project 保存当前状态到 Tombs，准备入土 */
-                    Singleton::Project::dumpTombs();
+                    Project::dumpTombs();
                     
                     for (let iw : internal::getAllWindows())
                     {

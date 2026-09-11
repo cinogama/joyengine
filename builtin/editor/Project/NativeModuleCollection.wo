@@ -1,0 +1,60 @@
+import pkg::std;
+import pkg::fsys;
+import pkg::try;
+import pkg::iterator;
+import pkg::worst;
+
+import NativeModule;
+
+using fsys;
+using iterator;
+using std;
+
+namespace JEEditor::Project
+{
+    using NativeModuleCollection = struct{
+        m_loaded_native_modules: map<string, NativeModule>,
+    }
+    {
+        public func create()
+        {
+            return NativeModuleCollection{
+                m_loaded_native_modules = {}mut,
+            };
+        }
+        public func dropAllModuleWhileProjectExist(self: NativeModuleCollection)
+        {
+            for (let (_, module) : self.m_loaded_native_modules)
+                module->drop();
+
+            self.m_loaded_native_modules->clear();
+        }
+        public func reload(self: NativeModuleCollection, name: string, path: path_t)=> bool
+        {
+            match (self.m_loaded_native_modules->get(name))
+            {
+                none?
+                {
+                    return is_value <| try!{
+                        try! module = NativeModule::load(name, path);
+                        self.m_loaded_native_modules->set(name, module);
+                        
+                        return_value!;
+                    };
+                }
+                value(module)?
+                {
+                    return module->reload(path);
+                }
+            }
+        }
+        public func getAllLoadedModuleNameAndPath(self: NativeModuleCollection)=> array<(string, path_t)>
+        {
+            return self.m_loaded_native_modules->iter
+                |> filter_map(\(_, module) = module->tryGetNameAndPath;)
+                |> collect
+                |> sort(\(lname, _), (rname, _) = lname < rname;);
+                ;
+        }
+    }
+}

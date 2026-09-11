@@ -21,7 +21,8 @@ import builtin::editor::GUI::Forms::InputBox;
 
 import builtin::editor::Singleton;
 import builtin::editor::Singleton::Universe;
-import builtin::editor::Singleton::Project;
+
+import builtin::editor::Project;
 
 using std;
 
@@ -320,11 +321,11 @@ namespace JEEditor::Editor
                         none?;
                     }
 
-                    match (toml::save(toml::new_table(), project_dir / Singleton::Project::PROJECT_FILE_NAME))
+                    match (toml::save(toml::new_table(), project_dir / Project::PROJECT_FILE_NAME))
                     {
                         err(msg)?
                             MsgBox::err("新建项目",
-                                F"写入项目文件 \"{Singleton::Project::PROJECT_FILE_NAME}\" 失败：{msg}");
+                                F"写入项目文件 \"{Project::PROJECT_FILE_NAME}\" 失败：{msg}");
                         ok(_)?
                         {
                             // confirmOpen 以 m_current 为待打开目录，
@@ -340,10 +341,10 @@ namespace JEEditor::Editor
         
         func confirmOpen(self: ProjectOpen)=> void
         {
-            if (!isfile(self.m_current / Singleton::Project::PROJECT_FILE_NAME))
+            if (!isfile(self.m_current / Project::PROJECT_FILE_NAME))
             {
                 MsgBox::err("打开项目",
-                    F"没有在 \"{self.m_current->to_string}\" 内找到项目文件 {Singleton::Project::PROJECT_FILE_NAME}。");
+                    F"没有在 \"{self.m_current->to_string}\" 内找到项目文件 {Project::PROJECT_FILE_NAME}。");
                 return;
             }
             
@@ -363,7 +364,7 @@ namespace JEEditor::Editor
             if (self.m_close_way == CloseWay::OPENED_A_PATH)
             {
                 /* 项目被打开了，调一下 apply，初始化一下 Project 实例 */
-                Singleton::apply:<Singleton::Project>(\_= do nil;);
+                Singleton::apply:<Project>(\_= do nil;);
             }
             else
             {

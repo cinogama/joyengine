@@ -41,7 +41,7 @@ import builtin::editor::Editor::EntityClipboard;
 import builtin::editor::Editor::ResourcePath;
 import builtin::editor::Editor::Action::CreateEntity;
 
-import builtin::editor::Singleton::Project;
+import builtin::editor::Project;
 
 import Definition;
 import CameraControl;
@@ -244,7 +244,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         s_world_viewports->set(self.m_world_instance, self);
         
         // 如果是从文件加载的 world，通知 Project 世界文件已经打开
-        do self.m_saving_path->> \p = Singleton::Project::worldOpen(p);;
+        do self.m_saving_path->> \p = Project::worldOpen(p);;
         
     }
     public func onDestroy(self: WorldEditorViewport)=> void
@@ -275,7 +275,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         }
         
         // 如果是从文件加载的 world，通知 Project 世界文件已经关闭
-        do self.m_saving_path->> \p = Singleton::Project::worldClose(p);;
+        do self.m_saving_path->> \p = Project::worldClose(p);;
     }
     // 关闭前确认：仅当世界存在未保存的修改（以 doAction/撤销/重做为准，
     // 见 Practice::isDirty）时才询问，否则直接放行关闭：
@@ -621,7 +621,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             value(dat)?
             {
                 dat->set("prefab",
-                    ResourcePath::toRuntimeResourcePath(path->to_string()));
+                    ResourcePath::toRuntimeResourcePath(path));
                     
                 let mut spawn_pos = self->getSpawnPosInFrontOfCamera();
                 match (self->getSpawnPosAtScreenPos(

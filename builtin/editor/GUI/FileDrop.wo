@@ -1,28 +1,29 @@
 import pkg::std;
+import pkg::fsys;
 
 import je::gui;
 
-import pkg::fsys;
+import builtin::editor::Editor::Browser;
+
+import Drag;
 
 using std;
 using je::gui;
 using fsys;
+using JEEditor::Editor;
 
 // 资源拖放字段：接收从资源管理器（builtin/editor/Editor/Browser.wo）拖来的
 // 文件或目录。ImGui 拖拽按“载荷类型名字符串”匹配，这里直接用字符串接收，
 // 因此本控件不反向依赖 Editor 模块，任何脚本都能复用。
 namespace JEEditor::GUI::FileDrop
 {
-    // 必须与 Browser.wo 中 FilePayload::type 保持一致。
-    let BROWSER_FILE_PAYLOAD = "JE_EDITOR_BROWSER_FILE_PATH";
-
     // 行尾“清除”按钮的宽度；字段宽度会相应让出这段空间。
     let CLEAR_BUTTON_WIDTH = 24.;
 
-    func displayName(path: string)=> string
+    func displayName(path: path_t)=> string
     {
-        let name = filename(normalize(path));
-        return name->len > 0 ? name | path;
+        let name = filename(path);
+        return name->len > 0 ? name | path->to_string;
     }
 
     // ImGui 风格的文件/目录拖放字段：以整块可交互的按钮展示当前路径的
@@ -37,9 +38,9 @@ namespace JEEditor::GUI::FileDrop
     //   option::value("") 清除
     //   option::value(p)  新的本地路径 p（不做 @/ 运行时路径转换，
     //                     是否需要由调用方经 Editor::ResourcePath 决定）
-    public func File(tag: string, current: option<string>)=> option<string>
+    public func File(tag: string, current: option<path_t>)=> option<option<path_t>>
     {
-        let mut result = option::none as option<string>;
+        let mut result = option::none: option<option<path_t>>;
 
         PushIDStr(tag);
         defer PopID();
@@ -73,11 +74,11 @@ namespace JEEditor::GUI::FileDrop
         if (IsItemHovered())
             do SetTooltip(tip);
 
-        match (AcceptDrag([BROWSER_FILE_PAYLOAD]))
+        match (Drag::AcceptDrag:<FilePayload>())
         {
             none?;
-            value((_, path))?
-                result = option::value(path);
+            value(filePayload)?
+                result = option::value(option::value(filePayload->path));
         }
 
         if (has_value)
@@ -86,7 +87,7 @@ namespace JEEditor::GUI::FileDrop
             PushStyleVec2(StyleVar::ImGuiStyleVar_ItemSpacing, (0., 0.));
             SameLine();
             if (ButtonSize("×###file_drop_clear", (CLEAR_BUTTON_WIDTH, 0.)))
-                result = option::value("");
+                result = option::value(option::none);
             PopStyleVar(1);
         }
 

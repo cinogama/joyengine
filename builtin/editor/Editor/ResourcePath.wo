@@ -11,15 +11,15 @@ namespace JEEditor::Editor::ResourcePath
 {
     // 反向：真实路径 -> @/ 相对形式。目标不在工作路径之下（相对路径
     // 为空、指向工作路径本身或以 .. 开头逃逸）时退回原路径。
-    public func toRuntimeResourcePath(path: string)=> string
+    public func toRuntimeResourcePath(path: fsys::path_t)=> string
     {
-        match (fsys::relative(fsys::normalize(path), fsys::workpath()))
+        match (fsys::relative(path, fsys::workpath()))
         {
-            err(_)? return path;
+            err(_)? return path->to_string;
             ok(rel)?
             {
                 if (rel == "" || rel == "." || rel->begin_with(".."))
-                    return path;
+                    return path->to_string;
                 return "@/" + rel;
             }
         }

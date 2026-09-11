@@ -60,11 +60,7 @@ namespace JEEditor::Editor
         public let type = "JE_EDITOR_BROWSER_FILE_PATH";
         
         public func create(p: fsys::path_t)=> FilePayload
-        // where require!(FilePayload : Drag::IDragPayload);
-        // ↑ 保留但注释：声明本类型服从 IDragPayload（鸭子类型，
-        // 注释不影响服从）。不写成生效的 require 是因为接口校验
-        // restore 时会递归依赖尚在 where 检查阶段的 create 本身，
-        // 类型检查在此循环失败
+            where require!(FilePayload : Drag::IDragPayload);
         {
             return FilePayload{
                 m_path = p,
@@ -1017,7 +1013,7 @@ PHYSICS2D_COLLISIONS!
                     }
                     if (MenuItem("C++ 模块"))
                     {
-                        
+                    
                     }
                     Separator();
                     if (MenuItem("文件夹"))
@@ -1239,9 +1235,9 @@ PHYSICS2D_COLLISIONS!
             wctx: WorldEditorViewport,
             e: entity, dst: fsys::path_t, dirty: mutable<bool>)=> void
         {
-            let runtime_path = ResourcePath::toRuntimeResourcePath(dst->to_string());
+            let runtime_path = ResourcePath::toRuntimeResourcePath(dst);
             
-            match (toml::save(Entity::save_prefab(e, dst->to_string()), dst))
+            match (toml::save(Entity::save_prefab(e, dst), dst))
             {
                 err(msg)?
                     MsgBox::err("保存失败",

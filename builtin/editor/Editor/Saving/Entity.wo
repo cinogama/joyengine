@@ -8,6 +8,7 @@ import je::towoo::components;
 
 import pkg::toml;
 import pkg::try;
+import pkg::fsys;
 
 import builtin::gaming::Saving::Entity;
 import builtin::editor::GUI::Forms::MsgBox;
@@ -15,6 +16,7 @@ import builtin::editor::Editor::ResourcePath;
 
 using je;
 using toml;
+using fsys;
 using JEEditor::Editor;
 using JEEditor::GUI::Forms;
 
@@ -65,7 +67,7 @@ namespace JEEditor::Saving::Entity
     // 已挂预设体且 dst 不是该预设体源文件时，输出相对该预设体的变体
     //（差异 + "prefab" 键，与普通实体的差异保存同构）；覆盖预设体
     // 源文件本体时仍输出完整数据。
-    public func save_prefab(e: entity, dst: string)=> Toml
+    public func save_prefab(e: entity, dst: path_t)=> Toml
     {
         let toml = _prefab_full(e);
 

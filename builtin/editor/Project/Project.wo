@@ -6,12 +6,13 @@ import pkg::fsys;
 import pkg::try;
 import pkg::worst;
 
+import je;
 import je::ecs;
 import je::gui;
 import je::internal;
 
-import Singleton;
-import Universe;
+import builtin::editor::Singleton;
+import builtin::editor::Singleton::Universe;
 
 import builtin::editor::GUI::Forms::MsgBox;
 import builtin::editor::GUI::Forms::AskBox;
@@ -26,6 +27,9 @@ import builtin::editor::Editor::Inspector;
 import builtin::editor::Editor::Material;
 import builtin::editor::Editor::Shutdown;
 import builtin::editor::Editor::WorldEditorViewport;
+import builtin::editor::Editor::ResourcePath;
+
+import NativeModuleCollection;
 
 using je;
 using toml;
@@ -37,13 +41,15 @@ using JEEditor::GUI;
 using JEEditor::GUI::Windows;
 using JEEditor::GUI::Forms;
 using JEEditor::GUI::Statebar;
+using JEEditor::Singleton;
 
-namespace JEEditor::Singleton
+namespace JEEditor
 {
     using Project = struct{
         m_shutdown_tombs: mut option<Tombs>,
         
         m_opened_worlds: map<path_t, void>,
+        m_native_modules: NativeModuleCollection,
     }
     {
         /*
@@ -137,21 +143,44 @@ namespace JEEditor::Singleton
         public func createAndLoad(toml: option<Toml>)=> Project
             where require!(Project: ISingleton);
         {
+            let proj = Project{
+                m_shutdown_tombs = mut option::none,
+                m_opened_worlds = {}mut,
+                m_native_modules = NativeModuleCollection::create(),
+            };
+            
             match (load(workpath() / PROJECT_FILE_NAME))
             {
                 ok(data)?
                 {
-                    do data;
+                    do try!{
+                        try! modules = data->get("modules")=>>\t = t->as_table;;
+                        for (let (name, module_path): modules)
+                        {
+                            do try!
+                            {
+                                try! path = module_path->as_string;
+                                if (proj.m_native_modules->reload(
+                                        name,
+                                        ResourcePath::toLocalResourcePath(path)))
+                                {
+                                    throw!;
+                                }
+                                return_value!;
+                            }
+                            catch!
+                            {
+                                MsgBox::msg("加载模块失败", F"加载模块 {name} 失败。");
+                            };
+                        }
+                        return_value!;
+                    };
+                    
                     startUpEditorGUI();
                 }
                 err(msg)?
                     MsgBox::err("加载项目失败", F"项目文件损坏，因此无法打开:\n{msg}");
             }
-            
-            let proj = Project{
-                m_shutdown_tombs = mut option::none,
-                m_opened_worlds = {}mut,
-            };
             
             match (toml=>> \data = Tombs::restore(data);)
             {
@@ -165,7 +194,7 @@ namespace JEEditor::Singleton
                             let mut editor_state = option::none: option<Toml>;
                             if (state->len > 0)
                                 editor_state = option::value(state);
-                            
+                                
                             WorldEditorViewport::openWorldEditorViewportFromFile(
                                 p, editor_state);
                         }
@@ -180,7 +209,25 @@ namespace JEEditor::Singleton
             /* TODO: 在此处将 Project 数据保存为 Toml，然后写入 PROJECT_FILE_NAME */
             let project_file_path = workpath() / PROJECT_FILE_NAME;
             
-            do project_file_path;
+            let project_toml = new_table();
+            
+            /* Module list */
+            let native_modules = new_table();
+            for (let (name, path) : self.m_native_modules->getAllLoadedModuleNameAndPath)
+            {
+                native_modules->set(name, ResourcePath::toRuntimeResourcePath(path));
+            }
+            project_toml->set("modules", native_modules);
+            
+            match (toml::save(project_toml, project_file_path))
+            {
+                ok(_)?;
+                err(msg)?
+                    logerr(F"保存项目文件失败: {msg}");
+            }
+            
+            /* save 被调用时，引擎的几乎全部上下文都已经被关闭（包括 Universe），此时正好清理 native modules */
+            self.m_native_modules->dropAllModuleWhileProjectExist();
             
             /*
             Project 的单例上下文分成两部分，一部分属于手动处理的 project.je4project
