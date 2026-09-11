@@ -54,6 +54,10 @@ namespace JEEditor::Singleton
         */
         using Tombs = struct{
             m_worlds_paths_to_open_next_time: array<path_t>,
+            // 每个世界的编辑器状态（调试摄像机位姿 / 视口编辑模式），
+            // 以规范化后的世界路径为键；由 WorldEditorViewport 编码为
+            // 不透明 Toml，Project 只负责搬运与落盘。
+            m_world_editor_states: map<path_t, Toml>,
         }
         {
             func save(self: Tombs)=> Toml
@@ -62,6 +66,17 @@ namespace JEEditor::Singleton
                 
                 let worlds = from(self.m_worlds_paths_to_open_next_time->>\p = p->to_string;);
                 dump->set("worlds", worlds);
+                
+                // 每个世界一条 [[world_states]] 记录：path + state 子表
+                let world_states = new_array();
+                for (let (path, state) : self.m_world_editor_states)
+                {
+                    let entry = new_table();
+                    entry->set("path", path->to_string());
+                    entry->set("state", state);
+                    world_states->push(entry);
+                }
+                dump->set("world_states", world_states);
                 
                 return dump;
             }
@@ -74,8 +89,54 @@ namespace JEEditor::Singleton
                     try! path = p->as_string;
                     world_paths->add(normalize(path));
                 }
+                
+                // world_states 为可选扩展（旧版 project.toml 无此键）：
+                // 缺失或单条损坏时跳过，不影响 worlds 列表的恢复。
+                let mut world_states = {}mut: map<path_t, Toml>;
+                match (data->get("world_states"))
+                {
+                    none?;
+                    value(states_val)?
+                    {
+                        match (states_val->as_array)
+                        {
+                            none?;
+                            value(states_arr)?
+                            {
+                                // 单条记录解析：path 与 state 均合法才返回，
+                                // 任一缺失/类型不符则返回 none 由调用方跳过。
+                                func parseState(entry: Toml)=> option<(path_t, Toml)>
+                                {
+                                    return or(option::none
+                                            : option<(path_t, Toml)>) <| try!{
+                                        try! pv = entry->get("path");
+                                        try! pstr = pv->as_string;
+                                        try! state = entry->get("state");
+                                        return_value! option::value <|
+                                            (normalize(pstr), state);
+                                    };
+                                }
+                                
+                                for (let entry : states_arr)
+                                {
+                                    match (parseState(entry))
+                                    {
+                                        none?;
+                                        value(pair)?
+                                        {
+                                            let (p, s) = pair;
+                                            world_states->set(p, s);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
                 return_value! Tombs{
                     m_worlds_paths_to_open_next_time = world_paths->unsafe::asarray,
+                    m_world_editor_states = world_states,
                 };
             }
         }
@@ -146,7 +207,9 @@ namespace JEEditor::Singleton
                     for (let p : tombs.m_worlds_paths_to_open_next_time)
                     {
                         if (isfile(p))
-                            WorldEditorViewport::openWorldEditorViewportFromFile(p);
+                            WorldEditorViewport::openWorldEditorViewportFromFile(
+                                p,
+                                tombs.m_world_editor_states->get(p));
                     }
                 }
             }
@@ -176,8 +239,24 @@ namespace JEEditor::Singleton
         {
             apply:<Project>(
                 func(proj){
+                    // 收集每个已打开世界视口的编辑器状态（调试摄像机位姿/
+                    // 视口编辑模式），以规范化路径为键，供下次启动恢复。
+                    let mut world_states = {}mut: map<path_t, Toml>;
+                    for (let vp : WorldEditorViewport::getAllViewports())
+                    {
+                        match (vp->getSavingPath)
+                        {
+                            none?;
+                            value(path)?
+                                world_states->set(
+                                    normalize(path->to_string()),
+                                    vp->dumpEditorStateToml());
+                        }
+                    }
+                    
                     let tombs = Tombs{
                         m_worlds_paths_to_open_next_time = proj.m_opened_worlds->keys,
+                        m_world_editor_states = world_states,
                     };
                     proj.m_shutdown_tombs = option::value(tombs);
                 });

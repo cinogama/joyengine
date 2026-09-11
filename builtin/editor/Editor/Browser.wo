@@ -1015,7 +1015,8 @@ PHYSICS2D_COLLISIONS!
             // 扩展名 -> 打开回调 的查找表；新增可打开的文件类型时在此注册。
             static let ext_open_map = {
                 [".je4world"] = func(p: fsys::path_t) {
-                    WorldEditorViewport::openWorldEditorViewportFromFile(p);
+                    WorldEditorViewport::openWorldEditorViewportFromFile(
+                        p, option::none);
                 },
             };
             

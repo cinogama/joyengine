@@ -51,8 +51,10 @@ import ColliderGizmo;
 import GizmoDrawing;
 import ViewportUI;
 import WorldSaving;
+import EditorState;
 
 using std;
+using toml;
 
 using je;
 using je::gui;
@@ -76,7 +78,8 @@ namespace JEEditor::Editor::WorldEditorViewport
         w: world,
         name: string,
         path: option<path_t>,
-        runtime_systems: array<typeinfo>)=> WorldEditorViewport
+        runtime_systems: array<typeinfo>,
+        editor_state: option<Toml>)=> WorldEditorViewport
         where require!(WorldEditorViewport: IWindows);
     {
         let graphic_uhost = graphic_uhost::get_or_create(
@@ -92,6 +95,9 @@ namespace JEEditor::Editor::WorldEditorViewport
             m_name = name,
             m_runtime_systems = []mut,
             m_saving_path = path,
+            
+            m_pending_editor_state = mut editor_state,
+            m_lock_mouse_on_look = mut false,
             
             m_editor_walk_camera_frame_buffer = mut option::none,
             m_fb_pending_size = mut (0., 0.),
@@ -406,6 +412,25 @@ namespace JEEditor::Editor::WorldEditorViewport
             s_last_focusd_world_view = option::value(self);
             
         let debug_camera = self.m_debug_camera_selector->iter |> collect->get(0);
+        
+        // 恢复 Project 单例保存的编辑器状态（调试摄像机位姿 / 视口编辑模式）：
+        // 仅在调试摄像机可解析后应用一次，随后清空待处理状态。
+        match (self.m_pending_editor_state)
+        {
+            none?;
+            value(editor_state)?
+            {
+                match (debug_camera)
+                {
+                    none?;
+                    value(camera)?
+                    {
+                        self->applyEditorState(editor_state, camera);
+                        self.m_pending_editor_state = option::none;
+                    }
+                }
+            }
+        }
         
         self->updateWalkCameraFramebuffer(debug_camera);
         

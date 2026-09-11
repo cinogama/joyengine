@@ -350,7 +350,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             > RMB_CLICK_MAX_DRAG_PX)
         {
             self.m_is_look_active = true;
-            if (s_lock_mouse_on_look)
+            if (self.m_lock_mouse_on_look)
                 input::set_lock_mouse(true);
         }
         if (hovered && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Middle))

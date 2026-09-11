@@ -30,6 +30,7 @@ import builtin::editor::Editor::Practice;
 
 import Definition;
 import WindowLifecycle;
+import EditorState;
 
 using std;
 
@@ -159,8 +160,11 @@ namespace JEEditor::Editor::WorldEditorViewport
         new_name: string,
         new_path: option<path_t>)=> bool
     {
+        // 重建窗口沿用当前世界实例与未保存的修改；同时把编辑器状态
+        //（摄像机位姿/编辑模式）搬到新视口，避免重命名/另存后视角与模式复位
         let new_viewport = create(
-            self.m_world_instance, new_name, new_path, self->getRuntimeSystems());
+            self.m_world_instance, new_name, new_path, self->getRuntimeSystems(),
+            option::value(self->dumpEditorStateToml()));
 
         match (Windows::show(new_viewport))
         {

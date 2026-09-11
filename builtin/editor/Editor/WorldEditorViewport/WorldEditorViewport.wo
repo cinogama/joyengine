@@ -16,6 +16,7 @@
 //   ViewportUI.wo        视口覆盖 UI（工具栏/未保存标记）
 //   WorldSaving.wo       世界保存/重命名/重开与调试系统管理
 //   WorldOpen.wo         世界创建与打开（静态入口）
+//   EditorState.wo       编辑器状态持久化（摄像机位姿/视口编辑模式编解码）
 
 export import Definition;
 export import WindowLifecycle;
@@ -27,3 +28,4 @@ export import GizmoDrawing;
 export import ViewportUI;
 export import WorldSaving;
 export import WorldOpen;
+export import EditorState;

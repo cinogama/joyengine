@@ -19,11 +19,13 @@ import je::towoo::types;
 import je::towoo::components;
 
 import pkg::fsys;
+import pkg::toml;
 
 import builtin::editor::Editor::Practice;
 import builtin::editor::Editor::Action::IAction;
 
 using std;
+using toml;
 
 using je;
 using je::gui;
@@ -44,6 +46,12 @@ namespace JEEditor::Editor
         
         protected m_runtime_systems: vec<typeinfo>,
         protected m_saving_path: option<path_t>,
+        
+        // Project 单例保存的编辑器状态（调试摄像机位姿 / 视口编辑模式）。
+        // 视口创建时注入，待调试摄像机在 run 首帧可解析后应用一次。
+        protected m_pending_editor_state: mut option<Toml>,
+        // 右键环视时是否锁定鼠标；每个世界视口各自记忆并随 Project 状态保存
+        protected m_lock_mouse_on_look: mut bool,
         
         // Editor context:
         protected m_editor_walk_camera_frame_buffer: mut option<graphic::framebuffer>,
@@ -240,9 +248,6 @@ namespace JEEditor::Editor
         
         protected let s_world_viewports = {}mut: map<world, WorldEditorViewport>;
         protected let mut s_last_focusd_world_view = option::none: option<WorldEditorViewport>;
-        
-        // 右键环视时是否锁定鼠标。虚拟机等环境下锁定鼠标会导致指针漂移，默认不锁定。
-        protected let mut s_lock_mouse_on_look = false;
         
         // 是否为摄像机实体（含 Translation 与 Projection 且不带 Invisible；
         // 编辑器调试摄像机带 Invisible，不算在内）

@@ -29,6 +29,7 @@ import Definition;
 import WindowLifecycle;
 
 using std;
+using toml;
 
 using je;
 using je::gui;
@@ -126,7 +127,8 @@ namespace JEEditor::Editor::WorldEditorViewport
                         new_world,
                         i == 0 ? "New world" | F"New world {i + 1}",
                         option::none,
-                        [])))
+                        [],
+                        option::none)))
             {
                 none?;
                 value(_)?
@@ -137,7 +139,10 @@ namespace JEEditor::Editor::WorldEditorViewport
 
     // 从 .je4world 文件加载世界并打开编辑视口；
     // 该路径已有打开的视口或文件读取失败时以 MsgBox 报错。
-    public func openWorldEditorViewportFromFile(path: path_t)=> void
+    // editor_state 为 Project 单例保存的编辑器状态（调试摄像机位姿/视口
+    // 编辑模式），无则为 none；在视口首帧应用。
+    public func openWorldEditorViewportFromFile(
+        path: path_t, editor_state: option<Toml>)=> void
     {
         match (findWorldEditorViewportByPath(path))
         {
@@ -186,7 +191,8 @@ namespace JEEditor::Editor::WorldEditorViewport
                     ->or(purename(path));
 
                 match (Windows::show(
-                    create(w, name, option::value(path), runtime_systems->to_array())))
+                    create(w, name, option::value(path), runtime_systems->to_array(),
+                        editor_state)))
                 {
                     none?
                     {

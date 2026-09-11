@@ -96,12 +96,12 @@ namespace JEEditor::Editor::WorldEditorViewport
 
         SameLine();
 
-        // 右键环视时是否锁定鼠标（虚拟机等环境下建议关闭）
-        match (CheckBox("锁定鼠标", s_lock_mouse_on_look))
+        // 右键环视时是否锁定鼠标（虚拟机等环境下建议关闭；每个世界视口独立记忆）
+        match (CheckBox("锁定鼠标", self.m_lock_mouse_on_look))
         {
             none?;
             value(v)?
-                s_lock_mouse_on_look = v;
+                self.m_lock_mouse_on_look = v;
         }
         if (IsItemHovered())
             toolbar_hovered = true;
