@@ -18,17 +18,10 @@ import builtin::editor::GUI::Icons;
 import builtin::editor::GUI::Forms::MsgBox;
 import builtin::editor::GUI::Forms::AskBox;
 import builtin::editor::GUI::Forms::InputBox;
-import builtin::editor::GUI::Statebar;
 
+import builtin::editor::Singleton;
 import builtin::editor::Singleton::Universe;
-
-import builtin::editor::Editor::Browser;
-import builtin::editor::Editor::EntityList;
-import builtin::editor::Editor::SystemList;
-import builtin::editor::Editor::LogBrowser;
-import builtin::editor::Editor::Inspector;
-import builtin::editor::Editor::Material;
-import builtin::editor::Editor::Shutdown;
+import builtin::editor::Singleton::Project;
 
 using std;
 
@@ -38,11 +31,9 @@ using je::graphic;
 using je::internal;
 using fsys;
 
-using JEEditor;
 using JEEditor::GUI;
 using JEEditor::GUI::Windows;
 using JEEditor::GUI::Forms;
-using JEEditor::GUI::Statebar;
 
 namespace JEEditor::Editor
 {
@@ -144,10 +135,8 @@ namespace JEEditor::Editor
         let k_primary_btn_active_color = (190, 113, 50, 255);
         let k_error_text_color = (255, 128, 128, 255);
         
-        // 项目目录的标志文件：目录内必须存在此文件才会被当作项目打开，
-        // 「在此处新建」负责在新目录内创建它（TOML 文档，暂无内容）。
-        let k_project_file_name = "project.je4project";
-        
+        // 项目目录的标志文件：目录内必须存在 Project::PROJECT_FILE_NAME 文件才会被当作项目打开，
+        // 「在此处新建」负责在新目录内创建它（TOML 文档，暂无内容）。        
         func childDirs(dir: path_t)=> array<path_t>
         {
             return walk(dir)
@@ -257,39 +246,6 @@ namespace JEEditor::Editor
             }
         }
         
-        func readyToStartEditor()
-        {
-            gui::register_exit_callback(func(){
-                    do AskBox::show(
-                        "即将退出编辑器",
-                        "JoyEngine 将在所有编辑器窗口关闭后退出，继续关闭？")
-                        ->onYes(
-                            func()
-                            {
-                                Shutdown::editorShutdownRequest(
-                                    Singleton::Universe::getUniverse());
-                            });
-                    return false;
-                });
-                
-            // 默认启动的编辑器窗口
-            do Browser::showBrowser();
-            do EntityList::showEntityList();
-            do SystemList::showSystemList();
-            do LogBrowser::showLogBrowser();
-            do Inspector::showInspector();
-            do Material::showMaterial();
-            
-            let runtime_path = fsys::workpath();
-            
-            set_runtime_path(fsys::workpath()->to_string);
-            
-            // 展示第一条信息
-            JEEditor::GUI::Statebar::showState(3.) <| func(){
-                je::gui::TextDisabled(F"JoyEngine 4.X, 当前工作路径: {runtime_path->to_string}");
-            };
-        }
-        
         // 为新项目准备资源目录：在项目根目录下创建 resource/，再把宿主
         // builtin/shader 下的内置着色器整体拷贝成 resource/shader，便于项目
         // 直接引用或改造。任一步失败都返回错误描述，调用方据此提示，
@@ -364,11 +320,11 @@ namespace JEEditor::Editor
                         none?;
                     }
 
-                    match (toml::save(toml::new_table(), project_dir / k_project_file_name))
+                    match (toml::save(toml::new_table(), project_dir / Singleton::Project::PROJECT_FILE_NAME))
                     {
                         err(msg)?
                             MsgBox::err("新建项目",
-                                F"写入项目文件 \"{k_project_file_name}\" 失败：{msg}");
+                                F"写入项目文件 \"{Singleton::Project::PROJECT_FILE_NAME}\" 失败：{msg}");
                         ok(_)?
                         {
                             // confirmOpen 以 m_current 为待打开目录，
@@ -384,10 +340,10 @@ namespace JEEditor::Editor
         
         func confirmOpen(self: ProjectOpen)=> void
         {
-            if (!isfile(self.m_current / k_project_file_name))
+            if (!isfile(self.m_current / Singleton::Project::PROJECT_FILE_NAME))
             {
                 MsgBox::err("打开项目",
-                    F"没有在 \"{self.m_current->to_string}\" 内找到项目文件 {k_project_file_name}。");
+                    F"没有在 \"{self.m_current->to_string}\" 内找到项目文件 {Singleton::Project::PROJECT_FILE_NAME}。");
                 return;
             }
             
@@ -398,16 +354,18 @@ namespace JEEditor::Editor
                 return;
             }
             
-            recordOpened(self.m_current);
-            
-            readyToStartEditor();
-            
+            recordOpened(self.m_current);            
             self.m_close_way = CloseWay::OPENED_A_PATH;
         }
         
         public func onClose(self: ProjectOpen)
         {
-            if (self.m_close_way != CloseWay::OPENED_A_PATH)
+            if (self.m_close_way == CloseWay::OPENED_A_PATH)
+            {
+                /* 项目被打开了，调一下 apply，初始化一下 Project 实例 */
+                Singleton::apply:<Singleton::Project>(\_= do nil;);
+            }
+            else
             {
                 launch_coroutine(
                     /* 如果项目窗口在没有打开任何项目的情况下关闭，那就退出整个进程 */

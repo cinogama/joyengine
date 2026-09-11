@@ -41,6 +41,8 @@ import builtin::editor::Editor::EntityClipboard;
 import builtin::editor::Editor::ResourcePath;
 import builtin::editor::Editor::Action::CreateEntity;
 
+import builtin::editor::Singleton::Project;
+
 import Definition;
 import CameraControl;
 import EntityPicking;
@@ -79,27 +81,27 @@ namespace JEEditor::Editor::WorldEditorViewport
     {
         let graphic_uhost = graphic_uhost::get_or_create(
             w->get_universe);
-
+            
         // 注意：按照设计，WorldEditorViewport 的生命周期应当比 world 实例更长
         //      因此，世界实例的释放将由 WorldEditorViewport 在 onClose 时执行
         let new_viewport = WorldEditorViewport{
             m_close = mut CloseRequest::NORMALLY,
-
+            
             m_world_instance = w,
-
+            
             m_name = name,
             m_runtime_systems = []mut,
             m_saving_path = path,
-
+            
             m_editor_walk_camera_frame_buffer = mut option::none,
             m_fb_pending_size = mut (0., 0.),
             m_fb_settle_counter = mut 0,
-
+            
             m_selected_entity_id = mut option::none,
             m_rmb_press_pos = mut (0., 0.),
             m_rmb_press_in_viewport = mut false,
             m_action_history = mut Practice::create(),
-
+            
             m_debug_camera_selector = w->create_selector([
                     requirement::contains(Editor::Invisible::type::typeinfo),
                     requirement::contains(Camera::RendToFramebuffer::type::typeinfo),
@@ -108,7 +110,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                     requirement::contains(Transform::LocalRotation::type::typeinfo),
                     requirement::contains(Transform::Translation::type::typeinfo),
                 ]),
-
+                
             m_selectable_entity_selector = w->create_selector([
                     requirement::except(Editor::Invisible::type::typeinfo),
                     requirement::contains(Transform::Translation::type::typeinfo),
@@ -116,13 +118,13 @@ namespace JEEditor::Editor::WorldEditorViewport
             m_all_entity_selector = w->create_selector([
                     requirement::except(Editor::Invisible::type::typeinfo),
                 ]),
-
+                
             m_camera_entity_selector = w->create_selector([
                     requirement::except(Editor::Invisible::type::typeinfo),
                     requirement::contains(Transform::Translation::type::typeinfo),
                     requirement::contains(Camera::Projection::type::typeinfo),
                 ]),
-
+                
             m_point_light2d_entity_selector = w->create_selector([
                     requirement::except(Editor::Invisible::type::typeinfo),
                     requirement::contains(Transform::Translation::type::typeinfo),
@@ -138,7 +140,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                     requirement::contains(Transform::Translation::type::typeinfo),
                     requirement::contains(Light2D::Parallel::type::typeinfo),
                 ]),
-
+                
             // 锚点父实体（Translation+Anchor）：按子的 LocalToParent.
             // parent_uid 反查父实体用（不加 except Invisible，与变换
             // 系统的锚点解析范围一致）
@@ -146,7 +148,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                     requirement::contains(Transform::Translation::type::typeinfo),
                     requirement::contains(Transform::Anchor::type::typeinfo),
                 ]),
-
+                
             // 2D 物理碰撞体实体（Translation+Rigidbody 且不带 Invisible）：
             // 碰撞体线框 gizmo 与“编辑碰撞体”手柄以它为准
             m_physics2d_body_entity_selector = w->create_selector([
@@ -154,7 +156,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                     requirement::contains(Transform::Translation::type::typeinfo),
                     requirement::contains(Physics2D::Rigidbody::type::typeinfo),
                 ]),
-
+                
             // Camera control state:
             m_last_time = mut 0.,
             m_is_look_active = mut false,
@@ -164,16 +166,16 @@ namespace JEEditor::Editor::WorldEditorViewport
             m_orbit_distance = mut CAMERA_DEFAULT_ORBIT_DISTANCE,
             m_rotation_x = mut quat::ident,
             m_rotation_y = mut quat::ident,
-
+            
             m_gizmo_draw_branch = graphic_uhost->alloc_branch(),
-
+            
             m_gizmo_mode = mut GizmoMode::TRANSLATE,
             m_gizmo_space = mut GizmoSpace::GLOBAL,
-
+            
             m_gizmo_hover_handle = mut GIZMO_HANDLE_NONE,
             m_gizmo_drag_handle = mut GIZMO_HANDLE_NONE,
             m_gizmo_dragging = mut false,
-
+            
             m_gizmo_drag_euid = mut (0h as entity::internal::euid_t),
             m_gizmo_drag_origin = mut ((0., 0., 0.) as vec3),
             m_gizmo_drag_rotation = mut quat::ident,
@@ -190,16 +192,16 @@ namespace JEEditor::Editor::WorldEditorViewport
             m_gizmo_drag_undo_component = mut "",
             m_gizmo_drag_undo_member = mut "",
             m_gizmo_drag_undo_old_value = mut "",
-
+            
             m_gizmo_draw_visible = mut false,
             m_gizmo_draw_origin = mut ((0., 0., 0.) as vec3),
             m_gizmo_draw_rotation = mut quat::ident,
             m_gizmo_draw_size = mut 1.,
             m_gizmo_draw_center_size = mut 0.1,
-
+            
             m_icon_gizmo_rects = []mut: vec<mut (entity::internal::euid_t, vec2, real)>,
             m_icon_gizmo_hover = mut option::none,
-
+            
             m_collider_hover_handle = mut GIZMO_HANDLE_NONE,
             m_collider_dragging = mut false,
             m_collider_drag_handle = mut GIZMO_HANDLE_NONE,
@@ -211,15 +213,15 @@ namespace JEEditor::Editor::WorldEditorViewport
             m_collider_drag_undo_member = mut "",
             m_collider_drag_undo_old_value = mut "",
         };
-
+        
         // “调试执行/导出时才启用”的系统保存在视口中（编辑器内不 add_system），
         // 待开始调试执行或导出时才会加入世界执行。
         for (let systype : runtime_systems)
             new_viewport.m_runtime_systems->add(systype);
-
+            
         return new_viewport;
     }
-
+    
     public func isCurrentViewportAvailable(self: WorldEditorViewport)
     {
         match (s_world_viewports->get(self.m_world_instance))
@@ -230,23 +232,27 @@ namespace JEEditor::Editor::WorldEditorViewport
         }
         return false;
     }
-
+    
     public func onCreate(self: WorldEditorViewport)=> void
     {
         s_world_viewports->set(self.m_world_instance, self);
+        
+        // 如果是从文件加载的 world，通知 Project 世界文件已经打开
+        do self.m_saving_path->> \p = Singleton::Project::worldOpen(p);;
+        
     }
     public func onDestroy(self: WorldEditorViewport)=> void
     {
         let graphic_uhost = graphic_uhost::get_or_create(
             self.m_world_instance->get_universe);
-
+            
         graphic_uhost->free_branch(self.m_gizmo_draw_branch);
     }
     public func onClose(self: WorldEditorViewport)=> void
     {
         if (self.m_is_look_active)
             input::set_lock_mouse(false);
-
+            
         match (s_last_focusd_world_view)
         {
             none?;
@@ -254,13 +260,16 @@ namespace JEEditor::Editor::WorldEditorViewport
                 if (std::is_same(v, self))
                     s_last_focusd_world_view = option::none;
         }
-
+        
         if (self.m_close != CloseRequest::CLOSE_BUT_KEEP_WORLD
             && self->isCurrentViewportAvailable)
         {
             do s_world_viewports->remove(self.m_world_instance);
             self.m_world_instance->close;
         }
+        
+        // 如果是从文件加载的 world，通知 Project 世界文件已经关闭
+        do self.m_saving_path->> \p = Singleton::Project::worldClose(p);;
     }
     // 关闭前确认：仅当世界存在未保存的修改（以 doAction/撤销/重做为准，
     // 见 Practice::isDirty）时才询问，否则直接放行关闭：
@@ -273,51 +282,51 @@ namespace JEEditor::Editor::WorldEditorViewport
         // 程序化关闭（重命名/另存重开/确认后的关闭）不拦截
         if (self.m_close != CloseRequest::NORMALLY)
             return true;
-
+            
         // 自上次保存后没有执行过任何编辑动作，与已保存状态一致，直接关闭
         if (!self.m_action_history->isDirty && self.m_saving_path->is_value)
             return true;
-
+            
         match (self.m_saving_path)
         {
             value(path)?
             {
                 // 已保存：是=保存后关闭，否=不保存直接关闭，取消=留在原地
                 do AskBox::show(
-                        F"关闭##{self.m_world_instance}",
-                        F"关闭前保存对 \"{self.m_name}\" 的修改吗？")
+                    F"关闭##{self.m_world_instance}",
+                    F"关闭前保存对 \"{self.m_name}\" 的修改吗？")
                     ->onYes(func() {
-                        if (self->saveWorldTo(path))
+                            if (self->saveWorldTo(path))
+                                self.m_close =
+                                    CloseRequest::CLOSE_AND_DESTROY_WORLD;
+                        })
+                    ->onNo(func() {
                             self.m_close =
                                 CloseRequest::CLOSE_AND_DESTROY_WORLD;
-                    })
-                    ->onNo(func() {
-                        self.m_close =
-                            CloseRequest::CLOSE_AND_DESTROY_WORLD;
-                    })
-                ;
+                        })
+                    ;
             }
             none?
             {
                 // 未保存：是=继续关闭，否/取消=留在原地
                 do AskBox::show(
-                        F"关闭##{self.m_world_instance}",
-                        F"世界 \"{self.m_name}\" 尚未保存，确认关闭吗？")
+                    F"关闭##{self.m_world_instance}",
+                    F"世界 \"{self.m_name}\" 尚未保存，确认关闭吗？")
                     ->onYes(func() {
-                        self.m_close =
-                            CloseRequest::CLOSE_AND_DESTROY_WORLD;
-                    })
-                ;
+                            self.m_close =
+                                CloseRequest::CLOSE_AND_DESTROY_WORLD;
+                        })
+                    ;
             }
         }
-
+        
         // 等待用户在对话框中确认，本次先不关闭
         return false;
     }
     public func getTitle(self: WorldEditorViewport)=> string
     {
         let saving_path = self.m_saving_path->> \p = p->to_string;;
-
+        
         return F"世界视口：{self.m_name}##{saving_path->or(":<unsaved>")}";
     }
     public func getMenu(self: WorldEditorViewport)=> option<Menu>
@@ -331,7 +340,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                         self->dropAndRename(new_name);
                     });
         }
-
+        
         return option::value <|
             Menu::create("")
                 -> subMenu("编辑")
@@ -383,23 +392,23 @@ namespace JEEditor::Editor::WorldEditorViewport
                 {
                     ImageSize(icon, 32., 32.);
                     Drag::DragPayload(SavingRequestPayload::create(self));
-
+                    
                     SameLine();
                     TextDisabled("当前世界尚未保存到文件中，拖动图标到资源管理器以保存");
                 }
                 none?;
             }
         }
-
+        
         let viewport_focused =
             IsWindowFocusedFlags(FocusedFlags::ImGuiFocusedFlags_RootAndChildWindows);
         if (viewport_focused)
             s_last_focusd_world_view = option::value(self);
-
+            
         let debug_camera = self.m_debug_camera_selector->iter |> collect->get(0);
-
+        
         self->updateWalkCameraFramebuffer(debug_camera);
-
+        
         let mut viewport_hovered = false;
         let mut viewport_rect = option::none: option<(ImVec2, ImVec2)>;
         match (self.m_editor_walk_camera_frame_buffer=>>\fb = fb->attachment(0);)
@@ -415,7 +424,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 viewport_rect = option::value <| GetItemRect();
             }
         }
-
+        
         // 变换游标工具栏（覆盖绘制在视口左上角）
         let mut toolbar_hovered = false;
         match (viewport_rect)
@@ -429,7 +438,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                     toolbar_hovered = true;
             }
         }
-
+        
         // 视口输入保护：Image 是无 ID 的展示型 widget，悬停它时 ImGui 的
         // g.HoveredId 恒为 0，未 dock 的浮动窗口会把视口内按下左键当成
         // “点击窗口空白处”而进入窗口移动状态，拖拽游标时窗口会跟着鼠标走。
@@ -448,7 +457,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                     SetCursorScreenPos(rect_min);
                     do InvisibleButton("##viewport_mouse_guard", rect_size);
                     viewport_hovered = IsItemHovered();
-
+                    
                     // 拖 .je4entity 预设体文件到视口创建实例：以守卫
                     // 按钮为拖放目标（须紧随其后调用），仅视口图像
                     // 区域内接收
@@ -456,18 +465,18 @@ namespace JEEditor::Editor::WorldEditorViewport
                 }
             }
         }
-
+        
         let now = time();
         let dt = mathf::clamp(now - self.m_last_time, 0., 0.1);
         self.m_last_time = now;
-
+        
         // 实体图标 gizmo（摄像机/2D 光源）的命中矩形与悬停
         //（供点击拾取与绘制染色使用）
         self->updateIconGizmos(
             debug_camera,
             viewport_hovered && !toolbar_hovered,
             viewport_rect);
-
+            
         // 碰撞体编辑手柄交互需先于变换游标：手柄目标更小更具体，优先
         // 接管左键拖拽；随后运行的 updateTransformGizmo 读取其悬停状态
         // 并让位。二者均先于摄像机控制，以抑制点击选中/摄像机操作
@@ -481,7 +490,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                     rect_min,
                     (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
         }
-
+        
         // 变换游标交互（碰撞体手柄被悬停/拖拽时让位，见 updateTransformGizmo）
         match (viewport_rect)
         {
@@ -493,7 +502,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                     rect_min,
                     (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
         }
-
+        
         // 先处理右键状态（记录按下起点、松开时按位移决定是否弹实体菜单），
         // 再进行摄像机控制：环视以这里记录的按下起点为基准，位移切实
         // 超过阈值后才会激活，因此本调用必须先于 updateCameraControl。
@@ -501,13 +510,13 @@ namespace JEEditor::Editor::WorldEditorViewport
             debug_camera,
             viewport_hovered && !toolbar_hovered,
             viewport_rect);
-
+            
         self->updateCameraControl(
             debug_camera,
             dt,
             viewport_hovered && !toolbar_hovered,
             viewport_rect);
-
+            
         // 视口内右键点击实体：选中并在鼠标处弹出与实体列表一致的上下文菜单
         //（粘贴项把实体生成在摄像机前方）
         if (BeginPopup(VIEWPORT_ENTITY_CONTEXT_MENU_ID))
@@ -520,7 +529,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             };
             defer EndPopup();
         }
-
+        
         // 视口内右键点击空白处：弹出仅含“粘贴”的菜单（与实体列表
         // 空白处的菜单一致；不同点在于粘贴出的实体生成在摄像机前方）
         if (BeginPopup(VIEWPORT_BLANK_CONTEXT_MENU_ID))
@@ -529,13 +538,13 @@ namespace JEEditor::Editor::WorldEditorViewport
                 self, self->getSpawnPosInFrontOfCamera());
             defer EndPopup();
         }
-
+        
         // Draw gizmo here.
         self->drawGizmos(debug_camera);
-
+        
         return self.m_close == CloseRequest::NORMALLY;
     }
-
+    
     // 拖放接收：把资源管理器（Browser 的 FilePayload）拖来的
     // .je4entity 预设体文件创建为实例。须在 run 中紧随视口交互守卫
     // 按钮调用（以守卫按钮为拖放目标，仅视口图像区域内接收）；
@@ -553,7 +562,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                     payload->path->to_string(), rect_min, rect_max);
         }
     }
-
+    
     // 由预设体文件创建实例：文件可能本身是其他预设体的变体（原始
     // 内容带 "prefab" 键），先以 load 展开为完整数据，再把 "prefab"
     // 键改指该文件自身——还原端（Saving::Entity::restore，经
@@ -572,12 +581,12 @@ namespace JEEditor::Editor::WorldEditorViewport
         rect_max: ImVec2)=> void
     {
         let path = normalize(path_str);
-
+        
         // 只接收 .je4entity 预设体文件（目录/其余类型忽略）
         if (!isfile(path)
             || string::lower(extension(path)) != ".je4entity")
             return;
-
+            
         // 展开变体链为完整数据；失败（文件损坏/已被移走）放弃
         match (JEGaming::Saving::Entity::load(path->to_string()))
         {
@@ -588,20 +597,20 @@ namespace JEEditor::Editor::WorldEditorViewport
             {
                 dat->set("prefab",
                     ResourcePath::toRuntimeResourcePath(path->to_string()));
-
+                    
                 let mut spawn_pos = self->getSpawnPosInFrontOfCamera();
                 match (self->getSpawnPosAtScreenPos(
-                    rect_min, rect_max, GetMousePos() as vec2))
+                        rect_min, rect_max, GetMousePos() as vec2))
                 {
                     none?;
                     value(pos)?
                         spawn_pos = option::value(pos);
                 }
-
+                
                 self->doAction(
                     CreateEntity::try_create_with_content_at(
                         dat, spawn_pos));
-
+                        
                 // 闭包按创建时的值捕获文本，之后每帧由 Statebar 调用绘制
                 let prefab_name = filename(path);
                 Statebar::showState(3.) <| func(){
@@ -610,14 +619,14 @@ namespace JEEditor::Editor::WorldEditorViewport
             }
         }
     }
-
+    
     // ==========================
-
+    
     public func findWorldEditorViewport(w: world)
     {
         return s_world_viewports->get(w);
     }
-
+    
     // 按窗口标题反查视口；标题对唯一窗口是唯一的，用于拖拽载荷的还原。
     public func findWorldEditorViewportByTitle(title: string)
     {
@@ -628,7 +637,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         }
         return option::none;
     }
-
+    
     // 按保存路径反查视口；资源管理器打开 .je4world 前用它去重。
     public func findWorldEditorViewportByPath(path: path_t)
     {
@@ -644,7 +653,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         }
         return option::none;
     }
-
+    
     // 所有打开的世界视口（预设体实例同步等跨视口遍历用）
     public func getAllViewports()=> array<WorldEditorViewport>
     {
@@ -653,7 +662,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             viewports->add(viewport);
         return viewports->to_array;
     }
-
+    
     public func getLastFocused()
     {
         return s_last_focusd_world_view;

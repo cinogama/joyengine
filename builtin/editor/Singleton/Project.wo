@@ -1,0 +1,180 @@
+import pkg::std;
+import pkg::toml;
+import pkg::singleton;
+import pkg::interface;
+import pkg::fsys;
+import pkg::try;
+import pkg::worst;
+
+import je::ecs;
+import je::gui;
+import je::internal;
+
+import Singleton;
+import Universe;
+
+import builtin::editor::GUI::Forms::MsgBox;
+import builtin::editor::GUI::Forms::AskBox;
+import builtin::editor::GUI::Statebar;
+
+import builtin::editor::Editor::MainMenu;
+import builtin::editor::Editor::Browser;
+import builtin::editor::Editor::EntityList;
+import builtin::editor::Editor::SystemList;
+import builtin::editor::Editor::LogBrowser;
+import builtin::editor::Editor::Inspector;
+import builtin::editor::Editor::Material;
+import builtin::editor::Editor::Shutdown;
+
+using je;
+using toml;
+using fsys;
+
+using JEEditor;
+using JEEditor::Editor;
+using JEEditor::GUI;
+using JEEditor::GUI::Windows;
+using JEEditor::GUI::Forms;
+using JEEditor::GUI::Statebar;
+
+namespace JEEditor::Singleton
+{
+    using Project = struct{
+        m_shutdown_tombs: mut option<Tombs>,
+        
+        m_opened_worlds: map<path_t, void>,
+    }
+    {
+        /*
+        编辑器正常退出时（参阅 builtin\editor\Editor\Shutdown.wo），会有一个
+        针对 Project 的退出回调。
+        此时，Project 会记录下当前编辑器的状态（例如还有哪些 World 出于打开状态）
+        到正式退出时，Tomb 会按照单例的 temp 保存流程落盘
+        */
+        using Tombs = struct{
+            m_worlds_paths_to_open_next_time: array<path_t>,
+        }
+        {
+            func save(self: Tombs)=> Toml
+            {
+                let dump = new_table();
+
+                let worlds = from(self.m_worlds_paths_to_open_next_time->>\p = p->to_string;);
+                dump->set("worlds", worlds);
+
+                return dump;
+            }
+            func restore(data: Toml)=> option<Tombs>
+            {
+                try! worlds = data->get("worlds")=>> \a = a->as_array;;
+                let world_paths = []mut: vec<path_t>;
+                for (let p: worlds)
+                {
+                    try! path = p->as_string;
+                    world_paths->add(normalize(path));
+                }
+                return_value! Tombs{
+                    m_worlds_paths_to_open_next_time = world_paths->unsafe::asarray,
+                };
+            }
+        }
+        
+        public let SINGLETON_LABEL = "project";
+        public let PROJECT_FILE_NAME = "project.je4project";
+        
+        func startUpEditorGUI()
+        {
+            gui::register_exit_callback(func(){
+                    do AskBox::show(
+                        "即将退出编辑器",
+                        "JoyEngine 将在所有编辑器窗口关闭后退出，继续关闭？")
+                        ->onYes(
+                            func()
+                            {
+                                Shutdown::editorShutdownRequest(
+                                    Singleton::Universe::getUniverse());
+                            });
+                    return false;
+                });
+                
+            // 开启主菜单
+            MainMenu::registerMainMenu();
+            
+            // 默认启动的编辑器窗口
+            Browser::showBrowser();
+            EntityList::showEntityList();
+            SystemList::showSystemList();
+            LogBrowser::showLogBrowser();
+            Inspector::showInspector();
+            Material::showMaterial();
+            
+            let runtime_path = fsys::workpath();
+            
+            internal::set_runtime_path(fsys::workpath()->to_string);
+            
+            // 展示第一条信息
+            Statebar::showState(3.) <| func(){
+                je::gui::TextDisabled(F"JoyEngine 4.X, 当前工作路径: {runtime_path->to_string}");
+            };
+        }
+        
+        public func createAndLoad(_: option<Toml>)=> Project
+            where require!(Project: ISingleton);
+        {
+            match (load(workpath() / PROJECT_FILE_NAME))
+            {
+                ok(data)?
+                {
+                    do data;
+                    startUpEditorGUI();
+                }
+                err(msg)?
+                    MsgBox::err("加载项目失败", F"项目文件损坏，因此无法打开:\n{msg}");
+            }
+            
+            return Project{
+                m_shutdown_tombs = mut option::none,
+                m_opened_worlds = {}mut,
+            };
+        }
+        public func save(_: Project)=> option<nothing>
+        {
+            /* TODO: 在此处将 Project 数据保存为 Toml，然后写入 PROJECT_FILE_NAME */
+            let project_file_path = workpath() / PROJECT_FILE_NAME;
+            
+            do project_file_path;
+            
+            /*
+            Project 的单例上下文分成两部分，一部分属于手动处理的 project.je4project
+            另外一部分数据归属默认的单例上下文存储，保存到 .temp 目录下。
+            */
+            return option::none;
+        }
+        
+        /* --------------------------------------------- */
+        public func dumpTombs()
+        {
+            apply:<Project>(
+                func(proj){
+                    let tombs = Tombs{
+                        m_worlds_paths_to_open_next_time = proj.m_opened_worlds->keys,
+                    };
+                    proj.m_shutdown_tombs = option::value(tombs);
+                });
+        }
+        public func worldOpen(world_path: path_t)
+        {
+            apply:<Project>(
+                func(proj){
+                    assert(proj.m_opened_worlds->insert(world_path, do nil));
+                });
+        }
+        public func worldClose(world_path: path_t)
+        {
+            apply:<Project>(
+                func(proj){
+                    assert(proj.m_opened_worlds->remove(world_path));
+                });
+        }
+    }
+}

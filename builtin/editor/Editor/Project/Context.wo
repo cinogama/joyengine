@@ -1,7 +1,0 @@
-namespace JEEditor::Editor::Project
-{
-    using Context = struct{}
-    {
-        
-    }
-}

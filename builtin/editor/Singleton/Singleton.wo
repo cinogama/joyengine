@@ -15,8 +15,8 @@ using je;
 namespace JEEditor::Singleton
 {
     let singleton_loader_concept<T> = concept!(content: option<Toml>){
-        typeof<T>::singleton_label: string;
-        typeof<T>::create_and_load(content): T;
+        typeof<T>::SINGLETON_LABEL: string;
+        typeof<T>::createAndLoad(content): T;
     };
     
     interface! ISingleton
@@ -36,20 +36,20 @@ namespace JEEditor::Singleton
         return s;
     }
     
-    public func register<T>()=> singleton<T>
+    func register<T>()=> singleton<T>
         where require!(T: ISingleton);
     {
         static let singleton_inst = singleton::create(
-            F"jeeditor::singleton::{typeof<T>::singleton_label}",
+            F"jeeditor::singleton::{typeof<T>::SINGLETON_LABEL}",
             100000000,
             func(){
-                let inst = typeof<T>::create_and_load(option::none);
+                let inst = typeof<T>::createAndLoad(option::none);
                 
                 singleton_record_list()->apply(
                     func(m){
-                        if (!m->insert(typeof<T>::singleton_label, ISingleton::create(inst)))
+                        if (!m->insert(typeof<T>::SINGLETON_LABEL, ISingleton::create(inst)))
                         {
-                            logfatal(F"Singleton `{typeof<T>::singleton_label}` already registered.");
+                            logfatal(F"Singleton `{typeof<T>::SINGLETON_LABEL}` already registered.");
                         }
                     });
                 return inst;
@@ -57,8 +57,13 @@ namespace JEEditor::Singleton
             
         return singleton_inst;
     }
+
+    public func apply<T, R>(f: (T)=> R)=> R
+    {
+        return register:<T>()->apply(f);
+    }
     
-    public func save_all_singleton()
+    public func saveAll()
     {
         do try!{
             let temp_path = workpath() / ".temp";

@@ -16,8 +16,9 @@ namespace JEEditor::Singleton
         m_universe: universe,
     }
     {
-        public let singleton_label = "universe";
-        public func create_and_load(_: option<Toml>)=> Universe
+        public let SINGLETON_LABEL = "universe";
+        
+        public func createAndLoad(_: option<Toml>)=> Universe
             where require!(Universe: ISingleton);
         {
             return Universe{
@@ -25,11 +26,9 @@ namespace JEEditor::Singleton
             };
         }
         
-        let singleton = register:<Universe>();
-        
         public func getUniverse()=> universe
         {
-            return singleton->apply(\v = v.m_universe;);
+            return apply:<Universe>(\v = v.m_universe;);
         }
     }
 }

@@ -99,8 +99,8 @@ namespace JEEditor::GUI::Windows
         s_modal_next_ticket: mut int,
     }
     {
-        public let singleton_label = "window_states";
-        public func create_and_load(_: option<Toml>)=> GlobalWindowsContextSingleton
+        public let SINGLETON_LABEL = "window_states";
+        public func createAndLoad(_: option<Toml>)=> GlobalWindowsContextSingleton
             where require!(GlobalWindowsContextSingleton: ISingleton);
         {
             return GlobalWindowsContextSingleton{
@@ -110,8 +110,6 @@ namespace JEEditor::GUI::Windows
                 s_modal_next_ticket = mut 0,
             };
         }
-        
-        let instance = Singleton::register:<GlobalWindowsContextSingleton>();
     }
     
     using WindowsState = struct{
@@ -125,8 +123,8 @@ namespace JEEditor::GUI::Windows
         func try_register_window(
             iw: IWindows, title: string, is_unique: bool, is_modal: bool)=> option<WindowsState>
         {
-            return GlobalWindowsContextSingleton::instance->apply
-                <| func(wctx)
+            return Singleton::apply:<GlobalWindowsContextSingleton>(
+                func(wctx)
                 {
                     if (is_unique)
                     {
@@ -145,12 +143,12 @@ namespace JEEditor::GUI::Windows
                     wctx.s_windows_states->set(iw, window_state);
                     
                     return option::value(window_state);
-                };
+                });
         }
         func unregister_window(iw: IWindows)
         {
-            GlobalWindowsContextSingleton::instance->apply
-                <| func(wctx)
+            Singleton::apply:<GlobalWindowsContextSingleton>(
+                func(wctx)
                 {
                     match (wctx.s_windows_states->get(iw))
                     {
@@ -166,7 +164,7 @@ namespace JEEditor::GUI::Windows
                             do wctx.s_windows_states->remove(iw);
                         }
                     }
-                };
+                });
         }
         
         public func isUnique(self: WindowsState)
@@ -209,16 +207,15 @@ namespace JEEditor::GUI::Windows
         // 避免同帧内两个协程先后 Begin 同一个载体窗口。
         func _push_modal_slot()=> int
         {
-            let ticket = GlobalWindowsContextSingleton::instance->apply
-                <| func(wctx)
+            let ticket = Singleton::apply:<GlobalWindowsContextSingleton>(
+                func(wctx)
                 {
                     let ticket = wctx.s_modal_next_ticket;
                     wctx.s_modal_next_ticket = ticket + 1;
                     wctx.s_modal_tickets->add(ticket);
                     
                     return ticket;
-                };
-                
+                });
                 
             std::yield();
             
@@ -226,17 +223,17 @@ namespace JEEditor::GUI::Windows
         }
         func _is_modal_top(ticket: int)=> bool
         {
-            return GlobalWindowsContextSingleton::instance->apply
-                <| func(wctx)
+            return Singleton::apply:<GlobalWindowsContextSingleton>(
+                func(wctx)
                 {
                     return wctx.s_modal_tickets[wctx.s_modal_tickets->len - 1] == ticket;
-                };
+                });
         }
         // 允许从栈中任意位置移除（链条场景：旧模态在回调中弹出新模态后立即关闭自身）。
         func _release_modal_slot(ticket: int)
         {
-            GlobalWindowsContextSingleton::instance->apply
-                <| func(wctx)
+            Singleton::apply:<GlobalWindowsContextSingleton>(
+                func(wctx)
                 {
                     for (let mut idx = 0; idx < wctx.s_modal_tickets->len; idx += 1)
                     {
@@ -246,7 +243,7 @@ namespace JEEditor::GUI::Windows
                             return;
                         }
                     }
-                };
+                });
         }
         
         func _make_window_attrib(
@@ -477,19 +474,19 @@ namespace JEEditor::GUI::Windows
     {
         public func getAllWindows()=> array<IWindows>
         {
-            return GlobalWindowsContextSingleton::instance->apply
-                <| func(wctx)
+            return Singleton::apply:<GlobalWindowsContextSingleton>(
+                func(wctx)
                 {
                     return wctx.s_windows_states->keys;
-                };
+                });
         }
         public func tryGetWindowState(iw: IWindows)=> option<WindowsState>
         {
-            return GlobalWindowsContextSingleton::instance->apply
-                <| func(wctx)
+            return Singleton::apply:<GlobalWindowsContextSingleton>(
+                func(wctx)
                 {
                     return wctx.s_windows_states->get(iw);
-                };
+                });
         }
     }
 }

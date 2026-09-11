@@ -6,6 +6,7 @@ import je::ecs;
 import pkg::interface;
 
 import builtin::editor::GUI::Windows;
+import builtin::editor::Singleton::Project;
 
 using std;
 using je;
@@ -60,6 +61,11 @@ namespace JEEditor::Editor
         public func getTitle(_: Shutdown)=> string
         {
             return "关闭编辑器……";
+        }
+        public func onCreate(_: Shutdown)
+        {
+            /* 通知 Project 保存当前状态到 Tombs，准备入土 */
+            Singleton::Project::dumpTombs();
         }
         public func run(self: Shutdown)=> bool
         {

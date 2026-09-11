@@ -559,7 +559,7 @@ PHYSICS2D_COLLISIONS!
     默认组, 默认组;
 }
 "@;
-                
+                    
                 match (filestream::open(dst, filestream::mode::write))
                 {
                     none?
@@ -923,6 +923,21 @@ PHYSICS2D_COLLISIONS!
                     if (MenuItem("物理世界配置"))
                     {
                         self->askToCreateNewPhysicsConfig();
+                    }
+                    if (MenuItem("ToWoo 组件"))
+                    {
+                    }
+                    if (MenuItem("ToWoo 系统"))
+                    {
+                    }
+                    if (MenuItem("C++ 模块"))
+                    {
+                        
+                    }
+                    Separator();
+                    if (MenuItem("文件夹"))
+                    {
+                        self->askToCreateNewFolder(self.m_current);
                     }
                 }
                 if (MenuItem("新建文件夹"))

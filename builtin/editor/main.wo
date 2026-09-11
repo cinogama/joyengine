@@ -17,7 +17,6 @@ import GUI::Statebar;
 import GUI::Forms::MsgBox;
 import GUI::Forms::AskBox;
 
-import Editor::MainMenu;
 import Editor::LogStatebar;
 import Editor::ReplConsole;
 import Editor::PanicBox;
@@ -45,25 +44,17 @@ func main()
     
     // 编辑器脚本退出之前清掉所有单例实例
     defer singleton::unsafe::reset_all_singleton();
-    defer Singleton::save_all_singleton();
+    defer Singleton::saveAll();
     
     // 载入默认的类型值编辑器
     do towoo::unsafe::dynamic_parser::update_all("!/builtin/script/types.wo")->unwrap;
     
-    // 注册 Woolang Panic 回调：当脚本运行时发生 panic 时，
-    // 弹出 PanicBox 展示错误原因、位置与调用栈。
-    // 回调参数依次为: src_file, lineno, functionname, rterrcode, reason, trace
-    internal::register_panic_hook(
-        \file, line, funcname, errcode, reason, trace =
-            Editor::PanicBox::show(file, line, funcname, errcode, reason, trace););
-            
     // 创建一个 Universe，之后编辑器将在这上面运行
     let u = Singleton::Universe::getUniverse();
-        
+    
     // 开启状态栏的引擎日志通知（WARNING/ERROR/FATAL 以图标 + 彩色文本展示）
     JEEditor::Editor::LogStatebar::start();
     defer JEEditor::Editor::LogStatebar::shutdown();
-    
     defer {
         u->wait();
         gui::unregister_exit_callback();
@@ -75,11 +66,15 @@ func main()
     // 编辑器，直接初始化图形处理流程。
     je::internal::init_graphic_pipeline_for_editor(u);
     
+    // 注册 Woolang Panic 回调：当脚本运行时发生 panic 时，
+    // 弹出 PanicBox 展示错误原因、位置与调用栈。
+    // 回调参数依次为: src_file, lineno, functionname, rterrcode, reason, trace
+    internal::register_panic_hook(
+        \file, line, funcname, errcode, reason, trace =
+            Editor::PanicBox::show(file, line, funcname, errcode, reason, trace););
+                        
     // 开启状态栏
     JEEditor::GUI::Statebar::start();
-    
-    // 开启主菜单
-    MainMenu::registerMainMenu();
     
     // 打开项目创建/打开窗口（模态），
     // 用于选择工作目录并切换 cwd。
