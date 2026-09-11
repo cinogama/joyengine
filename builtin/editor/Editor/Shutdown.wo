@@ -32,6 +32,9 @@ namespace JEEditor::Editor
                 none?;
                 value(shutdownWindow)?
                 {
+                    /* 通知 Project 保存当前状态到 Tombs，准备入土 */
+                    Singleton::Project::dumpTombs();
+                    
                     for (let iw : internal::getAllWindows())
                     {
                         if (is_same(iw, shutdownWindow))
@@ -61,11 +64,6 @@ namespace JEEditor::Editor
         public func getTitle(_: Shutdown)=> string
         {
             return "关闭编辑器……";
-        }
-        public func onCreate(_: Shutdown)
-        {
-            /* 通知 Project 保存当前状态到 Tombs，准备入土 */
-            Singleton::Project::dumpTombs();
         }
         public func run(self: Shutdown)=> bool
         {

@@ -36,6 +36,16 @@ namespace JEEditor::Singleton
         return s;
     }
     
+    func get_temp_file_dir_path()
+    {
+        let temp_path = workpath() / ".temp";
+        if (!exist(temp_path))
+        {
+            try! _ = mkdir(temp_path)->or_map(\eno = F"无法创建临时目录：{eno}";);
+        }
+        return_ok! temp_path;
+    }
+    
     func register<T>()=> singleton<T>
         where require!(T: ISingleton);
     {
@@ -43,7 +53,13 @@ namespace JEEditor::Singleton
             F"jeeditor::singleton::{typeof<T>::SINGLETON_LABEL}",
             100000000,
             func(){
-                let inst = typeof<T>::createAndLoad(option::none);
+                let toml_data = get_temp_file_dir_path()
+                    ->> \p = p / F"{typeof<T>::SINGLETON_LABEL}.toml";
+                    =>> \p = load(p);
+                    -> okay
+                    ;
+
+                let inst = typeof<T>::createAndLoad(toml_data);
                 
                 singleton_record_list()->apply(
                     func(m){
@@ -57,7 +73,7 @@ namespace JEEditor::Singleton
             
         return singleton_inst;
     }
-
+    
     public func apply<T, R>(f: (T)=> R)=> R
     {
         return register:<T>()->apply(f);

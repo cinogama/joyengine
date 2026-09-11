@@ -25,6 +25,7 @@ import builtin::editor::Editor::LogBrowser;
 import builtin::editor::Editor::Inspector;
 import builtin::editor::Editor::Material;
 import builtin::editor::Editor::Shutdown;
+import builtin::editor::Editor::WorldEditorViewport;
 
 using je;
 using toml;
@@ -58,10 +59,10 @@ namespace JEEditor::Singleton
             func save(self: Tombs)=> Toml
             {
                 let dump = new_table();
-
+                
                 let worlds = from(self.m_worlds_paths_to_open_next_time->>\p = p->to_string;);
                 dump->set("worlds", worlds);
-
+                
                 return dump;
             }
             func restore(data: Toml)=> option<Tombs>
@@ -118,7 +119,7 @@ namespace JEEditor::Singleton
             };
         }
         
-        public func createAndLoad(_: option<Toml>)=> Project
+        public func createAndLoad(toml: option<Toml>)=> Project
             where require!(Project: ISingleton);
         {
             match (load(workpath() / PROJECT_FILE_NAME))
@@ -132,12 +133,27 @@ namespace JEEditor::Singleton
                     MsgBox::err("加载项目失败", F"项目文件损坏，因此无法打开:\n{msg}");
             }
             
-            return Project{
+            let proj = Project{
                 m_shutdown_tombs = mut option::none,
                 m_opened_worlds = {}mut,
             };
+            
+            match (toml=>> \data = Tombs::restore(data);)
+            {
+                none?;
+                value(tombs)?
+                {
+                    for (let p : tombs.m_worlds_paths_to_open_next_time)
+                    {
+                        if (isfile(p))
+                            WorldEditorViewport::openWorldEditorViewportFromFile(p);
+                    }
+                }
+            }
+            
+            return proj;
         }
-        public func save(_: Project)=> option<nothing>
+        public func save(self: Project)=> option<Toml>
         {
             /* TODO: 在此处将 Project 数据保存为 Toml，然后写入 PROJECT_FILE_NAME */
             let project_file_path = workpath() / PROJECT_FILE_NAME;
@@ -148,7 +164,11 @@ namespace JEEditor::Singleton
             Project 的单例上下文分成两部分，一部分属于手动处理的 project.je4project
             另外一部分数据归属默认的单例上下文存储，保存到 .temp 目录下。
             */
-            return option::none;
+            return option::value(
+                self.m_shutdown_tombs
+                    ->> \tombs = tombs->save;
+                    -> or(new_table())
+                    );
         }
         
         /* --------------------------------------------- */
