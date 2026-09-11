@@ -10,13 +10,12 @@
     struct je_RendchainBranch
     {
         JECS_DISABLE_MOVE_AND_COPY(je_RendchainBranch);
-
-        // NOTE: 看起来 WEBGL 有些问题，如果目标平台是 WEBGL，则强制使用单缓冲
-        static constexpr uint8_t BRANCH_CHAIN_POOL_SIZE =
-            JE4_CURRENT_PLATFORM == JE4_PLATFORM_WEBGL
-            ? 1
-            : 2
-            ;
+        
+        /* 
+        NOTE: 尽管 branch 本身支持双缓冲，但是 branch 中的 ubuffer 只有一份实例，
+            在不同的 branch 中共享相同的 ubuffer 没啥意义
+        */
+        static constexpr uint8_t BRANCH_CHAIN_POOL_SIZE = 1;
 
         struct allocated_chain_t
         {
