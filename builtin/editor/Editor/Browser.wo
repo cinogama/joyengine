@@ -211,6 +211,12 @@ namespace JEEditor::Editor
         m_last_click_time: mut real,
         m_last_clicked: mut option<fsys::path_t>,
         
+        // 目录访问历史（“返回/前进”按钮使用的双栈）：m_history 记录可后
+        // 退的目录，m_forward 记录后退后可再前进的目录。只有目录真正变
+        // 化时才入栈，重复点击同一目录不会污染历史。
+        m_history: vec<fsys::path_t>,
+        m_forward: vec<fsys::path_t>,
+        
         // ---- caching ----
         // Set to true by async callbacks (mkdir/remove/move) to signal
         // that the filesystem changed and all caches need refreshing.
@@ -354,6 +360,9 @@ namespace JEEditor::Editor
                 m_show_hidden = mut false,
                 m_last_click_time = mut 0.,
                 m_last_clicked = mut option::none,
+                
+                m_history = []mut as vec<fsys::path_t>,
+                m_forward = []mut as vec<fsys::path_t>,
                 
                 m_fs_dirty = mutable::create(false),
                 m_tree_cache = {}mut,
@@ -623,6 +632,20 @@ PHYSICS2D_COLLISIONS!
         
         func drawToolbar(self: Browser)=> void
         {
+            BeginDisabled(self.m_history->len == 0);
+            if (Button("返回"))
+                self->navigateBack();
+            EndDisabled();
+            
+            SameLine();
+            
+            BeginDisabled(self.m_forward->len == 0);
+            if (Button("前进"))
+                self->navigateForward();
+            EndDisabled();
+            
+            SameLine();
+            
             if (Button("向上"))
                 self->navigateUp();
                 
@@ -665,11 +688,73 @@ PHYSICS2D_COLLISIONS!
             PopItemWidth();
         }
         
+        // 切换到目录 dir，并把切换前的目录压入返回栈。所有改变
+        // m_current 的位置都必须经由此函数，返回栈才能与访问轨迹一致；
+        // dir 与当前目录相同时直接返回，避免重复入栈。主动导航会开辟新
+        // 轨迹，因此清空前进栈（与浏览器行为一致）。
+        func goTo(self: Browser, dir: fsys::path_t)=> void
+        {
+            if (dir == self.m_current)
+                return;
+                
+            self.m_history->add(self.m_current);
+            self.m_forward->clear();
+            self.m_current = dir;
+        }
+        
+        // 从一个历史栈弹出最近的可用目录并返回它：栈中目录可能已被删
+        // 除/移动，遇到失效项就继续回溯；无可用项时返回 none 且不改动
+        // 当前目录。
+        func popValidDir(stack: vec<fsys::path_t>)=> option<fsys::path_t>
+        {
+            while (stack->len > 0)
+            {
+                let idx = stack->len - 1;
+                let dir = stack[idx];
+                
+                do stack->remove(idx);
+                
+                if (isdir(dir))
+                    return option::value(dir);
+            }
+            return option::none;
+        }
+        
+        // 返回上一次访问的目录：当前目录压入前进栈，再切回返回栈栈顶。
+        func navigateBack(self: Browser)=> void
+        {
+            match (popValidDir(self.m_history))
+            {
+                none?;
+                value(dir)?
+                {
+                    self.m_forward->add(self.m_current);
+                    self.m_current = dir;
+                    self.m_selected = option::none;
+                }
+            }
+        }
+        
+        // 前进：仅在后退过之后可用，与 navigateBack 互为逆操作。
+        func navigateForward(self: Browser)=> void
+        {
+            match (popValidDir(self.m_forward))
+            {
+                none?;
+                value(dir)?
+                {
+                    self.m_history->add(self.m_current);
+                    self.m_current = dir;
+                    self.m_selected = option::none;
+                }
+            }
+        }
+        
         func navigateUp(self: Browser)=> void
         {
             if (self.m_current != self.m_root)
             {
-                self.m_current = parent(self.m_current);
+                self->goTo(parent(self.m_current));
                 self.m_selected = option::none;
             }
         }
@@ -683,7 +768,7 @@ PHYSICS2D_COLLISIONS!
             if (!isdir(target_dir))
                 return;
                 
-            self.m_current = target_dir;
+            self->goTo(target_dir);
             self.m_selected = option::value(path);
             self.m_filter = "";
         }
@@ -707,7 +792,7 @@ PHYSICS2D_COLLISIONS!
             
             if (IsItemClickedLeft())
             {
-                self.m_current = self.m_root;
+                self->goTo(self.m_root);
                 self.m_selected = option::value(self.m_root);
             }
             
@@ -742,7 +827,7 @@ PHYSICS2D_COLLISIONS!
                 
                 if (IsItemClickedLeft())
                 {
-                    self.m_current = d;
+                    self->goTo(d);
                     self.m_selected = option::value(d);
                 }
                 
@@ -954,7 +1039,7 @@ PHYSICS2D_COLLISIONS!
                     let sel_parent = parent(sel);
                     
                     if (isdir(sel) && MenuItem("打开"))
-                        self.m_current = sel;
+                        self->goTo(sel);
                         
                     match (openActionForPath(sel))
                     {
@@ -1078,7 +1163,7 @@ PHYSICS2D_COLLISIONS!
             self.m_selected = option::value(path);
             
             if (is_double && isdir(path))
-                self.m_current = path;
+                self->goTo(path);
                 
             if (is_double)
             {
