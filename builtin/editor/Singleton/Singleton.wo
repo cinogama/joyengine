@@ -32,7 +32,7 @@ namespace JEEditor::Singleton
     func singleton_record_list()=> singleton<map<string, ISingleton>>
     {
         static let s = singleton::create(
-            "jeeditor::singleton_records", 10001, \={}mut;);
+            "jeeditor::singleton_records", 100000001, \={}mut;);
         return s;
     }
     
@@ -41,7 +41,7 @@ namespace JEEditor::Singleton
     {
         static let singleton_inst = singleton::create(
             F"jeeditor::singleton::{typeof<T>::singleton_label}",
-            10000,
+            100000000,
             func(){
                 let inst = typeof<T>::create_and_load(option::none);
                 
