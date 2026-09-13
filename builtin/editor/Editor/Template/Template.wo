@@ -14,6 +14,7 @@ namespace JEEditor::Editor::Template
     {
         public NATIVE_MODULE_CMAKELISTS,
         public NATIVE_MODULE_GITIGNORE,
+        public NATIVE_MODULE_LOADER_HPP,
         public NATIVE_MODULE_MAIN_CPP,
     }
 
@@ -22,6 +23,7 @@ namespace JEEditor::Editor::Template
         static let type_to_filename = {
             [Type::NATIVE_MODULE_CMAKELISTS] = "CMakeLists.txt",
             [Type::NATIVE_MODULE_GITIGNORE] = ".gitignore",
+            [Type::NATIVE_MODULE_LOADER_HPP] = "loader.hpp",
             [Type::NATIVE_MODULE_MAIN_CPP] = "main.cpp",
         };
 
@@ -31,6 +33,6 @@ namespace JEEditor::Editor::Template
             mode::read);
         defer do fstream->close;
 
-        return_value! fstream->readbuf(template_filename->len): buffer as string;
+        return_value! fstream->readbuf(fstream->len): buffer as string;
     }
 }

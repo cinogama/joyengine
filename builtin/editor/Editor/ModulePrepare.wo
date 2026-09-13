@@ -7,6 +7,8 @@ import pkg::list;
 import pkg::try;
 import pkg::filestream;
 import pkg::buffer;
+import pkg::platform;
+import pkg::process;
 
 import je;
 
@@ -69,9 +71,173 @@ namespace JEEditor::Editor
             RELEASE,
         }
 
+        func configName(config: BuildConfig)=> string
+        {
+            return config == BuildConfig::DEBUG ? "debug" | "relwithdebinfo";
+        }
+
+        // 链接时使用的引擎核心库文件名，随平台位数与配置变化
+        func engineCoreLibLinkFilename(libname: string, config: BuildConfig)=> string
+        {
+            let isdebug = config == BuildConfig::DEBUG;
+
+            return libname
+                + (platform::bit_width == 32 ? "32" | "")
+                + (isdebug ? "_debug" | "")
+                + (platform::os == platform::Os::WINDOWS
+                    ? ".lib"
+                    | platform::os == platform::Os::MACOS
+                    ? ".a"
+                    | ".so")
+                ;
+        }
+
+        func writeAllText(file_path: path_t, content: string)
+        {
+            try! f = open(file_path, mode::write)
+                -> ok_or(F"无法创建文件 {file_path->to_string}");
+
+            defer do f->close;
+
+            let content_buf = content as buffer;
+            if (!f->write(content_buf, 0, content_buf->len))
+                throw! F"写入文件 {file_path->to_string} 失败";
+
+            return_ok!;
+        }
+
+        // 收集目录下全部头文件名（不含扩展名），目录不存在时返回空数组
+        func collectHeaderPurenames(dir: path_t)=> array<string>
+        {
+            return subpath(dir)
+                ->> \childs = childs
+                    ->  forall(\f = isfile(f) && extension(f)->lower == ".hpp";)
+                    ->> \f = purename(f);
+                    ;
+                ->  or([]);
+        }
+
+        func joinLines(lines: array<string>)=> string
+        {
+            return lines->reduce(\l, r = l + "\n" + r;)->or("");
+        }
+
+        // 启动进程并等待结束，退出码非0视为失败
+        func startProcessAndWait(exec: path_t, args: array<string>, failmsg: string)
+        {
+            match (process::create(exec, args))
+            {
+                none? throw! F"无法启动进程：{exec->to_string}";
+                value(proc)?
+                {
+                    match (process::wait(proc))
+                    {
+                        err(eno)? throw! F"{failmsg}（{eno}）";
+                        ok(status)?
+                        {
+                            if (status != 0 as process::status_t)
+                                throw! failmsg;
+                        }
+                    }
+                }
+            }
+
+            return_ok!;
+        }
+
+        // 为指定的C++模块目录生成loader.hpp与CMakeLists.txt，
+        // 刷新.engine内的引擎链接库，最后调用CMake完成配置与编译。
         public func buildCppModuleDir(path: path_t, name: string, config: BuildConfig)
         {
-        
+            // 1. 定位CMake
+            try! cmake_env = platform::env("CMAKE")
+                -> ok_or("无法读取CMake路径，请检查CMake配置和环境变量");
+
+            let cmake_path = normalize(cmake_env);
+            if (!isfile(cmake_path))
+                throw! F"无法找到{cmake_path->to_string}，请检查CMake配置和环境变量";
+
+            // 2. 扫描components与systems目录，生成loader.hpp
+            let component_names = collectHeaderPurenames(path / "components");
+            let system_names = collectHeaderPurenames(path / "systems");
+
+            try! loader_template = Template::load(Template::Type::NATIVE_MODULE_LOADER_HPP)
+                -> ok_or("读取模板文件失败 loader.hpp");
+
+            let loader_src = loader_template
+                ->replace("$$INCLUDE_COMPONENT_HEADERS$$",
+                    joinLines(component_names->map(\f = F"#include \"{f}.hpp\"";)))
+                ->replace("$$INCLUDE_SYSTEM_HEADERS$$",
+                    joinLines(system_names->map(\f = F"#include \"{f}.hpp\"";)))
+                ->replace("$$REGISTER_COMPONENT_TYPES$$",
+                    joinLines(component_names->map(\f = F"        typing::register_type<{name}::{f}>(guard, \"{name}::{f}\");";)))
+                ->replace("$$REGISTER_SYSTEM_TYPES$$",
+                    joinLines(system_names->map(\f = F"        typing::register_type<{name}::{f}>(guard, \"{name}::{f}\");";)));
+
+            try! _ = writeAllText(path / "loader.hpp", loader_src);
+
+            // 3. 生成CMakeLists.txt
+            try! cmake_template = Template::load(Template::Type::NATIVE_MODULE_CMAKELISTS)
+                -> ok_or("读取模板文件失败 CMakeLists.txt");
+
+            try! _ = writeAllText(
+                path / "CMakeLists.txt",
+                cmake_template->replace("$$JEMODULE_PROJECT_NAME$$", name));
+
+            // 4. 从引擎根目录刷新.engine内的引擎链接库
+            let engine_root = normalize(std::host_path());
+            let engine_library_dir = path / ".engine" / "library";
+
+            do remove(path / ".engine");
+            try! _ = mkdir(path / ".engine")
+                -> or_map(\eno = F"创建 .engine 目录失败：{eno}";);
+            try! _ = mkdir(engine_library_dir)
+                -> or_map(\eno = F"创建 .engine/library 目录失败：{eno}";);
+
+            for (let p : walk(engine_root)->iter_result)
+            {
+                if (isfile(p))
+                {
+                    let ext = extension(p)->lower;
+                    let lower_fname = filename(p)->lower;
+                    if ((ext == ".lib" || ext == ".so" || ext == ".dylib")
+                        && (lower_fname->begin_with("libjoyecs")
+                            || lower_fname->begin_with("libwoo")))
+                    {
+                        try! _ = copy(p, engine_library_dir / filename(p))
+                            -> or_map(\eno = F"复制文件：`{p}` 失败（{eno}）";);
+                    }
+                }
+            }
+
+            // 5. 生成编译配置并编译
+            let config_name = configName(config);
+            let building_dir = path / F".build_{config_name}";
+            let core_lib_filename = engineCoreLibLinkFilename("libjoyecs", config);
+            let engine_include_path = engine_root / "builtin" / "include";
+
+            try! _ = startProcessAndWait(cmake_path,
+                [
+                    cmake_path->to_string,
+                    path->to_string,
+                    "-B", building_dir->to_string,
+                    F"-DCMAKE_BUILD_TYPE={config_name}",
+                    "-DBUILD_SHARED_LIBS=ON",
+                    F"-DJEMODULE_ENGINE_CORE_LIB_FILENAME={core_lib_filename}",
+                    F"-DJEMODULE_ENGINE_CORE_INCLUDE_PATH={engine_include_path}",
+                ],
+                "CMake生成失败");
+
+            try! _ = startProcessAndWait(cmake_path,
+                [
+                    cmake_path->to_string,
+                    "--build", building_dir->to_string,
+                    "--config", config_name,
+                    "-j", thread::concurrency() as string,
+                ],
+                "C++编译失败");
+
+            return_ok!;
         }
         public func createNewCppModuleDir(path: path_t, name: string)
         {
@@ -116,8 +282,8 @@ namespace JEEditor::Editor
             
             try! _ = create_file_with_content(".gitignore", Template::Type::NATIVE_MODULE_GITIGNORE);
             try! _ = create_file_with_content("main.cpp", Template::Type::NATIVE_MODULE_MAIN_CPP);
-            
-            buildCppModuleDir(path, name, BuildConfig::DEBUG);
+
+            try! _ = buildCppModuleDir(path, name, BuildConfig::DEBUG);
 
             return_ok!;
         }
