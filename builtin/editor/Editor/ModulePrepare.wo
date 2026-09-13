@@ -285,17 +285,55 @@ namespace JEEditor::Editor
             return_ok!;
         }
 
+        // 定位CMake可执行文件：优先使用CMAKE环境变量指定的路径，
+        // 否则按fsys::pathsep拆分PATH环境变量并逐个目录查找。
+        func locateCMake()
+        {
+            match (platform::env("CMAKE"))
+            {
+                value(cmake_env)?
+                {
+                    let cmake_path = normalize(cmake_env);
+                    if (isfile(cmake_path))
+                        return_ok! cmake_path;
+                }
+                none?;
+            }
+
+            match (platform::env("PATH"))
+            {
+                value(path_env)?
+                {
+                    let exec_names = platform::os == platform::Os::WINDOWS
+                        ? ["cmake.exe"]
+                        | ["cmake"];
+
+                    for (let dir : path_env->split(fsys::pathsep) |> iterator::collect)
+                    {
+                        let trimmed_dir = dir->trim;
+                        if (trimmed_dir->len == 0)
+                            continue;
+
+                        for (let exec_name : exec_names)
+                        {
+                            let candidate = normalize(trimmed_dir) / exec_name;
+                            if (isfile(candidate))
+                                return_ok! candidate;
+                        }
+                    }
+                }
+                none?;
+            }
+
+            throw! "未能在CMAKE环境变量与PATH各目录下找到CMake，请检查CMake的安装与配置";
+        }
+
         // 为指定的C++模块目录生成loader.hpp与CMakeLists.txt，
         // 刷新.engine内的引擎链接库，最后调用CMake完成配置与编译。
         public func buildCppModuleDir(path: path_t, name: string, config: BuildConfig)
         {
             // 1. 定位CMake
-            try! cmake_env = platform::env("CMAKE")
-                -> ok_or("无法读取CMake路径，请检查CMake配置和环境变量");
-
-            let cmake_path = normalize(cmake_env);
-            if (!isfile(cmake_path))
-                throw! F"无法找到{cmake_path->to_string}，请检查CMake配置和环境变量";
+            try! cmake_path = locateCMake();
 
             // 2. 扫描components与systems目录，生成loader.hpp
             let component_names = collectHeaderPurenames(path / "components");
