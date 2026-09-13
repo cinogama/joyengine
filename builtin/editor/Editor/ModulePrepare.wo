@@ -6,6 +6,7 @@ import pkg::thread;
 import pkg::list;
 import pkg::try;
 import pkg::filestream;
+import pkg::buffer;
 
 import je;
 
@@ -62,9 +63,15 @@ namespace JEEditor::Editor
         }
         
         /* -------------------------------------- */
-        public func buildCppModuleDir(path: path_t, name: string)
+        enum BuildConfig
         {
-            
+            DEBUG,
+            RELEASE,
+        }
+
+        public func buildCppModuleDir(path: path_t, name: string, config: BuildConfig)
+        {
+        
         }
         public func createNewCppModuleDir(path: path_t, name: string)
         {
@@ -88,14 +95,30 @@ namespace JEEditor::Editor
             try! _ = create_source_dir("components");
             try! _ = create_source_dir("sources");
             
-            /* Create CMakeLists.txt */
-            // try! mut cmake_template = Template::load(Template::Type::NATIVE_MODULE_CMAKELISTS)
-            //     -> ok_or("读取 CMake 模板文件失败");
-
-            // cmake_template = cmake_template->replace("$$JEMODULE_PROJECT_NAME$$", name);
-
-            // open(path / "name")
+            /* Create files */
+            func create_file_with_content(fname: string, type: Template::Type)
+            {
+                try! template_content =
+                    Template::load(type)
+                        -> ok_or(F"读取模板文件失败 {fname}");
+                        
+                try! f = open(path / fname, mode::write)
+                    -> ok_or(F"无法创建文件 {fname}");
+                    
+                defer do f->close;
                 
+                let template_content_buf = template_content as buffer;
+                if (!f->write(template_content_buf, 0, template_content_buf->len))
+                    throw! F"写入文件 {fname} 失败";
+                
+                return_ok!;
+            }
+            
+            try! _ = create_file_with_content(".gitignore", Template::Type::NATIVE_MODULE_GITIGNORE);
+            try! _ = create_file_with_content("main.cpp", Template::Type::NATIVE_MODULE_MAIN_CPP);
+            
+            buildCppModuleDir(path, name, BuildConfig::DEBUG);
+
             return_ok!;
         }
     }

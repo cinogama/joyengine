@@ -13,12 +13,16 @@ namespace JEEditor::Editor::Template
     enum Type
     {
         public NATIVE_MODULE_CMAKELISTS,
+        public NATIVE_MODULE_GITIGNORE,
+        public NATIVE_MODULE_MAIN_CPP,
     }
 
     public func load(type: Type)=> option<string>
     {
         static let type_to_filename = {
             [Type::NATIVE_MODULE_CMAKELISTS] = "CMakeLists.txt",
+            [Type::NATIVE_MODULE_GITIGNORE] = ".gitignore",
+            [Type::NATIVE_MODULE_MAIN_CPP] = "main.cpp",
         };
 
         try! template_filename = type_to_filename->get(type);
