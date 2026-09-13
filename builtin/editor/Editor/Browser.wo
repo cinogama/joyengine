@@ -31,6 +31,7 @@ import builtin::editor::GUI::Statebar;
 
 import builtin::editor::Editor::WorldEditorViewport;
 import builtin::editor::Editor::Saving::Entity;
+import builtin::editor::Editor::ModulePrepare;
 import ResourcePath;
 import Action::ModifyPrefab;
 
@@ -465,23 +466,41 @@ namespace JEEditor::Editor
                     });
         }
         
+        // 新建 C++ 模块（右键菜单“新建→C++ 模块”）：弹输入框要模块名，用户
+        // 确认后弹出 ModulePrepare 模态进度窗口，模块目录创建与
+        // createNewCppModuleDir（生成 loader.hpp/CMakeLists.txt 并调用 CMake
+        // 编译）都在窗口创建的工作线程中执行，避免编译期间卡死 UI；进度经
+        // postMessage 汇总到窗口日志区，失败原因由窗口结束时统一展示。回调
+        // 与工作线程都不捕获 Browser 实例，文件缓存刷新经 dirty 传出：目录
+        // 创建成功即置位，让新模块在编译期间就出现在目录列表中。
         func askToCreateCppModuleFolder(self: Browser, base: path_t)=> void
         {
+            let dirty = self.m_fs_dirty;
+
             do InputBox::show("新建 C++ 模块", "请输入新模块的名称：", "NewCppModule")
                 -> then(func(name){
-                        do try!
+                        if (name->len == 0)
                         {
-                            let cpp_module_path = base / F"{name}.je4module";
-
-                            try! _ = mkdir(cpp_module_path)->or_map(\eno = F"创建新目录失败：{eno}";);
-
-                            self.m_fs_dirty->set(true);
-                            return_ok!;
+                            MsgBox::err("新建 C++ 模块", "模块名称不能为空");
+                            return;
                         }
-                        catch! e
-                        {
-                            MsgBox::err("创建失败", F"无法创建新目录：{e}");
-                        };
+
+                        do show(ModulePrepare::create(func(prepare: ModulePrepare){
+                                let cpp_module_path = base / F"{name}.je4module";
+
+                                prepare->postMessage(
+                                    F"创建模块目录：{cpp_module_path->to_string()}");
+                                try! _ = mkdir(cpp_module_path)
+                                    ->or_map(\eno = F"创建新目录失败：{eno}";);
+                                dirty->set(true);
+
+                                prepare->postMessage(
+                                    "生成模块文件并编译（CMake），可能需要一些时间……");
+                                try! _ = ModulePrepare::createNewCppModuleDir(
+                                    cpp_module_path, name);
+
+                                return_ok!;
+                            }));
                     });
         }
         
@@ -1038,7 +1057,7 @@ PHYSICS2D_COLLISIONS!
                     }
                     if (MenuItem("C++ 模块"))
                     {
-                    
+                        self->askToCreateCppModuleFolder(self.m_current);
                     }
                     Separator();
                     if (MenuItem("文件夹"))
