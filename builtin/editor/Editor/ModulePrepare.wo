@@ -11,6 +11,7 @@ import pkg::platform;
 import pkg::process;
 
 import je;
+import je::gui;
 
 import builtin::editor::Editor::Template;
 
@@ -20,15 +21,28 @@ using fsys;
 using iterator;
 using thread;
 using filestream;
+using je::gui;
 using JEEditor::GUI::Windows;
 
 namespace JEEditor::Editor
 {
+    // 模块装载进度窗口
+    //
+    // 模态的异步任务执行窗口：create 在后台线程运行 thread_job，
+    // 工作线程通过 postMessage 投递进度消息到 m_msg_list，
+    // UI 协程每帧在 run 中加锁排空 m_msg_list 并显示，同时同步 m_finished/m_error。
+    // m_module_state_mx 保护全部跨线程可变状态（m_msg_list / m_finished / m_error）。
     using ModulePrepare = struct{
         m_module_state_mx: mutex,
-        
-        m_msg_list: list<()=> void>,
+
+        // 工作线程 → 窗口的消息队列（受 m_module_state_mx 保护）
+        m_msg_list: list<string>,
+        // 窗口显示缓冲：仅 UI 协程访问，无需加锁
+        m_logbuf: list<string>,
+
         m_finished: mut bool,
+        // 任务结束时的错误信息，none 表示成功（受 m_module_state_mx 保护）
+        m_error: mut option<string>,
     }
     {
         public func create(thread_job: (ModulePrepare)=> result<void, string>)=> ModulePrepare
@@ -36,31 +50,157 @@ namespace JEEditor::Editor
         {
             let self = ModulePrepare{
                 m_module_state_mx = mutex::create(),
-                m_msg_list = list::create:<()=> void>(),
+                m_msg_list = list::create:<string>(),
+                m_logbuf = list::create:<string>(),
                 m_finished = mut false,
+                m_error = mut option::none,
             };
-            
+
             do thread::create(func(){
-                    do thread_job(self);
-                    
+                    let job_result = thread_job(self);
+
                     self.m_module_state_mx->lock();
                     defer self.m_module_state_mx->unlock();
-                    
+
+                    match (job_result)
+                    {
+                        ok(_)? self.m_error = option::none;
+                        err(message)? self.m_error = option::value(message);
+                    }
                     self.m_finished = true;
                 });
             return self;
         }
-        
+
+        // 工作线程调用：投递一条进度消息，窗口的 run 会在后续帧接收并显示。
+        public func postMessage(self: ModulePrepare, message: string)=> void
+        {
+            self.m_module_state_mx->lock();
+            defer self.m_module_state_mx->unlock();
+
+            do self.m_msg_list->add(message);
+        }
+
+        // UI 协程调用：把工作线程投递的消息全部转移到显示缓冲，返回转移条数。
+        func drainMessages(self: ModulePrepare)=> int
+        {
+            self.m_module_state_mx->lock();
+            defer self.m_module_state_mx->unlock();
+
+            let mut drained = 0;
+            for (;;)
+            {
+                match (self.m_msg_list->pop_front())
+                {
+                    none? break;
+                    value(message)?
+                    {
+                        do self.m_logbuf->add(message);
+                        drained += 1;
+                    }
+                }
+            }
+            return drained;
+        }
+
+        // UI 协程调用：读取任务结束状态，返回 (是否已结束, 错误信息，none 表示成功)。
+        func takeState(self: ModulePrepare)=> (bool, option<string>)
+        {
+            self.m_module_state_mx->lock();
+            defer self.m_module_state_mx->unlock();
+
+            return (self.m_finished, self.m_error);
+        }
+
         public func getTitle(_: ModulePrepare)=> string
         {
             return "模块装载器";
+        }
+        public func getAttrib(_: ModulePrepare)=> WindowsAttribute
+        {
+            return WindowsAttribute::ImGuiWindowFlags_NoDocking
+                + WindowsAttribute::ImGuiWindowFlags_NoCollapse;
+        }
+        public func getSizeConstraints(_: ModulePrepare)=> SizeConstraints
+        {
+            return SizeConstraints::Limited(((480., 320.), (4096., 4096.)));
         }
         public func isModal(_: ModulePrepare)=> bool
         {
             return true;
         }
-        public func run(_: ModulePrepare)=> bool
+        public func run(self: ModulePrepare)=> bool
         {
+            let new_message_count = self->drainMessages();
+            let (finished, error) = self->takeState();
+
+            // 状态行：运行中显示动画提示，结束后按成败着色
+            if (!finished)
+            {
+                let phase = ((GetTime() * 2.) as int) % 4;
+                let busy_text = phase == 0 ? "正在执行，请稍候"
+                    | phase == 1 ? "正在执行，请稍候."
+                    | phase == 2 ? "正在执行，请稍候.."
+                    | "正在执行，请稍候...";
+                TextColored((120, 190, 255, 255), busy_text);
+
+                // 不定进度条：0~1 往返，表示任务仍在推进
+                let bar_phase = ((GetTime() * 1.5) as int) % 8;
+                let bar_value = bar_phase < 4
+                    ? bar_phase as real / 4.
+                    | (8 - bar_phase) as real / 4.;
+                ProgressBar(bar_value);
+            }
+            else
+            {
+                match (error)
+                {
+                    none? TextColored((110, 220, 110, 255), "执行完成。");
+                    value(errmsg)?
+                    {
+                        TextColored((255, 90, 90, 255), "执行失败：");
+                        PushTextWrapPos(0.);
+                        TextColored((240, 110, 110, 255), errmsg);
+                        PopTextWrapPos();
+                    }
+                }
+            }
+
+            Separator();
+
+            // 消息日志区：自动滚动到底部（有新消息时）
+            let avail = GetContentRegionAvail();
+            if (BeginChildSizeFlags("##ModulePrepareMessages",
+                    avail.0, avail.1 - (finished ? 30. | 0.),
+                    WindowsAttribute::ImGuiWindowFlags_HorizontalScrollbar))
+            {
+                PushTextWrapPos(0.);
+                if (self.m_logbuf->empty)
+                {
+                    TextDisabled("（暂无消息）");
+                }
+                else
+                {
+                    let mut line_iter = self.m_logbuf->iter();
+                    for (;;)
+                    {
+                        match (line_iter->next())
+                        {
+                            none? break;
+                            value(line)? Text(line);
+                        }
+                    }
+                }
+                PopTextWrapPos();
+
+                if (new_message_count > 0)
+                    SetScrollHereY(1.);
+            }
+            EndChild();
+
+            if (finished && Button("关闭"))
+                return false;
+
             return true;
         }
         
