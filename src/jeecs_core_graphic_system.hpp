@@ -2011,23 +2011,19 @@ public func frag(vf: v2f)
                 };
         }
 
-        // Allocate a texture group and bind slot 0 to the block's main texture,
-        // or to the default texture if the block has Textures but no main slot configured.
-        // Returns nullptr-like behavior (group is allocated but slot 0 is left unset) when
-        // the block has no Textures component at all — matching the original semantics.
         jegl_rchain_texture_group* alloc_shadow_texture_group(
-            jegl_rendchain* chain, const Textures* textures)
+            jegl_rendchain* chain, /* OPTIONAL */ const Textures* textures)
         {
             auto* group = jegl_rchain_allocate_texture_group(chain);
-            if (textures != nullptr)
-            {
-                auto main_texture = textures->get_texture(0);
-                jegl_rchain_bind_texture(
-                    chain, group, 0,
-                    main_texture.has_value()
-                        ? main_texture.value()->resource()
-                        : m_default_resources.default_texture->resource());
-            }
+            auto main_texture = 
+                textures == nullptr ? std::nullopt : textures->get_texture(0);
+
+            jegl_rchain_bind_texture(
+                chain, group, 0,
+                main_texture.has_value()
+                ? main_texture.value()->resource()
+                : m_default_resources.default_texture->resource());
+
             return group;
         }
 

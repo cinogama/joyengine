@@ -1,0 +1,32 @@
+import pkg::std;
+import pkg::fsys;
+import pkg::filestream;
+import pkg::worst::macro;
+import pkg::try;
+import pkg::buffer;
+
+using fsys;
+using filestream;
+
+namespace JEEditor::Editor::Template
+{
+    enum Type
+    {
+        public NATIVE_MODULE_CMAKELISTS,
+    }
+
+    public func load(type: Type)=> option<string>
+    {
+        static let type_to_filename = {
+            [Type::NATIVE_MODULE_CMAKELISTS] = "CMakeLists.txt",
+        };
+
+        try! template_filename = type_to_filename->get(type);
+        try! fstream = open(
+            parent(normalize(__FILE__!)) / F"{template_filename}.template", 
+            mode::read);
+        defer do fstream->close;
+
+        return_value! fstream->readbuf(template_filename->len): buffer as string;
+    }
+}

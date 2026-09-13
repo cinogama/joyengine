@@ -17,6 +17,7 @@ import pkg::worst;
 import pkg::iterator;
 import pkg::platform;
 import pkg::toml;
+import pkg::try;
 
 import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Icons;
@@ -452,12 +453,36 @@ namespace JEEditor::Editor
         
         func askToCreateNewFolder(self: Browser, base: path_t)=> void
         {
-            do InputBox::show("新建文件夹", "请输入文件夹名称：", "NewFolder")
-                ->then(func(name: string) {
-                        do mkdir(base / name);
-                        self.m_fs_dirty->set(true);
-                    })
-                ;
+            do InputBox::show("新目录", "请输入新目录名称：", "NewFolder")
+                ->then(func(name) {
+                        match (mkdir(base / name))
+                        {
+                            ok(_)?
+                                self.m_fs_dirty->set(true);
+                            err(msg)?
+                                MsgBox::err("创建失败", F"无法创建新目录：{msg}");
+                        }
+                    });
+        }
+        
+        func askToCreateCppModuleFolder(self: Browser, base: path_t)=> void
+        {
+            do InputBox::show("新建 C++ 模块", "请输入新模块的名称：", "NewCppModule")
+                -> then(func(name){
+                        do try!
+                        {
+                            let cpp_module_path = base / F"{name}.je4module";
+
+                            try! _ = mkdir(cpp_module_path)->or_map(\eno = F"创建新目录失败：{eno}";);
+
+                            self.m_fs_dirty->set(true);
+                            return_ok!;
+                        }
+                        catch! e
+                        {
+                            MsgBox::err("创建失败", F"无法创建新目录：{e}");
+                        };
+                    });
         }
         
         // 新建着色器（右键菜单“新建→着色器”）：以选中的内置着色器为模

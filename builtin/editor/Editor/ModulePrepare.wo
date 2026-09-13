@@ -1,0 +1,102 @@
+import pkg::std;
+import pkg::interface;
+import pkg::fsys;
+import pkg::iterator;
+import pkg::thread;
+import pkg::list;
+import pkg::try;
+import pkg::filestream;
+
+import je;
+
+import builtin::editor::Editor::Template;
+
+import builtin::editor::GUI::Windows;
+
+using fsys;
+using iterator;
+using thread;
+using filestream;
+using JEEditor::GUI::Windows;
+
+namespace JEEditor::Editor
+{
+    using ModulePrepare = struct{
+        m_module_state_mx: mutex,
+        
+        m_msg_list: list<()=> void>,
+        m_finished: mut bool,
+    }
+    {
+        public func create(thread_job: (ModulePrepare)=> result<void, string>)=> ModulePrepare
+            where require!(ModulePrepare: IWindows);
+        {
+            let self = ModulePrepare{
+                m_module_state_mx = mutex::create(),
+                m_msg_list = list::create:<()=> void>(),
+                m_finished = mut false,
+            };
+            
+            do thread::create(func(){
+                    do thread_job(self);
+                    
+                    self.m_module_state_mx->lock();
+                    defer self.m_module_state_mx->unlock();
+                    
+                    self.m_finished = true;
+                });
+            return self;
+        }
+        
+        public func getTitle(_: ModulePrepare)=> string
+        {
+            return "模块装载器";
+        }
+        public func isModal(_: ModulePrepare)=> bool
+        {
+            return true;
+        }
+        public func run(_: ModulePrepare)=> bool
+        {
+            return true;
+        }
+        
+        /* -------------------------------------- */
+        public func buildCppModuleDir(path: path_t, name: string)
+        {
+            
+        }
+        public func createNewCppModuleDir(path: path_t, name: string)
+        {
+            if (walk(path) |> iter_result |> collect->empty == false)
+                throw! F"目标目录 `{path}` 不为空";
+                
+            func create_source_dir(name: string)
+            {
+                try! dir_path = mkdir(path / name)
+                    -> or_map(\eno = F"创建 {name} 目录失败： {eno}";);
+                    
+                try! f = open(dir_path / ".gitkeepme", mode::write)
+                    -> ok_or(F"在 {name} 目录创建 .gitkeepme 失败");
+                    
+                defer do f->close;
+                
+                return_ok!;
+            }
+            
+            try! _ = create_source_dir("systems");
+            try! _ = create_source_dir("components");
+            try! _ = create_source_dir("sources");
+            
+            /* Create CMakeLists.txt */
+            // try! mut cmake_template = Template::load(Template::Type::NATIVE_MODULE_CMAKELISTS)
+            //     -> ok_or("读取 CMake 模板文件失败");
+
+            // cmake_template = cmake_template->replace("$$JEMODULE_PROJECT_NAME$$", name);
+
+            // open(path / "name")
+                
+            return_ok!;
+        }
+    }
+}
