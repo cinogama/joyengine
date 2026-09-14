@@ -39,7 +39,7 @@ namespace JEEditor::Editor::WorldEditorViewport
     // 冻结单个视口：保存编辑器状态与世界快照，关闭世界实例，并清掉
     // 依赖世界存活的瞬态交互状态与 framebuffer（恢复后由
     // updateWalkCameraFramebuffer 按当前尺寸自动重建）。幂等。
-    protected func freezeWorld(self: WorldEditorViewport)=> void
+    func freezeWorld(self: WorldEditorViewport)=> void
     {
         if (self.m_frozen_world_data->is_value)
             return;
@@ -89,7 +89,7 @@ namespace JEEditor::Editor::WorldEditorViewport
     // 恢复单个视口：用冻结快照在当前 universe 上重建世界，重新挂上
     // 调试摄像机与实体（沿用 euid），在视口上重建选择器并重新注册，
     // 编辑器状态留待下一帧调试摄像机可解析后应用。幂等。
-    protected func restoreWorld(self: WorldEditorViewport)=> void
+    func restoreWorld(self: WorldEditorViewport)=> void
     {
         if (self.m_frozen_world_data->is_none)
             return;
@@ -125,16 +125,14 @@ namespace JEEditor::Editor::WorldEditorViewport
         self.m_frozen_editor_state = option::none;
     }
 
-    // 进入冻结状态并冻结所有已打开的世界视口。冻结期间：
-    //   - s_last_focusd_world_view 暂存并置空，其他编辑面板（检视/实体
-    //     列表/系统列表）不再经它访问已关闭的世界；
-    //   - 所有视口创建操作失败（见 WindowLifecycle/WorldSaving/WorldOpen）。
+    // 进入冻结状态并冻结所有已打开的世界视口
+    // 注意：一般而言，应当在 freezeAllWorlds 之后，通过 yield() 等待一帧再执行其他操作
     public func freezeAllWorlds()=> void
     {
-        if (s_worlds_frozen)
+        s_worlds_frozen += 1;
+        if (s_worlds_frozen > 1)
             return;
 
-        s_worlds_frozen = true;
         s_frozen_last_focused = s_last_focusd_world_view;
         s_last_focusd_world_view = option::none;
 
@@ -142,56 +140,24 @@ namespace JEEditor::Editor::WorldEditorViewport
             vp->freezeWorld();
     }
 
-    // 逐个恢复所有世界视口并解除冻结（还原冻结前的聚焦视口）
+    // 引用计数 -1；仅最后一次调用（计数 1→0）逐个恢复所有世界视口并解除
+    // 冻结（还原冻结前的聚焦视口），嵌套恢复到此才真正生效
     public func restoreAllWorlds()=> void
     {
+        if (s_worlds_frozen == 0)
+        {
+            logerr("restoreAllWorlds: 冻结计数已为 0，忽略多余的恢复请求");
+            return;
+        }
+
+        s_worlds_frozen -= 1;
+        if (s_worlds_frozen > 0)
+            return;
+
         for (let vp : getAllViewports())
             vp->restoreWorld();
 
         s_last_focusd_world_view = s_frozen_last_focused;
         s_frozen_last_focused = option::none;
-        s_worlds_frozen = false;
-    }
-
-    // 冻结所有世界 → 执行 job → 恢复所有世界。
-    // 冻结/解冻之间各让出一帧：world->close 与新建世界的生效都发生在
-    // 下一个逻辑更新，须等其落地后 job 面对的世界才是一致的“无世界”
-    // 状态，恢复亦然。job 抛异常时同样恢复世界，避免世界被永久冻结。
-    public func freezeAllWorldsToDo(job: ()=> void)
-    {
-        // 同步重入保护：s_worlds_frozen 要等协程执行到冻结步骤才置位，
-        // 同帧内的第二次发起在此拦截
-        if (s_worlds_frozen || s_worlds_freeze_in_progress)
-        {
-            logerr("freezeAllWorldsToDo: 已有冻结流程进行中，忽略本次请求");
-            return;
-        }
-        s_worlds_freeze_in_progress = true;
-
-        launch_coroutine(
-            func()
-            {
-                // 0. 进入冻结状态
-                // 1. 保存并关闭所有世界
-                freezeAllWorlds();
-
-                // 2. 等待一帧，让世界关闭生效
-                yield();
-
-                // 3. 执行 job（job 失败也继续解冻）
-                do try!{
-                    job();
-                    return_value!;
-                };
-
-                // 4. 等待一帧，再重建世界
-                yield();
-
-                // 5. 通知所有视口恢复世界
-                // 6. 解除冻结
-                restoreAllWorlds();
-
-                s_worlds_freeze_in_progress = false;
-            });
     }
 }

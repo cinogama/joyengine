@@ -1086,10 +1086,16 @@ namespace JEEditor::Editor
                             if (MenuItem("打开"))
                                 open_action(sel);
                     }
-                    
-                    // 拓展模块目录专属入口：重新载入模块（功能暂未实现）
-                    if (is_module_dir && MenuItem("重新载入"))
+
+                    if (is_module_dir && MenuItem("重新构建并载入"))
                     {
+                        do show(ModulePrepare::create(func(prepare: ModulePrepare){
+                                prepare->postMessage(
+                                    "生成模块文件并编译（CMake），可能需要一些时间……");
+
+                                return ModulePrepare::buildCppModuleDir(
+                                    prepare, sel, purename(sel), ModulePrepare::BuildConfig::DEBUG);
+                            }));
                     }
                     
                     if (MenuItem("重命名"))

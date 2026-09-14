@@ -259,21 +259,24 @@ namespace JEEditor::Editor
         protected let s_world_viewports = {}mut: map<world, WorldEditorViewport>;
         protected let mut s_last_focusd_world_view = option::none: option<WorldEditorViewport>;
 
-        // 冻结（锁定）状态：为 true 期间所有世界视口的创建操作失败
-        //（FreezeWorlds::freezeAllWorlds）。冻结时 s_last_focusd_world_view
-        // 会暂存到 s_frozen_last_focused 并置空，避免各编辑面板在视口世界
-        // 已关闭期间经 getLastFocused 访问失效的世界实例。
-        protected let mut s_worlds_frozen = false;
+        // 冻结（锁定）状态：引用计数，> 0 期间所有世界视口的创建操作失败
+        //（FreezeWorlds::freezeAllWorlds/restoreAllWorlds）。freezeAllWorlds
+        // 计数 +1，仅首次（0→1）执行实际冻结；restoreAllWorlds 计数 -1，
+        // 仅最后一次（1→0）执行实际恢复，支持嵌套冻结。冻结时
+        // s_last_focusd_world_view 会暂存到 s_frozen_last_focused 并置空，
+        // 避免各编辑面板在视口世界已关闭期间经 getLastFocused 访问失效的
+        // 世界实例。
+        protected let mut s_worlds_frozen = 0;
         protected let mut s_frozen_last_focused = option::none: option<WorldEditorViewport>;
 
         // freezeAllWorldsToDo 已受理但协程尚未跑到冻结步骤（s_worlds_frozen
-        // 尚未置位）期间的同步重入保护：防止同一帧内重复发起冻结流程
+        // 尚未递增）期间的同步重入保护：防止同一帧内重复发起冻结流程
         protected let mut s_worlds_freeze_in_progress = false;
 
         // 当前是否处于“所有世界已冻结”状态（创建操作据此失败）
         public func isWorldsFrozen()=> bool
         {
-            return s_worlds_frozen;
+            return s_worlds_frozen > 0;
         }
         
         // 是否为摄像机实体（含 Translation 与 Projection 且不带 Invisible；

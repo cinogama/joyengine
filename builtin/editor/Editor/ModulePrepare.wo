@@ -14,6 +14,7 @@ import je;
 import je::gui;
 import je::towoo;
 
+import builtin::editor::Editor::WorldEditorViewport::FreezeWorlds;
 import builtin::editor::Editor::Template;
 import builtin::editor::Editor::Project;
 import builtin::editor::Editor::Project::NativeModule;
@@ -21,6 +22,7 @@ import builtin::editor::Singleton;
 
 import builtin::editor::GUI::Windows;
 
+using std;
 using fsys;
 using iterator;
 using thread;
@@ -240,8 +242,8 @@ namespace JEEditor::Editor
         /* -------------------------------------- */
         enum BuildConfig
         {
-            DEBUG,
-            RELEASE,
+            public DEBUG,
+            public RELEASE,
         }
         
         func configName(config: BuildConfig)=> string
@@ -567,41 +569,57 @@ namespace JEEditor::Editor
                 "C++编译失败");
                 
             // 6. 通知项目，装载动态库
-            try! _ = apply:<Project>(
-                func(proj)
-                {
-                    return proj->reloadModuleWhileWorldsFreezed(
-                        name,
-                        path,
-                        func()
+            let finished_flag = mutable::create(option::none: option<result<void, string>>);
+            
+            launch_coroutine(
+                func(){
+                    WorldEditorViewport::freezeAllWorlds();
+                    defer WorldEditorViewport::restoreAllWorlds();
+
+                    std::yield();
+
+                    let reload_result = apply:<Project>(
+                        func(proj)
                         {
-                            let dylib_filename = moduleDylibFilename(name);
-                            try! runtime_dir = prepareDirToPlaceRuntimeLib(path);
-                            
-                            let mut dylib_path = option::none: option<path_t>;
-                            for (let p : recursive_walk(path / ".build")->iter_result)
-                            {
-                                if (isfile(p) && filename(p)->lower == dylib_filename->lower)
-                                {
-                                    dylib_path = option::value(p);
-                                    break;
-                                }
-                            }
-                            
-                            try! found_dylib_path = dylib_path
-                                -> ok_or(F"在 .build 目录下未找到模块动态库 {dylib_filename}");
-                                
-                            do win->postMessage(
-                                F"拷贝产物：{found_dylib_path->to_string} -> {(runtime_dir / dylib_filename)->to_string}");
-                                
-                            try! _ = copy(found_dylib_path, runtime_dir / dylib_filename)
-                                -> or_map(\eno = F"复制文件：`{found_dylib_path->to_string}` 失败（{eno}）";);
-                                
-                            return_ok!;
+                            return map(\_ = do nil;) <|
+                                proj->reloadModuleWhileWorldsFreezed(
+                                    name,
+                                    path,
+                                    func()
+                                    {
+                                        let dylib_filename = moduleDylibFilename(name);
+                                        try! runtime_dir = prepareDirToPlaceRuntimeLib(path);
+                                        
+                                        let mut dylib_path = option::none: option<path_t>;
+                                        for (let p : recursive_walk(path / ".build")->iter_result)
+                                        {
+                                            if (isfile(p) && filename(p)->lower == dylib_filename->lower)
+                                            {
+                                                dylib_path = option::value(p);
+                                                break;
+                                            }
+                                        }
+                                        
+                                        try! found_dylib_path = dylib_path
+                                            -> ok_or(F"在 .build 目录下未找到模块动态库 {dylib_filename}");
+                                            
+                                        do win->postMessage(
+                                            F"拷贝产物：{found_dylib_path->to_string} -> {(runtime_dir / dylib_filename)->to_string}");
+                                            
+                                        try! _ = copy(found_dylib_path, runtime_dir / dylib_filename)
+                                            -> or_map(\eno = F"复制文件：`{found_dylib_path->to_string}` 失败（{eno}）";);
+                                            
+                                        return_ok!;
+                                    });
                         });
+                        
+                    finished_flag->set <| option::value(reload_result);
                 });
-                
-            return_ok!;
+
+            while (finished_flag->get->is_none)
+                sleep(0.1);
+
+            return finished_flag->get->unwrap;
         }
         public func createNewCppModuleDir(win: ModulePrepare, path: path_t, name: string)
         {
