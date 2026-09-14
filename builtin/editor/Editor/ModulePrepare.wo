@@ -16,6 +16,7 @@ import je::towoo;
 
 import builtin::editor::Editor::Template;
 import builtin::editor::Editor::Project;
+import builtin::editor::Editor::Project::NativeModule;
 import builtin::editor::Singleton;
 
 import builtin::editor::GUI::Windows;
@@ -453,6 +454,29 @@ namespace JEEditor::Editor
             throw! "未能在CMAKE环境变量与PATH各目录下找到CMake，请检查CMake的安装与配置";
         }
         
+        func prepareDirToPlaceRuntimeLib(path: path_t)
+        {
+            // 把产物动态库从 .build 拷贝到 .runtime（目录不存在则创建）。
+            // 输出被重定向到 .build/<配置> 下，多配置生成器（如Visual Studio）
+            // 还会再追加一层配置子目录，因此按文件名在 .build 下递归查找。
+            let mut runtime_dir = path / ".runtime";
+            
+            if (!exist(runtime_dir))
+            {
+                try! _ = mkdir(runtime_dir)
+                    -> or_map(\eno = F"创建 .runtime 目录失败：{eno}";);
+            }
+            
+            let new_runtime_dir_id =
+                Project::NativeModule::getMaxRuntimeDylibPathId(path)->or(-1) + 1;
+                
+            runtime_dir /= new_runtime_dir_id as string;
+            try! _ = mkdir(runtime_dir)
+                -> or_map(\eno = F"创建 .runtime/{new_runtime_dir_id} 目录失败：{eno}";);
+                
+            return_ok! runtime_dir;
+        }
+        
         // 为指定的C++模块目录生成loader.hpp与CMakeLists.txt，
         // 刷新.engine内的引擎链接库，调用CMake完成配置与编译，
         // 最后把产物动态库拷贝到模块目录下的 .runtime 目录；
@@ -543,25 +567,16 @@ namespace JEEditor::Editor
                 "C++编译失败");
                 
             // 6. 通知项目，装载动态库
-            apply:<Project>(
+            try! _ = apply:<Project>(
                 func(proj)
                 {
-                    do proj->reloadModuleWhileWorldsFreezed(
+                    return proj->reloadModuleWhileWorldsFreezed(
                         name,
                         path,
                         func()
                         {
-                            // 6.1 把产物动态库从 .build 拷贝到 .runtime（目录不存在则创建）。
-                            // 输出被重定向到 .build/<配置> 下，多配置生成器（如Visual Studio）
-                            // 还会再追加一层配置子目录，因此按文件名在 .build 下递归查找。
                             let dylib_filename = moduleDylibFilename(name);
-                            let runtime_dir = path / ".runtime";
-                            
-                            if (!isdir(runtime_dir))
-                            {
-                                try! _ = mkdir(runtime_dir)
-                                    -> or_map(\eno = F"创建 .runtime 目录失败：{eno}";);
-                            }
+                            try! runtime_dir = prepareDirToPlaceRuntimeLib(path);
                             
                             let mut dylib_path = option::none: option<path_t>;
                             for (let p : recursive_walk(path / ".build")->iter_result)
@@ -577,11 +592,11 @@ namespace JEEditor::Editor
                                 -> ok_or(F"在 .build 目录下未找到模块动态库 {dylib_filename}");
                                 
                             do win->postMessage(
-                                F"拷贝产物：{found_dylib_path->to_string} → {(runtime_dir / dylib_filename)->to_string}");
+                                F"拷贝产物：{found_dylib_path->to_string} -> {(runtime_dir / dylib_filename)->to_string}");
                                 
                             try! _ = copy(found_dylib_path, runtime_dir / dylib_filename)
                                 -> or_map(\eno = F"复制文件：`{found_dylib_path->to_string}` 失败（{eno}）";);
-
+                                
                             return_ok!;
                         });
                 });

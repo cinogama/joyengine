@@ -19,21 +19,27 @@ namespace JEEditor::Editor::Project
         m_loaded_module_handle: mut option<handle>,
     }
     {
+        public func getMaxRuntimeDylibPathId(path: path_t)
+        {
+            let runtime_path = path / ".runtime";
+            if (!isdir(runtime_path))
+                return option::none;
+                
+            return walk(runtime_path) |> iter_result
+                |> filter(\p = isdir(p) && filename(p)->is_number;)
+                |> map(\p = filename(p) as int;)
+                |> reduce(\l, r = l > r ? l | r;)
+                ;
+        }
         func findRuntimeDylibPath(name: string, path: path_t)
         {
             let runtime_path = path / ".runtime";
             if (!isdir(runtime_path))
                 return option::none;
                 
-            try! runtime_dir = walk(runtime_path) |> iter_result
-                |> filter(\p = isdir(p) && filename(p)->is_number;)
-                |> reduce(\l, r = lno > rno ? l | r
-                        where lno = filename(l) as int
-                            , rno = filename(r) as int
-                        ;)
-                ;
-                
-            return_value! (runtime_dir / ModulePrepare::moduleDylibFilename(name));
+            return_value! (runtime_path
+                / getMaxRuntimeDylibPathId(path)->or(0) as string
+                / ModulePrepare::moduleDylibFilename(name));
         }
         public func load(name: string, path: path_t)
         {
