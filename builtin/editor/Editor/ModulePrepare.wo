@@ -578,7 +578,10 @@ namespace JEEditor::Editor
                     WorldEditorViewport::freezeAllWorlds();
                     defer WorldEditorViewport::restoreAllWorlds();
                     
-                    std::yield();
+                    // 1. 等待视口编辑器进入冻结
+                    yield();
+                    // 2. 再等待一帧，确保其他依赖视口编辑器的窗口终止工作
+                    yield();
                     
                     let reload_result = apply:<Project>(
                         func(proj)
