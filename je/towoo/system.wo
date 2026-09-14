@@ -2,6 +2,7 @@
 import pkg::std;
 
 import je;
+import je::typeinfo;
 import je::towoo::types;
 import je::towoo::components;
 
@@ -144,6 +145,7 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
 }
 #macro work
 {
+    import pkg::std::macro;
     /*
     work! JobName()
     {
@@ -180,6 +182,8 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
 }
 #macro system
 {
+    import pkg::std;
+    import pkg::std::macro;
     /*
     system! JobName(
     localpos: Transform::LocalPosition

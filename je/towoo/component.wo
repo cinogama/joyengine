@@ -27,6 +27,8 @@ extern func _init_towoo_component(name: string)
 
 #macro component
 {
+    import pkg::std;
+    import pkg::std::macro;
     /*
     component!
     {
