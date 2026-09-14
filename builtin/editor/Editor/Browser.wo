@@ -607,33 +607,34 @@ namespace JEEditor::Editor
                 ;
         }
         
-        // 新建物理世界配置（右键菜单“新建→物理世界配置”）：在当前目录生成
-        // 一个 .je4physics.wo 配置脚本模板。该脚本是场景 Physics2D 物理的
-        // 唯一数据源（见 src/jeecs_core_physics_system.hpp 的
-        // load_scene_physics_config_from_path），必须返回
-        // je::physics2d::config::SceneConfig，内容即 je/physics2d/config.wo
-        // 提供的一组 PHYSICS2D_* 宏。模板存于 Template 目录
-        // （physics.je4physics.wo.template），经 Template::load 读入后用
-        // pkg::filestream 落盘。流程同 askToCreateNewShader：弹输入框要文
-        // 件名 → 已存在则确认覆盖 → 写入模板。
-        func askToCreateNewPhysicsConfig(self: Browser)=> void
+        // 从内置模板新建脚本文件（右键菜单“新建→物理世界配置 / ToWoo 组件 /
+        // ToWoo 系统”共用的流程）：弹输入框要文件名 → 未带约定后缀时自动补
+        // 全 → 已存在则确认覆盖 → 经 Template::load 读入模板后用 pkg::filestream
+        // 落盘。回调不捕获 Browser 实例，文件缓存刷新经 dirty 传出。
+        func askToCreateFromTemplate(
+            self: Browser,
+            dialog_title: string,
+            input_hint: string,
+            default_name: string,
+            file_suffix: string,
+            template_type: Template::Type,
+            type_display: string)=> void
         {
             let target_dir = self.m_current;
             let dirty = self.m_fs_dirty;
             
             func writeTo(dst: path_t)=> void
             {
-                match (Template::load(Template::Type::PHYSICS_CONFIG))
+                match (Template::load(template_type))
                 {
                     none?
-                        MsgBox::err("新建物理世界配置",
-                            "无法加载内置的物理世界配置模板文件");
+                        MsgBox::err(dialog_title, F"无法加载内置的 {type_display} 模板文件");
                     value(content)?
                     {
                         match (filestream::open(dst, filestream::mode::write))
                         {
                             none?
-                                MsgBox::err("新建物理世界配置",
+                                MsgBox::err(dialog_title,
                                     F"无法创建 \"{dst->to_string()}\"，可能是文件名非法或磁盘已满");
                             value(fs)?
                             {
@@ -641,7 +642,7 @@ namespace JEEditor::Editor
                                 
                                 if (!fs->write(content as buffer, 0, content->byte_len))
                                 {
-                                    MsgBox::err("新建物理世界配置",
+                                    MsgBox::err(dialog_title,
                                         F"写入 \"{dst->to_string()}\" 失败");
                                     return;
                                 }
@@ -651,7 +652,7 @@ namespace JEEditor::Editor
                                 // 闭包按创建时的值捕获文本，之后每帧由 Statebar 调用绘制
                                 let path_str = dst->to_string();
                                 Statebar::showState(3.) <| func(){
-                                    Text(F"物理世界配置 \"{path_str}\" 已创建");
+                                    Text(F"{type_display} \"{path_str}\" 已创建");
                                 };
                             }
                         }
@@ -663,14 +664,14 @@ namespace JEEditor::Editor
             {
                 if (file_name->len == 0)
                 {
-                    MsgBox::err("新建物理世界配置", "文件名不能为空");
+                    MsgBox::err(dialog_title, "文件名不能为空");
                     return;
                 }
                 
-                // 未带后缀时自动补全 .je4physics.wo
-                let full_name = file_name->end_with(".je4physics.wo")
+                // 未带后缀时自动补全（如 .je4physics.wo）
+                let full_name = file_name->end_with(file_suffix)
                     ? file_name
-                    | F"{file_name}.je4physics.wo";
+                    | F"{file_name}{file_suffix}";
                     
                 let dst = target_dir / full_name;
                 
@@ -678,7 +679,7 @@ namespace JEEditor::Editor
                 {
                     // 已存在同名文件时弹出覆盖确认
                     do AskBox::show(
-                        "新建物理世界配置", F"目录中已存在 \"{full_name}\"，确认覆盖吗？")
+                        dialog_title, F"目录中已存在 \"{full_name}\"，确认覆盖吗？")
                         ->onYes(\= writeTo(dst);)
                         ;
                 }
@@ -686,11 +687,46 @@ namespace JEEditor::Editor
                     writeTo(dst);
             }
             
-            do InputBox::show("新建物理世界配置",
-                "请输入物理世界配置文件名：",
-                "physics")
+            do InputBox::show(dialog_title, input_hint, default_name)
                 ->then(createAs)
                 ;
+        }
+        
+        // 新建物理世界配置（右键菜单“新建→物理世界配置”）：在当前目录生成
+        // 一个 .je4physics.wo 配置脚本模板。该脚本是场景 Physics2D 物理的
+        // 唯一数据源（见 src/jeecs_core_physics_system.hpp 的
+        // load_scene_physics_config_from_path），必须返回
+        // je::physics2d::config::SceneConfig，内容即 je/physics2d/config.wo
+        // 提供的一组 PHYSICS2D_* 宏。模板存于 Template 目录
+        // （physics.je4physics.wo.template），流程见 askToCreateFromTemplate。
+        func askToCreateNewPhysicsConfig(self: Browser)=> void
+        {
+            self->askToCreateFromTemplate(
+                "新建物理世界配置", "请输入物理世界配置文件名：", "physics",
+                ".je4physics.wo", Template::Type::PHYSICS_CONFIG, "物理世界配置");
+        }
+        
+        // 新建 ToWoo 组件（右键菜单“新建→ToWoo 组件”）：在当前目录生成一
+        // 个 .je4component.wo 组件脚本模板，组件成员经 component! 宏声明。
+        // 模板存于 Template 目录（towoo_component.je4component.wo.template），
+        // 流程见 askToCreateFromTemplate。
+        func askToCreateNewTowooComponent(self: Browser)=> void
+        {
+            self->askToCreateFromTemplate(
+                "新建 ToWoo 组件", "请输入 ToWoo 组件文件名：", "NewComponent",
+                ".je4component.wo", Template::Type::TOWOO_COMPONENT, "ToWoo 组件");
+        }
+        
+        // 新建 ToWoo 系统（右键菜单“新建→ToWoo 系统”）：在当前目录生成一
+        // 个 .je4system.wo 系统脚本模板，含 create/close 生命周期钩子与
+        // PRE_UPDATE!/UPDATE!/LATE_UPDATE! 三个作业队列（系统逻辑以
+        // system!/work! 宏声明）。模板存于 Template 目录
+        // （towoo_system.je4system.wo.template），流程见 askToCreateFromTemplate。
+        func askToCreateNewTowooSystem(self: Browser)=> void
+        {
+            self->askToCreateFromTemplate(
+                "新建 ToWoo 系统", "请输入 ToWoo 系统文件名：", "NewSystem",
+                ".je4system.wo", Template::Type::TOWOO_SYSTEM, "ToWoo 系统");
         }
         
         func drawToolbar(self: Browser)=> void
@@ -1075,9 +1111,11 @@ namespace JEEditor::Editor
                     }
                     if (MenuItem("ToWoo 组件"))
                     {
+                        self->askToCreateNewTowooComponent();
                     }
                     if (MenuItem("ToWoo 系统"))
                     {
+                        self->askToCreateNewTowooSystem();
                     }
                     if (MenuItem("C++ 模块"))
                     {

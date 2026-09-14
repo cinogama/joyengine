@@ -1,0 +1,44 @@
+import pkg::std;
+
+import je;
+import je::ecs;
+import je::towoo;
+import je::towoo::types;
+import je::towoo::components;
+import je::towoo::system;
+
+using std;
+using je;
+using je::towoo;
+
+using Context = struct{
+};
+
+extern func create(_: je::world)=> Context
+{
+    return Context{
+    };
+}
+extern func close(_: Context)
+{
+}
+
+extern func on_enable(_: Context)
+{
+}
+extern func on_disable(_: Context)
+{
+}
+
+PRE_UPDATE!
+{
+}
+UPDATE!
+{
+    system! update()
+    {
+    }
+}
+LATE_UPDATE!
+{
+}

@@ -1,0 +1,8 @@
+import pkg::std;
+
+import je::towoo::component;
+import je::towoo::types;
+
+component!
+{
+}

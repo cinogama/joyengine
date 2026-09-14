@@ -20,6 +20,8 @@ namespace JEEditor::Editor::Template
         public NATIVE_MODULE_SYSTEM_HPP,
         public NATIVE_MODULE_SYSTEM_CPP,
         public PHYSICS_CONFIG,
+        public TOWOO_COMPONENT,
+        public TOWOO_SYSTEM,
     }
 
     public func load(type: Type)=> option<string>
@@ -33,6 +35,8 @@ namespace JEEditor::Editor::Template
             [Type::NATIVE_MODULE_SYSTEM_HPP] = "native_module_system.hpp",
             [Type::NATIVE_MODULE_SYSTEM_CPP] = "native_module_system.cpp",
             [Type::PHYSICS_CONFIG] = "physics.je4physics.wo",
+            [Type::TOWOO_COMPONENT] = "towoo_component.je4component.wo",
+            [Type::TOWOO_SYSTEM] = "towoo_system.je4system.wo",
         };
         
         try! template_filename = type_to_filename->get(type);
