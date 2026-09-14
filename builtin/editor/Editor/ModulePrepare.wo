@@ -12,6 +12,7 @@ import pkg::process;
 
 import je;
 import je::gui;
+import je::towoo;
 
 import builtin::editor::Editor::Template;
 
@@ -21,6 +22,7 @@ using fsys;
 using iterator;
 using thread;
 using filestream;
+using je;
 using je::gui;
 using JEEditor::GUI::Windows;
 
@@ -32,6 +34,7 @@ namespace JEEditor::Editor
     // 工作线程通过 postMessage 投递进度消息到 m_msg_list，
     // UI 协程每帧在 run 中加锁排空 m_msg_list 并显示，同时同步 m_finished/m_error。
     // m_module_state_mx 保护全部跨线程可变状态（m_msg_list / m_finished / m_error）。
+    // 子进程（CMake）的 stdout/stderr 由独立读线程经管道转发为 postMessage（见 startProcessAndWait）。
     using ModulePrepare = struct{
         m_module_state_mx: mutex,
 
@@ -39,6 +42,9 @@ namespace JEEditor::Editor
         m_msg_list: list<string>,
         // 窗口显示缓冲：仅 UI 协程访问，无需加锁
         m_logbuf: list<string>,
+
+        // 窗口创建时刻（GetTime），仅 UI 协程访问，用于状态行显示已耗时
+        m_start_time: real,
 
         m_finished: mut bool,
         // 任务结束时的错误信息，none 表示成功（受 m_module_state_mx 保护）
@@ -52,6 +58,7 @@ namespace JEEditor::Editor
                 m_module_state_mx = mutex::create(),
                 m_msg_list = list::create:<string>(),
                 m_logbuf = list::create:<string>(),
+                m_start_time = GetTime(),
                 m_finished = mut false,
                 m_error = mut option::none,
             };
@@ -129,27 +136,49 @@ namespace JEEditor::Editor
         {
             return true;
         }
+        // 在当前行绘制“旋转圆点”加载动画并在动画右侧排版提示文本：
+        // 一圈圆点绕圆心连续旋转，头部（tail=0）最亮最大、向尾部渐暗渐小，
+        // 形成拖尾的彗星效果；点的位置由 sin/cos 按相位直接计算。
+        func drawBusySpinner(label: string)
+        {
+            let dot_count = 12;
+            let radius = 8.;
+            let head_angle = GetTime() * 5.;  // 旋转相位：每秒5弧度≈0.8圈
+
+            let text_size = CalcTextSize(label);
+            let cursor = GetCursorScreenPos();
+            let center = (cursor.0 + radius + 2., cursor.1 + text_size.1 * 0.5);
+            let draw_list = GetWindowDrawList();
+
+            for (let mut i = 0; i < dot_count; i += 1)
+            {
+                let tail = i as real / dot_count as real;  // 0=头部 → 1=尾部
+                let fade = 1. - tail;
+                let angle = head_angle - tail * 2. * mathf::PI;
+
+                draw_list->AddCircleFilled(
+                    (center.0 + mathf::cos(angle) * radius,
+                     center.1 + mathf::sin(angle) * radius),
+                    1.1 + 1.9 * fade,
+                    (120, 190, 255, (70. + 185. * fade * fade) as int));
+            }
+
+            // 占位动画区域后，把提示文本排到动画右侧
+            Dummy(((radius + 2.) * 2., text_size.1));
+            SameLine();
+            TextColored((120, 190, 255, 255), label);
+        }
+
         public func run(self: ModulePrepare)=> bool
         {
             let new_message_count = self->drainMessages();
             let (finished, error) = self->takeState();
 
-            // 状态行：运行中显示动画提示，结束后按成败着色
+            // 状态行：运行中显示旋转加载动画与已耗时，结束后按成败着色
             if (!finished)
             {
-                let phase = ((GetTime() * 2.) as int) % 4;
-                let busy_text = phase == 0 ? "正在执行，请稍候"
-                    | phase == 1 ? "正在执行，请稍候."
-                    | phase == 2 ? "正在执行，请稍候.."
-                    | "正在执行，请稍候...";
-                TextColored((120, 190, 255, 255), busy_text);
-
-                // 不定进度条：0~1 往返，表示任务仍在推进
-                let bar_phase = ((GetTime() * 1.5) as int) % 8;
-                let bar_value = bar_phase < 4
-                    ? bar_phase as real / 4.
-                    | (8 - bar_phase) as real / 4.;
-                ProgressBar(bar_value);
+                let elapsed = (GetTime() - self.m_start_time) as int;
+                drawBusySpinner(F"正在执行，请稍候（已耗时 {elapsed} 秒）");
             }
             else
             {
@@ -262,19 +291,99 @@ namespace JEEditor::Editor
             return lines->reduce(\l, r = l + "\n" + r;)->or("");
         }
 
-        // 启动进程并等待结束，退出码非0视为失败
-        func startProcessAndWait(exec: path_t, args: array<string>, failmsg: string)
+        // 转发一行子进程输出：展开 '\r' 覆盖式刷新（CMake/MSBuild 用它在原位
+        // 更新百分比进度）后只保留最终内容，与终端上看到的效果一致；空白行丢弃。
+        func relayOneLine(win: ModulePrepare, line: string)
         {
-            match (process::create(exec, args))
+            let mut visible = "";
+            for (let seg : line->split("\r") |> iterator::collect)
+            {
+                let trimmed = seg->trim;
+                if (trimmed->len > 0)
+                    visible = trimmed;
+            }
+
+            if (visible->len > 0)
+                do win->postMessage(visible);
+        }
+
+        // 管道读线程主体：阻塞循环读取管道并把输出按行转发到窗口日志。
+        // 管道读到的是任意大小的分块、可能截断在行中间，因此维护半行缓冲；
+        // 管道关闭（读到 none）意味着子进程结束，转发残余半行后关闭句柄。
+        func relayPipeLines(win: ModulePrepare, src: process::pipe)
+        {
+            let mut pending = "";
+
+            for (;;)
+            {
+                match (src->read(4096))
+                {
+                    value(chunk)?
+                    {
+                        let segs = chunk->split("\n") |> iterator::collect;
+                        pending = pending + segs[0];
+
+                        for (let mut i = 1; i < segs->len; i += 1)
+                        {
+                            relayOneLine(win, pending);
+                            pending = segs[i];
+                        }
+                    }
+                    none? break;
+                }
+            }
+
+            relayOneLine(win, pending);
+            do src->close();
+        }
+
+        // 为一条输出管道启动读线程；重定向标志为真时管道必然存在，
+        // 缺失时返回立即结束的空线程，保证后续 thread::wait 的逻辑统一。
+        func startPipeRelay(win: ModulePrepare, src: option<process::pipe>)
+        {
+            match (src)
+            {
+                value(p)?
+                {
+                    return thread::create(func(){
+                            relayPipeLines(win, p);
+                        });
+                }
+                none?;
+            }
+            return thread::create(func(){});
+        }
+
+        // 启动进程并把 stdout/stderr 重定向到管道等待结束，退出码非0视为失败；
+        // 子进程输出由独立读线程逐行转发到进度窗口日志。
+        // 两条管道必须并行读取：只阻塞读其中一条时，另一条的缓冲被写满后
+        // 子进程会卡死在写调用上。
+        func startProcessAndWait(win: ModulePrepare, exec: path_t, args: array<string>, failmsg: string)
+        {
+            do win->postMessage(F"$ {args->reduce(\l, r = l + " " + r;)->or("")}");
+
+            match (process::create_with_pipe(exec, args, false, true, true))
             {
                 none? throw! F"无法启动进程：{exec->to_string}";
-                value(proc)?
+                value(created)?
                 {
+                    let (proc, pipes) = created;
+
+                    let stdout_relay = startPipeRelay(win, pipes.stdout);
+                    let stderr_relay = startPipeRelay(win, pipes.stderr);
+
                     match (process::wait(proc))
                     {
+                        // wait 本身出错时不等待读线程：此时子进程大概率仍在运行，
+                        // 读线程尚未读到管道关闭，阻塞等待会把工作线程挂死；
+                        // 读线程随后会随管道关闭自行退出
                         err(eno)? throw! F"{failmsg}（{eno}）";
                         ok(status)?
                         {
+                            // 等待读线程排空管道，保证日志完整后再判定成败
+                            do thread::wait(stdout_relay);
+                            do thread::wait(stderr_relay);
+
                             if (status != 0 as process::status_t)
                                 throw! failmsg;
                         }
@@ -329,8 +438,9 @@ namespace JEEditor::Editor
         }
 
         // 为指定的C++模块目录生成loader.hpp与CMakeLists.txt，
-        // 刷新.engine内的引擎链接库，最后调用CMake完成配置与编译。
-        public func buildCppModuleDir(path: path_t, name: string, config: BuildConfig)
+        // 刷新.engine内的引擎链接库，最后调用CMake完成配置与编译；
+        // CMake的输出实时转发到 win 的日志区。
+        public func buildCppModuleDir(win: ModulePrepare, path: path_t, name: string, config: BuildConfig)
         {
             // 1. 定位CMake
             try! cmake_path = locateCMake();
@@ -394,7 +504,7 @@ namespace JEEditor::Editor
             let core_lib_filename = engineCoreLibLinkFilename("libjoyecs", config);
             let engine_include_path = engine_root / "builtin" / "include";
 
-            try! _ = startProcessAndWait(cmake_path,
+            try! _ = startProcessAndWait(win, cmake_path,
                 [
                     cmake_path->to_string,
                     path->to_string,
@@ -406,7 +516,7 @@ namespace JEEditor::Editor
                 ],
                 "CMake生成失败");
 
-            try! _ = startProcessAndWait(cmake_path,
+            try! _ = startProcessAndWait(win, cmake_path,
                 [
                     cmake_path->to_string,
                     "--build", building_dir->to_string,
@@ -417,7 +527,7 @@ namespace JEEditor::Editor
 
             return_ok!;
         }
-        public func createNewCppModuleDir(path: path_t, name: string)
+        public func createNewCppModuleDir(win: ModulePrepare, path: path_t, name: string)
         {
             if (walk(path) |> iter_result |> collect->empty == false)
                 throw! F"目标目录 `{path}` 不为空";
@@ -461,7 +571,7 @@ namespace JEEditor::Editor
             try! _ = create_file_with_content(".gitignore", Template::Type::NATIVE_MODULE_GITIGNORE);
             try! _ = create_file_with_content("main.cpp", Template::Type::NATIVE_MODULE_MAIN_CPP);
 
-            try! _ = buildCppModuleDir(path, name, BuildConfig::DEBUG);
+            try! _ = buildCppModuleDir(win, path, name, BuildConfig::DEBUG);
 
             return_ok!;
         }
