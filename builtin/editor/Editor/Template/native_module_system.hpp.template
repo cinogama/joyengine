@@ -1,0 +1,18 @@
+#pragma once
+#include "jeecs.hpp"
+
+namespace $$MODULE_NAME$$
+{
+    struct $$SYSTEM_NAME$$ : public jeecs::game_system
+    {
+        $$SYSTEM_NAME$$(jeecs::game_world world);
+        ~$$SYSTEM_NAME$$();
+
+        void OnEnable();
+        void OnDisable();
+
+        void PreUpdate();
+        void Update();
+        void LateUpdate();
+    };
+}

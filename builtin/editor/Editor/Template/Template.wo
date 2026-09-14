@@ -16,8 +16,11 @@ namespace JEEditor::Editor::Template
         public NATIVE_MODULE_GITIGNORE,
         public NATIVE_MODULE_LOADER_HPP,
         public NATIVE_MODULE_MAIN_CPP,
+        public NATIVE_MODULE_COMPONENT_HPP,
+        public NATIVE_MODULE_SYSTEM_HPP,
+        public NATIVE_MODULE_SYSTEM_CPP,
     }
-
+    
     public func load(type: Type)=> option<string>
     {
         static let type_to_filename = {
@@ -25,14 +28,17 @@ namespace JEEditor::Editor::Template
             [Type::NATIVE_MODULE_GITIGNORE] = ".gitignore",
             [Type::NATIVE_MODULE_LOADER_HPP] = "loader.hpp",
             [Type::NATIVE_MODULE_MAIN_CPP] = "main.cpp",
+            [Type::NATIVE_MODULE_COMPONENT_HPP] = "native_module_component.hpp",
+            [Type::NATIVE_MODULE_SYSTEM_HPP] = "native_module_system.hpp",
+            [Type::NATIVE_MODULE_SYSTEM_CPP] = "native_module_system.cpp",
         };
-
+        
         try! template_filename = type_to_filename->get(type);
         try! fstream = open(
-            parent(normalize(__FILE__!)) / F"{template_filename}.template", 
+            parent(normalize(__FILE__!)) / F"{template_filename}.template",
             mode::read);
         defer do fstream->close;
-
+        
         return_value! fstream->readbuf(fstream->len): buffer as string;
     }
 }
