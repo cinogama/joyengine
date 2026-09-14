@@ -32,6 +32,7 @@ import builtin::editor::GUI::Statebar;
 import builtin::editor::Editor::WorldEditorViewport;
 import builtin::editor::Editor::Saving::Entity;
 import builtin::editor::Editor::ModulePrepare;
+import builtin::editor::Editor::ModuleTypeCreator;
 import builtin::editor::Editor::Template;
 import ResourcePath;
 import Action::ModifyPrefab;
@@ -296,6 +297,32 @@ namespace JEEditor::Editor
         func isJe4ModuleDir(path: fsys::path_t)=> bool
         {
             return isdir(path) && string::lower(extension(path)) == ".je4module";
+        }
+
+        // 从 path 逐级上溯到项目根（workpath），返回第一个 *.je4module
+        // 祖先目录；不在任何模块内时返回 none。用于在模块目录内部时提供
+        // “新建→C++ 组件/系统”入口。
+        func findOwningJe4ModuleDir(path: path_t)=> option<path_t>
+        {
+            let root_str = workpath()->to_string();
+            let mut current = path;
+
+            for (;;)
+            {
+                if (isJe4ModuleDir(current))
+                    return option::value(current);
+
+                // 到达项目根或无法继续上溯（文件系统根）即停止
+                let current_str = current->to_string();
+                if (current_str == root_str)
+                    break;
+
+                let parent_dir = parent(current);
+                if (parent_dir->to_string() == current_str)
+                    break;
+                current = parent_dir;
+            }
+            return option::none;
         }
         
         func isEntryVisible(self: Browser, name: string)=> bool
@@ -1056,6 +1083,26 @@ namespace JEEditor::Editor
                     {
                         self->askToCreateCppModuleFolder(self.m_current);
                     }
+                    // 位于 *.je4module 目录内时，提供向该模块添加组件/系统的入口
+                    match (findOwningJe4ModuleDir(self.m_current))
+                    {
+                        none?;
+                        value(module_dir)?
+                        {
+                            if (MenuItem("C++ 组件"))
+                            {
+                                do ModuleTypeCreator::show(
+                                    module_dir, self.m_fs_dirty,
+                                    ModuleTypeCreator::TypeKind::COMPONENT);
+                            }
+                            if (MenuItem("C++ 系统"))
+                            {
+                                do ModuleTypeCreator::show(
+                                    module_dir, self.m_fs_dirty,
+                                    ModuleTypeCreator::TypeKind::SYSTEM);
+                            }
+                        }
+                    }
                     Separator();
                     if (MenuItem("文件夹"))
                     {
@@ -1096,6 +1143,25 @@ namespace JEEditor::Editor
                                 return ModulePrepare::buildCppModuleDir(
                                     prepare, sel, purename(sel), ModulePrepare::BuildConfig::DEBUG);
                             }));
+                    }
+
+                    // 向模块添加组件/系统（模态对话框，见 ModuleTypeCreator.wo）
+                    if (is_module_dir && BeginMenu("添加"))
+                    {
+                        defer EndMenu();
+
+                        if (MenuItem("组件…"))
+                        {
+                            do ModuleTypeCreator::show(
+                                sel, self.m_fs_dirty,
+                                ModuleTypeCreator::TypeKind::COMPONENT);
+                        }
+                        if (MenuItem("系统…"))
+                        {
+                            do ModuleTypeCreator::show(
+                                sel, self.m_fs_dirty,
+                                ModuleTypeCreator::TypeKind::SYSTEM);
+                        }
                     }
                     
                     if (MenuItem("重命名"))

@@ -280,7 +280,8 @@ namespace JEEditor::Editor
                 ;
         }
         
-        func writeAllText(file_path: path_t, content: string)
+        // 写入模板生成的代码文件时复用（见 ModuleTypeCreator）
+        public func writeAllText(file_path: path_t, content: string)
         {
             try! f = open(file_path, mode::write)
                 -> ok_or(F"无法创建文件 {file_path->to_string}");
@@ -294,8 +295,9 @@ namespace JEEditor::Editor
             return_ok!;
         }
         
-        // 收集目录下全部头文件名（不含扩展名），目录不存在时返回空数组
-        func collectHeaderPurenames(dir: path_t)=> array<string>
+        // 收集目录下全部头文件名（不含扩展名），目录不存在时返回空数组。
+        // 新建组件/系统对话框用它做重名校验（见 ModuleTypeCreator）。
+        public func collectHeaderPurenames(dir: path_t)=> array<string>
         {
             return subpath(dir)
                 ->> \childs = childs
