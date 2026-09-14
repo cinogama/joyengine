@@ -10,7 +10,7 @@ using fsys;
 using iterator;
 using std;
 
-namespace JEEditor::Project
+namespace JEEditor::Editor::Project
 {
     using NativeModuleCollection = struct{
         m_loaded_native_modules: map<string, NativeModule>,

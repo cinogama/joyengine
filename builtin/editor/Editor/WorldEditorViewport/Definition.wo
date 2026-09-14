@@ -39,7 +39,15 @@ namespace JEEditor::Editor
     protected using WorldEditorViewport = struct{
         protected m_close: mut CloseRequest,
         
-        protected m_world_instance: world,
+        protected m_world_instance: mut world,
+
+        // 冻结（FreezeWorlds）：本视口被冻结时，m_world_instance 已
+        // 关闭并等待恢复，此前的世界以 Toml 快照暂存在 m_frozen_world_data
+        //（带 eid），编辑器状态（摄像机位姿/编辑模式）另存于
+        // m_frozen_editor_state，恢复后经 m_pending_editor_state 应用。
+        // m_frozen_world_data->is_value 即“本视口处于冻结态”。
+        protected m_frozen_world_data: mut option<Toml>,
+        protected m_frozen_editor_state: mut option<Toml>,
         
         // World context:
         protected m_name: string,
@@ -68,31 +76,33 @@ namespace JEEditor::Editor
         protected m_action_history: mut Practice,
         
         // Camera control state:
-        protected m_debug_camera_selector: entity_selector,
-        protected m_selectable_entity_selector: entity_selector,
-        protected m_all_entity_selector: entity_selector,
+        //（全部选择器 mutable：冻结恢复时会在新世界实例上整体重建，
+        // 见 FreezeWorlds / rebuildWorldSelectors）
+        protected m_debug_camera_selector: mut entity_selector,
+        protected m_selectable_entity_selector: mut entity_selector,
+        protected m_all_entity_selector: mut entity_selector,
         
         // 摄像机实体（含 Translation+Projection 且不带 Invisible）选择器，
         // 其图标/视锥体 gizmo 与点击拾取均以它为准
-        protected m_camera_entity_selector: entity_selector,
+        protected m_camera_entity_selector: mut entity_selector,
         
         // 2D 光源实体（含 Translation 与对应光源组件且不带 Invisible）选择器：
         // 点光源图标以 Point/Range 两个选择器为准（同一图标），
         // 平行光源图标以 Parallel 选择器为准
-        protected m_point_light2d_entity_selector: entity_selector,
-        protected m_range_light2d_entity_selector: entity_selector,
-        protected m_parallel_light2d_entity_selector: entity_selector,
+        protected m_point_light2d_entity_selector: mut entity_selector,
+        protected m_range_light2d_entity_selector: mut entity_selector,
+        protected m_parallel_light2d_entity_selector: mut entity_selector,
         
         // 锚点父实体（含 Translation+Anchor）选择器：子的
         // LocalToParent.parent_uid 指向父的 Anchor.uid；新建/粘贴实体
         // 放置到摄像机前方时用它反查父实体并换算局部坐标
         //（见 EntityPicking.wo 的 worldToLocalPos）
-        protected m_anchor_parent_entity_selector: entity_selector,
+        protected m_anchor_parent_entity_selector: mut entity_selector,
 
         // 2D 物理碰撞体实体（Translation+Rigidbody 且不带 Invisible）选择器：
         // 碰撞体线框 gizmo 与“编辑碰撞体”手柄以它为准（与物理系统的
         // 查询语义一致：碰撞体组件只有在 Rigidbody 实体上才生效）
-        protected m_physics2d_body_entity_selector: entity_selector,
+        protected m_physics2d_body_entity_selector: mut entity_selector,
         
         protected m_last_time: mut real,
         protected m_is_look_active: mut bool,
@@ -248,6 +258,23 @@ namespace JEEditor::Editor
         
         protected let s_world_viewports = {}mut: map<world, WorldEditorViewport>;
         protected let mut s_last_focusd_world_view = option::none: option<WorldEditorViewport>;
+
+        // 冻结（锁定）状态：为 true 期间所有世界视口的创建操作失败
+        //（FreezeWorlds::freezeAllWorlds）。冻结时 s_last_focusd_world_view
+        // 会暂存到 s_frozen_last_focused 并置空，避免各编辑面板在视口世界
+        // 已关闭期间经 getLastFocused 访问失效的世界实例。
+        protected let mut s_worlds_frozen = false;
+        protected let mut s_frozen_last_focused = option::none: option<WorldEditorViewport>;
+
+        // freezeAllWorldsToDo 已受理但协程尚未跑到冻结步骤（s_worlds_frozen
+        // 尚未置位）期间的同步重入保护：防止同一帧内重复发起冻结流程
+        protected let mut s_worlds_freeze_in_progress = false;
+
+        // 当前是否处于“所有世界已冻结”状态（创建操作据此失败）
+        public func isWorldsFrozen()=> bool
+        {
+            return s_worlds_frozen;
+        }
         
         // 是否为摄像机实体（含 Translation 与 Projection 且不带 Invisible；
         // 编辑器调试摄像机带 Invisible，不算在内）

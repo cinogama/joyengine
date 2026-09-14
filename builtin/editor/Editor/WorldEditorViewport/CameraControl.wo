@@ -38,7 +38,8 @@ namespace JEEditor::Editor::WorldEditorViewport
 {
     // 拖拽缩放窗口时 content 尺寸每帧都在变化；等待尺寸连续稳定这么多帧后
     // 再重建摄像机 framebuffer，避免在拖拽过程中频繁分配 GPU 资源。
-    let FRAMEBUFFER_RESIZE_SETTLE_FRAMES = 30;
+    // protected：冻结恢复（FreezeWorlds）需预置计数器以立即重建 framebuffer。
+    protected let FRAMEBUFFER_RESIZE_SETTLE_FRAMES = 30;
     
     // ---- 摄像机游走参数（仅本文件使用） ----
     let CAMERA_MOVE_SPEED = 8.;

@@ -80,6 +80,13 @@ namespace JEEditor::Editor::WorldEditorViewport
 
     public func createNewWorldToEdit()
     {
+        // 冻结期间禁止创建世界视口（见 FreezeWorlds）
+        if (isWorldsFrozen())
+        {
+            MsgBox::err("新建世界", "当前正处于世界冻结流程中，请稍后再试");
+            return;
+        }
+        
         let new_world = world::create(
             Singleton::Universe::getUniverse());
 
@@ -144,6 +151,13 @@ namespace JEEditor::Editor::WorldEditorViewport
     public func openWorldEditorViewportFromFile(
         path: path_t, editor_state: option<Toml>)=> void
     {
+        // 冻结期间禁止创建世界视口（见 FreezeWorlds）
+        if (isWorldsFrozen())
+        {
+            MsgBox::err("打开失败", "当前正处于世界冻结流程中，请稍后再试");
+            return;
+        }
+        
         match (findWorldEditorViewportByPath(path))
         {
             none?;

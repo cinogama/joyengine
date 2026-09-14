@@ -43,7 +43,7 @@ using JEEditor::GUI::Forms;
 using JEEditor::GUI::Statebar;
 using JEEditor::Singleton;
 
-namespace JEEditor
+namespace JEEditor::Editor
 {
     using Project = struct{
         m_shutdown_tombs: mut option<Tombs>,
@@ -55,7 +55,7 @@ namespace JEEditor
         /*
         编辑器正常退出时（参阅 builtin\editor\Editor\Shutdown.wo），会有一个
         针对 Project 的退出回调。
-        此时，Project 会记录下当前编辑器的状态（例如还有哪些 World 出于打开状态）
+        此时，Project 会记录下当前编辑器的状态（例如还有哪些 World 处于打开状态）
         到正式退出时，Tomb 会按照单例的 temp 保存流程落盘
         */
         using Tombs = struct{

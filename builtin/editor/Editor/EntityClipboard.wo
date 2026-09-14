@@ -163,7 +163,7 @@ namespace JEEditor::Editor::EntityClipboard
     public func copy(e: entity)=> void
     {
         s_copied_entity_content =
-            option::value(Entity::save(e));
+            option::value(Entity::save(e, false));
     }
 
     // 按实体预设发布可撤销的“创建实体”动作：实体名、组件集合与默认

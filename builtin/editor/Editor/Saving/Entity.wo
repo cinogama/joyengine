@@ -22,11 +22,25 @@ using JEEditor::GUI::Forms;
 
 namespace JEEditor::Saving::Entity
 {
-    public func save(e: entity)=> Toml
+    // save_eid 为 true 时额外记录实体调试 EUID（"eid" 键）：世界文件
+    // 落盘一律传 false（同一会话打开多个世界时，各文件各自的 eid 会
+    // 撞号），仅冻结快照（FreezeWorlds）传 true，以便恢复后选中态与
+    // 引用 euid 的撤销历史依然有效。
+    public func save(e: entity, save_eid: bool)=> Toml
     {
         let toml = JEGaming::Saving::Entity::save(e);
 
         toml->set("name", e->internal::name);
+
+        if (save_eid)
+        {
+            match (e->internal::get_entity_uid)
+            {
+                none?;
+                value(eid)?
+                    toml->set("eid", eid as handle as int);
+            }
+        }
 
         return toml;
     }
@@ -325,7 +339,46 @@ namespace JEEditor::Saving::Entity
             }
         }
 
+        // 快照带 eid 时（冻结快照，见 save 的 save_eid），先把
+        // Editor::EntityId 放进起始组件集合：该组件必须在实体构造时
+        // 一并创建，原生侧构造时才会分配有效的调试 EUID；构造之后再
+        // add_component 走命令缓冲延迟生效，此时 set_entity_uid 不安全
+        //（同 CreateEntity 的做法）。带 prefab 的差异数据在展开后
+        // restore_dat 已是完整数据，插入点落在实际用于构造的表上。
+        match (edat->get("eid")=>> \v = v->as_int;)
+        {
+            none?;
+            value(_)?
+            {
+                match (restore_dat->get("components"))
+                {
+                    value(components_dat)?
+                        components_dat->set(
+                            Editor::EntityId::type::typeinfo->name,
+                            new_table());
+                    none?
+                    {
+                        let components_dat = new_table();
+                        components_dat->set(
+                            Editor::EntityId::type::typeinfo->name,
+                            new_table());
+                        restore_dat->set("components", components_dat);
+                    }
+                }
+            }
+        }
+
         let e = JEGaming::Saving::Entity::restore(w, restore_dat);
+
+        // 起始组件集合已含 Editor::EntityId，此时把 EUID 覆写为快照值
+        // 才是安全的（见上）
+        match (edat->get("eid")=>> \v = v->as_int;)
+        {
+            none?;
+            value(eid)?
+                e->internal::unsafe::set_entity_uid(
+                    eid as handle as entity::internal::euid_t);
+        }
 
         if (prefab_path->is_value)
             e->internal::set_prefab_path(prefab_path->unwrap);

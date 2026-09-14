@@ -40,7 +40,7 @@ namespace JEEditor::Editor::Action
 
                 entities_content->add(mut (
                     e->internal::get_entity_uid->or(0h as entity::internal::euid_t),
-                    JEEditor::Saving::Entity::save(e),));
+                    JEEditor::Saving::Entity::save(e, false),));
             }
             std::sort_in_place(entities_content, \(ida, _), (idb, _) = ida < idb;);
 

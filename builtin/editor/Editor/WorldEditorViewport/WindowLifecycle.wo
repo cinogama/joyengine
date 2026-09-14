@@ -41,7 +41,7 @@ import builtin::editor::Editor::EntityClipboard;
 import builtin::editor::Editor::ResourcePath;
 import builtin::editor::Editor::Action::CreateEntity;
 
-import builtin::editor::Project;
+import builtin::editor::Editor::Project;
 
 import Definition;
 import CameraControl;
@@ -74,6 +74,99 @@ using JEEditor::Editor::ResourcePath;
 
 namespace JEEditor::Editor::WorldEditorViewport
 {
+    // 视口挂在世界实例上的全部实体选择器。冻结/恢复（FreezeWorlds）
+    // 会重建 world 实例，此时用 create 在新世界上重建全部选择器，
+    // 由 rebuildWorldSelectors 整体替换到视口字段上。
+    protected using WorldSelectors = struct{
+        m_debug_camera_selector: entity_selector,
+        m_selectable_entity_selector: entity_selector,
+        m_all_entity_selector: entity_selector,
+        m_camera_entity_selector: entity_selector,
+        m_point_light2d_entity_selector: entity_selector,
+        m_range_light2d_entity_selector: entity_selector,
+        m_parallel_light2d_entity_selector: entity_selector,
+        m_anchor_parent_entity_selector: entity_selector,
+        m_physics2d_body_entity_selector: entity_selector,
+    }
+    {
+        func create(w: world)=> WorldSelectors
+        {
+            return WorldSelectors{
+                m_debug_camera_selector = w->create_selector([
+                        requirement::contains(Editor::Invisible::type::typeinfo),
+                        requirement::contains(Camera::RendToFramebuffer::type::typeinfo),
+                        requirement::contains(Camera::Projection::type::typeinfo),
+                        requirement::contains(Transform::LocalPosition::type::typeinfo),
+                        requirement::contains(Transform::LocalRotation::type::typeinfo),
+                        requirement::contains(Transform::Translation::type::typeinfo),
+                    ]),
+
+                m_selectable_entity_selector = w->create_selector([
+                        requirement::except(Editor::Invisible::type::typeinfo),
+                        requirement::contains(Transform::Translation::type::typeinfo),
+                    ]),
+                m_all_entity_selector = w->create_selector([
+                        requirement::except(Editor::Invisible::type::typeinfo),
+                    ]),
+
+                m_camera_entity_selector = w->create_selector([
+                        requirement::except(Editor::Invisible::type::typeinfo),
+                        requirement::contains(Transform::Translation::type::typeinfo),
+                        requirement::contains(Camera::Projection::type::typeinfo),
+                    ]),
+
+                m_point_light2d_entity_selector = w->create_selector([
+                        requirement::except(Editor::Invisible::type::typeinfo),
+                        requirement::contains(Transform::Translation::type::typeinfo),
+                        requirement::contains(Light2D::Point::type::typeinfo),
+                    ]),
+                m_range_light2d_entity_selector = w->create_selector([
+                        requirement::except(Editor::Invisible::type::typeinfo),
+                        requirement::contains(Transform::Translation::type::typeinfo),
+                        requirement::contains(Light2D::Range::type::typeinfo),
+                    ]),
+                m_parallel_light2d_entity_selector = w->create_selector([
+                        requirement::except(Editor::Invisible::type::typeinfo),
+                        requirement::contains(Transform::Translation::type::typeinfo),
+                        requirement::contains(Light2D::Parallel::type::typeinfo),
+                    ]),
+
+                // 锚点父实体（Translation+Anchor）：按子的 LocalToParent.
+                // parent_uid 反查父实体用（不加 except Invisible，与变换
+                // 系统的锚点解析范围一致）
+                m_anchor_parent_entity_selector = w->create_selector([
+                        requirement::contains(Transform::Translation::type::typeinfo),
+                        requirement::contains(Transform::Anchor::type::typeinfo),
+                    ]),
+
+                // 2D 物理碰撞体实体（Translation+Rigidbody 且不带 Invisible）：
+                // 碰撞体线框 gizmo 与“编辑碰撞体”手柄以它为准
+                m_physics2d_body_entity_selector = w->create_selector([
+                        requirement::except(Editor::Invisible::type::typeinfo),
+                        requirement::contains(Transform::Translation::type::typeinfo),
+                        requirement::contains(Physics2D::Rigidbody::type::typeinfo),
+                    ]),
+            };
+        }
+    }
+
+    // 把视口的实体选择器整体替换为在新世界 w 上重建的选择器
+    //（冻结后恢复时调用，见 FreezeWorlds）
+    protected func rebuildWorldSelectors(self: WorldEditorViewport, w: world)=> void
+    {
+        let selectors = WorldSelectors::create(w);
+
+        self.m_debug_camera_selector = selectors.m_debug_camera_selector;
+        self.m_selectable_entity_selector = selectors.m_selectable_entity_selector;
+        self.m_all_entity_selector = selectors.m_all_entity_selector;
+        self.m_camera_entity_selector = selectors.m_camera_entity_selector;
+        self.m_point_light2d_entity_selector = selectors.m_point_light2d_entity_selector;
+        self.m_range_light2d_entity_selector = selectors.m_range_light2d_entity_selector;
+        self.m_parallel_light2d_entity_selector = selectors.m_parallel_light2d_entity_selector;
+        self.m_anchor_parent_entity_selector = selectors.m_anchor_parent_entity_selector;
+        self.m_physics2d_body_entity_selector = selectors.m_physics2d_body_entity_selector;
+    }
+
     protected func create(
         w: world,
         name: string,
@@ -87,10 +180,15 @@ namespace JEEditor::Editor::WorldEditorViewport
             
         // 注意：按照设计，WorldEditorViewport 的生命周期应当比 world 实例更长
         //      因此，世界实例的释放将由 WorldEditorViewport 在 onClose 时执行
+        let selectors = WorldSelectors::create(w);
+
         let new_viewport = WorldEditorViewport{
             m_close = mut CloseRequest::NORMALLY,
             
-            m_world_instance = w,
+            m_world_instance = mut w,
+            
+            m_frozen_world_data = mut option::none,
+            m_frozen_editor_state = mut option::none,
             
             m_name = name,
             m_runtime_systems = []mut,
@@ -108,60 +206,20 @@ namespace JEEditor::Editor::WorldEditorViewport
             m_rmb_press_in_viewport = mut false,
             m_action_history = mut Practice::create(),
             
-            m_debug_camera_selector = w->create_selector([
-                    requirement::contains(Editor::Invisible::type::typeinfo),
-                    requirement::contains(Camera::RendToFramebuffer::type::typeinfo),
-                    requirement::contains(Camera::Projection::type::typeinfo),
-                    requirement::contains(Transform::LocalPosition::type::typeinfo),
-                    requirement::contains(Transform::LocalRotation::type::typeinfo),
-                    requirement::contains(Transform::Translation::type::typeinfo),
-                ]),
+            m_debug_camera_selector = mut selectors.m_debug_camera_selector,
                 
-            m_selectable_entity_selector = w->create_selector([
-                    requirement::except(Editor::Invisible::type::typeinfo),
-                    requirement::contains(Transform::Translation::type::typeinfo),
-                ]),
-            m_all_entity_selector = w->create_selector([
-                    requirement::except(Editor::Invisible::type::typeinfo),
-                ]),
+            m_selectable_entity_selector = mut selectors.m_selectable_entity_selector,
+            m_all_entity_selector = mut selectors.m_all_entity_selector,
                 
-            m_camera_entity_selector = w->create_selector([
-                    requirement::except(Editor::Invisible::type::typeinfo),
-                    requirement::contains(Transform::Translation::type::typeinfo),
-                    requirement::contains(Camera::Projection::type::typeinfo),
-                ]),
+            m_camera_entity_selector = mut selectors.m_camera_entity_selector,
                 
-            m_point_light2d_entity_selector = w->create_selector([
-                    requirement::except(Editor::Invisible::type::typeinfo),
-                    requirement::contains(Transform::Translation::type::typeinfo),
-                    requirement::contains(Light2D::Point::type::typeinfo),
-                ]),
-            m_range_light2d_entity_selector = w->create_selector([
-                    requirement::except(Editor::Invisible::type::typeinfo),
-                    requirement::contains(Transform::Translation::type::typeinfo),
-                    requirement::contains(Light2D::Range::type::typeinfo),
-                ]),
-            m_parallel_light2d_entity_selector = w->create_selector([
-                    requirement::except(Editor::Invisible::type::typeinfo),
-                    requirement::contains(Transform::Translation::type::typeinfo),
-                    requirement::contains(Light2D::Parallel::type::typeinfo),
-                ]),
+            m_point_light2d_entity_selector = mut selectors.m_point_light2d_entity_selector,
+            m_range_light2d_entity_selector = mut selectors.m_range_light2d_entity_selector,
+            m_parallel_light2d_entity_selector = mut selectors.m_parallel_light2d_entity_selector,
                 
-            // 锚点父实体（Translation+Anchor）：按子的 LocalToParent.
-            // parent_uid 反查父实体用（不加 except Invisible，与变换
-            // 系统的锚点解析范围一致）
-            m_anchor_parent_entity_selector = w->create_selector([
-                    requirement::contains(Transform::Translation::type::typeinfo),
-                    requirement::contains(Transform::Anchor::type::typeinfo),
-                ]),
+            m_anchor_parent_entity_selector = mut selectors.m_anchor_parent_entity_selector,
                 
-            // 2D 物理碰撞体实体（Translation+Rigidbody 且不带 Invisible）：
-            // 碰撞体线框 gizmo 与“编辑碰撞体”手柄以它为准
-            m_physics2d_body_entity_selector = w->create_selector([
-                    requirement::except(Editor::Invisible::type::typeinfo),
-                    requirement::contains(Transform::Translation::type::typeinfo),
-                    requirement::contains(Physics2D::Rigidbody::type::typeinfo),
-                ]),
+            m_physics2d_body_entity_selector = mut selectors.m_physics2d_body_entity_selector,
                 
             // Camera control state:
             m_last_time = mut 0.,
@@ -285,6 +343,11 @@ namespace JEEditor::Editor::WorldEditorViewport
     // 待用户确认后再通过 m_close 程序化关闭。
     public func onPreClose(self: WorldEditorViewport)=> bool
     {
+        // 冻结期间不允许关闭：世界已关闭，关闭确认里的保存/销毁都无意义，
+        // 待解冻恢复后再走正常流程
+        if (self.m_frozen_world_data->is_value)
+            return false;
+            
         // 程序化关闭（重命名/另存重开/确认后的关闭）不拦截
         if (self.m_close != CloseRequest::NORMALLY)
             return true;
@@ -381,6 +444,11 @@ namespace JEEditor::Editor::WorldEditorViewport
     }
     public func onUpdate(self: WorldEditorViewport)
     {
+        // 冻结期间世界已关闭，编辑动作队列暂不处理（队列保留，恢复后
+        // 凭 eid 仍有效继续撤销/重做）
+        if (self.m_frozen_world_data->is_value)
+            return;
+            
         match (self.m_action_history->update(self))
         {
             ok(_)?;
@@ -390,6 +458,15 @@ namespace JEEditor::Editor::WorldEditorViewport
     }
     public func run(self: WorldEditorViewport)=> bool
     {
+        // 冻结期间世界实例已关闭，任何访问世界的绘制/拾取/摄像机逻辑
+        // 都必须跳过；只画占位提示，也不更新 s_last_focusd_world_view
+        //（冻结时该全局已置空，避免其他面板经它访问失效世界）。
+        if (self.m_frozen_world_data->is_value)
+        {
+            TextDisabled("世界已冻结：正在重新加载…");
+            return true;
+        }
+        
         if (self.m_saving_path->is_none)
         {
             match(Icons::WORLD)

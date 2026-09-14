@@ -36,7 +36,7 @@ namespace JEEditor::Editor::Action
             try! eid = e->internal::get_entity_uid;
             return_value! FullEntityContent{
                 m_eid = mut option::value(eid),
-                m_entity_content = Entity::save(e),
+                m_entity_content = Entity::save(e, false),
             };
         }
         

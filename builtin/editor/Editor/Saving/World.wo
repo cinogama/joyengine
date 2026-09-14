@@ -21,10 +21,15 @@ namespace JEEditor::Saving::World
     // WorldEditorViewport 中，编辑器内不 add_system）。这类系统以类型名
     // 单独存放在 "running_systems" 键下；游戏运行时 restore 会把它们与
     // 立即启用的系统一并加入世界（见 JEGaming::Saving::World::restore）。
-    public func save(w: world, name: string, runtime_systems: array<typeinfo>)
+    // save_eid：是否把实体的调试 EUID 一并保存（透传给
+    // Entity::save）。世界文件落盘一律传 false（同一会话打开多个世界
+    // 时各自的 eid 会撞号），仅冻结快照（FreezeWorlds）传 true，使
+    // 恢复后选中态与引用 euid 的撤销历史依旧有效。
+    public func save(
+        w: world, name: string, runtime_systems: array<typeinfo>, save_eid: bool)
     {
         let wdat = World::saveWithCustomEntitySaver(
-            w, JEEditor::Saving::Entity::save);
+            w, \e = JEEditor::Saving::Entity::save(e, save_eid););
 
         // 世界的名字与文件名（保存路径）无关，须随文件单独保存
         wdat->set("name", name);

@@ -22,7 +22,7 @@ import builtin::editor::GUI::Forms::InputBox;
 import builtin::editor::Singleton;
 import builtin::editor::Singleton::Universe;
 
-import builtin::editor::Project;
+import builtin::editor::Editor::Project;
 
 using std;
 
