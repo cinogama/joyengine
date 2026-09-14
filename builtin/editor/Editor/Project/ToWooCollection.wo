@@ -1,0 +1,37 @@
+import pkg::std;
+import pkg::fsys;
+import pkg::iterator;
+
+using std;
+using fsys;
+using iterator;
+
+namespace JEEditor::Editor::Project
+{
+    using ToWooCollection = struct{}
+    {
+        public func create()=> ToWooCollection
+        {
+            let towoo_component_and_systems =
+                workpath() |> recursive_walk
+                    |> iter_result
+                    |> filter(
+                        \p = isfile(p)
+                            && (fname->end_with(".je4system.wo")
+                                || fname->end_with(".je4component.wo"))
+                                where fname = filename(p)->lower
+                            ;)
+                    |> collect
+                    ;
+                    
+            let towoo_components = towoo_component_and_systems
+                ->forall(\p = filename(p)->lower->end_with(".je4component.wo"););
+            let towoo_systems = towoo_component_and_systems
+                ->forall(\p = filename(p)->lower->end_with(".je4system.wo"););
+
+            do towoo_components;
+            do towoo_systems;
+            return ToWooCollection{};
+        }
+    }
+}
