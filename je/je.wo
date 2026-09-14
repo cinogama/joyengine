@@ -49,7 +49,7 @@ namespace je
                     
                 extern("libjoyecs", "wojeapi_dynamic_parser_restore")
                     public func restore(type: je::typeinfo, val: handle, dat: string)=> bool;
-                
+                    
                 extern("libjoyecs", "wojeapi_dynamic_parser_edit")
                     public func edit(type: je::typeinfo, val: handle, tag: string)=> option<bool>;
             }

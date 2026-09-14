@@ -29,29 +29,24 @@ namespace JEEditor::Editor::Project
 
             self.m_loaded_native_modules->clear();
         }
-        public func reload(self: NativeModuleCollection, name: string, path: path_t)=> bool
+        public func getNativeModuleByName(self: NativeModuleCollection, name: string)
         {
-            match (self.m_loaded_native_modules->get(name))
-            {
-                none?
-                {
-                    return is_value <| try!{
-                        try! module = NativeModule::load(name, path);
-                        self.m_loaded_native_modules->set(name, module);
-                        
-                        return_value!;
-                    };
-                }
-                value(module)?
-                {
-                    return module->reload(path);
-                }
-            }
+            return self.m_loaded_native_modules->get(name);
+        }
+        public func loadModule(self: NativeModuleCollection, name: string, path: path_t)
+        {
+            if (self.m_loaded_native_modules->contains(name))
+                throw!;
+
+            try! native_module = NativeModule::load(name, path);
+            assert(self.m_loaded_native_modules->insert(name, native_module));
+
+            return_value! native_module;
         }
         public func getAllLoadedModuleNameAndPath(self: NativeModuleCollection)=> array<(string, path_t)>
         {
             return self.m_loaded_native_modules->iter
-                |> filter_map(\(_, module) = module->tryGetNameAndPath;)
+                |> map(\(_, module) = module->getNameAndPath;)
                 |> collect
                 |> sort(\(lname, _), (rname, _) = lname < rname;);
                 ;

@@ -1,45 +1,74 @@
 import pkg::std;
 import pkg::fsys;
 import pkg::try;
+import pkg::iterator;
 
 import je;
 
+import builtin::editor::Editor::ModulePrepare;
+
 using je;
 using fsys;
+using iterator;
 
 namespace JEEditor::Editor::Project
 {
     using NativeModule = struct{
         m_name: string,
-        m_loaded_module_handle: mut option<(handle, path_t)>,
+        m_path: path_t,
+        m_loaded_module_handle: mut option<handle>,
     }
     {
+        func findRuntimeDylibPath(name: string, path: path_t)
+        {
+            let runtime_path = path / ".runtime";
+            if (!isdir(runtime_path))
+                return option::none;
+                
+            try! runtime_dir = walk(runtime_path) |> iter_result
+                |> filter(\p = isdir(p) && filename(p)->is_number;)
+                |> reduce(\l, r = lno > rno ? l | r
+                        where lno = filename(l) as int
+                            , rno = filename(r) as int
+                        ;)
+                ;
+                
+            return_value! (runtime_dir / ModulePrepare::moduleDylibFilename(name));
+        }
         public func load(name: string, path: path_t)
         {
-            try! module_handle = load_module(name, path->to_string);
+            try! dylibpath = findRuntimeDylibPath(name, path);
+            try! module_handle = load_module(name, dylibpath->to_string);
             return_value! NativeModule{
                 m_name = name,
-                m_loaded_module_handle = mut option::value((module_handle, path)),
+                m_path = path,
+                m_loaded_module_handle = mut option::value(module_handle),
             };
         }
         public func drop(self: NativeModule)
         {
-            unload_module(self.m_loaded_module_handle->unwrap.0);
-            self.m_loaded_module_handle = option::none;
+            match (self.m_loaded_module_handle)
+            {
+                value(module_handle)?{
+                    unload_module(module_handle);
+                    self.m_loaded_module_handle = option::none;
+                }
+                none?;
+            }
+            
         }
-        public func reload(self: NativeModule, path: path_t)
+        public func reload(self: NativeModule)
         {
-            return is_value <| try!{
-                try! new_module_handle = load_module(self.m_name, path->to_string);
-                self->drop();
-                
-                self.m_loaded_module_handle = option::value((new_module_handle, path));
-                return_value!;
-            };
+            self->drop();
+            
+            try! dylibpath = findRuntimeDylibPath(self.m_name, self.m_path);
+            
+            self.m_loaded_module_handle = load_module(self.m_name, dylibpath->to_string);
+            return self.m_loaded_module_handle;
         }
-        public func tryGetNameAndPath(self: NativeModule)
+        public func getNameAndPath(self: NativeModule)
         {
-            return self.m_loaded_module_handle->> \(_, path) = (self.m_name, path);;
+            return (self.m_name, self.m_path);
         }
     }
 }

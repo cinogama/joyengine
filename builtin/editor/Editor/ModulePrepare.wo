@@ -15,6 +15,8 @@ import je::gui;
 import je::towoo;
 
 import builtin::editor::Editor::Template;
+import builtin::editor::Editor::Project;
+import builtin::editor::Singleton;
 
 import builtin::editor::GUI::Windows;
 
@@ -24,6 +26,7 @@ using thread;
 using filestream;
 using je;
 using je::gui;
+using JEEditor::Singleton;
 using JEEditor::GUI::Windows;
 
 namespace JEEditor::Editor
@@ -37,15 +40,15 @@ namespace JEEditor::Editor
     // 子进程（CMake）的 stdout/stderr 由独立读线程经管道转发为 postMessage（见 startProcessAndWait）。
     using ModulePrepare = struct{
         m_module_state_mx: mutex,
-
+        
         // 工作线程 → 窗口的消息队列（受 m_module_state_mx 保护）
         m_msg_list: list<string>,
         // 窗口显示缓冲：仅 UI 协程访问，无需加锁
         m_logbuf: list<string>,
-
+        
         // 窗口创建时刻（GetTime），仅 UI 协程访问，用于状态行显示已耗时
         m_start_time: real,
-
+        
         m_finished: mut bool,
         // 任务结束时的错误信息，none 表示成功（受 m_module_state_mx 保护）
         m_error: mut option<string>,
@@ -62,13 +65,13 @@ namespace JEEditor::Editor
                 m_finished = mut false,
                 m_error = mut option::none,
             };
-
+            
             do thread::create(func(){
                     let job_result = thread_job(self);
-
+                    
                     self.m_module_state_mx->lock();
                     defer self.m_module_state_mx->unlock();
-
+                    
                     match (job_result)
                     {
                         ok(_)? self.m_error = option::none;
@@ -78,22 +81,22 @@ namespace JEEditor::Editor
                 });
             return self;
         }
-
+        
         // 工作线程调用：投递一条进度消息，窗口的 run 会在后续帧接收并显示。
         public func postMessage(self: ModulePrepare, message: string)=> void
         {
             self.m_module_state_mx->lock();
             defer self.m_module_state_mx->unlock();
-
+            
             do self.m_msg_list->add(message);
         }
-
+        
         // UI 协程调用：把工作线程投递的消息全部转移到显示缓冲，返回转移条数。
         func drainMessages(self: ModulePrepare)=> int
         {
             self.m_module_state_mx->lock();
             defer self.m_module_state_mx->unlock();
-
+            
             let mut drained = 0;
             for (;;)
             {
@@ -109,16 +112,16 @@ namespace JEEditor::Editor
             }
             return drained;
         }
-
+        
         // UI 协程调用：读取任务结束状态，返回 (是否已结束, 错误信息，none 表示成功)。
         func takeState(self: ModulePrepare)=> (bool, option<string>)
         {
             self.m_module_state_mx->lock();
             defer self.m_module_state_mx->unlock();
-
+            
             return (self.m_finished, self.m_error);
         }
-
+        
         public func getTitle(_: ModulePrepare)=> string
         {
             return "模块装载器";
@@ -144,36 +147,36 @@ namespace JEEditor::Editor
             let dot_count = 12;
             let radius = 8.;
             let head_angle = GetTime() * 5.;  // 旋转相位：每秒5弧度≈0.8圈
-
+            
             let text_size = CalcTextSize(label);
             let cursor = GetCursorScreenPos();
             let center = (cursor.0 + radius + 2., cursor.1 + text_size.1 * 0.5);
             let draw_list = GetWindowDrawList();
-
+            
             for (let mut i = 0; i < dot_count; i += 1)
             {
                 let tail = i as real / dot_count as real;  // 0=头部 → 1=尾部
                 let fade = 1. - tail;
                 let angle = head_angle - tail * 2. * mathf::PI;
-
+                
                 draw_list->AddCircleFilled(
                     (center.0 + mathf::cos(angle) * radius,
-                     center.1 + mathf::sin(angle) * radius),
+                        center.1 + mathf::sin(angle) * radius),
                     1.1 + 1.9 * fade,
                     (120, 190, 255, (70. + 185. * fade * fade) as int));
             }
-
+            
             // 占位动画区域后，把提示文本排到动画右侧
             Dummy(((radius + 2.) * 2., text_size.1));
             SameLine();
             TextColored((120, 190, 255, 255), label);
         }
-
+        
         public func run(self: ModulePrepare)=> bool
         {
             let new_message_count = self->drainMessages();
             let (finished, error) = self->takeState();
-
+            
             // 状态行：运行中显示旋转加载动画与已耗时，结束后按成败着色
             if (!finished)
             {
@@ -194,9 +197,9 @@ namespace JEEditor::Editor
                     }
                 }
             }
-
+            
             Separator();
-
+            
             // 消息日志区：自动滚动到底部（有新消息时）
             let avail = GetContentRegionAvail();
             if (BeginChildSizeFlags("##ModulePrepareMessages",
@@ -221,15 +224,15 @@ namespace JEEditor::Editor
                     }
                 }
                 PopTextWrapPos();
-
+                
                 if (new_message_count > 0)
                     SetScrollHereY(1.);
             }
             EndChild();
-
+            
             if (finished && Button("关闭"))
                 return false;
-
+                
             return true;
         }
         
@@ -239,17 +242,17 @@ namespace JEEditor::Editor
             DEBUG,
             RELEASE,
         }
-
+        
         func configName(config: BuildConfig)=> string
         {
             return config == BuildConfig::DEBUG ? "debug" | "relwithdebinfo";
         }
-
+        
         // 链接时使用的引擎核心库文件名，随平台位数与配置变化
         func engineCoreLibLinkFilename(libname: string, config: BuildConfig)=> string
         {
             let isdebug = config == BuildConfig::DEBUG;
-
+            
             return libname
                 + (platform::bit_width == 32 ? "32" | "")
                 + (isdebug ? "_debug" | "")
@@ -260,21 +263,34 @@ namespace JEEditor::Editor
                     | ".so")
                 ;
         }
-
+        
+        // 模块编译产物的动态库文件名（CMake目标 OUTPUT_NAME 为 lib<模块名>），
+        // 随平台变化
+        public func moduleDylibFilename(name: string)=> string
+        {
+            return "lib" + name
+                + (platform::os == platform::Os::WINDOWS
+                    ? ".dll"
+                    | platform::os == platform::Os::MACOS
+                    ? ".dylib"
+                    | ".so")
+                ;
+        }
+        
         func writeAllText(file_path: path_t, content: string)
         {
             try! f = open(file_path, mode::write)
                 -> ok_or(F"无法创建文件 {file_path->to_string}");
-
+                
             defer do f->close;
-
+            
             let content_buf = content as buffer;
             if (!f->write(content_buf, 0, content_buf->len))
                 throw! F"写入文件 {file_path->to_string} 失败";
-
+                
             return_ok!;
         }
-
+        
         // 收集目录下全部头文件名（不含扩展名），目录不存在时返回空数组
         func collectHeaderPurenames(dir: path_t)=> array<string>
         {
@@ -285,12 +301,12 @@ namespace JEEditor::Editor
                     ;
                 ->  or([]);
         }
-
+        
         func joinLines(lines: array<string>)=> string
         {
             return lines->reduce(\l, r = l + "\n" + r;)->or("");
         }
-
+        
         // 转发一行子进程输出：展开 '\r' 覆盖式刷新（CMake/MSBuild 用它在原位
         // 更新百分比进度）后只保留最终内容，与终端上看到的效果一致；空白行丢弃。
         func relayOneLine(win: ModulePrepare, line: string)
@@ -302,18 +318,18 @@ namespace JEEditor::Editor
                 if (trimmed->len > 0)
                     visible = trimmed;
             }
-
+            
             if (visible->len > 0)
                 do win->postMessage(visible);
         }
-
+        
         // 管道读线程主体：阻塞循环读取管道并把输出按行转发到窗口日志。
         // 管道读到的是任意大小的分块、可能截断在行中间，因此维护半行缓冲；
         // 管道关闭（读到 none）意味着子进程结束，转发残余半行后关闭句柄。
         func relayPipeLines(win: ModulePrepare, src: process::pipe)
         {
             let mut pending = "";
-
+            
             for (;;)
             {
                 match (src->read(4096))
@@ -322,7 +338,7 @@ namespace JEEditor::Editor
                     {
                         let segs = chunk->split("\n") |> iterator::collect;
                         pending = pending + segs[0];
-
+                        
                         for (let mut i = 1; i < segs->len; i += 1)
                         {
                             relayOneLine(win, pending);
@@ -332,11 +348,11 @@ namespace JEEditor::Editor
                     none? break;
                 }
             }
-
+            
             relayOneLine(win, pending);
             do src->close();
         }
-
+        
         // 为一条输出管道启动读线程；重定向标志为真时管道必然存在，
         // 缺失时返回立即结束的空线程，保证后续 thread::wait 的逻辑统一。
         func startPipeRelay(win: ModulePrepare, src: option<process::pipe>)
@@ -353,7 +369,7 @@ namespace JEEditor::Editor
             }
             return thread::create(func(){});
         }
-
+        
         // 启动进程并把 stdout/stderr 重定向到管道等待结束，退出码非0视为失败；
         // 子进程输出由独立读线程逐行转发到进度窗口日志。
         // 两条管道必须并行读取：只阻塞读其中一条时，另一条的缓冲被写满后
@@ -361,17 +377,17 @@ namespace JEEditor::Editor
         func startProcessAndWait(win: ModulePrepare, exec: path_t, args: array<string>, failmsg: string)
         {
             do win->postMessage(F"$ {args->reduce(\l, r = l + " " + r;)->or("")}");
-
+            
             match (process::create_with_pipe(exec, args, false, true, true))
             {
                 none? throw! F"无法启动进程：{exec->to_string}";
                 value(created)?
                 {
                     let (proc, pipes) = created;
-
+                    
                     let stdout_relay = startPipeRelay(win, pipes.stdout);
                     let stderr_relay = startPipeRelay(win, pipes.stderr);
-
+                    
                     match (process::wait(proc))
                     {
                         // wait 本身出错时不等待读线程：此时子进程大概率仍在运行，
@@ -383,17 +399,17 @@ namespace JEEditor::Editor
                             // 等待读线程排空管道，保证日志完整后再判定成败
                             do thread::wait(stdout_relay);
                             do thread::wait(stderr_relay);
-
+                            
                             if (status != 0 as process::status_t)
                                 throw! failmsg;
                         }
                     }
                 }
             }
-
+            
             return_ok!;
         }
-
+        
         // 定位CMake可执行文件：优先使用CMAKE环境变量指定的路径，
         // 否则按fsys::pathsep拆分PATH环境变量并逐个目录查找。
         func locateCMake()
@@ -408,7 +424,7 @@ namespace JEEditor::Editor
                 }
                 none?;
             }
-
+            
             match (platform::env("PATH"))
             {
                 value(path_env)?
@@ -416,13 +432,13 @@ namespace JEEditor::Editor
                     let exec_names = platform::os == platform::Os::WINDOWS
                         ? ["cmake.exe"]
                         | ["cmake"];
-
+                        
                     for (let dir : path_env->split(fsys::pathsep) |> iterator::collect)
                     {
                         let trimmed_dir = dir->trim;
                         if (trimmed_dir->len == 0)
                             continue;
-
+                            
                         for (let exec_name : exec_names)
                         {
                             let candidate = normalize(trimmed_dir) / exec_name;
@@ -433,55 +449,56 @@ namespace JEEditor::Editor
                 }
                 none?;
             }
-
+            
             throw! "未能在CMAKE环境变量与PATH各目录下找到CMake，请检查CMake的安装与配置";
         }
-
+        
         // 为指定的C++模块目录生成loader.hpp与CMakeLists.txt，
-        // 刷新.engine内的引擎链接库，最后调用CMake完成配置与编译；
+        // 刷新.engine内的引擎链接库，调用CMake完成配置与编译，
+        // 最后把产物动态库拷贝到模块目录下的 .runtime 目录；
         // CMake的输出实时转发到 win 的日志区。
         public func buildCppModuleDir(win: ModulePrepare, path: path_t, name: string, config: BuildConfig)
         {
             // 1. 定位CMake
             try! cmake_path = locateCMake();
-
+            
             // 2. 扫描components与systems目录，生成loader.hpp
             let component_names = collectHeaderPurenames(path / "components");
             let system_names = collectHeaderPurenames(path / "systems");
-
+            
             try! loader_template = Template::load(Template::Type::NATIVE_MODULE_LOADER_HPP)
                 -> ok_or("读取模板文件失败 loader.hpp");
-
+                
             let loader_src = loader_template
                 ->replace("$$INCLUDE_COMPONENT_HEADERS$$",
                     joinLines(component_names->map(\f = F"#include \"{f}.hpp\"";)))
-                ->replace("$$INCLUDE_SYSTEM_HEADERS$$",
-                    joinLines(system_names->map(\f = F"#include \"{f}.hpp\"";)))
-                ->replace("$$REGISTER_COMPONENT_TYPES$$",
-                    joinLines(component_names->map(\f = F"        typing::register_type<{name}::{f}>(guard, \"{name}::{f}\");";)))
-                ->replace("$$REGISTER_SYSTEM_TYPES$$",
-                    joinLines(system_names->map(\f = F"        typing::register_type<{name}::{f}>(guard, \"{name}::{f}\");";)));
-
+                    ->replace("$$INCLUDE_SYSTEM_HEADERS$$",
+                        joinLines(system_names->map(\f = F"#include \"{f}.hpp\"";)))
+                        ->replace("$$REGISTER_COMPONENT_TYPES$$",
+                            joinLines(component_names->map(\f = F"        typing::register_type<{name}::{f}>(guard, \"{name}::{f}\");";)))
+                            ->replace("$$REGISTER_SYSTEM_TYPES$$",
+                                joinLines(system_names->map(\f = F"        typing::register_type<{name}::{f}>(guard, \"{name}::{f}\");";)));
+                                
             try! _ = writeAllText(path / "loader.hpp", loader_src);
-
+            
             // 3. 生成CMakeLists.txt
             try! cmake_template = Template::load(Template::Type::NATIVE_MODULE_CMAKELISTS)
                 -> ok_or("读取模板文件失败 CMakeLists.txt");
-
+                
             try! _ = writeAllText(
                 path / "CMakeLists.txt",
                 cmake_template->replace("$$JEMODULE_PROJECT_NAME$$", name));
-
+                
             // 4. 从引擎根目录刷新.engine内的引擎链接库
             let engine_root = normalize(std::host_path());
             let engine_library_dir = path / ".engine" / "library";
-
+            
             do remove(path / ".engine");
             try! _ = mkdir(path / ".engine")
                 -> or_map(\eno = F"创建 .engine 目录失败：{eno}";);
             try! _ = mkdir(engine_library_dir)
                 -> or_map(\eno = F"创建 .engine/library 目录失败：{eno}";);
-
+                
             for (let p : walk(engine_root)->iter_result)
             {
                 if (isfile(p))
@@ -497,13 +514,13 @@ namespace JEEditor::Editor
                     }
                 }
             }
-
+            
             // 5. 生成编译配置并编译
             let config_name = configName(config);
             let building_dir = path / F".build_{config_name}";
             let core_lib_filename = engineCoreLibLinkFilename("libjoyecs", config);
             let engine_include_path = engine_root / "builtin" / "include";
-
+            
             try! _ = startProcessAndWait(win, cmake_path,
                 [
                     cmake_path->to_string,
@@ -515,7 +532,7 @@ namespace JEEditor::Editor
                     F"-DJEMODULE_ENGINE_CORE_INCLUDE_PATH={engine_include_path}",
                 ],
                 "CMake生成失败");
-
+                
             try! _ = startProcessAndWait(win, cmake_path,
                 [
                     cmake_path->to_string,
@@ -524,7 +541,51 @@ namespace JEEditor::Editor
                     "-j", thread::concurrency() as string,
                 ],
                 "C++编译失败");
+                
+            // 6. 通知项目，装载动态库
+            apply:<Project>(
+                func(proj)
+                {
+                    do proj->reloadModuleWhileWorldsFreezed(
+                        name,
+                        path,
+                        func()
+                        {
+                            // 6.1 把产物动态库从 .build 拷贝到 .runtime（目录不存在则创建）。
+                            // 输出被重定向到 .build/<配置> 下，多配置生成器（如Visual Studio）
+                            // 还会再追加一层配置子目录，因此按文件名在 .build 下递归查找。
+                            let dylib_filename = moduleDylibFilename(name);
+                            let runtime_dir = path / ".runtime";
+                            
+                            if (!isdir(runtime_dir))
+                            {
+                                try! _ = mkdir(runtime_dir)
+                                    -> or_map(\eno = F"创建 .runtime 目录失败：{eno}";);
+                            }
+                            
+                            let mut dylib_path = option::none: option<path_t>;
+                            for (let p : recursive_walk(path / ".build")->iter_result)
+                            {
+                                if (isfile(p) && filename(p)->lower == dylib_filename->lower)
+                                {
+                                    dylib_path = option::value(p);
+                                    break;
+                                }
+                            }
+                            
+                            try! found_dylib_path = dylib_path
+                                -> ok_or(F"在 .build 目录下未找到模块动态库 {dylib_filename}");
+                                
+                            do win->postMessage(
+                                F"拷贝产物：{found_dylib_path->to_string} → {(runtime_dir / dylib_filename)->to_string}");
+                                
+                            try! _ = copy(found_dylib_path, runtime_dir / dylib_filename)
+                                -> or_map(\eno = F"复制文件：`{found_dylib_path->to_string}` 失败（{eno}）";);
 
+                            return_ok!;
+                        });
+                });
+                
             return_ok!;
         }
         public func createNewCppModuleDir(win: ModulePrepare, path: path_t, name: string)
@@ -564,15 +625,15 @@ namespace JEEditor::Editor
                 let template_content_buf = template_content as buffer;
                 if (!f->write(template_content_buf, 0, template_content_buf->len))
                     throw! F"写入文件 {fname} 失败";
-                
+                    
                 return_ok!;
             }
             
             try! _ = create_file_with_content(".gitignore", Template::Type::NATIVE_MODULE_GITIGNORE);
             try! _ = create_file_with_content("main.cpp", Template::Type::NATIVE_MODULE_MAIN_CPP);
-
+            
             try! _ = buildCppModuleDir(win, path, name, BuildConfig::DEBUG);
-
+            
             return_ok!;
         }
     }

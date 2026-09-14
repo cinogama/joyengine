@@ -29,6 +29,7 @@ import builtin::editor::Editor::Shutdown;
 import builtin::editor::Editor::WorldEditorViewport;
 import builtin::editor::Editor::ResourcePath;
 
+import NativeModule;
 import NativeModuleCollection;
 
 using je;
@@ -160,12 +161,10 @@ namespace JEEditor::Editor
                             do try!
                             {
                                 try! path = module_path->as_string;
-                                if (proj.m_native_modules->reload(
-                                        name,
-                                        ResourcePath::toLocalResourcePath(path)))
-                                {
-                                    throw!;
-                                }
+                                try! _ = proj.m_native_modules->loadModule(
+                                    name,
+                                    ResourcePath::toLocalResourcePath(path));
+                                    
                                 return_value!;
                             }
                             catch!
@@ -239,7 +238,26 @@ namespace JEEditor::Editor
                     -> or(new_table())
                     );
         }
-        
+        public func reloadModuleWhileWorldsFreezed(
+            self: Project, name: string, path: path_t, update_dylib_callback: ()=> result<void, string>)
+        {
+            match (self.m_native_modules->getNativeModuleByName(name))
+            {
+                value(native_modules)? {
+                    native_modules->drop();
+                    
+                    try! _ = update_dylib_callback();
+                    try! _ = native_modules->reload()
+                        -> ok_or("装载模块失败");
+                    return_ok! native_modules;
+                }
+                none? {
+                    try! _ = update_dylib_callback();
+                    return self.m_native_modules->loadModule(name, path)
+                        -> ok_or("装载模块失败");
+                }
+            }
+        }
         /* --------------------------------------------- */
         public func dumpTombs()
         {
