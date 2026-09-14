@@ -1,0 +1,729 @@
+import pkg::std;
+
+import pkg::fsys;
+import pkg::interface;
+import pkg::try;
+
+import je::gui;
+
+import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Icons;
+import builtin::editor::GUI::Statebar;
+import builtin::editor::GUI::Forms::MsgBox;
+import builtin::editor::GUI::Shortcut;
+
+import builtin::editor::Editor::Template;
+import builtin::editor::Editor::ModulePrepare;
+
+using std;
+using fsys;
+using je::gui;
+
+using JEEditor::GUI;
+using JEEditor::GUI::Windows;
+using JEEditor::GUI::Icons;
+using JEEditor::GUI::Statebar;
+using JEEditor::GUI::Forms;
+
+namespace JEEditor::Editor
+{
+    // 组件成员设计器中的一行：成员名 + 选择的类型下标
+    // （对应 ModuleTypeCreator 的 MEMBER_TYPE_NAMES / MEMBER_TYPE_CPPDECLS）
+    // + 可选的 C++ 字面量初始值（空串 = 使用默认构造）
+    using MemberRow = struct{
+        m_name: mut string,
+        m_type: mut int,
+        m_default: mut string,
+    }
+    {
+        func create(name: string, type_index: int)=> MemberRow
+        {
+            return MemberRow{
+                m_name = mut name, m_type = mut type_index, m_default = mut "" };
+        }
+    }
+
+    // 向模块添加类型（组件/系统）的模态对话框。
+    //
+    // 用法：右键 *.je4module 目录“添加”子菜单，或位于模块目录内时
+    // “新建→C++ 组件/系统”打开（见 Browser.wo）。
+    //
+    // 对话框基于 Editor/Template 下的 native_module_component.hpp /
+    // native_module_system.hpp / native_module_system.cpp 模板生成代码：
+    // - 组件：可先在设计器里声明成员（名称 + 基础类型下拉 + 可选的
+    //   C++ 字面量初始值），生成的 struct 字段与 typing::register_member
+    //   注册调用一一对应；
+    // - 系统：生成继承 jeecs::game_system 的骨架（hpp + cpp）。
+    // 下方代码预览区用 C++ 语法高亮实时展示最终将写入的文件内容。
+    //
+    // 确认分两档：“创建并编译载入”在 ModulePrepare 工作线程写文件后走
+    // buildCppModuleDir（重新生成 loader.hpp、CMake 编译、冻结世界并热
+    // 重载，新类型自动注册）；“仅创建文件”只落盘，便于连续添加多个类型
+    // 后统一编译。loader.hpp 与 CMakeLists 均按目录内容重新生成，因此新
+    // 增文件无需任何工程配置改动。
+    using ModuleTypeCreator = struct{
+        // 目标模块：目录路径；名称 = purename = C++ 命名空间 = CMake 工程名
+        m_module_path: fsys::path_t,
+        m_module_name: string,
+        m_module_display: string,
+
+        // 浏览器文件缓存失效句柄（约定：对话框不捕获 Browser 实例）
+        m_fs_dirty: mutable<bool>,
+
+        // 打开时刻模块内既有头文件名快照（小写），用于重名校验。
+        // loader.hpp 把组件与系统注册进同一 C++ 命名空间，因此两个目录
+        // 的名字合并校验；比较不区分大小写以兼容 Windows 文件系统。
+        m_existing_component_names: array<string>,
+        m_existing_system_names: array<string>,
+
+        m_kind: mut TypeKind,
+        m_name: mut string,
+        m_members: vec<MemberRow>,
+        // 系统预览的当前页签：0 = .hpp，1 = .cpp（组件不使用）
+        m_active_preview_file: mut int,
+
+        m_preview: CodeEditorContext,
+        // 预览内容签名（类型|名称|成员|页签），变化时才 SetText，避免每帧重置
+        m_preview_sig: mut string,
+        m_close: mut bool,
+    }
+    {
+        enum TypeKind
+        {
+            public COMPONENT,
+            public SYSTEM,
+        }
+
+        // 成员设计器可选类型：显示名 → 生成的 C++ 声明类型。
+        // 均为引擎已注册、检视面板可编辑的基础类型。
+        let MEMBER_TYPE_NAMES = ["float", "int32", "uint32", "bool", "string", "vec2", "vec3", "vec4", "quat"];
+        let MEMBER_TYPE_CPPDECLS = [
+            "float", "int32_t", "uint32_t", "bool",
+            "jeecs::basic::string",
+            "jeecs::math::vec2", "jeecs::math::vec3", "jeecs::math::vec4",
+            "jeecs::math::quat",
+        ];
+
+        /* -------------------------------------- */
+        // 合法 C++ 标识符：字母/下划线开头，其后仅字母、数字、下划线
+        func isValidIdentifier(name: string)=> bool
+        {
+            if (name->len == 0)
+                return false;
+
+            let name_chars = name->chars;
+            for (let mut i = 0; i < name_chars->len; i += 1)
+            {
+                let ch_str = name_chars[i]->to_string;
+                if (i == 0)
+                {
+                    if (!name_chars[i]->is_alpha && ch_str != "_")
+                        return false;
+                }
+                else
+                {
+                    if (!name_chars[i]->is_alnum && ch_str != "_")
+                        return false;
+                }
+            }
+            return true;
+        }
+
+        // 类型名校验：返回 ok(名称) 或 err(原因)
+        func validateName(self: ModuleTypeCreator)=> result<string, string>
+        {
+            let name = self.m_name;
+
+            if (name->len == 0)
+                throw! "名称不能为空";
+            if (!isValidIdentifier(name))
+                throw! "不是合法的 C++ 标识符";
+
+            let lower_name = name->lower;
+            for (let existing : self.m_existing_component_names)
+            {
+                if (existing == lower_name)
+                    throw! F"模块中已存在同名组件 {existing}";
+            }
+            for (let existing : self.m_existing_system_names)
+            {
+                if (existing == lower_name)
+                    throw! F"模块中已存在同名系统 {existing}";
+            }
+
+            return_ok! name;
+        }
+
+        // 成员名校验：none 表示全部合法（空名行视为未填写，生成时跳过）；
+        // 非空行必须是合法标识符且互不重复
+        func validateMembers(self: ModuleTypeCreator)=> option<string>
+        {
+            for (let mut i = 0; i < self.m_members->len; i += 1)
+            {
+                let n = self.m_members[i].m_name;
+                if (n->len == 0)
+                    continue;
+
+                if (!isValidIdentifier(n))
+                    return option::value(F"成员名 “{n}” 不是合法的 C++ 标识符");
+
+                for (let mut j = 0; j < i; j += 1)
+                {
+                    if (self.m_members[j].m_name == n)
+                        return option::value(F"成员名 “{n}” 重复");
+                }
+            }
+            return option::none;
+        }
+
+        // 名称与成员均合法（系统没有成员设计器，只看名称）
+        func isInputValid(self: ModuleTypeCreator)=> bool
+        {
+            if (self->validateName()->is_err)
+                return false;
+            if (self.m_kind == TypeKind::COMPONENT && self->validateMembers()->is_value)
+                return false;
+            return true;
+        }
+
+        // 预览与“将写入”提示使用的名称：非法/为空时用占位名，保证预览始终可读
+        func displayNameOrPlaceholder(self: ModuleTypeCreator)=> string
+        {
+            if (isValidIdentifier(self.m_name))
+                return self.m_name;
+            return self.m_kind == TypeKind::COMPONENT ? "NewComponent" | "NewSystem";
+        }
+
+        /* -------------------------------------- */
+        // 成员初始值的生成文本：空值返回空串（不生成初始化）；
+        // string 类型自动补引号（已完整带引号时按原样使用），其余按
+        // C++ 表达式原样插入
+        func memberDefaultExpr(row: MemberRow)=> string
+        {
+            let text = row.m_default;
+            if (text->len == 0)
+                return "";
+
+            if (MEMBER_TYPE_CPPDECLS[row.m_type] == "jeecs::basic::string"
+                && !(text->len >= 2 && text->begin_with("\"") && text->end_with("\"")))
+                return F"\"{text}\"";
+
+            return text;
+        }
+
+        // 组件代码生成：模板 + 成员行 → 最终 .hpp 内容。
+        // 模板中的成员占位符本身带着缩进（声明处 8 空格、注册处 12 空格），
+        // 因此生成的行不带前导缩进，续行以对应宽度的空格拼接。
+        func generateComponentCode(module_name: string, component_name: string, member_rows: vec<MemberRow>)
+            => result<string, string>
+        {
+            try! template = Template::load(Template::Type::NATIVE_MODULE_COMPONENT_HPP)
+                ->ok_or("读取模板文件失败 native_module_component.hpp.template");
+
+            // 空名行跳过；成员名合法性由校验保证
+            let valid_rows = member_rows->forall(\row = row.m_name->len > 0;);
+
+            let decl_code = valid_rows
+                ->map(func(row: MemberRow)=> string
+                    {
+                        let type_decl = MEMBER_TYPE_CPPDECLS[row.m_type];
+                        let default_expr = memberDefaultExpr(row);
+                        return default_expr->len > 0
+                            ? F"{type_decl} {row.m_name} = {default_expr};"
+                            | F"{type_decl} {row.m_name};";
+                    })
+                ->reduce(\l, r = l + "\n        " + r;)
+                ->or("");
+
+            let register_code = valid_rows
+                ->map(\row = F"typing::register_member(guard, &{component_name}::{row.m_name}, \"{row.m_name}\");";)
+                ->reduce(\l, r = l + "\n            " + r;)
+                ->or("");
+
+            return_ok! template
+                ->replace("$$MODULE_NAME$$", module_name)
+                ->replace("$$COMPONENT_NAME$$", component_name)
+                ->replace("$$COMPONENT_MEMBERS_DECL$$", decl_code)
+                ->replace("$$COMPONENT_MEMBERS_REGISTER$$", register_code);
+        }
+
+        // 系统代码生成：返回 (hpp内容, cpp内容)
+        func generateSystemCode(module_name: string, system_name: string)
+            => result<(string, string), string>
+        {
+            try! hpp_template = Template::load(Template::Type::NATIVE_MODULE_SYSTEM_HPP)
+                ->ok_or("读取模板文件失败 native_module_system.hpp.template");
+            try! cpp_template = Template::load(Template::Type::NATIVE_MODULE_SYSTEM_CPP)
+                ->ok_or("读取模板文件失败 native_module_system.cpp.template");
+
+            return result::ok((
+                hpp_template
+                    ->replace("$$MODULE_NAME$$", module_name)
+                    ->replace("$$SYSTEM_NAME$$", system_name),
+                cpp_template
+                    ->replace("$$MODULE_NAME$$", module_name)
+                    ->replace("$$SYSTEM_NAME$$", system_name)));
+        }
+
+        // 目录不存在则创建；返回错误信息（已存在/创建成功均返回 none）
+        func ensureDirExists(dir: path_t)=> option<string>
+        {
+            if (isdir(dir))
+                return option::none;
+
+            match (mkdir(dir))
+            {
+                ok(_)? return option::none;
+                err(eno)? return option::value(F"创建目录 {dir->to_string()} 失败：{eno}");
+            }
+        }
+
+        // 生成待写入的 (路径, 内容) 列表，并确保目标子目录存在
+        func buildTargets(self: ModuleTypeCreator, type_name: string)=> result<vec<(path_t, string)>, string>
+        {
+            let targets = []mut as vec<(path_t, string)>;
+
+            if (self.m_kind == TypeKind::COMPONENT)
+            {
+                match (ensureDirExists(self.m_module_path / "components"))
+                {
+                    value(reason)? throw! reason;
+                    none?;
+                }
+                try! code = generateComponentCode(self.m_module_name, type_name, self.m_members);
+                do targets->add((self.m_module_path / "components" / F"{type_name}.hpp", code));
+            }
+            else
+            {
+                match (ensureDirExists(self.m_module_path / "systems"))
+                {
+                    value(reason)? throw! reason;
+                    none?;
+                }
+                try! codes = generateSystemCode(self.m_module_name, type_name);
+                let (hpp_code, cpp_code) = codes;
+                do targets->add((self.m_module_path / "systems" / F"{type_name}.hpp", hpp_code));
+                do targets->add((self.m_module_path / "systems" / F"{type_name}.cpp", cpp_code));
+            }
+
+            return_ok! targets;
+        }
+
+        /* -------------------------------------- */
+        // C++ 语法高亮的预览编辑器（只用于展示，内容随签名变化重置）
+        func makeCppPreviewEditor()=> CodeEditorContext
+        {
+            let ctx = CodeEditorContext::create();
+
+            let ldef = CodeEditorContext::LanguageDefinition::create("cpp");
+            let keywords = [
+                "alignas", "alignof", "auto", "bool", "break", "case", "catch",
+                "char", "class", "const", "constexpr", "const_cast", "continue",
+                "decltype", "default", "delete", "do", "double", "dynamic_cast",
+                "else", "enum", "explicit", "extern", "false", "float", "for",
+                "friend", "goto", "if", "inline", "int", "long", "mutable",
+                "namespace", "new", "noexcept", "nullptr", "operator", "private",
+                "protected", "public", "register", "reinterpret_cast", "return",
+                "short", "signed", "sizeof", "static", "static_assert",
+                "static_cast", "struct", "switch", "template", "this", "throw",
+                "true", "try", "typedef", "typeid", "typename", "union",
+                "unsigned", "using", "virtual", "void", "volatile", "while"
+            ];
+            for (let kw : keywords)
+                ldef->AddKeyword(kw);
+            ldef->SetSingleLineComment("//");
+            ldef->SetMultilineComment("/*", "*/");
+            ldef->SetCaseSensitive(true);
+            ldef->SetAutoIndentation(true);
+
+            // 不加 Identifier 分词则所有文本停留在 Default 灰色，高亮全部失效
+            ldef->AddTokenRegex(@"[A-Za-z_][A-Za-z0-9_]*"@, CodeEditorContext::PaletteIndex::Identifier);
+            ldef->AddTokenRegex(@"0[xX][0-9A-Fa-f]+"@, CodeEditorContext::PaletteIndex::Number);
+            ldef->AddTokenRegex(@"[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?"@, CodeEditorContext::PaletteIndex::Number);
+            ldef->AddTokenRegex(@""(\\.|[^"\\])*""@, CodeEditorContext::PaletteIndex::String);
+
+            ctx->SetLanguageDefinition(ldef);
+            return ctx;
+        }
+
+        // 预览内容签名：类型|名称|页签|各成员（名称:类型:初始值），
+        // 任一变化才需要重置编辑器
+        func previewSignature(self: ModuleTypeCreator)=> string
+        {
+            let mut sig = F"{self.m_kind}|{self.m_name}|{self.m_active_preview_file}";
+            for (let row : self.m_members)
+                sig = F"{sig}|{row.m_name}:{row.m_type}:{row.m_default}";
+            return sig;
+        }
+
+        /* -------------------------------------- */
+        public func create(module_path: path_t, fs_dirty: mutable<bool>, kind: TypeKind)=> ModuleTypeCreator
+            where require!(ModuleTypeCreator: IWindows);
+        {
+            return ModuleTypeCreator{
+                m_module_path = module_path,
+                m_module_name = purename(module_path),
+                m_module_display = filename(module_path),
+                m_fs_dirty = fs_dirty,
+                m_existing_component_names = ModulePrepare::collectHeaderPurenames(module_path / "components")
+                    ->map(\n = n->lower;),
+                m_existing_system_names = ModulePrepare::collectHeaderPurenames(module_path / "systems")
+                    ->map(\n = n->lower;),
+                m_kind = mut kind,
+                m_name = mut "",
+                m_members = []mut as vec<MemberRow>,
+                m_active_preview_file = mut 0,
+                m_preview = makeCppPreviewEditor(),
+                m_preview_sig = mut "",
+                m_close = mut false,
+            };
+        }
+
+        public func show(module_path: path_t, fs_dirty: mutable<bool>, kind: TypeKind)=> void
+        {
+            do Windows::show(ModuleTypeCreator::create(module_path, fs_dirty, kind));
+        }
+
+        public func getTitle(self: ModuleTypeCreator)=> string
+        {
+            return F"向模块添加类型：{self.m_module_display}";
+        }
+        public func getAttrib(_: ModuleTypeCreator)=> WindowsAttribute
+        {
+            return WindowsAttribute::ImGuiWindowFlags_NoDocking
+                + WindowsAttribute::ImGuiWindowFlags_NoCollapse
+                + WindowsAttribute::ImGuiWindowFlags_NoSavedSettings;
+        }
+        public func getSizeConstraints(_: ModuleTypeCreator)=> SizeConstraints
+        {
+            return SizeConstraints::Limited(((620., 480.), (1280., 1024.)));
+        }
+        public func isModal(_: ModuleTypeCreator)=> bool
+        {
+            return true;
+        }
+        public func getShortcut(self: ModuleTypeCreator)=> option<Shortcut>
+        {
+            return option::value <|
+                Shortcut::begin()
+                    ->shortCut([ImGuiKey::ImGuiKey_Enter], \= self->confirmByShortcut();)
+                    ->shortCut([ImGuiKey::ImGuiKey_Escape], \= self->cancel();)
+                    ->finish
+                ;
+        }
+
+        /* -------------------------------------- */
+        // 成员设计器（仅组件）：名称 + 类型下拉 + 可选初始值 + 删除，
+        // 逐行表格排版
+        func drawMemberDesigner(self: ModuleTypeCreator)=> void
+        {
+            SeparatorText("成员（可选，创建后可手写补充）");
+
+            // 删除请求在绘制循环中收集，循环结束后按索引从大到小删除，
+            // 避免边遍历边修改导致索引错位
+            let pending_remove = []mut as vec<int>;
+
+            if (BeginTable("##member_table", 4,
+                    TableFlags::ImGuiTableFlags_RowBg
+                    + TableFlags::ImGuiTableFlags_BordersInnerH
+                    + TableFlags::ImGuiTableFlags_SizingFixedFit))
+            {
+                TableSetupColumn("成员名", TableColumnFlags::ImGuiTableColumnFlags_WidthStretch, 0.);
+                TableSetupColumn("类型", TableColumnFlags::ImGuiTableColumnFlags_WidthFixed, 130.);
+                TableSetupColumn("初始值", TableColumnFlags::ImGuiTableColumnFlags_WidthStretch, 0.);
+                TableSetupColumn("操作", TableColumnFlags::ImGuiTableColumnFlags_WidthFixed, 58.);
+                TableHeadersRow();
+
+                for (let mut i = 0; i < self.m_members->len; i += 1)
+                {
+                    TableNextRow(TableRowFlags::ImGuiTableRowFlags_None, 0.);
+
+                    do TableNextColumn();
+                    match (InputText(F"##member_name_{i}", self.m_members[i].m_name))
+                    {
+                        none?;
+                        value(new_name)? self.m_members[i].m_name = new_name;
+                    }
+
+                    do TableNextColumn();
+                    match (Combo(F"##member_type_{i}", MEMBER_TYPE_NAMES,
+                            option::value(self.m_members[i].m_type)))
+                    {
+                        none?;
+                        value(new_type)? self.m_members[i].m_type = new_type;
+                    }
+
+                    do TableNextColumn();
+                    match (InputText(F"##member_default_{i}", self.m_members[i].m_default))
+                    {
+                        none?;
+                        value(new_default)? self.m_members[i].m_default = new_default;
+                    }
+
+                    do TableNextColumn();
+                    if (Button(F"删除##member_del_{i}"))
+                        do pending_remove->add(i);
+                }
+                EndTable();
+            }
+
+            for (let mut i = pending_remove->len - 1; i >= 0; i -= 1)
+                do self.m_members->remove(pending_remove[i]);
+
+            if (Button("+ 添加成员"))
+                do self.m_members->add(MemberRow::create("", 0));
+
+            TextDisabled("初始值：可选的 C++ 字面量（如 0.5f、true），留空则默认构造；字符串类型会自动补上引号");
+
+            match (self->validateMembers())
+            {
+                none?
+                {
+                    if (self.m_members->len == 0)
+                        TextDisabled("（不添加成员则生成空组件）");
+                }
+                value(reason)?
+                    TextColored((255, 90, 90, 255), F"✗ {reason}");
+            }
+        }
+
+        /* -------------------------------------- */
+        func confirmByShortcut(self: ModuleTypeCreator)=> void
+        {
+            // 快捷键入口：输入未就绪时静默忽略（按钮此时已禁用，
+            // 不弹窗以免打断输入）
+            if (self->isInputValid())
+                self->onConfirm(true);
+        }
+        func cancel(self: ModuleTypeCreator)=> void
+        {
+            self.m_close = true;
+        }
+
+        // 确认：生成代码并写入目标文件，随后按需编译热重载。
+        // 仅在 isInputValid 通过后调用（按钮禁用与快捷键均已拦截）。
+        func onConfirm(self: ModuleTypeCreator, build_after_create: bool)=> void
+        {
+            let type_name = self->validateName()->unwrap;
+
+            match (self->buildTargets(type_name))
+            {
+                err(reason)?
+                {
+                    do MsgBox::err("向模块添加类型", reason);
+                    return;
+                }
+                ok(file_list)?
+                {
+                    // 兜底：快照之后目标文件被外部创建时不覆盖
+                    for (let entry : file_list)
+                    {
+                        if (exist(entry.0))
+                        {
+                            do MsgBox::err("向模块添加类型",
+                                F"目标文件已存在：{entry.0->to_string()}");
+                            return;
+                        }
+                    }
+
+                    if (build_after_create)
+                        self->createWithBuild(file_list);
+                    else
+                        self->createFilesOnly(file_list, type_name);
+
+                    self.m_fs_dirty->set(true);
+                    self.m_close = true;
+                }
+            }
+        }
+
+        // 写文件后交给 ModulePrepare：重新生成 loader.hpp、CMake 编译、
+        // 冻结世界并热重载，全部在工作线程执行，进度输出到模态日志窗
+        func createWithBuild(self: ModuleTypeCreator, file_list: vec<(path_t, string)>)=> void
+        {
+            let module_path = self.m_module_path;
+            let module_name = self.m_module_name;
+            let dirty = self.m_fs_dirty;
+
+            do Windows::show(ModulePrepare::create(func(prepare: ModulePrepare){
+                    for (let entry : file_list)
+                    {
+                        prepare->postMessage(F"写入：{entry.0->to_string()}");
+                        try! _ = ModulePrepare::writeAllText(entry.0, entry.1);
+                    }
+                    dirty->set(true);
+
+                    prepare->postMessage(
+                        "生成模块文件并编译（CMake），可能需要一些时间……");
+                    try! _ = ModulePrepare::buildCppModuleDir(
+                        prepare, module_path, module_name, ModulePrepare::BuildConfig::DEBUG);
+
+                    return_ok!;
+                }));
+        }
+
+        // 仅写文件：不触发编译，状态栏提示后续手动“重新构建并载入”
+        func createFilesOnly(self: ModuleTypeCreator, file_list: vec<(path_t, string)>, type_name: string)=> void
+        {
+            for (let entry : file_list)
+            {
+                match (ModulePrepare::writeAllText(entry.0, entry.1))
+                {
+                    ok(_)?;
+                    err(msg)?
+                    {
+                        do MsgBox::err("向模块添加类型", msg);
+                        return;
+                    }
+                }
+            }
+
+            let module_display = self.m_module_display;
+            let created_hint = self.m_kind == TypeKind::COMPONENT
+                ? F"组件 {self.m_module_name}::{type_name}（components/{type_name}.hpp）已创建"
+                | F"系统 {self.m_module_name}::{type_name}（systems/{type_name}.hpp/.cpp）已创建";
+
+            Statebar::showState(5.) <| func(){
+                Text(F"{created_hint}，右键模块 \"{module_display}\" 选择“重新构建并载入”使其生效");
+            };
+        }
+
+        /* -------------------------------------- */
+        public func run(self: ModuleTypeCreator)=> bool
+        {
+            // ---- 模块信息头 ----
+            match (Icons::CPP)
+            {
+                none?;
+                value(cpp_icon)?
+                {
+                    ImageSize(cpp_icon, 22., 22.);
+                    SameLine();
+                }
+            }
+            Text(self.m_module_display);
+            SameLine();
+            TextDisabled(F"（C++ 命名空间 {self.m_module_name}）");
+
+            Separator();
+
+            // ---- 类型与名称 ----
+            if (RadioButton("组件##kind_component", self.m_kind == TypeKind::COMPONENT))
+                self.m_kind = TypeKind::COMPONENT;
+            SameLine();
+            if (RadioButton("系统##kind_system", self.m_kind == TypeKind::SYSTEM))
+            {
+                self.m_kind = TypeKind::SYSTEM;
+                self.m_active_preview_file = 0;
+            }
+            SameLine();
+            TextDisabled("组件 = 数据，系统 = 逻辑");
+
+            Text("名称：");
+            SameLine();
+            SetNextItemWidth(240.);
+            match (InputText("##type_name", self.m_name))
+            {
+                none?;
+                value(new_name)? self.m_name = new_name;
+            }
+            SameLine();
+            match (self->validateName())
+            {
+                ok(name)? TextColored((110, 220, 110, 255), F"✓ {name} 可用");
+                err(reason)? TextColored((255, 90, 90, 255), F"✗ {reason}");
+            }
+
+            // ---- 成员设计器（仅组件） ----
+            if (self.m_kind == TypeKind::COMPONENT)
+                self->drawMemberDesigner();
+
+            // ---- 代码预览 ----
+            let display_name = self->displayNameOrPlaceholder();
+
+            if (self.m_kind == TypeKind::SYSTEM && BeginTabBar("##preview_files"))
+            {
+                if (BeginTabItem(F"{display_name}.hpp##preview_hpp"))
+                {
+                    self.m_active_preview_file = 0;
+                    EndTabItem();
+                }
+                if (BeginTabItem(F"{display_name}.cpp##preview_cpp"))
+                {
+                    self.m_active_preview_file = 1;
+                    EndTabItem();
+                }
+                EndTabBar();
+            }
+
+            SeparatorText("代码预览（仅供参考，创建后可自由修改）");
+
+            // 签名变化时才重置编辑器内容，避免每帧覆盖导致闪烁
+            let preview_code = self->buildPreview(display_name);
+            let sig = self->previewSignature();
+            if (sig != self.m_preview_sig)
+            {
+                self.m_preview_sig = sig;
+                self.m_preview->SetText(preview_code);
+                self.m_preview->SetCursorPosition((0, 0));
+            }
+
+            let avail = GetContentRegionAvail();
+            // 页脚（写入提示 + 按钮行）预留高度
+            let preview_height = avail.1 - 96.;
+            CodeEditorSize(self.m_preview, "##module_type_preview",
+                (avail.0, preview_height < 100. ? 100. | preview_height), true);
+
+            // ---- 页脚 ----
+            Separator();
+            let target_hint = self.m_kind == TypeKind::COMPONENT
+                ? F"components/{display_name}.hpp"
+                | F"systems/{display_name}.hpp 与 systems/{display_name}.cpp";
+            TextDisabled(F"将写入：{target_hint}");
+
+            if (self->isInputValid())
+                TextDisabled("“创建并编译载入”会冻结世界、重新编译模块并热重载，可能需要一些时间");
+            else
+                TextColored((255, 90, 90, 255), "请先修正上方的错误");
+
+            Spacing();
+
+            let button_width = 148.;
+            BeginDisabled(!self->isInputValid());
+            if (ButtonSize("创建并编译载入", (button_width, 0.)))
+                self->onConfirm(true);
+            SameLine();
+            if (ButtonSize("仅创建文件", (button_width, 0.)))
+                self->onConfirm(false);
+            EndDisabled();
+            SameLine();
+            if (Button("取消"))
+                self->cancel();
+
+            return !self.m_close;
+        }
+
+        // 当前预览页签应展示的文件内容（名称非法时用占位名继续预览）
+        func buildPreview(self: ModuleTypeCreator, display_name: string)=> string
+        {
+            if (self.m_kind == TypeKind::COMPONENT)
+            {
+                match (generateComponentCode(self.m_module_name, display_name, self.m_members))
+                {
+                    ok(code)? return code;
+                    err(reason)? return F"// {reason}";
+                }
+            }
+
+            match (generateSystemCode(self.m_module_name, display_name))
+            {
+                ok(codes)?
+                {
+                    let (hpp_code, cpp_code) = codes;
+                    return self.m_active_preview_file == 0 ? hpp_code | cpp_code;
+                }
+                err(reason)? return F"// {reason}";
+            }
+        }
+    }
+}
