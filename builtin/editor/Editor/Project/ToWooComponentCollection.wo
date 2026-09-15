@@ -1,0 +1,56 @@
+import pkg::std;
+import pkg::fsys;
+import pkg::try;
+
+import je;
+
+import builtin::editor::GUI::Forms::MsgBox;
+
+using fsys;
+using je::towoo;
+using JEEditor::GUI::Forms;
+
+namespace JEEditor::Editor::Project
+{
+    using ToWooComponentCollection = struct{
+        m_components: map<string, ToWooComponentInfo>,
+    }
+    {
+        let COMPONENT_SUFFIX = ".je4component.wo";
+        
+        using ToWooComponentInfo = struct{
+            m_path: path_t,
+        };
+        
+        public func create(bootup_towoo_components: array<path_t>)=> ToWooComponentCollection
+        {
+            let self = ToWooComponentCollection{
+                m_components = {}mut,
+            };
+            
+            for (let p : bootup_towoo_components)
+                do self->appendNewComponent(p);
+                
+            return self;
+        }
+        
+        func appendNewComponent(self: ToWooComponentCollection, path: path_t)
+        {
+            let fname = filename(path);
+            if (isfile(path) && fname->lower->end_with(COMPONENT_SUFFIX))
+            {
+                let cname = fname->sub_len(0, fname->len - COMPONENT_SUFFIX->len);
+                
+                if (self.m_components->insert(cname, ToWooComponentInfo{m_path = path}))
+                    return update_component(cname, path->to_string);
+                else
+                {
+                    MsgBox::err("注册 ToWoo 组件失败",
+                        F"同名的 {cname} 组件已经通过 `{self.m_components[cname].m_path->to_string}` 注册，`{
+                            path->to_string}` 将不会生效");
+                }
+            }
+            return option::none;
+        }
+    }
+}
