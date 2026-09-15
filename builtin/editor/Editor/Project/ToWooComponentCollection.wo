@@ -16,7 +16,7 @@ namespace JEEditor::Editor::Project
         m_components: map<string, ToWooComponentInfo>,
     }
     {
-        let COMPONENT_SUFFIX = ".je4component.wo";
+        public let COMPONENT_SUFFIX = ".je4component.wo";
         
         using ToWooComponentInfo = struct{
             m_path: path_t,

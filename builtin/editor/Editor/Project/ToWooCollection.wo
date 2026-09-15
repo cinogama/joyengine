@@ -2,13 +2,17 @@ import pkg::std;
 import pkg::fsys;
 import pkg::iterator;
 
+import ToWooComponentCollection;
+
 using std;
 using fsys;
 using iterator;
 
 namespace JEEditor::Editor::Project
 {
-    using ToWooCollection = struct{}
+    using ToWooCollection = struct{
+        m_component_collection: ToWooComponentCollection,
+    }
     {
         public func create()=> ToWooCollection
         {
@@ -18,20 +22,21 @@ namespace JEEditor::Editor::Project
                     |> filter(
                         \p = isfile(p)
                             && (fname->end_with(".je4system.wo")
-                                || fname->end_with(".je4component.wo"))
+                                || fname->end_with(ToWooComponentCollection::COMPONENT_SUFFIX))
                                 where fname = filename(p)->lower
                             ;)
                     |> collect
                     ;
                     
             let towoo_components = towoo_component_and_systems
-                ->forall(\p = filename(p)->lower->end_with(".je4component.wo"););
+                ->forall(\p = filename(p)->lower->end_with(ToWooComponentCollection::COMPONENT_SUFFIX););
             let towoo_systems = towoo_component_and_systems
                 ->forall(\p = filename(p)->lower->end_with(".je4system.wo"););
 
-            do towoo_components;
             do towoo_systems;
-            return ToWooCollection{};
+            return ToWooCollection{
+                m_component_collection = ToWooComponentCollection::create(towoo_components),
+            };
         }
     }
 }
