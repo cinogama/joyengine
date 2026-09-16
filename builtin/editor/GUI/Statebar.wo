@@ -43,9 +43,10 @@ namespace JEEditor::GUI::Statebar
                         state();
                         
                         let (_, avail_y) = GetContentRegionAvail();
-                        
-                        // 本帧窗口被强制为传入的 height,剩余空间是 avail_y
-                        current_state.1 = (immut height) - avail_y;   // 即 cursor.y + 下边距,自动含内边距
+
+                        // 必须用本帧实际传入的 bar_height 来减：新状态首帧 height 还是 -1 哨兵，
+                        // 拿它减会把测量值算成负数，导致小内容状态永远测不出高度，bar_height 只增不减
+                        current_state.1 = (immut bar_height) - avail_y;   // 强制高度 - 剩余空间 = 内容实际需要的高度(含内边距)
                     }
                     
                     return_value!;
