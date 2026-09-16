@@ -3,6 +3,7 @@ import pkg::toml;
 import pkg::singleton;
 import pkg::interface;
 import pkg::fsys;
+import pkg::platform;
 import pkg::try;
 import pkg::worst;
 
@@ -20,6 +21,7 @@ import builtin::editor::GUI::Statebar;
 
 import builtin::editor::Editor::MainMenu;
 import builtin::editor::Editor::Browser;
+import builtin::editor::Editor::ModulePrepare;
 import builtin::editor::Editor::EntityList;
 import builtin::editor::Editor::SystemList;
 import builtin::editor::Editor::LogBrowser;
@@ -145,6 +147,73 @@ namespace JEEditor::Editor
                 je::gui::TextDisabled(F"JoyEngine 4.X, 当前工作路径: {runtime_path->to_string}");
             };
         }
+        /*
+        为 Wooly（Woolang 的 VSCode 插件）准备工作区配置。
+        每次打开项目时合并写入 workpath()/.vscode/settings.json，只增改 wooly.* 键，
+        用户已有的其它配置保持原样：
+        - wooly.scanRoots 指向引擎安装目录。wooly 会递归扫描这些目录，把其中的脚本
+        按相对路径注册为虚拟源以模拟根路径行为；引擎目录下带有全部 je/pkg/builtin
+        源码，因此项目脚本可以解析 import je; / import pkg::std; 等。
+        工作区自身的脚本由 wooly 直接处理，无需列入。
+        - wooly.woolangPath / wooly.woortPath 指向引擎目录中的 libwoo/libwoort 动态库，
+        使 LSP 总是使用与当前引擎一致的 woolang/woort 版本。wooly 按平台拼接固定
+        库名（libwoo.dll 等），引擎 debug 构建产物带 _debug 后缀无法匹配，此时不写
+        入这两个键，wooly 会退回按系统路径自动搜索。
+        已存在的配置文件解析失败（例如含有 JSONC 注释）时放弃写入，避免破坏用户配置。
+        */
+        func setupWoolyVSCodeConfig()
+        {
+            let engine_root = normalize(host_path());
+            
+            do mkdir(workpath() / ".vscode");
+            let settings_path = workpath() / ".vscode" / "settings.json";
+            
+            let mut dat = {}mut: map<dynamic, dynamic>;
+            match (file::readall(settings_path->to_string))
+            {
+                value(existing)?
+                {
+                    if (existing->len > 0)
+                    {
+                        match (map::deserialize(existing))
+                        {
+                            value(parsed)? dat = parsed;
+                            none?
+                            {
+                                logerr(F"无法解析已存在的 VSCode 配置文件 "
+                                    + F"{settings_path->to_string}，为避免破坏其中的内容，"
+                                    + "跳过 Wooly 配置写入。");
+                                return;
+                            }
+                        }
+                    }
+                }
+                none?;
+            }
+            
+            dat->set("wooly.enable" as dynamic, true as dynamic);
+            dat->set("wooly.scanRoots" as dynamic, [
+                    engine_root->to_string,
+                    (workpath() / ".temp" / "vfs")->to_string,
+                ] as dynamic);
+            dat->set("wooly.woolangPath" as dynamic, engine_root->to_string as dynamic);
+            dat->set("wooly.woortPath" as dynamic, engine_root->to_string as dynamic);
+            
+            match (dat->serialize)
+            {
+                value(text)?
+                {
+                    match (ModulePrepare::writeAllText(settings_path, text))
+                    {
+                        ok(_)?
+                            loginfo(F"已为 Wooly 更新 VSCode 配置: {settings_path->to_string}");
+                        err(msg)?
+                            logerr(F"写入 VSCode 配置文件失败: {msg}");
+                    }
+                }
+                none? logerr("序列化 VSCode 配置文件失败。");
+            }
+        }
         func checkToWooUpdated()
         {
             let mut last_check_time = time();
@@ -156,20 +225,20 @@ namespace JEEditor::Editor
                     yield();
                     continue;
                 }
-
+                
                 if (apply:<Project>(\p = p->toWooCheckAll();))
                 {
                     let finished = mutable::create(false);
                     FreezeWorldsTodo::show("正在更新 ToWoo...", func(){
+                    
+                            let proj = apply:<Project>(\p = p;);
+                            
+                            /* 此处直接绕开锁是完全OK 的，因为编辑器正处于冻结状态 */
+                            proj.m_towoo_collection->updateAllUpdated();
+                            
+                            finished->set <| true;
+                        });
                         
-                        let proj = apply:<Project>(\p = p;);
-
-                        /* 此处直接绕开锁是完全OK 的，因为编辑器正处于冻结状态 */
-                        proj.m_towoo_collection->updateAllUpdated();
-
-                        finished->set <| true;
-                    });
-
                     while (!finished->get)
                         yield();
                 }
@@ -181,13 +250,15 @@ namespace JEEditor::Editor
         {
             startUpEditorGUI();
             
+            setupWoolyVSCodeConfig();
+            
             let proj = Project{
                 m_shutdown_tombs = mut option::none,
                 m_opened_worlds = {}mut,
                 m_native_modules = NativeModuleCollection::create(),
                 m_towoo_collection = ToWooCollection::create(),
             };
-
+            
             /* ATTENTION: 此处的实现不恰当，之后做编辑器调试运行的时候，ToWoo 更新检查应当暂停 */
             launch_coroutine(checkToWooUpdated);
             
@@ -203,20 +274,20 @@ namespace JEEditor::Editor
                             {
                                 try! path = module_path->as_string
                                     ->ok_or(F"项目文件中的模块 {name} 配置损坏。");
-
+                                    
                                 let local_module_path =
                                     ResourcePath::toLocalResourcePath(path);
-
+                                    
                                 // 装载前整理模块的 .runtime 目录：
                                 // 保留编号最大（最新）的产物目录，删除其余，
                                 // 再把保留目录改名为 0，避免编号随多次构建无限累积。
                                 try! _ = NativeModule::tidyRuntimeDirsBeforeLoad(
                                     local_module_path);
-
+                                    
                                 try! _ = proj.m_native_modules->loadModule(
                                     name,
                                     local_module_path)-> ok_or(F"加载模块 {name} 失败。");
-
+                                    
                                 return_ok!;
                             }
                             catch! e
