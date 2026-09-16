@@ -15,6 +15,7 @@ import je;
 import je::ecs;
 import je::gui;
 import je::input;
+import je::typeinfo;
 
 import pkg::toml;
 import pkg::try;
@@ -56,6 +57,12 @@ namespace JEEditor::Editor::WorldEditorViewport
                 self->getRuntimeSystems(),
                 true));
 
+        // 冻结期间模块可能重载，m_runtime_systems 持有的旧 typeinfo 句柄
+        // 会随之悬空：类型名已随上面的快照保存（此刻句柄尚未失效，save
+        // 内取 name 安全），在此清空句柄列表，恢复时按名重解析
+        //（见 restoreWorld）
+        self.m_runtime_systems->clear();
+
         // 关闭世界实例；实际销毁在下一个逻辑更新生效，故 freeze 与
         // restore 之间必须让出帧（见 freezeAllWorldsToDo）
         self.m_world_instance->close;
@@ -96,10 +103,23 @@ namespace JEEditor::Editor::WorldEditorViewport
 
         let wdat = self.m_frozen_world_data->unwrap;
 
-        // 编辑器侧 restore：只恢复“立即启用”的系统，运行时装回的类型名
-        // 忽略——视口的 m_runtime_systems 本就持有原 typeinfo，无需重载
-        let (w, _) = JEEditor::Saving::World::restore(
+        // 编辑器侧 restore：只恢复“立即启用”的系统；“调试执行/导出时
+        // 才启用”的系统以类型名随快照保存（freezeWorld 冻结时句柄尚
+        // 有效），冻结期间模块可能重载使旧句柄悬空，因此按类型名重新
+        // 解析装回列表；类型未装载（模块卸载或装载失败）时跳过并记日志
+        let (w, runtime_system_names) = Saving::World::restore(
             Singleton::Universe::getUniverse(), wdat);
+
+        for (let tname : runtime_system_names)
+        {
+            match (typeinfo::load(tname))
+            {
+                none?
+                    logerr(F"Failed to load system type `{tname}`, skipped.");
+                value(systype)?
+                    self.m_runtime_systems->add(systype);
+            }
+        }
 
         ensureDebugCamera(w);
         w->set_enable(true);

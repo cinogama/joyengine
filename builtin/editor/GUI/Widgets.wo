@@ -1,0 +1,44 @@
+import pkg::std;
+
+import je;
+import je::gui;
+import je::towoo;
+
+using je;
+using je::gui;
+
+namespace JEEditor::GUI::Widgets
+{
+    // 在当前行绘制“旋转圆点”加载动画并在动画右侧排版提示文本：
+    // 一圈圆点绕圆心连续旋转，头部（tail=0）最亮最大、向尾部渐暗渐小，
+    // 形成拖尾的彗星效果；点的位置由 sin/cos 按相位直接计算。
+    public func drawBusySpinner(label: string)
+    {
+        let dot_count = 12;
+        let radius = 8.;
+        let head_angle = GetTime() * 5.;  // 旋转相位：每秒5弧度≈0.8圈
+
+        let text_size = CalcTextSize(label);
+        let cursor = GetCursorScreenPos();
+        let center = (cursor.0 + radius + 2., cursor.1 + text_size.1 * 0.5);
+        let draw_list = GetWindowDrawList();
+
+        for (let mut i = 0; i < dot_count; i += 1)
+        {
+            let tail = i as real / dot_count as real;  // 0=头部 → 1=尾部
+            let fade = 1. - tail;
+            let angle = head_angle - tail * 2. * mathf::PI;
+
+            draw_list->AddCircleFilled(
+                (center.0 + mathf::cos(angle) * radius,
+                    center.1 + mathf::sin(angle) * radius),
+                1.1 + 1.9 * fade,
+                (120, 190, 255, (70. + 185. * fade * fade) as int));
+        }
+
+        // 占位动画区域后，把提示文本排到动画右侧
+        Dummy(((radius + 2.) * 2., text_size.1));
+        SameLine();
+        TextColored((120, 190, 255, 255), label);
+    }
+}

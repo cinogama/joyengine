@@ -96,6 +96,13 @@ namespace JEEditor::Editor::Project
             
             return (failed_components, failed_systems);
         }
+        public func updateAllUpdated(self: ToWooCollection)
+        {
+            self.m_component_collection->updateAllUpdated();
+            update_api();
+            self.m_system_collection->updateAllUpdated();
+            update_api();
+        }
         public func checkAll(self: ToWooCollection)
         {
             return self.m_component_collection->checkAll()

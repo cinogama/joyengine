@@ -28,12 +28,15 @@ import builtin::editor::Editor::Material;
 import builtin::editor::Editor::Shutdown;
 import builtin::editor::Editor::WorldEditorViewport;
 import builtin::editor::Editor::ResourcePath;
+import builtin::editor::Editor::FreezeWorldsTodo;
 
 import NativeModule;
 import NativeModuleCollection;
 import ToWooCollection;
 
+using std;
 using je;
+using je::gui;
 using toml;
 using fsys;
 
@@ -142,7 +145,37 @@ namespace JEEditor::Editor
                 je::gui::TextDisabled(F"JoyEngine 4.X, 当前工作路径: {runtime_path->to_string}");
             };
         }
-        
+        func checkToWooUpdated()
+        {
+            let mut last_check_time = time();
+            for (;;)
+            {
+                let this_time = time();
+                if (this_time - last_check_time < 5.0)
+                {
+                    yield();
+                    continue;
+                }
+
+                if (apply:<Project>(\p = p->toWooCheckAll();))
+                {
+                    let finished = mutable::create(false);
+                    FreezeWorldsTodo::show("正在更新 ToWoo...", func(){
+                        
+                        let proj = apply:<Project>(\p = p;);
+
+                        /* 此处直接绕开锁是完全OK 的，因为编辑器正处于冻结状态 */
+                        proj.m_towoo_collection->updateAllUpdated();
+
+                        finished->set <| true;
+                    });
+
+                    while (!finished->get)
+                        yield();
+                }
+                last_check_time = this_time;
+            }
+        }
         public func createAndLoad(toml: option<Toml>)=> Project
             where require!(Project: ISingleton);
         {
@@ -154,6 +187,8 @@ namespace JEEditor::Editor
                 m_native_modules = NativeModuleCollection::create(),
                 m_towoo_collection = ToWooCollection::create(),
             };
+
+            launch_coroutine(checkToWooUpdated);
             
             match (load(workpath() / PROJECT_FILE_NAME))
             {

@@ -179,7 +179,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             }
             ok(wdat)?
             {
-                let (w, runtime_system_names) = JEEditor::Saving::World::restore(
+                let (w, runtime_system_names) = Saving::World::restore(
                     Singleton::Universe::getUniverse(),
                     wdat);
                 ensureDebugCamera(w);

@@ -133,6 +133,28 @@ namespace JEEditor::Editor::Project
             return failed_scripts->unsafe::asarray;
         }
         
+        public func updateAllUpdated<SUFFIX: string, UPDATER: ToWooUpdaterFuncT>(
+            self: ToWooCollectionTemplate<{SUFFIX}, {UPDATER}>)
+        {
+            for (let (name, info) : self.m_registered)
+            {
+                match (lastwrite(info.m_path))
+                {
+                    none?;
+                    value(lmt)?
+                        if (info.m_update_time->> \t = t != lmt;->or(false))
+                        {
+                            match(UPDATER(name, info.m_path->to_string))
+                            {
+                                none?;
+                                value(_)?
+                                    info.m_update_time = lastwrite(info.m_path);
+                            }
+                        }
+                }
+            }
+        }
+        
         public func checkAll<SUFFIX: string, UPDATER: ToWooUpdaterFuncT>(
             self: ToWooCollectionTemplate<{SUFFIX}, {UPDATER}>)
         {
