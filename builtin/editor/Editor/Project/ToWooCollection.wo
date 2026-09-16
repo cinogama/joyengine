@@ -68,7 +68,7 @@ namespace JEEditor::Editor::Project
         }
         public func updateComponent(self: ToWooCollection, path: path_t)
         {
-            let r = self.m_system_collection->update(path);
+            let r = self.m_component_collection->update(path);
             if (r->isOk)
             {
                 update_api();
