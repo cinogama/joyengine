@@ -31,6 +31,7 @@ import builtin::editor::Editor::ResourcePath;
 
 import NativeModule;
 import NativeModuleCollection;
+import ToWooCollection;
 
 using je;
 using toml;
@@ -51,6 +52,7 @@ namespace JEEditor::Editor
         
         m_opened_worlds: map<path_t, void>,
         m_native_modules: NativeModuleCollection,
+        m_towoo_collection: ToWooCollection,
     }
     {
         /*
@@ -148,6 +150,7 @@ namespace JEEditor::Editor
                 m_shutdown_tombs = mut option::none,
                 m_opened_worlds = {}mut,
                 m_native_modules = NativeModuleCollection::create(),
+                m_towoo_collection = ToWooCollection::create(),
             };
             
             match (load(workpath() / PROJECT_FILE_NAME))

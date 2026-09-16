@@ -30,7 +30,8 @@ namespace JEEditor::Editor::Project
             
             for (let p : bootup_towoo_components)
                 do self->appendNewComponent(p);
-                
+        
+            update_api();
             return self;
         }
         
