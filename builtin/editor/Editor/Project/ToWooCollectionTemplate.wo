@@ -33,15 +33,15 @@ namespace JEEditor::Editor::Project
             Invalid,
             CompileFailed,
         }
-
+        
         namespace UpdateResult
         {
             public func isOk(self: UpdateResult)
             {
                 match (self)
                 {
-                Ok(_)? return true;
-                _? return false;
+                    Ok(_)? return true;
+                    _? return false;
                 }
             }
         }
@@ -115,7 +115,7 @@ namespace JEEditor::Editor::Project
             }
             return UpdateResult::Invalid;
         }
-
+        
         public func updateAll<SUFFIX: string, UPDATER: ToWooUpdaterFuncT>(
             self: ToWooCollectionTemplate<{SUFFIX}, {UPDATER}>)
         {
@@ -124,13 +124,29 @@ namespace JEEditor::Editor::Project
             for (let (name, info) : self.m_registered)
                 match(UPDATER(name, info.m_path->to_string))
                 {
-                none?
-                    failed_scripts->add(info.m_path);
-                value(_)?
-                    info.m_update_time = lastwrite(info.m_path);
+                    none?
+                        failed_scripts->add(info.m_path);
+                    value(_)?
+                        info.m_update_time = lastwrite(info.m_path);
                 }
-
+                
             return failed_scripts->unsafe::asarray;
+        }
+        
+        public func checkAll<SUFFIX: string, UPDATER: ToWooUpdaterFuncT>(
+            self: ToWooCollectionTemplate<{SUFFIX}, {UPDATER}>)
+        {
+            for (let (_, info) : self.m_registered)
+            {
+                match (lastwrite(info.m_path))
+                {
+                    none?;
+                    value(lmt)?
+                        if (info.m_update_time->> \t = t != lmt;->or(false))
+                            return true;
+                }
+            }
+            return false;
         }
     }
 }

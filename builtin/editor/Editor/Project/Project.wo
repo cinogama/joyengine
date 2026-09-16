@@ -261,6 +261,10 @@ namespace JEEditor::Editor
                 }
             }
         }
+        public func toWooCheckAll(self: Project)
+        {
+            return self.m_towoo_collection->checkAll();
+        }
         /* --------------------------------------------- */
         public func dumpTombs()
         {
