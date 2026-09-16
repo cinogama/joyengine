@@ -146,6 +146,8 @@ namespace JEEditor::Editor
         public func createAndLoad(toml: option<Toml>)=> Project
             where require!(Project: ISingleton);
         {
+            startUpEditorGUI();
+            
             let proj = Project{
                 m_shutdown_tombs = mut option::none,
                 m_opened_worlds = {}mut,
@@ -177,8 +179,6 @@ namespace JEEditor::Editor
                         }
                         return_value!;
                     };
-                    
-                    startUpEditorGUI();
                 }
                 err(msg)?
                     MsgBox::err("加载项目失败", F"项目文件损坏，因此无法打开:\n{msg}");

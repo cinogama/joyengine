@@ -429,7 +429,7 @@ namespace JEEditor::GUI::Windows
     }
     
     public func show<T>(window_instance: T)=> option<IWindows>
-    // where require!(T: IWindows);
+        where require!(T: IWindows);
     {
         let i = IWindows::create(window_instance);
         return _launch_window(i, i->isModal);
@@ -437,13 +437,12 @@ namespace JEEditor::GUI::Windows
     
     // 强制以模态方式展示任意窗口（无需实现 isModal）
     public func showModal<T>(window_instance: T)=> option<IWindows>
-    // where require!(T: IWindows);
+        where require!(T: IWindows);
     {
         return _launch_window(IWindows::create(window_instance), true);
     }
     
     func _launch_window(i: IWindows, is_modal: bool)=> option<IWindows>
-    // where require!(T: IWindows);
     {
         let mut title = i->getTitle;
         let mut is_unique = title->find("$ID")->is_none;

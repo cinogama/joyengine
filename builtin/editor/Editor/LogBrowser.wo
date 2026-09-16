@@ -21,7 +21,7 @@ namespace JEEditor::Editor
     // 并提供过滤、着色、自动滚动与上限裁剪。
     using LogBrowser = struct{
         m_close: mut bool,
-        m_hook: mut handle,
+        m_hook: handle,
         
         // 本地累积的日志缓冲（getlogs 每次只返回增量）
         m_logs: vec<(internal::loglevel, string)>,
@@ -68,7 +68,7 @@ namespace JEEditor::Editor
         {
             return LogBrowser{
                 m_close = mut false,
-                m_hook = mut 0h,
+                m_hook = internal::hooklog(),
                 m_logs = []mut as vec<(internal::loglevel, string)>,
                 m_show_normal = mut true,
                 m_show_info = mut true,
@@ -96,14 +96,15 @@ namespace JEEditor::Editor
         public func onCreate(self: LogBrowser)=> void
         {
             s_logbrowser_singleton = option::value(self);
-            self.m_hook = internal::hooklog();
         }
-        public func onClose(self: LogBrowser)=> void
+        public func onClose(_: LogBrowser)=> void
         {
-            internal::unhooklog(self.m_hook);
             s_logbrowser_singleton = option::none;
         }
-        
+        public func onDestroy(self: LogBrowser)
+        {
+            internal::unhooklog(self.m_hook);
+        }
         // 排空 getlogs() 的增量日志到本地缓冲，并在超限时裁剪
         func drainLogs(self: LogBrowser)=> void
         {

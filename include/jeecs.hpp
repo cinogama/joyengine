@@ -1198,7 +1198,7 @@ JE_API void je_register_system_updater(
 ////////////////////// ToWoo //////////////////////
 /*
 je_towoo_update_api [基本接口]
-根据类型信息重新生成 je/api/.. 的接口脚本
+根据类型信息重新生成 towoo 的接口脚本
 请参见：
     je_TypeInfo
 */
