@@ -200,16 +200,27 @@ namespace JEEditor::Editor
                         {
                             do try!
                             {
-                                try! path = module_path->as_string;
+                                try! path = module_path->as_string
+                                    ->ok_or(F"项目文件中的模块 {name} 配置损坏。");
+
+                                let local_module_path =
+                                    ResourcePath::toLocalResourcePath(path);
+
+                                // 装载前整理模块的 .runtime 目录：
+                                // 保留编号最大（最新）的产物目录，删除其余，
+                                // 再把保留目录改名为 0，避免编号随多次构建无限累积。
+                                try! _ = NativeModule::tidyRuntimeDirsBeforeLoad(
+                                    local_module_path);
+
                                 try! _ = proj.m_native_modules->loadModule(
                                     name,
-                                    ResourcePath::toLocalResourcePath(path));
-                                    
-                                return_value!;
+                                    local_module_path)-> ok_or(F"加载模块 {name} 失败。");
+
+                                return_ok!;
                             }
-                            catch!
+                            catch! e
                             {
-                                MsgBox::msg("加载模块失败", F"加载模块 {name} 失败。");
+                                MsgBox::msg("加载模块失败", e);
                             };
                         }
                         return_value!;

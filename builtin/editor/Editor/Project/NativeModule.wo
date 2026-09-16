@@ -24,12 +24,50 @@ namespace JEEditor::Editor::Project
             let runtime_path = path / ".runtime";
             if (!isdir(runtime_path))
                 return option::none;
-                
+
             return walk(runtime_path) |> iter_result
                 |> filter(\p = isdir(p) && filename(p)->is_number;)
                 |> map(\p = filename(p) as int;)
                 |> reduce(\l, r = l > r ? l | r;)
                 ;
+        }
+        // 整理模块目录下的 .runtime：仅保留编号最大（最新）的产物目录，
+        // 删除其余编号目录，再把保留目录改名为 0，使编号不会随多次构建无限累积。
+        // 必须在装载模块之前调用：已装载的动态库被本进程占用，无法删除或改名。
+        public func tidyRuntimeDirsBeforeLoad(path: path_t)=> result<void, string>
+        {
+            let runtime_path = path / ".runtime";
+            if (!isdir(runtime_path))
+                return_ok!;
+
+            match (getMaxRuntimeDylibPathId(path))
+            {
+                none?;
+                value(latest_id)?
+                {
+                    let numeric_dirs = walk(runtime_path) |> iter_result
+                        |> filter(\p = isdir(p) && filename(p)->is_number;)
+                        |> iterator::collect;
+
+                    for (let removing_dir : numeric_dirs)
+                    {
+                        if (filename(removing_dir) as int == latest_id)
+                            continue;
+
+                        try! _ = remove(removing_dir)
+                            -> or_map(\eno = F"删除目录 `{removing_dir->to_string}` 失败（{eno}）";);
+                    }
+
+                    if (latest_id != 0)
+                    {
+                        let latest_dir = runtime_path / (latest_id as string);
+                        try! _ = move(latest_dir, runtime_path / "0")
+                            -> or_map(\eno = F"重命名目录 `{latest_dir->to_string}` 失败（{eno}）";);
+                    }
+                }
+            }
+
+            return_ok!;
         }
         func findRuntimeDylibPath(name: string, path: path_t)
         {
