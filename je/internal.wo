@@ -8,19 +8,6 @@ import je::input;
 
 namespace je
 {
-    namespace woolang
-    {
-        extern("libjoyecs", "wojeapi_get_woolang_commit_sha")
-            public func get_woolang_commit_sha()=> string;
-        extern("libjoyecs", "wojeapi_get_all_internal_scripts")
-            public func get_all_internal_scripts()=> dict<string, string>;
-    }
-    namespace typeinfo
-    {
-        extern("libjoyecs", "wojeapi_typemgr_get_unregister_count")
-            public func get_unregister_count()=> ::int;
-    }
-    
     namespace graphic
     {
         namespace texture

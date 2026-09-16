@@ -30,11 +30,7 @@ namespace jeecs_impl
         named_type_records _m_named_type_records;
         hash_type_records _m_hash_type_records;
 
-        size_t m_type_unregistered_count;
-
-        global_factory_holder()
-            : m_type_unregistered_count(0)
-        {}
+        global_factory_holder() = default;
 
     public:
         ~global_factory_holder()
@@ -324,9 +320,6 @@ namespace jeecs_impl
         {
             std::lock_guard g1(_m_factory_mx);
 
-            // Update the age count.
-            ++m_type_unregistered_count;
-
             assert(tinfo->m_id != jeecs::typing::INVALID_TYPE_ID && tinfo->m_id <= _m_type_records.size());
             auto* type_list = _m_type_records.at(tinfo->m_id - 1);
 
@@ -418,11 +411,6 @@ namespace jeecs_impl
                     types.push_back(t);
             }
             return types;
-        }
-        size_t get_unregistered_count() const noexcept
-        {
-            std::shared_lock sg1(_m_factory_mx);
-            return m_type_unregistered_count;
         }
     };
 }
@@ -569,11 +557,6 @@ const je_TypeInfo** jedbg_get_all_registed_types(void)
     memcpy(result, types.data(), types.size() * sizeof(const je_TypeInfo*));
 
     return result;
-}
-
-size_t jedbg_get_unregister_type_count(void)
-{
-    return jeecs_impl::global_factory_holder::holder()->get_unregistered_count();
 }
 
 #define JE_DECL_ATOMIC_OPERATOR_API(TYPE)                                                                 \

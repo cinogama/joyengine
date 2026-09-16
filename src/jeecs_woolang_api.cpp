@@ -2587,60 +2587,6 @@ WOORT_API woort_api wojeapi_towoo_update_api(void)
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_typemgr_get_unregister_count(void)
-{
-    return woort_ret_int((woort_Int)jedbg_get_unregister_type_count());
-}
-WOORT_API woort_api wojeapi_get_woolang_commit_sha(void)
-{
-    return woort_ret_string(wo_commit_sha());
-}
-WOORT_API woort_api wojeapi_get_all_internal_scripts(void)
-{
-    woort_value s;
-    if (!woort_push_reserve(2, &s))
-        return woort_ret_panic("Stack overflow.");
-
-    const woort_value result = s + 0;
-    const woort_value val = s + 1;
-
-    woort_set_map(result);
-
-    char** paths = nullptr;
-    size_t count = woort_vfs_get_all_paths(&paths);
-
-    for (size_t i = 0; i < count; ++i)
-    {
-        const char* vpath = paths[i];
-
-        woort_VFile* file = nullptr;
-        if (woort_vfile_open(vpath, &file))
-        {
-            const int64_t fsize = woort_vfile_size(file);
-            if (fsize >= 0)
-            {
-                const size_t alloc_size = (size_t)fsize;
-                char* data = (char*)malloc(alloc_size ? alloc_size : 1);
-                if (data != nullptr)
-                {
-                    const size_t nread = woort_vfile_read(file, data, alloc_size);
-                    woort_set_buffer(val, data, nread);
-                    (void)woort_map_set_by_string(result, vpath, val);
-
-                    free(data);
-                }
-            }
-            woort_vfile_close(file);
-        }
-    }
-
-    for (size_t i = 0; i < count; ++i)
-        woort_free(paths[i]);
-    woort_free(paths);
-
-    return woort_ret_value(result);
-}
-
 struct dynamic_parser_impl_t
 {
     woort_Value m_saving;

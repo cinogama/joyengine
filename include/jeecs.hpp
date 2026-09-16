@@ -4775,8 +4775,6 @@ JE_API const je_TypeInfo** jedbg_get_all_components_from_entity(const je_GameEnt
 // NOTE: need free the return result by 'je_mem_free'
 JE_API const je_TypeInfo** jedbg_get_all_registed_types(void);
 
-JE_API size_t jedbg_get_unregister_type_count(void);
-
 // NOTE: need free the return result by 'je_mem_free'
 JE_API const je_TypeInfo** jedbg_get_all_system_attached_in_world(je_GameWorld* _world);
 
