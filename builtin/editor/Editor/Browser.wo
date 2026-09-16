@@ -1000,6 +1000,22 @@ namespace JEEditor::Editor
             return ext_icon_map->get(ext)=>> \v = v;->or_bind(\= Icons::FILE;);
         }
         
+        // 右键是否点在本行上：须在行的 Selectable 仍是“最后提交的 item”
+        // 时调用（见 drawFileList）。
+        // 判定时机必须是“松开”而非“按下”。右键菜单本身是一个弹出窗口，
+        // 在按下那一帧它仍然打开着并占住 HoveredWindow，此时普通的
+        // IsItemHovered（也就是 IsItemClicked 的内部判定）会失败——于是
+        // “菜单已打开时右键另一个文件”选中的仍是上一次的目标，紧接着弹出
+        // 的菜单操作的也是那个错误目标。松开那一帧，弹窗已在上一帧末尾被
+        // ImGui 关闭（UpdateMouseMovingWindowEndFrame 在右键按下时关闭弹窗），
+        // 悬停判定恢复正常；ImGui 自带的 BeginPopupContextItem 采用的正是
+        // 这一时机（IsMouseReleased + IsItemHovered）。
+        func isRowRightClicked()=> bool
+        {
+            return IsMouseReleased(ImGuiMouseButton::ImGuiMouseButton_Right)
+                && IsItemHovered();
+        }
+        
         // 在整行 Selectable 之上叠绘条目图标（见 drawFileList）：图标本
         // 身不拦截输入，图标区域同样命中所在行的悬浮/点击/拖拽。
         func drawItemIcon(path: fsys::path_t)=> void
@@ -1031,8 +1047,9 @@ namespace JEEditor::Editor
             // 每行的交互区是一个占满整行的隐形 Selectable（"##" 空标签），
             // 图标与名称在 Selectable 之后叠绘（ImGui 推荐做法）：Image/Text
             // 不拦截输入，悬浮/点击/拖拽落在图标上时同样命中该行。图标与
-            // 名称的命中事件（DragPayload/IsItemClicked/返回值）都必须在
-            // Selectable 仍是“最后提交的 item”时读取，随后再回退光标叠绘。
+            // 名称的命中事件（DragPayload/IsItemClicked/isRowRightClicked/
+            // 返回值）都必须在 Selectable 仍是“最后提交的 item”时读取，
+            // 随后再回退光标叠绘。
             for (let d : dirs)
             {
                 let name = filename(d);
@@ -1047,7 +1064,7 @@ namespace JEEditor::Editor
 
                     Drag::DragPayload(FilePayload::create(d));
 
-                    if (IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Right))
+                    if (isRowRightClicked())
                         self.m_selected = option::value(d);
 
                     if (clicked)
@@ -1073,7 +1090,7 @@ namespace JEEditor::Editor
 
                     Drag::DragPayload(FilePayload::create(f));
 
-                    if (IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Right))
+                    if (isRowRightClicked())
                         self.m_selected = option::value(f);
 
                     if (clicked)
