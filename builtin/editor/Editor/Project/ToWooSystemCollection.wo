@@ -1,58 +1,26 @@
-import pkg::std;
 import pkg::fsys;
-import pkg::try;
 
 import je;
 
-import builtin::editor::GUI::Forms::MsgBox;
+export import ToWooCollectionTemplate;
 
 using fsys;
 using je::towoo;
-using JEEditor::GUI::Forms;
 
 namespace JEEditor::Editor::Project
 {
-    using ToWooSystemCollection = struct{
-        m_systems: map<string, ToWooSystemInfo>,
-    }
+    namespace ToWooSystemCollection
     {
-        public let SYSTEM_SUFFIX = ".je4system.wo";
+        public let SUFFIX = ".je4system.wo";
 
-        using ToWooSystemInfo = struct{
-            m_path: path_t,
-        };
-
-        public func create(bootup_towoo_systems: array<path_t>)=> ToWooSystemCollection
+        public func create(paths: array<path_t>)
         {
-            let self = ToWooSystemCollection{
-                m_systems = {}mut,
-            };
-
-            for (let p : bootup_towoo_systems)
-                do self->appendNewSystem(p);
-
-            update_api();
-
-            return self;
-        }
-
-        func appendNewSystem(self: ToWooSystemCollection, path: path_t)
-        {
-            let fname = filename(path);
-            if (isfile(path) && fname->lower->end_with(SYSTEM_SUFFIX))
-            {
-                let sname = fname->sub_len(0, fname->len - SYSTEM_SUFFIX->len);
-
-                if (self.m_systems->insert(sname, ToWooSystemInfo{m_path = path}))
-                    return update_system(sname, path->to_string);
-                else
-                {
-                    MsgBox::err("注册 ToWoo 系统失败",
-                        F"同名的 {sname} 系统已经通过 `{self.m_systems[sname].m_path->to_string}` 注册，`{
-                            path->to_string}` 将不会生效");
-                }
-            }
-            return option::none;
+            return ToWooCollectionTemplate::create:<{SUFFIX}, {update_system}>(paths);
         }
     }
+
+    using ToWooSystemCollection;
+
+    protected alias ToWooSystemCollection = 
+        ToWooCollectionTemplate<{SUFFIX}, {update_system}>;
 }

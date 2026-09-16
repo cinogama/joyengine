@@ -2,12 +2,15 @@ import pkg::std;
 import pkg::fsys;
 import pkg::iterator;
 
+import je;
+
 import ToWooComponentCollection;
 import ToWooSystemCollection;
 
 using std;
 using fsys;
 using iterator;
+using je::towoo;
 
 namespace JEEditor::Editor::Project
 {
@@ -23,22 +26,75 @@ namespace JEEditor::Editor::Project
                     |> iter_result
                     |> filter(
                         \p = isfile(p)
-                            && (fname->end_with(ToWooSystemCollection::SYSTEM_SUFFIX)
-                                || fname->end_with(ToWooComponentCollection::COMPONENT_SUFFIX))
+                            && (fname->end_with(ToWooSystemCollection::SUFFIX)
+                                || fname->end_with(ToWooComponentCollection::SUFFIX))
                                 where fname = filename(p)->lower
                             ;)
                     |> collect
                     ;
                     
-            let towoo_components = towoo_component_and_systems
-                ->forall(\p = filename(p)->lower->end_with(ToWooComponentCollection::COMPONENT_SUFFIX););
-            let towoo_systems = towoo_component_and_systems
-                ->forall(\p = filename(p)->lower->end_with(ToWooSystemCollection::SYSTEM_SUFFIX););
-
+            let towoo_components = ToWooComponentCollection::create <|
+                towoo_component_and_systems
+                    ->forall(\p = filename(p)->lower->end_with(ToWooComponentCollection::SUFFIX););
+                    
+            update_api();
+            
+            let towoo_systems = ToWooSystemCollection::create <|
+                towoo_component_and_systems
+                    ->forall(\p = filename(p)->lower->end_with(ToWooSystemCollection::SUFFIX););
+                    
+            update_api();
+            
             return ToWooCollection{
-                m_component_collection = ToWooComponentCollection::create(towoo_components),
-                m_system_collection = ToWooSystemCollection::create(towoo_systems),
+                m_component_collection = towoo_components,
+                m_system_collection = towoo_systems,
             };
+        }
+        public func appendComponent(self: ToWooCollection, path: path_t)
+        {
+            let r = self.m_component_collection->append(path);
+            if (r->isOk)
+                update_api();
+                
+            return r;
+        }
+        public func appendSystem(self: ToWooCollection, path: path_t)
+        {
+            let r = self.m_system_collection->append(path);
+            if (r->isOk)
+                update_api();
+                
+            return r;
+        }
+        public func updateComponent(self: ToWooCollection, path: path_t)
+        {
+            let r = self.m_system_collection->update(path);
+            if (r->isOk)
+            {
+                update_api();
+                
+                do self.m_system_collection->updateAll();
+                update_api();
+            }
+            
+            return r;
+        }
+        public func updateSystem(self: ToWooCollection, path: path_t)
+        {
+            let r = self.m_system_collection->update(path);
+            if (r->isOk)
+                update_api();
+                
+            return r;
+        }
+        public func updateAll(self: ToWooCollection)
+        {
+            let failed_components = self.m_component_collection->updateAll();
+            update_api();
+            let failed_systems = self.m_system_collection->updateAll();
+            update_api();
+            
+            return (failed_components, failed_systems);
         }
     }
 }

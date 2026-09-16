@@ -1,0 +1,136 @@
+import pkg::std;
+import pkg::fsys;
+import pkg::try;
+import pkg::worst;
+
+import je;
+import je::typeinfo;
+
+import builtin::editor::GUI::Forms::MsgBox;
+
+using fsys;
+using je;
+using je::towoo;
+using JEEditor::GUI::Forms;
+
+namespace JEEditor::Editor::Project
+{
+    using ToWooCollectionTemplate<SUFFIX: string, UPDATER: ToWooUpdaterFuncT> = struct{
+        m_registered: map<string, ToWooItemInfo>,
+    }
+    {
+        alias ToWooUpdaterFuncT = (string, string)=> option<typeinfo>;
+        
+        using ToWooItemInfo = struct{
+            public m_path: path_t,
+            m_update_time: mut option<unix1970_time_t>,
+        };
+        
+        union UpdateResult
+        {
+            Ok(typeinfo),
+            AlreadyExist(ToWooItemInfo),
+            Invalid,
+            CompileFailed,
+        }
+
+        namespace UpdateResult
+        {
+            public func isOk(self: UpdateResult)
+            {
+                match (self)
+                {
+                Ok(_)? return true;
+                _? return false;
+                }
+            }
+        }
+        
+        public func create<SUFFIX: string, UPDATER: ToWooUpdaterFuncT>(
+            paths: array<path_t>)=> ToWooCollectionTemplate<{SUFFIX}, {UPDATER}>
+        {
+            let self = ToWooCollectionTemplate:<{SUFFIX}, {UPDATER}>{
+                m_registered = {}mut,
+            };
+            
+            for (let p : paths)
+                do self->append(p);
+                
+            return self;
+        }
+        
+        public func append<SUFFIX: string, UPDATER: ToWooUpdaterFuncT>(
+            self: ToWooCollectionTemplate<{SUFFIX}, {UPDATER}>, path: path_t)=> UpdateResult
+        {
+            let fname = filename(path);
+            if (isfile(path) && fname->lower->end_with(SUFFIX))
+            {
+                let name = fname->sub_len(0, fname->len - SUFFIX->len);
+                
+                if (self.m_registered->insert(
+                        name,
+                        ToWooItemInfo{
+                            m_path = path,
+                            m_update_time = mut lastwrite(path),
+                        }))
+                {
+                    match(UPDATER(name, path->to_string))
+                    {
+                        value(t)?
+                            return UpdateResult::Ok(t);
+                        none?
+                            return UpdateResult::CompileFailed;
+                    }
+                }
+                else
+                    return UpdateResult::AlreadyExist(self.m_registered[name]);
+            }
+            return UpdateResult::Invalid;
+        }
+        
+        public func update<SUFFIX: string, UPDATER: ToWooUpdaterFuncT>(
+            self: ToWooCollectionTemplate<{SUFFIX}, {UPDATER}>, path: path_t)
+        {
+            let fname = filename(path);
+            if (isfile(path) && fname->lower->end_with(SUFFIX))
+            {
+                let name = fname->sub_len(0, fname->len - SUFFIX->len);
+                match (self.m_registered->get(name))
+                {
+                    value(sysinfo)? {
+                        if (sysinfo.m_path == path)
+                            match(UPDATER(name, path->to_string))
+                            {
+                                value(t)?
+                                {
+                                    sysinfo.m_update_time = lastwrite(path);
+                                    return UpdateResult::Ok(t);
+                                }
+                                none?
+                                    return UpdateResult::CompileFailed;
+                            }
+                    }
+                    none?;
+                }
+            }
+            return UpdateResult::Invalid;
+        }
+
+        public func updateAll<SUFFIX: string, UPDATER: ToWooUpdaterFuncT>(
+            self: ToWooCollectionTemplate<{SUFFIX}, {UPDATER}>)
+        {
+            let failed_scripts = []mut: vec<path_t>;
+            
+            for (let (name, info) : self.m_registered)
+                match(UPDATER(name, info.m_path->to_string))
+                {
+                none?
+                    failed_scripts->add(info.m_path);
+                value(_)?
+                    info.m_update_time = lastwrite(info.m_path);
+                }
+
+            return failed_scripts->unsafe::asarray;
+        }
+    }
+}
