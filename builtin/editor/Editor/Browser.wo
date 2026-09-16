@@ -16,6 +16,7 @@ import pkg::interface;
 import pkg::worst;
 import pkg::iterator;
 import pkg::platform;
+import pkg::thread;
 import pkg::toml;
 import pkg::try;
 
@@ -1198,7 +1199,10 @@ namespace JEEditor::Editor
                         
                     match (openActionForPath(sel))
                     {
-                        none?;
+                        // 编辑器未接管的文件与双击一致：交由外部程序打开
+                        none?
+                            if (isfile(sel) && MenuItem("打开"))
+                                openFileExternally(sel);
                         value(open_action)?
                             if (MenuItem("打开"))
                                 open_action(sel);
@@ -1336,7 +1340,74 @@ namespace JEEditor::Editor
             else
                 do platform::shell(F"xdg-open \"{parent(path)->to_string()}\"");
         }
-        
+
+        // 在后台线程执行 shell 命令：platform::shell 是阻塞的 system()，
+        // 外部程序启动期间（如 vscode 冷启动）在 UI 协程直接调用会卡住整
+        // 个编辑器，因此移入后台线程执行。返回的线程不等待，结束后由 GC
+        // 回收（thread 句柄的终结器会自动 detach）。命令失败（退出码非 0）
+        // 时记录错误日志。
+        func shellDetached(cmd: string)=> void
+        {
+            do thread::create(func(){
+                    if (platform::shell(cmd) != 0)
+                        logerr(F"执行外部命令失败（退出码非 0）：{cmd}");
+                });
+        }
+
+        // 以系统默认方式打开文件，等同于在操作系统的文件管理器中双击该
+        // 文件：Windows 经 cmd 内建命令 start 以文件关联程序打开——空标题
+        // "" 必须占位，否则带空格的路径会被 start 当作新开控制台窗口的标
+        // 题；macOS 用 open，其余平台用 xdg-open。fsys 的路径统一为正斜
+        // 杠，而 start 不认正斜杠路径，需转换为反斜杠（同
+        // revealInSystemExplorer）。
+        func openWithSystemDefault(path: fsys::path_t)=> void
+        {
+            let target = path->to_string();
+            let current_os = platform::get_os();
+
+            if (current_os == platform::Os::WINDOWS)
+            {
+                let win_path = target->replace("/", "\\");
+                shellDetached(F"start \"\" \"{win_path}\"");
+            }
+            else if (current_os == platform::Os::MACOS)
+                shellDetached(F"open \"{target}\"");
+            else
+                shellDetached(F"xdg-open \"{target}\"");
+        }
+
+        // 用 vscode 打开 ToWoo 脚本：以当前工作目录为工作区打开 vscode，
+        // 并在该工作区内打开脚本——code <工作区> <文件> 一条命令完成；
+        // 已有窗口打开着该工作区时聚焦该窗口并在其中打开文件。code 不在
+        // PATH 中等启动失败的情况（退出码非 0）回退为系统默认方式打开。
+        func openWooFileWithVSCode(path: fsys::path_t)=> void
+        {
+            let workspace = workpath()->to_string();
+            let target = path->to_string();
+
+            do thread::create(func(){
+                    if (platform::shell(F"code \"{workspace}\" \"{target}\"") != 0)
+                    {
+                        logerr(F"无法用 vscode 打开 \"{target}\"："
+                            + "code 命令启动失败（退出码非 0），"
+                            + "已回退为系统默认方式打开");
+                        openWithSystemDefault(path);
+                    }
+                });
+        }
+
+        // 双击 / 右键“打开”时，编辑器未接管（openActionForPath 未注册，
+        // 见 ext_open_map）的文件由此兜底：.wo 脚本（含 .je4physics.wo 等
+        // 以 .wo 结尾的派生后缀，extension 取最后一个后缀）用 vscode 打
+        // 开，其余文件交由操作系统以默认方式打开。
+        func openFileExternally(path: fsys::path_t)=> void
+        {
+            if (string::lower(extension(path)) == ".wo")
+                openWooFileWithVSCode(path);
+            else
+                openWithSystemDefault(path);
+        }
+
         func handleItemClick(self: Browser, path: fsys::path_t)=> void
         {
             let now = GetTime();
@@ -1350,12 +1421,16 @@ namespace JEEditor::Editor
             
             if (is_double && isdir(path))
                 self->goTo(path);
-                
+
             if (is_double)
             {
                 match (openActionForPath(path))
                 {
-                    none?;
+                    // 编辑器未接管的文件交由外部程序打开（.wo 用 vscode，
+                    // 其余用系统默认方式）；目录已在上方 goTo 进入，不在此列
+                    none?
+                        if (isfile(path))
+                            openFileExternally(path);
                     value(open_action)?
                         open_action(path);
                 }

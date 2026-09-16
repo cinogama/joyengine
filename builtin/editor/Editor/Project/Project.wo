@@ -188,6 +188,7 @@ namespace JEEditor::Editor
                 m_towoo_collection = ToWooCollection::create(),
             };
 
+            /* ATTENTION: 此处的实现不恰当，之后做编辑器调试运行的时候，ToWoo 更新检查应当暂停 */
             launch_coroutine(checkToWooUpdated);
             
             match (load(workpath() / PROJECT_FILE_NAME))
