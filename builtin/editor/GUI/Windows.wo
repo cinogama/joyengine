@@ -447,14 +447,6 @@ namespace JEEditor::GUI::Windows
         let mut title = i->getTitle;
         let mut is_unique = title->find("$ID")->is_none;
         
-        // 模态与 unique 语义重叠：同一时刻仅展示一个弹窗已由模态栈保证，
-        // 同名模态应抢占展示而非被 unique 拒绝，故自动追加 $ID 使其非 Unique。
-        if (is_modal && is_unique)
-        {
-            title = title + "$ID";
-            is_unique = false;
-        }
-        
         match (WindowsState::try_register_window(i, title, is_unique, is_modal))
         {
             none?
