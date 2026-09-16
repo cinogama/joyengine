@@ -1000,6 +1000,8 @@ namespace JEEditor::Editor
             return ext_icon_map->get(ext)=>> \v = v;->or_bind(\= Icons::FILE;);
         }
         
+        // 在整行 Selectable 之上叠绘条目图标（见 drawFileList）：图标本
+        // 身不拦截输入，图标区域同样命中所在行的悬浮/点击/拖拽。
         func drawItemIcon(path: fsys::path_t)=> void
         {
             match(iconForPath(path))
@@ -1026,6 +1028,11 @@ namespace JEEditor::Editor
             if (visible_count == 0)
                 TextDisabled("(空目录)");
                 
+            // 每行的交互区是一个占满整行的隐形 Selectable（"##" 空标签），
+            // 图标与名称在 Selectable 之后叠绘（ImGui 推荐做法）：Image/Text
+            // 不拦截输入，悬浮/点击/拖拽落在图标上时同样命中该行。图标与
+            // 名称的命中事件（DragPayload/IsItemClicked/返回值）都必须在
+            // Selectable 仍是“最后提交的 item”时读取，随后再回退光标叠绘。
             for (let d : dirs)
             {
                 let name = filename(d);
@@ -1033,21 +1040,25 @@ namespace JEEditor::Editor
                 {
                     let is_selected = self.m_selected->is_value
                         && self.m_selected->unwrap == d;
-                        
-                    drawItemIcon(d);
+
+                    let line_pos = GetCursorScreenPos();
                     let clicked = SelectableSelected(
-                        F"{name}/##{d->to_string()}", is_selected);
-                        
+                        F"##{d->to_string()}", is_selected);
+
                     Drag::DragPayload(FilePayload::create(d));
-                    
+
                     if (IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Right))
                         self.m_selected = option::value(d);
-                        
+
                     if (clicked)
                         self->handleItemClick(d);
+
+                    SetCursorScreenPos(line_pos);
+                    drawItemIcon(d);
+                    Text(F"{name}/");
                 }
             }
-            
+
             for (let f : files)
             {
                 let name = filename(f);
@@ -1055,18 +1066,22 @@ namespace JEEditor::Editor
                 {
                     let is_selected = self.m_selected->is_value
                         && self.m_selected->unwrap == f;
-                        
-                    drawItemIcon(f);
+
+                    let line_pos = GetCursorScreenPos();
                     let clicked = SelectableSelected(
-                        F"{name}##{f->to_string()}", is_selected);
-                        
+                        F"##{f->to_string()}", is_selected);
+
                     Drag::DragPayload(FilePayload::create(f));
-                    
+
                     if (IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Right))
                         self.m_selected = option::value(f);
-                        
+
                     if (clicked)
                         self->handleItemClick(f);
+
+                    SetCursorScreenPos(line_pos);
+                    drawItemIcon(f);
+                    Text(name);
                 }
             }
             
