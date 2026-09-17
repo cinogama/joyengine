@@ -1,6 +1,10 @@
 import pkg::std;
 import pkg::fsys;
 import pkg::iterator;
+import pkg::dumpling;
+import pkg::try;
+import pkg::filestream;
+import pkg::buffer;
 
 import je;
 
@@ -10,10 +14,54 @@ import ToWooSystemCollection;
 using std;
 using fsys;
 using iterator;
+using dumpling;
+using filestream;
 using je::towoo;
 
 namespace JEEditor::Editor::Project
 {
+    public func generateVFS()
+    {
+        let vfs_path = workpath() / ".temp" / "vfs";
+        if (!exist(vfs_path))
+        {
+            try! _ = mkdir(vfs_path)
+                -> or_map(\eno = F"创建 vfs 临时目录失败 {eno}";);
+        }
+        
+        for(let vp : VFile::get_all())
+        {
+            if (vp->begin_with("!")
+                || vp->begin_with("@")
+                || vp->begin_with("/")
+                || (vp->len >= 2 && vp[1] == ':'))
+                continue;
+                
+            je::log(vp);
+            
+            let vpath = vfs_path / vp;
+            do mkdir(parent(vpath));
+            
+            try! vf = VFile::open(vp)
+                -> ok_or(F"无法打开 {vp}");
+                
+            let buf = vf->read_buf(vf->len);
+            try! vfstream = open(vpath, mode::write)
+                -> ok_or(F"无法打开写入文件 {vpath->to_string}");
+                
+            if (!vfstream->write(buf, 0, buf->len))
+                throw! F"写入文件 {vpath->to_string} 失败";
+        }
+        
+        return_ok!;
+    }
+    func updateAndGenerateVFS()
+    {
+        update_api();
+        
+        return generateVFS();
+    }
+    
     using ToWooCollection = struct{
         m_component_collection: ToWooComponentCollection,
         m_system_collection: ToWooSystemCollection,
@@ -37,14 +85,12 @@ namespace JEEditor::Editor::Project
                 towoo_component_and_systems
                     ->forall(\p = filename(p)->lower->end_with(ToWooComponentCollection::SUFFIX););
                     
-            update_api();
+            do updateAndGenerateVFS();
             
             let towoo_systems = ToWooSystemCollection::create <|
                 towoo_component_and_systems
                     ->forall(\p = filename(p)->lower->end_with(ToWooSystemCollection::SUFFIX););
                     
-            update_api();
-            
             return ToWooCollection{
                 m_component_collection = towoo_components,
                 m_system_collection = towoo_systems,
@@ -54,54 +100,42 @@ namespace JEEditor::Editor::Project
         {
             let r = self.m_component_collection->append(path);
             if (r->isOk)
-                update_api();
-                
-            return r;
+            {
+                do updateAndGenerateVFS();
+                return true;
+            }
+            return false;
         }
         public func appendSystem(self: ToWooCollection, path: path_t)
         {
-            let r = self.m_system_collection->append(path);
-            if (r->isOk)
-                update_api();
-                
-            return r;
+            return self.m_system_collection->append(path)->isOk;
         }
         public func updateComponent(self: ToWooCollection, path: path_t)
         {
-            let r = self.m_component_collection->update(path);
-            if (r->isOk)
+            if (self.m_component_collection->update(path)->isOk)
             {
-                update_api();
-                
-                do self.m_system_collection->updateAll();
-                update_api();
+                do updateAndGenerateVFS();
+                return self.m_system_collection->updateAll()->empty;
             }
-            
-            return r;
+            return false;
         }
         public func updateSystem(self: ToWooCollection, path: path_t)
         {
-            let r = self.m_system_collection->update(path);
-            if (r->isOk)
-                update_api();
-                
-            return r;
+            return self.m_system_collection->update(path)->isOk;
         }
         public func updateAll(self: ToWooCollection)
         {
             let failed_components = self.m_component_collection->updateAll();
-            update_api();
+            do updateAndGenerateVFS();
             let failed_systems = self.m_system_collection->updateAll();
-            update_api();
             
-            return (failed_components, failed_systems);
+            return failed_components->empty || failed_systems->empty;
         }
         public func updateAllUpdated(self: ToWooCollection)
         {
             self.m_component_collection->updateAllUpdated();
-            update_api();
+            do updateAndGenerateVFS();
             self.m_system_collection->updateAllUpdated();
-            update_api();
         }
         public func checkAll(self: ToWooCollection)
         {

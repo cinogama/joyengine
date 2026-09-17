@@ -7,6 +7,8 @@ import je;
 
 import builtin::editor::Editor::ModulePrepare;
 
+import ToWooCollection;
+
 using je;
 using fsys;
 using iterator;
@@ -19,12 +21,19 @@ namespace JEEditor::Editor::Project
         m_loaded_module_handle: mut option<handle>,
     }
     {
+        func loadModuleAndRegenerateVFS(name: string, path: string)
+        {
+            let r = load_module(name, path);
+            
+            do generateVFS();
+            return r;
+        }
         public func getMaxRuntimeDylibPathId(path: path_t)
         {
             let runtime_path = path / ".runtime";
             if (!isdir(runtime_path))
                 return option::none;
-
+                
             return walk(runtime_path) |> iter_result
                 |> filter(\p = isdir(p) && filename(p)->is_number;)
                 |> map(\p = filename(p) as int;)
@@ -39,7 +48,7 @@ namespace JEEditor::Editor::Project
             let runtime_path = path / ".runtime";
             if (!isdir(runtime_path))
                 return_ok!;
-
+                
             match (getMaxRuntimeDylibPathId(path))
             {
                 none?;
@@ -48,16 +57,16 @@ namespace JEEditor::Editor::Project
                     let numeric_dirs = walk(runtime_path) |> iter_result
                         |> filter(\p = isdir(p) && filename(p)->is_number;)
                         |> iterator::collect;
-
+                        
                     for (let removing_dir : numeric_dirs)
                     {
                         if (filename(removing_dir) as int == latest_id)
                             continue;
-
+                            
                         try! _ = remove(removing_dir)
                             -> or_map(\eno = F"删除目录 `{removing_dir->to_string}` 失败（{eno}）";);
                     }
-
+                    
                     if (latest_id != 0)
                     {
                         let latest_dir = runtime_path / (latest_id as string);
@@ -66,7 +75,7 @@ namespace JEEditor::Editor::Project
                     }
                 }
             }
-
+            
             return_ok!;
         }
         func findRuntimeDylibPath(name: string, path: path_t)
