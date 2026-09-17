@@ -10,8 +10,8 @@
 //   ④ 协程等待数帧（暂停/加系统的指令经世界命令缓冲在下一逻辑更新
 //      生效）后 set_enable(true) 恢复所有世界运行；
 //   ⑤ 运行期间隐藏所有常规窗口、主菜单栏与状态栏（沉浸模式），仅留
-//      悬浮停止条；编辑操作照常执行但不记录历史（Practice 抑制开关），
-//      也不允许撤销/重做。
+//      停靠在主视口底部的调试运行停止条；编辑操作照常执行但不记录
+//      历史（Practice 抑制开关），也不允许撤销/重做。
 //
 // 终止运行（stopDebugRun）：关闭运行中被游戏逻辑改动的世界，用 ① 的
 // 快照重建各视口（不挂运行时系统，回到编辑态），恢复编辑现场与 UI。
@@ -169,12 +169,14 @@ namespace JEEditor::Editor::DebugRun
     }
 
     // ==========================
-    //  调试运行悬浮停止条
+    //  调试运行停止条
     // ==========================
 
-    // 不走 IWindows/窗口注册表（不受沉浸模式影响），仿主菜单/状态栏用
-    // 独立协程直接绘制：屏幕左上角（原主菜单位置，此时空闲）常驻运行
-    // 指示与停止按钮，Shift+F5 亦可终止运行。
+    // 不走 IWindows/窗口注册表（不受沉浸模式影响），仿状态栏用独立协程
+    // 直接绘制。经 BeginViewportSideBar 停靠在主视口底部（与 Statebar
+    // 同机制，二者不同时出现）：无需手动计算坐标，也不受 OS 层菜单栏
+    // 遮挡屏幕顶部的影响（如 Parallels 融合模式下的 macOS 菜单栏）；
+    // 内容整体居中展示运行指示与停止按钮。
     let mut s_debug_run_toolbar_showing = false;
     // 置位初值为 true：防止启动运行时按下的按键残留导致立即误触发
     let mut s_stop_key_latched = true;
@@ -223,24 +225,31 @@ namespace JEEditor::Editor::DebugRun
 
     func drawDebugRunToolbar()=> void
     {
-        SetNextWindowPos((8., 8.));
+        // 单行控件高度 + 上下窗口内边距
+        let bar_height = GetFrameHeight() + 16.;
 
-        let attrib = WindowsAttribute::ImGuiWindowFlags_NoTitleBar
-            + WindowsAttribute::ImGuiWindowFlags_NoResize
-            + WindowsAttribute::ImGuiWindowFlags_NoCollapse
-            + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize;
-
-        // BeginAttrOpen 返回 (show, open) 元组（与 GUI::Windows._show 的
-        // 用法一致）；停止按钮触发停止流程，下一帧起协程退出、悬浮条
-        // 不再绘制
-        let (toolbar_show, _) = BeginAttrOpen("##debug_run_toolbar", attrib);
-        if (toolbar_show)
+        if (BeginViewportSideBar(
+                "DebugRunToolbar",
+                Direction::ImGuiDir_Down,
+                bar_height,
+                WindowsAttribute::ImGuiWindowFlags_None))
         {
-            TextColored((90, 230, 115, 255), "●");
+            // 内容整体居中：总宽以文本测量估算（按钮宽按其文本宽加一个
+            // FrameHeight 的内边距估算），只占画面底部一条，不遮游戏主体
+            let text_run = "● 调试运行中";
+            let text_stop = "■ 停止";
+            let text_w = CalcTextSize(text_run).0;
+            let button_w = CalcTextSize(text_stop).0 + GetFrameHeight();
+
+            let (bar_w, _) = GetWindowSize();
+            let mut start_x = (bar_w - text_w - button_w - 12.) * 0.5;
+            if (start_x < 0.)
+                start_x = 0.;
+            SetCursorPos((start_x, GetCursorPos().1));
+
+            TextColored((90, 230, 115, 255), text_run);
             SameLine();
-            Text("调试运行中");
-            SameLine();
-            if (Button("■ 停止"))
+            if (Button(text_stop))
                 do stopDebugRun();
         }
         End();
