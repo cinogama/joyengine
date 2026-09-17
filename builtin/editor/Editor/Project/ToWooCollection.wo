@@ -36,9 +36,7 @@ namespace JEEditor::Editor::Project
                 || vp->begin_with("/")
                 || (vp->len >= 2 && vp[1] == ':'))
                 continue;
-                
-            je::log(vp);
-            
+
             let vpath = vfs_path / vp;
             do mkdir(parent(vpath));
             

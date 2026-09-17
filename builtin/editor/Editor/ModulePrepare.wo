@@ -29,6 +29,7 @@ using fsys;
 using iterator;
 using thread;
 using filestream;
+using platform;
 using je;
 using je::gui;
 using JEEditor::Singleton;
@@ -130,7 +131,7 @@ namespace JEEditor::Editor
         
         public func getTitle(_: ModulePrepare)=> string
         {
-            return "模块装载器";
+            return "模块装载器$ID";
         }
         public func getAttrib(_: ModulePrepare)=> WindowsAttribute
         {
@@ -141,9 +142,12 @@ namespace JEEditor::Editor
         {
             return SizeConstraints::Limited(((480., 320.), (4096., 4096.)));
         }
-        public func isModal(_: ModulePrepare)=> bool
+        public func onPreClose(self: ModulePrepare)
         {
-            return true;
+            /* 在任务结束前，窗口不允许手动关闭 */
+            let (finished, _) = self->takeState();
+            
+            return finished;
         }
         public func run(self: ModulePrepare)=> bool
         {
@@ -222,16 +226,14 @@ namespace JEEditor::Editor
         }
         
         // 链接时使用的引擎核心库文件名，随平台位数与配置变化
-        func engineCoreLibLinkFilename(libname: string, config: BuildConfig)=> string
+        func engineCoreLibLinkFilename(libname: string)=> string
         {
-            let isdebug = config == BuildConfig::DEBUG;
-            
             return libname
-                + (platform::bit_width == 32 ? "32" | "")
-                + (isdebug ? "_debug" | "")
-                + (platform::os == platform::Os::WINDOWS
+                + (bit_width == 32 ? "32" | "")
+                + (build_type == BuildType::DEBUG ? "_debug" | "")
+                + (os == Os::WINDOWS
                     ? ".lib"
-                    | platform::os == platform::Os::MACOS
+                    | os == Os::MACOS
                     ? ".a"
                     | ".so")
                 ;
@@ -242,9 +244,9 @@ namespace JEEditor::Editor
         public func moduleDylibFilename(name: string)=> string
         {
             return "lib" + name
-                + (platform::os == platform::Os::WINDOWS
+                + (os == Os::WINDOWS
                     ? ".dll"
-                    | platform::os == platform::Os::MACOS
+                    | os == Os::MACOS
                     ? ".dylib"
                     | ".so")
                 ;
@@ -389,7 +391,7 @@ namespace JEEditor::Editor
         // 否则按fsys::pathsep拆分PATH环境变量并逐个目录查找。
         func locateCMake()
         {
-            match (platform::env("CMAKE"))
+            match (env("CMAKE"))
             {
                 value(cmake_env)?
                 {
@@ -400,11 +402,11 @@ namespace JEEditor::Editor
                 none?;
             }
             
-            match (platform::env("PATH"))
+            match (env("PATH"))
             {
                 value(path_env)?
                 {
-                    let exec_names = platform::os == platform::Os::WINDOWS
+                    let exec_names = os == Os::WINDOWS
                         ? ["cmake.exe"]
                         | ["cmake"];
                         
@@ -516,7 +518,7 @@ namespace JEEditor::Editor
             // 5. 生成编译配置并编译
             let config_name = configName(config);
             let building_dir = path / F".build_{config_name}";
-            let core_lib_filename = engineCoreLibLinkFilename("libjoyecs", config);
+            let core_lib_filename = engineCoreLibLinkFilename("libjoyecs");
             let engine_include_path = engine_root / "builtin" / "include";
             
             try! _ = startProcessAndWait(win, cmake_path,
@@ -575,7 +577,7 @@ namespace JEEditor::Editor
                                 // Windows下MSVC把链接器pdb输出到与dll相同的目录且同名（仅扩展名不同），
                                 // 把它移动到与动态库相同的 .runtime 目录以便调试器定位符号；
                                 // 若该配置没有生成pdb则跳过。
-                                if (platform::os == platform::Os::WINDOWS)
+                                if (os == Os::WINDOWS)
                                 {
                                     let pdb_path = parent(found_dylib_path)
                                         / F"{purename(found_dylib_path)}.pdb";
@@ -605,7 +607,7 @@ namespace JEEditor::Editor
                     finished_flag->set <| option::value(reload_result);
                 });
                 
-            
+                
             while (finished_flag->get->is_none)
                 sleep(0.1);
                 
