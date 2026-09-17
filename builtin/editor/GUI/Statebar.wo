@@ -33,7 +33,15 @@ namespace JEEditor::GUI::Statebar
                     static let mut bar_height = GetFrameHeight();
                     if ((immut height) > 0.)
                         bar_height = immut height;
-                        
+
+                    // 高度上限：随字体缩放的约 8 行文本高度，防止多行内容
+                    // （如带堆栈的错误日志）把状态栏撑满大半个屏幕。
+                    // 钳制必须发生在 Begin 之前，保证写回的测量值用的是
+                    // 本帧实际传入的钳制后高度，否则会来回震荡。
+                    let max_bar_height = GetTextLineHeightWithSpacing() * 8. + GetFrameHeight();
+                    if ((immut bar_height) > max_bar_height)
+                        bar_height = max_bar_height;
+
                     if (BeginViewportSideBar(
                             "EditorStatebar",
                             Direction::ImGuiDir_Down,
