@@ -9,9 +9,11 @@
 //      “先装系统再启用”流程一致；
 //   ④ 协程等待数帧（暂停/加系统的指令经世界命令缓冲在下一逻辑更新
 //      生效）后 set_enable(true) 恢复所有世界运行；
-//   ⑤ 运行期间隐藏所有常规窗口、主菜单栏与状态栏（沉浸模式），仅留
-//      停靠在主视口底部的调试运行停止条；编辑操作照常执行但不记录
-//      历史（Practice 抑制开关），也不允许撤销/重做。
+//   ⑤ 运行期间默认隐藏所有常规窗口、主菜单栏与状态栏（沉浸模式），
+//      仅留可拖动的调试运行停止条（默认悬浮于左上角、菜单区下方）；
+//      运行中可经停止条按钮或 Shift+F6 随时切换编辑器 UI 显隐
+//      （toggleDebugRunUI），便于边运行边做编辑操作；编辑操作照常
+//      执行但不记录历史（Practice 抑制开关），也不允许撤销/重做。
 //
 // 终止运行（stopDebugRun）：关闭运行中被游戏逻辑改动的世界，用 ① 的
 // 快照重建各视口（不挂运行时系统，回到编辑态），恢复编辑现场与 UI。
@@ -64,6 +66,35 @@ namespace JEEditor::Editor::DebugRun
         return s_debug_running || s_transitioning;
     }
 
+    // 调试运行期间编辑器 UI（常规窗口/主菜单栏/状态栏）是否可见：
+    // 运行开始默认全部隐藏（沉浸模式），运行中可经停止条按钮或
+    // Shift+F6 随时切换，便于边运行边做编辑操作；停止条本身常驻
+    let mut s_debug_run_ui_visible = false;
+
+    public func isDebugRunUIVisible()=> bool
+    {
+        return s_debug_run_ui_visible;
+    }
+
+    // 统一应用运行期编辑器 UI 显隐（可见 = 退出沉浸模式并显示主菜单与
+    // 状态栏；调试运行停止条不走窗口系统，不受沉浸模式影响）
+    func applyDebugRunUIVisibility()=> void
+    {
+        Windows::setImmersiveMode(!s_debug_run_ui_visible);
+        Menu::setMainMenuHidden(!s_debug_run_ui_visible);
+        Statebar::setHidden(!s_debug_run_ui_visible);
+    }
+
+    // 切换调试运行期间的编辑器 UI 显隐（仅运行中有效）
+    public func toggleDebugRunUI()=> void
+    {
+        if (!s_debug_running)
+            return;
+
+        s_debug_run_ui_visible = !s_debug_run_ui_visible;
+        applyDebugRunUIVisibility();
+    }
+
     public func startDebugRun()=> bool
     {
         if (isDebugRunActive())
@@ -89,11 +120,11 @@ namespace JEEditor::Editor::DebugRun
         for (let vp : viewports)
             vp->addRuntimeSystemsToWorld();
 
-        // ⑤ 运行期间隐藏全部常规窗口、主菜单栏与状态栏；编辑操作照常
-        //    执行但不记录历史、不允许撤销/重做（见 Practice 抑制开关）
-        Windows::setImmersiveMode(true);
-        Menu::setMainMenuHidden(true);
-        Statebar::setHidden(true);
+        // ⑤ 运行期间默认隐藏全部常规窗口、主菜单栏与状态栏；编辑操作
+        //    照常执行但不记录历史、不允许撤销/重做（见 Practice 抑制开关）。
+        //    运行中可经停止条按钮/Shift+F6 随时切换显隐以便边运行边编辑
+        s_debug_run_ui_visible = false;
+        applyDebugRunUIVisibility();
         Practice::setHistorySuppressed(true);
         startDebugRunToolbar();
 
@@ -160,9 +191,14 @@ namespace JEEditor::Editor::DebugRun
                 // 让选择器/调试摄像机就绪一帧，再恢复编辑 UI
                 yield();
 
+                // 恢复编辑 UI：与运行期显隐标记无关，无条件退出沉浸模式
+                //（注意不能经 applyDebugRunUIVisibility——它按标记取反，
+                // 标记重置为 false 会把沉浸模式再开一遍）；标记仅在下次
+                // 开始运行时作为初始值使用
                 Windows::setImmersiveMode(false);
                 Menu::setMainMenuHidden(false);
                 Statebar::setHidden(false);
+                s_debug_run_ui_visible = false;
 
                 s_transitioning = false;
             });
@@ -172,14 +208,18 @@ namespace JEEditor::Editor::DebugRun
     //  调试运行停止条
     // ==========================
 
-    // 不走 IWindows/窗口注册表（不受沉浸模式影响），仿状态栏用独立协程
-    // 直接绘制。经 BeginViewportSideBar 停靠在主视口底部（与 Statebar
-    // 同机制，二者不同时出现）：无需手动计算坐标，也不受 OS 层菜单栏
-    // 遮挡屏幕顶部的影响（如 Parallels 融合模式下的 macOS 菜单栏）；
-    // 内容整体居中展示运行指示与停止按钮。
+    // 不走 IWindows/窗口注册表（不受沉浸模式影响），仿主菜单/状态栏用
+    // 独立协程直接绘制的悬浮条。默认位置在窗口左上角、主菜单栏下方：
+    // 不占用主视口底部（避免与状态栏 Statebar 抢占同一停靠位），也避开
+    // 被融合模式（如 Parallels）下 OS 菜单栏遮挡的屏幕最顶端。
+    // 位置只在首个绘制帧设置一次——SetNextWindowPos 每帧调用会把窗口
+    // 钉死导致无法拖动；之后 ImGui 记住窗口位置，抓住文本/空白区域即可
+    // 拖动，且同一编辑器会话内跨多次运行保持用户拖放的位置。
     let mut s_debug_run_toolbar_showing = false;
+    let mut s_toolbar_default_pos_applied = false;
     // 置位初值为 true：防止启动运行时按下的按键残留导致立即误触发
     let mut s_stop_key_latched = true;
+    let mut s_toggle_key_latched = true;
 
     func startDebugRunToolbar()=> void
     {
@@ -193,11 +233,14 @@ namespace JEEditor::Editor::DebugRun
                     if (!s_debug_run_toolbar_showing)
                         return;
 
-                    // Shift+F5 终止运行（与主菜单项的快捷键标注一致）；
-                    // 边沿触发防重复（与 GUI::Shortcut 的做法一致）
+                    // Shift+F5 终止运行（与主菜单项的快捷键标注一致）、
+                    // Shift+F6 切换编辑器 UI 显隐；均为边沿触发防重复
+                    //（与 GUI::Shortcut 的做法一致）
                     let shift_down = IsKeyDown(ImGuiKey::ImGuiMod_Shift);
                     let f5_down = IsKeyDown(ImGuiKey::ImGuiKey_F5);
                     let stop_key_down = shift_down && f5_down;
+                    let f6_down = IsKeyDown(ImGuiKey::ImGuiKey_F6);
+                    let toggle_key_down = shift_down && f6_down;
 
                     if (stop_key_down)
                     {
@@ -210,6 +253,17 @@ namespace JEEditor::Editor::DebugRun
                     }
                     else
                         s_stop_key_latched = false;
+
+                    if (toggle_key_down)
+                    {
+                        if (!s_toggle_key_latched)
+                        {
+                            s_toggle_key_latched = true;
+                            toggleDebugRunUI();
+                        }
+                    }
+                    else
+                        s_toggle_key_latched = false;
 
                     drawDebugRunToolbar();
 
@@ -225,31 +279,31 @@ namespace JEEditor::Editor::DebugRun
 
     func drawDebugRunToolbar()=> void
     {
-        // 单行控件高度 + 上下窗口内边距
-        let bar_height = GetFrameHeight() + 16.;
-
-        if (BeginViewportSideBar(
-                "DebugRunToolbar",
-                Direction::ImGuiDir_Down,
-                bar_height,
-                WindowsAttribute::ImGuiWindowFlags_None))
+        // 默认位置仅设置一次：左上角、主菜单栏（显示编辑器时）与 OS 菜单
+        // 栏（融合模式）下方；NoMove 未设置，抓住文本/空白区域可拖动
+        if (!s_toolbar_default_pos_applied)
         {
-            // 内容整体居中：总宽以文本测量估算（按钮宽按其文本宽加一个
-            // FrameHeight 的内边距估算），只占画面底部一条，不遮游戏主体
-            let text_run = "● 调试运行中";
-            let text_stop = "■ 停止";
-            let text_w = CalcTextSize(text_run).0;
-            let button_w = CalcTextSize(text_stop).0 + GetFrameHeight();
+            s_toolbar_default_pos_applied = true;
+            SetNextWindowPos((16., 48.));
+        }
 
-            let (bar_w, _) = GetWindowSize();
-            let mut start_x = (bar_w - text_w - button_w - 12.) * 0.5;
-            if (start_x < 0.)
-                start_x = 0.;
-            SetCursorPos((start_x, GetCursorPos().1));
+        let attrib = WindowsAttribute::ImGuiWindowFlags_NoTitleBar
+            + WindowsAttribute::ImGuiWindowFlags_NoResize
+            + WindowsAttribute::ImGuiWindowFlags_NoCollapse
+            + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize;
 
-            TextColored((90, 230, 115, 255), text_run);
+        // BeginAttrOpen 返回 (show, open) 元组（与 GUI::Windows._show 的
+        // 用法一致）
+        let (toolbar_show, _) = BeginAttrOpen("##debug_run_toolbar", attrib);
+        if (toolbar_show)
+        {
+            TextColored((90, 230, 115, 255), "● 调试运行中");
             SameLine();
-            if (Button(text_stop))
+            let text_toggle = s_debug_run_ui_visible ? "隐藏编辑器" | "显示编辑器";
+            if (Button(text_toggle))
+                do toggleDebugRunUI();
+            SameLine();
+            if (Button("■ 停止"))
                 do stopDebugRun();
         }
         End();
