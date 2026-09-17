@@ -1,0 +1,248 @@
+// 编辑器调试运行（Play in Editor）的全局编排。
+//
+// 开始运行（startDebugRun）：
+//   ① 各 WorldEditorViewport 保存运行前的世界与编辑器状态到各自的
+//      m_playing_world_context（世界保持存活，区别于冻结的关闭世界）；
+//   ② set_enable(false) 暂停所有引擎世界实例；
+//   ③ 把各视口“调试执行/导出时才启用”的系统（m_runtime_systems）
+//      add_system 进世界——此刻世界处于暂停态，与编辑器建世界的
+//      “先装系统再启用”流程一致；
+//   ④ 协程等待数帧（暂停/加系统的指令经世界命令缓冲在下一逻辑更新
+//      生效）后 set_enable(true) 恢复所有世界运行；
+//   ⑤ 运行期间隐藏所有常规窗口、主菜单栏与状态栏（沉浸模式），仅留
+//      悬浮停止条；编辑操作照常执行但不记录历史（Practice 抑制开关），
+//      也不允许撤销/重做。
+//
+// 终止运行（stopDebugRun）：关闭运行中被游戏逻辑改动的世界，用 ① 的
+// 快照重建各视口（不挂运行时系统，回到编辑态），恢复编辑现场与 UI。
+//
+// 注意：调试运行期间模块/ToWoo 依然会经冻结机制（FreezeWorldsTodo）
+// 更新世界——冻结与运行各持独立的 WorldSavedContext 槽位互不覆盖；
+// 冻结恢复时会重挂运行时系统使世界继续运行（见 FreezeWorlds）。
+
+import pkg::std;
+
+import je;
+import je::ecs;
+import je::gui;
+
+import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Menu;
+import builtin::editor::GUI::Statebar;
+
+import Practice;
+import WorldEditorViewport;
+
+import builtin::editor::Singleton::Universe;
+
+using std;
+using je;
+using je::gui;
+using JEEditor::GUI;
+using JEEditor::GUI::Windows;
+using JEEditor::GUI::Menu;
+using JEEditor::GUI::Statebar;
+
+namespace JEEditor::Editor::DebugRun
+{
+    // 恢复世界运行前等待的帧数（对齐 FreezeWorldsTodo 的等待帧数）：
+    // 让暂停与加系统的命令切实落地后再恢复运行
+    let DEBUG_RUN_RESUME_WAIT_FRAMES = 5;
+
+    let mut s_debug_running = false;
+    // 停止流程进行中（运行世界已关闭、尚未从运行快照重建完成）
+    let mut s_transitioning = false;
+
+    public func isDebugRunning()=> bool
+    {
+        return s_debug_running;
+    }
+
+    // 调试运行进行中或停止流程未完成（各编辑入口据此拒绝操作）
+    public func isDebugRunActive()=> bool
+    {
+        return s_debug_running || s_transitioning;
+    }
+
+    public func startDebugRun()=> bool
+    {
+        if (isDebugRunActive())
+            return false;
+
+        // 冻结流程中世界已关闭，无法采集运行快照
+        if (WorldEditorViewport::isWorldsFrozen())
+            return false;
+
+        let viewports = WorldEditorViewport::getAllViewports();
+        if (viewports->len == 0)
+            return false;
+
+        // ① 各视口保存运行前的世界与编辑器状态
+        for (let vp : viewports)
+            vp->saveDebugRunContext();
+
+        // ② 暂停所有引擎世界实例
+        for (let w : Singleton::Universe::getUniverse()->get_all_worlds)
+            do w->set_enable(false);
+
+        // ③ 把“调试执行”系统加入各视口世界
+        for (let vp : viewports)
+            vp->addRuntimeSystemsToWorld();
+
+        // ⑤ 运行期间隐藏全部常规窗口、主菜单栏与状态栏；编辑操作照常
+        //    执行但不记录历史、不允许撤销/重做（见 Practice 抑制开关）
+        Windows::setImmersiveMode(true);
+        Menu::setMainMenuHidden(true);
+        Statebar::setHidden(true);
+        Practice::setHistorySuppressed(true);
+        startDebugRunToolbar();
+
+        s_debug_running = true;
+
+        // ④ 等待数帧后恢复所有世界运行
+        launch_coroutine(func(){
+                for (let mut i = 0; i < DEBUG_RUN_RESUME_WAIT_FRAMES; i += 1)
+                    yield();
+
+                // 等待期间冻结流程（模块/ToWoo 更新）抢进来时让路：
+                // 世界已关闭，解冻重建会自行启用世界，待解冻后再统一恢复
+                while (WorldEditorViewport::isWorldsFrozen())
+                    yield();
+
+                // 等待期间已被停止：恢复协程就此中止
+                if (!s_debug_running)
+                    return;
+
+                for (let w : Singleton::Universe::getUniverse()->get_all_worlds)
+                    do w->set_enable(true);
+            });
+
+        return true;
+    }
+
+    public func stopDebugRun()=> void
+    {
+        if (!s_debug_running || s_transitioning)
+            return;
+
+        // 冻结更新中不允许停止：世界已关闭，待解冻后再停止
+        if (WorldEditorViewport::isWorldsFrozen())
+            return;
+
+        s_transitioning = true;
+        // 先落运行标志：等待恢复的协程据此自行中止
+        s_debug_running = false;
+
+        stopDebugRunToolbar();
+        Practice::setHistorySuppressed(false);
+
+        launch_coroutine(func(){
+                // 冻结流程（模块/ToWoo 更新）恰在此时插入的话等待其完成：
+                // 冻结的前提是“无世界存活”，不能在冻结期间关闭/重建世界
+                //（过渡期间 freezeWorld 会跳过本视口，见 FreezeWorlds）
+                while (WorldEditorViewport::isWorldsFrozen())
+                    yield();
+
+                // ⑥ 关闭运行中被游戏逻辑改动的世界（实际销毁在下一逻辑
+                //    更新生效，需让出帧后再重建）
+                for (let vp : WorldEditorViewport::getAllViewports())
+                    vp->closeWorldForDebugRunStop();
+
+                yield();
+
+                while (WorldEditorViewport::isWorldsFrozen())
+                    yield();
+
+                // 用运行前的快照重建各视口世界（不挂运行时系统，回到编辑态）
+                for (let vp : WorldEditorViewport::getAllViewports())
+                    vp->restoreDebugRunContext();
+
+                // 让选择器/调试摄像机就绪一帧，再恢复编辑 UI
+                yield();
+
+                Windows::setImmersiveMode(false);
+                Menu::setMainMenuHidden(false);
+                Statebar::setHidden(false);
+
+                s_transitioning = false;
+            });
+    }
+
+    // ==========================
+    //  调试运行悬浮停止条
+    // ==========================
+
+    // 不走 IWindows/窗口注册表（不受沉浸模式影响），仿主菜单/状态栏用
+    // 独立协程直接绘制：屏幕左上角（原主菜单位置，此时空闲）常驻运行
+    // 指示与停止按钮，Shift+F5 亦可终止运行。
+    let mut s_debug_run_toolbar_showing = false;
+    // 置位初值为 true：防止启动运行时按下的按键残留导致立即误触发
+    let mut s_stop_key_latched = true;
+
+    func startDebugRunToolbar()=> void
+    {
+        if (s_debug_run_toolbar_showing)
+            return;
+        s_debug_run_toolbar_showing = true;
+
+        launch_coroutine(func(){
+                for (;;)
+                {
+                    if (!s_debug_run_toolbar_showing)
+                        return;
+
+                    // Shift+F5 终止运行（与主菜单项的快捷键标注一致）；
+                    // 边沿触发防重复（与 GUI::Shortcut 的做法一致）
+                    let shift_down = IsKeyDown(ImGuiKey::ImGuiMod_Shift);
+                    let f5_down = IsKeyDown(ImGuiKey::ImGuiKey_F5);
+                    let stop_key_down = shift_down && f5_down;
+
+                    if (stop_key_down)
+                    {
+                        if (!s_stop_key_latched)
+                        {
+                            s_stop_key_latched = true;
+                            stopDebugRun();
+                            return;
+                        }
+                    }
+                    else
+                        s_stop_key_latched = false;
+
+                    drawDebugRunToolbar();
+
+                    yield();
+                }
+            });
+    }
+
+    func stopDebugRunToolbar()=> void
+    {
+        s_debug_run_toolbar_showing = false;
+    }
+
+    func drawDebugRunToolbar()=> void
+    {
+        SetNextWindowPos((8., 8.));
+
+        let attrib = WindowsAttribute::ImGuiWindowFlags_NoTitleBar
+            + WindowsAttribute::ImGuiWindowFlags_NoResize
+            + WindowsAttribute::ImGuiWindowFlags_NoCollapse
+            + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize;
+
+        // BeginAttrOpen 返回 (show, open) 元组（与 GUI::Windows._show 的
+        // 用法一致）；停止按钮触发停止流程，下一帧起协程退出、悬浮条
+        // 不再绘制
+        let (toolbar_show, _) = BeginAttrOpen("##debug_run_toolbar", attrib);
+        if (toolbar_show)
+        {
+            TextColored((90, 230, 115, 255), "●");
+            SameLine();
+            Text("调试运行中");
+            SameLine();
+            if (Button("■ 停止"))
+                do stopDebugRun();
+        }
+        End();
+    }
+}

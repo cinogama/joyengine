@@ -165,6 +165,19 @@ namespace JEEditor::GUI
         }
         
         let mut s_main_menu_instance = option::none: option<Menu>;
+
+        // 沉浸模式（调试运行）下隐藏主菜单栏：常驻渲染协程不销毁，
+        // 仅跳过本帧绘制，解除隐藏后即恢复
+        let mut s_main_menu_hidden = false;
+        public func setMainMenuHidden(hidden: bool)
+        {
+            s_main_menu_hidden = hidden;
+        }
+        public func isMainMenuHidden()=> bool
+        {
+            return s_main_menu_hidden;
+        }
+
         public func registerMainMenu(menu: Menu)
         {
             if (s_main_menu_instance->is_none)
@@ -172,10 +185,13 @@ namespace JEEditor::GUI
                 launch_coroutine(func(){
                         for (;;)
                         {
-                            match (s_main_menu_instance)
+                            if (!s_main_menu_hidden)
                             {
-                                none?;
-                                value(main_menu)? main_menu->showMainMenuBar();
+                                match (s_main_menu_instance)
+                                {
+                                    none?;
+                                    value(main_menu)? main_menu->showMainMenuBar();
+                                }
                             }
                             std::yield();
                         }

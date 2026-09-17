@@ -38,6 +38,20 @@ namespace JEEditor::Editor
             Redo(bool /*retried*/),
             Action((IAction, bool /* retried */)),
         }
+
+        // 调试运行期间抑制编辑历史：编辑操作照常执行落实，但不记录到
+        // m_action_history、不置未保存标记，也不允许撤销/重做（由
+        // Editor::DebugRun 在运行启停时拨动）。
+        let mut s_history_suppressed = false;
+
+        public func setHistorySuppressed(suppressed: bool)=> void
+        {
+            s_history_suppressed = suppressed;
+        }
+        public func isHistorySuppressed()=> bool
+        {
+            return s_history_suppressed;
+        }
         
         public func create()=> Practice
         {
@@ -79,17 +93,28 @@ namespace JEEditor::Editor
         
         public func undo(self: Practice)
         {
+            // 调试运行期间不允许撤销
+            if (s_history_suppressed)
+                return;
+
             self.m_operation_queue->add(ActionRequest::Undo(false));
         }
-        
+
         public func redo(self: Practice)
         {
+            // 调试运行期间不允许重做
+            if (s_history_suppressed)
+                return;
+
             self.m_operation_queue->add(ActionRequest::Redo(false));
         }
 
         // 是否存在可撤销的编辑动作（含操作队列中未落实的请求）
         public func canUndo(self: Practice)=> bool
         {
+            if (s_history_suppressed)
+                return false;
+
             return self.m_history_place_index > 0
                 || !self.m_operation_queue->empty;
         }
@@ -97,6 +122,9 @@ namespace JEEditor::Editor
         // 是否存在可重做的编辑动作（含操作队列中未落实的请求）
         public func canRedo(self: Practice)=> bool
         {
+            if (s_history_suppressed)
+                return false;
+
             return self.m_history_place_index < self.m_history->len
                 || !self.m_operation_queue->empty;
         }
@@ -114,74 +142,89 @@ namespace JEEditor::Editor
                         {
                             Redo(retried)?
                             {
-                                if (self.m_history_place_index < self.m_history->len)
+                                // 调试运行期间不执行重做（入队端已拦截，
+                                // 此处兜底抑制状态切换瞬间的在途请求）
+                                if (!s_history_suppressed)
                                 {
-                                    let redo_action = self.m_history[self.m_history_place_index];
-                                    if (redo_action->redo(w))
+                                    if (self.m_history_place_index < self.m_history->len)
                                     {
-                                        self.m_history_place_index += 1;
-                                        self.m_not_saved_dirty_flag = true;
-                                        showActionState(F"重做: {redo_action->describe()}");
+                                        let redo_action = self.m_history[self.m_history_place_index];
+                                        if (redo_action->redo(w))
+                                        {
+                                            self.m_history_place_index += 1;
+                                            self.m_not_saved_dirty_flag = true;
+                                            showActionState(F"重做: {redo_action->describe()}");
+                                        }
+                                        else
+                                        {
+                                            if (!retried)
+                                            {
+                                                self.m_operation_queue->add_front(
+                                                    ActionRequest::Redo(true));
+
+                                                return_ok! false;
+                                            }
+                                            // 已经推迟过一帧了，操作切实地失败了。
+                                            throw! "重做操作失败";
+                                        }
                                     }
                                     else
                                     {
-                                        if (!retried)
-                                        {
-                                            self.m_operation_queue->add_front(
-                                                ActionRequest::Redo(true));
-                                                
-                                            return_ok! false;
-                                        }
-                                        // 已经推迟过一帧了，操作切实地失败了。
-                                        throw! "重做操作失败";
+                                        showActionState("没有可重做的操作");
                                     }
-                                }
-                                else
-                                {
-                                    showActionState("没有可重做的操作");
                                 }
                             }
                             Undo(retried)?
                             {
-                                let undo_action_index = self.m_history_place_index - 1;
-                                if (undo_action_index >= 0)
+                                // 调试运行期间不执行撤销（入队端已拦截，
+                                // 此处兜底抑制状态切换瞬间的在途请求）
+                                if (!s_history_suppressed)
                                 {
-                                    let undo_action = self.m_history[undo_action_index];
-                                    if (undo_action->undo(w))
+                                    let undo_action_index = self.m_history_place_index - 1;
+                                    if (undo_action_index >= 0)
                                     {
-                                        self.m_history_place_index = undo_action_index;
-                                        self.m_not_saved_dirty_flag = true;
-                                        showActionState(F"撤销: {undo_action->describe()}");
+                                        let undo_action = self.m_history[undo_action_index];
+                                        if (undo_action->undo(w))
+                                        {
+                                            self.m_history_place_index = undo_action_index;
+                                            self.m_not_saved_dirty_flag = true;
+                                            showActionState(F"撤销: {undo_action->describe()}");
+                                        }
+                                        else
+                                        {
+                                            if (!retried)
+                                            {
+                                                self.m_operation_queue->add_front(
+                                                    ActionRequest::Undo(true));
+
+                                                return_ok! false;
+                                            }
+                                            // 已经推迟过一帧了，操作切实地失败了。
+                                            throw! "撤销操作失败";
+                                        }
                                     }
                                     else
                                     {
-                                        if (!retried)
-                                        {
-                                            self.m_operation_queue->add_front(
-                                                ActionRequest::Undo(true));
-                                                
-                                            return_ok! false;
-                                        }
-                                        // 已经推迟过一帧了，操作切实地失败了。
-                                        throw! "撤销操作失败";
+                                        showActionState("没有可撤销的操作");
                                     }
-                                }
-                                else
-                                {
-                                    showActionState("没有可撤销的操作");
                                 }
                             }
                             Action((action, retried))?
                             {
                                 if (action->redo(w))
                                 {
-                                    if (self.m_history_place_index != self.m_history->len)
-                                        assert(self.m_history->shrink(self.m_history_place_index));
-                                        
-                                    self.m_history->add(action);
-                                    self.m_history_place_index += 1;
-                                    self.m_not_saved_dirty_flag = true;
-                                    showActionState(action->describe());
+                                    // 调试运行期间：操作照常执行落实，但不
+                                    // 记录历史、不置未保存标记、不提示
+                                    if (!s_history_suppressed)
+                                    {
+                                        if (self.m_history_place_index != self.m_history->len)
+                                            assert(self.m_history->shrink(self.m_history_place_index));
+
+                                        self.m_history->add(action);
+                                        self.m_history_place_index += 1;
+                                        self.m_not_saved_dirty_flag = true;
+                                        showActionState(action->describe());
+                                    }
                                 }
                                 else
                                 {

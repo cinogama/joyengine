@@ -22,6 +22,7 @@ import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Forms::MsgBox;
 
 import builtin::editor::Editor::Saving::World;
+import builtin::editor::Editor::DebugRun;
 
 import builtin::editor::Singleton::Universe;
 
@@ -84,6 +85,13 @@ namespace JEEditor::Editor::WorldEditorViewport
         if (isWorldsFrozen())
         {
             MsgBox::err("新建世界", "当前正处于世界冻结流程中，请稍后再试");
+            return;
+        }
+
+        // 调试运行期间禁止创建：新世界不属于本次运行的暂停/恢复编排
+        if (DebugRun::isDebugRunActive())
+        {
+            MsgBox::err("新建世界", "当前正处于调试运行中，请先终止运行");
             return;
         }
         
@@ -155,6 +163,13 @@ namespace JEEditor::Editor::WorldEditorViewport
         if (isWorldsFrozen())
         {
             MsgBox::err("打开失败", "当前正处于世界冻结流程中，请稍后再试");
+            return;
+        }
+
+        // 调试运行期间禁止打开：新世界不属于本次运行的暂停/恢复编排
+        if (DebugRun::isDebugRunActive())
+        {
+            MsgBox::err("打开失败", "当前正处于调试运行中，请先终止运行");
             return;
         }
         

@@ -36,19 +36,35 @@ using JEEditor::Editor::Action;
 
 namespace JEEditor::Editor
 {
+    // 世界视口的“已保存世界上下文”：世界快照（带 eid，保实体调试 EUID
+    // 以延续选中态与引用 euid 的编辑历史）与编辑器状态（摄像机位姿/
+    // 编辑模式）的打包。冻结（FreezeWorlds）与调试运行（DebugRun）各自
+    // 持有一个独立槽位保存此结构，互不覆盖——调试运行期间模块/ToWoo
+    // 依然会经冻结机制更新世界，两份快照不可共用同一组字段。
+    protected using WorldSavedContext = struct{
+        protected m_world_data: Toml,
+        protected m_editor_state: Toml,
+    }
+    {
+    }
+
     protected using WorldEditorViewport = struct{
         protected m_close: mut CloseRequest,
-        
+
         protected m_world_instance: mut world,
 
         // 冻结（FreezeWorlds）：本视口被冻结时，m_world_instance 已
-        // 关闭并等待恢复，此前的世界以 Toml 快照暂存在 m_frozen_world_data
-        //（带 eid），编辑器状态（摄像机位姿/编辑模式）另存于
-        // m_frozen_editor_state，恢复后经 m_pending_editor_state 应用。
-        // m_frozen_world_data->is_value 即“本视口处于冻结态”。
-        protected m_frozen_world_data: mut option<Toml>,
-        protected m_frozen_editor_state: mut option<Toml>,
-        
+        // 关闭并等待恢复，此前的世界与编辑器状态打包暂存于
+        // m_frozen_world_context，恢复后经 m_pending_editor_state 应用。
+        // m_frozen_world_context->is_value 即“本视口处于冻结态”。
+        protected m_frozen_world_context: mut option<WorldSavedContext>,
+
+        // 调试运行（DebugRun）：开始调试运行时世界保持存活运行，运行前
+        // 的世界与编辑器状态打包暂存于 m_playing_world_context；终止运行
+        // 时丢弃运行中被游戏逻辑改动的世界，用该快照重建。
+        // m_playing_world_context->is_value 即“本视口处于调试运行态”。
+        protected m_playing_world_context: mut option<WorldSavedContext>,
+
         // World context:
         protected m_name: string,
         

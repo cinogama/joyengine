@@ -29,8 +29,8 @@ namespace JEEditor::Editor
 {
     // 系统列表：展示并管理当前编辑世界的两组系统——
     //   运行时：已 add_system 到世界，编辑器内正在运行（如图形系统）；
-    //   调试时：保存在 WorldEditorViewport 中，仅在开始调试执行
-    //   或导出时才会 add_system（调试/导出功能暂未支持）。
+    //   调试时：保存在 WorldEditorViewport 中，仅在开始调试运行
+    //   （Editor::DebugRun）或导出时才会 add_system（导出功能暂未支持）。
     // 组的含义通过悬浮分组标题的气泡提示展示。增删与两组之间的转换
     // 均通过 doAction 发布，支持撤销/重做并参与未保存判定；
     // 向“运行时”添加、以及从“运行时”移除会先弹窗确认。

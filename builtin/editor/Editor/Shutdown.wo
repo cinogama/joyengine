@@ -7,6 +7,7 @@ import pkg::interface;
 
 import builtin::editor::GUI::Windows;
 import builtin::editor::Editor::Project;
+import builtin::editor::Editor::DebugRun;
 
 using std;
 using je;
@@ -27,6 +28,13 @@ namespace JEEditor::Editor
         
         public func editorShutdownRequest(u: universe)
         {
+            // 调试运行中先终止运行：各视口恢复可关闭状态后关闭流程才能
+            // 继续进行（运行期间视口的关闭请求会被否决，见
+            // WorldEditorViewport::onPreClose；终止流程异步进行，期间本
+            // 窗口持续等待其余窗口退出）
+            if (DebugRun::isDebugRunActive())
+                DebugRun::stopDebugRun();
+
             match (show(create(u)))
             {
                 none?;
@@ -64,6 +72,12 @@ namespace JEEditor::Editor
         public func getTitle(_: Shutdown)=> string
         {
             return "关闭编辑器……";
+        }
+        // 沉浸模式（调试运行）下不隐藏：用户在运行期间触发关闭流程时
+        // 仍需看到等待进度与“取消关闭流程”按钮
+        public func isHiddenInImmersiveMode(_: Shutdown)=> bool
+        {
+            return false;
         }
         public func run(self: Shutdown)=> bool
         {

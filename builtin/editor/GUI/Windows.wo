@@ -64,6 +64,15 @@ namespace JEEditor::GUI::Windows
             do self;
             return false;
         }
+        // 沉浸模式（见 setImmersiveMode）下本窗口是否应当被隐藏。
+        // 默认：模态弹窗不隐藏（进度框/错误框等在调试运行期间仍需可见），
+        // 常规窗口全部隐藏；个别关键的非模态窗口（如 PanicBox）可覆写为
+        // 永不隐藏。
+        public func isHiddenInImmersiveMode(self)=> bool
+        {
+            do self;
+            return !self->isModal;
+        }
         public func onPreClose(self)=> bool
         {
             do self;
@@ -415,10 +424,21 @@ namespace JEEditor::GUI::Windows
             }
             else
             {
-                while (i->_engine_imgui_show_job(
-                        title, state, menu_instance, shortcut_instance))
+                let mut keep_open = true;
+                while (keep_open)
                 {
-                    std::yield();
+                    // 沉浸模式（调试运行）：常规窗口不渲染（不 Begin/End、
+                    // 不 run、不处理菜单与快捷键），但仍泵 onUpdate 与生命
+                    // 周期——外部关闭请求照常生效，编辑动作队列照常排空
+                    if (s_immersive_mode && i->isHiddenInImmersiveMode)
+                        keep_open = _update_window_lifetime(
+                            i, state, menu_instance, shortcut_instance, false, true);
+                    else
+                        keep_open = i->_engine_imgui_show_job(
+                            title, state, menu_instance, shortcut_instance);
+
+                    if (keep_open)
+                        std::yield();
                 }
             }
             
@@ -428,6 +448,20 @@ namespace JEEditor::GUI::Windows
         }
     }
     
+    // 沉浸模式：隐藏所有常规窗口（模态弹窗与其显式豁免的窗口除外），
+    // 用于调试运行等需要全屏呈现游戏画面、屏蔽编辑 UI 的场合。
+    // 隐藏期间各窗口协程照常存活：onUpdate 泵与关闭请求仍然生效。
+    let mut s_immersive_mode = false;
+
+    public func setImmersiveMode(on: bool)=> void
+    {
+        s_immersive_mode = on;
+    }
+    public func isImmersiveMode()=> bool
+    {
+        return s_immersive_mode;
+    }
+
     public func show<T>(window_instance: T)=> option<IWindows>
         where require!(T: IWindows);
     {

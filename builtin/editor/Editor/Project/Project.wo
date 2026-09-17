@@ -407,7 +407,10 @@ namespace JEEditor::Editor
                 m_declared_modules = modules,
             };
 
-            /* ATTENTION: 此处的实现不恰当，之后做编辑器调试运行的时候，ToWoo 更新检查应当暂停 */
+            /* ToWoo 更新检查持续运行：调试运行期间模块/ToWoo 依然可以经
+               冻结机制（FreezeWorldsTodo）更新世界，冻结与运行各持独立的
+               世界上下文快照互不覆盖，恢复时重挂运行时系统继续运行
+              （见 WorldEditorViewport::FreezeWorlds / Editor::DebugRun） */
             launch_coroutine(checkToWooUpdated);
 
             launch_coroutine(

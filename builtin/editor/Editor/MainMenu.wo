@@ -1,3 +1,5 @@
+import pkg::std;
+
 import builtin::editor::GUI::Menu;
 
 import Browser;
@@ -8,11 +10,24 @@ import Material;
 import ReplConsole;
 import WorldEditorViewport;
 import Inspector;
+import DebugRun;
+
+using std;
 
 namespace JEEditor::Editor::MainMenu
 {
     using GUI;
-    
+
+    // “开始运行”可用条件：未在运行/停止过渡、未冻结、至少有一个世界视口
+    func canStartDebugRun()=> bool
+    {
+        if (DebugRun::isDebugRunActive())
+            return false;
+        if (WorldEditorViewport::isWorldsFrozen())
+            return false;
+        return WorldEditorViewport::getAllViewports()->len > 0;
+    }
+
     public func registerMainMenu()
     {
         let engineMainMenu = Menu::create("")
@@ -94,6 +109,12 @@ namespace JEEditor::Editor::MainMenu
             ->  endMenu
             -> subMenu("编辑")
             ->  subItem("新建世界", WorldEditorViewport::createNewWorldToEdit)
+            ->      endItem
+            ->  endMenu
+            -> subMenu("运行")
+            ->  subItem("开始运行", \= do DebugRun::startDebugRun();)
+            ->      enableWhen(canStartDebugRun)
+            ->      shortCut("Shift+F5")
             ->      endItem
             ->  endMenu
             -> subMenu("工具")

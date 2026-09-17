@@ -40,6 +40,7 @@ import builtin::editor::Editor::Practice;
 import builtin::editor::Editor::EntityClipboard;
 import builtin::editor::Editor::ResourcePath;
 import builtin::editor::Editor::Action::CreateEntity;
+import builtin::editor::Editor::DebugRun;
 
 import builtin::editor::Editor::Project;
 
@@ -186,10 +187,10 @@ namespace JEEditor::Editor::WorldEditorViewport
             m_close = mut CloseRequest::NORMALLY,
             
             m_world_instance = mut w,
-            
-            m_frozen_world_data = mut option::none,
-            m_frozen_editor_state = mut option::none,
-            
+
+            m_frozen_world_context = mut option::none,
+            m_playing_world_context = mut option::none,
+
             m_name = name,
             m_runtime_systems = []mut,
             m_saving_path = path,
@@ -345,7 +346,12 @@ namespace JEEditor::Editor::WorldEditorViewport
     {
         // 冻结期间不允许关闭：世界已关闭，关闭确认里的保存/销毁都无意义，
         // 待解冻恢复后再走正常流程
-        if (self.m_frozen_world_data->is_value)
+        if (self.m_frozen_world_context->is_value)
+            return false;
+
+        // 调试运行（含停止过渡）期间不允许关闭：世界正在运行/等待重建，
+        // 待终止运行恢复编辑态后再走正常流程
+        if (self.m_playing_world_context->is_value)
             return false;
             
         // 程序化关闭（重命名/另存重开/确认后的关闭）不拦截
@@ -455,9 +461,15 @@ namespace JEEditor::Editor::WorldEditorViewport
     {
         // 冻结期间世界已关闭，编辑动作队列暂不处理（队列保留，恢复后
         // 凭 eid 仍有效继续撤销/重做）
-        if (self.m_frozen_world_data->is_value)
+        if (self.m_frozen_world_context->is_value)
             return;
-            
+
+        // 停止调试运行的过渡帧：世界已关闭、尚未从运行快照重建，队列
+        // 同样暂不处理。调试运行进行中则照常排空——操作执行但不记录
+        // 历史（Practice 抑制开关），随停止运行一并丢弃
+        if (self.m_playing_world_context->is_value && !DebugRun::isDebugRunning())
+            return;
+
         match (self.m_action_history->update(self))
         {
             ok(_)?;
@@ -470,7 +482,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         // 冻结期间世界实例已关闭，任何访问世界的绘制/拾取/摄像机逻辑
         // 都必须跳过；只画占位提示，也不更新 s_last_focusd_world_view
         //（冻结时该全局已置空，避免其他面板经它访问失效世界）。
-        if (self.m_frozen_world_data->is_value)
+        if (self.m_frozen_world_context->is_value)
         {
             TextDisabled("世界已冻结：正在重新加载…");
             return true;

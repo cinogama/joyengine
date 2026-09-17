@@ -53,6 +53,12 @@ namespace JEEditor::Editor
         {
             return "Woolang Panic$ID";
         }
+        // 沉浸模式（调试运行）下不隐藏：游戏代码在运行期间发生 Panic
+        // 时必须能弹出来，否则用户无从得知错误
+        public func isHiddenInImmersiveMode(_: PanicBox)=> bool
+        {
+            return false;
+        }
         public func getAttrib(_: PanicBox)=> WindowsAttribute
         {
             return WindowsAttribute::ImGuiWindowFlags_NoDocking
