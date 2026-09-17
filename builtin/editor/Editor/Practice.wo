@@ -85,7 +85,22 @@ namespace JEEditor::Editor
         public func redo(self: Practice)
         {
             self.m_operation_queue->add(ActionRequest::Redo(false));
-        }        
+        }
+
+        // 是否存在可撤销的编辑动作（含操作队列中未落实的请求）
+        public func canUndo(self: Practice)=> bool
+        {
+            return self.m_history_place_index > 0
+                || !self.m_operation_queue->empty;
+        }
+
+        // 是否存在可重做的编辑动作（含操作队列中未落实的请求）
+        public func canRedo(self: Practice)=> bool
+        {
+            return self.m_history_place_index < self.m_history->len
+                || !self.m_operation_queue->empty;
+        }
+
         public func update(self: Practice, w: WorldEditorViewport)=> result<bool, string>
         {
             for (;;)

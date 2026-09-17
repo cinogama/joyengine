@@ -413,6 +413,15 @@ namespace JEEditor::Editor::WorldEditorViewport
         return option::value <|
             Menu::create("")
                 -> subMenu("编辑")
+                ->  subItem("撤销", \= self->undo();)
+                ->      enableWhen(\= self->canUndo();)
+                ->      shortCut("Ctrl+Z")
+                ->      endItem
+                ->  subItem("重做", \= self->redo();)
+                ->      enableWhen(\= self->canRedo();)
+                ->      shortCut("Ctrl+Y")
+                ->      endItem
+                ->  separator()
                 ->  subItem("重命名", inputForRenamingWorld)
                 ->  endItem
                 -> endMenu

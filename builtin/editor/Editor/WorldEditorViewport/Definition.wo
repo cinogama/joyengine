@@ -317,6 +317,14 @@ namespace JEEditor::Editor
         {
             self.m_action_history->undo();
         }
+        public func canUndo(self: WorldEditorViewport)=> bool
+        {
+            return self.m_action_history->canUndo();
+        }
+        public func canRedo(self: WorldEditorViewport)=> bool
+        {
+            return self.m_action_history->canRedo();
+        }
         public func doAction<T>(self: WorldEditorViewport, action: T)
             where require!(T: IAction);
         {
