@@ -521,6 +521,10 @@ namespace JEEditor::Editor
             let core_lib_filename = engineCoreLibLinkFilename("libjoyecs");
             let engine_include_path = engine_root / "builtin" / "include";
             
+            let WINDOWS_x64_SPEC_PARAM =
+                os == Os::WINDOWS && arch == Arch::X86_64
+                    ? ["-A", "x64"] | []: array<string>;
+                    
             try! _ = startProcessAndWait(win, cmake_path,
                 [
                     cmake_path->to_string,
@@ -530,7 +534,7 @@ namespace JEEditor::Editor
                     "-DBUILD_SHARED_LIBS=ON",
                     F"-DJEMODULE_ENGINE_CORE_LIB_FILENAME={core_lib_filename}",
                     F"-DJEMODULE_ENGINE_CORE_INCLUDE_PATH={engine_include_path}",
-                ],
+                ]->connect(WINDOWS_x64_SPEC_PARAM),
                 "CMake生成失败");
                 
             try! _ = startProcessAndWait(win, cmake_path,
