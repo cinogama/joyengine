@@ -29,6 +29,7 @@ import builtin::editor::Editor::LogBrowser;
 import builtin::editor::Editor::Inspector;
 import builtin::editor::Editor::Material;
 import builtin::editor::Editor::Shutdown;
+import builtin::editor::Editor::DebugRun;
 import builtin::editor::Editor::WorldEditorViewport;
 import builtin::editor::Editor::ResourcePath;
 import builtin::editor::Editor::FreezeWorldsTodo;
@@ -122,6 +123,18 @@ namespace JEEditor::Editor
         func startUpEditorGUI()
         {
             gui::register_exit_callback(func(){
+                    // 调试运行（含停止过渡）期间拒绝退出：与保存等编辑入口
+                    // 的拒绝策略一致，运行中的世界状态属于游戏逻辑，退出
+                    // 流程不应在运行中接管编辑器；待停止运行后再退出
+                    // if (DebugRun::isDebugRunActive())
+                    // {
+                    //     MsgBox::msg(
+                    //         "无法退出",
+                    //         "调试运行进行中，请先停止调试运行（Shift+F5 或"
+                    //         + "停止条上的“■ 停止”按钮）再退出编辑器。");
+                    //     return false;
+                    // }
+
                     do AskBox::show(
                         "即将退出编辑器",
                         "JoyEngine 将在所有编辑器窗口关闭后退出，继续关闭？")
