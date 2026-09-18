@@ -32,29 +32,37 @@ namespace JEEditor::Editor
             // 继续进行（运行期间视口的关闭请求会被否决，见
             // WorldEditorViewport::onPreClose；终止流程异步进行，期间本
             // 窗口持续等待其余窗口退出）
-            if (DebugRun::isDebugRunActive())
-                DebugRun::stopDebugRun();
-
-            match (show(create(u)))
-            {
-                none?;
-                value(shutdownWindow)?
-                {
-                    /* 通知 Project 保存当前状态到 Tombs，准备入土 */
-                    Project::dumpTombs();
-                    
-                    for (let iw : internal::getAllWindows())
+            launch_coroutine(
+                func(){
+                    match (show(create(u)))
                     {
-                        if (is_same(iw, shutdownWindow))
-                            continue;
+                        none?;
+                        value(shutdownWindow)?
+                        {
+                            if (DebugRun::isDebugRunActive())
+                            {
+                                DebugRun::stopDebugRun();
+                                
+                                /* 调试运行需要若干帧才能结束掉，等待，直到调试运行结束 */
+                                while (DebugRun::isDebugRunActive())
+                                    yield();
+                            }
+                                                        
+                            /* 通知 Project 保存当前状态到 Tombs，准备入土 */
+                            Project::dumpTombs();
                             
-                        do internal::tryGetWindowState(iw)
-                            ->> \state = state->requestToClose();
-                            ;
+                            for (let iw : internal::getAllWindows())
+                            {
+                                if (is_same(iw, shutdownWindow))
+                                    continue;
+                                    
+                                do internal::tryGetWindowState(iw)
+                                    ->> \state = state->requestToClose();
+                                    ;
+                            }
+                        }
                     }
-                }
-            }
-            
+                });
         }
         
         func create(u: universe)=> Shutdown
