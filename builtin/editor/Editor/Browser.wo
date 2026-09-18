@@ -34,6 +34,7 @@ import builtin::editor::Editor::WorldEditorViewport;
 import builtin::editor::Editor::Saving::Entity;
 import builtin::editor::Editor::ModulePrepare;
 import builtin::editor::Editor::ModuleTypeCreator;
+import builtin::editor::Editor::Project;
 import builtin::editor::Editor::Template;
 import ResourcePath;
 import Action::ModifyPrefab;
@@ -611,7 +612,9 @@ namespace JEEditor::Editor
         // 从内置模板新建脚本文件（右键菜单“新建→物理世界配置 / ToWoo 组件 /
         // ToWoo 系统”共用的流程）：弹输入框要文件名 → 未带约定后缀时自动补
         // 全 → 已存在则确认覆盖 → 经 Template::load 读入模板后用 pkg::filestream
-        // 落盘。回调不捕获 Browser 实例，文件缓存刷新经 dirty 传出。
+        // 落盘。on_created 在文件成功落盘后携带其路径被调用（ToWoo 组件/系统
+        // 在此通知 Project 注册进 ToWoo 收集器），无需后继动作时传 none。
+        // 回调不捕获 Browser 实例，文件缓存刷新经 dirty 传出。
         func askToCreateFromTemplate(
             self: Browser,
             dialog_title: string,
@@ -619,7 +622,8 @@ namespace JEEditor::Editor
             default_name: string,
             file_suffix: string,
             template_type: Template::Type,
-            type_display: string)=> void
+            type_display: string,
+            on_created: option<(path_t)=> void>)=> void
         {
             let target_dir = self.m_current;
             let dirty = self.m_fs_dirty;
@@ -649,6 +653,15 @@ namespace JEEditor::Editor
                                 }
                                 
                                 dirty->set(true);
+                                
+                                // 创建成功后通知调用方（ToWoo 组件/系统在
+                                // 此注册进 Project，同名冲突由注册侧弹窗提示）
+                                match (on_created)
+                                {
+                                    none?;
+                                    value(notify)?
+                                        notify(dst);
+                                }
                                 
                                 // 闭包按创建时的值捕获文本，之后每帧由 Statebar 调用绘制
                                 let path_str = dst->to_string();
@@ -704,30 +717,40 @@ namespace JEEditor::Editor
         {
             self->askToCreateFromTemplate(
                 "新建物理世界配置", "请输入物理世界配置文件名：", "physics",
-                ".je4physics.wo", Template::Type::PHYSICS_CONFIG, "物理世界配置");
+                ".je4physics.wo", Template::Type::PHYSICS_CONFIG, "物理世界配置",
+                option::none);
         }
         
         // 新建 ToWoo 组件（右键菜单“新建→ToWoo 组件”）：在当前目录生成一
         // 个 .je4component.wo 组件脚本模板，组件成员经 component! 宏声明。
         // 模板存于 Template 目录（towoo_component.je4component.wo.template），
-        // 流程见 askToCreateFromTemplate。
+        // 流程见 askToCreateFromTemplate；落盘成功后通知 Project 注册进
+        // ToWoo 收集器（同名组件冲突时弹 MsgBox::err 提示）。
         func askToCreateNewTowooComponent(self: Browser)=> void
         {
             self->askToCreateFromTemplate(
                 "新建 ToWoo 组件", "请输入 ToWoo 组件文件名：", "NewComponent",
-                ".je4component.wo", Template::Type::TOWOO_COMPONENT, "ToWoo 组件");
+                ".je4component.wo", Template::Type::TOWOO_COMPONENT, "ToWoo 组件",
+                option::value(func(path: path_t){
+                    Project::appendTowooComponent(path);
+                }));
         }
         
         // 新建 ToWoo 系统（右键菜单“新建→ToWoo 系统”）：在当前目录生成一
         // 个 .je4system.wo 系统脚本模板，含 create/close 生命周期钩子与
         // PRE_UPDATE!/UPDATE!/LATE_UPDATE! 三个作业队列（系统逻辑以
         // system!/work! 宏声明）。模板存于 Template 目录
-        // （towoo_system.je4system.wo.template），流程见 askToCreateFromTemplate。
+        // （towoo_system.je4system.wo.template），流程见 askToCreateFromTemplate；
+        // 落盘成功后通知 Project 注册进 ToWoo 收集器（同名系统冲突时弹
+        // MsgBox::err 提示）。
         func askToCreateNewTowooSystem(self: Browser)=> void
         {
             self->askToCreateFromTemplate(
                 "新建 ToWoo 系统", "请输入 ToWoo 系统文件名：", "NewSystem",
-                ".je4system.wo", Template::Type::TOWOO_SYSTEM, "ToWoo 系统");
+                ".je4system.wo", Template::Type::TOWOO_SYSTEM, "ToWoo 系统",
+                option::value(func(path: path_t){
+                    Project::appendTowooSystem(path);
+                }));
         }
         
         func drawToolbar(self: Browser)=> void

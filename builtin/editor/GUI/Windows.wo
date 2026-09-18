@@ -109,6 +109,8 @@ namespace JEEditor::GUI::Windows
     }
     {
         public let SINGLETON_LABEL = "window_states";
+        public let SINGLETON_SEQUENCE = 200000000;
+
         public func createAndLoad(_: option<Toml>)=> GlobalWindowsContextSingleton
             where require!(GlobalWindowsContextSingleton: ISingleton);
         {

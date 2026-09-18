@@ -14,8 +14,13 @@ using je;
 
 namespace JEEditor::Singleton
 {
+    let has_singleton_sequence<T> = concept!{
+        typeof<T>::SINGLETON_SEQUENCE: int;
+    };
+
     let singleton_loader_concept<T> = concept!(content: option<Toml>){
         typeof<T>::SINGLETON_LABEL: string;
+        /* OPTIONAL typeof<T>::SINGLETON_SEQUENCE: int */
         typeof<T>::createAndLoad(content): T;
     };
     
@@ -32,7 +37,7 @@ namespace JEEditor::Singleton
     func singleton_record_list()=> singleton<map<string, ISingleton>>
     {
         static let s = singleton::create(
-            "jeeditor::singleton_records", 100000001, \={}mut;);
+            "jeeditor::singleton_records", 900000000, \={}mut;);
         return s;
     }
     
@@ -51,7 +56,7 @@ namespace JEEditor::Singleton
     {
         static let singleton_inst = singleton::create(
             F"jeeditor::singleton::{typeof<T>::SINGLETON_LABEL}",
-            100000000,
+            has_singleton_sequence:<T> ? typeof<T>::SINGLETON_SEQUENCE | 100000000,
             func(){
                 let toml_data = get_temp_file_dir_path()
                     ->> \p = p / F"{typeof<T>::SINGLETON_LABEL}.toml";

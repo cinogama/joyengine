@@ -529,5 +529,18 @@ namespace JEEditor::Editor
                     assert(proj.m_opened_worlds->remove(world_path));
                 });
         }
+        /* 浏览器中新建 ToWoo 组件/系统文件落盘后调用：把文件注册进
+        ToWoo 收集器（编译并装载）。同名冲突（项目内已有同名组件/系统）、
+        编译失败等注册失败原因由收集器侧弹 MsgBox::err 提示。 */
+        public func appendTowooComponent(path: path_t)=> void
+        {
+            do apply:<Project>(
+                \p = p.m_towoo_collection->appendComponent(path););
+        }
+        public func appendTowooSystem(path: path_t)=> void
+        {
+            do apply:<Project>(
+                \p = p.m_towoo_collection->appendSystem(path););
+        }
     }
 }
