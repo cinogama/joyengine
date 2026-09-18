@@ -165,9 +165,16 @@ namespace JEEditor::Editor::DebugRun
         s_debug_running = false;
 
         stopDebugRunToolbar();
-        Practice::setHistorySuppressed(false);
 
         launch_coroutine(func(){
+                // 为了确保一切正常，结束调试时需要先把编辑器窗口收起来
+                // 之后一并恢复
+                s_debug_run_ui_visible = false;
+                applyDebugRunUIVisibility();
+
+                // 再等待一帧确保编辑器窗口被切实地收起来了
+                yield();
+                
                 // 冻结流程（模块/ToWoo 更新）恰在此时插入的话等待其完成：
                 // 冻结的前提是“无世界存活”，不能在冻结期间关闭/重建世界
                 //（过渡期间 freezeWorld 会跳过本视口，见 FreezeWorlds）
@@ -192,15 +199,11 @@ namespace JEEditor::Editor::DebugRun
                 yield();
 
                 // 恢复编辑 UI：与运行期显隐标记无关，无条件退出沉浸模式
-                //（注意不能经 applyDebugRunUIVisibility——它按标记取反，
-                // 标记重置为 false 会把沉浸模式再开一遍）；标记仅在下次
-                // 开始运行时作为初始值使用
-                Windows::setImmersiveMode(false);
-                Menu::setMainMenuHidden(false);
-                Statebar::setHidden(false);
-                s_debug_run_ui_visible = false;
+                s_debug_run_ui_visible = true;
+                applyDebugRunUIVisibility();
 
                 s_transitioning = false;
+                Practice::setHistorySuppressed(false);
             });
     }
 
