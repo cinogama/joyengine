@@ -368,7 +368,11 @@ namespace JEEditor::Editor
                 SameLine();
                 SetNextItemWidth(-1.);
                 
-                let member_tag = F"##{cname}##{mname}##{mhandle}";
+                // tag 不能以 ## 开头：控件的可见标签写作 "标签##tag"，
+                // 若 tag 自身以 ## 开头会拼出 "###"，触发 ImGui"ID 只取
+                // ### 之后内容"的规则，导致同一成员的多个控件共享同一
+                // ID，编辑时互相牵连
+                let member_tag = F"{cname}##{mname}##{mhandle}";
                 
                 match (unsafe::dynamic_parser::edit(mtype, mhandle, member_tag))
                 {

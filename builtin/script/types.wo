@@ -347,7 +347,9 @@ namespace Physics2D::vertex_list
             let mut points = (val as array<vec2>)->to_vec;
             let mut need_update = false;
             
-            // 顶点数（物理侧要求至少 3 个顶点才能构成多边形）
+            // 顶点数（物理侧要求至少 3 个顶点才能构成多边形）。
+            // 首控件与成员名同行，负宽度在右侧为标签预留空间避免被裁切
+            SetNextItemWidth(-64.);
             match (InputInt(F"顶点数##{tag}", points->len)->>\n = n < 3 ? 3 | n;)
             {
                 value(count)?
@@ -361,9 +363,13 @@ namespace Physics2D::vertex_list
                 none?;
             }
             
+            // 顶点行整体缩进，视觉上从属于成员
+            Indent(16.);
             for (let mut i = 0; i < points->len; i += 1)
             {
-                match (InputFloat2(F"{i}##{tag}", points[i][0], points[i][1])->>\v = v as vec2;)
+                // 负宽度为"点X"标签预留空间，让两个分量框更宽敞
+                SetNextItemWidth(-80.);
+                match (InputFloat2(F"点{i}##{tag}", points[i][0], points[i][1])->>\v = v as vec2;)
                 {
                     value(np)?
                     {
@@ -378,7 +384,9 @@ namespace Physics2D::vertex_list
                     none?;
                 }
             }
-            
+
+            Unindent(16.);
+
             if (need_update)
                 return option::value(points->to_array as Physics2D::vertex_list);
             return option::none;
@@ -414,7 +422,9 @@ namespace Light2D::BlockShadow::block_mesh
             let mut points = (val as array<vec2>)->to_vec;
             let mut need_update = false;
 
-            // 顶点数（遮挡环至少 3 个顶点才能构成多边形）
+            // 顶点数（遮挡环至少 3 个顶点才能构成多边形）。
+            // 首控件与成员名同行，负宽度在右侧为标签预留空间避免被裁切
+            SetNextItemWidth(-64.);
             match (InputInt(F"顶点数##{tag}", points->len)->>\n = n < 3 ? 3 | n;)
             {
                 value(count)?
@@ -428,9 +438,13 @@ namespace Light2D::BlockShadow::block_mesh
                 none?;
             }
 
+            // 顶点行整体缩进，视觉上从属于成员
+            Indent(16.);
             for (let mut i = 0; i < points->len; i += 1)
             {
-                match (InputFloat2(F"{i}##{tag}", points[i][0], points[i][1])->>\v = v as vec2;)
+                // 负宽度为"点X"标签预留空间，让两个分量框更宽敞
+                SetNextItemWidth(-80.);
+                match (InputFloat2(F"点{i}##{tag}", points[i][0], points[i][1])->>\v = v as vec2;)
                 {
                     value(np)?
                     {
@@ -445,6 +459,8 @@ namespace Light2D::BlockShadow::block_mesh
                     none?;
                 }
             }
+
+            Unindent(16.);
 
             if (need_update)
                 return option::value(points->to_array as Light2D::BlockShadow::block_mesh);
@@ -502,7 +518,9 @@ namespace Light2D::Range::light_shape
             let mut positions = (val.m_positions)->to_vec;
             let mut need_update = false;
 
-            // 每环顶点数（环至少 3 个顶点才能构成多边形）
+            // 每环顶点数（环至少 3 个顶点才能构成多边形）。
+            // 首控件与成员名同行，负宽度在右侧为标签预留空间避免被裁切
+            SetNextItemWidth(-96.);
             match (InputInt(F"每环顶点数##{tag}", point_count)->>\n = n < 3 ? 3 | n;)
             {
                 value(count)?
@@ -516,6 +534,9 @@ namespace Light2D::Range::light_shape
                 }
                 none?;
             }
+
+            // 其余控件行整体缩进，视觉上从属于成员
+            Indent(16.);
 
             // 环数（每环一个强度；改变环数时同步伸缩 positions）
             match (InputInt(F"环数##{tag}", strengths->len)->>\n = n < 1 ? 1 | n;)
@@ -558,6 +579,8 @@ namespace Light2D::Range::light_shape
 
             for (let mut i = 0; i < positions->len; i += 1)
             {
+                // 负宽度为"环X点Y"标签预留空间，让两个分量框更宽敞
+                SetNextItemWidth(-88.);
                 match (InputFloat2(F"环{i / point_count}点{i % point_count}##{tag}", positions[i][0], positions[i][1])->>\v = v as vec2;)
                 {
                     value(np)?
@@ -572,6 +595,8 @@ namespace Light2D::Range::light_shape
                     none?;
                 }
             }
+
+            Unindent(16.);
 
             if (need_update)
                 return option::value(Light2D::Range::light_shape{
