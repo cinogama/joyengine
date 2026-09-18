@@ -385,6 +385,204 @@ namespace Physics2D::vertex_list
         }
     }
 }
+// Light2D::BlockShadow::block_mesh：遮挡光的闭合多边形环（实体局部坐标）。
+// 序列化为扁平数组 [x0,y0,x1,y1,...]，与 vertex_list 同构。
+namespace Light2D::BlockShadow::block_mesh
+{
+    using parser = void
+    {
+        public extern func saving(val: Light2D::BlockShadow::block_mesh)=> string
+        {
+            let dat = []mut: vec<real>;
+            for (let p : val as array<vec2>)
+            {
+                dat->add(p.0);
+                dat->add(p.1);
+            }
+            return dat->serialize->or("[]");
+        }
+        public extern func restoring(dat: string)=> Light2D::BlockShadow::block_mesh
+        {
+            let data = dat->array::deserialize->or([0. as dynamic, 0. as dynamic])->> \x = x as real;;
+            let result = []mut: vec<vec2>;
+            for (let mut i = 0; i + 1 < data->len; i += 2)
+                result->add((data->get_or(i, 0.), data->get_or(i + 1, 0.)) as vec2);
+            return result->to_array as Light2D::BlockShadow::block_mesh;
+        }
+        public extern func edit(val: Light2D::BlockShadow::block_mesh, tag: string)=> option<Light2D::BlockShadow::block_mesh>
+        {
+            let mut points = (val as array<vec2>)->to_vec;
+            let mut need_update = false;
+
+            // 顶点数（遮挡环至少 3 个顶点才能构成多边形）
+            match (InputInt(F"顶点数##{tag}", points->len)->>\n = n < 3 ? 3 | n;)
+            {
+                value(count)?
+                {
+                    if (count != points->len)
+                    {
+                        points->resize(count, (0., 0.) as vec2);
+                        need_update = true;
+                    }
+                }
+                none?;
+            }
+
+            for (let mut i = 0; i < points->len; i += 1)
+            {
+                match (InputFloat2(F"{i}##{tag}", points[i][0], points[i][1])->>\v = v as vec2;)
+                {
+                    value(np)?
+                    {
+                        // 索引结果不可变：重建顶点表替换第 i 项
+                        let updated = []mut: vec<vec2>;
+                        for (let mut j = 0; j < points->len; j += 1)
+                            updated->add(
+                                (j == i) ? np | ((points[j][0], points[j][1]) as vec2));
+                        points = updated;
+                        need_update = true;
+                    }
+                    none?;
+                }
+            }
+
+            if (need_update)
+                return option::value(points->to_array as Light2D::BlockShadow::block_mesh);
+            return option::none;
+        }
+    }
+}
+// Light2D::Range::light_shape：范围光的同心环多边形（layer-major：
+// positions 为 [ilayer * m_point_count + ipoint]，strengths 每环一项）。
+// 序列化为扁平数组 [point_count, s0..sN, x0,y0,x1,y1,...]，避开嵌套
+// 数组的 dynamic 语义。
+namespace Light2D::Range::light_shape
+{
+    using parser = void
+    {
+        public extern func saving(val: Light2D::Range::light_shape)=> string
+        {
+            let dat = []mut: vec<real>;
+            dat->add(val.m_point_count as real);
+            for (let s : val.m_strength)
+                dat->add(s);
+            for (let p : val.m_positions)
+            {
+                dat->add(p.0);
+                dat->add(p.1);
+            }
+            return dat->serialize->or("[]");
+        }
+        public extern func restoring(dat: string)=> Light2D::Range::light_shape
+        {
+            let data = dat->array::deserialize->or([0. as dynamic])->> \x = x as real;;
+            let mut pc = data->get_or(0, 0.) as int;
+            if (pc < 0)
+                pc = 0;
+            // 数据布局 [pc, s×L, xy×L*pc]：由总长反推环数 L
+            let layer_count = (data->len > 1) ? (data->len - 1) / (1 + 2 * pc) | 0;
+            let strengths = []mut: vec<float>;
+            for (let mut i = 0; i < layer_count; i += 1)
+                strengths->add(data->get_or(1 + i, 0.) as float);
+            let positions = []mut: vec<vec2>;
+            for (let mut i = 0; i < layer_count * pc; i += 1)
+                positions->add((
+                    data->get_or(1 + layer_count + i * 2, 0.),
+                    data->get_or(1 + layer_count + i * 2 + 1, 0.)) as vec2);
+            return Light2D::Range::light_shape{
+                m_point_count = pc,
+                m_strength = strengths->to_array,
+                m_positions = positions->to_array,
+            };
+        }
+        public extern func edit(val: Light2D::Range::light_shape, tag: string)=> option<Light2D::Range::light_shape>
+        {
+            let mut point_count = val.m_point_count;
+            let mut strengths = (val.m_strength)->to_vec;
+            let mut positions = (val.m_positions)->to_vec;
+            let mut need_update = false;
+
+            // 每环顶点数（环至少 3 个顶点才能构成多边形）
+            match (InputInt(F"每环顶点数##{tag}", point_count)->>\n = n < 3 ? 3 | n;)
+            {
+                value(count)?
+                {
+                    if (count != point_count)
+                    {
+                        point_count = count;
+                        positions->resize(strengths->len * count, (0., 0.) as vec2);
+                        need_update = true;
+                    }
+                }
+                none?;
+            }
+
+            // 环数（每环一个强度；改变环数时同步伸缩 positions）
+            match (InputInt(F"环数##{tag}", strengths->len)->>\n = n < 1 ? 1 | n;)
+            {
+                value(count)?
+                {
+                    if (count != strengths->len)
+                    {
+                        let old_len = strengths->len;
+                        strengths->resize(count, 1. as float);
+                        let newpos = []mut: vec<vec2>;
+                        for (let mut l = 0; l < count; l += 1)
+                            for (let mut p = 0; p < point_count; p += 1)
+                                newpos->add((l < old_len)
+                                    ? positions[l * point_count + p]
+                                    | ((0., 0.) as vec2));
+                        positions = newpos;
+                        need_update = true;
+                    }
+                }
+                none?;
+            }
+
+            for (let mut l = 0; l < strengths->len; l += 1)
+            {
+                match (InputFloat(F"环{l}强度##{tag}", strengths[l]))
+                {
+                    value(ns)?
+                    {
+                        // 索引结果不可变：重建强度表替换第 l 项
+                        let updated = []mut: vec<float>;
+                        for (let mut j = 0; j < strengths->len; j += 1)
+                            updated->add((j == l) ? (ns as float) | strengths[j]);
+                        strengths = updated;
+                        need_update = true;
+                    }
+                    none?;
+                }
+            }
+
+            for (let mut i = 0; i < positions->len; i += 1)
+            {
+                match (InputFloat2(F"环{i / point_count}点{i % point_count}##{tag}", positions[i][0], positions[i][1])->>\v = v as vec2;)
+                {
+                    value(np)?
+                    {
+                        // 索引结果不可变：重建位置表替换第 i 项
+                        let updated = []mut: vec<vec2>;
+                        for (let mut j = 0; j < positions->len; j += 1)
+                            updated->add((j == i) ? np | positions[j]);
+                        positions = updated;
+                        need_update = true;
+                    }
+                    none?;
+                }
+            }
+
+            if (need_update)
+                return option::value(Light2D::Range::light_shape{
+                    m_point_count = point_count,
+                    m_strength = strengths->to_array,
+                    m_positions = positions->to_array,
+                });
+            return option::none;
+        }
+    }
+}
 namespace file_resource
 {
     using parser = void

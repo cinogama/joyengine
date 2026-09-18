@@ -185,6 +185,22 @@ namespace JEEditor::Editor
         protected m_collider_drag_undo_component: mut string,
         protected m_collider_drag_undo_member: mut string,
         protected m_collider_drag_undo_old_value: mut string,
+
+        // ---- 2D 光源形状 gizmo（编辑手柄）状态 ----
+        // 选中带 Light2D::Range / Light2D::BlockShadow 的实体即显示形状
+        // 线框与手柄、可直接拖拽顶点（无需模式开关；仅选中时绘制）
+        protected m_light_hover_handle: mut int,
+        protected m_light_dragging: mut bool,
+        protected m_light_drag_handle: mut int,
+        // 拖拽开始时捕获的快照：形状所在平面（过 drag_center、法线为
+        // 实体 Z 轴世界方向，拖拽期间冻结）与撤销记录所需的组件成员旧值
+        protected m_light_drag_euid: mut entity::internal::euid_t,
+        protected m_light_drag_kind: mut LightShapeKind,
+        protected m_light_drag_center: mut vec3,
+        protected m_light_drag_normal: mut vec3,
+        protected m_light_drag_undo_component: mut string,
+        protected m_light_drag_undo_member: mut string,
+        protected m_light_drag_undo_old_value: mut string,
     }
     {
         // ---- 摄像机游走参数（跨文件共享的部分） ----
@@ -230,6 +246,13 @@ namespace JEEditor::Editor
         protected let COLLIDER_GIZMO_COLOR = (0.35, 0.9, 0.45, 0.55);
         protected let COLLIDER_GIZMO_COLOR_SELECTED = (1., 1., 0.25, 0.9);
         protected let COLLIDER_HANDLE_COLOR = (0.85, 0.85, 0.85, 0.9);
+
+        // ---- 2D 光源形状 gizmo 参数 ----
+        // 范围光/遮挡体线框配色：常态暖黄（范围光）/ 紫（遮挡体），
+        // 仅选中实体绘制故无常态/选中两套，手柄激活高亮复用
+        // GIZMO_COLOR_HOVER、方块手柄复用 COLLIDER_HANDLE 系列参数
+        protected let LIGHT2D_RANGE_GIZMO_COLOR = (1., 0.78, 0.35, 0.65);
+        protected let LIGHT2D_BLOCK_GIZMO_COLOR = (0.62, 0.52, 0.95, 0.65);
         
         // 右键同时承担“拖拽环视”职责：以按下起点为基准，位移切实超过该
         // 像素阈值后才激活环视（阈值内的位移不转动摄像机）；松开时位移
@@ -263,6 +286,15 @@ namespace JEEditor::Editor
             CIRCLE,
             CAPSULE,
             MESH,
+        }
+
+        // 可编辑形状的 2D 光源组件种类（Light2D::Range / Light2D::BlockShadow
+        // 两个互斥的形状编辑目标；枚举成员可见性继承声明，跨文件使用的
+        // 枚举须为 public）
+        public enum LightShapeKind
+        {
+            RANGE,
+            BLOCK_SHADOW,
         }
         
         public enum CloseRequest

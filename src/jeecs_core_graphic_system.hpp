@@ -1918,13 +1918,13 @@ public func frag(vf: v2f)
             {
                 if (blockshadow != nullptr)
                 {
-                    if (!blockshadow->mesh.m_block_mesh.has_value())
+                    if (!blockshadow->shape.m_block_mesh.has_value())
                     {
                         std::vector<float> _vertex_buffer;
                         std::vector<uint32_t> _index_buffer;
-                        if (!blockshadow->mesh.m_block_points.empty())
+                        if (!blockshadow->shape.m_block_points.empty())
                         {
-                            for (auto& point : blockshadow->mesh.m_block_points)
+                            for (auto& point : blockshadow->shape.m_block_points)
                             {
                                 _vertex_buffer.insert(_vertex_buffer.end(),
                                     {
@@ -1939,7 +1939,7 @@ public func frag(vf: v2f)
                                         _index_offset + 1,
                                     });
                             }
-                            blockshadow->mesh.m_block_mesh = jeecs::graphic::vertex::create(
+                            blockshadow->shape.m_block_mesh = jeecs::graphic::vertex::create(
                                 jegl_vertex::type::TRIANGLESTRIP,
                                 _vertex_buffer.data(), _vertex_buffer.size() * sizeof(float),
                                 _index_buffer,
@@ -1949,7 +1949,7 @@ public func frag(vf: v2f)
                                 });
                         }
                         else
-                            blockshadow->mesh.m_block_mesh.reset();
+                            blockshadow->shape.m_block_mesh.reset();
                     }
                 }
                 m_2dblock_z_list.push_back(
@@ -2200,7 +2200,7 @@ public func frag(vf: v2f)
                                     if (blockarch.blockshadow != nullptr
                                         && blockarch.blockshadow->factor > 0.f
                                         && (!light_is_above_block || !blockarch.blockshadow->auto_disable)
-                                        && blockarch.blockshadow->mesh.m_block_mesh.has_value())
+                                        && blockarch.blockshadow->shape.m_block_mesh.has_value())
                                     {
                                         // BlockShadow 用 (0,-1,1).unit() 作为平行光方向参考，
                                         // 通过 local_scale.x 传递阴影权重，color.w 固定为 1。
@@ -2211,7 +2211,7 @@ public func frag(vf: v2f)
                                         draw_shadow_occluder(
                                             light2d_shadow_rend_chain,
                                             pass,
-                                            blockarch.blockshadow->mesh.m_block_mesh.value(),
+                                            blockarch.blockshadow->shape.m_block_mesh.value(),
                                             /*texture_group=*/nullptr,
                                             blockarch.translation,
                                             lightarch,

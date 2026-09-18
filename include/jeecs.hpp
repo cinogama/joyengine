@@ -11724,14 +11724,14 @@ namespace jeecs
                 }
             };
 
-            block_mesh mesh;
+            block_mesh shape;
             float factor = 1.0f;
             bool reverse = false;
             bool auto_disable = true;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(guard, &BlockShadow::mesh, "mesh");
+                typing::register_member(guard, &BlockShadow::shape, "shape");
                 typing::register_member(guard, &BlockShadow::factor, "factor");
                 typing::register_member(guard, &BlockShadow::reverse, "reverse");
                 typing::register_member(guard, &BlockShadow::auto_disable, "auto_disable");

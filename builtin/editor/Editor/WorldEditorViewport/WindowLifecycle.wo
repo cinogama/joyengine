@@ -49,6 +49,7 @@ import CameraControl;
 import EntityPicking;
 import TransformGizmo;
 import ColliderGizmo;
+import LightGizmo;
 import GizmoDrawing;
 import ViewportUI;
 import WorldSaving;
@@ -277,6 +278,17 @@ namespace JEEditor::Editor::WorldEditorViewport
             m_collider_drag_undo_component = mut "",
             m_collider_drag_undo_member = mut "",
             m_collider_drag_undo_old_value = mut "",
+
+            m_light_hover_handle = mut GIZMO_HANDLE_NONE,
+            m_light_dragging = mut false,
+            m_light_drag_handle = mut GIZMO_HANDLE_NONE,
+            m_light_drag_euid = mut (0h as entity::internal::euid_t),
+            m_light_drag_kind = mut LightShapeKind::RANGE,
+            m_light_drag_center = mut ((0., 0., 0.) as vec3),
+            m_light_drag_normal = mut ((0., 0., 1.) as vec3),
+            m_light_drag_undo_component = mut "",
+            m_light_drag_undo_member = mut "",
+            m_light_drag_undo_old_value = mut "",
         };
         
         // “调试执行/导出时才启用”的系统保存在视口中（编辑器内不 add_system），
@@ -613,7 +625,21 @@ namespace JEEditor::Editor::WorldEditorViewport
                     rect_min,
                     (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
         }
-        
+
+        // 2D 光源形状编辑手柄交互：优先级介于碰撞体手柄与变换游标
+        // 之间（碰撞体手柄被悬停/拖拽时让位，其被悬停/拖拽时变换
+        // 游标让位），同样先于摄像机控制
+        match (viewport_rect)
+        {
+            none?;
+            value((rect_min, rect_max))?
+                self->updateLightGizmo(
+                    debug_camera,
+                    viewport_hovered && !toolbar_hovered,
+                    rect_min,
+                    (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
+        }
+
         // 变换游标交互（碰撞体手柄被悬停/拖拽时让位，见 updateTransformGizmo）
         match (viewport_rect)
         {

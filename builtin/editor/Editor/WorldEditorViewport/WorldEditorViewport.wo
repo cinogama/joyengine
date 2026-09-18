@@ -12,6 +12,8 @@
 //   EntityPicking.wo     实体拾取与右键菜单
 //   GizmoMath.wo         gizmo 数学工具（纯函数）
 //   TransformGizmo.wo    变换游标（操作手柄）交互
+//   ColliderGizmo.wo     2D 物理碰撞体编辑手柄交互
+//   LightGizmo.wo        2D 光源形状（Range/BlockShadow）编辑手柄交互
 //   GizmoDrawing.wo      gizmo 绘制
 //   ViewportUI.wo        视口覆盖 UI（工具栏/未保存标记）
 //   WorldSaving.wo       世界保存/重命名/重开与调试系统管理
