@@ -292,7 +292,7 @@ namespace JEEditor::Editor
                 || name->end_with(".je4cache")
                 || name->end_with(".je4project");
         }
-
+        
         // 引擎编辑器约定的原生拓展模块目录：开发者通过 *.je4module 目录
         // 提供新的组件与系统，其生命周期由模块系统管理，资源管理器中
         // 不允许删除（见右键菜单）。
@@ -300,7 +300,7 @@ namespace JEEditor::Editor
         {
             return isdir(path) && string::lower(extension(path)) == ".je4module";
         }
-
+        
         // 从 path 逐级上溯到项目根（workpath），返回第一个 *.je4module
         // 祖先目录；不在任何模块内时返回 none。用于在模块目录内部时提供
         // “新建→C++ 组件/系统”入口。
@@ -308,17 +308,17 @@ namespace JEEditor::Editor
         {
             let root_str = workpath()->to_string();
             let mut current = path;
-
+            
             for (;;)
             {
                 if (isJe4ModuleDir(current))
                     return option::value(current);
-
+                    
                 // 到达项目根或无法继续上溯（文件系统根）即停止
                 let current_str = current->to_string();
                 if (current_str == root_str)
                     break;
-
+                    
                 let parent_dir = parent(current);
                 if (parent_dir->to_string() == current_str)
                     break;
@@ -517,7 +517,7 @@ namespace JEEditor::Editor
         func askToCreateCppModuleFolder(self: Browser, base: path_t)=> void
         {
             let dirty = self.m_fs_dirty;
-
+            
             do InputBox::show("新建 C++ 模块", "请输入新模块的名称：", "NewCppModule")
                 -> then(func(name){
                         if (name->len == 0)
@@ -525,23 +525,23 @@ namespace JEEditor::Editor
                             MsgBox::err("新建 C++ 模块", "模块名称不能为空");
                             return;
                         }
-
+                        
                         do show(ModulePrepare::create(func(prepare: ModulePrepare){
-                                let cpp_module_path = base / F"{name}.je4module";
-
-                                prepare->postMessage(
-                                    F"创建模块目录：{cpp_module_path->to_string()}");
-                                try! _ = mkdir(cpp_module_path)
-                                    ->or_map(\eno = F"创建新目录失败：{eno}";);
-                                dirty->set(true);
-
-                                prepare->postMessage(
-                                    "生成模块文件并编译（CMake），可能需要一些时间……");
-                                try! _ = ModulePrepare::createNewCppModuleDir(
-                                    prepare, cpp_module_path, name);
-
-                                return_ok!;
-                            }));
+                                    let cpp_module_path = base / F"{name}.je4module";
+                                    
+                                    prepare->postMessage(
+                                        F"创建模块目录：{cpp_module_path->to_string()}");
+                                    try! _ = mkdir(cpp_module_path)
+                                        ->or_map(\eno = F"创建新目录失败：{eno}";);
+                                    dirty->set(true);
+                                    
+                                    prepare->postMessage(
+                                        "生成模块文件并编译（CMake），可能需要一些时间……");
+                                    try! _ = ModulePrepare::createNewCppModuleDir(
+                                        prepare, cpp_module_path, name);
+                                        
+                                    return_ok!;
+                                }));
                     });
         }
         
@@ -643,13 +643,14 @@ namespace JEEditor::Editor
                                     F"无法创建 \"{dst->to_string()}\"，可能是文件名非法或磁盘已满");
                             value(fs)?
                             {
-                                defer do fs->close();
-                                
-                                if (!fs->write(content as buffer, 0, content->byte_len))
                                 {
-                                    MsgBox::err(dialog_title,
-                                        F"写入 \"{dst->to_string()}\" 失败");
-                                    return;
+                                    defer do fs->close();
+                                    if (!fs->write(content as buffer, 0, content->byte_len))
+                                    {
+                                        MsgBox::err(dialog_title,
+                                            F"写入 \"{dst->to_string()}\" 失败");
+                                        return;
+                                    }
                                 }
                                 
                                 dirty->set(true);
@@ -732,8 +733,8 @@ namespace JEEditor::Editor
                 "新建 ToWoo 组件", "请输入 ToWoo 组件文件名：", "NewComponent",
                 ".je4component.wo", Template::Type::TOWOO_COMPONENT, "ToWoo 组件",
                 option::value(func(path: path_t){
-                    Project::appendTowooComponent(path);
-                }));
+                        Project::appendTowooComponent(path);
+                    }));
         }
         
         // 新建 ToWoo 系统（右键菜单“新建→ToWoo 系统”）：在当前目录生成一
@@ -749,8 +750,8 @@ namespace JEEditor::Editor
                 "新建 ToWoo 系统", "请输入 ToWoo 系统文件名：", "NewSystem",
                 ".je4system.wo", Template::Type::TOWOO_SYSTEM, "ToWoo 系统",
                 option::value(func(path: path_t){
-                    Project::appendTowooSystem(path);
-                }));
+                        Project::appendTowooSystem(path);
+                    }));
         }
         
         func drawToolbar(self: Browser)=> void
@@ -1081,25 +1082,25 @@ namespace JEEditor::Editor
                 {
                     let is_selected = self.m_selected->is_value
                         && self.m_selected->unwrap == d;
-
+                        
                     let line_pos = GetCursorScreenPos();
                     let clicked = SelectableSelected(
                         F"##{d->to_string()}", is_selected);
-
+                        
                     Drag::DragPayload(FilePayload::create(d));
-
+                    
                     if (isRowRightClicked())
                         self.m_selected = option::value(d);
-
+                        
                     if (clicked)
                         self->handleItemClick(d);
-
+                        
                     SetCursorScreenPos(line_pos);
                     drawItemIcon(d);
                     Text(F"{name}/");
                 }
             }
-
+            
             for (let f : files)
             {
                 let name = filename(f);
@@ -1107,19 +1108,19 @@ namespace JEEditor::Editor
                 {
                     let is_selected = self.m_selected->is_value
                         && self.m_selected->unwrap == f;
-
+                        
                     let line_pos = GetCursorScreenPos();
                     let clicked = SelectableSelected(
                         F"##{f->to_string()}", is_selected);
-
+                        
                     Drag::DragPayload(FilePayload::create(f));
-
+                    
                     if (isRowRightClicked())
                         self.m_selected = option::value(f);
-
+                        
                     if (clicked)
                         self->handleItemClick(f);
-
+                        
                     SetCursorScreenPos(line_pos);
                     drawItemIcon(f);
                     Text(name);
@@ -1230,23 +1231,23 @@ namespace JEEditor::Editor
                             if (MenuItem("打开"))
                                 open_action(sel);
                     }
-
+                    
                     if (is_module_dir && MenuItem("重新构建并载入"))
                     {
                         do show(ModulePrepare::create(func(prepare: ModulePrepare){
-                                prepare->postMessage(
-                                    "生成模块文件并编译（CMake），可能需要一些时间……");
-
-                                return ModulePrepare::buildCppModuleDir(
-                                    prepare, sel, purename(sel), ModulePrepare::BuildConfig::DEBUG);
-                            }));
+                                    prepare->postMessage(
+                                        "生成模块文件并编译（CMake），可能需要一些时间……");
+                                        
+                                    return ModulePrepare::buildCppModuleDir(
+                                        prepare, sel, purename(sel), ModulePrepare::BuildConfig::DEBUG);
+                                }));
                     }
-
+                    
                     // 向模块添加组件/系统（模态对话框，见 ModuleTypeCreator.wo）
                     if (is_module_dir && BeginMenu("添加"))
                     {
                         defer EndMenu();
-
+                        
                         if (MenuItem("组件…"))
                         {
                             do ModuleTypeCreator::show(
@@ -1363,7 +1364,7 @@ namespace JEEditor::Editor
             else
                 do platform::shell(F"xdg-open \"{parent(path)->to_string()}\"");
         }
-
+        
         // 在后台线程执行 shell 命令：platform::shell 是阻塞的 system()，
         // 外部程序启动期间（如 vscode 冷启动）在 UI 协程直接调用会卡住整
         // 个编辑器，因此移入后台线程执行。返回的线程不等待，结束后由 GC
@@ -1376,7 +1377,7 @@ namespace JEEditor::Editor
                         logerr(F"执行外部命令失败（退出码非 0）：{cmd}");
                 });
         }
-
+        
         // 以系统默认方式打开文件，等同于在操作系统的文件管理器中双击该
         // 文件：Windows 经 cmd 内建命令 start 以文件关联程序打开——空标题
         // "" 必须占位，否则带空格的路径会被 start 当作新开控制台窗口的标
@@ -1387,7 +1388,7 @@ namespace JEEditor::Editor
         {
             let target = path->to_string();
             let current_os = platform::get_os();
-
+            
             if (current_os == platform::Os::WINDOWS)
             {
                 let win_path = target->replace("/", "\\");
@@ -1398,7 +1399,7 @@ namespace JEEditor::Editor
             else
                 shellDetached(F"xdg-open \"{target}\"");
         }
-
+        
         // 用 vscode 打开 ToWoo 脚本：以当前工作目录为工作区打开 vscode，
         // 并在该工作区内打开脚本——code <工作区> <文件> 一条命令完成；
         // 已有窗口打开着该工作区时聚焦该窗口并在其中打开文件。code 不在
@@ -1407,7 +1408,7 @@ namespace JEEditor::Editor
         {
             let workspace = workpath()->to_string();
             let target = path->to_string();
-
+            
             do thread::create(func(){
                     if (platform::shell(F"code \"{workspace}\" \"{target}\"") != 0)
                     {
@@ -1418,7 +1419,7 @@ namespace JEEditor::Editor
                     }
                 });
         }
-
+        
         // 双击 / 右键“打开”时，编辑器未接管（openActionForPath 未注册，
         // 见 ext_open_map）的文件由此兜底：.wo 脚本（含 .je4physics.wo 等
         // 以 .wo 结尾的派生后缀，extension 取最后一个后缀）用 vscode 打
@@ -1430,7 +1431,7 @@ namespace JEEditor::Editor
             else
                 openWithSystemDefault(path);
         }
-
+        
         func handleItemClick(self: Browser, path: fsys::path_t)=> void
         {
             let now = GetTime();
@@ -1444,7 +1445,7 @@ namespace JEEditor::Editor
             
             if (is_double && isdir(path))
                 self->goTo(path);
-
+                
             if (is_double)
             {
                 match (openActionForPath(path))
