@@ -2593,6 +2593,12 @@ struct dynamic_parser_impl_t
     woort_Value m_restoring;
     woort_Value m_edit;
 
+    // saving/restoring 来自 types 脚本，edit 来自 editor 脚本，
+    // 三者相互独立：任一脚本缺失或未提供某槽位时对应标志为 false。
+    bool m_has_saving = false;
+    bool m_has_restoring = false;
+    bool m_has_edit = false;
+
     const je_TypeinfoScriptParser*
         m_script_parser;
 };
@@ -2605,92 +2611,94 @@ struct dynamic_parser_global_context_t
     std::mutex _je_dynamic_parser_mx;
 
     parser_table_t _je_dynamic_parser_impls;
-    woort_CodeEnv* _je_dynamic_parser_cenv = nullptr;
+    woort_CodeEnv* _je_dynamic_parser_types_cenv = nullptr;
+    woort_CodeEnv* _je_dynamic_parser_editor_cenv = nullptr;
 };
 static dynamic_parser_global_context_t _je_dynamic_parser_global_context;
 
 void _je_dynamic_parser_clear()
 {
-    if (_je_dynamic_parser_global_context._je_dynamic_parser_cenv != nullptr)
+    if (_je_dynamic_parser_global_context._je_dynamic_parser_types_cenv != nullptr)
     {
-        _je_dynamic_parser_global_context._je_dynamic_parser_impls.clear();
-
-        woort_codeenv_drop(_je_dynamic_parser_global_context._je_dynamic_parser_cenv);
-        _je_dynamic_parser_global_context._je_dynamic_parser_cenv = nullptr;
+        woort_codeenv_drop(_je_dynamic_parser_global_context._je_dynamic_parser_types_cenv);
+        _je_dynamic_parser_global_context._je_dynamic_parser_types_cenv = nullptr;
     }
+    if (_je_dynamic_parser_global_context._je_dynamic_parser_editor_cenv != nullptr)
+    {
+        woort_codeenv_drop(_je_dynamic_parser_global_context._je_dynamic_parser_editor_cenv);
+        _je_dynamic_parser_global_context._je_dynamic_parser_editor_cenv = nullptr;
+    }
+
+    _je_dynamic_parser_global_context._je_dynamic_parser_impls.clear();
 
     assert(_je_dynamic_parser_global_context._je_dynamic_parser_impls.empty());
 }
-void _je_dynamic_parser_update_types(woort_value tmp)
+void _je_dynamic_parser_refresh(woort_value tmp)
 {
-    if (_je_dynamic_parser_global_context._je_dynamic_parser_cenv != nullptr)
+    _je_dynamic_parser_global_context._je_dynamic_parser_impls.clear();
+
+    auto** types = jedbg_get_all_registed_types();
+
+    auto** cur_type = types;
+    while (*cur_type)
     {
-        _je_dynamic_parser_global_context._je_dynamic_parser_impls.clear();
-
-        auto** types = jedbg_get_all_registed_types();
-
-        auto** cur_type = types;
-        while (*cur_type)
+        auto* script_parser = jeecs::typing::get_script_parser(*cur_type);
+        if (script_parser != nullptr)
         {
-            auto* script_parser = jeecs::typing::get_script_parser(*cur_type);
-            if (script_parser != nullptr)
+            std::string script_woolang_typename = script_parser->m_woolang_typename;
+
+            woort_Value* const tmp_internal_storage = woort_internal_value(tmp);
+
+            auto p = std::make_unique<dynamic_parser_impl_t>();
+
+            if (_je_dynamic_parser_global_context._je_dynamic_parser_types_cenv != nullptr)
             {
-                std::string script_woolang_typename = script_parser->m_woolang_typename;
-
-                woort_Value* const tmp_internal_storage = woort_internal_value(tmp);
-
-                auto p = std::make_unique<dynamic_parser_impl_t>();
-
-                bool succ = true;
                 if (woort_load_extern_const(
                     tmp,
-                    _je_dynamic_parser_global_context._je_dynamic_parser_cenv,
+                    _je_dynamic_parser_global_context._je_dynamic_parser_types_cenv,
                     (script_woolang_typename + "::parser::saving").c_str()))
                 {
                     p->m_saving = *tmp_internal_storage;
+                    p->m_has_saving = true;
                 }
-                else
-                    succ = false;
 
                 if (woort_load_extern_const(
                     tmp,
-                    _je_dynamic_parser_global_context._je_dynamic_parser_cenv,
+                    _je_dynamic_parser_global_context._je_dynamic_parser_types_cenv,
                     (script_woolang_typename + "::parser::restoring").c_str()))
                 {
                     p->m_restoring = *tmp_internal_storage;
-                }
-                else
-                    succ = false;
-
-                if (woort_load_extern_const(
-                    tmp,
-                    _je_dynamic_parser_global_context._je_dynamic_parser_cenv,
-                    (script_woolang_typename + "::parser::edit").c_str()))
-                {
-                    p->m_edit = *tmp_internal_storage;
-                }
-                else
-                    succ = false;
-
-                if (succ)
-                {
-                    p->m_script_parser = script_parser;
-                    _je_dynamic_parser_global_context._je_dynamic_parser_impls.insert(
-                        std::make_pair((*cur_type)->m_id, std::move(p)));
+                    p->m_has_restoring = true;
                 }
             }
 
-            ++cur_type;
+            if (_je_dynamic_parser_global_context._je_dynamic_parser_editor_cenv != nullptr)
+            {
+                if (woort_load_extern_const(
+                    tmp,
+                    _je_dynamic_parser_global_context._je_dynamic_parser_editor_cenv,
+                    (script_woolang_typename + "::parser::edit").c_str()))
+                {
+                    p->m_edit = *tmp_internal_storage;
+                    p->m_has_edit = true;
+                }
+            }
+
+            if (p->m_has_saving || p->m_has_restoring || p->m_has_edit)
+            {
+                p->m_script_parser = script_parser;
+                _je_dynamic_parser_global_context._je_dynamic_parser_impls.insert(
+                    std::make_pair((*cur_type)->m_id, std::move(p)));
+            }
         }
 
-        je_mem_free(types);
+        ++cur_type;
     }
-    else
-    {
-        assert(_je_dynamic_parser_global_context._je_dynamic_parser_impls.empty());
-    }
+
+    je_mem_free(types);
 }
-std::optional<std::string> _je_dynamic_parser_update_all(const char* path)
+std::optional<std::string> _je_dynamic_parser_update_script(
+    woort_CodeEnv*& target_cenv, const char* path)
 {
     using namespace std;
 
@@ -2753,9 +2761,12 @@ std::optional<std::string> _je_dynamic_parser_update_all(const char* path)
             return r;
         }
 
-        _je_dynamic_parser_clear();
-        _je_dynamic_parser_global_context._je_dynamic_parser_cenv = cenv;
-        _je_dynamic_parser_update_types(s);
+        // 只替换目标槽位的旧脚本，再从两个脚本环境全量重建解析表；
+        // 另一个槽位不受影响。
+        if (target_cenv != nullptr)
+            woort_codeenv_drop(target_cenv);
+        target_cenv = cenv;
+        _je_dynamic_parser_refresh(s);
     }
     (void)woort_vm_swap(last);
     woort_vm_close(vmm);
@@ -2765,7 +2776,7 @@ std::optional<std::string> _je_dynamic_parser_update_all(const char* path)
 
 ////////////////////////////////////////////////////////////////
 
-WOORT_API woort_api wojeapi_dynamic_parser_update_script(void)
+static woort_api _wojeapi_dynamic_parser_update(woort_CodeEnv*& target_cenv)
 {
     std::optional<std::string> result;
 
@@ -2774,7 +2785,7 @@ WOORT_API woort_api wojeapi_dynamic_parser_update_script(void)
     woort_vm* const last = woort_vm_swap(nullptr);
     {
         std::lock_guard g1(_je_dynamic_parser_global_context._je_dynamic_parser_mx);
-        result = _je_dynamic_parser_update_all(parser_path);
+        result = _je_dynamic_parser_update_script(target_cenv, parser_path);
     }
     (void)woort_vm_swap(last);
 
@@ -2783,7 +2794,19 @@ WOORT_API woort_api wojeapi_dynamic_parser_update_script(void)
     return woort_ret_result_ok_void();
 }
 
-WOORT_API woort_api wojeapi_dynamic_parser_update_type(void)
+WOORT_API woort_api wojeapi_dynamic_parser_update_types(void)
+{
+    return _wojeapi_dynamic_parser_update(
+        _je_dynamic_parser_global_context._je_dynamic_parser_types_cenv);
+}
+
+WOORT_API woort_api wojeapi_dynamic_parser_update_editor(void)
+{
+    return _wojeapi_dynamic_parser_update(
+        _je_dynamic_parser_global_context._je_dynamic_parser_editor_cenv);
+}
+
+WOORT_API woort_api wojeapi_dynamic_parser_refresh(void)
 {
     woort_value s;
     if (!woort_push_reserve(1, &s))
@@ -2793,7 +2816,7 @@ WOORT_API woort_api wojeapi_dynamic_parser_update_type(void)
     std::lock_guard g1(_je_dynamic_parser_global_context._je_dynamic_parser_mx);
     (void)woort_vm_swap(last);
 
-    _je_dynamic_parser_update_types(s);
+    _je_dynamic_parser_refresh(s);
 
     return woort_ret_void();
 }
@@ -2824,10 +2847,11 @@ WOORT_API woort_api wojeapi_dynamic_parser_save(void)
 
     if (fnd != _je_dynamic_parser_global_context._je_dynamic_parser_impls.end())
     {
-        assert(_je_dynamic_parser_global_context._je_dynamic_parser_cenv != nullptr);
-
         auto* val = woort_pointer(1);
         auto& parser = fnd->second;
+
+        if (!parser->m_has_saving)
+            return woort_ret_option_none();
 
         const woort_value value = s + 0;
         const woort_value func = s + 1;
@@ -2857,11 +2881,12 @@ WOORT_API woort_api wojeapi_dynamic_parser_restore(void)
 
     if (fnd != _je_dynamic_parser_global_context._je_dynamic_parser_impls.end())
     {
-        assert(_je_dynamic_parser_global_context._je_dynamic_parser_cenv != nullptr);
-
         void* val = woort_pointer(1);
         const char* dat = woort_string(2);
         auto& parser = fnd->second;
+
+        if (!parser->m_has_restoring)
+            return woort_ret_bool(false);
 
         const woort_value result = s + 0;
         const woort_value func = s + 1;
@@ -2893,12 +2918,12 @@ WOORT_API woort_api wojeapi_dynamic_parser_edit(void)
 
     if (fnd != _je_dynamic_parser_global_context._je_dynamic_parser_impls.end())
     {
-        assert(_je_dynamic_parser_global_context._je_dynamic_parser_cenv
-            != nullptr);
-
         auto* val = woort_pointer(1);
         const char* tag = woort_string(2);
         auto& parser = fnd->second;
+
+        if (!parser->m_has_edit)
+            return woort_ret_option_none();
 
         const woort_value value = s + 0;
         const woort_value tag_slot = s + 1;

@@ -46,8 +46,9 @@ func main()
     defer singleton::unsafe::reset_all_singleton();
     defer Singleton::saveAll();
     
-    // 载入默认的类型值编辑器
-    do towoo::unsafe::dynamic_parser::update_all("!/builtin/script/types.wo")->unwrap;
+    // 载入默认的类型序列化器与类型值编辑器
+    do towoo::unsafe::dynamic_parser::update_types("!/builtin/script/types.wo")->unwrap;
+    do towoo::unsafe::dynamic_parser::update_editor("!/builtin/script/editor.wo")->unwrap;
     
     // 创建一个 Universe，之后编辑器将在这上面运行
     let u = Singleton::Universe::getUniverse();

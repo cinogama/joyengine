@@ -35,11 +35,14 @@ namespace je
         {
             namespace dynamic_parser
             {
-                extern("libjoyecs", "wojeapi_dynamic_parser_update_script")
-                    public func update_all(path: string)=> result<void, string>;
+                extern("libjoyecs", "wojeapi_dynamic_parser_update_types")
+                    public func update_types(path: string)=> result<void, string>;
+
+                extern("libjoyecs", "wojeapi_dynamic_parser_update_editor")
+                    public func update_editor(path: string)=> result<void, string>;
                     
-                extern("libjoyecs", "wojeapi_dynamic_parser_update_type")
-                    public func update_type()=> void;
+                extern("libjoyecs", "wojeapi_dynamic_parser_refresh")
+                    public func refresh()=> void;
                     
                 extern("libjoyecs", "wojeapi_dynamic_parser_clear")
                     public func clear()=> void;

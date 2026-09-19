@@ -1,0 +1,709 @@
+// editor.wo
+
+import pkg::std;
+
+import je;
+import je::gui;
+import je::towoo;
+import je::towoo::types;
+
+import pkg::fsys;
+
+import builtin::editor::GUI::FileDrop;
+import builtin::editor::Editor::ResourcePath;
+import builtin::editor::Editor::Animation2D::DataModel;
+
+using std;
+using je;
+using je::gui;
+using JEEditor::GUI;
+using JEEditor::Editor;
+
+// =============================================
+// 这个脚本用于向编辑器提供各类型的编辑拓展
+// （edit；各类型的序列化拓展见同目录 types.wo）
+// 此脚本如果存在错误，项目将无法被编辑器载入
+// =============================================
+
+namespace bool
+{
+    using parser = void
+    {
+        public extern func edit(val: bool, tag: string)=> option<bool>
+        {
+            return CheckBox(F"##{tag}", val);
+        }
+    }
+}
+namespace uint8
+{
+    using parser = void
+    {
+        public extern func edit(val: uint8, tag: string)=> option<uint8>
+        {
+            return InputInt(F"##{tag}", val);
+        }
+    }
+}
+namespace uint16
+{
+    using parser = void
+    {
+        public extern func edit(val: uint16, tag: string)=> option<uint16>
+        {
+            return InputInt(F"##{tag}", val);
+        }
+    }
+}
+namespace uint32
+{
+    using parser = void
+    {
+        public extern func edit(val: uint32, tag: string)=> option<uint32>
+        {
+            return InputInt(F"##{tag}", val);
+        }
+    }
+}
+namespace uint64
+{
+    using parser = void
+    {
+        public extern func edit(val: uint64, tag: string)=> option<uint64>
+        {
+            return InputInt(F"##{tag}", val);
+        }
+    }
+}
+namespace int8
+{
+    using parser = void
+    {
+        public extern func edit(val: int8, tag: string)=> option<int8>
+        {
+            return InputInt(F"##{tag}", val);
+        }
+    }
+}
+namespace int16
+{
+    using parser = void
+    {
+        public extern func edit(val: int16, tag: string)=> option<int16>
+        {
+            return InputInt(F"##{tag}", val);
+        }
+    }
+}
+namespace int32
+{
+    using parser = void
+    {
+        public extern func edit(val: int32, tag: string)=> option<int32>
+        {
+            return InputInt(F"##{tag}", val);
+        }
+    }
+}
+namespace int64
+{
+    using parser = void
+    {
+        public extern func edit(val: int64, tag: string)=> option<int64>
+        {
+            return InputInt(F"##{tag}", val);
+        }
+    }
+}
+namespace float
+{
+    using parser = void
+    {
+        public extern func edit(val: float, tag: string)=> option<float>
+        {
+            return InputFloat(F"##{tag}", val);
+        }
+    }
+}
+namespace real
+{
+    using parser = void
+    {
+        public extern func edit(val: real, tag: string)=> option<real>
+        {
+            return InputFloat(F"##{tag}", val);
+        }
+    }
+}
+namespace ivec2
+{
+    using parser = void
+    {
+        public extern func edit(val: ivec2, tag: string)=> option<ivec2>
+        {
+            return InputInt2(F"##{tag}", val.0, val.1)->>\v = v as ivec2;;
+        }
+    }
+}
+namespace vec2
+{
+    using parser = void
+    {
+        public extern func edit(val: vec2, tag: string)=> option<vec2>
+        {
+            return InputFloat2(F"##{tag}", val.0, val.1)->>\v = v as vec2;;
+        }
+    }
+}
+namespace vec3
+{
+    using parser = void
+    {
+        public extern func edit(val: vec3, tag: string)=> option<vec3>
+        {
+            return InputFloat3(F"##{tag}", val.0, val.1, val.2)->>\v = v as vec3;;
+        }
+    }
+}
+namespace vec4
+{
+    using parser = void
+    {
+        public extern func edit(val: vec4, tag: string)=> option<vec4>
+        {
+            return InputFloat4(F"##{tag}", val.0, val.1, val.2, val.3)->>\v = v as vec4;;
+        }
+    }
+}
+namespace quat
+{
+    using parser = void
+    {
+        public extern func edit(val: quat, tag: string)=> option<quat>
+        {
+            let angle = val->euler_angle;
+            return InputFloat3(F"##{tag}", angle.0, angle.1, angle.2)->>\v = quat::euler(v...);;
+        }
+    }
+}
+// Physics2D::vertex_list：Collider::Mesh 的多边形顶点环。
+namespace Physics2D::vertex_list
+{
+    using parser = void
+    {
+        public extern func edit(val: Physics2D::vertex_list, tag: string)=> option<Physics2D::vertex_list>
+        {
+            let mut points = (val as array<vec2>)->to_vec;
+            let mut need_update = false;
+
+            // 顶点数（物理侧要求至少 3 个顶点才能构成多边形）。
+            // 首控件与成员名同行，负宽度在右侧为标签预留空间避免被裁切
+            SetNextItemWidth(-64.);
+            match (InputInt(F"顶点数##{tag}", points->len)->>\n = n < 3 ? 3 | n;)
+            {
+                value(count)?
+                {
+                    if (count != points->len)
+                    {
+                        points->resize(count, (0., 0.) as vec2);
+                        need_update = true;
+                    }
+                }
+                none?;
+            }
+
+            // 顶点行整体缩进，视觉上从属于成员
+            Indent(16.);
+            for (let mut i = 0; i < points->len; i += 1)
+            {
+                // 负宽度为"点X"标签预留空间，让两个分量框更宽敞
+                SetNextItemWidth(-80.);
+                match (InputFloat2(F"点{i}##{tag}", points[i][0], points[i][1])->>\v = v as vec2;)
+                {
+                    value(np)?
+                    {
+                        // 索引结果不可变：重建顶点表替换第 i 项
+                        let updated = []mut: vec<vec2>;
+                        for (let mut j = 0; j < points->len; j += 1)
+                            updated->add(
+                                (j == i) ? np | ((points[j][0], points[j][1]) as vec2));
+                        points = updated;
+                        need_update = true;
+                    }
+                    none?;
+                }
+            }
+
+            Unindent(16.);
+
+            if (need_update)
+                return option::value(points->to_array as Physics2D::vertex_list);
+            return option::none;
+        }
+    }
+}
+// Light2D::BlockShadow::block_mesh：遮挡光的闭合多边形环（实体局部坐标）。
+namespace Light2D::BlockShadow::block_mesh
+{
+    using parser = void
+    {
+        public extern func edit(val: Light2D::BlockShadow::block_mesh, tag: string)=> option<Light2D::BlockShadow::block_mesh>
+        {
+            let mut points = (val as array<vec2>)->to_vec;
+            let mut need_update = false;
+
+            // 顶点数（遮挡环至少 3 个顶点才能构成多边形）。
+            // 首控件与成员名同行，负宽度在右侧为标签预留空间避免被裁切
+            SetNextItemWidth(-64.);
+            match (InputInt(F"顶点数##{tag}", points->len)->>\n = n < 3 ? 3 | n;)
+            {
+                value(count)?
+                {
+                    if (count != points->len)
+                    {
+                        points->resize(count, (0., 0.) as vec2);
+                        need_update = true;
+                    }
+                }
+                none?;
+            }
+
+            // 顶点行整体缩进，视觉上从属于成员
+            Indent(16.);
+            for (let mut i = 0; i < points->len; i += 1)
+            {
+                // 负宽度为"点X"标签预留空间，让两个分量框更宽敞
+                SetNextItemWidth(-80.);
+                match (InputFloat2(F"点{i}##{tag}", points[i][0], points[i][1])->>\v = v as vec2;)
+                {
+                    value(np)?
+                    {
+                        // 索引结果不可变：重建顶点表替换第 i 项
+                        let updated = []mut: vec<vec2>;
+                        for (let mut j = 0; j < points->len; j += 1)
+                            updated->add(
+                                (j == i) ? np | ((points[j][0], points[j][1]) as vec2));
+                        points = updated;
+                        need_update = true;
+                    }
+                    none?;
+                }
+            }
+
+            Unindent(16.);
+
+            if (need_update)
+                return option::value(points->to_array as Light2D::BlockShadow::block_mesh);
+            return option::none;
+        }
+    }
+}
+// Light2D::Range::light_shape：范围光的同心环多边形（layer-major：
+// positions 为 [ilayer * m_point_count + ipoint]，strengths 每环一项）。
+namespace Light2D::Range::light_shape
+{
+    using parser = void
+    {
+        public extern func edit(val: Light2D::Range::light_shape, tag: string)=> option<Light2D::Range::light_shape>
+        {
+            let mut point_count = val.m_point_count;
+            let mut strengths = (val.m_strength)->to_vec;
+            let mut positions = (val.m_positions)->to_vec;
+            let mut need_update = false;
+
+            // 每环顶点数（环至少 3 个顶点才能构成多边形）。
+            // 首控件与成员名同行，负宽度在右侧为标签预留空间避免被裁切
+            SetNextItemWidth(-96.);
+            match (InputInt(F"每环顶点数##{tag}", point_count)->>\n = n < 3 ? 3 | n;)
+            {
+                value(count)?
+                {
+                    if (count != point_count)
+                    {
+                        point_count = count;
+                        positions->resize(strengths->len * count, (0., 0.) as vec2);
+                        need_update = true;
+                    }
+                }
+                none?;
+            }
+
+            // 其余控件行整体缩进，视觉上从属于成员
+            Indent(16.);
+
+            // 环数（每环一个强度；改变环数时同步伸缩 positions）
+            match (InputInt(F"环数##{tag}", strengths->len)->>\n = n < 1 ? 1 | n;)
+            {
+                value(count)?
+                {
+                    if (count != strengths->len)
+                    {
+                        let old_len = strengths->len;
+                        strengths->resize(count, 1. as float);
+                        let newpos = []mut: vec<vec2>;
+                        for (let mut l = 0; l < count; l += 1)
+                            for (let mut p = 0; p < point_count; p += 1)
+                                newpos->add((l < old_len)
+                                    ? positions[l * point_count + p]
+                                    | ((0., 0.) as vec2));
+                        positions = newpos;
+                        need_update = true;
+                    }
+                }
+                none?;
+            }
+
+            for (let mut l = 0; l < strengths->len; l += 1)
+            {
+                match (InputFloat(F"环{l}强度##{tag}", strengths[l]))
+                {
+                    value(ns)?
+                    {
+                        // 索引结果不可变：重建强度表替换第 l 项
+                        let updated = []mut: vec<float>;
+                        for (let mut j = 0; j < strengths->len; j += 1)
+                            updated->add((j == l) ? (ns as float) | strengths[j]);
+                        strengths = updated;
+                        need_update = true;
+                    }
+                    none?;
+                }
+            }
+
+            for (let mut i = 0; i < positions->len; i += 1)
+            {
+                // 负宽度为"环X点Y"标签预留空间，让两个分量框更宽敞
+                SetNextItemWidth(-88.);
+                match (InputFloat2(F"环{i / point_count}点{i % point_count}##{tag}", positions[i][0], positions[i][1])->>\v = v as vec2;)
+                {
+                    value(np)?
+                    {
+                        // 索引结果不可变：重建位置表替换第 i 项
+                        let updated = []mut: vec<vec2>;
+                        for (let mut j = 0; j < positions->len; j += 1)
+                            updated->add((j == i) ? np | positions[j]);
+                        positions = updated;
+                        need_update = true;
+                    }
+                    none?;
+                }
+            }
+
+            Unindent(16.);
+
+            if (need_update)
+                return option::value(Light2D::Range::light_shape{
+                    m_point_count = point_count,
+                    m_strength = strengths->to_array,
+                    m_positions = positions->to_array,
+                });
+            return option::none;
+        }
+    }
+}
+// Animation::FrameAnimation::animation_list：帧动画引用表（运行时结构见
+// jeecs.hpp 的 Animation::FrameAnimation）。每个条目引用一个 .je4animation
+// 文件（m_path 为 @/ 运行时相对路径），并可指定载入后自动播放的动作与循环。
+namespace Animation::FrameAnimation::animation_list
+{
+    // 动作名缓存（runtime_path -> 动作名表 / 文件最后写入时间）：
+    // .je4animation 可能正在动画编辑器中被修改，以时间戳判断缓存失效。
+    let mut s_action_names_cache = {}mut: map<string, array<string>>;
+    let mut s_action_names_stamp = {}mut: map<string, int>;
+
+    // 读取动画文件中的动作名列表；文件缺失或无法解析时返回空表。
+    func read_action_names(runtime_path: string)=> array<string>
+    {
+        if (runtime_path == "")
+        {
+            let empty = []mut: vec<string>;
+            return empty->to_array;
+        }
+
+        let local_path = ResourcePath::toLocalResourcePath(runtime_path);
+        let mut stamp = -1;
+        match (fsys::lastwrite(local_path))
+        {
+            value(t)? stamp = t as int;
+            none?;
+        }
+
+        match (s_action_names_stamp->get(runtime_path))
+        {
+            value(cached)?
+            {
+                if (cached == stamp)
+                {
+                    match (s_action_names_cache->get(runtime_path))
+                    {
+                        value(names)? return names;
+                        none?;
+                    }
+                }
+            }
+            none?;
+        }
+
+        let mut names = []mut: vec<string>;
+        match (JEEditor::Editor::Animation2D::AnimationContext::open(local_path))
+        {
+            ok(ctx)? names = ctx->action_names->to_vec;
+            err(_)?;
+        }
+
+        let arr = names->to_array;
+        s_action_names_cache->set(runtime_path, arr);
+        s_action_names_stamp->set(runtime_path, stamp);
+        return arr;
+    }
+
+    // 以下 entry_* 辅助：struct 成员不可变，修改单个字段需重建整个条目
+    func entry_with_path(entry: Animation::FrameAnimation::animation_state, path: string)=> Animation::FrameAnimation::animation_state
+    {
+        return Animation::FrameAnimation::animation_state{
+            m_path = path,
+            m_action = entry.m_action,
+            m_loop = entry.m_loop,
+        };
+    }
+    func entry_with_action(entry: Animation::FrameAnimation::animation_state, action: option<string>)=> Animation::FrameAnimation::animation_state
+    {
+        return Animation::FrameAnimation::animation_state{
+            m_path = entry.m_path,
+            m_action = action,
+            m_loop = entry.m_loop,
+        };
+    }
+    func entry_with_loop(entry: Animation::FrameAnimation::animation_state, loop_flag: bool)=> Animation::FrameAnimation::animation_state
+    {
+        return Animation::FrameAnimation::animation_state{
+            m_path = entry.m_path,
+            m_action = entry.m_action,
+            m_loop = loop_flag,
+        };
+    }
+    // 替换第 i 项（vec 没有原地 set，remove + insert 换入）
+    func replace_entry(entries: vec<Animation::FrameAnimation::animation_state>, i: int, entry: Animation::FrameAnimation::animation_state)=> void
+    {
+        do entries->remove(i);
+        do entries->insert(i, entry);
+    }
+
+    using parser = void
+    {
+        public extern func edit(val: Animation::FrameAnimation::animation_list, tag: string)=> option<Animation::FrameAnimation::animation_list>
+        {
+            let mut entries = (val as array<Animation::FrameAnimation::animation_state>)->to_vec;
+            let mut need_update = false;
+
+            // 动画条目数。首控件与成员名同行，负宽度在右侧为标签预留空间
+            SetNextItemWidth(-64.);
+            match (InputInt(F"动画数##{tag}", entries->len)->>\n = n < 0 ? 0 | n;)
+            {
+                value(count)?
+                {
+                    if (count != entries->len)
+                    {
+                        entries->resize(count, Animation::FrameAnimation::animation_state{
+                            m_path = "",
+                            m_action = option::none,
+                            m_loop = false,
+                        });
+                        need_update = true;
+                    }
+                }
+                none?;
+            }
+
+            // 条目控件整体缩进，视觉上从属于成员
+            Indent(16.);
+            for (let mut i = 0; i < entries->len; i += 1)
+            {
+                // 1) 动画文件：从资源浏览器拖入 .je4animation，右侧 × 清除引用
+                let mut cur_local = option::none: option<fsys::path_t>;
+                if (entries[i].m_path != "")
+                    cur_local = option::value(ResourcePath::toLocalResourcePath(entries[i].m_path));
+
+                match (FileDrop::File(F"文件{i}##{tag}", cur_local))
+                {
+                    none?;
+                    value(p)?
+                    {
+                        let mut new_path = "";
+                        match (p)
+                        {
+                            value(lp)? new_path = ResourcePath::toRuntimeResourcePath(lp);
+                            none?;
+                        }
+                        // 换文件/清除后原动作引用不再可靠，一并清空
+                        replace_entry(entries, i,
+                            entry_with_path(entry_with_action(entries[i], option::none: option<string>), new_path));
+                        need_update = true;
+                    }
+                }
+
+                // 2) 载入后自动播放的动作：Combo 列出文件中的动作名；
+                //    当前动作不在文件中时附加标注项展示，避免值被静默丢弃
+                let file_names = read_action_names(entries[i].m_path);
+                let mut cur_action = "";
+                match (entries[i].m_action)
+                {
+                    value(a)? cur_action = a;
+                    none?;
+                }
+
+                let mut raw_names = []mut: vec<string>;
+                let mut disp = []mut: vec<string>;
+                raw_names->add("");
+                disp->add("（不自动播放）");
+                let mut sel = 0;
+                for (let n : file_names)
+                {
+                    raw_names->add(n);
+                    disp->add(n);
+                    if (n == cur_action)
+                        sel = raw_names->len - 1;
+                }
+                if (cur_action != "" && sel == 0)
+                {
+                    raw_names->add(cur_action);
+                    disp->add(F"{cur_action}（文件中不存在）");
+                    sel = raw_names->len - 1;
+                }
+
+                match (Combo(F"动作{i}##{tag}", disp->to_array, option::value(sel)))
+                {
+                    value(idx)?
+                    {
+                        let picked = raw_names->get_or(idx, "");
+                        let mut act = option::none: option<string>;
+                        if (picked != "")
+                            act = option::value(picked);
+                        replace_entry(entries, i, entry_with_action(entries[i], act));
+                        need_update = true;
+                    }
+                    none?;
+                }
+
+                // 3) 循环开关 + 移除条目
+                SameLine();
+                match (CheckBox(F"循环{i}##{tag}", entries[i].m_loop))
+                {
+                    value(l)?
+                    {
+                        replace_entry(entries, i, entry_with_loop(entries[i], l));
+                        need_update = true;
+                    }
+                    none?;
+                }
+                SameLine();
+                if (Button(F"×##{tag}_{i}"))
+                {
+                    do entries->remove(i);
+                    // 回退索引，让递增后仍指向原第 i+1 项
+                    i -= 1;
+                    need_update = true;
+                }
+                else
+                {
+                    if (IsItemHovered())
+                        do SetTooltip("移除该动画条目");
+                }
+            }
+
+            if (entries->len == 0)
+                do TextDisabled("无动画条目，点击上方数量控件的 + 添加");
+
+            Unindent(16.);
+
+            if (need_update)
+                return option::value(entries->to_array as Animation::FrameAnimation::animation_list);
+            return option::none;
+        }
+    }
+}
+namespace file_resource
+{
+    using parser = void
+    {
+        public extern func edit(val: file_resource, tag: string)=> option<file_resource>
+        {
+            match (FileDrop::File(tag, val.path->>\p = ResourcePath::toLocalResourcePath(p);))
+            {
+                value(p)?
+
+                    return option::value(file_resource{
+                            path = p->> \p = ResourcePath::toRuntimeResourcePath(p);,
+                        });
+                none?
+                    return option::none;
+            }
+        }
+    }
+}
+namespace uuid
+{
+    using parser = void
+    {
+        public extern func edit(val: uuid, tag: string)=> option<uuid>
+        {
+            return InputText(F"##{tag}", val as string)->> \dat = dat as uuid;;
+        }
+    }
+}
+namespace string
+{
+    using parser = void
+    {
+        public extern func edit(val: string, tag: string)=> option<string>
+        {
+            return InputText(F"##{tag}", val as string);
+        }
+    }
+}
+
+namespace UserInterface::Origin::origin_center
+{
+    using parser = void
+    {
+        public extern func edit(val: UserInterface::Origin::origin_center, tag: string)=> option<UserInterface::Origin::origin_center>
+        {
+            let mut newval = val;
+            BeginGroup();
+            {
+                if (CheckBox(F"##{tag}_lu", origin_center::left + origin_center::top == val)->is_value)
+                    newval = origin_center::left + origin_center::top;
+                SameLine();
+                if (CheckBox(F"##{tag}_u", origin_center::top == val)->is_value)
+                    newval = origin_center::top;
+                SameLine();
+                if (CheckBox(F"##{tag}_ru", origin_center::right + origin_center::top == val)->is_value)
+                    newval = origin_center::right + origin_center::top;
+
+                if (CheckBox(F"##{tag}_l", origin_center::left == val)->is_value)
+                    newval = origin_center::left;
+                SameLine();
+                if (CheckBox(F"##{tag}_c", origin_center::center == val)->is_value)
+                    newval = origin_center::center;
+                SameLine();
+                if (CheckBox(F"##{tag}_r", origin_center::right == val)->is_value)
+                    newval = origin_center::right;
+
+                if (CheckBox(F"##{tag}_lb", origin_center::left + origin_center::bottom == val)->is_value)
+                    newval = origin_center::left + origin_center::bottom;
+                SameLine();
+                if (CheckBox(F"##{tag}_b", origin_center::bottom == val)->is_value)
+                    newval = origin_center::bottom;
+                SameLine();
+                if (CheckBox(F"##{tag}_rb", origin_center::right + origin_center::bottom == val)->is_value)
+                    newval = origin_center::right + origin_center::bottom;
+            }
+            EndGroup();
+
+            if (newval != val)
+                return option::value(newval);
+            else
+                return option::none;
+        }
+    }
+}
