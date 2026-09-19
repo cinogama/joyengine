@@ -1,0 +1,301 @@
+// 2D 帧动画编辑器 —— 窗口实现与静态入口。
+// 窗口为唯一实例（标题不含 $ID）：再次打开其他动画文件时经
+// retargetTo 重定向现有窗口（脏数据先询问保存），而不是并列开多窗。
+// 关闭前若有未保存修改，经 onPreClose 否决关闭并弹出保存询问；
+// 询问是模态窗口（同标题唯一），窗口的 X 在被否决的下一帧恢复正常
+//（BeginAttrOpen 每帧以 open=true 重新进入），重复点击不会叠加弹窗。
+
+import pkg::std;
+
+import je;
+import je::ecs;
+import je::gui;
+
+import pkg::fsys;
+import pkg::interface;
+
+import builtin::editor::Singleton::Universe;
+
+import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Menu;
+import builtin::editor::GUI::Shortcut;
+import builtin::editor::GUI::Forms::MsgBox;
+import builtin::editor::GUI::Forms::AskBox;
+
+import DataModel;
+import EditorState;
+import UI;
+
+using std;
+using je;
+using je::gui;
+using fsys;
+using JEEditor::GUI;
+using JEEditor::GUI::Windows;
+using JEEditor::GUI::Forms;
+using JEEditor::Singleton;
+using JEEditor::Editor::Animation2D;
+
+namespace JEEditor::Editor::Animation2D
+{
+    // 编辑器窗口单例（onCreate/onClose 维护，openAnimationEditorFromFile 查询）
+    let mut s_editor_singleton = option::none: option<Animation2DEditor>;
+
+    public func isAnimationEditorExist()
+    {
+        return s_editor_singleton->is_value;
+    }
+
+    // 从 .je4animation 文件打开动画编辑器：文件无法解析时以 MsgBox 报错；
+    // 编辑器窗口已打开时重定向到新文件（脏数据先询问保存）。
+    public func openAnimationEditorFromFile(path: fsys::path_t)=> void
+    {
+        match (AnimationContext::open(path))
+        {
+            err(_)?
+            {
+                let path_str = path->to_string;
+                MsgBox::err("打开失败", F"无法打开动画文件：{path_str}");
+            }
+            ok(ctx)?
+                match (s_editor_singleton)
+                {
+                    none?
+                        do show(Animation2DEditor::create(ctx));
+                    value(editor)?
+                        editor->retargetTo(ctx);
+                }
+        }
+    }
+
+    using Animation2DEditor = struct{
+        m_close: mut bool,
+        m_state: mut EditorState,
+    }
+    {
+        func create(context: AnimationContext)=> Animation2DEditor
+            where require!(Animation2DEditor: IWindows);
+        {
+            return Animation2DEditor{
+                m_close = mut false,
+                m_state = mut EditorState::create(
+                    context, option::value(Universe::getUniverse())),
+            };
+        }
+
+        // 把窗口切换到另一个动画文件：丢弃全部编辑期状态（撤销栈/选区/
+        // 预览）。当前动画有未保存修改时先弹保存询问，保存失败则保持
+        // 原文件不动（不静默丢数据）。
+        func retargetTo(self: Animation2DEditor, context: AnimationContext)=> void
+        {
+            if (self.m_state.m_dirty && !self.m_close)
+            {
+                let old_path_str = self.m_state.m_context.m_path->to_string;
+                let editor = self;
+                do AskBox::show("是否保存动画", F"是否将动画保存到 {old_path_str}？")
+                    ->onYes(func(){
+                            do try_save(editor.m_state);
+                            // 保存失败（仍为脏）时放弃切换，保留原编辑现场
+                            if (editor.m_state.m_dirty)
+                                return;
+                            editor->applyRetarget(context);
+                        })
+                    ->onNo(func(){
+                            editor->applyRetarget(context);
+                        });
+                return;
+            }
+            self->applyRetarget(context);
+        }
+        func applyRetarget(self: Animation2DEditor, context: AnimationContext)=> void
+        {
+            self.m_state = EditorState::create(
+                context, option::value(Universe::getUniverse()));
+        }
+
+        public func onCreate(self: Animation2DEditor)=> void
+        {
+            s_editor_singleton = option::value(self);
+        }
+        public func onClose(_: Animation2DEditor)=> void
+        {
+            s_editor_singleton = option::none;
+        }
+        public func getTitle(_: Animation2DEditor)=> string
+        {
+            return "2D帧动画编辑器";
+        }
+        public func getSizeConstraints(_: Animation2DEditor)=> SizeConstraints
+        {
+            return SizeConstraints::Limited(((960., 520.), (4096., 4096.)));
+        }
+        public func getMenu(self: Animation2DEditor)=> option<Menu>
+        {
+            let state = self.m_state;
+            return option::value <|
+                Menu::create("")
+                    -> subMenu("文件")
+                    ->  subItem("保存", \= try_save(state);)
+                    ->  shortCut("Ctrl+S")
+                    ->  endItem
+                    ->  subItem("关闭", \= self->requestClose();)
+                    ->  endItem
+                    -> endMenu
+                    -> subMenu("编辑")
+                    ->  subItem("撤销", func(){
+                            match (state->cur_frames)
+                            {
+                                value(fr)? do state->undo(fr);
+                                none?;
+                            }
+                        })
+                    ->  enableWhen(\= state.m_undo->can_undo;)
+                    ->  endItem
+                    ->  subItem("重做", func(){
+                            match (state->cur_frames)
+                            {
+                                value(fr)? do state->redo(fr);
+                                none?;
+                            }
+                        })
+                    ->  enableWhen(\= state.m_undo->can_redo;)
+                    ->  endItem
+                    ->  separator()
+                    ->  subItem("新建动画", \= ask_new_action(state);)
+                    ->  endItem
+                    ->  subItem("导入动作...", \= import_action(state);)
+                    ->  endItem
+                    -> endMenu
+                    ;
+        }
+        public func getShortcut(self: Animation2DEditor)=> option<Shortcut>
+        {
+            let state = self.m_state;
+            return option::value <|
+                Shortcut::begin()
+                    ->shortCut(
+                        [ImGuiKey::ImGuiMod_Ctrl, ImGuiKey::ImGuiKey_S],
+                        \= try_save(state);)
+                    ->finish();
+        }
+
+        // 用户发起关闭（菜单“关闭”）：脏数据走保存询问，询问回调中再落关闭
+        func requestClose(self: Animation2DEditor)=> void
+        {
+            if (!self.m_state.m_dirty || self.m_close)
+            {
+                self.m_close = true;
+                return;
+            }
+            do self->askSaveThenClose();
+        }
+
+        // X 按钮 / 外部关闭请求：窗口标题不含 $ID，是唯一窗口；onPreClose
+        // 仅在关闭被发起的帧调用（边沿触发），此处否决关闭并弹保存询问，
+        // 用户答复后经 m_close 走正常关闭流程。
+        public func onPreClose(self: Animation2DEditor)=> bool
+        {
+            if (self.m_close || !self.m_state.m_dirty)
+                return true;
+            do self->askSaveThenClose();
+            return false;
+        }
+
+        func askSaveThenClose(self: Animation2DEditor)=> void
+        {
+            let path_str = self.m_state.m_context.m_path->to_string;
+            let editor = self;
+            do AskBox::show("是否保存动画", F"是否将动画保存到 {path_str}？")
+                ->onYes(func(){
+                        do try_save(editor.m_state);
+                        // 保存失败（仍为脏）时不关闭，保留用户修改
+                        if (!editor.m_state.m_dirty)
+                            editor.m_close = true;
+                    })
+                ->onNo(func(){
+                        editor.m_close = true;
+                    });
+        }
+
+        public func run(self: Animation2DEditor)=> bool
+        {
+            let state = self.m_state;
+            let ctx = state.m_context;
+            let avail = GetContentRegionAvail();
+
+            // 三栏布局：左动作 / 中预览+时间轴 / 右属性
+            let left_w = 180.;
+            let right_w = 500.;
+            let mut center_w = avail[0] - left_w - right_w - 8.;
+            if (center_w < 200.) center_w = 200.;
+
+            // 工具栏（整宽）
+            let frames_opt = ctx->current_frames;
+            do _render_toolbar(state, frames_opt);
+
+            // 左：动作
+            if (BeginChildSize("##left", left_w, avail[1] - GetFrameHeightWithSpacing()))
+                do _render_action_panel(state);
+            EndChild();
+            SameLine();
+
+            // 中：预览 + 时间轴
+            if (BeginChildSize("##center", center_w, avail[1] - GetFrameHeightWithSpacing()))
+            {
+                match (frames_opt)
+                {
+                    value(frames)?
+                    {
+                        if (frames->len == 0)
+                        {
+                            TextDisabled("当前动画没有帧");
+                            if (Button("+ 新建帧"))
+                            {
+                                let snap = frames->dup()->>\f = f->dup;;
+                                frames->add(Animation2dFrameData{
+                                        m_time = mut 0.1, m_component_data = []mut, m_uniform_data = []mut,
+                                    });
+                                do state->record(frames, snap, "新增帧");
+                                ctx.m_selected_frame = 0;
+                            }
+                            if (Button("⚙ 用精灵图切片生成"))
+                                do OpenPopup("##spritesheet_popup");
+                            do render_spritesheet_popup(state, frames);
+                        }
+                        else
+                        {
+                            let cur = state->advance_playback(frames);
+                            // 播放时跟随播放游标；否则停在用户选中的帧
+                            if (state.m_playing && cur >= 0)
+                                ctx.m_selected_frame = cur;
+                            else if (ctx.m_selected_frame < 0 || ctx.m_selected_frame >= frames->len)
+                                ctx.m_selected_frame = cur >= 0 ? cur | 0;
+                            let cf = ctx.m_selected_frame;
+                            do _render_center(state, frames, cf);
+                        }
+                    }
+                    none?
+                    {
+                        TextDisabled("请先新建或选择一个动画");
+                        if (Button("+ 新建动画")) do ask_new_action(state);
+                    }
+                }
+            }
+            EndChild();
+            SameLine();
+
+            // 右：属性
+            if (BeginChildSize("##right", right_w, avail[1] - GetFrameHeightWithSpacing()))
+            {
+                match (frames_opt)
+                {
+                    value(frames)? do _render_properties(state, frames);
+                    none? TextDisabled("无选中动画");
+                }
+            }
+            EndChild();
+
+            return !self.m_close;
+        }
+    }
+}

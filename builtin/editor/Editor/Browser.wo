@@ -36,6 +36,7 @@ import builtin::editor::Editor::ModulePrepare;
 import builtin::editor::Editor::ModuleTypeCreator;
 import builtin::editor::Editor::Project;
 import builtin::editor::Editor::Template;
+import builtin::editor::Editor::Animation2D;
 import ResourcePath;
 import Action::ModifyPrefab;
 
@@ -754,6 +755,66 @@ namespace JEEditor::Editor
                     }));
         }
         
+        // 新建动画文件（右键菜单“新建→动画”）：.je4animation 是二进制格式
+        // （魔数 + 动画组表，见 Animation2D::AnimationContext），空文件即
+        // “魔数 + 0 个动画组”，经 AnimationContext 落盘以保证与编辑器/运行
+        // 时的读写格式一致。流程同 askToCreateFromTemplate：弹输入框要文
+        // 件名 → 未带后缀时自动补全 → 已存在则确认覆盖 → 写盘。回调不捕
+        // 获 Browser 实例，文件缓存刷新经 dirty 传出。
+        func askToCreateNewAnimation(self: Browser)=> void
+        {
+            let target_dir = self.m_current;
+            let dirty = self.m_fs_dirty;
+            
+            func writeTo(dst: path_t)=> void
+            {
+                if (Animation2D::AnimationContext::create(dst)->save())
+                {
+                    dirty->set(true);
+                    
+                    // 闭包按创建时的值捕获文本，之后每帧由 Statebar 调用绘制
+                    let path_str = dst->to_string();
+                    Statebar::showState(3.) <| func(){
+                        Text(F"动画 \"{path_str}\" 已创建");
+                    };
+                }
+                else
+                    MsgBox::err("新建动画",
+                        F"无法创建 \"{dst->to_string()}\"，可能是文件名非法或磁盘已满");
+            }
+            
+            func createAs(file_name: string)=> void
+            {
+                if (file_name->len == 0)
+                {
+                    MsgBox::err("新建动画", "文件名不能为空");
+                    return;
+                }
+                
+                // 未带后缀时自动补全 .je4animation
+                let full_name = file_name->end_with(".je4animation")
+                    ? file_name
+                    | F"{file_name}.je4animation";
+                    
+                let dst = target_dir / full_name;
+                
+                if (isfile(dst))
+                {
+                    // 已存在同名文件时弹出覆盖确认
+                    do AskBox::show(
+                        "新建动画", F"目录中已存在 \"{full_name}\"，确认覆盖吗？")
+                        ->onYes(\= writeTo(dst);)
+                        ;
+                }
+                else
+                    writeTo(dst);
+            }
+            
+            do InputBox::show("新建动画", "请输入动画文件名：", "NewAnimation")
+                ->then(createAs)
+                ;
+        }
+        
         func drawToolbar(self: Browser)=> void
         {
             BeginDisabled(self.m_history->len == 0);
@@ -1162,6 +1223,10 @@ namespace JEEditor::Editor
                             }
                         }
                     }
+                    if (MenuItem("动画"))
+                    {
+                        self->askToCreateNewAnimation();
+                    }
                     if (MenuItem("物理世界配置"))
                     {
                         self->askToCreateNewPhysicsConfig();
@@ -1316,6 +1381,9 @@ namespace JEEditor::Editor
                 [".je4world"] = func(p: fsys::path_t) {
                     WorldEditorViewport::openWorldEditorViewportFromFile(
                         p, option::none);
+                },
+                [".je4animation"] = func(p: fsys::path_t) {
+                    Animation2D::openAnimationEditorFromFile(p);
                 },
             };
             

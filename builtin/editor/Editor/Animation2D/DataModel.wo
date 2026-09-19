@@ -1,0 +1,737 @@
+// 2D 帧动画编辑器 —— 数据模型与文件序列化。
+// 数据模型 / 文件格式与运行时 Animation::FrameAnimation 完全对齐
+// （魔数 0xA213A710，见 src/jeecs.hpp 的 animation_data_set::load_animation），
+// 序列化部分请勿改动。
+
+import pkg::std;
+
+import je;
+import je::gui;
+import je::typeinfo;
+import je::towoo;
+import je::towoo::types;
+
+import pkg::buffer;
+import pkg::filestream;
+import pkg::fsys;
+import pkg::math;
+import pkg::try;
+import pkg::worst;
+
+using std;
+using je::gui;
+using fsys;
+
+namespace JEEditor::Editor::Animation2D
+{
+    // ======================================================================
+    // Section 1 — 数据模型（保持与运行时二进制格式一致，请勿改动序列化）
+    // ======================================================================
+    public enum DataValueType
+    {
+        public INT,
+        public FLOAT,
+        public VEC2,
+        public VEC3,
+        public VEC4,
+        public QUAT4,
+    }
+    public union DataValue
+    {
+        INT(int),
+        FLOAT(real),
+        VEC2((real, real)),
+        VEC3((real, real, real)),
+        VEC4((real, real, real, real)),
+        QUAT4((real, real, real)),
+    }
+    namespace DataValue
+    {
+        using je::gui;
+
+        func to_string(self: DataValue)
+        {
+            match (self)
+            {
+                INT(i)? return i as string;
+                FLOAT(r)? return r as string;
+                VEC2((x, y))? return F"({x}, {y})";
+                VEC3((x, y, z))? return F"({x}, {y}, {z})";
+                VEC4((x, y, z, w))? return F"({x}, {y}, {z}, {w})";
+                QUAT4((x, y, z))? return F"({x}, {y}, {z})";
+            }
+        }
+
+        public func input_data_value(label: string, value: DataValue, on_change: (DataValue)=>void)
+        {
+            match (value)
+            {
+                INT(n)?
+                    do InputInt(label, n)->> \nv = on_change(DataValue::INT(nv));;
+                FLOAT(x)?
+                    do InputFloat(label, x)->> \nv = on_change(DataValue::FLOAT(nv));;
+                VEC2((x, y))?
+                    do InputFloat2(label, x, y)->> \nv = on_change(DataValue::VEC2(nv));;
+                VEC3((x, y, z))?
+                    do InputFloat3(label, x, y, z)->> \nv = on_change(DataValue::VEC3(nv));;
+                VEC4((x, y, z, w))?
+                    do InputFloat4(label, x, y, z, w)->> \nv = on_change(DataValue::VEC4(nv));;
+                QUAT4((x, y, z))?
+                    do InputFloat3(label, x, y, z)->> \nv = on_change(DataValue::QUAT4(nv));;
+            }
+        }
+
+        func append_to_buffer(buf: buffer, value: DataValue) => buffer
+        {
+            match (value)
+            {
+                INT(n)?
+                {
+                    let b = buf->appendui8(DataValueType::INT as int);
+                    return b->appendi32(n);
+                }
+                FLOAT(x)?
+                {
+                    let b = buf->appendui8(DataValueType::FLOAT as int);
+                    return b->appendf32(x);
+                }
+                VEC2((x, y))?
+                {
+                    let b = buf->appendui8(DataValueType::VEC2 as int);
+                    return b->appendf32(x)->appendf32(y);
+                }
+                VEC3((x, y, z))?
+                {
+                    let b = buf->appendui8(DataValueType::VEC3 as int);
+                    return b->appendf32(x)->appendf32(y)->appendf32(z);
+                }
+                VEC4((x, y, z, w))?
+                {
+                    let b = buf->appendui8(DataValueType::VEC4 as int);
+                    return b->appendf32(x)->appendf32(y)->appendf32(z)->appendf32(w);
+                }
+                QUAT4((ex, ey, ez))?
+                {
+                    let (x, y, z, w) = quat::euler(ez, ey, ex);
+                    let b = buf->appendui8(DataValueType::QUAT4 as int);
+                    return b->appendf32(x)->appendf32(y)->appendf32(z)->appendf32(w);
+                }
+            }
+        }
+    }
+
+    public using FrameComponentData = struct{
+        protected m_component_name: string,
+        protected m_member_name: string,
+        protected m_offset_mode: mut bool,
+        protected m_value: mut DataValue,
+    }
+    {
+        public func to_string(self: FrameComponentData)
+        {
+            if (self.m_offset_mode)
+                return F"{self.m_component_name}.{self.m_member_name}+={self.m_value->to_string}";
+            else
+                return F"{self.m_component_name}.{self.m_member_name}={self.m_value->to_string}";
+        }
+        public func dup(self: FrameComponentData)
+        {
+            return FrameComponentData{
+                m_component_name = self.m_component_name,
+                m_member_name = self.m_member_name,
+                m_value = mut self.m_value,
+                m_offset_mode = mut self.m_offset_mode,
+            };
+        }
+    }
+    public using FrameUniformData = struct{
+        protected m_uniform_name: string,
+        protected m_value: mut DataValue,
+    }
+    {
+        public func to_string(self: FrameUniformData)
+        {
+            return F"{self.m_uniform_name}={self.m_value->to_string}";
+        }
+        public func dup(self: FrameUniformData)
+        {
+            return FrameUniformData{
+                m_uniform_name = self.m_uniform_name,
+                m_value = mut self.m_value,
+            };
+        }
+    }
+    public using Animation2dFrameData = struct{
+        protected m_component_data: vec<FrameComponentData>,
+        protected m_uniform_data: vec<FrameUniformData>,
+        protected m_time: mut real,
+    }
+    {
+        public func dup(self: Animation2dFrameData)
+        {
+            return Animation2dFrameData{
+                m_time = mut self.m_time,
+                m_component_data = self.m_component_data->dup()->>\v = v->dup;,
+                m_uniform_data = self.m_uniform_data->dup()->>\v = v->dup;,
+            };
+        }
+    }
+    public using AnimationActionData = struct{
+        protected m_frames: vec<Animation2dFrameData>,
+    }
+    {
+        public func dup(self: AnimationActionData)
+        {
+            return AnimationActionData{
+                m_frames = self.m_frames->>\afd = afd->dup();,
+            };
+        }
+    }
+    public union SelectedComponentOrUniformData
+    {
+        ComponentIndex(int),
+        UniformIndex(int),
+        None,
+    }
+    namespace SelectedComponentOrUniformData
+    {
+        public func is_selected_component_idx(self: SelectedComponentOrUniformData, id: int)
+        {
+            match (self)
+            {
+                ComponentIndex(idx)? return idx == id;
+                _? return false;
+            }
+        }
+        public func is_selected_uniform_idx(self: SelectedComponentOrUniformData, id: int)
+        {
+            match (self)
+            {
+                UniformIndex(idx)? return idx == id;
+                _? return false;
+            }
+        }
+    }
+
+    public func lerp(a, b, deg: real)
+        where std::type_traits::is_same :<typeof(a),typeof(b)>
+        , a is int
+        || a is real
+        || a is (real, real)
+        || a is (real, real, real)
+        || a is (real, real, real, real)
+        ;
+    {
+        if (a is int)
+            return math::round(a as real + (b as real - a as real) * deg);
+        else if (a is real)
+            return a + (b - a) * deg;
+        else if (a is (real, real))
+            return (lerp(a[0], b[0], deg), lerp(a[1], b[1], deg));
+        else if (a is (real, real, real))
+            return (lerp(a[0], b[0], deg), lerp(a[1], b[1], deg), lerp(a[2], b[2], deg));
+        else if (a is (real, real, real, real))
+            return (lerp(a[0], b[0], deg), lerp(a[1], b[1], deg), lerp(a[2], b[2], deg), lerp(a[3], b[3], deg));
+        else
+            std::panic("lerp: unsupported value type");
+    }
+    public func lerp_data_value(a, b, deg: real)
+    {
+        match (a)
+        {
+            INT(v)? return DataValue::INT(lerp(v, b->unsafe::cast :<(void, int)>()[1], deg));
+            FLOAT(v)? return DataValue::FLOAT(lerp(v, b->unsafe::cast :<(void, real)>()[1], deg));
+            VEC2(v)? return DataValue::VEC2(lerp(v, b->unsafe::cast :<(void, (real, real))>()[1], deg));
+            VEC3(v)? return DataValue::VEC3(lerp(v, b->unsafe::cast :<(void, (real, real, real))>()[1], deg));
+            VEC4(v)? return DataValue::VEC4(lerp(v, b->unsafe::cast :<(void, (real, real, real, real))>()[1], deg));
+            QUAT4(v)? return DataValue::QUAT4(lerp(v, b->unsafe::cast :<(void, (real, real, real))>()[1], deg));
+        }
+    }
+
+    // slerp 版本的数据值插值：QUAT4 走球面插值（quat::slerp），其余复用 lerp_data_value。
+    // 调用方需保证 a、b 同类型（由 collect_interp_pairs 的 m_type_match 把关）。
+    public func interp_data_value(a: DataValue, b: DataValue, t: real) => DataValue
+    {
+        match (a)
+        {
+            QUAT4((aex, aey, aez))?
+            {
+                let (bex, bey, bez) = b->unsafe::cast :<(void, (real, real, real))>()[1];
+                let qa = quat::euler(aez, aey, aex);
+                let qb = quat::euler(bez, bey, bex);
+                let qr = quat::slerp(qa, qb, t);
+                let (rz, ry, rx) = qr->euler_angle as (real, real, real);
+                return DataValue::QUAT4((rx, ry, rz));
+            }
+            _? return lerp_data_value(a, b, t);
+        }
+    }
+    func data_value_type_tag(v: DataValue) => DataValueType
+    {
+        match (v)
+        {
+            INT(_)? return DataValueType::INT;
+            FLOAT(_)? return DataValueType::FLOAT;
+            VEC2(_)? return DataValueType::VEC2;
+            VEC3(_)? return DataValueType::VEC3;
+            VEC4(_)? return DataValueType::VEC4;
+            QUAT4(_)? return DataValueType::QUAT4;
+        }
+    }
+    func data_value_same_type(a: DataValue, b: DataValue) => bool
+    {
+        return data_value_type_tag(a) == data_value_type_tag(b);
+    }
+
+    // 插值键：标识一个可插值的组件成员或着色器变量
+    public union InterpKey
+    {
+        Component((string, string)),
+        Uniform(string),
+    }
+    namespace InterpKey
+    {
+        public func label(k: InterpKey) => string
+        {
+            match (k)
+            {
+                Component((c, m))? return c + "." + m;
+                Uniform(u)? return u;
+            }
+        }
+    }
+
+    // 两帧之间的键配对信息：标注每个键在 A/B 中的存在性与类型一致性
+    public using InterpPair = struct{
+        protected m_key: InterpKey,
+        protected m_ks: string,
+        protected m_in_a: bool,
+        protected m_in_b: bool,
+        protected m_type_match: bool,
+        protected m_a_val: option<DataValue>,
+        protected m_b_val: option<DataValue>,
+        protected m_a_offset_mode: bool,
+    };
+
+    // 在一帧中按 (组件名, 成员名) 查找已存在的值
+    func find_component_value(frame: Animation2dFrameData, cname: string, mname: string) => option<DataValue>
+    {
+        let mut res = option::none: option<DataValue>;
+        for (let cd : frame.m_component_data)
+        {
+            if (cd.m_component_name == cname && cd.m_member_name == mname)
+            {
+                res = option::value(cd.m_value);
+                break;
+            }
+        }
+        return res;
+    }
+    // 在一帧中按变量名查找已存在的着色器变量值
+    func find_uniform_value(frame: Animation2dFrameData, uname: string) => option<DataValue>
+    {
+        let mut res = option::none: option<DataValue>;
+        for (let ud : frame.m_uniform_data)
+        {
+            if (ud.m_uniform_name == uname)
+            {
+                res = option::value(ud.m_value);
+                break;
+            }
+        }
+        return res;
+    }
+
+    // 汇总两帧中所有组件/着色器变量键，标注存在性与类型一致性（不做原地修改）
+    public func collect_interp_pairs(a: Animation2dFrameData, b: Animation2dFrameData) => vec<InterpPair>
+    {
+        let mut result = []mut as vec<InterpPair>;
+        // A 的组件键：若 B 中也存在则配对
+        for (let cd : a.m_component_data)
+        {
+            let ks = "C:" + cd.m_component_name + "." + cd.m_member_name;
+            match (find_component_value(b, cd.m_component_name, cd.m_member_name))
+            {
+                value(bval)?
+                    do result->add(InterpPair{
+                            m_key = InterpKey::Component((cd.m_component_name, cd.m_member_name)),
+                            m_ks = ks,
+                            m_in_a = true, m_in_b = true,
+                            m_type_match = data_value_same_type(cd.m_value, bval),
+                            m_a_val = option::value(cd.m_value), m_b_val = option::value(bval),
+                            m_a_offset_mode = cd.m_offset_mode,
+                        });
+                none?
+                    do result->add(InterpPair{
+                            m_key = InterpKey::Component((cd.m_component_name, cd.m_member_name)),
+                            m_ks = ks,
+                            m_in_a = true, m_in_b = false, m_type_match = false,
+                            m_a_val = option::value(cd.m_value), m_b_val = option::none,
+                            m_a_offset_mode = cd.m_offset_mode,
+                        });
+            }
+        }
+        // A 的 uniform 键
+        for (let ud : a.m_uniform_data)
+        {
+            let ks = "U:" + ud.m_uniform_name;
+            match (find_uniform_value(b, ud.m_uniform_name))
+            {
+                value(bval)?
+                    do result->add(InterpPair{
+                            m_key = InterpKey::Uniform(ud.m_uniform_name),
+                            m_ks = ks,
+                            m_in_a = true, m_in_b = true,
+                            m_type_match = data_value_same_type(ud.m_value, bval),
+                            m_a_val = option::value(ud.m_value), m_b_val = option::value(bval),
+                            m_a_offset_mode = false,
+                        });
+                none?
+                    do result->add(InterpPair{
+                            m_key = InterpKey::Uniform(ud.m_uniform_name),
+                            m_ks = ks,
+                            m_in_a = true, m_in_b = false, m_type_match = false,
+                            m_a_val = option::value(ud.m_value), m_b_val = option::none,
+                            m_a_offset_mode = false,
+                        });
+            }
+        }
+        // B 的组件键中，A 里没有的
+        for (let cd : b.m_component_data)
+        {
+            if (find_component_value(a, cd.m_component_name, cd.m_member_name)->is_none)
+            {
+                let ks = "C:" + cd.m_component_name + "." + cd.m_member_name;
+                do result->add(InterpPair{
+                        m_key = InterpKey::Component((cd.m_component_name, cd.m_member_name)),
+                        m_ks = ks,
+                        m_in_a = false, m_in_b = true, m_type_match = false,
+                        m_a_val = option::none, m_b_val = option::value(cd.m_value),
+                        m_a_offset_mode = cd.m_offset_mode,
+                    });
+            }
+        }
+        // B 的 uniform 键中，A 里没有的
+        for (let ud : b.m_uniform_data)
+        {
+            if (find_uniform_value(a, ud.m_uniform_name)->is_none)
+            {
+                let ks = "U:" + ud.m_uniform_name;
+                do result->add(InterpPair{
+                        m_key = InterpKey::Uniform(ud.m_uniform_name),
+                        m_ks = ks,
+                        m_in_a = false, m_in_b = true, m_type_match = false,
+                        m_a_val = option::none, m_b_val = option::value(ud.m_value),
+                        m_a_offset_mode = false,
+                    });
+            }
+        }
+        return result;
+    }
+
+    // 取单个键在 t 处的值：可插值则插值，否则复制存在侧
+    func interp_pair_value(p: InterpPair, t: real) => DataValue
+    {
+        if (p.m_in_a && p.m_in_b && p.m_type_match)
+            return interp_data_value(p.m_a_val->unwrap, p.m_b_val->unwrap, t);
+        if (p.m_in_a)
+            return p.m_a_val->unwrap;
+        return p.m_b_val->unwrap;
+    }
+
+    // 按勾选状态与 t 生成一帧（offset_mode 沿用 A 侧）
+    public func build_interpolated_frame(
+        pairs: vec<InterpPair>, checked: map<string, bool>, t: real, ftime: real) => Animation2dFrameData
+    {
+        let mut comps = []mut as vec<FrameComponentData>;
+        let mut unis = []mut as vec<FrameUniformData>;
+        for (let p : pairs)
+        {
+            // 默认与弹窗一致：可插值键默认勾选，其余默认不勾（未在 map 中显式设置时取此默认）
+            let defv = p.m_in_a && p.m_in_b && p.m_type_match;
+            if (!checked->get_or(p.m_ks, defv))
+                continue;
+            let val = interp_pair_value(p, t);
+            match (p.m_key)
+            {
+                Component((cname, mname))?
+                    do comps->add(FrameComponentData{
+                            m_component_name = cname,
+                            m_member_name = mname,
+                            m_offset_mode = mut p.m_a_offset_mode,
+                            m_value = mut val,
+                        });
+                Uniform(uname)?
+                    do unis->add(FrameUniformData{
+                            m_uniform_name = uname,
+                            m_value = mut val,
+                        });
+            }
+        }
+        return Animation2dFrameData{
+            m_time = mut ftime,
+            m_component_data = comps,
+            m_uniform_data = unis,
+        };
+    }
+
+    // 把 je::typeinfo 映射为对应的默认 DataValue（添加组件/变量时使用）
+    public func default_data_value_for_type(t: je::typeinfo) => DataValue
+    {
+        if (t == je::typeinfo::int)
+            return DataValue::INT(0);
+        else if (t == je::typeinfo::float)
+            return DataValue::FLOAT(0.);
+        else if (t == je::typeinfo::float2)
+            return DataValue::VEC2((0., 0.));
+        else if (t == je::typeinfo::float3)
+            return DataValue::VEC3((0., 0., 0.));
+        else if (t == je::typeinfo::float4)
+            return DataValue::VEC4((0., 0., 0., 0.));
+        else if (t == je::typeinfo::quat)
+            return DataValue::QUAT4((0., 0., 0.));
+        return DataValue::INT(0);
+    }
+    public func type_is_animatable(t: je::typeinfo) => bool
+    {
+        return t == je::typeinfo::int
+            || t == je::typeinfo::float
+            || t == je::typeinfo::float2
+            || t == je::typeinfo::float3
+            || t == je::typeinfo::float4
+            || t == je::typeinfo::quat;
+    }
+
+    // ======================================================================
+    // Section 2 — AnimationContext（公共 API 与文件格式保持不变）
+    // ======================================================================
+    public using AnimationContext = struct{
+        protected m_animations: map<string, AnimationActionData>,
+        protected m_path: fsys::path_t,
+
+        // 编辑期选择状态
+        protected m_selected_action_name: mut string,
+        protected m_selected_frame: mut int,
+        protected m_selected_c_or_u_data: mut SelectedComponentOrUniformData,
+    }
+    {
+        public func create(path: fsys::path_t)
+        {
+            return AnimationContext{
+                m_animations = {}mut,
+                m_path = path,
+                m_selected_action_name = mut "",
+                m_selected_frame = mut -1,
+                m_selected_c_or_u_data = mut SelectedComponentOrUniformData::None,
+            };
+        }
+        public func open(path: fsys::path_t)
+        {
+            try! bufdata = buffer::builder::fromfile(path->to_string, 0, -1);
+
+            let self = AnimationContext{
+                m_animations = {}mut,
+                m_path = path,
+                m_selected_action_name = mut "",
+                m_selected_frame = mut -1,
+                m_selected_c_or_u_data = mut SelectedComponentOrUniformData::None,
+            };
+
+            func read_typed_value(bufdata: buffer::builder)
+            {
+                let value_type = bufdata->readui8() as DataValueType;
+                if (value_type == DataValueType::INT)
+                    return DataValue::INT(bufdata->readi32());
+                else if (value_type == DataValueType::FLOAT)
+                    return DataValue::FLOAT(bufdata->readf32());
+                else if (value_type == DataValueType::VEC2)
+                {
+                    let x = bufdata->readf32();
+                    let y = bufdata->readf32();
+                    return DataValue::VEC2((x, y));
+                }
+                else if (value_type == DataValueType::VEC3)
+                {
+                    let x = bufdata->readf32();
+                    let y = bufdata->readf32();
+                    let z = bufdata->readf32();
+                    return DataValue::VEC3((x, y, z));
+                }
+                else if (value_type == DataValueType::VEC4)
+                {
+                    let x = bufdata->readf32();
+                    let y = bufdata->readf32();
+                    let z = bufdata->readf32();
+                    let w = bufdata->readf32();
+                    return DataValue::VEC4((x, y, z, w));
+                }
+                else if (value_type == DataValueType::QUAT4)
+                {
+                    let x = bufdata->readf32();
+                    let y = bufdata->readf32();
+                    let z = bufdata->readf32();
+                    let w = bufdata->readf32();
+                    let (rz, ry, rx) = (x, y, z, w) as quat->euler_angle as (real, real, real);
+                    return DataValue::QUAT4((rx, ry, rz));
+                }
+                return std::panic(F"Unknown type: {value_type}");
+            }
+
+            if (bufdata->readui32() != 0xA213A710)
+                return result::err(0 as buffer::builder::errno_t);
+
+            let animation_count = bufdata->readi64();
+            for (let mut i = 0; i < animation_count; i += 1)
+            {
+                let frame_count = bufdata->readi64();
+                let frame_name_len = bufdata->readi64();
+                let frame_name = bufdata->readbuffer(frame_name_len): buffer as string;
+
+                let frames = AnimationActionData{m_frames = []mut};
+                self.m_animations->set(frame_name, frames);
+
+                for (let mut j = 0; j < frame_count; j += 1)
+                {
+                    let time = bufdata->readf32();
+                    let frame_data = Animation2dFrameData{
+                        m_time = mut time,
+                        m_component_data = []mut,
+                        m_uniform_data = []mut,
+                    };
+
+                    let component_data_count = bufdata->readi64();
+                    for (let mut k = 0; k < component_data_count; k += 1)
+                    {
+                        let component_name_len = bufdata->readi64();
+                        let component_name = bufdata->readbuffer(component_name_len): buffer as string;
+                        let member_name_len = bufdata->readi64();
+                        let member_name = bufdata->readbuffer(member_name_len): buffer as string;
+                        let offset_mode = bufdata->readui8() != 0;
+                        let value = read_typed_value(bufdata);
+                        frame_data.m_component_data->add(FrameComponentData{
+                                m_component_name = component_name,
+                                m_member_name = member_name,
+                                m_offset_mode = mut offset_mode,
+                                m_value = mut value,
+                            });
+                    }
+
+                    let uniform_data_count = bufdata->readi64();
+                    for (let mut k = 0; k < uniform_data_count; k += 1)
+                    {
+                        let uniform_name_len = bufdata->readi64();
+                        let uniform_name = bufdata->readbuffer(uniform_name_len): buffer as string;
+                        let value = read_typed_value(bufdata);
+                        frame_data.m_uniform_data->add(FrameUniformData{
+                                m_uniform_name = uniform_name,
+                                m_value = mut value,
+                            });
+                    }
+
+                    frames.m_frames->add(frame_data);
+                }
+            }
+            return result::ok(self);
+        }
+        public func save(self: AnimationContext)=> bool
+        {
+            let mut result = buffer::createui32(0xA213A710);
+            result = result->appendi64(self.m_animations->len);
+
+            for (let (action_name, action_data) : self.m_animations)
+            {
+                result = result
+                    ->appendi64(action_data.m_frames->len)
+                    ->appendi64(action_name->byte_len)
+                    + action_name: string as buffer;
+
+                for (let frame: action_data.m_frames)
+                {
+                    result = result->appendf32(frame.m_time);
+
+                    result = result->appendi64(frame.m_component_data->len);
+                    for (let cdata : frame.m_component_data)
+                    {
+                        result = result->appendi64(cdata.m_component_name->byte_len)
+                            + cdata.m_component_name: string as buffer;
+                        result = result->appendi64(cdata.m_member_name->byte_len)
+                            + cdata.m_member_name: string as buffer;
+                        result = result->appendui8(cdata.m_offset_mode? 1 | 0);
+                        result = DataValue::append_to_buffer(result, cdata.m_value);
+                    }
+
+                    result = result->appendi64(frame.m_uniform_data->len);
+                    for (let udata : frame.m_uniform_data)
+                    {
+                        result = result->appendi64(udata.m_uniform_name->byte_len)
+                            + udata.m_uniform_name: string as buffer;
+                        result = DataValue::append_to_buffer(result, udata.m_value);
+                    }
+                }
+            }
+
+            match (filestream::open(self.m_path, filestream::mode::write))
+            {
+                none?
+                    return false;
+                value(fs)?
+                {
+                    defer do fs->close();
+                    return fs->write(result, 0, result->len);
+                }
+            }
+        }
+
+        // 取当前选中动作的帧列表（vec 是引用语义，外部修改会写回）
+        public func current_frames(self: AnimationContext) => option<vec<Animation2dFrameData>>
+        {
+            return self.m_animations->get(self.m_selected_action_name)->>\a = a.m_frames;;
+        }
+        public func total_duration(frames: vec<Animation2dFrameData>) => real
+        {
+            let mut s = 0.;
+            for (let f : frames)
+                s += f.m_time;
+            return s;
+        }
+    }
+
+    // ======================================================================
+    // Section 5 — 精灵图：UV 解析
+    // ======================================================================
+    // 解析一帧的 Renderer::Textures::offset/tiling，得到引擎 UV 空间的 uv0/uv1。
+    public func frame_uv(frame: Animation2dFrameData) => option<((real, real), (real, real))>
+    {
+        let mut offset = (0., 0.);
+        let mut tiling = (1., 1.);
+        let mut found = false;
+        for (let cd : frame.m_component_data)
+        {
+            if (cd.m_component_name == "Renderer::Textures")
+            {
+                if (cd.m_member_name == "offset")
+                {
+                    match (cd.m_value)
+                    {
+                        VEC2((ox, oy))? { offset = (ox, oy); found = true; }
+                            _?;
+                    }
+                }
+                else if (cd.m_member_name == "tiling")
+                {
+                    match (cd.m_value)
+                    {
+                        VEC2((tx, ty))? { tiling = (tx, ty); found = true; }
+                            _?;
+                    }
+                }
+            }
+        }
+        if (!found)
+            return option::none;
+        // 对应 woshader: finalUV = (uv + offset) * tiling
+        let uv0 = (offset[0] * tiling[0], offset[1] * tiling[1]);
+        let uv1 = ((offset[0] + 1.) * tiling[0], (offset[1] + 1.) * tiling[1]);
+        return option::value((uv0, uv1));
+    }
+}
