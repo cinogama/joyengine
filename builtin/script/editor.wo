@@ -450,16 +450,18 @@ namespace Animation::FrameAnimation::animation_list
                 none?;
             }
 
-            // 每个条目占两行：文件引用一行，“动作 + 循环 + 移除”一行
+            // 每个条目占两行：“文件 + 移除”一行，“动作 + 循环”一行
             for (let mut i = 0; i < entries->len; i += 1)
             {
-                // 1) 动画文件：从资源浏览器拖入 .je4animation，右侧 × 清除引用
+                // 1) 动画文件：从资源浏览器拖入 .je4animation；字段右缘
+                //    紧邻的 × 只清除引用，行末的 × 移除整个条目
                 let mut cur_local = option::none: option<fsys::path_t>;
                 if (entries[i].m_path != "")
                     cur_local = option::value(ResourcePath::toLocalResourcePath(entries[i].m_path));
 
                 Widgets::beginRow(F"文件{i}", col_x, 56.);
-                match (FileDrop::File(F"##{tag}_file{i}", cur_local))
+                // 行末还要放“移除条目”× 按钮，为它预留右侧空间
+                match (FileDrop::FileTrailing(F"##{tag}_file{i}", cur_local, 32.))
                 {
                     none?;
                     value(p)?
@@ -475,6 +477,20 @@ namespace Animation::FrameAnimation::animation_list
                             entry_with_path(entry_with_action(entries[i], option::none: option<string>), new_path));
                         need_update = true;
                     }
+                }
+                SameLine();
+                if (ButtonSize(F"×##{tag}_{i}", (22., 0.)))
+                {
+                    do entries->remove(i);
+                    // 回退索引并跳过本条目余下行，让递增后仍指向原第 i+1 项
+                    i -= 1;
+                    need_update = true;
+                    continue;
+                }
+                else
+                {
+                    if (IsItemHovered())
+                        do SetTooltip("移除该动画条目");
                 }
 
                 // 2) 载入后自动播放的动作：Combo 列出文件中的动作名；
@@ -507,8 +523,8 @@ namespace Animation::FrameAnimation::animation_list
                 }
 
                 Widgets::beginRow(F"动作{i}", col_x, 56.);
-                // 同行还要放“循环”开关与移除按钮，为它们预留右侧空间
-                SetNextItemWidth(GetContentRegionAvail().0 - 104.);
+                // 同行还要放“循环”开关，为其预留右侧空间
+                SetNextItemWidth(GetContentRegionAvail().0 - 74.);
                 match (Combo(F"##{tag}_act{i}", disp->to_array, option::value(sel)))
                 {
                     value(idx)?
@@ -523,7 +539,7 @@ namespace Animation::FrameAnimation::animation_list
                     none?;
                 }
 
-                // 3) 循环开关 + 移除条目
+                // 3) 循环开关
                 SameLine();
                 match (CheckBox(F"循环##{tag}_loop{i}", entries[i].m_loop))
                 {
@@ -533,19 +549,6 @@ namespace Animation::FrameAnimation::animation_list
                         need_update = true;
                     }
                     none?;
-                }
-                SameLine();
-                if (ButtonSize(F"×##{tag}_{i}", (22., 0.)))
-                {
-                    do entries->remove(i);
-                    // 回退索引，让递增后仍指向原第 i+1 项
-                    i -= 1;
-                    need_update = true;
-                }
-                else
-                {
-                    if (IsItemHovered())
-                        do SetTooltip("移除该动画条目");
                 }
             }
 

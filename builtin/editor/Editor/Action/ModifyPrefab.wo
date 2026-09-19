@@ -70,22 +70,17 @@ namespace JEEditor::Editor::Action
         {
             for (let e : w->getEntitySelector())
             {
-                match (e->internal::get_entity_uid)
+                if (e->internal::get_entity_uid->> \ueid = ueid == eid;->or(false))
                 {
-                    none?;
-                    value(ueid)?
-                        if (ueid == eid)
-                        {
-                            match (path)
-                            {
-                                none?
-                                    if (e->towoo::get_component:<Editor::Prefab>()->is_value)
-                                        do e->towoo::remove_component:<Editor::Prefab>();
-                                value(p)?
-                                    e->towoo::add_component:<Editor::Prefab>().path->set <| p;
-                            }
-                            return true;
-                        }
+                    match (path)
+                    {
+                        none?
+                            if (e->towoo::get_component:<Editor::Prefab>()->is_value)
+                                do e->towoo::remove_component:<Editor::Prefab>();
+                        value(p)?
+                            e->towoo::add_component:<Editor::Prefab>().path->set <| p;
+                    }
+                    return true;
                 }
             }
             return false;

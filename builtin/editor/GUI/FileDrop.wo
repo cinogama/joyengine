@@ -40,6 +40,14 @@ namespace JEEditor::GUI::FileDrop
     //                     是否需要由调用方经 Editor::ResourcePath 决定）
     public func File(tag: string, current: option<path_t>)=> option<option<path_t>>
     {
+        return FileTrailing(tag, current, 0.);
+    }
+
+    // 同 File，但额外在行尾（清除按钮右侧）为调用方的控件让出
+    // trailing_reserve 宽度：调用方在本控件之后 SameLine 提交自己的
+    // 行尾控件（例如条目列表行末“移除该条目”的 × 按钮）。
+    public func FileTrailing(tag: string, current: option<path_t>, trailing_reserve: real)=> option<option<path_t>>
+    {
         let mut result = option::none: option<option<path_t>>;
 
         PushIDStr(tag);
@@ -56,11 +64,13 @@ namespace JEEditor::GUI::FileDrop
             {
                 has_value = true;
                 display = displayName(path);
-                tip = F"{path}\n从资源浏览器拖拽文件或目录到此处替换，右侧 × 可清除";
+                tip = F"{path}\n从资源浏览器拖拽文件或目录到此处替换，右侧紧邻的 × 可清除";
             }
         }
 
-        let mut field_width = GetContentRegionAvail().0;
+        let mut field_width = GetContentRegionAvail().0 - trailing_reserve;
+        if (field_width < 1.)
+            field_width = 1.;
         if (has_value)
         {
             field_width -= CLEAR_BUTTON_WIDTH;
@@ -88,6 +98,9 @@ namespace JEEditor::GUI::FileDrop
             SameLine();
             if (ButtonSize("×###file_drop_clear", (CLEAR_BUTTON_WIDTH, 0.)))
                 result = option::value(option::none);
+            // 行尾可能有多个 ×（清除引用 / 调用方的移除条目），悬停注明职责
+            if (IsItemHovered())
+                do SetTooltip("清除引用");
             PopStyleVar(1);
         }
 
