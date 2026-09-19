@@ -12,6 +12,7 @@ import pkg::fsys;
 
 import builtin::editor::GUI::FileDrop;
 import builtin::editor::Editor::ResourcePath;
+import builtin::editor::Editor::Animation2D::DataModel;
 
 using std;
 using je;
@@ -604,6 +605,264 @@ namespace Light2D::Range::light_shape
                     m_strength = strengths->to_array,
                     m_positions = positions->to_array,
                 });
+            return option::none;
+        }
+    }
+}
+// Animation::FrameAnimation::animation_list：帧动画引用表（运行时结构见
+// jeecs.hpp 的 Animation::FrameAnimation）。每个条目引用一个 .je4animation
+// 文件（m_path 为 @/ 运行时相对路径），并可指定载入后自动播放的动作与循环。
+// 序列化为字符串三元组的扁平数组 [path, action, loop, ...]，action 用空串
+// 表示 option::none，避开嵌套 struct 数组的 dynamic 语义。
+namespace Animation::FrameAnimation::animation_list
+{
+    // 动作名缓存（runtime_path -> 动作名表 / 文件最后写入时间）：
+    // .je4animation 可能正在动画编辑器中被修改，以时间戳判断缓存失效。
+    let mut s_action_names_cache = {}mut: map<string, array<string>>;
+    let mut s_action_names_stamp = {}mut: map<string, int>;
+
+    // 读取动画文件中的动作名列表；文件缺失或无法解析时返回空表。
+    func read_action_names(runtime_path: string)=> array<string>
+    {
+        if (runtime_path == "")
+        {
+            let empty = []mut: vec<string>;
+            return empty->to_array;
+        }
+
+        let local_path = ResourcePath::toLocalResourcePath(runtime_path);
+        let mut stamp = -1;
+        match (fsys::lastwrite(local_path))
+        {
+            value(t)? stamp = t as int;
+            none?;
+        }
+
+        match (s_action_names_stamp->get(runtime_path))
+        {
+            value(cached)?
+            {
+                if (cached == stamp)
+                {
+                    match (s_action_names_cache->get(runtime_path))
+                    {
+                        value(names)? return names;
+                        none?;
+                    }
+                }
+            }
+            none?;
+        }
+
+        let mut names = []mut: vec<string>;
+        match (JEEditor::Editor::Animation2D::AnimationContext::open(local_path))
+        {
+            ok(ctx)? names = ctx->action_names->to_vec;
+            err(_)?;
+        }
+
+        let arr = names->to_array;
+        s_action_names_cache->set(runtime_path, arr);
+        s_action_names_stamp->set(runtime_path, stamp);
+        return arr;
+    }
+
+    // 以下 entry_* 辅助：struct 成员不可变，修改单个字段需重建整个条目
+    func entry_with_path(entry: Animation::FrameAnimation::animation_state, path: string)=> Animation::FrameAnimation::animation_state
+    {
+        return Animation::FrameAnimation::animation_state{
+            m_path = path,
+            m_action = entry.m_action,
+            m_loop = entry.m_loop,
+        };
+    }
+    func entry_with_action(entry: Animation::FrameAnimation::animation_state, action: option<string>)=> Animation::FrameAnimation::animation_state
+    {
+        return Animation::FrameAnimation::animation_state{
+            m_path = entry.m_path,
+            m_action = action,
+            m_loop = entry.m_loop,
+        };
+    }
+    func entry_with_loop(entry: Animation::FrameAnimation::animation_state, loop_flag: bool)=> Animation::FrameAnimation::animation_state
+    {
+        return Animation::FrameAnimation::animation_state{
+            m_path = entry.m_path,
+            m_action = entry.m_action,
+            m_loop = loop_flag,
+        };
+    }
+    // 替换第 i 项（vec 没有原地 set，remove + insert 换入）
+    func replace_entry(entries: vec<Animation::FrameAnimation::animation_state>, i: int, entry: Animation::FrameAnimation::animation_state)=> void
+    {
+        do entries->remove(i);
+        do entries->insert(i, entry);
+    }
+
+    using parser = void
+    {
+        public extern func saving(val: Animation::FrameAnimation::animation_list)=> string
+        {
+            let dat = []mut: vec<string>;
+            for (let st : val as array<Animation::FrameAnimation::animation_state>)
+            {
+                dat->add(st.m_path);
+                let mut action = "";
+                match (st.m_action)
+                {
+                    value(a)? action = a;
+                    none?;
+                }
+                dat->add(action);
+                dat->add(st.m_loop ? "1" | "0");
+            }
+            return dat->serialize->or("[]");
+        }
+        public extern func restoring(dat: string)=> Animation::FrameAnimation::animation_list
+        {
+            let data = dat->array::deserialize->or(["" as dynamic, "" as dynamic, "" as dynamic])->> \x = x as string;;
+            let result = []mut: vec<Animation::FrameAnimation::animation_state>;
+            for (let mut i = 0; i + 2 < data->len; i += 3)
+            {
+                let action = data->get_or(i + 1, "");
+                let mut act = option::none: option<string>;
+                if (action != "")
+                    act = option::value(action);
+                result->add(Animation::FrameAnimation::animation_state{
+                    m_path = data->get_or(i, ""),
+                    m_action = act,
+                    m_loop = data->get_or(i + 2, "0") == "1",
+                });
+            }
+            return result->to_array as Animation::FrameAnimation::animation_list;
+        }
+        public extern func edit(val: Animation::FrameAnimation::animation_list, tag: string)=> option<Animation::FrameAnimation::animation_list>
+        {
+            let mut entries = (val as array<Animation::FrameAnimation::animation_state>)->to_vec;
+            let mut need_update = false;
+
+            // 动画条目数。首控件与成员名同行，负宽度在右侧为标签预留空间
+            SetNextItemWidth(-64.);
+            match (InputInt(F"动画数##{tag}", entries->len)->>\n = n < 0 ? 0 | n;)
+            {
+                value(count)?
+                {
+                    if (count != entries->len)
+                    {
+                        entries->resize(count, Animation::FrameAnimation::animation_state{
+                            m_path = "",
+                            m_action = option::none,
+                            m_loop = false,
+                        });
+                        need_update = true;
+                    }
+                }
+                none?;
+            }
+
+            // 条目控件整体缩进，视觉上从属于成员
+            Indent(16.);
+            for (let mut i = 0; i < entries->len; i += 1)
+            {
+                // 1) 动画文件：从资源浏览器拖入 .je4animation，右侧 × 清除引用
+                let mut cur_local = option::none: option<fsys::path_t>;
+                if (entries[i].m_path != "")
+                    cur_local = option::value(ResourcePath::toLocalResourcePath(entries[i].m_path));
+
+                match (FileDrop::File(F"文件{i}##{tag}", cur_local))
+                {
+                    none?;
+                    value(p)?
+                    {
+                        let mut new_path = "";
+                        match (p)
+                        {
+                            value(lp)? new_path = ResourcePath::toRuntimeResourcePath(lp);
+                            none?;
+                        }
+                        // 换文件/清除后原动作引用不再可靠，一并清空
+                        replace_entry(entries, i,
+                            entry_with_path(entry_with_action(entries[i], option::none: option<string>), new_path));
+                        need_update = true;
+                    }
+                }
+
+                // 2) 载入后自动播放的动作：Combo 列出文件中的动作名；
+                //    当前动作不在文件中时附加标注项展示，避免值被静默丢弃
+                let file_names = read_action_names(entries[i].m_path);
+                let mut cur_action = "";
+                match (entries[i].m_action)
+                {
+                    value(a)? cur_action = a;
+                    none?;
+                }
+
+                let mut raw_names = []mut: vec<string>;
+                let mut disp = []mut: vec<string>;
+                raw_names->add("");
+                disp->add("（不自动播放）");
+                let mut sel = 0;
+                for (let n : file_names)
+                {
+                    raw_names->add(n);
+                    disp->add(n);
+                    if (n == cur_action)
+                        sel = raw_names->len - 1;
+                }
+                if (cur_action != "" && sel == 0)
+                {
+                    raw_names->add(cur_action);
+                    disp->add(F"{cur_action}（文件中不存在）");
+                    sel = raw_names->len - 1;
+                }
+
+                match (Combo(F"动作{i}##{tag}", disp->to_array, option::value(sel)))
+                {
+                    value(idx)?
+                    {
+                        let picked = raw_names->get_or(idx, "");
+                        let mut act = option::none: option<string>;
+                        if (picked != "")
+                            act = option::value(picked);
+                        replace_entry(entries, i, entry_with_action(entries[i], act));
+                        need_update = true;
+                    }
+                    none?;
+                }
+
+                // 3) 循环开关 + 移除条目
+                SameLine();
+                match (CheckBox(F"循环{i}##{tag}", entries[i].m_loop))
+                {
+                    value(l)?
+                    {
+                        replace_entry(entries, i, entry_with_loop(entries[i], l));
+                        need_update = true;
+                    }
+                    none?;
+                }
+                SameLine();
+                if (Button(F"×##{tag}_{i}"))
+                {
+                    do entries->remove(i);
+                    // 回退索引，让递增后仍指向原第 i+1 项
+                    i -= 1;
+                    need_update = true;
+                }
+                else
+                {
+                    if (IsItemHovered())
+                        do SetTooltip("移除该动画条目");
+                }
+            }
+
+            if (entries->len == 0)
+                do TextDisabled("无动画条目，点击上方数量控件的 + 添加");
+
+            Unindent(16.);
+
+            if (need_update)
+                return option::value(entries->to_array as Animation::FrameAnimation::animation_list);
             return option::none;
         }
     }

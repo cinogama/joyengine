@@ -694,6 +694,15 @@ namespace JEEditor::Editor::Animation2D
                 s += f.m_time;
             return s;
         }
+
+        // 取文件中的全部动作名（供 types.wo 的值编辑器列举可选动作）
+        public func action_names(self: AnimationContext) => array<string>
+        {
+            let mut arr = []mut as vec<string>;
+            for (let (name, _) : self.m_animations)
+                arr->add(name);
+            return arr->to_array;
+        }
     }
 
     // ======================================================================
