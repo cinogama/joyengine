@@ -10,6 +10,7 @@ import je::towoo::types;
 import pkg::fsys;
 
 import builtin::editor::GUI::FileDrop;
+import builtin::editor::GUI::Widgets;
 import builtin::editor::Editor::ResourcePath;
 import builtin::editor::Editor::Animation2D::DataModel;
 
@@ -23,6 +24,13 @@ using JEEditor::Editor;
 // 这个脚本用于向编辑器提供各类型的编辑拓展
 // （edit；各类型的序列化拓展见同目录 types.wo）
 // 此脚本如果存在错误，项目将无法被编辑器载入
+//
+// 成员编辑的两列布局约定（与检视面板 Inspector.wo 约定，辅助函数见
+// JEEditor::GUI::Widgets）：调用方在成员行左侧绘制成员名标签列，把
+// 控件光标定位到右侧“控件列”起点后调用 edit。简单类型一个控件占满
+// 控件列；多行（列表/组合）编辑器先用 Widgets::editColumnX 记下控件
+// 列起点，再用 Widgets::beginRow / beginStepRow 逐行对齐（行标签在
+// 左、控件在右），不再各行从窗口缩进处起排。
 // =============================================
 
 namespace bool
@@ -193,52 +201,17 @@ namespace Physics2D::vertex_list
     {
         public extern func edit(val: Physics2D::vertex_list, tag: string)=> option<Physics2D::vertex_list>
         {
-            let mut points = (val as array<vec2>)->to_vec;
-            let mut need_update = false;
-
-            // 顶点数（物理侧要求至少 3 个顶点才能构成多边形）。
-            // 首控件与成员名同行，负宽度在右侧为标签预留空间避免被裁切
-            SetNextItemWidth(-64.);
-            match (InputInt(F"顶点数##{tag}", points->len)->>\n = n < 3 ? 3 | n;)
+            // 顶点环的公共编辑（首行“顶点数”与成员名同行，其后每个
+            // 顶点一行“点N + XY 输入”，全部对齐控件列）
+            let col_x = Widgets::editColumnX();
+            match (Widgets::editPointRing(
+                (val as array<vec2>)->to_vec, col_x, tag))
             {
-                value(count)?
-                {
-                    if (count != points->len)
-                    {
-                        points->resize(count, (0., 0.) as vec2);
-                        need_update = true;
-                    }
-                }
-                none?;
+                none?
+                    return option::none;
+                value(points)?
+                    return option::value(points->to_array as Physics2D::vertex_list);
             }
-
-            // 顶点行整体缩进，视觉上从属于成员
-            Indent(16.);
-            for (let mut i = 0; i < points->len; i += 1)
-            {
-                // 负宽度为"点X"标签预留空间，让两个分量框更宽敞
-                SetNextItemWidth(-80.);
-                match (InputFloat2(F"点{i}##{tag}", points[i][0], points[i][1])->>\v = v as vec2;)
-                {
-                    value(np)?
-                    {
-                        // 索引结果不可变：重建顶点表替换第 i 项
-                        let updated = []mut: vec<vec2>;
-                        for (let mut j = 0; j < points->len; j += 1)
-                            updated->add(
-                                (j == i) ? np | ((points[j][0], points[j][1]) as vec2));
-                        points = updated;
-                        need_update = true;
-                    }
-                    none?;
-                }
-            }
-
-            Unindent(16.);
-
-            if (need_update)
-                return option::value(points->to_array as Physics2D::vertex_list);
-            return option::none;
         }
     }
 }
@@ -249,52 +222,17 @@ namespace Light2D::BlockShadow::block_mesh
     {
         public extern func edit(val: Light2D::BlockShadow::block_mesh, tag: string)=> option<Light2D::BlockShadow::block_mesh>
         {
-            let mut points = (val as array<vec2>)->to_vec;
-            let mut need_update = false;
-
-            // 顶点数（遮挡环至少 3 个顶点才能构成多边形）。
-            // 首控件与成员名同行，负宽度在右侧为标签预留空间避免被裁切
-            SetNextItemWidth(-64.);
-            match (InputInt(F"顶点数##{tag}", points->len)->>\n = n < 3 ? 3 | n;)
+            // 顶点环的公共编辑（首行“顶点数”与成员名同行，其后每个
+            // 顶点一行“点N + XY 输入”，全部对齐控件列）
+            let col_x = Widgets::editColumnX();
+            match (Widgets::editPointRing(
+                (val as array<vec2>)->to_vec, col_x, tag))
             {
-                value(count)?
-                {
-                    if (count != points->len)
-                    {
-                        points->resize(count, (0., 0.) as vec2);
-                        need_update = true;
-                    }
-                }
-                none?;
+                none?
+                    return option::none;
+                value(points)?
+                    return option::value(points->to_array as Light2D::BlockShadow::block_mesh);
             }
-
-            // 顶点行整体缩进，视觉上从属于成员
-            Indent(16.);
-            for (let mut i = 0; i < points->len; i += 1)
-            {
-                // 负宽度为"点X"标签预留空间，让两个分量框更宽敞
-                SetNextItemWidth(-80.);
-                match (InputFloat2(F"点{i}##{tag}", points[i][0], points[i][1])->>\v = v as vec2;)
-                {
-                    value(np)?
-                    {
-                        // 索引结果不可变：重建顶点表替换第 i 项
-                        let updated = []mut: vec<vec2>;
-                        for (let mut j = 0; j < points->len; j += 1)
-                            updated->add(
-                                (j == i) ? np | ((points[j][0], points[j][1]) as vec2));
-                        points = updated;
-                        need_update = true;
-                    }
-                    none?;
-                }
-            }
-
-            Unindent(16.);
-
-            if (need_update)
-                return option::value(points->to_array as Light2D::BlockShadow::block_mesh);
-            return option::none;
         }
     }
 }
@@ -310,11 +248,11 @@ namespace Light2D::Range::light_shape
             let mut strengths = (val.m_strength)->to_vec;
             let mut positions = (val.m_positions)->to_vec;
             let mut need_update = false;
+            let col_x = Widgets::editColumnX();
 
-            // 每环顶点数（环至少 3 个顶点才能构成多边形）。
-            // 首控件与成员名同行，负宽度在右侧为标签预留空间避免被裁切
-            SetNextItemWidth(-96.);
-            match (InputInt(F"每环顶点数##{tag}", point_count)->>\n = n < 3 ? 3 | n;)
+            // 每环顶点数（环至少 3 个顶点才能构成多边形），首行与成员名同行
+            Widgets::beginStepRow("每环顶点数", col_x, 84.);
+            match (InputInt(F"##{tag}_pcount", point_count)->>\n = n < 3 ? 3 | n;)
             {
                 value(count)?
                 {
@@ -328,11 +266,9 @@ namespace Light2D::Range::light_shape
                 none?;
             }
 
-            // 其余控件行整体缩进，视觉上从属于成员
-            Indent(16.);
-
             // 环数（每环一个强度；改变环数时同步伸缩 positions）
-            match (InputInt(F"环数##{tag}", strengths->len)->>\n = n < 1 ? 1 | n;)
+            Widgets::beginStepRow("环数", col_x, 84.);
+            match (InputInt(F"##{tag}_rings", strengths->len)->>\n = n < 1 ? 1 | n;)
             {
                 value(count)?
                 {
@@ -355,7 +291,8 @@ namespace Light2D::Range::light_shape
 
             for (let mut l = 0; l < strengths->len; l += 1)
             {
-                match (InputFloat(F"环{l}强度##{tag}", strengths[l]))
+                Widgets::beginRow(F"环{l} 强度", col_x, 84.);
+                match (InputFloat(F"##{tag}_st{l}", strengths[l]))
                 {
                     value(ns)?
                     {
@@ -372,9 +309,8 @@ namespace Light2D::Range::light_shape
 
             for (let mut i = 0; i < positions->len; i += 1)
             {
-                // 负宽度为"环X点Y"标签预留空间，让两个分量框更宽敞
-                SetNextItemWidth(-88.);
-                match (InputFloat2(F"环{i / point_count}点{i % point_count}##{tag}", positions[i][0], positions[i][1])->>\v = v as vec2;)
+                Widgets::beginRow(F"环{i / point_count} 点{i % point_count}", col_x, 84.);
+                match (InputFloat2(F"##{tag}_pos{i}", positions[i][0], positions[i][1])->>\v = v as vec2;)
                 {
                     value(np)?
                     {
@@ -388,8 +324,6 @@ namespace Light2D::Range::light_shape
                     none?;
                 }
             }
-
-            Unindent(16.);
 
             if (need_update)
                 return option::value(Light2D::Range::light_shape{
@@ -495,10 +429,11 @@ namespace Animation::FrameAnimation::animation_list
         {
             let mut entries = (val as array<Animation::FrameAnimation::animation_state>)->to_vec;
             let mut need_update = false;
+            let col_x = Widgets::editColumnX();
 
-            // 动画条目数。首控件与成员名同行，负宽度在右侧为标签预留空间
-            SetNextItemWidth(-64.);
-            match (InputInt(F"动画数##{tag}", entries->len)->>\n = n < 0 ? 0 | n;)
+            // 动画条目数，首行与成员名同行
+            Widgets::beginStepRow("动画数", col_x, 56.);
+            match (InputInt(F"##{tag}_count", entries->len)->>\n = n < 0 ? 0 | n;)
             {
                 value(count)?
                 {
@@ -515,8 +450,7 @@ namespace Animation::FrameAnimation::animation_list
                 none?;
             }
 
-            // 条目控件整体缩进，视觉上从属于成员
-            Indent(16.);
+            // 每个条目占两行：文件引用一行，“动作 + 循环 + 移除”一行
             for (let mut i = 0; i < entries->len; i += 1)
             {
                 // 1) 动画文件：从资源浏览器拖入 .je4animation，右侧 × 清除引用
@@ -524,7 +458,8 @@ namespace Animation::FrameAnimation::animation_list
                 if (entries[i].m_path != "")
                     cur_local = option::value(ResourcePath::toLocalResourcePath(entries[i].m_path));
 
-                match (FileDrop::File(F"文件{i}##{tag}", cur_local))
+                Widgets::beginRow(F"文件{i}", col_x, 56.);
+                match (FileDrop::File(F"##{tag}_file{i}", cur_local))
                 {
                     none?;
                     value(p)?
@@ -571,7 +506,10 @@ namespace Animation::FrameAnimation::animation_list
                     sel = raw_names->len - 1;
                 }
 
-                match (Combo(F"动作{i}##{tag}", disp->to_array, option::value(sel)))
+                Widgets::beginRow(F"动作{i}", col_x, 56.);
+                // 同行还要放“循环”开关与移除按钮，为它们预留右侧空间
+                SetNextItemWidth(GetContentRegionAvail().0 - 104.);
+                match (Combo(F"##{tag}_act{i}", disp->to_array, option::value(sel)))
                 {
                     value(idx)?
                     {
@@ -587,7 +525,7 @@ namespace Animation::FrameAnimation::animation_list
 
                 // 3) 循环开关 + 移除条目
                 SameLine();
-                match (CheckBox(F"循环{i}##{tag}", entries[i].m_loop))
+                match (CheckBox(F"循环##{tag}_loop{i}", entries[i].m_loop))
                 {
                     value(l)?
                     {
@@ -597,7 +535,7 @@ namespace Animation::FrameAnimation::animation_list
                     none?;
                 }
                 SameLine();
-                if (Button(F"×##{tag}_{i}"))
+                if (ButtonSize(F"×##{tag}_{i}", (22., 0.)))
                 {
                     do entries->remove(i);
                     // 回退索引，让递增后仍指向原第 i+1 项
@@ -612,9 +550,10 @@ namespace Animation::FrameAnimation::animation_list
             }
 
             if (entries->len == 0)
-                do TextDisabled("无动画条目，点击上方数量控件的 + 添加");
-
-            Unindent(16.);
+            {
+                Widgets::setCursorX(col_x);
+                do TextDisabled("无动画条目，点击上方“动画数”的 + 添加");
+            }
 
             if (need_update)
                 return option::value(entries->to_array as Animation::FrameAnimation::animation_list);
@@ -668,37 +607,30 @@ namespace UserInterface::Origin::origin_center
     {
         public extern func edit(val: UserInterface::Origin::origin_center, tag: string)=> option<UserInterface::Origin::origin_center>
         {
+            // 3×3 方位选择格：行=上/中/下，列=左/中/右，当前方位以实心
+            // 圆点（RadioButton）标出；格子从控件列起点排布、间距均匀，
+            // 读作一块“方位垫”，不再是一串平铺的复选框
+            let cells = [
+                origin_center::left + origin_center::top, origin_center::top, origin_center::right + origin_center::top,
+                origin_center::left, origin_center::center, origin_center::right,
+                origin_center::left + origin_center::bottom, origin_center::bottom, origin_center::right + origin_center::bottom,
+            ];
             let mut newval = val;
-            BeginGroup();
+            let col_x = Widgets::editColumnX();
+
+            PushStyleVec2(StyleVar::ImGuiStyleVar_ItemSpacing, (10., 6.));
+            for (let mut row = 0; row < 3; row += 1)
             {
-                if (CheckBox(F"##{tag}_lu", origin_center::left + origin_center::top == val)->is_value)
-                    newval = origin_center::left + origin_center::top;
-                SameLine();
-                if (CheckBox(F"##{tag}_u", origin_center::top == val)->is_value)
-                    newval = origin_center::top;
-                SameLine();
-                if (CheckBox(F"##{tag}_ru", origin_center::right + origin_center::top == val)->is_value)
-                    newval = origin_center::right + origin_center::top;
-
-                if (CheckBox(F"##{tag}_l", origin_center::left == val)->is_value)
-                    newval = origin_center::left;
-                SameLine();
-                if (CheckBox(F"##{tag}_c", origin_center::center == val)->is_value)
-                    newval = origin_center::center;
-                SameLine();
-                if (CheckBox(F"##{tag}_r", origin_center::right == val)->is_value)
-                    newval = origin_center::right;
-
-                if (CheckBox(F"##{tag}_lb", origin_center::left + origin_center::bottom == val)->is_value)
-                    newval = origin_center::left + origin_center::bottom;
-                SameLine();
-                if (CheckBox(F"##{tag}_b", origin_center::bottom == val)->is_value)
-                    newval = origin_center::bottom;
-                SameLine();
-                if (CheckBox(F"##{tag}_rb", origin_center::right + origin_center::bottom == val)->is_value)
-                    newval = origin_center::right + origin_center::bottom;
+                Widgets::setCursorX(col_x);
+                for (let mut col = 0; col < 3; col += 1)
+                {
+                    if (col > 0)
+                        SameLine();
+                    if (RadioButton(F"##{tag}_{row * 3 + col}", cells[row * 3 + col] == val))
+                        newval = cells[row * 3 + col];
+                }
             }
-            EndGroup();
+            PopStyleVar(1);
 
             if (newval != val)
                 return option::value(newval);

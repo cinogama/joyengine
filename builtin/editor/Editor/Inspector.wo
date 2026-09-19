@@ -18,6 +18,7 @@ import builtin::gaming::Saving::Entity;
 import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Forms::MsgBox;
 import builtin::editor::GUI::Forms::AskBox;
+import builtin::editor::GUI::Widgets;
 import builtin::editor::Editor::Saving::Entity;
 
 import Browser;
@@ -40,6 +41,7 @@ using je::gui;
 using je::towoo;
 using JEEditor::GUI::Windows;
 using JEEditor::GUI::Forms;
+using JEEditor::GUI::Widgets;
 using JEEditor::Editor::EditSession;
 using JEEditor::Editor::Action;
 using JEEditor::Editor::ComponentPresets;
@@ -80,6 +82,13 @@ namespace JEEditor::Editor
         
         // 与预设体不一致的数据（成员名/组件标题）的高亮色
         let PREFAB_OVERRIDE_COLOR = (230, 190, 80, 255);
+
+        // 成员之间的分界线：极淡的横线，只为给相邻成员划出界线
+        let MEMBER_SEPARATOR_COLOR = (140, 140, 140, 36);
+
+        // 命名空间分组标题的强调色（0..1 浮点 RGBA，与主题文字色混合
+        // 使用，明暗主题都保持可读）
+        let GROUP_ACCENT = (0.42, 0.62, 0.95, 1.);
         
         // 预设体数据缓存：检视面板每帧重绘，不能每帧读盘解析；按
         // 「路径 + 最后写入时间」缓存解析结果，预设体文件被重新保存
@@ -267,6 +276,100 @@ namespace JEEditor::Editor
             }
             return false;
         }
+        // 把两个（0..1 浮点）风格色按 t 混合
+        func mixColorF(
+            c0: (real, real, real, real), c1: (real, real, real, real),
+            t: real)=> (real, real, real, real)
+        {
+            return (
+                c0.0 + (c1.0 - c0.0) * t,
+                c0.1 + (c1.1 - c0.1) * t,
+                c0.2 + (c1.2 - c0.2) * t,
+                c0.3 + (c1.3 - c0.3) * t);
+        }
+        // 混色结果转为可直接用于 PushStyleColor / 绘制的颜色；alpha 固定
+        // 为给定值（风格色多带半透明，按用途决定虚实）
+        func mixStyleColor(
+            c0: (real, real, real, real), c1: (real, real, real, real),
+            t: real, alpha: int)=> Color32RGBA
+        {
+            let m = mixColorF(c0, c1, t);
+            return ((m.0 * 255.) as int, (m.1 * 255.) as int, (m.2 * 255.) as int, alpha);
+        }
+        // 标量整数编辑器（InputInt）的步进按钮绘制在输入框之外，右列
+        // 需为其预留空间，否则按钮会被面板右缘裁掉
+        func isScalarIntType(t: typeinfo)=> bool
+        {
+            let n = t->name;
+            return n == "uint8" || n == "uint16" || n == "uint32"
+                || n == "uint64" || n == "int8" || n == "int16"
+                || n == "int32" || n == "int64";
+        }
+        // 成员行布局（与 builtin/script/editor.wo 的多行编辑器约定，见
+        // JEEditor::GUI::Widgets）：左侧成员名标签列 + 右侧控件列。绘制
+        // 标签并限制在标签列内（超长裁切，悬停可看全名），再把控件光标
+        // 定位到控件列起点，SetNextItemWidth 已按控件列宽减去 step_reserve
+        // 设置好。返回控件列起点（窗口坐标 X），供“无编辑器”提示等
+        // 续行对齐使用。
+        func beginMemberRow(label: string, highlighted: bool, step_reserve: real)=> real
+        {
+            let (start_x, start_y) = GetCursorPos();
+            let right_x = start_x + GetContentRegionAvail().0;
+
+            // 标签列宽随面板宽度伸缩，并夹在可读区间内
+            let mut label_w = (right_x - start_x) * 0.38;
+            if (label_w < 76.)
+                label_w = 76.;
+            if (label_w > 132.)
+                label_w = 132.;
+
+            // 标签与控件框垂直居中（与 ImGui 自带“框后标签”的基线一致）
+            let line_h = CalcTextSize(label).1;
+            SetCursorPos((start_x, start_y + (GetFrameHeight() - line_h) * 0.5));
+            let (label_sx, label_sy) = GetCursorScreenPos();
+            PushClipRect(
+                (label_sx - 1., label_sy - line_h),
+                (label_sx + label_w, label_sy + line_h * 2.));
+            if (highlighted)
+                TextColored(PREFAB_OVERRIDE_COLOR, label);
+            else
+            {
+                TextDisabled(label);
+                // 被裁切的长成员名悬停显示全名（高亮分支由调用方提示差异）
+                if (CalcTextSize(label).0 > label_w && IsItemHovered())
+                    do SetTooltip(label);
+            }
+            PopClipRect();
+
+            SameLine();
+            let widget_x = start_x + label_w;
+            setCursorX(widget_x);
+            SetNextItemWidth(right_x - widget_x - step_reserve);
+            return widget_x;
+        }
+        // 命名空间分组标题：填充色带 + 左侧强调竖条 + 命名空间名与组件数，
+        // 比 SeparatorText 更醒目。颜色由主题文字色向强调蓝混合得出，
+        // 明暗主题都保持可读
+        func showGroupHeader(title: string, count: int)
+        {
+            let text_c = GetStyleColor(ImGuiCol::ImGuiCol_Text);
+            let (x, y) = GetCursorScreenPos();
+            let width = GetContentRegionAvail().0;
+            let height = GetFrameHeight();
+            let draw = GetWindowDrawList();
+
+            draw->AddRectFilled((x, y), (x + width, y + height),
+                mixStyleColor(text_c, GROUP_ACCENT, 0.12, 42));
+            draw->AddRectFilled((x, y), (x + 3., y + height),
+                mixStyleColor(text_c, GROUP_ACCENT, 0.75, 220));
+            draw->AddText(
+                (x + 10., y + (height - GetTextLineHeight()) * 0.5),
+                mixStyleColor(text_c, GROUP_ACCENT, 0.55, 255),
+                F"{title} · {count}");
+
+            Dummy((0., height));
+            Spacing();
+        }
         func showEntityNameEdit(
             wctx: WorldEditorViewport, e: entity, prefab: option<PrefabRef>)
         {
@@ -293,16 +396,14 @@ namespace JEEditor::Editor
             
             if (name_overridden)
             {
-                TextColored(PREFAB_OVERRIDE_COLOR, "名称 *");
+                do beginMemberRow("名称 *", true, 0.);
                 if (IsItemHovered())
                     do SetTooltip(F"名称与预设体不一致\n预设体: {prefab_name->unwrap}\n当前: {e->internal::name}");
             }
             else
             {
-                TextDisabled("名称");
+                do beginMemberRow("名称", false, 0.);
             }
-            SameLine();
-            SetNextItemWidth(-1.);
             
             let NAME_EDIT_TAG = "##entity_name";
             
@@ -335,51 +436,52 @@ namespace JEEditor::Editor
         {
             let cinst = e->get_component(ctype)->unwrap;
             let eid = e->internal::get_entity_uid;
-            
-            Indent(0.);
-            for (let (mname, mtype, mhandle) : cinst->get_members)
+
+            // 成员整体缩进到组件标题之下，与标题栏形成从属关系
+            Indent(8.);
+            let members = cinst->get_members;
+            for (let mut mi = 0; mi < members->len; mi += 1)
             {
+                let (mname, mtype, mhandle) = members[mi];
+
                 // 序列化当前成员值：既用于与预设体的差异判定，也作为
                 // 撤销留档——edit 一旦返回 true，成员值已被就地修改，
                 // 此刻的值即修改前的序列化值
                 let old_value = unsafe::dynamic_parser::save(mtype, mhandle);;
-                
+
                 // 与预设体不一致的成员以高亮 + "*" 标记，悬停显示两侧
                 // 的值；一致/未比较的成员保持灰色弱化显示
                 let diff = memberDiffVsPrefab(prefab, cname, mname, old_value);
-                if (diff.m_comparable && diff.m_overridden)
+                let overridden = diff.m_comparable && diff.m_overridden;
+                do beginMemberRow(
+                    overridden ? F"{mname} *" | mname,
+                    overridden,
+                    isScalarIntType(mtype) ? 56. | 0.);
+                if (overridden && IsItemHovered())
                 {
-                    TextColored(PREFAB_OVERRIDE_COLOR, F"{mname} *");
-                    if (IsItemHovered())
+                    match (diff.m_prefab_value)
                     {
-                        match (diff.m_prefab_value)
-                        {
-                            none?
-                                do SetTooltip("该成员不在预设体中（新增）");
-                            value(pv)?
-                                do SetTooltip(F"与预设体不一致\n预设体: {pv}\n当前: {old_value->unwrap}");
-                        }
+                        none?
+                            do SetTooltip("该成员不在预设体中（新增）");
+                        value(pv)?
+                            do SetTooltip(F"与预设体不一致\n预设体: {pv}\n当前: {old_value->unwrap}");
                     }
                 }
-                else
-                {
-                    TextDisabled(mname);
-                }
-                SameLine();
-                SetNextItemWidth(-1.);
-                
+
                 // tag 不能以 ## 开头：控件的可见标签写作 "标签##tag"，
                 // 若 tag 自身以 ## 开头会拼出 "###"，触发 ImGui"ID 只取
                 // ### 之后内容"的规则，导致同一成员的多个控件共享同一
                 // ID，编辑时互相牵连
                 let member_tag = F"{cname}##{mname}##{mhandle}";
-                
+
                 match (unsafe::dynamic_parser::edit(mtype, mhandle, member_tag))
                 {
                     none?
                     {
-                        NewLine();
+                        // 无编辑器时在控件列内说明原因（折行到面板右缘）
+                        PushTextWrapPos(0.);
                         TextDisabled(F"编辑器没有为 `{mtype->script_name->or(mtype->name)}` 类型提供编辑组件");
+                        PopTextWrapPos();
                     }
                     value(updated)?
                     {
@@ -406,8 +508,16 @@ namespace JEEditor::Editor
                     // 超时/选中变化/其他成员改动判定（见 run()）。
                     }
                 }
+
+                // 成员之间以淡色横线分界
+                if (mi + 1 < members->len)
+                {
+                    PushStyleColor(ImGuiCol::ImGuiCol_Separator, MEMBER_SEPARATOR_COLOR);
+                    Separator();
+                    PopStyleColor(1);
+                }
             }
-            Unindent(0.);
+            Unindent(8.);
         }
         // 渲染器三件套（Renderer::Shape/Shaders/Textures）的移除分发：
         // 按类型名转交 Action 目录下的专用 Action（RemoveRendererShaders /
@@ -663,6 +773,76 @@ namespace JEEditor::Editor
             if (MenuItem("解除预设"))
                 unlinkPrefabFromEntity(wctx, e);
         }
+        // 单个组件块：醒目的标题栏（加厚的折叠头 + 行尾移除按钮）与
+        // 成员编辑区
+        func showComponentBlock(
+            wctx: WorldEditorViewport, e: entity, ctype: typeinfo,
+            prefab: option<PrefabRef>)
+        {
+            let cname = ctype->name;
+            let (_, short_name) = splitTypeName(cname);
+
+            // 预设体之外新增的组件：标题同样以高亮标记
+            let comp_added = isComponentAddedVsPrefab(prefab, cname);
+            if (comp_added)
+                PushStyleColor(ImGuiCol::ImGuiCol_Text, PREFAB_OVERRIDE_COLOR);
+
+            // 标题栏以不透明的主题 Header 混色填充，加厚内边距并微圆角，
+            // 让每个组件块有明确的分区感；悬停/按下向文字色轻微混合反馈
+            let header_c = GetStyleColor(ImGuiCol::ImGuiCol_Header);
+            let window_c = GetStyleColor(ImGuiCol::ImGuiCol_WindowBg);
+            let text_c = GetStyleColor(ImGuiCol::ImGuiCol_Text);
+            let base_c = mixColorF(header_c, window_c, 0.45);
+            PushStyleColor(ImGuiCol::ImGuiCol_Header,
+                mixStyleColor(header_c, window_c, 0.45, 255));
+            PushStyleColor(ImGuiCol::ImGuiCol_HeaderHovered,
+                mixStyleColor(base_c, text_c, 0.12, 255));
+            PushStyleColor(ImGuiCol::ImGuiCol_HeaderActive,
+                mixStyleColor(base_c, text_c, 0.22, 255));
+            PushStyleVec2(StyleVar::ImGuiStyleVar_FramePadding, (6., 5.));
+            PushStyleReal(StyleVar::ImGuiStyleVar_FrameRounding, 3.);
+
+            // AllowItemOverlap 允许后绘制的行尾 × 按钮抢占重叠区域的
+            // 悬停与点击；折叠头的命中区总是横跨整行且忽略
+            // SetNextItemWidth，不加此标志 × 的点击会被标题吞掉
+            let expanded = CollapsingHeaderFlags(
+                F"{short_name}##{cname}",
+                TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen
+                    + TreeNodeAttribute::ImGuiTreeNodeFlags_AllowItemOverlap);
+            PopStyleColor(3);
+
+            if (comp_added)
+            {
+                PopStyleColor(1);
+                if (IsItemHovered())
+                    do SetTooltip("该组件不在预设体中（新增）");
+            }
+
+            // 右键组件标题可移除该组件；显式绑定到标题的标签上，
+            // 且必须紧跟标题项调用（悬停检测基于最后绘制的项），
+            // 避免展开时误绑到成员控件或行尾按钮
+            if (BeginPopupContextItemLabel(F"{short_name}##{cname}"))
+            {
+                if (MenuItem(F"移除组件 {short_name}"))
+                    removeComponentFromEntity(wctx, e, ctype);
+
+                defer EndPopup();
+            }
+
+            // 折叠头的布局宽度只覆盖文字，× 需手动定位到行尾；
+            // × 也保留加厚的内边距，与标题栏同高
+            SameLine();
+            let (cursor_x, cursor_y) = GetCursorPos();
+            let (avail_width, _) = GetContentRegionAvail();
+            SetCursorPos((cursor_x + avail_width - 28., cursor_y));
+            if (ButtonSize(F"×##remove_{cname}", (24., 0.)))
+                removeComponentFromEntity(wctx, e, ctype);
+            PopStyleVar(2);
+
+            if (expanded)
+                showComponentMembersEdit(wctx, e, ctype, cname, prefab);
+            Spacing();
+        }
         func showEntityComponentEditImpl(wctx: WorldEditorViewport, e: entity)
         {
             // 挂有预设体的实体：加载预设体数据供差异对比使用
@@ -714,72 +894,35 @@ namespace JEEditor::Editor
             }
             
             SeparatorText("组件");
-            
-            // 组件按全名排序后同一命名空间的组件自然相邻，
-            // 命名空间发生变化时输出一个分组标题。
-            let mut visible_count = 0;
-            let mut last_namespace = "";
-            for (let ctype : e->internal::get_components_types
-                |> sort(\l, r = l->name < r->name;))
+
+            // 组件按全名排序后同一命名空间的组件自然相邻：按命名空间
+            // 分组，组头（色带 + 组件数）醒目标出组别；无命名空间的
+            // 组件不设组头
+            let visibles = e->internal::get_components_types
+                |> sort(\l, r = l->name < r->name;)
+                |> forall(\t = !t->name->begin_with("Editor::"););
+
+            let mut group_begin = 0;
+            while (group_begin < visibles->len)
             {
-                let cname = ctype->name;
-                // 编辑器内部组件（Editor::*）不在检视面板中显示
-                if (cname->begin_with("Editor::"))
-                    continue;
-                    
-                visible_count += 1;
-                let (ns, short_name) = splitTypeName(cname);
-                if (ns != last_namespace)
+                let (ns, _) = splitTypeName(visibles[group_begin]->name);
+                let mut group_end = group_begin;
+                while (group_end < visibles->len)
                 {
-                    if (ns != "")
-                        SeparatorText(ns);
-                    last_namespace = ns;
+                    let (cur_ns, _) = splitTypeName(visibles[group_end]->name);
+                    if (cur_ns != ns)
+                        break;
+                    group_end += 1;
                 }
-                
-                // 预设体之外新增的组件：标题同样以高亮标记
-                let comp_added = isComponentAddedVsPrefab(prefab, cname);
-                if (comp_added)
-                    PushStyleColor(ImGuiCol::ImGuiCol_Text, PREFAB_OVERRIDE_COLOR);
-                    
-                // AllowItemOverlap 允许后绘制的行尾 × 按钮抢占重叠区域的
-                // 悬停与点击；折叠头的命中区总是横跨整行且忽略
-                // SetNextItemWidth，不加此标志 × 的点击会被标题吞掉
-                let expanded = CollapsingHeaderFlags(
-                    F"{short_name}##{cname}",
-                    TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen
-                        + TreeNodeAttribute::ImGuiTreeNodeFlags_AllowItemOverlap);
-                        
-                if (comp_added)
+                if (ns != "")
+                    showGroupHeader(ns, group_end - group_begin);
+                for (let mut i = group_begin; i < group_end; i += 1)
                 {
-                    PopStyleColor(1);
-                    if (IsItemHovered())
-                        do SetTooltip("该组件不在预设体中（新增）");
+                    showComponentBlock(wctx, e, visibles[i], prefab);
                 }
-                
-                // 右键组件标题可移除该组件；显式绑定到标题的标签上，
-                // 且必须紧跟标题项调用（悬停检测基于最后绘制的项），
-                // 避免展开时误绑到成员控件或行尾按钮
-                if (BeginPopupContextItemLabel(F"{short_name}##{cname}"))
-                {
-                    if (MenuItem(F"移除组件 {short_name}"))
-                        removeComponentFromEntity(wctx, e, ctype);
-                        
-                    defer EndPopup();
-                }
-                
-                // 折叠头的布局宽度只覆盖文字，× 需手动定位到行尾
-                SameLine();
-                let (cursor_x, cursor_y) = GetCursorPos();
-                let (avail_width, _) = GetContentRegionAvail();
-                SetCursorPos((cursor_x + avail_width - 28., cursor_y));
-                if (ButtonSize(F"×##remove_{cname}", (24., 0.)))
-                    removeComponentFromEntity(wctx, e, ctype);
-                    
-                if (expanded)
-                    showComponentMembersEdit(wctx, e, ctype, cname, prefab);
-                Spacing();
+                group_begin = group_end;
             }
-            if (visible_count == 0)
+            if (visibles->len == 0)
                 TextDisabled("（没有可显示的组件）");
                 
             Spacing();
