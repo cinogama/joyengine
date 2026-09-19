@@ -23,6 +23,7 @@
 // 冻结恢复时会重挂运行时系统使世界继续运行（见 FreezeWorlds）。
 
 import pkg::std;
+import pkg::interface;
 
 import je;
 import je::ecs;
@@ -77,7 +78,8 @@ namespace JEEditor::Editor::DebugRun
     }
     
     // 统一应用运行期编辑器 UI 显隐（可见 = 退出沉浸模式并显示主菜单与
-    // 状态栏；调试运行停止条不走窗口系统，不受沉浸模式影响）
+    // 状态栏；调试运行停止条窗口豁免沉浸隐藏、常驻可见，见
+    // DebugRunToolbar::isHiddenInImmersiveMode）
     func applyDebugRunUIVisibility()=> void
     {
         Windows::setImmersiveMode(!s_debug_run_ui_visible);
@@ -126,7 +128,7 @@ namespace JEEditor::Editor::DebugRun
         s_debug_run_ui_visible = false;
         applyDebugRunUIVisibility();
         Practice::setHistorySuppressed(true);
-        startDebugRunToolbar();
+        DebugRunToolbar::show();
         
         s_debug_running = true;
         
@@ -164,7 +166,7 @@ namespace JEEditor::Editor::DebugRun
         // 先落运行标志：等待恢复的协程据此自行中止
         s_debug_running = false;
         
-        stopDebugRunToolbar();
+        DebugRunToolbar::requestClose();
         
         launch_coroutine(
             func(){
@@ -212,104 +214,135 @@ namespace JEEditor::Editor::DebugRun
     //  调试运行停止条
     // ==========================
     
-    // 不走 IWindows/窗口注册表（不受沉浸模式影响），仿主菜单/状态栏用
-    // 独立协程直接绘制的悬浮条。默认位置在窗口左上角、主菜单栏下方：
-    // 不占用主视口底部（避免与状态栏 Statebar 抢占同一停靠位），也避开
-    // 被融合模式（如 Parallels）下 OS 菜单栏遮挡的屏幕最顶端。
-    // 位置只在首个绘制帧设置一次——SetNextWindowPos 每帧调用会把窗口
-    // 钉死导致无法拖动；之后 ImGui 记住窗口位置，抓住文本/空白区域即可
-    // 拖动，且同一编辑器会话内跨多次运行保持用户拖放的位置。
-    let mut s_debug_run_toolbar_showing = false;
-    let mut s_toolbar_default_pos_applied = false;
-    // 置位初值为 true：防止启动运行时按下的按键残留导致立即误触发
-    let mut s_stop_key_latched = true;
-    let mut s_toggle_key_latched = true;
-    
-    func startDebugRunToolbar()=> void
+    // 运行期间常驻的悬浮停止条（Windows::IWindows 窗口范式，经
+    // Windows::show 展示，生命周期由窗口系统管理）：唯一标题（无 $ID）
+    // 保证同一时刻至多一条；NoTitleBar + AutoSize 的悬浮小条，抓住
+    // 文本/空白区域即可拖动。覆写 isHiddenInImmersiveMode 为 false：
+    // 沉浸模式只隐藏常规窗口，停止条作为运行期间唯一的编辑器 UI 常驻
+    // 显示。
+    // 默认位置在窗口左上角、主菜单栏下方：不占用主视口底部（避免与
+    // 状态栏 Statebar 抢占同一停靠位），也避开被融合模式（如 Parallels）
+    // 下 OS 菜单栏遮挡的屏幕最顶端。
+    using DebugRunToolbar = struct
     {
-        if (s_debug_run_toolbar_showing)
-            return;
-        s_debug_run_toolbar_showing = true;
+        m_close: mut bool,
+    }
+    {
+        // 工具条窗口单例（onCreate/onClose 维护）：stopDebugRun 据此
+        // 请求关闭；窗口经协程创建，show 返回时单例可能尚未就绪，但
+        // 请求关闭只会发生在运行中的后续帧，无碍
+        let mut s_toolbar_singleton = option::none: option<DebugRunToolbar>;
+        // 默认位置仅在本编辑器会话首个工具条窗口生效一次
+        let mut s_spawn_pos_applied = false;
+        // 置位初值为 true：防止启动运行时按下的按键残留导致立即误触发
+        let mut s_stop_key_latched = true;
+        let mut s_toggle_key_latched = true;
         
-        launch_coroutine(func(){
-                for (;;)
-                {
-                    if (!s_debug_run_toolbar_showing)
-                        return;
-                        
-                    // Shift+F5 终止运行（与主菜单项的快捷键标注一致）、
-                    // Shift+F6 切换编辑器 UI 显隐；均为边沿触发防重复
-                    //（与 GUI::Shortcut 的做法一致）
-                    let shift_down = IsKeyDown(ImGuiKey::ImGuiMod_Shift);
-                    let f5_down = IsKeyDown(ImGuiKey::ImGuiKey_F5);
-                    let stop_key_down = shift_down && f5_down;
-                    let f6_down = IsKeyDown(ImGuiKey::ImGuiKey_F6);
-                    let toggle_key_down = shift_down && f6_down;
-                    
-                    if (stop_key_down)
-                    {
-                        if (!s_stop_key_latched)
-                        {
-                            s_stop_key_latched = true;
-                            stopDebugRun();
-                            return;
-                        }
-                    }
-                    else
-                        s_stop_key_latched = false;
-                        
-                    if (toggle_key_down)
-                    {
-                        if (!s_toggle_key_latched)
-                        {
-                            s_toggle_key_latched = true;
-                            toggleDebugRunUI();
-                        }
-                    }
-                    else
-                        s_toggle_key_latched = false;
-                        
-                    drawDebugRunToolbar();
-                    
-                    yield();
-                }
-            });
-    }
-    
-    func stopDebugRunToolbar()=> void
-    {
-        s_debug_run_toolbar_showing = false;
-    }
-    
-    func drawDebugRunToolbar()=> void
-    {
-        // 默认位置仅设置一次：左上角、主菜单栏（显示编辑器时）与 OS 菜单
-        // 栏（融合模式）下方；NoMove 未设置，抓住文本/空白区域可拖动
-        if (!s_toolbar_default_pos_applied)
+        public func create()=> DebugRunToolbar
+        where require!(DebugRunToolbar: Windows::IWindows);
         {
-            s_toolbar_default_pos_applied = true;
-            SetNextWindowPos((16., 48.));
+            return DebugRunToolbar{
+                m_close = mut false,
+            };
         }
         
-        let attrib = WindowsAttribute::ImGuiWindowFlags_NoTitleBar
-            + WindowsAttribute::ImGuiWindowFlags_NoResize
-            + WindowsAttribute::ImGuiWindowFlags_NoCollapse
-            + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize;
+        func show()=> void
+        {
+            do Windows::show(DebugRunToolbar::create());
+        }
+        // 请求关闭工具条（窗口协程下一泵生效）；窗口不在时无事可做
+        func requestClose()=> void
+        {
+            match (s_toolbar_singleton)
+            {
+                none?;
+                value(toolbar)?
+                    toolbar->close();
+            }
+        }
+        
+        func close(self: DebugRunToolbar)
+        {
+            self.m_close = true;
+        }
+        
+        public func getTitle(_: DebugRunToolbar)=> string
+        {
+            return "调试运行##debug_run_toolbar";
+        }
+        public func getAttrib(_: DebugRunToolbar)=> WindowsAttribute
+        {
+            // NoResize + AlwaysAutoResize 由窗口系统按 AutoSize 尺寸
+            // 约束补上（见 Windows::_make_window_attrib）
+            return WindowsAttribute::ImGuiWindowFlags_NoTitleBar
+                + WindowsAttribute::ImGuiWindowFlags_NoCollapse
+                + WindowsAttribute::ImGuiWindowFlags_NoDocking;
+        }
+        public func getSizeConstraints(_: DebugRunToolbar)=> SizeConstraints
+        {
+            return SizeConstraints::AutoSize;
+        }
+        // 沉浸模式（调试运行）下不隐藏：停止条是运行期间唯一的编辑器 UI
+        public func isHiddenInImmersiveMode(_: DebugRunToolbar)=> bool
+        {
+            return false;
+        }        
+        public func onCreate(self: DebugRunToolbar)=> void
+        {
+            s_toolbar_singleton = option::value(self);
+        }
+        public func onClose(_: DebugRunToolbar)=> void
+        {
+            s_toolbar_singleton = option::none;
+        }
+        
+        // Shift+F5 终止运行（与主菜单项的快捷键标注一致）、Shift+F6 切换
+        // 编辑器 UI 显隐；均为边沿触发防重复（与 GUI::Shortcut 的做法
+        // 一致）。不走 getShortcut：该机制以窗口聚焦为前提，而运行期间
+        // 焦点在游戏视口，停止条的快捷键需要全局生效
+        public func onUpdate(_: DebugRunToolbar)=> void
+        {
+            let shift_down = IsKeyDown(ImGuiKey::ImGuiMod_Shift);
+            let f5_down = IsKeyDown(ImGuiKey::ImGuiKey_F5);
+            let stop_key_down = shift_down && f5_down;
+            let f6_down = IsKeyDown(ImGuiKey::ImGuiKey_F6);
+            let toggle_key_down = shift_down && f6_down;
             
-        // BeginAttrOpen 返回 (show, open) 元组（与 GUI::Windows._show 的
-        // 用法一致）
-        let (toolbar_show, _) = BeginAttrOpen("##debug_run_toolbar", attrib);
-        if (toolbar_show)
+            if (stop_key_down)
+            {
+                if (!s_stop_key_latched)
+                {
+                    s_stop_key_latched = true;
+                    stopDebugRun();
+                }
+            }
+            else
+                s_stop_key_latched = false;
+                
+            if (toggle_key_down)
+            {
+                if (!s_toggle_key_latched)
+                {
+                    s_toggle_key_latched = true;
+                    do toggleDebugRunUI();
+                }
+            }
+            else
+                s_toggle_key_latched = false;
+        }
+        
+        public func run(self: DebugRunToolbar)=> bool
         {
             TextColored((90, 230, 115, 255), "● 调试运行中");
             SameLine();
-            let text_toggle = s_debug_run_ui_visible ? "隐藏编辑器" | "显示编辑器";
+            let text_toggle = isDebugRunUIVisible() ? "隐藏编辑器" | "显示编辑器";
             if (Button(text_toggle))
                 do toggleDebugRunUI();
             SameLine();
             if (Button("■ 停止"))
                 do stopDebugRun();
+            
+            return !self.m_close;
         }
-        End();
     }
 }
