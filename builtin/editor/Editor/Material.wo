@@ -17,6 +17,7 @@ import pkg::worst;
 import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Drag;
 import builtin::editor::GUI::Forms::MsgBox;
+import builtin::editor::GUI::Widgets;
 
 import ResourcePath;
 import Browser;
@@ -38,6 +39,7 @@ using JEEditor::GUI;
 using JEEditor::GUI::Windows;
 using JEEditor::GUI::Drag;
 using JEEditor::GUI::Forms;
+using JEEditor::GUI::Widgets;
 using JEEditor::Editor::EditSession;
 using JEEditor::Editor::ResourcePath;
 using JEEditor::Editor::Action;
@@ -132,10 +134,11 @@ namespace JEEditor::Editor
         {
             if (e->get_component(ctype)->is_value)
                 return true;
-                
+
             let cname = ctype->name;
-            
-            if (Button(F"添加 {cname} 组件"))
+            let (_, short_name) = splitTypeName(cname);
+
+            if (Button(F"添加 {short_name} 组件"))
             {
                 // 先结束可能进行中的编辑手势，再发布添加组件的操作
                 EditSession::commit();
@@ -148,6 +151,8 @@ namespace JEEditor::Editor
                         wctx->doAction(action);
                 }
             }
+            if (IsItemHovered())
+                do SetTooltip(cname);
             return false;
         }
         
@@ -236,10 +241,17 @@ namespace JEEditor::Editor
             shader_index: int,
             tag: string)=> void
         {
-            TextDisabled(uname);
-            SameLine();
-            SetNextItemWidth(-1.);
-            
+            // 标量整数（InputInt）的步进按钮绘制在输入框之外，
+            // 为其预留右侧空间
+            let mut step_reserve = 0.;
+            match (uvar)
+            {
+                integer(_)? step_reserve = 56.;
+                _?;
+            }
+            do beginMemberRow(uname,
+                option::none: option<Color32RGBA>, step_reserve);
+
             match (uvar)
             {
                 integer(v)?
@@ -366,13 +378,16 @@ namespace JEEditor::Editor
                 TextDisabled("（没有可编辑的 uniform 变量）");
                 return;
             }
-            
-            for (let uname : names)
+
+            for (let mut i = 0; i < names->len; i += 1)
             {
+                let uname = names[i];
                 let uvar = uniforms->get(uname)->unwrap;
                 showUniformEdit(
                     wctx, eid, sinst, uname, uvar, shader_index,
                     F"##material_uniform_{shader_index}_{uname}");
+                if (i + 1 < names->len)
+                    memberSeparator();
             }
         }
         
@@ -388,24 +403,41 @@ namespace JEEditor::Editor
             }
         }
         
+        // 着色器列表项行尾的紧凑操作按钮：上移/下移/移除。在列表项
+        // 标题（TreeNodeEx）与拖放判定之后提交，配合标题上的
+        // AllowItemOverlap 抢占行尾区域的悬停与点击。
         func showShaderItemOps(
             wctx: WorldEditorViewport,
             e: entity, shaders: array<shader>, sinst: shader, idx: int)=> void
         {
+            let btn_w = 26.;
+            let ops_w = btn_w * 3. + 8. * 2.;
+
+            SameLine();
+            let (cursor_x, cursor_y) = GetCursorPos();
+            let (avail_width, _) = GetContentRegionAvail();
+            SetCursorPos((cursor_x + avail_width - ops_w - 4., cursor_y));
+
             BeginDisabled(idx == 0);
-            if (Button(F"上移##material_shader_{idx}"))
+            if (ButtonSize(F"↑##material_shader_up_{idx}", (btn_w, 0.)))
                 applyShadersChange(wctx, e, shaders->erase(idx)->inlay(idx - 1, sinst));
             EndDisabled();
+            if (IsItemHovered())
+                do SetTooltip("上移一位");
+
             SameLine();
-            
             BeginDisabled(idx + 1 >= shaders->len);
-            if (Button(F"下移##material_shader_{idx}"))
+            if (ButtonSize(F"↓##material_shader_down_{idx}", (btn_w, 0.)))
                 applyShadersChange(wctx, e, shaders->erase(idx)->inlay(idx + 1, sinst));
             EndDisabled();
+            if (IsItemHovered())
+                do SetTooltip("下移一位");
+
             SameLine();
-            
-            if (Button(F"移除##material_shader_{idx}"))
+            if (ButtonSize(F"×##material_shader_del_{idx}", (btn_w, 0.)))
                 applyShadersChange(wctx, e, shaders->erase(idx));
+            if (IsItemHovered())
+                do SetTooltip("移除该着色器");
         }
         
         // 加载着色器并插入到列表 insert_at 位置（越界时收敛到首/尾）
@@ -436,12 +468,13 @@ namespace JEEditor::Editor
             }
         }
         
-        // 列表末尾的追加行：拖动 .shader 文件到该行追加到列表末尾
+        // 列表末尾的追加行：整行按钮既是醒目的追加入口也是拖放目标，
+        // 拖动 .shader 文件到该行追加到列表末尾
         func showAppendShaderRow(
             wctx: WorldEditorViewport,
             e: entity, univ: option<universe>, append_at: int)=> void
         {
-            do Selectable("＋ 添加着色器##material_shader_append");
+            do ButtonSize("＋ 添加着色器##material_shader_append", (-1., 0.));
             if (IsItemHovered())
                 do SetTooltip("拖动 .shader 文件到此处追加到列表末尾");
             match (Drag::AcceptDrag:<FilePayload>())
@@ -500,84 +533,118 @@ namespace JEEditor::Editor
         
         func showShapeEdit(wctx: WorldEditorViewport, e: entity)=> void
         {
-            if (CollapsingHeaderFlags(
-                    "模型",
-                    TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
+            // 分区标题栏样式与检视面板的组件块一致
+            pushSectionHeaderStyle();
+            let opened = CollapsingHeaderFlags(
+                "模型", TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen);
+            popSectionHeaderStyle();
+            if (opened)
             {
                 // set_shape 只在组件存在时生效，缺少组件时先引导添加
                 if (!ensureComponentEditor(wctx, e, Renderer::Shape::type::typeinfo))
                     return;
-                    
+
                 let univ = option::value(wctx->getWorld->get_universe);
-                
-                // 模型行：文件名/状态文字 + 行尾移除按钮；悬浮整行时
-                // 以气泡展示完整路径与拖放说明
+
+                // 模型卡片行：整行是悬停提示与拖放命中区，行尾移除按钮
                 let mut shape_tip = "拖动模型文件到此处设置模型（.obj/.fbx/.gltf 等）";
-                
-                BeginGroup();
-                
+                let mut shape_text = "（未设置模型）";
+                let mut shape_dim = true;    // 未设置/内置顶点用弱化色显示
+                let mut shape_set = false;   // 已设置时行尾显示移除按钮
                 match (e->get_shape())
                 {
-                    none?
-                        Text("（未设置模型）");
+                    none?;
                     value(shp)?
-                    {
                         match (shp->path)
                         {
                             // vertex::create 创建的顶点没有来源路径
                             none?
-                                Text("（内置顶点）");
+                            {
+                                shape_text = "（内置顶点）";
+                                shape_set = true;
+                            }
                             value(p)?
                             {
-                                Text(filename(normalize(p)));
+                                shape_text = filename(normalize(p));
+                                shape_dim = false;
+                                shape_set = true;
                                 shape_tip = F"{p}\n拖动模型文件到此处替换模型";
                             }
                         }
-                        
-                        SameLine();
-                        if (Button("移除##material_shape"))
-                            applyShapeChange(wctx, e, option::none);
-                    }
                 }
-                
-                EndGroup();
+
+                Indent(8.);
+                defer Unindent(8.);
+
+                let card_h = 36.;
+                let (row_start, content_x) =
+                    beginCardRow("##material_shape_card", card_h);
                 if (IsItemHovered())
                     do SetTooltip(shape_tip);
-                    
-                // 拖动资源浏览器中的模型文件到该行可设置/替换模型
+
+                // 拖动资源浏览器中的模型文件到该卡片可设置/替换模型
                 match (Drag::AcceptDrag:<FilePayload>())
                 {
                     none?;
                     value(payload)?
                         trySetShape(wctx, e, univ, payload->path);
                 }
+
+                // 内容：状态/文件名文字；已设置时行尾提供移除
+                let (rcx, _) = GetCursorPos();
+                let right_x = rcx + GetContentRegionAvail().0;
+                setCursorX(content_x);
+                setCursorY(row_start.1 + (card_h - GetTextLineHeight()) * 0.5);
+                if (shape_dim)
+                    TextDisabled(shape_text);
+                else
+                    Text(shape_text);
+
+                if (shape_set)
+                {
+                    SetCursorPos((right_x - 30.,
+                        row_start.1 + (card_h - GetFrameHeight()) * 0.5));
+                    if (ButtonSize("×##material_shape", (26., 0.)))
+                        applyShapeChange(wctx, e, option::none);
+                    if (IsItemHovered())
+                        do SetTooltip("移除模型");
+                }
+                endCardRow(row_start, card_h);
             }
             Spacing();
         }
         
         func showShadersEdit(wctx: WorldEditorViewport, e: entity)=> void
         {
-            if (CollapsingHeaderFlags(
-                    "着色器",
-                    TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
+            // 分区标题栏样式与检视面板的组件块一致
+            pushSectionHeaderStyle();
+            let opened = CollapsingHeaderFlags(
+                "着色器", TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen);
+            popSectionHeaderStyle();
+            if (opened)
             {
                 if (!ensureComponentEditor(wctx, e, Renderer::Shaders::type::typeinfo))
                     return;
-                    
+
                 let shaders = e->get_shaders();
                 let univ = option::value(wctx->getWorld->get_universe);
                 let eid = e->internal::get_entity_uid;
-                
+
+                Indent(8.);
+                defer Unindent(8.);
+
                 if (shaders->len == 0)
                     TextDisabled("（没有着色器）");
-                    
+
                 for (let (idx, sinst) : shaders->iter |> enumerate)
                 {
-                    // 树节点行：箭头示意可展开编辑 uniform，整行同时是拖放目标
-                    let opened = TreeNodeEx(
+                    // 树节点行：箭头示意可展开编辑 uniform，整行同时是拖放目标；
+                    // AllowItemOverlap 让行尾的上移/下移/移除按钮可抢占点击
+                    let shader_opened = TreeNodeEx(
                         F"{idx}: {shaderDisplayName(sinst)}##material_shader_{idx}",
-                        TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth);
-                        
+                        TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
+                            + TreeNodeAttribute::ImGuiTreeNodeFlags_AllowItemOverlap);
+
                     // 悬浮提示完整路径与该行的拖放插入说明
                     match (sinst->path)
                     {
@@ -592,7 +659,7 @@ namespace JEEditor::Editor
                                 do SetTooltip(F"{p}\n拖动 .shader 文件到此处插入到该位置");
                         }
                     }
-                    
+
                     // 拖动 .shader 文件到该列表项上，新的着色器 pass 插入到该位置
                     match (Drag::AcceptDrag:<FilePayload>())
                     {
@@ -600,17 +667,18 @@ namespace JEEditor::Editor
                         value(payload)?
                             tryInsertShader(wctx, e, univ, payload->path, idx);
                     }
-                    
-                    if (opened)
+
+                    showShaderItemOps(wctx, e, shaders, sinst, idx);
+
+                    if (shader_opened)
                     {
-                        showShaderItemOps(wctx, e, shaders, sinst, idx);
                         SeparatorText("Uniform 变量");
                         showShaderUniformsEdit(wctx, eid, sinst, idx);
                         TreePop();
                     }
                     Spacing();
                 }
-                
+
                 showAppendShaderRow(wctx, e, univ, shaders->len);
             }
             Spacing();
@@ -698,10 +766,10 @@ namespace JEEditor::Editor
             SeparatorText("纹理通道");
             if (IsItemHovered())
                 do SetTooltip("采样通道由着色器的 uniform 声明");
-                
+
             let univ = option::value(wctx->getWorld->get_universe);
             let textures = e->get_textures();
-            
+
             // 通道清单 = 着色器声明的采样通道 ∪ 已绑定的通道，按通道号排序，
             // 用户无需手动指定通道号
             let channels = collectSamplerChannels(e->get_shaders());
@@ -712,14 +780,14 @@ namespace JEEditor::Editor
                     passes = passes->append(pass);
             }
             passes = passes |> sort(\l, r = l < r;);
-            
+
             if (passes->len == 0)
                 TextDisabled("（没有着色器声明需要采样的纹理通道）");
-                
+
             for (let pass : passes)
             {
                 let tex_opt = textures->get(pass);
-                
+
                 // 悬浮气泡内容：纹理路径 + 采样引用 + 拖放说明，每项一行
                 let mut tips = []: array<string>;
                 match (tex_opt)
@@ -746,79 +814,109 @@ namespace JEEditor::Editor
                     }
                 }
                 tips = tips->append("拖动纹理文件到此处绑定/替换纹理");
-                
-                BeginGroup();
-                
-                match (tex_opt)
-                {
-                    none?
-                        Text(F"通道 {pass}（未绑定纹理）");
-                    value(tex)?
-                    {
-                        ImageSize(tex, 32., 32.);
-                        SameLine();
-                        Text(F"通道 {pass}");
-                        
-                        // 移除与通道同行
-                        SameLine();
-                        if (Button(F"移除##material_texture_{pass}"))
-                            applyTextureChange(wctx, e, pass, option::none);
-                    }
-                }
-                
-                EndGroup();
-                
-                // 悬浮整行时以气泡显示路径、采样引用与拖放说明
+
+                // 通道卡片行：缩略图 + 通道号 + 文件名直显，整行是悬停
+                // 提示与拖放命中区，行尾解绑按钮
                 let tips_text = tips->reduce(\l, r = l + "\n" + r;)->unwrap;
+                let card_h = 40.;
+                let (row_start, content_x) =
+                    beginCardRow(F"##material_texture_card_{pass}", card_h);
                 if (IsItemHovered())
                     do SetTooltip(tips_text);
-                    
-                // 拖动资源浏览器中的纹理文件到该行可绑定/替换此通道
+
+                // 拖动资源浏览器中的纹理文件到该卡片可绑定/替换此通道
                 match (Drag::AcceptDrag:<FilePayload>())
                 {
                     none?;
                     value(payload)?
                         tryBindTexture(wctx, e, univ, pass, payload->path);
                 }
-                
-                Spacing();
+
+                let (rcx, _) = GetCursorPos();
+                let right_x = rcx + GetContentRegionAvail().0;
+
+                match (tex_opt)
+                {
+                    none?
+                    {
+                        setCursorX(content_x);
+                        setCursorY(row_start.1 + (card_h - GetTextLineHeight()) * 0.5);
+                        TextDisabled(F"通道 {pass}（未绑定纹理）");
+                    }
+                    value(tex)?
+                    {
+                        setCursorX(content_x);
+                        setCursorY(row_start.1 + 4.);
+                        ImageSize(tex, 32., 32.);
+                        SameLine();
+                        setCursorY(row_start.1 + (card_h - GetTextLineHeight()) * 0.5);
+                        Text(F"通道 {pass}");
+                        match (tex->path)
+                        {
+                            // 纹理没有来源路径时不显示文件名
+                            none?;
+                            value(p)?
+                            {
+                                SameLine();
+                                TextDisabled(filename(normalize(p)));
+                            }
+                        }
+
+                        setCursorX(right_x - 30.);
+                        setCursorY(row_start.1 + (card_h - GetFrameHeight()) * 0.5);
+                        if (ButtonSize(F"×##material_texture_{pass}", (26., 0.)))
+                            applyTextureChange(wctx, e, pass, option::none);
+                        if (IsItemHovered())
+                            do SetTooltip("解绑该通道的纹理");
+                    }
+                }
+                endCardRow(row_start, card_h);
             }
         }
         
         func showTexturesEdit(wctx: WorldEditorViewport, e: entity)=> void
         {
-            if (CollapsingHeaderFlags(
-                    "纹理",
-                    TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
+            // 分区标题栏样式与检视面板的组件块一致
+            pushSectionHeaderStyle();
+            let opened = CollapsingHeaderFlags(
+                "纹理", TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen);
+            popSectionHeaderStyle();
+            if (opened)
             {
                 if (!ensureComponentEditor(wctx, e, Renderer::Textures::type::typeinfo))
                     return;
-                    
+
                 // tiling/offset 是反射成员，沿用与检视面板一致的通用值编辑器
                 let eid = e->internal::get_entity_uid;
-                
+
                 let textures_component =
                     e->get_component(Renderer::Textures::type::typeinfo)->unwrap;
-                    
-                Indent(0.);
-                for (let (mname, mtype, mhandle) : textures_component->get_members)
+
+                Indent(8.);
+                defer Unindent(8.);
+
+                let members = textures_component->get_members;
+                for (let mut mi = 0; mi < members->len; mi += 1)
                 {
-                    TextDisabled(mname);
-                    SameLine();
-                    SetNextItemWidth(-1.);
-                    
+                    let (mname, mtype, mhandle) = members[mi];
+                    do beginMemberRow(mname,
+                        option::none: option<Color32RGBA>,
+                        isScalarIntType(mtype) ? 56. | 0.);
+
                     let member_tag = F"##material_textures_{mname}_{mhandle}";
-                    
+
                     // edit 一旦返回 true，成员值已被就地修改，先留档修改前的序列化值
                     let old_value = eid=>> \_ = unsafe::dynamic_parser::save(mtype, mhandle);;
-                    
+
                     match (unsafe::dynamic_parser::edit(mtype, mhandle, member_tag))
                     {
                         none?
                         {
-                            NewLine();
+                            // 无编辑器时在控件列内说明原因（折行到面板右缘）
+                            PushTextWrapPos(0.);
                             TextDisabled(
                                 F"编辑器没有为 `{mtype->script_name->or(mtype->name)}` 类型提供编辑组件");
+                            PopTextWrapPos();
                         }
                         value(edited)?
                         {
@@ -843,9 +941,13 @@ namespace JEEditor::Editor
                             }
                         }
                     }
+
+                    // 成员之间以淡色横线分界
+                    if (mi + 1 < members->len)
+                        memberSeparator();
                 }
-                Unindent(0.);
-                
+
+                Spacing();
                 showTextureChannelsEdit(wctx, e);
             }
             Spacing();
@@ -875,10 +977,10 @@ namespace JEEditor::Editor
                             TextDisabled("（没有待编辑的实体）");
                         value(e)?
                         {
-                            TextDisabled("名称");
-                            SameLine();
+                            do beginMemberRow("名称",
+                                option::none: option<Color32RGBA>, 0.);
                             Text(e->internal::name);
-                            
+
                             showShapeEdit(wctx, e);
                             showShadersEdit(wctx, e);
                             showTexturesEdit(wctx, e);

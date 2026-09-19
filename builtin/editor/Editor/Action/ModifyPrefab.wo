@@ -79,17 +79,12 @@ namespace JEEditor::Editor::Action
                             match (path)
                             {
                                 none?
-                                {
                                     if (e->towoo::get_component:<Editor::Prefab>()->is_value)
                                         do e->towoo::remove_component:<Editor::Prefab>();
-                                    return true;
-                                }
                                 value(p)?
-                                {
-                                    let cinst = e->towoo::add_component:<Editor::Prefab>();
-                                    cinst.path->set <| p;
-                                }
+                                    e->towoo::add_component:<Editor::Prefab>().path->set <| p;
                             }
+                            return true;
                         }
                 }
             }

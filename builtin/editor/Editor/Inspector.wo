@@ -83,9 +83,6 @@ namespace JEEditor::Editor
         // 与预设体不一致的数据（成员名/组件标题）的高亮色
         let PREFAB_OVERRIDE_COLOR = (230, 190, 80, 255);
 
-        // 成员之间的分界线：极淡的横线，只为给相邻成员划出界线
-        let MEMBER_SEPARATOR_COLOR = (140, 140, 140, 36);
-
         // 命名空间分组标题的强调色（0..1 浮点 RGBA，与主题文字色混合
         // 使用，明暗主题都保持可读）
         let GROUP_ACCENT = (0.42, 0.62, 0.95, 1.);
@@ -138,15 +135,6 @@ namespace JEEditor::Editor
         public func getSizeConstraints(_: Inspector)=> SizeConstraints
         {
             return SizeConstraints::Limited(((300., 200.), (600., 4096.)));
-        }
-        // 将 "Transform::LocalPosition" 拆为 ("Transform", "LocalPosition")，
-        // 不带命名空间的类型名返回 ("", 原名)。
-        func splitTypeName(cname: string)=> (string, string)
-        {
-            let sep_pos = cname->find("::")->or(-1);
-            if (sep_pos < 0)
-                return ("", cname);
-            return (cname->sub_len(0, sep_pos), cname->sub(sep_pos + 2));
         }
         // 加载预设体数据（带缓存，见 s_prefab_cache_*）。"@/xxx" 是
         // 相对 workpath 的资源路径，fsys::lastwrite 只认真实路径，
@@ -276,77 +264,6 @@ namespace JEEditor::Editor
             }
             return false;
         }
-        // 把两个（0..1 浮点）风格色按 t 混合
-        func mixColorF(
-            c0: (real, real, real, real), c1: (real, real, real, real),
-            t: real)=> (real, real, real, real)
-        {
-            return (
-                c0.0 + (c1.0 - c0.0) * t,
-                c0.1 + (c1.1 - c0.1) * t,
-                c0.2 + (c1.2 - c0.2) * t,
-                c0.3 + (c1.3 - c0.3) * t);
-        }
-        // 混色结果转为可直接用于 PushStyleColor / 绘制的颜色；alpha 固定
-        // 为给定值（风格色多带半透明，按用途决定虚实）
-        func mixStyleColor(
-            c0: (real, real, real, real), c1: (real, real, real, real),
-            t: real, alpha: int)=> Color32RGBA
-        {
-            let m = mixColorF(c0, c1, t);
-            return ((m.0 * 255.) as int, (m.1 * 255.) as int, (m.2 * 255.) as int, alpha);
-        }
-        // 标量整数编辑器（InputInt）的步进按钮绘制在输入框之外，右列
-        // 需为其预留空间，否则按钮会被面板右缘裁掉
-        func isScalarIntType(t: typeinfo)=> bool
-        {
-            let n = t->name;
-            return n == "uint8" || n == "uint16" || n == "uint32"
-                || n == "uint64" || n == "int8" || n == "int16"
-                || n == "int32" || n == "int64";
-        }
-        // 成员行布局（与 builtin/script/editor.wo 的多行编辑器约定，见
-        // JEEditor::GUI::Widgets）：左侧成员名标签列 + 右侧控件列。绘制
-        // 标签并限制在标签列内（超长裁切，悬停可看全名），再把控件光标
-        // 定位到控件列起点，SetNextItemWidth 已按控件列宽减去 step_reserve
-        // 设置好。返回控件列起点（窗口坐标 X），供“无编辑器”提示等
-        // 续行对齐使用。
-        func beginMemberRow(label: string, highlighted: bool, step_reserve: real)=> real
-        {
-            let (start_x, start_y) = GetCursorPos();
-            let right_x = start_x + GetContentRegionAvail().0;
-
-            // 标签列宽随面板宽度伸缩，并夹在可读区间内
-            let mut label_w = (right_x - start_x) * 0.38;
-            if (label_w < 76.)
-                label_w = 76.;
-            if (label_w > 132.)
-                label_w = 132.;
-
-            // 标签与控件框垂直居中（与 ImGui 自带“框后标签”的基线一致）
-            let line_h = CalcTextSize(label).1;
-            SetCursorPos((start_x, start_y + (GetFrameHeight() - line_h) * 0.5));
-            let (label_sx, label_sy) = GetCursorScreenPos();
-            PushClipRect(
-                (label_sx - 1., label_sy - line_h),
-                (label_sx + label_w, label_sy + line_h * 2.));
-            if (highlighted)
-                TextColored(PREFAB_OVERRIDE_COLOR, label);
-            else
-            {
-                TextDisabled(label);
-                // 被裁切的长成员名悬停显示全名（高亮分支由调用方提示差异）
-                if (CalcTextSize(label).0 > label_w && IsItemHovered())
-                    do SetTooltip(label);
-            }
-            PopClipRect();
-
-            SameLine();
-            let widget_x = start_x + label_w;
-            setCursorX(widget_x);
-            SetNextItemWidth(right_x - widget_x - step_reserve);
-            return widget_x;
-        }
         // 命名空间分组标题：填充色带 + 左侧强调竖条 + 命名空间名与组件数，
         // 比 SeparatorText 更醒目。颜色由主题文字色向强调蓝混合得出，
         // 明暗主题都保持可读
@@ -396,13 +313,15 @@ namespace JEEditor::Editor
             
             if (name_overridden)
             {
-                do beginMemberRow("名称 *", true, 0.);
+                do beginMemberRow("名称 *",
+                    option::value(PREFAB_OVERRIDE_COLOR), 0.);
                 if (IsItemHovered())
                     do SetTooltip(F"名称与预设体不一致\n预设体: {prefab_name->unwrap}\n当前: {e->internal::name}");
             }
             else
             {
-                do beginMemberRow("名称", false, 0.);
+                do beginMemberRow("名称",
+                    option::none: option<Color32RGBA>, 0.);
             }
             
             let NAME_EDIT_TAG = "##entity_name";
@@ -453,9 +372,12 @@ namespace JEEditor::Editor
                 // 的值；一致/未比较的成员保持灰色弱化显示
                 let diff = memberDiffVsPrefab(prefab, cname, mname, old_value);
                 let overridden = diff.m_comparable && diff.m_overridden;
+                let mut label_color = option::none: option<Color32RGBA>;
+                if (overridden)
+                    label_color = option::value(PREFAB_OVERRIDE_COLOR);
                 do beginMemberRow(
                     overridden ? F"{mname} *" | mname,
-                    overridden,
+                    label_color,
                     isScalarIntType(mtype) ? 56. | 0.);
                 if (overridden && IsItemHovered())
                 {
@@ -511,11 +433,7 @@ namespace JEEditor::Editor
 
                 // 成员之间以淡色横线分界
                 if (mi + 1 < members->len)
-                {
-                    PushStyleColor(ImGuiCol::ImGuiCol_Separator, MEMBER_SEPARATOR_COLOR);
-                    Separator();
-                    PopStyleColor(1);
-                }
+                    memberSeparator();
             }
             Unindent(8.);
         }
@@ -784,32 +702,20 @@ namespace JEEditor::Editor
 
             // 预设体之外新增的组件：标题同样以高亮标记
             let comp_added = isComponentAddedVsPrefab(prefab, cname);
+
+            // 标题栏样式与材质面板分区一致（见 Widgets::pushSectionHeaderStyle）；
+            // 高亮文字色压在标题栏样式之上，随标题一起弹出
+            pushSectionHeaderStyle();
             if (comp_added)
                 PushStyleColor(ImGuiCol::ImGuiCol_Text, PREFAB_OVERRIDE_COLOR);
 
-            // 标题栏以不透明的主题 Header 混色填充，加厚内边距并微圆角，
-            // 让每个组件块有明确的分区感；悬停/按下向文字色轻微混合反馈
-            let header_c = GetStyleColor(ImGuiCol::ImGuiCol_Header);
-            let window_c = GetStyleColor(ImGuiCol::ImGuiCol_WindowBg);
-            let text_c = GetStyleColor(ImGuiCol::ImGuiCol_Text);
-            let base_c = mixColorF(header_c, window_c, 0.45);
-            PushStyleColor(ImGuiCol::ImGuiCol_Header,
-                mixStyleColor(header_c, window_c, 0.45, 255));
-            PushStyleColor(ImGuiCol::ImGuiCol_HeaderHovered,
-                mixStyleColor(base_c, text_c, 0.12, 255));
-            PushStyleColor(ImGuiCol::ImGuiCol_HeaderActive,
-                mixStyleColor(base_c, text_c, 0.22, 255));
-            PushStyleVec2(StyleVar::ImGuiStyleVar_FramePadding, (6., 5.));
-            PushStyleReal(StyleVar::ImGuiStyleVar_FrameRounding, 3.);
-
             // AllowItemOverlap 允许后绘制的行尾 × 按钮抢占重叠区域的
             // 悬停与点击；折叠头的命中区总是横跨整行且忽略
-            // SetNextItemWidth，不加此标志 × 的点击会被标题吞掉
+            // SetNextItemWidth，不加此标志 × 的点击会被标题吞掉。
+            // 组件默认折叠，用户展开后 ImGui 按标题 ID 记住展开状态
             let expanded = CollapsingHeaderFlags(
                 F"{short_name}##{cname}",
-                TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen
-                    + TreeNodeAttribute::ImGuiTreeNodeFlags_AllowItemOverlap);
-            PopStyleColor(3);
+                TreeNodeAttribute::ImGuiTreeNodeFlags_AllowItemOverlap);
 
             if (comp_added)
             {
@@ -837,7 +743,7 @@ namespace JEEditor::Editor
             SetCursorPos((cursor_x + avail_width - 28., cursor_y));
             if (ButtonSize(F"×##remove_{cname}", (24., 0.)))
                 removeComponentFromEntity(wctx, e, ctype);
-            PopStyleVar(2);
+            popSectionHeaderStyle();
 
             if (expanded)
                 showComponentMembersEdit(wctx, e, ctype, cname, prefab);
