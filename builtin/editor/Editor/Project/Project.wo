@@ -40,6 +40,7 @@ import ToWooCollection;
 
 using std;
 using je;
+using je::towoo;
 using je::gui;
 using toml;
 using fsys;
@@ -461,6 +462,7 @@ namespace JEEditor::Editor
         public func reloadModuleWhileWorldsFreezed(
             self: Project, name: string, path: path_t, update_dylib_callback: ()=> result<void, string>)
         {
+            defer unsafe::dynamic_parser::refresh();
             match (self.m_native_modules->getNativeModuleByName(name))
             {
                 value(native_modules)? {
