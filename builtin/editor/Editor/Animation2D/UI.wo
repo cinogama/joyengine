@@ -549,7 +549,9 @@ namespace JEEditor::Editor::Animation2D
         let avail = GetContentRegionAvail();
         let total = AnimationContext::total_duration(frames);
         let content_w = math::max(total * state.m_px_per_sec + 32., avail[0]);
-        let canvas_h = avail[1] - GetTextLineHeightWithSpacing() - 4.;
+        // 帧时长文本已从格子底部移除，画布直接吃满控制行以下的全部
+        // 剩余高度（内边距与滚动条预留由 tl_canvas 内部计算）
+        let canvas_h = avail[1];
         if (canvas_h < 40.)
             return;
             
@@ -557,17 +559,25 @@ namespace JEEditor::Editor::Animation2D
                 WindowsAttribute::ImGuiWindowFlags_HorizontalScrollbar
                     + WindowsAttribute::ImGuiWindowFlags_NoScrollWithMouse))
         {
+            // 子窗口带内边距（绑定创建的 child 均为 border=true），交互区
+            // 高度必须按内部剩余高度计算，并预留底部水平滚动条的高度，
+            // 否则内容溢出内区会触发垂直滚动条
+            let inner = GetContentRegionAvail();
+            let mut strip_h = inner[1] - 16.;
+            if (strip_h < 8.)
+                strip_h = 8.;
+
             let origin = GetCursorScreenPos();
-            do InvisibleButton("##tl_area", (content_w, canvas_h));
+            do InvisibleButton("##tl_area", (content_w, strip_h));
             let hovered = IsItemHovered();
             let dl = GetWindowDrawList();
             let row_y = origin[1];
-            let row_h = canvas_h;
+            let row_h = strip_h;
             let scroll_x = GetScrollX();
             let draw_x0 = origin[0] - scroll_x;
-            
+
             // 背景（铺满可见区，用 origin 起始的可见宽度）
-            do dl->AddRectFilled((origin[0], row_y), (origin[0] + avail[0], row_y + row_h), (45, 45, 45, 255));
+            do dl->AddRectFilled((origin[0], row_y), (origin[0] + inner[0], row_y + row_h), (45, 45, 45, 255));
             
             // 帧单元格：格子宽度即帧时长（宽 = 帧时间 × 缩放），格内只
             // 显示帧序号，不再叠加帧时长文本（窄帧时放不下）
@@ -635,7 +645,7 @@ namespace JEEditor::Editor::Animation2D
             if (state.m_playing)
             {
                 let visible_left = GetScrollX();
-                let visible_right = visible_left + avail[0];
+                let visible_right = visible_left + inner[0];
                 let ph_local = state.m_play_time * state.m_px_per_sec;
                 if (ph_local < visible_left || ph_local > visible_right)
                     do SetScrollFromPosX(ph_local, 0.5);
