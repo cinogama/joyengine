@@ -28,6 +28,7 @@ import builtin::editor::Singleton::Universe;
 
 import Definition;
 import WindowLifecycle;
+import WorldSaving;
 
 using std;
 using toml;
@@ -47,7 +48,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         typeinfo::load("Translation::TranslationUpdatingSystem")->unwrap;
     let DEFAULT_GRAPHIC_SYSTEM_TYPE =
         typeinfo::load("Graphic::UnlitGraphicPipelineSystem")->unwrap;
-
+        
     // 确保世界中存在编辑器调试摄像机（带 Editor::Invisible 标记的透视摄像机），
     // 没有则创建默认的一个。调试摄像机是编辑器内部实体，不会随世界文件保存
     //（Editor:: 前缀组件在保存时被跳过），因此新建/载入世界时都需调用本函数重建。
@@ -61,10 +62,10 @@ namespace JEEditor::Editor::WorldEditorViewport
                 requirement::contains(Transform::LocalRotation::type::typeinfo),
                 requirement::contains(Transform::Translation::type::typeinfo),
             ]);
-
+            
         if ((debug_camera_selector->iter |> collect->get(0))->is_value)
             return;
-
+            
         // Create editor camera.
         do w->add_entity([
                 Transform::Translation::type::typeinfo,
@@ -78,7 +79,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 Editor::Invisible::type::typeinfo,
             ]);
     }
-
+    
     public func createNewWorldToEdit()
     {
         // 冻结期间禁止创建世界视口（见 FreezeWorlds）
@@ -87,7 +88,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             MsgBox::err("新建世界", "当前正处于世界冻结流程中，请稍后再试");
             return;
         }
-
+        
         // 调试运行期间禁止创建：新世界不属于本次运行的暂停/恢复编排
         if (DebugRun::isDebugRunActive())
         {
@@ -97,33 +98,39 @@ namespace JEEditor::Editor::WorldEditorViewport
         
         let new_world = world::create(
             Singleton::Universe::getUniverse());
-
+            
         // Create default graphic pipe line.
         do new_world->add_system(DEFAULT_GRAPHIC_SYSTEM_TYPE);
         do new_world->add_system(TRASNLATION_SYSTEM_TYPE);
-
+        
         // Create editor camera.
         ensureDebugCamera(new_world);
-
+        
         new_world->set_enable(true);
-
+        
         for (let mut i = 0;; i += 1)
         {
-            match (Windows::show(
-                    create(
-                        new_world,
-                        i == 0 ? "New world" | F"New world {i + 1}",
-                        option::none,
-                        [],
-                        option::none)))
+            let world_viewport = create(
+                new_world,
+                i == 0 ? "New world" | F"New world {i + 1}",
+                option::none,
+                [],
+                option::none);
+
+            match (Windows::show(world_viewport))
             {
                 none?;
                 value(_)?
+                {
+                    world_viewport->addRuntimeSystem(
+                        Animation::FrameAnimation::type::typeinfo);
+                        
                     break;
+                }
             }
         }
     }
-
+    
     // 从 .je4world 文件加载世界并打开编辑视口；
     // 该路径已有打开的视口或文件读取失败时以 MsgBox 报错。
     // editor_state 为 Project 单例保存的编辑器状态（调试摄像机位姿/视口
@@ -137,7 +144,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             MsgBox::err("打开失败", "当前正处于世界冻结流程中，请稍后再试");
             return;
         }
-
+        
         // 调试运行期间禁止打开：新世界不属于本次运行的暂停/恢复编排
         if (DebugRun::isDebugRunActive())
         {
@@ -155,7 +162,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 return;
             }
         }
-
+        
         match (toml::load(path))
         {
             err(msg)?
@@ -171,7 +178,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                     wdat);
                 ensureDebugCamera(w);
                 w->set_enable(true);
-
+                
                 // “调试执行/导出时才启用”的系统以类型名保存，此处解析为
                 // typeinfo 后交由视口保存；类型已卸载时跳过并记录日志。
                 let runtime_systems = []mut: vec<typeinfo>;
@@ -185,15 +192,15 @@ namespace JEEditor::Editor::WorldEditorViewport
                             runtime_systems->add(systype);
                     }
                 }
-
+                
                 // 优先使用文件中保存的世界名（与文件名无关）；
                 // 旧版本文件未保存名字，退回文件名。
                 let name = JEEditor::Saving::World::getName(wdat)
                     ->or(purename(path));
-
+                    
                 match (Windows::show(
-                    create(w, name, option::value(path), runtime_systems->to_array(),
-                        editor_state)))
+                        create(w, name, option::value(path), runtime_systems->to_array(),
+                            editor_state)))
                 {
                     none?
                     {
