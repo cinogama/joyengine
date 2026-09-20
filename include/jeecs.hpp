@@ -1567,9 +1567,9 @@ je_ecs_world_add_system_instance [基本接口]
     1. 若此前世界中不存在同类型的系统，则添加
     2. 若此前世界中已经存在同类型系统，则替换
 
-    * 若向一个正在销毁中的世界添加系统实例，返回 nullptr
+    * 若向一个正在销毁中的世界添加系统实例，或者给定的类型不是一个系统类型，返回 nullptr
 */
-JE_API je_System je_ecs_world_add_system_instance(
+JE_API /* OPTIONAL */ je_System je_ecs_world_add_system_instance(
     je_GameWorld* world,
     je_TypeId type);
 
@@ -1578,7 +1578,7 @@ je_ecs_world_get_system_instance [基本接口]
 从指定世界中获取一个指定类型的系统实例，返回此实例的指针
 若世界中不存在此类型的系统，返回nullptr
 */
-JE_API je_System je_ecs_world_get_system_instance(
+JE_API /* OPTIONAL */ je_System je_ecs_world_get_system_instance(
     je_GameWorld* world,
     je_TypeId type);
 
@@ -6789,7 +6789,7 @@ namespace jeecs
             return local_type;
         }
 
-        inline void construct(const je_TypeInfo* t, void* addr, void* arg = nullptr)
+        inline void construct(const je_TypeInfo* t, void* addr, void* arg)
         {
             t->m_constructor(addr, arg, t);
         }
@@ -6956,41 +6956,36 @@ namespace jeecs
             return gentity;
         }
 
-        inline game_system* add_system(je_TypeId type)
-        {
-            return static_cast<game_system*>(
-                je_ecs_world_add_system_instance(handle(), type));
-        }
-
         template <typename SystemT>
         inline SystemT* add_system()
         {
-            return static_cast<SystemT*>(add_system(
-                typing::id<SystemT>()));
-        }
+            static_assert(
+                std::is_base_of_v<game_system, SystemT>, 
+                "SystemT must be based of `game_system`.");
 
-        inline game_system* get_system(je_TypeId type)
-        {
-            return static_cast<game_system*>(
-                je_ecs_world_get_system_instance(handle(), type));
+            return static_cast<SystemT*>(
+                je_ecs_world_add_system_instance(handle(), typing::id<SystemT>()));
         }
 
         template <typename SystemT>
         inline SystemT* get_system()
         {
-            return static_cast<SystemT*>(get_system(
-                typing::id<SystemT>()));
-        }
+            static_assert(
+                std::is_base_of_v<game_system, SystemT>,
+                "SystemT must be based of `game_system`.");
 
-        inline void remove_system(je_TypeId type)
-        {
-            je_ecs_world_remove_system_instance(handle(), type);
+            return static_cast<SystemT*>(
+                je_ecs_world_get_system_instance(handle(), typing::id<SystemT>()));
         }
 
         template <typename SystemT>
         inline void remove_system()
         {
-            remove_system(typing::id<SystemT>());
+            static_assert(
+                std::is_base_of_v<game_system, SystemT>,
+                "SystemT must be based of `game_system`.");
+
+            je_ecs_world_remove_system_instance(handle(), typing::id<SystemT>());
         }
 
         // This function only used for editor.

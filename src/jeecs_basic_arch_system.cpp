@@ -804,7 +804,7 @@ namespace jeecs_impl
                     arch_typeinfo.second.m_begin_offset_in_chunk);
 
                 if (prefab == nullptr)
-                    jeecs::typing::construct(arch_typeinfo.second.m_typeinfo, component_addr);
+                    jeecs::typing::construct(arch_typeinfo.second.m_typeinfo, component_addr, nullptr);
                 else
                     jeecs::typing::copy(arch_typeinfo.second.m_typeinfo,
                         component_addr, prefab->get_component(arch_typeinfo.second.m_typeinfo->m_id));
@@ -1238,11 +1238,12 @@ namespace jeecs_impl
         void* append_component(const arch_type::entity& e, je_TypeId component_type)
         {
             const auto* tinfo = jeecs::typing::of(component_type);
-            std::shared_lock sl(_m_command_executer_guard_mx);
 
             // Instance component
             void* created_component = malloc(tinfo->m_size);
-            jeecs::typing::construct(tinfo, created_component);
+            jeecs::typing::construct(tinfo, created_component, nullptr);
+
+            std::shared_lock sl(_m_command_executer_guard_mx);
 
             _find_or_create_buffer_for_entity(e)->m_adding_or_removing_components.add_one(
                 new _entity_command_buffer::typed_component(component_type, created_component));
@@ -1569,6 +1570,9 @@ namespace jeecs_impl
         }
         inline je_System request_to_append_system(const je_TypeInfo* type)
         {
+            if (type->m_type_class != JE_SYSTEM)
+                return nullptr;
+
             je_System sys = static_cast<je_System>(malloc(type->m_size));
             jeecs::typing::construct(type, sys, this);
             get_command_buffer().add_system_instance(type, sys);
@@ -2770,12 +2774,12 @@ void je_ecs_world_destroy(je_GameWorld* world)
     static_cast<jeecs_impl::ecs_world*>(world)->get_command_buffer().close_world();
 }
 
-je_System je_ecs_world_add_system_instance(je_GameWorld* world, je_TypeId type)
+/* OPTIONAL */ je_System je_ecs_world_add_system_instance(je_GameWorld* world, je_TypeId type)
 {
     return static_cast<jeecs_impl::ecs_world*>(world)->request_to_append_system(jeecs::typing::of(type));
 }
 
-je_System je_ecs_world_get_system_instance(je_GameWorld* world, je_TypeId type)
+/* OPTIONAL */ je_System je_ecs_world_get_system_instance(je_GameWorld* world, je_TypeId type)
 {
     auto& syss = static_cast<jeecs_impl::ecs_world*>(world)->get_system_instances();
     auto fnd = syss.find(jeecs::typing::of(type));

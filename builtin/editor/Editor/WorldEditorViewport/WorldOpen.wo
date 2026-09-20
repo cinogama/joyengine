@@ -48,6 +48,8 @@ namespace JEEditor::Editor::WorldEditorViewport
         typeinfo::load("Translation::TranslationUpdatingSystem")->unwrap;
     let DEFAULT_GRAPHIC_SYSTEM_TYPE =
         typeinfo::load("Graphic::UnlitGraphicPipelineSystem")->unwrap;
+    let ANIMATION_SYSTEM_TYPE = 
+        typeinfo::load("Animation::FrameAnimationSystem")->unwrap;
         
     // 确保世界中存在编辑器调试摄像机（带 Editor::Invisible 标记的透视摄像机），
     // 没有则创建默认的一个。调试摄像机是编辑器内部实体，不会随世界文件保存
@@ -122,9 +124,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 none?;
                 value(_)?
                 {
-                    world_viewport->addRuntimeSystem(
-                        Animation::FrameAnimation::type::typeinfo);
-                        
+                    world_viewport->addRuntimeSystem(ANIMATION_SYSTEM_TYPE);
                     break;
                 }
             }

@@ -425,14 +425,14 @@ WOORT_API woort_api wojeapi_add_system_to_world(void)
     func add_system(self: world, systype : typeinfo) = > bool;
     */
     jeecs::game_world gworld(static_cast<je_GameWorld*>(woort_pointer(0)));
-    const je_TypeInfo* system_type =
-        static_cast<const je_TypeInfo*>(woort_pointer(1));
+    const je_TypeInfo* system_type = static_cast<const je_TypeInfo*>(woort_pointer(1));
 
-    bool added;
+    bool added = false;
 
     woort_vm* const last = woort_vm_swap(nullptr);
     {
-        added = gworld.add_system(system_type->m_id);
+        if (nullptr != je_ecs_world_add_system_instance(gworld.handle(), system_type->m_id))
+            added = true;
     }
     (void)woort_vm_swap(last);
 
@@ -445,7 +445,9 @@ WOORT_API woort_api wojeapi_get_system_from_world(void)
     const je_TypeInfo* system_type =
         static_cast<const je_TypeInfo*>(woort_pointer(1));
 
-    auto* const system_addr = gworld.get_system(system_type->m_id);
+    auto* const system_addr = 
+        je_ecs_world_get_system_instance(
+            gworld.handle(), system_type->m_id);
 
     if (system_addr == nullptr)
         return woort_ret_option_none();
@@ -463,7 +465,9 @@ WOORT_API woort_api wojeapi_remove_system_from_world(void)
     const je_TypeInfo* system_type =
         static_cast<const je_TypeInfo*>(woort_pointer(1));
 
-    gworld.remove_system(system_type->m_id);
+    je_ecs_world_remove_system_instance(
+        gworld.handle(), system_type->m_id);
+
     return woort_ret_void();
 }
 

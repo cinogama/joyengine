@@ -419,7 +419,7 @@ namespace jeecs
         {
             const je_TypeInfo* m_type;
 
-            ToWooBaseComponent(void* arg, const je_TypeInfo* ty)
+            ToWooBaseComponent(void*, const je_TypeInfo* ty)
                 : m_type(ty)
             {
                 if (m_type->m_member_types == nullptr)
@@ -428,13 +428,14 @@ namespace jeecs
                 auto* member = m_type->m_member_types->m_members;
                 while (member != nullptr)
                 {
-                    auto* this_member = static_cast<void*>(
+                    auto* const this_member = static_cast<void*>(
                         reinterpret_cast<char*>(this) + member->m_member_offset);
-                    jeecs::typing::construct(member->m_member_type, this_member, arg);
+
+                    jeecs::typing::construct(member->m_member_type, this_member, nullptr);
 
                     if (member->m_woovalue_init_may_null != nullptr)
                     {
-                        auto* val = std::launder(
+                        auto* const val = std::launder(
                             static_cast<script::woovalue*>(this_member));
 
                         woort_Value tmp;

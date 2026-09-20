@@ -322,6 +322,10 @@ namespace JEEditor::Editor
                 while (!finished->get)
                     yield();
                     
+                // 等待直到模块确切载入完成
+                while(WorldEditorViewport::isWorldsFrozen())
+                    yield();
+                    
                 all_modules_ok = all_modules_ok && all_ok->get;
             }
             
@@ -335,7 +339,12 @@ namespace JEEditor::Editor
                             finished->set <| true;
                         });
                 });
+                
             while (!finished->get)
+                yield();
+                
+            // 等待直到编辑器的类型脚本载入完成
+            while(WorldEditorViewport::isWorldsFrozen())
                 yield();
                 
             if (!all_modules_ok)
