@@ -1,0 +1,37 @@
+import pkg::std;
+import je::graphic;
+
+using je::graphic;
+
+namespace JEEditor::Editor::Gizmo::Shaders
+{
+    public let SELECTED_ENTITY_HILIGHT = shader::load(
+        option::none,
+        "!/builtin/editor/Editor/Gizmo/Shaders/SelectedEntity.shader");
+
+    // 变换游标使用的纯色着色器，颜色通过 JE_COLOR 逐次绘制设置
+    public let GIZMO_SOLID = shader::load(
+        option::none,
+        "!/builtin/editor/Editor/Gizmo/Shaders/GizmoSolid.shader");
+
+    // 摄像机实体图标 gizmo 使用的纹理着色器，染色同样由 JE_COLOR 提供
+    public let GIZMO_ICON = shader::load(
+        option::none,
+        "!/builtin/editor/Editor/Gizmo/Shaders/GizmoIcon.shader");
+
+    // 世界坐标网格着色器：全屏四边形内按像素射线与 y=0 平面求交，
+    // 摄像机位姿与逆投影矩阵通过 JE_GRID_* uniform 逐次绘制设置
+    public let WORLD_GRID = shader::load(
+        option::none,
+        "!/builtin/editor/Editor/Gizmo/Shaders/WorldGrid.shader");
+
+    // 2D（正交）模式的世界坐标网格着色器：与 z=0（xOy）平面求交，
+    // uniform 约定与 WORLD_GRID 一致
+    public let WORLD_GRID_2D = shader::load(
+        option::none,
+        "!/builtin/editor/Editor/Gizmo/Shaders/WorldGrid2D.shader");
+
+    public let EDITOR_DEFAULT_DEFER_2D_LIGHT_CAMERA_SHADER = shader::load(
+        option::none,
+        "!/builtin/shader/CameraDefer2DPass.shader");
+}

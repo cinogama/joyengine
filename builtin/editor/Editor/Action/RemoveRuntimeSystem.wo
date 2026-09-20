@@ -1,0 +1,45 @@
+import pkg::std;
+
+import je;
+import je::ecs;
+import je::typeinfo;
+
+import pkg::interface;
+
+import builtin::editor::Editor::WorldEditorViewport;
+
+import IAction;
+import AddRuntimeSystem;
+
+using je;
+
+namespace JEEditor::Editor::Action
+{
+    // 从 WorldEditorViewport 的调试系统列表（m_runtime_systems）中移除系统。
+    // 与 DestroyEntity 相同的范式：作为 AddRuntimeSystem 的反操作实现，
+    // redo/undo 交换。
+    using RemoveRuntimeSystem = AddRuntimeSystem
+    {
+        public func create(systype: typeinfo)=> RemoveRuntimeSystem
+            where require!(RemoveRuntimeSystem: IAction);
+        {
+            return AddRuntimeSystem::create(systype)
+                as raw RemoveRuntimeSystem as RemoveRuntimeSystem;
+        }
+
+        public func redo(self: RemoveRuntimeSystem, w: WorldEditorViewport)=> bool
+        {
+            return self as raw AddRuntimeSystem as AddRuntimeSystem->undo(w);
+        }
+
+        public func undo(self: RemoveRuntimeSystem, w: WorldEditorViewport)=> bool
+        {
+            return self as raw AddRuntimeSystem as AddRuntimeSystem->redo(w);
+        }
+
+        public func describe(self: RemoveRuntimeSystem)=> string
+        {
+            return F"移除调试系统 {self.m_system_type_name}";
+        }
+    }
+}

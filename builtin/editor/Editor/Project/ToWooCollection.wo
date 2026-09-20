@@ -1,0 +1,205 @@
+import pkg::std;
+import pkg::fsys;
+import pkg::iterator;
+import pkg::dumpling;
+import pkg::try;
+import pkg::filestream;
+import pkg::buffer;
+
+import je;
+
+import builtin::editor::GUI::Forms::MsgBox;
+
+import ToWooComponentCollection;
+import ToWooSystemCollection;
+
+using std;
+using fsys;
+using iterator;
+using dumpling;
+using filestream;
+using je::towoo;
+using JEEditor::GUI::Forms;
+
+namespace JEEditor::Editor::Project
+{
+    public func generateVFS()
+    {
+        let vfs_path = workpath() / ".temp" / "vfs";
+        if (!exist(vfs_path))
+        {
+            try! _ = mkdir(vfs_path)
+                -> or_map(\eno = F"创建 vfs 临时目录失败 {eno}";);
+        }
+        
+        for(let vp : VFile::get_all())
+        {
+            if (vp->begin_with("!")
+                || vp->begin_with("@")
+                || vp->begin_with("/")
+                || (vp->len >= 2 && vp[1] == ':'))
+                continue;
+
+            let vpath = vfs_path / vp;
+            do mkdir(parent(vpath));
+            
+            try! vf = VFile::open(vp)
+                -> ok_or(F"无法打开 {vp}");
+                
+            let buf = vf->read_buf(vf->len);
+            try! vfstream = open(vpath, mode::write)
+                -> ok_or(F"无法打开写入文件 {vpath->to_string}");
+                
+            if (!vfstream->write(buf, 0, buf->len))
+                throw! F"写入文件 {vpath->to_string} 失败";
+        }
+        
+        return_ok!;
+    }
+    func updateAndGenerateVFS()
+    {
+        update_api();
+        
+        return generateVFS();
+    }
+    
+    using ToWooCollection = struct{
+        m_component_collection: ToWooComponentCollection,
+        m_system_collection: ToWooSystemCollection,
+    }
+    {
+        public func create()=> ToWooCollection
+        {
+            let towoo_component_and_systems =
+                workpath() |> recursive_walk
+                    |> iter_result
+                    |> filter(
+                        \p = isfile(p)
+                            && (fname->end_with(ToWooSystemCollection::SUFFIX)
+                                || fname->end_with(ToWooComponentCollection::SUFFIX))
+                                where fname = filename(p)->lower
+                            ;)
+                    |> collect
+                    ;
+                    
+            let towoo_components = ToWooComponentCollection::create <|
+                towoo_component_and_systems
+                    ->forall(\p = filename(p)->lower->end_with(ToWooComponentCollection::SUFFIX););
+                    
+            do updateAndGenerateVFS();
+            
+            let towoo_systems = ToWooSystemCollection::create <|
+                towoo_component_and_systems
+                    ->forall(\p = filename(p)->lower->end_with(ToWooSystemCollection::SUFFIX););
+                    
+            return ToWooCollection{
+                m_component_collection = towoo_components,
+                m_system_collection = towoo_systems,
+            };
+        }
+        /* 新建文件注册（浏览器“新建→ToWoo 组件/系统”落盘后经
+        Project::appendTowooComponent / appendTowooSystem 调用）：
+        编译并装载脚本，成功返回 true。项目内其它目录已存在同名
+        组件/系统、或编译失败时弹 MsgBox::err 提示且不予注册；
+        原位覆盖已注册文件（浏览器中已确认覆盖）按一次更新处理。 */
+        public func appendComponent(self: ToWooCollection, path: path_t)=> bool
+        {
+            match (self.m_component_collection->append(path))
+            {
+                Ok(_)?
+                {
+                    do updateAndGenerateVFS();
+                    return true;
+                }
+                AlreadyExist(info)?
+                {
+                    if (info.m_path == path)
+                        return self->updateComponent(path);
+                        
+                    MsgBox::err(
+                        "注册 ToWoo 组件失败",
+                        F"项目中已存在同名组件 \"{info.m_path->to_string()}\"，"
+                            + F"新建的 \"{path->to_string()}\" 未被注册，"
+                            + "请重命名后重新创建。");
+                }
+                CompileFailed?
+                {
+                    MsgBox::err(
+                        "注册 ToWoo 组件失败",
+                        F"编译 \"{path->to_string()}\" 失败，该组件未被注册。");
+                }
+                Invalid?
+                {
+                    MsgBox::err(
+                        "注册 ToWoo 组件失败",
+                        F"\"{path->to_string()}\" 不是有效的 ToWoo 组件脚本。");
+                }
+            }
+            return false;
+        }
+        public func appendSystem(self: ToWooCollection, path: path_t)=> bool
+        {
+            match (self.m_system_collection->append(path))
+            {
+                Ok(_)?
+                    return true;
+                AlreadyExist(info)?
+                {
+                    if (info.m_path == path)
+                        return self->updateSystem(path);
+                        
+                    MsgBox::err(
+                        "注册 ToWoo 系统失败",
+                        F"项目中已存在同名系统 \"{info.m_path->to_string()}\"，"
+                            + F"新建的 \"{path->to_string()}\" 未被注册，"
+                            + "请重命名后重新创建。");
+                }
+                CompileFailed?
+                {
+                    MsgBox::err(
+                        "注册 ToWoo 系统失败",
+                        F"编译 \"{path->to_string()}\" 失败，该系统未被注册。");
+                }
+                Invalid?
+                {
+                    MsgBox::err(
+                        "注册 ToWoo 系统失败",
+                        F"\"{path->to_string()}\" 不是有效的 ToWoo 系统脚本。");
+                }
+            }
+            return false;
+        }
+        public func updateComponent(self: ToWooCollection, path: path_t)
+        {
+            if (self.m_component_collection->update(path)->isOk)
+            {
+                do updateAndGenerateVFS();
+                return self.m_system_collection->updateAll()->empty;
+            }
+            return false;
+        }
+        public func updateSystem(self: ToWooCollection, path: path_t)
+        {
+            return self.m_system_collection->update(path)->isOk;
+        }
+        public func updateAll(self: ToWooCollection)
+        {
+            let failed_components = self.m_component_collection->updateAll();
+            do updateAndGenerateVFS();
+            let failed_systems = self.m_system_collection->updateAll();
+            
+            return failed_components->empty || failed_systems->empty;
+        }
+        public func updateAllUpdated(self: ToWooCollection)
+        {
+            self.m_component_collection->updateAllUpdated();
+            do updateAndGenerateVFS();
+            self.m_system_collection->updateAllUpdated();
+        }
+        public func checkAll(self: ToWooCollection)
+        {
+            return self.m_component_collection->checkAll()
+                || self.m_system_collection->checkAll();
+        }
+    }
+}

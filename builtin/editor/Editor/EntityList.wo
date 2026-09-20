@@ -1,0 +1,598 @@
+import pkg::std;
+
+import je;
+import je::internal;
+import je::ecs;
+import je::gui;
+import je::typeinfo;
+import je::towoo;
+import je::towoo::components;
+
+import pkg::interface;
+import pkg::iterator;
+import pkg::try;
+import pkg::worst;
+
+import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Drag;
+
+import WorldEditorViewport;
+import ComponentPresets;
+import EntityClipboard;
+import Action::CreateEntity;
+import Action::AttachEntity;
+import Browser;
+
+using iterator;
+using je;
+using je::gui;
+using JEEditor::GUI;
+using JEEditor::GUI::Windows;
+using JEEditor::GUI::Drag;
+using JEEditor::Editor::Action;
+using JEEditor::Editor::ComponentPresets;
+using JEEditor::Editor::EntityClipboard;
+
+namespace JEEditor::Editor
+{
+    using EntityList = struct{
+        m_close: mut bool,
+    }
+    {
+        let mut s_entitylist_singleton = option::none: option<EntityList>;
+
+        // “新建实体”弹窗的状态；实体列表面板是单例，用模块级状态即可。
+        // 勾选记录保存组件类型名而非 typeinfo 句柄，
+        // 避免句柄在类型热重载等情况下失效（同 AddComponent 的做法）
+        let mut s_new_entity_filter = "";
+        let mut s_new_entity_focus = false;
+        let mut s_new_entity_selected = map::create:<string, bool>(0);
+
+        // 空白处右键“粘贴”菜单的弹窗 ID。空白菜单不挂在任何 item 上，
+        // 须像视口（VIEWPORT_BLANK_CONTEXT_MENU_ID）那样用显式 ID
+        // 手动 OpenPopup/BeginPopup（见 run）
+        let ENTITYLIST_BLANK_CONTEXT_MENU_ID = "##entitylist_blank_context";
+
+        // ---- 父子层级显示 ----
+        // 实体项标签 ID 计数器：树形递归渲染无法用 enumerate 顺序号，
+        // 无调试 EUID 的实体以帧内序号做 TreeNodeEx 的 ID 兜底
+        //（有 EUID 的用 EUID 本身，保证展开状态不随列表内容变化错乱）
+        let mut s_item_serial = 0;
+
+        // 常用组件组合表（分组/组合/组件全名）共享自 ComponentPresets.wo，
+        // 同时供“添加组件”弹窗与实体右键菜单使用
+
+        public func isEntityListExist()
+        {
+            return s_entitylist_singleton->is_value;
+        }
+        public func showEntityList()
+        {
+            do show(create());
+        }
+        public func closeEntityList()
+        {
+            match (s_entitylist_singleton)
+            {
+                none?;
+                value(entitylist_instance)?
+                    entitylist_instance->close();
+            }
+        }
+        
+        func create()=> EntityList
+            where require!(EntityList: IWindows);
+        {
+            return EntityList{
+                m_close = mut false,
+            };
+        }
+        func close(self: EntityList)
+        {
+            self.m_close = true;
+        }
+        public func onCreate(self: EntityList)=> void
+        {
+            s_entitylist_singleton = option::value(self);
+        }
+        public func onClose(_: EntityList)=> void
+        {
+            s_entitylist_singleton = option::none;
+        }
+        public func getTitle(_: EntityList)=> string
+        {
+            return "实体列表";
+        }
+        public func getSizeConstraints(_: EntityList)=> SizeConstraints
+        {
+            return SizeConstraints::Limited(((300., 200.), (400., 4096.)));
+        }
+        func showEntityContextMenu(world_view: WorldEditorViewport, e: entity)
+        {
+            if (BeginPopupContextItem())
+            {
+                // 列表内的粘贴保持快照原位置（false：不放到摄像机前方）
+                world_view->drawEntityContextMenuItems(e, false);
+                defer EndPopup();
+            }
+        }
+        // 渲染一个实体项并递归渲染其子层级。树节点用 TreeNodeEx：
+        // 点箭头=展开/收起、点名字区域=选中，由 ImGui 的
+        // IsItemToggledOpen 分流（不会互相劫持）；层级缩进由
+        // TreeNode/TreePop 自动管理。节点 ID 用调试 EUID（稳定，
+        // 展开状态不随列表内容变化而错乱），DefaultOpen 让新出现的
+        // 父节点默认展开（新挂接的子实体立即可见）。
+        // rendering 记录当前渲染路径上的实体，防御父链成环的坏数据
+        // 导致递归不终止（环上实体不会出现在任何根链上，由
+        // showEntitiesInWorld 兜底平铺显示）。
+        func drawEntityNode(
+            world_view: WorldEditorViewport,
+            entity_entry: (entity, option<entity::internal::euid_t>),
+            children_map: map<entity::internal::euid_t,
+                vec<mut (entity, option<entity::internal::euid_t>)>>,
+            rendering: map<entity::internal::euid_t, bool>)=> bool
+        {
+            let (e, euid) = entity_entry;
+            let mut any_hovered = false;
+
+            // 环防御：已在当前渲染路径上的实体不再进入
+            match (euid)
+            {
+                none?;
+                value(eid)?
+                {
+                    if (rendering->contains(eid))
+                        return false;
+                    do rendering->set(eid, true);
+                }
+            }
+
+            // 本项的子列表（=>> 链：EUID 反查子列表，无 EUID/无子得 none）
+            let children = euid =>> \eid = children_map->get(eid);;
+            let has_children = children->is_value && children->unwrap->len > 0;
+
+            let raw_name = e->internal::name;
+            let mut entity_name = raw_name;
+            if (entity_name == "")
+                entity_name = "<匿名实体>";
+
+            let current_selected_entity_id = world_view->getSelectedEntityId();
+            let is_selected = current_selected_entity_id->is_value
+                && euid->is_value
+                && current_selected_entity_id->unwrap == euid->unwrap;
+
+            // 派生自预设体的实体以蓝色显示，直观区分挂有预设体文件的
+            // 实体（Editor::Prefab 组件的 path 非空即视为有效挂载）
+            let prefab_path = e->internal::get_prefab_path();
+            let is_prefab_instance = prefab_path->is_value
+                && prefab_path->unwrap->len > 0;
+
+            let mut node_flags =
+                TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
+            if (!has_children)
+                node_flags += TreeNodeAttribute::ImGuiTreeNodeFlags_Leaf;
+            if (is_selected)
+                node_flags += TreeNodeAttribute::ImGuiTreeNodeFlags_Selected;
+
+            // 节点 ID：优先用稳定的调试 EUID，无 EUID 的实体以帧内
+            // 序号兜底
+            let mut label_id = "";
+            match (euid)
+            {
+                none?
+                {
+                    label_id = F"{s_item_serial}";
+                    s_item_serial += 1;
+                }
+                value(eid)?
+                    label_id = F"{eid}";
+            }
+
+            if (is_prefab_instance)
+                PushStyleColor(
+                    ImGuiCol::ImGuiCol_Text, (100, 160, 230, 255));
+
+            let node_open = TreeNodeEx(
+                F"{entity_name}##{label_id}", node_flags);
+
+            if (is_prefab_instance)
+                PopStyleColor(1);
+
+            // 紧随 TreeNodeEx 采样悬停状态：此时最后一个 item 仍是
+            // 本实体项（后面的 DragPayload 不得插在两者之间）
+            if (IsItemHovered())
+                any_hovered = true;
+
+            // 点击名字区域选中（IsItemToggledOpen 为真表示这次点击
+            // 作用在箭头上，只切展开不改选中）
+            if (IsItemClickedLeft() && !IsItemToggledOpen() && euid->is_value)
+                world_view->setSelectedEntityId(euid);
+
+            // 按住实体项拖出：拖到资源管理器可保存为 .je4entity
+            // 预设体文件；拖到另一实体项上则挂接为其子实体（载荷只
+            // 携带 EUID，entity 句柄不跨帧）
+            if (euid->is_value)
+                DragPayload(EntitySavingRequestPayload::create(
+                    world_view, euid->unwrap,
+                    raw_name->len > 0 ? raw_name | "Entity"));
+
+            // 拖拽接收：把拖来的实体挂到本项之下，发布可撤销的
+            // AttachEntity 操作（无效目标——自己、已是其子、成环——
+            // 由 try_create 拒绝，静默无操作）
+            match (Drag::AcceptDrag:<EntitySavingRequestPayload>())
+            {
+                none?;
+                value(payload)?
+                {
+                    do try!{
+                        try! dragged_entity =
+                            world_view->findListedEntityByEuid(
+                                payload->dragged_euid());
+                        try! attach_action = AttachEntity::try_create(
+                            world_view, dragged_entity, e);
+                        world_view->doAction(attach_action);
+                        return_value!;
+                    };
+                }
+            }
+
+            // 右键打开实体上下文菜单（菜单内容与视口右键菜单共用）
+            showEntityContextMenu(world_view, e);
+
+            // 子层级（展开时；缩进由 TreeNode/TreePop 自动管理）。
+            // 注意：Leaf 节点的 TreeNodeEx 同样返回 true（ImGui 约定，
+            // 也须配对 TreePop），只是没有子列表可画
+            if (node_open)
+            {
+                if (has_children)
+                {
+                    for (let (child_e, child_euid) : children->unwrap)
+                    {
+                        if (drawEntityNode(
+                                world_view, (child_e, child_euid),
+                                children_map, rendering))
+                            any_hovered = true;
+                    }
+                }
+                TreePop();
+            }
+
+            return any_hovered;
+        }
+        // 返回值：本帧鼠标是否悬停在任一实体项上（供 run 里空白右键
+        // 菜单的判定使用）。实体按父子层级显示：根级与各级子项均按
+        // EUID 升序；父实体不在可见范围（编辑器内部实体/锚点缺失）的
+        // 子实体按根显示；父链成环的坏数据由 rendering 防御并兜底
+        // 平铺，保证列表始终显示全部实体。
+        func showEntitiesInWorld(world_view: WorldEditorViewport)=> bool
+        {
+            let mut any_item_hovered = false;
+            let entity_selector = world_view->getEntitySelector();
+
+            let entities = entity_selector->iter
+                |> filter(\e = e->towoo::get_component:<Editor::Invisible>->is_none;)
+                |> map(\e = (e, e->internal::get_entity_uid);)
+                |> collect_as_mut
+                ;
+
+            std::sort_in_place(
+                entities,
+                \(_, lid), (_, rid) = lid->or(ZERO) < rid->or(ZERO)
+                    where ZERO = 0h as entity::internal::euid_t
+                    ;);
+
+            // 锚点 uid → euid（仅可见实体）：子的 parent_uid 据此认父
+            let anchor_to_euid =
+                map::create:<string, entity::internal::euid_t>(0);
+            for (let (e, euid) : entities)
+            {
+                match (e->internal::get_anchor_uid)
+                {
+                    none?;
+                    value(anchor_uid)?
+                        match (euid)
+                        {
+                            none?;
+                            value(eid)? anchor_to_euid->set(anchor_uid, eid);
+                        }
+                }
+            }
+
+            // 分组：根列表 + 各父实体的子列表（组内顺序继承整体排序）
+            let children_map = map::create:<entity::internal::euid_t,
+                vec<mut (entity, option<entity::internal::euid_t>)>>(0);
+            let roots = []mut:
+                vec<mut (entity, option<entity::internal::euid_t>)>;
+            for (let (e, euid) : entities)
+            {
+                // 父锚点可反查到可见实体才认父（=>> 链：无 LocalToParent
+                // 或父不在可见范围得 none，按根显示）
+                let parent_eid = e->internal::get_parent_anchor_uid
+                    =>> \parent_uid = anchor_to_euid->get(parent_uid);
+                    ;
+
+                match (parent_eid)
+                {
+                    // 无父/父不在可见范围：按根显示
+                    none?
+                        roots->add(mut (e, euid));
+                    value(peid)?
+                        match (children_map->get(peid))
+                        {
+                            none?
+                            {
+                                let child_list = []mut:
+                                    vec<mut (entity, option<entity::internal::euid_t>)>;
+                                child_list->add(mut (e, euid));
+                                children_map->set(peid, child_list);
+                            }
+                            value(child_list)?
+                                child_list->add(mut (e, euid));
+                        }
+                }
+            }
+
+            // 渲染：从各根递归展开
+            s_item_serial = 0;
+            let rendering = map::create:<entity::internal::euid_t, bool>(0);
+            for (let (root_e, root_euid) : roots)
+            {
+                if (drawEntityNode(
+                        world_view, (root_e, root_euid),
+                        children_map, rendering))
+                    any_item_hovered = true;
+            }
+
+            // 兜底：不在任何根链上的实体（父链成环等坏数据）平铺到
+            // 根级，保证列表始终可见全部实体。无 EUID 的实体必然已随
+            // roots/children 渲染（分组不依赖 EUID），跳过以防重复
+            for (let (rest_e, rest_euid) : entities)
+            {
+                match (rest_euid)
+                {
+                    none?;
+                    value(rest_eid)?
+                        if (!rendering->contains(rest_eid))
+                        {
+                            if (drawEntityNode(
+                                    world_view, (rest_e, rest_euid),
+                                    children_map, rendering))
+                                any_item_hovered = true;
+                        }
+                }
+            }
+
+            return any_item_hovered;
+        }
+        // 将 "Transform::LocalPosition" 拆为 ("Transform", "LocalPosition")，
+        // 不带命名空间的类型名返回 ("", 原名)。
+        func splitTypeName(cname: string)=> (string, string)
+        {
+            let sep_pos = cname->find("::")->or(-1);
+            if (sep_pos < 0)
+                return ("", cname);
+            return (cname->sub_len(0, sep_pos), cname->sub(sep_pos + 2));
+        }
+        // 组合内组件是否已全部勾选（同时用作按钮高亮与切换方向判定）
+        func isPresetAllSelected(cnames: array<string>)=> bool
+        {
+            let mut all_selected = true;
+            for (let cname : cnames)
+            {
+                if (!s_new_entity_selected->contains(cname))
+                    all_selected = false;
+            }
+            return all_selected;
+        }
+        // 整组已勾选时再点一次整组取消，否则补齐勾选缺失的组件；
+        // 与下方候选列表的勾选状态始终互通
+        func togglePreset(cnames: array<string>)=> void
+        {
+            if (isPresetAllSelected(cnames))
+            {
+                for (let cname : cnames)
+                    do s_new_entity_selected->remove(cname);
+            }
+            else
+            {
+                for (let cname : cnames)
+                    s_new_entity_selected->set(cname, true);
+            }
+        }
+        // “常用组合”菜单：分组为一级子菜单，子项即预设，整组勾选的项
+        // 高亮显示，点击切换整组；悬停提示该组合会勾选的全部组件。
+        // 点击子项只收起子菜单以上的弹窗层，菜单与外层“新建实体”弹窗
+        // 保持打开，可连续挑选多个组合
+        func showComponentPresetMenu()=> void
+        {
+            for (let (group_title, presets) : ComponentPresets::s_component_presets)
+            {
+                if (BeginMenu(group_title))
+                {
+                    defer EndMenu();
+                    for (let (preset_name, cnames) : presets)
+                    {
+                        if (SelectableSelected(F"{preset_name}##preset_{preset_name}",
+                                isPresetAllSelected(cnames)))
+                            togglePreset(cnames);
+
+                        if (IsItemHovered())
+                            do SetTooltip(ComponentPresets::presetTipText(cnames));
+                    }
+                }
+            }
+        }
+        // 按勾选的组件发布可撤销的 CreateEntity 操作：实体与调试 EUID 均由
+        // 动作首次落实（redo）时创建/分配（redo 会选中新实体），调用方不再
+        // 预创建实体，避免动作落实时二次创建。组件类型名在发布时才通过
+        // typeinfo::load 解析，失效的类型会被跳过；全部失效时拒绝发布。
+        // 新实体生成在（最后聚焦视口的）调试游走摄像机前方
+        func createNewEntity(wctx: WorldEditorViewport)=> void
+        {
+            let selected_ctypes = s_new_entity_selected->keys->iter
+                |> filter_map(\cname = typeinfo::load(cname);)
+                |> collect;
+            if (selected_ctypes->len == 0)
+            {
+                logerr("新建实体：勾选的组件类型均已失效");
+                return;
+            }
+
+            wctx->doAction(CreateEntity::try_create_with_types_at(
+                selected_ctypes, wctx->getSpawnPosInFrontOfCamera()));
+            CloseCurrentPopup();
+        }
+        // “新建实体”弹窗：搜索过滤 + 常用组合一键整组勾选 + 按命名空间
+        // 分组的组件候选，自由勾选组合若干组件后确认创建；不允许一个
+        // 组件都不选。
+        func showNewEntityPicker(wctx: WorldEditorViewport)=> void
+        {
+            // 弹窗大小由内容自适应；若控件用 -1 占满宽度，弹窗自身没有
+            // 可参考的实宽，会塌缩成细条，因此这里给控件显式像素宽度
+            let picker_width = 300.;
+            let preset_button_width = 92.;
+
+            // 搜索框与“常用组合”按钮同排，合计宽度与下方列表对齐
+            SetNextItemWidth(picker_width - preset_button_width - 8.);
+            if (s_new_entity_focus)
+            {
+                SetKeyboardFocusHere(0);
+                s_new_entity_focus = false;
+            }
+            match (InputText("##new_entity_filter", s_new_entity_filter))
+            {
+                none?;
+                value(new_filter)?
+                    s_new_entity_filter = new_filter;
+            }
+
+            SameLine();
+            if (ButtonSize("常用组合", (preset_button_width, 0.)))
+                OpenPopup("##component_preset_menu");
+            if (BeginPopup("##component_preset_menu"))
+            {
+                showComponentPresetMenu();
+                defer EndPopup();
+            }
+
+            let filter_lower = s_new_entity_filter->lower;
+            let has_filter = filter_lower->len > 0;
+
+            // 候选为全部已注册组件，排除编辑器内部组件（Editor::*）以及
+            // 不匹配搜索词的组件（按含命名空间的全名匹配）
+            let candidates = typeinfo::get_all_components_types()
+                ->forall(\ctype = !ctype->name->begin_with("Editor::") &&
+                            (!has_filter ||
+                                ctype->name->lower->find(filter_lower)->is_value);)
+                |> std::sort(\l, r = l->name < r->name;);
+
+            // 列表高度固定为约 8 行，避免候选过多时撑爆弹窗
+            if (BeginListBox("##new_entity_candidates", picker_width,
+                    GetFrameHeightWithSpacing() * 8.))
+            {
+                // 与检视面板一致的命名空间分组标题
+                let mut last_namespace = "";
+                for (let ctype : candidates)
+                {
+                    let cname = ctype->name;
+                    let (ns, short_name) = splitTypeName(cname);
+                    if (ns != last_namespace)
+                    {
+                        if (ns != "")
+                            SeparatorText(ns);
+                        last_namespace = ns;
+                    }
+
+                    match (CheckBox(F"{short_name}##new_{cname}",
+                            s_new_entity_selected->contains(cname)))
+                    {
+                        none?;
+                        value(checked)?
+                        {
+                            if (checked)
+                                s_new_entity_selected->set(cname, true);
+                            else
+                                do s_new_entity_selected->remove(cname);
+                        }
+                    }
+                }
+                if (candidates->len == 0)
+                    TextDisabled("（没有匹配的组件）");
+
+                EndListBox();
+            }
+
+            // 空实体没有保留意义：一个组件都没勾选时禁用创建按钮
+            BeginDisabled(s_new_entity_selected->len == 0);
+            if (ButtonSize("创建", (picker_width, 0.)))
+                createNewEntity(wctx);
+            EndDisabled();
+
+            if (s_new_entity_selected->len == 0)
+                TextDisabled("（至少勾选一个组件才能创建）");
+            else
+                Text(F"已勾选 {s_new_entity_selected->len} 个组件");
+        }
+        public func run(self: EntityList)=> bool
+        {
+            match (WorldEditorViewport::getLastFocused())
+            {
+                none?
+                    TextDisabled("（没有待编辑的世界）");
+                value(wctx)?
+                {
+                    let mut item_hovered = showEntitiesInWorld(wctx);
+
+                    Spacing();
+                    if (ButtonSize("新建实体", (-1., 0.)))
+                    {
+                        // 每次打开弹窗都复位搜索词与勾选，并将焦点设到搜索框
+                        s_new_entity_filter = "";
+                        s_new_entity_focus = true;
+                        s_new_entity_selected->clear();
+                        OpenPopup("##new_entity_picker");
+                    }
+
+                    // “新建实体”按钮同样是 item：悬停其上右键不算点空白
+                    if (IsItemHovered())
+                        item_hovered = true;
+
+                    if (BeginPopup("##new_entity_picker"))
+                    {
+                        showNewEntityPicker(wctx);
+                        defer EndPopup();
+                    }
+
+                    // 右键窗口空白区域（列表下方、项间空隙以及没有实体
+                    // 时的整个区域）：弹出仅含“粘贴”的菜单。绑定层没有
+                    // 带 NoOpenOverItems 标志的 BeginPopupContextWindow，
+                    // 直接用它会在悬停实体项时也打开并叠在实体菜单上
+                    // （右键实体项于是只剩“粘贴”），因此这里手动判定：
+                    // 松开右键时鼠标位于本窗口内且没有任何 item 被悬停
+                    // 才视为点击空白；“新建实体”弹窗打开期间覆盖的区域
+                    // 也不算空白。悬停实体项时由各项自己的右键菜单
+                    // （showEntityContextMenu）处理，不会走到这里
+                    let wpos = GetWindowPos();
+                    let wsize = GetWindowSize();
+                    if (!item_hovered
+                        && !IsPopupOpen("##new_entity_picker")
+                        && IsMouseHoveringRect(
+                            (wpos.0, wpos.1), (wpos.0 + wsize.0, wpos.1 + wsize.1))
+                        && IsMouseReleased(ImGuiMouseButton::ImGuiMouseButton_Right))
+                        OpenPopup(ENTITYLIST_BLANK_CONTEXT_MENU_ID);
+
+                    if (BeginPopup(ENTITYLIST_BLANK_CONTEXT_MENU_ID))
+                    {
+                        EntityClipboard::showPasteMenuItem(wctx);
+                        defer EndPopup();
+                    }
+                }
+            }
+            return !self.m_close;
+        }
+        
+    // ===============
+    }
+}

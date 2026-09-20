@@ -1,8 +1,9 @@
 // Joyengine 4.x
-import woo::std;
+import pkg::std;
 
 import je;
 import je::towoo::types;
+import je::typeinfo;
 
 namespace je::towoo::component
 {
@@ -26,6 +27,8 @@ extern func _init_towoo_component(name: string)
 
 #macro component
 {
+    import pkg::std;
+    import pkg::std::macro;
     /*
     component!
     {

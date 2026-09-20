@@ -1,0 +1,115 @@
+import pkg::std;
+import pkg::singleton;
+import pkg::interface;
+import pkg::toml;
+import pkg::fsys;
+import pkg::try;
+
+import je;
+
+using std;
+using toml;
+using fsys;
+using je;
+
+namespace JEEditor::Singleton
+{
+    let has_singleton_sequence<T> = concept!{
+        typeof<T>::SINGLETON_SEQUENCE: int;
+    };
+
+    let singleton_loader_concept<T> = concept!(content: option<Toml>){
+        typeof<T>::SINGLETON_LABEL: string;
+        /* OPTIONAL typeof<T>::SINGLETON_SEQUENCE: int */
+        typeof<T>::createAndLoad(content): T;
+    };
+    
+    interface! ISingleton
+    {
+        require (singleton_loader_concept:<Self>);
+        public func save(self)=> option<Toml>
+        {
+            do self;
+            return option::none;
+        }
+    }
+    
+    func singleton_record_list()=> singleton<map<string, ISingleton>>
+    {
+        static let s = singleton::create(
+            "jeeditor::singleton_records", 900000000, \={}mut;);
+        return s;
+    }
+    
+    func get_temp_file_dir_path()
+    {
+        let temp_path = workpath() / ".temp";
+        if (!exist(temp_path))
+        {
+            try! _ = mkdir(temp_path)->or_map(\eno = F"无法创建临时目录：{eno}";);
+        }
+        return_ok! temp_path;
+    }
+    
+    func register<T>()=> singleton<T>
+        where require!(T: ISingleton);
+    {
+        static let singleton_inst = singleton::create(
+            F"jeeditor::singleton::{typeof<T>::SINGLETON_LABEL}",
+            has_singleton_sequence:<T> ? typeof<T>::SINGLETON_SEQUENCE | 100000000,
+            func(){
+                let toml_data = get_temp_file_dir_path()
+                    ->> \p = p / F"{typeof<T>::SINGLETON_LABEL}.toml";
+                    =>> \p = load(p);
+                    -> okay
+                    ;
+
+                let inst = typeof<T>::createAndLoad(toml_data);
+                
+                singleton_record_list()->apply(
+                    func(m){
+                        if (!m->insert(typeof<T>::SINGLETON_LABEL, ISingleton::create(inst)))
+                        {
+                            logfatal(F"Singleton `{typeof<T>::SINGLETON_LABEL}` already registered.");
+                        }
+                    });
+                return inst;
+            });
+            
+        return singleton_inst;
+    }
+    
+    public func apply<T, R>(f: (T)=> R)=> R
+    {
+        return register:<T>()->apply(f);
+    }
+    
+    public func saveAll()
+    {
+        do try!{
+            let temp_path = workpath() / ".temp";
+            
+            if (!exist(temp_path))
+            {
+                try! _ = mkdir(temp_path)->or_map(\eno = F"无法创建临时目录：{eno}";);
+            }
+            
+            return singleton_record_list()->apply(func(v){
+                    for (let (label, s): v)
+                    {
+                        match (s->save)
+                        {
+                            none?;
+                            value(saved_data)?
+                            {
+                                try! _ = save(saved_data, temp_path / F"{label}.toml");
+                            }
+                        }
+                    }
+                    return_ok!;
+                });
+        } catch! e {
+            logerr(F"保存单例数据失败：{e: string}");
+        };
+    }
+}

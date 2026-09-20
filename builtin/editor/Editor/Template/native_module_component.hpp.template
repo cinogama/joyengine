@@ -1,0 +1,25 @@
+#pragma once
+#include "jeecs.hpp"
+
+namespace $$MODULE_NAME$$
+{
+    struct $$COMPONENT_NAME$$
+    {
+        JECS_DISABLE_MOVE_AND_COPY_OPERATOR($$COMPONENT_NAME$$);
+
+        $$COMPONENT_NAME$$()= default;
+        $$COMPONENT_NAME$$(const $$COMPONENT_NAME$$&) = default;
+        $$COMPONENT_NAME$$($$COMPONENT_NAME$$&&) = default;
+
+        $$COMPONENT_MEMBERS_DECL$$
+
+        static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+        {
+            using namespace jeecs;
+
+            // Register member in this function.
+            // e.g. typing::register_member(guard, &$$COMPONENT_NAME$$::member, "member");
+            $$COMPONENT_MEMBERS_REGISTER$$
+        }
+    };
+}

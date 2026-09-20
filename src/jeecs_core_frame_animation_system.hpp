@@ -37,7 +37,7 @@ namespace jeecs
                     if (!animation.m_current_action.has_value())
                         continue;
 
-                    auto* active_animation_frames =
+                    auto active_animation_frames =
                         animation.m_animations.find(animation.m_current_action.value());
 
                     if (active_animation_frames != animation.m_animations.end())
@@ -61,7 +61,7 @@ namespace jeecs
 
                                             assert(cdata.m_component_type != nullptr && cdata.m_member_info != nullptr);
 
-                                            auto* component_addr = je_ecs_world_entity_get_component(&e, cdata.m_component_type->m_id);
+                                            auto* component_addr = je_ecs_world_entity_get_component(&e._m_raw, cdata.m_component_type->m_id);
                                             if (component_addr == nullptr)
                                                 // 没有这个组件，忽略之
                                                 continue;
@@ -74,7 +74,7 @@ namespace jeecs
                                             switch (cdata.m_member_value.m_type)
                                             {
                                             case Animation::FrameAnimation::animation_list::frame_data::data_value::type::INT:
-                                                if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<int>())
+                                                if (cdata.m_member_info->m_member_type != jeecs::typing::of<int>())
                                                 {
                                                     jeecs::debug::logerr(
                                                         "Cannot apply animation frame data for component '%s''s member '%s', "
@@ -86,7 +86,7 @@ namespace jeecs
                                                 }
                                                 break;
                                             case Animation::FrameAnimation::animation_list::frame_data::data_value::type::FLOAT:
-                                                if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<float>())
+                                                if (cdata.m_member_info->m_member_type != jeecs::typing::of<float>())
                                                 {
                                                     jeecs::debug::logerr(
                                                         "Cannot apply animation frame data for component '%s''s member '%s', "
@@ -98,7 +98,7 @@ namespace jeecs
                                                 }
                                                 break;
                                             case Animation::FrameAnimation::animation_list::frame_data::data_value::type::VEC2:
-                                                if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec2>())
+                                                if (cdata.m_member_info->m_member_type != jeecs::typing::of<math::vec2>())
                                                 {
                                                     jeecs::debug::logerr(
                                                         "Cannot apply animation frame data for component '%s''s member '%s', "
@@ -110,7 +110,7 @@ namespace jeecs
                                                 }
                                                 break;
                                             case Animation::FrameAnimation::animation_list::frame_data::data_value::type::VEC3:
-                                                if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec3>())
+                                                if (cdata.m_member_info->m_member_type != jeecs::typing::of<math::vec3>())
                                                 {
                                                     jeecs::debug::logerr(
                                                         "Cannot apply animation frame data for component '%s''s member '%s', "
@@ -122,7 +122,7 @@ namespace jeecs
                                                 }
                                                 break;
                                             case Animation::FrameAnimation::animation_list::frame_data::data_value::type::VEC4:
-                                                if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec4>())
+                                                if (cdata.m_member_info->m_member_type != jeecs::typing::of<math::vec4>())
                                                 {
                                                     jeecs::debug::logerr(
                                                         "Cannot apply animation frame data for component '%s''s member '%s', "
@@ -134,7 +134,7 @@ namespace jeecs
                                                 }
                                                 break;
                                             case Animation::FrameAnimation::animation_list::frame_data::data_value::type::QUAT4:
-                                                if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::quat>())
+                                                if (cdata.m_member_info->m_member_type != jeecs::typing::of<math::quat>())
                                                 {
                                                     jeecs::debug::logerr(
                                                         "Cannot apply animation frame data for component '%s''s member '%s', "

@@ -1,6 +1,7 @@
 // Joyengine 4.x
-import woo::std;
-import je;
+import pkg::std;
+
+import je::graphic;
 
 namespace je::gui
 {
@@ -65,6 +66,15 @@ namespace je::gui
         ImGuiMouseButton_Middle = 2,
         ImGuiMouseButton_COUNT = 5
         };
+
+    public enum Direction  // ImGuiDir
+    {
+        ImGuiDir_None    = -1,
+        ImGuiDir_Left    = 0,
+        ImGuiDir_Right   = 1,
+        ImGuiDir_Up      = 2,
+        ImGuiDir_Down    = 3,
+    };
         
     extern("libjoyecs", "je_gui_job_vm_handle")
         public func JobID()=> handle;
@@ -77,7 +87,7 @@ namespace je::gui
     extern("libjoyecs", "je_gui_get_main_viewport_pos")
         public func GetMainViewportPos()=> ImVec2;
     extern("libjoyecs", "je_gui_get_this_viewport_pos")
-        public func GetThisViewportPos()=> ImVec2;    
+        public func GetThisViewportPos()=> ImVec2;
     extern("libjoyecs", "je_gui_get_window_pos")
         public func GetWindowPos()=> ImVec2;
     extern("libjoyecs", "je_gui_get_mouse_pos")
@@ -86,7 +96,7 @@ namespace je::gui
         public func GetMouseWheel()=> ImVec2;
     extern("libjoyecs", "je_gui_get_mouse_delta_pos")
         public func GetMouseDeltaPos()=> ImVec2;
-
+        
     extern("libjoyecs", "je_gui_get_cursor_pos")
         public func GetCursorPos()=> ImVec2;
     extern("libjoyecs", "je_gui_get_item_rect_size")
@@ -100,7 +110,7 @@ namespace je::gui
     extern("libjoyecs", "je_gui_begin_attr")
         public func BeginAttr(title:string, attribute:WindowsAttribute)=> bool;
     extern("libjoyecs", "je_gui_begin_open")
-        public func BeginAttrOpen(title:string, attribute:WindowsAttribute)=> option<bool>;
+        public func BeginAttrOpen(title:string, attribute:WindowsAttribute)=> (bool/* show */, bool /* open */);
     public func BeginOpen(title:string)
     {
         return BeginAttrOpen(title, WindowsAttribute::ImGuiWindowFlags_None);
@@ -118,8 +128,21 @@ namespace je::gui
     extern("libjoyecs", "je_gui_begin_child_size_flags")
         public func BeginChildSizeFlags(title:string, sizex: real, sizey: real, attr: WindowsAttribute)=> bool;
         
+    public enum FocusedFlags
+    {
+        ImGuiFocusedFlags_None                          = 0x0000,
+        ImGuiFocusedFlags_ChildWindows                  = 0x0001,   // Return true if any children of the window is focused
+        ImGuiFocusedFlags_RootWindow                    = 0x0002,   // Test from root window (top most parent of the current hierarchy)
+        ImGuiFocusedFlags_AnyWindow                     = 0x0004,   // Return true if any window is focused. Important: If you are trying to tell how to dispatch your low-level inputs, do NOT use this. Use 'io.WantCaptureMouse' instead! Please read the FAQ!
+        ImGuiFocusedFlags_NoPopupHierarchy              = 0x0008,   // Do not consider popup hierarchy (do not treat popup emitter as parent of popup) (when used with _ChildWindows or _RootWindow)
+        ImGuiFocusedFlags_DockHierarchy                 = 0x0010,   // Consider docking hierarchy (treat dockspace host as parent of docked window) (when used with _ChildWindows or _RootWindow)
+        ImGuiFocusedFlags_RootAndChildWindows           = ImGuiFocusedFlags_RootWindow + ImGuiFocusedFlags_ChildWindows,
+    }
+    
     extern("libjoyecs", "je_gui_is_window_focused")
         public func IsWindowFocused()=> bool;
+    extern("libjoyecs", "je_gui_is_window_focused_flags")
+        public func IsWindowFocusedFlags(flags: FocusedFlags)=> bool;
         
     extern("libjoyecs", "je_gui_end_child")
         public func EndChild()=> void;
@@ -134,6 +157,13 @@ namespace je::gui
         public func Text(msg:string)=> void;
     extern("libjoyecs", "je_gui_text_disabled")
         public func TextDisabled(msg:string)=> void;
+    extern("libjoyecs", "je_gui_text_colored")
+        public func TextColored(color: Color32RGBA, msg:string)=> void;
+        
+    extern("libjoyecs", "je_gui_push_text_wrap_pos")
+        public func PushTextWrapPos(wrap_local_pos_x: real)=> void;
+    extern("libjoyecs", "je_gui_pop_text_wrap_pos")
+        public func PopTextWrapPos()=> void;
         
     extern("libjoyecs", "je_gui_button")
         public func Button(msg:string)=> bool;
@@ -142,7 +172,12 @@ namespace je::gui
         
     extern("libjoyecs", "je_gui_invisible_button")
         public func InvisibleButton(msg:string, size: ImVec2)=> bool;
-        
+
+    // Attach a sidebar window to the main viewport (ImGui internal API).
+    // Always pair a `true` return with End().
+    extern("libjoyecs", "je_gui_begin_viewport_side_bar")
+        public func BeginViewportSideBar(name:string, dir: Direction, size: real, attribute: WindowsAttribute)=> bool;
+
     extern("libjoyecs", "je_gui_begin_main_menu_bar")
         public func BeginMainMenuBar()=> bool;
         
@@ -155,12 +190,12 @@ namespace je::gui
     extern("libjoyecs", "je_gui_menu_item_shortcut_enabled")
         public func MenuItemShortcutEnabled(text:string, shortcut:string, enable:bool)=> bool;
     extern("libjoyecs", "je_gui_menu_item_selected")
-        public func MenuItemShortcutSelectedEnabled(text:string, shortcut:string, selected:bool, enable:bool)=> option<bool /*selected*/>;
-    public func MenuItemSelectedEnabled(text:string, selected:bool, enable:bool)=> option<bool /*selected*/>
+        public func MenuItemShortcutSelectedEnabled(text:string, shortcut:string, selected:bool, enable:bool)=> bool;
+    public func MenuItemSelectedEnabled(text:string, selected:bool, enable:bool)=> bool
     {
         return MenuItemShortcutSelectedEnabled(text, "", selected, enable);
     }
-    public func MenuItemSelected(text:string, selected:bool)=> option<bool /*selected*/>
+    public func MenuItemSelected(text:string, selected:bool)=> bool
     {
         return MenuItemShortcutSelectedEnabled(text, "", selected, true);
     }
@@ -438,6 +473,22 @@ namespace je::gui
     extern("libjoyecs", "je_gui_endpopup")
         public func EndPopup()=>void;
         
+    // Modal dialog: call OpenPopup(label) once (e.g. when a button is clicked),
+    // then every frame: if (BeginPopupModal(label)) { ...; EndPopup(); }
+    // The modal window is centered on the viewport and dims everything behind it.
+    extern("libjoyecs", "je_gui_beginpopup_modal")
+        public func BeginPopupModal(label:string)=>bool;
+    extern("libjoyecs", "je_gui_beginpopup_modal_attr")
+        public func BeginPopupModalAttr(label:string, attr:WindowsAttribute)=>bool;
+    // p_open variant: shows the close (X) button; returns (show, open).
+    extern("libjoyecs", "je_gui_beginpopup_modal_open")
+        public func BeginPopupModalOpen(label:string)=> (bool /* show */, bool /* open */);
+    extern("libjoyecs", "je_gui_beginpopup_modal_attr_open")
+        public func BeginPopupModalAttrOpen(label:string, attr:WindowsAttribute)=> (bool /* show */, bool /* open */);
+        
+    extern("libjoyecs", "je_gui_ispopup_open")
+        public func IsPopupOpen(label:string)=>bool;
+        
     extern("libjoyecs", "je_gui_push_id")
         public func PushIDInt(id:int)=>void;
         
@@ -542,7 +593,24 @@ namespace je::gui
         
     extern("libjoyecs", "je_gui_separator")
         public func Separator()=> void;
-        
+
+    extern("libjoyecs", "je_gui_separator_text")
+        public func SeparatorText(label: string)=> void;
+    extern("libjoyecs", "je_gui_spacing")
+        public func Spacing()=> void;
+    extern("libjoyecs", "je_gui_newline")
+        public func NewLine()=> void;
+    extern("libjoyecs", "je_gui_indent")
+        public func Indent(indent_w: real)=> void;
+    extern("libjoyecs", "je_gui_unindent")
+        public func Unindent(indent_w: real)=> void;
+    extern("libjoyecs", "je_gui_bullet")
+        public func Bullet()=> void;
+    extern("libjoyecs", "je_gui_bullet_text")
+        public func BulletText(msg: string)=> void;
+    extern("libjoyecs", "je_gui_label_text")
+        public func LabelText(label: string, msg: string)=> void;
+
     extern("libjoyecs", "je_gui_image")
         public func Image(tex: je::graphic::texture)=> void;
     extern("libjoyecs", "je_gui_image_scale")
@@ -696,7 +764,7 @@ namespace je::gui
         
     extern("libjoyecs", "je_gui_set_next_item_width")
         public func SetNextItemWidth(w: real)=> void;
-
+        
     extern("libjoyecs", "je_gui_set_next_window_size_constraints")
         public func SetNextWindowSizeConstraints(minsz: ImVec2, maxsz: ImVec2)=> void;
     extern("libjoyecs", "je_gui_set_next_window_size")
@@ -729,17 +797,7 @@ namespace je::gui
         public func SetDragDropPayload(type: string, data: string)=> bool;
     extern("libjoyecs", "je_gui_end_drag_drop_source")
         public func EndDragDropSource()=> void;
-        
-    public func DragItem(type: string, payload: string, holddo: ()=>void)
-    {
-        if (BeginDragDropSource())
-        {
-            do SetDragDropPayload(type, payload);
-            holddo();
-            do EndDragDropSource();
-        }
-    }
-    
+            
     extern("libjoyecs", "je_gui_begin_drag_drop_target")
         public func BeginDragDropTarget()=> bool;
     extern("libjoyecs", "je_gui_accept_drag_drop_payload")
@@ -1183,12 +1241,12 @@ namespace je::gui
         
         extern("libjoyecs", "je_gui_node_editor_context_create")
             public func CreateContext()=> EditorContext;
-
+            
         extern("libjoyecs", "je_gui_node_editor_begin")
-            public func Begin(label: string, ctx: EditorContext)=> void;      
+            public func Begin(label: string, ctx: EditorContext)=> void;
         extern("libjoyecs", "je_gui_node_editor_end")
             public func End()=> void;
-
+            
         extern("libjoyecs", "je_gui_node_editor_begin_node")
             public func BeginNode(id: NodeId)=> void;
         extern("libjoyecs", "je_gui_node_editor_end_node")

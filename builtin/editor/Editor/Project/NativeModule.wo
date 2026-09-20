@@ -1,0 +1,127 @@
+import pkg::std;
+import pkg::fsys;
+import pkg::try;
+import pkg::iterator;
+
+import je;
+
+import builtin::editor::Editor::ModulePrepare;
+
+import ToWooCollection;
+
+using je;
+using fsys;
+using iterator;
+
+namespace JEEditor::Editor::Project
+{
+    using NativeModule = struct{
+        m_name: string,
+        m_path: path_t,
+        m_loaded_module_handle: mut option<handle>,
+    }
+    {
+        func loadModuleAndRegenerateVFS(name: string, path: string)
+        {
+            let r = load_module(name, path);
+            
+            do generateVFS();
+            return r;
+        }
+        public func getMaxRuntimeDylibPathId(path: path_t)
+        {
+            let runtime_path = path / ".runtime";
+            if (!isdir(runtime_path))
+                return option::none;
+                
+            return walk(runtime_path) |> iter_result
+                |> filter(\p = isdir(p) && filename(p)->is_number;)
+                |> map(\p = filename(p) as int;)
+                |> reduce(\l, r = l > r ? l | r;)
+                ;
+        }
+        // 整理模块目录下的 .runtime：仅保留编号最大（最新）的产物目录，
+        // 删除其余编号目录，再把保留目录改名为 0，使编号不会随多次构建无限累积。
+        // 必须在装载模块之前调用：已装载的动态库被本进程占用，无法删除或改名。
+        public func tidyRuntimeDirsBeforeLoad(path: path_t)=> result<void, string>
+        {
+            let runtime_path = path / ".runtime";
+            if (!isdir(runtime_path))
+                return_ok!;
+                
+            match (getMaxRuntimeDylibPathId(path))
+            {
+                none?;
+                value(latest_id)?
+                {
+                    let numeric_dirs = walk(runtime_path) |> iter_result
+                        |> filter(\p = isdir(p) && filename(p)->is_number;)
+                        |> iterator::collect;
+                        
+                    for (let removing_dir : numeric_dirs)
+                    {
+                        if (filename(removing_dir) as int == latest_id)
+                            continue;
+                            
+                        try! _ = remove(removing_dir)
+                            -> or_map(\eno = F"删除目录 `{removing_dir->to_string}` 失败（{eno}）";);
+                    }
+                    
+                    if (latest_id != 0)
+                    {
+                        let latest_dir = runtime_path / (latest_id as string);
+                        try! _ = move(latest_dir, runtime_path / "0")
+                            -> or_map(\eno = F"重命名目录 `{latest_dir->to_string}` 失败（{eno}）";);
+                    }
+                }
+            }
+            
+            return_ok!;
+        }
+        func findRuntimeDylibPath(name: string, path: path_t)
+        {
+            let runtime_path = path / ".runtime";
+            if (!isdir(runtime_path))
+                return option::none;
+                
+            return_value! (runtime_path
+                / getMaxRuntimeDylibPathId(path)->or(0) as string
+                / ModulePrepare::moduleDylibFilename(name));
+        }
+        public func load(name: string, path: path_t)
+        {
+            try! dylibpath = findRuntimeDylibPath(name, path);
+            try! module_handle = load_module(name, dylibpath->to_string);
+            return_value! NativeModule{
+                m_name = name,
+                m_path = path,
+                m_loaded_module_handle = mut option::value(module_handle),
+            };
+        }
+        public func drop(self: NativeModule)
+        {
+            match (self.m_loaded_module_handle)
+            {
+                value(module_handle)?{
+                    unload_module(module_handle);
+                    self.m_loaded_module_handle = option::none;
+                }
+                none?;
+            }
+            
+        }
+        public func reload(self: NativeModule)
+        {
+            self->drop();
+            
+            try! dylibpath = findRuntimeDylibPath(self.m_name, self.m_path);
+            
+            self.m_loaded_module_handle = load_module(self.m_name, dylibpath->to_string);
+            return self.m_loaded_module_handle;
+        }
+        public func getNameAndPath(self: NativeModule)
+        {
+            return (self.m_name, self.m_path);
+        }
+    }
+}

@@ -1,0 +1,26 @@
+import pkg::fsys;
+
+import je;
+
+export import ToWooCollectionTemplate;
+
+using fsys;
+using je::towoo;
+
+namespace JEEditor::Editor::Project
+{
+    namespace ToWooComponentCollection
+    {
+        public let SUFFIX = ".je4component.wo";
+        
+        public func create(paths: array<path_t>)
+        {
+            return ToWooCollectionTemplate::create:<{SUFFIX}, {update_component}>(paths);
+        }
+    }
+
+    using ToWooComponentCollection;
+
+    protected alias ToWooComponentCollection =
+        ToWooCollectionTemplate<{SUFFIX}, {update_component}>;
+}

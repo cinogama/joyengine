@@ -353,6 +353,7 @@ CTestTestfile.cmake
 _deps
 
 /out/
+/cmakebuild/
 /build/*
 #!/build/.keepme
 /build/builtin/*
@@ -366,3 +367,9 @@ _deps
 /src/jeecs_extern_library_woo_api.hpp
 /src/jeecs_extern_library_3rd_pkg.hpp
 
+# macOS Finder metadata
+.DS_Store
+
+
+# ZCode agent local data
+.zcode/

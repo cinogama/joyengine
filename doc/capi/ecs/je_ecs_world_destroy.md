@@ -54,4 +54,4 @@ je_ecs_world_destroy(world);
 ## 相关接口
 
 - [je_ecs_world_create](je_ecs_world_create.md) - 创建世界
-- [je_ecs_world_set_able](je_ecs_world_set_able.md) - 设置世界激活状态
+- [je_ecs_world_set_enable](je_ecs_world_set_enable.md) - 设置世界激活状态

@@ -9,7 +9,9 @@
 #include <unordered_map>
 #include <optional>
 #include <memory>
+#include <atomic>
 #include <cmath>
+#include <cstdio>
 
 /*
 TooWooo~
@@ -24,30 +26,42 @@ namespace jeecs
         {
             struct towoo_step_work
             {
-                dependence m_dependence;
                 woort_Value m_function;
-                std::vector<const typing::type_info*> m_used_components;
-                bool m_is_single_work;
+
+                je_TypeHash m_work_sequence /* Single job if zero. */;
+
+                std::vector<const je_TypeInfo*> m_used_components;
+
+                // 运行时收集的需求（视图需求排在最前，与 je_ecs_collect_requirements 约定一致），
+                // 仅在首次查询切片缓存时用于初始化 je_CollectedRequirements。
+                std::vector<je_ComponentRequirement> m_requirements;
             };
             struct towoo_system_info
             {
                 JECS_DISABLE_MOVE_AND_COPY(towoo_system_info);
 
                 woort_CodeEnv* m_code_env;
-                bool m_is_good;
 
                 std::optional<woort_Value> m_on_enable_function;
                 std::optional<woort_Value> m_on_disable_function;
                 woort_Value m_create_function;
                 woort_Value m_close_function;
 
+                bool m_is_good;
+
+                size_t m_registered_system_work_count;
                 std::vector<towoo_step_work> m_preworks;
                 std::vector<towoo_step_work> m_works;
                 std::vector<towoo_step_work> m_lateworks;
 
                 towoo_system_info(woort_CodeEnv* cenv)
                     : m_code_env(cenv)
-                {}
+                    , m_on_enable_function(std::nullopt)
+                    , m_on_disable_function(std::nullopt)
+                    , m_is_good(false)
+                    , m_registered_system_work_count(0)
+                {
+                }
                 ~towoo_system_info()
                 {
                     woort_CodeEnv_drop(m_code_env);
@@ -56,7 +70,7 @@ namespace jeecs
 
             inline static std::shared_mutex _registered_towoo_base_systems_mx;
             inline static std::unordered_map<
-                const typing::type_info*, std::unique_ptr<towoo_system_info>>
+                const je_TypeInfo*, std::unique_ptr<towoo_system_info>>
                 _registered_towoo_base_systems;
 
             woort_vm* m_job_vm;
@@ -68,7 +82,7 @@ namespace jeecs
             woort_value m_close_function;
             woort_value m_work_function;
 
-            const typing::type_info* m_type;
+            const je_TypeInfo* m_type;
 
             std::vector<towoo_step_work> m_pre_dependences;
             std::vector<towoo_step_work> m_dependences;
@@ -76,7 +90,7 @@ namespace jeecs
 
             JECS_DISABLE_MOVE_AND_COPY(ToWooBaseSystem);
 
-            ToWooBaseSystem(game_world w, const typing::type_info* ty)
+            ToWooBaseSystem(game_world w, const je_TypeInfo* ty)
                 : game_system(w)
                 , m_job_vm(nullptr)
                 , m_type(ty)
@@ -122,7 +136,7 @@ namespace jeecs
                 woort_value writeval,
                 woort_value tmpval,
                 void* component,
-                const typing::type_info* ctype)
+                const je_TypeInfo* ctype)
             {
                 assert(component != nullptr);
 
@@ -227,9 +241,26 @@ namespace jeecs
 
             void _invoke_multi_work(towoo_step_work& work, bool& aborted)
             {
-                work.m_dependence.update(get_world());
-                for (const auto& archinfo : work.m_dependence.m_archs)
+                je_GameWorld* const world_handle = get_world().handle();
+
+                // 复用世界切片缓存（与原生 collection::query 路径一致）：首次查询返回 false
+                // 时，用运行时收集的 je_ComponentRequirement[] 初始化 je_CollectedRequirements
+                // 并刷新 arch 信息；后续每帧由 _arch_modified 统一驱动更新，生命周期由世界托管。
+                je_RequirementCollection* collection = nullptr;
+                if (!je_ecs_world_query_slice_dependence(
+                    world_handle, this, work.m_work_sequence, &collection))
                 {
+                    collection->m_collected_requirement = je_ecs_collect_requirements(
+                        work.m_requirements.data(),
+                        work.m_used_components.size(),
+                        work.m_requirements.size() - work.m_used_components.size());
+                    je_ecs_world_update_collection(world_handle, collection);
+                }
+
+                for (size_t arch_idx = 0;
+                    arch_idx < collection->m_cached_arch_count; ++arch_idx)
+                {
+                    const auto& archinfo = collection->m_cached_archs[arch_idx];
                     auto cur_chunk = je_arch_get_chunk(archinfo.m_arch);
                     const size_t used_component_count = work.m_used_components.size();
 
@@ -242,11 +273,12 @@ namespace jeecs
                     while (cur_chunk)
                     {
                         auto entity_meta_addr = je_arch_entity_meta_addr_in_chunk(cur_chunk);
-                        typing::version_t version;
-                        for (typing::entity_id_in_chunk_t eid = 0;
-                            eid < archinfo.m_entity_count; ++eid)
+                        je_Version version;
+                        for (je_EntityIdInChunk eid = 0;
+                            eid < archinfo.m_entity_count;
+                            ++eid)
                         {
-                            if (game_entity::entity_stat::READY != entity_meta_addr[eid].m_stat)
+                            if (JE_ENTITY_STAT_READY != entity_meta_addr[eid].m_stat)
                                 continue;
 
                             version = entity_meta_addr[eid].m_version;
@@ -255,17 +287,21 @@ namespace jeecs
                                 cmpidx != work.m_used_components.end(); ++cmpidx)
                             {
                                 const size_t cmpid = cmpidx - work.m_used_components.begin();
-                                void* component = slice_requirement::base::view_base::get_component_from_archchunk_ptr(
-                                    &archinfo, cur_chunk, eid, cmpid);
+                                const size_t unit_size = archinfo.m_view_component_size[cmpid];
+                                void* component = unit_size != 0
+                                    ? static_cast<char*>(static_cast<void*>(cur_chunk))
+                                    + archinfo.m_view_component_offset[cmpid]
+                                    + unit_size * eid
+                                    : nullptr;
                                 const auto* typeinfo = *cmpidx;
                                 const woort_value component_st = stack_base + 2 + cmpid;
 
-                                switch (work.m_dependence.m_requirements[cmpid].m_require)
+                                switch (work.m_requirements[cmpid].m_kind)
                                 {
-                                case requirement::type::CONTAINS:
+                                case JE_COMPONENT_REQUIRE_CONTAINS:
                                     create_component_struct(component_st, m_work_function, component, typeinfo);
                                     break;
-                                case requirement::type::MAYNOT:
+                                case JE_COMPONENT_REQUIRE_MAYNOT:
                                     if (component == nullptr)
                                         woort_set_option_none(component_st);
                                     else
@@ -274,9 +310,8 @@ namespace jeecs
                                         woort_set_option_value(component_st, component_st);
                                     }
                                     break;
-                                case requirement::type::ANYOF:
-                                case requirement::type::EXCEPT:
-                                default:
+                                case JE_COMPONENT_REQUIRE_EXCEPT:
+                                default /* JE_COMPONENT_REQUIRE_ANYOF_0... */:
                                     break;
                                 }
                             }
@@ -317,7 +352,7 @@ namespace jeecs
                 {
                     for (auto& work : works)
                     {
-                        if (work.m_is_single_work)
+                        if (work.m_work_sequence == 0)
                             _invoke_single_work(work, aborted);
                         else
                             _invoke_multi_work(work, aborted);
@@ -382,9 +417,9 @@ namespace jeecs
 
         struct ToWooBaseComponent
         {
-            const jeecs::typing::type_info* m_type;
+            const je_TypeInfo* m_type;
 
-            ToWooBaseComponent(void* arg, const jeecs::typing::type_info* ty)
+            ToWooBaseComponent(void* arg, const je_TypeInfo* ty)
                 : m_type(ty)
             {
                 if (m_type->m_member_types == nullptr)
@@ -395,7 +430,7 @@ namespace jeecs
                 {
                     auto* this_member = static_cast<void*>(
                         reinterpret_cast<char*>(this) + member->m_member_offset);
-                    member->m_member_type->construct(this_member, arg);
+                    jeecs::typing::construct(member->m_member_type, this_member, arg);
 
                     if (member->m_woovalue_init_may_null != nullptr)
                     {
@@ -429,7 +464,7 @@ namespace jeecs
                 {
                     auto* this_member = static_cast<void*>(
                         reinterpret_cast<char*>(this) + member->m_member_offset);
-                    member->m_member_type->destruct(this_member);
+                    jeecs::typing::destruct(member->m_member_type, this_member);
                     member = member->m_next_member;
                 }
             }
@@ -448,7 +483,7 @@ namespace jeecs
                     auto* other_member = static_cast<const void*>(
                         reinterpret_cast<const char*>(&another) + member->m_member_offset);
 
-                    member->m_member_type->copy(this_member, other_member);
+                    jeecs::typing::copy(member->m_member_type, this_member, other_member);
                     member = member->m_next_member;
                 }
             }
@@ -467,7 +502,7 @@ namespace jeecs
                     auto* other_member = static_cast<void*>(
                         reinterpret_cast<char*>(&another) + member->m_member_offset);
 
-                    member->m_member_type->move(this_member, other_member);
+                    jeecs::typing::move(member->m_member_type, this_member, other_member);
                     member = member->m_next_member;
                 }
             }
@@ -479,7 +514,7 @@ namespace jeecs
 // File-scope helpers and WOORT_API / free functions (global scope)
 // ==========================================================================
 
-void je_towoo_unregister_system(const jeecs::typing::type_info* tinfo);
+void je_towoo_unregister_system(const je_TypeInfo* tinfo);
 
 namespace
 {
@@ -487,10 +522,10 @@ namespace
     // Helpers for je_towoo_update_api
     //
 
-    std::vector<const jeecs::typing::type_info*> _gather_all_registed_types()
+    std::vector<const je_TypeInfo*> _gather_all_registed_types()
     {
         auto** alltypes = jedbg_get_all_registed_types();
-        std::vector<const jeecs::typing::type_info*> all_registed_types;
+        std::vector<const je_TypeInfo*> all_registed_types;
         for (auto* idx = alltypes; *idx != nullptr; ++idx)
             all_registed_types.push_back(*idx);
         je_mem_free(alltypes);
@@ -498,13 +533,19 @@ namespace
     }
 
     std::string _generate_type_decl(
-        const std::vector<const jeecs::typing::type_info*>& all_registed_types)
+        const std::vector<const je_TypeInfo*>& all_registed_types)
     {
         std::string type_decl =
             R"(// This file is auto-generated by JoyEngineECS.
 // Do not edit this file manually.
-import woo::std;
+import pkg::std;
+
 import je;
+import je::audio;
+import je::ecs;
+import je::graphic;
+import je::input;
+import je::typeinfo;
 )";
 
         std::unordered_set<std::string> generated_types;
@@ -514,7 +555,7 @@ import je;
             if (typeinfo == nullptr)
                 continue;
 
-            auto* script_parser_info = typeinfo->get_script_parser();
+            auto* script_parser_info = jeecs::typing::get_script_parser(typeinfo);
             if (script_parser_info == nullptr
                 || false == generated_types.insert(script_parser_info->m_woolang_typename).second)
                 continue;
@@ -534,14 +575,19 @@ import je;
     }
 
     std::string _generate_component_decl(
-        const std::vector<const jeecs::typing::type_info*>& all_registed_types)
+        const std::vector<const je_TypeInfo*>& all_registed_types)
     {
         std::string component_decl =
             R"(// This file is auto-generated by JoyEngineECS.
 // Do not edit this file manually.
-import woo::std;
+import pkg::std;
 
 import je;
+import je::audio;
+import je::ecs;
+import je::graphic;
+import je::input;
+import je::typeinfo;
 import je::towoo;
 import je::towoo::types;
 )";
@@ -580,7 +626,7 @@ import je::towoo::types;
                 auto* registed_member = typeinfo->m_member_types->m_members;
                 while (registed_member != nullptr)
                 {
-                    auto* parser = registed_member->m_member_type->get_script_parser();
+                    auto* parser = jeecs::typing::get_script_parser(registed_member->m_member_type);
                     if (parser != nullptr)
                     {
                         const char* real_type_name =
@@ -614,6 +660,37 @@ import je::towoo::types;
 
         return component_decl;
     }
+
+#ifndef NDEBUG
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS \
+    || JE4_CURRENT_PLATFORM == JE4_PLATFORM_LINUX \
+    || JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS
+    // Debug builds on desktop platforms also dump the generated decl files into
+    // the project directory, so editors/IDEs can inspect and complete them.
+    // The 'je/towoo' directory is guaranteed to exist by the project.
+    void _dump_towoo_decl_to_project(
+        const char* filename, const std::string& file_content)
+    {
+        std::vector<char> file_loc;
+        file_loc.resize(woort_get_file_loc(__FILE__, nullptr, 0) + 1);
+        (void)woort_get_file_loc(__FILE__, file_loc.data(), file_loc.size());
+
+        const std::string dump_file = std::string(file_loc.data()) + "/../je/towoo/" + filename;
+
+        if (FILE* file = fopen(dump_file.c_str(), "wb"))
+        {
+            fwrite(file_content.data(), sizeof(char), file_content.size(), file);
+            fclose(file);
+        }
+        else
+        {
+            jeecs::debug::logwarn(
+                "Unable to dump '%s' to project directory, please check.",
+                dump_file.c_str());
+        }
+    }
+#endif
+#endif
 
     //
     // Helpers for je_towoo_register_system
@@ -683,11 +760,11 @@ import je::towoo::types;
         return true;
     }
 
-    const jeecs::typing::type_info* _register_system_type(const char* system_name)
+    const je_TypeInfo* _register_system_type(const char* system_name)
     {
         je_towoo_unregister_system(je_typing_get_info_by_name(system_name));
 
-        const jeecs::typing::type_info* created_system_type_info = je_typing_register(
+        const je_TypeInfo* created_system_type_info = je_typing_register(
             system_name,
             jeecs::basic::hash_compile_time(system_name),
             sizeof(jeecs::towoo::ToWooBaseSystem),
@@ -716,14 +793,14 @@ import je::towoo::types;
 
     void _init_system_with_vm(
         woort_vm* vmm,
-        const jeecs::typing::type_info* created_system_type_info,
+        const je_TypeInfo* created_system_type_info,
         jeecs::towoo::ToWooBaseSystem::towoo_system_info* sysinfo_ptr,
         woort_value initfunc,
         woort_value stack_base,
         const char* system_name)
     {
         woort_set_pointer(stack_base + 0,
-            const_cast<jeecs::typing::type_info*>(created_system_type_info));
+            const_cast<je_TypeInfo*>(created_system_type_info));
 
         if (WOORT_VM_CALL_STATUS_NORMAL != woort_invoke(WOORT_IGNORE, initfunc))
         {
@@ -750,7 +827,7 @@ import je::towoo::types;
     {
         std::string m_name;
         std::optional<_wooval_type> m_wooval_type;
-        const jeecs::typing::type_info* m_type;
+        const je_TypeInfo* m_type;
         size_t m_offset;
     };
 
@@ -771,28 +848,28 @@ import je::towoo::types;
         }
 
         const woort_value member_def = stack_base + 0;
-        const woort_value member_info = stack_base + 1;
+        const woort_value je_MemberInfo = stack_base + 1;
         const woort_value wooval_init = stack_base + 2;
 
         for (size_t i = 0; i < member_count; ++i)
         {
             (void)woort_vec_get(member_def, members, i);
 
-            woort_struct_get(member_info, member_def, 0);
-            const std::string member_name = woort_string(member_info);
+            woort_struct_get(je_MemberInfo, member_def, 0);
+            const std::string member_name = woort_string(je_MemberInfo);
 
-            woort_struct_get(member_info, member_def, 1);
+            woort_struct_get(je_MemberInfo, member_def, 1);
             auto* member_typeinfo =
-                static_cast<const jeecs::typing::type_info*>(woort_pointer(member_info));
+                static_cast<const je_TypeInfo*>(woort_pointer(je_MemberInfo));
 
             std::optional<_wooval_type> member_wooval_type = std::nullopt;
-            woort_struct_get(member_info, member_def, 2);
-            if (woort_option_get(member_info, member_info))
+            woort_struct_get(je_MemberInfo, member_def, 2);
+            if (woort_option_get(je_MemberInfo, je_MemberInfo))
             {
-                woort_struct_get(member_info, member_info, 0);
-                woort_struct_get(wooval_init, member_info, 1);
+                woort_struct_get(je_MemberInfo, je_MemberInfo, 0);
+                woort_struct_get(wooval_init, je_MemberInfo, 1);
 
-                _wooval_type wt{ woort_string(member_info) };
+                _wooval_type wt{ woort_string(je_MemberInfo) };
                 wt.m_wooval_val = *woort_internal_value(wooval_init);
 
                 member_wooval_type = std::optional(wt);
@@ -802,15 +879,17 @@ import je::towoo::types;
             member_defs.push_back(_member_info{
                 member_name, member_wooval_type, member_typeinfo, component_size });
 
-            component_size += member_typeinfo->m_chunk_size;
+            component_size += member_typeinfo->m_size;
             component_align = std::max(component_align, member_typeinfo->m_align);
         }
+        // Update size by align.
+        component_size = jeecs::basic::allign_size(component_size, component_align);
 
         return { member_defs, { component_size, component_align } };
     }
 
     void _register_component_members(
-        const jeecs::typing::type_info* towoo_component_tinfo,
+        const je_TypeInfo* towoo_component_tinfo,
         const std::vector<_member_info>& member_defs)
     {
         woort_value wooval_init;
@@ -847,26 +926,23 @@ import je::towoo::types;
 
 WOORT_API woort_api wojeapi_towoo_add_component(void)
 {
-    auto* e = static_cast<jeecs::game_entity*>(woort_gcpointer(0));
-    auto* ty = static_cast<const jeecs::typing::type_info*>(woort_pointer(1));
+    auto* e = static_cast<je_GameEntity*>(woort_gcpointer(0));
+    auto* ty = static_cast<const je_TypeInfo*>(woort_pointer(1));
 
     void* comp = je_ecs_world_entity_add_component(e, ty->m_id);
-    if (comp != nullptr)
-    {
-        woort_value stack_base;
-        if (!woort_push_reserve(1, &stack_base))
-            return woort_ret_panic("Stack overflow.");
 
-        jeecs::towoo::ToWooBaseSystem::create_component_struct(
-            WOORT_RETURN_SLOT, stack_base, comp, ty);
-        return woort_ret_option_value(WOORT_RETURN_SLOT);
-    }
-    return woort_ret_option_none();
+    woort_value stack_base;
+    if (!woort_push_reserve(1, &stack_base))
+        return woort_ret_panic("Stack overflow.");
+
+    jeecs::towoo::ToWooBaseSystem::create_component_struct(
+        WOORT_RETURN_SLOT, stack_base, comp, ty);
+    return woort_ret_value(WOORT_RETURN_SLOT);
 }
 WOORT_API woort_api wojeapi_towoo_get_component(void)
 {
-    auto* e = static_cast<jeecs::game_entity*>(woort_gcpointer(0));
-    auto* ty = static_cast<const jeecs::typing::type_info*>(woort_pointer(1));
+    auto* e = static_cast<je_GameEntity*>(woort_gcpointer(0));
+    auto* ty = static_cast<const je_TypeInfo*>(woort_pointer(1));
 
     void* comp = je_ecs_world_entity_get_component(e, ty->m_id);
     if (comp != nullptr)
@@ -883,27 +959,27 @@ WOORT_API woort_api wojeapi_towoo_get_component(void)
 }
 WOORT_API woort_api wojeapi_towoo_remove_component(void)
 {
-    auto* e = static_cast<jeecs::game_entity*>(woort_gcpointer(0));
-    auto* ty = static_cast<const jeecs::typing::type_info*>(woort_pointer(1));
+    auto* e = static_cast<je_GameEntity*>(woort_gcpointer(0));
+    auto* ty = static_cast<const je_TypeInfo*>(woort_pointer(1));
 
     je_ecs_world_entity_remove_component(e, ty->m_id);
     return woort_ret_void();
 }
 WOORT_API woort_api wojeapi_towoo_member_get(void)
 {
-    auto* ty = static_cast<const jeecs::typing::type_info*>(woort_pointer(0));
+    auto* ty = static_cast<const je_TypeInfo*>(woort_pointer(0));
 
-    assert(ty->get_script_parser() != nullptr);
-    ty->get_script_parser()->m_script_parse_c2w(woort_pointer(1), WOORT_RETURN_SLOT);
+    assert(jeecs::typing::get_script_parser(ty) != nullptr);
+    jeecs::typing::get_script_parser(ty)->m_script_parse_c2w(woort_pointer(1), WOORT_RETURN_SLOT);
 
     return woort_ret();
 }
 WOORT_API woort_api wojeapi_towoo_member_set(void)
 {
-    auto* ty = static_cast<const jeecs::typing::type_info*>(woort_pointer(0));
+    auto* ty = static_cast<const je_TypeInfo*>(woort_pointer(0));
 
-    assert(ty->get_script_parser() != nullptr);
-    ty->get_script_parser()->m_script_parse_w2c(woort_pointer(1), 2);
+    assert(jeecs::typing::get_script_parser(ty) != nullptr);
+    jeecs::typing::get_script_parser(ty)->m_script_parse_w2c(woort_pointer(1), 2);
 
     return woort_ret_void();
 }
@@ -920,8 +996,10 @@ void je_towoo_update_api()
     // typeinfo lookup fails because the dependency isn't yet loaded.
     const auto all_registed_types = _gather_all_registed_types();
 
-    const std::string woolang_parsing_type_decl = _generate_type_decl(all_registed_types);
-    const std::string woolang_component_type_decl = _generate_component_decl(all_registed_types);
+    const std::string woolang_parsing_type_decl =
+        _generate_type_decl(all_registed_types);
+    const std::string woolang_component_type_decl =
+        _generate_component_decl(all_registed_types);
 
     if (!woort_vfs_create(
         "je/towoo/types.wo",
@@ -939,9 +1017,18 @@ void je_towoo_update_api()
     {
         jeecs::debug::logfatal("Unable to regenerate 'je/towoo/components.wo' please check.");
     }
+
+#ifndef NDEBUG
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS \
+    || JE4_CURRENT_PLATFORM == JE4_PLATFORM_LINUX \
+    || JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS
+    _dump_towoo_decl_to_project("types.wo", woolang_parsing_type_decl);
+    _dump_towoo_decl_to_project("components.wo", woolang_component_type_decl);
+#endif
+#endif
 }
 
-void je_towoo_unregister_system(const jeecs::typing::type_info* tinfo)
+void je_towoo_unregister_system(const je_TypeInfo* tinfo)
 {
     if (tinfo == nullptr)
         return;
@@ -963,11 +1050,11 @@ void je_towoo_unregister_system(const jeecs::typing::type_info* tinfo)
     }
 }
 
-const jeecs::typing::type_info* je_towoo_register_system(
+const je_TypeInfo* je_towoo_register_system(
     const char* system_name,
     const char* script_path)
 {
-    const jeecs::typing::type_info* created_system_type_info = nullptr;
+    const je_TypeInfo* created_system_type_info = nullptr;
 
     jeecs_file* texfile = jeecs_file_open(script_path);
     if (texfile == nullptr)
@@ -997,10 +1084,6 @@ const jeecs::typing::type_info* je_towoo_register_system(
 
     auto systinfo =
         std::make_unique<jeecs::towoo::ToWooBaseSystem::towoo_system_info>(cenv);
-    systinfo->m_on_enable_function = std::nullopt;
-    systinfo->m_on_disable_function = std::nullopt;
-    systinfo->m_is_good = false;
-
     auto* sysinfo_ptr = systinfo.get();
 
     woort_vm* const vmm = woort_vm_create();
@@ -1076,7 +1159,7 @@ WOORT_API woort_api wojeapi_towoo_register_system_job(void)
 {
     std::lock_guard g1(jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems_mx);
 
-    auto* tinfo = static_cast<const jeecs::typing::type_info*>(woort_pointer(0));
+    auto* tinfo = static_cast<const je_TypeInfo*>(woort_pointer(0));
     auto registered_system_fnd =
         jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems.find(tinfo);
     if (registered_system_fnd
@@ -1103,10 +1186,10 @@ WOORT_API woort_api wojeapi_towoo_register_system_job(void)
     const woort_value requirement_info = stack_base + 0;
     const woort_value elem = stack_base + 1;
 
-    stepwork.m_is_single_work = is_single_work;
-
-    if (!stepwork.m_is_single_work)
+    if (!is_single_work)
     {
+        stepwork.m_work_sequence = ++works->m_registered_system_work_count;
+
         const size_t requirements_count = woort_vec_len(requirements);
         for (size_t i = 0; i < requirements_count; ++i)
         {
@@ -1114,25 +1197,28 @@ WOORT_API woort_api wojeapi_towoo_register_system_job(void)
 
             woort_struct_get(elem, requirement_info, 2);
             const auto* typeinfo =
-                static_cast<const jeecs::typing::type_info*>(woort_pointer(elem));
+                static_cast<const je_TypeInfo*>(woort_pointer(elem));
 
             woort_struct_get(elem, requirement_info, 0);
-            const jeecs::requirement::type ty =
-                static_cast<jeecs::requirement::type>(woort_int(elem));
+            const je_ComponentRequirementKind ty =
+                static_cast<je_ComponentRequirementKind>(woort_int(elem));
 
             woort_struct_get(elem, requirement_info, 1);
 
-            stepwork.m_dependence.m_requirements.push_back(
-                jeecs::requirement{
-                    ty,
-                    static_cast<size_t>(woort_int(elem)),
-                    typeinfo->m_id
-                });
+            const int req_kind =
+                ty >= JE_COMPONENT_REQUIRE_ANYOF_0
+                ? ty + static_cast<int>(woort_int(elem))
+                : ty;
+
+            stepwork.m_requirements.push_back(
+                je_ComponentRequirement{ req_kind, typeinfo->m_id });
 
             if (i < component_arg_count)
                 stepwork.m_used_components.push_back(typeinfo);
         }
     }
+    else
+        stepwork.m_work_sequence = 0;
 
     switch (que)
     {
@@ -1203,7 +1289,7 @@ WOORT_API woort_api wojeapi_towoo_update_component_data(void)
     _register_component_members(towoo_component_tinfo, member_defs);
 
     return woort_ret_pointer(
-        const_cast<jeecs::typing::type_info*>(towoo_component_tinfo));
+        const_cast<je_TypeInfo*>(towoo_component_tinfo));
 }
 
 // ==========================================================================
@@ -1272,6 +1358,17 @@ void wo_set_quat(woort_value target, const jeecs::math::quat& v)
     woort_struct_set_float(target, 1, v.y);
     woort_struct_set_float(target, 2, v.z);
     woort_struct_set_float(target, 3, v.w);
+}
+void wo_mat4(float* out_mat, woort_value val)
+{
+    for (size_t i = 0; i < 16; ++i)
+        out_mat[i] = woort_struct_get_float(val, i);
+}
+void wo_set_mat4(woort_value target, const float* mat)
+{
+    woort_set_struct(target, 16);
+    for (size_t i = 0; i < 16; ++i)
+        woort_struct_set_float(target, i, mat[i]);
 }
 
 template <typename T>
@@ -1384,6 +1481,51 @@ WOORT_API woort_api wojeapi_towoo_math_quat_slerp(void)
             wo_quat(0),
             wo_quat(1),
             woort_float(2)));
+    return woort_ret();
+}
+WOORT_API woort_api wojeapi_towoo_math_mat4_multi_vec4(void)
+{
+    float left_mat[16];
+    wo_mat4(left_mat, 0);
+
+    auto right_vec = wo_vec4(1);
+
+    float result[4];
+    jeecs::math::mat4xvec4(result, left_mat, &right_vec.x);
+    wo_set_vec4(WOORT_RETURN_SLOT, jeecs::math::vec4(result[0], result[1], result[2], result[3]));
+    return woort_ret();
+}
+WOORT_API woort_api wojeapi_towoo_math_mat4_multi_mat4(void)
+{
+    float left_mat[16];
+    wo_mat4(left_mat, 0);
+
+    float right_mat[16];
+    wo_mat4(right_mat, 1);
+
+    float result[16];
+    jeecs::math::mat4xmat4(result, left_mat, right_mat);
+    wo_set_mat4(WOORT_RETURN_SLOT, result);
+    return woort_ret();
+}
+WOORT_API woort_api wojeapi_towoo_math_quat_to_mat(void)
+{
+    auto quat = wo_quat(0);
+
+    float result[16];
+    quat.create_matrix(result);
+    wo_set_mat4(WOORT_RETURN_SLOT, result);
+    return woort_ret();
+}
+WOORT_API woort_api wojeapi_towoo_math_mat4_transform(void)
+{
+    float result[16];
+    jeecs::math::transform(
+        result,
+        wo_vec3(0),
+        wo_quat(1),
+        wo_vec3(2));
+    wo_set_mat4(WOORT_RETURN_SLOT, result);
     return woort_ret();
 }
 
@@ -1501,6 +1643,44 @@ WOORT_API woort_api wojeapi_towoo_renderer_textures_get_texture(void)
     return woort_ret_option_none();
 }
 
+WOORT_API woort_api wojeapi_towoo_renderer_shape_get_vertex(void)
+{
+    auto& shape =
+        wo_component<jeecs::Renderer::Shape>(0, WOORT_RETURN_SLOT);
+
+    if (shape.vertex.has_value())
+    {
+        return woort_ret_option_gchandle(
+            new jeecs::basic::resource<jeecs::graphic::vertex>(shape.vertex.value()),
+            WOORT_IGNORE,
+            [](void* p)
+            {
+                delete static_cast<jeecs::basic::resource<jeecs::graphic::vertex>*>(p);
+            },
+            nullptr);
+    }
+    return woort_ret_option_none();
+}
+
+WOORT_API woort_api wojeapi_towoo_renderer_shape_set_vertex(void)
+{
+    auto& shape =
+        wo_component<jeecs::Renderer::Shape>(0, WOORT_RETURN_SLOT);
+
+    if (woort_option_get(WOORT_RETURN_SLOT, 1))
+    {
+        shape.vertex.emplace(
+            *static_cast<jeecs::basic::resource<jeecs::graphic::vertex>*>(
+                woort_gcpointer(WOORT_RETURN_SLOT)));
+    }
+    else
+    {
+        shape.vertex.reset();
+    }
+
+    return woort_ret_void();
+}
+
 WOORT_API woort_api wojeapi_towoo_renderer_shaders_set_uniform_i(void)
 {
     auto& shaders =
@@ -1610,6 +1790,15 @@ WOORT_API woort_api wojeapi_towoo_transform_translation_global_rot(void)
     return woort_ret();
 }
 
+WOORT_API woort_api wojeapi_towoo_transform_translation_local_scale(void)
+{
+    auto& trans =
+        wo_component<jeecs::Transform::Translation>(0, WOORT_RETURN_SLOT);
+
+    wo_set_vec3(WOORT_RETURN_SLOT, trans.local_scale);
+    return woort_ret();
+}
+
 WOORT_API woort_api wojeapi_towoo_transform_translation_parent_pos(void)
 {
     auto& trans =
@@ -1691,6 +1880,23 @@ WOORT_API woort_api wojeapi_towoo_audio_playing_set_buffer(void)
     return woort_ret_void();
 }
 
+WOORT_API woort_api wojeapi_towoo_audio_playing_get_buffer(void)
+{
+    auto& playing = wo_component<jeecs::Audio::Playing>(0, WOORT_RETURN_SLOT);
+
+    auto res = playing.buffer.get_resource();
+    if (res.has_value())
+    {
+        return woort_ret_option_gchandle(
+            new jeecs::basic::resource<jeecs::audio::buffer>(res.value()),
+            WOORT_IGNORE,
+            [](void* p)
+            { delete static_cast<jeecs::basic::resource<jeecs::audio::buffer>*>(p); },
+            nullptr);
+    }
+    return woort_ret_option_none();
+}
+
 WOORT_API woort_api wojeapi_towoo_audio_source_get_source(void)
 {
     auto& source = wo_component<jeecs::Audio::Source>(0, WOORT_RETURN_SLOT);
@@ -1741,4 +1947,131 @@ WOORT_API woort_api wojeapi_towoo_userinterface_origin_mouse_on(void)
     auto m = wo_vec2(3);
 
     return woort_ret_bool(origin.mouse_on(r.x, r.y, a, m));
+}
+
+// ==========================================================================
+// Camera::RendToFramebuffer
+// ==========================================================================
+
+WOORT_API woort_api wojeapi_towoo_camera_rendtoframebuffer_get(void)
+{
+    auto& rendToFramebuffer =
+        wo_component<jeecs::Camera::RendToFramebuffer>(0, WOORT_RETURN_SLOT);
+
+    if (rendToFramebuffer.framebuffer.has_value())
+    {
+        return woort_ret_option_gchandle(
+            new jeecs::basic::resource<jeecs::graphic::framebuffer>(
+                rendToFramebuffer.framebuffer.value()),
+            WOORT_IGNORE,
+            [](void* p)
+            {
+                delete static_cast<
+                    jeecs::basic::resource<jeecs::graphic::framebuffer>*>(p);
+            },
+            nullptr);
+    }
+    return woort_ret_option_none();
+}
+
+WOORT_API woort_api wojeapi_towoo_camera_rendtoframebuffer_set(void)
+{
+    auto& rendToFramebuffer =
+        wo_component<jeecs::Camera::RendToFramebuffer>(0, WOORT_RETURN_SLOT);
+
+    if (woort_option_get(WOORT_RETURN_SLOT, 1))
+    {
+        rendToFramebuffer.framebuffer.emplace(
+            *static_cast<jeecs::basic::resource<jeecs::graphic::framebuffer>*>(
+                woort_gcpointer(WOORT_RETURN_SLOT)));
+    }
+    else
+    {
+        rendToFramebuffer.framebuffer.reset();
+    }
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_towoo_camera_projection_get_default_uniform_buf(void)
+{
+    auto& projection =
+        wo_component<jeecs::Camera::Projection>(0, WOORT_RETURN_SLOT);
+
+    return woort_ret_gchandle(
+        new jeecs::basic::resource<jeecs::graphic::uniformbuffer>(projection.default_uniform_buffer),
+        WOORT_IGNORE,
+        [](void* ptr)
+        {
+            delete (jeecs::basic::resource<jeecs::graphic::uniformbuffer> *)ptr;
+        },
+        nullptr);
+}
+
+WOORT_API woort_api wojeapi_towoo_camera_projection_get_view_mat(void)
+{
+    auto& projection =
+        wo_component<jeecs::Camera::Projection>(0, WOORT_RETURN_SLOT);
+
+    woort_set_struct(WOORT_RETURN_SLOT, 16);
+    for (size_t i = 0; i < 16; ++i)
+    {
+        woort_struct_set_float(
+            WOORT_RETURN_SLOT, 
+            i, 
+            (reinterpret_cast<float*>(projection.view))[i]);
+    }
+
+    return woort_ret();
+}
+
+WOORT_API woort_api wojeapi_towoo_camera_projection_get_proj_mat(void)
+{
+    auto& projection =
+        wo_component<jeecs::Camera::Projection>(0, WOORT_RETURN_SLOT);
+
+    woort_set_struct(WOORT_RETURN_SLOT, 16);
+    for (size_t i = 0; i < 16; ++i)
+    {
+        woort_struct_set_float(
+            WOORT_RETURN_SLOT,
+            i,
+            (reinterpret_cast<float*>(projection.projection))[i]);
+    }
+
+    return woort_ret();
+}
+
+WOORT_API woort_api wojeapi_towoo_camera_projection_get_inv_proj_mat(void)
+{
+    auto& projection =
+        wo_component<jeecs::Camera::Projection>(0, WOORT_RETURN_SLOT);
+
+    woort_set_struct(WOORT_RETURN_SLOT, 16);
+    for (size_t i = 0; i < 16; ++i)
+    {
+        woort_struct_set_float(
+            WOORT_RETURN_SLOT,
+            i,
+            (reinterpret_cast<float*>(projection.inv_projection))[i]);
+    }
+
+    return woort_ret();
+}
+
+WOORT_API woort_api wojeapi_towoo_camera_projection_get_view_proj_mat(void)
+{
+    auto& projection =
+        wo_component<jeecs::Camera::Projection>(0, WOORT_RETURN_SLOT);
+
+    woort_set_struct(WOORT_RETURN_SLOT, 16);
+    for (size_t i = 0; i < 16; ++i)
+    {
+        woort_struct_set_float(
+            WOORT_RETURN_SLOT,
+            i,
+            (reinterpret_cast<float*>(projection.view_projection))[i]);
+    }
+
+    return woort_ret();
 }

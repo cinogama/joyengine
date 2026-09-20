@@ -1,0 +1,203 @@
+import pkg::std;
+
+import je;
+import je::gui;
+
+using std;
+using je;
+using je::gui;
+
+namespace JEEditor::GUI
+{
+    union MenuOrItem
+    {
+        Menu(Menu),
+        Item(MenuItem),
+        Separator,
+    }
+    
+    using MenuItem = struct{
+        m_parent: Menu,
+        
+        m_name: string,
+        m_shortcut: mut string,
+        m_on_click: ()=> void,
+        
+        m_enable: mut ()=> bool,
+        m_check_stat: mut ()=> bool,
+    }
+    {
+        func create(name: string, parent: Menu, onclick: ()=> void)=> MenuItem
+        {
+            return MenuItem{
+                m_parent = parent,
+                
+                m_name = name,
+                m_shortcut = mut "",
+                m_on_click = onclick,
+                
+                m_enable = mut \=true;,
+                m_check_stat = mut \=false;,
+            };
+        }
+        public func enableWhen(self: MenuItem, cond: ()=> bool)=> MenuItem
+        {
+            self.m_enable = cond;
+            return self;
+        }
+        public func checkWhen(self: MenuItem, cond: ()=> bool)=> MenuItem
+        {
+            self.m_check_stat = cond;
+            return self;
+        }
+        public func shortCut(self: MenuItem, shortcut: string)=> MenuItem
+        {
+            self.m_shortcut = shortcut;
+            return self;
+        }
+        public func endItem(self: MenuItem)=> Menu
+        {
+            return self.m_parent;
+        }
+        
+        func showMenuItem(self: MenuItem)
+        {
+            let enabled = self.m_enable();
+            if (MenuItemShortcutSelectedEnabled(
+                    self.m_name,
+                    self.m_shortcut,
+                    self.m_check_stat(),
+                    enabled))
+            {
+                self.m_on_click();
+            }
+        }
+    }
+    
+    using Menu = struct{
+        m_parent: mut option<Menu>,
+        
+        m_name: string,
+        m_sub_items: vec<MenuOrItem>,
+    }
+    {
+        public func create(name: string)=> Menu
+        {
+            return Menu{
+                m_parent = mut option::none,
+                
+                m_name = name,
+                m_sub_items = []mut,
+            };
+        }
+        
+        public func subItem(self: Menu, name: string, action: ()=> void)=> MenuItem
+        {
+            let sub_item = MenuItem::create(name, self, action);
+            
+            self.m_sub_items->add(MenuOrItem::Item(sub_item));
+            
+            return sub_item;
+        }
+        public func subMenu(self: Menu, name: string)=> Menu
+        {
+            let sub_menu = Menu::create(name);
+            
+            sub_menu.m_parent = option::value(self);
+            self.m_sub_items->add(MenuOrItem::Menu(sub_menu));
+            
+            return sub_menu;
+        }
+        public func separator(self: Menu)=> Menu
+        {
+            self.m_sub_items->add(MenuOrItem::Separator);
+            return self;
+        }
+        public func endMenu(self: Menu)=> Menu
+        {
+            match (self.m_parent)
+            {
+                value(p)? return p;
+                none? return self;
+            }
+        }
+        func _showMenuItems(self: Menu)=> void
+        {
+            for (let item : self.m_sub_items)
+            {
+                match (item)
+                {
+                    Menu(sub_menu)?
+                        sub_menu->showMenu();
+                    Item(sub_menu_item)?
+                        sub_menu_item->showMenuItem();
+                    Separator?
+                        Separator();
+                }
+            }
+        }
+        public func showMenu(self: Menu)=> void
+        {
+            if (BeginMenu(self.m_name))
+            {
+                defer EndMenu();
+                
+                self->_showMenuItems();
+            }
+        }
+        public func showMenuBar(self: Menu)=> void
+        {
+            if (BeginMenuBar())
+            {
+                defer EndMenuBar();
+                
+                self->_showMenuItems();
+            }
+        }
+        func showMainMenuBar(self: Menu)=> void
+        {
+            if (BeginMainMenuBar())
+            {
+                defer EndMainMenuBar();
+                
+                self->_showMenuItems();
+            }
+        }
+        
+        let mut s_main_menu_instance = option::none: option<Menu>;
+
+        // 沉浸模式（调试运行）下隐藏主菜单栏：常驻渲染协程不销毁，
+        // 仅跳过本帧绘制，解除隐藏后即恢复
+        let mut s_main_menu_hidden = false;
+        public func setMainMenuHidden(hidden: bool)
+        {
+            s_main_menu_hidden = hidden;
+        }
+        public func isMainMenuHidden()=> bool
+        {
+            return s_main_menu_hidden;
+        }
+
+        public func registerMainMenu(menu: Menu)
+        {
+            if (s_main_menu_instance->is_none)
+            {
+                launch_coroutine(func(){
+                        for (;;)
+                        {
+                            if (!s_main_menu_hidden)
+                            {
+                                match (s_main_menu_instance)
+                                {
+                                    none?;
+                                    value(main_menu)? main_menu->showMainMenuBar();
+                                }
+                            }
+                            std::yield();
+                        }
+                    });
+            }
+            s_main_menu_instance = option::value(menu);
+        }
+    }
+}

@@ -1,0 +1,34 @@
+import pkg::std;
+import pkg::toml;
+import pkg::singleton;
+import pkg::interface;
+
+import je::ecs;
+
+import Singleton;
+
+using je;
+using toml;
+
+namespace JEEditor::Singleton
+{
+    using Universe = struct{
+        m_universe: universe,
+    }
+    {
+        public let SINGLETON_LABEL = "universe";
+        
+        public func createAndLoad(_: option<Toml>)=> Universe
+            where require!(Universe: ISingleton);
+        {
+            return Universe{
+                m_universe = universe::create(),
+            };
+        }
+        
+        public func getUniverse()=> universe
+        {
+            return apply:<Universe>(\v = v.m_universe;);
+        }
+    }
+}

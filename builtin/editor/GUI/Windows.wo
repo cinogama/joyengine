@@ -1,0 +1,519 @@
+import pkg::std;
+
+import je;
+import je::gui;
+
+import pkg::interface;
+import pkg::try;
+import pkg::toml;
+import pkg::singleton;
+
+import builtin::editor::Singleton;
+
+import Menu;
+import Shortcut;
+
+using std;
+using je;
+using je::gui;
+using toml;
+using JEEditor::Singleton;
+
+namespace JEEditor::GUI::Windows
+{
+    public union SizeConstraints
+    {
+        Unlimited,
+        AutoSize,
+        Limited((ImVec2, ImVec2)),
+    }
+    
+    interface! IWindows
+    {
+        public func getTitle(self)=> string;
+        public func getAttrib(self)=> WindowsAttribute
+        {
+            do self;
+            return WindowsAttribute::ImGuiWindowFlags_None;
+        }
+        public func getSizeConstraints(self)=> SizeConstraints
+        {
+            do self;
+            return SizeConstraints::AutoSize;
+        }
+        public func getShortcut(self)=> option<Shortcut>
+        {
+            do self;
+            return option::none;
+        }
+        public func getMenu(self)=> option<Menu>
+        {
+            do self;
+            return option::none;
+        }
+        public func getSpawnPos(self)=> option<ImVec2>
+        {
+            do self;
+            return option::none;
+        }
+        // 模态窗口：渲染为居中的模态弹窗并屏蔽其后所有窗口的输入。
+        // 模态窗口永远不是 Unique：同名模态由模态栈调度展示（最新者抢占显示）而非被拒绝，
+        // 系统会自动向标题追加 $ID，无需（也不应）手动添加。
+        public func isModal(self)=> bool
+        {
+            do self;
+            return false;
+        }
+        // 沉浸模式（见 setImmersiveMode）下本窗口是否应当被隐藏。
+        // 默认：模态弹窗不隐藏（进度框/错误框等在调试运行期间仍需可见），
+        // 常规窗口全部隐藏；个别关键的非模态窗口（如 PanicBox）可覆写为
+        // 永不隐藏。
+        public func isHiddenInImmersiveMode(self)=> bool
+        {
+            do self;
+            return !self->isModal;
+        }
+        public func onPreClose(self)=> bool
+        {
+            do self;
+            return true;
+        }
+        public func onCreate(self)=> void
+        {
+            do self;
+        }
+        public func onClose(self)=> void
+        {
+            do self;
+        }
+        public func onDestroy(self)=> void
+        {
+            do self;
+        }
+        public func onUpdate(self)=> void
+        {
+            do self;
+        }
+        public func run(self)=> bool;
+    };
+    
+    using GlobalWindowsContextSingleton = struct{
+        s_unique_window_record: map<string, IWindows>,
+        s_windows_states: map<IWindows, WindowsState>,
+        
+        // 模态窗口互斥栈（LIFO 票据）：同一时刻只展示栈顶（最新）的模态弹窗，
+        // 其余被压制挂起（ImGui popup 层级中并发的两个模态会互相关闭对方），
+        // 栈顶关闭后，被压制的模态重新弹出显示。
+        s_modal_tickets: vec<int>,
+        s_modal_next_ticket: mut int,
+    }
+    {
+        public let SINGLETON_LABEL = "window_states";
+        public let SINGLETON_SEQUENCE = 200000000;
+
+        public func createAndLoad(_: option<Toml>)=> GlobalWindowsContextSingleton
+            where require!(GlobalWindowsContextSingleton: ISingleton);
+        {
+            return GlobalWindowsContextSingleton{
+                s_unique_window_record = {}mut,
+                s_windows_states = {}mut,
+                s_modal_tickets = []mut,
+                s_modal_next_ticket = mut 0,
+            };
+        }
+    }
+    
+    using WindowsState = struct{
+        m_is_unique: bool,
+        m_is_modal: bool,
+        m_title: string,
+        
+        m_closing_request: mut bool,
+    }
+    {
+        func try_register_window(
+            iw: IWindows, title: string, is_unique: bool, is_modal: bool)=> option<WindowsState>
+        {
+            return Singleton::apply:<GlobalWindowsContextSingleton>(
+                func(wctx)
+                {
+                    if (is_unique)
+                    {
+                        if (wctx.s_unique_window_record->contains(title))
+                            return option::none;
+                        wctx.s_unique_window_record->set(title, iw);
+                    }
+                    
+                    let window_state = WindowsState{
+                        m_is_unique = is_unique,
+                        m_is_modal = is_modal,
+                        m_title = title,
+                        
+                        m_closing_request = mut false,
+                    };
+                    wctx.s_windows_states->set(iw, window_state);
+                    
+                    return option::value(window_state);
+                });
+        }
+        func unregister_window(iw: IWindows)
+        {
+            Singleton::apply:<GlobalWindowsContextSingleton>(
+                func(wctx)
+                {
+                    match (wctx.s_windows_states->get(iw))
+                    {
+                        none?
+                            logerr("Unexpected window instance, not registered yet.");
+                        value(state)?
+                        {
+                            if (state.m_is_unique)
+                            {
+                                if (!wctx.s_unique_window_record->remove(state.m_title))
+                                    logerr(F"Unique window named `{state.m_title}` not found in s_unique_window_record.");
+                            }
+                            do wctx.s_windows_states->remove(iw);
+                        }
+                    }
+                });
+        }
+        
+        public func isUnique(self: WindowsState)
+        {
+            return self.m_is_unique;
+        }
+        public func getTitle(self: WindowsState)
+        {
+            return self.m_title;
+        }
+        public func requestToClose(self: WindowsState)
+        {
+            self.m_closing_request = true;
+        }
+    }
+    namespace IWindows
+    {
+        // 模态弹窗的隐藏载体窗口：
+        // 协程顶层的 CurrentWindow 取决于同帧内其他协程的提交顺序，
+        // 直接在协程顶层 OpenPopup/BeginPopupModal 会导致 popup ID 逐帧漂移。
+        // 载体窗口标题固定，在它内部开弹窗可保证 ID 恒定。
+        let s_modal_carrier_title = "##JEEditorModalCarrier";
+        let s_modal_carrier_attrib = WindowsAttribute::ImGuiWindowFlags_NoTitleBar
+            + WindowsAttribute::ImGuiWindowFlags_NoResize
+            + WindowsAttribute::ImGuiWindowFlags_NoMove
+            + WindowsAttribute::ImGuiWindowFlags_NoScrollbar
+            + WindowsAttribute::ImGuiWindowFlags_NoCollapse
+            + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
+            + WindowsAttribute::ImGuiWindowFlags_NoBackground
+            + WindowsAttribute::ImGuiWindowFlags_NoSavedSettings
+            + WindowsAttribute::ImGuiWindowFlags_NoMouseInputs
+            + WindowsAttribute::ImGuiWindowFlags_NoFocusOnAppearing
+            + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus
+            + WindowsAttribute::ImGuiWindowFlags_NoNavInputs
+            + WindowsAttribute::ImGuiWindowFlags_NoNavFocus
+            + WindowsAttribute::ImGuiWindowFlags_NoDocking
+            ;
+            
+        // 新模态入栈即成为栈顶；让出一帧给被抢占者完成最后一次渲染检查，
+        // 避免同帧内两个协程先后 Begin 同一个载体窗口。
+        func _push_modal_slot()=> int
+        {
+            let ticket = Singleton::apply:<GlobalWindowsContextSingleton>(
+                func(wctx)
+                {
+                    let ticket = wctx.s_modal_next_ticket;
+                    wctx.s_modal_next_ticket = ticket + 1;
+                    wctx.s_modal_tickets->add(ticket);
+                    
+                    return ticket;
+                });
+                
+            std::yield();
+            
+            return ticket;
+        }
+        func _is_modal_top(ticket: int)=> bool
+        {
+            return Singleton::apply:<GlobalWindowsContextSingleton>(
+                func(wctx)
+                {
+                    return wctx.s_modal_tickets[wctx.s_modal_tickets->len - 1] == ticket;
+                });
+        }
+        // 允许从栈中任意位置移除（链条场景：旧模态在回调中弹出新模态后立即关闭自身）。
+        func _release_modal_slot(ticket: int)
+        {
+            Singleton::apply:<GlobalWindowsContextSingleton>(
+                func(wctx)
+                {
+                    for (let mut idx = 0; idx < wctx.s_modal_tickets->len; idx += 1)
+                    {
+                        if (wctx.s_modal_tickets[idx] == ticket)
+                        {
+                            do wctx.s_modal_tickets->remove(idx);
+                            return;
+                        }
+                    }
+                });
+        }
+        
+        func _make_window_attrib(
+            i: IWindows, state: WindowsState, menu: option<Menu>)=> WindowsAttribute
+        {
+            let mut attrib = i->getAttrib;
+            
+            if (!state.m_is_unique)
+                attrib = attrib as int->bor(
+                    WindowsAttribute::ImGuiWindowFlags_NoSavedSettings as int) as WindowsAttribute;
+                    
+            if (menu->is_value)
+                attrib = attrib as int->bor(
+                    WindowsAttribute::ImGuiWindowFlags_MenuBar as int) as WindowsAttribute;
+                    
+            match (i->getSizeConstraints)
+            {
+                Unlimited?;
+                AutoSize?
+                    attrib = attrib as int->bor(
+                        (WindowsAttribute::ImGuiWindowFlags_NoResize
+                            + WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize)
+                            as int) as WindowsAttribute;
+                Limited((min, max))?
+                    SetNextWindowSizeConstraints(min, max);
+            }
+            return attrib;
+        }
+        
+        func _update_window_lifetime(
+            i: IWindows, state: WindowsState,
+            menu: option<Menu>, shortcut: option<Shortcut>,
+            show: bool, open: bool)=> bool
+        {
+            let mut keep_open = open;
+            
+            // 来自外部的关闭请求
+            if (state.m_closing_request)
+            {
+                state.m_closing_request = false;
+                keep_open = false;
+            }
+            
+            if (!keep_open)
+                keep_open = !i->onPreClose;
+                
+            i->onUpdate();
+            
+            if (show)
+            {
+                match (shortcut)
+                {
+                    none?;
+                    value(shortcut_instance)?
+                        shortcut_instance->update();
+                }
+                
+                match (menu)
+                {
+                    none?;
+                    value(menu_instance)?
+                        menu_instance->showMenuBar();
+                }
+                
+                if (!i->run())
+                    keep_open = false;
+            }
+            return keep_open;
+        }
+        
+        func _engine_imgui_show_job(
+            i: IWindows, title: string, state: WindowsState, menu: option<Menu>, shortcut: option<Shortcut>)=> bool
+        {
+            let attrib = _make_window_attrib(i, state, menu);
+            
+            let (show, open) = BeginAttrOpen(title, attrib);
+            defer End();
+            
+            return _update_window_lifetime(i, state, menu, shortcut, show, open);
+        }
+        
+        // 模态展示：先渲染隐藏载体窗口，再在载体上弹出模态弹窗。
+        // 弹窗由 ImGui 自动居中于视口并使背景变暗（ImGuiCol_ModalWindowDimBg）。
+        func _engine_imgui_modal_show_job(
+            i: IWindows, title: string, state: WindowsState,
+            menu: option<Menu>, shortcut: option<Shortcut>,
+            first_frame: mutable<bool>)=> bool
+        {
+            do BeginAttrOpen(s_modal_carrier_title, s_modal_carrier_attrib);
+            defer End();
+            
+            // 尺寸约束等 NextWindowData 需在载体 Begin 之后设置，才能作用到弹窗本身。
+            let attrib = _make_window_attrib(i, state, menu);
+            
+            if (first_frame->get)
+            {
+                OpenPopup(title);
+                first_frame->set(false);
+            }
+            
+            let (show, _) = BeginPopupModalAttrOpen(title, attrib);
+            if (!show)
+                return false;
+                
+            let keep_open = _update_window_lifetime(i, state, menu, shortcut, true, true);
+            
+            if (!keep_open)
+                CloseCurrentPopup();
+            EndPopup();
+            
+            return keep_open;
+        }
+        
+        func _show(i: IWindows, state: WindowsState)
+        {
+            let title = state.m_is_unique
+                ? state.m_title
+                | state.m_title->replace("$ID", F"##{JobID()}")
+                ;
+                
+            let menu_instance = i->getMenu;
+            let shortcut_instance = i->getShortcut;
+            
+            // 模态弹窗由 ImGui 自动居中，忽略 SpawnPos
+            if (!state.m_is_modal)
+            {
+                match (i->getSpawnPos)
+                {
+                    none?;
+                    value(pos)?
+                        SetNextWindowPos(pos);
+                }
+            }
+            
+            i->onCreate();
+            
+            if (state.m_is_modal)
+            {
+                let ticket = _push_modal_slot();
+                let first_frame = mutable::create(true);
+                let mut suspended = false;
+                let mut keep_open = true;
+                while (keep_open)
+                {
+                    if (!_is_modal_top(ticket))
+                    {
+                        // 被更新的模态压制：停止渲染（弹窗已被 ImGui 截断），
+                        // 回到栈顶后需重新 OpenPopup。
+                        suspended = true;
+                        first_frame->set(true);
+                        std::yield();
+                        continue;
+                    }
+                    if (suspended)
+                    {
+                        // 重新成为栈顶：多让一帧，避免与刚关闭的原栈顶
+                        // 在同一帧内重复 Begin 载体窗口。
+                        suspended = false;
+                        std::yield();
+                        continue;
+                    }
+                    
+                    keep_open = i->_engine_imgui_modal_show_job(
+                        title, state, menu_instance, shortcut_instance, first_frame);
+                    if (keep_open)
+                        std::yield();
+                }
+                _release_modal_slot(ticket);
+            }
+            else
+            {
+                let mut keep_open = true;
+                while (keep_open)
+                {
+                    // 沉浸模式（调试运行）：常规窗口不渲染（不 Begin/End、
+                    // 不 run、不处理菜单与快捷键），但仍泵 onUpdate 与生命
+                    // 周期——外部关闭请求照常生效，编辑动作队列照常排空
+                    if (s_immersive_mode && i->isHiddenInImmersiveMode)
+                        keep_open = _update_window_lifetime(
+                            i, state, menu_instance, shortcut_instance, false, true);
+                    else
+                        keep_open = i->_engine_imgui_show_job(
+                            title, state, menu_instance, shortcut_instance);
+
+                    if (keep_open)
+                        std::yield();
+                }
+            }
+            
+            i->onClose();
+            i->onDestroy();
+            WindowsState::unregister_window(i);
+        }
+    }
+    
+    // 沉浸模式：隐藏所有常规窗口（模态弹窗与其显式豁免的窗口除外），
+    // 用于调试运行等需要全屏呈现游戏画面、屏蔽编辑 UI 的场合。
+    // 隐藏期间各窗口协程照常存活：onUpdate 泵与关闭请求仍然生效。
+    let mut s_immersive_mode = false;
+
+    public func setImmersiveMode(on: bool)=> void
+    {
+        s_immersive_mode = on;
+    }
+    public func isImmersiveMode()=> bool
+    {
+        return s_immersive_mode;
+    }
+
+    public func show<T>(window_instance: T)=> option<IWindows>
+        where require!(T: IWindows);
+    {
+        let i = IWindows::create(window_instance);
+        return _launch_window(i, i->isModal);
+    }
+    
+    // 强制以模态方式展示任意窗口（无需实现 isModal）
+    public func showModal<T>(window_instance: T)=> option<IWindows>
+        where require!(T: IWindows);
+    {
+        return _launch_window(IWindows::create(window_instance), true);
+    }
+    
+    func _launch_window(i: IWindows, is_modal: bool)=> option<IWindows>
+    {
+        let mut title = i->getTitle;
+        let mut is_unique = title->find("$ID")->is_none;
+        
+        match (WindowsState::try_register_window(i, title, is_unique, is_modal))
+        {
+            none?
+                i->onDestroy();
+            value(window_state)?
+            {
+                launch_coroutine(\= i->_show(window_state););
+                return option::value(i);
+            }
+        }
+        return option::none;
+    }
+    
+    // 仅限特殊情况使用：
+    namespace internal
+    {
+        public func getAllWindows()=> array<IWindows>
+        {
+            return Singleton::apply:<GlobalWindowsContextSingleton>(
+                func(wctx)
+                {
+                    return wctx.s_windows_states->keys;
+                });
+        }
+        public func tryGetWindowState(iw: IWindows)=> option<WindowsState>
+        {
+            return Singleton::apply:<GlobalWindowsContextSingleton>(
+                func(wctx)
+                {
+                    return wctx.s_windows_states->get(iw);
+                });
+        }
+    }
+}

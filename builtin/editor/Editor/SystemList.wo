@@ -1,0 +1,400 @@
+import pkg::std;
+
+import je::internal;
+import je::ecs;
+import je::gui;
+import je::typeinfo;
+
+import pkg::interface;
+import pkg::worst;
+
+import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Forms::AskBox;
+import builtin::editor::GUI::Widgets;
+
+import WorldEditorViewport;
+import Action::AddWorldSystem;
+import Action::RemoveWorldSystem;
+import Action::AddRuntimeSystem;
+import Action::RemoveRuntimeSystem;
+import Action::SwitchSystemGroup;
+
+using std;
+using je;
+using je::gui;
+using JEEditor::GUI::Windows;
+using JEEditor::GUI::Forms;
+using JEEditor::GUI::Widgets;
+using JEEditor::Editor::Action;
+
+namespace JEEditor::Editor
+{
+    // 系统列表：展示并管理当前编辑世界的两组系统——
+    //   运行时：已 add_system 到世界，编辑器内正在运行（如图形系统）；
+    //   调试时：保存在 WorldEditorViewport 中，仅在开始调试运行
+    //   （Editor::DebugRun）或导出时才会 add_system（导出功能暂未支持）。
+    // 组的含义通过悬浮分组标题的气泡提示展示。增删与两组之间的转换
+    // 均通过 doAction 发布，支持撤销/重做并参与未保存判定；
+    // 向“运行时”添加、以及从“运行时”移除会先弹窗确认。
+    using SystemList = struct{
+        m_close: mut bool,
+    }
+    {
+        let mut s_systemlist_singleton = option::none: option<SystemList>;
+
+        // “添加系统”选择弹窗的状态；面板是单例，用模块级状态即可
+        let mut s_add_system_filter = "";
+        let mut s_add_system_focus = false;
+        // 弹窗中“添加到哪一组”的选择：true=运行时，false=调试时。
+        // 默认添加到“调试时”，避免误触后系统立即在编辑器内运行
+        let mut s_add_system_immediate = false;
+
+        // 两组分组标题的强调色（0..1 浮点 RGBA，与主题文字色混合
+        // 使用，明暗主题都保持可读）：运行时沿用检视面板命名空间分组
+        // 的强调蓝；调试时用与检视面板预设体差异高亮同族的强调琥珀，
+        // 直观区分两组语义
+        let RUNTIME_GROUP_ACCENT = (0.42, 0.62, 0.95, 1.);
+        let DEBUG_GROUP_ACCENT = (0.90, 0.75, 0.31, 1.);
+
+        public func isSystemListExist()
+        {
+            return s_systemlist_singleton->is_value;
+        }
+        public func showSystemList()
+        {
+            do show(create());
+        }
+        public func closeSystemList()
+        {
+            match (s_systemlist_singleton)
+            {
+                none?;
+                value(systemlist_instance)?
+                    systemlist_instance->close();
+            }
+        }
+
+        func create()=> SystemList
+            where require!(SystemList: IWindows);
+        {
+            return SystemList{
+                m_close = mut false,
+            };
+        }
+        func close(self: SystemList)
+        {
+            self.m_close = true;
+        }
+        public func onCreate(self: SystemList)=> void
+        {
+            s_systemlist_singleton = option::value(self);
+        }
+        public func onClose(_: SystemList)=> void
+        {
+            s_systemlist_singleton = option::none;
+        }
+        public func getTitle(_: SystemList)=> string
+        {
+            return "系统列表";
+        }
+        public func getSizeConstraints(_: SystemList)=> SizeConstraints
+        {
+            return SizeConstraints::Limited(((260., 200.), (420., 4096.)));
+        }
+
+        // 移除系统：从“运行时”移除会立即 remove_system、影响编辑器内正在
+        // 运行的世界，因此先弹窗确认避免误触；从“调试时”移除不影响运行中
+        // 的世界，直接发布移除动作即可
+        func requestRemoveSystem(wctx: WorldEditorViewport, systype: typeinfo, is_world_system: bool)=> void
+        {
+            if (!is_world_system)
+            {
+                wctx->doAction(RemoveRuntimeSystem::create(systype));
+                return;
+            }
+
+            let name = systype->name;
+            do AskBox::show("移除系统", F"确认移除系统 \"{name}\" 吗？")
+                ->onYes(func() {
+                        /* 在对话框提出的时候，有可能因为模块或者 ToWoo 更新导致 typeinfo 发生变动 */
+                        match (typeinfo::load(name))
+                        {
+                            none?;
+                            value(systype)?
+                            {
+                                if (systype->is_system)
+                                    wctx->doAction(RemoveWorldSystem::create(systype, wctx->getWorld));
+                            }
+                        }
+                    })
+                ;
+        }
+
+        // 向“运行时”添加系统会立即 add_system 到世界并在编辑器内运行，
+        // 因此先弹窗确认，确认后才发布添加动作
+        func requestAddWorldSystem(wctx: WorldEditorViewport, systype: typeinfo)=> void
+        {
+            let name = systype->name;
+            do AskBox::show("添加系统", F"确认将系统 \"{name}\" 添加到运行时吗？")
+                ->onYes(func() {
+                        /* 在对话框提出的时候，有可能因为模块或者 ToWoo 更新导致 typeinfo 发生变动 */
+                        match (typeinfo::load(name))
+                        {
+                            none?;
+                            value(systype)?
+                            {
+                                if (systype->is_system)
+                                    wctx->doAction(AddWorldSystem::create(systype));
+                            }
+                        }
+                    });
+        }
+
+        // 一行系统条目：与检视面板组件块同款的分区标题栏样式整行
+        //（叶子节点、无折叠箭头）+ 行尾 × 移除按钮（平时与背景融为
+        // 一体，悬停红色提示危险操作）+ 右键上下文菜单。行内只显示
+        // 短名（悬停提示完整类型名）。
+        func showSystemEntryRow(
+            wctx: WorldEditorViewport, tag: string, systype: typeinfo, is_world_system: bool)=> void
+        {
+            let (_, short_name) = splitTypeName(systype->name);
+            let row_label = F"{short_name}##{tag}";
+
+            // 标题栏样式与检视面板的组件块一致（见
+            // Widgets::pushSectionHeaderStyle）。AllowItemOverlap 允许
+            // 后绘制的行尾 × 按钮抢占重叠区域的悬停与点击；SpanAvailWidth
+            // 让整行的命中区横跨面板剩余宽度
+            pushSectionHeaderStyle();
+            do TreeNodeEx(row_label,
+                TreeNodeAttribute::ImGuiTreeNodeFlags_Leaf
+                    + TreeNodeAttribute::ImGuiTreeNodeFlags_Framed
+                    + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
+                    + TreeNodeAttribute::ImGuiTreeNodeFlags_NoTreePushOnOpen
+                    + TreeNodeAttribute::ImGuiTreeNodeFlags_AllowItemOverlap);
+            if (IsItemHovered())
+                do SetTooltip(systype->name);
+
+            // 右键系统项弹出菜单；显式绑定到行的标签上，且紧跟行项调用
+            // （悬停检测基于最后绘制的项，此处行项即最后绘制的项）
+            if (BeginPopupContextItemLabel(row_label))
+            {
+                if (MenuItem("移除"))
+                    requestRemoveSystem(wctx, systype, is_world_system);
+
+                Separator();
+
+                let switch_label = is_world_system
+                    ? "转换为调试时启用" | "转换为运行时启用";
+                if (MenuItem(switch_label))
+                    wctx->doAction(SwitchSystemGroup::create(
+                            systype, wctx->getWorld, !is_world_system));
+
+                defer EndPopup();
+            }
+
+            // 行尾 × 移除按钮：折叠头的布局宽度只覆盖文字，× 需手动定位
+            // 到行尾；在标题栏样式内提交以获得同样的加厚内边距与圆角，
+            // 与标题栏同高
+            SameLine();
+            let (cursor_x, cursor_y) = GetCursorPos();
+            let (avail_width, _) = GetContentRegionAvail();
+            SetCursorPos((cursor_x + avail_width - 28., cursor_y));
+            PushStyleColor(ImGuiCol::ImGuiCol_Button, (0, 0, 0, 0));
+            PushStyleColor(ImGuiCol::ImGuiCol_ButtonHovered, (140, 40, 40, 255));
+            PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive, (190, 55, 55, 255));
+            if (ButtonSize(F"×##{tag}_remove", (24., 0.)))
+                requestRemoveSystem(wctx, systype, is_world_system);
+            PopStyleColor(3);
+            popSectionHeaderStyle();
+            Spacing();
+        }
+
+        // 分组标题：填充色带 + 左侧强调竖条 + 标题与系统数，与检视面板
+        // 的命名空间分组标题同款（见 Inspector::showGroupHeader），
+        // 悬停显示组的含义。颜色由主题文字色向该组的强调色混合得出，
+        // 明暗主题都保持可读
+        func showGroupHeader(
+            title: string, count: int, description: string,
+            accent: (real, real, real, real))
+        {
+            let text_c = GetStyleColor(ImGuiCol::ImGuiCol_Text);
+            let (x, y) = GetCursorScreenPos();
+            let width = GetContentRegionAvail().0;
+            let height = GetFrameHeight();
+            let draw = GetWindowDrawList();
+
+            draw->AddRectFilled((x, y), (x + width, y + height),
+                mixStyleColor(text_c, accent, 0.12, 42));
+            draw->AddRectFilled((x, y), (x + 3., y + height),
+                mixStyleColor(text_c, accent, 0.75, 220));
+            draw->AddText(
+                (x + 10., y + (height - GetTextLineHeight()) * 0.5),
+                mixStyleColor(text_c, accent, 0.55, 255),
+                F"{title} · {count}");
+
+            // 全宽占位让整个色带成为悬停命中区，用于展示组的含义
+            Dummy((width, height));
+            if (IsItemHovered())
+                do SetTooltip(description);
+            Spacing();
+        }
+
+        // 绘制一组系统：分组标题 + 条目列表。组的含义通过悬浮标题的
+        // 气泡提示展示；系统不按命名空间分小节，仅区分两组。
+        func showSystemGroup(
+            wctx: WorldEditorViewport,
+            systems: array<typeinfo>,
+            tag_prefix: string,
+            is_world_system: bool,
+            title: string,
+            description: string,
+            accent: (real, real, real, real))=> void
+        {
+            // 编辑器内部系统（Editor::*）不在系统列表中显示
+            let visible = systems
+                ->forall(\stype = !stype->name->begin_with("Editor::");)
+                |> sort(\l, r = l->name < r->name;);
+
+            showGroupHeader(title, visible->len, description, accent);
+
+            for (let systype : visible)
+                showSystemEntryRow(wctx, F"{tag_prefix}_{systype->name}", systype, is_world_system);
+
+            if (visible->len == 0)
+            {
+                Indent(8.);
+                TextDisabled("（空）");
+                Unindent(8.);
+            }
+        }
+
+        // “添加系统”选择弹窗：先选择添加到哪一组，再搜索过滤 +
+        // 候选列表（悬停提示完整类型名）。选中一项后，添加到“调试时”
+        // 立即发布添加操作，添加到“运行时”则先弹窗确认；弹窗保持打开，
+        // 便于连续添加；已在任意一组中的系统自下一帧起从候选中消失。
+        func showAddSystemPicker(wctx: WorldEditorViewport)=> void
+        {
+            // 弹窗大小由内容自适应；若控件用 -1 占满宽度，弹窗自身没有
+            // 可参考的实宽，会塌缩成细条，因此这里给控件显式像素宽度
+            let picker_width = 300.;
+
+            if (RadioButton("运行时", s_add_system_immediate))
+                s_add_system_immediate = true;
+            if (IsItemHovered())
+                do SetTooltip("添加后立即 add_system 到世界，编辑器内马上运行");
+
+            SameLine();
+            if (RadioButton("调试时", !s_add_system_immediate))
+                s_add_system_immediate = false;
+            if (IsItemHovered())
+                do SetTooltip("保存在世界中，仅在开始调试执行或导出时才会 add_system");
+
+            Spacing();
+
+            SetNextItemWidth(picker_width);
+            if (s_add_system_focus)
+            {
+                SetKeyboardFocusHere(0);
+                s_add_system_focus = false;
+            }
+            match (InputText("##add_system_filter", s_add_system_filter))
+            {
+                none?;
+                value(new_filter)?
+                    s_add_system_filter = new_filter;
+            }
+
+            let filter_lower = s_add_system_filter->lower;
+            let has_filter = filter_lower->len > 0;
+
+            // 候选为全部已注册系统，排除编辑器内部系统（Editor::*）、
+            // 两组中已存在的系统以及不匹配搜索词的系统（按含命名空间的全名匹配）
+            let candidates = typeinfo::get_all_systems_types()
+                ->forall(\stype = !stype->name->begin_with("Editor::") &&
+                        !wctx->hasWorldSystem(stype) &&
+                        !wctx->hasRuntimeSystem(stype) &&
+                        (!has_filter ||
+                            stype->name->lower->find(filter_lower)->is_value);)
+                    |> sort(\l, r = l->name < r->name;);
+
+            // 列表高度固定为约 8 行，避免候选过多时撑爆弹窗
+            if (BeginListBox("##add_system_candidates", picker_width,
+                    GetFrameHeightWithSpacing() * 8.))
+            {
+                for (let stype : candidates)
+                {
+                    let name = stype->name;
+                    let (_, short_name) = splitTypeName(name);
+
+                    if (Selectable(F"{short_name}##add_{name}"))
+                    {
+                        if (s_add_system_immediate)
+                            requestAddWorldSystem(wctx, stype);
+                        else
+                            wctx->doAction(AddRuntimeSystem::create(stype));
+                    }
+                    if (IsItemHovered())
+                        do SetTooltip(name);
+                }
+                if (candidates->len == 0)
+                    TextDisabled("（没有匹配的系统）");
+
+                EndListBox();
+            }
+        }
+
+        func showWorldSystems(wctx: WorldEditorViewport)
+        {
+            showSystemGroup(
+                wctx,
+                wctx->getWorld->internal::get_all_systems,
+                "world",
+                true,
+                "运行时",
+                "已 add_system 到世界，编辑器内正在运行的系统",
+                RUNTIME_GROUP_ACCENT);
+
+            Spacing();
+
+            showSystemGroup(
+                wctx,
+                wctx->getRuntimeSystems(),
+                "runtime",
+                false,
+                "调试时",
+                "保存在世界中，仅在开始调试执行或导出时运行的系统",
+                DEBUG_GROUP_ACCENT);
+
+            Spacing();
+            if (ButtonSize("添加系统", (-1., 0.)))
+            {
+                // 每次打开弹窗都复位搜索词，并将焦点设到搜索框
+                s_add_system_filter = "";
+                s_add_system_focus = true;
+                OpenPopup("##add_system_picker");
+            }
+
+            if (BeginPopup("##add_system_picker"))
+            {
+                showAddSystemPicker(wctx);
+                defer EndPopup();
+            }
+        }
+
+        public func run(self: SystemList)=> bool
+        {
+            match (WorldEditorViewport::getLastFocused())
+            {
+                none?
+                    TextDisabled("（没有待编辑的世界）");
+                value(wctx)?
+                {
+                    showWorldSystems(wctx);
+                }
+            }
+            return !self.m_close;
+        }
+
+    // ===============
+    }
+}

@@ -1,0 +1,50 @@
+import pkg::std;
+import pkg::fsys;
+import pkg::filestream;
+import pkg::worst::macro;
+import pkg::try;
+import pkg::buffer;
+
+using fsys;
+using filestream;
+
+namespace JEEditor::Editor::Template
+{
+    enum Type
+    {
+        public NATIVE_MODULE_CMAKELISTS,
+        public NATIVE_MODULE_GITIGNORE,
+        public NATIVE_MODULE_LOADER_HPP,
+        public NATIVE_MODULE_MAIN_CPP,
+        public NATIVE_MODULE_COMPONENT_HPP,
+        public NATIVE_MODULE_SYSTEM_HPP,
+        public NATIVE_MODULE_SYSTEM_CPP,
+        public PHYSICS_CONFIG,
+        public TOWOO_COMPONENT,
+        public TOWOO_SYSTEM,
+    }
+
+    public func load(type: Type)=> option<string>
+    {
+        static let type_to_filename = {
+            [Type::NATIVE_MODULE_CMAKELISTS] = "CMakeLists.txt",
+            [Type::NATIVE_MODULE_GITIGNORE] = ".gitignore",
+            [Type::NATIVE_MODULE_LOADER_HPP] = "loader.hpp",
+            [Type::NATIVE_MODULE_MAIN_CPP] = "main.cpp",
+            [Type::NATIVE_MODULE_COMPONENT_HPP] = "native_module_component.hpp",
+            [Type::NATIVE_MODULE_SYSTEM_HPP] = "native_module_system.hpp",
+            [Type::NATIVE_MODULE_SYSTEM_CPP] = "native_module_system.cpp",
+            [Type::PHYSICS_CONFIG] = "physics.je4physics.wo",
+            [Type::TOWOO_COMPONENT] = "towoo_component.je4component.wo",
+            [Type::TOWOO_SYSTEM] = "towoo_system.je4system.wo",
+        };
+        
+        try! template_filename = type_to_filename->get(type);
+        try! fstream = open(
+            parent(normalize(__FILE__!)) / F"{template_filename}.template",
+            mode::read);
+        defer do fstream->close;
+        
+        return_value! fstream->readbuf(fstream->len): buffer as string;
+    }
+}

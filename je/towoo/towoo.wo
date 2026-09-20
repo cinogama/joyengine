@@ -1,7 +1,9 @@
 // Joyengine 4.x
-import woo::std;
+import pkg::std;
 
 import je;
+import je::graphic;
+import je::audio;
 import je::towoo::types;
 import je::towoo::components;
 
@@ -31,13 +33,13 @@ namespace je
     namespace entity::towoo
     {
         extern("libjoyecs", "wojeapi_towoo_add_component")
-            private func _add_component<T>(self: entity, tid: je::typeinfo)=> option<T>;
+            private func _add_component<T>(self: entity, tid: je::typeinfo)=> T;
         extern("libjoyecs", "wojeapi_towoo_get_component")
             private func _get_component<T>(self: entity, tid: je::typeinfo)=> option<T>;
         extern("libjoyecs", "wojeapi_towoo_remove_component")
             private func _remove_component<T>(self: entity, tid: je::typeinfo)=> void;
             
-        public func add_component<T>(self: entity)=> option<T>
+        public func add_component<T>(self: entity)=> T
             where typeof:<T>::type::typeinfo is je::typeinfo;
         {
             return _add_component:<T>(self, typeof:<T>::type::typeinfo);
@@ -116,6 +118,27 @@ namespace je
         public let RAD2DEG = 180. / PI;
         public let DEG2RAD = PI / 180.;
     }
+}
+
+using mat4 = (
+    /* mat[x][y] ------> y */
+    real, real, real, real,
+    real, real, real, real,
+    real, real, real, real,
+    real, real, real, real,)
+{
+    /* extern("libjoyecs", "wojeapi_towoo_math_mat4_multi_vec4") */
+    /* extern("libjoyecs", "wojeapi_towoo_math_mat4_multi_mat4") */
+    extern("libjoyecs",
+        another is vec4
+            ? "wojeapi_towoo_math_mat4_multi_vec4"
+            | "wojeapi_towoo_math_mat4_multi_mat4")
+        public func operator * <T>(self: mat4, another: T)=> T
+            where another is vec4 || another is mat4;
+        ;
+
+    extern("libjoyecs", "wojeapi_towoo_math_mat4_transform")
+        public func transform(trans: vec3, rotation: quat, scale: vec3)=> mat4;
 }
 
 namespace vec2
@@ -360,6 +383,9 @@ namespace quat
     extern("libjoyecs", "wojeapi_towoo_math_quat_slerp")
         public func slerp(a: quat, b: quat, t: real)=> quat;
         
+    extern("libjoyecs", "wojeapi_towoo_math_quat_to_mat")
+        public func to_mat(self: quat)=> mat4;
+
     public func operator * (self: quat, b)
         where b is vec3 || b is quat;
     {
@@ -415,7 +441,6 @@ namespace Transform
     {
         extern("libjoyecs", "wojeapi_towoo_transform_translation_global_pos")
             public func get_global_pos(self: Translation)=> vec3;
-            
         extern("libjoyecs", "wojeapi_towoo_transform_translation_global_rot")
             public func get_global_rot(self: Translation)=> quat;
             
@@ -423,6 +448,9 @@ namespace Transform
             public func get_parent_pos(self: Translation, lpos: option<LocalPosition>, lrot: option<LocalRotation>)=> vec3;
         extern("libjoyecs", "wojeapi_towoo_transform_translation_parent_rot")
             public func get_parent_rot(self: Translation, lrot: option<LocalRotation>)=> quat;
+
+        extern("libjoyecs", "wojeapi_towoo_transform_translation_local_scale")
+            public func get_local_scale(self: Translation)=> vec3;
             
         extern("libjoyecs", "wojeapi_towoo_transform_translation_set_global_pos")
             public func set_global_pos(self: Translation, pos: vec3, wlpos: option<LocalPosition>, lrot: option<LocalRotation>)=> void;
@@ -436,13 +464,19 @@ namespace UserInterface
     {
         extern("libjoyecs", "wojeapi_towoo_userinterface_origin_layout")
             public func get_layout(self: Origin, display_range: vec2)=> (vec2, vec2, vec2);
-            
         extern("libjoyecs", "wojeapi_towoo_userinterface_origin_mouse_on")
             public func mouse_on(self: Origin, display_range: vec2, angle: real, mouse_pos: vec2)=> bool;
     }
 }
 namespace Renderer
 {
+    namespace Shape
+    {
+        extern("libjoyecs", "wojeapi_towoo_renderer_shape_get_vertex")
+            public func get_vertex(self: Shape)=> option<je::graphic::vertex>;
+        extern("libjoyecs", "wojeapi_towoo_renderer_shape_set_vertex")
+            public func set_vertex(self: Shape, vertex: option<je::graphic::vertex>)=> void;
+    }
     namespace Textures
     {
         extern("libjoyecs", "wojeapi_towoo_renderer_textures_bind_texture")
@@ -471,7 +505,6 @@ namespace Renderer
         ;
         extern("libjoyecs", "wojeapi_towoo_renderer_shaders_set_shaders")
             public func set_shaders(self: Shaders, shaders: array<je::graphic::shader>)=> void;
-            
         extern("libjoyecs", "wojeapi_towoo_renderer_shaders_get_shaders")
             public func get_shaders(self: Shaders)=> array<je::graphic::shader>;
     }
@@ -481,23 +514,46 @@ namespace Physics2D
     namespace Rigidbody
     {
         using Id = handle;
-
+        
         extern("libjoyecs", "wojeapi_towoo_physics2d_rigidbody_get_body_id")
             public func get_id(self: Rigidbody)=> option<Id>;
     }
-
+    
     namespace CollisionResult
     {
         // `position` is the world-space contact point; `normalize` is the
         // direction from self to the other body. Both come straight from
         // Box2D's manifold data.
         using collide_result = struct{position: vec2, normalize: vec2};
-
+        
         extern("libjoyecs", "wojeapi_towoo_physics2d_collisionresult_all")
             public func all(self: CollisionResult)=> dict<Rigidbody::Id, collide_result>;
-
         extern("libjoyecs", "wojeapi_towoo_physics2d_collisionresult_check")
             public func check(self: CollisionResult, another: Rigidbody)=> option<collide_result>;
+    }
+}
+namespace Camera
+{
+    namespace RendToFramebuffer
+    {
+        extern("libjoyecs", "wojeapi_towoo_camera_rendtoframebuffer_get")
+            public func get(self: RendToFramebuffer)=> option<je::graphic::framebuffer>;
+        extern("libjoyecs", "wojeapi_towoo_camera_rendtoframebuffer_set")
+            public func set(self: RendToFramebuffer, framebuf: option<je::graphic::framebuffer>)=> void;
+    }
+    namespace Projection
+    {
+        extern("libjoyecs", "wojeapi_towoo_camera_projection_get_default_uniform_buf")
+            public func get_default_uniform_buffer(self: Projection)=> je::graphic::uniformbuffer;
+            
+        extern("libjoyecs", "wojeapi_towoo_camera_projection_get_view_mat")
+            public func get_view_mat(self: Projection)=> mat4;
+        extern("libjoyecs", "wojeapi_towoo_camera_projection_get_proj_mat")
+            public func get_proj_mat(self: Projection)=> mat4;
+        extern("libjoyecs", "wojeapi_towoo_camera_projection_get_inv_proj_mat")
+            public func get_inv_proj_mat(self: Projection)=> mat4;
+        extern("libjoyecs", "wojeapi_towoo_camera_projection_get_view_proj_mat")
+            public func get_view_proj_mat(self: Projection)=> mat4;
     }
 }
 namespace Animation
@@ -506,10 +562,8 @@ namespace Animation
     {
         extern("libjoyecs", "wojeapi_towoo_animation_frameanimation_active_animation")
             public func active_action(self: FrameAnimation, animation_id: int, name: string, loop: bool)=> void;
-            
         extern("libjoyecs", "wojeapi_towoo_animation_frameanimation_stop_animation")
             public func stop_action(self: FrameAnimation, animation_id: int)=> void;
-            
         extern("libjoyecs", "wojeapi_towoo_animation_frameanimation_is_playing")
             public func is_playing(self: FrameAnimation, animation_id: int)=> bool;
     }
@@ -525,5 +579,7 @@ namespace Audio
     {
         extern("libjoyecs", "wojeapi_towoo_audio_playing_set_buffer")
             public func set_buffer(self: Playing, buf: je::audio::buffer)=> void;
+        extern("libjoyecs", "wojeapi_towoo_audio_playing_get_buffer")
+            public func get_buffer(self: Playing)=> option<je::audio::buffer>;
     }
 }

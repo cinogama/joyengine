@@ -1,0 +1,933 @@
+import pkg::std;
+
+import pkg::toml;
+import pkg::try;
+import pkg::worst;
+import pkg::iterator;
+
+import je;
+import je::ecs;
+import je::typeinfo;
+import je::graphic;
+import je::internal;
+
+using std;
+using je;
+using toml;
+using je::graphic;
+using iterator;
+
+namespace JEGaming::Saving::Entity
+{
+    func _save_component(cinst: component)=> Toml
+    {
+        let component_dat = new_table();
+        for (let (mname, mtype, maddr) : cinst->get_members)
+        {
+            match (towoo::unsafe::dynamic_parser::save(mtype, maddr))
+            {
+                none?;
+                value(saved_data)?
+                    component_dat->set(mname, saved_data);
+            }
+        }
+        return component_dat;
+    }
+    
+    func _save_components(e: entity)=> Toml
+    {
+        let components_dat = new_table();
+        for (let ctype : e->internal::get_components_types()
+            /* 为了确保顺序，此处始终按照字母序排列 */
+            |> sort(\l, r = l->name < r->name;))
+        {
+            let ctype_name = ctype->name;
+            if (ctype_name->begin_with("Editor::"))
+                /* Donot save editor components */
+                continue;
+                
+            components_dat->set(
+                ctype->name,
+                _save_component(
+                    e->get_component(ctype)->unwrap));
+        }
+        return components_dat;
+    }
+    
+    func _save_shader(sinst: shader)=> option<Toml>
+    {
+        let shader_dat = new_table();
+        
+        match (sinst->path)
+        {
+            none?
+                /* Skip builtin shader. */
+                return option::none;
+            value(shader_path)?
+                shader_dat->set("path", shader_path);
+        }
+        
+        for (let (uname, uinst) : sinst->get_uniforms)
+        {
+            if (uname->begin_with("JE_"))
+                /* Donot save engine builtin uniforms. */
+                continue;
+
+            match (uinst)
+            {
+                integer(vi)?
+                    shader_dat->set(uname, vi);
+                integer2((vi1, vi2))?
+                    shader_dat->set(uname, from([vi1, vi2]));
+                integer3((vi1, vi2, vi3))?
+                    shader_dat->set(uname, from([vi1, vi2, vi3]));
+                integer4((vi1, vi2, vi3, vi4))?
+                    shader_dat->set(uname, from([vi1, vi2, vi3, vi4]));
+                float(vr)?
+                    shader_dat->set(uname, vr);
+                float2((vr1, vr2))?
+                    shader_dat->set(uname, from([vr1, vr2]));
+                float3((vr1, vr2, vr3))?
+                    shader_dat->set(uname, from([vr1, vr2, vr3]));
+                float4((vr1, vr2, vr3, vr4))?
+                    shader_dat->set(uname, from([vr1, vr2, vr3, vr4]));
+                _?/* Ignore. */;
+            }
+        }
+        return option::value(shader_dat);
+    }
+    
+    func _save_shaders(e: entity)=> Toml
+    {
+        let shaders_dat = new_array();
+        for (let sinst : e->get_shaders())
+        {
+            match (_save_shader(sinst))
+            {
+                none? /* Skip builtin shader */;
+                value(shader_dat)?
+                    shaders_dat->push(shader_dat);
+            }
+        }
+        return shaders_dat;
+    }
+    
+    func _save_textures(e: entity)=> Toml
+    {
+        let textures_dat = new_table();
+        for (let (tpass, tinst) : e->get_textures)
+        {
+            match (tinst->path)
+            {
+                none? /* Skip builtin texture */;
+                value(texture_path)?
+                    textures_dat->set(tpass as string, texture_path);
+            }
+        }
+        return textures_dat;
+    }
+
+    func _save_shape(e: entity)=> option<string>
+    {
+        match (e->get_shape())
+        {
+            none?
+                return option::none;
+            value(shp)?
+                /* Skip builtin shape (created by vertex::create, no path). */
+                return shp->path;
+        }
+    }
+    
+    func _diff_component(ecdat: Toml, pcdat: option<Toml>)=> option<Toml>
+    {
+        func _compare_component_field(ecfdat: Toml, pcfdat: option<Toml>)=> option<string>
+        {
+            // 实体的组件成员数据必然是字符串类型
+            match (pcfdat=>> \v = v->as_string;)
+            {
+                none?
+                    return ecfdat->as_string;
+                value(pcfdata)?
+                    return ecfdat->as_string=>> \v = v != pcfdata ? option::value(v) | option::none;;
+            }
+        }
+        
+        let diff = new_table();
+        
+        let pcdata = pcdat=>> \v = v->as_table;->or({});
+        for (let (fname, fdat) : ecdat->as_table->or({}))
+        {
+            match (_compare_component_field(fdat, pcdata->get(fname)))
+            {
+                none?;
+                value(diff_dat)?
+                    diff->set(fname, diff_dat);
+            }
+        }
+        return diff->len > 0 ? option::value(diff) | option::none;
+    }
+    
+    func _diff_components(
+        entity_components_dat: dict<string, Toml>,
+        prefab_components_dat: dict<string, Toml>)=> option<Toml>
+    {
+        let component_diff = new_table();
+        for (let (ectype, ecdat) : entity_components_dat)
+        {
+            match (_diff_component(ecdat, prefab_components_dat->get(ectype)))
+            {
+                none?;
+                value(cdiff)?
+                    component_diff->set(ectype, cdiff);
+            }
+        }
+        
+        return (component_diff->len > 0)
+            ? option::value(component_diff)
+            | option::none;
+    }
+    
+    func _diff_removed_components(
+        entity_components_dat: dict<string, Toml>,
+        prefab_components_dat: dict<string, Toml>)=> option<Toml>
+    {
+        let removed_components = new_array();
+        for (let (pctype, _) : prefab_components_dat)
+        {
+            if (!entity_components_dat->contains(pctype))
+                removed_components->push(pctype);
+        }
+        
+        return removed_components->len > 0
+            ? option::value(removed_components)
+            | option::none
+            ;
+    }
+    
+    func _diff_textures(
+        entity_textures_dat: dict<string, Toml>,
+        prefab_textures_dat: dict<string, Toml>)=> option<Toml>
+    {
+        let diff = new_table();
+        for (let (etpass, etpath) : entity_textures_dat)
+        {
+            let etpath_ = etpath->as_string;
+            match (etpath_)
+            {
+                none?;
+                value(path)?
+                    if (prefab_textures_dat->get(etpass)=>> \v = v->as_string;->> \v = v != path;->or(true))
+                        diff->set(etpass, path);
+            }
+        }
+        return diff->len > 0
+            ? option::value(diff)
+            | option::none
+            ;
+    }
+    
+    func _diff_removed_textures(
+        entity_textures_dat: dict<string, Toml>,
+        prefab_textures_dat: dict<string, Toml>)=> option<Toml>
+    {
+        let removed_textures = new_array();
+        for (let (_, ptpath) : prefab_textures_dat)
+        {
+            match (ptpath->as_string)
+            {
+                none?;
+                value(path)?
+                {
+                    let mut still_exists = false;
+                    for (let (_, etpath) : entity_textures_dat)
+                    {
+                        if (etpath->as_string->or("") == path)
+                        {
+                            still_exists = true;
+                            break;
+                        }
+                    }
+                    if (!still_exists)
+                        removed_textures->push(path);
+                }
+            }
+        }
+        return removed_textures->len > 0
+            ? option::value(removed_textures)
+            | option::none
+            ;
+    }
+    
+    func _shader_path(sdat: Toml)=> string
+    {
+        return sdat->get("path")=>> \v = v->as_string;->or("");
+    }
+    
+    func _toml_value_equal(a: Toml, b: Toml)=> bool
+    {
+        if (a->is_int && b->is_int)
+            return a->as_int->unwrap == b->as_int->unwrap;
+        if (a->is_float && b->is_float)
+            return a->as_float->unwrap == b->as_float->unwrap;
+        if (a->is_bool && b->is_bool)
+            return a->as_bool->unwrap == b->as_bool->unwrap;
+        if (a->is_string && b->is_string)
+            return a->as_string->unwrap == b->as_string->unwrap;
+        if (a->is_array && b->is_array)
+        {
+            let av = a->as_array->unwrap;
+            let bv = b->as_array->unwrap;
+            if (av->len != bv->len)
+                return false;
+            for (let mut k = 0; k < av->len; k += 1)
+            {
+                if (!_toml_value_equal(av[k], bv[k]))
+                    return false;
+            }
+            return true;
+        }
+        return false;
+    }
+    
+    // 对「路径序列」做 LCS，返回 map：实体下标 -> 匹配到的预设体下标。
+    // 未匹配的实体下标 = 新增；未匹配的预设体下标 = 删除（隐式）。
+    func _align_shaders(epath: vec<string>, ppath: vec<string>)=> map<int, int>
+    {
+        let m = epath->len;
+        let n = ppath->len;
+        let stride = n + 1;
+        let dp = array::create((m + 1) * stride, mut 0);
+        
+        for (let mut i = m - 1; i >= 0; i -= 1)
+        {
+            for (let mut j = n - 1; j >= 0; j -= 1)
+            {
+                if (epath[i] == ppath[j])
+                    dp[i * stride + j] = dp[(i + 1) * stride + (j + 1)] + 1;
+                else
+                {
+                    let down = dp[(i + 1) * stride + j];
+                    let right = dp[i * stride + (j + 1)];
+                    dp[i * stride + j] = down > right ? down | right;
+                }
+            }
+        }
+        
+        let align = map::create:<int, int>(0);
+        let mut bi = 0;
+        let mut bj = 0;
+        while (bi < m && bj < n)
+        {
+            if (epath[bi] == ppath[bj])
+            {
+                align->map::set(bi, bj);
+                bi += 1;
+                bj += 1;
+            }
+            else if (dp[(bi + 1) * stride + bj] >= dp[bi * stride + (bj + 1)])
+                bi += 1;
+            else
+                bj += 1;
+        }
+        return align;
+    }
+    
+    func _diff_shaders(
+        entity_shaders_dat: array<Toml>,
+        prefab_shaders_dat: array<Toml>)=> option<Toml>
+    {
+        let m = entity_shaders_dat->len;
+        let n = prefab_shaders_dat->len;
+        
+        let epath = []mut: vec<string>;
+        for (let sdat : entity_shaders_dat)
+            epath->add(_shader_path(sdat));
+        let ppath = []mut: vec<string>;
+        for (let sdat : prefab_shaders_dat)
+            ppath->add(_shader_path(sdat));
+            
+        let align = _align_shaders(epath, ppath);
+        
+        let result = new_array();
+        let mut matched = 0;
+        let mut uniform_changed = false;
+        
+        for (let mut i = 0; i < m; i += 1)
+        {
+            if (align->map::contains(i))
+            {
+                matched += 1;
+                let j = align->map::get(i)->unwrap;
+                let slot = new_table();
+                slot->set("from", j);
+                let psdat = prefab_shaders_dat[j];
+                for (let (uname, uval) : entity_shaders_dat[i]->as_table->or({}))
+                {
+                    if (uname == "path")
+                        continue;
+                    let same = psdat->get(uname)=>> \pv = option::value(_toml_value_equal(uval, pv));->or(false);
+                    if (!same)
+                    {
+                        slot->set(uname, uval);
+                        uniform_changed = true;
+                    }
+                }
+                result->push(slot);
+            }
+            else
+                result->push(entity_shaders_dat[i]->clone());
+        }
+        
+        let any_change = (matched < m) || (matched < n) || uniform_changed;
+        return any_change ? option::value(result) | option::none;
+    }
+    
+    // public：编辑器侧 save_prefab 落盘预设体变体时复用此差异。
+    public func diff(entity_dat: Toml, prefab_entity_dat: Toml)=> Toml
+    {
+        let diff_dat = new_table();
+        
+        // Always keep the entity's own name.
+        diff_dat->set("name", entity_dat["name"]);
+        
+        let entity_components_dat =
+            entity_dat->get("components")=>> \v = v->as_table;->or({});
+        let prefab_components_dat =
+            prefab_entity_dat->get("components")=>> \v = v->as_table;->or({});
+            
+        // Components.
+        do _diff_components(entity_components_dat, prefab_components_dat)
+            ->> \cdiff = diff_dat->set("components", cdiff);
+            ;
+            
+        do _diff_removed_components(entity_components_dat, prefab_components_dat)
+            ->> \cdiff = diff_dat->set("removed_components", cdiff);
+            ;
+            
+        // -- textures --
+        let entity_textures_dat =
+            entity_dat->get("textures")=>> \v = v->as_table;->or({});
+        let prefab_textures_dat =
+            prefab_entity_dat->get("textures")=>> \v = v->as_table;->or({});
+            
+        do _diff_textures(entity_textures_dat, prefab_textures_dat)
+            ->> \tdiff = diff_dat->set("textures", tdiff);
+            ;
+        do _diff_removed_textures(entity_textures_dat, prefab_textures_dat)
+            ->> \tdiff = diff_dat->set("removed_textures", tdiff);
+            ;
+            
+        // -- shaders --
+        let entity_shaders_dat =
+            entity_dat->get("shaders")=>> \v = v->as_array;->or([]);
+        let prefab_shaders_dat =
+            prefab_entity_dat->get("shaders")=>> \v = v->as_array;->or([]);
+            
+        do _diff_shaders(entity_shaders_dat, prefab_shaders_dat)
+            ->> \sdiff = diff_dat->set("shaders", sdiff);
+            ;
+
+        // -- shape --
+        // 与预设体路径不同才记录；空串哨兵表示实体移除了预设体的模型
+        //（apply 时以此擦除键，restore 不再加载模型）。
+        let entity_shape_path =
+            entity_dat->get("shape")=>> \v = v->as_string;->or("");
+        let prefab_shape_path =
+            prefab_entity_dat->get("shape")=>> \v = v->as_string;->or("");
+
+        if (entity_shape_path != prefab_shape_path)
+            diff_dat->set("shape", entity_shape_path);
+
+        return diff_dat;
+    }
+    
+    public func apply(modifing_exist_dat: Toml, patching_dat: Toml)
+    {
+        // 1. Name - always take from patch.
+        modifing_exist_dat->set("name", patching_dat["name"]);
+        
+        // 2. Components.
+        // 2a. Remove removed components.
+        match (patching_dat->get("removed_components")=>> \v = v->as_array;)
+        {
+            none?;
+            value(removed)?
+                for (let rc : removed)
+                    modifing_exist_dat["components"]->erase_key(rc->as_string->unwrap);
+        }
+        
+        // 2b. Merge component diffs.
+        match (patching_dat->get("components")=>> \v = v->as_table;)
+        {
+            none?;
+            value(cdiffs)?
+                for (let (ctype, cdiff) : cdiffs)
+                {
+                    if (modifing_exist_dat["components"]->contains(ctype))
+                    {
+                        let exist_comp = modifing_exist_dat["components"][ctype];
+                        for (let (fname, fval) : cdiff->as_table->or({}))
+                            exist_comp->set(fname, fval);
+                    }
+                    else
+                        modifing_exist_dat["components"]->set(ctype, cdiff);
+                }
+        }
+        
+        // 3. Textures.
+        // 3a. Remove removed textures (by matching path values).
+        match (patching_dat->get("removed_textures")=>> \v = v->as_array;)
+        {
+            none?;
+            value(removed)?
+            {
+                let exist_textures = modifing_exist_dat["textures"]->as_table->or({});
+                for (let rpath : removed)
+                {
+                    let path = rpath->as_string->or("");
+                    let to_remove = []mut: vec<string>;
+                    for (let (tpass, tpath) : exist_textures)
+                    {
+                        if (tpath->as_string->or("") == path)
+                            to_remove->add(tpass);
+                    }
+                    for (let tpass : to_remove)
+                        modifing_exist_dat["textures"]->erase_key(tpass);
+                }
+            }
+        }
+        
+        // 3b. Apply texture diffs.
+        match (patching_dat->get("textures")=>> \v = v->as_table;)
+        {
+            none?;
+            value(tdiffs)?
+                for (let (tpass, tpath) : tdiffs)
+                    modifing_exist_dat["textures"]->set(tpass, tpath);
+        }
+        
+        // 4. Shaders.
+        match (patching_dat->get("shaders")=>> \v = v->as_array;)
+        {
+            none?;
+            value(sdiffs)?
+            {
+                let exist_shaders =
+                    modifing_exist_dat->get("shaders")=>> \v = v->as_array;->or([]);
+                    
+                let result_shaders = new_array();
+                for (let sdat : sdiffs)
+                {
+                    match (sdat->get("from"))
+                    {
+                        value(from_val)?
+                        {
+                            let j = from_val->as_int->unwrap;
+                            let base = exist_shaders[j]->clone();
+                            for (let (uname, uval) : sdat->as_table->or({}))
+                            {
+                                if (uname == "from")
+                                    continue;
+                                base->set(uname, uval);
+                            }
+                            result_shaders->push(base);
+                        }
+                        none?
+                            result_shaders->push(sdat);
+                    }
+                }
+                modifing_exist_dat->set("shaders", result_shaders);
+            }
+        }
+
+        // 5. Shape.
+        // Empty string means the shape was removed relative to the prefab.
+        match (patching_dat->get("shape")=>> \v = v->as_string;)
+        {
+            none?;
+            value(shape_path)?
+            {
+                if (shape_path == "")
+                    modifing_exist_dat->erase_key("shape");
+                else
+                    modifing_exist_dat->set("shape", shape_path);
+            }
+        }
+    }
+    
+    public func load(engine_path: string)=> option<Toml>
+    {
+        try! prefab_content = file::readall(engine_path);
+        try! mut prefab_dat = parse(prefab_content)->okay;
+        
+        match (prefab_dat->get("prefab"))
+        {
+            none?;
+            value(prefab_path)?
+            {
+                let patched_dat_may_none = try!{
+                    try! path = prefab_path->as_string;
+                    try! parent_prefab_dat = Entity::load(path);
+                    
+                    apply(parent_prefab_dat, prefab_dat);
+                    return_value! parent_prefab_dat;
+                };
+                
+                match (patched_dat_may_none)
+                {
+                    none?;
+                    value(patched_dat)?
+                    {
+                        patched_dat->erase_key("prefab");
+                        prefab_dat = patched_dat;
+                    }
+                }
+            }
+        }
+        return_value! prefab_dat;
+    }
+    
+    // 完整保存实体：无论实体当前是否挂有预设体，都输出完整数据
+    //（不含 prefab 差异分支）。落盘预设体文件时必须用它——编辑器的
+    // add/remove component 走命令缓冲延迟落实，保存时无法可靠地先
+    // 解除旧预设体关系再序列化。
+    func saveFull(e: entity)=> Toml
+    {
+        let toml = new_table();
+
+        // 0. Save name.
+        toml->set("name", e->internal::name);
+
+        // 1. Walk through all components.
+        toml->set("components", _save_components(e));
+
+        // 2. Save shaders.
+        toml->set("shaders", _save_shaders(e));
+
+        // 3. Save textures.
+        toml->set("textures", _save_textures(e));
+
+        // 4. Save shape.
+        do _save_shape(e)->> \shape_path = toml->set("shape", shape_path);
+        ;
+
+        return toml;
+    }
+
+    // 与 save_full 同为完整数据，供编辑器侧（JEEditor::Saving::Entity）转发使用
+    public func save_full(e: entity)=> Toml
+    {
+        return saveFull(e);
+    }
+
+    public func save(e: entity)=> Toml
+    {
+        let toml = saveFull(e);
+
+        // Calc diff by prefab data.
+        match (e->internal::get_prefab_path())
+        {
+            none?
+                return toml;
+            value(prefab_path)?
+            {
+                let diff_dat_may_none = try!{
+                    try! prefab_dat = Entity::load(prefab_path);
+
+                    let diff_dat = diff(toml, prefab_dat);
+                    diff_dat->set("prefab", prefab_path);
+
+                    return_value! diff_dat;
+                };
+
+                match (diff_dat_may_none)
+                {
+                    value(diff_dat)?
+                        return diff_dat;
+                    none?
+                        // 尽管无法读取预设体数据，但是依然保留预设体关系
+                        toml->set("prefab", prefab_path);
+                }
+            }
+        }
+        return toml;
+    }
+    
+    // 贴图序列化表中是否记录了指定路径（任意通道）
+    func _texture_paths_contains(
+        textures_dat: dict<string, Toml>, path: string)=> bool
+    {
+        for (let (_, tpath) : textures_dat)
+        {
+            if (tpath->as_string->or("") == path)
+                return true;
+        }
+        return false;
+    }
+
+    // 按序列化数据重建实体的着色器组：逐条 shader::load 并回填 uniforms，
+    // 整组 set_shaders；加载失败的条目跳过（restore 与 refresh 共用）
+    func _apply_shaders_dat(
+        e: entity, universe: option<universe>,
+        shaders_dat: array<Toml>)=> void
+    {
+        let shaders = []mut: vec<shader>;
+        for (let sdat : shaders_dat)
+        {
+            do try!{
+                try! shader_path = sdat->get("path")=>> \v = v->as_string;;
+                try! sinst = shader::load(universe, shader_path);
+
+                for (let (uname, uval) : sdat->as_table->or({}))
+                {
+                    if (uval->is_int)
+                        sinst->set_uniform(uname, uval->as_int->unwrap);
+                    else if (uval->is_float)
+                        sinst->set_uniform(uname, uval->as_float->unwrap);
+                    else if (uval->is_array)
+                    {
+                        let cnt = uval->len;
+                        if (cnt == 2 || cnt == 3 || cnt == 4)
+                        {
+                            if (uval[0]->is_int)
+                            {
+                                if (cnt == 2)
+                                    sinst->set_uniform(uname, (uval[0]->as_int->unwrap, uval[1]->as_int->unwrap));
+                                else if (cnt == 3)
+                                    sinst->set_uniform(uname, (uval[0]->as_int->unwrap, uval[1]->as_int->unwrap, uval[2]->as_int->unwrap));
+                                else
+                                    sinst->set_uniform(uname, (uval[0]->as_int->unwrap, uval[1]->as_int->unwrap, uval[2]->as_int->unwrap, uval[3]->as_int->unwrap));
+                            }
+                            else
+                            {
+                                if (cnt == 2)
+                                    sinst->set_uniform(uname, (uval[0]->as_float->unwrap, uval[1]->as_float->unwrap));
+                                else if (cnt == 3)
+                                    sinst->set_uniform(uname, (uval[0]->as_float->unwrap, uval[1]->as_float->unwrap, uval[2]->as_float->unwrap));
+                                else
+                                    sinst->set_uniform(uname, (uval[0]->as_float->unwrap, uval[1]->as_float->unwrap, uval[2]->as_float->unwrap, uval[3]->as_float->unwrap));
+                            }
+                        }
+                    }
+                }
+
+                shaders->add(sinst);
+                return_value!;
+            };
+        }
+
+        e->set_shaders(shaders->to_array());
+    }
+
+    // 把组件成员的序列化值逐条写回组件实例（数据未记录的成员保持现值，
+    // 无法解析的成员跳过）；restore 与 refresh 共用
+    func _apply_component_dat(cinst: component, cdat: Toml)=> void
+    {
+        for (let (mname, mdat) : cdat->as_table->or({}))
+        {
+            do try!{
+                try! mdata = mdat->as_string;
+                try! (mtype, minst) = cinst->get_member(mname);
+
+                do towoo::unsafe::dynamic_parser::restore(
+                    mtype, minst, mdata);
+                return_value!;
+            };
+        }
+    }
+
+    // 就地把既有实体从 old_dat 描述的状态迁移到 new_dat 描述的状态
+    //（预设体实例同步的 redo/undo 共用，两个方向对称）：
+    // - 名称按 new_dat 设置；
+    // - 组件：new_dat 记录的组件实体缺失则补建（add_component 返回的
+    //   暂存实例同帧即可写入成员），再逐成员回填；old_dat 有、new_dat
+    //   无、实体身上还在的组件移除（预设体更新后遗留的旧组件）；
+    // - 贴图：当前绑定中路径属于 old_dat 记录且 new_dat 不再记录的
+    //   通道解绑，再按 new_dat 绑定（加载失败保持旧绑定）；
+    // - 着色器：按 new_dat 整组重建（_apply_shaders_dat）；
+    // - 模型：new_dat 有则设置；old_dat 有、new_dat 无且实体当前有则
+    //   移除。
+    // 序列化数据不含 Editor:: 组件，移除判定不会波及编辑器内部组件；
+    // 与 restore 一致，无路径的 builtin 着色器/模型不参与序列化。
+    public func refresh(w: world, e: entity, old_dat: Toml, new_dat: Toml)=> void
+    {
+        let universe = option::value(w->get_universe);
+
+        // 1. Name.
+        match (new_dat->get("name")=>> \v = v->as_string;)
+        {
+            none?;
+            value(name)?
+                e->internal::set_name(name);
+        }
+
+        // 2. Components.
+        let new_components =
+            new_dat->get("components")=>> \v = v->as_table;->or({});
+        let old_components =
+            old_dat->get("components")=>> \v = v->as_table;->or({});
+
+        for (let (ctype_name, cdat) : new_components)
+        {
+            match (typeinfo::load(ctype_name))
+            {
+                none?
+                    logerr(F"刷新实体：无法解析组件类型 \"{ctype_name}\"");
+                value(ctype)?
+                    match (e->get_component(ctype))
+                    {
+                        // 已有组件就地写成员；缺失组件走 add_component
+                        // 返回的暂存实例（命令缓冲未落实前 get_component
+                        // 查不到，见 ModifyPrefab 的说明）
+                        value(cinst)?
+                            _apply_component_dat(cinst, cdat);
+                        none?
+                            _apply_component_dat(
+                                e->add_component(ctype), cdat);
+                    }
+            }
+        }
+
+        for (let (ctype_name, _) : old_components)
+        {
+            if (!new_components->contains(ctype_name))
+            {
+                match (typeinfo::load(ctype_name))
+                {
+                    none?;
+                    value(ctype)?
+                        if (e->get_component(ctype)->is_value)
+                            do e->remove_component(ctype);
+                }
+            }
+        }
+
+        // 3. Textures.
+        let new_textures =
+            new_dat->get("textures")=>> \v = v->as_table;->or({});
+        let old_textures =
+            old_dat->get("textures")=>> \v = v->as_table;->or({});
+
+        for (let (tpass, tinst) : e->get_textures)
+        {
+            match (tinst->path)
+            {
+                none?;
+                value(path)?
+                    if (_texture_paths_contains(old_textures, path)
+                        && !_texture_paths_contains(new_textures, path))
+                        e->bind_texture(
+                            tpass, option::none: option<texture>);
+            }
+        }
+        for (let (tpass, tpath) : new_textures)
+        {
+            do try!{
+                try! texture_path = tpath->as_string;
+
+                match (texture::load(universe, texture_path))
+                {
+                    // 加载失败保持旧绑定
+                    none?;
+                    value(tex)?
+                        e->bind_texture(
+                            tpass as int, option::value(tex));
+                }
+                return_value!;
+            };
+        }
+
+        // 4. Shaders.
+        _apply_shaders_dat(
+            e, universe,
+            new_dat->get("shaders")=>> \v = v->as_array;->or([]));
+
+        // 5. Shape.
+        match (new_dat->get("shape")=>> \v = v->as_string;)
+        {
+            value(shape_path)?
+                e->set_shape(vertex::load(universe, shape_path));
+            none?
+                match (old_dat->get("shape")=>> \v = v->as_string;)
+                {
+                    none?;
+                    value(_)?
+                        if (e->get_shape->is_value)
+                            e->set_shape(option::none: option<vertex>);
+                }
+        }
+    }
+
+    public func restore(w: world, edat: Toml)=> entity
+    {
+        let component_dats =
+            edat->get("components")=>> \v = v->as_table;->or({})->iter
+                |> filter_map(
+                    func((tname, tdat))
+                    {
+                        try! tinfo = typeinfo::load(tname);
+                        return_value! (tinfo, tdat);
+                    })
+                |> collect
+                ;
+                
+        let universe = option::value(w->get_universe);
+
+        // Create entity.
+        let e = w->add_entity(
+            component_dats->> \(ctype, _) = ctype;);
+            
+        // Apply component data.
+        for (let (ctype, cdat) : component_dats)
+        {
+            do try!{
+                let cinst = e->get_component(ctype)->unwrap;
+                for (let (mname, mdat) : cdat->as_table->or({}))
+                {
+                    try! mdata = mdat->as_string;
+                    try! (mtype, minst) = cinst->get_member(mname);
+                    
+                    do towoo::unsafe::dynamic_parser::restore(
+                        mtype, minst, mdata);
+                }
+                return_value!;
+            };
+        }
+        
+        // Apply textures.
+        let textures_dat = edat->get("textures")
+            =>> \v = v->as_table;->or({});
+
+        for (let (tpass, tpath) : textures_dat)
+        {
+            do try!{
+                try! texture_path = tpath->as_string;
+
+                e->bind_texture(
+                    tpass as int, 
+                    texture::load(universe, texture_path));
+
+                return_value!;
+            };
+        }
+
+        // Apply shape.
+        // set_shape only takes effect when the entity has the
+        // Renderer::Shape component, which is created above from
+        // the components table.
+        match (edat->get("shape")=>> \v = v->as_string;)
+        {
+            none?;
+            value(shape_path)?
+                e->set_shape(vertex::load(universe, shape_path));
+        }
+
+        // Apply shaders.
+        _apply_shaders_dat(
+            e, universe,
+            edat->get("shaders")=>> \v = v->as_array;->or([]));
+
+        return e;
+    }
+}

@@ -6,9 +6,15 @@
 
 #include <list>
 #include <optional>
+#include <unordered_map>
 
-static std::atomic_flag _jewo_log_buffer_mx = {};
-static std::list<std::pair<int, std::string>> _jewo_log_buffer;
+struct _jewo_log_channel
+{
+    std::atomic_flag                        m_mx;
+
+    je_log_regid_t                          m_fact_log_id;
+    std::list<std::pair<int, std::string>>  m_buffer;
+};
 
 WOORT_API woort_api wojeapi_get_current_platform(void)
 {
@@ -112,7 +118,7 @@ WOORT_API woort_api wojeapi_file_cache_read_all(void)
 
 WOORT_API woort_api wojeapi_mark_shared_glresource_outdated(void)
 {
-    auto* uhost = jegl_uhost_get_or_create_for_universe(woort_pointer(0), nullptr);
+    auto* uhost = jegl_uhost_get_or_create_for_universe(static_cast<je_GameUniverse*>(woort_pointer(0)), nullptr);
     return woort_ret_bool(
         jegl_mark_shared_resources_outdated(
             jegl_uhost_get_context(uhost),
@@ -121,10 +127,15 @@ WOORT_API woort_api wojeapi_mark_shared_glresource_outdated(void)
 
 WOORT_API woort_api wojeapi_init_graphic_pipeline_for_editor(void)
 {
-    auto* uhost = jegl_uhost_get_or_create_for_universe(woort_pointer(0), nullptr);
+    auto* uhost = jegl_uhost_get_or_create_for_universe(static_cast<je_GameUniverse*>(woort_pointer(0)), nullptr);
     jegl_uhost_set_skip_behavior(uhost, false);
 
     return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_get_runtime_path(void)
+{
+    return woort_ret_string(jeecs_file_get_runtime_path());
 }
 
 WOORT_API woort_api wojeapi_set_runtime_path(void)
@@ -192,35 +203,40 @@ WOORT_API woort_api wojeapi_crc64_string(void)
 
 WOORT_API woort_api wojeapi_register_log_callback(void)
 {
-    std::function<void(int, const char*)>* callbacks =
-        new std::function<void(int, const char*)>([&](int level, const char* msg)
-            {
-                while (_jewo_log_buffer_mx.test_and_set());
-                _jewo_log_buffer.push_back({ level, msg });
-                _jewo_log_buffer_mx.clear(); });
+    auto* channel = new _jewo_log_channel();
+    channel->m_mx.clear();
 
-    return woort_ret_int(
-        static_cast<woort_Int>(
-            je_log_register_callback(
-                [](int level, const char* msg, void* func)
-                {
-                    (*(std::function<void(int, const char*)> *)func)(level, msg);
-                },
-                callbacks)));
+    channel->m_fact_log_id = je_log_register_callback(
+        [](int level, const char* msg, void* userdata)
+        {
+            auto* const channel = static_cast<_jewo_log_channel*>(userdata);
+            while (channel->m_mx.test_and_set());
+            do
+            {
+                channel->m_buffer.push_back({ level, msg });
+
+            } while (0);
+            channel->m_mx.clear();
+        },
+        channel);
+
+    return woort_ret_pointer(channel);
 }
 
 WOORT_API woort_api wojeapi_unregister_log_callback(void)
 {
-    auto func = static_cast<std::function<void(int, const char*)> *>(
-        je_log_unregister_callback(
-            static_cast<je_log_regid_t>(woort_int(0))));
-    delete func;
+    auto* const channel = static_cast<_jewo_log_channel*>(woort_pointer(0));
+    (void)je_log_unregister_callback(channel->m_fact_log_id);
+
+    delete channel;
 
     return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_get_all_logs(void)
 {
+    auto* const channel = static_cast<_jewo_log_channel*>(woort_pointer(0));
+
     woort_value s;
     if (!woort_push_reserve(2, &s))
         return woort_ret_panic("Stack overflow.");
@@ -232,11 +248,12 @@ WOORT_API woort_api wojeapi_get_all_logs(void)
 
     std::list<std::pair<int, std::string>> logs;
 
-    while (_jewo_log_buffer_mx.test_and_set())
-        ;
-    logs.swap(_jewo_log_buffer);
-    assert(_jewo_log_buffer.empty());
-    _jewo_log_buffer_mx.clear();
+    while (channel->m_mx.test_and_set());
+    do
+    {
+        logs.swap(channel->m_buffer);
+    } while (0);
+    channel->m_mx.clear();
 
     for (auto& [i, s] : logs)
     {
@@ -266,52 +283,6 @@ WOORT_API woort_api wojeapi_unload_module(void)
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_apply_camera_framebuf_setting(void)
-{
-    jeecs::game_entity* const entity = static_cast<jeecs::game_entity*>(woort_gcpointer(0));
-    if (jeecs::Camera::RendToFramebuffer* rbf = entity->get_component<jeecs::Camera::RendToFramebuffer>())
-    {
-        rbf->framebuffer = jeecs::graphic::framebuffer::create(
-            (size_t)woort_int(1),
-            (size_t)woort_int(2),
-            {
-                jegl_texture::format::RGBA,
-            },
-            true);
-    }
-    else
-        jeecs::debug::logfatal("No RendToFramebuffer in specify entity when 'wojeapi_apply_camera_framebuf_setting'.");
-    return woort_ret_void();
-}
-
-WOORT_API woort_api wojeapi_get_framebuf_texture(void)
-{
-    jeecs::game_entity* const entity = static_cast<jeecs::game_entity*>(woort_gcpointer(0));
-    if (jeecs::Camera::RendToFramebuffer* rbf = entity->get_component<jeecs::Camera::RendToFramebuffer>())
-    {
-        if (!rbf->framebuffer.has_value())
-            return woort_ret_option_none();
-
-        auto tex = rbf->framebuffer.value()->get_attachment((size_t)woort_int(1));
-        if (tex.has_value())
-            return woort_ret_option_gchandle(
-                new jeecs::basic::resource<jeecs::graphic::texture>(tex.value()),
-                WOORT_IGNORE,
-                [](void* ptr)
-                {
-                    delete (jeecs::basic::resource<jeecs::graphic::texture> *)ptr;
-                },
-                nullptr);
-
-        jeecs::debug::logerr("RendToFramebuffer(%p).framebuffer not contain attach(%zu) in entity when 'wojeapi_get_framebuf_texture'.",
-            rbf, (size_t)woort_int(1));
-        return woort_ret_option_none();
-    }
-    else
-        jeecs::debug::logerr("No RendToFramebuffer in specify entity when 'wojeapi_get_framebuf_texture'.");
-    return woort_ret_option_none();
-}
-
 // ECS UNIVERSE
 WOORT_API woort_api wojeapi_create_universe(void)
 {
@@ -320,29 +291,37 @@ WOORT_API woort_api wojeapi_create_universe(void)
 
 WOORT_API woort_api wojeapi_close_universe(void)
 {
-    je_ecs_universe_destroy(woort_pointer(0));
+    je_GameUniverse* const universe = 
+        static_cast<je_GameUniverse*>(woort_pointer(0));
+
+    woort_vm* const last = woort_vm_swap(nullptr);
+    {
+        je_ecs_universe_destroy(universe);
+    }
+    (void)woort_vm_swap(last);
+
     return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_get_universe_from_world(void)
 {
-    void* universe = je_ecs_world_in_universe(woort_pointer(0));
+    je_GameUniverse* universe = je_ecs_world_in_universe(static_cast<je_GameWorld*>(woort_pointer(0)));
     return woort_ret_pointer(universe);
 }
 
 WOORT_API woort_api wojeapi_universe_extend_life(void)
 {
-    jeecs::game_universe(woort_pointer(0)).grow();
+    jeecs::game_universe(static_cast<je_GameUniverse*>(woort_pointer(0))).grow();
     return woort_ret_void();
 }
 WOORT_API woort_api wojeapi_universe_reduce_life(void)
 {
-    jeecs::game_universe(woort_pointer(0)).trim();
+    jeecs::game_universe(static_cast<je_GameUniverse*>(woort_pointer(0))).trim();
     return woort_ret_void();
 }
 WOORT_API woort_api wojeapi_universe_wait(void)
 {
-    jeecs::game_universe u(woort_pointer(0));
+    jeecs::game_universe u(static_cast<je_GameUniverse*>(woort_pointer(0)));
     woort_vm* const last = woort_vm_swap(nullptr);
     {
         u.wait();
@@ -359,43 +338,49 @@ WOORT_API woort_api wojeapi_time(void)
 
 WOORT_API woort_api wojeapi_universe_get_frame_deltatime(void)
 {
-    return woort_ret_real(je_ecs_universe_get_frame_deltatime(woort_pointer(0)));
+    return woort_ret_real(je_ecs_universe_get_frame_deltatime(
+        static_cast<je_GameUniverse*>(woort_pointer(0))));
 }
 
 WOORT_API woort_api wojeapi_universe_set_frame_deltatime(void)
 {
-    je_ecs_universe_set_frame_deltatime(woort_pointer(0), woort_real(1));
+    je_ecs_universe_set_frame_deltatime(
+        static_cast<je_GameUniverse*>(woort_pointer(0)), woort_real(1));
     return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_universe_get_max_deltatime(void)
 {
-    return woort_ret_real(je_ecs_universe_get_max_deltatime(woort_pointer(0)));
+    return woort_ret_real(je_ecs_universe_get_max_deltatime(
+        static_cast<je_GameUniverse*>(woort_pointer(0))));
 }
 WOORT_API woort_api wojeapi_universe_set_max_deltatime(void)
 {
-    je_ecs_universe_set_max_deltatime(woort_pointer(0), woort_real(1));
+    je_ecs_universe_set_max_deltatime(
+        static_cast<je_GameUniverse*>(woort_pointer(0)), woort_real(1));
     return woort_ret_void();
 }
 WOORT_API woort_api wojeapi_universe_get_timescale(void)
 {
-    return woort_ret_real(je_ecs_universe_get_time_scale(woort_pointer(0)));
+    return woort_ret_real(je_ecs_universe_get_time_scale(
+        static_cast<je_GameUniverse*>(woort_pointer(0))));
 }
 WOORT_API woort_api wojeapi_universe_set_timescale(void)
 {
-    je_ecs_universe_set_time_scale(woort_pointer(0), woort_real(1));
+    je_ecs_universe_set_time_scale(
+        static_cast<je_GameUniverse*>(woort_pointer(0)), woort_real(1));
     return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_create_world_in_universe(void)
 {
     return woort_ret_pointer(
-        jeecs::game_universe(woort_pointer(0)).create_world().handle());
+        jeecs::game_universe(static_cast<je_GameUniverse*>(woort_pointer(0))).create_world().handle());
 }
 
 WOORT_API woort_api wojeapi_get_all_worlds_in_universe(void)
 {
-    void* universe = woort_pointer(0);
+    je_GameUniverse* universe = static_cast<je_GameUniverse*>(woort_pointer(0));
 
     woort_value s;
 
@@ -423,24 +408,13 @@ WOORT_API woort_api wojeapi_get_all_worlds_in_universe(void)
 // ECS WORLD
 WOORT_API woort_api wojeapi_close_world(void)
 {
-    jeecs::game_world(woort_pointer(0)).close();
+    jeecs::game_world(static_cast<je_GameWorld*>(woort_pointer(0))).close();
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_set_able_world(void)
+WOORT_API woort_api wojeapi_set_enable_world(void)
 {
-    jeecs::game_world(woort_pointer(0)).set_able(woort_bool(1));
-    return woort_ret_void();
-}
-
-WOORT_API woort_api wojeapi_get_world_name(void)
-{
-    return woort_ret_string(jedbg_get_world_name(woort_pointer(0)));
-}
-
-WOORT_API woort_api wojeapi_set_world_name(void)
-{
-    jedbg_set_world_name(woort_pointer(0), woort_string(1));
+    jeecs::game_world(static_cast<je_GameWorld*>(woort_pointer(0))).set_enable(woort_bool(1));
     return woort_ret_void();
 }
 
@@ -450,9 +424,9 @@ WOORT_API woort_api wojeapi_add_system_to_world(void)
     extern("libjoyecs", "wojeapi_add_system_to_world")
     func add_system(self: world, systype : typeinfo) = > bool;
     */
-    jeecs::game_world gworld(woort_pointer(0));
-    const jeecs::typing::type_info* system_type =
-        static_cast<const jeecs::typing::type_info*>(woort_pointer(1));
+    jeecs::game_world gworld(static_cast<je_GameWorld*>(woort_pointer(0)));
+    const je_TypeInfo* system_type =
+        static_cast<const je_TypeInfo*>(woort_pointer(1));
 
     bool added;
 
@@ -467,9 +441,9 @@ WOORT_API woort_api wojeapi_add_system_to_world(void)
 
 WOORT_API woort_api wojeapi_get_system_from_world(void)
 {
-    jeecs::game_world gworld(woort_pointer(0));
-    const jeecs::typing::type_info* system_type =
-        static_cast<const jeecs::typing::type_info*>(woort_pointer(1));
+    jeecs::game_world gworld(static_cast<je_GameWorld*>(woort_pointer(0)));
+    const je_TypeInfo* system_type =
+        static_cast<const je_TypeInfo*>(woort_pointer(1));
 
     auto* const system_addr = gworld.get_system(system_type->m_id);
 
@@ -485,22 +459,23 @@ WOORT_API woort_api wojeapi_remove_system_from_world(void)
     extern("libjoyecs", "wojeapi_remove_system_from_world")
     func remove_system(self: world, sysinfo: typeinfo)=> void;
     */
-    jeecs::game_world gworld(woort_pointer(0));
-    const jeecs::typing::type_info* system_type =
-        static_cast<const jeecs::typing::type_info*>(woort_pointer(1));
+    jeecs::game_world gworld(static_cast<je_GameWorld*>(woort_pointer(0)));
+    const je_TypeInfo* system_type =
+        static_cast<const je_TypeInfo*>(woort_pointer(1));
 
     gworld.remove_system(system_type->m_id);
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_get_all_systems_from_world(void)
+WOORT_API woort_api wojeapi_world_get_all_systems(void)
 {
     /*
-    extern("libjoyecs", "wojeapi_get_all_systems_from_world")
+    extern("libjoyecs", "wojeapi_world_get_all_systems")
     private func _get_systems_from_world(self: world, out_result: array<typeinfo>)=> array<typeinfo>;
     */
-    const jeecs::typing::type_info** types =
-        jedbg_get_all_system_attached_in_world(woort_pointer(0));
+    const je_TypeInfo** types =
+        jedbg_get_all_system_attached_in_world(
+            static_cast<je_GameWorld*>(woort_pointer(0)));
 
     woort_value s;
 
@@ -525,10 +500,10 @@ WOORT_API woort_api wojeapi_get_all_systems_from_world(void)
 
 WOORT_API woort_api wojeapi_add_entity_to_world_with_components(void)
 {
-    jeecs::game_world gworld = woort_pointer(0);
+    jeecs::game_world gworld = static_cast<je_GameWorld*>(woort_pointer(0));
     woort_value components_list = 1;
 
-    std::vector<jeecs::typing::typeid_t> components;
+    std::vector<je_TypeId> components;
 
     woort_value s;
     if (!woort_push_reserve(1, &s))
@@ -541,40 +516,43 @@ WOORT_API woort_api wojeapi_add_entity_to_world_with_components(void)
     {
         (void)woort_vec_get(elem, components_list, i);
         components.push_back(
-            static_cast<const jeecs::typing::type_info*>(woort_unbox_pointer(elem))->m_id);
+            static_cast<const je_TypeInfo*>(woort_unbox_pointer(elem))->m_id);
     }
 
     return woort_ret_gchandle(
-        new jeecs::game_entity(gworld._add_entity(components)),
+        new je_GameEntity(gworld._add_entity(components)._m_raw),
         WOORT_IGNORE,
         [](void* ptr)
         {
-            delete (jeecs::game_entity*)ptr;
+            delete (je_GameEntity*)ptr;
         },
         nullptr);
 }
 
 WOORT_API woort_api wojeapi_add_entity_to_world_with_prefab(void)
 {
-    jeecs::game_world gworld(woort_pointer(0));
-    jeecs::game_entity* const prefab_entity = static_cast<jeecs::game_entity*>(woort_gcpointer(1));
+    jeecs::game_world gworld(static_cast<je_GameWorld*>(woort_pointer(0)));
+    je_GameEntity* const prefab_entity = static_cast<je_GameEntity*>(woort_gcpointer(1));
+
+    je_GameEntity* _e = new je_GameEntity{};
+    je_ecs_world_create_entity_with_prefab(gworld.handle(), _e, prefab_entity);
 
     return woort_ret_gchandle(
-        new jeecs::game_entity(gworld.add_entity(*prefab_entity)),
+        _e,
         WOORT_IGNORE,
         [](void* ptr)
         {
-            delete (jeecs::game_entity*)ptr;
+            delete (je_GameEntity*)ptr;
         },
         nullptr);
 }
 
 WOORT_API woort_api wojeapi_add_prefab_to_world_with_components(void)
 {
-    jeecs::game_world gworld(woort_pointer(0));
+    jeecs::game_world gworld(static_cast<je_GameWorld*>(woort_pointer(0)));
     woort_value components_list = 1;
 
-    std::vector<jeecs::typing::typeid_t> components;
+    std::vector<je_TypeId> components;
 
     woort_value s;
 
@@ -587,20 +565,20 @@ WOORT_API woort_api wojeapi_add_prefab_to_world_with_components(void)
     {
         (void)woort_vec_get(elem, components_list, i);
         components.push_back(
-            static_cast<const jeecs::typing::type_info*>(woort_unbox_pointer(elem))->m_id);
+            static_cast<const je_TypeInfo*>(woort_unbox_pointer(elem))->m_id);
     }
 
     return woort_ret_gchandle(
-        new jeecs::game_entity(gworld._add_prefab(components)),
+        new je_GameEntity(gworld._add_prefab(components)._m_raw),
         WOORT_IGNORE,
         [](void* ptr)
         {
-            delete (jeecs::game_entity*)ptr;
+            delete (je_GameEntity*)ptr;
         },
         nullptr);
 }
 
-WOORT_API woort_api wojeapi_get_all_entities_from_world(void)
+WOORT_API woort_api wojeapi_world_get_all_entities(void)
 {
     woort_value s;
 
@@ -614,104 +592,272 @@ WOORT_API woort_api wojeapi_get_all_entities_from_world(void)
 
     void* world_instance = woort_pointer(0);
 
-    auto required_components_len = woort_vec_len(1);
-    std::vector<jeecs::typing::typeid_t> required_components(required_components_len);
+    auto entities = jedbg_get_all_entities_in_world(
+        static_cast<je_GameWorld*>(world_instance));
 
-    for (size_t i = 0; i < required_components_len; ++i)
-    {
-        (void)woort_vec_get(elem, 1, i);
-
-        required_components[i] =
-            static_cast<const jeecs::typing::type_info*>(woort_unbox_pointer(elem))->m_id;
-    }
-
-    auto entities = jedbg_get_all_entities_in_world(world_instance);
     auto entity_iter = entities;
 
     while (*entity_iter)
     {
         auto* current_e = *(entity_iter++);
-
-        bool has_required = true;
-        for (auto& required_component : required_components)
-        {
-            if (nullptr == je_ecs_world_entity_get_component(current_e, required_component))
+        woort_set_gchandle(
+            elem,
+            current_e,
+            WOORT_IGNORE,
+            [](void* entity_ptr)
             {
-                jedbg_free_entity(current_e);
-                has_required = false;
-                break;
-            }
-        }
-
-        if (has_required)
-        {
-            woort_set_gchandle(
-                elem,
-                current_e,
-                WOORT_IGNORE,
-                [](void* entity_ptr)
-                {
-                    jedbg_free_entity((jeecs::game_entity*)entity_ptr);
-                },
-                nullptr);
-            woort_vec_push(out_arr, elem);
-        }
+                jedbg_free_entity((je_GameEntity*)entity_ptr);
+            },
+            nullptr);
+        woort_vec_push(out_arr, elem);
     }
     je_mem_free(entities);
 
     return woort_ret_value(out_arr);
 }
 
+// ===========================================================================
+// Persistent entity selector based on je_RequirementCollection.
+//
+// entity_selector holds a long-lived je_RequirementCollection. It is iterable:
+// iter() produces an entity_selector_iter. The version-change check and the
+// cache refresh happen in native code when the iterator is created (iter),
+// not on every step - so a single `for` loop observes a consistent arch set.
+// ===========================================================================
+struct wo_entity_selector_state
+{
+    je_GameWorld* world = nullptr;
+    je_RequirementCollection collection{};
+    // arch-change version captured at the selector's last refresh.
+    woort_Int arch_version = 0;
+
+    ~wo_entity_selector_state()
+    {
+        delete collection.m_collected_requirement;
+    }
+};
+
+// Per-iteration cursor. Lives only for the duration of a single `for` pass;
+// holds a non-owning back-pointer to the selector (kept alive by woolang GC
+// for at least as long as the loop is running).
+struct wo_entity_iter_state
+{
+    wo_entity_selector_state* selector = nullptr;
+    size_t arch_index = 0;
+    je_Chunk* chunk = nullptr;
+    je_EntityIdInChunk entity_index = 0;
+};
+
+// woort_pointer(0) = world
+// woort_vec(1)    = array<requirement>
+//   requirement is a union:
+//     contains(typeinfo)     -> JE_COMPONENT_REQUIRE_CONTAINS
+//     except(typeinfo)       -> JE_COMPONENT_REQUIRE_EXCEPT
+//     anyof(array<typeinfo>) -> JE_COMPONENT_REQUIRE_ANYOF_0 + group,
+//                                each anyof(...) entry gets its own group
+WOORT_API woort_api wojeapi_entity_selector_create(void)
+{
+    je_GameWorld* const world = static_cast<je_GameWorld*>(woort_pointer(0));
+
+    const size_t requirement_count = woort_vec_len(1);
+    std::vector<je_ComponentRequirement> requirements;
+    requirements.reserve(requirement_count);
+
+    if (requirement_count > 0)
+    {
+        woort_value s;
+        if (!woort_push_reserve(2, &s))
+            return woort_ret_panic("Stack overflow.");
+
+        const woort_value requirement_info = s + 0;
+        const woort_value elem = s + 1;
+
+        int anyof_group = 0;
+
+        for (size_t i = 0; i < requirement_count; ++i)
+        {
+            (void)woort_vec_get(requirement_info, 1, i);
+
+            const woort_Int variant = woort_union_get(elem, requirement_info);
+            switch (variant)
+            {
+            case 0: // contains(typeinfo)
+            {
+                const auto* typeinfo =
+                    static_cast<const je_TypeInfo*>(woort_pointer(elem));
+                requirements.push_back(je_ComponentRequirement{
+                    JE_COMPONENT_REQUIRE_CONTAINS, typeinfo->m_id });
+                break;
+            }
+            case 1: // except(typeinfo)
+            {
+                const auto* typeinfo =
+                    static_cast<const je_TypeInfo*>(woort_pointer(elem));
+                requirements.push_back(je_ComponentRequirement{
+                    JE_COMPONENT_REQUIRE_EXCEPT, typeinfo->m_id });
+                break;
+            }
+            case 2: // anyof(array<typeinfo>)
+            {
+                const size_t anyof_count = woort_vec_len(elem);
+                for (size_t j = 0; j < anyof_count; ++j)
+                {
+                    (void)woort_vec_get(requirement_info, elem, j);
+                    const auto* typeinfo =
+                        static_cast<const je_TypeInfo*>(woort_pointer(requirement_info));
+                    requirements.push_back(je_ComponentRequirement{
+                        JE_COMPONENT_REQUIRE_ANYOF_0 + anyof_group,
+                        typeinfo->m_id });
+                }
+                ++anyof_group;
+                break;
+            }
+            default:
+                return woort_ret_panic("Unknown requirement union variant.");
+            }
+        }
+    }
+
+    auto* state = new wo_entity_selector_state{};
+    state->world = world;
+    state->collection.m_collected_requirement = je_ecs_collect_requirements(
+        requirements.data(), 0, requirements.size());
+    je_ecs_world_update_collection(world, &state->collection);
+    state->arch_version =
+        (woort_Int)je_ecs_world_get_arch_change_version(world);
+
+    return woort_ret_gchandle(
+        state,
+        WOORT_IGNORE,
+        [](void* p)
+        { delete static_cast<wo_entity_selector_state*>(p); },
+        nullptr);
+}
+
+// Produce an iterator over the selector. This is where the arch-type change
+// check runs: if the world's arch-change version differs from the version
+// captured at the selector's last refresh, the cached arch info is refreshed
+// before the cursor starts.
+WOORT_API woort_api wojeapi_entity_selector_iter(void)
+{
+    auto* selector = static_cast<wo_entity_selector_state*>(woort_gcpointer(0));
+
+    const woort_Int current_version =
+        (woort_Int)je_ecs_world_get_arch_change_version(selector->world);
+    if (current_version != selector->arch_version)
+    {
+        je_ecs_world_update_collection(selector->world, &selector->collection);
+        selector->arch_version = current_version;
+    }
+
+    auto* iter = new wo_entity_iter_state{};
+    iter->selector = selector;
+
+    return woort_ret_gchandle(
+        iter,
+        WOORT_IGNORE,
+        [](void* p)
+        { delete static_cast<wo_entity_iter_state*>(p); },
+        nullptr);
+}
+
+// Advance the cursor to the next READY entity, or option::none when exhausted.
+WOORT_API woort_api wojeapi_entity_selector_iter_next(void)
+{
+    auto* iter = static_cast<wo_entity_iter_state*>(woort_gcpointer(0));
+    auto& col = iter->selector->collection;
+
+    for (;;)
+    {
+        if (iter->chunk == nullptr)
+        {
+            if (iter->arch_index >= col.m_cached_arch_count)
+                return woort_ret_option_none();
+
+            iter->chunk = je_arch_get_chunk(
+                col.m_cached_archs[iter->arch_index].m_arch);
+            iter->entity_index = 0;
+
+            if (iter->chunk == nullptr)
+            {
+                ++iter->arch_index;
+                continue;
+            }
+        }
+
+        const auto& archinfo = col.m_cached_archs[iter->arch_index];
+        const auto* meta = je_arch_entity_meta_addr_in_chunk(iter->chunk);
+
+        while (iter->entity_index < archinfo.m_entity_count)
+        {
+            if (meta[iter->entity_index].m_stat == JE_ENTITY_STAT_READY)
+            {
+                auto* entity = new je_GameEntity{
+                    iter->chunk,
+                    iter->entity_index,
+                    meta[iter->entity_index].m_version };
+                ++iter->entity_index;
+
+                return woort_ret_option_gchandle(
+                    entity,
+                    WOORT_IGNORE,
+                    [](void* p)
+                    { delete (je_GameEntity*)p; },
+                    nullptr);
+            }
+            ++iter->entity_index;
+        }
+
+        // current chunk exhausted -> next chunk (or next arch)
+        iter->chunk = je_arch_next_chunk(iter->chunk);
+        iter->entity_index = 0;
+        if (iter->chunk == nullptr)
+            ++iter->arch_index;
+    }
+}
+
 // ECS ENTITY
 WOORT_API woort_api wojeapi_close_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
-    entity->close();
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
+    if (entity->_m_in_chunk != nullptr)
+    {
+        je_GameWorld* _w = je_ecs_world_of_entity(entity);
+        if (_w != nullptr)
+            je_ecs_world_destroy_entity(_w, entity);
+    }
     return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_get_world_from_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
-    void* world = je_ecs_world_of_entity(entity);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
+    je_GameWorld* world = je_ecs_world_of_entity(entity);
     return woort_ret_pointer(world);
 }
 
-WOORT_API woort_api wojeapi_set_editing_entity_uid(void)
-{
-    jedbg_set_editing_entity_uid((jeecs::typing::debug_eid_t)woort_int(0));
-    return woort_ret_void();
-}
-
-WOORT_API woort_api wojeapi_reset_editing_entity_uid(void)
-{
-    jedbg_set_editing_entity_uid(0);
-    return woort_ret_void();
-}
-
-WOORT_API woort_api wojeapi_get_editing_entity_uid(void)
-{
-    jeecs::typing::debug_eid_t uid = jedbg_get_editing_entity_uid();
-
-    if (uid != 0)
-        return woort_ret_option_int((woort_Int)uid);
-    return woort_ret_option_none();
-}
 WOORT_API woort_api wojeapi_get_entity_uid(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
-    jeecs::typing::debug_eid_t uid = jedbg_get_entity_uid(entity);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
+    je_DebugEid uid = jedbg_get_entity_uid(entity);
 
     if (uid != 0)
         return woort_ret_option_int((woort_Int)uid);
     return woort_ret_option_none();
+}
+
+WOORT_API woort_api wojeapi_set_entity_uid(void)
+{
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
+    jedbg_set_entity_uid(entity, static_cast<je_DebugEid>(woort_int(1)));
+    return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_get_entity_anchor_uuid(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
-    if (auto* anc = entity->get_component<jeecs::Transform::Anchor>())
+    if (auto* anc = (jeecs::Transform::Anchor*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Transform::Anchor>()))
     {
         anc->uid.JEParseToScriptType(WOORT_RETURN_SLOT);
         return woort_ret_option_value(WOORT_RETURN_SLOT);
@@ -721,8 +867,8 @@ WOORT_API woort_api wojeapi_get_entity_anchor_uuid(void)
 }
 WOORT_API woort_api wojeapi_get_parent_anchor_uid(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
-    if (auto* l2p = entity->get_component<jeecs::Transform::LocalToParent>())
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
+    if (auto* l2p = (jeecs::Transform::LocalToParent*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Transform::LocalToParent>()))
     {
         l2p->parent_uid.JEParseToScriptType(WOORT_RETURN_SLOT);
         return woort_ret_option_value(WOORT_RETURN_SLOT);
@@ -733,24 +879,24 @@ WOORT_API woort_api wojeapi_get_parent_anchor_uid(void)
 
 WOORT_API woort_api wojeapi_set_parent(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
-    jeecs::game_entity* parent = (jeecs::game_entity*)woort_gcpointer(1);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
+    je_GameEntity* parent = (je_GameEntity*)woort_gcpointer(1);
     bool force = woort_bool(2);
 
-    auto* l2p = entity->get_component<jeecs::Transform::LocalToParent>();
-    auto* ca = parent->get_component<jeecs::Transform::Anchor>();
+    auto* l2p = (jeecs::Transform::LocalToParent*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Transform::LocalToParent>());
+    auto* ca = (jeecs::Transform::Anchor*)je_ecs_world_entity_get_component(parent, jeecs::typing::id<jeecs::Transform::Anchor>());
     if (force)
     {
         if (nullptr == l2p)
-            l2p = entity->add_component<jeecs::Transform::LocalToParent>();
+            l2p = (jeecs::Transform::LocalToParent*)je_ecs_world_entity_add_component(entity, jeecs::typing::id<jeecs::Transform::LocalToParent>());
         if (nullptr == ca)
-            ca = parent->add_component<jeecs::Transform::Anchor>();
+            ca = (jeecs::Transform::Anchor*)je_ecs_world_entity_add_component(parent, jeecs::typing::id<jeecs::Transform::Anchor>());
     }
 
     if (l2p && ca)
     {
-        if (entity->get_component<jeecs::Transform::LocalToWorld>())
-            entity->remove_component<jeecs::Transform::LocalToWorld>();
+        if ((jeecs::Transform::LocalToWorld*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Transform::LocalToWorld>()))
+            je_ecs_world_entity_remove_component(entity, jeecs::typing::id<jeecs::Transform::LocalToWorld>());
 
         l2p->parent_uid = ca->uid;
         return woort_ret_bool(true);
@@ -761,21 +907,21 @@ WOORT_API woort_api wojeapi_set_parent(void)
 
 WOORT_API woort_api wojeapi_set_parent_with_uid(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
     bool force = woort_bool(2);
 
-    auto* l2p = entity->get_component<jeecs::Transform::LocalToParent>();
+    auto* l2p = (jeecs::Transform::LocalToParent*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Transform::LocalToParent>());
     if (force)
     {
         if (nullptr == l2p)
-            l2p = entity->add_component<jeecs::Transform::LocalToParent>();
+            l2p = (jeecs::Transform::LocalToParent*)je_ecs_world_entity_add_component(entity, jeecs::typing::id<jeecs::Transform::LocalToParent>());
     }
 
     if (l2p)
     {
-        if (entity->get_component<jeecs::Transform::LocalToWorld>())
-            entity->remove_component<jeecs::Transform::LocalToWorld>();
+        if ((jeecs::Transform::LocalToWorld*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Transform::LocalToWorld>()))
+            je_ecs_world_entity_remove_component(entity, jeecs::typing::id<jeecs::Transform::LocalToWorld>());
 
         l2p->parent_uid.JEParseFromScriptType(1);
         return woort_ret_bool(true);
@@ -786,13 +932,13 @@ WOORT_API woort_api wojeapi_set_parent_with_uid(void)
 
 WOORT_API woort_api wojeapi_get_entity_name(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
     return woort_ret_string(je_ecs_get_name_of_entity(entity));
 }
 
 WOORT_API woort_api wojeapi_set_entity_name(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
     je_ecs_set_name_of_entity(entity, woort_string(1));
     return woort_ret_void();
 }
@@ -800,7 +946,7 @@ WOORT_API woort_api wojeapi_set_entity_name(void)
 WOORT_API woort_api wojeapi_get_entity_chunk_info(void)
 {
     char buf[64];
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
     int result = snprintf(buf, sizeof(buf), "[%p:%uv%u]", entity->_m_in_chunk, entity->_m_id, entity->_m_version);
     assert(result > 0 && result < (int)sizeof(buf));
@@ -811,7 +957,7 @@ WOORT_API woort_api wojeapi_get_entity_chunk_info(void)
 
 WOORT_API woort_api wojeapi_find_entity_with_chunk_info(void)
 {
-    jeecs::game_entity* entity = new jeecs::game_entity();
+    je_GameEntity* entity = new je_GameEntity();
     ((void)sscanf(woort_string(0), "[%p:%uv%u]", &entity->_m_in_chunk, &entity->_m_id, &entity->_m_version));
 
     return woort_ret_gchandle(
@@ -819,14 +965,14 @@ WOORT_API woort_api wojeapi_find_entity_with_chunk_info(void)
         WOORT_IGNORE,
         [](void* ptr)
         {
-            delete (jeecs::game_entity*)ptr;
+            delete (je_GameEntity*)ptr;
         },
         nullptr);
 }
 
 WOORT_API woort_api wojeapi_get_all_components_types_from_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
     woort_value s;
 
@@ -853,11 +999,11 @@ WOORT_API woort_api wojeapi_get_all_components_types_from_entity(void)
 
 WOORT_API woort_api wojeapi_get_component_from_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
     auto* const component_addr =
         je_ecs_world_entity_get_component(entity,
-            ((const jeecs::typing::type_info*)woort_pointer(1))->m_id);
+            ((const je_TypeInfo*)woort_pointer(1))->m_id);
 
     if (component_addr == nullptr)
         return woort_ret_option_none();
@@ -865,37 +1011,37 @@ WOORT_API woort_api wojeapi_get_component_from_entity(void)
     return woort_ret_option_pointer(component_addr);
 }
 
-WOORT_API woort_api wojeapi_add_component_from_entity(void)
+WOORT_API woort_api wojeapi_add_component_to_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
     return woort_ret_pointer(je_ecs_world_entity_add_component(entity,
-        ((const jeecs::typing::type_info*)woort_pointer(1))->m_id));
+        ((const je_TypeInfo*)woort_pointer(1))->m_id));
 }
 
 WOORT_API woort_api wojeapi_remove_component_from_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
     je_ecs_world_entity_remove_component(
-        entity, ((const jeecs::typing::type_info*)woort_pointer(1))->m_id);
+        entity, ((const je_TypeInfo*)woort_pointer(1))->m_id);
     return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_is_top_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
-    return woort_ret_bool(nullptr == entity->get_component<jeecs::Transform::LocalToParent>());
+    return woort_ret_bool(nullptr == (jeecs::Transform::LocalToParent*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Transform::LocalToParent>()));
 }
 
 WOORT_API woort_api wojeapi_is_child_of_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
-    jeecs::game_entity* parent = (jeecs::game_entity*)woort_gcpointer(1);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
+    je_GameEntity* parent = (je_GameEntity*)woort_gcpointer(1);
 
-    jeecs::Transform::LocalToParent* l2p = entity->get_component<jeecs::Transform::LocalToParent>();
-    jeecs::Transform::Anchor* archor = parent->get_component<jeecs::Transform::Anchor>();
+    jeecs::Transform::LocalToParent* l2p = (jeecs::Transform::LocalToParent*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Transform::LocalToParent>());
+    jeecs::Transform::Anchor* archor = (jeecs::Transform::Anchor*)je_ecs_world_entity_get_component(parent, jeecs::typing::id<jeecs::Transform::Anchor>());
 
     if (l2p && archor)
     {
@@ -922,8 +1068,8 @@ WOORT_API woort_api wojeapi_component_get_all_members(void)
     void* component_addr = woort_pointer(elem);
 
     woort_struct_get(elem, 0, 1);
-    const jeecs::typing::type_info* component_type =
-        (const jeecs::typing::type_info*)woort_pointer(elem);
+    const je_TypeInfo* component_type =
+        (const je_TypeInfo*)woort_pointer(elem);
 
     woort_set_vec(result);
 
@@ -964,18 +1110,18 @@ WOORT_API woort_api wojeapi_get_components_member(void)
     void* component_addr = woort_pointer(elem);
 
     woort_struct_get(elem, 0, 1);
-    const jeecs::typing::type_info* component_type =
-        (const jeecs::typing::type_info*)woort_pointer(elem);
+    const je_TypeInfo* component_type =
+        (const je_TypeInfo*)woort_pointer(elem);
 
     const woort_U8CString member_name = woort_string(1);
 
-    if (auto* member_info = component_type->find_member_by_name(member_name))
+    if (auto* je_MemberInfo = jeecs::typing::find_member_by_name(component_type, member_name))
     {
         woort_set_struct(result, 2);
 
-        woort_set_pointer(elem, member_info->m_member_type);
+        woort_set_pointer(elem, je_MemberInfo->m_member_type);
         woort_struct_set(result, 0, elem);
-        woort_set_pointer(elem, (member_info->m_member_offset + (intptr_t)component_addr));
+        woort_set_pointer(elem, (je_MemberInfo->m_member_offset + (intptr_t)component_addr));
         woort_struct_set(result, 1, elem);
 
         return woort_ret_option_value(result);
@@ -987,13 +1133,13 @@ WOORT_API woort_api wojeapi_get_components_member(void)
 // INPUTS
 WOORT_API woort_api wojeapi_input_keydown(void)
 {
-    return woort_ret_bool(jeecs::input::keydown((jeecs::input::keycode)woort_int(0)));
+    return woort_ret_bool(jeecs::input::keydown((je_Keycode)woort_int(0)));
 }
 
 WOORT_API woort_api wojeapi_input_mousedown(void)
 {
     return woort_ret_bool(jeecs::input::mousedown(
-        (size_t)woort_int(0), (jeecs::input::mousecode)woort_int(1)));
+        (size_t)woort_int(0), (je_Mousecode)woort_int(1)));
 }
 
 WOORT_API woort_api wojeapi_wheel_count(void)
@@ -1091,12 +1237,23 @@ WOORT_API woort_api wojeapi_input_mouse_view_pos(void)
     return woort_ret_value(result);
 }
 
+WOORT_API woort_api wojeapi_input_set_lock_mouse(void)
+{
+    je_io_set_lock_mouse(woort_bool(0));
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_input_get_lock_mouse(void)
+{
+    return woort_ret_bool(je_io_get_lock_mouse());
+}
+
 WOORT_API woort_api wojeapi_input_gamepad_button(void)
 {
     jeecs::input::gamepad* gamepad =
         (jeecs::input::gamepad*)woort_gcpointer(0);
-    jeecs::input::gamepadcode kcode =
-        (jeecs::input::gamepadcode)woort_int(1);
+    je_Gamepadcode kcode =
+        (je_Gamepadcode)woort_int(1);
 
     return woort_ret_bool(gamepad->button(kcode));
 }
@@ -1109,8 +1266,8 @@ WOORT_API woort_api wojeapi_input_gamepad_axis(void)
 
     jeecs::input::gamepad* gamepad =
         (jeecs::input::gamepad*)woort_gcpointer(0);
-    jeecs::input::joystickcode kcode =
-        (jeecs::input::joystickcode)woort_int(1);
+    je_Joystickcode kcode =
+        (je_Joystickcode)woort_int(1);
 
     auto axis = gamepad->stick(kcode);
 
@@ -1128,7 +1285,7 @@ WOORT_API woort_api wojeapi_input_gamepad_actived(void)
     jeecs::input::gamepad* gamepad =
         (jeecs::input::gamepad*)woort_gcpointer(0);
 
-    jeecs::typing::timestamp_ms_t actived;
+    je_TimestampMs actived;
     if (gamepad->actived(&actived))
         return woort_ret_option_int(actived);
 
@@ -1245,26 +1402,25 @@ WOORT_API woort_api wojeapi_logfatal(void)
 // ECS TYPEINFO
 WOORT_API woort_api wojeapi_type_of_name(void)
 {
-    auto* const type_info =
-        jeecs::typing::type_info::of(woort_string(0));
+    auto* const je_TypeInfo =
+        jeecs::typing::of(woort_string(0));
 
-    if (type_info == nullptr)
+    if (je_TypeInfo == nullptr)
         return woort_ret_option_none();
 
-    return woort_ret_option_pointer(type_info);
+    return woort_ret_option_pointer(je_TypeInfo);
 }
 
 WOORT_API woort_api wojeapi_type_of_id(void)
 {
-    auto* const type_info =
-        jeecs::typing::type_info::of((jeecs::typing::typeid_t)woort_int(0));
+    auto* const je_TypeInfo =
+        jeecs::typing::of((je_TypeId)woort_int(0));
 
-    if (type_info == nullptr)
+    if (je_TypeInfo == nullptr)
         return woort_ret_option_none();
 
-    return woort_ret_option_pointer(type_info);
+    return woort_ret_option_pointer(je_TypeInfo);
 }
-
 
 WOORT_API woort_api wojeapi_get_all_registed_types(void)
 {
@@ -1293,31 +1449,31 @@ WOORT_API woort_api wojeapi_get_all_registed_types(void)
 
 WOORT_API woort_api wojeapi_type_is_component(void)
 {
-    const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)woort_pointer(0);
+    const je_TypeInfo* type = (const je_TypeInfo*)woort_pointer(0);
     return woort_ret_bool(type->m_type_class == je_typing_class::JE_COMPONENT);
 }
 
 WOORT_API woort_api wojeapi_type_is_system(void)
 {
-    const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)woort_pointer(0);
-    return woort_ret_bool(type->is_system());
+    const je_TypeInfo* type = (const je_TypeInfo*)woort_pointer(0);
+    return woort_ret_bool(jeecs::typing::is_system(type));
 }
 
 WOORT_API woort_api wojeapi_type_id(void)
 {
-    const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)woort_pointer(0);
+    const je_TypeInfo* type = (const je_TypeInfo*)woort_pointer(0);
     return woort_ret_int(type->m_id);
 }
 
 WOORT_API woort_api wojeapi_type_name(void)
 {
-    const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)woort_pointer(0);
+    const je_TypeInfo* type = (const je_TypeInfo*)woort_pointer(0);
     return woort_ret_string(type->m_typename);
 }
 WOORT_API woort_api wojeapi_script_type_name(void)
 {
-    const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)woort_pointer(0);
-    auto* parser = type->get_script_parser();
+    const je_TypeInfo* type = (const je_TypeInfo*)woort_pointer(0);
+    auto* parser = jeecs::typing::get_script_parser(type);
     if (parser != nullptr)
         return woort_ret_option_string(parser->m_woolang_typename);
 
@@ -1331,7 +1487,7 @@ WOORT_API woort_api wojeapi_type_members(void)
     if (!woort_push_reserve(2, &s))
         return woort_ret_panic("Stack overflow.");
 
-    const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)woort_pointer(0);
+    const je_TypeInfo* type = (const je_TypeInfo*)woort_pointer(0);
 
     const woort_value result = s + 0;
     const woort_value elem = s + 1;
@@ -1379,23 +1535,23 @@ WOORT_API woort_api wojeapi_type_basic_type(void)
     switch (type)
     {
     case INT:
-        return woort_ret_pointer((void*)jeecs::typing::type_info::of<int>());
+        return woort_ret_pointer((void*)jeecs::typing::of<int>());
     case INT2:
-        return woort_ret_pointer((void*)jeecs::typing::type_info::of<jeecs::math::ivec2>());
+        return woort_ret_pointer((void*)jeecs::typing::of<jeecs::math::ivec2>());
     case BOOL:
-        return woort_ret_pointer((void*)jeecs::typing::type_info::of<bool>());
+        return woort_ret_pointer((void*)jeecs::typing::of<bool>());
     case FLOAT:
-        return woort_ret_pointer((void*)jeecs::typing::type_info::of<float>());
+        return woort_ret_pointer((void*)jeecs::typing::of<float>());
     case FLOAT2:
-        return woort_ret_pointer((void*)jeecs::typing::type_info::of<jeecs::math::vec2>());
+        return woort_ret_pointer((void*)jeecs::typing::of<jeecs::math::vec2>());
     case FLOAT3:
-        return woort_ret_pointer((void*)jeecs::typing::type_info::of<jeecs::math::vec3>());
+        return woort_ret_pointer((void*)jeecs::typing::of<jeecs::math::vec3>());
     case FLOAT4:
-        return woort_ret_pointer((void*)jeecs::typing::type_info::of<jeecs::math::vec4>());
+        return woort_ret_pointer((void*)jeecs::typing::of<jeecs::math::vec4>());
     case STRING:
-        return woort_ret_pointer((void*)jeecs::typing::type_info::of<jeecs::basic::string>());
+        return woort_ret_pointer((void*)jeecs::typing::of<jeecs::basic::string>());
     case QUAT:
-        return woort_ret_pointer((void*)jeecs::typing::type_info::of<jeecs::math::quat>());
+        return woort_ret_pointer((void*)jeecs::typing::of<jeecs::math::quat>());
     default:
         return woort_ret_panic("Unknown basic type.");
     }
@@ -1407,9 +1563,9 @@ WOORT_API woort_api wojeapi_texture_open(void)
 {
     const woort_value universe_ptr = WOORT_RETURN_SLOT;
 
-    void* universe_addr = nullptr;
+    je_GameUniverse* universe_addr = nullptr;
     if (woort_option_get(universe_ptr, 0))
-        universe_addr = woort_pointer(universe_ptr);
+        universe_addr = static_cast<je_GameUniverse*>(woort_pointer(universe_ptr));
 
     std::optional<jeecs::basic::resource<jeecs::graphic::texture>> loaded_texture;
 
@@ -1712,7 +1868,7 @@ WOORT_API woort_api wojeapi_shader_open(void)
     {
         gcontext = jegl_uhost_get_context(
             jegl_uhost_get_or_create_for_universe(
-                woort_pointer(universe_ptr), nullptr));
+                static_cast<je_GameUniverse*>(woort_pointer(universe_ptr)), nullptr));
     }
 
     std::optional<jeecs::basic::resource<jeecs::graphic::shader>> loaded_shader;
@@ -1747,20 +1903,23 @@ WOORT_API woort_api wojeapi_shader_create(void)
     {
         gcontext = jegl_uhost_get_context(
             jegl_uhost_get_or_create_for_universe(
-                woort_pointer(universe_ptr), nullptr));
+                static_cast<je_GameUniverse*>(woort_pointer(universe_ptr)), nullptr));
     }
 
     std::optional<jeecs::basic::resource<jeecs::graphic::shader>> loaded_shader;
+    const woort_U8CString shader_path = woort_string(1);
+    const woort_U8CString shader_content = woort_string(2);
+
     woort_vm* const last = woort_vm_swap(nullptr);
     {
         loaded_shader = jeecs::graphic::shader::create(
-            gcontext, woort_string(1), woort_string(2));
+            gcontext, shader_path, shader_content);
     }
     (void)woort_vm_swap(last);
 
     if (loaded_shader.has_value())
     {
-        return woort_ret_gchandle(
+        return woort_ret_option_gchandle(
             new jeecs::basic::resource<jeecs::graphic::shader>(loaded_shader.value()),
             WOORT_IGNORE,
             [](void* ptr)
@@ -1774,7 +1933,7 @@ WOORT_API woort_api wojeapi_shader_create(void)
 
 WOORT_API woort_api wojeapi_textures_of_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
     woort_value s;
     if (!woort_push_reserve(3, &s))
@@ -1785,18 +1944,12 @@ WOORT_API woort_api wojeapi_textures_of_entity(void)
 
     woort_set_map(out_map);
 
-    if (jeecs::Renderer::Textures* textures = entity->get_component<jeecs::Renderer::Textures>())
+    if (jeecs::Renderer::Textures* textures = (jeecs::Renderer::Textures*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Renderer::Textures>()))
     {
         for (auto& texture : textures->textures)
         {
-            woort_set_gchandle(val,
-                new jeecs::basic::resource<jeecs::graphic::texture>(texture.m_texture),
-                WOORT_IGNORE,
-                [](void* ptr)
-                {
-                    delete (jeecs::basic::resource<jeecs::graphic::shader> *)ptr;
-                },
-                nullptr);
+            woort_set_gchandle(val, new jeecs::basic::resource<jeecs::graphic::texture>(texture.m_texture), WOORT_IGNORE, [](void* ptr)
+                { delete (jeecs::basic::resource<jeecs::graphic::shader> *)ptr; }, nullptr);
             (void)woort_map_set_by_int(out_map, (woort_Int)texture.m_pass_id, val);
         }
     }
@@ -1806,9 +1959,9 @@ WOORT_API woort_api wojeapi_textures_of_entity(void)
 
 WOORT_API woort_api wojeapi_bind_texture_for_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
-    if (jeecs::Renderer::Textures* textures = entity->get_component<jeecs::Renderer::Textures>())
+    if (jeecs::Renderer::Textures* textures = (jeecs::Renderer::Textures*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Renderer::Textures>()))
     {
         if (woort_option_get(WOORT_RETURN_SLOT, 2))
         {
@@ -1829,9 +1982,9 @@ WOORT_API woort_api wojeapi_bind_texture_for_entity(void)
 
 WOORT_API woort_api wojeapi_set_shape_for_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
-    if (jeecs::Renderer::Shape* shape = entity->get_component<jeecs::Renderer::Shape>())
+    if (jeecs::Renderer::Shape* shape = (jeecs::Renderer::Shape*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Renderer::Shape>()))
     {
         if (woort_option_get(WOORT_RETURN_SLOT, 1))
             shape->vertex.emplace(*(jeecs::basic::resource<jeecs::graphic::vertex> *)woort_gcpointer(WOORT_RETURN_SLOT));
@@ -1846,9 +1999,9 @@ WOORT_API woort_api wojeapi_set_shape_for_entity(void)
 
 WOORT_API woort_api wojeapi_get_shape_of_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
-    if (jeecs::Renderer::Shape* shape = entity->get_component<jeecs::Renderer::Shape>())
+    if (jeecs::Renderer::Shape* shape = (jeecs::Renderer::Shape*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Renderer::Shape>()))
     {
         if (shape->vertex.has_value())
             return woort_ret_option_gchandle(
@@ -1874,7 +2027,7 @@ WOORT_API woort_api wojeapi_vertex_load(void)
     {
         gcontext = jegl_uhost_get_context(
             jegl_uhost_get_or_create_for_universe(
-                woort_pointer(universe_ptr), nullptr));
+                static_cast<je_GameUniverse*>(woort_pointer(universe_ptr)), nullptr));
     }
 
     const woort_U8CString path = woort_string(1);
@@ -1921,8 +2074,7 @@ WOORT_API woort_api wojeapi_vertex_create(void)
         (void)woort_vec_get(WOORT_RETURN_SLOT, 3, i);
         formats[i] = {
             jegl_vertex::data_type::FLOAT32,
-            (size_t)woort_unbox_int(WOORT_RETURN_SLOT)
-        };
+            (size_t)woort_unbox_int(WOORT_RETURN_SLOT) };
     }
 
     std::optional<jeecs::basic::resource<jeecs::graphic::vertex>> loaded_vertex;
@@ -1939,7 +2091,7 @@ WOORT_API woort_api wojeapi_vertex_create(void)
     (void)woort_vm_swap(last);
 
     if (loaded_vertex.has_value())
-        return woort_ret_gchandle(
+        return woort_ret_option_gchandle(
             new jeecs::basic::resource<jeecs::graphic::vertex>(loaded_vertex.value()),
             WOORT_IGNORE,
             [](void* ptr)
@@ -1948,7 +2100,7 @@ WOORT_API woort_api wojeapi_vertex_create(void)
             },
             nullptr);
 
-    return woort_ret_panic("Bad vertex format.");
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api wojeapi_vertex_path(void)
@@ -1963,7 +2115,7 @@ WOORT_API woort_api wojeapi_vertex_path(void)
 
 WOORT_API woort_api wojeapi_shaders_of_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
     woort_value s;
     if (!woort_push_reserve(2, &s))
@@ -1974,18 +2126,12 @@ WOORT_API woort_api wojeapi_shaders_of_entity(void)
 
     woort_set_vec(out_array);
 
-    if (jeecs::Renderer::Shaders* shaders = entity->get_component<jeecs::Renderer::Shaders>())
+    if (jeecs::Renderer::Shaders* shaders = (jeecs::Renderer::Shaders*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Renderer::Shaders>()))
     {
         for (auto& shader : shaders->shaders)
         {
-            woort_set_gchandle(elem,
-                new jeecs::basic::resource<jeecs::graphic::shader>(shader),
-                WOORT_IGNORE,
-                [](void* ptr)
-                {
-                    delete (jeecs::basic::resource<jeecs::graphic::shader> *)ptr;
-                },
-                nullptr);
+            woort_set_gchandle(elem, new jeecs::basic::resource<jeecs::graphic::shader>(shader), WOORT_IGNORE, [](void* ptr)
+                { delete (jeecs::basic::resource<jeecs::graphic::shader> *)ptr; }, nullptr);
 
             woort_vec_push(out_array, elem);
         }
@@ -1995,15 +2141,12 @@ WOORT_API woort_api wojeapi_shaders_of_entity(void)
     return woort_ret_value(out_array);
 }
 
-WOORT_API woort_api wojeapi_reload_shader_of_entity(void);
-WOORT_API woort_api wojeapi_reload_texture_of_entity(void);
-
 WOORT_API woort_api wojeapi_set_shaders_of_entity(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
     const woort_value shader_array = 1;
 
-    if (jeecs::Renderer::Shaders* shaders = entity->get_component<jeecs::Renderer::Shaders>())
+    if (jeecs::Renderer::Shaders* shaders = (jeecs::Renderer::Shaders*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Renderer::Shaders>()))
     {
         shaders->shaders.clear();
         const size_t arrsize = woort_vec_len(shader_array);
@@ -2049,8 +2192,7 @@ WOORT_API woort_api wojeapi_get_uniforms_from_shader(void)
         woort_set_struct(val, 2);
         (void)woort_map_set_by_string(out_map, uniforms->m_name, val);
 
-        if (uniforms->m_uniform_type >= jegl_shader::uniform_type::INT
-            && uniforms->m_uniform_type <= jegl_shader::uniform_type::FLOAT4)
+        if (uniforms->m_uniform_type >= jegl_shader::uniform_type::INT && uniforms->m_uniform_type <= jegl_shader::uniform_type::FLOAT4)
         {
             woort_set_int(elem, uniforms->m_uniform_type);
         }
@@ -2182,26 +2324,13 @@ WOORT_API woort_api wojeapi_set_uniforms_float4(void)
     return woort_ret_void();
 }
 
-// defined in 'jeecs_core_editor_system.hpp'
-WOORT_API woort_api wojeapi_get_bad_shader_list_of_entity(void);
-WOORT_API woort_api wojeapi_store_bad_shader_name(void);
-WOORT_API woort_api wojeapi_remove_bad_shader_name(void);
-WOORT_API woort_api wojeapi_store_bad_shader_uniforms_int(void);
-WOORT_API woort_api wojeapi_store_bad_shader_uniforms_int2(void);
-WOORT_API woort_api wojeapi_store_bad_shader_uniforms_int3(void);
-WOORT_API woort_api wojeapi_store_bad_shader_uniforms_int4(void);
-WOORT_API woort_api wojeapi_store_bad_shader_uniforms_float(void);
-WOORT_API woort_api wojeapi_store_bad_shader_uniforms_float2(void);
-WOORT_API woort_api wojeapi_store_bad_shader_uniforms_float3(void);
-WOORT_API woort_api wojeapi_store_bad_shader_uniforms_float4(void);
-
 WOORT_API woort_api wojeapi_shader_path(void)
 {
     auto* shader = (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(0);
 
     if (auto str = (*shader)->resource()->m_handle.m_path_may_null_if_builtin)
-        return woort_ret_string(str);
-    return woort_ret_string("< Built-in shader >");
+        return woort_ret_option_string(str);
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api wojeapi_texture_get_size(void)
@@ -2226,9 +2355,82 @@ WOORT_API woort_api wojeapi_texture_path(void)
     return woort_ret_option_none();
 }
 
+///////////////////////////////////////////////////////////////
+WOORT_API woort_api wojeapi_framebuffer_create(void)
+{
+    const size_t reso_w = (size_t)woort_int(0);
+    const size_t reso_h = (size_t)woort_int(1);
+    const woort_value formats_arr = 2;
+    const bool contain_depth = woort_bool(3);
+
+    const size_t fmt_count = woort_vec_len(formats_arr);
+    std::vector<jegl_texture::format> formats(fmt_count);
+
+    for (size_t i = 0; i < fmt_count; ++i)
+    {
+        (void)woort_vec_get(WOORT_RETURN_SLOT, formats_arr, i);
+        formats[i] = (jegl_texture::format)woort_unbox_int(WOORT_RETURN_SLOT);
+    }
+
+    std::optional<jeecs::basic::resource<jeecs::graphic::framebuffer>> loaded_framebuffer;
+
+    woort_vm* const last = woort_vm_swap(nullptr);
+    {
+        loaded_framebuffer = jeecs::graphic::framebuffer::create(
+            reso_w, reso_h, formats, contain_depth);
+    }
+    (void)woort_vm_swap(last);
+
+    if (loaded_framebuffer.has_value())
+        return woort_ret_option_gchandle(
+            new jeecs::basic::resource<jeecs::graphic::framebuffer>(loaded_framebuffer.value()),
+            WOORT_IGNORE,
+            [](void* ptr)
+            {
+                delete (jeecs::basic::resource<jeecs::graphic::framebuffer> *)ptr;
+            },
+            nullptr);
+
+    return woort_ret_option_none();
+}
+
+WOORT_API woort_api wojeapi_framebuffer_get_attachment(void)
+{
+    auto* loaded_framebuffer =
+        (jeecs::basic::resource<jeecs::graphic::framebuffer> *)woort_gcpointer(0);
+
+    auto attachment = (*loaded_framebuffer)->get_attachment((size_t)woort_int(1));
+
+    if (attachment.has_value())
+        return woort_ret_option_gchandle(
+            new jeecs::basic::resource<jeecs::graphic::texture>(attachment.value()),
+            WOORT_IGNORE,
+            [](void* ptr)
+            {
+                delete (jeecs::basic::resource<jeecs::graphic::texture> *)ptr;
+            },
+            nullptr);
+
+    return woort_ret_option_none();
+}
+
+WOORT_API woort_api wojeapi_framebuffer_get_size(void)
+{
+    auto* loaded_framebuffer =
+        (jeecs::basic::resource<jeecs::graphic::framebuffer> *)woort_gcpointer(0);
+    auto sz = loaded_framebuffer->get()->size();
+
+    woort_set_struct(WOORT_RETURN_SLOT, 2);
+
+    woort_struct_set_int(WOORT_RETURN_SLOT, 0, (woort_Int)sz.x);
+    woort_struct_set_int(WOORT_RETURN_SLOT, 1, (woort_Int)sz.y);
+
+    return woort_ret();
+}
+
 WOORT_API woort_api wojeapi_get_entity_arch_information(void)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)woort_gcpointer(0);
+    je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
     size_t chunk_size = 0, entity_size = 0, entity_count = 0;
 
     jedbg_get_entity_arch_information(entity, &chunk_size, &entity_size, &entity_count);
@@ -2244,7 +2446,7 @@ WOORT_API woort_api wojeapi_get_entity_arch_information(void)
 
 WOORT_API woort_api wojeapi_towoo_register_system(void)
 {
-    const jeecs::typing::type_info* result;
+    const je_TypeInfo* result;
 
     const woort_U8CString name = woort_string(0);
     const woort_U8CString path = woort_string(1);
@@ -2262,7 +2464,7 @@ WOORT_API woort_api wojeapi_towoo_register_system(void)
 }
 WOORT_API woort_api wojeapi_towoo_unregister_system(void)
 {
-    je_towoo_unregister_system((const jeecs::typing::type_info*)woort_pointer(0));
+    je_towoo_unregister_system((const je_TypeInfo*)woort_pointer(0));
     return woort_ret_void();
 }
 
@@ -2366,8 +2568,8 @@ WOORT_API woort_api wojeapi_towoo_update_component(void)
 
 WOORT_API woort_api wojeapi_towoo_unregister_component(void)
 {
-    const jeecs::typing::type_info* t =
-        (const jeecs::typing::type_info*)woort_pointer(0);
+    const je_TypeInfo* t =
+        (const je_TypeInfo*)woort_pointer(0);
 
     je_typing_unregister(t);
 
@@ -2385,164 +2587,118 @@ WOORT_API woort_api wojeapi_towoo_update_api(void)
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_typemgr_get_unregister_count(void)
-{
-    return woort_ret_int((woort_Int)jedbg_get_unregister_type_count());
-}
-WOORT_API woort_api wojeapi_get_woolang_commit_sha(void)
-{
-    return woort_ret_string(wo_commit_sha());
-}
-WOORT_API woort_api wojeapi_get_all_internal_scripts(void)
-{
-    woort_value s;
-    if (!woort_push_reserve(2, &s))
-        return woort_ret_panic("Stack overflow.");
-
-    const woort_value result = s + 0;
-    const woort_value val = s + 1;
-
-    woort_set_map(result);
-
-    char** paths = nullptr;
-    size_t count = woort_vfs_get_all_paths(&paths);
-
-    for (size_t i = 0; i < count; ++i)
-    {
-        const char* vpath = paths[i];
-
-        woort_VFile* file = nullptr;
-        if (woort_vfile_open(vpath, &file))
-        {
-            const int64_t fsize = woort_vfile_size(file);
-            if (fsize >= 0)
-            {
-                const size_t alloc_size = (size_t)fsize;
-                char* data = (char*)malloc(alloc_size ? alloc_size : 1);
-                if (data != nullptr)
-                {
-                    const size_t nread = woort_vfile_read(file, data, alloc_size);
-                    woort_set_buffer(val, data, nread);
-                    (void)woort_map_set_by_string(result, vpath, val);
-
-                    free(data);
-                }
-            }
-            woort_vfile_close(file);
-        }
-    }
-
-    for (size_t i = 0; i < count; ++i)
-        woort_free(paths[i]);
-    woort_free(paths);
-
-    return woort_ret_value(result);
-}
-
 struct dynamic_parser_impl_t
 {
     woort_Value m_saving;
     woort_Value m_restoring;
     woort_Value m_edit;
 
-    const jeecs::typing::typeinfo_script_parser*
+    // saving/restoring 来自 types 脚本，edit 来自 editor 脚本，
+    // 三者相互独立：任一脚本缺失或未提供某槽位时对应标志为 false。
+    bool m_has_saving = false;
+    bool m_has_restoring = false;
+    bool m_has_edit = false;
+
+    const je_TypeinfoScriptParser*
         m_script_parser;
 };
 
 struct dynamic_parser_global_context_t
 {
     using parser_table_t =
-        std::unordered_map<jeecs::typing::typeid_t, std::unique_ptr<dynamic_parser_impl_t>>;
+        std::unordered_map<je_TypeId, std::unique_ptr<dynamic_parser_impl_t>>;
 
     std::mutex _je_dynamic_parser_mx;
 
     parser_table_t _je_dynamic_parser_impls;
-    woort_CodeEnv* _je_dynamic_parser_cenv = nullptr;
+    woort_CodeEnv* _je_dynamic_parser_types_cenv = nullptr;
+    woort_CodeEnv* _je_dynamic_parser_editor_cenv = nullptr;
 };
 static dynamic_parser_global_context_t _je_dynamic_parser_global_context;
 
 void _je_dynamic_parser_clear()
 {
-    if (_je_dynamic_parser_global_context._je_dynamic_parser_cenv != nullptr)
+    if (_je_dynamic_parser_global_context._je_dynamic_parser_types_cenv != nullptr)
     {
-        _je_dynamic_parser_global_context._je_dynamic_parser_impls.clear();
-
-        woort_codeenv_drop(_je_dynamic_parser_global_context._je_dynamic_parser_cenv);
-        _je_dynamic_parser_global_context._je_dynamic_parser_cenv = nullptr;
+        woort_codeenv_drop(_je_dynamic_parser_global_context._je_dynamic_parser_types_cenv);
+        _je_dynamic_parser_global_context._je_dynamic_parser_types_cenv = nullptr;
     }
+    if (_je_dynamic_parser_global_context._je_dynamic_parser_editor_cenv != nullptr)
+    {
+        woort_codeenv_drop(_je_dynamic_parser_global_context._je_dynamic_parser_editor_cenv);
+        _je_dynamic_parser_global_context._je_dynamic_parser_editor_cenv = nullptr;
+    }
+
+    _je_dynamic_parser_global_context._je_dynamic_parser_impls.clear();
 
     assert(_je_dynamic_parser_global_context._je_dynamic_parser_impls.empty());
 }
-void _je_dynamic_parser_update_types(woort_value tmp)
+void _je_dynamic_parser_refresh(woort_value tmp)
 {
-    if (_je_dynamic_parser_global_context._je_dynamic_parser_cenv != nullptr)
+    _je_dynamic_parser_global_context._je_dynamic_parser_impls.clear();
+
+    auto** types = jedbg_get_all_registed_types();
+
+    auto** cur_type = types;
+    while (*cur_type)
     {
-        _je_dynamic_parser_global_context._je_dynamic_parser_impls.clear();
-
-        auto** types = jedbg_get_all_registed_types();
-
-        auto** cur_type = types;
-        while (*cur_type)
+        auto* script_parser = jeecs::typing::get_script_parser(*cur_type);
+        if (script_parser != nullptr)
         {
-            auto* script_parser = (*cur_type)->get_script_parser();
-            if (script_parser != nullptr)
+            std::string script_woolang_typename = script_parser->m_woolang_typename;
+
+            woort_Value* const tmp_internal_storage = woort_internal_value(tmp);
+
+            auto p = std::make_unique<dynamic_parser_impl_t>();
+
+            if (_je_dynamic_parser_global_context._je_dynamic_parser_types_cenv != nullptr)
             {
-                std::string script_woolang_typename = script_parser->m_woolang_typename;
-
-                woort_Value* const tmp_internal_storage = woort_internal_value(tmp);
-
-                auto p = std::make_unique<dynamic_parser_impl_t>();
-
-                bool succ = true;
                 if (woort_load_extern_const(
                     tmp,
-                    _je_dynamic_parser_global_context._je_dynamic_parser_cenv,
+                    _je_dynamic_parser_global_context._je_dynamic_parser_types_cenv,
                     (script_woolang_typename + "::parser::saving").c_str()))
                 {
                     p->m_saving = *tmp_internal_storage;
+                    p->m_has_saving = true;
                 }
-                else
-                    succ = false;
 
                 if (woort_load_extern_const(
                     tmp,
-                    _je_dynamic_parser_global_context._je_dynamic_parser_cenv,
+                    _je_dynamic_parser_global_context._je_dynamic_parser_types_cenv,
                     (script_woolang_typename + "::parser::restoring").c_str()))
                 {
                     p->m_restoring = *tmp_internal_storage;
-                }
-                else
-                    succ = false;
-
-                if (woort_load_extern_const(
-                    tmp,
-                    _je_dynamic_parser_global_context._je_dynamic_parser_cenv,
-                    (script_woolang_typename + "::parser::edit").c_str()))
-                {
-                    p->m_edit = *tmp_internal_storage;
-                }
-                else
-                    succ = false;
-
-                if (succ)
-                {
-                    p->m_script_parser = script_parser;
-                    _je_dynamic_parser_global_context._je_dynamic_parser_impls.insert(
-                        std::make_pair((*cur_type)->m_id, std::move(p)));
+                    p->m_has_restoring = true;
                 }
             }
 
-            ++cur_type;
+            if (_je_dynamic_parser_global_context._je_dynamic_parser_editor_cenv != nullptr)
+            {
+                if (woort_load_extern_const(
+                    tmp,
+                    _je_dynamic_parser_global_context._je_dynamic_parser_editor_cenv,
+                    (script_woolang_typename + "::parser::edit").c_str()))
+                {
+                    p->m_edit = *tmp_internal_storage;
+                    p->m_has_edit = true;
+                }
+            }
+
+            if (p->m_has_saving || p->m_has_restoring || p->m_has_edit)
+            {
+                p->m_script_parser = script_parser;
+                _je_dynamic_parser_global_context._je_dynamic_parser_impls.insert(
+                    std::make_pair((*cur_type)->m_id, std::move(p)));
+            }
         }
 
-        je_mem_free(types);
+        ++cur_type;
     }
-    else
-    {
-        assert(_je_dynamic_parser_global_context._je_dynamic_parser_impls.empty());
-    }
+
+    je_mem_free(types);
 }
-std::optional<std::string> _je_dynamic_parser_update_all(const char* path)
+std::optional<std::string> _je_dynamic_parser_update_script(
+    woort_CodeEnv*& target_cenv, const char* path)
 {
     using namespace std;
 
@@ -2605,9 +2761,12 @@ std::optional<std::string> _je_dynamic_parser_update_all(const char* path)
             return r;
         }
 
-        _je_dynamic_parser_clear();
-        _je_dynamic_parser_global_context._je_dynamic_parser_cenv = cenv;
-        _je_dynamic_parser_update_types(s);
+        // 只替换目标槽位的旧脚本，再从两个脚本环境全量重建解析表；
+        // 另一个槽位不受影响。
+        if (target_cenv != nullptr)
+            woort_codeenv_drop(target_cenv);
+        target_cenv = cenv;
+        _je_dynamic_parser_refresh(s);
     }
     (void)woort_vm_swap(last);
     woort_vm_close(vmm);
@@ -2617,7 +2776,7 @@ std::optional<std::string> _je_dynamic_parser_update_all(const char* path)
 
 ////////////////////////////////////////////////////////////////
 
-WOORT_API woort_api wojeapi_dynamic_parser_update_script(void)
+static woort_api _wojeapi_dynamic_parser_update(woort_CodeEnv*& target_cenv)
 {
     std::optional<std::string> result;
 
@@ -2626,7 +2785,7 @@ WOORT_API woort_api wojeapi_dynamic_parser_update_script(void)
     woort_vm* const last = woort_vm_swap(nullptr);
     {
         std::lock_guard g1(_je_dynamic_parser_global_context._je_dynamic_parser_mx);
-        result = _je_dynamic_parser_update_all(parser_path);
+        result = _je_dynamic_parser_update_script(target_cenv, parser_path);
     }
     (void)woort_vm_swap(last);
 
@@ -2635,7 +2794,19 @@ WOORT_API woort_api wojeapi_dynamic_parser_update_script(void)
     return woort_ret_result_ok_void();
 }
 
-WOORT_API woort_api wojeapi_dynamic_parser_update_type(void)
+WOORT_API woort_api wojeapi_dynamic_parser_update_types(void)
+{
+    return _wojeapi_dynamic_parser_update(
+        _je_dynamic_parser_global_context._je_dynamic_parser_types_cenv);
+}
+
+WOORT_API woort_api wojeapi_dynamic_parser_update_editor(void)
+{
+    return _wojeapi_dynamic_parser_update(
+        _je_dynamic_parser_global_context._je_dynamic_parser_editor_cenv);
+}
+
+WOORT_API woort_api wojeapi_dynamic_parser_refresh(void)
 {
     woort_value s;
     if (!woort_push_reserve(1, &s))
@@ -2645,7 +2816,7 @@ WOORT_API woort_api wojeapi_dynamic_parser_update_type(void)
     std::lock_guard g1(_je_dynamic_parser_global_context._je_dynamic_parser_mx);
     (void)woort_vm_swap(last);
 
-    _je_dynamic_parser_update_types(s);
+    _je_dynamic_parser_refresh(s);
 
     return woort_ret_void();
 }
@@ -2662,7 +2833,7 @@ WOORT_API woort_api wojeapi_dynamic_parser_clear(void)
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_dynamic_parser_saving(void)
+WOORT_API woort_api wojeapi_dynamic_parser_save(void)
 {
     woort_value s;
     if (!woort_push_reserve(2, &s))
@@ -2670,15 +2841,17 @@ WOORT_API woort_api wojeapi_dynamic_parser_saving(void)
 
     std::lock_guard g1(_je_dynamic_parser_global_context._je_dynamic_parser_mx);
 
-    auto* type = (const jeecs::typing::type_info*)woort_pointer(0);
-    auto fnd = _je_dynamic_parser_global_context._je_dynamic_parser_impls.find(type->m_id);
+    auto* type = (const je_TypeInfo*)woort_pointer(0);
+    auto fnd = _je_dynamic_parser_global_context._je_dynamic_parser_impls.find(
+        type->m_id);
 
     if (fnd != _je_dynamic_parser_global_context._je_dynamic_parser_impls.end())
     {
-        assert(_je_dynamic_parser_global_context._je_dynamic_parser_cenv != nullptr);
-
         auto* val = woort_pointer(1);
         auto& parser = fnd->second;
+
+        if (!parser->m_has_saving)
+            return woort_ret_option_none();
 
         const woort_value value = s + 0;
         const woort_value func = s + 1;
@@ -2695,7 +2868,7 @@ WOORT_API woort_api wojeapi_dynamic_parser_saving(void)
     return woort_ret_option_none();
 }
 
-WOORT_API woort_api wojeapi_dynamic_parser_restoring(void)
+WOORT_API woort_api wojeapi_dynamic_parser_restore(void)
 {
     woort_value s;
     if (!woort_push_reserve(2, &s))
@@ -2703,16 +2876,17 @@ WOORT_API woort_api wojeapi_dynamic_parser_restoring(void)
 
     std::lock_guard g1(_je_dynamic_parser_global_context._je_dynamic_parser_mx);
 
-    auto* type = (const jeecs::typing::type_info*)woort_pointer(0);
+    auto* type = (const je_TypeInfo*)woort_pointer(0);
     auto fnd = _je_dynamic_parser_global_context._je_dynamic_parser_impls.find(type->m_id);
 
     if (fnd != _je_dynamic_parser_global_context._je_dynamic_parser_impls.end())
     {
-        assert(_je_dynamic_parser_global_context._je_dynamic_parser_cenv != nullptr);
-
         void* val = woort_pointer(1);
         const char* dat = woort_string(2);
         auto& parser = fnd->second;
+
+        if (!parser->m_has_restoring)
+            return woort_ret_bool(false);
 
         const woort_value result = s + 0;
         const woort_value func = s + 1;
@@ -2738,16 +2912,18 @@ WOORT_API woort_api wojeapi_dynamic_parser_edit(void)
 
     std::lock_guard g1(_je_dynamic_parser_global_context._je_dynamic_parser_mx);
 
-    auto* type = (const jeecs::typing::type_info*)woort_pointer(0);
-    auto fnd = _je_dynamic_parser_global_context._je_dynamic_parser_impls.find(type->m_id);
+    auto* type = (const je_TypeInfo*)woort_pointer(0);
+    auto fnd = _je_dynamic_parser_global_context._je_dynamic_parser_impls.find(
+        type->m_id);
 
     if (fnd != _je_dynamic_parser_global_context._je_dynamic_parser_impls.end())
     {
-        assert(_je_dynamic_parser_global_context._je_dynamic_parser_cenv != nullptr);
-
         auto* val = woort_pointer(1);
         const char* tag = woort_string(2);
         auto& parser = fnd->second;
+
+        if (!parser->m_has_edit)
+            return woort_ret_option_none();
 
         const woort_value value = s + 0;
         const woort_value tag_slot = s + 1;
@@ -2761,12 +2937,13 @@ WOORT_API woort_api wojeapi_dynamic_parser_edit(void)
         if (WOORT_VM_CALL_STATUS_NORMAL != woort_invoke(value, func))
             return woort_ret_panic("Failed to invoke `edit` callback.");
 
-        if (woort_option_get(value, value))
+        const bool updated = woort_option_get(value, value);
+        if (updated)
             parser->m_script_parser->m_script_parse_w2c(val, value);
 
-        return woort_ret_bool(true);
+        return woort_ret_option_bool(updated);
     }
-    return woort_ret_bool(false);
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api wojeapi_audio_buffer_load(void)
@@ -2851,8 +3028,7 @@ WOORT_API woort_api wojeapi_audio_filter_update(void)
             flt->m_type = (jeal_filter_type)woort_struct_get_int(updated_info, 0);
             flt->m_gain = woort_struct_get_float(updated_info, 1);
             flt->m_gain_lf = woort_struct_get_float(updated_info, 2);
-            flt->m_gain_hf = woort_struct_get_float(updated_info, 3);
-        });
+            flt->m_gain_hf = woort_struct_get_float(updated_info, 3); });
 
     return woort_ret_void();
 }
@@ -2917,14 +3093,14 @@ WOORT_API woort_api wojeapi_audio_source_update(void)
             woort_struct_get(WOORT_RETURN_SLOT, updated_info, 3);
             for (uint16_t i = 0; i < 3; ++i)
             {
-                src->m_location[i] = 
+                src->m_location[i] =
                     woort_struct_get_float(WOORT_RETURN_SLOT, i);
             }
 
             woort_struct_get(WOORT_RETURN_SLOT, updated_info, 4);
             for (uint16_t i = 0; i < 3; ++i)
             {
-                src->m_velocity[i] = 
+                src->m_velocity[i] =
                     woort_struct_get_float(WOORT_RETURN_SLOT, i);
             }
         });
@@ -3149,15 +3325,15 @@ WOORT_API woort_api wojeapi_audio_effect_create(void)
     woolang_je_audio_effect_kind kind = (woolang_je_audio_effect_kind)woort_int(0);
     switch (kind)
     {
-#define woort_ret_jeal_new_effect(effect_type_name)                                                       \
-    woort_ret_gchandle(                                                                                   \
-        new wo_je_effect_res_t(effect_type_name)(                                                         \
-            jeecs::audio::effect<effect_type_name>::create()),                                            \
-        WOORT_IGNORE,                                                                                     \
-        [](void *p)                                                                                       \
-        {                                                                                                 \
-            delete static_cast<jeecs::basic::resource<jeecs::audio::effect<effect_type_name>> *>(p);      \
-        },                                                                                                \
+#define woort_ret_jeal_new_effect(effect_type_name)                                                  \
+    woort_ret_gchandle(                                                                              \
+        new wo_je_effect_res_t(effect_type_name)(                                                    \
+            jeecs::audio::effect<effect_type_name>::create()),                                       \
+        WOORT_IGNORE,                                                                                \
+        [](void *p)                                                                                  \
+        {                                                                                            \
+            delete static_cast<jeecs::basic::resource<jeecs::audio::effect<effect_type_name>> *>(p); \
+        },                                                                                           \
         nullptr)
 
     case woolang_je_audio_effect_kind::REVERB:
@@ -3492,8 +3668,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
                 eff->m_late_reverb_delay = woort_struct_get_float(updated_info, 9);
                 eff->m_air_absorption_gain_hf = woort_struct_get_float(updated_info, 10);
                 eff->m_room_rolloff_factor = woort_struct_get_float(updated_info, 11);
-                eff->m_decay_hf_limit = woort_struct_get_bool(updated_info, 12);
-            });
+                eff->m_decay_hf_limit = woort_struct_get_bool(updated_info, 12); });
         break;
     }
     case woolang_je_audio_effect_kind::CHORUS:
@@ -3508,8 +3683,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
                 eff->m_rate = woort_struct_get_float(updated_info, 2);
                 eff->m_depth = woort_struct_get_float(updated_info, 3);
                 eff->m_feedback = woort_struct_get_float(updated_info, 4);
-                eff->m_delay = woort_struct_get_float(updated_info, 5);
-            });
+                eff->m_delay = woort_struct_get_float(updated_info, 5); });
         break;
     }
     case woolang_je_audio_effect_kind::DISTORTION:
@@ -3523,8 +3697,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
                 eff->m_gain = woort_struct_get_float(updated_info, 1);
                 eff->m_lowpass_cutoff = woort_struct_get_float(updated_info, 2);
                 eff->m_equalizer_center_freq = woort_struct_get_float(updated_info, 3);
-                eff->m_equalizer_bandwidth = woort_struct_get_float(updated_info, 4);
-            });
+                eff->m_equalizer_bandwidth = woort_struct_get_float(updated_info, 4); });
         break;
     }
     case woolang_je_audio_effect_kind::ECHO:
@@ -3538,8 +3711,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
                 eff->m_lr_delay = woort_struct_get_float(updated_info, 1);
                 eff->m_damping = woort_struct_get_float(updated_info, 2);
                 eff->m_feedback = woort_struct_get_float(updated_info, 3);
-                eff->m_spread = woort_struct_get_float(updated_info, 4);
-            });
+                eff->m_spread = woort_struct_get_float(updated_info, 4); });
         break;
     }
     case woolang_je_audio_effect_kind::FLANGER:
@@ -3554,8 +3726,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
                 eff->m_rate = woort_struct_get_float(updated_info, 2);
                 eff->m_depth = woort_struct_get_float(updated_info, 3);
                 eff->m_feedback = woort_struct_get_float(updated_info, 4);
-                eff->m_delay = woort_struct_get_float(updated_info, 5);
-            });
+                eff->m_delay = woort_struct_get_float(updated_info, 5); });
         break;
     }
     case woolang_je_audio_effect_kind::FREQUENCY_SHIFTER:
@@ -3567,8 +3738,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
             {
                 eff->m_frequency = woort_struct_get_float(updated_info, 0);
                 eff->m_left_direction = (jeal_effect_frequency_shifter::direction)woort_struct_get_int(updated_info, 1);
-                eff->m_right_direction = (jeal_effect_frequency_shifter::direction)woort_struct_get_int(updated_info, 2);
-            });
+                eff->m_right_direction = (jeal_effect_frequency_shifter::direction)woort_struct_get_int(updated_info, 2); });
         break;
     }
     case woolang_je_audio_effect_kind::VOCAL_MORPHER:
@@ -3583,8 +3753,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
                 eff->m_phoneme_b = (jeal_effect_vocal_morpher::phoneme)woort_struct_get_int(updated_info, 2);
                 eff->m_phoneme_b_coarse_tuning = (int)woort_struct_get_int(updated_info, 3);
                 eff->m_waveform = (jeal_effect_vocal_morpher::waveform)woort_struct_get_int(updated_info, 4);
-                eff->m_rate = woort_struct_get_float(updated_info, 5);
-            });
+                eff->m_rate = woort_struct_get_float(updated_info, 5); });
         break;
     }
     case woolang_je_audio_effect_kind::PITCH_SHIFTER:
@@ -3595,8 +3764,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
         (*effect_instance)->update([&](jeal_effect_pitch_shifter* eff)
             {
                 eff->m_coarse_tune = (int)woort_struct_get_int(updated_info, 0);
-                eff->m_fine_tune = (int)woort_struct_get_int(updated_info, 1);
-            });
+                eff->m_fine_tune = (int)woort_struct_get_int(updated_info, 1); });
         break;
     }
     case woolang_je_audio_effect_kind::RING_MODULATOR:
@@ -3608,8 +3776,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
             {
                 eff->m_frequency = woort_struct_get_float(updated_info, 0);
                 eff->m_highpass_cutoff = woort_struct_get_float(updated_info, 1);
-                eff->m_waveform = (jeal_effect_ring_modulator::waveform)woort_struct_get_int(updated_info, 2);
-            });
+                eff->m_waveform = (jeal_effect_ring_modulator::waveform)woort_struct_get_int(updated_info, 2); });
         break;
     }
     case woolang_je_audio_effect_kind::AUTOWAH:
@@ -3622,8 +3789,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
                 eff->m_attack_time = woort_struct_get_float(updated_info, 0);
                 eff->m_release_time = woort_struct_get_float(updated_info, 1);
                 eff->m_resonance = woort_struct_get_float(updated_info, 2);
-                eff->m_peak_gain = woort_struct_get_float(updated_info, 3);
-            });
+                eff->m_peak_gain = woort_struct_get_float(updated_info, 3); });
         break;
     }
     case woolang_je_audio_effect_kind::COMPRESSOR:
@@ -3632,9 +3798,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
             static_cast<wo_je_effect_res_t(jeal_effect_compressor)*>(effect);
 
         (*effect_instance)->update([&](jeal_effect_compressor* eff)
-            {
-                eff->m_enabled = woort_struct_get_bool(updated_info, 0);
-            });
+            { eff->m_enabled = woort_struct_get_bool(updated_info, 0); });
         break;
     }
     case woolang_je_audio_effect_kind::EQUALIZER:
@@ -3653,8 +3817,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
                 eff->m_mid2_center = woort_struct_get_float(updated_info, 6);
                 eff->m_mid2_width = woort_struct_get_float(updated_info, 7);
                 eff->m_high_gain = woort_struct_get_float(updated_info, 8);
-                eff->m_high_cutoff = woort_struct_get_float(updated_info, 9);
-            });
+                eff->m_high_cutoff = woort_struct_get_float(updated_info, 9); });
         break;
     }
     case woolang_je_audio_effect_kind::EAXREVERB:
@@ -3694,8 +3857,7 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
                 eff->m_hf_reference = woort_struct_get_float(updated_info, 19);
                 eff->m_lf_reference = woort_struct_get_float(updated_info, 20);
                 eff->m_room_rolloff_factor = woort_struct_get_float(updated_info, 21);
-                eff->m_decay_hf_limit = woort_struct_get_bool(updated_info, 22);
-            });
+                eff->m_decay_hf_limit = woort_struct_get_bool(updated_info, 22); });
         break;
     }
     default:
@@ -3712,8 +3874,8 @@ WOORT_API woort_api wojeapi_audio_effect_slot_create(void)
             jeecs::audio::effect_slot::create()),
         WOORT_IGNORE,
         [](void* p)
-        { 
-            delete static_cast<jeecs::basic::resource<jeecs::audio::effect_slot>*>(p); 
+        {
+            delete static_cast<jeecs::basic::resource<jeecs::audio::effect_slot>*>(p);
         },
         nullptr);
 }
@@ -3799,9 +3961,7 @@ WOORT_API woort_api wojeapi_audio_effect_slot_update(void)
     const woort_value info = 1;
 
     (*effect_slot)->update([&](jeal_effect_slot* eff)
-        {
-            eff->m_gain = woort_struct_get_float(info, 0);
-        });
+        { eff->m_gain = woort_struct_get_float(info, 0); });
 
     return woort_ret_void();
 }
@@ -3809,7 +3969,7 @@ WOORT_API woort_api wojeapi_audio_effect_slot_update(void)
 WOORT_API woort_api wojeapi_input_update_mouse_state(void)
 {
     auto group = (size_t)woort_int(0);
-    auto key = (jeecs::input::mousecode)woort_int(1);
+    auto key = (je_Mousecode)woort_int(1);
     auto down = woort_bool(2);
 
     je_io_update_mouse_state(group, key, down);
@@ -3825,10 +3985,465 @@ WOORT_API woort_api wojeapi_input_update_wheel(void)
 }
 WOORT_API woort_api wojeapi_input_update_key_state(void)
 {
-    auto key = (jeecs::input::keycode)woort_int(0);
+    auto key = (je_Keycode)woort_int(0);
     auto down = woort_bool(1);
 
     je_io_update_key_state(key, down);
+
+    return woort_ret_void();
+}
+
+/////////////////////////// RENDCHAIN API ///////////////////////////
+
+static const uint32_t* _wojeapi_lookup_uniform_location(
+    jeecs::basic::resource<jeecs::graphic::shader>* shader_res, const char* name)
+{
+    auto* builtin = (*shader_res)->m_builtin;
+
+    if (strcmp(name, "JE_M") == 0)
+        return &builtin->m_builtin_uniform_m;
+    if (strcmp(name, "JE_MV") == 0)
+        return &builtin->m_builtin_uniform_mv;
+    if (strcmp(name, "JE_MVP") == 0)
+        return &builtin->m_builtin_uniform_mvp;
+    if (strcmp(name, "JE_LOCAL_SCALE") == 0)
+        return &builtin->m_builtin_uniform_local_scale;
+    if (strcmp(name, "JE_UV_TILING") == 0)
+        return &builtin->m_builtin_uniform_tiling;
+    if (strcmp(name, "JE_UV_OFFSET") == 0)
+        return &builtin->m_builtin_uniform_offset;
+    if (strcmp(name, "JE_COLOR") == 0)
+        return &builtin->m_builtin_uniform_color;
+    if (strcmp(name, "JE_LIGHT2D_RESOLUTION") == 0)
+        return &builtin->m_builtin_uniform_light2d_resolution;
+    if (strcmp(name, "JE_LIGHT2D_DECAY") == 0)
+        return &builtin->m_builtin_uniform_light2d_decay;
+
+    auto* custom = (*shader_res)->resource()->m_custom_uniforms;
+    while (custom != nullptr)
+    {
+        if (strcmp(custom->m_name, name) == 0)
+            return &custom->m_index;
+        custom = custom->m_next;
+    }
+    return nullptr;
+}
+
+WOORT_API woort_api wojeapi_uniformbuffer_create(void)
+{
+    const size_t binding_place = (size_t)woort_int(0);
+    const size_t buffer_size = (size_t)woort_int(1);
+
+    std::optional<jeecs::basic::resource<jeecs::graphic::uniformbuffer>> ub;
+
+    woort_vm* const last = woort_vm_swap(nullptr);
+    {
+        ub = jeecs::graphic::uniformbuffer::create(binding_place, buffer_size);
+    }
+    (void)woort_vm_swap(last);
+
+    if (ub.has_value())
+        return woort_ret_option_gchandle(
+            new jeecs::basic::resource<jeecs::graphic::uniformbuffer>(ub.value()),
+            WOORT_IGNORE,
+            [](void* ptr)
+            {
+                delete (jeecs::basic::resource<jeecs::graphic::uniformbuffer> *)ptr;
+            },
+            nullptr);
+
+    return woort_ret_option_none();
+}
+
+WOORT_API woort_api wojeapi_uniformbuffer_update(void)
+{
+    auto* ub =
+        (jeecs::basic::resource<jeecs::graphic::uniformbuffer> *)woort_gcpointer(0);
+    const size_t offset = (size_t)woort_int(1);
+
+    size_t buflen = 0;
+    const void* buf = woort_buffer(2, &buflen);
+
+    (*ub)->update_buffer(offset, buflen, buf);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_uhost_get_or_create_for_universe(void)
+{
+    je_GameUniverse* universe = static_cast<je_GameUniverse*>(woort_pointer(0));
+
+    je_GraphicUhost* host;
+
+    woort_vm* const last = woort_vm_swap(nullptr);
+    {
+        host = jegl_uhost_get_or_create_for_universe(universe, nullptr);
+    }
+    (void)woort_vm_swap(last);
+
+    return woort_ret_pointer(host);
+}
+
+WOORT_API woort_api wojeapi_uhost_get_context(void)
+{
+    auto* host = (je_GraphicUhost*)woort_pointer(0);
+    return woort_ret_pointer(jegl_uhost_get_context(host));
+}
+
+WOORT_API woort_api wojeapi_uhost_set_skip_behavior(void)
+{
+    auto* host = (je_GraphicUhost*)woort_pointer(0);
+    bool skip_all_draw = woort_bool(1);
+
+    jegl_uhost_set_skip_behavior(host, skip_all_draw);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_uhost_alloc_branch(void)
+{
+    auto* host = (je_GraphicUhost*)woort_pointer(0);
+    return woort_ret_pointer(jegl_uhost_alloc_branch(host));
+}
+
+WOORT_API woort_api wojeapi_uhost_free_branch(void)
+{
+    auto* host = (je_GraphicUhost*)woort_pointer(0);
+    auto* branch = (je_RendchainBranch*)woort_pointer(1);
+
+    jegl_uhost_free_branch(host, branch);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_branch_new_frame(void)
+{
+    auto* branch = (je_RendchainBranch*)woort_pointer(0);
+    int priority = (int)woort_int(1);
+
+    jegl_branch_new_frame(branch, priority);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_branch_new_chain(void)
+{
+    auto* branch = (je_RendchainBranch*)woort_pointer(0);
+
+    jegl_frame_buffer* fb = nullptr;
+    if (woort_option_get(WOORT_RETURN_SLOT, 1))
+    {
+        auto* fb_res =
+            (jeecs::basic::resource<jeecs::graphic::framebuffer> *)woort_gcpointer(WOORT_RETURN_SLOT);
+        fb = (*fb_res)->resource();
+    }
+
+    int32_t x = (int32_t)woort_int(2);
+    int32_t y = (int32_t)woort_int(3);
+    uint32_t w = (uint32_t)woort_int(4);
+    uint32_t h = (uint32_t)woort_int(5);
+
+    return woort_ret_pointer(jegl_branch_new_chain(branch, fb, x, y, w, h));
+}
+
+WOORT_API woort_api wojeapi_rchain_create(void)
+{
+    return woort_ret_pointer(jegl_rchain_create());
+}
+
+WOORT_API woort_api wojeapi_rchain_close(void)
+{
+    auto* chain = (jegl_rendchain*)woort_pointer(0);
+    jegl_rchain_close(chain);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_begin(void)
+{
+    auto* chain = (jegl_rendchain*)woort_pointer(0);
+
+    jegl_frame_buffer* fb = nullptr;
+    if (woort_option_get(WOORT_RETURN_SLOT, 1))
+    {
+        auto* fb_res =
+            (jeecs::basic::resource<jeecs::graphic::framebuffer> *)woort_gcpointer(WOORT_RETURN_SLOT);
+        fb = (*fb_res)->resource();
+    }
+
+    int32_t x = (int32_t)woort_int(2);
+    int32_t y = (int32_t)woort_int(3);
+    uint32_t w = (uint32_t)woort_int(4);
+    uint32_t h = (uint32_t)woort_int(5);
+
+    jegl_rchain_begin(chain, fb, x, y, w, h);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_bind_uniform_buffer(void)
+{
+    auto* chain = (jegl_rendchain*)woort_pointer(0);
+    auto* ub =
+        (jeecs::basic::resource<jeecs::graphic::uniformbuffer> *)woort_gcpointer(1);
+
+    jegl_rchain_bind_uniform_buffer(chain, (*ub)->resource());
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_clear_color_buffer(void)
+{
+    auto* chain = (jegl_rendchain*)woort_pointer(0);
+    size_t attachment_index = (size_t)woort_int(1);
+
+    const woort_value color_tuple = 2;
+    float clear_color[4];
+    clear_color[0] = (float)woort_struct_get_real(color_tuple, 0);
+    clear_color[1] = (float)woort_struct_get_real(color_tuple, 1);
+    clear_color[2] = (float)woort_struct_get_real(color_tuple, 2);
+    clear_color[3] = (float)woort_struct_get_real(color_tuple, 3);
+
+    jegl_rchain_clear_color_buffer(chain, attachment_index, clear_color);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_clear_depth_buffer(void)
+{
+    auto* chain = (jegl_rendchain*)woort_pointer(0);
+    float clear_depth = woort_float(1);
+
+    jegl_rchain_clear_depth_buffer(chain, clear_depth);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_allocate_texture_group(void)
+{
+    auto* chain = (jegl_rendchain*)woort_pointer(0);
+    return woort_ret_pointer(jegl_rchain_allocate_texture_group(chain));
+}
+
+WOORT_API woort_api wojeapi_rchain_bind_texture(void)
+{
+    auto* chain = (jegl_rendchain*)woort_pointer(0);
+    auto* tg = (jegl_rchain_texture_group*)woort_pointer(1);
+    size_t binding_pass = (size_t)woort_int(2);
+    auto* tex =
+        (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(3);
+
+    jegl_rchain_bind_texture(chain, tg, binding_pass, (*tex)->resource());
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_draw(void)
+{
+    auto* chain = (jegl_rendchain*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    auto* vert =
+        (jeecs::basic::resource<jeecs::graphic::vertex> *)woort_gcpointer(2);
+
+    jegl_rchain_texture_group* tg = nullptr;
+    if (woort_option_get(WOORT_RETURN_SLOT, 3))
+        tg = (jegl_rchain_texture_group*)woort_pointer(WOORT_RETURN_SLOT);
+
+    auto* act = jegl_rchain_draw(chain, (*shad)->resource(), (*vert)->resource(), tg);
+
+    return woort_ret_pointer(act);
+}
+
+WOORT_API woort_api wojeapi_rchain_commit(void)
+{
+    auto* chain = (jegl_rendchain*)woort_pointer(0);
+    auto* ctx = (jegl_context*)woort_pointer(1);
+
+    jegl_rchain_commit(chain, ctx);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_get_target_framebuf(void)
+{
+    auto* chain = (jegl_rendchain*)woort_pointer(0);
+    auto* fb = jegl_rchain_get_target_framebuf(chain);
+
+    if (fb != nullptr)
+        return woort_ret_option_pointer(fb);
+
+    return woort_ret_option_none();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_buffer(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* ub =
+        (jeecs::basic::resource<jeecs::graphic::uniformbuffer> *)woort_gcpointer(1);
+
+    jegl_rchain_set_uniform_buffer(act, (*ub)->resource());
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_int(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    const char* name = woort_string(2);
+    int val = (int)woort_int(3);
+
+    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
+    jegl_rchain_set_uniform_int(act, loc, val);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_int2(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    const char* name = woort_string(2);
+
+    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
+    jegl_rchain_set_uniform_int2(act, loc, (int)woort_int(3), (int)woort_int(4));
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_int3(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    const char* name = woort_string(2);
+
+    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
+    jegl_rchain_set_uniform_int3(act, loc,
+        (int)woort_int(3), (int)woort_int(4), (int)woort_int(5));
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_int4(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    const char* name = woort_string(2);
+
+    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
+    jegl_rchain_set_uniform_int4(act, loc,
+        (int)woort_int(3), (int)woort_int(4), (int)woort_int(5), (int)woort_int(6));
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_float(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    const char* name = woort_string(2);
+    float val = woort_float(3);
+
+    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
+    jegl_rchain_set_uniform_float(act, loc, val);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_float2(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    const char* name = woort_string(2);
+
+    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
+    jegl_rchain_set_uniform_float2(act, loc, woort_float(3), woort_float(4));
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_float3(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    const char* name = woort_string(2);
+
+    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
+    jegl_rchain_set_uniform_float3(act, loc,
+        woort_float(3), woort_float(4), woort_float(5));
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_float4(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    const char* name = woort_string(2);
+
+    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
+    jegl_rchain_set_uniform_float4(act, loc,
+        woort_float(3), woort_float(4), woort_float(5), woort_float(6));
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_float2x2(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    const char* name = woort_string(2);
+
+    float mat[2][2];
+    for (int i = 0; i < 4; ++i)
+        (&mat[0][0])[i] = woort_float((woort_value)(3 + i));
+
+    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
+    jegl_rchain_set_uniform_float2x2(act, loc, mat);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_float3x3(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    const char* name = woort_string(2);
+
+    float mat[3][3];
+    for (int i = 0; i < 9; ++i)
+        (&mat[0][0])[i] = woort_float((woort_value)(3 + i));
+
+    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
+    jegl_rchain_set_uniform_float3x3(act, loc, mat);
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_rchain_set_uniform_float4x4(void)
+{
+    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
+    auto* shad =
+        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    const char* name = woort_string(2);
+
+    float mat[4][4];
+    for (int i = 0; i < 16; ++i)
+        (&mat[0][0])[i] = woort_float((woort_value)(3 + i));
+
+    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
+    jegl_rchain_set_uniform_float4x4(act, loc, mat);
 
     return woort_ret_void();
 }

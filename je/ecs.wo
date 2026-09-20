@@ -1,0 +1,194 @@
+// Joyengine 4.x
+import pkg::std;
+import je::typeinfo;
+import je::graphic;
+
+namespace je
+{
+    public using universe = handle;
+    namespace universe
+    {
+        extern("libjoyecs", "wojeapi_create_universe")
+            public func create()=> universe;
+            
+        extern("libjoyecs", "wojeapi_close_universe")
+            public func close(self: universe)=> void;
+            
+        extern("libjoyecs", "wojeapi_universe_extend_life")
+            public func grow(self: universe)=> void;
+            
+        extern("libjoyecs", "wojeapi_universe_reduce_life")
+            public func trim(self: universe)=> void;
+            
+        extern("libjoyecs", "wojeapi_universe_wait")
+            public func wait(self: universe)=> void;
+            
+        extern("libjoyecs", "wojeapi_universe_get_frame_deltatime")
+            public func get_frame_deltatime(self: universe)=> real;
+            
+        extern("libjoyecs", "wojeapi_universe_set_frame_deltatime")
+            public func set_frame_deltatime(self: universe, delta: real)=> void;
+            
+        extern("libjoyecs", "wojeapi_universe_get_max_deltatime")
+            public func get_max_deltatime(self: universe)=> real;
+            
+        extern("libjoyecs", "wojeapi_universe_set_max_deltatime")
+            public func set_max_deltatime(self: universe, delta: real)=> void;
+            
+        extern("libjoyecs", "wojeapi_universe_get_timescale")
+            public func get_timescale(self: universe)=> real;
+            
+        extern("libjoyecs", "wojeapi_universe_set_timescale")
+            public func set_timescale(self: universe, scale: real)=> void;
+            
+        extern("libjoyecs", "wojeapi_get_all_worlds_in_universe")
+            public func get_all_worlds(self: universe)=> array<world>;
+    }
+    
+    public using world = handle;
+    namespace world
+    {
+        extern("libjoyecs", "wojeapi_create_world_in_universe")
+            public func create(u: universe)=> world;
+            
+        extern("libjoyecs", "wojeapi_close_world")
+            public func close(self: world) => void;
+            
+        extern("libjoyecs", "wojeapi_set_enable_world")
+            public func set_enable(self: world, able: bool)=> void;
+            
+        extern("libjoyecs", "wojeapi_add_system_to_world")
+            public func add_system(self: world, systype: typeinfo)=> bool;
+            
+        extern("libjoyecs", "wojeapi_add_entity_to_world_with_components")
+            public func add_entity(self: world, components: array<typeinfo>)=> entity;
+            
+        extern("libjoyecs", "wojeapi_add_entity_to_world_with_prefab")
+            public func instance(self: world, prefab: entity)=> entity;
+            
+        extern("libjoyecs", "wojeapi_add_prefab_to_world_with_components")
+            public func add_prefab(self: world, components: array<typeinfo>)=> entity;
+            
+        extern("libjoyecs", "wojeapi_remove_system_from_world")
+            public func remove_system(self: world, sysinfo: typeinfo)=> void;
+            
+        extern("libjoyecs", "wojeapi_get_universe_from_world")
+            public func get_universe(self: world)=> universe;
+            
+        extern("libjoyecs", "wojeapi_get_system_from_world")
+            public func get_system(self: world, systype: typeinfo)=> option<handle>;
+    }
+    public using entity = gchandle;
+    namespace entity
+    {
+        public func operator == (a: entity, b: entity)
+        {
+            return a->chunkinfo() == b->chunkinfo();
+        }
+        public func operator != (a: entity, b: entity)
+        {
+            return a->chunkinfo() != b->chunkinfo();
+        }
+        
+        extern("libjoyecs", "wojeapi_close_entity")
+            public func close(self: entity)=> void;
+            
+        extern("libjoyecs", "wojeapi_get_world_from_entity")
+            public func get_world(self: entity)=> world;
+            
+        public func get_component(self: entity, type: typeinfo)=> option<component>
+        {
+            extern("libjoyecs", "wojeapi_get_component_from_entity")
+                func _get_component(self: entity, type: typeinfo)=> option<handle>;
+                
+            return _get_component(self, type)
+                ->> \addr = component{
+                        addr = addr,
+                        type = type,
+                    }
+                    ;
+                ;
+        };
+        
+        public func add_component(self: entity, type: typeinfo)=> component
+        {
+            extern("libjoyecs", "wojeapi_add_component_to_entity")
+                func _add_component(self: entity, type: typeinfo)=> handle;
+                
+            return component{addr = _add_component(self, type), type = type,};
+        };
+        
+        extern("libjoyecs", "wojeapi_remove_component_from_entity")
+            public func remove_component(self: entity, type: typeinfo)=> void;
+            
+        extern("libjoyecs", "wojeapi_get_entity_chunk_info")
+            public func chunkinfo(self: entity)=> string;
+            
+        extern("libjoyecs", "wojeapi_shaders_of_entity")
+            public func get_shaders(self: entity)=> array<graphic::shader>;
+            
+        extern("libjoyecs", "wojeapi_set_shaders_of_entity")
+            public func set_shaders(self: entity, shaders: array<graphic::shader>)=> void;
+            
+        extern("libjoyecs", "wojeapi_textures_of_entity")
+            public func get_textures(self: entity)=> dict<int, graphic::texture>;
+            
+        extern("libjoyecs", "wojeapi_bind_texture_for_entity")
+            public func bind_texture(self: entity, id: int, tex: option<graphic::texture>)=> void;
+            
+        extern("libjoyecs", "wojeapi_set_shape_for_entity")
+            public func set_shape(self: entity, shape: option<graphic::vertex>)=> void;
+            
+        extern("libjoyecs", "wojeapi_get_shape_of_entity")
+            public func get_shape(self: entity)=> option<graphic::vertex>;
+            
+    } // end of namespace entity
+    
+    using component = struct{addr: handle, type: typeinfo}
+    {
+        extern("libjoyecs", "wojeapi_get_components_member")
+            public func get_member(self: component, name: string)=> option<(typeinfo, handle)>;
+            
+        extern("libjoyecs", "wojeapi_component_get_all_members")
+            public func get_members(self: component)=> array<(string, typeinfo, handle)>;
+    }
+
+    public union requirement
+    {
+        contains(typeinfo),
+        except(typeinfo),
+        anyof(array<typeinfo>),
+    }
+
+    // A persistent selector over the entities of a world, backed by a cached
+    // je_RequirementCollection. It is iterable: iter() returns an
+    // entity_selector_iter. The cached arch info is refreshed in native code
+    // when the iterator is created (only if the world's arch-type set changed).
+    public using entity_selector = gchandle;
+
+    // Iterator over an entity_selector. Advanced via next() in a `for` loop.
+    public using entity_selector_iter = gchandle;
+
+    namespace entity_selector
+    {
+        // Create an iterator over the matching entities. Native code checks the
+        // world's arch-type change version here and refreshes the cache if needed.
+        extern("libjoyecs", "wojeapi_entity_selector_iter")
+            public func iter(self: entity_selector)=> entity_selector_iter;
+    }
+
+    namespace entity_selector_iter
+    {
+        extern("libjoyecs", "wojeapi_entity_selector_iter_next")
+            public func next(self: entity_selector_iter)=> option<entity>;
+    }
+
+    namespace world
+    {
+        // Create a persistent entity selector matching the given requirements.
+        // Each entry is a requirement union: contains(typeinfo), except(typeinfo)
+        // or anyof(array<typeinfo>); each anyof(...) entry forms its own ANYOF group.
+        extern("libjoyecs", "wojeapi_entity_selector_create")
+            public func create_selector(self: world, requirements: array<requirement>)=> entity_selector;
+    }
+}

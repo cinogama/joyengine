@@ -1,0 +1,304 @@
+import pkg::std;
+
+import je;
+import je::gui;
+import je::towoo;
+import je::towoo::types;
+import je::typeinfo;
+
+using std;
+using je;
+using je::gui;
+
+namespace JEEditor::GUI::Widgets
+{
+    // 在当前行绘制“旋转圆点”加载动画并在动画右侧排版提示文本：
+    // 一圈圆点绕圆心连续旋转，头部（tail=0）最亮最大、向尾部渐暗渐小，
+    // 形成拖尾的彗星效果；点的位置由 sin/cos 按相位直接计算。
+    public func drawBusySpinner(label: string)
+    {
+        let dot_count = 12;
+        let radius = 8.;
+        let head_angle = GetTime() * 5.;  // 旋转相位：每秒5弧度≈0.8圈
+
+        let text_size = CalcTextSize(label);
+        let cursor = GetCursorScreenPos();
+        let center = (cursor.0 + radius + 2., cursor.1 + text_size.1 * 0.5);
+        let draw_list = GetWindowDrawList();
+
+        for (let mut i = 0; i < dot_count; i += 1)
+        {
+            let tail = i as real / dot_count as real;  // 0=头部 → 1=尾部
+            let fade = 1. - tail;
+            let angle = head_angle - tail * 2. * mathf::PI;
+
+            draw_list->AddCircleFilled(
+                (center.0 + mathf::cos(angle) * radius,
+                    center.1 + mathf::sin(angle) * radius),
+                1.1 + 1.9 * fade,
+                (120, 190, 255, (70. + 185. * fade * fade) as int));
+        }
+
+        // 占位动画区域后，把提示文本排到动画右侧
+        Dummy(((radius + 2.) * 2., text_size.1));
+        SameLine();
+        TextColored((120, 190, 255, 255), label);
+    }
+
+    // ============================================================
+    // 检视面板成员编辑的两列布局辅助
+    // （JEEditor::Editor::Inspector.wo 与 builtin/script/editor.wo 共用）
+    //
+    // 约定：检视面板在成员行的左侧绘制成员名标签列，把控件光标定位
+    // 到右侧“控件列”起点后调用 dynamic_parser::edit。简单类型一个控件
+    // 占满控件列即可；多行（列表/组合）编辑器先用 editColumnX 记下
+    // 控件列起点，再用 beginRow / beginStepRow 让每一行“行标签 + 控件”
+    // 与控件列对齐，避免各行从窗口缩进处起排、挤成一坨。
+    // ============================================================
+
+    // 仅调整光标的横/纵坐标，另一轴保持不变
+    public func setCursorX(x: real)=> void
+    {
+        let (_, y) = GetCursorPos();
+        SetCursorPos((x, y));
+    }
+    public func setCursorY(y: real)=> void
+    {
+        let (x, _) = GetCursorPos();
+        SetCursorPos((x, y));
+    }
+
+    // 编辑器入口处的控件列起点（窗口坐标 X）：必须在绘制任何控件前
+    // 调用（此刻调用方已把光标定位到控件列）
+    public func editColumnX()=> real
+    {
+        return GetCursorPos().0;
+    }
+
+    // 在控件列内起一行：行标签画在 col_x 起、label_w 宽的子列内并与
+    // 控件框垂直居中，控件从 col_x + label_w 起占满剩余宽度
+    // （SetNextItemWidth 已设置好，控件自身的可见标签应为空）。
+    // 调用后需立刻提交该行控件。
+    public func beginRow(label: string, col_x: real, label_w: real)=> void
+    {
+        setCursorX(col_x);
+        setCursorY(GetCursorPos().1 + (GetFrameHeight() - GetTextLineHeight()) * 0.5);
+        TextDisabled(label);
+        SameLine();
+        setCursorX(col_x + label_w);
+        SetNextItemWidth(GetContentRegionAvail().0);
+    }
+
+    // 同 beginRow，但用于 InputInt 这类把步进按钮画在输入框之外的
+    // 控件：为框外的按钮预留右侧空间，避免被面板边缘裁掉
+    public func beginStepRow(label: string, col_x: real, label_w: real)=> void
+    {
+        beginRow(label, col_x, label_w);
+        SetNextItemWidth(GetContentRegionAvail().0 - 56.);
+    }
+
+    // 多边形顶点环编辑（Physics2D::vertex_list 与
+    // Light2D::BlockShadow::block_mesh 的公共结构）：首行“顶点数”步进
+    // 控件与成员名同行，其后每个顶点一行“点N + XY 输入”（物理侧要求
+    // 至少 3 个顶点才能构成多边形）。返回有改动时的新顶点表，无改动
+    // 返回 none。
+    public func editPointRing(
+        points: vec<vec2>, col_x: real, tag: string)=> option<vec<vec2>>
+    {
+        let mut pts = points;
+        let mut changed = false;
+
+        beginStepRow("顶点数", col_x, 56.);
+        match (InputInt(F"##{tag}_count", pts->len)->>\n = n < 3 ? 3 | n;)
+        {
+            value(count)?
+            {
+                if (count != pts->len)
+                {
+                    pts->resize(count, (0., 0.) as vec2);
+                    changed = true;
+                }
+            }
+            none?;
+        }
+
+        for (let mut i = 0; i < pts->len; i += 1)
+        {
+            beginRow(F"点{i}", col_x, 56.);
+            match (InputFloat2(F"##{tag}_{i}", pts[i][0], pts[i][1])->>\v = v as vec2;)
+            {
+                value(np)?
+                {
+                    // 索引结果不可变：重建顶点表替换第 i 项
+                    let updated = []mut: vec<vec2>;
+                    for (let mut j = 0; j < pts->len; j += 1)
+                        updated->add(
+                            (j == i) ? np | ((pts[j][0], pts[j][1]) as vec2));
+                    pts = updated;
+                    changed = true;
+                }
+                none?;
+            }
+        }
+
+        if (changed)
+            return option::value(pts);
+        return option::none;
+    }
+
+    // ============================================================
+    // 检视面板 / 材质面板共用的排版与配色辅助
+    // ============================================================
+
+    // 把两个（0..1 浮点）风格色按 t 混合
+    public func mixColorF(
+        c0: (real, real, real, real), c1: (real, real, real, real),
+        t: real)=> (real, real, real, real)
+    {
+        return (
+            c0.0 + (c1.0 - c0.0) * t,
+            c0.1 + (c1.1 - c0.1) * t,
+            c0.2 + (c1.2 - c0.2) * t,
+            c0.3 + (c1.3 - c0.3) * t);
+    }
+    // 混色结果转为可直接用于 PushStyleColor / 绘制的颜色；alpha 固定
+    // 为给定值（风格色多带半透明，按用途决定虚实）
+    public func mixStyleColor(
+        c0: (real, real, real, real), c1: (real, real, real, real),
+        t: real, alpha: int)=> Color32RGBA
+    {
+        let m = mixColorF(c0, c1, t);
+        return ((m.0 * 255.) as int, (m.1 * 255.) as int, (m.2 * 255.) as int, alpha);
+    }
+
+    // 把 "Transform::LocalPosition" 拆为 ("Transform", "LocalPosition")，
+    // 不带命名空间的类型名返回 ("", 原名)。
+    public func splitTypeName(cname: string)=> (string, string)
+    {
+        let sep_pos = cname->find("::")->or(-1);
+        if (sep_pos < 0)
+            return ("", cname);
+        return (cname->sub_len(0, sep_pos), cname->sub(sep_pos + 2));
+    }
+
+    // 标量整数编辑器（InputInt）的步进按钮绘制在输入框之外，右列
+    // 需为其预留空间，否则按钮会被面板右缘裁掉
+    public func isScalarIntType(t: typeinfo)=> bool
+    {
+        let n = t->name;
+        return n == "uint8" || n == "uint16" || n == "uint32"
+            || n == "uint64" || n == "int8" || n == "int16"
+            || n == "int32" || n == "int64";
+    }
+
+    // 成员行布局：左侧标签列 + 右侧控件列（label_color 为 none 时用
+    // 弱化灰字）。标签限制在标签列内（超长裁切，悬停可看全名），并与
+    // 控件框垂直居中；SetNextItemWidth 已按控件列宽减去 step_reserve
+    // 设置好。返回控件列起点（窗口坐标 X），供“无编辑器”提示等
+    // 续行对齐使用。
+    public func beginMemberRow(
+        label: string, label_color: option<Color32RGBA>, step_reserve: real)=> real
+    {
+        let (start_x, start_y) = GetCursorPos();
+        let right_x = start_x + GetContentRegionAvail().0;
+
+        // 标签列宽随面板宽度伸缩，并夹在可读区间内
+        let mut label_w = (right_x - start_x) * 0.38;
+        if (label_w < 76.)
+            label_w = 76.;
+        if (label_w > 132.)
+            label_w = 132.;
+
+        // 标签与控件框垂直居中（与 ImGui 自带“框后标签”的基线一致）
+        let line_h = CalcTextSize(label).1;
+        SetCursorPos((start_x, start_y + (GetFrameHeight() - line_h) * 0.5));
+        let (label_sx, label_sy) = GetCursorScreenPos();
+        PushClipRect(
+            (label_sx - 1., label_sy - line_h),
+            (label_sx + label_w, label_sy + line_h * 2.));
+        match (label_color)
+        {
+            none?
+            {
+                TextDisabled(label);
+                // 被裁切的长标签悬停显示全名（着色分支由调用方提示差异）
+                if (CalcTextSize(label).0 > label_w && IsItemHovered())
+                    do SetTooltip(label);
+            }
+            value(c)? TextColored(c, label);
+        }
+        PopClipRect();
+
+        SameLine();
+        let widget_x = start_x + label_w;
+        setCursorX(widget_x);
+        SetNextItemWidth(right_x - widget_x - step_reserve);
+        return widget_x;
+    }
+
+    // 成员之间的淡色分界线
+    public func memberSeparator()=> void
+    {
+        PushStyleColor(ImGuiCol::ImGuiCol_Separator, (140, 140, 140, 36));
+        Separator();
+        PopStyleColor(1);
+    }
+
+    // 区块标题栏样式（检视面板的组件块与材质面板的分区共用）：
+    // 不透明的主题 Header 混色填充、加厚内边距、微圆角，悬停/按下向
+    // 文字色轻微混合反馈。与 popSectionHeaderStyle 成对使用，其间提交
+    // CollapsingHeaderFlags 等标题内容（标题之后、pop 之前提交的行尾
+    // 按钮会同高，且 Button/MenuItem 配色不受影响）。
+    public func pushSectionHeaderStyle()=> void
+    {
+        let header_c = GetStyleColor(ImGuiCol::ImGuiCol_Header);
+        let window_c = GetStyleColor(ImGuiCol::ImGuiCol_WindowBg);
+        let text_c = GetStyleColor(ImGuiCol::ImGuiCol_Text);
+        let base_c = mixColorF(header_c, window_c, 0.45);
+        PushStyleColor(ImGuiCol::ImGuiCol_Header,
+            mixStyleColor(header_c, window_c, 0.45, 255));
+        PushStyleColor(ImGuiCol::ImGuiCol_HeaderHovered,
+            mixStyleColor(base_c, text_c, 0.12, 255));
+        PushStyleColor(ImGuiCol::ImGuiCol_HeaderActive,
+            mixStyleColor(base_c, text_c, 0.22, 255));
+        PushStyleVec2(StyleVar::ImGuiStyleVar_FramePadding, (6., 5.));
+        PushStyleReal(StyleVar::ImGuiStyleVar_FrameRounding, 3.);
+    }
+    public func popSectionHeaderStyle()=> void
+    {
+        PopStyleColor(3);
+        PopStyleVar(2);
+    }
+
+    // 卡片行（材质面板的模型行/纹理通道行）：绘制淡色底与悬停描边，
+    // 并提交一个覆盖整行的隐形交互项——调用方紧接着对它做
+    // IsItemHovered 悬停提示与 AcceptDrag 拖放，使整行都是命中区；
+    // 随后在行内绘制内容（后绘制的控件可抢占点击）。返回
+    // (行的窗口坐标起点, 内容起点 X)，内容绘制完调用 endCardRow 复位。
+    public func beginCardRow(tag: string, height: real)=> ((real, real), real)
+    {
+        let (start_x, start_y) = GetCursorPos();
+        let width = GetContentRegionAvail().0;
+        let (sx, sy) = GetCursorScreenPos();
+        let draw = GetWindowDrawList();
+        let text_c = GetStyleColor(ImGuiCol::ImGuiCol_Text);
+
+        draw->AddRectFilled((sx, sy), (sx + width, sy + height),
+            ((text_c.0 * 255.) as int, (text_c.1 * 255.) as int,
+                (text_c.2 * 255.) as int, 14));
+
+        do InvisibleButton(tag, (width, height));
+        if (IsItemHovered())
+            draw->AddRect((sx, sy), (sx + width, sy + height),
+                ((text_c.0 * 255.) as int, (text_c.1 * 255.) as int,
+                    (text_c.2 * 255.) as int, 60), 1.);
+
+        return ((start_x, start_y), start_x + 8.);
+    }
+    // 卡片内容绘制完后复位光标到卡片下方（含行距）
+    public func endCardRow(row_start: (real, real), height: real)=> void
+    {
+        SetCursorPos((row_start.0, row_start.1 + height));
+        Spacing();
+    }
+}

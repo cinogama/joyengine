@@ -1,36 +1,42 @@
 // editor.wo
-// =============================================
-// 这个脚本用于向编辑器提供各类型的编辑拓展
-// 此脚本如果存在错误，项目将无法被编辑器载入
-// =============================================
-import woo::std;
+
+import pkg::std;
 
 import je;
 import je::gui;
 import je::towoo;
 import je::towoo::types;
 
-import pkg::worst;
-import pkg::math;
-import pkg::iterator;
+import pkg::fsys;
 
-import builtin::api::gui::file;
-import builtin::api::gui::poseditor;
+import builtin::editor::GUI::FileDrop;
+import builtin::editor::GUI::Widgets;
+import builtin::editor::Editor::ResourcePath;
+import builtin::editor::Editor::Animation2D::DataModel;
 
+using std;
+using je;
 using je::gui;
+using JEEditor::GUI;
+using JEEditor::Editor;
+
+// =============================================
+// 这个脚本用于向编辑器提供各类型的编辑拓展
+// （edit；各类型的序列化拓展见同目录 types.wo）
+// 此脚本如果存在错误，项目将无法被编辑器载入
+//
+// 成员编辑的两列布局约定（与检视面板 Inspector.wo 约定，辅助函数见
+// JEEditor::GUI::Widgets）：调用方在成员行左侧绘制成员名标签列，把
+// 控件光标定位到右侧“控件列”起点后调用 edit。简单类型一个控件占满
+// 控件列；多行（列表/组合）编辑器先用 Widgets::editColumnX 记下控件
+// 列起点，再用 Widgets::beginRow / beginStepRow 逐行对齐（行标签在
+// 左、控件在右），不再各行从窗口缩进处起排。
+// =============================================
 
 namespace bool
 {
     using parser = void
     {
-        public extern func saving(val: bool)=> string
-        {
-            return val as string;
-        }
-        public extern func restoring(dat: string)=> bool
-        {
-            return dat as bool;
-        }
         public extern func edit(val: bool, tag: string)=> option<bool>
         {
             return CheckBox(F"##{tag}", val);
@@ -41,14 +47,6 @@ namespace uint8
 {
     using parser = void
     {
-        public extern func saving(val: uint8)=> string
-        {
-            return val as string;
-        }
-        public extern func restoring(dat: string)=> uint8
-        {
-            return dat as uint8;
-        }
         public extern func edit(val: uint8, tag: string)=> option<uint8>
         {
             return InputInt(F"##{tag}", val);
@@ -59,14 +57,6 @@ namespace uint16
 {
     using parser = void
     {
-        public extern func saving(val: uint16)=> string
-        {
-            return val as string;
-        }
-        public extern func restoring(dat: string)=> uint16
-        {
-            return dat as uint16;
-        }
         public extern func edit(val: uint16, tag: string)=> option<uint16>
         {
             return InputInt(F"##{tag}", val);
@@ -77,14 +67,6 @@ namespace uint32
 {
     using parser = void
     {
-        public extern func saving(val: uint32)=> string
-        {
-            return val as string;
-        }
-        public extern func restoring(dat: string)=> uint32
-        {
-            return dat as uint32;
-        }
         public extern func edit(val: uint32, tag: string)=> option<uint32>
         {
             return InputInt(F"##{tag}", val);
@@ -95,14 +77,6 @@ namespace uint64
 {
     using parser = void
     {
-        public extern func saving(val: uint64)=> string
-        {
-            return val as string;
-        }
-        public extern func restoring(dat: string)=> uint64
-        {
-            return dat as uint64;
-        }
         public extern func edit(val: uint64, tag: string)=> option<uint64>
         {
             return InputInt(F"##{tag}", val);
@@ -113,14 +87,6 @@ namespace int8
 {
     using parser = void
     {
-        public extern func saving(val: int8)=> string
-        {
-            return val as string;
-        }
-        public extern func restoring(dat: string)=> int8
-        {
-            return dat as int8;
-        }
         public extern func edit(val: int8, tag: string)=> option<int8>
         {
             return InputInt(F"##{tag}", val);
@@ -131,14 +97,6 @@ namespace int16
 {
     using parser = void
     {
-        public extern func saving(val: int16)=> string
-        {
-            return val as string;
-        }
-        public extern func restoring(dat: string)=> int16
-        {
-            return dat as int16;
-        }
         public extern func edit(val: int16, tag: string)=> option<int16>
         {
             return InputInt(F"##{tag}", val);
@@ -149,14 +107,6 @@ namespace int32
 {
     using parser = void
     {
-        public extern func saving(val: int32)=> string
-        {
-            return val as string;
-        }
-        public extern func restoring(dat: string)=> int32
-        {
-            return dat as int32;
-        }
         public extern func edit(val: int32, tag: string)=> option<int32>
         {
             return InputInt(F"##{tag}", val);
@@ -167,14 +117,6 @@ namespace int64
 {
     using parser = void
     {
-        public extern func saving(val: int64)=> string
-        {
-            return val as string;
-        }
-        public extern func restoring(dat: string)=> int64
-        {
-            return dat as int64;
-        }
         public extern func edit(val: int64, tag: string)=> option<int64>
         {
             return InputInt(F"##{tag}", val);
@@ -185,14 +127,6 @@ namespace float
 {
     using parser = void
     {
-        public extern func saving(val: float)=> string
-        {
-            return val as string;
-        }
-        public extern func restoring(dat: string)=> float
-        {
-            return dat as float;
-        }
         public extern func edit(val: float, tag: string)=> option<float>
         {
             return InputFloat(F"##{tag}", val);
@@ -203,14 +137,6 @@ namespace real
 {
     using parser = void
     {
-        public extern func saving(val: real)=> string
-        {
-            return val as string;
-        }
-        public extern func restoring(dat: string)=> real
-        {
-            return dat as real;
-        }
         public extern func edit(val: real, tag: string)=> option<real>
         {
             return InputFloat(F"##{tag}", val);
@@ -221,15 +147,6 @@ namespace ivec2
 {
     using parser = void
     {
-        public extern func saving(val: ivec2)=> string
-        {
-            return [val.0, val.1]->serialize->or("[0,0]");
-        }
-        public extern func restoring(dat: string)=> ivec2
-        {
-            let data = dat->array::deserialize->or([0 as dynamic, 0 as dynamic])->> \x = x as int;;
-            return (data->get_or(0, 0), data->get_or(1, 0)) as ivec2;
-        }
         public extern func edit(val: ivec2, tag: string)=> option<ivec2>
         {
             return InputInt2(F"##{tag}", val.0, val.1)->>\v = v as ivec2;;
@@ -240,15 +157,6 @@ namespace vec2
 {
     using parser = void
     {
-        public extern func saving(val: vec2)=> string
-        {
-            return [val.0, val.1]->serialize->or("[0,0]");
-        }
-        public extern func restoring(dat: string)=> vec2
-        {
-            let data = dat->array::deserialize->or([0 as dynamic, 0 as dynamic])->> \x = x as real;;
-            return (data->get_or(0, 0.), data->get_or(1, 0.)) as vec2;
-        }
         public extern func edit(val: vec2, tag: string)=> option<vec2>
         {
             return InputFloat2(F"##{tag}", val.0, val.1)->>\v = v as vec2;;
@@ -259,15 +167,6 @@ namespace vec3
 {
     using parser = void
     {
-        public extern func saving(val: vec3)=> string
-        {
-            return [val.0, val.1, val.2]->serialize->or("[0,0,0]");
-        }
-        public extern func restoring(dat: string)=> vec3
-        {
-            let data = dat->array::deserialize->or([0 as dynamic, 0 as dynamic, 0 as dynamic])->> \x = x as real;;
-            return (data->get_or(0, 0.), data->get_or(1, 0.), data->get_or(2, 0.)) as vec3;
-        }
         public extern func edit(val: vec3, tag: string)=> option<vec3>
         {
             return InputFloat3(F"##{tag}", val.0, val.1, val.2)->>\v = v as vec3;;
@@ -278,15 +177,6 @@ namespace vec4
 {
     using parser = void
     {
-        public extern func saving(val: vec4)=> string
-        {
-            return [val.0, val.1, val.2, val.3]->serialize->or("[0,0,0,0]");
-        }
-        public extern func restoring(dat: string)=> vec4
-        {
-            let data = dat->array::deserialize->or([0 as dynamic, 0 as dynamic, 0 as dynamic, 0 as dynamic])->> \x = x as real;;
-            return (data->get_or(0, 0.), data->get_or(1, 0.), data->get_or(2, 0.), data->get_or(3, 0.)) as vec4;
-        }
         public extern func edit(val: vec4, tag: string)=> option<vec4>
         {
             return InputFloat4(F"##{tag}", val.0, val.1, val.2, val.3)->>\v = v as vec4;;
@@ -297,15 +187,6 @@ namespace quat
 {
     using parser = void
     {
-        public extern func saving(val: quat)=> string
-        {
-            return [val.0, val.1, val.2, val.3]->serialize->or("[0,0,0,0]");
-        }
-        public extern func restoring(dat: string)=> quat
-        {
-            let data = dat->array::deserialize->or([0 as dynamic, 0 as dynamic, 0 as dynamic, 0 as dynamic])->> \x = x as real;;
-            return (data->get_or(0, 0.), data->get_or(1, 0.), data->get_or(2, 0.), data->get_or(3, 0.)) as quat;
-        }
         public extern func edit(val: quat, tag: string)=> option<quat>
         {
             let angle = val->euler_angle;
@@ -313,60 +194,389 @@ namespace quat
         }
     }
 }
-namespace fileresource_void
+// Physics2D::vertex_list：Collider::Mesh 的多边形顶点环。
+namespace Physics2D::vertex_list
 {
     using parser = void
     {
-        public extern func saving(val: fileresource_void)=> string
+        public extern func edit(val: Physics2D::vertex_list, tag: string)=> option<Physics2D::vertex_list>
         {
-            return val.path->or("");
-        }
-        public extern func restoring(dat: string)=> fileresource_void
-        {
-            if (dat == "")
-                return fileresource_void{ path = option::none };
-            else
-                return fileresource_void{ path = option::value(dat) };
-        }
-        public extern func edit(val: fileresource_void, tag: string)=> option<fileresource_void>
-        {
-            match (jeapi::gui::widget::File(F"文件：##{tag}", val.path->or(""), \=do nil;))
+            // 顶点环的公共编辑（首行“顶点数”与成员名同行，其后每个
+            // 顶点一行“点N + XY 输入”，全部对齐控件列）
+            let col_x = Widgets::editColumnX();
+            match (Widgets::editPointRing(
+                (val as array<vec2>)->to_vec, col_x, tag))
             {
-                value(p)?
-                    if (p == "")
-                        return option::value(fileresource_void{ path = option::none });
-                else
-                    return option::value(fileresource_void{ path = option::value(p) });
                 none?
                     return option::none;
+                value(points)?
+                    return option::value(points->to_array as Physics2D::vertex_list);
             }
         }
     }
 }
-namespace fileresource_audio_buffer
+// Light2D::BlockShadow::block_mesh：遮挡光的闭合多边形环（实体局部坐标）。
+namespace Light2D::BlockShadow::block_mesh
 {
     using parser = void
     {
-        public extern func saving(val: fileresource_audio_buffer)=> string
+        public extern func edit(val: Light2D::BlockShadow::block_mesh, tag: string)=> option<Light2D::BlockShadow::block_mesh>
         {
-            return val.path->or("");
+            // 顶点环的公共编辑（首行“顶点数”与成员名同行，其后每个
+            // 顶点一行“点N + XY 输入”，全部对齐控件列）
+            let col_x = Widgets::editColumnX();
+            match (Widgets::editPointRing(
+                (val as array<vec2>)->to_vec, col_x, tag))
+            {
+                none?
+                    return option::none;
+                value(points)?
+                    return option::value(points->to_array as Light2D::BlockShadow::block_mesh);
+            }
         }
-        public extern func restoring(dat: string)=> fileresource_audio_buffer
+    }
+}
+// Light2D::Range::light_shape：范围光的同心环多边形（layer-major：
+// positions 为 [ilayer * m_point_count + ipoint]，strengths 每环一项）。
+namespace Light2D::Range::light_shape
+{
+    using parser = void
+    {
+        public extern func edit(val: Light2D::Range::light_shape, tag: string)=> option<Light2D::Range::light_shape>
         {
-            if (dat == "")
-                return fileresource_audio_buffer{ path = option::none };
-            else
-                return fileresource_audio_buffer{ path = option::value(dat) };
+            let mut point_count = val.m_point_count;
+            let mut strengths = (val.m_strength)->to_vec;
+            let mut positions = (val.m_positions)->to_vec;
+            let mut need_update = false;
+            let col_x = Widgets::editColumnX();
+
+            // 每环顶点数（环至少 3 个顶点才能构成多边形），首行与成员名同行
+            Widgets::beginStepRow("每环顶点数", col_x, 84.);
+            match (InputInt(F"##{tag}_pcount", point_count)->>\n = n < 3 ? 3 | n;)
+            {
+                value(count)?
+                {
+                    if (count != point_count)
+                    {
+                        point_count = count;
+                        positions->resize(strengths->len * count, (0., 0.) as vec2);
+                        need_update = true;
+                    }
+                }
+                none?;
+            }
+
+            // 环数（每环一个强度；改变环数时同步伸缩 positions）
+            Widgets::beginStepRow("环数", col_x, 84.);
+            match (InputInt(F"##{tag}_rings", strengths->len)->>\n = n < 1 ? 1 | n;)
+            {
+                value(count)?
+                {
+                    if (count != strengths->len)
+                    {
+                        let old_len = strengths->len;
+                        strengths->resize(count, 1. as float);
+                        let newpos = []mut: vec<vec2>;
+                        for (let mut l = 0; l < count; l += 1)
+                            for (let mut p = 0; p < point_count; p += 1)
+                                newpos->add((l < old_len)
+                                    ? positions[l * point_count + p]
+                                    | ((0., 0.) as vec2));
+                        positions = newpos;
+                        need_update = true;
+                    }
+                }
+                none?;
+            }
+
+            for (let mut l = 0; l < strengths->len; l += 1)
+            {
+                Widgets::beginRow(F"环{l} 强度", col_x, 84.);
+                match (InputFloat(F"##{tag}_st{l}", strengths[l]))
+                {
+                    value(ns)?
+                    {
+                        // 索引结果不可变：重建强度表替换第 l 项
+                        let updated = []mut: vec<float>;
+                        for (let mut j = 0; j < strengths->len; j += 1)
+                            updated->add((j == l) ? (ns as float) | strengths[j]);
+                        strengths = updated;
+                        need_update = true;
+                    }
+                    none?;
+                }
+            }
+
+            for (let mut i = 0; i < positions->len; i += 1)
+            {
+                Widgets::beginRow(F"环{i / point_count} 点{i % point_count}", col_x, 84.);
+                match (InputFloat2(F"##{tag}_pos{i}", positions[i][0], positions[i][1])->>\v = v as vec2;)
+                {
+                    value(np)?
+                    {
+                        // 索引结果不可变：重建位置表替换第 i 项
+                        let updated = []mut: vec<vec2>;
+                        for (let mut j = 0; j < positions->len; j += 1)
+                            updated->add((j == i) ? np | positions[j]);
+                        positions = updated;
+                        need_update = true;
+                    }
+                    none?;
+                }
+            }
+
+            if (need_update)
+                return option::value(Light2D::Range::light_shape{
+                    m_point_count = point_count,
+                    m_strength = strengths->to_array,
+                    m_positions = positions->to_array,
+                });
+            return option::none;
         }
-        public extern func edit(val: fileresource_audio_buffer, tag: string)=> option<fileresource_audio_buffer>
+    }
+}
+// Animation::FrameAnimation::animation_list：帧动画引用表（运行时结构见
+// jeecs.hpp 的 Animation::FrameAnimation）。每个条目引用一个 .je4animation
+// 文件（m_path 为 @/ 运行时相对路径），并可指定载入后自动播放的动作与循环。
+namespace Animation::FrameAnimation::animation_list
+{
+    // 动作名缓存（runtime_path -> 动作名表 / 文件最后写入时间）：
+    // .je4animation 可能正在动画编辑器中被修改，以时间戳判断缓存失效。
+    let mut s_action_names_cache = {}mut: map<string, array<string>>;
+    let mut s_action_names_stamp = {}mut: map<string, int>;
+
+    // 读取动画文件中的动作名列表；文件缺失或无法解析时返回空表。
+    func read_action_names(runtime_path: string)=> array<string>
+    {
+        if (runtime_path == "")
         {
-            match (jeapi::gui::widget::File(F"文件：##{tag}", val.path->or(""), \=do nil;))
+            let empty = []mut: vec<string>;
+            return empty->to_array;
+        }
+
+        let local_path = ResourcePath::toLocalResourcePath(runtime_path);
+        let mut stamp = -1;
+        match (fsys::lastwrite(local_path))
+        {
+            value(t)? stamp = t as int;
+            none?;
+        }
+
+        match (s_action_names_stamp->get(runtime_path))
+        {
+            value(cached)?
+            {
+                if (cached == stamp)
+                {
+                    match (s_action_names_cache->get(runtime_path))
+                    {
+                        value(names)? return names;
+                        none?;
+                    }
+                }
+            }
+            none?;
+        }
+
+        let mut names = []mut: vec<string>;
+        match (JEEditor::Editor::Animation2D::AnimationContext::open(local_path))
+        {
+            ok(ctx)? names = ctx->action_names->to_vec;
+            err(_)?;
+        }
+
+        let arr = names->to_array;
+        s_action_names_cache->set(runtime_path, arr);
+        s_action_names_stamp->set(runtime_path, stamp);
+        return arr;
+    }
+
+    // 以下 entry_* 辅助：struct 成员不可变，修改单个字段需重建整个条目
+    func entry_with_path(entry: Animation::FrameAnimation::animation_state, path: string)=> Animation::FrameAnimation::animation_state
+    {
+        return Animation::FrameAnimation::animation_state{
+            m_path = path,
+            m_action = entry.m_action,
+            m_loop = entry.m_loop,
+        };
+    }
+    func entry_with_action(entry: Animation::FrameAnimation::animation_state, action: option<string>)=> Animation::FrameAnimation::animation_state
+    {
+        return Animation::FrameAnimation::animation_state{
+            m_path = entry.m_path,
+            m_action = action,
+            m_loop = entry.m_loop,
+        };
+    }
+    func entry_with_loop(entry: Animation::FrameAnimation::animation_state, loop_flag: bool)=> Animation::FrameAnimation::animation_state
+    {
+        return Animation::FrameAnimation::animation_state{
+            m_path = entry.m_path,
+            m_action = entry.m_action,
+            m_loop = loop_flag,
+        };
+    }
+    // 替换第 i 项（vec 没有原地 set，remove + insert 换入）
+    func replace_entry(entries: vec<Animation::FrameAnimation::animation_state>, i: int, entry: Animation::FrameAnimation::animation_state)=> void
+    {
+        do entries->remove(i);
+        do entries->insert(i, entry);
+    }
+
+    using parser = void
+    {
+        public extern func edit(val: Animation::FrameAnimation::animation_list, tag: string)=> option<Animation::FrameAnimation::animation_list>
+        {
+            let mut entries = (val as array<Animation::FrameAnimation::animation_state>)->to_vec;
+            let mut need_update = false;
+            let col_x = Widgets::editColumnX();
+
+            // 动画条目数，首行与成员名同行
+            Widgets::beginStepRow("动画数", col_x, 56.);
+            match (InputInt(F"##{tag}_count", entries->len)->>\n = n < 0 ? 0 | n;)
+            {
+                value(count)?
+                {
+                    if (count != entries->len)
+                    {
+                        entries->resize(count, Animation::FrameAnimation::animation_state{
+                            m_path = "",
+                            m_action = option::none,
+                            m_loop = false,
+                        });
+                        need_update = true;
+                    }
+                }
+                none?;
+            }
+
+            // 每个条目占两行：“文件 + 移除”一行，“动作 + 循环”一行
+            for (let mut i = 0; i < entries->len; i += 1)
+            {
+                // 1) 动画文件：从资源浏览器拖入 .je4animation；字段右缘
+                //    紧邻的 × 只清除引用，行末的 × 移除整个条目
+                let mut cur_local = option::none: option<fsys::path_t>;
+                if (entries[i].m_path != "")
+                    cur_local = option::value(ResourcePath::toLocalResourcePath(entries[i].m_path));
+
+                Widgets::beginRow(F"文件{i}", col_x, 56.);
+                // 行末还要放“移除条目”× 按钮，为它预留右侧空间
+                match (FileDrop::FileTrailing(F"##{tag}_file{i}", cur_local, 32.))
+                {
+                    none?;
+                    value(p)?
+                    {
+                        let mut new_path = "";
+                        match (p)
+                        {
+                            value(lp)? new_path = ResourcePath::toRuntimeResourcePath(lp);
+                            none?;
+                        }
+                        // 换文件/清除后原动作引用不再可靠，一并清空
+                        replace_entry(entries, i,
+                            entry_with_path(entry_with_action(entries[i], option::none: option<string>), new_path));
+                        need_update = true;
+                    }
+                }
+                SameLine();
+                if (ButtonSize(F"×##{tag}_{i}", (22., 0.)))
+                {
+                    do entries->remove(i);
+                    // 回退索引并跳过本条目余下行，让递增后仍指向原第 i+1 项
+                    i -= 1;
+                    need_update = true;
+                    continue;
+                }
+                else
+                {
+                    if (IsItemHovered())
+                        do SetTooltip("移除该动画条目");
+                }
+
+                // 2) 载入后自动播放的动作：Combo 列出文件中的动作名；
+                //    当前动作不在文件中时附加标注项展示，避免值被静默丢弃
+                let file_names = read_action_names(entries[i].m_path);
+                let mut cur_action = "";
+                match (entries[i].m_action)
+                {
+                    value(a)? cur_action = a;
+                    none?;
+                }
+
+                let mut raw_names = []mut: vec<string>;
+                let mut disp = []mut: vec<string>;
+                raw_names->add("");
+                disp->add("（不自动播放）");
+                let mut sel = 0;
+                for (let n : file_names)
+                {
+                    raw_names->add(n);
+                    disp->add(n);
+                    if (n == cur_action)
+                        sel = raw_names->len - 1;
+                }
+                if (cur_action != "" && sel == 0)
+                {
+                    raw_names->add(cur_action);
+                    disp->add(F"{cur_action}（文件中不存在）");
+                    sel = raw_names->len - 1;
+                }
+
+                Widgets::beginRow(F"动作{i}", col_x, 56.);
+                // 同行还要放“循环”开关，为其预留右侧空间
+                SetNextItemWidth(GetContentRegionAvail().0 - 74.);
+                match (Combo(F"##{tag}_act{i}", disp->to_array, option::value(sel)))
+                {
+                    value(idx)?
+                    {
+                        let picked = raw_names->get_or(idx, "");
+                        let mut act = option::none: option<string>;
+                        if (picked != "")
+                            act = option::value(picked);
+                        replace_entry(entries, i, entry_with_action(entries[i], act));
+                        need_update = true;
+                    }
+                    none?;
+                }
+
+                // 3) 循环开关
+                SameLine();
+                match (CheckBox(F"循环##{tag}_loop{i}", entries[i].m_loop))
+                {
+                    value(l)?
+                    {
+                        replace_entry(entries, i, entry_with_loop(entries[i], l));
+                        need_update = true;
+                    }
+                    none?;
+                }
+            }
+
+            if (entries->len == 0)
+            {
+                Widgets::setCursorX(col_x);
+                do TextDisabled("无动画条目，点击上方“动画数”的 + 添加");
+            }
+
+            if (need_update)
+                return option::value(entries->to_array as Animation::FrameAnimation::animation_list);
+            return option::none;
+        }
+    }
+}
+namespace file_resource
+{
+    using parser = void
+    {
+        public extern func edit(val: file_resource, tag: string)=> option<file_resource>
+        {
+            match (FileDrop::File(tag, val.path->>\p = ResourcePath::toLocalResourcePath(p);))
             {
                 value(p)?
-                    if (p == "")
-                        return option::value(fileresource_audio_buffer{ path = option::none });
-                else
-                    return option::value(fileresource_audio_buffer{ path = option::value(p) });
+
+                    return option::value(file_resource{
+                            path = p->> \p = ResourcePath::toRuntimeResourcePath(p);,
+                        });
                 none?
                     return option::none;
             }
@@ -377,14 +587,6 @@ namespace uuid
 {
     using parser = void
     {
-        public extern func saving(val: uuid)=> string
-        {
-            return val as string;
-        }
-        public extern func restoring(dat: string)=> uuid
-        {
-            return dat as uuid;
-        }
         public extern func edit(val: uuid, tag: string)=> option<uuid>
         {
             return InputText(F"##{tag}", val as string)->> \dat = dat as uuid;;
@@ -395,378 +597,46 @@ namespace string
 {
     using parser = void
     {
-        public extern func saving(val: string)=> string
-        {
-            return val as string;
-        }
-        public extern func restoring(dat: string)=> string
-        {
-            return dat as string;
-        }
         public extern func edit(val: string, tag: string)=> option<string>
         {
             return InputText(F"##{tag}", val as string);
         }
     }
 }
-namespace Light2D::Range::light_shape
-{
-    using parser = void
-    {
-        public extern func saving(val: Light2D::Range::light_shape)=> string
-        {
-            let dat = {
-                ["m_point_count"] = val.m_point_count as dynamic,
-                ["m_strength"] = val.m_strength as dynamic,
-                ["m_positions"] = val.m_positions->>\v2 = v2->parser::saving; as dynamic,
-            };
-            
-            return dat->serialize->unwrap;
-        }
-        public extern func restoring(dat: string)=> Light2D::Range::light_shape
-        {
-            let data = dat->dict::deserialize->or({});
-            return Light2D::Range::light_shape
-            {
-                m_point_count = data->get_or("m_point_count" as dynamic, 0 as dynamic)->or(0),
-                m_strength = data->get_or("m_strength" as dynamic, [] as dynamic)->or([] as array<dynamic>)->> \e = e->or(0.0);,
-                m_positions = data->get_or("m_positions" as dynamic, [] as dynamic)->or([] as array<dynamic>)->> \v2 = vec2::parser::restoring(v2 as string);,
-            };
-        }
-        public extern func edit(val: Light2D::Range::light_shape, tag: string)=> option<Light2D::Range::light_shape>
-        {
-            let mut need_update = false;
-            
-            let mut strength_data = val.m_strength;
-            let mut point_data = val.m_positions;
-            
-            match (InputInt(F"层数##{tag}", strength_data->len)->>\n = n < 0 ? 0 | n;)
-            {
-                value(count)?
-                {
-                    strength_data = strength_data->resize(count, 0.0 as real);
-                    point_data = point_data->resize(count * val.m_point_count, (0., 0.) as vec2);
-                    
-                    need_update = true;
-                }
-                none?;
-            }
-            
-            let layer_count = strength_data->len;
-            let mut point_count = val.m_point_count;
-            
-            match (InputInt(F"顶点##{tag}", point_count)->>\n = n < 0 ? 0 | n;)
-            {
-                value(count)?
-                {
-                    let v = vec::create(count * layer_count, mut (0., 0.) as vec2);
-                    for (let mut ilayer = 0; ilayer < layer_count; ilayer += 1)
-                    {
-                        for (let mut ipoint = 0; ipoint < math::min(count, point_count); ipoint += 1)
-                        {
-                            v[ilayer * count + ipoint] = point_data[ilayer * point_count + ipoint];
-                        }
-                    }
-                    point_count = count;
-                    point_data = v->unsafe::cast:<array<vec2>>;
-                    
-                    need_update = true;
-                }
-                none?;
-            }
-            
-            let layered_positions = []mut as vec<array<vec2>>;
-            for (let mut offset = 0; offset < layer_count; offset += 1)
-                layered_positions->add(
-                    point_data->sub_len(offset * point_count, point_count));
-                    
-            Text("形状网格");
-            TextDisabled("* 请保持最内层为凸多边形");
-            match (jeapi::gui::widget::poseditor(
-                    F"##shape##{tag}",
-                    math::min(GetContentRegionAvail().0, 400.),
-                    layered_positions: vec<array<vec2>>->unsafe::cast:<array<array<(real, real)>>>,
-                    0.01,
-                    func(a, i)
-                    {
-                        let r = []mut as vec<((real, real), (real, real))>;
-                        for (let (idx, p) : a[i]->iter |> iterator::enumerate)
-                        {
-                            r->add((a[i][(idx > 0 ? idx | a[i]->len) - 1], p));
-                            
-                            if (i > 0)
-                                r->add((a[i - 1][idx], p));
-                        }
-                        return r->to_array;
-                    },
-                ))
-            {
-                value(posgroups)?
-                {
-                    point_data = posgroups
-                        ->  reduce(\l, r = l->connect(r);)
-                        ->  or([])
-                        ->> \e = e as vec2;
-                        ;
-                    need_update = true;
-                }
-                none?
-                    ;
-            }
-            
-            let new_strength_data = []mut as vec<real>;
-            for (let (i, st) : strength_data->iter |> iterator::enumerate)
-            {
-                Text(F"强度 {i}");
-                SameLine();
-                match (DragFloat(F"##strength_{i}##{tag}", st, 0.01, 0., 1.))
-                {
-                    value(newst)?
-                    {
-                        new_strength_data->add(newst);
-                        need_update = true;
-                    }
-                    none?
-                        new_strength_data->add(st);
-                }
-            }
-            
-            if (need_update)
-                return option::value(
-                    Light2D::Range::light_shape
-                    {
-                        m_point_count = point_count,
-                        m_strength = new_strength_data->unsafe::cast:<array<real>>,
-                        m_positions = point_data,
-                    }
-                );
-                
-            return option::none;
-        }
-    }
-    
-}
-namespace Light2D::BlockShadow::block_mesh
-{
-    using parser = void
-    {
-        public extern func saving(val: Light2D::BlockShadow::block_mesh)=> string
-        {
-            return val as array<vec2>
-                ->> \v2 = v2->parser::saving;
-                -> serialize->unwrap
-                ;
-        }
-        public extern func restoring(dat: string)=> Light2D::BlockShadow::block_mesh
-        {
-            return dat->array::deserialize->or([])
-                ->> \v2 = vec2::parser::restoring(v2 as string);
-                as block_mesh;
-        }
-        public extern func edit(mut val: Light2D::BlockShadow::block_mesh, tag: string)=> option<Light2D::BlockShadow::block_mesh>
-        {
-            let mut size_changed = false;
-            match (InputInt(F"size##{tag}", val as array<vec2>->len)->>\n = n < 0 ? 0 | n;)
-            {
-                value(newsize)?
-                {
-                    val = val as array<vec2>->resize(newsize, (0., 0.) as vec2) as Light2D::BlockShadow::block_mesh;
-                    size_changed = true;
-                }
-                none?;
-            }
-            
-            match (jeapi::gui::widget::poseditor(
-                    F"##block_mesh##{tag}",
-                    math::min(GetContentRegionAvail().0, 400.),
-                    [val as array<vec2>->>\p = p as (real, real);],
-                    0.01,
-                    func(a, i)
-                    {
-                        let r = []mut as vec<((real, real), (real, real))>;
-                        for (let (idx, p) : a[i]->iter |> iterator::enumerate)
-                        {
-                            if (idx > 0)
-                                r->add((a[i][idx - 1], p));
-                        }
-                        return r->to_array;
-                    },
-                ))
-            {
-                value(posgroups)?
-                    return option::value(posgroups[0]: array<(real, real)>->>\p = p as vec2; as Light2D::BlockShadow::block_mesh);
-                none?
-                    if (size_changed)
-                        return option::value(val);
-                else
-                    return option::none;
-            }
-        }
-    }
-}
+
 namespace UserInterface::Origin::origin_center
 {
     using parser = void
     {
-        public extern func saving(val: UserInterface::Origin::origin_center)=> string
-        {
-            return val as int as string;
-        }
-        public extern func restoring(dat: string)=> UserInterface::Origin::origin_center
-        {
-            return dat as int as UserInterface::Origin::origin_center;
-        }
         public extern func edit(val: UserInterface::Origin::origin_center, tag: string)=> option<UserInterface::Origin::origin_center>
         {
+            // 3×3 方位选择格：行=上/中/下，列=左/中/右，当前方位以实心
+            // 圆点（RadioButton）标出；格子从控件列起点排布、间距均匀，
+            // 读作一块“方位垫”，不再是一串平铺的复选框
+            let cells = [
+                origin_center::left + origin_center::top, origin_center::top, origin_center::right + origin_center::top,
+                origin_center::left, origin_center::center, origin_center::right,
+                origin_center::left + origin_center::bottom, origin_center::bottom, origin_center::right + origin_center::bottom,
+            ];
             let mut newval = val;
-            BeginGroup();
+            let col_x = Widgets::editColumnX();
+
+            PushStyleVec2(StyleVar::ImGuiStyleVar_ItemSpacing, (10., 6.));
+            for (let mut row = 0; row < 3; row += 1)
             {
-                if (CheckBox(F"##{tag}_lu", origin_center::left + origin_center::top == val)->is_value)
-                    newval = origin_center::left + origin_center::top;
-                SameLine();
-                if (CheckBox(F"##{tag}_u", origin_center::top == val)->is_value)
-                    newval = origin_center::top;
-                SameLine();
-                if (CheckBox(F"##{tag}_ru", origin_center::right + origin_center::top == val)->is_value)
-                    newval = origin_center::right + origin_center::top;
-                    
-                if (CheckBox(F"##{tag}_l", origin_center::left == val)->is_value)
-                    newval = origin_center::left;
-                SameLine();
-                if (CheckBox(F"##{tag}_c", origin_center::center == val)->is_value)
-                    newval = origin_center::center;
-                SameLine();
-                if (CheckBox(F"##{tag}_r", origin_center::right == val)->is_value)
-                    newval = origin_center::right;
-                    
-                if (CheckBox(F"##{tag}_lb", origin_center::left + origin_center::bottom == val)->is_value)
-                    newval = origin_center::left + origin_center::bottom;
-                SameLine();
-                if (CheckBox(F"##{tag}_b", origin_center::bottom == val)->is_value)
-                    newval = origin_center::bottom;
-                SameLine();
-                if (CheckBox(F"##{tag}_rb", origin_center::right + origin_center::bottom == val)->is_value)
-                    newval = origin_center::right + origin_center::bottom;
+                Widgets::setCursorX(col_x);
+                for (let mut col = 0; col < 3; col += 1)
+                {
+                    if (col > 0)
+                        SameLine();
+                    if (RadioButton(F"##{tag}_{row * 3 + col}", cells[row * 3 + col] == val))
+                        newval = cells[row * 3 + col];
+                }
             }
-            EndGroup();
-            
+            PopStyleVar(1);
+
             if (newval != val)
                 return option::value(newval);
-            else
-                return option::none;
-        }
-    }
-}
-namespace Animation::FrameAnimation::animation_list
-{
-    using parser = void
-    {
-        public extern func saving(val: Animation::FrameAnimation::animation_list)=> string
-        {
-            return val as array<animation_state>
-                ->> \state = [
-                        state.m_path as dynamic,
-                        state.m_action->is_value ? state.m_action->unwrap as dynamic | nil as dynamic,
-                        state.m_loop as dynamic];
-                    ->  serialize
-                    ->  unwrap;
-        }
-        public extern func restoring(dat: string)=> Animation::FrameAnimation::animation_list
-        {
-            return dat->array::deserialize->or([])
-                ->> \state =
-                    animation_state
-                    {
-                        m_path = state_dat->get_or(0, "" as dynamic)->or(""),
-                        m_action = state_dat->get_or(1, nil as dynamic)->trycast:<string>,
-                        m_loop = state_dat->get_or(2, false as dynamic)->or(false),
-                    }
-                    where 
-                        state_dat = state->or([] as array<dynamic>)
-                    ;
-                as animation_list;
-            ;
-        }
-        public extern func edit(mut val: Animation::FrameAnimation::animation_list, tag: string)=> option<Animation::FrameAnimation::animation_list>
-        {
-            let mut need_update = false;
-            
-            match (InputInt(F"size##{tag}", val as array<animation_state>->len)->>\n = n < 0 ? 0 | n;)
-            {
-                value(newsize)?
-                {
-                    val = val as array<animation_state>
-                        ->resize(newsize,
-                            animation_state
-                            {
-                                m_path = "",
-                                m_action = option::none,
-                                m_loop = false,
-                            }) as Animation::FrameAnimation::animation_list;
-                    need_update = true;
-                }
-                none?;
-            }
-            
-            let mut newval = []mut as vec<animation_state>;
-            
-            for (let (idx, state) : val as array<animation_state>->iter |> iterator::enumerate)
-            {
-                let mut path = state.m_path;
-                let mut animation = state.m_action;
-                let mut loop = state.m_loop;
-                
-                if (TreeNodeEx(F"动画 {idx}",
-                        TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow
-                            + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick
-                            + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
-                            + TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
-                {
-                    match (CheckBox(F"循环##{tag}", loop))
-                    {
-                        value(newloop)?
-                        {
-                            loop = newloop;
-                            need_update = true;
-                        }
-                        none?;
-                    }
-                    SameLine();
-                    
-                    match (jeapi::gui::widget::File(F"路径##{tag}", path, \=do nil;))
-                    {
-                        value(newpath)?
-                        {
-                            path = newpath;
-                            need_update = true;
-                        }
-                        none?;
-                    }
-                    
-                    match (InputText(F"动作##{tag}", animation->or("")))
-                    {
-                        value(newanimation)?
-                        {
-                            animation = option::value(newanimation);
-                            need_update = true;
-                        }
-                        none?;
-                    }
-                    
-                    newval->add(
-                        animation_state
-                        {
-                            m_path = path,
-                            m_action = animation,
-                            m_loop = loop,
-                        }
-                    );
-                    TreePop();
-                }
-            }
-            
-            if (need_update)
-                return option::value(newval->to_array as Animation::FrameAnimation::animation_list);
             else
                 return option::none;
         }

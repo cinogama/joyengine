@@ -6,51 +6,63 @@
 
 #define _CRT_SECURE_NO_WARNINGS
 
-#ifndef __cplusplus
-#   error jeecs.h only support for c++
-#else
-
+// woort.h 自身已是 C/C++ 双兼容（内部用 #ifdef __cplusplus 分段），
+// 它是 C ABI 段的依赖，因此无条件包含。
 #include "woort.h"
 
 #define WO_FAIL_JE_FATAL_ERROR 0xD201
 #define WO_FAIL_JE_BAD_INIT_SHADER_VALUE 0xD202
 
-#include <cstdint>
-#include <cstring>
-#include <cstdlib>
-#include <cassert>
-#include <cfloat>
+// C++ 标准库头文件仅在 C++ 下需要（C++ 辅助声明段与 C++ 包装段使用）。
+// C ABI 段不得依赖这些头文件。
+#ifdef __cplusplus
+#   include <cstdint>
+#   include <cstring>
+#   include <cstdlib>
+#   include <cassert>
+#   include <cfloat>
 
-#include <typeinfo>
+#   include <typeinfo>
 
-#include <atomic>
-#include <thread>
-#include <mutex>
-#include <shared_mutex>
-#include <condition_variable>
+#   include <atomic>
+#   include <thread>
+#   include <mutex>
+#   include <shared_mutex>
+#   include <condition_variable>
 
-#include <set>
-#include <map>
-#include <vector>
-#include <unordered_set>
-#include <unordered_map>
-#include <algorithm>
-#include <functional>
-#include <type_traits>
-#include <cstddef>
-#include <cmath>
-#include <random>
-#include <sstream>
-#include <climits>
-#include <initializer_list>
-#include <optional>
-#include <tuple>
-#include <concepts>
+#   include <set>
+#   include <map>
+#   include <vector>
+#   include <unordered_set>
+#   include <unordered_map>
+#   include <algorithm>
+#   include <functional>
+#   include <type_traits>
+#   include <cstddef>
+#   include <cmath>
+#   include <random>
+#   include <sstream>
+#   include <climits>
+#   include <initializer_list>
+#   include <optional>
+#   include <tuple>
+#   include <array>
+#   include <concepts>
 
-#include <execution>
+#   include <execution>
+#endif // __cplusplus
 
-#define JE_FORCE_CAPI extern "C"{
-#define JE_FORCE_CAPI_END }
+// JE_FORCE_CAPI / JE_FORCE_CAPI_END
+// C++ 下展开为 extern "C" { ... }，用于将 C ABI 包裹以保证链接约定；
+// 纯 C 下展开为空（C 本身即为 C 链接）。
+// 这是编译防火墙的关键骨架：C ABI 段应仅使用 C 构造，使其可被纯 C 编译器处理。
+#ifdef __cplusplus
+#   define JE_FORCE_CAPI extern "C"{
+#   define JE_FORCE_CAPI_END }
+#else
+#   define JE_FORCE_CAPI
+#   define JE_FORCE_CAPI_END
+#endif
 
 #ifdef WO_SHARED_LIB
 #   define JE4_SHARED_CORE
@@ -160,9 +172,252 @@
 
 #define typesof(...) <__VA_ARGS__>      // 用于优化泛型参数列表对代码自动整理的影响，配合需要大量泛型参数的接口使用
 
+// ==========================================================================
+// C ABI 原始标量类型（je_ 前缀 + 大驼峰）
+// 这些是 C ABI 段的基础标量类型别名，C/C++ 通用。必须在 C++ 辅助声明段之前
+// 定义，以便 C++ 端以它们为规范提供 jeecs::typing:: 别名，C ABI 签名也直接使用。
+// ==========================================================================
+typedef size_t   je_TypeHash;     // 类型哈希值
+typedef size_t   je_TypeId;       // 引擎类型工厂管理的类型 ID（无效值 = (je_TypeId)-1）
+#define JE_INVALID_TYPE_ID ((je_TypeId)SIZE_MAX) /* je_TypeId 的无效值，与 JE_INVALID_TYPE_ID 等价 */
+typedef uint32_t je_Version;      // 版本号（实体索引版本、图形线程版本等）
+typedef uint64_t je_TimestampMs;  // 毫秒时间戳
+typedef uint64_t je_DebugEid;     // 调试用实体 ID（仅编辑器）
+
+// je_Uuid：全局唯一标识符（平凡布局）。C++ 端 jeecs::typing::uuid 以公开继承方式扩展它（加方法）。
+typedef struct je_Uuid {
+    union {
+        struct {
+            uint64_t a;
+            uint64_t b;
+        };
+        struct {
+            uint32_t x; // Time stamp
+            uint16_t y; // Time stamp
+            uint16_t z; // Random
+
+            uint16_t w; // Inc L16
+            uint16_t u; // Inc H16
+            uint32_t v; // Random
+        };
+    };
+} je_Uuid;
+
+// ---- C ABI ECS 不透明句柄（opaque handle）前向声明 ----
+// 这些类型对外仅暴露指针；完整定义在引擎内部（src/）。C/C++ 通用，二进制兼容。
+// 在引擎内部以空结构体作为公开基类，实际实现类（jeecs_impl::ecs_universe 等）继承它们，
+// 因此 C ABI 边界处可使用干净的 derived↔base static_cast，无需 reinterpret_cast。
+// 此处提前声明是因为 je_GameEntity（见下方）需要引用 je_Chunk。
+typedef struct je_GameUniverse je_GameUniverse;   // ECS 宇宙（全局上下文）
+typedef struct je_GameWorld    je_GameWorld;      // ECS 世界
+typedef struct je_Archtype je_Archtype;   // ECS 原型（ArchType）
+typedef struct je_Chunk    je_Chunk;      // ECS 原型分块（ArchChunk）
+
+// ---- 实体（game_entity）C 类型 ----
+// jeecs::game_entity（C++ 包装）以组合方式持有 je_GameEntity 作为成员；
+// je_EntityStat / meta 不再提供 C++ 别名，直接使用 je_EntityStat / je_GameEntityMeta。
+typedef uint32_t je_EntityIdInChunk;
+
+typedef enum je_EntityStat {
+    JE_ENTITY_STAT_UNAVAILABLE = 0, // Entity is destroyed or just not ready.
+    JE_ENTITY_STAT_READY,           // Entity is OK, works as normal.
+    JE_ENTITY_STAT_PREFAB,          // Current entity is prefab.
+} je_EntityStat;
+
+typedef struct je_GameEntityMeta {
+    je_Version m_version;
+    je_EntityStat m_stat;
+} je_GameEntityMeta;
+
+typedef struct je_GameEntity {
+    je_Chunk* _m_in_chunk;
+    je_EntityIdInChunk _m_id;
+    je_Version _m_version;
+} je_GameEntity;
+
+// ---- 输入码（input）C 枚举 ----
+// 原 jeecs::input 的 enum class 已迁移为 C 枚举（je_*），C++ 直接使用。
+// 枚举项加 JE_<KIND>_ 前缀以避免不同输入码间的同名冲突（如 LEFT/RIGHT/A/B）。
+typedef enum je_Mousecode {
+    JE_MOUSE_LEFT,
+    JE_MOUSE_MID,
+    JE_MOUSE_RIGHT,
+
+    JE_MOUSE_CUSTOM_0 = 16,
+    JE_MOUSE_CUSTOM_1,
+    JE_MOUSE_CUSTOM_2,
+    JE_MOUSE_CUSTOM_3,
+    JE_MOUSE_CUSTOM_4,
+    JE_MOUSE_CUSTOM_5,
+    JE_MOUSE_CUSTOM_6,
+    JE_MOUSE_CUSTOM_7,
+    JE_MOUSE_CUSTOM_8,
+
+    JE_MOUSE_COUNT,
+} je_Mousecode;
+
+typedef enum je_Keycode {
+    JE_KEY_UNKNOWN = 0,
+
+    JE_KEY_APOSTROPHE = '\'',
+    JE_KEY_COMMA = ',',
+    JE_KEY_MINUS = '-',
+    JE_KEY_PERIOD = '.',
+    JE_KEY_SLASH = '/',
+
+    JE_KEY_A = 'A',
+    JE_KEY_B,
+    JE_KEY_C,
+    JE_KEY_D,
+    JE_KEY_E,
+    JE_KEY_F,
+    JE_KEY_G,
+    JE_KEY_H,
+    JE_KEY_I,
+    JE_KEY_J,
+    JE_KEY_K,
+    JE_KEY_L,
+    JE_KEY_M,
+    JE_KEY_N,
+    JE_KEY_O,
+    JE_KEY_P,
+    JE_KEY_Q,
+    JE_KEY_R,
+    JE_KEY_S,
+    JE_KEY_T,
+    JE_KEY_U,
+    JE_KEY_V,
+    JE_KEY_W,
+    JE_KEY_X,
+    JE_KEY_Y,
+    JE_KEY_Z,
+    JE_KEY_1 = '1',
+    JE_KEY_2,
+    JE_KEY_3,
+    JE_KEY_4,
+    JE_KEY_5,
+    JE_KEY_6,
+    JE_KEY_7,
+    JE_KEY_8,
+    JE_KEY_9,
+    JE_KEY_0,
+    JE_KEY_SPACE = ' ',
+
+    JE_KEY_SEMICOLON = ';',
+    JE_KEY_EQUAL = '=',
+    JE_KEY_LEFT_BRACKET = '[',
+    JE_KEY_BACKSLASH = '\\',
+    JE_KEY_RIGHT_BRACKET = ']',
+    JE_KEY_GRAVE_ACCENT = '`',
+
+    JE_KEY_L_SHIFT = 128,
+    JE_KEY_R_SHIFT,
+    JE_KEY_L_CTRL,
+    JE_KEY_R_CTRL,
+    JE_KEY_L_ALT,
+    JE_KEY_R_ALT,
+    JE_KEY_TAB,
+    JE_KEY_ENTER,
+    JE_KEY_ESC,
+    JE_KEY_BACKSPACE,
+
+    JE_KEY_NP_0,
+    JE_KEY_NP_1,
+    JE_KEY_NP_2,
+    JE_KEY_NP_3,
+    JE_KEY_NP_4,
+    JE_KEY_NP_5,
+    JE_KEY_NP_6,
+    JE_KEY_NP_7,
+    JE_KEY_NP_8,
+    JE_KEY_NP_9,
+    JE_KEY_NP_DECIMAL,
+    JE_KEY_NP_DIVIDE,
+    JE_KEY_NP_MULTIPLY,
+    JE_KEY_NP_SUBTRACT,
+    JE_KEY_NP_ADD,
+    JE_KEY_NP_ENTER,
+
+    JE_KEY_UP,
+    JE_KEY_DOWN,
+    JE_KEY_LEFT,
+    JE_KEY_RIGHT,
+
+    JE_KEY_F1,
+    JE_KEY_F2,
+    JE_KEY_F3,
+    JE_KEY_F4,
+    JE_KEY_F5,
+    JE_KEY_F6,
+    JE_KEY_F7,
+    JE_KEY_F8,
+    JE_KEY_F9,
+    JE_KEY_F10,
+    JE_KEY_F11,
+    JE_KEY_F12,
+    JE_KEY_F13,
+    JE_KEY_F14,
+    JE_KEY_F15,
+    JE_KEY_F16,
+
+    JE_KEY_CUSTOM_0 = 256,
+    JE_KEY_CUSTOM_1,
+    JE_KEY_CUSTOM_2,
+    JE_KEY_CUSTOM_3,
+    JE_KEY_CUSTOM_4,
+    JE_KEY_CUSTOM_5,
+    JE_KEY_CUSTOM_6,
+    JE_KEY_CUSTOM_7,
+    JE_KEY_CUSTOM_8,
+
+    JE_KEY_COUNT,
+} je_Keycode;
+
+typedef enum je_Gamepadcode {
+    JE_GAMEPAD_UP,
+    JE_GAMEPAD_DOWN,
+    JE_GAMEPAD_LEFT,
+    JE_GAMEPAD_RIGHT,
+
+    JE_GAMEPAD_A,
+    JE_GAMEPAD_B,
+    JE_GAMEPAD_X,
+    JE_GAMEPAD_Y,
+
+    JE_GAMEPAD_LB,
+    JE_GAMEPAD_RB,
+    JE_GAMEPAD_LS,
+    JE_GAMEPAD_RS,
+
+    JE_GAMEPAD_SELECT,
+    JE_GAMEPAD_START,
+    JE_GAMEPAD_GUIDE,
+
+    JE_GAMEPAD_COUNT,
+} je_Gamepadcode;
+
+typedef enum je_Joystickcode {
+    JE_JOY_L,
+    JE_JOY_R,
+    JE_JOY_LT, // Use x value only.
+    JE_JOY_RT, // Use x value only.
+
+    JE_JOY_COUNT,
+} je_Joystickcode;
+
+// ---- C ABI 不透明句柄（opaque handle）前向声明 ----
+// 这些类型对外仅暴露指针；完整定义在引擎内部（src/）。C/C++ 通用，二进制兼容。
+// 注：je_GameUniverse/je_GameWorld/je_Archtype/je_Chunk 的前向声明位于文件更上方（实体类型段之前），
+// 因为 je_GameEntity 等早期定义的类型需要引用 je_Chunk。
+typedef struct je_GraphicUhost    je_GraphicUhost;      // 图形渲染宿主上下文
+typedef struct je_RendchainBranch je_RendchainBranch;   // 可编程绘制分支
+
+#ifdef __cplusplus
 /*
-jeecs [命名空间]
-此处定义引擎自带的所有的C++接口类、函数、类型和常量
+jeecs [命名空间] —— C++ 辅助声明段
+此处定义引擎自带的所有的C++接口类、函数、类型和常量。
+该段提供 C ABI 段需要引用的类型别名/前向声明（如 je_TypeInfo、game_entity 等），
+仅 C++ 可见；纯 C 编译器跳过本段。
 */
 namespace jeecs
 {
@@ -183,19 +438,8 @@ namespace jeecs
 #endif
     }
 
-    /*
-    jeecs::rendchain_branch [类型]
-    可编程图形接口类型，用于表示一组绘制流程
-    请参见
-        jegl_rendchain
-    */
-    struct rendchain_branch;
-
-    /*
-    jeecs::graphic_uhost [类型]
-    可编程图形接口类型，用于表示一个渲染上下文的总和
-    */
-    struct graphic_uhost;
+    // 注：je_RendchainBranch / je_GraphicUhost 不再在此提供 C++ 别名。
+    // C++ 代码直接使用 C ABI 类型 je_RendchainBranch / je_GraphicUhost（见文件顶部 C ABI 段）。
 
     /*
     jeecs::typing [命名空间]
@@ -204,45 +448,28 @@ namespace jeecs
     namespace typing
     {
         /*
-        jeecs::typing::typehash_t [类型别名]
+        je_TypeHash [类型别名]
         用于储存哈希值结果的类型
         */
-        using typehash_t = size_t;
 
         /*
-        jeecs::typing::typeid_t [类型别名]
-        用于储存引擎的类型工厂管理的类型ID，规定的无效值是 jeecs::typing::INVALID_TYPE_ID
+        je_TypeId [类型别名]
+        用于储存引擎的类型工厂管理的类型ID，规定的无效值是 JE_INVALID_TYPE_ID
             请参见：
-            jeecs::typing::INVALID_TYPE_ID
+            JE_INVALID_TYPE_ID
         */
-        using typeid_t = size_t;
 
         /*
-        jeecs::typing::INVALID_TYPE_ID [常量]
-        jeecs::typing::typeid_t 类型的无效值
+        JE_INVALID_TYPE_ID [常量]
+        je_TypeId 类型的无效值
         请参见：
-            jeecs::typing::typeid_t
+            je_TypeId
         */
-        constexpr typeid_t INVALID_TYPE_ID = SIZE_MAX;
-
-        struct type_info;
+        constexpr je_TypeId INVALID_TYPE_ID = SIZE_MAX;
 
         using module_entry_t = void (*)(woort_Dylib*);
         using module_leave_t = void (*)(void);
 
-        using construct_func_t = void (*)(void*, void*, const jeecs::typing::type_info*);
-        using destruct_func_t = void (*)(void*);
-        using copy_construct_func_t = void (*)(void*, const void*);
-        using move_construct_func_t = void (*)(void*, void*);
-
-        using on_enable_or_disable_func_t = void (*)(void*);
-        using update_func_t = void (*)(void*);
-
-        using parse_c2w_func_t = void (*)(const void*, woort_value);
-        using parse_w2c_func_t = void (*)(void*, woort_value);
-
-        using entity_id_in_chunk_t = uint32_t;
-        using version_t = uint32_t;
 
         /*
         jeecs::typing::uuid [类型]
@@ -250,27 +477,8 @@ namespace jeecs
         请参见：
             jeecs::typing::uid_t
         */
-        struct uuid
+        struct uuid : public je_Uuid
         {
-            union
-            {
-                struct
-                {
-                    uint64_t a;
-                    uint64_t b;
-                };
-                struct
-                {
-                    uint32_t x; // Time stamp
-                    uint16_t y; // Time stamp
-                    uint16_t z; // Random
-
-                    uint16_t w; // Inc L16
-                    uint16_t u; // Inc H16
-                    uint32_t v; // Random
-                };
-            };
-
             static uuid generate() noexcept;
 
             inline bool operator==(const uuid& uid) const noexcept
@@ -315,14 +523,21 @@ namespace jeecs
         using uid_t = uuid;
 
         /*
-        jeecs::typing::timestamp_ms_t [类型别名]
+        je_TimestampMs [类型别名]
         用于储存以毫秒为单位的时间戳的类型别名
         请参见：
             je_clock_time_stamp
         */
-        using timestamp_ms_t = uint64_t;
 
-        using debug_eid_t = uint64_t;
+        /*
+        je_DebugEid [类型别名]
+        实体的调试 ID，对于任何实体，确保在引擎的生命周期内唯一
+        仅编辑器环境下有效。
+        ----------------------------------
+        * 0 是无效值
+        ----------------------------------
+        * 正计划废弃，待编辑器重构计划推进。
+        */
 
         template <typename T>
         struct _origin_type
@@ -450,6 +665,34 @@ namespace jeecs
         template <size_t n, typename... Ts>
         using index_types_t = typename _variadic_type_indexer<n, Ts...>::type;
 
+        /*
+        jeecs::typing::pack_index_v<Target, Ts...> [编译期常量]
+        在类型序列 Ts... 中查找 Target 首次出现的位置；若未找到则为 SIZE_MAX。
+        替代旧的 _const_type_index 递归实现，编译期展开更友好。
+        */
+        namespace _detail
+        {
+            template <typename Target, size_t I, typename... Ts>
+            struct _pack_index_helper;
+
+            template <typename Target, size_t I, typename First, typename... Rest>
+            struct _pack_index_helper<Target, I, First, Rest...>
+            {
+                static constexpr size_t value =
+                    std::is_same_v<Target, First>
+                    ? I
+                    : _pack_index_helper<Target, I + 1, Rest...>::value;
+            };
+
+            template <typename Target, size_t I>
+            struct _pack_index_helper<Target, I>
+            {
+                static constexpr size_t value = SIZE_MAX;
+            };
+        }
+        template <typename Target, typename... Ts>
+        inline constexpr size_t pack_index_v = _detail::_pack_index_helper<Target, 0, Ts...>::value;
+
         class type_unregister_guard;
     }
 
@@ -489,33 +732,21 @@ namespace jeecs
     Chunk都会对指定位置记录的版本信息进行更新。只需要校验Chunk内的版本和索引的版本
     即可。
     */
-    struct game_entity
+    class game_entity
     {
-        enum class entity_stat : uint8_t
-        {
-            UNAVAILABLE = 0, // Entity is destroied or just not ready,
-            READY,           // Entity is OK, and just work as normal.
-            PREFAB,          // Current entity is prefab, cannot be selected from arch-system and cannot
-        };
-
-        struct meta
-        {
-            jeecs::typing::version_t m_version;
-            jeecs::game_entity::entity_stat m_stat;
-        };
-
-        void* _m_in_chunk;
-        jeecs::typing::entity_id_in_chunk_t _m_id;
-        jeecs::typing::version_t _m_version;
+    public:
+        // C ABI 实体句柄（平凡布局）。game_entity 以组合方式持有它，方法操作 _m_raw。
+        // je_EntityStat / meta 不再嵌套于此，请使用 C 类型 je_EntityStat / je_GameEntityMeta。
+        je_GameEntity _m_raw;
 
         inline game_entity& _set_arch_chunk_info(
-            void* chunk,
-            jeecs::typing::entity_id_in_chunk_t index,
-            jeecs::typing::version_t ver) noexcept
+            je_Chunk* chunk,
+            je_EntityIdInChunk index,
+            je_Version ver) noexcept
         {
-            _m_in_chunk = chunk;
-            _m_id = index;
-            _m_version = ver;
+            _m_raw._m_in_chunk = chunk;
+            _m_raw._m_id = index;
+            _m_raw._m_version = ver;
 
             return *this;
         }
@@ -568,20 +799,19 @@ namespace jeecs
 
         inline bool operator==(const game_entity& e) const noexcept
         {
-            return _m_in_chunk == e._m_in_chunk &&
-                _m_id == e._m_id &&
-                _m_version == e._m_version;
+            return _m_raw._m_in_chunk == e._m_raw._m_in_chunk &&
+                _m_raw._m_id == e._m_raw._m_id &&
+                _m_raw._m_version == e._m_raw._m_version;
         }
         inline bool operator!=(const game_entity& e) const noexcept
         {
-            return _m_in_chunk != e._m_in_chunk ||
-                _m_id != e._m_id ||
-                _m_version != e._m_version;
+            return _m_raw._m_in_chunk != e._m_raw._m_in_chunk ||
+                _m_raw._m_id != e._m_raw._m_id ||
+                _m_raw._m_version != e._m_raw._m_version;
         }
     };
     static_assert(std::is_trivial_v<game_entity>);
-
-    struct dependence;
+    static_assert(std::is_standard_layout_v<game_entity>);
 
     /*
     jeecs::input [命名空间]
@@ -591,175 +821,8 @@ namespace jeecs
     {
         constexpr size_t MAX_MOUSE_GROUP_COUNT = 16;
 
-        enum class mousecode : uint8_t
-        {
-            LEFT,
-            MID,
-            RIGHT,
-
-            CUSTOM_0 = 16,
-            CUSTOM_1,
-            CUSTOM_2,
-            CUSTOM_3,
-            CUSTOM_4,
-            CUSTOM_5,
-            CUSTOM_6,
-            CUSTOM_7,
-            CUSTOM_8,
-
-            _COUNT, //
-        };
-        enum class keycode : uint16_t
-        {
-            UNKNOWN = 0,
-
-            APOSTROPHE = '\'',
-            COMMA = ',',
-            MINUS = '-',
-            PERIOD = '.',
-            SLASH = '/',
-
-            A = 'A',
-            B,
-            C,
-            D,
-            E,
-            F,
-            G,
-            H,
-            I,
-            J,
-            K,
-            L,
-            M,
-            N,
-            O,
-            P,
-            Q,
-            R,
-            S,
-            T,
-            U,
-            V,
-            W,
-            X,
-            Y,
-            Z,
-            _1 = '1',
-            _2,
-            _3,
-            _4,
-            _5,
-            _6,
-            _7,
-            _8,
-            _9,
-            _0,
-            _ = ' ',
-
-            SEMICOLON = ';',
-            EQUAL = '=',
-            LEFT_BRACKET = '[',
-            BACKSLASH = '\\',
-            RIGHT_BRACKET = ']',
-            GRAVE_ACCENT = '`',
-
-            L_SHIFT = 128,
-            R_SHIFT,
-            L_CTRL,
-            R_CTRL,
-            L_ALT,
-            R_ALT,
-            TAB,
-            ENTER,
-            ESC,
-            BACKSPACE,
-
-            NP_0,
-            NP_1,
-            NP_2,
-            NP_3,
-            NP_4,
-            NP_5,
-            NP_6,
-            NP_7,
-            NP_8,
-            NP_9,
-            NP_DECIMAL,
-            NP_DIVIDE,
-            NP_MULTIPLY,
-            NP_SUBTRACT,
-            NP_ADD,
-            NP_ENTER,
-
-            UP,
-            DOWN,
-            LEFT,
-            RIGHT,
-
-            F1,
-            F2,
-            F3,
-            F4,
-            F5,
-            F6,
-            F7,
-            F8,
-            F9,
-            F10,
-            F11,
-            F12,
-            F13,
-            F14,
-            F15,
-            F16,
-
-            CUSTOM_0 = 256,
-            CUSTOM_1,
-            CUSTOM_2,
-            CUSTOM_3,
-            CUSTOM_4,
-            CUSTOM_5,
-            CUSTOM_6,
-            CUSTOM_7,
-            CUSTOM_8,
-
-            _COUNT, //
-        };
-        enum class gamepadcode : uint8_t
-        {
-            UP,
-            DOWN,
-            LEFT,
-            RIGHT,
-
-            A,
-            B,
-            X,
-            Y,
-
-            // LT,
-            // RT,
-            LB,
-            RB,
-            LS,
-            RS,
-
-            SELECT,
-            START,
-            GUIDE,
-
-            _COUNT, //
-        };
-        enum class joystickcode : uint8_t
-        {
-            L,
-            R,
-            LT, // Use x value only.
-            RT, // Use x value only.
-
-            _COUNT, //
-        };
+        // 原 je_Mousecode/je_Keycode/je_Gamepadcode/je_Joystickcode 的 enum class 已迁移为
+        // C 枚举 je_Mousecode/je_Keycode/je_Gamepadcode/je_Joystickcode（见文件顶部 C ABI 段）。
     }
 
     /*
@@ -818,6 +881,8 @@ namespace std
         }
     };
 }
+
+#endif // __cplusplus （C++ 辅助声明段结束）
 
 JE_FORCE_CAPI
 
@@ -929,25 +994,102 @@ typedef enum je_typing_class
     JE_SYSTEM,
 } je_typing_class;
 
+// ==========================================================================
+// 类型子系统（typing）C 类型
+// je_TypeInfo 及其关联类型拥有公开的平凡数据布局（非不透明）。C++ 包装层
+// （jeecs::typing）直接使用这些 C 类型；原 je_TypeInfo 上的便捷方法以
+// jeecs::typing 命名空间下的自由函数形式提供。
+// ==========================================================================
+
+/* 前向声明：函数指针类型与 je_MemberInfo 需要引用 je_TypeInfo */
+typedef struct je_TypeInfo je_TypeInfo;
+
+/* 类型子系统使用的函数指针类型（C ABI 签名直接使用） */
+typedef void (*je_ConstructFunc)(void* addr, void* arg, const je_TypeInfo* tinfo);
+typedef void (*je_DestructFunc)(void* addr);
+typedef void (*je_CopyConstructFunc)(void* dst, const void* src);
+typedef void (*je_MoveConstructFunc)(void* dst, void* src);
+typedef void (*je_OnEnableOrDisableFunc)(void* sys);
+typedef void (*je_UpdateFunc)(void* sys);
+typedef void (*je_ParseC2WFunc)(const void* c_data, woort_value w_value);
+typedef void (*je_ParseW2CFunc)(void* c_data, woort_value w_value);
+
+/* 组件成员信息节点 */
+typedef struct je_MemberInfo {
+    const je_TypeInfo* m_class_type;
+    const char* m_member_name;
+    const char* m_woovalue_type_may_null;
+    woort_GCPin* m_woovalue_init_may_null;
+    const je_TypeInfo* m_member_type;
+    ptrdiff_t m_member_offset;
+    struct je_MemberInfo* m_next_member;
+} je_MemberInfo;
+
+/* 组件成员信息集合 */
+typedef struct je_TypeinfoMember {
+    size_t m_member_count;
+    je_MemberInfo* m_members;
+} je_TypeinfoMember;
+
+/* woolang 转换信息 */
+typedef struct je_TypeinfoScriptParser {
+    je_ParseC2WFunc m_script_parse_c2w;
+    je_ParseW2CFunc m_script_parse_w2c;
+    const char* m_woolang_typename;
+    const char* m_woolang_typedecl;
+} je_TypeinfoScriptParser;
+
+/* 系统更新方法集 */
+typedef struct je_TypeinfoSystemUpdater {
+    je_OnEnableOrDisableFunc m_on_enable;
+    je_OnEnableOrDisableFunc m_on_disable;
+    je_UpdateFunc m_pre_update;
+    je_UpdateFunc m_state_update;
+    je_UpdateFunc m_update;
+    je_UpdateFunc m_physics_update;
+    je_UpdateFunc m_transform_update;
+    je_UpdateFunc m_late_update;
+    je_UpdateFunc m_commit_update;
+    je_UpdateFunc m_graphic_update;
+} je_TypeinfoSystemUpdater;
+
+/* 类型信息（完整平凡布局，非不透明） */
+typedef struct je_TypeInfo {
+    je_TypeId m_id;
+    const char* m_typename; // will be free by je_typing_unregister
+    size_t m_size;
+    size_t m_align;
+    je_TypeHash m_hash;
+    je_ConstructFunc m_constructor;
+    je_DestructFunc m_destructor;
+    je_CopyConstructFunc m_copier;
+    je_MoveConstructFunc m_mover;
+    je_typing_class m_type_class;
+    const je_TypeinfoMember* m_member_types;
+    const je_TypeinfoScriptParser* m_script_parsers;
+    const je_TypeinfoSystemUpdater* m_system_updaters;
+    const je_TypeInfo* m_next;
+} je_TypeInfo;
+
 /*
 je_typing_register [基本接口]
 向引擎的类型管理器注册一个类型及其基本信息，返回记录当前类型的类型地址
 * 类型的名称是区分的唯一标记符，不同类型必须使用不同的名字。
 * 必须通过 je_typing_unregister 在适当时机释放
 请参见：
-    jeecs::typing::typeid_t
+    je_TypeId
     je_typing_unregister
 */
-JE_API const jeecs::typing::type_info* je_typing_register(
+JE_API const je_TypeInfo* je_typing_register(
     const char* _name,
-    jeecs::typing::typehash_t _hash,
+    je_TypeHash _hash,
     size_t _size,
     size_t _align,
     je_typing_class _typecls,
-    jeecs::typing::construct_func_t _constructor,
-    jeecs::typing::destruct_func_t _destructor,
-    jeecs::typing::copy_construct_func_t _copy_constructor,
-    jeecs::typing::move_construct_func_t _move_constructor);
+    je_ConstructFunc _constructor,
+    je_DestructFunc _destructor,
+    je_CopyConstructFunc _copy_constructor,
+    je_MoveConstructFunc _move_constructor);
 
 /*
 je_typing_reset [基本接口]
@@ -955,41 +1097,41 @@ je_typing_reset [基本接口]
     * 成员字段将被重置，请重新注册
 */
 JE_API void je_typing_reset(
-    const jeecs::typing::type_info* _tinfo,
+    const je_TypeInfo* _tinfo,
     size_t _size,
     size_t _align,
-    jeecs::typing::construct_func_t _constructor,
-    jeecs::typing::destruct_func_t _destructor,
-    jeecs::typing::copy_construct_func_t _copy_constructor,
-    jeecs::typing::move_construct_func_t _move_constructor);
+    je_ConstructFunc _constructor,
+    je_DestructFunc _destructor,
+    je_CopyConstructFunc _copy_constructor,
+    je_MoveConstructFunc _move_constructor);
 
 /*
 je_typing_get_info_by_id [基本接口]
 通过类型id获取类型信息，若给定的id不合法，返回nullptr
 请参见：
-    jeecs::typing::typeid_t
-    jeecs::typing::type_info
+    je_TypeId
+    je_TypeInfo
 */
-JE_API const jeecs::typing::type_info* je_typing_get_info_by_id(
-    jeecs::typing::typeid_t _id);
+JE_API const je_TypeInfo* je_typing_get_info_by_id(
+    je_TypeId _id);
 
 /*
 je_typing_get_info_by_hash [基本接口]
 通过类型的哈希值获取类型信息，若给定的类型哈希不合法，返回nullptr
 请参见：
-    jeecs::typing::typehash_t
-    jeecs::typing::type_info
+    je_TypeHash
+    je_TypeInfo
 */
-JE_API const jeecs::typing::type_info* je_typing_get_info_by_hash(
-    jeecs::typing::typehash_t _hash);
+JE_API const je_TypeInfo* je_typing_get_info_by_hash(
+    je_TypeHash _hash);
 
 /*
 je_typing_get_info_by_name [基本接口]
 通过类型的名称获取类型信息，若给定的类型名不合法或不存在，返回nullptr
 请参见：
-    jeecs::typing::type_info
+    je_TypeInfo
 */
-JE_API const jeecs::typing::type_info* je_typing_get_info_by_name(
+JE_API const je_TypeInfo* je_typing_get_info_by_name(
     const char* type_name);
 
 /*
@@ -999,21 +1141,21 @@ je_typing_unregister [基本接口]
 类型是当前模块通过 je_typing_register 成功注册的类型。
 若释放的类型不合法，则给出级别错误的日志信息。
 请参见：
-    jeecs::typing::type_info
+    je_TypeInfo
     je_typing_register
 */
-JE_API void je_typing_unregister(const jeecs::typing::type_info* tinfo);
+JE_API void je_typing_unregister(const je_TypeInfo* tinfo);
 
 /*
 je_register_member [基本接口]
 向引擎的类型管理器注册指定类型的成员信息。
 * 使用本地typeinfo，而非全局通用typeinfo
 请参见：
-    jeecs::typing::type_info
+    je_TypeInfo
 */
 JE_API void je_register_member(
-    const jeecs::typing::type_info* _classtype,
-    const jeecs::typing::type_info* _membertype,
+    const je_TypeInfo* _classtype,
+    const je_TypeInfo* _membertype,
     const char* _member_name,
     const char* _woovalue_type_may_null,
     woort_value _boxed_woovalue_init_may_ignored /* Use WOORT_IGNORE as none init */,
@@ -1024,12 +1166,12 @@ je_register_script_parser [基本接口]
 向引擎的类型管理器注册指定类型的脚本转换方法。
 * 使用本地typeinfo，而非全局通用typeinfo
 请参见：
-    jeecs::typing::type_info
+    je_TypeInfo
 */
 JE_API void je_register_script_parser(
-    const jeecs::typing::type_info* _type,
-    jeecs::typing::parse_c2w_func_t c2w,
-    jeecs::typing::parse_w2c_func_t w2c,
+    const je_TypeInfo* _type,
+    je_ParseC2WFunc c2w,
+    je_ParseW2CFunc w2c,
     const char* woolang_typename,
     const char* woolang_typedecl);
 
@@ -1038,35 +1180,35 @@ je_register_system_updater [基本接口]
 向引擎的类型管理器注册指定类型的系统更新方法。
 * 使用本地typeinfo，而非全局通用typeinfo
 请参见：
-    jeecs::typing::type_info
+    je_TypeInfo
 */
 JE_API void je_register_system_updater(
-    const jeecs::typing::type_info* _type,
-    jeecs::typing::on_enable_or_disable_func_t _on_enable,
-    jeecs::typing::on_enable_or_disable_func_t _on_disable,
-    jeecs::typing::update_func_t _pre_update,
-    jeecs::typing::update_func_t _state_update,
-    jeecs::typing::update_func_t _update,
-    jeecs::typing::update_func_t _physics_update,
-    jeecs::typing::update_func_t _transform_update,
-    jeecs::typing::update_func_t _late_update,
-    jeecs::typing::update_func_t _commit_update,
-    jeecs::typing::update_func_t _graphic_update);
+    const je_TypeInfo* _type,
+    je_OnEnableOrDisableFunc _on_enable,
+    je_OnEnableOrDisableFunc _on_disable,
+    je_UpdateFunc _pre_update,
+    je_UpdateFunc _state_update,
+    je_UpdateFunc _update,
+    je_UpdateFunc _physics_update,
+    je_UpdateFunc _transform_update,
+    je_UpdateFunc _late_update,
+    je_UpdateFunc _commit_update,
+    je_UpdateFunc _graphic_update);
 
 ////////////////////// ToWoo //////////////////////
 /*
 je_towoo_update_api [基本接口]
-根据类型信息重新生成 je/api/.. 的接口脚本
+根据类型信息重新生成 towoo 的接口脚本
 请参见：
-    jeecs::typing::type_info
+    je_TypeInfo
 */
 JE_API void je_towoo_update_api();
 
-JE_API const jeecs::typing::type_info* je_towoo_register_system(
+JE_API const je_TypeInfo* je_towoo_register_system(
     const char* system_name,
     const char* script_path);
 
-JE_API void je_towoo_unregister_system(const jeecs::typing::type_info* tinfo);
+JE_API void je_towoo_unregister_system(const je_TypeInfo* tinfo);
 
 ////////////////////// ARCH //////////////////////
 
@@ -1076,20 +1218,20 @@ je_arch_get_chunk [基本接口]
 所以总是返回非nullptr值。
     * 此方法一般由 collection 调用，用于获取指定ArchType中的组件信息
 */
-JE_API void* je_arch_get_chunk(void* archtype);
+JE_API je_Chunk* je_arch_get_chunk(je_Archtype* archtype);
 
 /*
 je_arch_next_chunk [基本接口]
 通过给定的Chunk，获取其下一个Chunk，如果给定Chunk没有后继则返回nullptr
     * 此方法一般由 collection 调用，用于获取指定ArchType中的组件信息
 */
-JE_API void* je_arch_next_chunk(void* chunk);
+JE_API je_Chunk* je_arch_next_chunk(je_Chunk* chunk);
 
 /*
 je_arch_entity_meta_addr_in_chunk [基本接口]
 通过给定的Chunk，获取Chunk中的实体元数据起始地址。
 */
-JE_API const jeecs::game_entity::meta* je_arch_entity_meta_addr_in_chunk(void* chunk);
+JE_API const je_GameEntityMeta* je_arch_entity_meta_addr_in_chunk(je_Chunk* chunk);
 
 ////////////////////// ECS //////////////////////
 
@@ -1107,7 +1249,7 @@ je_ecs_universe_create [基本接口]
         3. 解除注册所有Job
     完成全部操作后，宇宙将处于可销毁状态。
 */
-JE_API void* je_ecs_universe_create(void);
+JE_API je_GameUniverse* je_ecs_universe_create(void);
 
 /*
 je_ecs_universe_loop [基本接口]
@@ -1118,7 +1260,7 @@ je_ecs_universe_loop [基本接口]
 请参见：
     je_ecs_universe_register_exit_callback
 */
-JE_API void je_ecs_universe_loop(void* universe);
+JE_API void je_ecs_universe_loop(je_GameUniverse* universe);
 
 /*
 je_ecs_universe_destroy [基本接口]
@@ -1127,7 +1269,7 @@ je_ecs_universe_destroy [基本接口]
 请参见：
     je_ecs_universe_loop
 */
-JE_API void je_ecs_universe_destroy(void* universe);
+JE_API void je_ecs_universe_destroy(je_GameUniverse* universe);
 
 /*
 je_ecs_universe_grow_lifetime [基本接口]
@@ -1137,7 +1279,7 @@ je_ecs_universe_grow_lifetime [基本接口]
 请参见：
     je_ecs_universe_trim_lifetime
 */
-JE_API void je_ecs_universe_grow_lifetime(void* universe);
+JE_API void je_ecs_universe_grow_lifetime(je_GameUniverse* universe);
 
 /*
 je_ecs_universe_trim_lifetime [基本接口]
@@ -1150,7 +1292,7 @@ je_ecs_universe_trim_lifetime [基本接口]
     请参见：
         je_ecs_universe_grow_lifetime
 */
-JE_API void je_ecs_universe_trim_lifetime(void* universe);
+JE_API void je_ecs_universe_trim_lifetime(je_GameUniverse* universe);
 
 /*
 je_ecs_universe_register_exit_callback [基本接口]
@@ -1160,11 +1302,11 @@ je_ecs_universe_register_exit_callback [基本接口]
     je_ecs_universe_create
 */
 JE_API void je_ecs_universe_register_exit_callback(
-    void* universe,
+    je_GameUniverse* universe,
     void (*callback)(void*),
     void* arg);
 
-typedef void (*je_job_for_worlds_t)(void* /*world*/, void* /*custom_data*/);
+typedef void (*je_job_for_worlds_t)(je_GameWorld* /*world*/, void* /*custom_data*/);
 typedef void (*je_job_call_once_t)(void* /*custom_data*/);
 
 /*
@@ -1172,7 +1314,7 @@ je_ecs_universe_register_pre_for_worlds_job [基本接口]
 向指定宇宙中注册优先遍历世界任务（Pre job for worlds）
 */
 JE_API void je_ecs_universe_register_pre_for_worlds_job(
-    void* universe,
+    je_GameUniverse* universe,
     je_job_for_worlds_t job,
     void* data,
     void (*freefunc)(void*));
@@ -1182,7 +1324,7 @@ je_ecs_universe_register_pre_for_worlds_job [基本接口]
 向指定宇宙中注册优先单独任务（Pre job for once）
 */
 JE_API void je_ecs_universe_register_pre_call_once_job(
-    void* universe,
+    je_GameUniverse* universe,
     je_job_call_once_t job,
     void* data,
     void (*freefunc)(void*));
@@ -1192,7 +1334,7 @@ je_ecs_universe_register_for_worlds_job [基本接口]
 向指定宇宙中注册普通遍历世界任务（Job for worlds）
 */
 JE_API void je_ecs_universe_register_for_worlds_job(
-    void* universe,
+    je_GameUniverse* universe,
     je_job_for_worlds_t job,
     void* data,
     void (*freefunc)(void*));
@@ -1202,7 +1344,7 @@ je_ecs_universe_register_call_once_job [基本接口]
 向指定宇宙中注册普通单独任务（Job for once）
 */
 JE_API void je_ecs_universe_register_call_once_job(
-    void* universe,
+    je_GameUniverse* universe,
     je_job_call_once_t job,
     void* data,
     void (*freefunc)(void*));
@@ -1212,7 +1354,7 @@ je_ecs_universe_register_after_for_worlds_job [基本接口]
 向指定宇宙中注册延后遍历世界任务（Defer job for worlds）
 */
 JE_API void je_ecs_universe_register_after_for_worlds_job(
-    void* universe,
+    je_GameUniverse* universe,
     je_job_for_worlds_t job,
     void* data,
     void (*freefunc)(void*));
@@ -1222,7 +1364,7 @@ je_ecs_universe_register_after_call_once_job [基本接口]
 向指定宇宙中注册延后单独任务（Defer job for once）
 */
 JE_API void je_ecs_universe_register_after_call_once_job(
-    void* universe,
+    je_GameUniverse* universe,
     je_job_call_once_t job,
     void* data,
     void (*freefunc)(void*));
@@ -1232,7 +1374,7 @@ je_ecs_universe_unregister_pre_for_worlds_job [基本接口]
 从指定宇宙中取消优先遍历世界任务（Pre job for worlds）
 */
 JE_API void je_ecs_universe_unregister_pre_for_worlds_job(
-    void* universe,
+    je_GameUniverse* universe,
     je_job_for_worlds_t job);
 
 /*
@@ -1240,7 +1382,7 @@ je_ecs_universe_unregister_pre_call_once_job [基本接口]
 从指定宇宙中取消优先单独任务（Pre job for once）
 */
 JE_API void je_ecs_universe_unregister_pre_call_once_job(
-    void* universe,
+    je_GameUniverse* universe,
     je_job_call_once_t job);
 
 /*
@@ -1248,7 +1390,7 @@ je_ecs_universe_unregister_for_worlds_job [基本接口]
 从指定宇宙中取消普通遍历世界任务（Job for worlds）
 */
 JE_API void je_ecs_universe_unregister_for_worlds_job(
-    void* universe,
+    je_GameUniverse* universe,
     je_job_for_worlds_t job);
 
 /*
@@ -1256,7 +1398,7 @@ je_ecs_universe_unregister_call_once_job [基本接口]
 从指定宇宙中取消普通单独任务（Job for once）
 */
 JE_API void je_ecs_universe_unregister_call_once_job(
-    void* universe,
+    je_GameUniverse* universe,
     je_job_call_once_t job);
 
 /*
@@ -1264,7 +1406,7 @@ je_ecs_universe_unregister_after_for_worlds_job [基本接口]
 从指定宇宙中取消延后遍历世界任务（After job for worlds）
 */
 JE_API void je_ecs_universe_unregister_after_for_worlds_job(
-    void* universe,
+    je_GameUniverse* universe,
     je_job_for_worlds_t job);
 
 /*
@@ -1272,7 +1414,7 @@ je_ecs_universe_unregister_after_call_once_job [基本接口]
 从指定宇宙中取消延后单独任务（After job for once）
 */
 JE_API void je_ecs_universe_unregister_after_call_once_job(
-    void* universe,
+    je_GameUniverse* universe,
     je_job_call_once_t job);
 
 /*
@@ -1282,33 +1424,33 @@ je_ecs_universe_get_frame_deltatime [基本接口]
     je_ecs_universe_set_deltatime
 */
 JE_API double je_ecs_universe_get_frame_deltatime(
-    void* universe);
+    je_GameUniverse* universe);
 
 /*
 je_ecs_universe_set_frame_deltatime [基本接口]
 设置当前宇宙的帧更新间隔时间
 */
 JE_API void je_ecs_universe_set_frame_deltatime(
-    void* universe,
+    je_GameUniverse* universe,
     double delta);
 
 /*
 je_ecs_universe_get_real_deltatime [基本接口]
 获取当前宇宙的实际更新间隔，即距离上次更新的实际时间差异
 */
-JE_API double je_ecs_universe_get_real_deltatime(void* universe);
+JE_API double je_ecs_universe_get_real_deltatime(je_GameUniverse* universe);
 
 /*
 je_ecs_universe_get_smooth_deltatime [基本接口]
 获取当前宇宙的平滑更新间隔，是过去若干帧的间隔平均值
 */
-JE_API double je_ecs_universe_get_smooth_deltatime(void* universe);
+JE_API double je_ecs_universe_get_smooth_deltatime(je_GameUniverse* universe);
 
 /*
 je_ecs_universe_get_max_deltatime [基本接口]
 获取当前宇宙的最大时间间隔，deltatime的最大值即为此值
 */
-JE_API double je_ecs_universe_get_max_deltatime(void* universe);
+JE_API double je_ecs_universe_get_max_deltatime(je_GameUniverse* universe);
 
 /*
 je_ecs_universe_set_max_deltatime [基本接口]
@@ -1317,35 +1459,35 @@ je_ecs_universe_set_max_deltatime [基本接口]
 请参见：
     je_ecs_universe_set_time_scale
 */
-JE_API void je_ecs_universe_set_max_deltatime(void* universe, double val);
+JE_API void je_ecs_universe_set_max_deltatime(je_GameUniverse* universe, double val);
 
 /*
 je_ecs_universe_set_time_scale [基本接口]
 设置当前宇宙的时间缩放系数
 */
-JE_API void je_ecs_universe_set_time_scale(void* universe, double scale);
+JE_API void je_ecs_universe_set_time_scale(je_GameUniverse* universe, double scale);
 
 /*
 je_ecs_universe_get_time_scale [基本接口]
 获取当前宇宙的时间缩放系数
 */
-JE_API double je_ecs_universe_get_time_scale(void* universe);
+JE_API double je_ecs_universe_get_time_scale(je_GameUniverse* universe);
 
 /*
 je_ecs_world_in_universe [基本接口]
 获取指定世界所属的宇宙
 */
-JE_API void* je_ecs_world_in_universe(void* world);
+JE_API je_GameUniverse* je_ecs_world_in_universe(je_GameWorld* world);
 
 /*
 je_ecs_world_create [基本接口]
 在指定的宇宙中创建一个世界
     * 世界在创建之后，默认为非激活状态，请在初始化操作完成后调用
-        je_ecs_world_set_able 将世界激活
+        je_ecs_world_set_enable 将世界激活
 请参见：
-    je_ecs_world_set_able
+    je_ecs_world_set_enable
 */
-JE_API void* je_ecs_world_create(void* in_universe);
+JE_API je_GameWorld* je_ecs_world_create(je_GameUniverse* in_universe);
 
 /*
 je_ecs_world_destroy [基本接口]
@@ -1362,23 +1504,61 @@ je_ecs_world_destroy [基本接口]
     je_ecs_world_add_system_instance
     je_ecs_world_create_entity_with_components
 */
-JE_API void je_ecs_world_destroy(void* world);
+JE_API void je_ecs_world_destroy(je_GameWorld* world);
+
+typedef enum je_ComponentRequirementKind
+{
+    JE_COMPONENT_REQUIRE_CONTAINS,  // Must have spcify component
+    JE_COMPONENT_REQUIRE_MAYNOT,    // May have or not have
+    JE_COMPONENT_REQUIRE_EXCEPT,    // Must not contain spcify component
+    JE_COMPONENT_REQUIRE_ANYOF_0,   // Must have one of 'ANYOF' components
+
+}je_ComponentRequirementKind;
+
+typedef struct je_ComponentRequirement {
+    int /*je_ComponentRequirementKind*/ m_kind;
+    je_TypeId                           m_typeid;
+}je_ComponentRequirement;
+
+typedef struct je_DependenceArchInfos
+{
+    je_Archtype* m_arch;
+    size_t  m_entity_count;
+
+    // View detail.
+    size_t* m_view_component_offset;
+    size_t* m_view_component_size;
+
+} je_DependenceArchInfos;
+
+typedef struct je_CollectedRequirements je_CollectedRequirements;
+
+typedef struct je_RequirementCollection {
+    je_DependenceArchInfos* m_cached_archs;
+    size_t                      m_cached_arch_count;
+
+    je_CollectedRequirements* m_collected_requirement;
+}je_RequirementCollection;
+
+JE_API je_CollectedRequirements* je_ecs_collect_requirements(
+    const je_ComponentRequirement* requirements,
+    size_t view_requiremnt_count,
+    size_t other_requiremnts_count);
+
+JE_API void je_ecs_world_update_collection(
+    je_GameWorld* world,
+    je_RequirementCollection* collection);
 
 /*
-je_ecs_world_archmgr_updated_version [基本接口]
-获取当前世界的 ArchManager 的版本号
-此函数可获取世界的 ArchType 是否有增加，一般用于 collection 检测是否需要更新 ArchType 缓存
+je_ecs_world_get_arch_change_version [基本接口]
+返回世界内 arch-type 的变更版本号（单调递增）。每当世界中创建了新的 arch-type 时
+该值递增。此函数为非消费式读取：调用不会影响 ecs_world::update 对内部系统切片
+缓存的刷新逻辑。外部持久化的 je_RequirementCollection 可通过比较两次观测值来
+判断是否需要刷新（调用 je_ecs_world_update_collection）。
 */
-JE_API size_t je_ecs_world_archmgr_updated_version(void* world);
+JE_API size_t je_ecs_world_get_arch_change_version(je_GameWorld* world);
 
-/*
-je_ecs_world_update_dependences_archinfo [基本接口]
-从当前世界更新类型依赖信息（即 ArchType 缓存）
-此函数一般用于 collection 更新自身某步 dependence 的 ArchType 缓存
-*/
-JE_API void je_ecs_world_update_dependences_archinfo(
-    void* world,
-    jeecs::dependence* dependence);
+typedef void* je_System;
 
 /*
 je_ecs_world_add_system_instance [基本接口]
@@ -1389,18 +1569,18 @@ je_ecs_world_add_system_instance [基本接口]
 
     * 若向一个正在销毁中的世界添加系统实例，返回 nullptr
 */
-JE_API jeecs::game_system* je_ecs_world_add_system_instance(
-    void* world,
-    jeecs::typing::typeid_t type);
+JE_API je_System je_ecs_world_add_system_instance(
+    je_GameWorld* world,
+    je_TypeId type);
 
 /*
 je_ecs_world_get_system_instance [基本接口]
 从指定世界中获取一个指定类型的系统实例，返回此实例的指针
 若世界中不存在此类型的系统，返回nullptr
 */
-JE_API jeecs::game_system* je_ecs_world_get_system_instance(
-    void* world,
-    jeecs::typing::typeid_t type);
+JE_API je_System je_ecs_world_get_system_instance(
+    je_GameWorld* world,
+    je_TypeId type);
 
 /*
 je_ecs_world_remove_system_instance [基本接口]
@@ -1410,26 +1590,26 @@ je_ecs_world_remove_system_instance [基本接口]
     2. 若此前世界中已经存在同类型系统，则无事发生
 */
 JE_API void je_ecs_world_remove_system_instance(
-    void* world,
-    jeecs::typing::typeid_t type);
+    je_GameWorld* world,
+    je_TypeId type);
 
 /*
 je_ecs_world_create_entity_with_components [基本接口]
 向指定世界中创建一个用于指定组件集合的实体，创建结果通过参数 out_entity 返回
-component_ids 应该指向一个储存有N+1个jeecs::typing::typeid_t实例的连续空间，
-其中，N是组件种类数量且不应该为0，空间的最后应该是jeecs::typing::INVALID_TYPE_ID
+component_ids 应该指向一个储存有N+1个je_TypeId实例的连续空间，
+其中，N是组件种类数量且不应该为0，空间的最后应该是JE_INVALID_TYPE_ID
 以表示结束。
     * 若向一个正在销毁中的世界创建实体，则创建失败，out_entity将被写入`无效值`
 请参见：
-    jeecs::typing::typeid_t
-    jeecs::typing::INVALID_TYPE_ID
-    jeecs::game_entity
+    je_TypeId
+    JE_INVALID_TYPE_ID
+    je_GameEntity
     jeecs::game_world::add_entity
 */
 JE_API void je_ecs_world_create_entity_with_components(
-    void* world,
-    jeecs::game_entity* out_entity,
-    const jeecs::typing::typeid_t* component_ids);
+    je_GameWorld* world,
+    je_GameEntity* out_entity,
+    const je_TypeId* component_ids);
 
 /*
 je_ecs_world_create_prefab_with_components [基本接口]
@@ -1440,9 +1620,9 @@ je_ecs_world_create_prefab_with_components [基本接口]
     je_ecs_world_create_entity_with_components
 */
 JE_API void je_ecs_world_create_prefab_with_components(
-    void* world,
-    jeecs::game_entity* out_entity,
-    const jeecs::typing::typeid_t* component_ids);
+    je_GameWorld* world,
+    je_GameEntity* out_entity,
+    const je_TypeId* component_ids);
 
 /*
 je_ecs_world_create_entity_with_prefab [基本接口]
@@ -1456,20 +1636,20 @@ je_ecs_world_create_entity_with_prefab [基本接口]
     je_ecs_world_create_prefab_with_components
 */
 JE_API void je_ecs_world_create_entity_with_prefab(
-    void* world,
-    jeecs::game_entity* out_entity,
-    const jeecs::game_entity* prefab);
+    je_GameWorld* world,
+    je_GameEntity* out_entity,
+    const je_GameEntity* prefab);
 
 /*
 je_ecs_world_destroy_entity [基本接口]
 从世界中销毁一个实体索引指定的相关组件
 若实体索引是`无效值`或已失效，则无事发生
 请参见：
-    jeecs::game_entity::close
+    je_GameEntity::close
 */
 JE_API void je_ecs_world_destroy_entity(
-    void* world,
-    const jeecs::game_entity* entity);
+    je_GameWorld* world,
+    const je_GameEntity* entity);
 
 /*
 je_ecs_world_entity_add_component [基本接口]
@@ -1480,11 +1660,11 @@ je_ecs_world_entity_add_component [基本接口]
     1. 若实体已经存在同类型组件，则替换之
     2. 若实体不存在同类型组件，则更新实体
 请参见：
-    jeecs::game_entity::add_component
+    je_GameEntity::add_component
 */
 JE_API void* je_ecs_world_entity_add_component(
-    const jeecs::game_entity* entity,
-    jeecs::typing::typeid_t type);
+    const je_GameEntity* entity,
+    je_TypeId type);
 
 /*
 je_ecs_world_entity_remove_component [基本接口]
@@ -1495,42 +1675,42 @@ je_ecs_world_entity_remove_component [基本接口]
     1. 若实体已经存在同类型组件，则移除之
     2. 若实体不存在同类型组件，则无事发生
 请参见：
-    jeecs::game_entity::remove_component
+    je_GameEntity::remove_component
 */
 JE_API void je_ecs_world_entity_remove_component(
-    const jeecs::game_entity* entity,
-    jeecs::typing::typeid_t type);
+    const je_GameEntity* entity,
+    je_TypeId type);
 
 /*
 je_ecs_world_entity_get_component [基本接口]
 从实体中获取一个组件
 若实体索引是`无效值`或已失效，或者实体不存在指定类型的组件，则返回nullptr
 请参见：
-    jeecs::game_entity::get_component
+    je_GameEntity::get_component
 */
 JE_API void* je_ecs_world_entity_get_component(
-    const jeecs::game_entity* entity,
-    jeecs::typing::typeid_t type);
+    const je_GameEntity* entity,
+    je_TypeId type);
 
 /*
 je_ecs_world_of_entity [基本接口]
 获取实体所在的世界
 若实体索引是`无效值`，则返回nullptr
 请参见：
-    jeecs::game_entity::game_world
+    je_GameEntity::game_world
 */
-JE_API void* je_ecs_world_of_entity(
-    const jeecs::game_entity* entity);
+JE_API je_GameWorld* je_ecs_world_of_entity(
+    const je_GameEntity* entity);
 
 /*
-je_ecs_world_set_able [基本接口]
+je_ecs_world_set_enable [基本接口]
 设置世界是否被激活
     * 若世界未激活，则实体组件系统更新将被暂停，世界任务亦将被跳过，仅响应
         世界销毁请求和激活世界请求
     * 世界在激活/取消激活时，所有系统的对应回调会被执行；如果系统实例创建时，
         世界尚未激活，则系统的回调函数不会被执行
 */
-JE_API void je_ecs_world_set_able(void* world, bool enable);
+JE_API void je_ecs_world_set_enable(je_GameWorld* world, bool enable);
 
 /*
 je_ecs_world_query_dependence [基本接口]
@@ -1539,12 +1719,12 @@ je_ecs_world_query_dependence [基本接口]
   * 获取到的查询缓存仅在当前帧有效，不应当被持久化保存
 */
 JE_API bool je_ecs_world_query_slice_dependence(
-    void* world,
+    je_GameWorld* world,
     jeecs::game_system* system_instance,
-    jeecs::typing::typehash_t slice_type_hash,
-    jeecs::dependence** out_dependence);
+    je_TypeHash slice_type_hash,
+    je_RequirementCollection** out_collection);
 
-// ATTENTION: These 2 functions have no thread-safe-promise.
+// ATTENTION: Following 2 functions have no thread-safe-promise:
 /*
 je_ecs_get_name_of_entity [基本接口]
 获取实体的名称，一般只用于调试使用，不建议使用在实际项目中
@@ -1554,7 +1734,7 @@ je_ecs_get_name_of_entity [基本接口]
 或者其他操作，取出的字符串可能失效
 */
 JE_API const char* je_ecs_get_name_of_entity(
-    const jeecs::game_entity* entity);
+    const je_GameEntity* entity);
 
 /*
 je_ecs_set_name_of_entity [基本接口]
@@ -1568,7 +1748,7 @@ je_ecs_set_name_of_entity [基本接口]
 若实体不包含 Editor::Name，则创建后再进行设置
 */
 JE_API const char* je_ecs_set_name_of_entity(
-    const jeecs::game_entity* entity,
+    const je_GameEntity* entity,
     const char* name);
 /////////////////////////// Time&Sleep /////////////////////////////////
 
@@ -1604,7 +1784,7 @@ je_clock_time_stamp [基本接口]
 获取当前时间戳，单位是毫秒
     * 这个时间与 je_clock_time 获取到的时间不同，*不是* 引擎启动时起的计时
 */
-JE_API jeecs::typing::timestamp_ms_t je_clock_time_stamp();
+JE_API je_TimestampMs je_clock_time_stamp();
 
 /*
 je_clock_sleep_until [基本接口]
@@ -1626,7 +1806,7 @@ je_uid_generate [基本接口]
 请参见：
     jeecs::typing::uid_t
 */
-JE_API void je_uid_generate(jeecs::typing::uid_t* out_uid);
+JE_API void je_uid_generate(je_Uuid* out_uid);
 
 /////////////////////////// FILE /////////////////////////////////
 
@@ -1939,13 +2119,12 @@ enum jegl_update_action
 jegl_context [类型]
 图形上下文，储存有当前图形线程的各项信息
 */
+// 图形实现上下文指针（提升到文件作用域，供 jegl_graphic_api 的函数指针别名直接使用，避免 C++ 的 :: 作用域解析）。
+typedef void* je_GraphicImplContext;
 struct jegl_context
 {
-    // 用户定义的图形实现上下文指针，供图形接口实现使用
-    using graphic_impl_context_t = void*;
-
     // 图形帧渲染任务函数类型定义，图形线程负责每帧调用一次此函数
-    using frame_job_func_t = void (*)(jegl_context*, void*, jegl_update_action);
+    typedef void (*frame_job_func_t)(jegl_context*, void*, jegl_update_action);
 
     frame_job_func_t _m_frame_rend_work;
     void* _m_frame_rend_work_arg;
@@ -1954,11 +2133,11 @@ struct jegl_context
     jegl_context_notifier* _m_thread_notifier;
     void* _m_interface_handle;
 
-    void* m_universe_instance;
-    jeecs::typing::version_t m_version;
+    je_GameUniverse* m_universe_instance;
+    je_Version m_version;
     jegl_interface_config m_config;
     jegl_graphic_api* m_apis;
-    graphic_impl_context_t m_graphic_impl_context;
+    je_GraphicImplContext m_graphic_impl_context;
 };
 
 using jegl_resource_blob = void*;
@@ -1974,7 +2153,7 @@ struct jegl_resource_handle
     jegl_resource_bind_counter* m_raw_ref_count;
 
     jegl_context* m_graphic_thread;
-    jeecs::typing::version_t m_graphic_thread_version;
+    je_Version m_graphic_thread_version;
 
     bool m_modified;
     void* m_ptr;
@@ -2362,84 +2541,84 @@ struct jegl_graphic_api
 {
     // 图形基本启动和关闭接口
     using startup_func_t =
-        jegl_context::graphic_impl_context_t(*)(jegl_context*, const jegl_interface_config*, bool);
+        je_GraphicImplContext(*)(jegl_context*, const jegl_interface_config*, bool);
     using shutdown_func_t =
-        void (*)(jegl_context*, jegl_context::graphic_impl_context_t, bool);
+        void (*)(jegl_context*, je_GraphicImplContext, bool);
 
     using update_func_t =
-        jegl_update_action(*)(jegl_context::graphic_impl_context_t);
+        jegl_update_action(*)(je_GraphicImplContext);
     using commit_func_t =
-        jegl_update_action(*)(jegl_context::graphic_impl_context_t, jegl_update_action);
+        jegl_update_action(*)(je_GraphicImplContext, jegl_update_action);
 
     // 资源创建相关接口
     using shader_create_blob_func_t =
-        jegl_resource_blob(*)(jegl_context::graphic_impl_context_t, jegl_shader*);
+        jegl_resource_blob(*)(je_GraphicImplContext, jegl_shader*);
     using shader_close_blob_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob);
+        void (*)(je_GraphicImplContext, jegl_resource_blob);
     using shader_init_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob, jegl_shader*);
+        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_shader*);
     using shader_update_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_shader*);
+        void (*)(je_GraphicImplContext, jegl_shader*);
     using shader_close_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_shader*);
+        void (*)(je_GraphicImplContext, jegl_shader*);
 
     using texture_create_blob_func_t =
-        jegl_resource_blob(*)(jegl_context::graphic_impl_context_t, jegl_texture*);
+        jegl_resource_blob(*)(je_GraphicImplContext, jegl_texture*);
     using texture_close_blob_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob);
+        void (*)(je_GraphicImplContext, jegl_resource_blob);
     using texture_init_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob, jegl_texture*);
+        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_texture*);
     using texture_update_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_texture*);
+        void (*)(je_GraphicImplContext, jegl_texture*);
     using texture_close_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_texture*);
+        void (*)(je_GraphicImplContext, jegl_texture*);
 
     using vertex_create_blob_func_t =
-        jegl_resource_blob(*)(jegl_context::graphic_impl_context_t, jegl_vertex*);
+        jegl_resource_blob(*)(je_GraphicImplContext, jegl_vertex*);
     using vertex_close_blob_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob);
+        void (*)(je_GraphicImplContext, jegl_resource_blob);
     using vertex_init_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob, jegl_vertex*);
+        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_vertex*);
     using vertex_update_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_vertex*);
+        void (*)(je_GraphicImplContext, jegl_vertex*);
     using vertex_close_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_vertex*);
+        void (*)(je_GraphicImplContext, jegl_vertex*);
 
     using framebuffer_init_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_frame_buffer*);
+        void (*)(je_GraphicImplContext, jegl_frame_buffer*);
     using framebuffer_update_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_frame_buffer*);
+        void (*)(je_GraphicImplContext, jegl_frame_buffer*);
     using framebuffer_close_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_frame_buffer*);
+        void (*)(je_GraphicImplContext, jegl_frame_buffer*);
 
     using ubuffer_init_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_uniform_buffer*);
+        void (*)(je_GraphicImplContext, jegl_uniform_buffer*);
     using ubuffer_update_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_uniform_buffer*);
+        void (*)(je_GraphicImplContext, jegl_uniform_buffer*);
     using ubuffer_close_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_uniform_buffer*);
+        void (*)(je_GraphicImplContext, jegl_uniform_buffer*);
 
     // Shader uniform 设置相关接口
     using set_uniform_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, uint32_t, jegl_shader::uniform_type, const void*);
+        void (*)(je_GraphicImplContext, uint32_t, jegl_shader::uniform_type, const void*);
 
     // 绘制相关接口
     using viewport_xyzw_t = int32_t[4];
     using bind_framebuf_func_t =
         void (*)(
-            jegl_context::graphic_impl_context_t,
+            je_GraphicImplContext,
             jegl_frame_buffer* /* MAY NULL */,
             const viewport_xyzw_t*,
             const jegl_frame_buffer_clear_operation*);
 
     using bind_ubuffer_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_uniform_buffer*);
+        void (*)(je_GraphicImplContext, jegl_uniform_buffer*);
     using bind_shader_func_t =
-        bool (*)(jegl_context::graphic_impl_context_t, jegl_shader*);
+        bool (*)(je_GraphicImplContext, jegl_shader*);
     using bind_texture_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_texture*, size_t);
+        void (*)(je_GraphicImplContext, jegl_texture*, size_t);
     using draw_vertex_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_vertex*);
+        void (*)(je_GraphicImplContext, jegl_vertex*);
 
 
     /*
@@ -2704,8 +2883,8 @@ struct jegl_graphic_api
 };
 static_assert(sizeof(jegl_graphic_api) % sizeof(void*) == 0);
 
-using jeecs_api_register_func_t = void (*)(jegl_graphic_api*);
-using jeecs_sync_callback_func_t = void (*)(jegl_context*, void*);
+typedef void  (*jeecs_api_register_func_t)(jegl_graphic_api*);
+typedef void  (*jeecs_sync_callback_func_t)(jegl_context*, void*);
 
 /*
 jegl_register_sync_graphic_callback [基本接口]
@@ -2798,7 +2977,7 @@ jegl_start_graphic_thread [基本接口]
 */
 JE_API jegl_context* jegl_start_graphic_thread(
     jegl_interface_config config,
-    void* universe_instance,
+    je_GameUniverse* universe_instance,
     jeecs_api_register_func_t register_func,
     jegl_context::frame_job_func_t frame_rend_work,
     void* arg);
@@ -3573,8 +3752,8 @@ jegl_uhost_get_or_create_for_universe [基本接口]
     jegl_reboot_graphic_thread
     je_ecs_universe_register_exit_callback
 */
-JE_API jeecs::graphic_uhost* jegl_uhost_get_or_create_for_universe(
-    void* universe,
+JE_API je_GraphicUhost* jegl_uhost_get_or_create_for_universe(
+    je_GameUniverse* universe,
     const jegl_interface_config* config);
 
 /*
@@ -3582,7 +3761,7 @@ jegl_uhost_get_context [基本接口]
 从指定的可编程图形上下文接口获取图形线程的正式描述符
 */
 JE_API jegl_context* jegl_uhost_get_context(
-    jeecs::graphic_uhost* host);
+    je_GraphicUhost* host);
 
 /*
 jegl_uhost_set_skip_behavior [基本接口]
@@ -3591,7 +3770,7 @@ jegl_uhost_set_skip_behavior [基本接口]
     * uhost 实例创建时默认为真
 */
 JE_API void jegl_uhost_set_skip_behavior(
-    jeecs::graphic_uhost* host, bool skip_all_draw);
+    je_GraphicUhost* host, bool skip_all_draw);
 
 /*
 jegl_uhost_alloc_branch [基本接口]
@@ -3600,23 +3779,23 @@ jegl_uhost_alloc_branch [基本接口]
 请参见：
     jegl_uhost_free_branch
 */
-JE_API jeecs::rendchain_branch* jegl_uhost_alloc_branch(
-    jeecs::graphic_uhost* host);
+JE_API je_RendchainBranch* jegl_uhost_alloc_branch(
+    je_GraphicUhost* host);
 
 /*
 jegl_uhost_free_branch [基本接口]
 从指定的可编程图形上下文接口释放一个绘制组
 */
 JE_API void jegl_uhost_free_branch(
-    jeecs::graphic_uhost* host,
-    jeecs::rendchain_branch* free_branch);
+    je_GraphicUhost* host,
+    je_RendchainBranch* free_branch);
 
 /*
 jegl_branch_new_frame [基本接口]
 在绘制开始之前，指示绘制组开始新的一帧，并指定优先级
 */
 JE_API void jegl_branch_new_frame(
-    jeecs::rendchain_branch* branch,
+    je_RendchainBranch* branch,
     int priority);
 
 /*
@@ -3626,7 +3805,7 @@ jegl_branch_new_chain [基本接口]
     jegl_rendchain
 */
 JE_API jegl_rendchain* jegl_branch_new_chain(
-    jeecs::rendchain_branch* branch,
+    je_RendchainBranch* branch,
     jegl_frame_buffer* framebuffer,
     int32_t x,
     int32_t y,
@@ -3649,10 +3828,8 @@ JE_API void jegui_set_font(
     size_t size);
 
 typedef uint64_t jegui_user_image_handle_t;
-using jegui_user_image_loader_t =
-jegui_user_image_handle_t(*)(jegl_context*, jegl_texture*);
-using jegui_user_sampler_loader_t =
-void (*)(jegl_context*, jegl_shader*);
+typedef jegui_user_image_handle_t(*jegui_user_image_loader_t)(jegl_context*, jegl_texture*);
+typedef void  (*jegui_user_sampler_loader_t)(jegl_context*, jegl_shader*);
 
 /*
 jegui_init_basic [基本接口]
@@ -3697,7 +3874,7 @@ JE_API bool jegui_shutdown_callback(void);
 je_io_update_key_state [基本接口]
 更新指定键的状态信息
 */
-JE_API void je_io_update_key_state(jeecs::input::keycode keycode, bool keydown);
+JE_API void je_io_update_key_state(je_Keycode je_Keycode, bool keydown);
 
 /*
 je_io_update_mouse_pos [基本接口]
@@ -3710,7 +3887,7 @@ JE_API void je_io_update_mouse_pos(size_t group, int x, int y);
 je_io_update_mouse_state [基本接口]
 更新鼠标（或触摸点）的状态
 */
-JE_API void je_io_update_mouse_state(size_t group, jeecs::input::mousecode key, bool keydown);
+JE_API void je_io_update_mouse_state(size_t group, je_Mousecode key, bool keydown);
 
 /*
 je_io_update_window_size [基本接口]
@@ -3736,7 +3913,7 @@ JE_API void je_io_update_wheel(size_t group, float x, float y);
 je_io_get_key_down [基本接口]
 获取指定的按键是否被按下
 */
-JE_API bool je_io_get_key_down(jeecs::input::keycode keycode);
+JE_API bool je_io_get_key_down(je_Keycode je_Keycode);
 
 /*
 je_io_get_mouse_pos [基本接口]
@@ -3748,7 +3925,7 @@ JE_API void je_io_get_mouse_pos(size_t group, int* out_x, int* out_y);
 je_io_get_mouse_state [基本接口]
 获取鼠标的按键状态
 */
-JE_API bool je_io_get_mouse_state(size_t group, jeecs::input::mousecode key);
+JE_API bool je_io_get_mouse_state(size_t group, je_Mousecode key);
 
 /*
 je_io_get_window_size [基本接口]
@@ -3864,7 +4041,7 @@ je_io_gamepad_is_active [基本接口]
 */
 JE_API bool je_io_gamepad_is_active(
     je_io_gamepad_handle_t gamepad,
-    jeecs::typing::timestamp_ms_t* out_last_pushed_time_may_null);
+    je_TimestampMs* out_last_pushed_time_may_null);
 /*
 je_io_gamepad_get_button_down [基本接口]
 获取指定虚拟手柄的指定按键是否被按下
@@ -3875,7 +4052,7 @@ je_io_gamepad_get_button_down [基本接口]
     je_io_close_gamepad
 */
 JE_API bool je_io_gamepad_get_button_down(
-    je_io_gamepad_handle_t gamepad, jeecs::input::gamepadcode code);
+    je_io_gamepad_handle_t gamepad, je_Gamepadcode code);
 /*
 je_io_gamepad_update_button_state [基本接口]
 更新指定的虚拟手柄按键状态，可以被 je_io_gamepad_get_button_down 获取
@@ -3887,7 +4064,7 @@ je_io_gamepad_update_button_state [基本接口]
     je_io_close_gamepad
 */
 JE_API void je_io_gamepad_update_button_state(
-    je_io_gamepad_handle_t gamepad, jeecs::input::gamepadcode code, bool down);
+    je_io_gamepad_handle_t gamepad, je_Gamepadcode code, bool down);
 
 /*
 je_io_gamepad_get_stick [基本接口]
@@ -3900,7 +4077,7 @@ je_io_gamepad_get_stick [基本接口]
     je_io_close_gamepad
 */
 JE_API void je_io_gamepad_get_stick(
-    je_io_gamepad_handle_t gamepad, jeecs::input::joystickcode stickid, float* out_x, float* out_y);
+    je_io_gamepad_handle_t gamepad, je_Joystickcode stickid, float* out_x, float* out_y);
 /*
 je_io_gamepad_update_stick [基本接口]
 更新指定虚拟手柄的指定摇杆的坐标
@@ -3914,7 +4091,7 @@ je_io_gamepad_update_stick [基本接口]
     je_io_close_gamepad
 */
 JE_API void je_io_gamepad_update_stick(
-    je_io_gamepad_handle_t gamepad, jeecs::input::joystickcode stickid, float x, float y);
+    je_io_gamepad_handle_t gamepad, je_Joystickcode stickid, float x, float y);
 
 /*
 je_io_gamepad_stick_set_deadzone [基本接口]
@@ -3923,7 +4100,7 @@ je_io_gamepad_stick_set_deadzone [基本接口]
     * 当设置摇杆的坐标（je_io_gamepad_update_stick）时，如果坐标的模长小于死区，则坐标将被视为0
 */
 JE_API void je_io_gamepad_stick_set_deadzone(
-    je_io_gamepad_handle_t gamepad, jeecs::input::joystickcode stickid, float deadzone);
+    je_io_gamepad_handle_t gamepad, je_Joystickcode stickid, float deadzone);
 
 // Library / Module loader
 
@@ -4585,36 +4762,28 @@ JE_API bool je_main_script_entry();
 // NOTE: need free the return result by 'je_mem_free'
 // will return all alive world pointer in the universe.
 // [world1, world2,..., nullptr]
-JE_API void** jedbg_get_all_worlds_in_universe(void* _universes);
+JE_API je_GameWorld** jedbg_get_all_worlds_in_universe(je_GameUniverse* _universes);
 
-JE_API const char* jedbg_get_world_name(void* _world);
-
-JE_API void jedbg_set_world_name(void* _world, const char* name);
-
-JE_API void jedbg_free_entity(jeecs::game_entity* _entity_list);
+JE_API void jedbg_free_entity(je_GameEntity* _entity_list);
 
 // NOTE: need free the return result by 'je_mem_free'(and elem with jedbg_free_entity)
-JE_API jeecs::game_entity** jedbg_get_all_entities_in_world(void* _world);
+JE_API je_GameEntity** jedbg_get_all_entities_in_world(je_GameWorld* _world);
 
 // NOTE: need free the return result by 'je_mem_free'
-JE_API const jeecs::typing::type_info** jedbg_get_all_components_from_entity(const jeecs::game_entity* _entity);
+JE_API const je_TypeInfo** jedbg_get_all_components_from_entity(const je_GameEntity* _entity);
 
 // NOTE: need free the return result by 'je_mem_free'
-JE_API const jeecs::typing::type_info** jedbg_get_all_registed_types(void);
-
-JE_API size_t jedbg_get_unregister_type_count(void);
+JE_API const je_TypeInfo** jedbg_get_all_registed_types(void);
 
 // NOTE: need free the return result by 'je_mem_free'
-JE_API const jeecs::typing::type_info** jedbg_get_all_system_attached_in_world(void* _world);
+JE_API const je_TypeInfo** jedbg_get_all_system_attached_in_world(je_GameWorld* _world);
 
-JE_API void jedbg_set_editing_entity_uid(const jeecs::typing::debug_eid_t uid);
+JE_API je_DebugEid jedbg_get_entity_uid(const je_GameEntity* e);
 
-JE_API jeecs::typing::debug_eid_t jedbg_get_editing_entity_uid();
-
-JE_API jeecs::typing::debug_eid_t jedbg_get_entity_uid(const jeecs::game_entity* e);
+JE_API void jedbg_set_entity_uid(const je_GameEntity* e, je_DebugEid uid);
 
 JE_API void jedbg_get_entity_arch_information(
-    jeecs::game_entity* _entity,
+    je_GameEntity* _entity,
     size_t* _out_chunk_size,
     size_t* _out_entity_size,
     size_t* _out_all_entity_count_in_chunk);
@@ -4645,6 +4814,12 @@ JE_DECL_ATOMIC_OPERATOR_API(intptr_t);
 
 JE_FORCE_CAPI_END
 
+#ifdef __cplusplus
+/*
+jeecs [命名空间] —— C++ 包装层
+将上方纯 C ABI 包装为易用的 C++ 接口（类型别名、enum class 映射、RAII 包装类等）。
+仅 C++ 可见。
+*/
 namespace jeecs
 {
 #define JECS_DISABLE_MOVE_AND_COPY_OPERATOR(TYPE) \
@@ -4740,9 +4915,8 @@ namespace jeecs
                 { t.JEParseFromScriptType(val) } -> std::same_as<void>;
                 { ct.JEParseToScriptType(val) } -> std::same_as<void>;
             };
-
             template <typename U>
-            concept has_pointer_typeinfo_constructor_function = requires(void* ptr, const jeecs::typing::type_info * tinfo)
+            concept has_pointer_typeinfo_constructor_function = requires(void* ptr, const je_TypeInfo * tinfo)
             {
                 new U(ptr, tinfo);
             };
@@ -4752,7 +4926,17 @@ namespace jeecs
                 new U(ptr);
             };
             template <typename U>
-            concept has_typeinfo_constructor_function = requires(const jeecs::typing::type_info * tinfo)
+            concept has_game_system_typeinfo_constructor_function = requires(je_GameWorld * ptr, const je_TypeInfo * tinfo)
+            {
+                new U(ptr, tinfo);
+            };
+            template <typename U>
+            concept has_game_system_constructor_function = requires(je_GameWorld * ptr)
+            {
+                new U(ptr);
+            };
+            template <typename U>
+            concept has_typeinfo_constructor_function = requires(const je_TypeInfo * tinfo)
             {
                 new U(tinfo);
             };
@@ -4761,7 +4945,6 @@ namespace jeecs
             {
                 new U();
             };
-
             template <typename T>
             concept is_reference_or_pointer = std::is_reference_v<T> || std::is_pointer_v<T>;
 
@@ -4824,12 +5007,16 @@ namespace jeecs
         template <typename T>
         struct default_functions
         {
-            static void constructor(void* _ptr, void* arg_ptr, const jeecs::typing::type_info* tinfo)
+            static void constructor(void* _ptr, void* arg_ptr, const je_TypeInfo* tinfo)
             {
                 if constexpr (traits::has_pointer_typeinfo_constructor_function<T>)
                     new (_ptr) T(arg_ptr, tinfo);
                 else if constexpr (traits::has_pointer_constructor_function<T>)
                     new (_ptr) T(arg_ptr);
+                else if constexpr (traits::has_game_system_typeinfo_constructor_function<T>)
+                    new (_ptr) T(static_cast<je_GameWorld*>(arg_ptr), tinfo);
+                else if constexpr (traits::has_game_system_constructor_function<T>)
+                    new (_ptr) T(static_cast<je_GameWorld*>(arg_ptr));
                 else if constexpr (traits::has_typeinfo_constructor_function<T>)
                     new (_ptr) T(tinfo);
                 else
@@ -5313,62 +5500,442 @@ namespace jeecs
             }
         };
 
+        class string;
+
+        namespace _detail
+        {
+            template <typename T>
+            inline size_t default_hash(const T& key) noexcept
+            {
+                return std::hash<T>{}(key);
+            }
+        }
+
+        constexpr je_TypeHash prime = (je_TypeHash)0x100000001B3ull;
+        constexpr je_TypeHash basis = (je_TypeHash)0xCBF29CE484222325ull;
+
+        /*
+        jeecs::basic::hash_compile_time [函数]
+        可在编译时计算字符串的哈希值的哈希函数
+        */
+        constexpr je_TypeHash hash_compile_time(
+            char const* str, je_TypeHash last_value = basis)
+        {
+            return *str ? hash_compile_time(str + 1, (*str ^ last_value) * prime) : last_value;
+        }
+
         /*
         jeecs::basic::map [类型]
         用于存放大小可变的唯一键值对
             * 为了保证模块之间的二进制一致性，公共组件中请不要使用std::map
+            * 采用开放寻址（线性探测）的哈希表实现
         */
         template <typename KeyT, typename ValT>
         class map
         {
+        public:
             struct pair
             {
                 KeyT k;
                 ValT v;
             };
-            basic::vector<pair> dats;
+
+        private:
+            enum class slot_state : uint8_t
+            {
+                EMPTY = 0,
+                OCCUPIED = 1,
+                TOMBSTONE = 2,
+            };
+
+            struct slot
+            {
+                slot_state state;
+                size_t cached_hash;
+                alignas(pair) unsigned char storage[sizeof(pair)];
+            };
+
+            slot* m_slots = nullptr;
+            size_t m_capacity = 0;
+            size_t m_size = 0;
+            size_t m_tombstones = 0;
+
+            static constexpr size_t MIN_CAPACITY = 16;
+            static constexpr size_t LOAD_FACTOR_NUM = 3;
+            static constexpr size_t LOAD_FACTOR_DEN = 4;
+
+            inline static pair* _slot_pair(slot& s) noexcept
+            {
+                return std::launder(reinterpret_cast<pair*>(s.storage));
+            }
+            inline static const pair* _slot_pair(const slot& s) noexcept
+            {
+                return std::launder(reinterpret_cast<const pair*>(s.storage));
+            }
+
+            inline static size_t _hash_key(const KeyT& k) noexcept
+            {
+                if constexpr (std::is_same_v<std::decay_t<KeyT>, basic::string>)
+                {
+                    return (size_t)hash_compile_time(k.c_str());
+                }
+                else
+                {
+                    return _detail::default_hash(k);
+                }
+            }
+
+            void _deallocate() noexcept
+            {
+                if (m_slots != nullptr)
+                {
+                    for (size_t i = 0; i < m_capacity; ++i)
+                    {
+                        if (m_slots[i].state == slot_state::OCCUPIED)
+                            _slot_pair(m_slots[i])->~pair();
+                    }
+                    je_mem_free(m_slots);
+                    m_slots = nullptr;
+                }
+                m_capacity = 0;
+                m_size = 0;
+                m_tombstones = 0;
+            }
+
+            void _alloc_slots(size_t cap) noexcept
+            {
+                m_slots = (slot*)je_mem_alloc(cap * sizeof(slot));
+                m_capacity = cap;
+                m_size = 0;
+                m_tombstones = 0;
+                for (size_t i = 0; i < cap; ++i)
+                    m_slots[i].state = slot_state::EMPTY;
+            }
+
+            void _rehash(size_t new_cap) noexcept
+            {
+                slot* old_slots = m_slots;
+                size_t old_cap = m_capacity;
+
+                m_slots = (slot*)je_mem_alloc(new_cap * sizeof(slot));
+                m_capacity = new_cap;
+                m_size = 0;
+                m_tombstones = 0;
+
+                for (size_t i = 0; i < new_cap; ++i)
+                    m_slots[i].state = slot_state::EMPTY;
+
+                for (size_t i = 0; i < old_cap; ++i)
+                {
+                    if (old_slots[i].state == slot_state::OCCUPIED)
+                    {
+                        const size_t h = old_slots[i].cached_hash;
+                        size_t idx = h & (new_cap - 1);
+                        while (m_slots[idx].state == slot_state::OCCUPIED)
+                            idx = (idx + 1) & (new_cap - 1);
+
+                        new (m_slots[idx].storage) pair(std::move(*_slot_pair(old_slots[i])));
+                        _slot_pair(old_slots[i])->~pair();
+                        m_slots[idx].state = slot_state::OCCUPIED;
+                        m_slots[idx].cached_hash = h;
+                        ++m_size;
+                    }
+                }
+
+                if (old_slots != nullptr)
+                    je_mem_free(old_slots);
+            }
+
+            inline void _ensure_cap_for_insert() noexcept
+            {
+                const size_t used_after = m_size + m_tombstones + 1;
+                const size_t threshold = (m_capacity * LOAD_FACTOR_NUM) / LOAD_FACTOR_DEN;
+
+                if (m_capacity == 0 || used_after > threshold)
+                {
+                    if (m_capacity == 0)
+                    {
+                        _alloc_slots(MIN_CAPACITY);
+                    }
+                    else if (m_tombstones > m_size)
+                    {
+                        // 多数浪费来自墓碑，原地 rehash 即可
+                        _rehash(m_capacity);
+                    }
+                    else
+                    {
+                        _rehash(m_capacity * 2);
+                    }
+                }
+            }
+
+            const slot* _find_slot(const KeyT& k) const noexcept
+            {
+                if (m_capacity == 0)
+                    return nullptr;
+
+                const size_t h = _hash_key(k);
+                const size_t mask = m_capacity - 1;
+                size_t idx = h & mask;
+                const size_t start = idx;
+
+                do
+                {
+                    slot& s = m_slots[idx];
+                    if (s.state == slot_state::EMPTY)
+                        return nullptr;
+                    if (s.state == slot_state::OCCUPIED
+                        && s.cached_hash == h
+                        && _slot_pair(s)->k == k)
+                    {
+                        return &s;
+                    }
+                    idx = (idx + 1) & mask;
+                } while (idx != start);
+
+                return nullptr;
+            }
+
+            slot* _find_slot(const KeyT& k) noexcept
+            {
+                return const_cast<slot*>(
+                    static_cast<const map&>(*this)._find_slot(k));
+            }
 
         public:
+            template <bool IsConst>
+            class basic_iterator
+            {
+                friend class map;
+                using slot_ptr_t = std::conditional_t<IsConst, const slot*, slot*>;
+
+                slot_ptr_t m_cur;
+                slot_ptr_t m_end_slot;
+
+                basic_iterator(slot_ptr_t cur, slot_ptr_t end_slot, bool /*skip_to_occupied*/) noexcept
+                    : m_cur(cur), m_end_slot(end_slot)
+                {
+                    while (m_cur < m_end_slot && m_cur->state != slot_state::OCCUPIED)
+                        ++m_cur;
+                }
+
+            public:
+                basic_iterator(slot_ptr_t cur, slot_ptr_t end_slot) noexcept
+                    : m_cur(cur), m_end_slot(end_slot)
+                {
+                }
+
+                basic_iterator& operator++() noexcept
+                {
+                    do
+                    {
+                        ++m_cur;
+                    } while (m_cur < m_end_slot && m_cur->state != slot_state::OCCUPIED);
+                    return *this;
+                }
+
+                auto& operator*() const noexcept
+                {
+                    return *_slot_pair(*m_cur);
+                }
+                auto* operator->() const noexcept
+                {
+                    return _slot_pair(*m_cur);
+                }
+
+                bool operator==(const basic_iterator& o) const noexcept { return m_cur == o.m_cur; }
+                bool operator!=(const basic_iterator& o) const noexcept { return m_cur != o.m_cur; }
+            };
+
+            using iterator = basic_iterator<false>;
+            using const_iterator = basic_iterator<true>;
+
+            map() noexcept = default;
+
+            ~map() noexcept
+            {
+                _deallocate();
+            }
+
+            map(const map& o) noexcept
+            {
+                if (o.m_capacity > 0)
+                {
+                    _alloc_slots(o.m_capacity);
+                    for (size_t i = 0; i < o.m_capacity; ++i)
+                    {
+                        if (o.m_slots[i].state == slot_state::OCCUPIED)
+                        {
+                            slot& dst = m_slots[i];
+                            dst.state = slot_state::OCCUPIED;
+                            dst.cached_hash = o.m_slots[i].cached_hash;
+                            new (dst.storage) pair(*_slot_pair(o.m_slots[i]));
+                            ++m_size;
+                        }
+                    }
+                }
+            }
+
+            map(map&& o) noexcept
+                : m_slots(o.m_slots)
+                , m_capacity(o.m_capacity)
+                , m_size(o.m_size)
+                , m_tombstones(o.m_tombstones)
+            {
+                o.m_slots = nullptr;
+                o.m_capacity = 0;
+                o.m_size = 0;
+                o.m_tombstones = 0;
+            }
+
+            map& operator=(const map& o) noexcept
+            {
+                if (this != &o)
+                {
+                    _deallocate();
+                    if (o.m_capacity > 0)
+                    {
+                        _alloc_slots(o.m_capacity);
+                        for (size_t i = 0; i < o.m_capacity; ++i)
+                        {
+                            if (o.m_slots[i].state == slot_state::OCCUPIED)
+                            {
+                                slot& dst = m_slots[i];
+                                dst.state = slot_state::OCCUPIED;
+                                dst.cached_hash = o.m_slots[i].cached_hash;
+                                new (dst.storage) pair(*_slot_pair(o.m_slots[i]));
+                                ++m_size;
+                            }
+                        }
+                    }
+                }
+                return *this;
+            }
+
+            map& operator=(map&& o) noexcept
+            {
+                if (this != &o)
+                {
+                    _deallocate();
+                    m_slots = o.m_slots;
+                    m_capacity = o.m_capacity;
+                    m_size = o.m_size;
+                    m_tombstones = o.m_tombstones;
+
+                    o.m_slots = nullptr;
+                    o.m_capacity = 0;
+                    o.m_size = 0;
+                    o.m_tombstones = 0;
+                }
+                return *this;
+            }
+
             ValT& operator[](const KeyT& k) noexcept
             {
-                auto* fnd = find(k);
-                if (fnd == dats.end())
+                if (slot* found = _find_slot(k); found != nullptr)
+                    return _slot_pair(*found)->v;
+
+                _ensure_cap_for_insert();
+
+                const size_t h = _hash_key(k);
+                const size_t mask = m_capacity - 1;
+                size_t idx = h & mask;
+                slot* first_tombstone = nullptr;
+
+                while (true)
                 {
-                    dats.push_back({ k, {} });
-                    return dats.back().v;
+                    slot& s = m_slots[idx];
+                    if (s.state == slot_state::EMPTY)
+                    {
+                        slot* target = first_tombstone != nullptr ? first_tombstone : &s;
+                        target->state = slot_state::OCCUPIED;
+                        target->cached_hash = h;
+                        new (target->storage) pair{ k, ValT{} };
+                        if (target != &s)
+                            --m_tombstones;
+                        ++m_size;
+                        return _slot_pair(*target)->v;
+                    }
+                    if (s.state == slot_state::TOMBSTONE && first_tombstone == nullptr)
+                        first_tombstone = &s;
+
+                    idx = (idx + 1) & mask;
                 }
-                return fnd->v;
             }
+
+            iterator find(const KeyT& k) noexcept
+            {
+                slot* s = _find_slot(k);
+                if (s == nullptr)
+                    return end();
+                return iterator(s, m_slots + m_capacity, true);
+            }
+
+            const_iterator find(const KeyT& k) const noexcept
+            {
+                const slot* s = _find_slot(k);
+                if (s == nullptr)
+                    return end();
+                return const_iterator(s, m_slots + m_capacity, true);
+            }
+
+            bool erase(const KeyT& k) noexcept
+            {
+                slot* s = _find_slot(k);
+                if (s == nullptr)
+                    return false;
+
+                _slot_pair(*s)->~pair();
+                s->state = slot_state::TOMBSTONE;
+                --m_size;
+                ++m_tombstones;
+                return true;
+            }
+
             void clear() noexcept
             {
-                dats.clear();
-            }
-            pair* find(const KeyT& k) const noexcept
-            {
-                return std::find_if(dats.begin(), dats.end(), [&k](pair& p)
-                    { return p.k == k; });
-            }
-            bool erase(const KeyT& k)
-            {
-                auto* fnd = find(k);
-                if (fnd != end())
+                for (size_t i = 0; i < m_capacity; ++i)
                 {
-                    dats.erase(fnd);
-                    return true;
+                    if (m_slots[i].state == slot_state::OCCUPIED)
+                        _slot_pair(m_slots[i])->~pair();
+                    m_slots[i].state = slot_state::EMPTY;
                 }
-                return false;
+                m_size = 0;
+                m_tombstones = 0;
             }
-            inline auto begin() const noexcept -> pair*
+
+            iterator begin() noexcept
             {
-                return dats.begin();
+                if (m_capacity == 0)
+                    return end();
+                return iterator(m_slots, m_slots + m_capacity, true);
             }
-            inline auto end() const noexcept -> pair*
+
+            const_iterator begin() const noexcept
             {
-                return dats.end();
+                if (m_capacity == 0)
+                    return end();
+                return const_iterator(m_slots, m_slots + m_capacity, true);
             }
-            inline size_t size() const
+
+            iterator end() noexcept
             {
-                return dats.size();
+                return iterator(m_slots + m_capacity, m_slots + m_capacity);
+            }
+
+            const_iterator end() const noexcept
+            {
+                return const_iterator(m_slots + m_capacity, m_slots + m_capacity);
+            }
+
+            inline size_t size() const noexcept
+            {
+                return m_size;
+            }
+
+            inline bool empty() const noexcept
+            {
+                return m_size == 0;
             }
         };
 
@@ -5482,19 +6049,6 @@ namespace jeecs
                 return c_str();
             }
         };
-
-        constexpr typing::typehash_t prime = (typing::typehash_t)0x100000001B3ull;
-        constexpr typing::typehash_t basis = (typing::typehash_t)0xCBF29CE484222325ull;
-
-        /*
-        jeecs::basic::hash_compile_time [函数]
-        可在编译时计算字符串的哈希值的哈希函数
-        */
-        constexpr typing::typehash_t hash_compile_time(
-            char const* str, typing::typehash_t last_value = basis)
-        {
-            return *str ? hash_compile_time(str + 1, (*str ^ last_value) * prime) : last_value;
-        }
 
         /*
         jeecs::basic::allign_size [函数]
@@ -5928,43 +6482,63 @@ namespace jeecs
         template <typename T>
         using resource = shared_pointer<T>;
 
+        namespace traits
+        {
+            template <typename T>
+            concept is_loadable_resource = requires(const std::string & path)
+            {
+                { T::load(path) } -> std::same_as<std::optional<basic::resource<T>>>;
+            };
+        }
+
+        class file_resource_placeholder
+        {
+            JECS_DISABLE_MOVE_AND_COPY(file_resource_placeholder);
+            file_resource_placeholder() = default;
+        public:
+            static std::optional<resource<file_resource_placeholder>> load(
+                const std::string& path)
+            {
+                return resource<file_resource_placeholder>(new file_resource_placeholder());
+            }
+        };
+
         /*
-        jeecs::basic::fileresource [类型]
+        jeecs::basic::file_resource [类型]
         文件资源包装类型，用于组件内的成员变量
-            * 类型T应该有 load 方法以创建和返回自身
-            * 类型T如果是void，那么相当于只读取文件名
         */
-        template <typename T>
-        class fileresource
+        template <traits::is_loadable_resource T = file_resource_placeholder>
+        class file_resource
         {
             struct file_content_t
             {
                 basic::string m_path;
                 basic::resource<T> m_resource;
             };
-            std::optional<file_content_t> m_file;
-
+            basic::optional<file_content_t> m_file;
         public:
-            bool load(const std::string& path)
+            auto reset() -> void
             {
-                clear();
-                if (path != "")
+                m_file.reset();
+            }
+            auto load(const std::string& path) -> bool
+            {
+                reset();
+                if (!path.empty())
                 {
                     auto res = T::load(path);
-                    if (res.has_value())
-                    {
-                        m_file.emplace(
-                            file_content_t{
-                                path,
-                                res.value(),
-                            });
-                        return true;
-                    }
-                    return false;
+                    if (!res.has_value())
+                        return false;
+
+                    m_file.emplace(
+                        file_content_t{
+                            path,
+                            res.value(),
+                        });
                 }
                 return true;
             }
-            void set_resource(const basic::resource<T>& res)
+            auto set_resource(const basic::resource<T>& res) -> void
             {
                 m_file.emplace(
                     file_content_t{
@@ -5972,66 +6546,68 @@ namespace jeecs
                         res,
                     });
             }
-            bool has_resource() const
+            auto has_resource() const -> bool
             {
                 return m_file.has_value();
             }
-            std::optional<basic::resource<T>> get_resource() const
+            auto get_resource() const -> std::optional<basic::resource<T>>
             {
                 if (m_file.has_value())
                     return m_file->m_resource;
 
                 return std::nullopt;
             }
-            std::optional<std::string> get_path() const
+            auto get_path() const -> std::optional<std::string>
             {
                 if (m_file.has_value())
                     return m_file->m_path.cpp_str();
 
                 return std::nullopt;
             }
-            void clear()
-            {
-                m_file.reset();
-            }
-        };
-
-        template <>
-        class fileresource<void>
-        {
-            struct file_content_t
-            {
-                basic::string m_path;
-            };
-            std::optional<file_content_t> m_file;
 
         public:
-            bool load(const std::string& path)
+            static const char* JEScriptTypeName()
             {
-                clear();
-                if (path != "")
+                return "file_resource";
+            }
+            static const char* JEScriptTypeDeclare()
+            {
+                return "public using file_resource = struct{public path: option<string>};";
+            }
+            void JEParseFromScriptType(woort_value v)
+            {
+                woort_value path;
+                if (!woort_push_reserve(1, &path))
+                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                else
                 {
-                    m_file.emplace(
-                        file_content_t{
-                            path,
-                        });
-                }
-                return true;
-            }
-            std::optional<std::string> get_path() const
-            {
-                if (m_file.has_value())
-                    return m_file->m_path.cpp_str();
+                    woort_struct_get(path, v, 0);
+                    if (woort_option_get(path, path))
+                        (void)load(woort_string(path));
+                    else
+                        reset();
 
-                return std::nullopt;
+                    woort_pop(1);
+                }
             }
-            bool has_resource() const
+            void JEParseToScriptType(woort_value v) const
             {
-                return m_file.has_value();
-            }
-            void clear()
-            {
-                m_file.reset();
+                woort_value field;
+                if (!woort_push_reserve(1, &field))
+                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                else
+                {
+                    auto path = get_path();
+                    if (path.has_value())
+                        woort_set_option_string(field, path.value().c_str());
+                    else
+                        woort_set_option_none(field);
+
+                    woort_set_struct(v, 1);
+                    woort_struct_set(v, 0, field);
+
+                    woort_pop(1);
+                }
             }
         };
     }
@@ -6045,72 +6621,18 @@ namespace jeecs
             return u;
         }
 
-        /*
-        jeecs::typing::typeinfo_member [类型]
-        用于储存组件的成员信息
-        */
-        struct typeinfo_member
-        {
-            struct member_info
-            {
-                const type_info* m_class_type;
-
-                const char* m_member_name;
-
-                const char* m_woovalue_type_may_null;
-                woort_GCPin* m_woovalue_init_may_null;
-
-                const type_info* m_member_type;
-                ptrdiff_t m_member_offset;
-
-                member_info* m_next_member;
-            };
-
-            size_t m_member_count;
-            member_info* m_members;
-        };
-
-        /*
-        jeecs::typing::typeinfo_script_parser [类型]
-        用于储存与woolang进行转换的方法和类型信息
-        */
-        struct typeinfo_script_parser
-        {
-            parse_c2w_func_t m_script_parse_c2w;
-            parse_w2c_func_t m_script_parse_w2c;
-            const char* m_woolang_typename;
-            const char* m_woolang_typedecl;
-        };
-
-        /*
-        jeecs::typing::typeinfo_system_updater [类型]
-        用于储存系统的更新方法
-        */
-        struct typeinfo_system_updater
-        {
-            on_enable_or_disable_func_t m_on_enable;
-            on_enable_or_disable_func_t m_on_disable;
-
-            update_func_t m_pre_update;
-            update_func_t m_state_update;
-            update_func_t m_update;
-            update_func_t m_physics_update;
-            update_func_t m_transform_update;
-            update_func_t m_late_update;
-            update_func_t m_commit_update;
-            update_func_t m_graphic_update;
-        };
-
+        /* je_TypeinfoMember / je_TypeinfoScriptParser / je_TypeinfoSystemUpdater
+           已迁移为 C ABI 类型 je_TypeinfoMember / je_TypeinfoScriptParser /
+           je_TypeinfoSystemUpdater（见文件顶部 C ABI 段），C++ 直接使用。 */
         class type_unregister_guard
         {
-            friend struct type_info;
 
             using id_typeinfo_map_t = std::unordered_map<
-                jeecs::typing::typeid_t,
-                const jeecs::typing::type_info*>;
+                je_TypeId,
+                const je_TypeInfo*>;
             using registered_type_hash_map_t = std::unordered_map<
-                jeecs::typing::typehash_t,
-                jeecs::typing::typeid_t>;
+                je_TypeHash,
+                je_TypeId>;
 
             mutable std::mutex _m_mx;
 
@@ -6125,7 +6647,7 @@ namespace jeecs
                 assert(_m_self_registed_id_typeinfo.empty());
             }
             template <typename T>
-            bool _register_or_get_local_type_info(const char* _typename, const type_info** out_typeinfo)
+            bool _register_or_get_local_type_info(const char* _typename, const je_TypeInfo** out_typeinfo)
             {
                 do
                 {
@@ -6187,7 +6709,7 @@ namespace jeecs
                 _m_self_registed_id_typeinfo.clear();
                 _m_self_registed_hash.clear();
             }
-            const jeecs::typing::type_info* get_local_type_info(jeecs::typing::typeid_t id) const
+            const je_TypeInfo* get_local_type_info(je_TypeId id) const
             {
                 std::lock_guard g1(_m_mx);
                 return _m_self_registed_id_typeinfo.at(id);
@@ -6195,158 +6717,133 @@ namespace jeecs
         };
 
         /*
-        jeecs::typing::type_info [类型]
-        用于储存类型信息和基本接口
+        jeecs::typing 自由函数（原 je_TypeInfo 上的便捷方法）
+        这些函数操作 const je_TypeInfo*；je_TypeInfo 的平凡数据布局见文件顶部 C ABI 段的 je_TypeInfo。
         */
-        struct type_info
+        template <typename T>
+        inline const je_TypeInfo* of()
         {
-            typeid_t m_id;
+            return je_typing_get_info_by_hash(typeid(T).hash_code());
+        }
+        inline const je_TypeInfo* of(je_TypeId _tid)
+        {
+            return je_typing_get_info_by_id(_tid);
+        }
+        inline const je_TypeInfo* of(const char* name)
+        {
+            return je_typing_get_info_by_name(name);
+        }
 
-            const char* m_typename; // will be free by je_typing_unregister
-            size_t m_size;
-            size_t m_align;
-            size_t m_chunk_size; // calc by je_typing_register
-            typehash_t m_hash;
+        template <typename T>
+        inline je_TypeId id()
+        {
+            return of<T>()->m_id;
+        }
+        inline je_TypeId id(const je_TypeInfo* _tinfo)
+        {
+            return _tinfo->m_id;
+        }
+        inline je_TypeId id(const char* name)
+        {
+            return of(name)->m_id;
+        }
 
-            construct_func_t m_constructor;
-            destruct_func_t m_destructor;
-            copy_construct_func_t m_copier;
-            move_construct_func_t m_mover;
-
-            je_typing_class m_type_class;
-
-            const typeinfo_member* m_member_types;
-            const typeinfo_script_parser* m_script_parsers;
-            const typeinfo_system_updater* m_system_updaters;
-
-            const type_info* m_next;
-
-        public:
-            template <typename T>
-            inline static const type_info* of()
+        template <typename T>
+        inline const je_TypeInfo* register_type(
+            type_unregister_guard* guard, const char* _typename)
+        {
+            const je_TypeInfo* local_type = nullptr;
+            if (guard->_register_or_get_local_type_info<T>(_typename, &local_type))
             {
-                return je_typing_get_info_by_hash(typeid(T).hash_code());
-            }
-            inline static const type_info* of(typeid_t _tid)
-            {
-                return je_typing_get_info_by_id(_tid);
-            }
-            inline static const type_info* of(const char* name)
-            {
-                return je_typing_get_info_by_name(name);
-            }
-
-            template <typename T>
-            inline static typeid_t id()
-            {
-                return of<T>()->m_id;
-            }
-            inline static typeid_t id(const type_info* _tinfo)
-            {
-                return _tinfo->m_id;
-            }
-            inline static typeid_t id(const char* name)
-            {
-                return of(name)->m_id;
-            }
-
-            template <typename T>
-            inline static const type_info* register_type(
-                jeecs::typing::type_unregister_guard* guard, const char* _typename)
-            {
-                const type_info* local_type = nullptr;
-                if (guard->_register_or_get_local_type_info<T>(_typename, &local_type))
+                if constexpr (traits::has_JERefRegsiter<T>)
                 {
-                    if constexpr (traits::has_JERefRegsiter<T>)
-                    {
-                        T::JERefRegsiter(guard);
-                    }
+                    T::JERefRegsiter(guard);
                 }
+            }
 
-                if (local_type->m_type_class == je_typing_class::JE_SYSTEM)
+            if (local_type->m_type_class == je_typing_class::JE_SYSTEM)
+            {
+                je_register_system_updater(
+                    local_type,
+                    default_functions<T>::on_enable,
+                    default_functions<T>::on_disable,
+                    default_functions<T>::pre_update,
+                    default_functions<T>::state_update,
+                    default_functions<T>::update,
+                    default_functions<T>::physics_update,
+                    default_functions<T>::transform_update,
+                    default_functions<T>::late_update,
+                    default_functions<T>::commit_update,
+                    default_functions<T>::graphic_update);
+            }
+
+            if constexpr (traits::has_JEScriptTypeInterface<T>)
+            {
+                je_register_script_parser(local_type,
+                    default_functions<T>::parse_to_script_type,
+                    default_functions<T>::parse_from_script_type,
+                    T::JEScriptTypeName(),
+                    T::JEScriptTypeDeclare());
+            }
+
+            return local_type;
+        }
+
+        inline void construct(const je_TypeInfo* t, void* addr, void* arg = nullptr)
+        {
+            t->m_constructor(addr, arg, t);
+        }
+        inline void destruct(const je_TypeInfo* t, void* addr)
+        {
+            t->m_destructor(addr);
+        }
+        inline void copy(const je_TypeInfo* t, void* dst_addr, const void* src_addr)
+        {
+            t->m_copier(dst_addr, src_addr);
+        }
+        inline void move(const je_TypeInfo* t, void* dst_addr, void* src_addr)
+        {
+            t->m_mover(dst_addr, src_addr);
+        }
+
+        inline bool is_system(const je_TypeInfo* t) noexcept
+        {
+            return t->m_type_class == je_typing_class::JE_SYSTEM;
+        }
+
+        inline bool is_component(const je_TypeInfo* t) noexcept
+        {
+            return t->m_type_class == je_typing_class::JE_COMPONENT;
+        }
+
+        inline const je_MemberInfo* find_member_by_name(const je_TypeInfo* t, const char* name) noexcept
+        {
+            if (t->m_member_types == nullptr)
+            {
+                if (t->m_next != nullptr)
+                    return find_member_by_name(t->m_next, name);
+            }
+            else
+            {
+                auto* member_info_ptr = t->m_member_types->m_members;
+                while (member_info_ptr != nullptr)
                 {
-                    je_register_system_updater(
-                        local_type,
-                        typing::default_functions<T>::on_enable,
-                        typing::default_functions<T>::on_disable,
-                        typing::default_functions<T>::pre_update,
-                        typing::default_functions<T>::state_update,
-                        typing::default_functions<T>::update,
-                        typing::default_functions<T>::physics_update,
-                        typing::default_functions<T>::transform_update,
-                        typing::default_functions<T>::late_update,
-                        typing::default_functions<T>::commit_update,
-                        typing::default_functions<T>::graphic_update);
+                    if (strcmp(member_info_ptr->m_member_name, name) == 0)
+                        return member_info_ptr;
+
+                    member_info_ptr = member_info_ptr->m_next_member;
                 }
+            }
+            jeecs::debug::logerr("Failed to find member named: '%s' in '%s'.", name, t->m_typename);
+            return nullptr;
+        }
+        inline const je_TypeinfoScriptParser* get_script_parser(const je_TypeInfo* t)
+        {
+            if (t->m_script_parsers == nullptr && t->m_next != nullptr)
+                return get_script_parser(t->m_next);
 
-                if constexpr (traits::has_JEScriptTypeInterface<T>)
-                {
-                    je_register_script_parser(local_type,
-                        typing::default_functions<T>::parse_to_script_type,
-                        typing::default_functions<T>::parse_from_script_type,
-                        T::JEScriptTypeName(),
-                        T::JEScriptTypeDeclare());
-                }
-
-                return local_type;
-            }
-
-            void construct(void* addr, void* arg = nullptr) const
-            {
-                m_constructor(addr, arg, this);
-            }
-            void destruct(void* addr) const
-            {
-                m_destructor(addr);
-            }
-            void copy(void* dst_addr, const void* src_addr) const
-            {
-                m_copier(dst_addr, src_addr);
-            }
-            void move(void* dst_addr, void* src_addr) const
-            {
-                m_mover(dst_addr, src_addr);
-            }
-
-            inline bool is_system() const noexcept
-            {
-                return m_type_class == je_typing_class::JE_SYSTEM;
-            }
-
-            inline bool is_component() const noexcept
-            {
-                return m_type_class == je_typing_class::JE_COMPONENT;
-            }
-
-            inline const typeinfo_member::member_info* find_member_by_name(const char* name) const noexcept
-            {
-                if (m_member_types == nullptr)
-                {
-                    if (m_next != nullptr)
-                        return m_next->find_member_by_name(name);
-                }
-                else
-                {
-                    auto* member_info_ptr = m_member_types->m_members;
-                    while (member_info_ptr != nullptr)
-                    {
-                        if (strcmp(member_info_ptr->m_member_name, name) == 0)
-                            return member_info_ptr;
-
-                        member_info_ptr = member_info_ptr->m_next_member;
-                    }
-                }
-                jeecs::debug::logerr("Failed to find member named: '%s' in '%s'.", name, this->m_typename);
-                return nullptr;
-            }
-            inline const typeinfo_script_parser* get_script_parser() const
-            {
-                if (m_script_parsers == nullptr && m_next != nullptr)
-                    return m_next->get_script_parser();
-
-                return m_script_parsers;
-            }
-        };
+            return t->m_script_parsers;
+        }
 
         template <typename ClassT, typename MemberT>
         inline void register_member(
@@ -6354,11 +6851,11 @@ namespace jeecs
             ptrdiff_t member_offset,
             const char* membname)
         {
-            const type_info* membt = type_info::register_type<MemberT>(guard, nullptr);
+            const je_TypeInfo* membt = jeecs::typing::register_type<MemberT>(guard, nullptr);
             assert(membt->m_type_class == je_typing_class::JE_BASIC_TYPE);
 
             je_register_member(
-                guard->get_local_type_info(type_info::id<ClassT>()),
+                guard->get_local_type_info(jeecs::typing::id<ClassT>()),
                 membt,
                 membname,
                 nullptr,
@@ -6385,13 +6882,13 @@ namespace jeecs
             const std::string& woolang_typename,
             const std::string& woolang_typedecl)
         {
-            const typing::type_info* local_typeinfo = nullptr;
+            const je_TypeInfo* local_typeinfo = nullptr;
             guard->_register_or_get_local_type_info<T>(nullptr, &local_typeinfo);
 
             je_register_script_parser(
                 local_typeinfo,
-                reinterpret_cast<jeecs::typing::parse_c2w_func_t>(c2w),
-                reinterpret_cast<jeecs::typing::parse_w2c_func_t>(w2c),
+                reinterpret_cast<je_ParseC2WFunc>(c2w),
+                reinterpret_cast<je_ParseW2CFunc>(w2c),
                 woolang_typename.c_str(),
                 woolang_typedecl.c_str());
         }
@@ -6401,10 +6898,10 @@ namespace jeecs
 
     class game_world
     {
-        void* _m_ecs_world_addr;
+        je_GameWorld* _m_ecs_world_addr;
 
     public:
-        game_world(void* ecs_world_addr)
+        game_world(je_GameWorld* ecs_world_addr)
             : _m_ecs_world_addr(ecs_world_addr)
         {
         }
@@ -6413,7 +6910,7 @@ namespace jeecs
         friend class game_system;
 
     public:
-        inline void* handle() const noexcept
+        inline je_GameWorld* handle() const noexcept
         {
             return _m_ecs_world_addr;
         }
@@ -6421,16 +6918,16 @@ namespace jeecs
         template <typename FirstCompT, typename... CompTs>
         inline game_entity add_entity()
         {
-            const typing::typeid_t component_ids[] = {
-                typing::type_info::id<FirstCompT>(),
-                typing::type_info::id<CompTs>()...,
+            const je_TypeId component_ids[] = {
+                typing::id<FirstCompT>(),
+                typing::id<CompTs>()...,
                 typing::INVALID_TYPE_ID,
             };
 
             game_entity gentity;
 
             je_ecs_world_create_entity_with_components(
-                handle(), &gentity, component_ids);
+                handle(), &gentity._m_raw, component_ids);
 
             return gentity;
         }
@@ -6438,52 +6935,54 @@ namespace jeecs
         {
             game_entity gentity;
             je_ecs_world_create_entity_with_prefab(
-                handle(), &gentity, &prefab);
+                handle(), &gentity._m_raw, &prefab._m_raw);
 
             return gentity;
         }
         template <typename FirstCompT, typename... CompTs>
         inline game_entity add_prefab()
         {
-            const typing::typeid_t component_ids[] = {
-                typing::type_info::id<FirstCompT>(),
-                typing::type_info::id<CompTs>()...,
+            const je_TypeId component_ids[] = {
+                typing::id<FirstCompT>(),
+                typing::id<CompTs>()...,
                 typing::INVALID_TYPE_ID,
             };
 
             game_entity gentity;
 
             je_ecs_world_create_prefab_with_components(
-                handle(), &gentity, component_ids);
+                handle(), &gentity._m_raw, component_ids);
 
             return gentity;
         }
 
-        inline jeecs::game_system* add_system(jeecs::typing::typeid_t type)
+        inline game_system* add_system(je_TypeId type)
         {
-            return je_ecs_world_add_system_instance(handle(), type);
+            return static_cast<game_system*>(
+                je_ecs_world_add_system_instance(handle(), type));
         }
 
         template <typename SystemT>
         inline SystemT* add_system()
         {
             return static_cast<SystemT*>(add_system(
-                typing::type_info::id<SystemT>()));
+                typing::id<SystemT>()));
         }
 
-        inline jeecs::game_system* get_system(jeecs::typing::typeid_t type)
+        inline game_system* get_system(je_TypeId type)
         {
-            return je_ecs_world_get_system_instance(handle(), type);
+            return static_cast<game_system*>(
+                je_ecs_world_get_system_instance(handle(), type));
         }
 
         template <typename SystemT>
         inline SystemT* get_system()
         {
             return static_cast<SystemT*>(get_system(
-                typing::type_info::id<SystemT>()));
+                typing::id<SystemT>()));
         }
 
-        inline void remove_system(jeecs::typing::typeid_t type)
+        inline void remove_system(je_TypeId type)
         {
             je_ecs_world_remove_system_instance(handle(), type);
         }
@@ -6491,35 +6990,35 @@ namespace jeecs
         template <typename SystemT>
         inline void remove_system()
         {
-            remove_system(typing::type_info::id<SystemT>());
+            remove_system(typing::id<SystemT>());
         }
 
         // This function only used for editor.
-        inline game_entity _add_entity(std::vector<typing::typeid_t> components)
+        inline game_entity _add_entity(std::vector<je_TypeId> components)
         {
             components.push_back(typing::INVALID_TYPE_ID);
 
             game_entity gentity;
             je_ecs_world_create_entity_with_components(
-                handle(), &gentity, components.data());
+                handle(), &gentity._m_raw, components.data());
 
             return gentity;
         }
         // This function only used for editor.
-        inline game_entity _add_prefab(std::vector<typing::typeid_t> components)
+        inline game_entity _add_prefab(std::vector<je_TypeId> components)
         {
             components.push_back(typing::INVALID_TYPE_ID);
 
             game_entity gentity;
             je_ecs_world_create_prefab_with_components(
-                handle(), &gentity, components.data());
+                handle(), &gentity._m_raw, components.data());
 
             return gentity;
         }
 
         inline void remove_entity(const game_entity& entity)
         {
-            je_ecs_world_destroy_entity(handle(), &entity);
+            je_ecs_world_destroy_entity(handle(), &entity._m_raw);
         }
 
         inline operator bool() const noexcept
@@ -6532,132 +7031,17 @@ namespace jeecs
             je_ecs_world_destroy(_m_ecs_world_addr);
         }
 
-        void set_able(bool able) const noexcept
+        void set_enable(bool able) const noexcept
         {
-            je_ecs_world_set_able(handle(), able);
+            je_ecs_world_set_enable(handle(), able);
         }
 
         inline game_universe get_universe() const noexcept;
     };
 
-    // Used for select the components of entities which match spcify requirements.
-    struct requirement
-    {
-        enum type : uint8_t
-        {
-            CONTAINS, // Must have spcify component
-            MAYNOT,  // May have or not have
-            ANYOF,   // Must have one of 'ANYOF' components
-            EXCEPT,  // Must not contain spcify component
-        };
-
-        type m_require;
-        size_t m_require_group_id;
-        typing::typeid_t m_type;
-    };
-    static_assert(std::is_trivial_v<requirement>);
-
-    struct dependence
-    {
-        // archs of dependences:
-        struct arch_chunks_info
-        {
-            void* m_arch;
-            typing::entity_id_in_chunk_t m_entity_count;
-
-            /* An arch will contain a chain of chunks
-            --------------------------------------
-            | ArchType
-            | chunk5->chunk4->chunk3->chunk2...
-            --------------------------------------
-
-            Components data buf will store at chunk' head.
-            --------------------------------------
-            | Chunk
-            | [COMPONENT_BUFFER 64KByte] [OTHER DATAS ..Byte]
-            --------------------------------------
-
-            In buffer, components will store like this:
-            --------------------------------------
-            | Buffer
-            | [COMPONENT_1 0 1 2...] [COMPONENT_2 0 1 2...]...
-            --------------------------------------
-
-            Each type of components will have a size, and begin-offset in buffer.
-            We can use these informations to get all components to walk through.
-            */
-
-            struct component_info
-            {
-                size_t m_component_offset_in_chunk;
-                size_t m_component_offset_of_unit;
-            };
-            basic::vector<component_info> m_component_infos;
-        };
-
-        basic::vector<requirement> m_requirements;
-        basic::vector<arch_chunks_info> m_archs;
-
-        size_t m_current_arch_version;
-        void* m_cached_arch_belongs_to_world_handle;
-
-        dependence() = default;
-        dependence(const dependence& d)
-            : m_requirements(d.m_requirements)
-            , m_archs({})
-            , m_current_arch_version(0)
-            , m_cached_arch_belongs_to_world_handle(nullptr)
-        {
-        }
-        dependence(dependence&& d)
-            : m_requirements(std::move(d.m_requirements))
-            , m_archs(std::move(d.m_archs))
-            , m_current_arch_version(d.m_current_arch_version)
-            , m_cached_arch_belongs_to_world_handle(d.m_cached_arch_belongs_to_world_handle)
-        {
-            d.m_current_arch_version = 0;
-            d.m_cached_arch_belongs_to_world_handle = nullptr;
-        }
-        dependence& operator=(const dependence& d)
-        {
-            m_requirements = d.m_requirements;
-            m_archs = {};
-            m_current_arch_version = 0;
-            m_cached_arch_belongs_to_world_handle = nullptr;
-
-            return *this;
-        }
-        dependence& operator=(dependence&& d)
-        {
-            m_requirements = std::move(d.m_requirements);
-            m_archs = std::move(d.m_archs);
-            m_current_arch_version = d.m_current_arch_version;
-            m_cached_arch_belongs_to_world_handle = d.m_cached_arch_belongs_to_world_handle;
-
-            d.m_current_arch_version = 0;
-            d.m_cached_arch_belongs_to_world_handle = nullptr;
-
-            return *this;
-        }
-        ~dependence() = default;
-
-        void update(game_world aim_world) noexcept
-        {
-            auto* world_handle = aim_world.handle();
-
-            assert(world_handle != nullptr);
-
-            size_t arch_updated_ver = je_ecs_world_archmgr_updated_version(world_handle);
-            if (m_cached_arch_belongs_to_world_handle != world_handle
-                || m_current_arch_version != arch_updated_ver)
-            {
-                m_current_arch_version = arch_updated_ver;
-                m_cached_arch_belongs_to_world_handle = world_handle;
-
-                je_ecs_world_update_dependences_archinfo(world_handle, this);
-            }
-        }
-    };
+    // 组件筛选要求现在直接使用 C ABI 的 je_ComponentRequirement（见文件顶部 C ABI 段），
+    // 字段对应：m_kind / m_group_id / m_typeid，枚举值 JE_COMPONENT_REQUIRE_*。
+    static_assert(std::is_trivial_v<je_ComponentRequirement>);
 
     namespace slice_requirement
     {
@@ -6665,116 +7049,118 @@ namespace jeecs
         {
             struct view_base
             {
-            private:
-                template <typename ComponentT, typename... ArgTs>
-                struct _const_type_index
+                struct component_info
                 {
-                    using f_t = typing::function_traits<void(ArgTs...)>;
-                    template <size_t id = 0>
-                    static constexpr size_t _index()
-                    {
-                        if constexpr (std::is_same_v<
-                            typename f_t::template argument<id>::type, ComponentT>)
-                            return id;
-                        else
-                            return _index<id + 1>();
-                    }
-                    static constexpr size_t index = _index();
+                    size_t m_component_offset_in_chunk;
+                    size_t m_component_offset_of_unit;
                 };
+
             public:
-                inline static void* get_component_from_archchunk_ptr(
-                    const dependence::arch_chunks_info* archinfo,
-                    void* chunkbuf,
-                    typing::entity_id_in_chunk_t entity_id,
-                    size_t cid)
+                // 接收预缓存的单个 component_info，避免每次解引用都走扁平偏移数组的双重间接。
+                inline static void* get_component_by_cached_info(
+                    const component_info* info,
+                    je_Chunk* chunkbuf,
+                    je_EntityIdInChunk entity_id)
                 {
-                    assert(cid < archinfo->m_component_infos.size());
-
-                    const auto& component_info = archinfo->m_component_infos.at(cid);
-
-                    if (component_info.m_component_offset_of_unit != 0)
+                    if (info->m_component_offset_of_unit != 0)
                     {
-                        size_t offset = component_info.m_component_offset_in_chunk + component_info.m_component_offset_of_unit * entity_id;
-                        return static_cast<char*>(chunkbuf) + offset;
+                        size_t offset = info->m_component_offset_in_chunk
+                            + info->m_component_offset_of_unit * entity_id;
+                        return reinterpret_cast<char*>(chunkbuf) + offset;
                     }
-                    else
-                        return nullptr;
+                    return nullptr;
                 }
+                // 编译期版本：cid 由 pack_index_v 在编译期决定；
+                //cached_infos 应为调用方预缓存的 component_info 数组（按 view 的 Components... 顺序）。
+                // 对于 CONTAINS（引用）类型走无分支路径；
+                // 对于 MAYNOT（指针）类型保留 nullptr 检查。
                 template <typename ComponentT, typename... ArgTs>
                 inline static ComponentT get_component_from_archchunk(
-                    const dependence::arch_chunks_info* archinfo,
-                    void* chunkbuf,
-                    typing::entity_id_in_chunk_t entity_id)
+                    const component_info* cached_infos,
+                    je_Chunk* chunkbuf,
+                    je_EntityIdInChunk entity_id)
                 {
-                    constexpr size_t cid = _const_type_index<ComponentT, ArgTs...>::index;
-                    auto* component_ptr = std::launder(static_cast<typename typing::origin_t<ComponentT> *>(
-                        get_component_from_archchunk_ptr(archinfo, chunkbuf, entity_id, cid)));
+                    constexpr size_t cid = typing::pack_index_v<ComponentT, ArgTs...>;
+                    static_assert(cid != SIZE_MAX, "ComponentT must be one of ArgTs...");
+                    const auto& info = cached_infos[cid];
 
-                    if (component_ptr != nullptr)
+                    if constexpr (std::is_pointer_v<ComponentT>)
                     {
-                        if constexpr (std::is_reference_v<ComponentT>)
-                            return *component_ptr;
-                        else
-                        {
-                            static_assert(std::is_pointer_v<ComponentT>);
-                            return component_ptr;
-                        }
+                        // MAYNOT：offset_of_unit == 0 表示此 arch 不含该可选组件
+                        if (info.m_component_offset_of_unit == 0)
+                            return nullptr;
                     }
 
+                    // CONTAINS 路径无分支：arch 保证 offset_of_unit > 0
+                    assert(sizeof(typename typing::origin_t<ComponentT>) == info.m_component_offset_of_unit);
+
+                    auto* component_ptr = static_cast<typename typing::origin_t<ComponentT>*>(
+                        static_cast<void*>(
+                            reinterpret_cast<char*>(chunkbuf)
+                            + info.m_component_offset_in_chunk
+                            + sizeof(typename typing::origin_t<ComponentT>) * entity_id));
+
                     if constexpr (std::is_reference_v<ComponentT>)
-                        // Only maynot/anyof canbe here. 'je_ecs_world_update_dependences_archinfo' may have some problem.
-                        abort();
+                        return *component_ptr;
                     else
-                        return nullptr; // Only maynot/anyof can be here, no need to cast the type;
+                    {
+                        static_assert(std::is_pointer_v<ComponentT>);
+                        return component_ptr;
+                    }
                 }
             protected:
                 template<typename T, typename ... Ts>
-                static void _apply_dependence_impl(dependence* out_dependence)
+                static void _apply_dependence_impl(basic::vector<je_ComponentRequirement>* out_requirements)
                 {
                     static_assert(
                         std::is_pointer_v<T> || std::is_reference_v<T>);
 
-                    out_dependence->m_requirements.push_back(
-                        requirement{
-                            std::is_pointer_v<T> ? requirement::type::MAYNOT : requirement::type::CONTAINS,
-                            0,
-                            typing::type_info::id<typing::origin_t<T>>() });
+                    out_requirements->push_back(
+                        je_ComponentRequirement{
+                            std::is_pointer_v<T>
+                                ? JE_COMPONENT_REQUIRE_MAYNOT
+                                : JE_COMPONENT_REQUIRE_CONTAINS,
+                            typing::id<typing::origin_t<T>>() });
 
                     if constexpr (sizeof...(Ts) > 0)
-                        _apply_dependence_impl<Ts...>(out_dependence);
+                        _apply_dependence_impl<Ts...>(out_requirements);
                 }
 
                 template<typename ... Ts>
-                static void _apply_dependence(dependence* out_dependence)
+                static void _apply_dependence(basic::vector<je_ComponentRequirement>* out_requirements)
                 {
                     if constexpr (sizeof...(Ts) > 0)
-                        _apply_dependence_impl<Ts...>(out_dependence);
+                        _apply_dependence_impl<Ts...>(out_requirements);
                 }
             };
 
-            template<requirement::type RequireType>
+            template<je_ComponentRequirementKind RequireType>
             struct requirement_base
             {
                 template<typename T, typename ... Ts>
-                static void _apply_dependence_impl(size_t group, dependence* out_dependence)
+                static void _apply_dependence_impl(int group, basic::vector<je_ComponentRequirement>* out_requirements)
                 {
-                    out_dependence->m_requirements.push_back(
-                        requirement{ RequireType, group, typing::type_info::id<typing::origin_t<T>>() });
+                    out_requirements->push_back(
+                        je_ComponentRequirement{
+                            RequireType >= JE_COMPONENT_REQUIRE_ANYOF_0
+                                ? RequireType + group
+                                : RequireType,
+                            typing::id<typing::origin_t<T>>() });
 
                     if constexpr (sizeof...(Ts) > 0)
-                        _apply_dependence_impl<Ts...>(group, out_dependence);
+                        _apply_dependence_impl<Ts...>(group, out_requirements);
                 }
 
                 template<typename ... Ts>
-                static void _apply_dependence(size_t group, dependence* out_dependence)
+                static void _apply_dependence(int group, basic::vector<je_ComponentRequirement>* out_requirements)
                 {
                     if constexpr (sizeof...(Ts) > 0)
-                        _apply_dependence_impl<Ts...>(group, out_dependence);
+                        _apply_dependence_impl<Ts...>(group, out_requirements);
                 }
             };
-            struct contains_base : requirement_base<requirement::type::CONTAINS> {};
-            struct except_base : requirement_base<requirement::type::EXCEPT> {};
-            struct anyof_base : requirement_base<requirement::type::ANYOF> {};
+            struct contains_base : requirement_base<JE_COMPONENT_REQUIRE_CONTAINS> {};
+            struct except_base : requirement_base<JE_COMPONENT_REQUIRE_EXCEPT> {};
+            struct anyof_base : requirement_base<JE_COMPONENT_REQUIRE_ANYOF_0> {};
         }
 
         template<typing::traits::is_reference_or_pointer ... Components>
@@ -6782,58 +7168,61 @@ namespace jeecs
         {
             using components = std::tuple<Components...>;
             using entity_with_components = std::tuple<const game_entity, Components...>;
-            static void apply_dependence(dependence* out_dependence)
+            static void apply_dependence(basic::vector<je_ComponentRequirement>* out_requirements)
             {
-                _apply_dependence<Components...>(out_dependence);
+                _apply_dependence<Components...>(out_requirements);
             }
 
             static components fetch_component_slice_from_chunk(
-                const dependence::arch_chunks_info* archinfo, void* chunkbuf, typing::entity_id_in_chunk_t entity_id)
+                const component_info* cached_infos,
+                je_Chunk* chunkbuf,
+                je_EntityIdInChunk entity_id)
             {
-                return std::forward_as_tuple(
-                    get_component_from_archchunk<Components, Components...>(archinfo, chunkbuf, entity_id)...);
+                return components{
+                    get_component_from_archchunk<Components, Components...>(
+                        cached_infos, chunkbuf, entity_id)... };
             }
             static entity_with_components fetch_entity_and_component_slice_from_chunk(
-                const dependence::arch_chunks_info* archinfo,
-                void* chunkbuf,
-                typing::entity_id_in_chunk_t entity_id,
-                typing::version_t entity_version)
+                const component_info* cached_infos,
+                je_Chunk* chunkbuf,
+                je_EntityIdInChunk entity_id,
+                je_Version entity_version)
             {
-                return std::forward_as_tuple(
+                return entity_with_components{
                     game_entity{
                         chunkbuf,
                         entity_id,
                         entity_version,
                     },
                     get_component_from_archchunk<Components, Components...>(
-                        archinfo, chunkbuf, entity_id)...);
+                        cached_infos, chunkbuf, entity_id)... };
             }
         };
         template<typename ... Components>
         struct contains : base::contains_base
         {
             using components = std::tuple<Components...>;
-            static void apply_dependence(size_t group, dependence* out_dependence)
+            static void apply_dependence(int group, basic::vector<je_ComponentRequirement>* out_requirements)
             {
-                _apply_dependence<Components...>(group, out_dependence);
+                _apply_dependence<Components...>(group, out_requirements);
             }
         };
         template<typename ... Components>
         struct except : base::except_base
         {
             using components = std::tuple<Components...>;
-            static void apply_dependence(size_t group, dependence* out_dependence)
+            static void apply_dependence(int group, basic::vector<je_ComponentRequirement>* out_requirements)
             {
-                _apply_dependence<Components...>(group, out_dependence);
+                _apply_dependence<Components...>(group, out_requirements);
             }
         };
         template<typename ... Components>
         struct anyof : base::anyof_base
         {
             using components = std::tuple<Components...>;
-            static void apply_dependence(size_t group, dependence* out_dependence)
+            static void apply_dependence(int group, basic::vector<je_ComponentRequirement>* out_requirements)
             {
-                _apply_dependence<Components...>(group, out_dependence);
+                _apply_dependence<Components...>(group, out_requirements);
             }
         };
 
@@ -6892,89 +7281,204 @@ namespace jeecs
         slice_requirement::traits::is_requirement ... SliceRequirements>
     class collection
     {
-        dependence m_dependence;
-
-        template<size_t Group, typename T, typename ... Ts>
-        static void _apply_requirements_impl(dependence* dep)
+        template<int Group, typename T, typename ... Ts>
+        static void _apply_requirements_impl(basic::vector<je_ComponentRequirement>* reqs)
         {
             static_assert(
                 std::is_base_of_v<slice_requirement::base::contains_base, T>
                 || std::is_base_of_v<slice_requirement::base::except_base, T>
                 || std::is_base_of_v<slice_requirement::base::anyof_base, T>);
 
-            T::apply_dependence(Group, dep);
+            T::apply_dependence(Group, reqs);
 
             if constexpr (sizeof...(Ts) > 0)
-                _apply_requirements_impl<Group + 1, Ts...>(dep);
+                _apply_requirements_impl<Group + 1, Ts...>(reqs);
         }
-        template<size_t Group, typename ... Ts>
-        static void _apply_requirements(dependence* dep)
+        template<int Group, typename ... Ts>
+        static void _apply_requirements(basic::vector<je_ComponentRequirement>* reqs)
         {
             if constexpr (sizeof...(Ts) > 0)
-                _apply_requirements_impl<Group, Ts...>(dep);
+                _apply_requirements_impl<Group, Ts...>(reqs);
         }
     public:
-        static void apply_requirements(dependence* dep)
+        // 首次初始化：收集视图需求（CONTAINS/MAYNOT）与其它需求（contain/except/anyof），
+        // 交由 C ABI 的 je_ecs_collect_requirements 生成不透明的 je_CollectedRequirements
+        // 并挂到 collection->m_collected_requirement 上。视图需求必须排在最前。
+        static void apply_requirements(je_RequirementCollection* collection)
         {
-            SliceView::apply_dependence(dep);
-            _apply_requirements<1, SliceRequirements...>(dep);
+            static_assert(std::is_base_of_v<slice_requirement::base::view_base, SliceView>,
+                "First template argument of collection must be collection::view.");
+
+            basic::vector<je_ComponentRequirement> reqs;
+            SliceView::apply_dependence(&reqs);
+            const size_t view_requirement_count = reqs.size();
+            _apply_requirements<1, SliceRequirements...>(&reqs);
+
+            collection->m_collected_requirement = je_ecs_collect_requirements(
+                reqs.data(),
+                view_requirement_count,
+                reqs.size() - view_requirement_count);
         }
 
     public:
-        class slice
+        // CRTP 基类：封装 slice / entity_slice 共享的迭代逻辑与状态。
+        // 派生类只需提供 value_type、iterator typedefs、operator* 以及接受
+        // const je_RequirementCollection* / const je_DependenceArchInfos* 的构造函数。
+        template <typename Derived>
+        class slice_base
         {
+        public:
+            static constexpr size_t _component_count =
+                std::tuple_size_v<typename SliceView::components>;
+
         protected:
-            const dependence::arch_chunks_info* m_archs_current;
-            const dependence::arch_chunks_info* m_archs_end;
+            const je_DependenceArchInfos* m_archs_current;
+            const je_DependenceArchInfos* m_archs_end;
 
-            void* m_chunk_currnet;
-            const jeecs::game_entity::meta* m_chunk_current_entity_meta;
-            typing::entity_id_in_chunk_t m_chunk_entity_currnet_index;
+            je_Chunk* m_chunk_current;
+            const je_GameEntityMeta* m_chunk_current_entity_meta;
+            je_EntityIdInChunk m_chunk_entity_current_index;
+
+            // 预缓存本视图所需的 component_info（按 SliceView::Components... 顺序）。
+            // 在进入新 arch 时一次性刷新，避免每次解引用都走 je_DependenceArchInfos 的
+            // m_view_component_offset / m_view_component_size 双重间接。
+            std::array<typename SliceView::component_info, _component_count> m_cached_infos{};
+
+            slice_base() = default;
 
             // For `end()` only.
-            explicit slice(
-                const dependence::arch_chunks_info* _archs_end)
+            explicit slice_base(const je_DependenceArchInfos* _archs_end)
                 : m_archs_current(_archs_end)
                 , m_archs_end(_archs_end)
-                , m_chunk_currnet(nullptr)
+                , m_chunk_current(nullptr)
                 , m_chunk_current_entity_meta(nullptr)
-                , m_chunk_entity_currnet_index(0)
+                , m_chunk_entity_current_index(0)
             {
             }
 
-        private:
+            // 进入一个新 arch：刷新 chunk、meta、预缓存 component_info。
+            inline void _enter_current_arch()
+            {
+                m_chunk_current = je_arch_get_chunk(m_archs_current->m_arch);
+                assert(m_chunk_current != nullptr);
+                m_chunk_current_entity_meta = je_arch_entity_meta_addr_in_chunk(m_chunk_current);
+
+                for (size_t i = 0; i < _component_count; ++i)
+                {
+                    m_cached_infos[i].m_component_offset_in_chunk =
+                        m_archs_current->m_view_component_offset[i];
+                    m_cached_infos[i].m_component_offset_of_unit =
+                        m_archs_current->m_view_component_size[i];
+                }
+            }
+            // 在同一 arch 内切换 chunk：仅刷新 meta 指针。
+            inline void _enter_current_chunk()
+            {
+                m_chunk_current_entity_meta = je_arch_entity_meta_addr_in_chunk(m_chunk_current);
+            }
+
             void _move_to_valid_entity()
             {
                 for (;;)
                 {
-                    if (m_chunk_entity_currnet_index >= m_archs_current->m_entity_count)
+                    if (m_chunk_entity_current_index >= m_archs_current->m_entity_count)
                     {
                         // Move to next chunk.
-                        m_chunk_entity_currnet_index = 0;
-                        m_chunk_currnet = je_arch_next_chunk(m_chunk_currnet);
-                        if (m_chunk_currnet == nullptr)
+                        m_chunk_entity_current_index = 0;
+                        m_chunk_current = je_arch_next_chunk(m_chunk_current);
+                        if (m_chunk_current == nullptr)
                         {
                             // Move to next arch.
                             if (++m_archs_current == m_archs_end)
-                                // End! m_archs_current == m_archs_end && m_chunk_currnet == nullptr
+                                // End! m_archs_current == m_archs_end && m_chunk_current == nullptr
                                 break;
 
-                            m_chunk_currnet = je_arch_get_chunk(m_archs_current->m_arch);
-                            assert(m_chunk_currnet != nullptr);
+                            _enter_current_arch();
                         }
-
-                        // Update entity meta for new chunk.
-                        m_chunk_current_entity_meta = je_arch_entity_meta_addr_in_chunk(m_chunk_currnet);
+                        else
+                        {
+                            _enter_current_chunk();
+                        }
                     }
 
-                    if (jeecs::game_entity::entity_stat::READY
-                        == m_chunk_current_entity_meta[m_chunk_entity_currnet_index].m_stat)
+                    if (JE_ENTITY_STAT_READY
+                        == m_chunk_current_entity_meta[m_chunk_entity_current_index].m_stat)
                         break;
 
-                    ++m_chunk_entity_currnet_index;
+                    ++m_chunk_entity_current_index;
                 }
             }
 
+            // 由派生类的 collection 构造函数调用，统一初始化路径。
+            void _init_from_collection(const je_RequirementCollection* collection)
+            {
+                m_archs_current = collection->m_cached_archs;
+                m_archs_end = collection->m_cached_archs + collection->m_cached_arch_count;
+                m_chunk_entity_current_index = 0;
+
+                if (m_archs_current != m_archs_end)
+                {
+                    _enter_current_arch();
+                    _move_to_valid_entity();
+                }
+                else
+                {
+                    // NOTE: 没有枚举到任何 ArchType，直接置为 end 状态。
+                    m_chunk_current = nullptr;
+                    m_chunk_current_entity_meta = nullptr;
+                    m_chunk_entity_current_index = 0;
+                }
+            }
+
+        public:
+            Derived& operator ++()
+            {
+                ++m_chunk_entity_current_index;
+                _move_to_valid_entity();
+                return static_cast<Derived&>(*this);
+            }
+            Derived operator ++(int)
+            {
+                Derived current = static_cast<Derived&>(*this);
+                ++m_chunk_entity_current_index;
+                _move_to_valid_entity();
+                return current;
+            }
+            bool operator ==(const Derived& pindex) const
+            {
+                return m_chunk_current == pindex.m_chunk_current
+                    && m_chunk_entity_current_index == pindex.m_chunk_entity_current_index;
+            }
+            bool operator !=(const Derived& pindex) const
+            {
+                return m_chunk_current != pindex.m_chunk_current
+                    || m_chunk_entity_current_index != pindex.m_chunk_entity_current_index;
+            }
+
+            Derived begin()
+            {
+                return static_cast<Derived&>(*this);
+            }
+            Derived end() const
+            {
+                return Derived(m_archs_end);
+            }
+
+            // 注意：slice 是 forward_iterator，调用 std::for_each(par_unseq, ...)
+            // 时大多数标准库实现难以有效切分工作（无法随机访问）。
+            template<typename FT>
+            void foreach_parallel(FT&& ft)
+            {
+                ::jeecs::parallel_foreach(
+                    static_cast<Derived&>(*this),
+                    end(),
+                    std::forward<FT>(ft));
+            }
+        };
+
+        class slice : public slice_base<slice>
+        {
+            using base_t = slice_base<slice>;
         public:
             typedef ptrdiff_t difference_type;
             typedef typename SliceView::components value_type;
@@ -6982,182 +7486,74 @@ namespace jeecs
             typedef void reference;
             typedef std::forward_iterator_tag iterator_category;
 
+            slice() = default;
             slice(const slice&) = default;
             slice(slice&&) = default;
-            slice& operator = (const slice&) = default;
-            slice& operator = (slice&&) = default;
-            slice()
-                : m_archs_current(nullptr)
-                , m_archs_end(nullptr)
-                , m_chunk_currnet(nullptr)
-                , m_chunk_current_entity_meta(nullptr)
-                , m_chunk_entity_currnet_index(0)
-            {
+            slice& operator=(const slice&) = default;
+            slice& operator=(slice&&) = default;
+
+            explicit slice(const je_DependenceArchInfos* _archs_end)
+                : base_t(_archs_end) {
             }
-            explicit slice(const dependence* dependence)
+            explicit slice(const je_RequirementCollection* collection)
             {
-                m_archs_current = dependence->m_archs.begin();
-                m_archs_end = dependence->m_archs.end();
-
-                if (m_archs_current != m_archs_end)
-                {
-                    m_chunk_currnet = je_arch_get_chunk(m_archs_current->m_arch);
-                    m_chunk_current_entity_meta = je_arch_entity_meta_addr_in_chunk(m_chunk_currnet);
-                    m_chunk_entity_currnet_index = 0;
-
-                    _move_to_valid_entity();
-                }
-                else
-                {
-                    // NOTE: 没有枚举到任何 ArchType，直接置为 end 状态。
-                    m_chunk_currnet = nullptr;
-                    m_chunk_current_entity_meta = nullptr;
-                    m_chunk_entity_currnet_index = 0;
-                }
+                this->_init_from_collection(collection);
             }
 
-            slice operator ++()
-            {
-                ++m_chunk_entity_currnet_index;
-                _move_to_valid_entity();
-
-                return *this;
-            }
-            slice operator ++(int)
-            {
-                auto current = this;
-
-                ++m_chunk_entity_currnet_index;
-                _move_to_valid_entity();
-
-                return current;
-            }
-            bool operator ==(const slice& pindex) const
-            {
-                return m_archs_current == pindex.m_archs_current
-                    && m_chunk_currnet == pindex.m_chunk_currnet
-                    && m_chunk_entity_currnet_index == pindex.m_chunk_entity_currnet_index;
-            }
-            bool operator !=(const slice& pindex) const
-            {
-                return m_archs_current != pindex.m_archs_current
-                    || m_chunk_currnet != pindex.m_chunk_currnet
-                    || m_chunk_entity_currnet_index != pindex.m_chunk_entity_currnet_index;
-            }
             value_type operator*()
             {
                 return SliceView::fetch_component_slice_from_chunk(
-                    m_archs_current, m_chunk_currnet, m_chunk_entity_currnet_index);
-            }
-
-            slice begin()
-            {
-                return *this;
-            }
-            slice end()
-            {
-                return slice(m_archs_end);
-            }
-
-            template<typename FT>
-            void foreach_parallel(FT&& ft)
-            {
-                ::jeecs::parallel_foreach(
-                    * this,
-                    end(),
-                    ft);
+                    this->m_cached_infos.data(),
+                    this->m_chunk_current,
+                    this->m_chunk_entity_current_index);
             }
         };
-        class entity_slice : public slice
-        {
-        private:
-            explicit entity_slice(
-                const dependence::arch_chunks_info* _archs_end)
-                : slice(_archs_end)
-            {
-            }
-        public:
-            typedef typename SliceView::entity_with_components value_type;
 
+        class entity_slice : public slice_base<entity_slice>
+        {
+            using base_t = slice_base<entity_slice>;
+        public:
+            typedef ptrdiff_t difference_type;
+            typedef typename SliceView::entity_with_components value_type;
+            typedef void pointer;
+            typedef void reference;
+            typedef std::forward_iterator_tag iterator_category;
+
+            entity_slice() = default;
             entity_slice(const entity_slice&) = default;
             entity_slice(entity_slice&&) = default;
-            entity_slice& operator = (const entity_slice&) = default;
-            entity_slice& operator = (entity_slice&&) = default;
-            entity_slice() = default;
-            explicit entity_slice(const dependence* dependence)
-                : slice(dependence)
+            entity_slice& operator=(const entity_slice&) = default;
+            entity_slice& operator=(entity_slice&&) = default;
+
+            explicit entity_slice(const je_DependenceArchInfos* _archs_end)
+                : base_t(_archs_end) {
+            }
+            explicit entity_slice(const je_RequirementCollection* collection)
             {
+                this->_init_from_collection(collection);
             }
 
-            entity_slice operator ++()
-            {
-                this->slice::operator++();
-                return *this;
-            }
-            entity_slice operator ++(int)
-            {
-                auto current = this;
-                this->slice::operator++(0);
-                return current;
-            }
             value_type operator*()
             {
                 return SliceView::fetch_entity_and_component_slice_from_chunk(
-                    this->m_archs_current,
-                    this->m_chunk_currnet,
-                    this->m_chunk_entity_currnet_index,
-                    this->m_chunk_current_entity_meta[this->m_chunk_entity_currnet_index].m_version);
-            }
-
-            entity_slice begin()
-            {
-                return *this;
-            }
-            entity_slice end()
-            {
-                return entity_slice(this->m_archs_end);
-            }
-
-            template<typename FT>
-            void foreach_parallel(FT&& ft)
-            {
-                ::jeecs::parallel_foreach(
-                    * this,
-                    end(),
-                    ft);
+                    this->m_cached_infos.data(),
+                    this->m_chunk_current,
+                    this->m_chunk_entity_current_index,
+                    this->m_chunk_current_entity_meta[this->m_chunk_entity_current_index].m_version);
             }
         };
-
-        collection()
-        {
-            static_assert(std::is_base_of_v<slice_requirement::base::view_base, SliceView>,
-                "First template argument of collection must be collection::view.");
-
-            apply_requirements(&m_dependence);
-        }
-
-        slice fetch(game_world w)
-        {
-            m_dependence.update(w);
-            return slice(&m_dependence);
-        }
-        entity_slice fetch_with_entity(game_world w)
-        {
-            m_dependence.update(w);
-            return entity_slice(&m_dependence);
-        }
     };
 
     class game_universe
     {
-        void* _m_universe_addr;
+        je_GameUniverse* _m_universe_addr;
 
     public:
-        game_universe(void* universe_addr)
+        game_universe(je_GameUniverse* universe_addr)
             : _m_universe_addr(universe_addr)
         {
         }
-        inline void* handle() const noexcept
+        inline je_GameUniverse* handle() const noexcept
         {
             return _m_universe_addr;
         }
@@ -7236,21 +7632,24 @@ namespace jeecs
         template<
             slice_requirement::traits::is_view SliceView,
             slice_requirement::traits::is_requirement... SliceRequirements>
-        jeecs::dependence* _fetch_query_slice_cache()
+        je_RequirementCollection* _fetch_query_slice_cache()
         {
-            jeecs::dependence* dep;
+            je_RequirementCollection* requirement_collection;
+            je_GameWorld* const world_inst = get_world().handle();
+
             if (!je_ecs_world_query_slice_dependence(
-                get_world().handle(),
+                world_inst,
                 this,
                 typeid(collection<SliceView, SliceRequirements...>).hash_code(),
-                &dep))
+                &requirement_collection))
             {
-                // This dependence is just created, need to apply requirements.
-
-                collection<SliceView, SliceRequirements...>::apply_requirements(dep);
-                dep->update(get_world());
+                // This collection is just created, need to apply requirements
+                // for first-time initialization, then update arch info.
+                collection<SliceView, SliceRequirements...>::apply_requirements(
+                    requirement_collection);
+                je_ecs_world_update_collection(world_inst, requirement_collection);
             }
-            return dep;
+            return requirement_collection;
         }
 
     public:
@@ -7317,29 +7716,29 @@ namespace jeecs
     template <typename T>
     inline T* game_entity::get_component() const noexcept
     {
-        return (T*)je_ecs_world_entity_get_component(this,
-            typing::type_info::id<T>());
+        return (T*)je_ecs_world_entity_get_component(&_m_raw,
+            typing::id<T>());
     }
     template <typename T>
     inline T* game_entity::add_component() const noexcept
     {
-        return (T*)je_ecs_world_entity_add_component(this,
-            typing::type_info::id<T>());
+        return (T*)je_ecs_world_entity_add_component(&_m_raw,
+            typing::id<T>());
     }
     template <typename T>
     inline void game_entity::remove_component() const noexcept
     {
-        return je_ecs_world_entity_remove_component(this,
-            typing::type_info::id<T>());
+        return je_ecs_world_entity_remove_component(&_m_raw,
+            typing::id<T>());
     }
 
     inline jeecs::game_world game_entity::game_world() const noexcept
     {
-        return jeecs::game_world(je_ecs_world_of_entity(this));
+        return jeecs::game_world(je_ecs_world_of_entity(&_m_raw));
     }
     inline void game_entity::close() const noexcept
     {
-        if (_m_in_chunk == nullptr)
+        if (_m_raw._m_in_chunk == nullptr)
             return;
 
         game_world().remove_entity(*this);
@@ -7781,12 +8180,12 @@ namespace jeecs
                 return "public using ivec2 = (int, int);";
             }
 
-            inline float max() const noexcept
+            inline int max() const noexcept
             {
                 return std::max(x, y);
             }
 
-            inline float min() const noexcept
+            inline int min() const noexcept
             {
                 return std::min(x, y);
             }
@@ -8829,7 +9228,7 @@ namespace jeecs
                     if (jegl_shad_uniforms->m_name == name)
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
-                            jegl_shader::uniform_type::INT)
+                            jegl_shader::uniform_type::INT2)
                             debug::logerr(
                                 "Trying set uniform('%s' = %d, %d) to shader(%p), but current uniform type is not 'INT2'.",
                                 name.c_str(), x, y, this);
@@ -8856,7 +9255,7 @@ namespace jeecs
                     if (jegl_shad_uniforms->m_name == name)
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
-                            jegl_shader::uniform_type::INT)
+                            jegl_shader::uniform_type::INT3)
                             debug::logerr(
                                 "Trying set uniform('%s' = %d, %d, %d) to shader(%p), but current uniform type is not 'INT3'.",
                                 name.c_str(), x, y, z, this);
@@ -8884,7 +9283,7 @@ namespace jeecs
                     if (jegl_shad_uniforms->m_name == name)
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
-                            jegl_shader::uniform_type::INT)
+                            jegl_shader::uniform_type::INT4)
                             debug::logerr(
                                 "Trying set uniform('%s' = %d, %d, %d, %d) to shader(%p), but current uniform type is not 'INT4'.",
                                 name.c_str(), x, y, z, w, this);
@@ -9377,31 +9776,31 @@ namespace jeecs
 
                 // u32 -> utf8 conversion helper.
                 const auto u32_to_utf8 = [](std::u32string_view sv) -> std::string
-                {
-                    const size_t sz = woort_u32strn_to_str(sv.data(), sv.size(), nullptr, 0);
-                    std::string out;
-                    out.resize(sz);
-                    (void)woort_u32strn_to_str(sv.data(), sv.size(), out.data(), sz);
-                    return out;
-                };
+                    {
+                        const size_t sz = woort_u32strn_to_str(sv.data(), sv.size(), nullptr, 0);
+                        std::string out;
+                        out.resize(sz);
+                        (void)woort_u32strn_to_str(sv.data(), sv.size(), out.data(), sz);
+                        return out;
+                    };
 
                 // Parse hex color ("RRGGBBAA"; shorter input zero-pads, matching
                 // the legacy strncpy-into-"00000000" behavior) into normalized RGBA.
                 // Bytes are unpacked in the same order the old code used.
                 const auto parse_hex_color = [&](std::u32string_view hex) -> math::vec4
-                {
-                    char buf[9] = "00000000";
-                    const auto u8hex = u32_to_utf8(hex);
-                    std::strncpy(buf, u8hex.c_str(), 8);
-                    const unsigned int packed = std::strtoul(buf, nullptr, 16);
-                    const auto* b = reinterpret_cast<const unsigned char*>(&packed);
-                    return math::vec4{
-                        b[3] / 255.0f, // R
-                        b[2] / 255.0f, // G
-                        b[1] / 255.0f, // B
-                        b[0] / 255.0f  // A
+                    {
+                        char buf[9] = "00000000";
+                        const auto u8hex = u32_to_utf8(hex);
+                        std::strncpy(buf, u8hex.c_str(), 8);
+                        const unsigned int packed = std::strtoul(buf, nullptr, 16);
+                        const auto* b = reinterpret_cast<const unsigned char*>(&packed);
+                        return math::vec4{
+                            b[3] / 255.0f, // R
+                            b[2] / 255.0f, // G
+                            b[1] / 255.0f, // B
+                            b[0] / 255.0f  // A
+                        };
                     };
-                };
 
                 // Alpha-over compositing of a glyph pixel onto the destination.
                 // A fully-transparent destination reads back as white (1,1,1) for
@@ -9411,18 +9810,18 @@ namespace jeecs
                     const math::vec4& dst,
                     const math::vec4& src,
                     const math::vec4& tint) -> math::vec4
-                {
-                    const float src_a = src.w * tint.w;
-                    const float inv_a = 1.0f - src_a;
-                    const float dst_r = dst.w ? dst.x : 1.0f;
-                    const float dst_g = dst.w ? dst.y : 1.0f;
-                    const float dst_b = dst.w ? dst.z : 1.0f;
-                    return math::vec4(
-                        tint.x * src.x * src_a + dst_r * inv_a,
-                        tint.y * src.y * src_a + dst_g * inv_a,
-                        tint.z * src.z * src_a + dst_b * inv_a,
-                        src_a + dst.w * inv_a);
-                };
+                    {
+                        const float src_a = src.w * tint.w;
+                        const float inv_a = 1.0f - src_a;
+                        const float dst_r = dst.w ? dst.x : 1.0f;
+                        const float dst_g = dst.w ? dst.y : 1.0f;
+                        const float dst_b = dst.w ? dst.z : 1.0f;
+                        return math::vec4(
+                            tint.x * src.x * src_a + dst_r * inv_a,
+                            tint.y * src.y * src_a + dst_g * inv_a,
+                            tint.z * src.z * src_a + dst_b * inv_a,
+                            src_a + dst.w * inv_a);
+                    };
 
                 // Cached scaled-font pool shared by both passes.
                 using font_key_t = std::pair<std::string, size_t>;
@@ -9432,72 +9831,72 @@ namespace jeecs
                 // events. Grouped so a single reset() restores the default state.
                 struct
                 {
-                    float      scale  = 1.0f;
-                    math::vec4 color  = math::vec4{ 1, 1, 1, 1 };
+                    float      scale = 1.0f;
+                    math::vec4 color = math::vec4{ 1, 1, 1, 1 };
                     math::vec2 offset = math::vec2{ 0, 0 };
-                    font*      current = nullptr;
+                    font* current = nullptr;
                 } style;
                 style.current = &font_base;
 
                 const auto reset_style = [&]() noexcept
-                {
-                    style.scale   = 1.0f;
-                    style.color   = math::vec4{ 1, 1, 1, 1 };
-                    style.offset  = math::vec2{ 0, 0 };
-                    style.current = &font_base;
-                };
+                    {
+                        style.scale = 1.0f;
+                        style.color = math::vec4{ 1, 1, 1, 1 };
+                        style.offset = math::vec2{ 0, 0 };
+                        style.current = &font_base;
+                    };
 
                 // Single source of truth for attribute application — shared by the
                 // measure and raster passes so their state cannot drift apart.
                 const auto apply_attr = [&](std::u32string_view field, std::u32string_view value)
-                {
-                    const auto u8value = u32_to_utf8(value);
-
-                    if (field == U"scale")
                     {
-                        style.scale = std::stof(u8value);
-                        if (style.scale == 1.0f)
-                        {
-                            style.current = &font_base;
-                            return;
-                        }
-                        const auto key = std::make_pair(
-                            std::string(base_font_resource->m_path),
-                            static_cast<size_t>(std::round(
-                                style.scale * base_font_resource->m_scale_x)));
+                        const auto u8value = u32_to_utf8(value);
 
-                        auto found = font_pool.find(key);
-                        if (found == font_pool.end())
+                        if (field == U"scale")
                         {
-                            auto loaded = font::load(
-                                key.first,
-                                key.second,
-                                base_font_resource->m_board_size_x,
-                                base_font_resource->m_updater);
-
-                            if (!loaded.has_value())
+                            style.scale = std::stof(u8value);
+                            if (style.scale == 1.0f)
                             {
-                                debug::logerr(
-                                    "Failed to open font: '%s'.",
-                                    base_font_resource->m_path);
                                 style.current = &font_base;
                                 return;
                             }
-                            found = font_pool.emplace(key, std::move(*loaded)).first;
+                            const auto key = std::make_pair(
+                                std::string(base_font_resource->m_path),
+                                static_cast<size_t>(std::round(
+                                    style.scale * base_font_resource->m_scale_x)));
+
+                            auto found = font_pool.find(key);
+                            if (found == font_pool.end())
+                            {
+                                auto loaded = font::load(
+                                    key.first,
+                                    key.second,
+                                    base_font_resource->m_board_size_x,
+                                    base_font_resource->m_updater);
+
+                                if (!loaded.has_value())
+                                {
+                                    debug::logerr(
+                                        "Failed to open font: '%s'.",
+                                        base_font_resource->m_path);
+                                    style.current = &font_base;
+                                    return;
+                                }
+                                found = font_pool.emplace(key, std::move(*loaded)).first;
+                            }
+                            style.current = found->second.get();
                         }
-                        style.current = found->second.get();
-                    }
-                    else if (field == U"color")
-                    {
-                        style.color = parse_hex_color(value);
-                    }
-                    else if (field == U"offset")
-                    {
-                        math::vec2 delta = math::vec2{ 0, 0 };
-                        (void)std::sscanf(u8value.c_str(), "(%f,%f)", &delta.x, &delta.y);
-                        style.offset = style.offset + delta;
-                    }
-                };
+                        else if (field == U"color")
+                        {
+                            style.color = parse_hex_color(value);
+                        }
+                        else if (field == U"offset")
+                        {
+                            math::vec2 delta = math::vec2{ 0, 0 };
+                            (void)std::sscanf(u8value.c_str(), "(%f,%f)", &delta.x, &delta.y);
+                            style.offset = style.offset + delta;
+                        }
+                    };
 
                 // Markup scanner. Supports {field:value} attribute spans and a
                 // backslash escape: '\' makes the next character literal (so '\{'
@@ -9505,53 +9904,53 @@ namespace jeecs
                 const auto walk_text = [&text](
                     const std::function<void(std::u32string_view, std::u32string_view)>& on_attr,
                     const std::function<void(char32_t)>& on_char)
-                {
-                    const auto end = text.cend();
-                    for (auto it = text.cbegin(); it != end; ++it)
                     {
-                        const char32_t ch = *it;
-
-                        if (ch == U'\\')
+                        const auto end = text.cend();
+                        for (auto it = text.cbegin(); it != end; ++it)
                         {
-                            if (++it; it != end)
-                                on_char(*it);
-                            continue;
-                        }
-                        if (ch == U'{')
-                        {
-                            bool in_field = true;
-                            std::u32string field;
-                            std::u32string value;
+                            const char32_t ch = *it;
 
-                            for (++it; it != end; ++it)
+                            if (ch == U'\\')
                             {
-                                const char32_t c = *it;
-                                if (c == U':')
-                                    in_field = false;
-                                else if (c == U'}')
-                                {
-                                    on_attr(field, value);
-                                    break;
-                                }
-                                else if (in_field)
-                                    field += c;
-                                else
-                                    value += c;
+                                if (++it; it != end)
+                                    on_char(*it);
+                                continue;
                             }
-                            continue;
+                            if (ch == U'{')
+                            {
+                                bool in_field = true;
+                                std::u32string field;
+                                std::u32string value;
+
+                                for (++it; it != end; ++it)
+                                {
+                                    const char32_t c = *it;
+                                    if (c == U':')
+                                        in_field = false;
+                                    else if (c == U'}')
+                                    {
+                                        on_attr(field, value);
+                                        break;
+                                    }
+                                    else if (in_field)
+                                        field += c;
+                                    else
+                                        value += c;
+                                }
+                                continue;
+                            }
+                            on_char(ch);
                         }
-                        on_char(ch);
-                    }
-                };
+                    };
 
                 // Pixel offset contributed by the current text offset, in text-space
                 // units (note: y uses m_scale_x too, preserved from the original).
                 const auto offset_dx = [&]() noexcept {
                     return static_cast<int>(style.offset.x * base_font_resource->m_scale_x);
-                };
+                    };
                 const auto offset_dy = [&]() noexcept {
                     return static_cast<int>(style.offset.y * base_font_resource->m_scale_x);
-                };
+                    };
 
                 int next_ch_x = 0;
                 int next_ch_y = 0;
@@ -9681,8 +10080,8 @@ namespace jeecs
                 float m_time[4];
             };
 
-            graphic_uhost* _m_graphic_host;
-            std::vector<rendchain_branch*> _m_rchain_pipeline;
+            je_GraphicUhost* _m_graphic_host;
+            std::vector<je_RendchainBranch*> _m_rchain_pipeline;
             size_t _m_this_frame_allocate_rchain_pipeline_count;
 
             BasePipelineInterface(game_world w, const jegl_interface_config* config)
@@ -9710,7 +10109,7 @@ namespace jeecs
             {
                 _m_this_frame_allocate_rchain_pipeline_count = 0;
             }
-            rendchain_branch* allocate_branch(int priority)
+            je_RendchainBranch* allocate_branch(int priority)
             {
                 if (_m_this_frame_allocate_rchain_pipeline_count >= _m_rchain_pipeline.size())
                 {
@@ -10206,9 +10605,9 @@ namespace jeecs
                     return world_position - get_parent_rotation(rotation) * local_pos->pos;
                 return world_position;
             }
-
             void set_global_rotation(const math::quat& _rot, LocalRotation* rot)
             {
+
                 if (rot)
                     rot->rot = _rot * get_parent_rotation(rot).inverse();
                 world_rotation = _rot;
@@ -10538,7 +10937,6 @@ namespace jeecs
 
                 return std::nullopt;
             }
-
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Textures::tiling, "tiling");
@@ -10684,7 +11082,7 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Scene);
             JECS_DEFAULT_CONSTRUCTOR(Scene);
 
-            basic::fileresource<void> physics_config;
+            basic::file_resource<> physics_config;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
@@ -10844,6 +11242,92 @@ namespace jeecs
                 {
                     typing::register_member(guard, &Capsule::radius, "radius");
                     typing::register_member(guard, &Capsule::height, "height");
+                }
+            };
+            // Arbitrary simple polygon outline (convex or concave; vertices in
+            // body-local space, any winding). Box2D has no native concave
+            // "mesh" shape, so the physics system decomposes the loop into
+            // convex parts (a single polygon when possible, otherwise ear-cut
+            // triangles) and attaches them as compound shapes on one body.
+            struct Mesh
+            {
+                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Mesh);
+                JECS_DEFAULT_CONSTRUCTOR(Mesh);
+
+                // ===================== Script-visible vertex loop =====================
+                // A dynamic list of 2D points exposed to woolang as `array<vec2>`
+                // (same mapping pattern as Light2D::BlockShadow::block_mesh).
+                // Used by Collider::Mesh to store the polygon outline. Default value
+                // is the unit square, matching Collider::Box's default extents.
+                struct vertex_list
+                {
+                    basic::vector<math::vec2> points = {
+                        math::vec2(-0.5f, -0.5f),
+                        math::vec2(0.5f, -0.5f),
+                        math::vec2(0.5f,  0.5f),
+                        math::vec2(-0.5f,  0.5f),
+                    };
+
+                    static const char* JEScriptTypeName()
+                    {
+                        return "Physics2D::vertex_list";
+                    }
+                    static const char* JEScriptTypeDeclare()
+                    {
+                        return
+                            "namespace Physics2D\n"
+                            "{\n"
+                            "    public using vertex_list = array<vec2>;\n"
+                            "}";
+                    }
+                    void JEParseFromScriptType(woort_value v)
+                    {
+                        woort_value pos;
+                        if (!woort_push_reserve(1, &pos))
+                            woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                        else
+                        {
+                            const size_t point_count = woort_vec_len(v);
+
+                            points.clear();
+
+                            for (size_t i = 0; i < point_count; ++i)
+                            {
+                                (void)woort_vec_get(pos, v, i);
+
+                                math::vec2 position;
+                                position.JEParseFromScriptType(pos);
+
+                                points.push_back(position);
+                            }
+
+                            woort_pop(1);
+                        }
+                    }
+                    void JEParseToScriptType(woort_value v) const
+                    {
+                        woort_value pos;
+                        if (!woort_push_reserve(1, &pos))
+                            woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                        else
+                        {
+                            woort_set_vec(v);
+                            woort_vec_resize(v, points.size());
+                            for (size_t i = 0; i < points.size(); ++i)
+                            {
+                                points.at(i).JEParseToScriptType(pos);
+                                (void)woort_vec_set(v, i, pos);
+                            }
+
+                            woort_pop(1);
+                        }
+                    }
+                };
+
+                vertex_list vertices;
+                static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+                {
+                    typing::register_member(guard, &Mesh::vertices, "vertices");
                 }
             };
         }
@@ -11240,14 +11724,14 @@ namespace jeecs
                 }
             };
 
-            block_mesh mesh;
+            block_mesh shape;
             float factor = 1.0f;
             bool reverse = false;
             bool auto_disable = true;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(guard, &BlockShadow::mesh, "mesh");
+                typing::register_member(guard, &BlockShadow::shape, "shape");
                 typing::register_member(guard, &BlockShadow::factor, "factor");
                 typing::register_member(guard, &BlockShadow::reverse, "reverse");
                 typing::register_member(guard, &BlockShadow::auto_disable, "auto_disable");
@@ -11361,9 +11845,9 @@ namespace jeecs
                     };
                     struct component_data
                     {
-                        const jeecs::typing::type_info*
+                        const je_TypeInfo*
                             m_component_type;
-                        const jeecs::typing::typeinfo_member::member_info*
+                        const je_MemberInfo*
                             m_member_info;
                         data_value m_member_value;
                         bool m_offset_mode;
@@ -11524,7 +12008,7 @@ namespace jeecs
                                                 break;
                                             }
 
-                                            auto* component_type = jeecs::typing::type_info::of(component_name.c_str());
+                                            auto* component_type = jeecs::typing::of(component_name.c_str());
                                             if (component_type == nullptr)
                                                 jeecs::debug::logerr(
                                                     "Failed to found component type named '%s' when reading animation '%s' frame %zu in '%s'.",
@@ -11536,7 +12020,7 @@ namespace jeecs
                                             {
                                                 frame_data::component_data cdata;
                                                 cdata.m_component_type = component_type;
-                                                cdata.m_member_info = component_type->find_member_by_name(member_name.c_str());
+                                                cdata.m_member_info = jeecs::typing::find_member_by_name(component_type, member_name.c_str());
                                                 cdata.m_member_value = value;
                                                 cdata.m_offset_mode = offset_mode != 0;
                                                 cdata.m_member_addr_cache = nullptr;
@@ -11805,7 +12289,7 @@ namespace jeecs
                 LOOPED_PLAYING,
             };
             play_state state = play_state::STOPPED;
-            basic::fileresource<audio::buffer> buffer;
+            basic::file_resource<audio::buffer> buffer;
 
             bool play = true;
             bool loop = true;
@@ -11841,24 +12325,24 @@ namespace jeecs
 
             je_io_gamepad_handle_t gamepad;
 
-            basic::map<input::keycode, input::gamepadcode> keymap;
-            input::keycode left_stick_up_left_down_right[4];
+            basic::map<je_Keycode, je_Gamepadcode> keymap;
+            je_Keycode left_stick_up_left_down_right[4];
 
             VirtualGamepad()
                 : gamepad(je_io_create_gamepad(nullptr, nullptr))
                 , left_stick_up_left_down_right{
-                    input::keycode::W,
-                    input::keycode::A,
-                    input::keycode::S,
-                    input::keycode::D }
+                    JE_KEY_W,
+                    JE_KEY_A,
+                    JE_KEY_S,
+                    JE_KEY_D }
             {
-                keymap[input::keycode::UP] = input::gamepadcode::UP;
-                keymap[input::keycode::DOWN] = input::gamepadcode::DOWN;
-                keymap[input::keycode::LEFT] = input::gamepadcode::LEFT;
-                keymap[input::keycode::RIGHT] = input::gamepadcode::RIGHT;
+                keymap[JE_KEY_UP] = JE_GAMEPAD_UP;
+                keymap[JE_KEY_DOWN] = JE_GAMEPAD_DOWN;
+                keymap[JE_KEY_LEFT] = JE_GAMEPAD_LEFT;
+                keymap[JE_KEY_RIGHT] = JE_GAMEPAD_RIGHT;
 
-                keymap[input::keycode::ENTER] = input::gamepadcode::START;
-                keymap[input::keycode::ESC] = input::gamepadcode::SELECT;
+                keymap[JE_KEY_ENTER] = JE_GAMEPAD_START;
+                keymap[JE_KEY_ESC] = JE_GAMEPAD_SELECT;
             }
             VirtualGamepad(const VirtualGamepad& another)
                 : gamepad(je_io_create_gamepad(nullptr, nullptr))
@@ -12245,140 +12729,89 @@ namespace jeecs
             // 0. register built-in components
             using namespace typing;
 
-            type_info::register_type<Transform::LocalPosition>(guard, "Transform::LocalPosition");
-            type_info::register_type<Transform::LocalRotation>(guard, "Transform::LocalRotation");
-            type_info::register_type<Transform::LocalScale>(guard, "Transform::LocalScale");
-            type_info::register_type<Transform::Anchor>(guard, "Transform::Anchor");
-            type_info::register_type<Transform::LocalToWorld>(guard, "Transform::LocalToWorld");
-            type_info::register_type<Transform::LocalToParent>(guard, "Transform::LocalToParent");
-            type_info::register_type<Transform::Translation>(guard, "Transform::Translation");
+            jeecs::typing::register_type<Transform::LocalPosition>(guard, "Transform::LocalPosition");
+            jeecs::typing::register_type<Transform::LocalRotation>(guard, "Transform::LocalRotation");
+            jeecs::typing::register_type<Transform::LocalScale>(guard, "Transform::LocalScale");
+            jeecs::typing::register_type<Transform::Anchor>(guard, "Transform::Anchor");
+            jeecs::typing::register_type<Transform::LocalToWorld>(guard, "Transform::LocalToWorld");
+            jeecs::typing::register_type<Transform::LocalToParent>(guard, "Transform::LocalToParent");
+            jeecs::typing::register_type<Transform::Translation>(guard, "Transform::Translation");
 
-            type_info::register_type<UserInterface::Origin>(guard, "UserInterface::Origin");
-            type_info::register_type<UserInterface::Rotation>(guard, "UserInterface::Rotation");
-            type_info::register_type<UserInterface::Absolute>(guard, "UserInterface::Absolute");
-            type_info::register_type<UserInterface::Relatively>(guard, "UserInterface::Relatively");
+            jeecs::typing::register_type<UserInterface::Origin>(guard, "UserInterface::Origin");
+            jeecs::typing::register_type<UserInterface::Rotation>(guard, "UserInterface::Rotation");
+            jeecs::typing::register_type<UserInterface::Absolute>(guard, "UserInterface::Absolute");
+            jeecs::typing::register_type<UserInterface::Relatively>(guard, "UserInterface::Relatively");
 
-            type_info::register_type<Renderer::Rendqueue>(guard, "Renderer::Rendqueue");
-            type_info::register_type<Renderer::Shape>(guard, "Renderer::Shape");
-            type_info::register_type<Renderer::Shaders>(guard, "Renderer::Shaders");
-            type_info::register_type<Renderer::Textures>(guard, "Renderer::Textures");
-            type_info::register_type<Renderer::Color>(guard, "Renderer::Color");
+            jeecs::typing::register_type<Renderer::Rendqueue>(guard, "Renderer::Rendqueue");
+            jeecs::typing::register_type<Renderer::Shape>(guard, "Renderer::Shape");
+            jeecs::typing::register_type<Renderer::Shaders>(guard, "Renderer::Shaders");
+            jeecs::typing::register_type<Renderer::Textures>(guard, "Renderer::Textures");
+            jeecs::typing::register_type<Renderer::Color>(guard, "Renderer::Color");
 
-            type_info::register_type<Animation::FrameAnimation>(guard, "Animation::FrameAnimation");
+            jeecs::typing::register_type<Animation::FrameAnimation>(guard, "Animation::FrameAnimation");
 
-            type_info::register_type<Camera::FrustumCulling>(guard, "Camera::FrustumCulling");
-            type_info::register_type<Camera::Projection>(guard, "Camera::Projection");
-            type_info::register_type<Camera::OrthoProjection>(guard, "Camera::OrthoProjection");
-            type_info::register_type<Camera::PerspectiveProjection>(guard, "Camera::PerspectiveProjection");
-            type_info::register_type<Camera::Viewport>(guard, "Camera::Viewport");
-            type_info::register_type<Camera::RendToFramebuffer>(guard, "Camera::RendToFramebuffer");
-            type_info::register_type<Camera::Clear>(guard, "Camera::Clear");
+            jeecs::typing::register_type<Camera::FrustumCulling>(guard, "Camera::FrustumCulling");
+            jeecs::typing::register_type<Camera::Projection>(guard, "Camera::Projection");
+            jeecs::typing::register_type<Camera::OrthoProjection>(guard, "Camera::OrthoProjection");
+            jeecs::typing::register_type<Camera::PerspectiveProjection>(guard, "Camera::PerspectiveProjection");
+            jeecs::typing::register_type<Camera::Viewport>(guard, "Camera::Viewport");
+            jeecs::typing::register_type<Camera::RendToFramebuffer>(guard, "Camera::RendToFramebuffer");
+            jeecs::typing::register_type<Camera::Clear>(guard, "Camera::Clear");
 
-            type_info::register_type<Light2D::TopDown>(guard, "Light2D::TopDown");
-            type_info::register_type<Light2D::Gain>(guard, "Light2D::Gain");
-            type_info::register_type<Light2D::Point>(guard, "Light2D::Point");
-            type_info::register_type<Light2D::Range>(guard, "Light2D::Range");
-            type_info::register_type<Light2D::Parallel>(guard, "Light2D::Parallel");
-            type_info::register_type<Light2D::ShadowBuffer>(guard, "Light2D::ShadowBuffer");
-            type_info::register_type<Light2D::CameraPostPass>(guard, "Light2D::CameraPostPass");
-            type_info::register_type<Light2D::BlockShadow>(guard, "Light2D::BlockShadow");
-            type_info::register_type<Light2D::ShapeShadow>(guard, "Light2D::ShapeShadow");
-            type_info::register_type<Light2D::SpriteShadow>(guard, "Light2D::SpriteShadow");
-            type_info::register_type<Light2D::SelfShadow>(guard, "Light2D::SelfShadow");
+            jeecs::typing::register_type<Light2D::TopDown>(guard, "Light2D::TopDown");
+            jeecs::typing::register_type<Light2D::Gain>(guard, "Light2D::Gain");
+            jeecs::typing::register_type<Light2D::Point>(guard, "Light2D::Point");
+            jeecs::typing::register_type<Light2D::Range>(guard, "Light2D::Range");
+            jeecs::typing::register_type<Light2D::Parallel>(guard, "Light2D::Parallel");
+            jeecs::typing::register_type<Light2D::ShadowBuffer>(guard, "Light2D::ShadowBuffer");
+            jeecs::typing::register_type<Light2D::CameraPostPass>(guard, "Light2D::CameraPostPass");
+            jeecs::typing::register_type<Light2D::BlockShadow>(guard, "Light2D::BlockShadow");
+            jeecs::typing::register_type<Light2D::ShapeShadow>(guard, "Light2D::ShapeShadow");
+            jeecs::typing::register_type<Light2D::SpriteShadow>(guard, "Light2D::SpriteShadow");
+            jeecs::typing::register_type<Light2D::SelfShadow>(guard, "Light2D::SelfShadow");
 
-            type_info::register_type<Physics2D::Scene>(guard, "Physics2D::Scene");
+            jeecs::typing::register_type<Physics2D::Scene>(guard, "Physics2D::Scene");
 
-            type_info::register_type<Physics2D::Rigidbody>(guard, "Physics2D::Rigidbody");
-            type_info::register_type<Physics2D::DynamicBody>(guard, "Physics2D::DynamicBody");
-            type_info::register_type<Physics2D::KinematicBody>(guard, "Physics2D::KinematicBody");
-            type_info::register_type<Physics2D::Bullet>(guard, "Physics2D::Bullet");
+            jeecs::typing::register_type<Physics2D::Rigidbody>(guard, "Physics2D::Rigidbody");
+            jeecs::typing::register_type<Physics2D::DynamicBody>(guard, "Physics2D::DynamicBody");
+            jeecs::typing::register_type<Physics2D::KinematicBody>(guard, "Physics2D::KinematicBody");
+            jeecs::typing::register_type<Physics2D::Bullet>(guard, "Physics2D::Bullet");
 
-            type_info::register_type<Physics2D::LockTranslationX>(guard, "Physics2D::LockTranslationX");
-            type_info::register_type<Physics2D::LockTranslationY>(guard, "Physics2D::LockTranslationY");
-            type_info::register_type<Physics2D::LockRotation>(guard, "Physics2D::LockRotation");
+            jeecs::typing::register_type<Physics2D::LockTranslationX>(guard, "Physics2D::LockTranslationX");
+            jeecs::typing::register_type<Physics2D::LockTranslationY>(guard, "Physics2D::LockTranslationY");
+            jeecs::typing::register_type<Physics2D::LockRotation>(guard, "Physics2D::LockRotation");
 
-            type_info::register_type<Physics2D::LinearVelocity>(guard, "Physics2D::LinearVelocity");
-            type_info::register_type<Physics2D::AngularVelocity>(guard, "Physics2D::AngularVelocity");
-            type_info::register_type<Physics2D::LinearDamping>(guard, "Physics2D::LinearDamping");
-            type_info::register_type<Physics2D::AngularDamping>(guard, "Physics2D::AngularDamping");
-            type_info::register_type<Physics2D::GravityScale>(guard, "Physics2D::GravityScale");
+            jeecs::typing::register_type<Physics2D::LinearVelocity>(guard, "Physics2D::LinearVelocity");
+            jeecs::typing::register_type<Physics2D::AngularVelocity>(guard, "Physics2D::AngularVelocity");
+            jeecs::typing::register_type<Physics2D::LinearDamping>(guard, "Physics2D::LinearDamping");
+            jeecs::typing::register_type<Physics2D::AngularDamping>(guard, "Physics2D::AngularDamping");
+            jeecs::typing::register_type<Physics2D::GravityScale>(guard, "Physics2D::GravityScale");
 
-            type_info::register_type<Physics2D::Collider::Box>(guard, "Physics2D::Collider::Box");
-            type_info::register_type<Physics2D::Collider::Circle>(guard, "Physics2D::Collider::Circle");
-            type_info::register_type<Physics2D::Collider::Capsule>(guard, "Physics2D::Collider::Capsule");
+            jeecs::typing::register_type<Physics2D::Collider::Box>(guard, "Physics2D::Collider::Box");
+            jeecs::typing::register_type<Physics2D::Collider::Circle>(guard, "Physics2D::Collider::Circle");
+            jeecs::typing::register_type<Physics2D::Collider::Capsule>(guard, "Physics2D::Collider::Capsule");
+            jeecs::typing::register_type<Physics2D::Collider::Mesh>(guard, "Physics2D::Collider::Mesh");
 
-            type_info::register_type<Physics2D::Density>(guard, "Physics2D::Density");
-            type_info::register_type<Physics2D::Friction>(guard, "Physics2D::Friction");
-            type_info::register_type<Physics2D::Restitution>(guard, "Physics2D::Restitution");
-            type_info::register_type<Physics2D::IsTrigger>(guard, "Physics2D::IsTrigger");
+            jeecs::typing::register_type<Physics2D::Density>(guard, "Physics2D::Density");
+            jeecs::typing::register_type<Physics2D::Friction>(guard, "Physics2D::Friction");
+            jeecs::typing::register_type<Physics2D::Restitution>(guard, "Physics2D::Restitution");
+            jeecs::typing::register_type<Physics2D::IsTrigger>(guard, "Physics2D::IsTrigger");
 
-            type_info::register_type<Physics2D::Offset::Position>(guard, "Physics2D::Offset::Position");
-            type_info::register_type<Physics2D::Offset::Rotation>(guard, "Physics2D::Offset::Rotation");
-            type_info::register_type<Physics2D::Offset::Scale>(guard, "Physics2D::Offset::Scale");
+            jeecs::typing::register_type<Physics2D::Offset::Position>(guard, "Physics2D::Offset::Position");
+            jeecs::typing::register_type<Physics2D::Offset::Rotation>(guard, "Physics2D::Offset::Rotation");
+            jeecs::typing::register_type<Physics2D::Offset::Scale>(guard, "Physics2D::Offset::Scale");
 
-            type_info::register_type<Physics2D::CollisionResult>(guard, "Physics2D::CollisionResult");
+            jeecs::typing::register_type<Physics2D::CollisionResult>(guard, "Physics2D::CollisionResult");
 
-            type_info::register_type<Audio::Source>(guard, "Audio::Source");
-            type_info::register_type<Audio::Listener>(guard, "Audio::Listener");
-            type_info::register_type<Audio::Playing>(guard, "Audio::Playing");
+            jeecs::typing::register_type<Audio::Source>(guard, "Audio::Source");
+            jeecs::typing::register_type<Audio::Listener>(guard, "Audio::Listener");
+            jeecs::typing::register_type<Audio::Playing>(guard, "Audio::Playing");
 
-            type_info::register_type<Input::VirtualGamepad>(guard, "Input::VirtualGamepad");
+            jeecs::typing::register_type<Input::VirtualGamepad>(guard, "Input::VirtualGamepad");
 
             // 1. register basic types
-            type_info::register_type<math::ivec2>(guard, nullptr);
-
-            auto file_resource_uniform_parser_c2w =
-                [](const auto* v, woort_value value)
-                {
-                    woort_value s;
-                    if (!woort_push_reserve(1, &s))
-                        woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
-                    else
-                    {
-                        woort_set_struct(value, 1);
-
-                        if (v->has_resource())
-                            woort_set_option_string(s, v->get_path()->c_str());
-                        else
-                            woort_set_option_none(s);
-
-                        woort_struct_set(value, 0, s);
-
-                        woort_pop(1);
-                    }
-                };
-            auto file_resource_uniform_parser_w2c =
-                [](auto* v, woort_value value)
-                {
-                    woort_value s;
-                    if (!woort_push_reserve(1, &s))
-                        woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
-                    else
-                    {
-                        woort_struct_get(s, value, 0);
-
-                        if (woort_option_get(s, s))
-                            v->load(woort_string(s));
-                        else
-                            v->clear();
-
-                        woort_pop(1);
-                    }
-                };
-            typing::register_script_parser<basic::fileresource<void>>(
-                guard,
-                file_resource_uniform_parser_c2w,
-                file_resource_uniform_parser_w2c,
-                "fileresource_void",
-                "public using fileresource_void = struct{ public path: option<string> };");
-
-            typing::register_script_parser<basic::fileresource<audio::buffer>>(
-                guard,
-                file_resource_uniform_parser_c2w,
-                file_resource_uniform_parser_w2c,
-                "fileresource_audio_buffer",
-                "public using fileresource_audio_buffer = fileresource_void;");
-
+            jeecs::typing::register_type<basic::file_resource<>>(guard, nullptr);
+            jeecs::typing::register_type<math::ivec2>(guard, nullptr);
             typing::register_script_parser<bool>(
                 guard,
                 [](const bool* v, woort_value value)
@@ -12390,7 +12823,6 @@ namespace jeecs
                     *v = woort_bool(value);
                 },
                 "bool", "");
-
             auto integer_uniform_parser_c2w = [](const auto* v, woort_value value)
                 {
                     woort_set_int(value, (woort_Int)*v);
@@ -12436,8 +12868,8 @@ namespace jeecs
                     static_assert(sizeof(size_t) == sizeof(uint64_t) || sizeof(size_t) == sizeof(uint32_t));
                 }
             }
-            // Or size_t is same as uint32_t or uint64_t, skip.
 
+            // Or size_t is same as uint32_t or uint64_t, skip.
             typing::register_script_parser<float>(
                 guard,
                 [](const float* v, woort_value value)
@@ -12520,11 +12952,11 @@ namespace jeecs
     }
     namespace input
     {
-        inline bool keydown(keycode key)
+        inline bool keydown(je_Keycode key)
         {
             return je_io_get_key_down(key);
         }
-        inline bool mousedown(size_t group, mousecode key)
+        inline bool mousedown(size_t group, je_Mousecode key)
         {
             return je_io_get_mouse_state(group, key);
         }
@@ -12560,7 +12992,7 @@ namespace jeecs
             return { x, y };
         }
 
-        template <typing::typehash_t hash_v1, int v2>
+        template <je_TypeHash hash_v1, int v2>
         static bool _isUp(bool keystate)
         {
             static bool lastframekeydown;
@@ -12568,7 +13000,7 @@ namespace jeecs
             lastframekeydown = keystate;
             return res;
         }
-        template <typing::typehash_t hash_v1, int v2>
+        template <je_TypeHash hash_v1, int v2>
         static bool _firstDown(bool keystate)
         {
             static bool lastframekeydown;
@@ -12576,10 +13008,10 @@ namespace jeecs
             lastframekeydown = keystate;
             return res;
         }
-        template <typing::typehash_t hash_v1, int v2>
+        template <je_TypeHash hash_v1, int v2>
         static bool _doubleClick(bool keystate, float i = 0.1f)
         {
-            static typing::timestamp_ms_t lact_click_tm = je_clock_time_stamp();
+            static je_TimestampMs lact_click_tm = je_clock_time_stamp();
             static bool release_for_next_click = false;
 
             auto cur_time = je_clock_time_stamp();
@@ -12587,7 +13019,7 @@ namespace jeecs
             // 1. first click.
             if (keystate)
             {
-                if (release_for_next_click && cur_time - lact_click_tm < (typing::timestamp_ms_t)(i * 1000.f))
+                if (release_for_next_click && cur_time - lact_click_tm < (je_TimestampMs)(i * 1000.f))
                 {
                     // Is Double click!
                     lact_click_tm = 0; // reset the time.
@@ -12595,7 +13027,7 @@ namespace jeecs
                     return true;
                 }
                 // Release for a long time, re calc the time
-                if (!release_for_next_click || cur_time - lact_click_tm > (typing::timestamp_ms_t)(i * 1000.f))
+                if (!release_for_next_click || cur_time - lact_click_tm > (je_TimestampMs)(i * 1000.f))
                 {
                     lact_click_tm = cur_time;
                     release_for_next_click = false;
@@ -12603,7 +13035,7 @@ namespace jeecs
             }
             else
             {
-                if (!release_for_next_click && cur_time - lact_click_tm < (typing::timestamp_ms_t)(i * 1000.f))
+                if (!release_for_next_click && cur_time - lact_click_tm < (je_TimestampMs)(i * 1000.f))
                     release_for_next_click = true;
             }
             return false;
@@ -12628,17 +13060,17 @@ namespace jeecs
             gamepad& operator=(gamepad&&) = default;
             ~gamepad() = default;
 
-            bool button(gamepadcode button) const
+            bool button(je_Gamepadcode button) const
             {
                 return je_io_gamepad_get_button_down(m_gamepad_handle, button);
             }
-            math::vec2 stick(joystickcode stick) const
+            math::vec2 stick(je_Joystickcode stick) const
             {
                 float x, y;
                 je_io_gamepad_get_stick(m_gamepad_handle, stick, &x, &y);
                 return { x, y };
             }
-            bool actived(typing::timestamp_ms_t* out_last_update_time_may_null) const
+            bool actived(je_TimestampMs* out_last_update_time_may_null) const
             {
                 return je_io_gamepad_is_active(
                     m_gamepad_handle, out_last_update_time_may_null);
@@ -12672,7 +13104,7 @@ namespace jeecs
             {
                 auto gamepad_handles = _get_all_handle();
 
-                typing::timestamp_ms_t last_update_time = 0;
+                je_TimestampMs last_update_time = 0;
                 size_t last_index = SIZE_MAX;
 
                 const size_t size = gamepad_handles.size();
@@ -12680,7 +13112,7 @@ namespace jeecs
 
                 for (size_t i = 0; i < size; ++i)
                 {
-                    typing::timestamp_ms_t cur_time;
+                    je_TimestampMs cur_time;
                     if (je_io_gamepad_is_active(data[i], &cur_time))
                     {
                         if (cur_time > last_update_time)
@@ -12785,5 +13217,5 @@ namespace jeecs
         }
     };
 }
-#endif
-#endif
+#endif // __cplusplus （C++ 包装层结束）
+#endif // !JE_MSVC_RC_INCLUDE

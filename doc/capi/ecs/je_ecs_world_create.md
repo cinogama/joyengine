@@ -48,18 +48,18 @@ jeecs::typing::typeid_t components[] = {
 je_ecs_world_create_entity_with_components(world, &entity, components);
 
 // 激活世界（开始更新循环）
-je_ecs_world_set_able(world, true);
+je_ecs_world_set_enable(world, true);
 ```
 
 ## 注意事项
 
 - 世界在创建之后，默认为非激活状态
-- 完成初始化操作后需要调用 `je_ecs_world_set_able(world, true)` 激活世界
+- 完成初始化操作后需要调用 `je_ecs_world_set_enable(world, true)` 激活世界
 - 每个世界有独立的更新循环
 
 ## 相关接口
 
 - [je_ecs_world_destroy](je_ecs_world_destroy.md) - 销毁世界
-- [je_ecs_world_set_able](je_ecs_world_set_able.md) - 设置世界激活状态
+- [je_ecs_world_set_enable](je_ecs_world_set_enable.md) - 设置世界激活状态
 - [je_ecs_world_add_system_instance](je_ecs_world_add_system_instance.md) - 添加系统
 - [je_ecs_world_create_entity_with_components](je_ecs_world_create_entity_with_components.md) - 创建实体

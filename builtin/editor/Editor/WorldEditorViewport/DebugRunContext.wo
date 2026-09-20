@@ -1,0 +1,78 @@
+// 世界编辑器视口 —— 调试运行（DebugRun）的视口侧支持。
+// 开始调试运行时（Editor::DebugRun::startDebugRun）：各视口先把运行前
+// 的世界与编辑器状态打包存入 m_playing_world_context（世界保持存活
+// 运行，区别于冻结的关闭世界）；终止运行时关闭运行中被游戏逻辑改动
+// 的世界，用该快照重建，恢复运行前的编辑现场。
+//
+// 快照带 eid（与冻结一致）：恢复后实体沿用原调试 EUID，视口选中态与
+// 引用 euid 的编辑历史（撤销/重做）依然有效。
+
+import pkg::std;
+
+import je;
+import je::ecs;
+import je::gui;
+import je::typeinfo;
+
+import pkg::toml;
+
+import Definition;
+import WindowLifecycle;
+import CameraControl;
+import WorldSaving;
+import EditorState;
+import FreezeWorlds;
+
+using std;
+using je;
+using je::gui;
+using toml;
+
+namespace JEEditor::Editor::WorldEditorViewport
+{
+    // 保存调试运行前的世界上下文（幂等）。不清空 m_runtime_systems、
+    // 不关闭世界：运行期间世界保持存活，运行时系统随后由全局编排
+    //（Editor::DebugRun::startDebugRun）加入世界执行。
+    public func saveDebugRunContext(self: WorldEditorViewport)=> void
+    {
+        if (self.m_playing_world_context->is_value)
+            return;
+
+        self.m_playing_world_context = option::value(self->dumpWorldSavedContext());
+    }
+
+    // 本视口是否保存有调试运行上下文（即处于调试运行态/停止过渡态）
+    public func isDebugRunContextSaved(self: WorldEditorViewport)=> bool
+    {
+        return self.m_playing_world_context->is_value;
+    }
+
+    // 把“调试执行/导出时才启用”的系统加入当前世界执行（开始调试运行
+    // 流程第 ③ 步；世界此刻应处于暂停态，恢复运行由 DebugRun 的协程进行）
+    public func addRuntimeSystemsToWorld(self: WorldEditorViewport)=> void
+    {
+        for (let systype : self.m_runtime_systems)
+            do self.m_world_instance->add_system(systype);
+    }
+
+    // 终止调试运行：关闭运行中的世界并清理瞬态交互状态。实际销毁在
+    // 下一个逻辑更新生效，其后需让出帧再 restoreDebugRunContext。
+    public func closeWorldForDebugRunStop(self: WorldEditorViewport)=> void
+    {
+        self->closeWorldAndResetTransientState();
+    }
+
+    // 用调试运行前保存的世界上下文重建世界（不挂运行时系统，回到编辑
+    // 态）。幂等。
+    public func restoreDebugRunContext(self: WorldEditorViewport)=> void
+    {
+        if (self.m_playing_world_context->is_none)
+            return;
+
+        let ctx = self.m_playing_world_context->unwrap;
+
+        self->rebuildWorldFromSavedContext(ctx, false);
+
+        self.m_playing_world_context = option::none;
+    }
+}

@@ -1,0 +1,1705 @@
+import pkg::std;
+
+import je;
+import je::ecs;
+import je::graphic;
+import je::gui;
+import je::internal;
+import je::typeinfo;
+import je::towoo;
+import je::towoo::components;
+
+import pkg::fsys;
+import pkg::filestream;
+import pkg::buffer;
+import pkg::interface;
+import pkg::worst;
+import pkg::iterator;
+import pkg::platform;
+import pkg::thread;
+import pkg::toml;
+import pkg::try;
+
+import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Icons;
+import builtin::editor::GUI::Drag;
+import builtin::editor::GUI::Menu;
+import builtin::editor::GUI::Shortcut;
+import builtin::editor::GUI::Forms::InputBox;
+import builtin::editor::GUI::Forms::AskBox;
+import builtin::editor::GUI::Forms::MsgBox;
+import builtin::editor::GUI::Statebar;
+
+import builtin::editor::Editor::WorldEditorViewport;
+import builtin::editor::Editor::Saving::Entity;
+import builtin::editor::Editor::ModulePrepare;
+import builtin::editor::Editor::ModuleTypeCreator;
+import builtin::editor::Editor::Project;
+import builtin::editor::Editor::Template;
+import builtin::editor::Editor::Animation2D;
+import ResourcePath;
+import Action::ModifyPrefab;
+
+using std;
+
+using je;
+using je::gui;
+using je::graphic;
+using fsys;
+using toml;
+
+using JEEditor::GUI;
+using JEEditor::GUI::Windows;
+using JEEditor::GUI::Drag;
+using JEEditor::GUI::Forms;
+using JEEditor::GUI::Icons;
+using JEEditor::GUI::Statebar;
+using JEEditor::Saving;
+using JEEditor::Editor::ResourcePath;
+using JEEditor::Editor::Action;
+
+namespace JEEditor::Editor
+{
+    using FilePayload = struct{
+        m_path: fsys::path_t,
+    }
+    {
+        public let type = "JE_EDITOR_BROWSER_FILE_PATH";
+        
+        public func create(p: fsys::path_t)=> FilePayload
+            where require!(FilePayload : Drag::IDragPayload);
+        {
+            return FilePayload{
+                m_path = p,
+            };
+        }
+        
+        public func restore(data: string) => option<FilePayload>
+        {
+            return option::value(FilePayload::create(normalize(data)));
+        }
+        public func dump(self: FilePayload) => string
+        {
+            return self.m_path->to_string;
+        }
+        public func tips(self: FilePayload) => string
+        {
+            return F"移动: {filename(self.m_path)}";
+        }
+        // 被拖拽文件的路径（字段私有，供视口等接收方读取）
+        public func path(self: FilePayload)=> fsys::path_t
+        {
+            return self.m_path;
+        }
+    }
+    
+    // “保存世界”拖拽载荷：携带发起保存的世界视口。
+    // ImGui 拖拽载荷只能以字符串传递，dump 时序列化为视口窗口标题
+    // （标题对唯一窗口而言是唯一的），restore 时再反查回视口实例。
+    using SavingRequestPayload = struct{
+        m_viewport: WorldEditorViewport,
+    }
+    {
+        public let type = "JE_EDITOR_BROWSER_SAVING_REQUEST";
+        
+        public func create(viewport: WorldEditorViewport)=> SavingRequestPayload
+            where require!(SavingRequestPayload : Drag::IDragPayload);
+        {
+            return SavingRequestPayload{
+                m_viewport = viewport,
+            };
+        }
+        
+        public func restore(data: string) => option<SavingRequestPayload>
+        {
+            match (WorldEditorViewport::findWorldEditorViewportByTitle(data))
+            {
+                none?
+                    return option::none;
+                value(viewport)?
+                    return option::value(SavingRequestPayload::create(viewport));
+            }
+        }
+        public func dump(self: SavingRequestPayload) => string
+        {
+            return self.m_viewport->getTitle;
+        }
+        public func tips(self: SavingRequestPayload) => string
+        {
+            return F"保存: {self.m_viewport->getName}.je4world";
+        }
+    }
+    
+    // “保存实体为预设体”拖拽载荷：携带发起的世界视口与目标实体的调试
+    // EUID。entity 句柄不允许跨帧持有，这里跨帧只持有 EUID，待文件名
+    // 确认后再按 EUID 反查实体实例执行保存（见 requestSavePrefabAs）。
+    // ImGui 拖拽载荷只能以字符串传递：EUID 与实体名在 dump 时暂存于
+    // 模块级 s_pending_dragging。暂存必须挂在 dump 而非 create 上：
+    // DragPayload 每帧会对列表里每个实体项调用 create，而 dump 只在
+    // 真正成为拖拽源的项上被调用；restore 时 dump 视口标题反查回视口
+    // 实例并取回暂存内容。
+    using EntitySavingRequestPayload = struct{
+        m_viewport: WorldEditorViewport,
+        m_euid: entity::internal::euid_t,
+        m_entity_name: string,
+    }
+    {
+        // ImGui 载荷类型名上限 32 字符（ImGuiPayload::DataType 为 char[33]）
+        public let type = "JE_EDITOR_ENTITY_SAVING_REQUEST";
+        
+        let mut s_pending_dragging =
+            option::none: option<(entity::internal::euid_t, string)>;
+            
+        public func create(
+            viewport: WorldEditorViewport,
+            euid: entity::internal::euid_t,
+            entity_name: string)=> EntitySavingRequestPayload
+            where require!(EntitySavingRequestPayload : Drag::IDragPayload);
+        {
+            return EntitySavingRequestPayload{
+                m_viewport = viewport,
+                m_euid = euid,
+                m_entity_name = entity_name,
+            };
+        }
+        
+        public func restore(data: string) => option<EntitySavingRequestPayload>
+        {
+            match (WorldEditorViewport::findWorldEditorViewportByTitle(data))
+            {
+                none?
+                    return option::none;
+                value(viewport)?
+                    match (s_pending_dragging)
+                    {
+                        none?
+                            return option::none;
+                        value(pending)?
+                            return option::value(EntitySavingRequestPayload{
+                                    m_viewport = viewport,
+                                    m_euid = pending.0,
+                                    m_entity_name = pending.1,
+                                });
+                    }
+            }
+        }
+        
+        // 被拖拽实体的调试 EUID（字段私有，供实体列表等接收方读取）
+        public func dragged_euid(self: EntitySavingRequestPayload)=> entity::internal::euid_t
+        {
+            return self.m_euid;
+        }
+        public func dump(self: EntitySavingRequestPayload) => string
+        {
+            // 只在成为拖拽源的项上被调用（拖拽期间每帧一次，幂等覆盖）
+            s_pending_dragging =
+                option::value((self.m_euid, self.m_entity_name));
+            return self.m_viewport->getTitle;
+        }
+        public func tips(self: EntitySavingRequestPayload) => string
+        {
+            return F"保存预设体: {self.m_entity_name}.je4entity";
+        }
+    }
+    
+    using Browser = struct{
+        m_close: mut bool,
+        
+        m_root: fsys::path_t,
+        m_current: mut fsys::path_t,
+        m_selected: mut option<fsys::path_t>,
+        m_filter: mut string,
+        // 是否显示以 '.' 开头的文件/目录及 *.je4cache 缓存文件，默认隐藏。
+        m_show_hidden: mut bool,
+        m_last_click_time: mut real,
+        m_last_clicked: mut option<fsys::path_t>,
+        
+        // 目录访问历史（“返回/前进”按钮使用的双栈）：m_history 记录可后
+        // 退的目录，m_forward 记录后退后可再前进的目录。只有目录真正变
+        // 化时才入栈，重复点击同一目录不会污染历史。
+        m_history: vec<fsys::path_t>,
+        m_forward: vec<fsys::path_t>,
+        
+        // ---- caching ----
+        // Set to true by async callbacks (mkdir/remove/move) to signal
+        // that the filesystem changed and all caches need refreshing.
+        m_fs_dirty: mutable<bool>,
+        
+        // Tree cache: maps a directory path string to its sorted subdirs.
+        m_tree_cache: map<string, array<fsys::path_t>>,
+        
+        // File-list cache for the current directory.
+        m_list_path: mut string,
+        m_list_dirs: mut array<fsys::path_t>,
+        m_list_files: mut array<fsys::path_t>,
+    }
+    {
+        let mut s_browser_singleton = option::none: option<Browser>;
+        // 待消费的定位请求（见 requestNavigateTo）
+        let mut s_pending_navigate = option::none: option<fsys::path_t>;
+        public func isBrowserExist()
+        {
+            return s_browser_singleton->is_value;
+        }
+        public func showBrowser()
+        {
+            do show(create());
+        }
+        public func closeBrowser()
+        {
+            match (s_browser_singleton)
+            {
+                none?;
+                value(browser_instance)?
+                    browser_instance->close();
+            }
+        }
+        // 外部（如检视面板的预设体来源行）请求在资源管理器中定位到指定
+        // 路径。浏览器窗口经协程创建，showBrowser 返回时 onCreate 尚未
+        // 执行、单例未就绪，不能立即取实例导航：请求一律先暂存，由浏览器
+        // 首帧（或已打开时的下一帧）run() 统一消费。
+        public func requestNavigateTo(path: fsys::path_t)=> void
+        {
+            s_pending_navigate = option::value(path);
+            if (s_browser_singleton->is_none)
+                do showBrowser();
+        }
+        
+        func childDirs(dir: fsys::path_t)=> array<fsys::path_t>
+        {
+            return walk(dir)
+                |> iterator::iter_result
+                |> iterator::filter(\v = isdir(v);)
+                |> iterator::collect()
+                |> std::sort(\a, b = filename(a) < filename(b);)
+                ;
+        }
+        
+        func childFiles(dir: fsys::path_t)=> array<fsys::path_t>
+        {
+            return walk(dir)
+                |> iterator::iter_result
+                |> iterator::filter(\v = isfile(v);)
+                |> iterator::collect()
+                |> std::sort(\a, b = filename(a) < filename(b);)
+                ;
+        }
+        
+        // 默认隐藏的名称：以 '.' 开头的文件/目录，以及引擎生成的 *.je4cache
+        // 缓存文件与 *.je4project 工程文件。
+        func isHiddenName(name: string)=> bool
+        {
+            return name->begin_with(".")
+                || name->end_with(".je4cache")
+                || name->end_with(".je4project");
+        }
+        
+        // 引擎编辑器约定的原生拓展模块目录：开发者通过 *.je4module 目录
+        // 提供新的组件与系统，其生命周期由模块系统管理，资源管理器中
+        // 不允许删除（见右键菜单）。
+        func isJe4ModuleDir(path: fsys::path_t)=> bool
+        {
+            return isdir(path) && string::lower(extension(path)) == ".je4module";
+        }
+        
+        // 从 path 逐级上溯到项目根（workpath），返回第一个 *.je4module
+        // 祖先目录；不在任何模块内时返回 none。用于在模块目录内部时提供
+        // “新建→C++ 组件/系统”入口。
+        func findOwningJe4ModuleDir(path: path_t)=> option<path_t>
+        {
+            let root_str = workpath()->to_string();
+            let mut current = path;
+            
+            for (;;)
+            {
+                if (isJe4ModuleDir(current))
+                    return option::value(current);
+                    
+                // 到达项目根或无法继续上溯（文件系统根）即停止
+                let current_str = current->to_string();
+                if (current_str == root_str)
+                    break;
+                    
+                let parent_dir = parent(current);
+                if (parent_dir->to_string() == current_str)
+                    break;
+                current = parent_dir;
+            }
+            return option::none;
+        }
+        
+        func isEntryVisible(self: Browser, name: string)=> bool
+        {
+            return self.m_show_hidden || !isHiddenName(name);
+        }
+        
+        func visibleEntryCount(self: Browser, entries: array<fsys::path_t>)=> int
+        {
+            let mut count = 0;
+            for (let entry : entries)
+            {
+                if (self->isEntryVisible(filename(entry)))
+                    count += 1;
+            }
+            return count;
+        }
+        
+        func toggleShowHidden(self: Browser)=> void
+        {
+            self.m_show_hidden = !self.m_show_hidden;
+        }
+        
+        // Flush the global dirty flag: clear the tree cache and force the
+        // file-list cache to reload on next access.
+        func processDirty(self: Browser)=> void
+        {
+            if (self.m_fs_dirty->get())
+            {
+                self.m_tree_cache->clear();
+                self.m_list_path = "";
+                self.m_fs_dirty->set(false);
+            }
+        }
+        
+        // Cached lookup of subdirectories for the tree view.
+        func getSubDirs(self: Browser, dir: fsys::path_t)=> array<fsys::path_t>
+        {
+            let key = dir->to_string();
+            if (self.m_tree_cache->contains(key))
+                return self.m_tree_cache->get(key)->unwrap;
+                
+            let dirs = childDirs(dir);
+            self.m_tree_cache->set(key, dirs);
+            return dirs;
+        }
+        
+        // Refresh the file-list cache when the current directory changes
+        // or after a global dirty flush.
+        func ensureFileListCache(self: Browser)=> void
+        {
+            let cur_key = self.m_current->to_string();
+            if (self.m_list_path != cur_key)
+            {
+                self.m_list_dirs = childDirs(self.m_current);
+                self.m_list_files = childFiles(self.m_current);
+                self.m_list_path = cur_key;
+            }
+        }
+        
+        public func create()=> Browser
+            where require!(Browser: IWindows);
+        {
+            let root = workpath();
+            return Browser{
+                m_close = mut false,
+                
+                m_root = root,
+                m_current = mut root,
+                m_selected = mut option::none,
+                m_filter = mut "",
+                m_show_hidden = mut false,
+                m_last_click_time = mut 0.,
+                m_last_clicked = mut option::none,
+                
+                m_history = []mut as vec<fsys::path_t>,
+                m_forward = []mut as vec<fsys::path_t>,
+                
+                m_fs_dirty = mutable::create(false),
+                m_tree_cache = {}mut,
+                m_list_path = mut root->to_string(),
+                m_list_dirs = mut childDirs(root),
+                m_list_files = mut childFiles(root),
+            };
+        }
+        func close(self: Browser)
+        {
+            self.m_close = true;
+        }
+        public func getTitle(_: Browser)=> string
+        {
+            return "项目资源管理器";
+        }
+        public func getSizeConstraints(_: Browser)=> SizeConstraints
+        {
+            return SizeConstraints::Limited(((600., 200.), (4096., 4096.)));
+        }
+        public func getMenu(self: Browser)=> option<Menu>
+        {
+            return option::value <|
+                Menu::create("")
+                    -> subMenu("视图")
+                    ->  subItem("显示隐藏文件", \= self->toggleShowHidden();)
+                    ->  checkWhen(\= self.m_show_hidden;)
+                    ->  shortCut("Ctrl+H")
+                    ->  endItem
+                    -> endMenu
+                    ;
+        }
+        public func getShortcut(self: Browser)=> option<Shortcut>
+        {
+            return option::value <|
+                Shortcut::begin()
+                    ->shortCut(
+                        [ImGuiKey::ImGuiMod_Ctrl, ImGuiKey::ImGuiKey_H],
+                        \= self->toggleShowHidden();)
+                        ->finish();
+        }
+        public func onCreate(self: Browser)=> void
+        {
+            s_browser_singleton = option::value(self);
+        }
+        public func onClose(_: Browser)=> void
+        {
+            s_browser_singleton = option::none;
+        }
+        public func run(self: Browser)=> bool
+        {
+            // 消费外部请求的定位（见 requestNavigateTo）
+            match (s_pending_navigate)
+            {
+                none?;
+                value(path)?
+                {
+                    s_pending_navigate = option::none;
+                    self->navigateTo(path);
+                }
+            }
+            
+            self->processDirty();
+            self->drawToolbar();
+            Separator();
+            
+            let avail = GetContentRegionAvail();
+            let tree_width = 280.;
+            let list_width = avail.0 - tree_width;
+            
+            if (BeginChildSizeFlags("##BrowserTree", tree_width, avail.1,
+                    WindowsAttribute::ImGuiWindowFlags_None))
+            {
+                self->drawTree();
+            }
+            EndChild();
+            
+            SameLine();
+            
+            if (BeginChildSizeFlags("##BrowserList", list_width, avail.1,
+                    WindowsAttribute::ImGuiWindowFlags_None))
+            {
+                self->drawFileList();
+            }
+            EndChild();
+            
+            self->acceptSavingDrop();
+            
+            return !self.m_close;
+        }
+        
+        func askToCreateNewFolder(self: Browser, base: path_t)=> void
+        {
+            do InputBox::show("新目录", "请输入新目录名称：", "NewFolder")
+                ->then(func(name) {
+                        match (mkdir(base / name))
+                        {
+                            ok(_)?
+                                self.m_fs_dirty->set(true);
+                            err(msg)?
+                                MsgBox::err("创建失败", F"无法创建新目录：{msg}");
+                        }
+                    });
+        }
+        
+        // 新建 C++ 模块（右键菜单“新建→C++ 模块”）：弹输入框要模块名，用户
+        // 确认后弹出 ModulePrepare 模态进度窗口，模块目录创建与
+        // createNewCppModuleDir（生成 loader.hpp/CMakeLists.txt 并调用 CMake
+        // 编译）都在窗口创建的工作线程中执行，避免编译期间卡死 UI；进度与
+        // CMake 子进程输出经 postMessage 汇总到窗口日志区，失败原因由窗口
+        // 结束时统一展示。回调与工作线程都不捕获 Browser 实例，文件缓存刷新
+        // 经 dirty 传出：目录创建成功即置位，让新模块在编译期间就出现在目录列表中。
+        func askToCreateCppModuleFolder(self: Browser, base: path_t)=> void
+        {
+            let dirty = self.m_fs_dirty;
+            
+            do InputBox::show("新建 C++ 模块", "请输入新模块的名称：", "NewCppModule")
+                -> then(func(name){
+                        if (name->len == 0)
+                        {
+                            MsgBox::err("新建 C++ 模块", "模块名称不能为空");
+                            return;
+                        }
+                        
+                        do show(ModulePrepare::create(func(prepare: ModulePrepare){
+                                    let cpp_module_path = base / F"{name}.je4module";
+                                    
+                                    prepare->postMessage(
+                                        F"创建模块目录：{cpp_module_path->to_string()}");
+                                    try! _ = mkdir(cpp_module_path)
+                                        ->or_map(\eno = F"创建新目录失败：{eno}";);
+                                    dirty->set(true);
+                                    
+                                    prepare->postMessage(
+                                        "生成模块文件并编译（CMake），可能需要一些时间……");
+                                    try! _ = ModulePrepare::createNewCppModuleDir(
+                                        prepare, cpp_module_path, name);
+                                        
+                                    return_ok!;
+                                }));
+                    });
+        }
+        
+        // 新建着色器（右键菜单“新建→着色器”）：以选中的内置着色器为模
+        // 板复制到当前目录。流程同 requestSavePrefabAs：弹输入框要文件
+        // 名 → 已存在则确认覆盖 → 复制模板。回调不捕获 Browser 实例，
+        // 文件缓存刷新经 dirty 传出。
+        func askToCreateNewShader(self: Browser, template_path: path_t)=> void
+        {
+            let target_dir = self.m_current;
+            let dirty = self.m_fs_dirty;
+            let template_name = purename(template_path);
+            
+            func copyTo(dst: path_t)=> void
+            {
+                match (copy(template_path, dst))
+                {
+                    err(e)?
+                        MsgBox::err("新建着色器",
+                            F"复制内置着色器 \"{template_name}\" 到 \"{dst->to_string()}\" 失败：{e}");
+                    ok(_)?
+                    {
+                        dirty->set(true);
+                        
+                        // 闭包按创建时的值捕获文本，之后每帧由 Statebar 调用绘制
+                        let path_str = dst->to_string();
+                        Statebar::showState(3.) <| func(){
+                            Text(F"着色器 \"{path_str}\" 已创建（基于内置着色器 \"{template_name}\"）");
+                        };
+                    }
+                }
+            }
+            
+            func createAs(file_name: string)=> void
+            {
+                if (file_name->len == 0)
+                {
+                    MsgBox::err("新建着色器", "文件名不能为空");
+                    return;
+                }
+                
+                // 未带后缀时自动补全 .shader
+                let full_name = file_name->end_with(".shader")
+                    ? file_name
+                    | F"{file_name}.shader";
+                    
+                let dst = target_dir / full_name;
+                
+                if (isfile(dst))
+                {
+                    // 已存在同名文件时弹出覆盖确认
+                    do AskBox::show(
+                        "新建着色器", F"目录中已存在 \"{full_name}\"，确认覆盖吗？")
+                        ->onYes(\= copyTo(dst);)
+                        ;
+                }
+                else
+                    copyTo(dst);
+            }
+            
+            do InputBox::show("新建着色器",
+                F"基于内置着色器 \"{template_name}\"，请输入着色器名称：",
+                template_name)
+                ->then(createAs)
+                ;
+        }
+        
+        // 从内置模板新建脚本文件（右键菜单“新建→物理世界配置 / ToWoo 组件 /
+        // ToWoo 系统”共用的流程）：弹输入框要文件名 → 未带约定后缀时自动补
+        // 全 → 已存在则确认覆盖 → 经 Template::load 读入模板后用 pkg::filestream
+        // 落盘。on_created 在文件成功落盘后携带其路径被调用（ToWoo 组件/系统
+        // 在此通知 Project 注册进 ToWoo 收集器），无需后继动作时传 none。
+        // 回调不捕获 Browser 实例，文件缓存刷新经 dirty 传出。
+        func askToCreateFromTemplate(
+            self: Browser,
+            dialog_title: string,
+            input_hint: string,
+            default_name: string,
+            file_suffix: string,
+            template_type: Template::Type,
+            type_display: string,
+            on_created: option<(path_t)=> void>)=> void
+        {
+            let target_dir = self.m_current;
+            let dirty = self.m_fs_dirty;
+            
+            func writeTo(dst: path_t)=> void
+            {
+                match (Template::load(template_type))
+                {
+                    none?
+                        MsgBox::err(dialog_title, F"无法加载内置的 {type_display} 模板文件");
+                    value(content)?
+                    {
+                        match (filestream::open(dst, filestream::mode::write))
+                        {
+                            none?
+                                MsgBox::err(dialog_title,
+                                    F"无法创建 \"{dst->to_string()}\"，可能是文件名非法或磁盘已满");
+                            value(fs)?
+                            {
+                                {
+                                    defer do fs->close();
+                                    if (!fs->write(content as buffer, 0, content->byte_len))
+                                    {
+                                        MsgBox::err(dialog_title,
+                                            F"写入 \"{dst->to_string()}\" 失败");
+                                        return;
+                                    }
+                                }
+                                
+                                dirty->set(true);
+                                
+                                // 创建成功后通知调用方（ToWoo 组件/系统在
+                                // 此注册进 Project，同名冲突由注册侧弹窗提示）
+                                match (on_created)
+                                {
+                                    none?;
+                                    value(notify)?
+                                        notify(dst);
+                                }
+                                
+                                // 闭包按创建时的值捕获文本，之后每帧由 Statebar 调用绘制
+                                let path_str = dst->to_string();
+                                Statebar::showState(3.) <| func(){
+                                    Text(F"{type_display} \"{path_str}\" 已创建");
+                                };
+                            }
+                        }
+                    }
+                }
+            }
+            
+            func createAs(file_name: string)=> void
+            {
+                if (file_name->len == 0)
+                {
+                    MsgBox::err(dialog_title, "文件名不能为空");
+                    return;
+                }
+                
+                // 未带后缀时自动补全（如 .je4physics.wo）
+                let full_name = file_name->end_with(file_suffix)
+                    ? file_name
+                    | F"{file_name}{file_suffix}";
+                    
+                let dst = target_dir / full_name;
+                
+                if (isfile(dst))
+                {
+                    // 已存在同名文件时弹出覆盖确认
+                    do AskBox::show(
+                        dialog_title, F"目录中已存在 \"{full_name}\"，确认覆盖吗？")
+                        ->onYes(\= writeTo(dst);)
+                        ;
+                }
+                else
+                    writeTo(dst);
+            }
+            
+            do InputBox::show(dialog_title, input_hint, default_name)
+                ->then(createAs)
+                ;
+        }
+        
+        // 新建物理世界配置（右键菜单“新建→物理世界配置”）：在当前目录生成
+        // 一个 .je4physics.wo 配置脚本模板。该脚本是场景 Physics2D 物理的
+        // 唯一数据源（见 src/jeecs_core_physics_system.hpp 的
+        // load_scene_physics_config_from_path），必须返回
+        // je::physics2d::config::SceneConfig，内容即 je/physics2d/config.wo
+        // 提供的一组 PHYSICS2D_* 宏。模板存于 Template 目录
+        // （physics.je4physics.wo.template），流程见 askToCreateFromTemplate。
+        func askToCreateNewPhysicsConfig(self: Browser)=> void
+        {
+            self->askToCreateFromTemplate(
+                "新建物理世界配置", "请输入物理世界配置文件名：", "physics",
+                ".je4physics.wo", Template::Type::PHYSICS_CONFIG, "物理世界配置",
+                option::none);
+        }
+        
+        // 新建 ToWoo 组件（右键菜单“新建→ToWoo 组件”）：在当前目录生成一
+        // 个 .je4component.wo 组件脚本模板，组件成员经 component! 宏声明。
+        // 模板存于 Template 目录（towoo_component.je4component.wo.template），
+        // 流程见 askToCreateFromTemplate；落盘成功后通知 Project 注册进
+        // ToWoo 收集器（同名组件冲突时弹 MsgBox::err 提示）。
+        func askToCreateNewTowooComponent(self: Browser)=> void
+        {
+            self->askToCreateFromTemplate(
+                "新建 ToWoo 组件", "请输入 ToWoo 组件文件名：", "NewComponent",
+                ".je4component.wo", Template::Type::TOWOO_COMPONENT, "ToWoo 组件",
+                option::value(func(path: path_t){
+                        Project::appendTowooComponent(path);
+                    }));
+        }
+        
+        // 新建 ToWoo 系统（右键菜单“新建→ToWoo 系统”）：在当前目录生成一
+        // 个 .je4system.wo 系统脚本模板，含 create/close 生命周期钩子与
+        // PRE_UPDATE!/UPDATE!/LATE_UPDATE! 三个作业队列（系统逻辑以
+        // system!/work! 宏声明）。模板存于 Template 目录
+        // （towoo_system.je4system.wo.template），流程见 askToCreateFromTemplate；
+        // 落盘成功后通知 Project 注册进 ToWoo 收集器（同名系统冲突时弹
+        // MsgBox::err 提示）。
+        func askToCreateNewTowooSystem(self: Browser)=> void
+        {
+            self->askToCreateFromTemplate(
+                "新建 ToWoo 系统", "请输入 ToWoo 系统文件名：", "NewSystem",
+                ".je4system.wo", Template::Type::TOWOO_SYSTEM, "ToWoo 系统",
+                option::value(func(path: path_t){
+                        Project::appendTowooSystem(path);
+                    }));
+        }
+        
+        // 新建动画文件（右键菜单“新建→动画”）：.je4animation 是二进制格式
+        // （魔数 + 动画组表，见 Animation2D::AnimationContext），空文件即
+        // “魔数 + 0 个动画组”，经 AnimationContext 落盘以保证与编辑器/运行
+        // 时的读写格式一致。流程同 askToCreateFromTemplate：弹输入框要文
+        // 件名 → 未带后缀时自动补全 → 已存在则确认覆盖 → 写盘。回调不捕
+        // 获 Browser 实例，文件缓存刷新经 dirty 传出。
+        func askToCreateNewAnimation(self: Browser)=> void
+        {
+            let target_dir = self.m_current;
+            let dirty = self.m_fs_dirty;
+            
+            func writeTo(dst: path_t)=> void
+            {
+                if (Animation2D::AnimationContext::create(dst)->save())
+                {
+                    dirty->set(true);
+                    
+                    // 闭包按创建时的值捕获文本，之后每帧由 Statebar 调用绘制
+                    let path_str = dst->to_string();
+                    Statebar::showState(3.) <| func(){
+                        Text(F"动画 \"{path_str}\" 已创建");
+                    };
+                }
+                else
+                    MsgBox::err("新建动画",
+                        F"无法创建 \"{dst->to_string()}\"，可能是文件名非法或磁盘已满");
+            }
+            
+            func createAs(file_name: string)=> void
+            {
+                if (file_name->len == 0)
+                {
+                    MsgBox::err("新建动画", "文件名不能为空");
+                    return;
+                }
+                
+                // 未带后缀时自动补全 .je4animation
+                let full_name = file_name->end_with(".je4animation")
+                    ? file_name
+                    | F"{file_name}.je4animation";
+                    
+                let dst = target_dir / full_name;
+                
+                if (isfile(dst))
+                {
+                    // 已存在同名文件时弹出覆盖确认
+                    do AskBox::show(
+                        "新建动画", F"目录中已存在 \"{full_name}\"，确认覆盖吗？")
+                        ->onYes(\= writeTo(dst);)
+                        ;
+                }
+                else
+                    writeTo(dst);
+            }
+            
+            do InputBox::show("新建动画", "请输入动画文件名：", "NewAnimation")
+                ->then(createAs)
+                ;
+        }
+        
+        func drawToolbar(self: Browser)=> void
+        {
+            BeginDisabled(self.m_history->len == 0);
+            if (Button("返回"))
+                self->navigateBack();
+            EndDisabled();
+            
+            SameLine();
+            
+            BeginDisabled(self.m_forward->len == 0);
+            if (Button("前进"))
+                self->navigateForward();
+            EndDisabled();
+            
+            SameLine();
+            
+            if (Button("向上"))
+                self->navigateUp();
+                
+            SameLine();
+            
+            let mut rel = "";
+            match (relative(self.m_current, self.m_root))
+            {
+                err(_)?;
+                ok(r)?
+                    rel = r;
+            }
+            let display = (rel->len == 0 || rel == ".") ? "/" | rel;
+            TextDisabled(display);
+            
+            SameLine();
+            
+            if (Button("刷新"))
+                self.m_selected = option::none;
+                
+            SameLine();
+            
+            if (Button("新建文件夹"))
+            {
+                self->askToCreateNewFolder(self.m_current);
+            }
+            
+            SameLine();
+            
+            Text("搜索:");
+            SameLine();
+            
+            PushItemWidth(150.);
+            match (InputText("##BrowserFilter", self.m_filter))
+            {
+                none?;
+                value(new_text)?
+                    self.m_filter = new_text;
+            }
+            PopItemWidth();
+        }
+        
+        // 切换到目录 dir，并把切换前的目录压入返回栈。所有改变
+        // m_current 的位置都必须经由此函数，返回栈才能与访问轨迹一致；
+        // dir 与当前目录相同时直接返回，避免重复入栈。主动导航会开辟新
+        // 轨迹，因此清空前进栈（与浏览器行为一致）。
+        func goTo(self: Browser, dir: fsys::path_t)=> void
+        {
+            if (dir == self.m_current)
+                return;
+                
+            self.m_history->add(self.m_current);
+            self.m_forward->clear();
+            self.m_current = dir;
+        }
+        
+        // 从一个历史栈弹出最近的可用目录并返回它：栈中目录可能已被删
+        // 除/移动，遇到失效项就继续回溯；无可用项时返回 none 且不改动
+        // 当前目录。
+        func popValidDir(stack: vec<fsys::path_t>)=> option<fsys::path_t>
+        {
+            while (stack->len > 0)
+            {
+                let idx = stack->len - 1;
+                let dir = stack[idx];
+                
+                do stack->remove(idx);
+                
+                if (isdir(dir))
+                    return option::value(dir);
+            }
+            return option::none;
+        }
+        
+        // 返回上一次访问的目录：当前目录压入前进栈，再切回返回栈栈顶。
+        func navigateBack(self: Browser)=> void
+        {
+            match (popValidDir(self.m_history))
+            {
+                none?;
+                value(dir)?
+                {
+                    self.m_forward->add(self.m_current);
+                    self.m_current = dir;
+                    self.m_selected = option::none;
+                }
+            }
+        }
+        
+        // 前进：仅在后退过之后可用，与 navigateBack 互为逆操作。
+        func navigateForward(self: Browser)=> void
+        {
+            match (popValidDir(self.m_forward))
+            {
+                none?;
+                value(dir)?
+                {
+                    self.m_history->add(self.m_current);
+                    self.m_current = dir;
+                    self.m_selected = option::none;
+                }
+            }
+        }
+        
+        func navigateUp(self: Browser)=> void
+        {
+            if (self.m_current != self.m_root)
+            {
+                self->goTo(parent(self.m_current));
+                self.m_selected = option::none;
+            }
+        }
+        
+        // 定位到指定路径：目录则进入该目录，文件则进入所在目录并选中
+        // 该项；搜索过滤一并清除，保证目标项在列表中立即可见。目标所
+        // 在目录不存在（如预设体文件已被移走）时静默放弃。
+        func navigateTo(self: Browser, path: fsys::path_t)=> void
+        {
+            let target_dir = isdir(path) ? path | parent(path);
+            if (!isdir(target_dir))
+                return;
+                
+            self->goTo(target_dir);
+            self.m_selected = option::value(path);
+            self.m_filter = "";
+        }
+        
+        func drawTree(self: Browser)=> void
+        {
+            let root_name = filename(self.m_root);
+            let display_name = root_name->len > 0 ? root_name | "项目";
+            
+            let mut root_flags = TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
+                
+            if (self.m_current == self.m_root)
+                root_flags += TreeNodeAttribute::ImGuiTreeNodeFlags_Selected;
+                
+            let root_open = TreeNodeEx(F"{display_name}##browser_root", root_flags);
+            
+            self->acceptDirDrop(self.m_root);
+            
+            if (IsItemClickedLeft())
+            {
+                self->goTo(self.m_root);
+                self.m_selected = option::value(self.m_root);
+            }
+            
+            if (root_open)
+            {
+                self->drawDirNode(self.m_root);
+                TreePop();
+            }
+        }
+        
+        func drawDirNode(self: Browser, dir: fsys::path_t)=> void
+        {
+            for (let d : self->getSubDirs(dir))
+            {
+                let name = filename(d);
+                if (!self->isEntryVisible(name))
+                    continue;
+                    
+                let is_selected = self.m_selected->is_value
+                    && self.m_selected->unwrap == d;
+                    
+                let mut flags = TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow
+                    + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick
+                    + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
+                    
+                if (is_selected)
+                    flags += TreeNodeAttribute::ImGuiTreeNodeFlags_Selected;
+                    
+                let node_open = TreeNodeEx(F"{name}##{d->to_string()}", flags);
+                
+                self->acceptDirDrop(d);
+                
+                if (IsItemClickedLeft())
+                {
+                    self->goTo(d);
+                    self.m_selected = option::value(d);
+                }
+                
+                if (node_open)
+                {
+                    self->drawDirNode(d);
+                    TreePop();
+                }
+            }
+        }
+        
+        // 根据路径返回对应的图标：目录返回文件夹图标（*.je4module 拓展模块
+        // 目录除外，使用 C++ 程序图标），文件按扩展名走 ext_icon_map 查询，
+        // 未命中则返回默认 FILE 图标。
+        func iconForPath(path: fsys::path_t)=> option<texture>
+        {
+            // 扩展名 -> 图标 的查找表；命中即用，未命中走默认 FILE 图标。
+            static let ext_icon_map = {
+                [".png"] = Icons::TEXTURE,
+                [".jpg"] = Icons::TEXTURE,
+                [".jpeg"] = Icons::TEXTURE,
+                [".bmp"] = Icons::TEXTURE,
+                [".tga"] = Icons::TEXTURE,
+                [".tif"] = Icons::TEXTURE,
+                [".tiff"] = Icons::TEXTURE,
+                [".gif"] = Icons::TEXTURE,
+                [".webp"] = Icons::TEXTURE,
+                [".hdr"] = Icons::TEXTURE,
+                [".exr"] = Icons::TEXTURE,
+                [".dds"] = Icons::TEXTURE,
+                [".ico"] = Icons::TEXTURE,
+                [".pvr"] = Icons::TEXTURE,
+                [".ktx"] = Icons::TEXTURE,
+                [".psd"] = Icons::TEXTURE,
+                
+                [".shader"] = Icons::SHADER,
+                
+                [".ttf"] = Icons::FONT,
+                [".otf"] = Icons::FONT,
+                [".font"] = Icons::FONT,
+                [".fnt"] = Icons::FONT,
+                
+                [".wav"] = Icons::MUSIC,
+                [".mp3"] = Icons::MUSIC,
+                [".ogg"] = Icons::MUSIC,
+                [".flac"] = Icons::MUSIC,
+                [".aiff"] = Icons::MUSIC,
+                [".m4a"] = Icons::MUSIC,
+                
+                [".cpp"] = Icons::CPP,
+                [".cc"] = Icons::CPP,
+                [".cxx"] = Icons::CPP,
+                [".c"] = Icons::CPP,
+                [".h"] = Icons::CPP,
+                [".hpp"] = Icons::CPP,
+                [".hxx"] = Icons::CPP,
+                
+                [".wo"] = Icons::WOOLANG,
+                
+                [".je4animation"] = Icons::ANIMATION,
+                [".je4tilemap"] = Icons::TILEMAP,
+                [".je4world"] = Icons::WORLD,
+                [".je4entity"] = Icons::ENTITY,
+            };
+            
+            
+            if (isdir(path))
+                return isJe4ModuleDir(path) ? Icons::CPP | Icons::FOLDER;
+                
+            let ext = string::lower(extension(path));
+            return ext_icon_map->get(ext)=>> \v = v;->or_bind(\= Icons::FILE;);
+        }
+        
+        // 右键是否点在本行上：须在行的 Selectable 仍是“最后提交的 item”
+        // 时调用（见 drawFileList）。
+        // 判定时机必须是“松开”而非“按下”。右键菜单本身是一个弹出窗口，
+        // 在按下那一帧它仍然打开着并占住 HoveredWindow，此时普通的
+        // IsItemHovered（也就是 IsItemClicked 的内部判定）会失败——于是
+        // “菜单已打开时右键另一个文件”选中的仍是上一次的目标，紧接着弹出
+        // 的菜单操作的也是那个错误目标。松开那一帧，弹窗已在上一帧末尾被
+        // ImGui 关闭（UpdateMouseMovingWindowEndFrame 在右键按下时关闭弹窗），
+        // 悬停判定恢复正常；ImGui 自带的 BeginPopupContextItem 采用的正是
+        // 这一时机（IsMouseReleased + IsItemHovered）。
+        func isRowRightClicked()=> bool
+        {
+            return IsMouseReleased(ImGuiMouseButton::ImGuiMouseButton_Right)
+                && IsItemHovered();
+        }
+        
+        // 在整行 Selectable 之上叠绘条目图标（见 drawFileList）：图标本
+        // 身不拦截输入，图标区域同样命中所在行的悬浮/点击/拖拽。
+        func drawItemIcon(path: fsys::path_t)=> void
+        {
+            match(iconForPath(path))
+            {
+                none?;
+                value(icon)?
+                {
+                    ImageSize(icon, 16., 16.);
+                    SameLine();
+                }
+            }
+        }
+        
+        func drawFileList(self: Browser)=> void
+        {
+            self->ensureFileListCache();
+            let dirs = self.m_list_dirs;
+            let files = self.m_list_files;
+            
+            let filter_lower = self.m_filter->lower;
+            let has_filter = filter_lower->len > 0;
+            
+            let visible_count = self->visibleEntryCount(dirs) + self->visibleEntryCount(files);
+            if (visible_count == 0)
+                TextDisabled("(空目录)");
+                
+            // 每行的交互区是一个占满整行的隐形 Selectable（"##" 空标签），
+            // 图标与名称在 Selectable 之后叠绘（ImGui 推荐做法）：Image/Text
+            // 不拦截输入，悬浮/点击/拖拽落在图标上时同样命中该行。图标与
+            // 名称的命中事件（DragPayload/IsItemClicked/isRowRightClicked/
+            // 返回值）都必须在 Selectable 仍是“最后提交的 item”时读取，
+            // 随后再回退光标叠绘。
+            for (let d : dirs)
+            {
+                let name = filename(d);
+                if (self->isEntryVisible(name) && (!has_filter || name->lower->find(filter_lower)->is_value))
+                {
+                    let is_selected = self.m_selected->is_value
+                        && self.m_selected->unwrap == d;
+                        
+                    let line_pos = GetCursorScreenPos();
+                    let clicked = SelectableSelected(
+                        F"##{d->to_string()}", is_selected);
+                        
+                    Drag::DragPayload(FilePayload::create(d));
+                    
+                    if (isRowRightClicked())
+                        self.m_selected = option::value(d);
+                        
+                    if (clicked)
+                        self->handleItemClick(d);
+                        
+                    SetCursorScreenPos(line_pos);
+                    drawItemIcon(d);
+                    Text(F"{name}/");
+                }
+            }
+            
+            for (let f : files)
+            {
+                let name = filename(f);
+                if (self->isEntryVisible(name) && (!has_filter || name->lower->find(filter_lower)->is_value))
+                {
+                    let is_selected = self.m_selected->is_value
+                        && self.m_selected->unwrap == f;
+                        
+                    let line_pos = GetCursorScreenPos();
+                    let clicked = SelectableSelected(
+                        F"##{f->to_string()}", is_selected);
+                        
+                    Drag::DragPayload(FilePayload::create(f));
+                    
+                    if (isRowRightClicked())
+                        self.m_selected = option::value(f);
+                        
+                    if (clicked)
+                        self->handleItemClick(f);
+                        
+                    SetCursorScreenPos(line_pos);
+                    drawItemIcon(f);
+                    Text(name);
+                }
+            }
+            
+            if (BeginPopupContextWindow())
+            {
+                if (BeginMenu("新建"))
+                {
+                    defer EndMenu();
+                    
+                    if (BeginMenu("着色器"))
+                    {
+                        defer EndMenu();
+                        
+                        do MenuItemEnabled("基于内置着色器：", false);
+                        Separator();
+                        
+                        func getAllBuiltinShadersPath()
+                        {
+                            using iterator;
+                            
+                            let builtin_shader_path = normalize(host_path()) / "builtin" / "shader";
+                            return walk(builtin_shader_path) |> iter_result
+                                |> filter(\p = isfile(p) && extension(p)->lower == ".shader";)
+                                |> collect
+                                |> sort(\l, r = purename(l) < purename(r);)
+                                ;
+                            ;
+                        }
+                        
+                        static let all_builtin_shaders_path = getAllBuiltinShadersPath();
+                        for (let p : all_builtin_shaders_path)
+                        {
+                            if (MenuItem(F"{purename(p)}"))
+                            {
+                                self->askToCreateNewShader(p);
+                            }
+                        }
+                    }
+                    if (MenuItem("动画"))
+                    {
+                        self->askToCreateNewAnimation();
+                    }
+                    if (MenuItem("物理世界配置"))
+                    {
+                        self->askToCreateNewPhysicsConfig();
+                    }
+                    if (MenuItem("ToWoo 组件"))
+                    {
+                        self->askToCreateNewTowooComponent();
+                    }
+                    if (MenuItem("ToWoo 系统"))
+                    {
+                        self->askToCreateNewTowooSystem();
+                    }
+                    if (MenuItem("C++ 模块"))
+                    {
+                        self->askToCreateCppModuleFolder(self.m_current);
+                    }
+                    // 位于 *.je4module 目录内时，提供向该模块添加组件/系统的入口
+                    match (findOwningJe4ModuleDir(self.m_current))
+                    {
+                        none?;
+                        value(module_dir)?
+                        {
+                            if (MenuItem("C++ 组件"))
+                            {
+                                do ModuleTypeCreator::show(
+                                    module_dir, self.m_fs_dirty,
+                                    ModuleTypeCreator::TypeKind::COMPONENT);
+                            }
+                            if (MenuItem("C++ 系统"))
+                            {
+                                do ModuleTypeCreator::show(
+                                    module_dir, self.m_fs_dirty,
+                                    ModuleTypeCreator::TypeKind::SYSTEM);
+                            }
+                        }
+                    }
+                    Separator();
+                    if (MenuItem("文件夹"))
+                    {
+                        self->askToCreateNewFolder(self.m_current);
+                    }
+                }
+                if (MenuItem("新建文件夹"))
+                {
+                    self->askToCreateNewFolder(self.m_current);
+                }
+                
+                Separator();
+                
+                if (self.m_selected->is_value)
+                {
+                    let sel = self.m_selected->unwrap;
+                    let sel_name = filename(sel);
+                    let sel_parent = parent(sel);
+                    let is_module_dir = isJe4ModuleDir(sel);
+                    
+                    if (isdir(sel) && MenuItem("打开"))
+                        self->goTo(sel);
+                        
+                    match (openActionForPath(sel))
+                    {
+                        // 编辑器未接管的文件与双击一致：交由外部程序打开
+                        none?
+                            if (isfile(sel) && MenuItem("打开"))
+                                openFileExternally(sel);
+                        value(open_action)?
+                            if (MenuItem("打开"))
+                                open_action(sel);
+                    }
+                    
+                    if (is_module_dir && MenuItem("重新构建并载入"))
+                    {
+                        do show(ModulePrepare::create(func(prepare: ModulePrepare){
+                                    prepare->postMessage(
+                                        "生成模块文件并编译（CMake），可能需要一些时间……");
+                                        
+                                    return ModulePrepare::buildCppModuleDir(
+                                        prepare, sel, purename(sel), ModulePrepare::BuildConfig::DEBUG);
+                                }));
+                    }
+                    
+                    // 向模块添加组件/系统（模态对话框，见 ModuleTypeCreator.wo）
+                    if (is_module_dir && BeginMenu("添加"))
+                    {
+                        defer EndMenu();
+                        
+                        if (MenuItem("组件…"))
+                        {
+                            do ModuleTypeCreator::show(
+                                sel, self.m_fs_dirty,
+                                ModuleTypeCreator::TypeKind::COMPONENT);
+                        }
+                        if (MenuItem("系统…"))
+                        {
+                            do ModuleTypeCreator::show(
+                                sel, self.m_fs_dirty,
+                                ModuleTypeCreator::TypeKind::SYSTEM);
+                        }
+                    }
+                    
+                    if (MenuItem("重命名"))
+                    {
+                        do InputBox::show("重命名", "请输入新名称：", sel_name)
+                            ->then(func(new_name: string) {
+                                    let new_path = sel_parent / new_name;
+                                    
+                                    match (renameActionForPath(sel))
+                                    {
+                                        none?;
+                                        value(on_renamed)?
+                                            on_renamed(sel, new_path);
+                                    }
+                                    
+                                    do move(sel, new_path);
+                                    self.m_fs_dirty->set(true);
+                                })
+                            ;
+                    }
+                    
+                    Separator();
+                    
+                    // 拓展模块目录由模块系统管理，禁止在资源管理器中删除
+                    if (MenuItemEnabled("删除", !is_module_dir))
+                    {
+                        let target = sel;
+                        do AskBox::show("删除", F"确认删除 \"{sel_name}\" 吗？")
+                            ->onYes(func() {
+                                    do remove(target);
+                                    self.m_fs_dirty->set(true);
+                                })
+                            ;
+                    }
+                    
+                    Separator();
+                    
+                    if (MenuItem("复制路径"))
+                        SetClipboardText(sel->to_string());
+                        
+                    if (MenuItem("在资源管理器中展示"))
+                        revealInSystemExplorer(sel);
+                }
+                
+                EndPopup();
+            }
+        }
+        
+        // 双击 / 右键“打开”时按扩展名查找打开回调：目录与未注册的扩展名返回 none。
+        func openActionForPath(path: fsys::path_t)=> option<(fsys::path_t)=> void>
+        {
+            // 扩展名 -> 打开回调 的查找表；新增可打开的文件类型时在此注册。
+            static let ext_open_map = {
+                [".je4world"] = func(p: fsys::path_t) {
+                    WorldEditorViewport::openWorldEditorViewportFromFile(
+                        p, option::none);
+                },
+                [".je4animation"] = func(p: fsys::path_t) {
+                    Animation2D::openAnimationEditorFromFile(p);
+                },
+            };
+            
+            if (!isfile(path))
+                return option::none;
+                
+            return ext_open_map->get(string::lower(extension(path)));
+        }
+        
+        // 文件被重命名后按扩展名查找联动回调（参数为 旧路径, 新路径）：未注册返回 none。
+        func renameActionForPath(path: fsys::path_t)=> option<(fsys::path_t, fsys::path_t)=> void>
+        {
+            // 扩展名 -> 重命名联动回调 的查找表；新增需要联动同步的文件类型时在此注册。
+            static let ext_rename_map = {
+                // 重命名的世界文件若已有打开的视口：按新路径重开视口
+                //（同首次保存的逻辑），确保视口的保存路径与文件一致。
+                [".je4world"] = func(old_path: fsys::path_t, new_path: fsys::path_t) {
+                    match (WorldEditorViewport::findWorldEditorViewportByPath(old_path))
+                    {
+                        none?;
+                        value(viewport)?
+                            viewport->dropAndRetargetPath(new_path);
+                    }
+                },
+            };
+            
+            return ext_rename_map->get(string::lower(extension(path)));
+        }
+        
+        // 在系统文件管理器中展示指定路径：Windows 用 explorer /select 选中该项，
+        // macOS 用 open -R 在 Finder 中定位；其余平台的 xdg-open 不支持定位，
+        // 退化为打开所在目录。fsys 的路径统一为正斜杠，而 explorer /select 只认
+        // 反斜杠，不转换的话定位会失败并回退打开默认位置（桌面）。
+        func revealInSystemExplorer(path: fsys::path_t)=> void
+        {
+            let target = path->to_string();
+            let current_os = platform::get_os();
+            
+            if (current_os == platform::Os::WINDOWS)
+            {
+                let win_path = target->replace("/", "\\");
+                do platform::shell(F"explorer.exe /select,\"{win_path}\"");
+            }
+            else if (current_os == platform::Os::MACOS)
+                do platform::shell(F"open -R \"{target}\"");
+            else
+                do platform::shell(F"xdg-open \"{parent(path)->to_string()}\"");
+        }
+        
+        // 在后台线程执行 shell 命令：platform::shell 是阻塞的 system()，
+        // 外部程序启动期间（如 vscode 冷启动）在 UI 协程直接调用会卡住整
+        // 个编辑器，因此移入后台线程执行。返回的线程不等待，结束后由 GC
+        // 回收（thread 句柄的终结器会自动 detach）。命令失败（退出码非 0）
+        // 时记录错误日志。
+        func shellDetached(cmd: string)=> void
+        {
+            do thread::create(func(){
+                    if (platform::shell(cmd) != 0)
+                        logerr(F"执行外部命令失败（退出码非 0）：{cmd}");
+                });
+        }
+        
+        // 以系统默认方式打开文件，等同于在操作系统的文件管理器中双击该
+        // 文件：Windows 经 cmd 内建命令 start 以文件关联程序打开——空标题
+        // "" 必须占位，否则带空格的路径会被 start 当作新开控制台窗口的标
+        // 题；macOS 用 open，其余平台用 xdg-open。fsys 的路径统一为正斜
+        // 杠，而 start 不认正斜杠路径，需转换为反斜杠（同
+        // revealInSystemExplorer）。
+        func openWithSystemDefault(path: fsys::path_t)=> void
+        {
+            let target = path->to_string();
+            let current_os = platform::get_os();
+            
+            if (current_os == platform::Os::WINDOWS)
+            {
+                let win_path = target->replace("/", "\\");
+                shellDetached(F"start \"\" \"{win_path}\"");
+            }
+            else if (current_os == platform::Os::MACOS)
+                shellDetached(F"open \"{target}\"");
+            else
+                shellDetached(F"xdg-open \"{target}\"");
+        }
+        
+        // 用 vscode 打开 ToWoo 脚本：以当前工作目录为工作区打开 vscode，
+        // 并在该工作区内打开脚本——code <工作区> <文件> 一条命令完成；
+        // 已有窗口打开着该工作区时聚焦该窗口并在其中打开文件。code 不在
+        // PATH 中等启动失败的情况（退出码非 0）回退为系统默认方式打开。
+        func openWooFileWithVSCode(path: fsys::path_t)=> void
+        {
+            let workspace = workpath()->to_string();
+            let target = path->to_string();
+            
+            do thread::create(func(){
+                    if (platform::shell(F"code \"{workspace}\" \"{target}\"") != 0)
+                    {
+                        logerr(F"无法用 vscode 打开 \"{target}\"："
+                            + "code 命令启动失败（退出码非 0），"
+                            + "已回退为系统默认方式打开");
+                        openWithSystemDefault(path);
+                    }
+                });
+        }
+        
+        // 双击 / 右键“打开”时，编辑器未接管（openActionForPath 未注册，
+        // 见 ext_open_map）的文件由此兜底：.wo 脚本（含 .je4physics.wo 等
+        // 以 .wo 结尾的派生后缀，extension 取最后一个后缀）用 vscode 打
+        // 开，其余文件交由操作系统以默认方式打开。
+        func openFileExternally(path: fsys::path_t)=> void
+        {
+            if (string::lower(extension(path)) == ".wo")
+                openWooFileWithVSCode(path);
+            else
+                openWithSystemDefault(path);
+        }
+        
+        func handleItemClick(self: Browser, path: fsys::path_t)=> void
+        {
+            let now = GetTime();
+            let is_double = self.m_last_clicked->is_value
+                && self.m_last_clicked->unwrap == path
+                && (now - self.m_last_click_time) < 0.5;
+                
+            self.m_last_click_time = now;
+            self.m_last_clicked = option::value(path);
+            self.m_selected = option::value(path);
+            
+            if (is_double && isdir(path))
+                self->goTo(path);
+                
+            if (is_double)
+            {
+                match (openActionForPath(path))
+                {
+                    // 编辑器未接管的文件交由外部程序打开（.wo 用 vscode，
+                    // 其余用系统默认方式）；目录已在上方 goTo 进入，不在此列
+                    none?
+                        if (isfile(path))
+                            openFileExternally(path);
+                    value(open_action)?
+                        open_action(path);
+                }
+            }
+        }
+        
+        func acceptDirDrop(self: Browser, target_dir: fsys::path_t)=> void
+        {
+            match (Drag::AcceptDrag:<FilePayload>())
+            {
+                none?;
+                value(payload)?
+                    self->requestMove(payload.m_path, target_dir);
+            }
+            
+            match (Drag::AcceptDrag:<SavingRequestPayload>())
+            {
+                none?;
+                value(payload)?
+                {
+                    let dirty = self.m_fs_dirty;
+                    payload.m_viewport->requestSaveAs(
+                        target_dir, \= dirty->set(true););
+                }
+            }
+            
+            match (Drag::AcceptDrag:<EntitySavingRequestPayload>())
+            {
+                none?;
+                value(payload)?
+                    requestSavePrefabAs(payload, target_dir, self.m_fs_dirty);
+            }
+        }
+        
+        // 拖到资源管理器窗口的空白/文件列表区域：保存到当前目录
+        func acceptSavingDrop(self: Browser)=> void
+        {
+            match (Drag::AcceptDrag:<SavingRequestPayload>())
+            {
+                none?;
+                value(payload)?
+                {
+                    let dirty = self.m_fs_dirty;
+                    payload.m_viewport->requestSaveAs(
+                        self.m_current, \= dirty->set(true););
+                }
+            }
+            
+            match (Drag::AcceptDrag:<EntitySavingRequestPayload>())
+            {
+                none?;
+                value(payload)?
+                    requestSavePrefabAs(payload, self.m_current, self.m_fs_dirty);
+            }
+        }
+        
+        // 把实体写入 dst 并将实体挂为该文件的预设体：未挂预设体或覆盖
+        // 当前预设体源文件时落盘完整数据（更新预设体本体），已挂其他
+        // 预设体时落盘为旧预设体的变体（差异 + "prefab" 键，详见
+        // save_prefab）。
+        // 文件写盘成功后，挂载关联（含此前挂有其他预设体时的旧路径还原
+        // 信息）走可撤销的 ModifyPrefab Action，由 Practice 调用 redo 落实；
+        // 把 path 写进命令缓冲临时实例的原因见 ModifyPrefab 的
+        // applyPrefabState。没有 EUID 的实体无法支持撤销，退化为直接挂载。
+        // dirty 在写盘成功后被置位以刷新资源管理器的文件缓存。
+        func savePrefabEntityTo(
+            wctx: WorldEditorViewport,
+            e: entity, dst: fsys::path_t, dirty: mutable<bool>)=> void
+        {
+            let runtime_path = ResourcePath::toRuntimeResourcePath(dst);
+            
+            match (toml::save(Entity::save_prefab(e, dst), dst))
+            {
+                err(msg)?
+                    MsgBox::err("保存失败",
+                        F"保存预设体到 \"{dst->to_string()}\" 失败：{msg}");
+                ok(_)?
+                {
+                    // 文件创建成功：实体自此成为预设体
+                    match (e->internal::get_entity_uid)
+                    {
+                        none?
+                        {
+                            logerr("保存预设体：实体缺少 EUID，预设体关联以不可撤销方式建立");
+                            
+                            let prefab = e->towoo::add_component:<Editor::Prefab>();
+                            prefab.path->set <| runtime_path;
+                        }
+                        value(eid)?
+                            wctx->doAction(ModifyPrefab::create(
+                                    eid, e->internal::get_prefab_path,
+                                    option::value(runtime_path)));
+                    }
+                    
+                    dirty->set(true);
+                    
+                    // 闭包按创建时的值捕获文本，之后每帧由 Statebar 调用绘制
+                    let name = e->internal::name;
+                    let path_str = dst->to_string();
+                    Statebar::showState(3.) <| func(){
+                        Text(F"预设体 \"{name}\" 已保存到 \"{path_str}\"");
+                    };
+                }
+            }
+        }
+        
+        // 拖拽实体到资源管理器后的保存流程（原资源管理器 requestSaveAs 的
+        // 实体版）：弹输入框要文件名 → 已存在则确认覆盖 → 按载荷中的 EUID
+        // 反查实体（entity 不跨帧持有，对话框确认时才反查；反查内部会检查
+        // 视口存活性，实体已不存在则取消保存）→ 写盘并挂预设体。回调不
+        // 捕获 Browser 实例，文件缓存刷新经 dirty 传出。
+        func requestSavePrefabAs(
+            payload: EntitySavingRequestPayload,
+            target_dir: fsys::path_t,
+            dirty: mutable<bool>)=> void
+        {
+            func saveTo(dst: fsys::path_t)=> void
+            {
+                match (payload.m_viewport->findListedEntityByEuid(payload.m_euid))
+                {
+                    none?
+                        MsgBox::err("保存失败", "目标实体已不存在，预设体保存已取消");
+                    value(e)?
+                        savePrefabEntityTo(payload.m_viewport, e, dst, dirty);
+                }
+            }
+            
+            func savePrefabAs(file_name: string)=> void
+            {
+                if (file_name->len == 0)
+                {
+                    MsgBox::err("保存失败", "文件名不能为空");
+                    return;
+                }
+                
+                // 未带后缀时自动补全 .je4entity
+                let full_name = file_name->end_with(".je4entity")
+                    ? file_name
+                    | F"{file_name}.je4entity";
+                    
+                let dst = target_dir / full_name;
+                
+                if (isfile(dst))
+                {
+                    // 已存在同名文件时弹出覆盖确认
+                    do AskBox::show(
+                        "保存", F"目录中已存在 \"{full_name}\"，确认覆盖吗？")
+                        ->onYes(\= saveTo(dst);)
+                        ;
+                }
+                else
+                    saveTo(dst);
+            }
+            
+            do InputBox::show(
+                "保存预设体", "请输入保存的文件名：",
+                F"{payload.m_entity_name}.je4entity")
+                ->then(savePrefabAs)
+                ;
+        }
+        
+        func requestMove(self: Browser, src: fsys::path_t, target_dir: fsys::path_t)=> void
+        {
+            if (parent(src) == target_dir)
+                return;
+                
+            let src_name = filename(src);
+            let dst = target_dir / src_name;
+            let dirty = self.m_fs_dirty;
+            let target_name = filename(target_dir);
+            
+            do AskBox::show("移动", F"确认将 \"{src_name}\" 移动到 \"{target_name}\" 吗？")
+                ->onYes(func() {
+                        do move(src, dst);
+                        dirty->set(true);
+                    })
+                ;
+        }
+    }
+}

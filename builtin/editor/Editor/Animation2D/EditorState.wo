@@ -1,0 +1,337 @@
+// 2D 帧动画编辑器 —— 撤销/重做与编辑期状态。
+// 撤销采用命令模式：闭包捕获帧列表引用，以快照 swap 恢复。
+// 旧版把“添加组件/变量”弹窗的局部编辑状态放在函数内 static，
+// 这里收编为 EditorState 字段，随窗口实例存活。
+
+import pkg::std;
+
+import je;
+import je::ecs;
+import je::gui;
+import je::graphic;
+import je::typeinfo;
+
+import pkg::fsys;
+
+import DataModel;
+
+using std;
+using je;
+using je::gui;
+using je::graphic;
+using fsys;
+
+namespace JEEditor::Editor::Animation2D
+{
+    // ======================================================================
+    // Section 3 — 撤销/重做（命令模式，闭包捕获帧列表引用）
+    // ======================================================================
+    using UndoCommand = struct{
+        m_apply: ()=>void,
+        m_undo: ()=>void,
+        m_desc: string,
+    };
+    public using UndoStack = struct{
+        protected m_past: vec<UndoCommand>,
+        protected m_future: vec<UndoCommand>,
+    }
+    {
+        public func create() => UndoStack
+        {
+            return UndoStack{ m_past = []mut, m_future = []mut };
+        }
+        public func can_undo(self: UndoStack) => bool { return self.m_past->len > 0; }
+        public func can_redo(self: UndoStack) => bool { return self.m_future->len > 0; }
+        public func clear(self: UndoStack)
+        {
+            self.m_past->clear();
+            self.m_future->clear();
+        }
+    }
+
+    // 把“编辑前/编辑后”的两份帧快照注册为一个可撤销/重做的命令。
+    // before 是编辑前的深拷贝；调用此函数时 frames 已是编辑后状态。
+    // 用 swap(快照的 dup) 来恢复，保持原始快照不被污染，从而支持反复 undo/redo。
+    func commit_snapshot(
+        stack: UndoStack, frames: vec<Animation2dFrameData>,
+        before: vec<Animation2dFrameData>, desc: string) => void
+    {
+        let after_copy = frames->dup()->>\f = f->dup;;
+        stack.m_future->clear();
+        stack.m_past->add(UndoCommand{
+                m_apply = func() {
+                    let restore = after_copy->dup()->>\f = f->dup;;
+                    frames->swap(restore);
+                },
+                m_undo = func() {
+                    let restore = before->dup()->>\f = f->dup;;
+                    frames->swap(restore);
+                },
+                m_desc = desc,
+            });
+    }
+
+    // ======================================================================
+    // Section 4 — 编辑器状态
+    // ======================================================================
+    public using EditorState = struct{
+        protected m_context: AnimationContext,
+        protected m_universe: option<universe>,
+
+        // 播放
+        protected m_playing: mut bool,
+        protected m_loop_preview: mut bool,
+        protected m_preview_speed: mut real,
+        protected m_play_time: mut real,
+        protected m_last_tick: mut real,
+
+        // 时间轴
+        protected m_px_per_sec: mut real,
+        protected m_selected_frames: vec<int>,
+
+        // 预览（源贴图路径为本地路径，载入时经 ResourcePath 转运行时路径）
+        protected m_source_texture: mut option<texture>,
+        protected m_source_path: mut option<fsys::path_t>,
+        protected m_preview_zoom: mut real,
+        protected m_show_checker: mut bool,
+
+        // 洋葱皮
+        protected m_onion_enabled: mut bool,
+        protected m_onion_prev: mut int,
+        protected m_onion_next: mut int,
+
+        // 撤销
+        protected m_undo: UndoStack,
+        protected m_dirty: mut bool,
+        // 值编辑合并：进入一次连续编辑时取快照，边界处 flush
+        protected m_pending_before: mut option<vec<Animation2dFrameData>>,
+
+        // 切片
+        protected m_ss_cols: mut int,
+        protected m_ss_rows: mut int,
+        protected m_ss_ftime: mut real,
+
+        // 两帧间线性插值弹窗：菜单触发时暂存的关键帧索引与编辑期勾选/参数状态
+        protected m_interp_pair: mut option<(int, int)>,
+        protected m_interp_checked: map<string, bool>,
+        protected m_interp_count: mut int,
+        protected m_interp_ftime: mut real,
+        protected m_interp_was_open: mut bool,
+
+        // “添加组件数据”弹窗的编辑期选择状态
+        protected m_addc_sel_type: mut option<int>,
+        protected m_addc_sel_member: mut option<int>,
+        protected m_addc_offset_mode: mut bool,
+        protected m_addc_editing_value: mut DataValue,
+        protected m_addc_last_type: mut option<typeinfo>,
+
+        // “添加着色器变量”弹窗的编辑期输入状态
+        protected m_addu_name: mut string,
+        protected m_addu_sel_type: mut option<int>,
+        protected m_addu_types: array<(string, mut DataValue)>,
+    }
+    {
+        public func create(context: AnimationContext, universe: option<universe>) => EditorState
+        {
+            return EditorState{
+                m_context = context,
+                m_universe = universe,
+
+                m_playing = mut false,
+                m_loop_preview = mut true,
+                m_preview_speed = mut 1.,
+                m_play_time = mut 0.,
+                m_last_tick = mut 0.,
+
+                m_px_per_sec = mut 200.,
+                m_selected_frames = []mut,
+
+                m_source_texture = mut option::none,
+                m_source_path = mut option::none,
+                m_preview_zoom = mut 1.,
+                m_show_checker = mut true,
+
+                m_onion_enabled = mut false,
+                m_onion_prev = mut 1,
+                m_onion_next = mut 1,
+
+                m_undo = UndoStack::create(),
+                m_dirty = mut false,
+                m_pending_before = mut option::none,
+
+                m_ss_cols = mut 4,
+                m_ss_rows = mut 4,
+                m_ss_ftime = mut 0.1,
+
+                m_interp_pair = mut option::none,
+                m_interp_checked = {}mut,
+                m_interp_count = mut 3,
+                m_interp_ftime = mut 0.1,
+                m_interp_was_open = mut false,
+
+                m_addc_sel_type = mut option::none,
+                m_addc_sel_member = mut option::none,
+                m_addc_offset_mode = mut false,
+                m_addc_editing_value = mut DataValue::INT(0),
+                m_addc_last_type = mut option::none,
+
+                m_addu_name = mut "",
+                m_addu_sel_type = mut option::none,
+                m_addu_types = [
+                    ("int", mut DataValue::INT(0)),
+                    ("float", mut DataValue::FLOAT(0.)),
+                    ("vec2", mut DataValue::VEC2((0., 0.))),
+                    ("vec3", mut DataValue::VEC3((0., 0., 0.))),
+                    ("vec4", mut DataValue::VEC4((0., 0., 0., 0.))),
+                ],
+            };
+        }
+
+        // 开始一次值编辑（若尚未开始则抓快照）
+        public func begin_value_edit(self: EditorState, frames: vec<Animation2dFrameData>) => void
+        {
+            if (self.m_pending_before->is_none)
+            {
+                let snap = frames->dup()->>\f = f->dup;;
+                self.m_pending_before = option::value(snap);
+            }
+        }
+        // 在边界处（切帧/按钮操作/保存）提交挂起的值编辑
+        public func flush_value_edit(self: EditorState, frames: vec<Animation2dFrameData>) => void
+        {
+            match (self.m_pending_before)
+            {
+                value(before)?
+                {
+                    do commit_snapshot(self.m_undo, frames, before, "编辑值");
+                    self.m_pending_before = option::none;
+                    self.m_dirty = true;
+                }
+                none?;
+            }
+        }
+
+        public func cur_frames(self: EditorState) => option<vec<Animation2dFrameData>>
+        {
+            return self.m_context->current_frames;
+        }
+        public func mark_dirty(self: EditorState) => void { self.m_dirty = true; }
+
+        // 用快照方式记录一次离散操作。调用方先 snap = dup，再改 frames，再 record(snap, desc)。
+        public func record(self: EditorState, frames: vec<Animation2dFrameData>, snap: vec<Animation2dFrameData>, desc: string) => void
+        {
+            do self->flush_value_edit(frames);
+            do commit_snapshot(self.m_undo, frames, snap, desc);
+            self.m_dirty = true;
+        }
+        public func undo(self: EditorState, frames: vec<Animation2dFrameData>) => void
+        {
+            do self->flush_value_edit(frames);
+            match (self.m_undo.m_past->pop())
+            {
+                value(cmd)?
+                {
+                    do cmd.m_undo();
+                    self.m_undo.m_future->add(cmd);
+                    self.m_dirty = true;
+                }
+                none?;
+            }
+        }
+        public func redo(self: EditorState, frames: vec<Animation2dFrameData>) => void
+        {
+            do self->flush_value_edit(frames);
+            match (self.m_undo.m_future->pop())
+            {
+                value(cmd)?
+                {
+                    do cmd.m_apply();
+                    self.m_undo.m_past->add(cmd);
+                    self.m_dirty = true;
+                }
+                none?;
+            }
+        }
+
+        // 播放：推进时间，返回当前帧索引（-1 表示无帧）
+        public func advance_playback(self: EditorState, frames: vec<Animation2dFrameData>) => int
+        {
+            let n = frames->len;
+            if (n == 0)
+            {
+                self.m_last_tick = GetTime();
+                return -1;
+            }
+            let now = GetTime();
+            let dt = self.m_last_tick <= 0. ? 0. | (now - self.m_last_tick);
+            self.m_last_tick = now;
+
+            if (self.m_playing)
+            {
+                self.m_play_time += dt * self.m_preview_speed;
+                let total = AnimationContext::total_duration(frames);
+                if (self.m_loop_preview && total > 0.)
+                {
+                    if (self.m_play_time >= total)
+                        self.m_play_time = self.m_play_time % total;
+                    if (self.m_play_time < 0.)
+                        self.m_play_time = 0.;
+                }
+                else
+                {
+                    if (self.m_play_time >= total)
+                    {
+                        self.m_play_time = total;
+                        self.m_playing = false;
+                    }
+                }
+            }
+            return frame_at_time(frames, self.m_play_time);
+        }
+    }
+
+    // 由累计时间定位帧索引
+    public func frame_at_time(frames: vec<Animation2dFrameData>, t: real) => int
+    {
+        let n = frames->len;
+        if (n == 0)
+            return -1;
+        let mut acc = 0.;
+        for (let mut i = 0; i < n; i += 1)
+        {
+            let f = frames[i];
+            acc += f.m_time > 0. ? f.m_time | 0.0001;
+            if (t < acc)
+                return i;
+        }
+        return n - 1;
+    }
+    // 由时间轴上的局部 x（像素）定位帧索引
+    public func frame_at_x(frames: vec<Animation2dFrameData>, px_per_sec: real, local_x: real) => int
+    {
+        let n = frames->len;
+        if (n == 0)
+            return -1;
+        if (local_x < 0.)
+            return 0;
+        let mut x = 0.;
+        for (let mut i = 0; i < n; i += 1)
+        {
+            let w = frames[i].m_time * px_per_sec;
+            if (w <= 8.)
+            {
+                // 极窄帧用最小宽度参与命中
+                if (local_x < x + 8.)
+                    return i;
+                x += 8.;
+            }
+            else
+            {
+                if (local_x < x + w)
+                    return i;
+                x += w;
+            }
+        }
+        return n - 1;
+    }
+}

@@ -1,0 +1,50 @@
+import pkg::std;
+
+import je;
+import je::ecs;
+import je::typeinfo;
+
+import pkg::interface;
+
+import builtin::editor::Editor::WorldEditorViewport;
+
+import IAction;
+import AddWorldSystem;
+
+using je;
+
+namespace JEEditor::Editor::Action
+{
+    // 从世界移除立即启用的系统。与 DestroyEntity 相同的范式：作为
+    // AddWorldSystem 的反操作实现，redo/undo 交换。创建时系统仍在运行，
+    // 先记录当前世界状态（含该系统运行期间对实体组件的修改）；
+    // redo 移除系统，undo 重新添加系统并按 AddWorldSystem 的 redo 逻辑
+    // 刷新快照后再启用，后续再次 redo（移除）时即还原到该状态。
+    using RemoveWorldSystem = AddWorldSystem
+    {
+        public func create(systype: typeinfo, w: world)=> RemoveWorldSystem
+            where require!(RemoveWorldSystem: IAction);
+        {
+            let action = AddWorldSystem::create(systype)
+                as raw RemoveWorldSystem as RemoveWorldSystem;
+
+            // 移除操作创建时系统仍在运行：记录当前世界状态，
+            // redo 移除系统后世界即停留在该状态
+            do action.m_world_content->refresh_from(w);
+
+            return action;
+        }
+        public func redo(self: RemoveWorldSystem, w: WorldEditorViewport)=> bool
+        {
+            return self as raw AddWorldSystem as AddWorldSystem->undo(w);
+        }
+        public func undo(self: RemoveWorldSystem, w: WorldEditorViewport)=> bool
+        {
+            return self as raw AddWorldSystem as AddWorldSystem->redo(w);
+        }
+        public func describe(self: RemoveWorldSystem)=> string
+        {
+            return F"移除系统 {self.m_system_type_name}";
+        }
+    }
+}

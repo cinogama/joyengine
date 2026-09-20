@@ -1,0 +1,232 @@
+// 世界编辑器视口 —— 所有世界的冻结/恢复。
+// 用于需要在“没有任何世界实例存活”的前提下执行的场合（例如重载原生
+// 模块）：先进入冻结（锁定）状态使所有视口创建操作失败，把每个视口
+// 的世界序列化为内存 Toml 快照后关闭各自的 je::world，让出一帧，再
+// 执行 job，然后再让出一帧，用快照在各视口上重建世界并解除冻结。
+//
+// 快照带 eid（save 的 save_eid 传 true）：恢复后实体沿用原调试 EUID，
+// 视口选中态与引用 euid 的编辑历史（撤销/重做）依然有效。
+// 调试摄像机带 Editor::Invisible，不被存档，恢复后经 ensureDebugCamera
+// 重建；其位姿与视口编辑模式经 dumpEditorStateToml 跨冻结保留。
+//
+// 快照的采集（dumpWorldSavedContext）与世界的重建
+//（rebuildWorldFromSavedContext）同时服务于调试运行（DebugRun）：
+// 两者各持一个独立的 WorldSavedContext 槽位，互不覆盖——调试运行期间
+// 模块/ToWoo 依然会经本文件的冻结机制更新世界。
+
+import pkg::std;
+
+import je;
+import je::ecs;
+import je::gui;
+import je::input;
+import je::typeinfo;
+
+import pkg::toml;
+import pkg::try;
+
+import builtin::editor::Editor::Saving::World;
+import builtin::editor::Editor::DebugRun;
+import builtin::editor::Singleton::Universe;
+
+import Definition;
+import WindowLifecycle;
+import CameraControl;
+import WorldOpen;
+import WorldSaving;
+import EditorState;
+
+using std;
+using je;
+using je::gui;
+using toml;
+
+namespace JEEditor::Editor::WorldEditorViewport
+{
+    // 采集当前视口的世界上下文：编辑器状态（摄像机位姿 / Gizmo 模式 /
+    // 2D 模式，须在关闭世界前从活的调试摄像机上采集）与世界快照
+    //（save_eid = true，保住实体 EUID 以延续选中态与编辑历史）。
+    // 冻结（freezeWorld）与调试运行（DebugRun）共用此入口各自留档。
+    public func dumpWorldSavedContext(self: WorldEditorViewport)=> WorldSavedContext
+    {
+        return WorldSavedContext{
+            m_editor_state = self->dumpEditorStateToml(),
+
+            m_world_data = JEEditor::Saving::World::save(
+                self.m_world_instance,
+                self.m_name,
+                self->getRuntimeSystems(),
+                true),
+        };
+    }
+
+    // 关闭世界实例并清理依赖世界存活的瞬态状态：丢弃 framebuffer（属
+    // graphic host、可跨世界存活，但其中绑定的调试摄像机已随世界销毁，
+    // 恢复后由 updateWalkCameraFramebuffer 按当前尺寸自动重建）、复位
+    // 拖拽/悬停/命中矩形，结束进行中的环视并解锁鼠标。
+    // freezeWorld 与调试运行终止（DebugRun）共用。
+    public func closeWorldAndResetTransientState(self: WorldEditorViewport)=> void
+    {
+        // 关闭世界实例；实际销毁在下一个逻辑更新生效，故其后必须让出帧
+        //（见 freezeAllWorldsToDo / DebugRun::stopDebugRun）
+        self.m_world_instance->close;
+
+        self.m_editor_walk_camera_frame_buffer = option::none;
+
+        self.m_gizmo_hover_handle = GIZMO_HANDLE_NONE;
+        self.m_gizmo_drag_handle = GIZMO_HANDLE_NONE;
+        self.m_gizmo_dragging = false;
+
+        self.m_collider_hover_handle = GIZMO_HANDLE_NONE;
+        self.m_collider_dragging = false;
+        self.m_collider_drag_handle = GIZMO_HANDLE_NONE;
+
+        self.m_icon_gizmo_rects->clear();
+        self.m_icon_gizmo_hover = option::none;
+
+        self.m_rmb_press_in_viewport = false;
+
+        // 结束进行中的环视并解锁鼠标
+        if (self.m_is_look_active)
+        {
+            self.m_is_look_active = false;
+            input::set_lock_mouse(false);
+        }
+    }
+
+    // 用已保存的世界上下文在当前 universe 上重建世界：重新挂上调试摄像
+    // 机与实体（沿用 euid），在视口上重建选择器并重新注册，编辑器状态
+    // 留待下一帧调试摄像机可解析后经 m_pending_editor_state 应用。
+    // add_runtime_systems 为真时（调试运行期间被冻结更新的世界）把
+    // “调试执行”系统重新加入世界继续运行。
+    public func rebuildWorldFromSavedContext(
+        self: WorldEditorViewport, ctx: WorldSavedContext,
+        add_runtime_systems: bool)=> void
+    {
+        // 编辑器侧 restore：只恢复“立即启用”的系统；“调试执行/导出时
+        // 才启用”的系统以类型名随快照保存（dumpWorldSavedContext 采集时
+        // 句柄尚有效），期间模块可能重载使旧句柄悬空，因此先清空句柄
+        // 列表再按类型名重新解析装回（停止调试运行的重建路径中列表
+        // 仍是满的，调用方无需先行清空）；类型未装载（模块卸载或装载
+        // 失败）时跳过并记日志
+        self.m_runtime_systems->clear();
+        let (w, runtime_system_names) = Saving::World::restore(
+            Singleton::Universe::getUniverse(), ctx.m_world_data);
+
+        for (let tname : runtime_system_names)
+        {
+            match (typeinfo::load(tname))
+            {
+                none?
+                    logerr(F"Failed to load system type `{tname}`, skipped.");
+                value(systype)?
+                    self.m_runtime_systems->add(systype);
+            }
+        }
+
+        ensureDebugCamera(w);
+
+        if (add_runtime_systems)
+        {
+            // 冻结重建得到的是全新世界实例：调试运行期间的世界应带着
+            // “调试执行”系统继续运行，需在此重新挂回（快照恢复的
+            // “立即启用”系统里可能已含同名系统，重复添加时 add_system
+            // 返回 false，忽略即可）
+            for (let systype : self.m_runtime_systems)
+                do w->add_system(systype);
+        }
+
+        w->set_enable(true);
+
+        // 以新世界为键重新注册（旧键指向已关闭的旧世界）
+        do s_world_viewports->remove(self.m_world_instance);
+        self.m_world_instance = w;
+        s_world_viewports->set(w, self);
+
+        // 选择器须重建在新世界上（旧选择器指向已销毁的旧世界）
+        self->rebuildWorldSelectors(w);
+
+        // framebuffer 已随世界关闭丢弃：把尺寸稳定计数器预置到阈值，
+        // 使 updateWalkCameraFramebuffer 下一帧立即重建并重绑到新摄像机，
+        // 而不是再等 FRAMEBUFFER_RESIZE_SETTLE_FRAMES 帧（窗口尺寸未变的
+        // 常见情形；若期间窗口被改过尺寸，仍按正常稳定流程处理）
+        self.m_fb_settle_counter = FRAMEBUFFER_RESIZE_SETTLE_FRAMES;
+
+        // 编辑器状态交给 run 首帧应用（需调试摄像机解析完成）
+        self.m_pending_editor_state = option::value(ctx.m_editor_state);
+    }
+
+    // 冻结单个视口：保存世界上下文，关闭世界实例，并清掉依赖世界存活
+    // 的瞬态交互状态。幂等。
+    func freezeWorld(self: WorldEditorViewport)=> void
+    {
+        if (self.m_frozen_world_context->is_value)
+            return;
+
+        // 停止调试运行的过渡期间世界已关闭、正等待从运行快照重建：
+        // 无需（也不能）再从它采集快照，也不清 m_runtime_systems，
+        // 重建由 DebugRun::stopDebugRun 的协程负责
+        if (self.m_playing_world_context->is_value && !DebugRun::isDebugRunning())
+            return;
+
+        self.m_frozen_world_context = option::value(self->dumpWorldSavedContext());
+
+        // 冻结期间模块可能重载，m_runtime_systems 持有的旧 typeinfo 句柄
+        // 会随之悬空：类型名已随上面的快照保存（此刻句柄尚未失效，save
+        // 内取 name 安全），在此清空句柄列表，恢复时按名重解析
+        //（见 rebuildWorldFromSavedContext）
+        self.m_runtime_systems->clear();
+
+        self->closeWorldAndResetTransientState();
+    }
+
+    // 恢复单个视口：用冻结快照在当前 universe 上重建世界。幂等。
+    func restoreWorld(self: WorldEditorViewport)=> void
+    {
+        if (self.m_frozen_world_context->is_none)
+            return;
+
+        let ctx = self.m_frozen_world_context->unwrap;
+
+        // 调试运行期间被冻结更新的世界：重建后重挂运行时系统继续运行
+        self->rebuildWorldFromSavedContext(ctx, DebugRun::isDebugRunning());
+
+        self.m_frozen_world_context = option::none;
+    }
+
+    // 进入冻结状态并冻结所有已打开的世界视口
+    // 注意：一般而言，应当在 freezeAllWorlds 之后，通过 yield() 等待一帧再执行其他操作
+    public func freezeAllWorlds()=> void
+    {
+        s_worlds_frozen += 1;
+        if (s_worlds_frozen > 1)
+            return;
+
+        s_frozen_last_focused = s_last_focusd_world_view;
+        s_last_focusd_world_view = option::none;
+
+        for (let vp : getAllViewports())
+            vp->freezeWorld();
+    }
+
+    // 引用计数 -1；仅最后一次调用（计数 1→0）逐个恢复所有世界视口并解除
+    // 冻结（还原冻结前的聚焦视口），嵌套恢复到此才真正生效
+    public func restoreAllWorlds()=> void
+    {
+        if (s_worlds_frozen == 0)
+        {
+            logerr("restoreAllWorlds: 冻结计数已为 0，忽略多余的恢复请求");
+            return;
+        }
+
+        s_worlds_frozen -= 1;
+        if (s_worlds_frozen > 0)
+            return;
+
+        for (let vp : getAllViewports())
+            vp->restoreWorld();
+
+        s_last_focusd_world_view = s_frozen_last_focused;
+        s_frozen_last_focused = option::none;
+    }
+}

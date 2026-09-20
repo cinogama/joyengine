@@ -15,17 +15,17 @@ WOSHADER_UNIFORM!
     public let JE_LIGHT2D_DECAY = vec1!(1.);
     
 WOSHADER_UNIFORM!
-    public let JE_LIGHT2D_Albedo = 
-    texture2d::uniform(JE_LIGHT2D_DEFER_0 + 0, __linear_clamp);
+    public let JE_LIGHT2D_Albedo =
+        texture2d::uniform(JE_LIGHT2D_DEFER_0 + 0, __linear_clamp);
 WOSHADER_UNIFORM!
-    public let JE_LIGHT2D_SelfLuminescence = 
-    texture2d::uniform(JE_LIGHT2D_DEFER_0 + 1, __linear_clamp);
+    public let JE_LIGHT2D_SelfLuminescence =
+        texture2d::uniform(JE_LIGHT2D_DEFER_0 + 1, __linear_clamp);
 WOSHADER_UNIFORM!
-    public let JE_LIGHT2D_VSpacePosition = 
-    texture2d::uniform(JE_LIGHT2D_DEFER_0 + 2, __linear_clamp);
+    public let JE_LIGHT2D_VSpacePosition =
+        texture2d::uniform(JE_LIGHT2D_DEFER_0 + 2, __linear_clamp);
 WOSHADER_UNIFORM!
-    public let JE_LIGHT2D_VSpaceNormalize = 
-    texture2d::uniform(JE_LIGHT2D_DEFER_0 + 3, __linear_clamp);
+    public let JE_LIGHT2D_VSpaceNormalize =
+        texture2d::uniform(JE_LIGHT2D_DEFER_0 + 3, __linear_clamp);
 WOSHADER_UNIFORM!
-    public let JE_LIGHT2D_Shadow = 
-    texture2d::uniform(JE_LIGHT2D_DEFER_0 + 4, __linear_clamp);
+    public let JE_LIGHT2D_Shadow =
+        texture2d::uniform(JE_LIGHT2D_DEFER_0 + 4, __linear_clamp);

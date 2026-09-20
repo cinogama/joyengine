@@ -20,9 +20,9 @@ namespace jeecs_impl
     {
         JECS_DISABLE_MOVE_AND_COPY(global_factory_holder);
 
-        using sequence_type_records = std::vector<jeecs::typing::type_info *>;
-        using named_type_records = std::unordered_map<std::string, jeecs::typing::typeid_t>;
-        using hash_type_records = std::unordered_map<jeecs::typing::typehash_t, jeecs::typing::typeid_t>;
+        using sequence_type_records = std::vector<je_TypeInfo*>;
+        using named_type_records = std::unordered_map<std::string, je_TypeId>;
+        using hash_type_records = std::unordered_map<je_TypeHash, je_TypeId>;
 
         mutable std::shared_mutex _m_factory_mx;
 
@@ -30,12 +30,7 @@ namespace jeecs_impl
         named_type_records _m_named_type_records;
         hash_type_records _m_hash_type_records;
 
-        size_t m_type_unregistered_count;
-
-        global_factory_holder()
-            : m_type_unregistered_count(0)
-        {
-        }
+        global_factory_holder() = default;
 
     public:
         ~global_factory_holder()
@@ -45,44 +40,45 @@ namespace jeecs_impl
 #endif
         }
 
-        static global_factory_holder *holder() noexcept
+        static global_factory_holder* holder() noexcept
         {
             static global_factory_holder holder;
             return &holder;
         }
 
-        jeecs::typing::type_info *declear_type(
-            const char *_typename,
-            jeecs::typing::typehash_t _hash,
+        je_TypeInfo* declear_type(
+            const char* _typename,
+            je_TypeHash _hash,
             size_t _size,
             size_t _align,
             je_typing_class _typecls,
-            jeecs::typing::construct_func_t _constructor,
-            jeecs::typing::destruct_func_t _destructor,
-            jeecs::typing::copy_construct_func_t _copy_constructor,
-            jeecs::typing::move_construct_func_t _move_constructor) noexcept
+            je_ConstructFunc _constructor,
+            je_DestructFunc _destructor,
+            je_CopyConstructFunc _copy_constructor,
+            je_MoveConstructFunc _move_constructor) noexcept
         {
-            jeecs::typing::type_info *tinfo = new jeecs::typing::type_info();
-            tinfo->m_typename = jeecs::basic::make_new_string(_typename);
-            tinfo->m_size = _size;
-            tinfo->m_align = _align;
-            tinfo->m_chunk_size = jeecs::basic::allign_size(_size, _align);
-            tinfo->m_hash = _hash;
+            assert(_align != 0 && (_align & (_align - 1)) == 0);
+            assert(_size != 0 && _size % _align == 0);
 
-            tinfo->m_type_class = _typecls;
+            je_TypeInfo* const tinfo = new je_TypeInfo{
+                jeecs::typing::INVALID_TYPE_ID,
+                jeecs::basic::make_new_string(_typename),
+                _size,
+                _align,
+                _hash,
 
-            tinfo->m_constructor = _constructor;
-            tinfo->m_destructor = _destructor;
-            tinfo->m_copier = _copy_constructor;
-            tinfo->m_mover = _move_constructor;
+                _constructor,
+                _destructor,
+                _copy_constructor,
+                _move_constructor,
 
-            tinfo->m_member_types = nullptr;
-            tinfo->m_script_parsers = nullptr;
-            tinfo->m_system_updaters = nullptr;
+                _typecls,
 
-            tinfo->m_next = nullptr;
-
-            assert(tinfo->m_size != 0 && tinfo->m_chunk_size != 0);
+                nullptr,
+                nullptr,
+                nullptr,
+                nullptr,
+            };
 
             std::lock_guard g1(_m_factory_mx);
 
@@ -92,9 +88,9 @@ namespace jeecs_impl
                 tinfo->m_id = fnd->second;
 
                 // Replace the last type info, and link the new type info.
-                auto *last_type_info = _m_type_records.at(tinfo->m_id - 1);
+                auto* last_type_info = _m_type_records.at(tinfo->m_id - 1);
                 while (last_type_info->m_next != nullptr)
-                    last_type_info = const_cast<jeecs::typing::type_info *>(last_type_info->m_next);
+                    last_type_info = const_cast<je_TypeInfo*>(last_type_info->m_next);
 
                 last_type_info->m_next = tinfo;
             }
@@ -105,7 +101,7 @@ namespace jeecs_impl
                 if (holder_fnd != _m_type_records.end())
                 {
                     *holder_fnd = tinfo;
-                    tinfo->m_id = 1 + (jeecs::typing::typeid_t)(holder_fnd - _m_type_records.begin());
+                    tinfo->m_id = 1 + (je_TypeId)(holder_fnd - _m_type_records.begin());
                 }
                 else
                 {
@@ -119,26 +115,29 @@ namespace jeecs_impl
 
                 if (_m_hash_type_records.insert(std::make_pair(tinfo->m_hash, tinfo->m_id)).second == false)
                     jeecs::debug::logerr("Type '%s' hash conflict with '%s', please check!",
-                                         tinfo->m_typename, _m_type_records[_m_hash_type_records[tinfo->m_hash] - 1]->m_typename);
+                        tinfo->m_typename, _m_type_records[_m_hash_type_records[tinfo->m_hash] - 1]->m_typename);
             }
 
             return tinfo;
         }
 
         void reset_type(
-            const jeecs::typing::type_info *_type,
+            const je_TypeInfo* _type,
             size_t _size,
             size_t _align,
-            jeecs::typing::construct_func_t _constructor,
-            jeecs::typing::destruct_func_t _destructor,
-            jeecs::typing::copy_construct_func_t _copy_constructor,
-            jeecs::typing::move_construct_func_t _move_constructor) noexcept
+            je_ConstructFunc _constructor,
+            je_DestructFunc _destructor,
+            je_CopyConstructFunc _copy_constructor,
+            je_MoveConstructFunc _move_constructor) noexcept
         {
-            jeecs::typing::type_info *tinfo = const_cast<jeecs::typing::type_info *>(_type);
+            assert(_align != 0 && (_align & (_align - 1)) == 0);
+            assert(_size != 0 && _size % _align == 0);
+
+            je_TypeInfo* const tinfo = 
+                const_cast<je_TypeInfo*>(_type);
 
             tinfo->m_size = _size;
             tinfo->m_align = _align;
-            tinfo->m_chunk_size = jeecs::basic::allign_size(_size, _align);
 
             tinfo->m_constructor = _constructor;
             tinfo->m_destructor = _destructor;
@@ -160,16 +159,16 @@ namespace jeecs_impl
         }
 
         void declear_member(
-            jeecs::typing::type_info *_classtype,
-            const jeecs::typing::type_info *_membertype,
-            const char *_member_name,
-            const char *_woovalue_type_may_null,
+            je_TypeInfo* _classtype,
+            const je_TypeInfo* _membertype,
+            const char* _member_name,
+            const char* _woovalue_type_may_null,
             woort_value _boxed_woovalue_init_may_ignored,
             ptrdiff_t _member_offset) noexcept
         {
             if (_classtype->m_member_types == nullptr)
             {
-                auto members = new jeecs::typing::typeinfo_member();
+                auto members = new je_TypeinfoMember();
                 members->m_member_count = 0;
                 members->m_members = nullptr;
 
@@ -180,10 +179,10 @@ namespace jeecs_impl
                 assert(_classtype->m_member_types->m_member_count != 0);
                 assert(_classtype->m_member_types->m_members != nullptr);
             }
-            auto *class_member_info = const_cast<jeecs::typing::typeinfo_member *>(_classtype->m_member_types);
+            auto* class_member_info = const_cast<je_TypeinfoMember*>(_classtype->m_member_types);
 
-            jeecs::typing::typeinfo_member::member_info *meminfo =
-                new jeecs::typing::typeinfo_member::member_info();
+            je_MemberInfo* meminfo =
+                new je_MemberInfo();
 
             meminfo->m_class_type = _classtype;
             meminfo->m_member_type = _membertype;
@@ -201,7 +200,7 @@ namespace jeecs_impl
                     meminfo->m_woovalue_init_may_null, 0, _boxed_woovalue_init_may_ignored);
             }
 
-            auto **m_new_member_ptr = &class_member_info->m_members;
+            auto** m_new_member_ptr = &class_member_info->m_members;
             while (*m_new_member_ptr)
                 m_new_member_ptr = &((*m_new_member_ptr)->m_next_member);
 
@@ -211,11 +210,11 @@ namespace jeecs_impl
         }
 
         void declear_script_parser(
-            jeecs::typing::type_info *_typeinfo,
-            jeecs::typing::parse_c2w_func_t _c2w,
-            jeecs::typing::parse_w2c_func_t _w2c,
-            const char *_woolang_typename,
-            const char *_woolang_typedecl) noexcept
+            je_TypeInfo* _typeinfo,
+            je_ParseC2WFunc _c2w,
+            je_ParseW2CFunc _w2c,
+            const char* _woolang_typename,
+            const char* _woolang_typedecl) noexcept
         {
             if (_typeinfo->m_script_parsers != nullptr)
             {
@@ -225,7 +224,7 @@ namespace jeecs_impl
             }
             else
             {
-                jeecs::typing::typeinfo_script_parser *parser = new jeecs::typing::typeinfo_script_parser();
+                je_TypeinfoScriptParser* parser = new je_TypeinfoScriptParser();
                 parser->m_script_parse_c2w = _c2w;
                 parser->m_script_parse_w2c = _w2c;
                 parser->m_woolang_typename = jeecs::basic::make_new_string(_woolang_typename);
@@ -236,17 +235,17 @@ namespace jeecs_impl
         }
 
         void declear_system_updater(
-            jeecs::typing::type_info *_typeinfo,
-            jeecs::typing::on_enable_or_disable_func_t _on_enable,
-            jeecs::typing::on_enable_or_disable_func_t _on_disable,
-            jeecs::typing::update_func_t _pre_update,
-            jeecs::typing::update_func_t _state_update,
-            jeecs::typing::update_func_t _update,
-            jeecs::typing::update_func_t _physics_update,
-            jeecs::typing::update_func_t _transform_update,
-            jeecs::typing::update_func_t _late_update,
-            jeecs::typing::update_func_t _commit_update,
-            jeecs::typing::update_func_t _graphic_update)
+            je_TypeInfo* _typeinfo,
+            je_OnEnableOrDisableFunc _on_enable,
+            je_OnEnableOrDisableFunc _on_disable,
+            je_UpdateFunc _pre_update,
+            je_UpdateFunc _state_update,
+            je_UpdateFunc _update,
+            je_UpdateFunc _physics_update,
+            je_UpdateFunc _transform_update,
+            je_UpdateFunc _late_update,
+            je_UpdateFunc _commit_update,
+            je_UpdateFunc _graphic_update)
         {
             if (_typeinfo->m_system_updaters != nullptr)
             {
@@ -265,7 +264,7 @@ namespace jeecs_impl
                 assert(_commit_update != nullptr);
                 assert(_graphic_update != nullptr);
 
-                jeecs::typing::typeinfo_system_updater *updater = new jeecs::typing::typeinfo_system_updater();
+                je_TypeinfoSystemUpdater* updater = new je_TypeinfoSystemUpdater();
                 updater->m_on_enable = _on_enable;
                 updater->m_on_disable = _on_disable;
                 updater->m_pre_update = _pre_update;
@@ -281,18 +280,18 @@ namespace jeecs_impl
             }
         }
 
-        static void _free_member_infors(const jeecs::typing::typeinfo_member *member) noexcept
+        static void _free_member_infors(const je_TypeinfoMember* member) noexcept
         {
-            auto *meminfo = member->m_members;
+            auto* meminfo = member->m_members;
             while (meminfo != nullptr)
             {
-                auto *current_member = meminfo;
+                auto* current_member = meminfo;
                 meminfo = meminfo->m_next_member;
 
-                je_mem_free((void *)current_member->m_member_name);
+                je_mem_free((void*)current_member->m_member_name);
 
                 if (current_member->m_woovalue_type_may_null != nullptr)
-                    je_mem_free((void *)current_member->m_woovalue_type_may_null);
+                    je_mem_free((void*)current_member->m_woovalue_type_may_null);
 
                 const bool entry_tmp_gc_guard = woort_GC_sync_marking_lock();
                 {
@@ -306,26 +305,23 @@ namespace jeecs_impl
             }
             delete member;
         }
-        static void _free_system_updater(const jeecs::typing::typeinfo_system_updater *updater) noexcept
+        static void _free_system_updater(const je_TypeinfoSystemUpdater* updater) noexcept
         {
             delete updater;
         }
-        static void _free_script_parser(const jeecs::typing::typeinfo_script_parser *parser) noexcept
+        static void _free_script_parser(const je_TypeinfoScriptParser* parser) noexcept
         {
-            je_mem_free((void *)parser->m_woolang_typename);
-            je_mem_free((void *)parser->m_woolang_typedecl);
+            je_mem_free((void*)parser->m_woolang_typename);
+            je_mem_free((void*)parser->m_woolang_typedecl);
             delete parser;
         }
 
-        void undeclear_type(jeecs::typing::type_info *tinfo)
+        void undeclear_type(je_TypeInfo* tinfo)
         {
             std::lock_guard g1(_m_factory_mx);
 
-            // Update the age count.
-            ++m_type_unregistered_count;
-
             assert(tinfo->m_id != jeecs::typing::INVALID_TYPE_ID && tinfo->m_id <= _m_type_records.size());
-            auto *type_list = _m_type_records.at(tinfo->m_id - 1);
+            auto* type_list = _m_type_records.at(tinfo->m_id - 1);
 
             bool need_update_type = type_list == tinfo;
             bool need_clear_hashed_and_named_type = type_list == tinfo && tinfo->m_next == nullptr;
@@ -333,12 +329,12 @@ namespace jeecs_impl
             if (need_update_type)
             {
                 _m_type_records.at(tinfo->m_id - 1) =
-                    const_cast<jeecs::typing::type_info *>(tinfo->m_next);
+                    const_cast<je_TypeInfo*>(tinfo->m_next);
             }
             else
             {
                 while (type_list->m_next != tinfo)
-                    type_list = const_cast<jeecs::typing::type_info *>(type_list->m_next);
+                    type_list = const_cast<je_TypeInfo*>(type_list->m_next);
 
                 assert(type_list != nullptr);
                 type_list->m_next = tinfo->m_next;
@@ -359,12 +355,12 @@ namespace jeecs_impl
             if (tinfo->m_script_parsers != nullptr)
                 _free_script_parser(tinfo->m_script_parsers);
 
-            je_mem_free((void *)tinfo->m_typename);
+            je_mem_free((void*)tinfo->m_typename);
 
             delete tinfo;
         }
 
-        jeecs::typing::type_info *get_info_by_id(jeecs::typing::typeid_t id) noexcept
+        je_TypeInfo* get_info_by_id(je_TypeId id) noexcept
         {
             if (id && id != jeecs::typing::INVALID_TYPE_ID)
             {
@@ -374,7 +370,7 @@ namespace jeecs_impl
             }
             return nullptr;
         }
-        jeecs::typing::type_info *get_info_by_hash(jeecs::typing::typehash_t hash) noexcept
+        je_TypeInfo* get_info_by_hash(je_TypeHash hash) noexcept
         {
             std::shared_lock sg1(_m_factory_mx);
             auto fnd = _m_hash_type_records.find(hash);
@@ -382,7 +378,7 @@ namespace jeecs_impl
                 return _m_type_records[fnd->second - 1];
             return nullptr;
         }
-        jeecs::typing::type_info *get_info_by_name(const char *name) noexcept
+        je_TypeInfo* get_info_by_name(const char* name) noexcept
         {
             if (name)
             {
@@ -392,7 +388,7 @@ namespace jeecs_impl
                     return _m_type_records[fnd->second - 1];
 
                 // Not found? find it from woolang name?
-                for (auto *typeinfo : _m_type_records)
+                for (auto* typeinfo : _m_type_records)
                 {
                     if (typeinfo == nullptr)
                         continue;
@@ -404,36 +400,31 @@ namespace jeecs_impl
             }
             return nullptr;
         }
-        std::vector<jeecs::typing::type_info *> get_all_registed_types() noexcept
+        std::vector<je_TypeInfo*> get_all_registed_types() noexcept
         {
             std::shared_lock sg1(_m_factory_mx);
-            std::vector<jeecs::typing::type_info *> types;
+            std::vector<je_TypeInfo*> types;
 
-            for (auto *t : _m_type_records)
+            for (auto* t : _m_type_records)
             {
                 if (t != nullptr)
                     types.push_back(t);
             }
             return types;
         }
-        size_t get_unregistered_count() const noexcept
-        {
-            std::shared_lock sg1(_m_factory_mx);
-            return m_type_unregistered_count;
-        }
     };
 }
 
-const jeecs::typing::type_info *je_typing_register(
-    const char *_name,
-    jeecs::typing::typehash_t _hash,
+const je_TypeInfo* je_typing_register(
+    const char* _name,
+    je_TypeHash _hash,
     size_t _size,
     size_t _align,
     je_typing_class _typecls,
-    jeecs::typing::construct_func_t _constructor,
-    jeecs::typing::destruct_func_t _destructor,
-    jeecs::typing::copy_construct_func_t _copy_constructor,
-    jeecs::typing::move_construct_func_t _move_constructor)
+    je_ConstructFunc _constructor,
+    je_DestructFunc _destructor,
+    je_CopyConstructFunc _copy_constructor,
+    je_MoveConstructFunc _move_constructor)
 {
     return jeecs_impl::global_factory_holder::holder()->declear_type(
         _name,
@@ -448,13 +439,13 @@ const jeecs::typing::type_info *je_typing_register(
 }
 
 void je_typing_reset(
-    const jeecs::typing::type_info *_tinfo,
+    const je_TypeInfo* _tinfo,
     size_t _size,
     size_t _align,
-    jeecs::typing::construct_func_t _constructor,
-    jeecs::typing::destruct_func_t _destructor,
-    jeecs::typing::copy_construct_func_t _copy_constructor,
-    jeecs::typing::move_construct_func_t _move_constructor)
+    je_ConstructFunc _constructor,
+    je_DestructFunc _destructor,
+    je_CopyConstructFunc _copy_constructor,
+    je_MoveConstructFunc _move_constructor)
 {
     return jeecs_impl::global_factory_holder::holder()->reset_type(
         _tinfo,
@@ -466,43 +457,43 @@ void je_typing_reset(
         _move_constructor);
 }
 
-const jeecs::typing::type_info *je_typing_get_info_by_id(
-    jeecs::typing::typeid_t _id)
+const je_TypeInfo* je_typing_get_info_by_id(
+    je_TypeId _id)
 {
     return jeecs_impl::global_factory_holder::holder()
         ->get_info_by_id(_id);
 }
 
-const jeecs::typing::type_info *je_typing_get_info_by_hash(
-    jeecs::typing::typehash_t _hash)
+const je_TypeInfo* je_typing_get_info_by_hash(
+    je_TypeHash _hash)
 {
     return jeecs_impl::global_factory_holder::holder()
         ->get_info_by_hash(_hash);
 }
 
-const jeecs::typing::type_info *je_typing_get_info_by_name(
-    const char *type_name)
+const je_TypeInfo* je_typing_get_info_by_name(
+    const char* type_name)
 {
     return jeecs_impl::global_factory_holder::holder()->get_info_by_name(type_name);
 }
 
-void je_typing_unregister(const jeecs::typing::type_info *tinfo)
+void je_typing_unregister(const je_TypeInfo* tinfo)
 {
     jeecs_impl::global_factory_holder::holder()->undeclear_type(
-        const_cast<jeecs::typing::type_info *>(tinfo));
+        const_cast<je_TypeInfo*>(tinfo));
 }
 
 void je_register_member(
-    const jeecs::typing::type_info *_classtype,
-    const jeecs::typing::type_info *_membertype,
-    const char *_member_name,
-    const char *_woovalue_type_may_null,
+    const je_TypeInfo* _classtype,
+    const je_TypeInfo* _membertype,
+    const char* _member_name,
+    const char* _woovalue_type_may_null,
     woort_value _boxed_woovalue_init_may_ignored,
     ptrdiff_t _member_offset)
 {
     jeecs_impl::global_factory_holder::holder()
         ->declear_member(
-            const_cast<jeecs::typing::type_info *>(_classtype),
+            const_cast<je_TypeInfo*>(_classtype),
             _membertype,
             _member_name,
             _woovalue_type_may_null,
@@ -511,15 +502,15 @@ void je_register_member(
 }
 
 void je_register_script_parser(
-    const jeecs::typing::type_info *_type,
-    jeecs::typing::parse_c2w_func_t c2w,
-    jeecs::typing::parse_w2c_func_t w2c,
-    const char *woolang_typename,
-    const char *woolang_typedecl)
+    const je_TypeInfo* _type,
+    je_ParseC2WFunc c2w,
+    je_ParseW2CFunc w2c,
+    const char* woolang_typename,
+    const char* woolang_typedecl)
 {
     jeecs_impl::global_factory_holder::holder()
         ->declear_script_parser(
-            const_cast<jeecs::typing::type_info *>(_type),
+            const_cast<je_TypeInfo*>(_type),
             c2w,
             w2c,
             woolang_typename,
@@ -527,21 +518,21 @@ void je_register_script_parser(
 }
 
 void je_register_system_updater(
-    const jeecs::typing::type_info *_type,
-    jeecs::typing::on_enable_or_disable_func_t _on_enable,
-    jeecs::typing::on_enable_or_disable_func_t _on_disable,
-    jeecs::typing::update_func_t _pre_update,
-    jeecs::typing::update_func_t _state_update,
-    jeecs::typing::update_func_t _update,
-    jeecs::typing::update_func_t _physics_update,
-    jeecs::typing::update_func_t _transform_update,
-    jeecs::typing::update_func_t _late_update,
-    jeecs::typing::update_func_t _commit_update,
-    jeecs::typing::update_func_t _graphic_update)
+    const je_TypeInfo* _type,
+    je_OnEnableOrDisableFunc _on_enable,
+    je_OnEnableOrDisableFunc _on_disable,
+    je_UpdateFunc _pre_update,
+    je_UpdateFunc _state_update,
+    je_UpdateFunc _update,
+    je_UpdateFunc _physics_update,
+    je_UpdateFunc _transform_update,
+    je_UpdateFunc _late_update,
+    je_UpdateFunc _commit_update,
+    je_UpdateFunc _graphic_update)
 {
     jeecs_impl::global_factory_holder::holder()
         ->declear_system_updater(
-            const_cast<jeecs::typing::type_info *>(_type),
+            const_cast<je_TypeInfo*>(_type),
             _on_enable,
             _on_disable,
             _pre_update,
@@ -557,20 +548,15 @@ void je_register_system_updater(
 ///////////////////////////////////////////////////////////////////////////
 
 // NOTE: need free the return result by 'je_mem_free'
-const jeecs::typing::type_info **jedbg_get_all_registed_types(void)
+const je_TypeInfo** jedbg_get_all_registed_types(void)
 {
-    auto &&types = jeecs_impl::global_factory_holder::holder()->get_all_registed_types();
-    auto result = (const jeecs::typing::type_info **)je_mem_alloc(sizeof(const jeecs::typing::type_info *) * (types.size() + 1));
+    auto&& types = jeecs_impl::global_factory_holder::holder()->get_all_registed_types();
+    auto result = (const je_TypeInfo**)je_mem_alloc(sizeof(const je_TypeInfo*) * (types.size() + 1));
     result[types.size()] = nullptr;
 
-    memcpy(result, types.data(), types.size() * sizeof(const jeecs::typing::type_info *));
+    memcpy(result, types.data(), types.size() * sizeof(const je_TypeInfo*));
 
     return result;
-}
-
-size_t jedbg_get_unregister_type_count(void)
-{
-    return jeecs_impl::global_factory_holder::holder()->get_unregistered_count();
 }
 
 #define JE_DECL_ATOMIC_OPERATOR_API(TYPE)                                                                 \

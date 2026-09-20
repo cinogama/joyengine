@@ -1,9 +1,9 @@
-# je_ecs_world_set_able
+# je_ecs_world_set_enable
 
 ## 函数签名
 
 ```c
-JE_API void je_ecs_world_set_able(void* world, bool enable);
+JE_API void je_ecs_world_set_enable(void* world, bool enable);
 ```
 
 ## 描述
@@ -34,15 +34,15 @@ void* world = je_ecs_world_create(universe);
 // 添加系统和创建实体...
 
 // 激活世界，开始更新循环
-je_ecs_world_set_able(world, true);
+je_ecs_world_set_enable(world, true);
 
 // ... 运行一段时间后 ...
 
 // 暂停世界
-je_ecs_world_set_able(world, false);
+je_ecs_world_set_enable(world, false);
 
 // 恢复世界
-je_ecs_world_set_able(world, true);
+je_ecs_world_set_enable(world, true);
 ```
 
 ## 注意事项

@@ -1,0 +1,994 @@
+import pkg::std;
+
+import je;
+import je::ecs;
+import je::graphic;
+import je::gui;
+import je::internal;
+import je::typeinfo;
+import je::towoo;
+import je::towoo::components;
+
+import pkg::fsys;
+import pkg::interface;
+import pkg::iterator;
+import pkg::worst;
+
+import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Drag;
+import builtin::editor::GUI::Forms::MsgBox;
+import builtin::editor::GUI::Widgets;
+
+import ResourcePath;
+import Browser;
+import WorldEditorViewport;
+import EditSession;
+import Action::AddComponent;
+import Action::ModifyEntityShaders;
+import Action::ModifyEntityShape;
+import Action::ModifyEntityTexture;
+
+using std;
+using iterator;
+using je;
+using je::gui;
+using je::graphic;
+using je::towoo;
+using fsys;
+using JEEditor::GUI;
+using JEEditor::GUI::Windows;
+using JEEditor::GUI::Drag;
+using JEEditor::GUI::Forms;
+using JEEditor::GUI::Widgets;
+using JEEditor::Editor::EditSession;
+using JEEditor::Editor::ResourcePath;
+using JEEditor::Editor::Action;
+
+namespace JEEditor::Editor
+{
+    // 材质面板：编辑选中实体的 Renderer::Shape（模型顶点资源）、
+    // Renderer::Shaders（着色器列表与 uniform 变量）和
+    // Renderer::Textures（tiling/offset 与纹理通道）。
+    // 模型、着色器列表与纹理通道不是反射成员（Renderer::Shape 与
+    // Renderer::Shaders 未注册任何成员，Renderer::Textures 也只反射了
+    // tiling/offset），无法走检视面板的通用成员编辑与撤销管线，
+    // 这里通过 entity 的模型/着色器/纹理 API 就地修改。
+    using Material = struct{
+        m_close: mut bool,
+    }
+    {
+        // EditSession 中的面板标识，用于编辑手势的焦点归属判定
+        let PANEL_OWNER = "Material";
+        
+        let mut s_material_singleton = option::none: option<Material>;
+        
+        public func isMaterialExist()
+        {
+            return s_material_singleton->is_value;
+        }
+        public func showMaterial()
+        {
+            do show(create());
+        }
+        public func closeMaterial()
+        {
+            match (s_material_singleton)
+            {
+                none?;
+                value(material_instance)?
+                    material_instance->close();
+            }
+        }
+        
+        func create()=> Material
+            where require!(Material: IWindows);
+        {
+            return Material{
+                m_close = mut false,
+            };
+        }
+        func close(self: Material)
+        {
+            self.m_close = true;
+        }
+        public func onCreate(self: Material)=> void
+        {
+            s_material_singleton = option::value(self);
+        }
+        public func onClose(_: Material)=> void
+        {
+            // 面板被关闭时，结束任何遗留的编辑手势
+            EditSession::commit();
+            s_material_singleton = option::none;
+        }
+        public func getTitle(_: Material)=> string
+        {
+            return "材质";
+        }
+        public func getSizeConstraints(_: Material)=> SizeConstraints
+        {
+            return SizeConstraints::Limited(((320., 200.), (600., 4096.)));
+        }
+        
+        func findSelectedEntity(
+            wctx: WorldEditorViewport,
+            selected_entity_id: entity::internal::euid_t)=> option<entity>
+        {
+            for (let e : wctx->getEntitySelector)
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(eeuid)?
+                        if (eeuid == selected_entity_id)
+                            return option::value(e);
+                }
+            }
+            return option::none;
+        }
+        
+        // 实体缺少组件时显示添加按钮；返回组件当前是否存在。
+        // 点击添加后本帧仍返回 false，内容自下一帧起渲染。
+        func ensureComponentEditor(
+            wctx: WorldEditorViewport, e: entity, ctype: typeinfo)=> bool
+        {
+            if (e->get_component(ctype)->is_value)
+                return true;
+
+            let cname = ctype->name;
+            let (_, short_name) = splitTypeName(cname);
+
+            if (Button(F"添加 {short_name} 组件"))
+            {
+                // 先结束可能进行中的编辑手势，再发布添加组件的操作
+                EditSession::commit();
+                match (AddComponent::try_create(e, ctype))
+                {
+                    none?
+                        // 没有 EUID 的实体退化为直接添加（无法支持撤销）
+                        do e->add_component(ctype);
+                    value(action)?
+                        wctx->doAction(action);
+                }
+            }
+            if (IsItemHovered())
+                do SetTooltip(cname);
+            return false;
+        }
+        
+        // 将着色器列表变更发布为可撤销操作；无 EUID 的实体退化为直接修改
+        func applyShadersChange(
+            wctx: WorldEditorViewport, e: entity, new_shaders: array<shader>)=> void
+        {
+            match (e->internal::get_entity_uid)
+            {
+                none?
+                    e->set_shaders(new_shaders);
+                value(eid)?
+                    wctx->doAction(
+                        ModifyEntityShaders::create(eid, e->get_shaders(), new_shaders));
+            }
+        }
+        
+        // 将纹理通道变更发布为可撤销操作；无 EUID 的实体退化为直接修改
+        func applyTextureChange(
+            wctx: WorldEditorViewport, e: entity,
+            pass: int, new_texture: option<texture>)=> void
+        {
+            match (e->internal::get_entity_uid)
+            {
+                none?
+                    do e->bind_texture(pass, new_texture);
+                value(eid)?
+                    wctx->doAction(
+                        ModifyEntityTexture::create(
+                            eid, pass, e->get_textures()->get(pass), new_texture));
+            }
+        }
+        
+        // 将模型变更发布为可撤销操作；无 EUID 的实体退化为直接修改
+        func applyShapeChange(
+            wctx: WorldEditorViewport, e: entity,
+            new_shape: option<vertex>)=> void
+        {
+            match (e->internal::get_entity_uid)
+            {
+                none?
+                    do e->set_shape(new_shape);
+                value(eid)?
+                    wctx->doAction(
+                        ModifyEntityShape::create(eid, e->get_shape(), new_shape));
+            }
+        }
+        
+        // JE_ 前缀的 uniform 是引擎内部渲染使用的变量，由引擎在渲染时写入，
+        // 不在材质编辑器中展示与编辑（与引擎热重载时跳过它们的行为一致）。
+        func isInternalUniformName(uname: string)=> bool
+        {
+            return uname->begin_with("JE_");
+        }
+        
+        // 追踪 uniform 编辑手势；无 EUID 的实体跳过追踪（无法支持撤销）。
+        // uvar 为本帧编辑前的值，手势首帧的它将被留档为撤销点。
+        func trackUniformEdit(
+            wctx: WorldEditorViewport,
+            eid: option<entity::internal::euid_t>,
+            shader_index: int,
+            uname: string,
+            tag: string,
+            old_value: shader::uniform_variable,
+            new_value: shader::uniform_variable)=> void
+        {
+            match (eid)
+            {
+                none?;
+                value(eidv)?
+                    EditSession::trackUniform(
+                        tag, PANEL_OWNER, wctx, eidv, shader_index, uname,
+                        old_value, new_value);
+            }
+        }
+        
+        // 渲染一个 uniform 变量的编辑控件；值变化时立即写回着色器，
+        // 并追踪为可撤销的编辑手势。
+        // uniform 名字即其在着色器内的名字，不可编辑。
+        func showUniformEdit(
+            wctx: WorldEditorViewport,
+            eid: option<entity::internal::euid_t>,
+            sinst: shader,
+            uname: string,
+            uvar: shader::uniform_variable,
+            shader_index: int,
+            tag: string)=> void
+        {
+            // 标量整数（InputInt）的步进按钮绘制在输入框之外，
+            // 为其预留右侧空间
+            let mut step_reserve = 0.;
+            match (uvar)
+            {
+                integer(_)? step_reserve = 56.;
+                _?;
+            }
+            do beginMemberRow(uname,
+                option::none: option<Color32RGBA>, step_reserve);
+
+            match (uvar)
+            {
+                integer(v)?
+                {
+                    match (InputInt(tag, v))
+                    {
+                        none?;
+                        value(nv)?
+                        {
+                            trackUniformEdit(wctx, eid, shader_index, uname, tag, uvar, shader::uniform_variable::integer(nv));
+                            sinst->set_uniform(uname, nv);
+                        }
+                    }
+                }
+                integer2((v1, v2))?
+                {
+                    match (InputInt2(tag, v1, v2))
+                    {
+                        none?;
+                        value((n1, n2))?
+                        {
+                            trackUniformEdit(wctx, eid, shader_index, uname, tag, uvar, shader::uniform_variable::integer2((n1, n2)));
+                            sinst->set_uniform(uname, (n1, n2));
+                        }
+                    }
+                }
+                integer3((v1, v2, v3))?
+                {
+                    match (InputInt3(tag, v1, v2, v3))
+                    {
+                        none?;
+                        value((n1, n2, n3))?
+                        {
+                            trackUniformEdit(wctx, eid, shader_index, uname, tag, uvar, shader::uniform_variable::integer3((n1, n2, n3)));
+                            sinst->set_uniform(uname, (n1, n2, n3));
+                        }
+                    }
+                }
+                integer4((v1, v2, v3, v4))?
+                {
+                    match (InputInt4(tag, v1, v2, v3, v4))
+                    {
+                        none?;
+                        value((n1, n2, n3, n4))?
+                        {
+                            trackUniformEdit(wctx, eid, shader_index, uname, tag, uvar, shader::uniform_variable::integer4((n1, n2, n3, n4)));
+                            sinst->set_uniform(uname, (n1, n2, n3, n4));
+                        }
+                    }
+                }
+                float(v)?
+                {
+                    match (InputFloat(tag, v))
+                    {
+                        none?;
+                        value(nv)?
+                        {
+                            trackUniformEdit(wctx, eid, shader_index, uname, tag, uvar, shader::uniform_variable::float(nv));
+                            sinst->set_uniform(uname, nv);
+                        }
+                    }
+                }
+                float2((v1, v2))?
+                {
+                    match (InputFloat2(tag, v1, v2))
+                    {
+                        none?;
+                        value((n1, n2))?
+                        {
+                            trackUniformEdit(wctx, eid, shader_index, uname, tag, uvar, shader::uniform_variable::float2((n1, n2)));
+                            sinst->set_uniform(uname, (n1, n2));
+                        }
+                    }
+                }
+                float3((v1, v2, v3))?
+                {
+                    match (InputFloat3(tag, v1, v2, v3))
+                    {
+                        none?;
+                        value((n1, n2, n3))?
+                        {
+                            trackUniformEdit(wctx, eid, shader_index, uname, tag, uvar, shader::uniform_variable::float3((n1, n2, n3)));
+                            sinst->set_uniform(uname, (n1, n2, n3));
+                        }
+                    }
+                }
+                float4((v1, v2, v3, v4))?
+                {
+                    match (InputFloat4(tag, v1, v2, v3, v4))
+                    {
+                        none?;
+                        value((n1, n2, n3, n4))?
+                        {
+                            trackUniformEdit(wctx, eid, shader_index, uname, tag, uvar, shader::uniform_variable::float4((n1, n2, n3, n4)));
+                            sinst->set_uniform(uname, (n1, n2, n3, n4));
+                        }
+                    }
+                }
+                texture(pass_id)?
+                {
+                    // 采样器类型的 uniform 采样的是指定通道的纹理
+                    //（通道在下方纹理区编辑），引擎未提供修改它的写入口径，
+                    // 这里只展示它采样的通道。
+                    TextDisabled(F"采样纹理通道 {pass_id}");
+                }
+                _?
+                    TextDisabled("（不支持的 uniform 类型）");
+            }
+        }
+        
+        func showShaderUniformsEdit(
+            wctx: WorldEditorViewport,
+            eid: option<entity::internal::euid_t>,
+            sinst: shader, shader_index: int)=> void
+        {
+            let uniforms = sinst->get_uniforms;
+            let names = uniforms->keys
+                // 引擎内部 uniform（JE_ 前缀）不在此展示
+                |> forall(\uname = !isInternalUniformName(uname);)
+                |> sort(\l, r = l < r;);
+                
+            if (names->len == 0)
+            {
+                TextDisabled("（没有可编辑的 uniform 变量）");
+                return;
+            }
+
+            for (let mut i = 0; i < names->len; i += 1)
+            {
+                let uname = names[i];
+                let uvar = uniforms->get(uname)->unwrap;
+                showUniformEdit(
+                    wctx, eid, sinst, uname, uvar, shader_index,
+                    F"##material_uniform_{shader_index}_{uname}");
+                if (i + 1 < names->len)
+                    memberSeparator();
+            }
+        }
+        
+        // 着色器列表项的显示名：取文件名（完整路径通过悬停提示展示）
+        func shaderDisplayName(sinst: shader)=> string
+        {
+            match (sinst->path)
+            {
+                none?
+                    return "（内置着色器）";
+                value(p)?
+                    return filename(normalize(p));
+            }
+        }
+        
+        // 着色器列表项行尾的紧凑操作按钮：上移/下移/移除。在列表项
+        // 标题（TreeNodeEx）与拖放判定之后提交，配合标题上的
+        // AllowItemOverlap 抢占行尾区域的悬停与点击。
+        func showShaderItemOps(
+            wctx: WorldEditorViewport,
+            e: entity, shaders: array<shader>, sinst: shader, idx: int)=> void
+        {
+            let btn_w = 26.;
+            let ops_w = btn_w * 3. + 8. * 2.;
+
+            SameLine();
+            let (cursor_x, cursor_y) = GetCursorPos();
+            let (avail_width, _) = GetContentRegionAvail();
+            SetCursorPos((cursor_x + avail_width - ops_w - 4., cursor_y));
+
+            BeginDisabled(idx == 0);
+            if (ButtonSize(F"↑##material_shader_up_{idx}", (btn_w, 0.)))
+                applyShadersChange(wctx, e, shaders->erase(idx)->inlay(idx - 1, sinst));
+            EndDisabled();
+            if (IsItemHovered())
+                do SetTooltip("上移一位");
+
+            SameLine();
+            BeginDisabled(idx + 1 >= shaders->len);
+            if (ButtonSize(F"↓##material_shader_down_{idx}", (btn_w, 0.)))
+                applyShadersChange(wctx, e, shaders->erase(idx)->inlay(idx + 1, sinst));
+            EndDisabled();
+            if (IsItemHovered())
+                do SetTooltip("下移一位");
+
+            SameLine();
+            if (ButtonSize(F"×##material_shader_del_{idx}", (btn_w, 0.)))
+                applyShadersChange(wctx, e, shaders->erase(idx));
+            if (IsItemHovered())
+                do SetTooltip("移除该着色器");
+        }
+        
+        // 加载着色器并插入到列表 insert_at 位置（越界时收敛到首/尾）
+        func tryInsertShader(
+            wctx: WorldEditorViewport,
+            e: entity, univ: option<universe>, path: path_t, insert_at: int)=> void
+        {
+            if (string::lower(extension(path)) != ".shader")
+            {
+                MsgBox::err("添加着色器失败", F"`{path}` 不是着色器文件（.shader）");
+                return;
+            }
+            
+            match (shader::load(univ, ResourcePath::toRuntimeResourcePath(path)))
+            {
+                none?
+                    MsgBox::err("添加着色器失败", F"无法加载着色器：`{path}`");
+                value(sinst)?
+                {
+                    let shaders = e->get_shaders();
+                    let mut at = insert_at;
+                    if (at < 0)
+                        at = 0;
+                    if (at > shaders->len)
+                        at = shaders->len;
+                    applyShadersChange(wctx, e, shaders->inlay(at, sinst));
+                }
+            }
+        }
+        
+        // 列表末尾的追加行：整行按钮既是醒目的追加入口也是拖放目标，
+        // 拖动 .shader 文件到该行追加到列表末尾
+        func showAppendShaderRow(
+            wctx: WorldEditorViewport,
+            e: entity, univ: option<universe>, append_at: int)=> void
+        {
+            do ButtonSize("＋ 添加着色器##material_shader_append", (-1., 0.));
+            if (IsItemHovered())
+                do SetTooltip("拖动 .shader 文件到此处追加到列表末尾");
+            match (Drag::AcceptDrag:<FilePayload>())
+            {
+                none?;
+                value(payload)?
+                    tryInsertShader(wctx, e, univ, payload->path, append_at);
+            }
+        }
+        
+        func isModelFile(path: path_t)=> bool
+        {
+            // 引擎经 Assimp 解析模型文件（jegl_load_vertex），
+            // 此处列出常见可拖入的模型扩展名
+            static let model_exts = {
+                [".obj"] = true,
+                [".fbx"] = true,
+                [".gltf"] = true,
+                [".glb"] = true,
+                [".dae"] = true,
+                [".3ds"] = true,
+                [".stl"] = true,
+                [".ply"] = true,
+                [".blend"] = true,
+                [".x"] = true,
+                [".ms3d"] = true,
+                [".lwo"] = true,
+                [".md2"] = true,
+                [".md3"] = true,
+                [".md5mesh"] = true,
+                [".bvh"] = true,
+                [".ac"] = true,
+                [".ase"] = true,
+            };
+            return model_exts->contains(string::lower(extension(path)));
+        }
+        
+        func trySetShape(
+            wctx: WorldEditorViewport,
+            e: entity, univ: option<universe>, path: path_t)=> void
+        {
+            if (!isModelFile(path))
+            {
+                MsgBox::err("设置模型失败", F"`{path}` 不是模型文件");
+                return;
+            }
+            
+            match (vertex::load(univ, ResourcePath::toRuntimeResourcePath(path)))
+            {
+                none?
+                    MsgBox::err("设置模型失败", F"无法加载模型：`{path}`");
+                value(shp)?
+                    applyShapeChange(wctx, e, option::value(shp));
+            }
+        }
+        
+        func showShapeEdit(wctx: WorldEditorViewport, e: entity)=> void
+        {
+            // 分区标题栏样式与检视面板的组件块一致
+            pushSectionHeaderStyle();
+            let opened = CollapsingHeaderFlags(
+                "模型", TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen);
+            popSectionHeaderStyle();
+            if (opened)
+            {
+                // set_shape 只在组件存在时生效，缺少组件时先引导添加
+                if (!ensureComponentEditor(wctx, e, Renderer::Shape::type::typeinfo))
+                    return;
+
+                let univ = option::value(wctx->getWorld->get_universe);
+
+                // 模型卡片行：整行是悬停提示与拖放命中区，行尾移除按钮
+                let mut shape_tip = "拖动模型文件到此处设置模型（.obj/.fbx/.gltf 等）";
+                let mut shape_text = "（未设置模型）";
+                let mut shape_dim = true;    // 未设置/内置顶点用弱化色显示
+                let mut shape_set = false;   // 已设置时行尾显示移除按钮
+                match (e->get_shape())
+                {
+                    none?;
+                    value(shp)?
+                        match (shp->path)
+                        {
+                            // vertex::create 创建的顶点没有来源路径
+                            none?
+                            {
+                                shape_text = "（内置顶点）";
+                                shape_set = true;
+                            }
+                            value(p)?
+                            {
+                                shape_text = filename(normalize(p));
+                                shape_dim = false;
+                                shape_set = true;
+                                shape_tip = F"{p}\n拖动模型文件到此处替换模型";
+                            }
+                        }
+                }
+
+                Indent(8.);
+                defer Unindent(8.);
+
+                let card_h = 36.;
+                let (row_start, content_x) =
+                    beginCardRow("##material_shape_card", card_h);
+                if (IsItemHovered())
+                    do SetTooltip(shape_tip);
+
+                // 拖动资源浏览器中的模型文件到该卡片可设置/替换模型
+                match (Drag::AcceptDrag:<FilePayload>())
+                {
+                    none?;
+                    value(payload)?
+                        trySetShape(wctx, e, univ, payload->path);
+                }
+
+                // 内容：状态/文件名文字；已设置时行尾提供移除
+                let (rcx, _) = GetCursorPos();
+                let right_x = rcx + GetContentRegionAvail().0;
+                setCursorX(content_x);
+                setCursorY(row_start.1 + (card_h - GetTextLineHeight()) * 0.5);
+                if (shape_dim)
+                    TextDisabled(shape_text);
+                else
+                    Text(shape_text);
+
+                if (shape_set)
+                {
+                    SetCursorPos((right_x - 30.,
+                        row_start.1 + (card_h - GetFrameHeight()) * 0.5));
+                    if (ButtonSize("×##material_shape", (26., 0.)))
+                        applyShapeChange(wctx, e, option::none);
+                    if (IsItemHovered())
+                        do SetTooltip("移除模型");
+                }
+                endCardRow(row_start, card_h);
+            }
+            Spacing();
+        }
+        
+        func showShadersEdit(wctx: WorldEditorViewport, e: entity)=> void
+        {
+            // 分区标题栏样式与检视面板的组件块一致
+            pushSectionHeaderStyle();
+            let opened = CollapsingHeaderFlags(
+                "着色器", TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen);
+            popSectionHeaderStyle();
+            if (opened)
+            {
+                if (!ensureComponentEditor(wctx, e, Renderer::Shaders::type::typeinfo))
+                    return;
+
+                let shaders = e->get_shaders();
+                let univ = option::value(wctx->getWorld->get_universe);
+                let eid = e->internal::get_entity_uid;
+
+                Indent(8.);
+                defer Unindent(8.);
+
+                if (shaders->len == 0)
+                    TextDisabled("（没有着色器）");
+
+                for (let (idx, sinst) : shaders->iter |> enumerate)
+                {
+                    // 树节点行：箭头示意可展开编辑 uniform，整行同时是拖放目标；
+                    // AllowItemOverlap 让行尾的上移/下移/移除按钮可抢占点击
+                    let shader_opened = TreeNodeEx(
+                        F"{idx}: {shaderDisplayName(sinst)}##material_shader_{idx}",
+                        TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
+                            + TreeNodeAttribute::ImGuiTreeNodeFlags_AllowItemOverlap);
+
+                    // 悬浮提示完整路径与该行的拖放插入说明
+                    match (sinst->path)
+                    {
+                        none?
+                        {
+                            if (IsItemHovered())
+                                do SetTooltip("拖动 .shader 文件到此处插入到该位置");
+                        }
+                        value(p)?
+                        {
+                            if (IsItemHovered())
+                                do SetTooltip(F"{p}\n拖动 .shader 文件到此处插入到该位置");
+                        }
+                    }
+
+                    // 拖动 .shader 文件到该列表项上，新的着色器 pass 插入到该位置
+                    match (Drag::AcceptDrag:<FilePayload>())
+                    {
+                        none?;
+                        value(payload)?
+                            tryInsertShader(wctx, e, univ, payload->path, idx);
+                    }
+
+                    showShaderItemOps(wctx, e, shaders, sinst, idx);
+
+                    if (shader_opened)
+                    {
+                        SeparatorText("Uniform 变量");
+                        showShaderUniformsEdit(wctx, eid, sinst, idx);
+                        TreePop();
+                    }
+                    Spacing();
+                }
+
+                showAppendShaderRow(wctx, e, univ, shaders->len);
+            }
+            Spacing();
+        }
+        
+        func isTextureFile(path: path_t)=> bool
+        {
+            // 与资源浏览器的纹理扩展名列表（Browser::iconForPath）保持一致
+            static let texture_exts = {
+                [".png"] = true,
+                [".jpg"] = true,
+                [".jpeg"] = true,
+                [".bmp"] = true,
+                [".tga"] = true,
+                [".tif"] = true,
+                [".tiff"] = true,
+                [".gif"] = true,
+                [".webp"] = true,
+                [".hdr"] = true,
+                [".exr"] = true,
+                [".dds"] = true,
+                [".ico"] = true,
+                [".pvr"] = true,
+                [".ktx"] = true,
+                [".psd"] = true,
+            };
+            return texture_exts->contains(string::lower(extension(path)));
+        }
+        
+        func tryBindTexture(
+            wctx: WorldEditorViewport,
+            e: entity, univ: option<universe>, pass: int, path: path_t)=> void
+        {
+            if (pass < 0)
+            {
+                MsgBox::err("绑定纹理失败", "纹理通道号不能是负数");
+                return;
+            }
+            if (!isTextureFile(path))
+            {
+                MsgBox::err("绑定纹理失败", F"`{path}` 不是纹理文件");
+                return;
+            }
+            
+            match (texture::load(univ, ResourcePath::toRuntimeResourcePath(path)))
+            {
+                none?
+                    MsgBox::err("绑定纹理失败", F"无法加载纹理：`{path}`");
+                value(tex)?
+                    applyTextureChange(wctx, e, pass, option::value(tex));
+            }
+        }
+        
+        // 遍历着色器列表声明的采样通道：通道号 → 采样它的 uniform 引用列表
+        //（引用形如 "0: Main"，表示着色器 0 的 Main uniform）。
+        // JE_ 前缀的 uniform 由引擎管理，其通道不在此收集。
+        func collectSamplerChannels(shaders: array<shader>)
+            => map<int, array<string>>
+            {
+                let channels = map::create:<int, array<string>>(0);
+                for (let (idx, sinst) : shaders->iter |> enumerate)
+                {
+                    for (let (uname, uvar) : sinst->get_uniforms)
+                    {
+                        if (isInternalUniformName(uname))
+                            continue;
+                            
+                        match (uvar)
+                        {
+                            texture(pass)?
+                            {
+                                let refs = channels->get_or(pass, []: array<string>);
+                                channels->set(pass, refs->append(F"{idx}: {uname}"));
+                            }
+                            _?;
+                        }
+                    }
+                }
+                return channels;
+            }
+            
+        func showTextureChannelsEdit(
+            wctx: WorldEditorViewport, e: entity)=> void
+        {
+            SeparatorText("纹理通道");
+            if (IsItemHovered())
+                do SetTooltip("采样通道由着色器的 uniform 声明");
+
+            let univ = option::value(wctx->getWorld->get_universe);
+            let textures = e->get_textures();
+
+            // 通道清单 = 着色器声明的采样通道 ∪ 已绑定的通道，按通道号排序，
+            // 用户无需手动指定通道号
+            let channels = collectSamplerChannels(e->get_shaders());
+            let mut passes = channels->keys;
+            for (let pass : textures->keys)
+            {
+                if (!channels->contains(pass))
+                    passes = passes->append(pass);
+            }
+            passes = passes |> sort(\l, r = l < r;);
+
+            if (passes->len == 0)
+                TextDisabled("（没有着色器声明需要采样的纹理通道）");
+
+            for (let pass : passes)
+            {
+                let tex_opt = textures->get(pass);
+
+                // 悬浮气泡内容：纹理路径 + 采样引用 + 拖放说明，每项一行
+                let mut tips = []: array<string>;
+                match (tex_opt)
+                {
+                    none?;
+                    value(tex)?
+                    {
+                        match (tex->path)
+                        {
+                            none?;
+                            value(p)?
+                                tips = tips->append(p);
+                        }
+                    }
+                }
+                match (channels->get(pass))
+                {
+                    none?
+                        tips = tips->append("（未被任何着色器采样）");
+                    value(refs)?
+                    {
+                        for (let ref_name : refs |> sort(\l, r = l < r;))
+                            tips = tips->append(F"采样于 {ref_name}");
+                    }
+                }
+                tips = tips->append("拖动纹理文件到此处绑定/替换纹理");
+
+                // 通道卡片行：缩略图 + 通道号 + 文件名直显，整行是悬停
+                // 提示与拖放命中区，行尾解绑按钮
+                let tips_text = tips->reduce(\l, r = l + "\n" + r;)->unwrap;
+                let card_h = 40.;
+                let (row_start, content_x) =
+                    beginCardRow(F"##material_texture_card_{pass}", card_h);
+                if (IsItemHovered())
+                    do SetTooltip(tips_text);
+
+                // 拖动资源浏览器中的纹理文件到该卡片可绑定/替换此通道
+                match (Drag::AcceptDrag:<FilePayload>())
+                {
+                    none?;
+                    value(payload)?
+                        tryBindTexture(wctx, e, univ, pass, payload->path);
+                }
+
+                let (rcx, _) = GetCursorPos();
+                let right_x = rcx + GetContentRegionAvail().0;
+
+                match (tex_opt)
+                {
+                    none?
+                    {
+                        setCursorX(content_x);
+                        setCursorY(row_start.1 + (card_h - GetTextLineHeight()) * 0.5);
+                        TextDisabled(F"通道 {pass}（未绑定纹理）");
+                    }
+                    value(tex)?
+                    {
+                        setCursorX(content_x);
+                        setCursorY(row_start.1 + 4.);
+                        ImageSize(tex, 32., 32.);
+                        SameLine();
+                        setCursorY(row_start.1 + (card_h - GetTextLineHeight()) * 0.5);
+                        Text(F"通道 {pass}");
+                        match (tex->path)
+                        {
+                            // 纹理没有来源路径时不显示文件名
+                            none?;
+                            value(p)?
+                            {
+                                SameLine();
+                                TextDisabled(filename(normalize(p)));
+                            }
+                        }
+
+                        setCursorX(right_x - 30.);
+                        setCursorY(row_start.1 + (card_h - GetFrameHeight()) * 0.5);
+                        if (ButtonSize(F"×##material_texture_{pass}", (26., 0.)))
+                            applyTextureChange(wctx, e, pass, option::none);
+                        if (IsItemHovered())
+                            do SetTooltip("解绑该通道的纹理");
+                    }
+                }
+                endCardRow(row_start, card_h);
+            }
+        }
+        
+        func showTexturesEdit(wctx: WorldEditorViewport, e: entity)=> void
+        {
+            // 分区标题栏样式与检视面板的组件块一致
+            pushSectionHeaderStyle();
+            let opened = CollapsingHeaderFlags(
+                "纹理", TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen);
+            popSectionHeaderStyle();
+            if (opened)
+            {
+                if (!ensureComponentEditor(wctx, e, Renderer::Textures::type::typeinfo))
+                    return;
+
+                // tiling/offset 是反射成员，沿用与检视面板一致的通用值编辑器
+                let eid = e->internal::get_entity_uid;
+
+                let textures_component =
+                    e->get_component(Renderer::Textures::type::typeinfo)->unwrap;
+
+                Indent(8.);
+                defer Unindent(8.);
+
+                let members = textures_component->get_members;
+                for (let mut mi = 0; mi < members->len; mi += 1)
+                {
+                    let (mname, mtype, mhandle) = members[mi];
+                    do beginMemberRow(mname,
+                        option::none: option<Color32RGBA>,
+                        isScalarIntType(mtype) ? 56. | 0.);
+
+                    let member_tag = F"##material_textures_{mname}_{mhandle}";
+
+                    // edit 一旦返回 true，成员值已被就地修改，先留档修改前的序列化值
+                    let old_value = eid=>> \_ = unsafe::dynamic_parser::save(mtype, mhandle);;
+
+                    match (unsafe::dynamic_parser::edit(mtype, mhandle, member_tag))
+                    {
+                        none?
+                        {
+                            // 无编辑器时在控件列内说明原因（折行到面板右缘）
+                            PushTextWrapPos(0.);
+                            TextDisabled(
+                                F"编辑器没有为 `{mtype->script_name->or(mtype->name)}` 类型提供编辑组件");
+                            PopTextWrapPos();
+                        }
+                        value(edited)?
+                        {
+                            if (edited)
+                            {
+                                match (eid)
+                                {
+                                    none?;
+                                    value(eidv)?
+                                        match (old_value)
+                                        {
+                                            none?;
+                                            value(before)?
+                                                EditSession::trackMember(
+                                                    member_tag, PANEL_OWNER, wctx, eidv,
+                                                    Renderer::Textures::type::typeinfo->name, mname,
+                                                    before,
+                                                    unsafe::dynamic_parser::save(mtype, mhandle)
+                                                        ->or(before));
+                                        }
+                                }
+                            }
+                        }
+                    }
+
+                    // 成员之间以淡色横线分界
+                    if (mi + 1 < members->len)
+                        memberSeparator();
+                }
+
+                Spacing();
+                showTextureChannelsEdit(wctx, e);
+            }
+            Spacing();
+        }
+        
+        public func run(self: Material)=> bool
+        {
+            let selection = WorldEditorViewport::getLastFocused()
+                =>> \wctx = wctx->getSelectedEntityId
+                    ->> \selected_entity_id = (wctx, selected_entity_id);
+                    ;
+                ;
+                
+            // 手势结束判定（超时/选中实体变化/本面板失去焦点），见 EditSession
+            EditSession::update(
+                PANEL_OWNER, IsWindowFocused(), selection->> \sel = sel.1;);
+                
+            match (selection)
+            {
+                none?
+                    TextDisabled("（没有待编辑的实体）");
+                value((wctx, selected_entity_id))?
+                {
+                    match (findSelectedEntity(wctx, selected_entity_id))
+                    {
+                        none?
+                            TextDisabled("（没有待编辑的实体）");
+                        value(e)?
+                        {
+                            do beginMemberRow("名称",
+                                option::none: option<Color32RGBA>, 0.);
+                            Text(e->internal::name);
+
+                            showShapeEdit(wctx, e);
+                            showShadersEdit(wctx, e);
+                            showTexturesEdit(wctx, e);
+                        }
+                    }
+                }
+            }
+            return !self.m_close;
+        }
+    }
+}

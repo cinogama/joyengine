@@ -1,5 +1,5 @@
 // Forward2DSelfGlowing.shader
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;

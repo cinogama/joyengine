@@ -1,0 +1,37 @@
+// 世界编辑器视口（包入口）。
+// 原单文件按功能拆分为以下部分（均在命名空间
+// JEEditor::Editor / JEEditor::Editor::WorldEditorViewport 下），
+// 此处统一再导出：既有的
+//   import WorldEditorViewport;
+//   import builtin::editor::Editor::WorldEditorViewport;
+// 无需任何改动。
+//
+//   Definition.wo        类型定义与共享状态（struct/枚举/常量/静态量）
+//   WindowLifecycle.wo   窗口生命周期、注册表与主循环（create/run/...）
+//   CameraControl.wo     调试游走摄像机（framebuffer/2D 模式/操控）
+//   EntityPicking.wo     实体拾取与右键菜单
+//   GizmoMath.wo         gizmo 数学工具（纯函数）
+//   TransformGizmo.wo    变换游标（操作手柄）交互
+//   ColliderGizmo.wo     2D 物理碰撞体编辑手柄交互
+//   LightGizmo.wo        2D 光源形状（Range/BlockShadow）编辑手柄交互
+//   GizmoDrawing.wo      gizmo 绘制
+//   ViewportUI.wo        视口覆盖 UI（工具栏/未保存标记）
+//   WorldSaving.wo       世界保存/重命名/重开与调试系统管理
+//   WorldOpen.wo         世界创建与打开（静态入口）
+//   EditorState.wo       编辑器状态持久化（摄像机位姿/视口编辑模式编解码）
+//   FreezeWorlds.wo      所有世界的冻结/恢复（freezeAllWorldsToDo）
+//   DebugRunContext.wo   调试运行的视口侧支持（运行上下文保存/重建）
+
+export import Definition;
+export import WindowLifecycle;
+export import CameraControl;
+export import EntityPicking;
+export import GizmoMath;
+export import TransformGizmo;
+export import GizmoDrawing;
+export import ViewportUI;
+export import WorldSaving;
+export import WorldOpen;
+export import EditorState;
+export import FreezeWorlds;
+export import DebugRunContext;

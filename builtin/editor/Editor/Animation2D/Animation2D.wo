@@ -1,0 +1,19 @@
+// 2D 帧动画编辑器（包入口）。
+// 自旧版单文件编辑器（builtin/editor/gui/animation2d.wo）移植而来，
+// 数据模型与 .je4animation 二进制格式保持不变，交互层适配新编辑器的
+// IWindows 窗口系统与 MsgBox/InputBox/AskBox/Statebar 表单组件。
+//
+// 既有的
+//   import Animation2D;
+//   import builtin::editor::Editor::Animation2D;
+// 无需任何改动。各部分均在命名空间 JEEditor::Editor::Animation2D 下：
+//
+//   DataModel.wo     数据模型、插值配对与 AnimationContext 序列化
+//   EditorState.wo   撤销/重做栈与编辑期状态
+//   UI.wo            工具栏/动作列表/预览画布/时间轴/属性面板渲染
+//   Window.wo        Animation2DEditor 窗口（IWindows）与静态入口
+
+export import DataModel;
+export import EditorState;
+export import UI;
+export import Window;

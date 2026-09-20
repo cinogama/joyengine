@@ -17,7 +17,7 @@ void jegui_android_handleInputEvent()
 
     auto pos = jeecs::input::mousepos(0);
     io.AddMousePosEvent(pos.x, pos.y);
-    io.AddMouseButtonEvent(0, jeecs::input::mousedown(0, jeecs::input::mousecode::LEFT));
+    io.AddMouseButtonEvent(0, jeecs::input::mousedown(0, JE_MOUSE_LEFT));
 }
 
 void jegui_android_init(void* egl_interface)

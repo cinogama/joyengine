@@ -1,0 +1,450 @@
+// types.wo
+
+import pkg::std;
+
+import je;
+import je::towoo::types;
+
+import pkg::worst;
+
+using std;
+using je;
+
+// =============================================
+// 这个脚本用于向引擎提供各类型的序列化拓展
+// （saving / restoring；各类型的编辑器拓展见同目录 editor.wo）
+// 此脚本如果存在错误，项目将无法被编辑器载入
+// =============================================
+
+namespace bool
+{
+    using parser = void
+    {
+        public extern func saving(val: bool)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> bool
+        {
+            return dat as bool;
+        }
+    }
+}
+namespace uint8
+{
+    using parser = void
+    {
+        public extern func saving(val: uint8)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> uint8
+        {
+            return dat as uint8;
+        }
+    }
+}
+namespace uint16
+{
+    using parser = void
+    {
+        public extern func saving(val: uint16)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> uint16
+        {
+            return dat as uint16;
+        }
+    }
+}
+namespace uint32
+{
+    using parser = void
+    {
+        public extern func saving(val: uint32)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> uint32
+        {
+            return dat as uint32;
+        }
+    }
+}
+namespace uint64
+{
+    using parser = void
+    {
+        public extern func saving(val: uint64)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> uint64
+        {
+            return dat as uint64;
+        }
+    }
+}
+namespace int8
+{
+    using parser = void
+    {
+        public extern func saving(val: int8)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> int8
+        {
+            return dat as int8;
+        }
+    }
+}
+namespace int16
+{
+    using parser = void
+    {
+        public extern func saving(val: int16)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> int16
+        {
+            return dat as int16;
+        }
+    }
+}
+namespace int32
+{
+    using parser = void
+    {
+        public extern func saving(val: int32)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> int32
+        {
+            return dat as int32;
+        }
+    }
+}
+namespace int64
+{
+    using parser = void
+    {
+        public extern func saving(val: int64)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> int64
+        {
+            return dat as int64;
+        }
+    }
+}
+namespace float
+{
+    using parser = void
+    {
+        public extern func saving(val: float)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> float
+        {
+            return dat as float;
+        }
+    }
+}
+namespace real
+{
+    using parser = void
+    {
+        public extern func saving(val: real)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> real
+        {
+            return dat as real;
+        }
+    }
+}
+namespace ivec2
+{
+    using parser = void
+    {
+        public extern func saving(val: ivec2)=> string
+        {
+            return [val.0, val.1]->serialize->or("[0,0]");
+        }
+        public extern func restoring(dat: string)=> ivec2
+        {
+            let data = dat->array::deserialize->or([0 as dynamic, 0 as dynamic])->> \x = x as int;;
+            return (data->get_or(0, 0), data->get_or(1, 0)) as ivec2;
+        }
+    }
+}
+namespace vec2
+{
+    using parser = void
+    {
+        public extern func saving(val: vec2)=> string
+        {
+            return [val.0, val.1]->serialize->or("[0,0]");
+        }
+        public extern func restoring(dat: string)=> vec2
+        {
+            let data = dat->array::deserialize->or([0 as dynamic, 0 as dynamic])->> \x = x as real;;
+            return (data->get_or(0, 0.), data->get_or(1, 0.)) as vec2;
+        }
+    }
+}
+namespace vec3
+{
+    using parser = void
+    {
+        public extern func saving(val: vec3)=> string
+        {
+            return [val.0, val.1, val.2]->serialize->or("[0,0,0]");
+        }
+        public extern func restoring(dat: string)=> vec3
+        {
+            let data = dat->array::deserialize->or([0 as dynamic, 0 as dynamic, 0 as dynamic])->> \x = x as real;;
+            return (data->get_or(0, 0.), data->get_or(1, 0.), data->get_or(2, 0.)) as vec3;
+        }
+    }
+}
+namespace vec4
+{
+    using parser = void
+    {
+        public extern func saving(val: vec4)=> string
+        {
+            return [val.0, val.1, val.2, val.3]->serialize->or("[0,0,0,0]");
+        }
+        public extern func restoring(dat: string)=> vec4
+        {
+            let data = dat->array::deserialize->or([0 as dynamic, 0 as dynamic, 0 as dynamic, 0 as dynamic])->> \x = x as real;;
+            return (data->get_or(0, 0.), data->get_or(1, 0.), data->get_or(2, 0.), data->get_or(3, 0.)) as vec4;
+        }
+    }
+}
+namespace quat
+{
+    using parser = void
+    {
+        public extern func saving(val: quat)=> string
+        {
+            return [val.0, val.1, val.2, val.3]->serialize->or("[0,0,0,0]");
+        }
+        public extern func restoring(dat: string)=> quat
+        {
+            let data = dat->array::deserialize->or([0 as dynamic, 0 as dynamic, 0 as dynamic, 0 as dynamic])->> \x = x as real;;
+            return (data->get_or(0, 0.), data->get_or(1, 0.), data->get_or(2, 0.), data->get_or(3, 0.)) as quat;
+        }
+    }
+}
+// Physics2D::vertex_list：Collider::Mesh 的多边形顶点环。
+// 序列化为扁平数组 [x0,y0,x1,y1,...]，避开嵌套数组的 dynamic 语义。
+namespace Physics2D::vertex_list
+{
+    using parser = void
+    {
+        public extern func saving(val: Physics2D::vertex_list)=> string
+        {
+            let dat = []mut: vec<real>;
+            for (let p : val as array<vec2>)
+            {
+                dat->add(p.0);
+                dat->add(p.1);
+            }
+            return dat->serialize->or("[]");
+        }
+        public extern func restoring(dat: string)=> Physics2D::vertex_list
+        {
+            let data = dat->array::deserialize->or([0. as dynamic, 0. as dynamic])->> \x = x as real;;
+            let result = []mut: vec<vec2>;
+            for (let mut i = 0; i + 1 < data->len; i += 2)
+                result->add((data->get_or(i, 0.), data->get_or(i + 1, 0.)) as vec2);
+            return result->to_array as Physics2D::vertex_list;
+        }
+    }
+}
+// Light2D::BlockShadow::block_mesh：遮挡光的闭合多边形环（实体局部坐标）。
+// 序列化为扁平数组 [x0,y0,x1,y1,...]，与 vertex_list 同构。
+namespace Light2D::BlockShadow::block_mesh
+{
+    using parser = void
+    {
+        public extern func saving(val: Light2D::BlockShadow::block_mesh)=> string
+        {
+            let dat = []mut: vec<real>;
+            for (let p : val as array<vec2>)
+            {
+                dat->add(p.0);
+                dat->add(p.1);
+            }
+            return dat->serialize->or("[]");
+        }
+        public extern func restoring(dat: string)=> Light2D::BlockShadow::block_mesh
+        {
+            let data = dat->array::deserialize->or([0. as dynamic, 0. as dynamic])->> \x = x as real;;
+            let result = []mut: vec<vec2>;
+            for (let mut i = 0; i + 1 < data->len; i += 2)
+                result->add((data->get_or(i, 0.), data->get_or(i + 1, 0.)) as vec2);
+            return result->to_array as Light2D::BlockShadow::block_mesh;
+        }
+    }
+}
+// Light2D::Range::light_shape：范围光的同心环多边形（layer-major：
+// positions 为 [ilayer * m_point_count + ipoint]，strengths 每环一项）。
+// 序列化为扁平数组 [point_count, s0..sN, x0,y0,x1,y1,...]，避开嵌套
+// 数组的 dynamic 语义。
+namespace Light2D::Range::light_shape
+{
+    using parser = void
+    {
+        public extern func saving(val: Light2D::Range::light_shape)=> string
+        {
+            let dat = []mut: vec<real>;
+            dat->add(val.m_point_count as real);
+            for (let s : val.m_strength)
+                dat->add(s);
+            for (let p : val.m_positions)
+            {
+                dat->add(p.0);
+                dat->add(p.1);
+            }
+            return dat->serialize->or("[]");
+        }
+        public extern func restoring(dat: string)=> Light2D::Range::light_shape
+        {
+            let data = dat->array::deserialize->or([0. as dynamic])->> \x = x as real;;
+            let mut pc = data->get_or(0, 0.) as int;
+            if (pc < 0)
+                pc = 0;
+            // 数据布局 [pc, s×L, xy×L*pc]：由总长反推环数 L
+            let layer_count = (data->len > 1) ? (data->len - 1) / (1 + 2 * pc) | 0;
+            let strengths = []mut: vec<float>;
+            for (let mut i = 0; i < layer_count; i += 1)
+                strengths->add(data->get_or(1 + i, 0.) as float);
+            let positions = []mut: vec<vec2>;
+            for (let mut i = 0; i < layer_count * pc; i += 1)
+                positions->add((
+                    data->get_or(1 + layer_count + i * 2, 0.),
+                    data->get_or(1 + layer_count + i * 2 + 1, 0.)) as vec2);
+            return Light2D::Range::light_shape{
+                m_point_count = pc,
+                m_strength = strengths->to_array,
+                m_positions = positions->to_array,
+            };
+        }
+    }
+}
+// Animation::FrameAnimation::animation_list：帧动画引用表（运行时结构见
+// jeecs.hpp 的 Animation::FrameAnimation）。每个条目引用一个 .je4animation
+// 文件（m_path 为 @/ 运行时相对路径），并可指定载入后自动播放的动作与循环。
+// 序列化为字符串三元组的扁平数组 [path, action, loop, ...]，action 用空串
+// 表示 option::none，避开嵌套 struct 数组的 dynamic 语义。
+namespace Animation::FrameAnimation::animation_list
+{
+    using parser = void
+    {
+        public extern func saving(val: Animation::FrameAnimation::animation_list)=> string
+        {
+            let dat = []mut: vec<string>;
+            for (let st : val as array<Animation::FrameAnimation::animation_state>)
+            {
+                dat->add(st.m_path);
+                let mut action = "";
+                match (st.m_action)
+                {
+                    value(a)? action = a;
+                    none?;
+                }
+                dat->add(action);
+                dat->add(st.m_loop ? "1" | "0");
+            }
+            return dat->serialize->or("[]");
+        }
+        public extern func restoring(dat: string)=> Animation::FrameAnimation::animation_list
+        {
+            let data = dat->array::deserialize->or(["" as dynamic, "" as dynamic, "" as dynamic])->> \x = x as string;;
+            let result = []mut: vec<Animation::FrameAnimation::animation_state>;
+            for (let mut i = 0; i + 2 < data->len; i += 3)
+            {
+                let action = data->get_or(i + 1, "");
+                let mut act = option::none: option<string>;
+                if (action != "")
+                    act = option::value(action);
+                result->add(Animation::FrameAnimation::animation_state{
+                    m_path = data->get_or(i, ""),
+                    m_action = act,
+                    m_loop = data->get_or(i + 2, "0") == "1",
+                });
+            }
+            return result->to_array as Animation::FrameAnimation::animation_list;
+        }
+    }
+}
+namespace file_resource
+{
+    using parser = void
+    {
+        public extern func saving(val: file_resource)=> string
+        {
+            return val.path->or("");
+        }
+        public extern func restoring(dat: string)=> file_resource
+        {
+            if (dat == "")
+                return file_resource{ path = option::none };
+            else
+                return file_resource{ path = option::value(dat) };
+        }
+    }
+}
+namespace uuid
+{
+    using parser = void
+    {
+        public extern func saving(val: uuid)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> uuid
+        {
+            return dat as uuid;
+        }
+    }
+}
+namespace string
+{
+    using parser = void
+    {
+        public extern func saving(val: string)=> string
+        {
+            return val as string;
+        }
+        public extern func restoring(dat: string)=> string
+        {
+            return dat as string;
+        }
+    }
+}
+
+namespace UserInterface::Origin::origin_center
+{
+    using parser = void
+    {
+        public extern func saving(val: UserInterface::Origin::origin_center)=> string
+        {
+            return val as int as string;
+        }
+        public extern func restoring(dat: string)=> UserInterface::Origin::origin_center
+        {
+            return dat as int as UserInterface::Origin::origin_center;
+        }
+    }
+}

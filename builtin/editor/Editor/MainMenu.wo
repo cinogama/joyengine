@@ -1,0 +1,128 @@
+import pkg::std;
+
+import builtin::editor::GUI::Menu;
+
+import Browser;
+import EntityList;
+import LogBrowser;
+import SystemList;
+import Material;
+import ReplConsole;
+import WorldEditorViewport;
+import Inspector;
+import DebugRun;
+
+using std;
+
+namespace JEEditor::Editor::MainMenu
+{
+    using GUI;
+
+    // “开始运行”可用条件：未在运行/停止过渡、未冻结、至少有一个世界视口
+    func canStartDebugRun()=> bool
+    {
+        if (DebugRun::isDebugRunActive())
+            return false;
+        if (WorldEditorViewport::isWorldsFrozen())
+            return false;
+        return WorldEditorViewport::getAllViewports()->len > 0;
+    }
+
+    public func registerMainMenu()
+    {
+        let engineMainMenu = Menu::create("")
+            -> subMenu("JoyEngine")
+            ->  endMenu
+            -> subMenu("文件")
+            ->  endMenu
+            -> subMenu("视图")
+            ->  subItem("项目资源管理器",
+                func()
+                {
+                    if (Browser::isBrowserExist())
+                        Browser::closeBrowser();
+                    else
+                        Browser::showBrowser();
+                })
+            ->      checkWhen(Browser::isBrowserExist)
+            ->      endItem
+            ->  subItem("日志浏览器",
+                func()
+                {
+                    if (LogBrowser::isLogBrowserExist())
+                        LogBrowser::closeLogBrowser();
+                    else
+                        LogBrowser::showLogBrowser();
+                })
+            ->      checkWhen(LogBrowser::isLogBrowserExist)
+            ->      endItem
+            ->  subItem("实体列表",
+                func()
+                {
+                    if (EntityList::isEntityListExist())
+                        EntityList::closeEntityList();
+                    else
+                        EntityList::showEntityList();
+                })
+            ->      checkWhen(EntityList::isEntityListExist)
+            ->      endItem
+            ->  subItem("系统列表",
+                func()
+                {
+                    if (SystemList::isSystemListExist())
+                        SystemList::closeSystemList();
+                    else
+                        SystemList::showSystemList();
+                })
+            ->      checkWhen(SystemList::isSystemListExist)
+            ->      endItem
+            ->  subItem("检视面板",
+                func()
+                {
+                    if (Inspector::isInspectorExist())
+                        Inspector::closeInspector();
+                    else
+                        Inspector::showInspector();
+                })
+            ->      checkWhen(EntityList::isEntityListExist)
+            ->      endItem
+            ->  subItem("材质编辑器",
+                func()
+                {
+                    if (Material::isMaterialExist())
+                        Material::closeMaterial();
+                    else
+                        Material::showMaterial();
+                })
+            ->      checkWhen(Material::isMaterialExist)
+            ->      endItem
+            ->  subItem("Woolang REPL",
+                func()
+                {
+                    if (ReplConsole::isReplConsoleExist())
+                        ReplConsole::closeReplConsole();
+                    else
+                        ReplConsole::showReplConsole();
+                })
+            ->      checkWhen(ReplConsole::isReplConsoleExist)
+            ->      endItem
+            ->  endMenu
+            -> subMenu("编辑")
+            ->  subItem("新建世界", WorldEditorViewport::createNewWorldToEdit)
+            ->      endItem
+            ->  endMenu
+            -> subMenu("运行")
+            ->  subItem("开始运行", \= do DebugRun::startDebugRun();)
+            ->      enableWhen(canStartDebugRun)
+            ->      shortCut("Shift+F5")
+            ->      endItem
+            ->  endMenu
+            -> subMenu("工具")
+            ->  endMenu
+            -> subMenu("帮助")
+            ->  endMenu
+            ;
+            
+        Menu::registerMainMenu(engineMainMenu);
+    }
+}

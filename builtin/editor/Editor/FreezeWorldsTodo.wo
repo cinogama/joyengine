@@ -1,0 +1,87 @@
+import pkg::std;
+import pkg::interface;
+import pkg::thread;
+
+import je::gui;
+
+import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Widgets;
+import builtin::editor::Editor::WorldEditorViewport::FreezeWorlds;
+
+using std;
+using je::gui;
+using JEEditor::GUI;
+using JEEditor::GUI::Windows;
+using JEEditor::GUI::Widgets;
+
+namespace JEEditor::Editor
+{
+    using FreezeWorldsTodo = struct{
+        m_msg: string,
+        m_job: ()=> void,
+        // 窗口创建时刻（GetTime），仅 UI 协程访问，用于状态行显示已耗时
+        m_start_time: real,
+        m_waiting_frame: mut int,
+        m_job_finished: mut bool,
+    }
+    {
+        func create(msg: string, job: ()=> void)=> FreezeWorldsTodo
+            where require!(FreezeWorldsTodo: IWindows);
+        {
+            return FreezeWorldsTodo{
+                m_msg = msg,
+                m_job = job,
+                m_start_time = GetTime(),
+                m_waiting_frame = mut 5,
+                m_job_finished = mut false,
+            };
+        }
+        
+        public func getTitle(_: FreezeWorldsTodo)=> string
+        {
+            return "请稍等……$ID";
+        }
+        public func isModal(_: FreezeWorldsTodo)=> bool
+        {
+            return true;
+        }
+        
+        public func onPreClose(_: FreezeWorldsTodo)=> bool
+        {
+            /* 窗口不允许手动关闭 */
+            return false;
+        }
+        public func onCreate(_: FreezeWorldsTodo)=> void
+        {
+            WorldEditorViewport::freezeAllWorlds();
+        }
+        public func onClose(_: FreezeWorldsTodo)=> void
+        {
+            WorldEditorViewport::restoreAllWorlds();
+        }
+        public func run(self: FreezeWorldsTodo)=> bool
+        {
+            // 状态行：旋转加载动画 + 提示文本与已耗时
+            let elapsed = (GetTime() - self.m_start_time) as int;
+            Widgets::drawBusySpinner(F"{self.m_msg}（已耗时 {elapsed} 秒）");
+
+            if (self.m_waiting_frame > 0)
+            {
+                if (0 == (self.m_waiting_frame -:= 1))
+                    do thread::create(
+                        func(){
+                            self.m_job();
+                            self.m_job_finished = true;
+                        });
+            }
+            
+            return !self.m_job_finished;
+        }
+
+        public func show(msg: string, job: ()=> void)
+        {
+            let w = create(msg, job);
+            assert(Windows::show(w)->is_value);
+        }
+    }
+}

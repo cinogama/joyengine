@@ -1,0 +1,22 @@
+import je::physics2d::config;
+
+// 声明一个物理层，一个世界中可以存在若干个不同的层。不同层的实体不会发生碰撞。
+PHYSICS2D_LAYER! 0
+{
+    gravity: (0.0, -9.8);
+    substeps: 4;
+    sleep: true;
+    continuous: false;
+}
+
+// 声明碰撞组：满足指定特征的实体构成一个组，一个实体可以同时属于多个组。
+//          最多允许声明 16 个碰撞组
+PHYSICS2D_GROUP! 默认组
+{
+}
+
+// 声明碰撞关系：声明可以发生碰撞的碰撞对，碰撞对内的两个实体不区分顺序
+PHYSICS2D_COLLISIONS!
+{
+    默认组, 默认组;
+}

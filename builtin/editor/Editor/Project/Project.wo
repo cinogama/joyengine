@@ -1,0 +1,587 @@
+import pkg::std;
+import pkg::toml;
+import pkg::singleton;
+import pkg::interface;
+import pkg::fsys;
+import pkg::platform;
+import pkg::try;
+import pkg::worst;
+
+import je;
+import je::ecs;
+import je::gui;
+import je::internal;
+
+import builtin::editor::Singleton;
+import builtin::editor::Singleton::Universe;
+
+import builtin::editor::GUI::Forms::MsgBox;
+import builtin::editor::GUI::Forms::AskBox;
+import builtin::editor::GUI::Statebar;
+import builtin::editor::GUI::Windows;
+
+import builtin::editor::Editor::MainMenu;
+import builtin::editor::Editor::Browser;
+import builtin::editor::Editor::ModulePrepare;
+import builtin::editor::Editor::EntityList;
+import builtin::editor::Editor::SystemList;
+import builtin::editor::Editor::LogBrowser;
+import builtin::editor::Editor::Inspector;
+import builtin::editor::Editor::Material;
+import builtin::editor::Editor::Shutdown;
+import builtin::editor::Editor::DebugRun;
+import builtin::editor::Editor::WorldEditorViewport;
+import builtin::editor::Editor::ResourcePath;
+import builtin::editor::Editor::FreezeWorldsTodo;
+
+import NativeModule;
+import NativeModuleCollection;
+import ToWooCollection;
+
+using std;
+using je;
+using je::towoo;
+using je::gui;
+using toml;
+using fsys;
+
+using JEEditor;
+using JEEditor::Editor;
+using JEEditor::GUI;
+using JEEditor::GUI::Windows;
+using JEEditor::GUI::Forms;
+using JEEditor::GUI::Statebar;
+using JEEditor::Singleton;
+
+namespace JEEditor::Editor
+{
+    using Project = struct{
+        m_working_path: path_t,
+        m_shutdown_tombs: mut option<Tombs>,
+        
+        m_opened_worlds: map<path_t, void>,
+        m_native_modules: NativeModuleCollection,
+        m_towoo_collection: ToWooCollection,
+        
+        // 项目文件中声明的模块表（name -> 本地路径），打开项目时解析。
+        // save 写回 project.je4project 时以它为准、再合并本次会话装载的模块：
+        // 模块编译/装载失败时不会进入 m_native_modules，若只按已装载列表写回，
+        // 一次编译失败就会在退出时把这些模块从项目文件里丢掉。
+        m_declared_modules: map<string, path_t>,
+    }
+    {
+        /*
+        编辑器正常退出时（参阅 builtin\editor\Editor\Shutdown.wo），会有一个
+        针对 Project 的退出回调。
+        此时，Project 会记录下当前编辑器的状态（例如还有哪些 World 处于打开状态）
+        到正式退出时，Tomb 会按照单例的 temp 保存流程落盘
+        */
+        using Tombs = struct{
+            // 世界文件路径 -> 该世界的编辑器状态（调试摄像机位姿 / 视口
+            // 编辑模式等，由 WorldEditorViewport 编码为不透明 Toml）。
+            // 键的出现本身即表示“下次启动需要打开这个世界”；
+            // 值为空表表示该世界没有需要恢复的编辑器状态。
+            m_worlds: map<path_t, Toml>,
+        }
+        {
+            func save(self: Tombs)=> Toml
+            {
+                let dump = new_table();
+                
+                let worlds = new_table();
+                for (let (path, state) : self.m_worlds)
+                    worlds->set(path->to_string(), state);
+                dump->set("worlds", worlds);
+                
+                return dump;
+            }
+            func restore(data: Toml)=> option<Tombs>
+            {
+                let mut worlds = {}mut: map<path_t, Toml>;
+                match (data->get("worlds"))
+                {
+                    none?;
+                    value(worlds_val)?
+                    {
+                        match (worlds_val->as_table)
+                        {
+                            none?;
+                            value(worlds_tbl)?
+                            {
+                                for (let (pstr, state) : worlds_tbl)
+                                    worlds->set(normalize(pstr), state);
+                            }
+                        }
+                    }
+                }
+                
+                return_value! Tombs{ m_worlds = worlds };
+            }
+        }
+        
+        public let SINGLETON_LABEL = "project";
+        public let PROJECT_FILE_NAME = "project.je4project";
+        
+        func startUpEditorGUI()
+        {
+            gui::register_exit_callback(func(){
+                    let msg = DebugRun::isDebugRunActive()
+                        ? "JoyEngine 将退出调试，并在所有编辑器窗口关闭后退出，继续关闭？"
+                        | "JoyEngine 将在所有编辑器窗口关闭后退出，继续关闭？";
+                        
+                    do AskBox::show("即将退出编辑器", msg)
+                        -> onYes(
+                            func()
+                            {
+                                Shutdown::editorShutdownRequest(
+                                    Singleton::Universe::getUniverse());
+                            });
+                    return false;
+                });
+                
+            // 开启主菜单
+            MainMenu::registerMainMenu();
+            
+            // 默认启动的编辑器窗口
+            Browser::showBrowser();
+            EntityList::showEntityList();
+            SystemList::showSystemList();
+            LogBrowser::showLogBrowser();
+            Inspector::showInspector();
+            Material::showMaterial();
+            
+            let runtime_path = fsys::workpath();
+            
+            internal::set_runtime_path(fsys::workpath()->to_string);
+            
+            // 展示第一条信息
+            Statebar::showState(3.) <| func(){
+                je::gui::TextDisabled(F"JoyEngine 4.X, 当前工作路径: {runtime_path->to_string}");
+            };
+        }
+        /*
+        为 Wooly（Woolang 的 VSCode 插件）准备工作区配置。
+        每次打开项目时合并写入 workpath()/.vscode/settings.json，只增改 wooly.* 键，
+        用户已有的其它配置保持原样：
+        - wooly.scanRoots 指向引擎安装目录。wooly 会递归扫描这些目录，把其中的脚本
+        按相对路径注册为虚拟源以模拟根路径行为；引擎目录下带有全部 je/pkg/builtin
+        源码，因此项目脚本可以解析 import je; / import pkg::std; 等。
+        工作区自身的脚本由 wooly 直接处理，无需列入。
+        - wooly.woolangPath / wooly.woortPath 指向引擎目录中的 libwoo/libwoort 动态库，
+        使 LSP 总是使用与当前引擎一致的 woolang/woort 版本。wooly 按平台拼接固定
+        库名（libwoo.dll 等），引擎 debug 构建产物带 _debug 后缀无法匹配，此时不写
+        入这两个键，wooly 会退回按系统路径自动搜索。
+        已存在的配置文件解析失败（例如含有 JSONC 注释）时放弃写入，避免破坏用户配置。
+        */
+        func setupWoolyVSCodeConfig()
+        {
+            let engine_root = normalize(host_path());
+            
+            do mkdir(workpath() / ".vscode");
+            let settings_path = workpath() / ".vscode" / "settings.json";
+            
+            let mut dat = {}mut: map<dynamic, dynamic>;
+            match (file::readall(settings_path->to_string))
+            {
+                value(existing)?
+                {
+                    if (existing->len > 0)
+                    {
+                        match (map::deserialize(existing))
+                        {
+                            value(parsed)? dat = parsed;
+                            none?
+                            {
+                                logerr(F"无法解析已存在的 VSCode 配置文件 "
+                                    + F"{settings_path->to_string}，为避免破坏其中的内容，"
+                                    + "跳过 Wooly 配置写入。");
+                                return;
+                            }
+                        }
+                    }
+                }
+                none?;
+            }
+            
+            dat->set("wooly.enable" as dynamic, true as dynamic);
+            dat->set("wooly.scanRoots" as dynamic, [
+                    engine_root->to_string,
+                    (workpath() / ".temp" / "vfs")->to_string,
+                ] as dynamic);
+            dat->set("wooly.woolangPath" as dynamic, engine_root->to_string as dynamic);
+            dat->set("wooly.woortPath" as dynamic, engine_root->to_string as dynamic);
+            
+            match (dat->serialize)
+            {
+                value(text)?
+                {
+                    match (ModulePrepare::writeAllText(settings_path, text))
+                    {
+                        ok(_)?
+                            loginfo(F"已为 Wooly 更新 VSCode 配置: {settings_path->to_string}");
+                        err(msg)?
+                            logerr(F"写入 VSCode 配置文件失败: {msg}");
+                    }
+                }
+                none? logerr("序列化 VSCode 配置文件失败。");
+            }
+        }
+        func checkToWooUpdated()
+        {
+            let mut last_check_time = time();
+            for (;;)
+            {
+                let this_time = time();
+                if (this_time - last_check_time < 5.0)
+                {
+                    yield();
+                    continue;
+                }
+                
+                if (apply:<Project>(\p = p->toWooCheckAll();))
+                {
+                    let finished = mutable::create(false);
+                    FreezeWorldsTodo::show("正在更新 ToWoo...", func(){
+                    
+                            let proj = apply:<Project>(\p = p;);
+                            
+                            /* 此处直接绕开锁是完全OK 的，因为编辑器正处于冻结状态 */
+                            proj.m_towoo_collection->updateAllUpdated();
+                            
+                            finished->set <| true;
+                        });
+                        
+                    while (!finished->get)
+                        yield();
+                }
+                last_check_time = this_time;
+            }
+        }
+        /*
+        项目打开后的模块准备与世界恢复（以 GUI 协程运行，见 createAndLoad）：
+        先在 ModulePrepare 窗口的后台线程中依次编译 modules 中的全部模块
+        （buildCppModuleDir 编译完成后会自动装载动态库），全部成功后才按
+        Tombs 恢复上次打开的世界；只要有模块编译/装载失败（或项目文件中存在
+        损坏的模块条目），就不恢复任何世界——世界恢复依赖模块注册的类型，
+        缺少类型时恢复出的世界在下次保存时会丢失对应数据。
+        */
+        func prepareModulesThenRestoreWorlds(
+            modules: map<string, path_t>, modules_all_valid: bool, toml: option<Toml>)
+        {
+            let mut all_modules_ok = modules_all_valid;
+            let finished = mutable::create(false);
+            
+            if (!modules->empty)
+            {
+                let all_ok = mutable::create(true);
+                
+                do Windows::showModal(
+                    ModulePrepare::create(
+                        func(prepare: ModulePrepare){
+                            prepare->postMessage(
+                                "编译并装载项目全部模块（CMake），可能需要一些时间……");
+                                
+                            for (let (name, module_path): modules)
+                            {
+                                prepare->postMessage(F"==== 准备模块 {name} ====");
+                                
+                                do try!
+                                {
+                                    // 编译前整理模块的 .runtime 目录：
+                                    // 保留编号最大（最新）的产物目录，删除其余，
+                                    // 再把保留目录改名为 0，避免编号随多次构建无限累积。
+                                    // 此刻全部模块动态库都未装载，可以安全删除或改名。
+                                    try! _ = NativeModule::tidyRuntimeDirsBeforeLoad(
+                                        module_path);
+                                        
+                                    // 编译并把产物动态库移动到 .runtime 后自动装载
+                                    // （见 buildCppModuleDir 末尾的 reloadModuleWhileWorldsFreezed）。
+                                    try! _ = ModulePrepare::buildCppModuleDir(
+                                        prepare,
+                                        module_path,
+                                        name,
+                                        ModulePrepare::BuildConfig::DEBUG);
+                                        
+                                    return_ok!;
+                                }
+                                catch! e
+                                {
+                                    // 继续编译其余模块，让用户一次看到全部错误
+                                    prepare->postMessage(F"模块 {name} 编译失败：{e}");
+                                    all_ok->set <| false;
+                                };
+                            }
+                            
+                            finished->set <| true;
+                            
+                            if (!all_ok->get)
+                                throw! "部分模块编译失败，详见上方日志";
+                            return_ok!;
+                        }));
+                        
+                while (!finished->get)
+                    yield();
+                    
+                all_modules_ok = all_modules_ok && all_ok->get;
+            }
+            
+            finished->set <| false;
+            FreezeWorldsTodo::show(
+                "更新编辑器类型",
+                func(){
+                    apply:<Project>(
+                        func(proj){
+                            proj->updateEditorTypesDuringFreeze();
+                            finished->set <| true;
+                        });
+                });
+            while (!finished->get)
+                yield();
+                
+            if (!all_modules_ok)
+            {
+                logerr("存在编译或装载失败的模块，本次不恢复上次打开的世界。");
+                MsgBox::msg(
+                    "打开项目",
+                    "存在编译或装载失败的模块，本次不恢复上次打开的世界，\n"
+                        + "请修复模块后重新打开项目。");
+                return;
+            }
+            
+            match (toml=>> \data = Tombs::restore(data);)
+            {
+                none?;
+                value(tombs)?
+                {
+                    for (let (p, state) : tombs.m_worlds)
+                    {
+                        if (isfile(p))
+                        {
+                            let mut editor_state = option::none: option<Toml>;
+                            if (state->len > 0)
+                                editor_state = option::value(state);
+                                
+                            WorldEditorViewport::openWorldEditorViewportFromFile(
+                                p, editor_state);
+                        }
+                    }
+                }
+            }
+        }
+        
+        public func createAndLoad(toml: option<Toml>)=> Project
+            where require!(Project: ISingleton);
+        {
+            startUpEditorGUI();
+            
+            setupWoolyVSCodeConfig();
+            
+            /* 只解析项目文件中的模块表，不在这里直接装载动态库。全部模块的
+            编译与装载、以及随后上次打开世界的恢复，都交给
+            prepareModulesThenRestoreWorlds 协程完成（编译是后台任务，
+            不能阻塞在项目打开的调用栈里）。*/
+            let mut modules = {}mut: map<string, path_t>;
+            // catch! 块会被脱糖为闭包，不能对 let mut 赋值，因此用 mutable 单元
+            let modules_all_valid = mutable::create(true);
+            
+            match (load(workpath() / PROJECT_FILE_NAME))
+            {
+                ok(data)?
+                {
+                    do try!{
+                        try! module_table = data->get("modules")=>>\t = t->as_table;;
+                        for (let (name, module_path): module_table)
+                        {
+                            do try!
+                            {
+                                try! path = module_path->as_string
+                                    ->ok_or(F"项目文件中的模块 {name} 配置损坏。");
+                                    
+                                modules->set(
+                                    name, ResourcePath::toLocalResourcePath(path));
+                                    
+                                return_ok!;
+                            }
+                            catch! e
+                            {
+                                // 损坏的条目无法参与编译装载，视同模块失败处理
+                                modules_all_valid->set <| false;
+                                MsgBox::msg("加载模块失败", e);
+                            };
+                        }
+                        return_value!;
+                    };
+                }
+                err(msg)?
+                    MsgBox::err("加载项目失败", F"项目文件损坏，因此无法打开:\n{msg}");
+            }
+            
+            let proj = Project{
+                m_working_path = workpath(),
+                m_shutdown_tombs = mut option::none,
+                m_opened_worlds = {}mut,
+                m_native_modules = NativeModuleCollection::create(),
+                m_towoo_collection = ToWooCollection::create(),
+                m_declared_modules = modules,
+            };
+            
+            /* ToWoo 更新检查持续运行：调试运行期间模块/ToWoo 依然可以经
+            冻结机制（FreezeWorldsTodo）更新世界，冻结与运行各持独立的
+            世界上下文快照互不覆盖，恢复时重挂运行时系统继续运行
+            （见 WorldEditorViewport::FreezeWorlds / Editor::DebugRun） */
+            launch_coroutine(checkToWooUpdated);
+            
+            launch_coroutine(
+                \= prepareModulesThenRestoreWorlds(
+                        modules, modules_all_valid->get, toml););
+                        
+            return proj;
+        }
+        public func save(self: Project)=> option<Toml>
+        {
+            /* TODO: 在此处将 Project 数据保存为 Toml，然后写入 PROJECT_FILE_NAME */
+            let project_file_path = workpath() / PROJECT_FILE_NAME;
+            
+            let project_toml = new_table();
+            
+            /* Module list：以项目文件声明的模块表为准，再合并本次会话装载
+            的模块（含新建的），保证编译失败的模块不会从项目文件中丢失 */
+            let native_modules = new_table();
+            for (let (name, path) : self.m_declared_modules)
+                native_modules->set(name, ResourcePath::toRuntimeResourcePath(path));
+            for (let (name, path) : self.m_native_modules->getAllLoadedModuleNameAndPath)
+                native_modules->set(name, ResourcePath::toRuntimeResourcePath(path));
+            project_toml->set("modules", native_modules);
+            
+            match (toml::save(project_toml, project_file_path))
+            {
+                ok(_)?;
+                err(msg)?
+                    logerr(F"保存项目文件失败: {msg}");
+            }
+            
+            /* save 被调用时，引擎的几乎全部上下文都已经被关闭（包括 Universe），此时正好清理 native modules */
+            self.m_native_modules->dropAllModuleWhileProjectExist();
+            
+            /*
+            Project 的单例上下文分成两部分，一部分属于手动处理的 project.je4project
+            另外一部分数据归属默认的单例上下文存储，保存到 .temp 目录下。
+            */
+            return option::value(
+                self.m_shutdown_tombs
+                    ->> \tombs = tombs->save;
+                    -> or(new_table())
+                    );
+        }
+        func updateEditorTypesDuringFreeze(self: Project)
+        {
+            let editor_script_path = self.m_working_path / "resource" / "editor";
+            
+            let types_path = editor_script_path / "types.wo";
+            if (isfile(types_path))
+            {
+                match (unsafe::dynamic_parser::update_types(types_path->to_string))
+                {
+                    ok(_)?;
+                    err(msg)?
+                        je::logerr(F"更新类型序列化器失败：\n{msg}");
+                }
+            }
+            let editor_path = editor_script_path / "editor.wo";
+            if (isfile(editor_path))
+            {
+                match (unsafe::dynamic_parser::update_editor(editor_path->to_string))
+                {
+                    ok(_)?;
+                    err(msg)?
+                        je::logerr(F"更新类型编辑器失败：\n{msg}");
+                }
+            }
+        }
+        public func reloadModuleWhileWorldsFreezed(
+            self: Project, name: string, path: path_t, update_dylib_callback: ()=> result<void, string>)
+        {
+            defer unsafe::dynamic_parser::refresh();
+            match (self.m_native_modules->getNativeModuleByName(name))
+            {
+                value(native_modules)? {
+                    native_modules->drop();
+                    
+                    try! _ = update_dylib_callback();
+                    try! _ = native_modules->reload()
+                        -> ok_or("装载模块失败");
+                    return_ok! native_modules;
+                }
+                none? {
+                    try! _ = update_dylib_callback();
+                    return self.m_native_modules->loadModule(name, path)
+                        -> ok_or("装载模块失败");
+                }
+            }
+        }
+        public func toWooCheckAll(self: Project)
+        {
+            return self.m_towoo_collection->checkAll();
+        }
+        /* --------------------------------------------- */
+        public func dumpTombs()
+        {
+            apply:<Project>(
+                func(proj){
+                    // 收集每个已打开世界视口的编辑器状态（调试摄像机位姿/
+                    // 视口编辑模式），以规范化路径为键。
+                    let mut states = {}mut: map<path_t, Toml>;
+                    for (let vp : WorldEditorViewport::getAllViewports())
+                    {
+                        match (vp->getSavingPath)
+                        {
+                            none?;
+                            value(path)?
+                                states->set(
+                                    normalize(path->to_string()),
+                                    vp->dumpEditorStateToml());
+                        }
+                    }
+                    
+                    // 合并“下次需打开的世界”与“各自的编辑器状态”：
+                    // 以编辑器记录的已打开世界为准，逐个取出对应状态，
+                    // 没有状态的世界以空表占位（下次启动仍会打开）。
+                    let mut worlds = {}mut: map<path_t, Toml>;
+                    for (let p : proj.m_opened_worlds->keys)
+                    {
+                        let np = normalize(p->to_string);
+                        worlds->set(np, states->get(np)->or(new_table()));
+                    }
+                    
+                    proj.m_shutdown_tombs = option::value(Tombs{ m_worlds = worlds });
+                });
+        }
+        public func worldOpen(world_path: path_t)
+        {
+            apply:<Project>(
+                func(proj){
+                    assert(proj.m_opened_worlds->insert(world_path, do nil));
+                });
+        }
+        public func worldClose(world_path: path_t)
+        {
+            apply:<Project>(
+                func(proj){
+                    assert(proj.m_opened_worlds->remove(world_path));
+                });
+        }
+        /* 浏览器中新建 ToWoo 组件/系统文件落盘后调用：把文件注册进
+        ToWoo 收集器（编译并装载）。同名冲突（项目内已有同名组件/系统）、
+        编译失败等注册失败原因由收集器侧弹 MsgBox::err 提示。 */
+        public func appendTowooComponent(path: path_t)=> void
+        {
+            do apply:<Project>(
+                \p = p.m_towoo_collection->appendComponent(path););
+        }
+        public func appendTowooSystem(path: path_t)=> void
+        {
+            do apply:<Project>(
+                \p = p.m_towoo_collection->appendSystem(path););
+        }
+    }
+}

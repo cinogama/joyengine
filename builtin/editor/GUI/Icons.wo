@@ -1,0 +1,35 @@
+import pkg::std;
+
+import je::graphic;
+
+using std;
+using je::graphic;
+
+namespace JEEditor::GUI::Icons
+{
+    public let WHITE = texture::create(1, 1);
+    WHITE->pix((0, 0))->set_color((1., 1., 1., 1.));
+
+    public let WARNING = texture::load(option::none, "!/builtin/icon/Warning.png");
+    public let ERROR = texture::load(option::none, "!/builtin/icon/Error.png");
+    public let ASK = texture::load(option::none, "!/builtin/icon/Ask.png");
+    
+    // ---- 文件 / 文件夹类型图标 ----
+    public let FOLDER    = texture::load(option::none, "!/builtin/icon/FilePath.png");
+    public let FILE      = texture::load(option::none, "!/builtin/icon/File.png");
+    public let TEXTURE   = texture::load(option::none, "!/builtin/icon/TextureFile.png");
+    public let ANIMATION = texture::load(option::none, "!/builtin/icon/AnimationFile.png");
+    public let SHADER    = texture::load(option::none, "!/builtin/icon/ShaderFile.png");
+    public let FONT      = texture::load(option::none, "!/builtin/icon/Font.png");
+    public let MUSIC     = texture::load(option::none, "!/builtin/icon/Music.png");
+    public let TILEMAP   = texture::load(option::none, "!/builtin/icon/Tilemap.png");
+    public let CPP       = texture::load(option::none, "!/builtin/icon/CppProgram.png");
+    public let WOOLANG   = texture::load(option::none, "!/builtin/icon/Script.png");
+    public let WORLD     = texture::load(option::none, "!/builtin/icon/World.png");
+    public let ENTITY    = texture::load(option::none, "!/builtin/icon/Entity.png");
+
+    // ---- 视口 gizmo 图标 ----
+    public let GIZMO_CAMERA = texture::load(option::none, "!/builtin/icon/gizmo_camera.png");
+    public let GIZMO_POINT_LIGHT2D = texture::load(option::none, "!/builtin/icon/gizmo_point_light2d.png");
+    public let GIZMO_PARALLEL_LIGHT2D = texture::load(option::none, "!/builtin/icon/gizmo_parallel_light2d.png");
+}

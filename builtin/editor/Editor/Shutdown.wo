@@ -1,0 +1,123 @@
+import pkg::std;
+
+import je::gui;
+import je::ecs;
+
+import pkg::interface;
+
+import builtin::editor::GUI::Windows;
+import builtin::editor::Editor::Project;
+import builtin::editor::Editor::DebugRun;
+
+using std;
+using je;
+using je::gui;
+using JEEditor::GUI::Windows;
+
+namespace JEEditor::Editor
+{
+    using Shutdown = struct{
+        m_closing_universe: universe,
+    }
+    {
+        let mut s_shutdown_singleton = option::none: option<Shutdown>;
+        public func isShutdownExist()
+        {
+            return s_shutdown_singleton->is_value;
+        }
+        
+        public func editorShutdownRequest(u: universe)
+        {
+            // 调试运行中先终止运行：各视口恢复可关闭状态后关闭流程才能
+            // 继续进行（运行期间视口的关闭请求会被否决，见
+            // WorldEditorViewport::onPreClose；终止流程异步进行，期间本
+            // 窗口持续等待其余窗口退出）
+            launch_coroutine(
+                func(){
+                    match (show(create(u)))
+                    {
+                        none?;
+                        value(shutdownWindow)?
+                        {
+                            if (DebugRun::isDebugRunActive())
+                            {
+                                DebugRun::stopDebugRun();
+                                
+                                /* 调试运行需要若干帧才能结束掉，等待，直到调试运行结束 */
+                                while (DebugRun::isDebugRunActive())
+                                    yield();
+                            }
+                                                        
+                            /* 通知 Project 保存当前状态到 Tombs，准备入土 */
+                            Project::dumpTombs();
+                            
+                            for (let iw : internal::getAllWindows())
+                            {
+                                if (is_same(iw, shutdownWindow))
+                                    continue;
+                                    
+                                do internal::tryGetWindowState(iw)
+                                    ->> \state = state->requestToClose();
+                                    ;
+                            }
+                        }
+                    }
+                });
+        }
+        
+        func create(u: universe)=> Shutdown
+            where require!(Shutdown: IWindows);
+        {
+            return Shutdown{
+                m_closing_universe = u,
+            };
+        }
+        public func getAttrib(_: Shutdown)=> WindowsAttribute
+        {
+            return WindowsAttribute::ImGuiWindowFlags_NoTitleBar
+                + WindowsAttribute::ImGuiWindowFlags_NoCollapse;
+        }
+        public func getTitle(_: Shutdown)=> string
+        {
+            return "关闭编辑器……";
+        }
+        // 沉浸模式（调试运行）下不隐藏：用户在运行期间触发关闭流程时
+        // 仍需看到等待进度与“取消关闭流程”按钮
+        public func isHiddenInImmersiveMode(_: Shutdown)=> bool
+        {
+            return false;
+        }
+        public func run(self: Shutdown)=> bool
+        {
+            Text("正在等待窗口退出……");
+            
+            let cancel = Button("取消关闭流程");
+            Separator();
+            
+            let mut alive_window_count = 0;
+            
+            for (let iw : internal::getAllWindows())
+            {
+                alive_window_count += 1;
+                
+                let window_state = internal::tryGetWindowState(iw);
+                match (window_state)
+                {
+                    none?;
+                    value(state)?
+                        TextDisabled(state->getTitle());
+                }
+            }
+            
+            // 只剩下当前窗口了
+            if (alive_window_count == 1)
+            {
+                // Note: 考虑到关闭世界的操作可能未立刻同步，关闭 universe 的操作延迟一帧发生：
+                launch_coroutine(\= self.m_closing_universe->trim(););
+                return false;
+            }
+            
+            return !cancel;
+        }
+    }
+}

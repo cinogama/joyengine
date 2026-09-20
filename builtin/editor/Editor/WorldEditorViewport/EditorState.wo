@@ -1,0 +1,273 @@
+// 世界编辑器视口 —— 编辑器状态持久化。
+// 把视口的“编辑模式”与调试游走摄像机的位姿编码为 Toml，供 Project 单例
+// 在退出时随 Tombs 落盘、下次启动时恢复。这里集中处理状态的编解码，
+// Project.wo 只当作不透明数据搬运。
+//
+// 注意：2D 模式 / 2D 光照并非视口字段，而是调试摄像机实际挂载的组件
+//（Camera::OrthoProjection / Light2D::CameraPostPass），因此编码时读取
+// 摄像机组件、恢复时按同样的组件规则写回（复用 CameraControl.wo 的判断
+// 与切换函数），保证与运行时语义一致。
+
+import pkg::std;
+
+import je;
+import je::ecs;
+
+import je::towoo;
+import je::towoo::types;
+import je::towoo::components;
+
+import pkg::toml;
+import pkg::iterator;
+
+import Definition;
+import CameraControl;
+
+using std;
+using toml;
+using iterator;
+
+using je;
+using je::gui;
+
+namespace JEEditor::Editor::WorldEditorViewport
+{
+    // ---- Toml 读取辅助（缺失/类型不符时回退默认值） ----
+
+    func read_int(data: Toml, key: string, default: int)=> int
+    {
+        match (data->get(key))
+        {
+            none? return default;
+            value(v)?
+            {
+                match (v->as_int)
+                {
+                    none? return default;
+                    value(i)? return i;
+                }
+            }
+        }
+    }
+
+    func read_real(data: Toml, key: string, default: real)=> real
+    {
+        match (data->get(key))
+        {
+            none? return default;
+            value(v)?
+            {
+                match (v->as_float)
+                {
+                    none? return default;
+                    value(f)? return f;
+                }
+            }
+        }
+    }
+
+    func read_bool(data: Toml, key: string, default: bool)=> bool
+    {
+        match (data->get(key))
+        {
+            none? return default;
+            value(v)?
+            {
+                match (v->as_bool)
+                {
+                    none? return default;
+                    value(b)? return b;
+                }
+            }
+        }
+    }
+
+    func read_vec3(data: Toml, key: string, default: vec3)=> vec3
+    {
+        match (data->get(key))
+        {
+            none? return default;
+            value(v)?
+            {
+                match (v->as_array)
+                {
+                    none? return default;
+                    value(a)?
+                    {
+                        if (a->len < 3)
+                            return default;
+                        return (
+                            a[0]->as_float->or(default[0]),
+                            a[1]->as_float->or(default[1]),
+                            a[2]->as_float->or(default[2]),
+                        ) as vec3;
+                    }
+                }
+            }
+        }
+    }
+
+    func read_quat(data: Toml, key: string, default: quat)=> quat
+    {
+        match (data->get(key))
+        {
+            none? return default;
+            value(v)?
+            {
+                match (v->as_array)
+                {
+                    none? return default;
+                    value(a)?
+                    {
+                        if (a->len < 4)
+                            return default;
+                        return (
+                            a[0]->as_float->or(default[0]),
+                            a[1]->as_float->or(default[1]),
+                            a[2]->as_float->or(default[2]),
+                            a[3]->as_float->or(default[3]),
+                        ) as quat;
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- 编码 ----
+
+    // 导出当前视口的编辑器状态：Gizmo 模式/参考系、锁定鼠标，以及调试
+    // 摄像机的投影模式、2D 光照、位置/旋转与（2D）正交 scale /（3D）FOV。
+    // 调试摄像机缺失（极端情况）时仅导出视口字段。
+    public func dumpEditorStateToml(self: WorldEditorViewport)=> Toml
+    {
+        let dump = new_table();
+
+        dump->set("gizmo_mode", self.m_gizmo_mode as int);
+        dump->set("gizmo_space", self.m_gizmo_space as int);
+        dump->set("lock_mouse", self.m_lock_mouse_on_look);
+
+        match (self.m_debug_camera_selector->iter |> collect->get(0))
+        {
+            none?;
+            value(camera)?
+            {
+                dump->set("is_2d", isDebugCamera2DMode(camera));
+                dump->set("light_2d", isDebugCameraLight2DEnabled(camera));
+
+                match (camera->towoo::get_component:<Transform::LocalPosition>)
+                {
+                    none?;
+                    value(lp)?
+                    {
+                        let p = lp.pos->get;
+                        dump->set("camera_pos", from([p[0], p[1], p[2]]));
+                    }
+                }
+                match (camera->towoo::get_component:<Transform::LocalRotation>)
+                {
+                    none?;
+                    value(lr)?
+                    {
+                        let r = lr.rot->get;
+                        dump->set("camera_rot", from([r[0], r[1], r[2], r[3]]));
+                    }
+                }
+                match (camera->towoo::get_component:<Camera::OrthoProjection>)
+                {
+                    none?;
+                    value(ortho)?
+                        dump->set("ortho_scale", ortho.scale->get);
+                }
+                match (camera->towoo::get_component:<Camera::PerspectiveProjection>)
+                {
+                    none?;
+                    value(persp)?
+                        dump->set("perspective_fov", persp.angle->get);
+                }
+            }
+        }
+
+        return dump;
+    }
+
+    // ---- 解码 / 应用 ----
+
+    // 把保存的编辑器状态应用到本视口与调试摄像机上。
+    // 摄像机组件增删沿用 CameraControl.wo setDebugCamera2DMode 的做法：
+    // 摘下一种投影、挂上另一种；新挂的组件必须写入 add_component 返回的
+    // 当帧暂存实例（实体级 get_component 同帧读不到未生效组件），已存在
+    // 的组件则就地写。
+    protected func applyEditorState(
+        self: WorldEditorViewport, data: Toml, camera: entity)=> void
+    {
+        self.m_gizmo_mode =
+            read_int(data, "gizmo_mode", GizmoMode::TRANSLATE as int) as GizmoMode;
+        self.m_gizmo_space =
+            read_int(data, "gizmo_space", GizmoSpace::GLOBAL as int) as GizmoSpace;
+        self.m_lock_mouse_on_look = read_bool(data, "lock_mouse", false);
+
+        let is_2d = read_bool(data, "is_2d", false);
+        let light_2d = read_bool(data, "light_2d", false);
+
+        let pos = read_vec3(data, "camera_pos", (0., 0., 0.) as vec3);
+        let rot = read_quat(data, "camera_rot", quat::ident);
+
+        if (is_2d)
+        {
+            if (camera->towoo::get_component:<Camera::PerspectiveProjection>->is_value)
+                do camera->towoo::remove_component:<Camera::PerspectiveProjection>();
+
+            match (camera->towoo::get_component:<Camera::OrthoProjection>)
+            {
+                none?
+                {
+                    let ortho = camera->towoo::add_component:<Camera::OrthoProjection>();
+                    ortho.scale->set(read_real(data, "ortho_scale", 1.));
+                }
+                value(ortho)?
+                    ortho.scale->set(read_real(data, "ortho_scale", 1.));
+            }
+
+            // 2D 镜头正对 XY 平面，旋转恒为单位四元数；环视累积量一并复位
+            camera->towoo::get_component:<Transform::LocalRotation>
+                ->unwrap.rot->set(quat::ident);
+            self.m_rotation_x = quat::ident;
+            self.m_rotation_y = quat::ident;
+        }
+        else
+        {
+            if (camera->towoo::get_component:<Camera::OrthoProjection>->is_value)
+                do camera->towoo::remove_component:<Camera::OrthoProjection>();
+
+            match (camera->towoo::get_component:<Camera::PerspectiveProjection>)
+            {
+                none?
+                {
+                    let persp =
+                        camera->towoo::add_component:<Camera::PerspectiveProjection>();
+                    persp.angle->set(read_real(data, "perspective_fov", 75.));
+                }
+                value(persp)?
+                    persp.angle->set(read_real(data, "perspective_fov", 75.));
+            }
+
+            camera->towoo::get_component:<Transform::LocalRotation>
+                ->unwrap.rot->set(rot);
+
+            // 还原环视累积量：运行时以 newRot = m_rotation_y * m_rotation_x
+            // 合成朝向。把整个旋转放进 m_rotation_x、m_rotation_y 置单位
+            // 四元数，则合成结果恰好等于 rot（无跳变），此后右键环视的
+            // 增量即在当前朝向基础上继续。
+            self.m_rotation_x = rot;
+            self.m_rotation_y = quat::ident;
+        }
+
+        match (camera->towoo::get_component:<Transform::LocalPosition>)
+        {
+            none?;
+            value(lp)? lp.pos->set(pos);
+        }
+
+        setDebugCameraLight2DEnabled(camera, light_2d);
+    }
+}

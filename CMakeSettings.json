@@ -161,6 +161,158 @@
           "type": "BOOL"
         }
       ]
+    },
+    {
+      "name": "arm64-Debug",
+      "generator": "Ninja",
+      "configurationType": "Debug",
+      "buildRoot": "${projectDir}\\out\\build\\${name}",
+      "installRoot": "${projectDir}\\out\\install\\${name}",
+      "cmakeCommandArgs": "",
+      "buildCommandArgs": "",
+      "ctestCommandArgs": "",
+      "inheritEnvironments": [ "msvc_arm64" ],
+      "variables": [
+        {
+          "name": "JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD",
+          "value": "Ture",
+          "type": "BOOL"
+        },
+        {
+          "name": "JE4_ENABLE_DX11_GAPI",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "JE4_ENABLE_OPENGL330_GAPI",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "JE4_ENABLE_VULKAN120_GAPI",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "JE4_ENABLE_WIN32_CONSOLE",
+          "value": "True",
+          "type": "BOOL"
+        }
+      ]
+    },
+    {
+      "name": "arm64-Release",
+      "generator": "Ninja",
+      "configurationType": "RelWithDebInfo",
+      "buildRoot": "${projectDir}\\out\\build\\${name}",
+      "installRoot": "${projectDir}\\out\\install\\${name}",
+      "cmakeCommandArgs": "",
+      "buildCommandArgs": "",
+      "ctestCommandArgs": "",
+      "inheritEnvironments": [ "msvc_arm64" ],
+      "variables": [
+        {
+          "name": "JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD",
+          "value": "Ture",
+          "type": "BOOL"
+        },
+        {
+          "name": "JE4_ENABLE_DX11_GAPI",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "JE4_ENABLE_OPENGL330_GAPI",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "JE4_ENABLE_VULKAN120_GAPI",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "JE4_ENABLE_WIN32_CONSOLE",
+          "value": "True",
+          "type": "BOOL"
+        }
+      ]
+    },
+    {
+      "name": "x64-by-arm64-Debug",
+      "generator": "Ninja",
+      "configurationType": "Debug",
+      "buildRoot": "${projectDir}\\out\\build\\${name}",
+      "installRoot": "${projectDir}\\out\\install\\${name}",
+      "cmakeCommandArgs": "",
+      "buildCommandArgs": "",
+      "ctestCommandArgs": "",
+      "inheritEnvironments": [ "msvc_x64_arm64" ],
+      "variables": [
+        {
+          "name": "JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD",
+          "value": "Ture",
+          "type": "BOOL"
+        },
+        {
+          "name": "JE4_ENABLE_DX11_GAPI",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "JE4_ENABLE_OPENGL330_GAPI",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "JE4_ENABLE_VULKAN120_GAPI",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "JE4_ENABLE_WIN32_CONSOLE",
+          "value": "True",
+          "type": "BOOL"
+        }
+      ]
+    },
+    {
+      "name": "x64-by-arm64-Release",
+      "generator": "Ninja",
+      "configurationType": "RelWithDebInfo",
+      "buildRoot": "${projectDir}\\out\\build\\${name}",
+      "installRoot": "${projectDir}\\out\\install\\${name}",
+      "cmakeCommandArgs": "",
+      "buildCommandArgs": "",
+      "ctestCommandArgs": "",
+      "inheritEnvironments": [ "msvc_x64_arm64" ],
+      "variables": [
+        {
+          "name": "JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD",
+          "value": "Ture",
+          "type": "BOOL"
+        },
+        {
+          "name": "JE4_ENABLE_DX11_GAPI",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "JE4_ENABLE_OPENGL330_GAPI",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "JE4_ENABLE_VULKAN120_GAPI",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "JE4_ENABLE_WIN32_CONSOLE",
+          "value": "True",
+          "type": "BOOL"
+        }
+      ]
     }
   ]
 }

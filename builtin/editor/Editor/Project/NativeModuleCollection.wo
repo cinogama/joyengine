@@ -1,0 +1,55 @@
+import pkg::std;
+import pkg::fsys;
+import pkg::try;
+import pkg::iterator;
+import pkg::worst;
+
+import NativeModule;
+
+using fsys;
+using iterator;
+using std;
+
+namespace JEEditor::Editor::Project
+{
+    using NativeModuleCollection = struct{
+        m_loaded_native_modules: map<string, NativeModule>,
+    }
+    {
+        public func create()
+        {
+            return NativeModuleCollection{
+                m_loaded_native_modules = {}mut,
+            };
+        }
+        public func dropAllModuleWhileProjectExist(self: NativeModuleCollection)
+        {
+            for (let (_, module) : self.m_loaded_native_modules)
+                module->drop();
+
+            self.m_loaded_native_modules->clear();
+        }
+        public func getNativeModuleByName(self: NativeModuleCollection, name: string)
+        {
+            return self.m_loaded_native_modules->get(name);
+        }
+        public func loadModule(self: NativeModuleCollection, name: string, path: path_t)
+        {
+            if (self.m_loaded_native_modules->contains(name))
+                throw!;
+
+            try! native_module = NativeModule::load(name, path);
+            assert(self.m_loaded_native_modules->insert(name, native_module));
+
+            return_value! native_module;
+        }
+        public func getAllLoadedModuleNameAndPath(self: NativeModuleCollection)=> array<(string, path_t)>
+        {
+            return self.m_loaded_native_modules->iter
+                |> map(\(_, module) = module->getNameAndPath;)
+                |> collect
+                |> sort(\(lname, _), (rname, _) = lname < rname;);
+                ;
+        }
+    }
+}

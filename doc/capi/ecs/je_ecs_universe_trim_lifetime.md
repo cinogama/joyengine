@@ -31,7 +31,7 @@ void* universe = je_ecs_universe_create();
 // 创建时引用计数为 1
 
 void* world = je_ecs_world_create(universe);
-je_ecs_world_set_able(world, true);
+je_ecs_world_set_enable(world, true);
 
 // ... 游戏运行中 ...
 

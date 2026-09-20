@@ -59,7 +59,7 @@ namespace jeecs
                 nullptr,
                 "!/builtin/builtin_default.shader", R"(
 // Default shader
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;
@@ -113,7 +113,7 @@ public let frag =
 
         struct camera_arch
         {
-            rendchain_branch* branchPipeline;
+            je_RendchainBranch* branchPipeline;
 
             const Rendqueue* rendqueue;
             const Projection* projection;
@@ -339,7 +339,7 @@ public let frag =
 
         // Allocate a rend_chain for a camera; honors optional sub-viewport (normalized rect).
         jegl_rendchain* new_rend_chain_for_camera(
-            rendchain_branch* branch,
+            je_RendchainBranch* branch,
             const Viewport* viewport,
             graphic::framebuffer* rend_aim_buffer,
             size_t buffer_w, size_t buffer_h)
@@ -941,7 +941,7 @@ public let frag =
                         nullptr,
                         "!/builtin/defer_light2d_shadow_point.shader",
                         R"(
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;
@@ -997,7 +997,7 @@ public func frag(_: v2f)
                         nullptr,
                         "!/builtin/defer_light2d_shadow_parallel.shader",
                         R"(
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;
@@ -1053,7 +1053,7 @@ public func frag(_: v2f)
                     nullptr,
                     "!/builtin/defer_light2d_shadow_reverse_point.shader",
                     R"(
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;
@@ -1109,7 +1109,7 @@ public func frag(_: v2f)
                         nullptr,
                         "!/builtin/defer_light2d_shadow_reverse_parallel.shader",
                         R"(
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;
@@ -1165,7 +1165,7 @@ public func frag(_: v2f)
                         nullptr,
                         "!/builtin/defer_light2d_shadow_point_shape.shader",
                         R"(
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;
@@ -1242,7 +1242,7 @@ public func frag(vf: v2f)
                         nullptr,
                         "!/builtin/defer_light2d_shadow_parallel_shape.shader",
                         R"(
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;
@@ -1315,7 +1315,7 @@ public func frag(vf: v2f)
                         nullptr,
                         "!/builtin/defer_light2d_shadow_point_sprite.shader",
                         R"(
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;
@@ -1389,7 +1389,7 @@ public func frag(vf: v2f)
                     nullptr,
                     "!/builtin/defer_light2d_shadow_parallel_sprite.shader"
                     , R"(
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;
@@ -1459,7 +1459,7 @@ public func frag(vf: v2f)
                         nullptr,
                         "!/builtin/defer_light2d_shadow_sub.shader",
                         R"(
-import woo::std;
+import pkg::std;
 
 import je::shader;
 import pkg::woshader;
@@ -1522,7 +1522,7 @@ public func frag(vf: v2f)
 
         struct l2dcamera_arch
         {
-            rendchain_branch* branchPipeline;
+            je_RendchainBranch* branchPipeline;
 
             const Rendqueue* rendqueue;
             const Translation* translation;
@@ -1918,13 +1918,13 @@ public func frag(vf: v2f)
             {
                 if (blockshadow != nullptr)
                 {
-                    if (!blockshadow->mesh.m_block_mesh.has_value())
+                    if (!blockshadow->shape.m_block_mesh.has_value())
                     {
                         std::vector<float> _vertex_buffer;
                         std::vector<uint32_t> _index_buffer;
-                        if (!blockshadow->mesh.m_block_points.empty())
+                        if (!blockshadow->shape.m_block_points.empty())
                         {
-                            for (auto& point : blockshadow->mesh.m_block_points)
+                            for (auto& point : blockshadow->shape.m_block_points)
                             {
                                 _vertex_buffer.insert(_vertex_buffer.end(),
                                     {
@@ -1939,7 +1939,7 @@ public func frag(vf: v2f)
                                         _index_offset + 1,
                                     });
                             }
-                            blockshadow->mesh.m_block_mesh = jeecs::graphic::vertex::create(
+                            blockshadow->shape.m_block_mesh = jeecs::graphic::vertex::create(
                                 jegl_vertex::type::TRIANGLESTRIP,
                                 _vertex_buffer.data(), _vertex_buffer.size() * sizeof(float),
                                 _index_buffer,
@@ -1949,7 +1949,7 @@ public func frag(vf: v2f)
                                 });
                         }
                         else
-                            blockshadow->mesh.m_block_mesh.reset();
+                            blockshadow->shape.m_block_mesh.reset();
                     }
                 }
                 m_2dblock_z_list.push_back(
@@ -2011,23 +2011,19 @@ public func frag(vf: v2f)
                 };
         }
 
-        // Allocate a texture group and bind slot 0 to the block's main texture,
-        // or to the default texture if the block has Textures but no main slot configured.
-        // Returns nullptr-like behavior (group is allocated but slot 0 is left unset) when
-        // the block has no Textures component at all — matching the original semantics.
         jegl_rchain_texture_group* alloc_shadow_texture_group(
-            jegl_rendchain* chain, const Textures* textures)
+            jegl_rendchain* chain, /* OPTIONAL */ const Textures* textures)
         {
             auto* group = jegl_rchain_allocate_texture_group(chain);
-            if (textures != nullptr)
-            {
-                auto main_texture = textures->get_texture(0);
-                jegl_rchain_bind_texture(
-                    chain, group, 0,
-                    main_texture.has_value()
-                        ? main_texture.value()->resource()
-                        : m_default_resources.default_texture->resource());
-            }
+            auto main_texture = 
+                textures == nullptr ? std::nullopt : textures->get_texture(0);
+
+            jegl_rchain_bind_texture(
+                chain, group, 0,
+                main_texture.has_value()
+                ? main_texture.value()->resource()
+                : m_default_resources.default_texture->resource());
+
             return group;
         }
 
@@ -2204,7 +2200,7 @@ public func frag(vf: v2f)
                                     if (blockarch.blockshadow != nullptr
                                         && blockarch.blockshadow->factor > 0.f
                                         && (!light_is_above_block || !blockarch.blockshadow->auto_disable)
-                                        && blockarch.blockshadow->mesh.m_block_mesh.has_value())
+                                        && blockarch.blockshadow->shape.m_block_mesh.has_value())
                                     {
                                         // BlockShadow 用 (0,-1,1).unit() 作为平行光方向参考，
                                         // 通过 local_scale.x 传递阴影权重，color.w 固定为 1。
@@ -2215,7 +2211,7 @@ public func frag(vf: v2f)
                                         draw_shadow_occluder(
                                             light2d_shadow_rend_chain,
                                             pass,
-                                            blockarch.blockshadow->mesh.m_block_mesh.value(),
+                                            blockarch.blockshadow->shape.m_block_mesh.value(),
                                             /*texture_group=*/nullptr,
                                             blockarch.translation,
                                             lightarch,
@@ -2420,7 +2416,9 @@ public func frag(vf: v2f)
                     {
                         auto& light2d = *light2d_p;
 
-                        assert(light2d.translation != nullptr && light2d.color != nullptr && light2d.shaders != nullptr && light2d.shape != nullptr);
+                        assert(light2d.translation != nullptr
+                            && light2d.shaders != nullptr 
+                            && light2d.shape != nullptr);
 
                         // bind_entity_textures allocates the group, binds default at slot 0,
                         // and binds user textures (which may override slot 0 or other slots).
@@ -2456,7 +2454,8 @@ public func frag(vf: v2f)
                             : m_default_resources.default_shaders_list;
 
                         // 传入 Light2D 所需的颜色、衰减信息
-                        math::vec4 light_color = light2d.color == nullptr ? math::vec4(1.f, 1.f, 1.f, 1.f) : light2d.color->color;
+                        math::vec4 light_color = 
+                            light2d.color == nullptr ? math::vec4(1.f, 1.f, 1.f, 1.f) : light2d.color->color;
                         if (light2d.gain != nullptr)
                             light_color.w *= light2d.gain->gain;
 

@@ -1,0 +1,96 @@
+import pkg::std;
+
+import je;
+import je::gui;
+
+import pkg::list;
+import pkg::try;
+
+using std;
+using je;
+using je::gui;
+
+namespace JEEditor::GUI::Statebar
+{
+    let s_state_showing_queue = list::create:<(()=> void, mut real, real)>();
+
+    // 沉浸模式（调试运行）下隐藏状态栏：渲染跳过，但队列的过期清理
+    // 照常进行，防止隐藏期间的通知无限堆积
+    let mut s_statebar_hidden = false;
+    public func setHidden(hidden: bool)
+    {
+        s_statebar_hidden = hidden;
+    }
+    public func isHidden()=> bool
+    {
+        return s_statebar_hidden;
+    }
+
+    public func start()
+    {
+        launch(func(){
+                while (s_state_showing_queue->len >= 2)
+                {
+                    let (_, _, tm) = s_state_showing_queue->front->unwrap;
+                    if (time() < tm)
+                        break;
+
+                    do s_state_showing_queue->pop_front();
+                }
+
+                if (!s_statebar_hidden)
+                {
+                    do try!{
+                        try! current_state = s_state_showing_queue->front;
+                        let (state, height, _) = current_state;
+
+                        static let mut bar_height = GetFrameHeight();
+                        if ((immut height) > 0.)
+                            bar_height = immut height;
+
+                        // 高度上限：随字体缩放的约 8 行文本高度，防止多行内容
+                        // （如带堆栈的错误日志）把状态栏撑满大半个屏幕。
+                        // 钳制必须发生在 Begin 之前，保证写回的测量值用的是
+                        // 本帧实际传入的钳制后高度，否则会来回震荡。
+                        let max_bar_height = GetTextLineHeightWithSpacing() * 8. + GetFrameHeight();
+                        if ((immut bar_height) > max_bar_height)
+                            bar_height = max_bar_height;
+
+                        if (BeginViewportSideBar(
+                                "EditorStatebar",
+                                Direction::ImGuiDir_Down,
+                                bar_height,
+                                WindowsAttribute::ImGuiWindowFlags_None))
+                        {
+                            state();
+
+                            let (_, avail_y) = GetContentRegionAvail();
+
+                            // 必须用本帧实际传入的 bar_height 来减：新状态首帧 height 还是 -1 哨兵，
+                            // 拿它减会把测量值算成负数，导致小内容状态永远测不出高度，bar_height 只增不减
+                            current_state.1 = (immut bar_height) - avail_y;   // 强制高度 - 剩余空间 = 内容实际需要的高度(含内边距)
+                        }
+
+                        return_value!;
+                    };
+
+
+                    End();
+                }
+                return true;
+            });
+    }
+    public func showState(job: ()=> void, keep_time_at_least: real)
+    {
+        if (false)
+        {
+            // 防止调用方灌爆队列（例如日志刷屏时）：超过上限则优先丢弃最旧的待展示状态
+            while (s_state_showing_queue->len >= 16)
+            {
+                do s_state_showing_queue->pop_front();
+            }
+        }
+        
+        s_state_showing_queue->add((job, mut -1., time() + keep_time_at_least));
+    }
+}
