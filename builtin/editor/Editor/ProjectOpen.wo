@@ -259,21 +259,22 @@ namespace JEEditor::Editor
                 -> or_map(\e = F"创建资源目录 \"{resource_dir->to_string}\" 失败：{e}";);
                 
             let bulitin_path = normalize(host_path()) / "builtin";
-            let shader_src = bulitin_path / "shader";
-            if (!isdir(shader_src))
-                throw! F"内置着色器目录 \"{shader_src->to_string}\" 不存在。";
-                
             let shader_dst = resource_dir / "shader";
-            try! _ = copy(shader_src, shader_dst)
+            
+            try! _ = copy(bulitin_path / "shader", shader_dst)
                 -> or_map(\e = F"拷贝内置着色器到 \"{shader_dst->to_string}\" 失败：{e}";);
                 
             let type_script_path = bulitin_path / "script";
-
-            try! _ = copy(type_script_path / "editor.wo", project_dir)
-                -> or_map(\e = F"拷贝 editor.wo 到 \"{project_dir->to_string}\" 失败：{e}";);
+            
+            let editor_scripts = resource_dir / "editor";
+            try! _ = mkdir(editor_scripts)
+                -> or_map(\e = F"创建编辑器目录 \"{editor_scripts->to_string}\" 失败：{e}";);
                 
-            try! _ = copy(type_script_path / "types.wo", project_dir)
-                -> or_map(\e = F"拷贝 types.wo 到 \"{project_dir->to_string}\" 失败：{e}";);
+            try! _ = copy(type_script_path / "editor.wo", editor_scripts)
+                -> or_map(\e = F"拷贝 editor.wo 到 \"{editor_scripts->to_string}\" 失败：{e}";);
+                
+            try! _ = copy(type_script_path / "types.wo", editor_scripts)
+                -> or_map(\e = F"拷贝 types.wo 到 \"{editor_scripts->to_string}\" 失败：{e}";);
                 
             return_ok!;
         }

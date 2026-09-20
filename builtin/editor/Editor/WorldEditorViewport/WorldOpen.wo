@@ -105,34 +105,6 @@ namespace JEEditor::Editor::WorldEditorViewport
         // Create editor camera.
         ensureDebugCamera(new_world);
 
-        let e = new_world->add_entity([
-                Transform::Translation::type::typeinfo,
-                Transform::LocalPosition::type::typeinfo,
-                Transform::LocalRotation::type::typeinfo,
-                Transform::LocalScale::type::typeinfo,
-                Transform::LocalToWorld::type::typeinfo,
-                Renderer::Shaders::type::typeinfo,
-                Renderer::Shape::type::typeinfo,
-            ]);
-
-        e->towoo::get_component:<Transform::LocalPosition>->unwrap.pos->set(
-            (0., 0., 1.) as vec3);
-
-        let e2 = new_world->add_entity([
-                Transform::Translation::type::typeinfo,
-                Transform::LocalPosition::type::typeinfo,
-                Transform::LocalRotation::type::typeinfo,
-                Transform::LocalScale::type::typeinfo,
-                Transform::LocalToWorld::type::typeinfo,
-                Renderer::Shaders::type::typeinfo,
-                Renderer::Shape::type::typeinfo,
-            ]);
-
-        e2->towoo::get_component:<Transform::LocalPosition>->unwrap.pos->set(
-            (0., 1.5, 1.) as vec3);
-        e2->towoo::get_component:<Transform::LocalRotation>->unwrap.rot->set(
-            quat::euler(0., 0., 15.));
-
         new_world->set_enable(true);
 
         for (let mut i = 0;; i += 1)

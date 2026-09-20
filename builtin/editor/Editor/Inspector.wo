@@ -82,7 +82,7 @@ namespace JEEditor::Editor
         
         // 与预设体不一致的数据（成员名/组件标题）的高亮色
         let PREFAB_OVERRIDE_COLOR = (230, 190, 80, 255);
-
+        
         // 命名空间分组标题的强调色（0..1 浮点 RGBA，与主题文字色混合
         // 使用，明暗主题都保持可读）
         let GROUP_ACCENT = (0.42, 0.62, 0.95, 1.);
@@ -274,7 +274,7 @@ namespace JEEditor::Editor
             let width = GetContentRegionAvail().0;
             let height = GetFrameHeight();
             let draw = GetWindowDrawList();
-
+            
             draw->AddRectFilled((x, y), (x + width, y + height),
                 mixStyleColor(text_c, GROUP_ACCENT, 0.12, 42));
             draw->AddRectFilled((x, y), (x + 3., y + height),
@@ -283,7 +283,7 @@ namespace JEEditor::Editor
                 (x + 10., y + (height - GetTextLineHeight()) * 0.5),
                 mixStyleColor(text_c, GROUP_ACCENT, 0.55, 255),
                 F"{title} · {count}");
-
+                
             Dummy((0., height));
             Spacing();
         }
@@ -355,19 +355,19 @@ namespace JEEditor::Editor
         {
             let cinst = e->get_component(ctype)->unwrap;
             let eid = e->internal::get_entity_uid;
-
+            
             // 成员整体缩进到组件标题之下，与标题栏形成从属关系
             Indent(8.);
             let members = cinst->get_members;
             for (let mut mi = 0; mi < members->len; mi += 1)
             {
                 let (mname, mtype, mhandle) = members[mi];
-
+                
                 // 序列化当前成员值：既用于与预设体的差异判定，也作为
                 // 撤销留档——edit 一旦返回 true，成员值已被就地修改，
                 // 此刻的值即修改前的序列化值
                 let old_value = unsafe::dynamic_parser::save(mtype, mhandle);;
-
+                
                 // 与预设体不一致的成员以高亮 + "*" 标记，悬停显示两侧
                 // 的值；一致/未比较的成员保持灰色弱化显示
                 let diff = memberDiffVsPrefab(prefab, cname, mname, old_value);
@@ -389,13 +389,13 @@ namespace JEEditor::Editor
                             do SetTooltip(F"与预设体不一致\n预设体: {pv}\n当前: {old_value->unwrap}");
                     }
                 }
-
+                
                 // tag 不能以 ## 开头：控件的可见标签写作 "标签##tag"，
                 // 若 tag 自身以 ## 开头会拼出 "###"，触发 ImGui"ID 只取
                 // ### 之后内容"的规则，导致同一成员的多个控件共享同一
                 // ID，编辑时互相牵连
                 let member_tag = F"{cname}##{mname}##{mhandle}";
-
+                
                 match (unsafe::dynamic_parser::edit(mtype, mhandle, member_tag))
                 {
                     none?
@@ -430,7 +430,7 @@ namespace JEEditor::Editor
                     // 超时/选中变化/其他成员改动判定（见 run()）。
                     }
                 }
-
+                
                 // 成员之间以淡色横线分界
                 if (mi + 1 < members->len)
                     memberSeparator();
@@ -699,16 +699,16 @@ namespace JEEditor::Editor
         {
             let cname = ctype->name;
             let (_, short_name) = splitTypeName(cname);
-
+            
             // 预设体之外新增的组件：标题同样以高亮标记
             let comp_added = isComponentAddedVsPrefab(prefab, cname);
-
+            
             // 标题栏样式与材质面板分区一致（见 Widgets::pushSectionHeaderStyle）；
             // 高亮文字色压在标题栏样式之上，随标题一起弹出
             pushSectionHeaderStyle();
             if (comp_added)
                 PushStyleColor(ImGuiCol::ImGuiCol_Text, PREFAB_OVERRIDE_COLOR);
-
+                
             // AllowItemOverlap 允许后绘制的行尾 × 按钮抢占重叠区域的
             // 悬停与点击；折叠头的命中区总是横跨整行且忽略
             // SetNextItemWidth，不加此标志 × 的点击会被标题吞掉。
@@ -716,14 +716,14 @@ namespace JEEditor::Editor
             let expanded = CollapsingHeaderFlags(
                 F"{short_name}##{cname}",
                 TreeNodeAttribute::ImGuiTreeNodeFlags_AllowItemOverlap);
-
+                
             if (comp_added)
             {
                 PopStyleColor(1);
                 if (IsItemHovered())
                     do SetTooltip("该组件不在预设体中（新增）");
             }
-
+            
             // 右键组件标题可移除该组件；显式绑定到标题的标签上，
             // 且必须紧跟标题项调用（悬停检测基于最后绘制的项），
             // 避免展开时误绑到成员控件或行尾按钮
@@ -731,10 +731,10 @@ namespace JEEditor::Editor
             {
                 if (MenuItem(F"移除组件 {short_name}"))
                     removeComponentFromEntity(wctx, e, ctype);
-
+                    
                 defer EndPopup();
             }
-
+            
             // 折叠头的布局宽度只覆盖文字，× 需手动定位到行尾；
             // × 也保留加厚的内边距，与标题栏同高
             SameLine();
@@ -744,7 +744,7 @@ namespace JEEditor::Editor
             if (ButtonSize(F"×##remove_{cname}", (24., 0.)))
                 removeComponentFromEntity(wctx, e, ctype);
             popSectionHeaderStyle();
-
+            
             if (expanded)
                 showComponentMembersEdit(wctx, e, ctype, cname, prefab);
             Spacing();
@@ -800,14 +800,14 @@ namespace JEEditor::Editor
             }
             
             SeparatorText("组件");
-
+            
             // 组件按全名排序后同一命名空间的组件自然相邻：按命名空间
             // 分组，组头（色带 + 组件数）醒目标出组别；无命名空间的
             // 组件不设组头
             let visibles = e->internal::get_components_types
                 |> sort(\l, r = l->name < r->name;)
                 |> forall(\t = !t->name->begin_with("Editor::"););
-
+                
             let mut group_begin = 0;
             while (group_begin < visibles->len)
             {
@@ -848,7 +848,7 @@ namespace JEEditor::Editor
         }
         func showEntityComponentEdit(
             wctx: WorldEditorViewport,
-            selected_entity_id: entity::internal::euid_t)
+            selected_entity_id: entity::internal::euid_t)=> bool
         {
             for (let e : wctx->getEntitySelector)
             {
@@ -857,9 +857,13 @@ namespace JEEditor::Editor
                     none?;
                     value(eeuid)?
                         if (eeuid == selected_entity_id)
+                        {
                             showEntityComponentEditImpl(wctx, e);
+                            return true;
+                        }
                 }
             }
+            return false;
         }
         public func run(self: Inspector)=> bool
         {
@@ -873,15 +877,17 @@ namespace JEEditor::Editor
             EditSession::update(
                 PANEL_OWNER, IsWindowFocused(), selection->> \sel = sel.1;);
                 
+            let mut has_entity = false;
             match (selection)
             {
-                none?
-                    TextDisabled("（没有待编辑的实体）");
+                none?;
                 value((wctx, selected_entity_id))?
-                {
-                    showEntityComponentEdit(wctx, selected_entity_id);
-                }
+                    has_entity = showEntityComponentEdit(wctx, selected_entity_id);
             }
+            
+            if (!has_entity)
+                TextDisabled("（没有待编辑的实体）");
+                
             return !self.m_close;
         }
     }

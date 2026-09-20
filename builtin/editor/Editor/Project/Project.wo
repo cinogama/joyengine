@@ -56,6 +56,7 @@ using JEEditor::Singleton;
 namespace JEEditor::Editor
 {
     using Project = struct{
+        m_working_path: path_t,
         m_shutdown_tombs: mut option<Tombs>,
         
         m_opened_worlds: map<path_t, void>,
@@ -267,18 +268,16 @@ namespace JEEditor::Editor
         func prepareModulesThenRestoreWorlds(
             modules: map<string, path_t>, modules_all_valid: bool, toml: option<Toml>)
         {
-            // 先让 createAndLoad 的调用栈返回、Project 单例注册完毕，
-            // 之后 buildCppModuleDir 内部的 apply:<Project> 才能取到本实例。
-            yield();
-            
             let mut all_modules_ok = modules_all_valid;
+            let finished = mutable::create(false);
             
             if (!modules->empty)
             {
                 let all_ok = mutable::create(true);
-                let finished = mutable::create(false);
                 
-                do Windows::showModal(ModulePrepare::create(func(prepare: ModulePrepare){
+                do Windows::showModal(
+                    ModulePrepare::create(
+                        func(prepare: ModulePrepare){
                             prepare->postMessage(
                                 "编译并装载项目全部模块（CMake），可能需要一些时间……");
                                 
@@ -326,6 +325,19 @@ namespace JEEditor::Editor
                 all_modules_ok = all_modules_ok && all_ok->get;
             }
             
+            finished->set <| false;
+            FreezeWorldsTodo::show(
+                "更新编辑器类型",
+                func(){
+                    apply:<Project>(
+                        func(proj){
+                            proj->updateEditorTypesDuringFreeze();
+                            finished->set <| true;
+                        });
+                });
+            while (!finished->get)
+                yield();
+                
             if (!all_modules_ok)
             {
                 logerr("存在编译或装载失败的模块，本次不恢复上次打开的世界。");
@@ -356,6 +368,7 @@ namespace JEEditor::Editor
                 }
             }
         }
+        
         public func createAndLoad(toml: option<Toml>)=> Project
             where require!(Project: ISingleton);
         {
@@ -404,6 +417,7 @@ namespace JEEditor::Editor
             }
             
             let proj = Project{
+                m_working_path = workpath(),
                 m_shutdown_tombs = mut option::none,
                 m_opened_worlds = {}mut,
                 m_native_modules = NativeModuleCollection::create(),
@@ -458,6 +472,31 @@ namespace JEEditor::Editor
                     ->> \tombs = tombs->save;
                     -> or(new_table())
                     );
+        }
+        func updateEditorTypesDuringFreeze(self: Project)
+        {
+            let editor_script_path = self.m_working_path / "resource" / "editor";
+            
+            let types_path = editor_script_path / "types.wo";
+            if (isfile(types_path))
+            {
+                match (unsafe::dynamic_parser::update_types(types_path->to_string))
+                {
+                    ok(_)?;
+                    err(msg)?
+                        je::logerr(F"更新类型序列化器失败：\n{msg}");
+                }
+            }
+            let editor_path = editor_script_path / "editor.wo";
+            if (isfile(editor_path))
+            {
+                match (unsafe::dynamic_parser::update_editor(editor_path->to_string))
+                {
+                    ok(_)?;
+                    err(msg)?
+                        je::logerr(F"更新类型编辑器失败：\n{msg}");
+                }
+            }
         }
         public func reloadModuleWhileWorldsFreezed(
             self: Project, name: string, path: path_t, update_dylib_callback: ()=> result<void, string>)
