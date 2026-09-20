@@ -11,6 +11,7 @@ import pkg::interface;
 import pkg::worst;
 import pkg::iterator;
 import pkg::toml;
+import pkg::try;
 
 import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Shortcut;
@@ -137,7 +138,7 @@ namespace JEEditor::Editor
         let k_error_text_color = (255, 128, 128, 255);
         
         // 项目目录的标志文件：目录内必须存在 Project::PROJECT_FILE_NAME 文件才会被当作项目打开，
-        // 「在此处新建」负责在新目录内创建它（TOML 文档，暂无内容）。        
+        // 「在此处新建」负责在新目录内创建它（TOML 文档，暂无内容）。
         func childDirs(dir: path_t)=> array<path_t>
         {
             return walk(dir)
@@ -251,34 +252,32 @@ namespace JEEditor::Editor
         // builtin/shader 下的内置着色器整体拷贝成 resource/shader，便于项目
         // 直接引用或改造。任一步失败都返回错误描述，调用方据此提示，
         // 此时尚未写入项目文件，目录不会被当作有效项目打开。
-        func initProjectResources(project_dir: path_t)=> option<string>
+        func initProjectResources(project_dir: path_t)=> result<void, string>
         {
             let resource_dir = project_dir / "resource";
-            match (mkdir(resource_dir))
-            {
-                err(e)?
-                    return option::value(
-                        F"创建资源目录 \"{resource_dir->to_string}\" 失败：{e}");
-                ok(_)?;
-            }
-
-            let shader_src = normalize(host_path()) / "builtin" / "shader";
+            try! _ = mkdir(resource_dir)
+                -> or_map(\e = F"创建资源目录 \"{resource_dir->to_string}\" 失败：{e}";);
+                
+            let bulitin_path = normalize(host_path()) / "builtin";
+            let shader_src = bulitin_path / "shader";
             if (!isdir(shader_src))
-                return option::value(
-                    F"内置着色器目录 \"{shader_src->to_string}\" 不存在。");
-
+                throw! F"内置着色器目录 \"{shader_src->to_string}\" 不存在。";
+                
             let shader_dst = resource_dir / "shader";
-            match (copy(shader_src, shader_dst))
-            {
-                err(e)?
-                    return option::value(
-                        F"拷贝内置着色器到 \"{shader_dst->to_string}\" 失败：{e}");
-                ok(_)?;
-            }
+            try! _ = copy(shader_src, shader_dst)
+                -> or_map(\e = F"拷贝内置着色器到 \"{shader_dst->to_string}\" 失败：{e}";);
+                
+            let type_script_path = bulitin_path / "script";
 
-            return option::none;
+            try! _ = copy(type_script_path / "editor.wo", project_dir)
+                -> or_map(\e = F"拷贝 editor.wo 到 \"{project_dir->to_string}\" 失败：{e}";);
+                
+            try! _ = copy(type_script_path / "types.wo", project_dir)
+                -> or_map(\e = F"拷贝 types.wo 到 \"{project_dir->to_string}\" 失败：{e}";);
+                
+            return_ok!;
         }
-
+        
         // 在当前浏览目录下新建项目：弹输入框要项目名 → 建同名目录 →
         // 初始化资源目录 → 目录内写入空的 TOML 项目文件 → 直接打开新项目。
         // InputBox 以模态弹窗压住本窗口，回调触发时本窗口必然仍存活，
@@ -286,57 +285,40 @@ namespace JEEditor::Editor
         func askToCreateProjectHere(self: ProjectOpen)=> void
         {
             do InputBox::show("新建项目", "请输入项目文件夹名称：", "NewProject")
-                    ->then(\name = self->createProjectHere(name);)
-                    ;
+                ->then(\name = self->createProjectHere(name);)
+                ;
         }
         
         func createProjectHere(self: ProjectOpen, name: string)=> void
         {
-            let trimmed = name->trim;
-            if (trimmed->len == 0)
+            do try!
             {
-                MsgBox::err("新建项目", "项目名称不能为空。");
-                return;
+                let trimmed = name->trim;
+                if (trimmed->len == 0)
+                {
+                    throw! "项目名称不能为空。";
+                }
+                
+                let project_dir = self.m_current / trimmed;
+                
+                try! _ = mkdir(project_dir)
+                    -> or_map(\e = F"在 \"{self.m_current->to_string}\" 下创建目录 \"{trimmed}\" 失败：{e}";);
+                    
+                try! _ = initProjectResources(project_dir);
+                try! _ = toml::save(toml::new_table(), project_dir / Project::PROJECT_FILE_NAME);
+                
+                // confirmOpen 以 m_current 为待打开目录，
+                // 先跳转进新目录再打开；若切换工作目录失败，
+                // 浏览器也已停在新目录处。
+                self->navigate(project_dir->to_string);
+                self->confirmOpen();
+                
+                return_ok!;
             }
-            
-            let project_dir = self.m_current / trimmed;
-            
-            match (mkdir(project_dir))
+            catch! e
             {
-                err(e)?
-                {
-                    MsgBox::err("新建项目",
-                        F"在 \"{self.m_current->to_string}\" 下创建目录 \"{trimmed}\" 失败：{e}");
-                    return;
-                }
-                ok(_)?
-                {
-                    match (initProjectResources(project_dir))
-                    {
-                        value(msg)?
-                        {
-                            MsgBox::err("新建项目", msg);
-                            return;
-                        }
-                        none?;
-                    }
-
-                    match (toml::save(toml::new_table(), project_dir / Project::PROJECT_FILE_NAME))
-                    {
-                        err(msg)?
-                            MsgBox::err("新建项目",
-                                F"写入项目文件 \"{Project::PROJECT_FILE_NAME}\" 失败：{msg}");
-                        ok(_)?
-                        {
-                            // confirmOpen 以 m_current 为待打开目录，
-                            // 先跳转进新目录再打开；若切换工作目录失败，
-                            // 浏览器也已停在新目录处。
-                            self->navigate(project_dir->to_string);
-                            self->confirmOpen();
-                        }
-                    }
-                }
-            }
+                MsgBox::err("新建项目失败", e);
+            };
         }
         
         func confirmOpen(self: ProjectOpen)=> void
@@ -355,7 +337,7 @@ namespace JEEditor::Editor
                 return;
             }
             
-            recordOpened(self.m_current);            
+            recordOpened(self.m_current);
             self.m_close_way = CloseWay::OPENED_A_PATH;
         }
         
