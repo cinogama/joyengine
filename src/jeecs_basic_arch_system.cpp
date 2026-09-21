@@ -34,9 +34,9 @@ namespace jeecs_impl
 // derived↔base 的 static_cast 完成 je_Xxx* 与实现类指针之间的转换，
 // 无需 reinterpret_cast。空基类优化（EBO）保证 je_Chunk* 与 arch_chunk 对象地址一致。
 struct je_GameUniverse {};
-struct je_GameWorld    {};
+struct je_GameWorld {};
 struct je_Archtype {};
-struct je_Chunk    {};
+struct je_Chunk {};
 
 struct je_SelectedArchCache
 {
@@ -790,7 +790,7 @@ namespace jeecs_impl
                 _m_free_count += _m_entity_count_per_chunk;
             }
         }
-        entity instance_entity(const entity* prefab) noexcept
+        entity instance_entity(/* OPTIONAL */ const entity* prefab) noexcept
         {
             arch_chunk* chunk;
             je_EntityIdInChunk entity_id;
@@ -804,11 +804,20 @@ namespace jeecs_impl
                     arch_typeinfo.second.m_begin_offset_in_chunk);
 
                 if (prefab == nullptr)
+                {
                     jeecs::typing::construct(
-                        arch_typeinfo.second.m_typeinfo, component_addr, nullptr);
+                        arch_typeinfo.second.m_typeinfo,
+                        component_addr,
+                        nullptr);
+                }
                 else
-                    jeecs::typing::copy(arch_typeinfo.second.m_typeinfo,
-                        component_addr, prefab->get_component(arch_typeinfo.second.m_typeinfo->m_id));
+                {
+                    jeecs::typing::copy(
+                        arch_typeinfo.second.m_typeinfo,
+                        component_addr,
+                        prefab->get_component(
+                            arch_typeinfo.second.m_typeinfo->m_id));
+                }
             }
 
             return entity{ chunk, entity_id, entity_version };
@@ -900,7 +909,7 @@ namespace jeecs_impl
         std::atomic_flag _m_arch_modified = {};
 
     public:
-        arch_manager(ecs_world* world) 
+        arch_manager(ecs_world* world)
             : _m_world(world)
         {
         }
@@ -1606,7 +1615,7 @@ namespace jeecs_impl
                 }
             }
 
-            std::unique_ptr<HoldedRequirementCollection> created_collection = 
+            std::unique_ptr<HoldedRequirementCollection> created_collection =
                 std::make_unique<HoldedRequirementCollection>();
 
             *out_collection = created_collection.get();
