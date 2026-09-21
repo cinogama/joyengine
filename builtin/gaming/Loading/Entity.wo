@@ -16,30 +16,14 @@ using toml;
 
 namespace JEGaming::Loading::Entity
 {
-    public async! func load(w: world, path: string)=> result<entity, string>
+    public func load(w: world, path: string)=> result<entity, string>
     {
-        let r = mutable::create(option::none: option<result<Toml, string>>);
-        do thread::create(func(){
-                r->set <| option::value <| try!{
-                    try! dat = readall(path)
-                        -> ok_or(F"Failed to load entity from `{path}`.");
-                        
-                    return parse(dat);
-                };
-            });
+        try! entity_dat = readall(path)
+            -> ok_or(F"Failed to load entity from `{path}`.")
+            =>> parse
+            ;
             
-        for (;;)
-        {
-            match (r->get)
-            {
-                none? yield!;
-                value(r)?
-                {
-                    try! entity_dat = r;
-                    return Saving::Entity::restore(w, entity_dat)
-                        -> ok_or(F"Bad entity data of `{path}`.");
-                }
-            }
-        }
+        return Saving::Entity::restore(w, entity_dat)
+            -> ok_or(F"Bad entity data of `{path}`.");
     }
 }
