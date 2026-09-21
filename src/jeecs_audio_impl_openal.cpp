@@ -1071,9 +1071,8 @@ namespace jeecs
             //      源 ID 已经可有可无，此处不需要设置
             new_dump_for_no_device_context_source->m_source_id = 0;
 
-            dump.m_sources_dump.insert(
-                std::make_pair(
-                    source, new_dump_for_no_device_context_source));
+            dump.m_sources_dump.emplace(
+                    source, new_dump_for_no_device_context_source);
 
             return new_dump_for_no_device_context_source;
         }
@@ -1105,9 +1104,8 @@ namespace jeecs
             //      源 ID 已经可有可无，此处不需要设置
             new_dump_for_no_device_context_effect_slot->m_effect_slot_id = 0;
 
-            dump.m_effect_slots_dump.insert(
-                std::make_pair(
-                    slot, new_dump_for_no_device_context_effect_slot));
+            dump.m_effect_slots_dump.emplace(
+                    slot, new_dump_for_no_device_context_effect_slot);
 
             return new_dump_for_no_device_context_effect_slot;
         }

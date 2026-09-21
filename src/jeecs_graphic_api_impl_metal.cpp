@@ -1403,15 +1403,15 @@ namespace jeecs::graphic::api::metal
 
             do
             {
-                auto result = shader_shared_state.m_pipeline_states.insert(
-                    std::make_pair(current_target_framebuffer, pso));
+                auto result = shader_shared_state.m_pipeline_states.emplace(
+                    current_target_framebuffer, pso);
                 (void)result;
                 assert(result.second);
             } while (0);
 
             if (current_target_framebuffer != nullptr)
             {
-                auto result = current_target_framebuffer->m_linked_shaders.insert(
+                auto result = current_target_framebuffer->m_linked_shaders.emplace(
                     &shader_shared_state);
                 (void)result;
                 assert(result.second);

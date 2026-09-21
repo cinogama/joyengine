@@ -613,8 +613,8 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
     std::unordered_map<std::string, const shader_uniform_block_info*> _uniform_blocks;
     for (auto& uniform_block : shader_wrapper_ptr->m_uniform_blocks)
     {
-        auto result = _uniform_blocks.insert(
-            std::make_pair(uniform_block.m_name, &uniform_block));
+        auto result = _uniform_blocks.emplace(
+            uniform_block.m_name, &uniform_block);
 
         (void)result;
         assert(result.second);

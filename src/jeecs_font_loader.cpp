@@ -139,14 +139,13 @@ const jeecs::graphic::character* je_font_get_char(
     int texture_pixel_height = pixel_h + 2 * (int)font->m_board_size_y;
 
     jeecs::graphic::character& ch =
-        font->m_stb_font_data->m_character_set.insert(
-            std::make_pair(
+        font->m_stb_font_data->m_character_set.emplace(
                 static_cast<int>(unicode32_char),
                 jeecs::graphic::character{
                     jeecs::graphic::texture::create(
                         (size_t)texture_pixel_width,
                         (size_t)texture_pixel_width,
-                        jegl_texture::format::RGBA) })).first->second;
+                        jegl_texture::format::RGBA) }).first->second;
 
     ch.m_char = unicode32_char;
 

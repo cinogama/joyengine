@@ -2701,8 +2701,8 @@ void _je_dynamic_parser_refresh(woort_value tmp)
             if (p->m_has_saving || p->m_has_restoring || p->m_has_edit)
             {
                 p->m_script_parser = script_parser;
-                _je_dynamic_parser_global_context._je_dynamic_parser_impls.insert(
-                    std::make_pair((*cur_type)->m_id, std::move(p)));
+                _je_dynamic_parser_global_context._je_dynamic_parser_impls.emplace(
+                    (*cur_type)->m_id, std::move(p));
             }
         }
 

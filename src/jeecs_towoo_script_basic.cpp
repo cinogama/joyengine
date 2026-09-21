@@ -558,7 +558,7 @@ import je::typeinfo;
 
             auto* script_parser_info = jeecs::typing::get_script_parser(typeinfo);
             if (script_parser_info == nullptr
-                || false == generated_types.insert(script_parser_info->m_woolang_typename).second)
+                || !generated_types.emplace(script_parser_info->m_woolang_typename).second)
                 continue;
 
             type_decl +=

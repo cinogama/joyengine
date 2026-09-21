@@ -1886,7 +1886,7 @@ WOORT_API woort_api je_gui_code_editor_language_definition_add_keyword(void)
     TextEditor::LanguageDefinition* defs =
         static_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0));
 
-    defs->mKeywords.insert(woort_string(1));
+    defs->mKeywords.emplace(woort_string(1));
     return woort_ret_void();
 }
 WOORT_API woort_api je_gui_code_editor_language_definition_add_identifier(void)
@@ -1899,7 +1899,7 @@ WOORT_API woort_api je_gui_code_editor_language_definition_add_identifier(void)
     ident.mLocation.mLine = (int)woort_int(3);
     ident.mLocation.mColumn = (int)woort_int(4);
 
-    defs->mIdentifiers.insert(std::make_pair(woort_string(1), ident));
+    defs->mIdentifiers.emplace(woort_string(1), ident);
     return woort_ret_void();
 }
 WOORT_API woort_api je_gui_code_editor_language_definition_add_token_regex(void)

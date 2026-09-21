@@ -3822,7 +3822,7 @@ namespace jeecs::graphic::api::vk120
             return topology_pipeline;
 
         (void)target_framebuffer_instance->
-            m_shaders_generate_pipeline_for_this_frame.insert(shader_blob);
+            m_shaders_generate_pipeline_for_this_frame.emplace(shader_blob);
 
         m_blob_data->m_rasterization_state_create_info.frontFace =
             target_framebuffer_instance->m_is_screen_framebuffer

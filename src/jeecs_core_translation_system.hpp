@@ -57,7 +57,7 @@ namespace jeecs
                 if (anchor != nullptr)
                 {
                     // 对于L2W的变换，其直接作为变换起点集合
-                    binded_trans.insert(std::make_pair(anchor->uid, &trans));
+                    binded_trans.emplace(anchor->uid, &trans);
                 }
             }
 
@@ -105,7 +105,7 @@ namespace jeecs
 
                         // 完成应用，将当前变换绑定到binding，然后从pending中删除当前项
                         if (current_idx->anchor_may_null != nullptr)
-                            binded_trans.insert(std::make_pair(current_idx->anchor_may_null->uid, current_idx->trans));
+                            binded_trans.emplace(current_idx->anchor_may_null->uid, current_idx->trans);
 
                         pending_anchor_information.erase(current_idx);
                     }
@@ -174,7 +174,7 @@ namespace jeecs
                     origin.root_center = origin.elem_center;
                     if (anchor != nullptr)
                     {
-                        binded_origins.insert(std::make_pair(anchor->uid, &origin));
+                        binded_origins.emplace(anchor->uid, &origin);
                     }
                 }
             }
@@ -200,7 +200,7 @@ namespace jeecs
 
                         // 完成应用，将当前变换绑定到binding，然后从pending中删除当前项
                         if (current_idx->anchor_may_null != nullptr)
-                            binded_origins.insert(std::make_pair(current_idx->anchor_may_null->uid, current_idx->origin));
+                            binded_origins.emplace(current_idx->anchor_may_null->uid, current_idx->origin);
 
                         pending_anchor_information.erase(current_idx);
                     }

@@ -109,11 +109,11 @@ namespace jeecs_impl
                     tinfo->m_id = _m_type_records.size();
                 }
 
-                if (_m_named_type_records.insert(std::make_pair(tinfo->m_typename, tinfo->m_id)).second == false)
+                if (_m_named_type_records.emplace(tinfo->m_typename, tinfo->m_id).second == false)
                     // Failed to instert, should not happen.
                     jeecs::debug::logfatal("Type '%s' is already registered?, please check!", tinfo->m_typename);
 
-                if (_m_hash_type_records.insert(std::make_pair(tinfo->m_hash, tinfo->m_id)).second == false)
+                if (_m_hash_type_records.emplace(tinfo->m_hash, tinfo->m_id).second == false)
                     jeecs::debug::logerr("Type '%s' hash conflict with '%s', please check!",
                         tinfo->m_typename, _m_type_records[_m_hash_type_records[tinfo->m_hash] - 1]->m_typename);
             }

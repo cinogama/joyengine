@@ -317,9 +317,9 @@ public let frag =
         // Write the per-camera view/projection/VP/time quartet into the default uniform buffer.
         void update_default_uniform_buffer(
             const Projection& projection,
-            const float (&view)[4][4],
-            const float (&proj)[4][4],
-            const float (&vp)[4][4],
+            const float(&view)[4][4],
+            const float(&proj)[4][4],
+            const float(&vp)[4][4],
             const math::vec4& shader_time)
         {
             auto* ub = projection.default_uniform_buffer.get();
@@ -461,8 +461,8 @@ public let frag =
         void draw_world_renderers(
             jegl_rendchain* chain,
             const FrustumCulling* frustum_culling,
-            const float (&view)[4][4],
-            const float (&vp)[4][4])
+            const float(&view)[4][4],
+            const float(&vp)[4][4])
         {
             for (auto& rendentity : m_renderer_list)
             {
@@ -553,11 +553,10 @@ public let frag =
             >())
             {
                 auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
-                m_camera_list.insert(
+                m_camera_list.emplace(
                     camera_arch{
                         branch, rendqueue, &projection, cameraviewport, rendbuf, nullptr, clear
-                    }
-                );
+                    });
             }
 
             for (auto&& [shads, texs, shape, rendqueue, origin, rotation, color] : query<
@@ -566,7 +565,7 @@ public let frag =
                 except typesof(Point, Parallel, Range)
             >())
             {
-                m_renderer_list.insert(
+                m_renderer_list.emplace(
                     renderer_arch{
                         color, rendqueue, nullptr, &shape, &shads, texs, &origin, rotation });
             }
@@ -755,11 +754,10 @@ public let frag =
             >())
             {
                 auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
-                m_camera_list.insert(
+                m_camera_list.emplace(
                     camera_arch{
                         branch, rendqueue, &projection, cameraviewport, rendbuf, frustumCulling, clear
-                    }
-                );
+                    });
             }
 
             for (auto&& [trans, shads, texs, shape, rendqueue, color] : query<
@@ -779,7 +777,7 @@ public let frag =
             >())
             {
                 // RendOb will be input to a chain and used for swap
-                m_renderer_list.insert(
+                m_renderer_list.emplace(
                     renderer_arch{
                         color, rendqueue, &trans, &shape, &shads, texs
                     });
@@ -1631,7 +1629,7 @@ public func frag(vf: v2f)
             >())
             {
                 auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
-                m_2dcamera_list.insert(
+                m_2dcamera_list.emplace(
                     l2dcamera_arch{
                         branch,
                         rendqueue,
@@ -1645,8 +1643,7 @@ public func frag(vf: v2f)
                         frustumCulling,
                         clear,
                         color
-                    }
-                );
+                    });
 
                 if (light2dpostpass != nullptr)
                 {
@@ -1732,7 +1729,7 @@ public func frag(vf: v2f)
             >())
             {
                 // RendOb will be input to a chain and used for swap
-                m_renderer_list.insert(
+                m_renderer_list.emplace(
                     renderer_arch{
                         color, rendqueue, &trans, &shape, &shads, texs
                     });
@@ -2001,21 +1998,21 @@ public func frag(vf: v2f)
                     m_defer_light2d_host._defer_light2d_shadow_shape_parallel_pass,
                     m_defer_light2d_host._defer_light2d_shadow_sprite_parallel_pass,
                     m_defer_light2d_host._defer_light2d_shadow_sub_pass,
-                }
-                : defer_light2d_shadow_passes_t{
-                    m_defer_light2d_host._defer_light2d_shadow_point_pass,
-                    m_defer_light2d_host._defer_light2d_shadow_point_reverse_pass,
-                    m_defer_light2d_host._defer_light2d_shadow_shape_point_pass,
-                    m_defer_light2d_host._defer_light2d_shadow_sprite_point_pass,
-                    m_defer_light2d_host._defer_light2d_shadow_sub_pass,
-                };
+            }
+            : defer_light2d_shadow_passes_t{
+                m_defer_light2d_host._defer_light2d_shadow_point_pass,
+                m_defer_light2d_host._defer_light2d_shadow_point_reverse_pass,
+                m_defer_light2d_host._defer_light2d_shadow_shape_point_pass,
+                m_defer_light2d_host._defer_light2d_shadow_sprite_point_pass,
+                m_defer_light2d_host._defer_light2d_shadow_sub_pass,
+            };
         }
 
         jegl_rchain_texture_group* alloc_shadow_texture_group(
             jegl_rendchain* chain, /* OPTIONAL */ const Textures* textures)
         {
             auto* group = jegl_rchain_allocate_texture_group(chain);
-            auto main_texture = 
+            auto main_texture =
                 textures == nullptr ? std::nullopt : textures->get_texture(0);
 
             jegl_rchain_bind_texture(
@@ -2038,8 +2035,8 @@ public func frag(vf: v2f)
             jegl_rchain_texture_group* texture_group,
             const Translation* occluder_translation,
             const light2d_arch& light,
-            const float (&view)[4][4],
-            const float (&vp)[4][4],
+            const float(&view)[4][4],
+            const float(&vp)[4][4],
             math::vec3 local_scale,
             float color_w,
             const math::vec3& parallel_dir_ref,
@@ -2417,7 +2414,7 @@ public func frag(vf: v2f)
                         auto& light2d = *light2d_p;
 
                         assert(light2d.translation != nullptr
-                            && light2d.shaders != nullptr 
+                            && light2d.shaders != nullptr
                             && light2d.shape != nullptr);
 
                         // bind_entity_textures allocates the group, binds default at slot 0,
@@ -2454,7 +2451,7 @@ public func frag(vf: v2f)
                             : m_default_resources.default_shaders_list;
 
                         // 传入 Light2D 所需的颜色、衰减信息
-                        math::vec4 light_color = 
+                        math::vec4 light_color =
                             light2d.color == nullptr ? math::vec4(1.f, 1.f, 1.f, 1.f) : light2d.color->color;
                         if (light2d.gain != nullptr)
                             light_color.w *= light2d.gain->gain;

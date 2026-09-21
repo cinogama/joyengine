@@ -224,10 +224,10 @@ size_t fimg_save_buffer_to_img_impl(
         if (ctx->writing_offset >= (size_t)ctx->image->fimg_head.MAX_FILE_SINGLE_IMG_SIZE)
         {
             const auto writing_image_file_path =
-                ctx->writing_path 
-                + "/" 
-                + FIMAGE_FILE_NAME 
-                + std::to_string(ctx->image->fimg_head.disk_count) 
+                ctx->writing_path
+                + "/"
+                + FIMAGE_FILE_NAME
+                + std::to_string(ctx->image->fimg_head.disk_count)
                 + FIMAGE_FILE_EXTENSION_NAME;
 
             FILE* imgwrite = fopen(writing_image_file_path.c_str(), "wb");
@@ -253,7 +253,7 @@ size_t fimg_save_file_to_img_impl(
         size_t real_read_sz;
         do
         {
-            const size_t buffer_free_size = 
+            const size_t buffer_free_size =
                 (size_t)(ctx->image->fimg_head.MAX_FILE_SINGLE_IMG_SIZE - ctx->writing_offset);
             real_read_sz = fread(ctx->writing_buffer + ctx->writing_offset, 1, buffer_free_size, fp);
 
@@ -294,7 +294,7 @@ fimg_creating_context* fimg_create_new_img_for_storing(
     ctx->image->path = storing_path;
     ctx->image->fimg_head.MAX_FILE_SINGLE_IMG_SIZE =
         packsize == 0 ? DEFAULT_IMAGE_SIZE : packsize;
-    ctx->writing_buffer = 
+    ctx->writing_buffer =
         new unsigned char[(size_t)ctx->image->fimg_head.MAX_FILE_SINGLE_IMG_SIZE];
 
     assert(ctx->image->fimg_head.disk_count == 0);
@@ -315,14 +315,13 @@ bool fimg_storing_buffer_to_img(
 
     if (filesz != (size_t)-1)
     {
-        if (ctx->image->file_map.insert(
-            std::make_pair(
-                aimpath,
-                fimg_img_index{
-                    this_file_img_index,
-                    this_file_diff_count,
-                    filesz }))
-                    .second)
+        if (ctx->image->file_map.emplace(
+            aimpath,
+            fimg_img_index{
+                this_file_img_index,
+                this_file_diff_count,
+                filesz
+            }).second)
         {
             ++ctx->image->fimg_head.file_count;
         }
@@ -343,14 +342,13 @@ bool fimg_storing_file_to_img(
 
     if (filesz != (size_t)-1)
     {
-        if (ctx->image->file_map.insert(
-            std::make_pair(
-                aimpath,
-                fimg_img_index{
-                    this_file_img_index,
-                    this_file_diff_count,
-                    filesz }))
-                    .second)
+        if (ctx->image->file_map.emplace(
+            aimpath,
+            fimg_img_index{
+                this_file_img_index,
+                this_file_diff_count,
+                filesz
+            }).second)
         {
             ++ctx->image->fimg_head.file_count;
         }

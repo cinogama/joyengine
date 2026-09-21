@@ -412,7 +412,7 @@ namespace jeecs_impl
                     if (!_m_free_slots.pop(&freeid))
                         break;
 
-                    free_entity_ids.insert(freeid);
+                    free_entity_ids.emplace(freeid);
                 }
 
                 for (je_EntityIdInChunk eidx = 0; eidx < _m_entity_count; eidx++)
@@ -449,7 +449,7 @@ namespace jeecs_impl
                         break;
 
                     assert(empty_entity_ids.find(freeid) == empty_entity_ids.end());
-                    empty_entity_ids.insert(freeid);
+                    empty_entity_ids.emplace(freeid);
                 }
                 return empty_entity_ids;
             }
@@ -1220,7 +1220,7 @@ namespace jeecs_impl
             ebuf->m_entity_removed_flag = false;
             ebuf->m_entity_active_stat = JE_ENTITY_STAT_UNAVAILABLE;
 
-            auto result = _m_entity_command_buffers.insert(std::make_pair(e, ebuf)).second;
+            auto result = _m_entity_command_buffers.emplace(e, ebuf).second;
             (void)result;
             assert(result);
 
@@ -1404,7 +1404,7 @@ namespace jeecs_impl
             , _m_destroying_flag(false)
         {
             std::lock_guard g1(_m_alive_worlds_mx);
-            _m_alive_worlds.insert(this);
+            _m_alive_worlds.emplace(this);
         }
         ~ecs_world()
         {
@@ -1441,13 +1441,13 @@ namespace jeecs_impl
                 if (_m_world_enabled)
                     type->m_system_updaters->m_on_enable(sys);
 
-                auto result = m_systems.insert(std::make_pair(type, sys)).second;
+                auto result = m_systems.emplace(type, sys).second;
                 (void)result;
                 assert(result);
 
                 // Create system slice cache for this system
-                result = m_system_slice_caches.insert(
-                    std::make_pair(sys, slice_cache_container_t{})).second;
+                result = m_system_slice_caches.emplace(
+                    sys, slice_cache_container_t{}).second;
                 (void)result;
                 assert(result);
             }
@@ -1720,10 +1720,9 @@ namespace jeecs_impl
                     auto* current_modify_typed_components = modify_typed_components;
                     modify_typed_components = modify_typed_components->last;
 
-                    if (!modifying_component_type_and_instances.insert(
-                        std::make_pair(
+                    if (!modifying_component_type_and_instances.emplace(
                             current_modify_typed_components->m_type_id,
-                            current_modify_typed_components->m_component_addr))
+                            current_modify_typed_components->m_component_addr)
                         .second)
                     {
                         // Operation failed, there is a new operation has overwrite this operation.
@@ -1962,11 +1961,9 @@ namespace jeecs_impl
                     auto* cur_append_or_remove_system = append_or_remove_system;
                     append_or_remove_system = append_or_remove_system->last;
 
-                    if (!modifying_system_type_and_instances.insert(
-                        std::make_pair(
+                    if (!modifying_system_type_and_instances.emplace(
                             cur_append_or_remove_system->m_typeinfo,
-                            cur_append_or_remove_system->m_add_system_instance))
-                        .second)
+                            cur_append_or_remove_system->m_add_system_instance).second)
 
                     {
                         if (cur_append_or_remove_system->m_add_system_instance != nullptr)
@@ -2723,7 +2720,7 @@ namespace jeecs_impl
                 {
                     if (shutdown_universes.find(u) == shutdown_universes.end())
                     {
-                        shutdown_universes.insert(u);
+                        shutdown_universes.emplace(u);
                         all_universe_has_shutdown = false;
                     }
 

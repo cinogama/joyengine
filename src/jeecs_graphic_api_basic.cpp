@@ -998,7 +998,7 @@ bool jegl_mark_shared_resources_outdated(
     jegl_context* context, const char* path)
 {
     std::lock_guard g1(context->_m_thread_notifier->_m_outdated_resource_blobs_mx);
-    if (context->_m_thread_notifier->_m_outdated_resource_blobs.insert(path).second)
+    if (context->_m_thread_notifier->_m_outdated_resource_blobs.emplace(path).second)
     {
         std::lock_guard g2(context->_m_thread_notifier->_m_cached_resources_mx);
 
@@ -1082,14 +1082,13 @@ bool _jegl_try_update_resource_blob(
     assert(resource_handle->m_path_may_null_if_builtin != nullptr);
 
     auto result = jeecs::graphic::_current_graphic_thread->_m_thread_notifier
-        ->_m_created_resource_blobs.insert(
-            std::make_pair(
+        ->_m_created_resource_blobs.emplace(
                 resource_handle->m_path_may_null_if_builtin,
                 jeecs::graphic::cached_resource_blob
                 {
                     blob_type,
                     blob_may_null,
-                }));
+                });
 
     if (blob_may_null != nullptr)
         return result.second;
@@ -1130,8 +1129,8 @@ T* _jegl_try_update_shared_resource(jegl_context* context, T* resource)
 
         jegl_context_notifier::cached_resource_statement caching_statement(resource);
         auto&& [cached_resource_pair, insert_succ] =
-            context->_m_thread_notifier->_m_cached_resources.insert(
-                std::make_pair(resource_path, caching_statement));
+            context->_m_thread_notifier->_m_cached_resources.emplace(
+                resource_path, caching_statement);
 
         jegl_context_notifier::cached_resource_statement& cached_resource =
             cached_resource_pair->second;
@@ -1187,7 +1186,7 @@ jeecs::graphic::jegl_resouce_state _jegl_check_resource_state(
         resource_handle->m_graphic_thread_version = jeecs::graphic::_current_graphic_thread->m_version;
 
         auto result =
-            resource_handle->m_graphic_thread->_m_thread_notifier->_m_created_resources.insert(
+            resource_handle->m_graphic_thread->_m_thread_notifier->_m_created_resources.emplace(
                 resource);
 
         (void)result;
