@@ -275,6 +275,8 @@ namespace JEEditor::Editor::WorldEditorViewport
             m_collider_drag_kind = mut ColliderKind::BOX,
             m_collider_drag_center = mut ((0., 0., 0.) as vec3),
             m_collider_drag_normal = mut ((0., 0., 1.) as vec3),
+            m_collider_drag_start_angle = mut 0.,
+            m_collider_drag_start_degree = mut 0.,
             m_collider_drag_undo_component = mut "",
             m_collider_drag_undo_member = mut "",
             m_collider_drag_undo_old_value = mut "",

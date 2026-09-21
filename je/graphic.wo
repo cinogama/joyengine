@@ -26,6 +26,12 @@ namespace je
                 
             extern("libjoyecs", "wojeapi_vertex_path")
                 public func path(self: vertex)=> option<string>;
+
+            // 模型顶点数据的局部空间包围盒，返回
+            // (min_x, min_y, min_z, max_x, max_y, max_z)；
+            // 顶点格式不含 3 分量位置时包围盒为全 0（由调用方处理退化）
+            extern("libjoyecs", "wojeapi_vertex_aabb")
+                public func aabb(self: vertex)=> (real, real, real, real, real, real);
         }
         
         public using texture = gchandle

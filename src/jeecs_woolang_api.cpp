@@ -2127,6 +2127,24 @@ WOORT_API woort_api wojeapi_vertex_path(void)
     return woort_ret_option_none();
 }
 
+WOORT_API woort_api wojeapi_vertex_aabb(void)
+{
+    auto* loaded_vertex =
+        (jeecs::basic::resource<jeecs::graphic::vertex> *)woort_gcpointer(0);
+    auto* raw_vertex = (*loaded_vertex)->resource();
+
+    woort_set_struct(WOORT_RETURN_SLOT, 6);
+
+    woort_struct_set_float(WOORT_RETURN_SLOT, 0, raw_vertex->m_x_min);
+    woort_struct_set_float(WOORT_RETURN_SLOT, 1, raw_vertex->m_y_min);
+    woort_struct_set_float(WOORT_RETURN_SLOT, 2, raw_vertex->m_z_min);
+    woort_struct_set_float(WOORT_RETURN_SLOT, 3, raw_vertex->m_x_max);
+    woort_struct_set_float(WOORT_RETURN_SLOT, 4, raw_vertex->m_y_max);
+    woort_struct_set_float(WOORT_RETURN_SLOT, 5, raw_vertex->m_z_max);
+
+    return woort_ret();
+}
+
 WOORT_API woort_api wojeapi_shaders_of_entity(void)
 {
     je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);

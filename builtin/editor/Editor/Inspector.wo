@@ -2,16 +2,19 @@ import pkg::std;
 
 import je;
 import je::ecs;
+import je::graphic;
 import je::internal;
 import je::gui;
 import je::typeinfo;
 import je::towoo;
+import je::towoo::types;
 import je::towoo::components;
 
 import pkg::toml;
 import pkg::fsys;
 import pkg::interface;
 import pkg::worst;
+import pkg::try;
 
 import builtin::gaming::Saving::Entity;
 
@@ -29,6 +32,7 @@ import ResourcePath;
 import PrefabSync;
 import Action::AddComponent;
 import Action::DestroyEntity;
+import Action::ModifyComponentMember;
 import Action::ModifyPrefab;
 import Action::RemoveComponent;
 import Action::RemoveRendererShaders;
@@ -691,6 +695,175 @@ namespace JEEditor::Editor
             if (MenuItem("解除预设"))
                 unlinkPrefabFromEntity(wctx, e);
         }
+        // 圆形碰撞体「自动适配」的半径取法（w/h 为目标矩形的宽高）：
+        // 外接圆完全覆盖目标矩形；最大边一半沿两轴恰好覆盖（四角略
+        // 露出）；最小边一半内切于较短边方向
+        enum CircleFitMode
+        {
+            CIRCUMSCRIBED,
+            MAX_HALF,
+            MIN_HALF,
+        }
+        // 计算「自动适配」的目标矩形（宽、高）：LocalScale×模型包围盒；
+        // 无 Shape 组件、未指派 model、或模型包围盒退化（顶点格式不含
+        // 3 分量位置导致 bounds 全 0）时模型按 (1,1,1) 处理；负 scale 取
+        // 绝对值，过小的边钳到 0.01（与 ColliderGizmo 的碰撞体尺寸下限
+        // 同口径）避免退化碰撞体
+        func getColliderAutoFitExtent(e: entity)=> (real, real)
+        {
+            let mut model_w = 1.;
+            let mut model_h = 1.;
+
+            match (e->towoo::get_component:<Renderer::Shape>())
+            {
+                none?;
+                value(shape)?
+                {
+                    match (shape->get_vertex())
+                    {
+                        none?;
+                        value(model)?
+                        {
+                            let (x0, y0, _, x1, y1, _) = model->aabb();
+                            if (x1 - x0 > 0. && y1 - y0 > 0.)
+                            {
+                                model_w = x1 - x0;
+                                model_h = y1 - y0;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 菜单项已按 LocalScale 存在性置灰，这里防御性回退 scale=(1,1)
+            let mut sx = 1.;
+            let mut sy = 1.;
+            match (e->towoo::get_component:<Transform::LocalScale>())
+            {
+                none?;
+                value(ls)?
+                {
+                    let s = ls.scale->get;
+                    sx = s[0];
+                    sy = s[1];
+                }
+            }
+
+            let mut w = mathf::abs(model_w * sx);
+            let mut h = mathf::abs(model_h * sy);
+            if (w < 0.01)
+                w = 0.01;
+            if (h < 0.01)
+                h = 0.01;
+            return (w, h);
+        }
+        // 序列化碰撞体组件成员的当前值（供撤销记录使用）；与
+        // TransformGizmo 的 serializeMemberValue 同逻辑，该函数是
+        // WorldEditorViewport 模块的 protected，这里本地实现一份
+        func serializeColliderMember(
+            e: entity, component_type_name: string, member_name: string)=> option<string>
+        {
+            return or(option::none: option<string>) <| try!{
+                try! component_type = typeinfo::load(component_type_name);
+                try! component_instance = e->get_component(component_type);
+                try! (member_type, member_addr) = component_instance->get_member(member_name);
+                return_value! unsafe::dynamic_parser::save(member_type, member_addr);
+            };
+        }
+        // 碰撞体成员已被类型化写入后的撤销发布：新值相对旧值有变化且
+        // 实体有 EUID 时发布 ModifyComponentMember；没有 EUID 的实体退化
+        // 为直接修改（不可撤销，与 removeComponentFromEntity 同口径）
+        func trackColliderMemberChange(
+            wctx: WorldEditorViewport, e: entity,
+            component_type_name: string, member_name: string,
+            old_value: option<string>)=> void
+        {
+            match (serializeColliderMember(e, component_type_name, member_name))
+            {
+                none?;
+                value(new_value)?
+                    match (old_value)
+                    {
+                        none?;
+                        value(old)?
+                            if (new_value != old)
+                                match (e->internal::get_entity_uid)
+                                {
+                                    none?;
+                                    value(eid)?
+                                        wctx->doAction(ModifyComponentMember::create(
+                                            eid, component_type_name, member_name,
+                                            old, new_value));
+                                }
+                    }
+            }
+        }
+        // 「自动适配」：按 LocalScale×模型包围盒的目标矩形重设碰撞体的
+        // 大小成员（只改大小，不调整 Offset）。Box: size=(w,h)；Circle:
+        // 半径按取法（圆没有唯一适配约定，由菜单三选一）；Capsule: 半径
+        // 取短边一半、总高取长边（轴向 Y，与 gizmo 高度手柄同口径）。
+        // Capsule 修改两个成员，各发布一条撤销记录（现有 Action 体系无
+        // 组合动作）。Mesh 顶点是自由多边形，不支持自动适配（菜单置灰）。
+        func autoFitCollider(
+            wctx: WorldEditorViewport, e: entity,
+            cname: string, circle_fit: CircleFitMode)=> void
+        {
+            EditSession::commit();
+
+            let (w, h) = getColliderAutoFitExtent(e);
+
+            if (cname == "Physics2D::Collider::Box")
+            {
+                match (e->towoo::get_component:<Physics2D::Collider::Box>())
+                {
+                    none?;
+                    value(box)?
+                    {
+                        let old_value = serializeColliderMember(e, cname, "size");
+                        box.size->set((w, h) as vec2);
+                        trackColliderMemberChange(wctx, e, cname, "size", old_value);
+                    }
+                }
+            }
+            else if (cname == "Physics2D::Collider::Circle")
+            {
+                match (e->towoo::get_component:<Physics2D::Collider::Circle>())
+                {
+                    none?;
+                    value(circle)?
+                    {
+                        let mut radius = mathf::sqrt(w * w + h * h) * 0.5;
+                        if (circle_fit == CircleFitMode::MAX_HALF)
+                            radius = (h < w ? w | h) * 0.5;
+                        else if (circle_fit == CircleFitMode::MIN_HALF)
+                            radius = (w < h ? w | h) * 0.5;
+
+                        let old_value = serializeColliderMember(e, cname, "radius");
+                        circle.radius->set(radius);
+                        trackColliderMemberChange(wctx, e, cname, "radius", old_value);
+                    }
+                }
+            }
+            else if (cname == "Physics2D::Collider::Capsule")
+            {
+                match (e->towoo::get_component:<Physics2D::Collider::Capsule>())
+                {
+                    none?;
+                    value(capsule)?
+                    {
+                        let old_radius = serializeColliderMember(e, cname, "radius");
+                        capsule.radius->set((w < h ? w | h) * 0.5);
+                        trackColliderMemberChange(
+                            wctx, e, cname, "radius", old_radius);
+
+                        let old_height = serializeColliderMember(e, cname, "height");
+                        capsule.height->set(w < h ? h | w);
+                        trackColliderMemberChange(
+                            wctx, e, cname, "height", old_height);
+                    }
+                }
+            }
+        }
         // 单个组件块：醒目的标题栏（加厚的折叠头 + 行尾移除按钮）与
         // 成员编辑区
         func showComponentBlock(
@@ -729,10 +902,49 @@ namespace JEEditor::Editor
             // 避免展开时误绑到成员控件或行尾按钮
             if (BeginPopupContextItemLabel(F"{short_name}##{cname}"))
             {
+                defer EndPopup();
+
+                // 碰撞体组件的「自动适配」：按 LocalScale×模型包围盒重设
+                // 大小；需要实体带 LocalScale（否则置灰），Mesh 不支持
+                if (cname->begin_with("Physics2D::Collider::"))
+                {
+                    let has_scale = e->towoo::get_component:<Transform::LocalScale>()
+                        ->is_value;
+
+                    if (cname == "Physics2D::Collider::Circle")
+                    {
+                        // 圆没有唯一适配约定，提供三种半径取法由用户选择
+                        if (BeginMenu("自动适配"))
+                        {
+                            defer EndMenu();
+
+                            if (MenuItemEnabled(
+                                    "外接圆 √(w²+h²)/2", has_scale))
+                                autoFitCollider(wctx, e, cname,
+                                    CircleFitMode::CIRCUMSCRIBED);
+                            if (MenuItemEnabled(
+                                    "按最大边 max(w,h)/2", has_scale))
+                                autoFitCollider(wctx, e, cname,
+                                    CircleFitMode::MAX_HALF);
+                            if (MenuItemEnabled(
+                                    "按最小边 min(w,h)/2", has_scale))
+                                autoFitCollider(wctx, e, cname,
+                                    CircleFitMode::MIN_HALF);
+                        }
+                    }
+                    else if (cname == "Physics2D::Collider::Mesh")
+                        do MenuItemEnabled("自动适配", false);
+                    else
+                    {
+                        if (MenuItemEnabled("自动适配", has_scale))
+                            autoFitCollider(wctx, e, cname,
+                                CircleFitMode::CIRCUMSCRIBED);
+                    }
+                    Separator();
+                }
+
                 if (MenuItem(F"移除组件 {short_name}"))
                     removeComponentFromEntity(wctx, e, ctype);
-                    
-                defer EndPopup();
             }
             
             // 折叠头的布局宽度只覆盖文字，× 需手动定位到行尾；

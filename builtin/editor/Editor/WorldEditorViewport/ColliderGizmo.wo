@@ -1,9 +1,11 @@
 // 世界编辑器视口 —— 碰撞体 gizmo（编辑手柄）交互。
-// “编辑碰撞体”模式下为选中实体的 Physics2D::Collider（Box/Circle/
-// Capsule/Mesh）显示可拖拽手柄：盒四角 / 圆半径点 / 胶囊高度点与半径
-// 点 / 网格各顶点。拖拽在碰撞体平面（实体 Z 轴为法线）内进行，命中
-// 点换算回形状局部坐标后直接写回组件值；拖拽结束值有变化时发布可
-// 撤销的 ModifyComponentMember（与变换游标同一套撤销机制）。
+// 为选中实体的 Physics2D::Collider（Box/Circle/Capsule/Mesh）显示可
+// 拖拽手柄：盒四角 / 圆半径点 / 胶囊高度点与半径点 / 网格各顶点；
+// 实体带 Offset::Position / Offset::Rotation 组件时另提供碰撞体中心
+// 拖拽把手与旋转环把手（直接编辑这两个偏移组件）。拖拽在碰撞体平面
+//（实体 Z 轴为法线）内进行，命中点换算回组件局部坐标后直接写回组件
+// 值；拖拽结束值有变化时发布可撤销的 ModifyComponentMember（与变换
+// 游标同一套撤销机制）。
 // 线框与手柄的绘制见 GizmoDrawing.wo，几何换算复用本文件的纯函数
 // 与 GizmoMath.wo。
 
@@ -41,8 +43,7 @@ namespace JEEditor::Editor::WorldEditorViewport
 
     // 碰撞体框架：形状局部坐标 -> 世界坐标的变换。center/rotation 已含
     // Offset::Position/Offset::Rotation 的合成（与物理系统 compute_body_pose
-    // 一致），oscale 为 Offset::Scale（形状几何按物理系统的口径乘入各
-    // 顶点，见 getColliderHandles/getColliderOutline）。
+    // 同口径：偏移位置按合成角旋转，即 center = entity_pos + rotation * 偏移）。
     protected func colliderFrame(e: entity)=> option<(vec3, quat)>
     {
         return or(option::none: option<(vec3, quat)>) <| try!{
@@ -64,22 +65,21 @@ namespace JEEditor::Editor::WorldEditorViewport
                 value(orot)? offset_rot = orot.degree->get;
             }
 
-            let center = entity_pos
-                + entity_rot * ((offset_pos[0], offset_pos[1], 0.) as vec3);
             let rotation = entity_rot * quat::axis((0., 0., 1.) as vec3, offset_rot);
+            let center = entity_pos
+                + rotation * ((offset_pos[0], offset_pos[1], 0.) as vec3);
             return_value! option::value((center, rotation));
         };
     }
 
-    // 形状局部坐标（已含 Offset::Scale 的最终几何）-> 世界坐标
+    // 形状局部坐标 -> 世界坐标
     protected func colliderShapeToWorld(
         center: vec3, rotation: quat, local: vec2)=> vec3
     {
         return center + rotation * ((local[0], local[1], 0.) as vec3);
     }
 
-    // 世界坐标（碰撞体平面内）-> 组件局部坐标（除回 Offset::Scale），
-    // 供拖拽写回组件值使用；scale 过小时按符号保留极小值避免除零
+    // 世界坐标（碰撞体平面内）-> 组件局部坐标，供拖拽写回组件值使用
     protected func colliderWorldToLocal(
         center: vec3, rotation: quat, world: vec3)=> vec2
     {
@@ -87,7 +87,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         return (local[0], local[1]) as vec2;
     }
 
-    // 盒的四角形状局部坐标（±size/2，含 Offset::Scale，与物理系统同口径）
+    // 盒的四角形状局部坐标（±size/2，与物理系统同口径）
     protected func colliderBoxCorners(size: vec2)=> array<vec2>
     {
         let hx = mathf::abs(size[0]) * 0.5;
@@ -98,7 +98,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         ];
     }
 
-    // 圆的有效半径（abs(radius) * 两轴 offset scale 的较大者，与物理系统同口径）
+    // 圆的有效半径（abs(radius)，与物理系统同口径）
     protected func colliderCircleRadius(radius: real)=> real
     {
         return mathf::abs(radius);
@@ -257,6 +257,59 @@ namespace JEEditor::Editor::WorldEditorViewport
         };
     }
 
+    // 偏移把手（Offset::Position / Offset::Rotation，组件存在时才有）：
+    // 中心把手位于碰撞体框架中心，旋转环略大于形状轮廓，供交互与绘制共用
+
+    // 中心把手世界坐标（拖拽写回 Offset::Position.value）；
+    // 实体无 Offset::Position 组件时为 none
+    protected func getColliderOffsetPositionHandle(e: entity)=> option<vec3>
+    {
+        return or(option::none: option<vec3>) <| try!{
+            if (e->towoo::get_component:<Physics2D::Offset::Position>()->is_none)
+                return_value! option::none: option<vec3>;
+            try! frame = colliderFrame(e);
+            return_value! option::value(frame.0);
+        };
+    }
+
+    // 旋转环（碰撞体平面内、以框架中心为圆心、半径为线框最大外扩半径
+    // 乘 COLLIDER_ROTATION_RING_RATIO 的采样环，首尾不重复）与环上
+    // 框架 +X 方向的把手位置（拖拽写回 Offset::Rotation.degree）；
+    // 实体无 Offset::Rotation 组件时为 none
+    protected func getColliderOffsetRotationGizmo(
+        e: entity)=> option<(array<vec3>, vec3)>
+    {
+        return or(option::none: option<(array<vec3>, vec3)>) <| try!{
+            if (e->towoo::get_component:<Physics2D::Offset::Rotation>()->is_none)
+                return_value! option::none: option<(array<vec3>, vec3)>;
+            try! frame = colliderFrame(e);
+            try! outline = getColliderOutline(e);
+
+            // 环半径：线框各点到中心的最大距离略放大，与形状轮廓区分开
+            let mut extent = 0.;
+            for (let p : outline)
+            {
+                let d = (p - frame.0)->length;
+                if (d > extent)
+                    extent = d;
+            }
+            let ring_r = extent * COLLIDER_ROTATION_RING_RATIO;
+
+            let pts = []mut: vec<vec3>;
+            for (let mut i = 0; i < COLLIDER_CIRCLE_SEGMENTS; i += 1)
+            {
+                let ang = 2. * mathf::PI
+                    * (i as real / COLLIDER_CIRCLE_SEGMENTS as real);
+                pts->add(colliderShapeToWorld(
+                    frame.0, frame.1,
+                    (mathf::cos(ang) * ring_r, mathf::sin(ang) * ring_r) as vec2));
+            }
+            let handle = colliderShapeToWorld(
+                frame.0, frame.1, (ring_r, 0.) as vec2);
+            return_value! option::value((pts->to_array, handle));
+        };
+    }
+
     // ==================== 交互（悬停 / 拖拽 / 撤销） ====================
 
     // 每帧更新碰撞体编辑手柄状态：选中带碰撞体的实体即显示手柄、
@@ -304,18 +357,17 @@ namespace JEEditor::Editor::WorldEditorViewport
                 return_value!;
 
             let mouse = GetMousePos() as vec2;
+            let mouse_local = (mouse - rmin) / rsize;
+            let mouse_ndc = (mouse_local - (0.5, 0.5) as vec2) * 2.;
+            let mouse_ray = towoo::ray::from(
+                camera_trans, camera_proj,
+                (mouse_ndc[0], -mouse_ndc[1]) as vec2,
+                camera_entity->towoo::get_component:<Camera::PerspectiveProjection>->is_none);
 
             // 拖拽进行中：按当前鼠标射线应用编辑
             if (self.m_collider_dragging)
             {
                 self.m_collider_hover_handle = self.m_collider_drag_handle;
-
-                let mouse_local = (mouse - rmin) / rsize;
-                let mouse_ndc = (mouse_local - (0.5, 0.5) as vec2) * 2.;
-                let mouse_ray = towoo::ray::from(
-                    camera_trans, camera_proj,
-                    (mouse_ndc[0], -mouse_ndc[1]) as vec2,
-                    camera_entity->towoo::get_component:<Camera::PerspectiveProjection>->is_none);
 
                 self->applyColliderDrag(
                     selected_entity, mouse_ray->origin, mouse_ray->direction);
@@ -344,6 +396,50 @@ namespace JEEditor::Editor::WorldEditorViewport
                     best = i;
                 }
             }
+
+            // 偏移把手一并参与最近者竞争：中心把手按点距；旋转把手按
+            // 把手点距与环分段距离（与变换游标旋转环同一判定口径）
+            match (getColliderOffsetPositionHandle(selected_entity))
+            {
+                none?;
+                value(p)?
+                {
+                    let d = (mouse - gizmoWorldToScreen(
+                            view_proj, p, rmin, rsize))->length;
+                    if (d < best_dist)
+                    {
+                        best_dist = d;
+                        best = COLLIDER_HANDLE_OFFSET_POSITION;
+                    }
+                }
+            }
+            match (getColliderOffsetRotationGizmo(selected_entity))
+            {
+                none?;
+                value((ring, hp))?
+                {
+                    let d = (mouse - gizmoWorldToScreen(
+                            view_proj, hp, rmin, rsize))->length;
+                    if (d < best_dist)
+                    {
+                        best_dist = d;
+                        best = COLLIDER_HANDLE_OFFSET_ROTATION;
+                    }
+                    for (let mut i = 0; i < ring->len; i += 1)
+                    {
+                        let a = gizmoWorldToScreen(
+                            view_proj, ring[i], rmin, rsize);
+                        let b = gizmoWorldToScreen(
+                            view_proj, ring[(i + 1) % ring->len], rmin, rsize);
+                        let d = gizmoScreenDistToSegment(mouse, a, b);
+                        if (d < best_dist)
+                        {
+                            best_dist = d;
+                            best = COLLIDER_HANDLE_OFFSET_ROTATION;
+                        }
+                    }
+                }
+            }
             self.m_collider_hover_handle = best;
 
             // 悬停手柄上按下左键：开始拖拽
@@ -352,7 +448,8 @@ namespace JEEditor::Editor::WorldEditorViewport
             {
                 self->beginColliderDrag(
                     selected_entity, selected_euid, kind,
-                    self.m_collider_hover_handle);
+                    self.m_collider_hover_handle,
+                    mouse_ray->origin, mouse_ray->direction);
             }
 
             return_value!;
@@ -365,15 +462,28 @@ namespace JEEditor::Editor::WorldEditorViewport
         selected_entity: entity,
         selected_euid: entity::internal::euid_t,
         kind: ColliderKind,
-        handle: int)=> void
+        handle: int,
+        ray_origin: vec3,
+        ray_dir: vec3)=> void
     {
         do try!{
             try! frame = colliderFrame(selected_entity);
 
-            // 撤销记录的目标成员按种类而定（胶囊依手柄：0=高度 1=半径）
+            // 撤销记录的目标成员按种类而定（胶囊依手柄：0=高度 1=半径；
+            // 偏移把手直接编辑 Offset 组件自身）
             let mut undo_component = "";
             let mut undo_member = "";
-            if (kind == ColliderKind::BOX)
+            if (handle == COLLIDER_HANDLE_OFFSET_POSITION)
+            {
+                undo_component = "Physics2D::Offset::Position";
+                undo_member = "value";
+            }
+            else if (handle == COLLIDER_HANDLE_OFFSET_ROTATION)
+            {
+                undo_component = "Physics2D::Offset::Rotation";
+                undo_member = "degree";
+            }
+            else if (kind == ColliderKind::BOX)
             {
                 undo_component = "Physics2D::Collider::Box";
                 undo_member = "size";
@@ -394,6 +504,23 @@ namespace JEEditor::Editor::WorldEditorViewport
                 undo_member = "vertices";
             }
 
+            // 旋转把手：捕获碰撞体平面内的起始角与起始 degree，
+            // 拖拽按角度增量改写 Offset::Rotation.degree
+            let mut start_angle = 0.;
+            let mut start_degree = 0.;
+            if (handle == COLLIDER_HANDLE_OFFSET_ROTATION)
+            {
+                try! orot =
+                    selected_entity->towoo::get_component:<Physics2D::Offset::Rotation>();
+                let normal = frame.1 * ((0., 0., 1.) as vec3);
+                try! hit = gizmoRayPlaneHit(
+                    ray_origin, ray_dir, normal, frame.0);
+                let (ba, bb) = gizmoPlaneBasis(normal);
+                let v = hit - frame.0;
+                start_angle = mathf::atan2(v->dot(bb), v->dot(ba));
+                start_degree = orot.degree->get;
+            }
+
             try! old_value = serializeMemberValue(
                 selected_entity, undo_component, undo_member);
 
@@ -404,6 +531,8 @@ namespace JEEditor::Editor::WorldEditorViewport
             // 拖拽平面：碰撞体所在平面（实体 Z 轴为法线），拖拽期间冻结
             self.m_collider_drag_center = frame.0;
             self.m_collider_drag_normal = frame.1 * ((0., 0., 1.) as vec3);
+            self.m_collider_drag_start_angle = start_angle;
+            self.m_collider_drag_start_degree = start_degree;
             self.m_collider_drag_undo_component = undo_component;
             self.m_collider_drag_undo_member = undo_member;
             self.m_collider_drag_undo_old_value = old_value;
@@ -428,6 +557,35 @@ namespace JEEditor::Editor::WorldEditorViewport
 
             let kind = self.m_collider_drag_kind;
             let handle = self.m_collider_drag_handle;
+
+            // 偏移把手：命中点/角度换算回偏移局部值写回 Offset 组件
+            if (handle == COLLIDER_HANDLE_OFFSET_POSITION)
+            {
+                try! opos =
+                    selected_entity->towoo::get_component:<Physics2D::Offset::Position>();
+                try! frame = colliderFrame(selected_entity);
+                try! trans =
+                    selected_entity->towoo::get_component:<Transform::Translation>();
+                // 命中点位于实体位置 + 框架旋转 * 偏移 上，逆变换回
+                // 偏移值（与 colliderFrame/物理系统 compute_body_pose 互逆）
+                let local = frame.1->inverse * (hit - trans->get_global_pos);
+                opos.value->set((local[0], local[1]) as vec2);
+                return_value!;
+            }
+            else if (handle == COLLIDER_HANDLE_OFFSET_ROTATION)
+            {
+                try! orot =
+                    selected_entity->towoo::get_component:<Physics2D::Offset::Rotation>();
+                // 冻结平面内的当前角减起始角得增量，叠加到起始 degree；
+                // 基向量由冻结法线重算（纯函数，与捕获起始角时一致）
+                let (ba, bb) = gizmoPlaneBasis(self.m_collider_drag_normal);
+                let v = hit - self.m_collider_drag_center;
+                let angle = mathf::atan2(v->dot(bb), v->dot(ba));
+                let delta_deg =
+                    (angle - self.m_collider_drag_start_angle) * mathf::RAD2DEG;
+                orot.degree->set(self.m_collider_drag_start_degree + delta_deg);
+                return_value!;
+            }
 
             if (kind == ColliderKind::BOX)
             {
