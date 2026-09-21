@@ -11,6 +11,7 @@ import ReplConsole;
 import WorldEditorViewport;
 import Inspector;
 import DebugRun;
+import Project;
 
 using std;
 
@@ -109,6 +110,9 @@ namespace JEEditor::Editor::MainMenu
             ->  endMenu
             -> subMenu("编辑")
             ->  subItem("新建世界", WorldEditorViewport::createNewWorldToEdit)
+            ->      endItem
+            ->  separator()
+            ->  subItem("更新类型 & 编辑器", Project::updateEditorTypes)
             ->      endItem
             ->  endMenu
             -> subMenu("运行")

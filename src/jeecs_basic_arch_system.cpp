@@ -804,7 +804,8 @@ namespace jeecs_impl
                     arch_typeinfo.second.m_begin_offset_in_chunk);
 
                 if (prefab == nullptr)
-                    jeecs::typing::construct(arch_typeinfo.second.m_typeinfo, component_addr, nullptr);
+                    jeecs::typing::construct(
+                        arch_typeinfo.second.m_typeinfo, component_addr, nullptr);
                 else
                     jeecs::typing::copy(arch_typeinfo.second.m_typeinfo,
                         component_addr, prefab->get_component(arch_typeinfo.second.m_typeinfo->m_id));

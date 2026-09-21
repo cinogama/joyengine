@@ -268,7 +268,7 @@ namespace JEEditor::Editor
         func prepareModulesThenRestoreWorlds(
             modules: map<string, path_t>, modules_all_valid: bool, toml: option<Toml>)
         {
-            let mut all_modules_ok = modules_all_valid;
+            let all_modules_ok = mutable::create(modules_all_valid);
             let finished = mutable::create(false);
             
             if (!modules->empty)
@@ -326,16 +326,18 @@ namespace JEEditor::Editor
                 while(WorldEditorViewport::isWorldsFrozen())
                     yield();
                     
-                all_modules_ok = all_modules_ok && all_ok->get;
+                all_modules_ok->set(all_modules_ok->get && all_ok->get);
             }
             
             finished->set <| false;
             FreezeWorldsTodo::show(
                 "更新编辑器类型",
                 func(){
-                    apply:<Project>(
+                    return apply:<Project>(
                         func(proj){
-                            proj->updateEditorTypesDuringFreeze();
+                            if (!proj->updateEditorTypesDuringFreeze())
+                                all_modules_ok->set <| false;
+                                
                             finished->set <| true;
                         });
                 });
@@ -347,7 +349,7 @@ namespace JEEditor::Editor
             while(WorldEditorViewport::isWorldsFrozen())
                 yield();
                 
-            if (!all_modules_ok)
+            if (!all_modules_ok->get)
             {
                 logerr("存在编译或装载失败的模块，本次不恢复上次打开的世界。");
                 MsgBox::msg(
@@ -484,6 +486,7 @@ namespace JEEditor::Editor
         }
         func updateEditorTypesDuringFreeze(self: Project)
         {
+            let mut result = true;
             let editor_script_path = self.m_working_path / "resource" / "editor";
             
             let types_path = editor_script_path / "types.wo";
@@ -492,8 +495,10 @@ namespace JEEditor::Editor
                 match (unsafe::dynamic_parser::update_types(types_path->to_string))
                 {
                     ok(_)?;
-                    err(msg)?
+                    err(msg)?{
+                        result = false;
                         je::logerr(F"更新类型序列化器失败：\n{msg}");
+                    }
                 }
             }
             let editor_path = editor_script_path / "editor.wo";
@@ -502,10 +507,13 @@ namespace JEEditor::Editor
                 match (unsafe::dynamic_parser::update_editor(editor_path->to_string))
                 {
                     ok(_)?;
-                    err(msg)?
+                    err(msg)?{
+                        result = false;
                         je::logerr(F"更新类型编辑器失败：\n{msg}");
+                    }
                 }
             }
+            return result;
         }
         public func reloadModuleWhileWorldsFreezed(
             self: Project, name: string, path: path_t, update_dylib_callback: ()=> result<void, string>)
@@ -591,6 +599,15 @@ namespace JEEditor::Editor
         {
             do apply:<Project>(
                 \p = p.m_towoo_collection->appendSystem(path););
+        }
+        public func updateEditorTypes()
+        {
+            FreezeWorldsTodo::show("正在更新 ToWoo...", func(){
+                    apply:<Project>(
+                        func(proj){
+                            do proj->updateEditorTypesDuringFreeze();
+                        });
+                });
         }
     }
 }
