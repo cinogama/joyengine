@@ -61,13 +61,13 @@ namespace je
             public func add_system(self: world, systype: typeinfo)=> bool;
             
         extern("libjoyecs", "wojeapi_add_entity_to_world_with_components")
-            public func add_entity(self: world, components: array<typeinfo>)=> entity;
+            public func add_entity(self: world, components: array<typeinfo>)=> option<entity>;
             
         extern("libjoyecs", "wojeapi_add_entity_to_world_with_prefab")
             public func instance(self: world, prefab: entity)=> entity;
             
         extern("libjoyecs", "wojeapi_add_prefab_to_world_with_components")
-            public func add_prefab(self: world, components: array<typeinfo>)=> entity;
+            public func add_prefab(self: world, components: array<typeinfo>)=> option<entity>;
             
         extern("libjoyecs", "wojeapi_remove_system_from_world")
             public func remove_system(self: world, sysinfo: typeinfo)=> void;

@@ -859,7 +859,7 @@ namespace JEGaming::Saving::Entity
         }
     }
 
-    public func restore(w: world, edat: Toml)=> entity
+    public func restore(w: world, edat: Toml)=> option<entity>
     {
         let component_dats =
             edat->get("components")=>> \v = v->as_table;->or({})->iter
@@ -875,7 +875,7 @@ namespace JEGaming::Saving::Entity
         let universe = option::value(w->get_universe);
 
         // Create entity.
-        let e = w->add_entity(
+        try! e = w->add_entity(
             component_dats->> \(ctype, _) = ctype;);
             
         // Apply component data.
@@ -928,6 +928,6 @@ namespace JEGaming::Saving::Entity
             e, universe,
             edat->get("shaders")=>> \v = v->as_array;->or([]));
 
-        return e;
+        return_value! e;
     }
 }

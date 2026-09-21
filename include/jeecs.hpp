@@ -1499,7 +1499,8 @@ je_ecs_world_destroy [基本接口]
         2. 销毁所有实体
         3. 执行最后命令缓冲区更新
         4. 被宇宙从世界列表中移除
-    * 向一个正在销毁中的世界中创建实体或添加系统是无效的
+    * 向正在销毁中的世界创建实体或添加系统仍会成功，
+        但它们会在下一次世界更新时随世界一并销毁
 请参见：
     je_ecs_world_add_system_instance
     je_ecs_world_create_entity_with_components
@@ -1567,7 +1568,9 @@ je_ecs_world_add_system_instance [基本接口]
     1. 若此前世界中不存在同类型的系统，则添加
     2. 若此前世界中已经存在同类型系统，则替换
 
-    * 若向一个正在销毁中的世界添加系统实例，或者给定的类型不是一个系统类型，返回 nullptr
+    * 若给定的类型不是一个系统类型，返回 nullptr
+    * 向正在销毁中的世界添加系统实例仍会返回有效实例，
+        但该系统会在下一次世界更新时随世界一并销毁，永远不会执行
 */
 JE_API /* OPTIONAL */ je_System je_ecs_world_add_system_instance(
     je_GameWorld* world,
@@ -1598,7 +1601,8 @@ je_ecs_world_create_entity_with_components [基本接口]
 向指定世界中创建一个用于指定组件集合的实体，创建结果通过参数 out_entity 返回
 component_ids 应该指向一个储存有N个je_TypeId实例的连续空间，
 其中，N是组件种类数量（component_count）且不应该为0。
-    * 若向一个正在销毁中的世界创建实体，则创建失败，out_entity将被写入`无效值`
+    * 世界销毁是异步的：向已提交销毁请求（正在销毁中）的世界创建实体仍会成功，
+        但该实体会在下一次世界更新时随世界一并销毁；
 请参见：
     je_TypeId
     je_GameEntity
@@ -6989,8 +6993,11 @@ namespace jeecs
         }
 
         // This function only used for editor.
-        inline game_entity _add_entity(const std::vector<je_TypeId>& components)
+        inline std::optional<game_entity> _add_entity(const std::vector<je_TypeId>& components)
         {
+            if (components.empty())
+                return std::nullopt;
+
             game_entity gentity;
             je_ecs_world_create_entity_with_components(
                 handle(), &gentity._m_raw, components.data(), components.size());
@@ -6998,8 +7005,11 @@ namespace jeecs
             return gentity;
         }
         // This function only used for editor.
-        inline game_entity _add_prefab(const std::vector<je_TypeId>& components)
+        inline std::optional<game_entity> _add_prefab(const std::vector<je_TypeId>& components)
         {
+            if (components.empty())
+                return std::nullopt;
+
             game_entity gentity;
             je_ecs_world_create_prefab_with_components(
                 handle(), &gentity._m_raw, components.data(), components.size());

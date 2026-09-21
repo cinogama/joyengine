@@ -291,7 +291,7 @@ WOORT_API woort_api wojeapi_create_universe(void)
 
 WOORT_API woort_api wojeapi_close_universe(void)
 {
-    je_GameUniverse* const universe = 
+    je_GameUniverse* const universe =
         static_cast<je_GameUniverse*>(woort_pointer(0));
 
     woort_vm* const last = woort_vm_swap(nullptr);
@@ -445,7 +445,7 @@ WOORT_API woort_api wojeapi_get_system_from_world(void)
     const je_TypeInfo* system_type =
         static_cast<const je_TypeInfo*>(woort_pointer(1));
 
-    auto* const system_addr = 
+    auto* const system_addr =
         je_ecs_world_get_system_instance(
             gworld.handle(), system_type->m_id);
 
@@ -523,14 +523,19 @@ WOORT_API woort_api wojeapi_add_entity_to_world_with_components(void)
             static_cast<const je_TypeInfo*>(woort_unbox_pointer(elem))->m_id);
     }
 
-    return woort_ret_gchandle(
-        new je_GameEntity(gworld._add_entity(components)._m_raw),
-        WOORT_IGNORE,
-        [](void* ptr)
-        {
-            delete (je_GameEntity*)ptr;
-        },
-        nullptr);
+    auto new_entity = gworld._add_entity(components);
+    if (new_entity.has_value())
+    {
+        return woort_ret_option_gchandle(
+            new je_GameEntity(new_entity.value()._m_raw),
+            WOORT_IGNORE,
+            [](void* ptr)
+            {
+                delete (je_GameEntity*)ptr;
+            },
+            nullptr);
+    }
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api wojeapi_add_entity_to_world_with_prefab(void)
@@ -572,14 +577,19 @@ WOORT_API woort_api wojeapi_add_prefab_to_world_with_components(void)
             static_cast<const je_TypeInfo*>(woort_unbox_pointer(elem))->m_id);
     }
 
-    return woort_ret_gchandle(
-        new je_GameEntity(gworld._add_prefab(components)._m_raw),
-        WOORT_IGNORE,
-        [](void* ptr)
-        {
-            delete (je_GameEntity*)ptr;
-        },
-        nullptr);
+    auto new_prefab = gworld._add_prefab(components);
+    if (new_prefab.has_value())
+    {
+        return woort_ret_option_gchandle(
+            new je_GameEntity(new_prefab.value()._m_raw),
+            WOORT_IGNORE,
+            [](void* ptr)
+            {
+                delete (je_GameEntity*)ptr;
+            },
+            nullptr);
+    }
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api wojeapi_world_get_all_entities(void)

@@ -3,9 +3,9 @@
 ## 函数签名
 
 ```c
-JE_API jeecs::game_system* je_ecs_world_add_system_instance(
-    void* world,
-    jeecs::typing::typeid_t type);
+JE_API je_System je_ecs_world_add_system_instance(
+    je_GameWorld* world,
+    je_TypeId type);
 ```
 
 ## 描述
@@ -16,14 +16,14 @@ JE_API jeecs::game_system* je_ecs_world_add_system_instance(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `world` | `void*` | 指向世界的指针 |
-| `type` | `jeecs::typing::typeid_t` | 系统类型的 ID |
+| `world` | `je_GameWorld*` | 指向世界的指针 |
+| `type` | `je_TypeId` | 系统类型的 ID |
 
 ## 返回值
 
 | 类型 | 描述 |
 |------|------|
-| `jeecs::game_system*` | 指向系统实例的指针；若添加失败返回 `nullptr` |
+| `je_System` | 指向系统实例的指针；若给定的类型不是一个系统类型，返回 `nullptr` |
 
 ## 用法
 
@@ -32,14 +32,15 @@ JE_API jeecs::game_system* je_ecs_world_add_system_instance(
 ### 示例
 
 ```cpp
-void* world = je_ecs_world_create(universe);
+je_GameUniverse* universe = je_ecs_universe_create();
+je_GameWorld* world = je_ecs_world_create(universe);
 
 // 获取系统类型信息
-const jeecs::typing::type_info* physics_system = 
+const je_TypeInfo* physics_system = 
     je_typing_get_info_by_name("Physics2D::World");
 
 // 添加系统实例
-jeecs::game_system* system_instance = 
+je_System system_instance = 
     je_ecs_world_add_system_instance(world, physics_system->m_id);
 
 if (system_instance != nullptr) {
@@ -53,7 +54,7 @@ if (system_instance != nullptr) {
 - 如果生效的是添加系统操作：
   - 若此前世界中不存在同类型系统，则添加
   - 若此前世界中已存在同类型系统，则替换
-- 若向一个正在销毁中的世界添加系统实例，返回 `nullptr`
+- 向正在销毁中的世界添加系统实例仍会返回有效实例，但该系统会在下一次世界更新时随世界一并销毁，永远不会执行
 
 ## 相关接口
 

@@ -953,8 +953,6 @@ namespace jeecs_impl
 
         arch_type* find_or_add_arch(const types_set& _types) noexcept
         {
-            if (_types.empty())
-                return nullptr;
             do
             {
                 std::shared_lock sg1(_m_arch_types_mapping_mx);
@@ -974,7 +972,6 @@ namespace jeecs_impl
         }
         arch_type::entity create_an_entity_with_component(const types_set& _types) noexcept
         {
-            assert(!_types.empty());
             return find_or_add_arch(_types)->instance_entity(nullptr);
         }
 
@@ -2844,7 +2841,9 @@ void je_ecs_world_create_entity_with_components(
     const je_TypeId* component_ids,
     size_t component_count)
 {
-    jeecs_impl::types_set types =
+    assert(component_count != 0);
+
+    const jeecs_impl::types_set types =
         jeecs_impl::make_types_set(component_ids, component_count);
 
     auto&& entity = static_cast<jeecs_impl::ecs_world*>(world)
@@ -2860,7 +2859,9 @@ void je_ecs_world_create_prefab_with_components(
     const je_TypeId* component_ids,
     size_t component_count)
 {
-    jeecs_impl::types_set types =
+    assert(component_count != 0);
+
+    const jeecs_impl::types_set types =
         jeecs_impl::make_types_set(component_ids, component_count);
 
     auto entity = static_cast<jeecs_impl::ecs_world*>(world)

@@ -4,9 +4,10 @@
 
 ```c
 JE_API void je_ecs_world_create_entity_with_components(
-    void* world,
-    jeecs::game_entity* out_entity,
-    const jeecs::typing::typeid_t* component_ids);
+    je_GameWorld* world,
+    je_GameEntity* out_entity,
+    const je_TypeId* component_ids,
+    size_t component_count);
 ```
 
 ## 描述
@@ -17,9 +18,10 @@ JE_API void je_ecs_world_create_entity_with_components(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `world` | `void*` | 指向世界的指针 |
-| `out_entity` | `jeecs::game_entity*` | 用于接收创建结果的实体指针 |
-| `component_ids` | `const jeecs::typing::typeid_t*` | 组件类型 ID 数组，以 `INVALID_TYPE_ID` 结尾 |
+| `world` | `je_GameWorld*` | 指向世界的指针 |
+| `out_entity` | `je_GameEntity*` | 用于接收创建结果的实体指针 |
+| `component_ids` | `const je_TypeId*` | 组件类型 ID 数组 |
+| `component_count` | `size_t` | 组件种类数量 |
 
 ## 返回值
 
@@ -33,21 +35,21 @@ JE_API void je_ecs_world_create_entity_with_components(
 
 ```cpp
 // 获取组件类型
-const jeecs::typing::type_info* transform_type = 
+const je_TypeInfo* transform_type = 
     je_typing_get_info_by_name("Transform::Translation");
-const jeecs::typing::type_info* renderer_type = 
+const je_TypeInfo* renderer_type = 
     je_typing_get_info_by_name("Renderer::Shape");
 
-// 构建组件 ID 数组（以 INVALID_TYPE_ID 结尾）
-jeecs::typing::typeid_t components[] = {
+// 构建组件 ID 数组
+const je_TypeId components[] = {
     transform_type->m_id,
     renderer_type->m_id,
-    jeecs::typing::INVALID_TYPE_ID  // 结束标记
 };
 
 // 创建实体
-jeecs::game_entity entity;
-je_ecs_world_create_entity_with_components(world, &entity, components);
+je_GameEntity entity;
+je_ecs_world_create_entity_with_components(
+    world, &entity, components, sizeof(components) / sizeof(je_TypeId));
 
 // 获取并设置组件数据
 auto* transform = (Transform::Translation*)
@@ -60,10 +62,10 @@ if (transform != nullptr) {
 
 ## 注意事项
 
-- `component_ids` 应指向一个储存有 N+1 个类型 ID 的连续空间
-- 其中 N 是组件种类数量且不应该为 0
-- 空间的最后必须是 `jeecs::typing::INVALID_TYPE_ID` 作为结束标记
-- 若向一个正在销毁中的世界创建实体，创建失败，`out_entity` 将被写入无效值
+- `component_ids` 应指向一个储存有 N 个类型 ID 的连续空间
+- 其中 N 是组件种类数量（`component_count`）且不应该为 0
+- 世界销毁是异步的（见 [je_ecs_world_destroy](je_ecs_world_destroy.md)）：向已提交销毁请求（正在销毁中）的世界创建实体仍会成功，`out_entity` 将被写入有效句柄，但该实体会在下一次世界更新时随世界一并销毁
+- 向已被销毁的世界（指针已悬空）创建实体是未定义行为
 
 ## 相关接口
 

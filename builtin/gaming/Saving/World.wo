@@ -52,7 +52,7 @@ namespace JEGaming::Saving::World
         return saveWithCustomEntitySaver(w, Entity::save);
     }
     public func restoreWithCustomEntityRestorer(
-        u: universe, wdat: Toml, entity_restorer: (world, Toml)=> entity)=> world
+        u: universe, wdat: Toml, entity_restorer: (world, Toml)=> option<entity>)=> world
         {
         let w = world::create(u);
         

@@ -62,7 +62,7 @@ namespace JEEditor::Editor::Action
                 m_entity_content = entity_dat,
             };
         }
-
+        
         // 从既有实体数据（复制到剪贴板的实体快照等）构造：快照不含
         // Editor:: 组件（save 跳过），补上空的 Editor::EntityId 让原生侧
         // 构造时分配全新的调试 EUID（同 try_create_with_types）；
@@ -71,7 +71,7 @@ namespace JEEditor::Editor::Action
         func try_create_with_content(entity_content: Toml)=> FullEntityContent
         {
             let content = entity_content->clone();
-
+            
             match (content->get("components"))
             {
                 value(components_dat)?
@@ -92,7 +92,7 @@ namespace JEEditor::Editor::Action
                     content->set("components", components_dat);
                 }
             }
-
+            
             return FullEntityContent{
                 m_eid = mut option::none,
                 m_entity_content = content,
@@ -179,7 +179,14 @@ namespace JEEditor::Editor::Action
         }
         public func redo(self: CreateEntity, w: WorldEditorViewport)=> bool
         {
-            let e = Entity::restore(w->getWorld(), self.m_content.m_entity_content);
+            let optional_e = Entity::restore(w->getWorld(), self.m_content.m_entity_content);
+            if (optional_e->is_none)
+            {
+                logerr("创建实体：无法实例化目标实体");
+                return false;
+            }
+            
+            let e = optional_e->unwrap;
             let mut entity_id = self.m_content.m_eid;
             
             match (entity_id)
@@ -209,7 +216,7 @@ namespace JEEditor::Editor::Action
                 value(eid)?
                     e->internal::unsafe::set_entity_uid(eid);
             }
-
+            
             // 生成点（世界坐标）：换算为局部坐标后写入新实体的
             // LocalPosition（无父实体时局部即世界，见 worldToLocalPos）。
             // LocalPosition 属于起始组件集合时随实体构造已生效，同帧可取
@@ -234,10 +241,10 @@ namespace JEEditor::Editor::Action
                             }
                     }
             }
-
+            
             // 选中新实体，便于立刻在检视面板中编辑
             do w->setSelectedEntityId(entity_id);
-
+            
             return true;
         }
         public func undo(self: CreateEntity, w: WorldEditorViewport)=> bool

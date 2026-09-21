@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_ecs_world_destroy(void* world);
+JE_API void je_ecs_world_destroy(je_GameWorld* world);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_ecs_world_destroy(void* world);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `world` | `void*` | 指向需要销毁的世界的指针 |
+| `world` | `je_GameWorld*` | 指向需要销毁的世界的指针 |
 
 ## 返回值
 
@@ -35,8 +35,8 @@ JE_API void je_ecs_world_destroy(void* world);
 ### 示例
 
 ```cpp
-void* universe = je_ecs_universe_create();
-void* world = je_ecs_world_create(universe);
+je_GameUniverse* universe = je_ecs_universe_create();
+je_GameWorld* world = je_ecs_world_create(universe);
 
 // 使用世界...
 
@@ -48,7 +48,7 @@ je_ecs_world_destroy(world);
 ## 注意事项
 
 - 销毁操作不会立即生效，而是延迟到下一次逻辑更新
-- 向一个正在销毁中的世界创建实体或添加系统是无效的
+- 向正在销毁中的世界创建实体或添加系统仍会成功，但它们会在下一次世界更新时随世界一并销毁
 - 世界销毁时会自动销毁其中的所有系统和实体
 
 ## 相关接口

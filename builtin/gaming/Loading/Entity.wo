@@ -36,7 +36,8 @@ namespace JEGaming::Loading::Entity
                 value(r)?
                 {
                     try! entity_dat = r;
-                    return_ok! Saving::Entity::restore(w, entity_dat);
+                    return Saving::Entity::restore(w, entity_dat)
+                        -> ok_or(F"Bad entity data of `{path}`.");
                 }
             }
         }
