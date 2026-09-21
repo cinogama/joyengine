@@ -27,6 +27,7 @@ import builtin::editor::GUI::Statebar;
 
 import builtin::editor::Editor::Saving::World;
 import builtin::editor::Editor::Practice;
+import builtin::editor::Editor::Project;
 
 import Definition;
 import WindowLifecycle;
@@ -182,10 +183,17 @@ namespace JEEditor::Editor::WorldEditorViewport
             self.m_world_instance, new_name, new_path, self->getRuntimeSystems(),
             option::value(self->dumpEditorStateToml()));
 
+        // 在尝试重新打开之前，暂时先从 Project 中移除这个窗口
+        do self.m_saving_path->> \p = Project::worldClose(p);;
+
         match (Windows::show(new_viewport))
         {
             none?
+            {
+                // 重命名失败了，重新加回来
+                do self.m_saving_path->> \p = Project::worldOpen(p);;
                 return false;
+            }
             value(_)?
             {
                 new_viewport.m_action_history = self.m_action_history;

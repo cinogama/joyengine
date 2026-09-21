@@ -102,7 +102,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                         requirement::contains(Transform::LocalRotation::type::typeinfo),
                         requirement::contains(Transform::Translation::type::typeinfo),
                     ]),
-
+                    
                 m_selectable_entity_selector = w->create_selector([
                         requirement::except(Editor::Invisible::type::typeinfo),
                         requirement::contains(Transform::Translation::type::typeinfo),
@@ -110,13 +110,13 @@ namespace JEEditor::Editor::WorldEditorViewport
                 m_all_entity_selector = w->create_selector([
                         requirement::except(Editor::Invisible::type::typeinfo),
                     ]),
-
+                    
                 m_camera_entity_selector = w->create_selector([
                         requirement::except(Editor::Invisible::type::typeinfo),
                         requirement::contains(Transform::Translation::type::typeinfo),
                         requirement::contains(Camera::Projection::type::typeinfo),
                     ]),
-
+                    
                 m_point_light2d_entity_selector = w->create_selector([
                         requirement::except(Editor::Invisible::type::typeinfo),
                         requirement::contains(Transform::Translation::type::typeinfo),
@@ -132,7 +132,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                         requirement::contains(Transform::Translation::type::typeinfo),
                         requirement::contains(Light2D::Parallel::type::typeinfo),
                     ]),
-
+                    
                 // 锚点父实体（Translation+Anchor）：按子的 LocalToParent.
                 // parent_uid 反查父实体用（不加 except Invisible，与变换
                 // 系统的锚点解析范围一致）
@@ -140,7 +140,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                         requirement::contains(Transform::Translation::type::typeinfo),
                         requirement::contains(Transform::Anchor::type::typeinfo),
                     ]),
-
+                    
                 // 2D 物理碰撞体实体（Translation+Rigidbody 且不带 Invisible）：
                 // 碰撞体线框 gizmo 与“编辑碰撞体”手柄以它为准
                 m_physics2d_body_entity_selector = w->create_selector([
@@ -151,13 +151,13 @@ namespace JEEditor::Editor::WorldEditorViewport
             };
         }
     }
-
+    
     // 把视口的实体选择器整体替换为在新世界 w 上重建的选择器
     //（冻结后恢复时调用，见 FreezeWorlds）
     protected func rebuildWorldSelectors(self: WorldEditorViewport, w: world)=> void
     {
         let selectors = WorldSelectors::create(w);
-
+        
         self.m_debug_camera_selector = selectors.m_debug_camera_selector;
         self.m_selectable_entity_selector = selectors.m_selectable_entity_selector;
         self.m_all_entity_selector = selectors.m_all_entity_selector;
@@ -168,7 +168,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         self.m_anchor_parent_entity_selector = selectors.m_anchor_parent_entity_selector;
         self.m_physics2d_body_entity_selector = selectors.m_physics2d_body_entity_selector;
     }
-
+    
     protected func create(
         w: world,
         name: string,
@@ -183,15 +183,15 @@ namespace JEEditor::Editor::WorldEditorViewport
         // 注意：按照设计，WorldEditorViewport 的生命周期应当比 world 实例更长
         //      因此，世界实例的释放将由 WorldEditorViewport 在 onClose 时执行
         let selectors = WorldSelectors::create(w);
-
+        
         let new_viewport = WorldEditorViewport{
             m_close = mut CloseRequest::NORMALLY,
             
             m_world_instance = mut w,
-
+            
             m_frozen_world_context = mut option::none,
             m_playing_world_context = mut option::none,
-
+            
             m_name = name,
             m_runtime_systems = []mut,
             m_saving_path = path,
@@ -209,20 +209,20 @@ namespace JEEditor::Editor::WorldEditorViewport
             m_action_history = mut Practice::create(),
             
             m_debug_camera_selector = mut selectors.m_debug_camera_selector,
-                
+            
             m_selectable_entity_selector = mut selectors.m_selectable_entity_selector,
             m_all_entity_selector = mut selectors.m_all_entity_selector,
-                
+            
             m_camera_entity_selector = mut selectors.m_camera_entity_selector,
-                
+            
             m_point_light2d_entity_selector = mut selectors.m_point_light2d_entity_selector,
             m_range_light2d_entity_selector = mut selectors.m_range_light2d_entity_selector,
             m_parallel_light2d_entity_selector = mut selectors.m_parallel_light2d_entity_selector,
-                
+            
             m_anchor_parent_entity_selector = mut selectors.m_anchor_parent_entity_selector,
-                
+            
             m_physics2d_body_entity_selector = mut selectors.m_physics2d_body_entity_selector,
-                
+            
             // Camera control state:
             m_last_time = mut 0.,
             m_is_look_active = mut false,
@@ -278,7 +278,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             m_collider_drag_undo_component = mut "",
             m_collider_drag_undo_member = mut "",
             m_collider_drag_undo_old_value = mut "",
-
+            
             m_light_hover_handle = mut GIZMO_HANDLE_NONE,
             m_light_dragging = mut false,
             m_light_drag_handle = mut GIZMO_HANDLE_NONE,
@@ -338,15 +338,17 @@ namespace JEEditor::Editor::WorldEditorViewport
                     s_last_focusd_world_view = option::none;
         }
         
-        if (self.m_close != CloseRequest::CLOSE_BUT_KEEP_WORLD
-            && self->isCurrentViewportAvailable)
+        if (self.m_close != CloseRequest::CLOSE_BUT_KEEP_WORLD)
         {
-            do s_world_viewports->remove(self.m_world_instance);
-            self.m_world_instance->close;
+            if (self->isCurrentViewportAvailable)
+            {
+                do s_world_viewports->remove(self.m_world_instance);
+                self.m_world_instance->close;
+            }
+            
+            // 如果是从文件加载的 world，通知 Project 世界文件已经关闭
+            do self.m_saving_path->> \p = Project::worldClose(p);;
         }
-        
-        // 如果是从文件加载的 world，通知 Project 世界文件已经关闭
-        do self.m_saving_path->> \p = Project::worldClose(p);;
     }
     // 关闭前确认：仅当世界存在未保存的修改（以 doAction/撤销/重做为准，
     // 见 Practice::isDirty）时才询问，否则直接放行关闭：
@@ -360,7 +362,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         // 待解冻恢复后再走正常流程
         if (self.m_frozen_world_context->is_value)
             return false;
-
+            
         // 调试运行（含停止过渡）期间不允许关闭：世界正在运行/等待重建，
         // 待终止运行恢复编辑态后再走正常流程
         if (self.m_playing_world_context->is_value)
@@ -475,13 +477,13 @@ namespace JEEditor::Editor::WorldEditorViewport
         // 凭 eid 仍有效继续撤销/重做）
         if (self.m_frozen_world_context->is_value)
             return;
-
+            
         // 停止调试运行的过渡帧：世界已关闭、尚未从运行快照重建，队列
         // 同样暂不处理。调试运行进行中则照常排空——操作执行但不记录
         // 历史（Practice 抑制开关），随停止运行一并丢弃
         if (self.m_playing_world_context->is_value && !DebugRun::isDebugRunning())
             return;
-
+            
         match (self.m_action_history->update(self))
         {
             ok(_)?;
@@ -625,7 +627,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                     rect_min,
                     (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
         }
-
+        
         // 2D 光源形状编辑手柄交互：优先级介于碰撞体手柄与变换游标
         // 之间（碰撞体手柄被悬停/拖拽时让位，其被悬停/拖拽时变换
         // 游标让位），同样先于摄像机控制
@@ -639,7 +641,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                     rect_min,
                     (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
         }
-
+        
         // 变换游标交互（碰撞体手柄被悬停/拖拽时让位，见 updateTransformGizmo）
         match (viewport_rect)
         {
