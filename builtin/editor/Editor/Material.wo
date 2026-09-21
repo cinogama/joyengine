@@ -62,6 +62,10 @@ namespace JEEditor::Editor
         
         let mut s_material_singleton = option::none: option<Material>;
         
+        // “添加着色器”菜单当前展示的快照：目录完整路径字符串 → 组内
+        // .shader 文件（按路径排序）；每次点击添加按钮时重新扫描工作目录
+        let mut s_shader_picker_groups = map::create:<string, array<path_t>>(0);
+        
         public func isMaterialExist()
         {
             return s_material_singleton->is_value;
@@ -468,20 +472,100 @@ namespace JEEditor::Editor
             }
         }
         
-        // 列表末尾的追加行：整行按钮既是醒目的追加入口也是拖放目标，
-        // 拖动 .shader 文件到该行追加到列表末尾
+        // 遍历当前工作目录（含子目录）下的所有 .shader 文件，
+        // 按所在目录分组：目录完整路径字符串 → 组内文件（按路径排序）
+        func scanShaderFilesUnderWorkpath()=> map<string, array<path_t>>
+        {
+            let groups = map::create:<string, array<path_t>>(0);
+            for (let p : recursive_walk(workpath()) |> iter_result
+                |> filter(\p = isfile(p)
+                    && string::lower(extension(p)) == ".shader";)
+                |> collect
+                |> sort(\l, r = l->to_string() < r->to_string();))
+            {
+                let dir = parent(p)->to_string();
+                groups->set(dir, groups->get_or(dir, []: array<path_t>)->append(p));
+            }
+            return groups;
+        }
+        
+        // 菜单里的目录显示名：相对工作目录的路径，转换失败时退回完整路径
+        func pickerDirDisplayName(dir: string)=> string
+        {
+            match (relative(normalize(dir), workpath()))
+            {
+                ok(rel)? return rel;
+                err(_)? return dir;
+            }
+        }
+        
+        // “添加着色器”弹出菜单：按路径分组展示工作目录下的 .shader 文件，
+        // 工作目录根下的文件平铺在菜单顶层，其余目录按相对路径展开为
+        // 子菜单；选中一项即加载并插入到列表 insert_at 位置
+        //（菜单项点击后自动收起整个弹出层）
+        func showShaderFilePickerMenu(
+            wctx: WorldEditorViewport,
+            e: entity, univ: option<universe>, insert_at: int)=> void
+        {
+            if (s_shader_picker_groups->keys->len == 0)
+            {
+                do MenuItemEnabled("（工作目录下没有 .shader 文件）", false);
+                return;
+            }
+            
+            let root_dir = workpath()->to_string();
+            for (let dir : s_shader_picker_groups->keys |> sort(\l, r = l < r;))
+            {
+                let files = s_shader_picker_groups->get(dir)->unwrap;
+                
+                // 工作目录根下的着色器不经子菜单直接平铺在菜单顶层
+                if (dir == root_dir)
+                {
+                    for (let p : files)
+                    {
+                        if (MenuItem(filename(p)))
+                            tryInsertShader(wctx, e, univ, p, insert_at);
+                    }
+                    continue;
+                }
+                
+                if (BeginMenu(pickerDirDisplayName(dir)))
+                {
+                    defer EndMenu();
+                    for (let p : files)
+                    {
+                        if (MenuItem(filename(p)))
+                            tryInsertShader(wctx, e, univ, p, insert_at);
+                    }
+                }
+            }
+        }
+        
+        // 列表末尾的追加行：整行按钮既是醒目的追加入口也是拖放目标；
+        // 点击按钮先扫描工作目录下的 .shader 文件并弹出按路径分组的
+        // 选择菜单，拖动 .shader 文件到该行直接追加到列表末尾
         func showAppendShaderRow(
             wctx: WorldEditorViewport,
             e: entity, univ: option<universe>, append_at: int)=> void
         {
-            do ButtonSize("＋ 添加着色器##material_shader_append", (-1., 0.));
+            if (ButtonSize("＋ 添加着色器##material_shader_append", (-1., 0.)))
+            {
+                s_shader_picker_groups = scanShaderFilesUnderWorkpath();
+                OpenPopup("##material_shader_picker_menu");
+            }
             if (IsItemHovered())
-                do SetTooltip("拖动 .shader 文件到此处追加到列表末尾");
+                do SetTooltip(
+                    "点击从工作目录选择 .shader 文件\n拖动 .shader 文件到此处追加到列表末尾");
             match (Drag::AcceptDrag:<FilePayload>())
             {
                 none?;
                 value(payload)?
                     tryInsertShader(wctx, e, univ, payload->path, append_at);
+            }
+            if (BeginPopup("##material_shader_picker_menu"))
+            {
+                defer EndPopup();
+                showShaderFilePickerMenu(wctx, e, univ, append_at);
             }
         }
         
