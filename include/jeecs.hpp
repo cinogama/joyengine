@@ -1596,20 +1596,19 @@ JE_API void je_ecs_world_remove_system_instance(
 /*
 je_ecs_world_create_entity_with_components [基本接口]
 向指定世界中创建一个用于指定组件集合的实体，创建结果通过参数 out_entity 返回
-component_ids 应该指向一个储存有N+1个je_TypeId实例的连续空间，
-其中，N是组件种类数量且不应该为0，空间的最后应该是JE_INVALID_TYPE_ID
-以表示结束。
+component_ids 应该指向一个储存有N个je_TypeId实例的连续空间，
+其中，N是组件种类数量（component_count）且不应该为0。
     * 若向一个正在销毁中的世界创建实体，则创建失败，out_entity将被写入`无效值`
 请参见：
     je_TypeId
-    JE_INVALID_TYPE_ID
     je_GameEntity
     jeecs::game_world::add_entity
 */
 JE_API void je_ecs_world_create_entity_with_components(
     je_GameWorld* world,
     je_GameEntity* out_entity,
-    const je_TypeId* component_ids);
+    const je_TypeId* component_ids,
+    size_t component_count);
 
 /*
 je_ecs_world_create_prefab_with_components [基本接口]
@@ -1622,7 +1621,8 @@ je_ecs_world_create_prefab_with_components [基本接口]
 JE_API void je_ecs_world_create_prefab_with_components(
     je_GameWorld* world,
     je_GameEntity* out_entity,
-    const je_TypeId* component_ids);
+    const je_TypeId* component_ids,
+    size_t component_count);
 
 /*
 je_ecs_world_create_entity_with_prefab [基本接口]
@@ -6921,13 +6921,13 @@ namespace jeecs
             const je_TypeId component_ids[] = {
                 typing::id<FirstCompT>(),
                 typing::id<CompTs>()...,
-                typing::INVALID_TYPE_ID,
             };
 
             game_entity gentity;
 
             je_ecs_world_create_entity_with_components(
-                handle(), &gentity._m_raw, component_ids);
+                handle(), &gentity._m_raw, component_ids,
+                sizeof(component_ids) / sizeof(je_TypeId));
 
             return gentity;
         }
@@ -6945,13 +6945,13 @@ namespace jeecs
             const je_TypeId component_ids[] = {
                 typing::id<FirstCompT>(),
                 typing::id<CompTs>()...,
-                typing::INVALID_TYPE_ID,
             };
 
             game_entity gentity;
 
             je_ecs_world_create_prefab_with_components(
-                handle(), &gentity._m_raw, component_ids);
+                handle(), &gentity._m_raw, component_ids,
+                sizeof(component_ids) / sizeof(je_TypeId));
 
             return gentity;
         }
@@ -6989,24 +6989,20 @@ namespace jeecs
         }
 
         // This function only used for editor.
-        inline game_entity _add_entity(std::vector<je_TypeId> components)
+        inline game_entity _add_entity(const std::vector<je_TypeId>& components)
         {
-            components.push_back(typing::INVALID_TYPE_ID);
-
             game_entity gentity;
             je_ecs_world_create_entity_with_components(
-                handle(), &gentity._m_raw, components.data());
+                handle(), &gentity._m_raw, components.data(), components.size());
 
             return gentity;
         }
         // This function only used for editor.
-        inline game_entity _add_prefab(std::vector<je_TypeId> components)
+        inline game_entity _add_prefab(const std::vector<je_TypeId>& components)
         {
-            components.push_back(typing::INVALID_TYPE_ID);
-
             game_entity gentity;
             je_ecs_world_create_prefab_with_components(
-                handle(), &gentity._m_raw, components.data());
+                handle(), &gentity._m_raw, components.data(), components.size());
 
             return gentity;
         }

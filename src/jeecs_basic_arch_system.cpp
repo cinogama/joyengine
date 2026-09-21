@@ -26,6 +26,37 @@
 namespace jeecs_impl
 {
     class arch_type;
+
+    // types_set 是排序去重的 std::vector<je_TypeId>，其不变式只能通过
+    // 以下三个辅助函数维护；archetype 的身份与 map 键序都依赖它是升序无重复的。
+    inline void types_set_insert(std::vector<je_TypeId>& _types, je_TypeId _tid) noexcept
+    {
+        auto _at = std::lower_bound(_types.begin(), _types.end(), _tid);
+        if (_at == _types.end() || *_at != _tid)
+            _types.insert(_at, _tid);
+    }
+    inline bool types_set_contains(const std::vector<je_TypeId>& _types, je_TypeId _tid) noexcept
+    {
+        return std::binary_search(_types.begin(), _types.end(), _tid);
+    }
+    inline bool types_set_erase(std::vector<je_TypeId>& _types, je_TypeId _tid) noexcept
+    {
+        auto _at = std::lower_bound(_types.begin(), _types.end(), _tid);
+        if (_at == _types.end() || *_at != _tid)
+            return false;
+        _types.erase(_at);
+        return true;
+    }
+    // 从未排序数组批量构建，一次分配 + 排序 + 去重；
+    // 优于对逐元素调用 types_set_insert（每次插入都要搬移后半段）。
+    inline std::vector<je_TypeId> make_types_set(
+        const je_TypeId* _type_ids, size_t _count) noexcept
+    {
+        std::vector<je_TypeId> _types(_type_ids, _type_ids + _count);
+        std::sort(_types.begin(), _types.end());
+        _types.erase(std::unique(_types.begin(), _types.end()), _types.end());
+        return _types;
+    }
 }
 
 // je_GameUniverse/je_GameWorld/je_Archtype/je_Chunk 在公开头文件中仅作不透明前向声明，
@@ -76,7 +107,8 @@ struct je_SelectedArchCache
 
 struct je_CollectedRequirements
 {
-    using types_set = std::set<je_TypeId>;
+    // 排序去重的紧凑类型集合：插入/删除/查找必须走 jeecs_impl::types_set_* 辅助函数
+    using types_set = std::vector<je_TypeId>;
 
     types_set m_contain_set;
     types_set m_except_set;
@@ -956,15 +988,13 @@ namespace jeecs_impl
         {
             static auto contains = [](const types_set& a, const types_set& b)
                 {
-                    for (auto type_id : b)
-                        if (a.find(type_id) == a.end())
-                            return false;
-                    return true;
+                    // b ⊆ a（双方均为排序序列）
+                    return std::includes(a.begin(), a.end(), b.begin(), b.end());
                 };
             static auto contain_any = [](const types_set& a, const types_set& b)
                 {
                     for (auto type_id : b)
-                        if (a.find(type_id) != a.end())
+                        if (types_set_contains(a, type_id))
                             return true;
                     return b.empty();
                 };
@@ -979,7 +1009,7 @@ namespace jeecs_impl
             static auto except = [](const types_set& a, const types_set& b)
                 {
                     for (auto type_id : b)
-                        if (a.find(type_id) != a.end())
+                        if (types_set_contains(a, type_id))
                             return false;
                     return true;
                 };
@@ -1783,7 +1813,7 @@ namespace jeecs_impl
                                 if (instance == nullptr)
                                 {
                                     // Trying to remove.
-                                    if (new_chunk_types.erase(tid))
+                                    if (types_set_erase(new_chunk_types, tid))
                                     {
                                         current_entity.chunk()->destruct_component_addr_with_typeid(
                                             current_entity._m_id,
@@ -1802,8 +1832,8 @@ namespace jeecs_impl
                                     append_component_type_addr_map[tid] = instance;
 
                                     // Trying to append.
-                                    if (new_chunk_types.find(tid) == new_chunk_types.end())
-                                        new_chunk_types.insert(tid);
+                                    if (!types_set_contains(new_chunk_types, tid))
+                                        types_set_insert(new_chunk_types, tid);
                                     else
                                     {
 #ifndef NDEBUG
@@ -2811,11 +2841,11 @@ void je_ecs_world_set_enable(je_GameWorld* world, bool enable)
 void je_ecs_world_create_entity_with_components(
     je_GameWorld* world,
     je_GameEntity* out_entity,
-    const je_TypeId* component_ids)
+    const je_TypeId* component_ids,
+    size_t component_count)
 {
-    jeecs_impl::types_set types;
-    while (*component_ids != jeecs::typing::INVALID_TYPE_ID)
-        types.insert(*(component_ids++));
+    jeecs_impl::types_set types =
+        jeecs_impl::make_types_set(component_ids, component_count);
 
     auto&& entity = static_cast<jeecs_impl::ecs_world*>(world)
         ->create_entity_with_component(types, JE_ENTITY_STAT_READY);
@@ -2827,11 +2857,11 @@ void je_ecs_world_create_entity_with_components(
 void je_ecs_world_create_prefab_with_components(
     je_GameWorld* world,
     je_GameEntity* out_entity,
-    const je_TypeId* component_ids)
+    const je_TypeId* component_ids,
+    size_t component_count)
 {
-    jeecs_impl::types_set types;
-    while (*component_ids != jeecs::typing::INVALID_TYPE_ID)
-        types.insert(*(component_ids++));
+    jeecs_impl::types_set types =
+        jeecs_impl::make_types_set(component_ids, component_count);
 
     auto entity = static_cast<jeecs_impl::ecs_world*>(world)
         ->create_entity_with_component(types, JE_ENTITY_STAT_PREFAB);
@@ -2875,15 +2905,16 @@ je_CollectedRequirements* je_ecs_collect_requirements(
         switch (requirement.m_kind)
         {
         case JE_COMPONENT_REQUIRE_CONTAINS:
-            new_collected->m_contain_set.insert(requirement.m_typeid);
+            jeecs_impl::types_set_insert(new_collected->m_contain_set, requirement.m_typeid);
             break;
         case JE_COMPONENT_REQUIRE_MAYNOT:
             break;
         case JE_COMPONENT_REQUIRE_EXCEPT:
-            new_collected->m_except_set.insert(requirement.m_typeid);
+            jeecs_impl::types_set_insert(new_collected->m_except_set, requirement.m_typeid);
             break;
         default /* JE_COMPONENT_REQUIRE_ANYOF_0... */:
-            new_collected->m_anyof_sets[requirement.m_kind].insert(requirement.m_typeid);
+            jeecs_impl::types_set_insert(
+                new_collected->m_anyof_sets[requirement.m_kind], requirement.m_typeid);
             break;
 
         }
