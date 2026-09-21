@@ -1,0 +1,43 @@
+import pkg::std;
+import pkg::async;
+import pkg::toml;
+import pkg::try;
+import pkg::thread;
+
+import je;
+import je::ecs;
+
+import builtin::gaming::Saving::World;
+
+using std;
+using toml;
+using je;
+using je::file;
+
+namespace JEGaming::Loading::World
+{
+    public async! func load(u: universe, path: string)=> result<world, string>
+    {
+        let r = mutable::create(option::none: option<result<world, string>>);
+        do thread::create(func(){
+                r->set <| option::value <| try!{
+                    try! dat = readall(path)
+                        -> ok_or(F"Failed to load world from `{path}`.");
+                        
+                    try! world_dat = parse(dat);
+                    
+                    return_ok! Saving::World::restore(u, world_dat);
+                };
+            });
+            
+        for (;;)
+        {
+            match (r->get)
+            {
+                none? yield!;
+                value(r)?
+                    return r;
+            }
+        }
+    }
+}

@@ -1,0 +1,44 @@
+import pkg::std;
+import pkg::try;
+import pkg::toml;
+import pkg::async;
+import pkg::thread;
+
+import je;
+import je::ecs;
+
+import builtin::gaming::Saving::Entity;
+
+using std;
+using je;
+using je::file;
+using toml;
+
+namespace JEGaming::Loading::Entity
+{
+    public async! func load(w: world, path: string)=> result<entity, string>
+    {
+        let r = mutable::create(option::none: option<result<Toml, string>>);
+        do thread::create(func(){
+                r->set <| option::value <| try!{
+                    try! dat = readall(path)
+                        -> ok_or(F"Failed to load entity from `{path}`.");
+                        
+                    return parse(dat);
+                };
+            });
+            
+        for (;;)
+        {
+            match (r->get)
+            {
+                none? yield!;
+                value(r)?
+                {
+                    try! entity_dat = r;
+                    return_ok! Saving::Entity::restore(w, entity_dat);
+                }
+            }
+        }
+    }
+}
