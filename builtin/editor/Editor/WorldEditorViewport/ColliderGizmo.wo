@@ -43,9 +43,9 @@ namespace JEEditor::Editor::WorldEditorViewport
     // Offset::Position/Offset::Rotation 的合成（与物理系统 compute_body_pose
     // 一致），oscale 为 Offset::Scale（形状几何按物理系统的口径乘入各
     // 顶点，见 getColliderHandles/getColliderOutline）。
-    protected func colliderFrame(e: entity)=> option<(vec3, quat, vec2)>
+    protected func colliderFrame(e: entity)=> option<(vec3, quat)>
     {
-        return or(option::none: option<(vec3, quat, vec2)>) <| try!{
+        return or(option::none: option<(vec3, quat)>) <| try!{
             try! trans = e->towoo::get_component:<Transform::Translation>();
 
             let entity_pos = trans->get_global_pos;
@@ -63,17 +63,11 @@ namespace JEEditor::Editor::WorldEditorViewport
                 none?;
                 value(orot)? offset_rot = orot.degree->get;
             }
-            let mut offset_scale = (1., 1.) as vec2;
-            match (e->towoo::get_component:<Physics2D::Offset::Scale>())
-            {
-                none?;
-                value(oscale)? offset_scale = oscale.value->get;
-            }
 
             let center = entity_pos
                 + entity_rot * ((offset_pos[0], offset_pos[1], 0.) as vec3);
             let rotation = entity_rot * quat::axis((0., 0., 1.) as vec3, offset_rot);
-            return_value! option::value((center, rotation, offset_scale));
+            return_value! option::value((center, rotation));
         };
     }
 
@@ -87,24 +81,17 @@ namespace JEEditor::Editor::WorldEditorViewport
     // 世界坐标（碰撞体平面内）-> 组件局部坐标（除回 Offset::Scale），
     // 供拖拽写回组件值使用；scale 过小时按符号保留极小值避免除零
     protected func colliderWorldToLocal(
-        center: vec3, rotation: quat, offset_scale: vec2, world: vec3)=> vec2
+        center: vec3, rotation: quat, world: vec3)=> vec2
     {
         let local = rotation->inverse * (world - center);
-        let mut sx = offset_scale[0];
-        if (mathf::abs(sx) < 0.0001)
-            sx = (sx < 0.) ? -0.0001 | 0.0001;
-        let mut sy = offset_scale[1];
-        if (mathf::abs(sy) < 0.0001)
-            sy = (sy < 0.) ? -0.0001 | 0.0001;
-        return (local[0] / sx, local[1] / sy) as vec2;
+        return (local[0], local[1]) as vec2;
     }
 
     // 盒的四角形状局部坐标（±size/2，含 Offset::Scale，与物理系统同口径）
-    protected func colliderBoxCorners(
-        size: vec2, offset_scale: vec2)=> array<vec2>
+    protected func colliderBoxCorners(size: vec2)=> array<vec2>
     {
-        let hx = mathf::abs(size[0]) * mathf::abs(offset_scale[0]) * 0.5;
-        let hy = mathf::abs(size[1]) * mathf::abs(offset_scale[1]) * 0.5;
+        let hx = mathf::abs(size[0]) * 0.5;
+        let hy = mathf::abs(size[1]) * 0.5;
         return [
             (-hx, -hy) as vec2, (hx, -hy) as vec2,
             (hx, hy) as vec2, (-hx, hy) as vec2,
@@ -112,11 +99,9 @@ namespace JEEditor::Editor::WorldEditorViewport
     }
 
     // 圆的有效半径（abs(radius) * 两轴 offset scale 的较大者，与物理系统同口径）
-    protected func colliderCircleRadius(radius: real, offset_scale: vec2)=> real
+    protected func colliderCircleRadius(radius: real)=> real
     {
-        let ax = mathf::abs(offset_scale[0]);
-        let ay = mathf::abs(offset_scale[1]);
-        return mathf::abs(radius) * ((ax > ay) ? ax | ay);
+        return mathf::abs(radius);
     }
 
     // 选中实体碰撞体的（种类, 手柄世界坐标列表）；无碰撞体时为 none。
@@ -128,14 +113,13 @@ namespace JEEditor::Editor::WorldEditorViewport
             try! frame = colliderFrame(e);
             let center = frame.0;
             let rotation = frame.1;
-            let oscale = frame.2;
 
             match (e->towoo::get_component:<Physics2D::Collider::Box>())
             {
                 value(box)?
                 {
                     let pts = []mut: vec<vec3>;
-                    for (let c : colliderBoxCorners(box.size->get, oscale))
+                    for (let c : colliderBoxCorners(box.size->get))
                         pts->add(colliderShapeToWorld(center, rotation, c));
                     return_value! option::value((ColliderKind::BOX, pts->to_array));
                 }
@@ -146,7 +130,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             {
                 value(circle)?
                 {
-                    let r = colliderCircleRadius(circle.radius->get, oscale);
+                    let r = colliderCircleRadius(circle.radius->get);
                     let pts = []mut: vec<vec3>;
                     pts->add(colliderShapeToWorld(center, rotation, (r, 0.) as vec2));
                     return_value! option::value((ColliderKind::CIRCLE, pts->to_array));
@@ -158,8 +142,8 @@ namespace JEEditor::Editor::WorldEditorViewport
             {
                 value(capsule)?
                 {
-                    let r = mathf::abs(capsule.radius->get) * mathf::abs(oscale[0]);
-                    let hh = mathf::abs(capsule.height->get) * mathf::abs(oscale[1]) * 0.5;
+                    let r = mathf::abs(capsule.radius->get);
+                    let hh = mathf::abs(capsule.height->get) * 0.5;
                     let pts = []mut: vec<vec3>;
                     pts->add(colliderShapeToWorld(center, rotation, (0., hh) as vec2));
                     pts->add(colliderShapeToWorld(center, rotation, (r, 0.) as vec2));
@@ -174,8 +158,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 {
                     let pts = []mut: vec<vec3>;
                     for (let p : mesh.vertices->get as array<vec2>)
-                        pts->add(colliderShapeToWorld(
-                            center, rotation, (p[0] * oscale[0], p[1] * oscale[1]) as vec2));
+                        pts->add(colliderShapeToWorld(center, rotation, p));
                     return_value! option::value((ColliderKind::MESH, pts->to_array));
                 }
                 none?;
@@ -193,14 +176,13 @@ namespace JEEditor::Editor::WorldEditorViewport
             try! frame = colliderFrame(e);
             let center = frame.0;
             let rotation = frame.1;
-            let oscale = frame.2;
 
             match (e->towoo::get_component:<Physics2D::Collider::Box>())
             {
                 value(box)?
                 {
                     let pts = []mut: vec<vec3>;
-                    for (let c : colliderBoxCorners(box.size->get, oscale))
+                    for (let c : colliderBoxCorners(box.size->get))
                         pts->add(colliderShapeToWorld(center, rotation, c));
                     return_value! option::value(pts->to_array);
                 }
@@ -211,7 +193,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             {
                 value(circle)?
                 {
-                    let r = colliderCircleRadius(circle.radius->get, oscale);
+                    let r = colliderCircleRadius(circle.radius->get);
                     let pts = []mut: vec<vec3>;
                     for (let mut i = 0; i < COLLIDER_CIRCLE_SEGMENTS; i += 1)
                     {
@@ -230,8 +212,8 @@ namespace JEEditor::Editor::WorldEditorViewport
             {
                 value(capsule)?
                 {
-                    let r = mathf::abs(capsule.radius->get) * mathf::abs(oscale[0]);
-                    let hh = mathf::abs(capsule.height->get) * mathf::abs(oscale[1]) * 0.5;
+                    let r = mathf::abs(capsule.radius->get);
+                    let hh = mathf::abs(capsule.height->get) * 0.5;
                     // 圆弧圆心纵坐标：h/2 > r 时为 ±(h/2-r)，否则胶囊退化
                     // 为圆（圆心过原点），统一为 max(h/2-r, 0)
                     let hc = (hh > r) ? (hh - r) | 0.;
@@ -265,8 +247,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 {
                     let pts = []mut: vec<vec3>;
                     for (let p : mesh.vertices->get as array<vec2>)
-                        pts->add(colliderShapeToWorld(
-                            center, rotation, (p[0] * oscale[0], p[1] * oscale[1]) as vec2));
+                        pts->add(colliderShapeToWorld(center, rotation, p));
                     return_value! option::value(pts->to_array);
                 }
                 none?;
@@ -453,7 +434,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 try! box =
                     selected_entity->towoo::get_component:<Physics2D::Collider::Box>();
                 try! frame = colliderFrame(selected_entity);
-                let corner = colliderWorldToLocal(frame.0, frame.1, frame.2, hit);
+                let corner = colliderWorldToLocal(frame.0, frame.1, hit);
                 let sx = mathf::abs(corner[0]) * 2.;
                 let sy = mathf::abs(corner[1]) * 2.;
                 box.size->set((
@@ -465,7 +446,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 try! circle =
                     selected_entity->towoo::get_component:<Physics2D::Collider::Circle>();
                 try! frame = colliderFrame(selected_entity);
-                let p = colliderWorldToLocal(frame.0, frame.1, frame.2, hit);
+                let p = colliderWorldToLocal(frame.0, frame.1, hit);
                 circle.radius->set(
                     (p->length > COLLIDER_MIN_SIZE) ? p->length | COLLIDER_MIN_SIZE);
             }
@@ -474,7 +455,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 try! capsule =
                     selected_entity->towoo::get_component:<Physics2D::Collider::Capsule>();
                 try! frame = colliderFrame(selected_entity);
-                let p = colliderWorldToLocal(frame.0, frame.1, frame.2, hit);
+                let p = colliderWorldToLocal(frame.0, frame.1, hit);
                 if (handle == 0)
                 {
                     // 高度手柄（顶部）：h = 2*|y|
@@ -504,7 +485,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 if (handle < 0 || handle >= pts->len)
                     return_value!;
 
-                let np = colliderWorldToLocal(frame.0, frame.1, frame.2, hit);
+                let np = colliderWorldToLocal(frame.0, frame.1, hit);
                 let newpts = []mut: vec<vec2>;
                 for (let mut i = 0; i < pts->len; i += 1)
                     newpts->add((i == handle) ? np | (pts[i][0], pts[i][1]) as vec2);

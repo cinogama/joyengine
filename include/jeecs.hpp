@@ -11399,17 +11399,6 @@ namespace jeecs
                     typing::register_member(guard, &Rotation::degree, "degree");
                 }
             };
-            struct Scale
-            {
-                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Scale);
-                JECS_DEFAULT_CONSTRUCTOR(Scale);
-
-                math::vec2 value = math::vec2(1.f, 1.f);
-                static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
-                {
-                    typing::register_member(guard, &Scale::value, "value");
-                }
-            };
         }
 
         // ===================== Output: per-frame contacts =====================
@@ -12800,7 +12789,6 @@ namespace jeecs
 
             jeecs::typing::register_type<Physics2D::Offset::Position>(guard, "Physics2D::Offset::Position");
             jeecs::typing::register_type<Physics2D::Offset::Rotation>(guard, "Physics2D::Offset::Rotation");
-            jeecs::typing::register_type<Physics2D::Offset::Scale>(guard, "Physics2D::Offset::Scale");
 
             jeecs::typing::register_type<Physics2D::CollisionResult>(guard, "Physics2D::CollisionResult");
 
