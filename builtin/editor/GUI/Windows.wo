@@ -109,6 +109,7 @@ namespace JEEditor::GUI::Windows
         s_modal_tickets: vec<int>,
         s_modal_next_ticket: mut int,
         
+        m_pre_windows_update: vec<()=> void>,
         m_window_process_jobs: vec<async<void>>,
     }
     {
@@ -123,12 +124,9 @@ namespace JEEditor::GUI::Windows
                 s_windows_states = {}mut,
                 s_modal_tickets = []mut,
                 s_modal_next_ticket = mut 0,
+                m_pre_windows_update = []mut,
                 m_window_process_jobs = []mut,
             };
-        }
-        func appendWindowsProcess(self: GlobalWindowsContextSingleton, w: async<void>)
-        {
-            self.m_window_process_jobs->add(w);
         }
         func pickAllWindowsProcess(self: GlobalWindowsContextSingleton)
         {
@@ -517,6 +515,9 @@ namespace JEEditor::GUI::Windows
         func mainCoroutineJob(){
             for (;;)
             {
+                for (let job: internal::getAndDupPreWindowsJob())
+                    job();
+
                 for (let w: internal::pickAllWindowsProcess())
                 {
                     if (w->dispatch->is_none)
@@ -540,7 +541,17 @@ namespace JEEditor::GUI::Windows
         public func appendWindowsProcess(w: async<void>)
         {
             return Singleton::apply:<GlobalWindowsContextSingleton>(
-                \wctx = wctx->appendWindowsProcess(w););
+                \wctx = wctx.m_window_process_jobs->add(w););
+        }
+        func getAndDupPreWindowsJob()
+        {
+            return Singleton::apply:<GlobalWindowsContextSingleton>(
+                \wctx = wctx.m_pre_windows_update->dup->unsafe::asarray;);
+        }
+        public func registerPreWindowsJob(callback: ()=> void)
+        {
+            return Singleton::apply:<GlobalWindowsContextSingleton>(
+                \wctx = wctx.m_pre_windows_update->add(callback););
         }
         public func getAllWindows()=> array<IWindows>
         {

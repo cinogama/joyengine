@@ -1,0 +1,25 @@
+import pkg::std;
+
+import je::internal;
+import je::ecs;
+
+import builtin::editor::Singleton::Universe;
+import builtin::editor::GUI::Windows;
+
+using je;
+using JEEditor::GUI::Windows;
+using JEEditor::Singleton::Universe;
+
+namespace JEEditor::Editor::WorldEditorViewport
+{
+    public func registerClosingCheckJob()
+    {
+        internal::registerPreWindowsJob(
+            func(){
+                for (let _: getUniverse()->get_all_worlds())
+                {
+                    
+                }
+            });
+    }
+}

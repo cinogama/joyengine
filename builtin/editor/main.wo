@@ -22,6 +22,7 @@ import Editor::ReplConsole;
 import Editor::PanicBox;
 import Editor::Shutdown;
 import Editor::ProjectOpen;
+import Editor::WorldEditorViewport::ClosingWorldChecker;
 
 import Singleton;
 import Singleton::Universe;
@@ -72,6 +73,9 @@ func main()
     JEEditor::GUI::Statebar::start();
     // 开启窗口主协程
     JEEditor::GUI::Windows::start();
+
+    // 此处注册一些确保在其他窗口之前执行的操作
+    JEEditor::Editor::WorldEditorViewport::registerClosingCheckJob();
     
     // 打开项目创建/打开窗口（模态），
     // 用于选择工作目录并切换 cwd。
