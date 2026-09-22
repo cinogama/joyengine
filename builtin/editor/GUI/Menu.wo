@@ -1,7 +1,10 @@
 import pkg::std;
+import pkg::async;
 
 import je;
 import je::gui;
+
+import Windows;
 
 using std;
 using je;
@@ -165,7 +168,7 @@ namespace JEEditor::GUI
         }
         
         let mut s_main_menu_instance = option::none: option<Menu>;
-
+        
         // 沉浸模式（调试运行）下隐藏主菜单栏：常驻渲染协程不销毁，
         // 仅跳过本帧绘制，解除隐藏后即恢复
         let mut s_main_menu_hidden = false;
@@ -177,25 +180,28 @@ namespace JEEditor::GUI
         {
             return s_main_menu_hidden;
         }
-
+        
+        async! func mainMenuLoop()
+        {
+            for (;;)
+            {
+                if (!s_main_menu_hidden)
+                {
+                    match (s_main_menu_instance)
+                    {
+                        none?;
+                        value(main_menu)? main_menu->showMainMenuBar();
+                    }
+                }
+                yield!;
+            }
+        }
+        
         public func registerMainMenu(menu: Menu)
         {
             if (s_main_menu_instance->is_none)
             {
-                launch_coroutine(func(){
-                        for (;;)
-                        {
-                            if (!s_main_menu_hidden)
-                            {
-                                match (s_main_menu_instance)
-                                {
-                                    none?;
-                                    value(main_menu)? main_menu->showMainMenuBar();
-                                }
-                            }
-                            std::yield();
-                        }
-                    });
+                Windows::internal::appendWindowsProcess(mainMenuLoop());
             }
             s_main_menu_instance = option::value(menu);
         }

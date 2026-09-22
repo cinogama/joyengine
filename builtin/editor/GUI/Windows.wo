@@ -537,7 +537,7 @@ namespace JEEditor::GUI::Windows
             return Singleton::apply:<GlobalWindowsContextSingleton>(
                 \wctx = wctx->pickAllWindowsProcess(););
         }
-        func appendWindowsProcess(w: async<void>)
+        public func appendWindowsProcess(w: async<void>)
         {
             return Singleton::apply:<GlobalWindowsContextSingleton>(
                 \wctx = wctx->appendWindowsProcess(w););
@@ -545,18 +545,12 @@ namespace JEEditor::GUI::Windows
         public func getAllWindows()=> array<IWindows>
         {
             return Singleton::apply:<GlobalWindowsContextSingleton>(
-                func(wctx)
-                {
-                    return wctx.s_windows_states->keys;
-                });
+                \wctx = wctx.s_windows_states->keys;);
         }
         public func tryGetWindowState(iw: IWindows)=> option<WindowsState>
         {
             return Singleton::apply:<GlobalWindowsContextSingleton>(
-                func(wctx)
-                {
-                    return wctx.s_windows_states->get(iw);
-                });
+                \wctx = wctx.s_windows_states->get(iw););
         }
     }
 }

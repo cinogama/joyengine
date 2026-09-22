@@ -5,6 +5,9 @@ import je::gui;
 
 import pkg::list;
 import pkg::try;
+import pkg::async;
+
+import Windows;
 
 using std;
 using je;
@@ -26,62 +29,63 @@ namespace JEEditor::GUI::Statebar
         return s_statebar_hidden;
     }
     
-    public func start()
+    async! func stateBarLoop()
     {
-        launch_coroutine(
-            func(){
-                for(;;){
-                    while (s_state_showing_queue->len >= 2)
+        for(;;)
+        {
+            while (s_state_showing_queue->len >= 2)
+            {
+                let (_, _, tm) = s_state_showing_queue->front->unwrap;
+                if (time() < tm)
+                    break;
+                    
+                do s_state_showing_queue->pop_front();
+            }
+            
+            if (!s_statebar_hidden)
+            {
+                do try!{
+                    try! current_state = s_state_showing_queue->front;
+                    let (state, height, _) = current_state;
+                    
+                    static let mut bar_height = GetFrameHeight();
+                    if ((immut height) > 0.)
+                        bar_height = immut height;
+                        
+                    // 高度上限：随字体缩放的约 8 行文本高度，防止多行内容
+                    // （如带堆栈的错误日志）把状态栏撑满大半个屏幕。
+                    // 钳制必须发生在 Begin 之前，保证写回的测量值用的是
+                    // 本帧实际传入的钳制后高度，否则会来回震荡。
+                    let max_bar_height = GetTextLineHeightWithSpacing() * 8. + GetFrameHeight();
+                    if ((immut bar_height) > max_bar_height)
+                        bar_height = max_bar_height;
+                        
+                    if (BeginViewportSideBar(
+                            "EditorStatebar",
+                            Direction::ImGuiDir_Down,
+                            bar_height,
+                            WindowsAttribute::ImGuiWindowFlags_None))
                     {
-                        let (_, _, tm) = s_state_showing_queue->front->unwrap;
-                        if (time() < tm)
-                            break;
-                            
-                        do s_state_showing_queue->pop_front();
+                        state();
+                        
+                        let (_, avail_y) = GetContentRegionAvail();
+                        
+                        // 必须用本帧实际传入的 bar_height 来减：新状态首帧 height 还是 -1 哨兵，
+                        // 拿它减会把测量值算成负数，导致小内容状态永远测不出高度，bar_height 只增不减
+                        current_state.1 = (immut bar_height) - avail_y;   // 强制高度 - 剩余空间 = 内容实际需要的高度(含内边距)
                     }
                     
-                    if (!s_statebar_hidden)
-                    {
-                        do try!{
-                            try! current_state = s_state_showing_queue->front;
-                            let (state, height, _) = current_state;
-                            
-                            static let mut bar_height = GetFrameHeight();
-                            if ((immut height) > 0.)
-                                bar_height = immut height;
-                                
-                            // 高度上限：随字体缩放的约 8 行文本高度，防止多行内容
-                            // （如带堆栈的错误日志）把状态栏撑满大半个屏幕。
-                            // 钳制必须发生在 Begin 之前，保证写回的测量值用的是
-                            // 本帧实际传入的钳制后高度，否则会来回震荡。
-                            let max_bar_height = GetTextLineHeightWithSpacing() * 8. + GetFrameHeight();
-                            if ((immut bar_height) > max_bar_height)
-                                bar_height = max_bar_height;
-                                
-                            if (BeginViewportSideBar(
-                                    "EditorStatebar",
-                                    Direction::ImGuiDir_Down,
-                                    bar_height,
-                                    WindowsAttribute::ImGuiWindowFlags_None))
-                            {
-                                state();
-                                
-                                let (_, avail_y) = GetContentRegionAvail();
-                                
-                                // 必须用本帧实际传入的 bar_height 来减：新状态首帧 height 还是 -1 哨兵，
-                                // 拿它减会把测量值算成负数，导致小内容状态永远测不出高度，bar_height 只增不减
-                                current_state.1 = (immut bar_height) - avail_y;   // 强制高度 - 剩余空间 = 内容实际需要的高度(含内边距)
-                            }
-                            
-                            return_value!;
-                        };
-                        
-                        
-                        End();
-                    }
-                    yield();
-                }
-            });
+                    return_value!;
+                };
+                End();
+            }
+            yield!;
+        }
+    }
+    
+    public func start()
+    {
+        Windows::internal::appendWindowsProcess(stateBarLoop());
     }
     public func showState(job: ()=> void, keep_time_at_least: real)
     {
