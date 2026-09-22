@@ -1390,14 +1390,6 @@ namespace je::gui
             public func shutdown()=> void;
     }
     
-    public func launch(gui_func: ()=> bool)=> void
-    {
-        return launch_coroutine(func(){
-                while (gui_func())
-                    std::yield();
-            });
-    }
-    
     namespace input
     {
         extern("libjoyecs", "je_gui_get_input_state")

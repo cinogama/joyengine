@@ -31,8 +31,6 @@ using je;
 using je::internal;
 using JEEditor;
 using JEEditor::Editor;
-using JEEditor::GUI::Windows;
-using JEEditor::GUI::Forms;
 
 func main()
 {
@@ -72,6 +70,8 @@ func main()
             
     // 开启状态栏
     JEEditor::GUI::Statebar::start();
+    // 开启窗口主协程
+    JEEditor::GUI::Windows::start();
     
     // 打开项目创建/打开窗口（模态），
     // 用于选择工作目录并切换 cwd。

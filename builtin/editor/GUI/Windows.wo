@@ -7,6 +7,8 @@ import pkg::interface;
 import pkg::try;
 import pkg::toml;
 import pkg::singleton;
+import pkg::async;
+import pkg::worst;
 
 import builtin::editor::Singleton;
 
@@ -106,11 +108,13 @@ namespace JEEditor::GUI::Windows
         // 栈顶关闭后，被压制的模态重新弹出显示。
         s_modal_tickets: vec<int>,
         s_modal_next_ticket: mut int,
+        
+        m_window_process_jobs: vec<async<void>>,
     }
     {
         public let SINGLETON_LABEL = "window_states";
         public let SINGLETON_SEQUENCE = 200000000;
-
+        
         public func createAndLoad(_: option<Toml>)=> GlobalWindowsContextSingleton
             where require!(GlobalWindowsContextSingleton: ISingleton);
         {
@@ -119,7 +123,19 @@ namespace JEEditor::GUI::Windows
                 s_windows_states = {}mut,
                 s_modal_tickets = []mut,
                 s_modal_next_ticket = mut 0,
+                m_window_process_jobs = []mut,
             };
+        }
+        func appendWindowsProcess(self: GlobalWindowsContextSingleton, w: async<void>)
+        {
+            self.m_window_process_jobs->add(w);
+        }
+        func pickAllWindowsProcess(self: GlobalWindowsContextSingleton)
+        {
+            let r = []mut: vec<async<void>>;
+            self.m_window_process_jobs->swap(r);
+            
+            return r->unsafe::asarray;
         }
     }
     
@@ -368,7 +384,7 @@ namespace JEEditor::GUI::Windows
             return keep_open;
         }
         
-        func _show(i: IWindows, state: WindowsState)
+        async! func _show(i: IWindows, state: WindowsState)
         {
             let title = state.m_is_unique
                 ? state.m_title
@@ -405,7 +421,7 @@ namespace JEEditor::GUI::Windows
                         // 回到栈顶后需重新 OpenPopup。
                         suspended = true;
                         first_frame->set(true);
-                        std::yield();
+                        yield!;
                         continue;
                     }
                     if (suspended)
@@ -413,14 +429,14 @@ namespace JEEditor::GUI::Windows
                         // 重新成为栈顶：多让一帧，避免与刚关闭的原栈顶
                         // 在同一帧内重复 Begin 载体窗口。
                         suspended = false;
-                        std::yield();
+                        yield!;
                         continue;
                     }
                     
                     keep_open = i->_engine_imgui_modal_show_job(
                         title, state, menu_instance, shortcut_instance, first_frame);
                     if (keep_open)
-                        std::yield();
+                        yield!;
                 }
                 _release_modal_slot(ticket);
             }
@@ -438,7 +454,7 @@ namespace JEEditor::GUI::Windows
                     else
                         keep_open = i->_engine_imgui_show_job(
                             title, state, menu_instance, shortcut_instance);
-
+                            
                     if (keep_open)
                         std::yield();
                 }
@@ -454,7 +470,7 @@ namespace JEEditor::GUI::Windows
     // 用于调试运行等需要全屏呈现游戏画面、屏蔽编辑 UI 的场合。
     // 隐藏期间各窗口协程照常存活：onUpdate 泵与关闭请求仍然生效。
     let mut s_immersive_mode = false;
-
+    
     public func setImmersiveMode(on: bool)=> void
     {
         s_immersive_mode = on;
@@ -463,7 +479,7 @@ namespace JEEditor::GUI::Windows
     {
         return s_immersive_mode;
     }
-
+    
     public func show<T>(window_instance: T)=> option<IWindows>
         where require!(T: IWindows);
     {
@@ -489,16 +505,43 @@ namespace JEEditor::GUI::Windows
                 i->onDestroy();
             value(window_state)?
             {
-                launch_coroutine(\= i->_show(window_state););
+                internal::appendWindowsProcess(i->_show(window_state));
                 return option::value(i);
             }
         }
         return option::none;
     }
     
+    public func start()
+    {
+        func mainCoroutineJob(){
+            for (;;)
+            {
+                for (let w: internal::pickAllWindowsProcess())
+                {
+                    if (w->dispatch->is_none)
+                        // Still in process.
+                        internal::appendWindowsProcess(w);
+                }
+                yield();
+            }
+        }
+        launch_coroutine(mainCoroutineJob);
+    }
+    
     // 仅限特殊情况使用：
     namespace internal
     {
+        func pickAllWindowsProcess()
+        {
+            return Singleton::apply:<GlobalWindowsContextSingleton>(
+                \wctx = wctx->pickAllWindowsProcess(););
+        }
+        func appendWindowsProcess(w: async<void>)
+        {
+            return Singleton::apply:<GlobalWindowsContextSingleton>(
+                \wctx = wctx->appendWindowsProcess(w););
+        }
         public func getAllWindows()=> array<IWindows>
         {
             return Singleton::apply:<GlobalWindowsContextSingleton>(

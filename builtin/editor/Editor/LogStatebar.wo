@@ -34,9 +34,12 @@ namespace JEEditor::Editor::LogStatebar
         s_running = true;
 
         s_hook = internal::hooklog();
-        launch(func(){
-                drainNewLogs();
-                return true;
+        launch_coroutine(func(){
+                for(;;)
+                {
+                    drainNewLogs();
+                    yield();
+                }
             });
     }
     public func shutdown()
