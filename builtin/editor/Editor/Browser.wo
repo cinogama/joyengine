@@ -822,7 +822,8 @@ namespace JEEditor::Editor
         //   nodes.wo（节点导入清单，编辑集时按 nodes 目录重新生成）、
         //   editor.wo（编辑器启动脚本，经 dumpling 加载后打开 Workflow 编辑器窗口）、
         //   runtime.wo（运行时入口，注册 "main" 分发器）、
-        //   nodes/types/ 目录。模板均存于 Template 目录（workflow_*.template）。
+        //   nodes/types/ 目录（内含空 .gitkeepme 占位文件，保证空目录可被
+        //   git 跟踪）。模板均存于 Template 目录（workflow_*.template）。
         // 回调不捕获 Browser 实例，文件缓存刷新经 dirty 传出。
         func askToCreateNewWorkflowSet(self: Browser)=> void
         {
@@ -861,6 +862,27 @@ namespace JEEditor::Editor
                             }
                         }
 
+                        // 创建 nodes/types 目录并放置空 .gitkeepme 占位文件，
+                        // 使空目录也能被 git 跟踪（与模块目录的 .gitkeepme 约定一致）
+                        func createNodesTypesDir(base: path_t)=> bool
+                        {
+                            match (mkdir(base / "nodes" / "types"))
+                            {
+                                err(_)? return false;
+                                ok(types_dir)?
+                                {
+                                    match (filestream::open(
+                                        types_dir / ".gitkeepme",
+                                        filestream::mode::write))
+                                    {
+                                        none? return false;
+                                        value(fs)?
+                                            return fs->close();
+                                    }
+                                }
+                            }
+                        }
+
                         match (mkdir(target_dir / F"{name}.je4workflows"))
                         {
                             err(eno)?
@@ -881,7 +903,7 @@ namespace JEEditor::Editor
                                     || !writeTemplateTo(
                                         Template::Type::WORKFLOW_RUNTIME,
                                         new_path / "runtime.wo")
-                                    || mkdir(new_path / "nodes" / "types")->is_err
+                                    || !createNodesTypesDir(new_path)
                                     ;
 
                                 if (failed)
