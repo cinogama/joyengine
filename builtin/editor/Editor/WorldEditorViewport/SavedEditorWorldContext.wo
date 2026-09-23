@@ -1,0 +1,33 @@
+import pkg::std;
+import pkg::toml;
+import pkg::interface;
+
+import builtin::editor::Singleton;
+
+import Definition;
+
+using std;
+using toml;
+using JEEditor::Singleton;
+
+namespace JEEditor::Editor::WorldEditorViewport
+{
+    using SavedEditorWorldContext = struct{}
+    {
+        public let SINGLETON_LABEL = "saved_editor_world_context";
+
+        public func createAndLoad(_: option<Toml>)=> SavedEditorWorldContext
+            where require!(SavedEditorWorldContext: ISingleton);
+        {
+            return SavedEditorWorldContext{};
+        }
+        public func save(_: SavedEditorWorldContext)=> option<Toml>
+        {
+            return option::none;
+        }
+
+        /* ==================== */
+
+
+    }
+}

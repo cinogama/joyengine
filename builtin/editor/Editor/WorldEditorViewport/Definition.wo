@@ -36,35 +36,23 @@ using JEEditor::Editor::Action;
 
 namespace JEEditor::Editor
 {
-    // 世界视口的“已保存世界上下文”：世界快照（带 eid，保实体调试 EUID
-    // 以延续选中态与引用 euid 的编辑历史）与编辑器状态（摄像机位姿/
-    // 编辑模式）的打包。冻结（FreezeWorlds）与调试运行（DebugRun）各自
-    // 持有一个独立槽位保存此结构，互不覆盖——调试运行期间模块/ToWoo
-    // 依然会经冻结机制更新世界，两份快照不可共用同一组字段。
-    protected using WorldSavedContext = struct{
-        protected m_world_data: Toml,
-        protected m_editor_state: Toml,
-    }
-    {
-    }
-
     protected using WorldEditorViewport = struct{
         protected m_close: mut CloseRequest,
-
+        
         protected m_world_instance: mut world,
-
+        
         // 冻结（FreezeWorlds）：本视口被冻结时，m_world_instance 已
         // 关闭并等待恢复，此前的世界与编辑器状态打包暂存于
         // m_frozen_world_context，恢复后经 m_pending_editor_state 应用。
         // m_frozen_world_context->is_value 即“本视口处于冻结态”。
         protected m_frozen_world_context: mut option<WorldSavedContext>,
-
+        
         // 调试运行（DebugRun）：开始调试运行时世界保持存活运行，运行前
         // 的世界与编辑器状态打包暂存于 m_playing_world_context；终止运行
         // 时丢弃运行中被游戏逻辑改动的世界，用该快照重建。
         // m_playing_world_context->is_value 即“本视口处于调试运行态”。
         protected m_playing_world_context: mut option<WorldSavedContext>,
-
+        
         // World context:
         protected m_name: string,
         
@@ -114,7 +102,7 @@ namespace JEEditor::Editor
         // 放置到摄像机前方时用它反查父实体并换算局部坐标
         //（见 EntityPicking.wo 的 worldToLocalPos）
         protected m_anchor_parent_entity_selector: mut entity_selector,
-
+        
         // 2D 物理碰撞体实体（Translation+Rigidbody 且不带 Invisible）选择器：
         // 碰撞体线框 gizmo 与“编辑碰撞体”手柄以它为准（与物理系统的
         // 查询语义一致：碰撞体组件只有在 Rigidbody 实体上才生效）
@@ -170,7 +158,7 @@ namespace JEEditor::Editor
         // 命中半径px）与当前悬停的实体，每帧由 updateIconGizmos 重建
         protected m_icon_gizmo_rects: vec<mut (entity::internal::euid_t, vec2, real)>,
         protected m_icon_gizmo_hover: mut option<entity::internal::euid_t>,
-
+        
         // ---- 碰撞体 gizmo（编辑手柄）状态 ----
         // 选中带碰撞体的实体即显示手柄、可直接拖拽（无需模式开关）
         protected m_collider_hover_handle: mut int,
@@ -188,7 +176,7 @@ namespace JEEditor::Editor
         protected m_collider_drag_undo_component: mut string,
         protected m_collider_drag_undo_member: mut string,
         protected m_collider_drag_undo_old_value: mut string,
-
+        
         // ---- 2D 光源形状 gizmo（编辑手柄）状态 ----
         // 选中带 Light2D::Range / Light2D::BlockShadow 的实体即显示形状
         // 线框与手柄、可直接拖拽顶点（无需模式开关；仅选中时绘制）
@@ -206,6 +194,16 @@ namespace JEEditor::Editor
         protected m_light_drag_undo_old_value: mut string,
     }
     {
+        // 世界视口的“已保存世界上下文”：世界快照（带 eid，保实体调试 EUID
+        // 以延续选中态与引用 euid 的编辑历史）与编辑器状态（摄像机位姿/
+        // 编辑模式）的打包。冻结（FreezeWorlds）与调试运行（DebugRun）各自
+        // 持有一个独立槽位保存此结构，互不覆盖——调试运行期间模块/ToWoo
+        // 依然会经冻结机制更新世界，两份快照不可共用同一组字段。
+        protected using WorldSavedContext = struct{
+            protected m_world_data: Toml,
+            protected m_editor_state: Toml,
+        };
+        
         // ---- 摄像机游走参数（跨文件共享的部分） ----
         protected let CAMERA_DEFAULT_ORBIT_DISTANCE = 10.;
         
@@ -240,7 +238,7 @@ namespace JEEditor::Editor
         
         // ---- 2D 光源实体 gizmo 参数 ----
         protected let LIGHT2D_GIZMO_ICON_SIZE_PX = 48.;  // 光源图标边长（像素）
-
+        
         // ---- 碰撞体 gizmo 参数 ----
         protected let COLLIDER_HANDLE_SIZE_PX = 8.;      // 编辑手柄方块边长（像素）
         protected let COLLIDER_MIN_SIZE = 0.01;          // 尺寸/半径下限
@@ -249,7 +247,7 @@ namespace JEEditor::Editor
         protected let COLLIDER_GIZMO_COLOR = (0.35, 0.9, 0.45, 0.55);
         protected let COLLIDER_GIZMO_COLOR_SELECTED = (1., 1., 0.25, 0.9);
         protected let COLLIDER_HANDLE_COLOR = (0.85, 0.85, 0.85, 0.9);
-
+        
         // ---- 碰撞体偏移（Offset）编辑把手参数 ----
         // 偏移把手编号（负数哨兵，形状手柄为 >= 0 的数组下标，
         // 与 GIZMO_HANDLE_NONE = -1 不冲突）：
@@ -262,7 +260,7 @@ namespace JEEditor::Editor
         // 悬停/拖拽高亮复用 GIZMO_COLOR_HOVER
         protected let COLLIDER_OFFSET_HANDLE_COLOR = (0.3, 0.9, 0.95, 0.9);
         protected let COLLIDER_ROTATION_GIZMO_COLOR = (1., 0.62, 0.25, 0.75);
-
+        
         // ---- 2D 光源形状 gizmo 参数 ----
         // 范围光/遮挡体线框配色：常态暖黄（范围光）/ 紫（遮挡体），
         // 仅选中实体绘制故无常态/选中两套，手柄激活高亮复用
@@ -293,7 +291,7 @@ namespace JEEditor::Editor
             LOCAL,
             GLOBAL,
         }
-
+        
         // 碰撞体种类（与 Physics2D::Collider 的四个互斥组件对应；
         // 枚举成员可见性继承声明，跨文件使用的枚举须为 public）
         public enum ColliderKind
@@ -303,7 +301,7 @@ namespace JEEditor::Editor
             CAPSULE,
             MESH,
         }
-
+        
         // 可编辑形状的 2D 光源组件种类（Light2D::Range / Light2D::BlockShadow
         // 两个互斥的形状编辑目标；枚举成员可见性继承声明，跨文件使用的
         // 枚举须为 public）
@@ -322,7 +320,7 @@ namespace JEEditor::Editor
         
         protected let s_world_viewports = {}mut: map<world, WorldEditorViewport>;
         protected let mut s_last_focusd_world_view = option::none: option<WorldEditorViewport>;
-
+        
         // 冻结（锁定）状态：引用计数，> 0 期间所有世界视口的创建操作失败
         //（FreezeWorlds::freezeAllWorlds/restoreAllWorlds）。freezeAllWorlds
         // 计数 +1，仅首次（0→1）执行实际冻结；restoreAllWorlds 计数 -1，
@@ -332,11 +330,11 @@ namespace JEEditor::Editor
         // 世界实例。
         protected let mut s_worlds_frozen = 0;
         protected let mut s_frozen_last_focused = option::none: option<WorldEditorViewport>;
-
+        
         // freezeAllWorldsToDo 已受理但协程尚未跑到冻结步骤（s_worlds_frozen
         // 尚未递增）期间的同步重入保护：防止同一帧内重复发起冻结流程
         protected let mut s_worlds_freeze_in_progress = false;
-
+        
         // 当前是否处于“所有世界已冻结”状态（创建操作据此失败）
         public func isWorldsFrozen()=> bool
         {
@@ -360,7 +358,7 @@ namespace JEEditor::Editor
                 || !(e->towoo::get_component:<Light2D::Range>->is_none)
                 || !(e->towoo::get_component:<Light2D::Parallel>->is_none);
         }
-
+        
         // 是否为带碰撞体的 2D 物理实体（Rigidbody + 任一 Collider 组件；
         // 与物理系统的查询语义一致：碰撞体组件只有配 Rigidbody 才生效），
         // 其碰撞体线框 gizmo 与“编辑碰撞体”手柄以此为准
