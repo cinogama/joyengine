@@ -5,21 +5,67 @@ import je::ecs;
 
 import builtin::editor::Singleton::Universe;
 import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Forms::MsgBox;
+
+import Definition;
+import WindowLifecycle;
 
 using je;
+using std;
 using JEEditor::GUI::Windows;
+using JEEditor::GUI::Forms;
 using JEEditor::Singleton::Universe;
 
 namespace JEEditor::Editor::WorldEditorViewport
 {
+    // 注册“世界视口意外关闭检查”前置任务：每帧在所有窗口更新前运行，
+    // 发现 m_world_instance 不在编辑器 universe 存活世界列表中的视口即
+    // 将其程序化关闭（世界被移出列表的同一逻辑更新里即已销毁，句柄悬空，
+    // 故先从 s_world_viewports 注销、使 onClose 不再对死句柄调用 close），
+    // 并弹出一个 err 消息框。冻结与调试运行（停止过渡）期间世界同样
+    // 不在存活列表中，相关机制的适配另行处理。
     public func registerClosingCheckJob()
     {
         internal::registerPreWindowsJob(
             func(){
-                for (let _: getUniverse()->get_all_worlds())
+                let alive_worlds = getUniverse()->get_all_worlds();
+
+                func isAlive(w: world)=> bool
                 {
-                    
+                    for (let alive_world : alive_worlds)
+                        if (std::is_same(alive_world, w))
+                            return true;
+                    return false;
                 }
+
+                let mut closed_names = "";
+                for (let viewport : getAllViewports())
+                {
+                    if (isAlive(viewport.m_world_instance))
+                        continue;
+
+                    do s_world_viewports->remove(viewport.m_world_instance);
+                    viewport.m_close = CloseRequest::CLOSE_AND_DESTROY_WORLD;
+
+                    // 其他面板每帧经 getLastFocused 访问聚焦视口的世界，
+                    // 先摘掉死视口引用（与 freezeAllWorlds 同一理由）
+                    match (s_last_focusd_world_view)
+                    {
+                        none?;
+                        value(v)?
+                            if (std::is_same(v, viewport))
+                                s_last_focusd_world_view = option::none;
+                    }
+
+                    if (closed_names != "")
+                        closed_names = closed_names + "、";
+                    closed_names = closed_names + viewport.m_name;
+                }
+
+                if (closed_names != "")
+                    MsgBox::err(
+                        "世界视口被意外关闭",
+                        F"以下世界的世界实例已意外关闭，对应的视口已被关闭：\n{closed_names}");
             });
     }
 }

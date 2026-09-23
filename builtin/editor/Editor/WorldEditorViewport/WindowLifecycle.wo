@@ -43,6 +43,7 @@ import builtin::editor::Editor::Action::CreateEntity;
 import builtin::editor::Editor::DebugRun;
 
 import builtin::editor::Editor::Project;
+import builtin::editor::Singleton::Universe;
 
 import Definition;
 import CameraControl;
@@ -322,9 +323,13 @@ namespace JEEditor::Editor::WorldEditorViewport
     }
     public func onDestroy(self: WorldEditorViewport)=> void
     {
+        // 不能经 m_world_instance->get_universe 取 universe：世界意外死亡被
+        // ClosingWorldChecker 关闭时该句柄已悬空。编辑器所有视口的世界都
+        // 创建自编辑器 universe 单例（WorldOpen / rebuildWorldFromSavedContext），
+        // 直接取单例与原取法恒等且永不悬空。
         let graphic_uhost = graphic_uhost::get_or_create(
-            self.m_world_instance->get_universe);
-            
+            Singleton::Universe::getUniverse());
+
         graphic_uhost->free_branch(self.m_gizmo_draw_branch);
     }
     public func onClose(self: WorldEditorViewport)=> void
