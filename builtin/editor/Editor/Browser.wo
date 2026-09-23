@@ -39,6 +39,7 @@ import builtin::editor::Editor::Template;
 import builtin::editor::Editor::Animation2D;
 import builtin::editor::Editor::Workflow;
 import ResourcePath;
+import ShaderUpdater;
 import Action::ModifyPrefab;
 
 using std;
@@ -1666,6 +1667,15 @@ namespace JEEditor::Editor
                                     return ModulePrepare::buildCppModuleDir(
                                         prepare, sel, purename(sel), ModulePrepare::BuildConfig::DEBUG);
                                 }));
+                    }
+
+                    // 更新着色器：失效缓存后重新加载，并刷新所有世界中
+                    // 对该着色器的引用（uniform 值保留，见 ShaderUpdater.wo）
+                    if (isfile(sel)
+                        && string::lower(extension(sel)) == ".shader"
+                        && MenuItem("更新着色器"))
+                    {
+                        ShaderUpdater::update(sel);
                     }
 
                     // 编辑 Workflow 集：重新生成 nodes.wo 清单后经 dumpling 加载

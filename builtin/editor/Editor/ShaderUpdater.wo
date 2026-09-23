@@ -1,0 +1,120 @@
+import pkg::std;
+import pkg::fsys;
+
+import je;
+import je::ecs;
+import je::graphic;
+import je::internal;
+import je::towoo::components;
+
+import builtin::editor::GUI::Forms::MsgBox;
+
+import builtin::editor::Singleton::Universe;
+import ResourcePath;
+
+using std;
+using je;
+using je::graphic;
+
+using JEEditor::GUI::Forms;
+using JEEditor::Singleton;
+using JEEditor::Editor::ResourcePath;
+
+// 浏览器右键 .shader 文件的“更新着色器”实现：失效缓存后重新加载，
+// 并刷新所有世界中对该着色器的引用。供 Browser.wo 调用。
+namespace JEEditor::Editor::ShaderUpdater
+{
+    // 把旧着色器实例上用户可写的 uniform 值复制到新实例，实现更新后
+    // 保留原 uniform 值。JE_ 前缀的 uniform 由引擎渲染时写入；texture
+    //（采样通道）与其余类型引擎未提供写入口径——这三类均跳过（与材质
+    // 编辑器的展示口径一致）。新着色器中已不存在的 uniform 名，底层
+    // set_uniform 为无操作，无需特判。
+    func copyUniforms(old_sinst: shader, new_sinst: shader)=> void
+    {
+        let uniforms = old_sinst->get_uniforms;
+        for (let uname : uniforms->keys)
+        {
+            if (uname->begin_with("JE_"))
+                continue;
+                
+            match (uniforms->get(uname)->unwrap)
+            {
+                integer(v)? new_sinst->set_uniform(uname, v);
+                integer2(v)? new_sinst->set_uniform(uname, v);
+                integer3(v)? new_sinst->set_uniform(uname, v);
+                integer4(v)? new_sinst->set_uniform(uname, v);
+                float(v)? new_sinst->set_uniform(uname, v);
+                float2(v)? new_sinst->set_uniform(uname, v);
+                float3(v)? new_sinst->set_uniform(uname, v);
+                float4(v)? new_sinst->set_uniform(uname, v);
+                _?;
+            }
+        }
+    }
+    
+    // 更新流程：
+    // 1. 失效该路径着色器的共享缓存（内存缓存条目与 GPU blob）；
+    //    磁盘 .je4cache 由源码 CRC 自校验，文件改动后自动重新编译；
+    // 2. 先加载一次校验新版可用，失败则弹窗提示并中止（保留旧实例）；
+    // 3. 遍历所有世界的所有实体，替换 Renderer::Shaders 中指向该路径
+    //    的着色器实例并保留 uniform 值；其余实例原样保留。
+    // 每处替换都独立调用 shader::load：共享着色器（m_enable_to_shared）
+    // 会命中共享缓存拿到同一实例；非共享着色器则各自创建全新实例——
+    // 两种语义均由加载器保证，无需读取该标志。
+    public func update(sel: fsys::path_t)=> void
+    {
+        // 与材质编辑器加载着色器一致，用 @/ 运行时形式比对与加载
+        let runtime_path = ResourcePath::toRuntimeResourcePath(sel);
+                
+        match (shader::load(option::none, runtime_path))
+        {
+            none?
+            {
+                MsgBox::err("更新着色器失败", F"无法加载着色器：`{sel}`");
+                return;
+            }
+            value(_)?;
+        }
+        
+        let univ = Singleton::Universe::getUniverse();
+        
+        do univ->internal::mark_shared_glresource_outdated(runtime_path);
+        for (let w : univ->get_all_worlds)
+        {
+            let selector = w->create_selector(
+                [requirement::contains(Renderer::Shaders::type::typeinfo)]);
+            for (let e : selector)
+            {
+                let mut rebuilt = []: array<shader>;
+                let mut changed = false;
+                for (let sinst : e->get_shaders())
+                {
+                    // 仅当实例路径命中目标时重新加载替换，否则原样保留
+                    let mut snew_opt = option::none: option<shader>;
+                    match (sinst->path)
+                    {
+                        value(p)?
+                            if (p == runtime_path)
+                                snew_opt = shader::load(option::value(univ), runtime_path);
+                        none?;
+                    }
+                    
+                    match (snew_opt)
+                    {
+                        value(snew)?
+                        {
+                            copyUniforms(sinst, snew);
+                            rebuilt = rebuilt->append(snew);
+                            changed = true;
+                        }
+                        // 开头已校验可加载，这里失败仅防御性地保留旧实例
+                        none?
+                            rebuilt = rebuilt->append(sinst);
+                    }
+                }
+                if (changed)
+                    e->set_shaders(rebuilt);
+            }
+        }
+    }
+}
