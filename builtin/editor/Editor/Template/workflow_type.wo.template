@@ -1,0 +1,56 @@
+// $TYPE_NAME$.wo
+import pkg::std;
+
+import je::gui;
+
+import pkg::guid;
+import pkg::worst;
+
+using je::gui;
+
+// 自定义 Workflow 引脚类型声明：
+// 节点通过 io->in:<workflow::types::$TYPE_NAME$>(...) / io->out:<workflow::types::$TYPE_NAME$>(...)
+// 使用本类型；使用它的节点文件需先导入本文件（如本文件位于集内 nodes/types/
+// 目录下，则为 `import types::$TYPE_NAME$;`）。
+// 引脚的显示名与颜色由 node_editor 命名空间下的 name/color 提供，
+// 未连接的输入引脚会调用 edit 提供默认值编辑，save/restore 负责其序列化；
+// void/bool/int/real/vec2 等基础类型已由 builtin::statements::types 内置，无需声明。
+namespace workflow::types
+{
+    public using $TYPE_NAME$ = struct{
+        // 在此声明类型成员（跨模块使用的成员需 public）……
+        public value: real,
+    }
+    {
+    }
+
+    namespace $TYPE_NAME$
+    {
+        namespace node_editor
+        {
+            public let name = "$TYPE_NAME$";
+            public let color = 0xFFCC88FF;  // RRGGBBAA
+
+            public func edit(self: $TYPE_NAME$, uid: guid::GUID)=> option<$TYPE_NAME$>
+            {
+                SetNextItemWidth(175.);
+                return InputFloat(F"##{uid as string}", self.value)
+                    ->> \v = $TYPE_NAME${ value = v };;
+            }
+            public func save(self: $TYPE_NAME$)=> string
+            {
+                return [self.value]->serialize->unwrap;
+            }
+            public func restore(str: string)=> $TYPE_NAME$
+            {
+                return $TYPE_NAME${
+                    value = array::deserialize(str)
+                        =>> \arr = arr as dynamic->trycast:<array<real>>();
+                        -> map_or(\arr = arr->get_or(0, 0.);,
+                            0.)
+                    ,
+                };
+            }
+        }
+    }
+}

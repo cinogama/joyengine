@@ -990,6 +990,91 @@ namespace JEEditor::Editor
             ;
         }
 
+        // 新建 Workflow 类型声明（右键菜单“新建→Workflow→创建类型声明”）：
+        // 以 workflow_type.wo 模板在当前目录生成 {name}.wo，声明自定义引脚
+        // 类型 workflow::types::{name}（含 node_editor 显示名/颜色/默认值
+        // 编辑/序列化，模板中的 $NODE_NAME$ 占位符替换为类型名）。通常应在
+        // Workflow 集的 nodes/types 目录内创建，经 nodes.wo 清单导入后，
+        // 节点即可通过 io->in/out:<workflow::types::{name}> 使用该类型；
+        // void/bool/int/real/vec2 等基础类型已由 builtin::statements::types
+        // 内置提供，无需声明。
+        func askToCreateWorkflowTypeDeclaration(self: Browser)=> void
+        {
+            let target_dir = self.m_current;
+            let dirty = self.m_fs_dirty;
+
+            let dialog_title = "新建 Workflow 类型声明";
+            let type_display = "Workflow 类型声明";
+
+            func writeTo(dst: path_t, type_name: string)=> void
+            {
+                match (Template::load(Template::Type::WORKFLOW_TYPE))
+                {
+                    none?
+                        MsgBox::err(dialog_title,
+                            F"无法加载内置的 {type_display} 模板文件");
+                    value(content)?
+                    {
+                        match (filestream::open(dst, filestream::mode::write))
+                        {
+                            none?
+                                MsgBox::err(dialog_title,
+                                    F"无法创建 \"{dst->to_string()}\"，可能是文件名非法或磁盘已满");
+                            value(fs)?
+                            {
+                                let filled = content->replace("$TYPE_NAME$", type_name);
+                                defer do fs->close();
+                                if (!fs->write(filled as buffer, 0, filled->byte_len))
+                                {
+                                    MsgBox::err(dialog_title,
+                                        F"写入 \"{dst->to_string()}\" 失败");
+                                    return;
+                                }
+
+                                dirty->set(true);
+
+                                let path_str = dst->to_string();
+                                Statebar::showState(3.) <| func(){
+                                    Text(F"{type_display} \"{path_str}\" 已创建");
+                                };
+                            }
+                        }
+                    }
+                }
+            }
+
+            func createAs(file_name: string)=> void
+            {
+                if (file_name->len == 0)
+                {
+                    MsgBox::err(dialog_title, "文件名不能为空");
+                    return;
+                }
+
+                let full_name = file_name->end_with(".wo")
+                    ? file_name
+                    | F"{file_name}.wo";
+
+                let dst = target_dir / full_name;
+
+                if (isfile(dst))
+                {
+                    do AskBox::show(
+                        dialog_title, F"目录中已存在 \"{full_name}\"，确认覆盖吗？")
+                        ->onYes(\= writeTo(dst, purename(dst));)
+                        ;
+                }
+                else
+                    writeTo(dst, purename(dst));
+            }
+
+            do InputBox::show(dialog_title,
+                    F"将在{target_dir->to_string()}创建{type_display}：",
+                    "NewType")
+                ->then(createAs)
+            ;
+        }
+
         // 编辑 Workflow 集（右键 *.je4workflows 目录的菜单项）：先按集内
         // nodes 目录重新生成 nodes.wo 导入清单（对每个 .wo 生成一条
         // export import），再经 Workflow::openWorkflowSet 以 dumpling 加载
@@ -1486,6 +1571,10 @@ namespace JEEditor::Editor
                         if (MenuItem("创建 Flow Node 声明"))
                         {
                             self->askToCreateWorkflowNodeDeclaration(false);
+                        }
+                        if (MenuItem("创建类型声明"))
+                        {
+                            self->askToCreateWorkflowTypeDeclaration();
                         }
                     }
                     if (MenuItem("C++ 模块"))

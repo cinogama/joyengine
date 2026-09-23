@@ -28,6 +28,7 @@ namespace JEEditor::Editor::Template
         public WORKFLOW_RUNTIME,
         public WORKFLOW_EVAL_NODE,
         public WORKFLOW_FLOW_NODE,
+        public WORKFLOW_TYPE,
     }
 
     public func load(type: Type)=> option<string>
@@ -49,6 +50,7 @@ namespace JEEditor::Editor::Template
             [Type::WORKFLOW_RUNTIME] = "workflow_runtime.wo",
             [Type::WORKFLOW_EVAL_NODE] = "workflow_eval_node.wo",
             [Type::WORKFLOW_FLOW_NODE] = "workflow_flow_node.wo",
+            [Type::WORKFLOW_TYPE] = "workflow_type.wo",
         };
         
         try! template_filename = type_to_filename->get(type);
