@@ -107,6 +107,15 @@ namespace JEEditor::Editor::WorldEditorViewport
             {
                 value(vp)?
                 {
+                    // 运行期临时视口的世界仅采集世界数据：其编辑历史与
+                    // 选中态属运行期临场状态，跨冻结不留存（解冻后由
+                    // ClosingWorldChecker 重新补给临时视口）
+                    if (vp.m_is_runtime_editing)
+                    {
+                        saved->add(dumpBareWorldSavedContext(w));
+                        continue;
+                    }
+
                     match (s_last_focusd_world_view)
                     {
                         value(focused)?

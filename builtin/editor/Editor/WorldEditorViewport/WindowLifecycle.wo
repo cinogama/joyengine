@@ -54,6 +54,7 @@ import GizmoDrawing;
 import ViewportUI;
 import WorldSaving;
 import EditorState;
+import ClosingWorldChecker;
 
 using std;
 using toml;
@@ -170,6 +171,8 @@ namespace JEEditor::Editor::WorldEditorViewport
             m_close = mut CloseRequest::NORMALLY,
 
             m_world_instance = mut w,
+
+            m_is_runtime_editing = mut false,
 
             m_name = name,
             m_runtime_systems = []mut,
@@ -322,7 +325,15 @@ namespace JEEditor::Editor::WorldEditorViewport
                 if (std::is_same(v, self))
                     s_last_focusd_world_view = option::none;
         }
-        
+
+        // 运行期临时视口：世界属于调试运行编排（停止时统一关闭回收），
+        // 关闭窗口不触碰世界，也不通知 Project；从注册表移除即可
+        if (self.m_is_runtime_editing)
+        {
+            do s_world_viewports->remove(self.m_world_instance);
+            return;
+        }
+
         if (self.m_close != CloseRequest::CLOSE_BUT_KEEP_WORLD)
         {
             if (self->isCurrentViewportAvailable)
@@ -343,6 +354,16 @@ namespace JEEditor::Editor::WorldEditorViewport
     // 待用户确认后再通过 m_close 程序化关闭。
     public func onPreClose(self: WorldEditorViewport)=> bool
     {
+        // 运行期临时视口：无保存概念，关闭无需确认。程序化关闭（回收/
+        // 清扫已置 m_close）直接放行；用户手动关闭则把世界记为“已忽略”，
+        // 本次运行期内不再为其重建临时视口（见 ClosingWorldChecker）
+        if (self.m_is_runtime_editing)
+        {
+            if (self.m_close == CloseRequest::NORMALLY)
+                dismissRuntimeEditingViewport(self.m_world_instance);
+            return true;
+        }
+
         // 程序化关闭（重命名/另存重开/确认后的关闭）不拦截
         if (self.m_close != CloseRequest::NORMALLY)
             return true;
@@ -391,12 +412,23 @@ namespace JEEditor::Editor::WorldEditorViewport
     {
         let saving_path = self.m_saving_path->> \p = p->to_string;;
         
-        return F"世界视口：{self.m_name}##{saving_path->or(":<unsaved>")}";
+        let mut title = F"世界视口：{self.m_name}##{saving_path->or(":<unsaved>")}";
+        if (self.m_is_runtime_editing)
+            title += "$ID";
+
+        return title;
     }
     public func getMenu(self: WorldEditorViewport)=> option<Menu>
     {
         func inputForRenamingWorld()=> void
         {
+            // 运行期临时视口不支持重命名（重命名会重建视口窗口且无保存语义）
+            if (self.m_is_runtime_editing)
+            {
+                MsgBox::msg("重命名世界", "调试运行的临时视口不支持重命名");
+                return;
+            }
+
             do InputBox::show("重命名世界", "请输入新的世界名称", self.m_name)
                 -> then(
                     func(new_name)
@@ -457,7 +489,8 @@ namespace JEEditor::Editor::WorldEditorViewport
     }
     public func run(self: WorldEditorViewport)=> bool
     {
-        if (self.m_saving_path->is_none)
+        // 运行期临时视口不提供保存入口：跳过“未保存提示 + 拖拽保存”横幅
+        if (self.m_saving_path->is_none && !self.m_is_runtime_editing)
         {
             match(Icons::WORLD)
             {

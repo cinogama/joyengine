@@ -120,6 +120,11 @@ namespace JEEditor::Editor::WorldEditorViewport
     // 编辑器中世界落盘的唯一入口。
     public func saveWorldTo(self: WorldEditorViewport, path: path_t)=> bool
     {
+        // 运行期临时视口不提供保存：其编辑属于运行期临场调整，随停止
+        // 运行一并丢弃
+        if (self.m_is_runtime_editing)
+            return false;
+
         // 冻结期间世界已暂停等待重建，不应落盘（Ctrl+S 等入口由此拦截）；
         // 调试运行（含停止过渡）期间同样不落盘：运行中的世界状态属于
         // 游戏逻辑，不应覆盖编辑现场
@@ -158,6 +163,14 @@ namespace JEEditor::Editor::WorldEditorViewport
     // 尚未保存过的世界没有目标目录，提示改用拖拽图标到资源管理器的保存流程。
     protected func saveByShortcut(self: WorldEditorViewport)=> void
     {
+        // 运行期临时视口不支持保存：编辑内容随停止运行一并丢弃
+        if (self.m_is_runtime_editing)
+        {
+            MsgBox::msg(
+                "保存", "调试运行的临时视口不支持保存，编辑内容随停止运行丢弃");
+            return;
+        }
+
         match (self.m_saving_path)
         {
             value(path)?
@@ -177,6 +190,10 @@ namespace JEEditor::Editor::WorldEditorViewport
         new_name: string,
         new_path: option<path_t>)=> bool
     {
+        // 运行期临时视口不支持重命名/另存/路径重定向（重建窗口无意义）
+        if (self.m_is_runtime_editing)
+            return false;
+
         // 冻结期间不允许重建窗口（重命名/另存/路径重定向一并失败），
         // 待解冻后重试；调试运行（含停止过渡）期间同样不允许
         if (isWorldsFrozen() || DebugRun::isDebugRunActive())

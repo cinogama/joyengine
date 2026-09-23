@@ -140,6 +140,10 @@ namespace JEEditor::Editor::WorldEditorViewport
     protected func drawUnsavedMark(
         self: WorldEditorViewport, rect_min: ImVec2, rect_max: ImVec2)=> bool
     {
+        // 运行期临时视口没有“未保存”概念，不绘制
+        if (self.m_is_runtime_editing)
+            return false;
+
         if (!self.m_action_history->isDirty && self.m_saving_path->is_value)
             return false;
 

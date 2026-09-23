@@ -41,6 +41,14 @@ namespace JEEditor::Editor
 
         protected m_world_instance: mut world,
 
+        // 运行期临时编辑视口标记：调试运行期间由 ClosingWorldChecker 为
+        // 无视口的世界创建（见 createRuntimeEditingViewport），停止运行时
+        // 统一关闭回收。此类视口使用独立的编辑历史（创建时全新，不迁移
+        // 不保留），不提供任何保存入口（Ctrl+S/拖拽保存/另存/重命名一律
+        // 拒绝），关闭窗口不触碰世界实例——世界属于调试运行编排，由停止
+        // 运行流程统一关闭。
+        protected m_is_runtime_editing: mut bool,
+
         // World context:
         protected m_name: string,
         
@@ -427,6 +435,9 @@ namespace JEEditor::Editor
         // Donot save document for unsafed world viewport.
         public func getAttrib(self: WorldEditorViewport)=> WindowsAttribute
         {
+            // 运行期临时视口没有“未保存”概念，不标记未保存文档
+            if (self.m_is_runtime_editing)
+                return WindowsAttribute::ImGuiWindowFlags_None;
             if (self.m_saving_path->is_none)
                 return WindowsAttribute::ImGuiWindowFlags_UnsavedDocument;
             return WindowsAttribute::ImGuiWindowFlags_None;

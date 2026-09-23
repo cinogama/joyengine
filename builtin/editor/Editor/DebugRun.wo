@@ -15,8 +15,10 @@
 //   ⑥ 运行期间默认隐藏所有常规窗口、主菜单栏与状态栏（沉浸模式），
 //      仅留可拖动的调试运行停止条（默认悬浮于左上角、菜单区下方）；
 //      运行中可经停止条按钮或 Shift+F6 随时切换编辑器 UI 显隐
-//      （toggleDebugRunUI）；世界视口已随运行关闭，编辑器 UI 仅供
-//      浏览，不再能在视口内编辑世界。
+//      （toggleDebugRunUI）。ClosingWorldChecker 会为各世界补给运行期
+//      临时编辑视口（独立编辑历史、不执行保存，见 ClosingWorldChecker），
+//      供运行期临场编辑，停止时统一关闭回收——因此运行期不做全局的
+//      编辑历史抑制（编辑只会落入临时视口各自的独立历史）。
 //
 // 终止运行（stopDebugRun）：关闭当前宇宙中所有世界（运行中被游戏逻辑
 // 改动的世界与运行期新建的世界一并关闭），用 ① 的快照重建世界，为有
@@ -40,8 +42,8 @@ import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Menu;
 import builtin::editor::GUI::Statebar;
 
-import Practice;
 import WorldEditorViewport;
+import builtin::editor::Editor::WorldEditorViewport::ClosingWorldChecker;
 
 import builtin::editor::Singleton::Universe;
 
@@ -130,17 +132,19 @@ namespace JEEditor::Editor::DebugRun
         // ④ 关闭全部世界视口窗口（世界实例保留继续运行）
         WorldEditorViewport::closeAllViewportWindows();
 
+        // 复位运行期临时视口记账：ClosingWorldChecker 随后会为各世界补给
+        // 临时编辑视口（独立编辑历史、不执行保存），停止时统一回收
+        WorldEditorViewport::resetRuntimeEditingState();
+
         s_debug_running = true;
 
         // ⑤⑥ 协程：先让出一帧使视口窗口在非沉浸的帧里泵到 run 完成
-        //    关闭，再进入沉浸模式；等待数帧后恢复所有世界运行。
-        //    运行期间编辑操作不记录历史（Practice 抑制开关）
+        //    关闭，再进入沉浸模式；等待数帧后恢复所有世界运行
         launch_coroutine(func(){
                 yield();
 
                 s_debug_run_ui_visible = false;
                 applyDebugRunUIVisibility();
-                Practice::setHistorySuppressed(true);
                 DebugRunToolbar::show();
 
                 for (let mut i = 0; i < DEBUG_RUN_RESUME_WAIT_FRAMES; i += 1)
@@ -195,6 +199,11 @@ namespace JEEditor::Editor::DebugRun
                 while (WorldEditorViewport::isWorldsFrozenEngaged())
                     yield();
 
+                // 统一回收运行期临时编辑视口：先从注册表注销再请求关闭
+                //（沉浸模式隐藏期间同样生效），世界随后由停止流程关闭，
+                // 不会触发意外关闭检查的错误框
+                WorldEditorViewport::closeAllRuntimeEditingViewports();
+
                 // 关闭当前宇宙中所有世界：运行中被游戏逻辑改动的世界与
                 // 运行期新建的世界一并关闭（实际销毁在下一逻辑更新生效，
                 // 需让出帧后再重建）
@@ -219,7 +228,6 @@ namespace JEEditor::Editor::DebugRun
                 DebugRunToolbar::requestClose();
 
                 s_transitioning = false;
-                Practice::setHistorySuppressed(false);
             });
     }
     
