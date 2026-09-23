@@ -7,10 +7,11 @@
 //      再对死句柄调用 close），并弹出一个 err 消息框。运行期临时视口的
 //      世界随游戏逻辑生死属正常运行现象，静默关闭即可，不计入名单。
 //   ② 运行期补给：调试运行期间（开始运行会关闭全部常规视口），为没有
-//      对应视口的存活世界创建临时编辑视口（独立编辑历史、无保存入口、
-//      关闭不触碰世界），供运行期临场编辑；停止运行时统一关闭回收
+//      对应视口的存活世界创建临时编辑视口（独立编辑历史、无保存入口；
+//      用户经确认框手动关闭时世界随视口一并关闭），供运行期临场编辑；
+//      停止运行时统一关闭回收
 //      （DebugRun::stopDebugRun → closeAllRuntimeEditingViewports）。
-//      用户手动关闭过的世界（dismissed）本次运行期内不再重建。
+//      用户确认关闭过的世界（dismissed）在本次运行期内不再重建。
 //      冻结期间（含解冻恢复过渡）不创建——世界正被冻结机制编排。
 
 import pkg::std;
@@ -53,7 +54,8 @@ namespace JEEditor::Editor::WorldEditorViewport
     
     // 为世界 w 创建运行期临时编辑视口：独立编辑历史（create 全新、不
     // 迁移不保留）、无保存入口（path = none 且各保存路径按
-    // m_is_runtime_editing 拒绝）、关闭不触碰世界（见 onClose）。命名以
+    // m_is_runtime_editing 拒绝）；用户经确认框手动关闭时世界随视口
+    // 一并关闭，程序化关闭不触碰世界（见 onClose）。命名以
     // 计数保证唯一——临时视口无保存路径，沿用世界名会同未保存视口的
     // 标题（名字 + "##:<unsaved>"）冲突。
     func createRuntimeEditingViewport(w: world)=> void
@@ -109,8 +111,9 @@ namespace JEEditor::Editor::WorldEditorViewport
     // 先从注册表注销——世界随后即被停止流程关闭，不注销会被意外关闭
     // 检查当成“世界意外死亡”弹错误框；再程序化关闭——置 m_close 后经
     // 窗口状态 requestToClose（沉浸模式隐藏期间同样生效；onPreClose 据
-    // m_close != NORMALLY 识别为程序化关闭，不记 dismissed）。世界不随
-    // 窗口关闭（onClose 的临时视口分支），由停止运行流程统一关闭。
+    // m_close != NORMALLY 识别为程序化关闭，不弹确认框、不记
+    // dismissed）。回收是程序化关闭，世界不随窗口关闭（见 onClose），
+    // 由停止运行流程统一关闭。
     public func closeAllRuntimeEditingViewports()=> void
     {
         for (let vp : getAllViewports())

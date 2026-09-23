@@ -326,11 +326,20 @@ namespace JEEditor::Editor::WorldEditorViewport
                     s_last_focusd_world_view = option::none;
         }
 
-        // 运行期临时视口：世界属于调试运行编排（停止时统一关闭回收），
-        // 关闭窗口不触碰世界，也不通知 Project；从注册表移除即可
+        // 运行期临时视口：用户经确认框手动关闭时世界随视口一并关闭
+        //（视口关闭 = 世界关闭，与常规视口的所有权设计一致）；程序化
+        // 关闭不触碰世界——停止运行回收与冻结关闭均置
+        // CLOSE_BUT_KEEP_WORLD（世界由对应机制处置），世界已死亡被清扫
+        // 的已先行注销（isCurrentViewportAvailable 为假）。无保存路径，
+        // 不通知 Project
         if (self.m_is_runtime_editing)
         {
-            do s_world_viewports->remove(self.m_world_instance);
+            if (self.m_close == CloseRequest::CLOSE_AND_DESTROY_WORLD
+                && self->isCurrentViewportAvailable)
+            {
+                do s_world_viewports->remove(self.m_world_instance);
+                self.m_world_instance->close;
+            }
             return;
         }
 
@@ -354,14 +363,28 @@ namespace JEEditor::Editor::WorldEditorViewport
     // 待用户确认后再通过 m_close 程序化关闭。
     public func onPreClose(self: WorldEditorViewport)=> bool
     {
-        // 运行期临时视口：无保存概念，关闭无需确认。程序化关闭（回收/
-        // 清扫已置 m_close）直接放行；用户手动关闭则把世界记为“已忽略”，
-        // 本次运行期内不再为其重建临时视口（见 ClosingWorldChecker）
+        // 运行期临时视口：程序化关闭（停止运行回收/冻结关闭/清扫已置
+        // m_close）不拦截、不弹确认；用户手动关闭弹确认——关闭临时视口
+        // 会一并关闭正在运行的世界实例（视口关闭 = 世界关闭，与常规视口
+        // 的所有权设计一致）
         if (self.m_is_runtime_editing)
         {
-            if (self.m_close == CloseRequest::NORMALLY)
-                dismissRuntimeEditingViewport(self.m_world_instance);
-            return true;
+            if (self.m_close != CloseRequest::NORMALLY)
+                return true;
+
+            do AskBox::show(
+                F"关闭##{self.m_world_instance}",
+                F"关闭临时视口将同时关闭正在运行的世界 \"{self.m_name}\"，确认关闭吗？")
+                ->onYes(func() {
+                        // 世界关闭在下一个逻辑更新才生效：先记为“已忽略”，
+                        // 期间关闭检查器不得为其重建临时视口
+                        dismissRuntimeEditingViewport(self.m_world_instance);
+                        self.m_close =
+                            CloseRequest::CLOSE_AND_DESTROY_WORLD;
+                    });
+
+            // 等待用户在对话框中确认，本次先不关闭
+            return false;
         }
 
         // 程序化关闭（重命名/另存重开/确认后的关闭）不拦截
