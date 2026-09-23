@@ -27,6 +27,7 @@ import builtin::editor::Editor::DebugRun;
 
 import Definition;
 import WindowLifecycle;
+import WorldOpen;
 
 using je;
 using std;
@@ -40,7 +41,7 @@ namespace JEEditor::Editor::WorldEditorViewport
     // ==========================
     //  运行期临时编辑视口
     // ==========================
-
+    
     // 已创建的临时视口窗口句柄：停止运行时经窗口状态 requestToClose——
     // 沉浸模式隐藏期间窗口不泵 run、m_close 不生效，关闭请求必须走
     // requestToClose 的 onPreClose 路径才能在隐藏状态下生效
@@ -49,7 +50,7 @@ namespace JEEditor::Editor::WorldEditorViewport
     let s_runtime_edit_dismissed = {}mut: map<world, bool>;
     // 临时视口命名计数（会话内单调递增，保证窗口标题唯一）
     let mut s_runtime_edit_seq = 0;
-
+    
     // 为世界 w 创建运行期临时编辑视口：独立编辑历史（create 全新、不
     // 迁移不保留）、无保存入口（path = none 且各保存路径按
     // m_is_runtime_editing 拒绝）、关闭不触碰世界（见 onClose）。命名以
@@ -57,6 +58,14 @@ namespace JEEditor::Editor::WorldEditorViewport
     // 标题（名字 + "##:<unsaved>"）冲突。
     func createRuntimeEditingViewport(w: world)=> void
     {
+        // 确保世界中存在调试摄像机：运行期的世界可能从未有过（游戏逻辑
+        // 运行中新建的世界）或经冻结重建时丢失（调试摄像机带
+        // Editor::Invisible，不随快照保存，裸条目重建不补建），没有它
+        // 视口解析不到摄像机、没有渲染画面。幂等，已有则不重建（与
+        // openWorldEditorViewportFromFile / rebuildWorldsFromSavedEntries
+        // 的做法一致，见 WorldOpen::ensureDebugCamera）
+        ensureDebugCamera(w);
+        
         s_runtime_edit_seq += 1;
         let vp = create(
             w,
@@ -65,7 +74,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             [],
             option::none);
         vp.m_is_runtime_editing = true;
-
+        
         match (Windows::show(vp))
         {
             none?
@@ -74,19 +83,19 @@ namespace JEEditor::Editor::WorldEditorViewport
                 s_runtime_edit_windows->add(iw);
         }
     }
-
+    
     // 记录“用户已手动关闭该世界的临时视口”：本次运行期内不再重建
     //（onPreClose 的用户关闭路径调用）
     public func dismissRuntimeEditingViewport(w: world)=> void
     {
         do s_runtime_edit_dismissed->insert(w, true);
     }
-
+    
     func isRuntimeEditingDismissed(w: world)=> bool
     {
         return s_runtime_edit_dismissed->get(w)->is_value;
     }
-
+    
     // 复位运行期临时视口的全部记账（开始运行时调用：清除上一轮的窗口
     // 句柄与“已忽略”记录——世界句柄可能被引擎复用，残留记录会误伤
     // 下一轮运行中新创建的世界）
@@ -95,7 +104,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         s_runtime_edit_windows->clear();
         s_runtime_edit_dismissed->clear();
     }
-
+    
     // 统一关闭回收所有运行期临时视口（停止运行时、关闭世界之前调用）：
     // 先从注册表注销——世界随后即被停止流程关闭，不注销会被意外关闭
     // 检查当成“世界意外死亡”弹错误框；再程序化关闭——置 m_close 后经
@@ -108,27 +117,27 @@ namespace JEEditor::Editor::WorldEditorViewport
         {
             if (!vp.m_is_runtime_editing)
                 continue;
-
+                
             do s_world_viewports->remove(vp.m_world_instance);
             vp.m_close = CloseRequest::CLOSE_BUT_KEEP_WORLD;
         }
-
+        
         for (let iw : s_runtime_edit_windows)
             do internal::tryGetWindowState(iw)
                 ->> \state = state->requestToClose();
                 ;
-
+                
         s_runtime_edit_windows->clear();
         s_runtime_edit_dismissed->clear();
     }
-
+    
     // 注册“世界视口意外关闭检查 + 运行期临时视口补给”前置任务
     public func registerClosingCheckJob()
     {
         internal::registerPreWindowsJob(
             func(){
                 let alive_worlds = getUniverse()->get_all_worlds();
-
+                
                 func isAlive(w: world)=> bool
                 {
                     for (let alive_world : alive_worlds)
@@ -136,16 +145,16 @@ namespace JEEditor::Editor::WorldEditorViewport
                             return true;
                     return false;
                 }
-
+                
                 let mut closed_names = "";
                 for (let viewport : getAllViewports())
                 {
                     if (isAlive(viewport.m_world_instance))
                         continue;
-
+                        
                     do s_world_viewports->remove(viewport.m_world_instance);
                     viewport.m_close = CloseRequest::CLOSE_AND_DESTROY_WORLD;
-
+                    
                     // 其他面板每帧经 getLastFocused 访问聚焦视口的世界，
                     // 先摘掉死视口引用（与 freezeAllWorlds 同一理由）
                     match (s_last_focusd_world_view)
@@ -155,22 +164,22 @@ namespace JEEditor::Editor::WorldEditorViewport
                             if (std::is_same(v, viewport))
                                 s_last_focusd_world_view = option::none;
                     }
-
+                    
                     // 运行期临时视口的世界随游戏逻辑生死（游戏销毁世界
                     // 属正常行为），静默关闭即可，不计入意外关闭名单
-                    if (viewport.m_is_runtime_editing)
-                        continue;
-
-                    if (closed_names != "")
-                        closed_names = closed_names + "、";
-                    closed_names = closed_names + viewport.m_name;
+                    if (!viewport.m_is_runtime_editing)
+                    {
+                        if (closed_names != "")
+                            closed_names = closed_names + "、";
+                        closed_names = closed_names + viewport.m_name;
+                    }
                 }
-
+                
                 if (closed_names != "")
                     MsgBox::err(
                         "世界视口被意外关闭",
                         F"以下世界的世界实例已意外关闭，对应的视口已被关闭：\n{closed_names}");
-
+                        
                 // 运行期补给：调试运行期为无视口的存活世界创建临时编辑
                 // 视口。冻结期间（含解冻恢复过渡）不创建——世界正在被
                 // 冻结机制编排（冻结会关闭全部视口，解冻重建后由此补回）
@@ -182,7 +191,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                             continue;
                         if (isRuntimeEditingDismissed(w))
                             continue;
-
+                            
                         createRuntimeEditingViewport(w);
                     }
                 }

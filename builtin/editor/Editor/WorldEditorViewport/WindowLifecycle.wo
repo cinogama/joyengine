@@ -480,6 +480,9 @@ namespace JEEditor::Editor::WorldEditorViewport
     }
     public func onUpdate(self: WorldEditorViewport)
     {
+        if (self.m_close != CloseRequest::NORMALLY)
+            return;
+
         match (self.m_action_history->update(self))
         {
             ok(_)?;
@@ -489,6 +492,9 @@ namespace JEEditor::Editor::WorldEditorViewport
     }
     public func run(self: WorldEditorViewport)=> bool
     {
+        if (self.m_close != CloseRequest::NORMALLY)
+            return false;
+
         // 运行期临时视口不提供保存入口：跳过“未保存提示 + 拖拽保存”横幅
         if (self.m_saving_path->is_none && !self.m_is_runtime_editing)
         {
