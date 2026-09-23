@@ -1,6 +1,7 @@
 import pkg::std;
 
 import je;
+import je::graphic;
 import je::gui;
 
 import pkg::node_editor;
