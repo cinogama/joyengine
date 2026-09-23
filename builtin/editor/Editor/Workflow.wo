@@ -1,0 +1,364 @@
+import pkg::std;
+
+import je;
+import je::gui;
+
+import pkg::fsys;
+import pkg::iterator;
+import pkg::toml;
+import pkg::try;
+import pkg::worst;
+import pkg::buffer;
+import pkg::interface;
+import pkg::filestream;
+import pkg::dumpling;
+
+import builtin::statements;
+import builtin::statements::editor;
+
+import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Menu;
+import builtin::editor::GUI::Forms::InputBox;
+import builtin::editor::GUI::Forms::MsgBox;
+
+using std;
+using je::gui;
+using fsys;
+using iterator;
+using toml;
+using JEEditor::GUI;
+using JEEditor::GUI::Windows;
+using JEEditor::GUI::Menu;
+using JEEditor::GUI::Forms;
+
+namespace JEEditor::Editor
+{
+    /*
+    /XXX.je4workflows
+    |
+    |-> editor.wo               // Workflow 编辑器启动脚本，导入 nodes 注册全部
+    |                           // Node 声明后调用 JEEditor::Editor::Workflow::openEditor
+    |                           // 打开本窗口；外部（浏览器）通过 dumpling 加载它。
+    |
+    |-> loader.wo               // 里面会用 JE_WORKFLOW_FETCH_AND_IMPORT_ALL_SCRIPT_IN_NODE_PATH 宏
+    |                           // 导入所有 Node 声明，不过 exec 不包含编辑器逻辑，只通过接收 je4workflow
+    |                           // 文件来构建工作流并执行
+    |-> nodes..
+    |   |-> types..
+    |
+    |-> XXXXXXX.je4workflow
+    |-> XXXXXXX.dispatch.wo
+    |
+    |-> YYYYYYY.je4workflow
+    |-> YYYYYYY.dispatch.wo
+    |
+    |-> ZZZZZZZ.je4workflow
+    |-> ZZZZZZZ.dispatch.wo
+    */
+
+    // 一个被打开的 .je4workflow 图文件及其编辑状态。
+    using WorkflowEditTarget = struct{
+        m_workflow_path: fsys::path_t,
+        m_graph: jeapi::statements::GraphContext,
+        m_graph_editor: jeapi::statements::GraphEditor,
+    }
+    {
+        // 读取（或首次创建）一个 .je4workflow 文件为可编辑状态。
+        // 返回 result<WorkflowEditTarget, string>（由 try!/return_ok! 推导）。
+        func create(p: fsys::path_t)
+        {
+            if (fsys::isfile(p))
+            {
+                try! dat = je::file::readall(p->to_string)
+                    -> ok_or(F"无法读取 Workflow 文件 {p->to_string}")
+                    ;
+                try! root = toml::parse(dat)->okay
+                    -> ok_or(F"无法解析 Workflow 文件 {p->to_string}")
+                    ;
+                try! (graph, extra) = jeapi::statements::load_graph_and_extra_data(root)
+                    -> ok_or(F"无法解析 Workflow 文件 {p->to_string}")
+                    ;
+
+                return_ok!
+                    WorkflowEditTarget
+                    {
+                        m_workflow_path = p,
+                        m_graph = graph,
+                        m_graph_editor = jeapi::statements::GraphEditor::create(graph, extra),
+                    };
+            }
+            else
+            {
+                let graph = jeapi::statements::create_graph_context();
+                let self =
+                    WorkflowEditTarget
+                    {
+                        m_workflow_path = p,
+                        m_graph = graph,
+                        m_graph_editor = jeapi::statements::GraphEditor::create(graph, option::none),
+                    };
+                try! _ = self->save();
+                return_ok! self;
+            }
+        }
+        func save(self: WorkflowEditTarget)=> result<void, string>
+        {
+            let root = jeapi::statements::save_with_extra_data(
+                self.m_graph,
+                self.m_graph_editor);
+
+            match (filestream::open(self.m_workflow_path, filestream::mode::write))
+            {
+                none?
+                    throw! F"无法保存 Workflow 文件到 {self.m_workflow_path->to_string}";
+                value(fs)?
+                {
+                    defer do fs->close();
+                    let content = root->to_toml();
+                    if (!fs->write(content as buffer, 0, content->byte_len))
+                        throw! F"无法保存 Workflow 文件到 {self.m_workflow_path->to_string()}";
+                }
+            }
+            return_ok!;
+        }
+    }
+
+    // Workflow 编辑器窗口（唯一窗口，按 Workflow 集路径去重）：
+    // 左侧为集内全部 .je4workflow 文件列表，右侧为节点图编辑器
+    // （jeapi::statements::gui::Edit，基于 pkg::node_editor）。
+    // 由 Workflow 集目录下的 editor.wo 启动脚本（经 dumpling 加载）调用
+    // Workflow::openEditor 打开——节点类型注册在加载它的那个程序实例中。
+    using WorkflowEditor = struct{
+        m_location_path: fsys::path_t,
+        m_workflows: map<string, WorkflowEditTarget>,
+
+        m_current: mut option<(string, WorkflowEditTarget)>,
+
+        // 关闭确认：点 X 后弹“是否保存对所有 Workflow 的更改”，
+        // 确认保存成功（或选择不保存）后置位，下一帧 run 返回 false 真正关闭。
+        m_pending_close_ask: mut bool,
+        m_force_close: mut bool,
+    }
+    {
+        public func create(workflow_path: fsys::path_t)=> option<WorkflowEditor>
+            where require!(WorkflowEditor: Windows::IWindows);
+        {
+            if (!fsys::isdir(workflow_path))
+                return option::none;
+
+            return option::value(
+                WorkflowEditor
+                {
+                    m_location_path = workflow_path,
+
+                    // 遍历当前目录下的所有 je4workflow 文件
+                    m_workflows = fsys::walk(workflow_path)
+                        -> iterator::iter_result
+                        -> iterator::filter(\p = fsys::isfile(p) && fsys::extension(p)->lower == ".je4workflow";)
+                        |> iterator::filter_map(
+                            \p = WorkflowEditTarget::create(p)->okay
+                                ->> \wc = (fsys::purename(p), wc);
+                            ;)
+                        |> iterator::collect
+                        -> mapping
+                        -> unsafe::asmap
+                        ,
+
+                    m_current = mut option::none,
+                    m_pending_close_ask = mut false,
+                    m_force_close = mut false,
+                });
+        }
+
+        func newWorkflow(self: WorkflowEditor, name: string)=> result<void, string>
+        {
+            if (self.m_workflows->contains(name))
+                throw! F"工作流 {name} 已经存在";
+
+            try! wc = WorkflowEditTarget::create(
+                self.m_location_path / F"{name}.je4workflow");
+
+            self.m_workflows->set(name, wc);
+
+            return_ok!;
+        }
+        func saveCurrent(self: WorkflowEditor)=> void
+        {
+            match (self.m_current)
+            {
+                none?;
+                value((_, wc))?
+                    match (wc->save())
+                    {
+                        ok(_)?;
+                        err(e)?
+                            MsgBox::err("保存 Workflow 失败",
+                                F"无法保存 Workflow 文件：{e}");
+                    }
+            }
+        }
+        func saveAll(self: WorkflowEditor)=> bool
+        {
+            match (self.m_workflows->iter
+                |> iterator::map(\(_, wc) = wc->save();)
+                |> iterator::try_collect)
+            {
+                ok(_)? return true;
+                err(e)?
+                {
+                    MsgBox::err("保存 Workflow 失败",
+                        F"无法保存某些 Workflow 文件：{e}");
+                    return false;
+                }
+            }
+        }
+        func askToCreateNewWorkflow(self: WorkflowEditor)=> void
+        {
+            do InputBox::show(
+                    "新建 Workflow",
+                    "请输入新的 Workflow 名称(不含扩展名)：",
+                    "")
+                ->then(
+                    func(name: string)
+                    {
+                        match (self->newWorkflow(name))
+                        {
+                            ok(_)?;
+                            err(e)?
+                                MsgBox::err("创建新的 Workflow 失败",
+                                    F"无法创建新的 Workflow {name}：{e}");
+                        }
+                    })
+            ;
+        }
+
+        public func getTitle(self: WorkflowEditor)=> string
+        {
+            return F"Workflow 编辑器 - {self.m_location_path->to_string()}";
+        }
+        public func getSizeConstraints(_: WorkflowEditor)=> Windows::SizeConstraints
+        {
+            return Windows::SizeConstraints::Limited(((500., 200.), (2000., 2000.)));
+        }
+        public func getMenu(self: WorkflowEditor)=> option<Menu>
+        {
+            let menu = Menu::create("文件");
+            do menu->subItem("保存当前 Workflow", \= self->saveCurrent();)
+                ->enableWhen(\= self.m_current->is_value;)
+                ->endItem();
+            do menu->subItem("全部保存", \= do self->saveAll();)
+                ->endItem();
+            do menu->separator();
+            do menu->subItem("创建新的 Workflow", \= self->askToCreateNewWorkflow();)
+                ->endItem();
+            return option::value(menu);
+        }
+
+        public func onPreClose(self: WorkflowEditor)=> bool
+        {
+            if (self.m_force_close)
+                return true;
+            self.m_pending_close_ask = true;
+            return false;
+        }
+
+        public func run(self: WorkflowEditor)=> bool
+        {
+            if (self.m_force_close)
+                return false;
+
+            if (self.m_pending_close_ask)
+            {
+                self.m_pending_close_ask = false;
+                OpenPopup("保存更改");
+            }
+
+            let (_, h) = GetContentRegionAvail();
+            if (BeginListBox("##editing_workflow_list", 200., h))
+            {
+                defer EndListBox();
+
+                for (let (name, wc) :
+                    self.m_workflows->unmapping->std::sort(
+                        \(aname, _), (bname, _) = aname < bname;))
+                {
+                    if (SelectableSelected(
+                            name,
+                            self.m_current
+                                ->> \(cur_name, _) = cur_name == name;
+                                ->or(false)))
+                    {
+                        self.m_current = option::value((name, wc));
+                    }
+                }
+            }
+            SameLine();
+            match (self.m_current)
+            {
+                none?;
+                value((_, wc))?
+                {
+                    jeapi::statements::gui::Edit(
+                        "##editing_workflow_edit", wc.m_graph_editor);
+                }
+            }
+
+            if (BeginPopupModal("保存更改"))
+            {
+                defer EndPopup();
+                Text("是否保存对所有 Workflow 的更改？");
+
+                if (Button("是"))
+                {
+                    if (self->saveAll())
+                        self.m_force_close = true;
+                    CloseCurrentPopup();
+                }
+                SameLine();
+                if (Button("否"))
+                {
+                    self.m_force_close = true;
+                    CloseCurrentPopup();
+                }
+                SameLine();
+                if (Button("取消"))
+                    CloseCurrentPopup();
+            }
+
+            return true;
+        }
+    }
+
+    namespace Workflow
+    {
+        // Workflow 编辑器入口：由 Workflow 集目录下的 editor.wo 启动脚本调用。
+        // 返回窗口是否成功打开（同名唯一窗口已存在时为 false）。
+        public func openEditor(workflow_path: fsys::path_t)=> bool
+        {
+            match (WorkflowEditor::create(workflow_path))
+            {
+                none? return false;
+                value(editor)?
+                    return Windows::show(editor)->is_value;
+            }
+        }
+
+        // 编辑 Workflow 集（浏览器右键 *.je4workflows 目录的入口）：
+        // 经 dumpling 加载并运行集内 editor.wo 启动脚本，其模块级代码会
+        // 导入 nodes 注册全部节点声明，再调用 openEditor 打开编辑器窗口。
+        // 节点类型注册在加载它的那个程序实例中，编辑器窗口随之运行于其中；
+        // 窗口状态经 GlobalWindowsContextSingleton 全局共享，由主编辑器泵驱动。
+        public func openWorkflowSet(workflow_dir: fsys::path_t)=> result<void, string>
+        {
+            let editor_entry = workflow_dir / "editor.wo";
+
+            try! _ = bind(\r = r;) <| dumpling::dispatch(
+                func()
+                {
+                    return or_map(\e = e->to_string;) <|
+                        dumpling::Program::load(editor_entry, false);
+                });
+            return_ok!;
+        }
+    }
+}

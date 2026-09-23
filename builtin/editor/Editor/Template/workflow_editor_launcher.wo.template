@@ -1,0 +1,11 @@
+// Donot modify this file!
+
+import pkg::fsys;
+import pkg::worst::macro;
+
+import builtin::editor::Editor::Workflow;
+
+import nodes;
+
+do JEEditor::Editor::Workflow::openEditor(
+    fsys::parent(fsys::normalize(__FILE__!)));

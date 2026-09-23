@@ -22,6 +22,12 @@ namespace JEEditor::Editor::Template
         public PHYSICS_CONFIG,
         public TOWOO_COMPONENT,
         public TOWOO_SYSTEM,
+        public WORKFLOW_GITATTRIBUTES,
+        public WORKFLOW_NODES,
+        public WORKFLOW_EDITOR_LAUNCHER,
+        public WORKFLOW_RUNTIME,
+        public WORKFLOW_EVAL_NODE,
+        public WORKFLOW_FLOW_NODE,
     }
 
     public func load(type: Type)=> option<string>
@@ -37,6 +43,12 @@ namespace JEEditor::Editor::Template
             [Type::PHYSICS_CONFIG] = "physics.je4physics.wo",
             [Type::TOWOO_COMPONENT] = "towoo_component.je4component.wo",
             [Type::TOWOO_SYSTEM] = "towoo_system.je4system.wo",
+            [Type::WORKFLOW_GITATTRIBUTES] = "workflow_gitattributes",
+            [Type::WORKFLOW_NODES] = "workflow_nodes.wo",
+            [Type::WORKFLOW_EDITOR_LAUNCHER] = "workflow_editor_launcher.wo",
+            [Type::WORKFLOW_RUNTIME] = "workflow_runtime.wo",
+            [Type::WORKFLOW_EVAL_NODE] = "workflow_eval_node.wo",
+            [Type::WORKFLOW_FLOW_NODE] = "workflow_flow_node.wo",
         };
         
         try! template_filename = type_to_filename->get(type);
