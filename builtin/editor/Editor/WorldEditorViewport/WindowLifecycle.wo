@@ -462,6 +462,11 @@ namespace JEEditor::Editor::WorldEditorViewport
         
         return option::value <|
             Menu::create("")
+                -> subMenu("文件")
+                ->  subItem("保存", \= self->saveByShortcut();)
+                ->      shortCut("Ctrl+S")
+                ->      endItem
+                -> endMenu
                 -> subMenu("编辑")
                 ->  subItem("撤销", \= self->undo();)
                 ->      enableWhen(\= self->canUndo();)

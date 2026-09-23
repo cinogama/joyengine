@@ -33,13 +33,28 @@ namespace JEEditor::Editor::MainMenu
         return Singleton::Universe::getUniverse()->get_all_worlds->len > 0;
     }
 
+    // “保存全部”可用条件：未在运行/停止过渡、未冻结（冻结/调试运行期间
+    // 世界不落盘，见 WorldEditorViewport::saveWorldTo 的拦截）
+    func canSaveAllWorlds()=> bool
+    {
+        if (DebugRun::isDebugRunActive())
+            return false;
+        if (WorldEditorViewport::isWorldsFrozen())
+            return false;
+        return true;
+    }
+
     public func registerMainMenu()
     {
         let engineMainMenu = Menu::create("")
             -> subMenu("JoyEngine")
             ->  endMenu
-            -> subMenu("文件")
-            ->  endMenu
+                -> subMenu("文件")
+                ->  subItem("保存全部", WorldEditorViewport::saveAllWorlds)
+                ->      enableWhen(canSaveAllWorlds)
+                ->      shortCut("Ctrl+Shfit+S")
+                ->      endItem
+                ->  endMenu
             -> subMenu("视图")
             ->  subItem("项目资源管理器",
                 func()

@@ -182,6 +182,41 @@ namespace JEEditor::Editor::WorldEditorViewport
         }
     }
 
+    // 保存全部（主菜单“文件”→“保存全部”）：把所有已保存到文件的世界
+    // 视口写回原路径，每个世界的成功提示/错误对话框由 saveWorldTo 负责。
+    // 尚未保存到文件的世界没有目标路径，无法自动落盘，弹窗列出名称提示
+    // 改用拖拽视口顶部图标的保存流程；运行期临时视口没有保存语义，不参与。
+    public func saveAllWorlds()=> void
+    {
+        let unsaved_names = []mut: vec<string>;
+
+        for (let viewport : getAllViewports())
+        {
+            // 运行期临时视口：编辑内容随停止运行丢弃，没有保存入口
+            if (viewport.m_is_runtime_editing)
+                continue;
+
+            match (viewport->getSavingPath())
+            {
+                value(path)?
+                    do viewport->saveWorldTo(path);
+                none?
+                    unsaved_names->add(viewport->getName());
+            }
+        }
+
+        if (unsaved_names->len == 0)
+            return;
+
+        let mut unsaved_list = "";
+        for (let name : unsaved_names)
+            unsaved_list += F"\n  {name}";
+
+        MsgBox::msg(
+            "保存全部",
+            F"以下世界尚未保存到文件中，请拖动其视口顶部的图标到资源管理器以保存：{unsaved_list}");
+    }
+
     // 以新的名称/保存路径重建本视口（沿用当前世界实例与未保存的修改）。
     // 重建成功时把编辑历史（m_action_history）迁移到新视口以保持撤销/重做连续，
     // 再以 CLOSE_BUT_KEEP_WORLD 关闭旧视口；窗口创建失败时返回 false。
