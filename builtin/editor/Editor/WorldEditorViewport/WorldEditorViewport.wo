@@ -19,8 +19,9 @@
 //   WorldSaving.wo       世界保存/重命名/重开与调试系统管理
 //   WorldOpen.wo         世界创建与打开（静态入口）
 //   EditorState.wo       编辑器状态持久化（摄像机位姿/视口编辑模式编解码）
-//   FreezeWorlds.wo      所有世界的冻结/恢复（freezeAllWorldsToDo）
-//   DebugRunContext.wo   调试运行的视口侧支持（运行上下文保存/重建）
+//   FreezeWorlds.wo      所有世界的冻结/恢复（freezeAllWorldsToDo）与
+//                        调试运行侧的世界快照/重建（SavedEditorWorldContext）
+//   SavedEditorWorldContext.wo  冻结/调试运行快照的存储单例（内存态）
 
 export import Definition;
 export import WindowLifecycle;
@@ -34,4 +35,3 @@ export import WorldSaving;
 export import WorldOpen;
 export import EditorState;
 export import FreezeWorlds;
-export import DebugRunContext;

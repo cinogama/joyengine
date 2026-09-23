@@ -1,4 +1,14 @@
+// 世界编辑器视口 —— 冻结/调试运行快照的存储单例。
+// m_frozen_saved：冻结（FreezeWorlds::freezeAllWorlds）前从 universe 枚举
+//   所有世界采集的快照条目（有视口的附带编辑器上下文），解冻时据此重建
+//   世界与视口后清空；
+// m_play_saved：调试运行（Editor::DebugRun::startDebugRun）开始前的快照
+//   条目，停止运行时据此重建世界与视口后清空。
+// 两个槽位独立互不覆盖——调试运行期间模块/ToWoo 依然会经冻结机制更新
+// 世界。仅作内存态存储（save 返回 none，不随编辑器会话持久化）。
+
 import pkg::std;
+
 import pkg::toml;
 import pkg::interface;
 
@@ -12,14 +22,20 @@ using JEEditor::Singleton;
 
 namespace JEEditor::Editor::WorldEditorViewport
 {
-    using SavedEditorWorldContext = struct{}
+    using SavedEditorWorldContext = struct{
+        protected m_frozen_saved: mut option<array<WorldSavedContext>>,
+        protected m_play_saved: mut option<array<WorldSavedContext>>,
+    }
     {
         public let SINGLETON_LABEL = "saved_editor_world_context";
 
         public func createAndLoad(_: option<Toml>)=> SavedEditorWorldContext
             where require!(SavedEditorWorldContext: ISingleton);
         {
-            return SavedEditorWorldContext{};
+            return SavedEditorWorldContext{
+                m_frozen_saved = mut option::none,
+                m_play_saved = mut option::none,
+            };
         }
         public func save(_: SavedEditorWorldContext)=> option<Toml>
         {
@@ -27,7 +43,5 @@ namespace JEEditor::Editor::WorldEditorViewport
         }
 
         /* ==================== */
-
-
     }
 }

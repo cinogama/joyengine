@@ -40,7 +40,6 @@ import builtin::editor::Editor::Practice;
 import builtin::editor::Editor::EntityClipboard;
 import builtin::editor::Editor::ResourcePath;
 import builtin::editor::Editor::Action::CreateEntity;
-import builtin::editor::Editor::DebugRun;
 
 import builtin::editor::Editor::Project;
 import builtin::editor::Singleton::Universe;
@@ -77,9 +76,8 @@ using JEEditor::Editor::ResourcePath;
 
 namespace JEEditor::Editor::WorldEditorViewport
 {
-    // 视口挂在世界实例上的全部实体选择器。冻结/恢复（FreezeWorlds）
-    // 会重建 world 实例，此时用 create 在新世界上重建全部选择器，
-    // 由 rebuildWorldSelectors 整体替换到视口字段上。
+    // 视口挂在世界实例上的全部实体选择器，随视口在 create 时于所属世界
+    // 上创建（冻结/调试运行的恢复会重建世界并新建视口，见 FreezeWorlds）。
     protected using WorldSelectors = struct{
         m_debug_camera_selector: entity_selector,
         m_selectable_entity_selector: entity_selector,
@@ -153,23 +151,6 @@ namespace JEEditor::Editor::WorldEditorViewport
         }
     }
     
-    // 把视口的实体选择器整体替换为在新世界 w 上重建的选择器
-    //（冻结后恢复时调用，见 FreezeWorlds）
-    protected func rebuildWorldSelectors(self: WorldEditorViewport, w: world)=> void
-    {
-        let selectors = WorldSelectors::create(w);
-        
-        self.m_debug_camera_selector = selectors.m_debug_camera_selector;
-        self.m_selectable_entity_selector = selectors.m_selectable_entity_selector;
-        self.m_all_entity_selector = selectors.m_all_entity_selector;
-        self.m_camera_entity_selector = selectors.m_camera_entity_selector;
-        self.m_point_light2d_entity_selector = selectors.m_point_light2d_entity_selector;
-        self.m_range_light2d_entity_selector = selectors.m_range_light2d_entity_selector;
-        self.m_parallel_light2d_entity_selector = selectors.m_parallel_light2d_entity_selector;
-        self.m_anchor_parent_entity_selector = selectors.m_anchor_parent_entity_selector;
-        self.m_physics2d_body_entity_selector = selectors.m_physics2d_body_entity_selector;
-    }
-    
     protected func create(
         w: world,
         name: string,
@@ -187,12 +168,9 @@ namespace JEEditor::Editor::WorldEditorViewport
         
         let new_viewport = WorldEditorViewport{
             m_close = mut CloseRequest::NORMALLY,
-            
+
             m_world_instance = mut w,
-            
-            m_frozen_world_context = mut option::none,
-            m_playing_world_context = mut option::none,
-            
+
             m_name = name,
             m_runtime_systems = []mut,
             m_saving_path = path,
@@ -325,7 +303,7 @@ namespace JEEditor::Editor::WorldEditorViewport
     {
         // 不能经 m_world_instance->get_universe 取 universe：世界意外死亡被
         // ClosingWorldChecker 关闭时该句柄已悬空。编辑器所有视口的世界都
-        // 创建自编辑器 universe 单例（WorldOpen / rebuildWorldFromSavedContext），
+        // 创建自编辑器 universe 单例（WorldOpen / FreezeWorlds 的快照重建），
         // 直接取单例与原取法恒等且永不悬空。
         let graphic_uhost = graphic_uhost::get_or_create(
             Singleton::Universe::getUniverse());
@@ -365,16 +343,6 @@ namespace JEEditor::Editor::WorldEditorViewport
     // 待用户确认后再通过 m_close 程序化关闭。
     public func onPreClose(self: WorldEditorViewport)=> bool
     {
-        // 冻结期间不允许关闭：世界已关闭，关闭确认里的保存/销毁都无意义，
-        // 待解冻恢复后再走正常流程
-        if (self.m_frozen_world_context->is_value)
-            return false;
-            
-        // 调试运行（含停止过渡）期间不允许关闭：世界正在运行/等待重建，
-        // 待终止运行恢复编辑态后再走正常流程
-        if (self.m_playing_world_context->is_value)
-            return false;
-            
         // 程序化关闭（重命名/另存重开/确认后的关闭）不拦截
         if (self.m_close != CloseRequest::NORMALLY)
             return true;
@@ -480,17 +448,6 @@ namespace JEEditor::Editor::WorldEditorViewport
     }
     public func onUpdate(self: WorldEditorViewport)
     {
-        // 冻结期间世界已关闭，编辑动作队列暂不处理（队列保留，恢复后
-        // 凭 eid 仍有效继续撤销/重做）
-        if (self.m_frozen_world_context->is_value)
-            return;
-            
-        // 停止调试运行的过渡帧：世界已关闭、尚未从运行快照重建，队列
-        // 同样暂不处理。调试运行进行中则照常排空——操作执行但不记录
-        // 历史（Practice 抑制开关），随停止运行一并丢弃
-        if (self.m_playing_world_context->is_value && !DebugRun::isDebugRunning())
-            return;
-            
         match (self.m_action_history->update(self))
         {
             ok(_)?;
@@ -500,15 +457,6 @@ namespace JEEditor::Editor::WorldEditorViewport
     }
     public func run(self: WorldEditorViewport)=> bool
     {
-        // 冻结期间世界实例已关闭，任何访问世界的绘制/拾取/摄像机逻辑
-        // 都必须跳过；只画占位提示，也不更新 s_last_focusd_world_view
-        //（冻结时该全局已置空，避免其他面板经它访问失效世界）。
-        if (self.m_frozen_world_context->is_value)
-        {
-            TextDisabled("世界已冻结：正在重新加载…");
-            return true;
-        }
-        
         if (self.m_saving_path->is_none)
         {
             match(Icons::WORLD)

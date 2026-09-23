@@ -6,6 +6,7 @@ import je::gui;
 
 import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Widgets;
+import builtin::editor::Editor::WorldEditorViewport::Definition;
 import builtin::editor::Editor::WorldEditorViewport::FreezeWorlds;
 
 using std;
@@ -68,11 +69,18 @@ namespace JEEditor::Editor
             if (self.m_waiting_frame > 0)
             {
                 if (0 == (self.m_waiting_frame -:= 1))
-                    do thread::create(
-                        func(){
-                            self.m_job();
-                            self.m_job_finished = true;
-                        });
+                {
+                    // 冻结过渡（等待停止运行/恢复过渡、采集快照）尚未完成
+                    // 时再等一帧：世界全部暂停、视口窗口全关后才启动 job
+                    if (WorldEditorViewport::isWorldsFreezeTransitionInProgress())
+                        self.m_waiting_frame = 1;
+                    else
+                        do thread::create(
+                            func(){
+                                self.m_job();
+                                self.m_job_finished = true;
+                            });
+                }
             }
             
             return !self.m_job_finished;

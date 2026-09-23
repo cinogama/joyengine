@@ -1,5 +1,7 @@
 import pkg::std;
 
+import je::ecs;
+
 import builtin::editor::GUI::Menu;
 
 import Browser;
@@ -13,20 +15,22 @@ import Inspector;
 import DebugRun;
 import Project;
 
+import builtin::editor::Singleton::Universe;
+
 using std;
 
 namespace JEEditor::Editor::MainMenu
 {
     using GUI;
 
-    // “开始运行”可用条件：未在运行/停止过渡、未冻结、至少有一个世界视口
+    // “开始运行”可用条件：未在运行/停止过渡、未冻结、宇宙中至少有一个世界
     func canStartDebugRun()=> bool
     {
         if (DebugRun::isDebugRunActive())
             return false;
         if (WorldEditorViewport::isWorldsFrozen())
             return false;
-        return WorldEditorViewport::getAllViewports()->len > 0;
+        return Singleton::Universe::getUniverse()->get_all_worlds->len > 0;
     }
 
     public func registerMainMenu()

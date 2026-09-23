@@ -38,21 +38,9 @@ namespace JEEditor::Editor
 {
     protected using WorldEditorViewport = struct{
         protected m_close: mut CloseRequest,
-        
+
         protected m_world_instance: mut world,
-        
-        // 冻结（FreezeWorlds）：本视口被冻结时，m_world_instance 已
-        // 关闭并等待恢复，此前的世界与编辑器状态打包暂存于
-        // m_frozen_world_context，恢复后经 m_pending_editor_state 应用。
-        // m_frozen_world_context->is_value 即“本视口处于冻结态”。
-        protected m_frozen_world_context: mut option<WorldSavedContext>,
-        
-        // 调试运行（DebugRun）：开始调试运行时世界保持存活运行，运行前
-        // 的世界与编辑器状态打包暂存于 m_playing_world_context；终止运行
-        // 时丢弃运行中被游戏逻辑改动的世界，用该快照重建。
-        // m_playing_world_context->is_value 即“本视口处于调试运行态”。
-        protected m_playing_world_context: mut option<WorldSavedContext>,
-        
+
         // World context:
         protected m_name: string,
         
@@ -80,8 +68,7 @@ namespace JEEditor::Editor
         protected m_action_history: mut Practice,
         
         // Camera control state:
-        //（全部选择器 mutable：冻结恢复时会在新世界实例上整体重建，
-        // 见 FreezeWorlds / rebuildWorldSelectors）
+        //（全部选择器 mutable：随视口在 create 时于所属世界实例上创建）
         protected m_debug_camera_selector: mut entity_selector,
         protected m_selectable_entity_selector: mut entity_selector,
         protected m_all_entity_selector: mut entity_selector,
@@ -194,14 +181,28 @@ namespace JEEditor::Editor
         protected m_light_drag_undo_old_value: mut string,
     }
     {
+        // 编辑器上下文：重建 WorldEditorViewport 窗口所需的全部状态。
+        // 编辑器状态（摄像机位姿/编辑模式）经 m_pending_editor_state 在
+        // 重建视口的首帧应用；编辑历史与选中态依赖快照带 eid（euid 延续），
+        // 重建后直接迁移即依然有效。
+        protected using EditorContext = struct{
+            protected m_editor_state: Toml,
+            protected m_saving_path: option<path_t>,
+            protected m_action_history: Practice,
+            protected m_selected_entity_id: option<entity::internal::euid_t>,
+        };
+
         // 世界视口的“已保存世界上下文”：世界快照（带 eid，保实体调试 EUID
-        // 以延续选中态与引用 euid 的编辑历史）与编辑器状态（摄像机位姿/
-        // 编辑模式）的打包。冻结（FreezeWorlds）与调试运行（DebugRun）各自
-        // 持有一个独立槽位保存此结构，互不覆盖——调试运行期间模块/ToWoo
-        // 依然会经冻结机制更新世界，两份快照不可共用同一组字段。
+        // 以延续选中态与引用 euid 的编辑历史）与可选编辑器上下文的打包。
+        // 冻结（FreezeWorlds）与调试运行（DebugRun）把各自的一组条目存入
+        // SavedEditorWorldContext 单例的 m_frozen_saved / m_play_saved 槽位，
+        // 互不覆盖——调试运行期间模块/ToWoo 依然会经冻结机制更新世界，
+        // 两份快照不可共用同一组条目。
         protected using WorldSavedContext = struct{
             protected m_world_data: Toml,
-            protected m_editor_state: Toml,
+            // 有编辑器上下文 ⇔ 采集时该世界有对应的 WorldEditorViewport：
+            // 恢复时除重建世界外，还按其中保存的状态重建视口窗口
+            protected m_editor: option<EditorContext>,
         };
         
         // ---- 摄像机游走参数（跨文件共享的部分） ----
@@ -320,25 +321,55 @@ namespace JEEditor::Editor
         
         protected let s_world_viewports = {}mut: map<world, WorldEditorViewport>;
         protected let mut s_last_focusd_world_view = option::none: option<WorldEditorViewport>;
-        
-        // 冻结（锁定）状态：引用计数，> 0 期间所有世界视口的创建操作失败
+
+        // 冻结（锁定）状态：请求计数，> 0 期间所有世界视口的创建操作失败
         //（FreezeWorlds::freezeAllWorlds/restoreAllWorlds）。freezeAllWorlds
-        // 计数 +1，仅首次（0→1）执行实际冻结；restoreAllWorlds 计数 -1，
-        // 仅最后一次（1→0）执行实际恢复，支持嵌套冻结。冻结时
-        // s_last_focusd_world_view 会暂存到 s_frozen_last_focused 并置空，
-        // 避免各编辑面板在视口世界已关闭期间经 getLastFocused 访问失效的
-        // 世界实例。
+        // 计数 +1，仅首次（0→1）启动冻结协程；restoreAllWorlds 计数 -1，
+        // 仅最后一次（1→0）启动恢复协程，支持嵌套冻结。恢复协程进行期间
+        // 计数虽已归零，isWorldsFrozen 经恢复过渡标志依然为真，各编辑入口
+        // 持续被拒绝直至世界重建完成。冻结时聚焦视口以其在快照中的条目
+        // 下标暂存（s_frozen_last_focused_index / s_play_last_focused_index）
+        // 并置空 s_last_focusd_world_view，避免各编辑面板在无存活视口期间
+        // 经 getLastFocused 访问失效的视口；恢复后据此还原聚焦。
         protected let mut s_worlds_frozen = 0;
-        protected let mut s_frozen_last_focused = option::none: option<WorldEditorViewport>;
-        
-        // freezeAllWorldsToDo 已受理但协程尚未跑到冻结步骤（s_worlds_frozen
-        // 尚未递增）期间的同步重入保护：防止同一帧内重复发起冻结流程
+        protected let mut s_frozen_last_focused_index =
+            option::none: option<int>;
+        protected let mut s_play_last_focused_index =
+            option::none: option<int>;
+
+        // 冻结已切实生效（快照采集完成、世界全部暂停、视口窗口全关）
+        // 直至恢复协程结束。与 isWorldsFrozen 的“请求已受理”相区别：
+        // 请求已受理但尚未生效期间，正在进行的停止运行过渡可先行完成，
+        // 冻结协程随后再采集其结果（DebugRun 的停止流程据此等待，避免
+        // 与冻结协程互相等待的死锁）。
+        protected let mut s_worlds_frozen_engaged = false;
+
+        // 冻结受理→采集完成的过渡标志：FreezeWorldsTodo 的 job 线程据此
+        // 等待世界切实冻结后再启动（等待停止运行/恢复过渡期间保持为真）
         protected let mut s_worlds_freeze_in_progress = false;
-        
-        // 当前是否处于“所有世界已冻结”状态（创建操作据此失败）
+
+        // 恢复过渡协程进行中：世界正处于关闭/重建中
+        protected let mut s_worlds_restore_in_progress = false;
+
+        // 当前是否处于“所有世界已冻结”状态（创建操作据此失败；含恢复
+        // 过渡期间——世界尚未重建完成）
         public func isWorldsFrozen()=> bool
         {
-            return s_worlds_frozen > 0;
+            return s_worlds_frozen > 0 || s_worlds_restore_in_progress;
+        }
+
+        // 冻结是否已切实生效（区别于请求已受理）：供 DebugRun 的停止
+        // 流程与协程等待使用
+        public func isWorldsFrozenEngaged()=> bool
+        {
+            return s_worlds_frozen_engaged;
+        }
+
+        // 冻结过渡（受理→采集完成）是否进行中：供 FreezeWorldsTodo
+        // 推迟 job 线程的启动
+        public func isWorldsFreezeTransitionInProgress()=> bool
+        {
+            return s_worlds_freeze_in_progress;
         }
         
         // 是否为摄像机实体（含 Translation 与 Projection 且不带 Invisible；

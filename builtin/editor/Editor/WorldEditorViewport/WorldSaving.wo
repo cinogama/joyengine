@@ -28,6 +28,7 @@ import builtin::editor::GUI::Statebar;
 import builtin::editor::Editor::Saving::World;
 import builtin::editor::Editor::Practice;
 import builtin::editor::Editor::Project;
+import builtin::editor::Editor::DebugRun;
 
 import Definition;
 import WindowLifecycle;
@@ -97,6 +98,14 @@ namespace JEEditor::Editor::WorldEditorViewport
             self.m_runtime_systems->add(added);
     }
 
+    // 把“调试执行/导出时才启用”的系统加入当前世界执行（开始调试运行
+    // 流程第 ③ 步；世界此刻应处于暂停态，恢复运行由 DebugRun 的协程进行）
+    public func addRuntimeSystemsToWorld(self: WorldEditorViewport)=> void
+    {
+        for (let systype : self.m_runtime_systems)
+            do self.m_world_instance->add_system(systype);
+    }
+
     public func getName(self: WorldEditorViewport)=> string
     {
         return self.m_name;
@@ -111,12 +120,10 @@ namespace JEEditor::Editor::WorldEditorViewport
     // 编辑器中世界落盘的唯一入口。
     public func saveWorldTo(self: WorldEditorViewport, path: path_t)=> bool
     {
-        // 冻结期间世界已关闭，无法序列化（Ctrl+S 等入口由此拦截）；
+        // 冻结期间世界已暂停等待重建，不应落盘（Ctrl+S 等入口由此拦截）；
         // 调试运行（含停止过渡）期间同样不落盘：运行中的世界状态属于
         // 游戏逻辑，不应覆盖编辑现场
-        if (self.m_frozen_world_context->is_value)
-            return false;
-        if (self.m_playing_world_context->is_value)
+        if (isWorldsFrozen() || DebugRun::isDebugRunActive())
             return false;
             
         match (toml::save(
@@ -172,9 +179,7 @@ namespace JEEditor::Editor::WorldEditorViewport
     {
         // 冻结期间不允许重建窗口（重命名/另存/路径重定向一并失败），
         // 待解冻后重试；调试运行（含停止过渡）期间同样不允许
-        if (self.m_frozen_world_context->is_value)
-            return false;
-        if (self.m_playing_world_context->is_value)
+        if (isWorldsFrozen() || DebugRun::isDebugRunActive())
             return false;
             
         // 重建窗口沿用当前世界实例与未保存的修改；同时把编辑器状态
