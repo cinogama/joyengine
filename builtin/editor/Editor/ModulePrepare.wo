@@ -489,37 +489,14 @@ namespace JEEditor::Editor
                 path / "CMakeLists.txt",
                 cmake_template->replace("$$JEMODULE_PROJECT_NAME$$", name));
                 
-            // 4. 从引擎根目录刷新.engine内的引擎链接库
+            // 4. 生成编译配置并编译
             let engine_root = normalize(std::host_path());
-            let engine_library_dir = path / ".engine" / "library";
             
-            do remove(path / ".engine");
-            try! _ = mkdir(path / ".engine")
-                -> or_map(\eno = F"创建 .engine 目录失败：{eno}";);
-            try! _ = mkdir(engine_library_dir)
-                -> or_map(\eno = F"创建 .engine/library 目录失败：{eno}";);
-                
-            for (let p : walk(engine_root)->iter_result)
-            {
-                if (isfile(p))
-                {
-                    let ext = extension(p)->lower;
-                    let lower_fname = filename(p)->lower;
-                    if ((ext == ".lib" || ext == ".so" || ext == ".dylib")
-                        && (lower_fname->begin_with("libjoyecs")
-                            || lower_fname->begin_with("libwoo")))
-                    {
-                        try! _ = copy(p, engine_library_dir / filename(p))
-                            -> or_map(\eno = F"复制文件：`{p}` 失败（{eno}）";);
-                    }
-                }
-            }
-            
-            // 5. 生成编译配置并编译
             let config_name = configName(config);
             let building_dir = path / F".build_{config_name}";
             let core_lib_filename = engineCoreLibLinkFilename("libjoyecs");
             let engine_include_path = engine_root / "builtin" / "include";
+            let engine_library_path = engine_root;
             
             let WINDOWS_x64_SPEC_PARAM =
                 os == Os::WINDOWS && arch == Arch::X86_64
@@ -534,6 +511,7 @@ namespace JEEditor::Editor
                     "-DBUILD_SHARED_LIBS=ON",
                     F"-DJEMODULE_ENGINE_CORE_LIB_FILENAME={core_lib_filename}",
                     F"-DJEMODULE_ENGINE_CORE_INCLUDE_PATH={engine_include_path}",
+                    F"-DJEMODULE_ENGINE_CORE_LIBRARY_PATH={engine_library_path}",
                 ]->connect(WINDOWS_x64_SPEC_PARAM),
                 "CMake生成失败");
                 
@@ -546,7 +524,7 @@ namespace JEEditor::Editor
                 ],
                 "C++编译失败");
                 
-            // 6. 通知项目，装载动态库
+            // 5. 通知项目，装载动态库
             let finished_flag = mutable::create(option::none: option<result<void, string>>);
             FreezeWorldsTodo::show(
                 "正在更新模块的动态库",

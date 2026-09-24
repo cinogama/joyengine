@@ -11,6 +11,8 @@ set (JEMODULE_ENGINE_CORE_LIB_FILENAME  "libjoyecs"  CACHE STRING
     "The file name of engine core library.")
 set (JEMODULE_ENGINE_CORE_INCLUDE_PATH  ""  CACHE STRING
     "The path name of engine core headers.")
+set (JEMODULE_ENGINE_CORE_LIBRARY_PATH  ""  CACHE STRING
+    "The path name of engine core librarys.")
 
 #####################################################################
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.build/${CMAKE_BUILD_TYPE}")
@@ -21,7 +23,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/.build/${CMAKE_BUILD_TYPE}"
 #####################################################################
 if(BUILD_SHARED_LIBS)
     set(JEMODULE_BUILD_TYPE SHARED)
-    find_library(jemodule_jeecs_lib "${JEMODULE_ENGINE_CORE_LIB_FILENAME}" ./.engine/library)
+    find_library(jemodule_jeecs_lib "${JEMODULE_ENGINE_CORE_LIB_FILENAME}" ${JEMODULE_ENGINE_CORE_LIBRARY_PATH})
 else()
     set(JEMODULE_BUILD_TYPE STATIC)
 endif()
@@ -65,9 +67,7 @@ add_library($$JEMODULE_PROJECT_NAME$$
 
 if(BUILD_SHARED_LIBS)
     target_link_libraries($$JEMODULE_PROJECT_NAME$$
-        PRIVATE ${jemodule_jeecs_lib}
-        PRIVATE ${jemodule_woolang_lib}
-        PRIVATE ${jemodule_woort_lib})
+        PRIVATE ${jemodule_jeecs_lib})
 else()
     target_compile_definitions(
         $$JEMODULE_PROJECT_NAME$$
