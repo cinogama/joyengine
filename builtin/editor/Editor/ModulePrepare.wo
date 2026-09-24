@@ -224,21 +224,7 @@ namespace JEEditor::Editor
         {
             return config == BuildConfig::DEBUG ? "debug" | "relwithdebinfo";
         }
-        
-        // 链接时使用的引擎核心库文件名，随平台位数与配置变化
-        func engineCoreLibLinkFilename(libname: string)=> string
-        {
-            return libname
-                + (bit_width == 32 ? "32" | "")
-                + (build_type == BuildType::DEBUG ? "_debug" | "")
-                + (os == Os::WINDOWS
-                    ? ".lib"
-                    | os == Os::MACOS
-                    ? ".a"
-                    | ".so")
-                ;
-        }
-        
+                
         // 模块编译产物的动态库文件名（CMake目标 OUTPUT_NAME 为 lib<模块名>），
         // 随平台变化
         public func moduleDylibFilename(name: string)=> string
@@ -494,7 +480,7 @@ namespace JEEditor::Editor
             
             let config_name = configName(config);
             let building_dir = path / F".build_{config_name}";
-            let core_lib_filename = engineCoreLibLinkFilename("libjoyecs");
+            let core_lib_filename = moduleDylibFilename("joyecs");
             let engine_include_path = engine_root / "builtin" / "include";
             let engine_library_path = engine_root;
             
