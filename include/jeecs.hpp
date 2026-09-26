@@ -12440,37 +12440,51 @@ namespace jeecs
             void JEParseFromScriptType(woort_value v)
             {
                 woort_value s;
-                if (!woort_push_reserve(1, &s))
+                if (!woort_push_reserve(2, &s))
                     woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
                 else
                 {
-                    const size_t key_count = woort_vec_len(v);
+                    const woort_value tmp = s + 0;
+                    const woort_value keys = s + 1;
+
+                    woort_struct_get(keys, v, 0);
+
+                    const size_t key_count = woort_vec_len(keys);
                     m_keys.clear();
                     for (size_t i = 0; i < key_count; ++i)
                     {
-                        (void)woort_vec_get(s, v, i);
-                        math::vec2 key;
-                        key.JEParseFromScriptType(s);
-                        m_keys.push_back(key);
+                        if (woort_vec_get(tmp, keys, i))
+                        {
+                            math::vec2 key;
+                            key.JEParseFromScriptType(tmp);
+                            m_keys.push_back(key);
+                        }
                     }
-                    woort_pop(1);
+                    woort_pop(2);
                 }
             }
             void JEParseToScriptType(woort_value v) const
             {
                 woort_value s;
-                if (!woort_push_reserve(1, &s))
+                if (!woort_push_reserve(2, &s))
                     woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
                 else
                 {
-                    woort_set_vec(v);
-                    woort_vec_resize(v, m_keys.size());
+                    const woort_value tmp = s + 0;
+                    const woort_value arr = s + 1;
+
+                    woort_set_struct(v, 1);
+
+                    woort_set_vec(arr);
+                    woort_vec_resize(arr, m_keys.size());
                     for (size_t i = 0; i < m_keys.size(); ++i)
                     {
-                        m_keys.at(i).JEParseToScriptType(s);
-                        (void)woort_vec_set(v, i, s);
+                        m_keys.at(i).JEParseToScriptType(tmp);
+                        (void)woort_vec_set(arr, i, tmp);
                     }
-                    woort_pop(1);
+                    woort_struct_set(v, 0, arr);
+
+                    woort_pop(2);
                 }
             }
         };
