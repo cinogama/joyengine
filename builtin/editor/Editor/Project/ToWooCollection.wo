@@ -182,13 +182,16 @@ namespace JEEditor::Editor::Project
         {
             return self.m_system_collection->update(path)->isOk;
         }
+        /* 无条件重编译全部已注册的组件与系统（区别于 updateAllUpdated 只处理
+        有变更的脚本），返回是否全部编译成功；各失败脚本的编译错误由更新器
+        （je::towoo）记入日志。 */
         public func updateAll(self: ToWooCollection)
         {
             let failed_components = self.m_component_collection->updateAll();
             do updateAndGenerateVFS();
             let failed_systems = self.m_system_collection->updateAll();
             
-            return failed_components->empty || failed_systems->empty;
+            return failed_components->empty && failed_systems->empty;
         }
         public func updateAllUpdated(self: ToWooCollection)
         {

@@ -133,6 +133,8 @@ namespace JEEditor::Editor::MainMenu
             ->  separator()
             ->  subItem("更新类型 & 编辑器", Project::updateEditorTypes)
             ->      endItem
+            ->  subItem("重新编译 ToWoo", Project::recompileAllToWoo)
+            ->      endItem
             ->  endMenu
             -> subMenu("运行")
             ->  subItem("开始运行", \= do DebugRun::startDebugRun();)

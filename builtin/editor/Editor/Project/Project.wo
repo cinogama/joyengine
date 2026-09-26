@@ -331,7 +331,7 @@ namespace JEEditor::Editor
             
             finished->set <| false;
             FreezeWorldsTodo::show(
-                "更新编辑器类型",
+                "装载编辑器类型...",
                 func(){
                     return apply:<Project>(
                         func(proj){
@@ -602,11 +602,40 @@ namespace JEEditor::Editor
         }
         public func updateEditorTypes()
         {
-            FreezeWorldsTodo::show("正在更新 ToWoo...", func(){
+            FreezeWorldsTodo::show("正在更新编辑器类型...", func(){
                     apply:<Project>(
                         func(proj){
                             do proj->updateEditorTypesDuringFreeze();
                         });
+                });
+        }
+        /* 菜单“编辑→重新编译 ToWoo”入口：与 checkToWooUpdated 的增量热更不同，
+        无论文件是否变更都强制重编译全部已注册的 ToWoo 组件与系统，用于自动
+        热更失效时的手动兜底。有脚本编译失败时弹 MsgBox 提示，编译错误详情
+        由更新器记入日志浏览器。 */
+        public func recompileAllToWoo()
+        {
+            let finished = mutable::create(false);
+            let all_ok = mutable::create(true);
+            
+            FreezeWorldsTodo::show("正在重新编译 ToWoo...", func(){
+                    let proj = apply:<Project>(\p = p;);
+                    
+                    /* 此处直接绕开锁是完全OK 的，因为编辑器正处于冻结状态 */
+                    all_ok->set <| proj.m_towoo_collection->updateAll();
+                    
+                    finished->set <| true;
+                });
+                
+            launch_coroutine(func(){
+                    // FreezeWorldsTodo::show 注册窗口后即返回，等编译结束再提示结果
+                    while (!finished->get)
+                        yield();
+                        
+                    if (!all_ok->get)
+                        MsgBox::err(
+                            "重新编译 ToWoo",
+                            "部分 ToWoo 组件/系统编译失败，详情请查看日志浏览器。");
                 });
         }
     }
