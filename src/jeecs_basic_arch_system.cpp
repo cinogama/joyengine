@@ -16,11 +16,6 @@
 #define DEBUG_ARCH_LOG_WARN(...) jeecs::debug::logwarn(__VA_ARGS__)
 #endif
 
-// 统一使用 jeecs.hpp 提供的 JE_PARALLEL_FOREACH 宏，
-// 该宏已根据编译器/异常/平台/Release 状态自动决定是否启用 par_unseq。
-// 历史上这里曾用本地 ParallelForeach 宏配合 __cpp_lib_execution 守卫，
-// 但守卫判定在 <execution> 被 include 之前，永远退化成串行 —— 现已修复。
-
 #define jeoffsetof(T, M) ((::size_t)&reinterpret_cast<char const volatile &>((((T *)0)->M)))
 
 namespace jeecs_impl
@@ -188,69 +183,75 @@ namespace jeecs_impl
         return false;
     }
 
+    // 基于 Treiber 栈的 MPMC 无锁固定容量 id 栈，用于空闲 eid 池。
+    // 约束：入栈值必须是 [0, capacity) 内的下标，且任意时刻每个值在栈中至多
+    // 出现一次——free eid 池天然满足：eid 只有从“已分配”转为“已释放”时才会
+    // 重新入栈。因此每个值独占一个链接槽位，直接用值本身索引 _m_next。
+    // 栈头把“槽下标 + 修改计数”打包进一个 64 位原子量：计数随每次成功的栈头
+    // 变更严格递增，用于消除经典 Treiber 栈的 ABA 问题——同一 eid 会被反复
+    // 压栈/出栈，仅凭下标无法区分“同一个 id 的两次入栈”。
     template <typename T>
-    class mcmp_lockfree_fixed_loop_queue
+    class mcmp_lockfree_fixed_id_stack
     {
-        JECS_DISABLE_MOVE_AND_COPY(mcmp_lockfree_fixed_loop_queue);
+        JECS_DISABLE_MOVE_AND_COPY(mcmp_lockfree_fixed_id_stack);
 
-        T* const _m_queue_buffer;
-        const size_t _m_queue_size;
+        static constexpr uint64_t NIL = 0xFFFFFFFF;
 
-        std::atomic_size_t _m_head;
-        std::atomic_size_t _m_tail_for_write;
-        std::atomic_size_t _m_tail_for_reading;
+        const uint32_t _m_capacity;
+        std::atomic<uint32_t>* const _m_next; // _m_next[id]：id 在栈内的下一个下标
+        std::atomic<uint64_t> _m_head;        // 低 32 位：栈顶下标或 NIL；高 32 位：ABA 计数
 
     public:
-        mcmp_lockfree_fixed_loop_queue(size_t queue_size)
-            : _m_queue_buffer(new T[queue_size + 1])
-            , _m_queue_size(queue_size + 1)
-            , _m_head(0)
-            , _m_tail_for_write(0)
-            , _m_tail_for_reading(0)
+        explicit mcmp_lockfree_fixed_id_stack(size_t capacity)
+            : _m_capacity(static_cast<uint32_t>(capacity))
+            , _m_next(new std::atomic<uint32_t>[capacity]{})
+            , _m_head(NIL)
         {
-            assert(queue_size != 0);
+            assert(capacity != 0 && capacity < NIL);
+            assert(_m_head.is_lock_free());
         }
-        ~mcmp_lockfree_fixed_loop_queue()
+        ~mcmp_lockfree_fixed_id_stack()
         {
-            delete[] _m_queue_buffer;
+            delete[] _m_next;
         }
 
-        void push(const T& elem)
+        void push(T elem)
         {
-            size_t write_target_place = _m_tail_for_write.load();
-            size_t next_write_place = (write_target_place + 1) % _m_queue_size;
+            const uint64_t idx = static_cast<uint64_t>(elem);
+            assert(idx < _m_capacity);
 
-            while (!_m_tail_for_write.compare_exchange_weak(write_target_place, next_write_place))
+            uint64_t head = _m_head.load(std::memory_order_relaxed);
+            for (;;)
             {
-                next_write_place = (write_target_place + 1) % _m_queue_size;
-            }
+                // 先挂接、再发布。即便与某个迟滞的 pop 并发读写同一槽位，
+                // 对方的 CAS 也会因高位计数不同而失败，不会消费到坏链接。
+                _m_next[idx].store(static_cast<uint32_t>(head), std::memory_order_relaxed);
 
-            assert(next_write_place != _m_head.load());
-
-            _m_queue_buffer[write_target_place] = elem;
-
-            while (!_m_tail_for_reading.compare_exchange_weak(write_target_place, next_write_place))
-            {
-                next_write_place = (write_target_place + 1) % _m_queue_size;
+                const uint64_t new_head = ((head >> 32) + 1) << 32 | idx;
+                if (_m_head.compare_exchange_weak(
+                    head, new_head, std::memory_order_release, std::memory_order_relaxed))
+                    return;
             }
         }
 
         bool pop(T* out_value)
         {
-            size_t read_place = _m_head.load();
-            size_t next_read_place;
-
-            do
+            uint64_t head = _m_head.load(std::memory_order_acquire);
+            for (;;)
             {
-                if (read_place == _m_tail_for_reading.load())
+                const uint64_t idx = head & 0xFFFFFFFF;
+                if (idx == NIL)
                     return false;
 
-                next_read_place = (read_place + 1) % _m_queue_size;
-
-            } while (!_m_head.compare_exchange_weak(read_place, next_read_place));
-
-            *out_value = _m_queue_buffer[read_place];
-            return true;
+                const uint64_t next = _m_next[idx].load(std::memory_order_relaxed);
+                const uint64_t new_head = ((head >> 32) + 1) << 32 | next;
+                if (_m_head.compare_exchange_weak(
+                    head, new_head, std::memory_order_acquire, std::memory_order_acquire))
+                {
+                    *out_value = static_cast<T>(idx);
+                    return true;
+                }
+            }
         }
     };
 
@@ -298,7 +299,7 @@ namespace jeecs_impl
             const size_t _m_entity_size;
 
             arch_type* _m_arch_type;
-            mcmp_lockfree_fixed_loop_queue<je_EntityIdInChunk>
+            mcmp_lockfree_fixed_id_stack<je_EntityIdInChunk>
                 _m_free_slots;
 #ifndef NDEBUG
             std::atomic<je_EntityIdInChunk> _m_debug_free_count;
@@ -323,8 +324,10 @@ namespace jeecs_impl
 
                 _m_entities_meta = new je_GameEntityMeta[_m_entity_count]{};
 
-                for (je_EntityIdInChunk i = 0; i < _m_entity_count; ++i)
-                    _m_free_slots.push((je_EntityIdInChunk)i);
+                // 逆序压栈：栈是 LIFO，这样首次分配仍按 0,1,2... 顺序取出，
+                // 与原先用队列时的分配顺序保持一致。
+                for (je_EntityIdInChunk i = _m_entity_count; i-- > 0;)
+                    _m_free_slots.push(i);
             }
             ~arch_chunk()
             {
