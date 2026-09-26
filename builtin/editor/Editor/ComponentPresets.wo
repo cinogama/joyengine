@@ -77,6 +77,10 @@ namespace JEEditor::Editor::ComponentPresets
         "Physics2D::Scene",
     ];
 
+    public let PARTICLE_EMITTER_COMPONENTS = [
+        "Particle::Emitter",
+    ];
+
     // 常用组件组合表：(分组标题, [(组合名, [组件类型全名...])...])
     public let s_component_presets = [
         ("变换", [
@@ -86,6 +90,7 @@ namespace JEEditor::Editor::ComponentPresets
         ("渲染", [
             ("基本渲染", BASE_RENDERER_COMPONENTS),
             ("帧动画", ["Animation::FrameAnimation"]),
+            ("粒子发射器", PARTICLE_EMITTER_COMPONENTS),
         ]),
         ("2D光照", [
             ("点光源", LIGHT2D_POINT_COMPONENTS),

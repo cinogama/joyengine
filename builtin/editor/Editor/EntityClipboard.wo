@@ -95,6 +95,23 @@ namespace JEEditor::Editor::EntityClipboard
             separator_before = true,
             presets = [
                 EntityPreset{
+                    menu_label = "粒子发射器",
+                    entity_name = "粒子发射器",
+                    components = BASE_TRANSFORM_COMPONENTS
+                        ->connect(BASE_RENDERER_COMPONENTS)
+                        ->connect(["Renderer::Rendqueue"])
+                        ->connect(PARTICLE_EMITTER_COMPONENTS),
+                    // 引擎内置着色器（! 前缀指向可执行文件目录），无需
+                    // 项目资源即可工作；需要加色混合时换用 ParticleAdd.shader
+                    default_shader = option::value(
+                        "!/builtin/shader/ParticleBlend.shader"),
+                },
+            ],
+        },
+        EntityPresetGroup{
+            separator_before = true,
+            presets = [
+                EntityPreset{
                     menu_label = "2D光源（点）",
                     entity_name = "2D点光源",
                     components = BASE_TRANSFORM_COMPONENTS

@@ -388,6 +388,94 @@ namespace Animation::FrameAnimation::animation_list
         }
     }
 }
+// Particle::color_gradient：粒子颜色随生命周期（0~1）的 RGBA 渐变关键帧
+// （m_times 与 m_colors 一一对应）。序列化为扁平数组
+// [count, t0, r0,g0,b0,a0, t1, ...]，避开嵌套数组的 dynamic 语义。
+namespace Particle::color_gradient
+{
+    using parser = void
+    {
+        public extern func saving(val: Particle::color_gradient)=> string
+        {
+            let times = (val.m_times)->to_vec;
+            let colors = (val.m_colors)->to_vec;
+            let dat = []mut: vec<real>;
+            dat->add(times->len as real);
+            for (let t : times)
+                dat->add(t);
+            for (let c : colors)
+            {
+                dat->add(c.0);
+                dat->add(c.1);
+                dat->add(c.2);
+                dat->add(c.3);
+            }
+            return dat->serialize->or("[]");
+        }
+        public extern func restoring(dat: string)=> Particle::color_gradient
+        {
+            let data = dat->array::deserialize->or([0. as dynamic])->> \x = x as real;;
+            let mut count = data->get_or(0, 0.) as int;
+            if (count < 0)
+                count = 0;
+            let times = []mut: vec<float>;
+            for (let mut i = 0; i < count; i += 1)
+                times->add(data->get_or(1 + i, 0.) as float);
+            let colors = []mut: vec<vec4>;
+            for (let mut i = 0; i < count; i += 1)
+            {
+                let base = 1 + count + i * 4;
+                colors->add((
+                    data->get_or(base, 0.),
+                    data->get_or(base + 1, 0.),
+                    data->get_or(base + 2, 0.),
+                    data->get_or(base + 3, 1.)) as vec4);
+            }
+            return Particle::color_gradient{
+                m_times = times->to_array,
+                m_colors = colors->to_array,
+            };
+        }
+    }
+}
+// Particle::scalar_curve：粒子标量（如尺寸）随生命周期（0~1）的
+// (时间, 数值) 关键帧曲线。序列化为扁平数组 [count, t0, v0, t1, v1, ...]。
+namespace Particle::scalar_curve
+{
+    using parser = void
+    {
+        public extern func saving(val: Particle::scalar_curve)=> string
+        {
+            let dat = []mut: vec<real>;
+            let keys = (val.m_keys)->to_vec;
+            dat->add(keys->len as real);
+            for (let k : keys)
+            {
+                dat->add(k.0);
+                dat->add(k.1);
+            }
+            return dat->serialize->or("[]");
+        }
+        public extern func restoring(dat: string)=> Particle::scalar_curve
+        {
+            let data = dat->array::deserialize->or([0. as dynamic])->> \x = x as real;;
+            let mut count = data->get_or(0, 0.) as int;
+            if (count < 0)
+                count = 0;
+            let keys = []mut: vec<vec2>;
+            for (let mut i = 0; i < count; i += 1)
+            {
+                let base = 1 + i * 2;
+                keys->add((
+                    data->get_or(base, 0.),
+                    data->get_or(base + 1, 1.)) as vec2);
+            }
+            return Particle::scalar_curve{
+                m_keys = keys->to_array,
+            };
+        }
+    }
+}
 namespace file_resource
 {
     using parser = void

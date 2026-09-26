@@ -1516,11 +1516,13 @@ namespace jeecs::graphic::api::dx11
         vertex->m_stride = resource->m_data_size_per_point;
 
         // 新建顶点缓冲区
+        // 使用 DEFAULT 而非 IMMUTABLE：动态网格（如粒子系统）会通过
+        // dx11_vertex_update -> UpdateSubresource 重写顶点数据
         D3D11_BUFFER_DESC vertex_buffer_describe;
         vertex_buffer_describe.ByteWidth =
             (UINT)resource->m_vertex_length;
 
-        vertex_buffer_describe.Usage = D3D11_USAGE_IMMUTABLE;
+        vertex_buffer_describe.Usage = D3D11_USAGE_DEFAULT;
         vertex_buffer_describe.BindFlags = D3D11_BIND_VERTEX_BUFFER;
         vertex_buffer_describe.CPUAccessFlags = 0;
         vertex_buffer_describe.MiscFlags = 0;
@@ -1571,10 +1573,22 @@ namespace jeecs::graphic::api::dx11
         resource->m_handle.m_ptr = vertex;
     }
     void dx11_vertex_update(
-        je_GraphicImplContext,
-        jegl_vertex*)
+        je_GraphicImplContext ctx,
+        jegl_vertex* resource)
     {
-        // No need to do anything.
+        jegl_dx11_context* context = static_cast<jegl_dx11_context*>(ctx);
+        jedx11_vertex* vertex = static_cast<jedx11_vertex*>(resource->m_handle.m_ptr);
+
+        // 整体重写顶点数据（索引缓冲内容不变），并同步激活索引数量
+        context->m_dx_context->UpdateSubresource(
+            vertex->m_vbo.Get(),
+            0,
+            nullptr,
+            resource->m_vertexs,
+            0,
+            0);
+
+        vertex->m_count = (UINT)resource->m_index_count;
     }
     void dx11_vertex_close(
         je_GraphicImplContext,

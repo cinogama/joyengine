@@ -4211,6 +4211,32 @@ namespace jeecs::graphic::api::vk120
     }
     void update_vertex(je_GraphicImplContext ctx, jegl_vertex* vertex)
     {
+        jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
+        jevk12_vertex* vertex_instance =
+            static_cast<jevk12_vertex*>(vertex->m_handle.m_ptr);
+
+        // 宿主可见内存：整体重映射重写顶点数据（索引缓冲内容不变），
+        // 并同步激活索引数量
+        void* vertex_memory_ptr = nullptr;
+        if (VK_SUCCESS == context->vkMapMemory(
+                context->_vk_logic_device,
+                vertex_instance->m_vk_vertex_buffer_memory,
+                0,
+                vertex->m_vertex_length,
+                0,
+                &vertex_memory_ptr))
+        {
+            memcpy(
+                vertex_memory_ptr,
+                vertex->m_vertexs,
+                vertex->m_vertex_length);
+            context->vkUnmapMemory(
+                context->_vk_logic_device,
+                vertex_instance->m_vk_vertex_buffer_memory);
+
+            vertex_instance->m_vertex_point_count =
+                (uint32_t)vertex->m_index_count;
+        }
     }
     void update_framebuffer(je_GraphicImplContext ctx, jegl_frame_buffer* fbuffer)
     {

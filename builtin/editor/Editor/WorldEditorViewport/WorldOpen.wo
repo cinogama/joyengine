@@ -50,6 +50,8 @@ namespace JEEditor::Editor::WorldEditorViewport
         typeinfo::load("Graphic::UnlitGraphicPipelineSystem")->unwrap;
     let ANIMATION_SYSTEM_TYPE = 
         typeinfo::load("Animation::FrameAnimationSystem")->unwrap;
+    let PARTICLE_SYSTEM_TYPE =
+        typeinfo::load("Particle::ParticleSystem")->unwrap;
         
     // 确保世界中存在编辑器调试摄像机（带 Editor::Invisible 标记的透视摄像机），
     // 没有则创建默认的一个。调试摄像机是编辑器内部实体，不会随世界文件保存
@@ -104,6 +106,9 @@ namespace JEEditor::Editor::WorldEditorViewport
         // Create default graphic pipe line.
         do new_world->add_system(DEFAULT_GRAPHIC_SYSTEM_TYPE);
         do new_world->add_system(TRASNLATION_SYSTEM_TYPE);
+        // 粒子系统与变换系统同为运行时系统：编辑态即模拟，便于在视口
+        // 中实时预览与调参发射器
+        do new_world->add_system(PARTICLE_SYSTEM_TYPE);
         
         // Create editor camera.
         ensureDebugCamera(new_world);
@@ -177,6 +182,9 @@ namespace JEEditor::Editor::WorldEditorViewport
                     Singleton::Universe::getUniverse(),
                     wdat);
                 ensureDebugCamera(w);
+                // 旧世界文件未保存粒子系统：补挂一次，保证发射器在编辑态
+                // 可预览（已存在时 add_system 无事发生）
+                do w->add_system(PARTICLE_SYSTEM_TYPE);
                 w->set_enable(true);
                 
                 // “调试执行/导出时才启用”的系统以类型名保存，此处解析为

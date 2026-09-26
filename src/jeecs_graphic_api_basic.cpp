@@ -1621,6 +1621,7 @@ jegl_vertex* _jegl_create_vertex_impl(
     memcpy(index_buffer, indices, index_count * sizeof(uint32_t));
     vertex->m_indices = index_buffer;
     vertex->m_index_count = index_count;
+    vertex->m_index_capacity = index_count;
 
     jegl_vertex::data_layout* formats =
         (jegl_vertex::data_layout*)malloc(format_count * sizeof(jegl_vertex::data_layout));
@@ -1938,6 +1939,40 @@ jegl_vertex* jegl_create_vertex(
         _jegl_init_resource_handle(&vertex->m_handle, nullptr);
 
     return vertex;
+}
+
+void jegl_update_vertex_buffer(
+    jegl_vertex* vertex,
+    const void* vertex_data,
+    size_t vertex_length,
+    size_t active_index_count)
+{
+    if (vertex == nullptr)
+        return;
+
+    if (active_index_count > vertex->m_index_capacity)
+        active_index_count = vertex->m_index_capacity;
+
+    if (vertex_data != nullptr && vertex_length != 0)
+    {
+        if (vertex_length > vertex->m_vertex_length)
+        {
+            jeecs::debug::logerr(
+                "Failed to update vertex(%p): data size %zu is bigger than the vertex buffer size %zu.",
+                vertex, vertex_length, vertex->m_vertex_length);
+            return;
+        }
+
+        memcpy(const_cast<void*>(vertex->m_vertexs), vertex_data, vertex_length);
+        vertex->m_handle.m_modified = true;
+    }
+    else if (active_index_count != vertex->m_index_count)
+    {
+        // 只收缩绘制数量也走一次后端刷新，让已初始化的后端同步激活数量
+        vertex->m_handle.m_modified = true;
+    }
+
+    vertex->m_index_count = active_index_count;
 }
 
 jegl_frame_buffer* jegl_create_framebuf(

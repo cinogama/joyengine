@@ -2246,6 +2246,9 @@ struct jegl_vertex
     size_t m_vertex_length;
     const uint32_t* m_indices;
     size_t m_index_count;
+    // 索引缓冲的分配容量：m_index_count 可被 jegl_update_vertex_buffer 收缩为
+    // 激活数量，本字段保持创建时的分配大小，作为收缩的上限
+    size_t m_index_capacity;
     const data_layout* m_formats;
     size_t m_format_count;
     size_t m_data_size_per_point;
@@ -3178,6 +3181,26 @@ JE_API jegl_vertex* jegl_create_vertex(
     size_t index_count,
     const jegl_vertex::data_layout* format,
     size_t format_count);
+
+/*
+jegl_update_vertex_buffer [基本接口]
+整体更新一个顶点（模型）资源中的顶点数据，用于逐帧改写动态网格（如粒子系统）
+    * vertex_data 与 vertex_length 描述一份完整的顶点数据，将被拷贝替换掉资源中
+        原有的顶点数据；vertex_data 传入 nullptr 时只调整激活的索引数量
+    * active_index_count 为本次更新后实际参与绘制的索引数量（不能超过资源创建时
+        的索引总数），用于在容量固定的缓冲区上收缩绘制范围
+    * 调用后资源的 m_modified 标记被置位，图形后端将在该资源的下次使用时通过
+        vertex_update 钩子重新上传数据（索引缓冲本身不重传，只刷新绘制数量）
+    * 与 jegl_update_uniformbuf 相同，本接口必须在逻辑帧窗口内（图形线程静默时）调用
+请参见：
+    jegl_create_vertex
+    jegl_update_uniformbuf
+*/
+JE_API void jegl_update_vertex_buffer(
+    jegl_vertex* vertex,
+    const void* vertex_data,
+    size_t vertex_length,
+    size_t active_index_count);
 
 /*
 jegl_close_vertex [基本接口]
@@ -9464,6 +9487,12 @@ namespace jeecs
                     return basic::resource<vertex>(new vertex(res));
                 return std::nullopt;
             }
+            // 整体替换顶点数据并收缩激活索引数量（见 jegl_update_vertex_buffer），
+            // 供逐帧改写的动态网格使用；索引缓冲保持创建时的内容不变
+            void update_buffer(const void* pdatas, size_t pdatalen, size_t active_index_count) const
+            {
+                jegl_update_vertex_buffer(resource(), pdatas, pdatalen, active_index_count);
+            }
         };
         class framebuffer : public resource_basic<jegl_frame_buffer>
         {
@@ -12211,6 +12240,327 @@ namespace jeecs
             }
         };
     }
+    namespace Particle
+    {
+        // 颜色渐变：随生命周期时间（0~1）插值的一组 RGBA 关键帧。
+        // m_times 与 m_colors 一一对应且应按时间升序排列；
+        // 采样时 t 会被钳制到首末关键帧覆盖的范围。
+        struct color_gradient
+        {
+            basic::vector<float> m_times;
+            basic::vector<math::vec4> m_colors;
+
+            color_gradient()
+            {
+                m_times.push_back(0.0f);
+                m_times.push_back(1.0f);
+                m_colors.push_back(math::vec4(1.0f, 1.0f, 1.0f, 1.0f));
+                m_colors.push_back(math::vec4(1.0f, 1.0f, 1.0f, 0.0f));
+            }
+
+            // 关键帧数量（times/colors 以较短者为准）
+            size_t size() const noexcept
+            {
+                return std::min(m_times.size(), m_colors.size());
+            }
+            // 采样：空渐变返回 fallback；t 超出范围时钳制到首/末关键帧
+            math::vec4 sample(float t, const math::vec4& fallback) const
+            {
+                const size_t key_count = size();
+                if (key_count == 0)
+                    return fallback;
+                if (key_count == 1 || t <= m_times.at(0))
+                    return m_colors.at(0);
+                if (t >= m_times.at(key_count - 1))
+                    return m_colors.at(key_count - 1);
+
+                for (size_t i = 1; i < key_count; ++i)
+                {
+                    if (t <= m_times.at(i))
+                    {
+                        const float t0 = m_times.at(i - 1), t1 = m_times.at(i);
+                        const float span = t1 - t0;
+                        const float k = span > 0.0f ? (t - t0) / span : 0.0f;
+                        const math::vec4& c0 = m_colors.at(i - 1);
+                        const math::vec4& c1 = m_colors.at(i);
+                        return math::vec4(
+                            c0.x + (c1.x - c0.x) * k,
+                            c0.y + (c1.y - c0.y) * k,
+                            c0.z + (c1.z - c0.z) * k,
+                            c0.w + (c1.w - c0.w) * k);
+                    }
+                }
+                return m_colors.at(key_count - 1);
+            }
+
+            static const char* JEScriptTypeName()
+            {
+                return "Particle::color_gradient";
+            }
+            static const char* JEScriptTypeDeclare()
+            {
+                return
+                    "namespace Particle\n"
+                    "{\n"
+                    "    public using color_gradient = struct{\n"
+                    "        public m_times: array<float>,\n"
+                    "        public m_colors: array<vec4>,\n"
+                    "    };\n"
+                    "}";
+            }
+            void JEParseFromScriptType(woort_value v)
+            {
+                woort_value s;
+                if (!woort_push_reserve(3, &s))
+                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                else
+                {
+                    const woort_value tmp = s + 0;
+                    const woort_value times = s + 1;
+                    const woort_value colors = s + 2;
+
+                    woort_struct_get(times, v, 0);
+                    woort_struct_get(colors, v, 1);
+
+                    const size_t time_count = woort_vec_len(times);
+                    const size_t color_count = woort_vec_len(colors);
+                    const size_t key_count = std::min(time_count, color_count);
+
+                    m_times.clear();
+                    m_colors.clear();
+                    for (size_t i = 0; i < key_count; ++i)
+                    {
+                        if (woort_vec_get(tmp, times, i))
+                            m_times.push_back(woort_unbox_float(tmp));
+                        if (woort_vec_get(tmp, colors, i))
+                        {
+                            math::vec4 color;
+                            color.JEParseFromScriptType(tmp);
+                            m_colors.push_back(color);
+                        }
+                    }
+
+                    woort_pop(3);
+                }
+            }
+            void JEParseToScriptType(woort_value v) const
+            {
+                woort_value s;
+                if (!woort_push_reserve(2, &s))
+                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                else
+                {
+                    const woort_value tmp = s + 0;
+                    const woort_value arr = s + 1;
+
+                    const size_t key_count = size();
+
+                    woort_set_struct(v, 2);
+
+                    woort_set_vec(arr);
+                    woort_vec_resize(arr, key_count);
+                    for (size_t i = 0; i < key_count; ++i)
+                    {
+                        woort_set_box_float(tmp, m_times.at(i));
+                        (void)woort_vec_set(arr, i, tmp);
+                    }
+                    woort_struct_set(v, 0, arr);
+
+                    woort_set_vec(arr);
+                    woort_vec_resize(arr, key_count);
+                    for (size_t i = 0; i < key_count; ++i)
+                    {
+                        m_colors.at(i).JEParseToScriptType(tmp);
+                        (void)woort_vec_set(arr, i, tmp);
+                    }
+                    woort_struct_set(v, 1, arr);
+
+                    woort_pop(2);
+                }
+            }
+        };
+
+        // 标量曲线：随生命周期时间（0~1）插值的一组 (时间, 数值) 关键帧，
+        // 用于尺寸等标量的生命周期调制；采样规则与 color_gradient 相同。
+        struct scalar_curve
+        {
+            basic::vector<math::vec2> m_keys;
+
+            scalar_curve()
+            {
+                m_keys.push_back(math::vec2(0.0f, 1.0f));
+                m_keys.push_back(math::vec2(1.0f, 1.0f));
+            }
+
+            size_t size() const noexcept
+            {
+                return m_keys.size();
+            }
+            float sample(float t, float fallback) const
+            {
+                const size_t key_count = m_keys.size();
+                if (key_count == 0)
+                    return fallback;
+                if (key_count == 1 || t <= m_keys.at(0).x)
+                    return m_keys.at(0).y;
+                if (t >= m_keys.at(key_count - 1).x)
+                    return m_keys.at(key_count - 1).y;
+
+                for (size_t i = 1; i < key_count; ++i)
+                {
+                    const math::vec2& k1 = m_keys.at(i);
+                    if (t <= k1.x)
+                    {
+                        const math::vec2& k0 = m_keys.at(i - 1);
+                        const float span = k1.x - k0.x;
+                        const float k = span > 0.0f ? (t - k0.x) / span : 0.0f;
+                        return k0.y + (k1.y - k0.y) * k;
+                    }
+                }
+                return m_keys.at(key_count - 1).y;
+            }
+
+            static const char* JEScriptTypeName()
+            {
+                return "Particle::scalar_curve";
+            }
+            static const char* JEScriptTypeDeclare()
+            {
+                return
+                    "namespace Particle\n"
+                    "{\n"
+                    "    public using scalar_curve = struct{\n"
+                    "        public m_keys: array<vec2>,\n"
+                    "    };\n"
+                    "}";
+            }
+            void JEParseFromScriptType(woort_value v)
+            {
+                woort_value s;
+                if (!woort_push_reserve(1, &s))
+                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                else
+                {
+                    const size_t key_count = woort_vec_len(v);
+                    m_keys.clear();
+                    for (size_t i = 0; i < key_count; ++i)
+                    {
+                        (void)woort_vec_get(s, v, i);
+                        math::vec2 key;
+                        key.JEParseFromScriptType(s);
+                        m_keys.push_back(key);
+                    }
+                    woort_pop(1);
+                }
+            }
+            void JEParseToScriptType(woort_value v) const
+            {
+                woort_value s;
+                if (!woort_push_reserve(1, &s))
+                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                else
+                {
+                    woort_set_vec(v);
+                    woort_vec_resize(v, m_keys.size());
+                    for (size_t i = 0; i < m_keys.size(); ++i)
+                    {
+                        m_keys.at(i).JEParseToScriptType(s);
+                        (void)woort_vec_set(v, i, s);
+                    }
+                    woort_pop(1);
+                }
+            }
+        };
+
+        /*
+        Emitter [组件]
+        粒子发射器：描述一类粒子的发射与生命周期行为，模拟与网格构建由
+        Particle::ParticleSystem 完成（见 jeecs_core_particle_system.hpp）。
+        发射器实体同时需要 Renderer::Shape / Shaders / Textures 三件套参与
+        常规渲染管线（系统会在缺失时自动补齐并挂上内置粒子着色器）；
+        粒子纹理绑定在 Renderer::Textures 的 pass 0，混合模式由所选着色器决定。
+        角度类成员（散布角/初始自转/自转速度）以度为单位。
+        m_simulation_space 为 0 时粒子在世界空间模拟（发射器移动不携带已发射
+        粒子），为 1 时在发射器局部空间模拟（整体随发射器刚体运动）；
+        局部空间下 m_direction 与 m_gravity 按发射器局部坐标系解释。
+        m_clear_particles 置为 true 后系统会清空全部已发射粒子并把该标记复位。
+        */
+        struct Emitter
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Emitter);
+            JECS_DEFAULT_CONSTRUCTOR(Emitter);
+
+            // ===== 发射 =====
+            int m_shape = 0;                        // 0=点 1=球体 2=圆(2D) 3=盒
+            float m_shape_radius = 0.25f;           // 球/圆 的发射半径
+            math::vec3 m_shape_size = { 0.5f, 0.5f, 0.5f }; // 盒的半边长
+            float m_spawn_rate = 32.0f;             // 每秒发射数量
+            int m_burst_count = 0;                  // 周期爆发的数量（0=关闭）
+            float m_burst_interval = 1.0f;          // 爆发间隔（秒）
+
+            // ===== 初速与受力 =====
+            float m_lifetime_min = 2.0f;            // 初始寿命区间（秒）
+            float m_lifetime_max = 3.0f;
+            float m_speed_min = 0.8f;               // 初始速度区间
+            float m_speed_max = 1.6f;
+            math::vec3 m_direction = { 0.0f, 1.0f, 0.0f }; // 主发射方向（内部归一化）
+            float m_spread_angle = 25.0f;           // 围绕主方向的散布角（度，180=全球面）
+            math::vec3 m_gravity = { 0.0f, -0.8f, 0.0f }; // 加速度（见模拟空间说明）
+            float m_drag = 0.0f;                    // 速度阻尼（每秒指数衰减系数）
+
+            // ===== 初始外观（在区间内均匀随机） =====
+            float m_size_min = 0.08f;               // 初始尺寸区间（世界单位）
+            float m_size_max = 0.16f;
+            math::vec4 m_color_min = { 1.0f, 1.0f, 1.0f, 1.0f };
+            math::vec4 m_color_max = { 1.0f, 1.0f, 1.0f, 1.0f };
+            float m_rotation_min = 0.0f;            // 初始自转区间（度）
+            float m_rotation_max = 0.0f;
+            float m_angular_min = 0.0f;             // 自转速度区间（度/秒）
+            float m_angular_max = 0.0f;
+
+            // ===== 生命周期调制（乘算到初始值上） =====
+            color_gradient m_color_over_lifetime;
+            scalar_curve m_size_over_lifetime;
+
+            // ===== 通用 =====
+            int m_max_particles = 512;
+            int m_simulation_space = 0;             // 0=世界空间 1=局部空间
+            bool m_playing = true;
+            bool m_clear_particles = false;
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &Emitter::m_shape, "shape");
+                typing::register_member(guard, &Emitter::m_shape_radius, "shape_radius");
+                typing::register_member(guard, &Emitter::m_shape_size, "shape_size");
+                typing::register_member(guard, &Emitter::m_spawn_rate, "spawn_rate");
+                typing::register_member(guard, &Emitter::m_burst_count, "burst_count");
+                typing::register_member(guard, &Emitter::m_burst_interval, "burst_interval");
+                typing::register_member(guard, &Emitter::m_lifetime_min, "lifetime_min");
+                typing::register_member(guard, &Emitter::m_lifetime_max, "lifetime_max");
+                typing::register_member(guard, &Emitter::m_speed_min, "speed_min");
+                typing::register_member(guard, &Emitter::m_speed_max, "speed_max");
+                typing::register_member(guard, &Emitter::m_direction, "direction");
+                typing::register_member(guard, &Emitter::m_spread_angle, "spread_angle");
+                typing::register_member(guard, &Emitter::m_gravity, "gravity");
+                typing::register_member(guard, &Emitter::m_drag, "drag");
+                typing::register_member(guard, &Emitter::m_size_min, "size_min");
+                typing::register_member(guard, &Emitter::m_size_max, "size_max");
+                typing::register_member(guard, &Emitter::m_color_min, "color_min");
+                typing::register_member(guard, &Emitter::m_color_max, "color_max");
+                typing::register_member(guard, &Emitter::m_rotation_min, "rotation_min");
+                typing::register_member(guard, &Emitter::m_rotation_max, "rotation_max");
+                typing::register_member(guard, &Emitter::m_angular_min, "angular_min");
+                typing::register_member(guard, &Emitter::m_angular_max, "angular_max");
+                typing::register_member(guard, &Emitter::m_color_over_lifetime, "color_over_lifetime");
+                typing::register_member(guard, &Emitter::m_size_over_lifetime, "size_over_lifetime");
+                typing::register_member(guard, &Emitter::m_max_particles, "max_particles");
+                typing::register_member(guard, &Emitter::m_simulation_space, "simulation_space");
+                typing::register_member(guard, &Emitter::m_playing, "playing");
+                typing::register_member(guard, &Emitter::m_clear_particles, "clear_particles");
+            }
+        };
+    }
     namespace Audio
     {
         struct Source
@@ -12739,6 +13089,7 @@ namespace jeecs
             jeecs::typing::register_type<Renderer::Color>(guard, "Renderer::Color");
 
             jeecs::typing::register_type<Animation::FrameAnimation>(guard, "Animation::FrameAnimation");
+            jeecs::typing::register_type<Particle::Emitter>(guard, "Particle::Emitter");
 
             jeecs::typing::register_type<Camera::FrustumCulling>(guard, "Camera::FrustumCulling");
             jeecs::typing::register_type<Camera::Projection>(guard, "Camera::Projection");

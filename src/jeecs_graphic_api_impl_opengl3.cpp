@@ -1336,7 +1336,19 @@ namespace jeecs::graphic::api::gl3
     void vertex_update(
         je_GraphicImplContext,
         jegl_vertex* resource)
-    {}
+    {
+        jegl3_vertex_data* vertex_data =
+            static_cast<jegl3_vertex_data*>(resource->m_handle.m_ptr);
+
+        // 整体重传顶点数据（索引缓冲内容不变），并同步激活索引数量
+        glBindBuffer(GL_ARRAY_BUFFER, vertex_data->m_vbo);
+        glBufferSubData(GL_ARRAY_BUFFER,
+            0,
+            resource->m_vertex_length,
+            resource->m_vertexs);
+
+        vertex_data->m_pointcount = (GLsizei)resource->m_index_count;
+    }
     void vertex_close(
         je_GraphicImplContext,
         jegl_vertex* resource)

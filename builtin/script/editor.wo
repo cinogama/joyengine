@@ -335,6 +335,270 @@ namespace Light2D::Range::light_shape
         }
     }
 }
+// Particle::color_gradient：粒子颜色随生命周期（0~1）的 RGBA 渐变。
+// 编辑器首行绘制渐变预览条，其下“关键帧数”一行；每个关键帧占两行：
+// “时间N”（0~1）一行、“颜色N”（RGBA）一行，全部对齐控件列。
+// 关键帧应按时间升序排列（运行时按升序采样）。
+namespace Particle::color_gradient
+{
+    // 钳制到 [0,1]
+    func clamp01(v: real)=> real
+    {
+        return (v < 0.) ? 0. | ((v > 1.) ? 1. | v);
+    }
+    // 按关键帧插值采样（与引擎侧 color_gradient::sample 一致）
+    func sample(times: vec<float>, colors: vec<vec4>, t: real)=> vec4
+    {
+        let count = times->len;
+        if (count == 0 || colors->len == 0)
+            return (1., 1., 1., 1.) as vec4;
+        if (count == 1 || t <= times[0] as real)
+            return colors[0];
+        if (t >= times[count - 1] as real)
+            return colors[count - 1];
+        for (let mut i = 1; i < count; i += 1)
+        {
+            if (t <= times[i] as real)
+            {
+                let t0 = times[i - 1] as real;
+                let t1 = times[i] as real;
+                let span = t1 - t0;
+                let k = (span > 0.) ? (t - t0) / span | 0.;
+                let c0 = colors[i - 1];
+                let c1 = colors[i];
+                return (
+                    c0.0 + (c1.0 - c0.0) * k,
+                    c0.1 + (c1.1 - c0.1) * k,
+                    c0.2 + (c1.2 - c0.2) * k,
+                    c0.3 + (c1.3 - c0.3) * k) as vec4;
+            }
+        }
+        return colors[count - 1];
+    }
+    // 颜色分量转 0~255 的 ImGui 颜色分量
+    func to8(v: real)=> int
+    {
+        let c = clamp01(v) * 255.;
+        return (c < 0.) ? 0 | ((c > 255.) ? 255 | (c + 0.5) as int);
+    }
+    // 替换第 i 项（vec 索引结果不可变，重建表替换）
+    func replace_at(src: vec<float>, i: int, v: float)=> vec<float>
+    {
+        let updated = []mut: vec<float>;
+        for (let mut j = 0; j < src->len; j += 1)
+            updated->add((j == i) ? v | src[j]);
+        return updated;
+    }
+    func replace_color_at(src: vec<vec4>, i: int, v: vec4)=> vec<vec4>
+    {
+        let updated = []mut: vec<vec4>;
+        for (let mut j = 0; j < src->len; j += 1)
+            updated->add((j == i) ? v | src[j]);
+        return updated;
+    }
+
+    using parser = void
+    {
+        public extern func edit(val: Particle::color_gradient, tag: string)=> option<Particle::color_gradient>
+        {
+            let mut times = (val.m_times)->to_vec;
+            let mut colors = (val.m_colors)->to_vec;
+            let mut need_update = false;
+            let col_x = Widgets::editColumnX();
+
+            // 渐变预览条：24 段色带按关键帧插值着色，并推进布局光标
+            let draw_list = GetWindowDrawList();
+            let bar_pos = GetCursorScreenPos();
+            let bar_w = GetContentRegionAvail().0;
+            let bar_h = 12.;
+            for (let mut i = 0; i < 24; i += 1)
+            {
+                let t = i as real / 24.;
+                let c = sample(times, colors, t);
+                let x0 = bar_pos.0 + bar_w * t;
+                let x1 = bar_pos.0 + bar_w * ((i + 1) as real / 24.);
+                do draw_list->AddRectFilled(
+                    (x0, bar_pos.1),
+                    (x1, bar_pos.1 + bar_h),
+                    (to8(c.0), to8(c.1), to8(c.2), to8(c.3)));
+            }
+            do Dummy((0., bar_h + 6.));
+
+            // 关键帧数（至少 1 帧），首行与成员名同行
+            Widgets::beginStepRow("关键帧数", col_x, 72.);
+            match (InputInt(F"##{tag}_count", times->len)->>\n = n < 1 ? 1 | n;)
+            {
+                value(count)?
+                {
+                    if (count != times->len)
+                    {
+                        times->resize(count, 1. as float);
+                        colors->resize(count, (1., 1., 1., 1.) as vec4);
+                        need_update = true;
+                    }
+                }
+                none?;
+            }
+
+            // 每个关键帧两行：时间（0~1）、颜色（RGBA）
+            for (let mut i = 0; i < times->len; i += 1)
+            {
+                Widgets::beginRow(F"时间{i}", col_x, 72.);
+                match (InputFloat(F"##{tag}_t{i}", times[i] as real)->>\t = clamp01(t);)
+                {
+                    value(nt)?
+                    {
+                        times = replace_at(times, i, nt as float);
+                        need_update = true;
+                    }
+                    none?;
+                }
+
+                Widgets::beginRow(F"颜色{i}", col_x, 72.);
+                match (InputFloat4(
+                        F"##{tag}_c{i}",
+                        colors[i][0] as real, colors[i][1] as real,
+                        colors[i][2] as real, colors[i][3] as real)->>\v = v as vec4;)
+                {
+                    value(nc)?
+                    {
+                        colors = replace_color_at(colors, i, nc);
+                        need_update = true;
+                    }
+                    none?;
+                }
+            }
+
+            if (need_update)
+                return option::value(Particle::color_gradient{
+                    m_times = times->to_array,
+                    m_colors = colors->to_array,
+                });
+            return option::none;
+        }
+    }
+}
+// Particle::scalar_curve：粒子标量（如尺寸）随生命周期（0~1）的
+// (时间, 数值) 关键帧曲线。编辑器首行绘制归一化曲线预览，其下
+// “关键帧数”一行；每个关键帧一行“关键帧N”的时间与数值输入。
+// 关键帧应按时间升序排列（运行时按升序采样）。
+namespace Particle::scalar_curve
+{
+    // 按关键帧插值采样（与引擎侧 scalar_curve::sample 一致）
+    func sample(keys: vec<vec2>, t: real)=> real
+    {
+        let count = keys->len;
+        if (count == 0)
+            return 1.;
+        if (count == 1 || t <= keys[0][0] as real)
+            return keys[0][1] as real;
+        if (t >= keys[count - 1][0] as real)
+            return keys[count - 1][1] as real;
+        for (let mut i = 1; i < count; i += 1)
+        {
+            if (t <= keys[i][0] as real)
+            {
+                let k0 = keys[i - 1];
+                let k1 = keys[i];
+                let span = k1[0] as real - k0[0] as real;
+                let k = (span > 0.) ? (t - k0[0] as real) / span | 0.;
+                return k0[1] as real + (k1[1] as real - k0[1] as real) * k;
+            }
+        }
+        return keys[count - 1][1] as real;
+    }
+    // 替换第 i 项（vec 索引结果不可变，重建表替换）
+    func replace_at(src: vec<vec2>, i: int, v: vec2)=> vec<vec2>
+    {
+        let updated = []mut: vec<vec2>;
+        for (let mut j = 0; j < src->len; j += 1)
+            updated->add((j == i) ? v | src[j]);
+        return updated;
+    }
+
+    using parser = void
+    {
+        public extern func edit(val: Particle::scalar_curve, tag: string)=> option<Particle::scalar_curve>
+        {
+            let mut keys = (val.m_keys)->to_vec;
+            let mut need_update = false;
+            let col_x = Widgets::editColumnX();
+
+            // 曲线预览：以最大绝对值为纵轴归一化绘制折线，并推进布局光标
+            let mut vabs_max = 0.001;
+            for (let k : keys)
+            {
+                let kv = k[1] as real;
+                let a = (kv < 0.) ? -kv | kv;
+                if (a > vabs_max)
+                    vabs_max = a;
+            }
+
+            let draw_list = GetWindowDrawList();
+            let plot_pos = GetCursorScreenPos();
+            let plot_w = GetContentRegionAvail().0;
+            let plot_h = 22.;
+            do draw_list->AddRect(
+                (plot_pos.0, plot_pos.1),
+                (plot_pos.0 + plot_w, plot_pos.1 + plot_h),
+                (90, 90, 90, 255), 1.);
+            do draw_list->AddLine(
+                (plot_pos.0, plot_pos.1 + plot_h * 0.5),
+                (plot_pos.0 + plot_w, plot_pos.1 + plot_h * 0.5),
+                (70, 70, 70, 255), 1.);
+            for (let mut i = 0; i < 28; i += 1)
+            {
+                let t0 = i as real / 28.;
+                let t1 = (i + 1) as real / 28.;
+                let v0 = sample(keys, t0) / vabs_max * 0.5 + 0.5;
+                let v1 = sample(keys, t1) / vabs_max * 0.5 + 0.5;
+                do draw_list->AddLine(
+                    (plot_pos.0 + plot_w * t0, plot_pos.1 + plot_h * (1. - v0)),
+                    (plot_pos.0 + plot_w * t1, plot_pos.1 + plot_h * (1. - v1)),
+                    (240, 200, 90, 255), 2.);
+            }
+            do Dummy((0., plot_h + 6.));
+
+            // 关键帧数（至少 1 帧），首行与成员名同行
+            Widgets::beginStepRow("关键帧数", col_x, 72.);
+            match (InputInt(F"##{tag}_count", keys->len)->>\n = n < 1 ? 1 | n;)
+            {
+                value(count)?
+                {
+                    if (count != keys->len)
+                    {
+                        keys->resize(count, (1., 1.) as vec2);
+                        need_update = true;
+                    }
+                }
+                none?;
+            }
+
+            // 每个关键帧一行：时间与数值
+            for (let mut i = 0; i < keys->len; i += 1)
+            {
+                Widgets::beginRow(F"关键帧{i}", col_x, 72.);
+                match (InputFloat2(
+                        F"##{tag}_k{i}", keys[i][0] as real, keys[i][1] as real)->>\v = v as vec2;)
+                {
+                    value(nk)?
+                    {
+                        let t = (nk.0 < 0.) ? 0. | nk.0;
+                        keys = replace_at(keys, i, (t, nk.1) as vec2);
+                        need_update = true;
+                    }
+                    none?;
+                }
+            }
+
+            if (need_update)
+                return option::value(Particle::scalar_curve{
+                    m_keys = keys->to_array,
+                });
+            return option::none;
+        }
+    }
+}
 // Animation::FrameAnimation::animation_list：帧动画引用表（运行时结构见
 // jeecs.hpp 的 Animation::FrameAnimation）。每个条目引用一个 .je4animation
 // 文件（m_path 为 @/ 运行时相对路径），并可指定载入后自动播放的动作与循环。

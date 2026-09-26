@@ -1249,8 +1249,19 @@ namespace jeecs::graphic::api::metal
     {
         // TODO;
     }
-    void update_vertex(je_GraphicImplContext, jegl_vertex*)
+    void update_vertex(je_GraphicImplContext, jegl_vertex* resource)
     {
+        metal_vertex* vertex =
+            static_cast<metal_vertex*>(resource->m_handle.m_ptr);
+
+        // Shared 存储模式：整体重写顶点数据（索引缓冲内容不变），
+        // 并同步激活索引数量
+        memcpy(
+            vertex->m_vertex_buffer->contents(),
+            resource->m_vertexs,
+            resource->m_vertex_length);
+
+        vertex->m_index_count = resource->m_index_count;
     }
     void update_framebuffer(je_GraphicImplContext, jegl_frame_buffer*)
     {
