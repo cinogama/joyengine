@@ -1143,10 +1143,13 @@ namespace jeecs::graphic::api::metal
             vertex->m_vertex_length,
             MTL::ResourceStorageModeShared);
 
-        // Create index buffer
+        // Create index buffer: sized by allocation capacity (m_index_count
+        // may have been shrunk to the active count by
+        // jegl_update_vertex_buffer; the draw count is kept separately in
+        // metal_vertex::m_index_count)
         MTL::Buffer* index_buffer = metal_context->m_metal_device->newBuffer(
             vertex->m_indices,
-            vertex->m_index_count * sizeof(uint32_t),
+            vertex->m_index_capacity * sizeof(uint32_t),
             MTL::ResourceStorageModeShared);
 
         // Map primitive types

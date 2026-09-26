@@ -1952,6 +1952,11 @@ void jegl_update_vertex_buffer(
 
     if (active_index_count > vertex->m_index_capacity)
         active_index_count = vertex->m_index_capacity;
+    // 激活数量保持至少 1：0 长度的绘制调用与 0 字节的缓冲区分配在
+    // 部分后端（D3D11/Vulkan/Metal）上非法；1 个索引的 TRIANGLES
+    // 绘制不产生任何图元，视觉上等价于不绘制
+    if (active_index_count == 0)
+        active_index_count = 1;
 
     if (vertex_data != nullptr && vertex_length != 0)
     {

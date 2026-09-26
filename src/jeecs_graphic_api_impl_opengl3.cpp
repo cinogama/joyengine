@@ -1282,8 +1282,11 @@ namespace jeecs::graphic::api::gl3
             GL_STATIC_DRAW);
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+        // 索引缓冲按分配容量上传（m_index_count 可能被
+        // jegl_update_vertex_buffer 收缩为激活数量，绘制数量另存于
+        // m_pointcount）
         glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-            resource->m_index_count * sizeof(uint32_t),
+            resource->m_index_capacity * sizeof(uint32_t),
             resource->m_indices,
             GL_STATIC_DRAW);
 

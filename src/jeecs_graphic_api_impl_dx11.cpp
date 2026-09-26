@@ -1546,9 +1546,12 @@ namespace jeecs::graphic::api::dx11
         // 新建索引缓冲区
         static_assert(sizeof(uint32_t) == sizeof(UINT));
 
+        // 按分配容量创建（m_index_count 可能已被 jegl_update_vertex_buffer
+        // 收缩为激活数量——D3D11 不允许 ByteWidth 为 0；绘制数量另存于
+        // vertex->m_count）
         D3D11_BUFFER_DESC index_buffer_describe;
         index_buffer_describe.ByteWidth =
-            (UINT)resource->m_index_count * sizeof(uint32_t);
+            (UINT)resource->m_index_capacity * sizeof(uint32_t);
         index_buffer_describe.Usage = D3D11_USAGE_IMMUTABLE;
         index_buffer_describe.BindFlags = D3D11_BIND_INDEX_BUFFER;
         index_buffer_describe.CPUAccessFlags = 0;

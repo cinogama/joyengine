@@ -2793,9 +2793,11 @@ namespace jeecs::graphic::api::vk120
                 _vk_logic_device,
                 vertex->m_vk_vertex_buffer_memory);
 
-            // 创建索引缓冲区
+            // 创建索引缓冲区：按分配容量上传（m_index_count 可能已被
+            // jegl_update_vertex_buffer 收缩为激活数量，绘制数量另存于
+            // m_vertex_point_count）
             alloc_vk_device_buffer_memory(
-                resource->m_index_count * sizeof(uint32_t),
+                resource->m_index_capacity * sizeof(uint32_t),
                 VkBufferUsageFlagBits::VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
                 VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                 VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -2807,13 +2809,13 @@ namespace jeecs::graphic::api::vk120
                 _vk_logic_device,
                 vertex->m_vk_index_buffer_memory,
                 0,
-                resource->m_index_count * sizeof(uint32_t),
+                resource->m_index_capacity * sizeof(uint32_t),
                 0,
                 &index_buffer_memory_ptr);
             memcpy(
                 index_buffer_memory_ptr,
                 resource->m_indices,
-                resource->m_index_count * sizeof(uint32_t));
+                resource->m_index_capacity * sizeof(uint32_t));
             vkUnmapMemory(
                 _vk_logic_device,
                 vertex->m_vk_index_buffer_memory);
