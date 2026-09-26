@@ -102,7 +102,9 @@ namespace JEEditor::Editor::EntityClipboard
                         ->connect(["Renderer::Rendqueue"])
                         ->connect(PARTICLE_EMITTER_COMPONENTS),
                     // 引擎内置着色器（! 前缀指向可执行文件目录），无需
-                    // 项目资源即可工作；需要加色混合时换用 ParticleAdd.shader
+                    // 项目资源即可工作；需要加色混合时换用 ParticleAdd.shader，
+                    // 延迟渲染管线（Light2D::CameraPostPass 相机）下换用
+                    // Forward2DParticle.shader / Forward2DParticleSelfGlowing.shader
                     default_shader = option::value(
                         "!/builtin/shader/ParticleBlend.shader"),
                 },
