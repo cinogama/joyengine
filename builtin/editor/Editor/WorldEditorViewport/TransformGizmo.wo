@@ -18,6 +18,7 @@ import pkg::try;
 
 import builtin::editor::Editor::Action::ModifyComponentMember;
 
+import CameraControl;
 import Definition;
 import GizmoMath;
 import EntityPicking;
@@ -43,7 +44,9 @@ namespace JEEditor::Editor::WorldEditorViewport
         };
     }
 
-    // 检测当前鼠标悬停的手柄（屏幕空间距离判定），返回手柄编号
+    // 检测当前鼠标悬停的手柄（屏幕空间距离判定），返回手柄编号。
+    // 2D（正交）模式下与视线平行的轴向手柄、侧视成线段的旋转环不参与
+    // 命中（与 GizmoDrawing 的绘制剔除同口径）
     protected func pickGizmoHandle(
         self: WorldEditorViewport,
         view_proj: mat4,
@@ -52,7 +55,8 @@ namespace JEEditor::Editor::WorldEditorViewport
         gizmo_size: real,
         mouse: vec2,
         rect_min: vec2,
-        rect_size: vec2)=> int
+        rect_size: vec2,
+        is_2d: bool)=> int
     {
         let center_screen = gizmoWorldToScreen(view_proj, origin, rect_min, rect_size);
 
@@ -70,6 +74,11 @@ namespace JEEditor::Editor::WorldEditorViewport
             let samples = 32;
             for (let mut axis = 0; axis < 3; axis += 1)
             {
+                // 2D 模式下侧视成线段的环（绕 X/Y）不参与命中，仅保留
+                // 屏幕内旋转的绕 Z 环
+                if (is_2d && gizmoRingEdgeOnIn2D(
+                        orientation * gizmoUnitAxis(axis)))
+                    continue;
                 let ring_normal = orientation * gizmoUnitAxis(axis);
                 let (ba, bb) = gizmoPlaneBasis(ring_normal);
                 let mut prev = gizmoWorldToScreen(
@@ -98,6 +107,11 @@ namespace JEEditor::Editor::WorldEditorViewport
                 | gizmo_size;
             for (let mut axis = 0; axis < 3; axis += 1)
             {
+                // 2D 模式下与视线平行的轴（投影成一点、轴向拖拽无解）
+                // 不参与命中
+                if (is_2d && gizmoAxisHiddenIn2D(
+                        orientation * gizmoUnitAxis(axis)))
+                    continue;
                 let tip = origin + (orientation * gizmoUnitAxis(axis)) * axis_len;
                 let tip_screen = gizmoWorldToScreen(view_proj, tip, rect_min, rect_size);
                 let d = gizmoScreenDistToSegment(mouse, center_screen, tip_screen);
@@ -174,6 +188,9 @@ namespace JEEditor::Editor::WorldEditorViewport
             let cam_forward = camera_trans->get_global_rot * ((0., 0., 1.) as vec3);
             let view_proj = camera_proj->get_view_proj_mat;
 
+            // 2D（正交）模式：与视线平行的游标部件不绘制、不参与命中
+            let is_2d = isDebugCamera2DMode(camera_entity);
+
             let gizmo_pos = trans->get_global_pos;
             let gizmo_rot = trans->get_global_rot;
 
@@ -235,7 +252,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             if (hoverable)
                 self.m_gizmo_hover_handle = self->pickGizmoHandle(
                     view_proj, origin, orientation,
-                    self.m_gizmo_draw_size, mouse, rmin, rsize);
+                    self.m_gizmo_draw_size, mouse, rmin, rsize, is_2d);
 
             // 碰撞体/光源形状/粒子发射器编辑手柄优先：其被悬停或拖拽中
             // 时变换游标让位（不响应悬停高亮与左键拖拽；游标本帧仍照常

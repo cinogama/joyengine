@@ -29,6 +29,23 @@ namespace JEEditor::Editor::WorldEditorViewport
         return (1., 0., 0.) as vec3;
     }
 
+    // 2D（正交）模式下世界轴是否与视线（世界 ±Z）近平行（8 度内）：
+    // 该轴上的手柄投影成一点、拖拽的轴线最近点参数亦无解（轴线与鼠标
+    // 射线平行），绘制与悬停检测应一并跳过，避免在屏幕中心互相遮挡。
+    // world_axis 须为单位向量
+    protected func gizmoAxisHiddenIn2D(world_axis: vec3)=> bool
+    {
+        return mathf::abs(world_axis[2]) > 0.99;
+    }
+
+    // 2D（正交）模式下旋转环是否侧视成线段（环轴垂直视线，6 度内）：
+    // 环投影为过环心的一条线段，与场景内其他 gizmo 互相穿插且难以分辨，
+    // 绘制与悬停检测应一并跳过。ring_normal 须为单位向量
+    protected func gizmoRingEdgeOnIn2D(ring_normal: vec3)=> bool
+    {
+        return mathf::abs(ring_normal[2]) < 0.1;
+    }
+
     protected func gizmoMat4MulPoint(m: mat4, p: vec3)=> vec3
     {
         let h = m * ((p[0], p[1], p[2], 1.) as vec4);

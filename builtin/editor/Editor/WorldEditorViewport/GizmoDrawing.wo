@@ -3,7 +3,9 @@
 // 2D 光源实体图标、粒子发射器实体图标、变换游标本体、2D 物理碰撞体
 // 线框与编辑手柄、2D 光源形状（Range 同心环 / BlockShadow 遮挡多边形）
 // 线框与编辑手柄、粒子发射器（发射形状 / 方向箭头 / 散布角环）线框
-// 与编辑手柄的渲染，走视口自有的 rendchain 分支。
+// 与编辑手柄的渲染，走视口自有的 rendchain 分支。2D（正交）模式下
+// 游标与视线平行的轴/环、粒子发射器与视线平行的形状手柄不绘制
+//（剔除口径与各 update*Gizmo 的悬停检测一致，见 GizmoMath.wo）。
 
 import pkg::std;
 
@@ -50,26 +52,26 @@ namespace JEEditor::Editor::WorldEditorViewport
         do try!{
             try! camera_entity = debug_camera;
             try! camera_projection = camera_entity->towoo::get_component:<Camera::Projection>();
-
+            
             // 获取目标纹理缓冲区，如果没有就不绘制 gizmo 了。
             try! fb = self.m_editor_walk_camera_frame_buffer;
-
+            
             // GIZMO 的绘制层级，需要一个足够大的数字以确保 GIZMO 总是最后绘制
             let GIZMO_REND_QUEUE = 1000000;
-
+            
             // 开始新的一帧~
             self.m_gizmo_draw_branch->new_frame(GIZMO_REND_QUEUE);
-
+            
             let gizmo_rend_chain = self.m_gizmo_draw_branch->new_chain(
                 option::value(fb), 0, 0, 0, 0);
-
+                
             // 绑定默认 ubo
             gizmo_rend_chain->bind_uniform_buffer(
                 camera_projection->get_default_uniform_buffer);
-
+                
             // 世界坐标网格铺在最底层，先于其余 gizmo 绘制
             drawWorldGrid(camera_entity, camera_projection, gizmo_rend_chain);
-
+            
             func drawGizmo(
                 pos: vec3,
                 rot: quat,
@@ -81,11 +83,11 @@ namespace JEEditor::Editor::WorldEditorViewport
                 do try!{
                     try! shader_instance = shader;
                     try! shape_instance = shape;
-
+                    
                     let model = mat4::transform(pos, rot, scale);
                     let model_view = camera_projection->get_view_mat * model;
                     let model_view_proj = camera_projection->get_view_proj_mat * model;
-
+                    
                     let mut texture_group = option::none: option<texture_group>;
                     match (texture)
                     {
@@ -94,16 +96,16 @@ namespace JEEditor::Editor::WorldEditorViewport
                         {
                             let group = gizmo_rend_chain->allocate_texture_group;
                             gizmo_rend_chain->bind_texture(group, 0, texture_instance);
-
+                            
                             texture_group = option::value(group);
                         }
                     }
-
+                    
                     let draw_action = gizmo_rend_chain->draw(shader_instance, shape_instance, texture_group);
                     draw_action->set_uniform_mat4x4(shader_instance, "JE_M", model as raw mat4);
                     draw_action->set_uniform_mat4x4(shader_instance, "JE_MV", model_view as raw mat4);
                     draw_action->set_uniform_mat4x4(shader_instance, "JE_MVP", model_view_proj as raw mat4);
-
+                    
                     match (texture)
                     {
                         none?;
@@ -116,7 +118,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                     return_value!;
                 };
             }
-
+            
             // 绘制实体图标（摄像机/2D 光源）：公告板四边形采样图标纹理，
             // 染色（悬停/选中高亮）通过 JE_COLOR 提供；图标统一半透明
             // 渲染，JE_COLOR 的 alpha 固定为 0.5（悬停/选中只改 rgb）
@@ -130,15 +132,15 @@ namespace JEEditor::Editor::WorldEditorViewport
                 do try!{
                     try! shader_instance = GIZMO_ICON;
                     try! shape_instance = DEFAULT_SQUARE_SHAPE;
-
+                    
                     let scale = (icon_size, icon_size, icon_size) as vec3;
                     let model = mat4::transform(pos, rot, scale);
                     let model_view = camera_projection->get_view_mat * model;
                     let model_view_proj = camera_projection->get_view_proj_mat * model;
-
+                    
                     let texture_group = gizmo_rend_chain->allocate_texture_group;
                     gizmo_rend_chain->bind_texture(texture_group, 0, icon);
-
+                    
                     let draw_action = gizmo_rend_chain->draw(
                         shader_instance, shape_instance, option::value(texture_group));
                     draw_action->set_uniform_mat4x4(shader_instance, "JE_M", model as raw mat4);
@@ -152,25 +154,20 @@ namespace JEEditor::Editor::WorldEditorViewport
                     return_value!;
                 };
             }
-
+            
             // 绘制被选中的实体
             do try!{
                 try! selected_euid = self.m_selected_entity_id;
                 try! selected_entity = self->findEntityByEuid(selected_euid);
-
-                // 摄像机实体的选中高亮由其 gizmo（图标染色 + 视锥体高亮，
-                // 见下方摄像机实体 gizmo 段）承担，不再叠加闪烁四边形
-                if (isCameraEntity(selected_entity))
+                
+                if (isCameraEntity(selected_entity)
+                    || isLight2DEntity(selected_entity)
+                    || isParticleEmitterEntity(selected_entity))
                     return_value!;
-
-                // 2D 光源实体同理（见下方 2D 光源实体 gizmo 段），
-                // 选中高亮由图标染色承担，不绘制闪烁四边形
-                if (isLight2DEntity(selected_entity))
-                    return_value!;
-
+                    
                 let trans = selected_entity->towoo::get_component:<Transform::Translation>->unwrap;
                 let texture = selected_entity->towoo::get_component:<Renderer::Textures>;
-
+                
                 drawGizmo(
                     trans->get_global_pos,
                     trans->get_global_rot,
@@ -186,10 +183,10 @@ namespace JEEditor::Editor::WorldEditorViewport
                                     ;
                                 ;
                             -> or((WHITE, (1., 1.) as vec2, (0.,0.) as vec2)),
-                    DEFAULT_SQUARE_SHAPE);
+                        DEFAULT_SQUARE_SHAPE);
                 return_value!;
             };
-
+            
             // 绘制变换游标（纯色，颜色由每次绘制的 JE_COLOR 提供）
             func drawSolid(
                 pos: vec3,
@@ -201,11 +198,11 @@ namespace JEEditor::Editor::WorldEditorViewport
                 do try!{
                     try! shape_instance = shape;
                     try! shader_instance = GIZMO_SOLID;
-
+                    
                     let model = mat4::transform(pos, rot, scale);
                     let model_view = camera_projection->get_view_mat * model;
                     let model_view_proj = camera_projection->get_view_proj_mat * model;
-
+                    
                     let draw_action = gizmo_rend_chain->draw(
                         shader_instance, shape_instance, option::none);
                     draw_action->set_uniform_mat4x4(shader_instance, "JE_M", model as raw mat4);
@@ -215,7 +212,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                     return_value!;
                 };
             }
-
+            
             // 绘制摄像机实体 gizmo（视锥体线框 + 图标）：
             // 含 Translation 与 Projection 且不带 Invisible 的实体视为摄像机
             // 实体（编辑器调试摄像机带 Invisible，不在此列）。
@@ -230,7 +227,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 let debug_cam_rot = debug_camera_trans->get_global_rot;
                 let debug_cam_forward =
                     debug_cam_rot * ((0., 0., 1.) as vec3);
-
+                    
                 // 视锥体棱线的眼空间裁剪参数（见 gizmoClipEyeSegmentToScreen）：
                 // 透视为 tan 半 FOV（乘纵横比得横向），正交为可视半宽高
                 let debug_znear = camera_projection.znear->get;
@@ -240,13 +237,13 @@ namespace JEEditor::Editor::WorldEditorViewport
                 if (debug_is_persp)
                     clip_sy = mathf::tan(
                         camera_entity->towoo::get_component:<Camera::PerspectiveProjection>->unwrap.angle->get
-                        * 0.5 * mathf::DEG2RAD);
+                            * 0.5 * mathf::DEG2RAD);
                 else
                     // 正交纵向可视半高为 ORTHO_PROJECTION_RATIO（5.0）/ scale
                     clip_sy = 5. / camera_entity
                         ->towoo::get_component:<Camera::OrthoProjection>->unwrap.scale->get;
                 let clip_sx = clip_sy * fb_rsize[0] / fb_rsize[1];
-
+                
                 // 单条视锥体棱：先在眼空间对调试摄像机做屏幕边界裁剪
                 //（远平面不裁，超出 zfar 的部分由 GizmoSolid 钳制 z 绘制），
                 // 再把单位 X 轴线段旋到 ab 方向绘制
@@ -262,7 +259,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                     let (ca, cb) = clipped->unwrap;
                     let wa = debug_cam_pos + debug_cam_rot * ca;
                     let wb = debug_cam_pos + debug_cam_rot * cb;
-
+                    
                     let ab = wb - wa;
                     let len = ab->length;
                     if (len < 0.0001)
@@ -271,7 +268,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                         wa, gizmoEdgeRotation(ab), (len, len, len) as vec3,
                         GIZMO_LINE_X, color);
                 }
-
+                
                 for (let e : self.m_camera_entity_selector)
                 {
                     do try!{
@@ -280,10 +277,10 @@ namespace JEEditor::Editor::WorldEditorViewport
                         try! cam_proj =
                             e->towoo::get_component:<Camera::Projection>();
                         try! euid = e->internal::get_entity_uid;
-
+                        
                         let pos = cam_trans->get_global_pos;
                         let rot = cam_trans->get_global_rot;
-
+                        
                         let mut is_selected = false;
                         match (self.m_selected_entity_id)
                         {
@@ -298,7 +295,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                             value(hovered)?
                                 is_hover = hovered == euid;
                         }
-
+                        
                         let mut frustum_color = CAMERA_GIZMO_COLOR;
                         if (is_hover)
                             frustum_color = CAMERA_GIZMO_COLOR_HOVER;
@@ -309,7 +306,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                             icon_tint = (1., 1., 0.6, 1.);
                         if (is_selected)
                             icon_tint = (1., 1., 0.25, 1.);
-
+                            
                         // ---- 视锥体线框 ----
                         // 用该摄像机自己的逆投影矩阵反变换 NDC 角点
                         //（近/远平面 z 分别为 0/1），宽高比随之与其渲染
@@ -334,7 +331,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                             drawFrustumEdge(far_rect[i], far_rect[j], frustum_color);
                             drawFrustumEdge(near_rect[i], far_rect[i], frustum_color);
                         }
-
+                        
                         // ---- 图标 ----
                         // 绘制在 Translation 位置、面向调试摄像机（公告板），
                         // 大小按屏幕像素恒定（与变换游标同一套估算）；
@@ -363,7 +360,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 }
                 return_value!;
             };
-
+            
             // 绘制 2D 光源与粒子发射器实体图标 gizmo（仅图标，无附加线框）：
             // 点光源（Translation+Point/Range 且不带 Invisible）绘制
             // gizmo_point_light2d，平行光源（Translation+Parallel 且不带
@@ -384,7 +381,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 let debug_cam_pos = debug_camera_trans->get_global_pos;
                 let debug_cam_forward =
                     debug_camera_trans->get_global_rot * ((0., 0., 1.) as vec3);
-
+                    
                 // follow_rotation 为真时（平行光源）图标随实体最终旋转在
                 // 公告板面内自转，箭头指向实际照射方向；点/范围光源全向
                 // 发光，图标不随旋转
@@ -398,15 +395,15 @@ namespace JEEditor::Editor::WorldEditorViewport
                             e->towoo::get_component:<Transform::Translation>();
                         try! euid = e->internal::get_entity_uid;
                         try! icon_instance = icon;
-
+                        
                         let pos = trans->get_global_pos;
-
+                        
                         let billboard_rot = debug_camera_trans->get_global_rot;
                         let mut icon_rot = billboard_rot;
                         if (follow_rotation)
                             icon_rot = billboard_rot * gizmoDirectionalIconSpin(
                                 trans->get_global_rot, billboard_rot);
-
+                                
                         let mut is_selected = false;
                         match (self.m_selected_entity_id)
                         {
@@ -421,7 +418,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                             value(hovered)?
                                 is_hover = hovered == euid;
                         }
-
+                        
                         // 默认状态下图标 rgb 跟随光源自身的颜色
                         //（Renderer::Color 的 color），没有该组件的
                         // 光源实体回退白色；悬停/选中仍用各自高亮色
@@ -439,7 +436,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                             icon_tint = (1., 1., 0.6, 1.);
                         if (is_selected)
                             icon_tint = (1., 1., 0.25, 1.);
-
+                            
                         // 位于调试摄像机身后的光源不绘制图标（避免镜像投影）
                         if ((pos - debug_cam_pos)->dot(debug_cam_forward) > 0.)
                         {
@@ -456,7 +453,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                         return_value!;
                     };
                 }
-
+                
                 // 粒子发射器图标：绘制规则与光源图标一致（Translation
                 // 位置、面向调试摄像机的公告板、屏幕像素恒定大小、身后
                 // 不绘制），默认染色取发射器自身初始颜色区间的中点
@@ -471,9 +468,9 @@ namespace JEEditor::Editor::WorldEditorViewport
                             e->towoo::get_component:<Particle::Emitter>();
                         try! euid = e->internal::get_entity_uid;
                         try! icon_instance = icon;
-
+                        
                         let pos = trans->get_global_pos;
-
+                        
                         let mut is_selected = false;
                         match (self.m_selected_entity_id)
                         {
@@ -488,7 +485,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                             value(hovered)?
                                 is_hover = hovered == euid;
                         }
-
+                        
                         let cmin = emitter.color_min->get;
                         let cmax = emitter.color_max->get;
                         let mut icon_tint = (
@@ -500,7 +497,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                             icon_tint = (1., 1., 0.6, 1.);
                         if (is_selected)
                             icon_tint = (1., 1., 0.25, 1.);
-
+                            
                         // 位于调试摄像机身后的发射器不绘制图标（避免镜像投影）
                         if ((pos - debug_cam_pos)->dot(debug_cam_forward) > 0.)
                         {
@@ -517,7 +514,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                         return_value!;
                     };
                 }
-
+                
                 for (let e : self.m_point_light2d_entity_selector)
                 {
                     drawLight2DIcon(e, Icons::GIZMO_POINT_LIGHT2D, false);
@@ -536,9 +533,12 @@ namespace JEEditor::Editor::WorldEditorViewport
                 }
                 return_value!;
             };
-
+            
             // 绘制变换游标（操作手柄）；碰撞体编辑手柄在本块之后提交，
             // 因此手柄始终绘制在游标上层（见下方碰撞体块注释）。
+            // 2D（正交）模式下跳过与视线平行的部件：轴向手柄投影成一点、
+            // 锥体叠在中央手柄上，旋转环侧视成过心的线段，只会与中央
+            // 手柄及场景内其他 gizmo 互相遮挡（命中剔除见 pickGizmoHandle）
             if (self.m_gizmo_draw_visible)
             {
                 let origin = self.m_gizmo_draw_origin;
@@ -546,21 +546,32 @@ namespace JEEditor::Editor::WorldEditorViewport
                 let active_handle = self.m_gizmo_dragging
                     ? self.m_gizmo_drag_handle
                     | self.m_gizmo_hover_handle;
-
+                let is_2d = isDebugCamera2DMode(camera_entity);
+                
                 let axis_colors = [
                     (active_handle == GIZMO_HANDLE_X) ? GIZMO_COLOR_HOVER | GIZMO_COLOR_X,
                     (active_handle == GIZMO_HANDLE_Y) ? GIZMO_COLOR_HOVER | GIZMO_COLOR_Y,
                     (active_handle == GIZMO_HANDLE_Z) ? GIZMO_COLOR_HOVER | GIZMO_COLOR_Z,
                 ];
-
+                
                 if (self.m_gizmo_mode == GizmoMode::ROTATE)
                 {
                     let ring_size = self.m_gizmo_draw_size * GIZMO_RING_RADIUS_RATIO;
                     let ring_scale = (ring_size, ring_size, ring_size) as vec3;
-
-                    drawSolid(origin, orientation, ring_scale, GIZMO_RING_AROUND_X, axis_colors[0]);
-                    drawSolid(origin, orientation, ring_scale, GIZMO_RING_AROUND_Y, axis_colors[1]);
-                    drawSolid(origin, orientation, ring_scale, GIZMO_RING_AROUND_Z, axis_colors[2]);
+                    
+                    let rings = [
+                        GIZMO_RING_AROUND_X,
+                        GIZMO_RING_AROUND_Y,
+                        GIZMO_RING_AROUND_Z];
+                    for (let mut axis = 0; axis < 3; axis += 1)
+                    {
+                        // 2D 模式仅保留屏幕内旋转的绕 Z 环
+                        if (is_2d && gizmoRingEdgeOnIn2D(
+                                orientation * gizmoUnitAxis(axis)))
+                            continue;
+                        drawSolid(origin, orientation, ring_scale,
+                            rings[axis], axis_colors[axis]);
+                    }
                 }
                 else
                 {
@@ -568,7 +579,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                         ? self.m_gizmo_draw_size * GIZMO_SCALE_AXIS_RATIO
                         | self.m_gizmo_draw_size;
                     let axis_scale = (axis_len, axis_len, axis_len) as vec3;
-
+                    
                     let lines = [GIZMO_LINE_X, GIZMO_LINE_Y, GIZMO_LINE_Z];
                     // 平移用箭头锥，缩放用方块手柄
                     let mut tips = [GIZMO_CONE_X, GIZMO_CONE_Y, GIZMO_CONE_Z];
@@ -576,10 +587,14 @@ namespace JEEditor::Editor::WorldEditorViewport
                         tips = [GIZMO_BOX_X, GIZMO_BOX_Y, GIZMO_BOX_Z];
                     for (let mut axis = 0; axis < 3; axis += 1)
                     {
+                        // 2D 模式跳过与视线平行的轴
+                        if (is_2d && gizmoAxisHiddenIn2D(
+                                orientation * gizmoUnitAxis(axis)))
+                            continue;
                         drawSolid(origin, orientation, axis_scale, lines[axis], axis_colors[axis]);
                         drawSolid(origin, orientation, axis_scale, tips[axis], axis_colors[axis]);
                     }
-
+                    
                     // 中央手柄：屏幕平面移动 / 整体缩放
                     let center = self.m_gizmo_draw_center_size;
                     drawSolid(
@@ -590,7 +605,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                         | GIZMO_COLOR_CENTER);
                 }
             }
-
+            
             // 绘制 2D 物理碰撞体实体 gizmo（线框 + 编辑手柄）：
             // 所有碰撞体实体恒绘制线框（常态绿色，选中黄色与游标高亮
             // 一致），并为选中实体绘制可拖拽的编辑手柄（无需模式开关）。
@@ -605,7 +620,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 let fb_rsize = (fbw as real, fbh as real) as vec2;
                 let debug_view_proj = camera_projection->get_view_proj_mat;
                 let billboard_rot = debug_camera_trans->get_global_rot;
-
+                
                 // 单条碰撞体边：单位 X 轴线段旋到 ab 方向
                 func drawColliderEdge(
                     a: vec3, b: vec3, color: (real, real, real, real))=> void
@@ -618,7 +633,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                         a, gizmoEdgeRotation(ab), (len, len, len) as vec3,
                         GIZMO_LINE_X, color);
                 }
-
+                
                 // 手柄方块：面向调试摄像机、屏幕像素恒定大小，激活时染黄
                 func drawColliderHandle(
                     pos: vec3, active: bool, color: (real, real, real, real))=> void
@@ -632,13 +647,13 @@ namespace JEEditor::Editor::WorldEditorViewport
                         DEFAULT_SQUARE_SHAPE,
                         active ? GIZMO_COLOR_HOVER | color);
                 }
-
+                
                 for (let e : self.m_physics2d_body_entity_selector)
                 {
                     do try!{
                         try! euid = e->internal::get_entity_uid;
                         try! outline = getColliderOutline(e);
-
+                        
                         let mut is_selected = false;
                         match (self.m_selected_entity_id)
                         {
@@ -646,21 +661,21 @@ namespace JEEditor::Editor::WorldEditorViewport
                             value(selected)?
                                 is_selected = selected == euid;
                         }
-
+                        
                         let color = is_selected
                             ? COLLIDER_GIZMO_COLOR_SELECTED
                             | COLLIDER_GIZMO_COLOR;
                         for (let mut i = 0; i < outline->len; i += 1)
                             drawColliderEdge(
                                 outline[i], outline[(i + 1) % outline->len], color);
-
+                                
                         // 为选中实体绘制编辑手柄
                         if (is_selected)
                         {
                             let active_handle = self.m_collider_dragging
                                 ? self.m_collider_drag_handle
                                 | self.m_collider_hover_handle;
-
+                                
                             match (getColliderHandles(e))
                             {
                                 none?;
@@ -673,7 +688,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                                             COLLIDER_HANDLE_COLOR);
                                 }
                             }
-
+                            
                             // 中心把手（Offset::Position）：拖拽改变碰撞体中心
                             match (getColliderOffsetPositionHandle(e))
                             {
@@ -685,7 +700,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                                             == COLLIDER_HANDLE_OFFSET_POSITION,
                                         COLLIDER_OFFSET_HANDLE_COLOR);
                             }
-
+                            
                             // 旋转环与环上把手（Offset::Rotation）：
                             // 拖拽旋转碰撞体，环随框架 +X 方向的把手指示角度
                             match (getColliderOffsetRotationGizmo(e))
@@ -715,7 +730,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 }
                 return_value!;
             };
-
+            
             // 绘制 2D 光源形状编辑 gizmo（仅选中实体）：
             // Light2D::Range 的多层同心环线框（环色亮度随该环强度调制，
             // 各环按闭合环绘制）与 Light2D::BlockShadow 的多边形线框
@@ -730,7 +745,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 let fb_rsize = (fbw as real, fbh as real) as vec2;
                 let debug_view_proj = camera_projection->get_view_proj_mat;
                 let billboard_rot = debug_camera_trans->get_global_rot;
-
+                
                 // 单条形状边：单位 X 轴线段旋到 ab 方向（同碰撞体边）
                 func drawLightEdge(
                     a: vec3, b: vec3, color: (real, real, real, real))=> void
@@ -743,7 +758,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                         a, gizmoEdgeRotation(ab), (len, len, len) as vec3,
                         GIZMO_LINE_X, color);
                 }
-
+                
                 // 手柄方块：面向调试摄像机、屏幕像素恒定大小，激活时染黄
                 func drawLightHandle(pos: vec3, active: bool)=> void
                 {
@@ -756,7 +771,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                         DEFAULT_SQUARE_SHAPE,
                         active ? GIZMO_COLOR_HOVER | COLLIDER_HANDLE_COLOR);
                 }
-
+                
                 do try!{
                     try! selected_euid = self.m_selected_entity_id;
                     try! selected_entity = self->findEntityByEuid(selected_euid);
@@ -764,11 +779,11 @@ namespace JEEditor::Editor::WorldEditorViewport
                     let kind = outlines_info.0;
                     let rings = outlines_info.1;
                     let strengths = outlines_info.2;
-
+                    
                     let base_color = (kind == LightShapeKind::RANGE)
                         ? LIGHT2D_RANGE_GIZMO_COLOR
                         | LIGHT2D_BLOCK_GIZMO_COLOR;
-
+                        
                     for (let mut r = 0; r < rings->len; r += 1)
                     {
                         let ring = rings[r];
@@ -789,7 +804,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                         if (kind == LightShapeKind::RANGE && ring->len > 2)
                             drawLightEdge(ring[ring->len - 1], ring[0], color);
                     }
-
+                    
                     // 为选中实体绘制顶点手柄
                     match (getLightShapeHandles(selected_entity))
                     {
@@ -808,14 +823,16 @@ namespace JEEditor::Editor::WorldEditorViewport
                 };
                 return_value!;
             };
-
+            
             // 绘制粒子发射器编辑 gizmo（仅选中实体）：
             // 发射形状线框（球=三向大圆 / 圆=XY 平面圆 / 盒=六面边环）、
             // 主发射方向箭头（轴线段 + 箭头锥，尖端为方向手柄）与散布
             // 角环（过箭头尖端、垂直主方向，半径 = 箭头长 * tan(半散布
             // 角)），及可拖拽手柄（形状手柄 / 方向手柄 / 散布把手）。
             // 线段与手柄的绘制方式同碰撞体/光源形状；本块在其后提交，
-            // 绘制在最上层。
+            // 绘制在最上层。2D（正交）模式下与视线平行的形状手柄投影成
+            // 一点且无法拖拽，不绘制（与 updateParticleGizmo 的悬停剔除
+            // 同口径）。
             do try!{
                 try! debug_camera_trans =
                     camera_entity->towoo::get_component:<Transform::Translation>();
@@ -823,7 +840,8 @@ namespace JEEditor::Editor::WorldEditorViewport
                 let fb_rsize = (fbw as real, fbh as real) as vec2;
                 let debug_view_proj = camera_projection->get_view_proj_mat;
                 let billboard_rot = debug_camera_trans->get_global_rot;
-
+                let is_2d = isDebugCamera2DMode(camera_entity);
+                
                 // 单条形状边：单位 X 轴线段旋到 ab 方向（同碰撞体边）
                 func drawParticleEdge(
                     a: vec3, b: vec3, color: (real, real, real, real))=> void
@@ -836,7 +854,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                         a, gizmoEdgeRotation(ab), (len, len, len) as vec3,
                         GIZMO_LINE_X, color);
                 }
-
+                
                 // 手柄方块：面向调试摄像机、屏幕像素恒定大小，激活时染黄
                 func drawParticleHandle(
                     pos: vec3,
@@ -852,18 +870,18 @@ namespace JEEditor::Editor::WorldEditorViewport
                         DEFAULT_SQUARE_SHAPE,
                         active ? GIZMO_COLOR_HOVER | color);
                 }
-
+                
                 do try!{
                     try! selected_euid = self.m_selected_entity_id;
                     try! selected_entity = self->findEntityByEuid(selected_euid);
                     try! emitter =
                         selected_entity->towoo::get_component:<Particle::Emitter>();
                     try! frame = particleFrame(selected_entity);
-
+                    
                     let active_handle = self.m_particle_dragging
                         ? self.m_particle_drag_handle
                         | self.m_particle_hover_handle;
-
+                        
                     // ---- 发射形状线框（各环按闭合环绘制；点发射无环） ----
                     match (getParticleShapeOutline(selected_entity))
                     {
@@ -885,7 +903,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                             }
                         }
                     }
-
+                    
                     // 形状手柄
                     match (getParticleShapeHandles(selected_entity))
                     {
@@ -894,12 +912,18 @@ namespace JEEditor::Editor::WorldEditorViewport
                         {
                             let handles = handles_info.1;
                             for (let mut i = 0; i < handles->len; i += 1)
+                            {
+                                if (is_2d && gizmoAxisHiddenIn2D(
+                                        frame.1 * gizmoUnitAxis(
+                                            particleHandleAxis(handles_info.0, i))))
+                                    continue;
                                 drawParticleHandle(
                                     handles[i], i == active_handle,
                                     COLLIDER_HANDLE_COLOR);
+                            }
                         }
                     }
-
+                    
                     // ---- 方向箭头（轴线段 + 箭头锥，沿主方向） ----
                     let (dir, len) = getParticleArrow(frame, emitter);
                     let arrow_scale = (len, len, len) as vec3;
@@ -918,7 +942,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                         frame.0 + dir * len,
                         active_handle == PARTICLE_HANDLE_DIRECTION,
                         PARTICLE_DIRECTION_GIZMO_COLOR);
-
+                        
                     // ---- 散布角环（过箭头尖端、垂直主方向） ----
                     let (ring, hp) = getParticleSpreadRing(
                         frame.0, dir, len, emitter.spread_angle->get);
@@ -937,11 +961,11 @@ namespace JEEditor::Editor::WorldEditorViewport
                 };
                 return_value!;
             };
-
+            
             return_value!;
         };
     }
-
+    
     // 绘制半透明的世界坐标网格，输入为覆盖整个屏幕的 NDC 四边形，
     // shader 内按像素重建视线再与网格平面求交；网格密度、颜色与距离
     // 衰减均在 shader 中定义。3D 模式铺在 XZ 地面（y=0，WorldGrid），
@@ -960,18 +984,18 @@ namespace JEEditor::Editor::WorldEditorViewport
                 ? WORLD_GRID_2D
                 | WORLD_GRID;
             try! shape_instance = FULLSCREEN_NDC_QUAD;
-
+            
             let rot = camera_trans->get_global_rot;
             let pos = camera_trans->get_global_pos;
-
+            
             // 与 ray::from 的 orth 参数一致：无透视投影组件即按正交处理
             let is_ortho =
                 camera_entity->towoo::get_component:<Camera::PerspectiveProjection>()->is_none;
-
+                
             let right = rot * ((1., 0., 0.) as vec3);
             let up = rot * ((0., 1., 0.) as vec3);
             let forward = rot * ((0., 0., 1.) as vec3);
-
+            
             let draw_action = rend_chain->draw(shader_instance, shape_instance, option::none);
             draw_action->set_uniform_mat4x4(
                 shader_instance, "JE_GRID_INV_PROJ",

@@ -16,6 +16,11 @@
 // 结束值有变化时发布可撤销的 ModifyComponentMember（与变换游标/碰撞体/
 // 光源手柄同一套撤销机制）。线框与手柄的绘制见 GizmoDrawing.wo，
 // 几何换算复用本文件的纯函数与 GizmoMath.wo。
+// 2D（正交）模式下与视线（世界 Z）近平行的形状手柄投影成一点、本就
+// 无法拖拽，绘制与悬停检测一并跳过（见 GizmoDrawing.wo 与
+// gizmoAxisHiddenIn2D）；散布角环平面与视线平行时（主方向在屏幕平面
+// 内的典型 2D 情形）环平面求交无解，拖拽平面退回面向视线的平面，按
+// 命中点垂直主方向的分量换算散布角，保证 2D 下散布可拖。
 // 优先级介于光源手柄与变换游标之间：碰撞体/光源手柄被悬停/拖拽时
 // 本手柄让位，其被悬停/拖拽时变换游标让位。
 
@@ -35,6 +40,7 @@ import pkg::try;
 
 import builtin::editor::Editor::Action::ModifyComponentMember;
 
+import CameraControl;
 import Definition;
 import GizmoMath;
 import EntityPicking;
@@ -214,6 +220,15 @@ namespace JEEditor::Editor::WorldEditorViewport
                 + (ba * mathf::cos(ang) + bb * mathf::sin(ang)) * ring_r);
         }
         return (pts->to_array, ring_center + ba * ring_r);
+    }
+
+    // 形状手柄对应的拖拽轴号（Sphere 手柄下标即轴号；Circle/Box 下标
+    // 整除 2 得轴号），供 2D 模式的视线平行剔除使用
+    protected func particleHandleAxis(kind: ParticleShapeKind, handle: int)=> int
+    {
+        if (kind == ParticleShapeKind::SPHERE)
+            return handle;
+        return handle / 2;
     }
 
     // 选中发射器的（形状种类, 形状手柄世界坐标列表）；无发射器时为
@@ -399,6 +414,10 @@ namespace JEEditor::Editor::WorldEditorViewport
             try! frame = particleFrame(selected_entity);
             let kind = particleShapeKind(emitter);
 
+            // 2D（正交）模式：与视线平行的形状手柄不绘制、不参与悬停
+            //（两者同口径，见 gizmoAxisHiddenIn2D）
+            let is_2d = isDebugCamera2DMode(camera_entity);
+
             let rmin = rect_min as vec2;
             let rsize = rect_size as vec2;
             if (rsize[0] <= 0. || rsize[1] <= 0.)
@@ -449,6 +468,12 @@ namespace JEEditor::Editor::WorldEditorViewport
                     let handles = handles_info.1;
                     for (let mut i = 0; i < handles->len; i += 1)
                     {
+                        // 2D 模式跳过与视线（世界 Z）近平行的手柄：
+                        // 投影成一点、轴线最近点参数无解，本就不可拖拽
+                        if (is_2d && gizmoAxisHiddenIn2D(
+                                frame.1 * gizmoUnitAxis(
+                                    particleHandleAxis(handles_info.0, i))))
+                            continue;
                         let d = (mouse - gizmoWorldToScreen(
                                 view_proj, handles[i], rmin, rsize))->length;
                         if (d < best_dist)
@@ -507,7 +532,8 @@ namespace JEEditor::Editor::WorldEditorViewport
             {
                 self->beginParticleDrag(
                     selected_entity, selected_euid, kind,
-                    self.m_particle_hover_handle, camera_trans);
+                    self.m_particle_hover_handle, camera_trans,
+                    mouse_ray->direction);
             }
 
             return_value!;
@@ -515,14 +541,16 @@ namespace JEEditor::Editor::WorldEditorViewport
     }
 
     // 开始一次手柄拖拽：捕获发射器中心/拖拽轴/拖拽平面与撤销用旧值，
-    // 条件不满足时放弃
+    // 条件不满足时放弃。ray_dir 为点击时的鼠标射线方向（单位向量），
+    // 供散布环判断环平面是否与视线平行
     protected func beginParticleDrag(
         self: WorldEditorViewport,
         selected_entity: entity,
         selected_euid: entity::internal::euid_t,
         kind: ParticleShapeKind,
         handle: int,
-        camera_trans: Transform::Translation)=> void
+        camera_trans: Transform::Translation,
+        ray_dir: vec3)=> void
     {
         do try!{
             try! emitter =
@@ -568,6 +596,12 @@ namespace JEEditor::Editor::WorldEditorViewport
                 plane_normal = dir;
                 plane_point = frame.0 + dir * len;
                 self.m_particle_drag_len = len;
+                // 鼠标射线与环平面近平行时（如 2D 正交、主方向在屏幕
+                // 平面内），环平面求交无解、拖拽失效：退回冻结面向视线
+                // 的平面，命中点仍按垂直主方向的分量换算散布角（见
+                // applyParticleDrag）
+                if (mathf::abs(ray_dir->dot(dir)) < 0.001)
+                    plane_normal = ray_dir->unit;
             }
 
             self.m_particle_dragging = true;
@@ -617,14 +651,19 @@ namespace JEEditor::Editor::WorldEditorViewport
             }
             else if (handle == PARTICLE_HANDLE_SPREAD)
             {
-                // 环平面内命中点到环心的距离 -> 散布角 = 2*atan(距离/箭头长)
+                // 命中点相对环心的偏移去掉主方向分量后取模长 -> 散布角
+                // = 2*atan(距离/箭头长)。环平面正常求交时命中点本就在
+                // 平面内，投影不改变结果；2D 退回的面向视线平面的命中点
+                // 则借此换算出环平面内的有效半径
                 try! hit = gizmoRayPlaneHit(
                     ray_origin, ray_dir,
                     self.m_particle_drag_plane_normal,
                     self.m_particle_drag_plane_point);
-                let r = (hit - self.m_particle_drag_plane_point)->length;
+                let offset = hit - self.m_particle_drag_plane_point;
+                let dir = particleDirectionWorld(frame.1, emitter.direction->get);
+                let radial = offset - dir * (offset->dot(dir));
                 emitter.spread_angle->set(mathf::clamp(
-                    2. * mathf::atan2(r, self.m_particle_drag_len)
+                    2. * mathf::atan2(radial->length, self.m_particle_drag_len)
                         * mathf::RAD2DEG,
                     0., 180.));
             }
