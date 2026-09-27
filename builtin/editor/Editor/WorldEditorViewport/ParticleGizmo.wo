@@ -1,0 +1,699 @@
+// 世界编辑器视口 —— 粒子发射器 gizmo（编辑手柄）交互。
+// 选中带 Particle::Emitter 的实体时（无需模式开关）显示发射形状线框、
+// 主发射方向箭头与散布角环，及可拖拽手柄：球发射形状为三根局部轴上的
+// 半径手柄（沿所在轴拖拽，|轴向参数|/轴向缩放写回 shape_radius），圆
+// 发射形状为形状平面内 ±X/±Y 四个半径手柄（形状平面内拖拽，|局部偏移|
+// 写回 shape_radius），盒发射形状为六面中心手柄（沿所在轴拖拽写回
+// shape_size 对应半边长分量），方向箭头尖端手柄在面向调试摄像机的平面
+// 内拖拽（命中点-中心 归一后经全局旋转逆变换写回 direction 的局部值），
+// 散布角环把手在环平面内拖拽（按 2*atan(环内半径/箭头长) 写回
+// spread_angle，钳制 0~180 度）。
+// 发射形状几何与粒子系统口径一致：局部偏移逐分量乘实体 local_scale
+// 后经全局旋转到世界（世界空间模拟的发射偏移 / 局部空间模拟的
+// object2world 同款合成）；主方向按 world_rotation * direction 解释，
+// 零向量退回世界 +Y（与粒子系统的散布采样回退一致）。
+// 拖拽中轴/平面冻结（实体移动/旋转中拖拽仍换算回组件局部值），拖拽
+// 结束值有变化时发布可撤销的 ModifyComponentMember（与变换游标/碰撞体/
+// 光源手柄同一套撤销机制）。线框与手柄的绘制见 GizmoDrawing.wo，
+// 几何换算复用本文件的纯函数与 GizmoMath.wo。
+// 优先级介于光源手柄与变换游标之间：碰撞体/光源手柄被悬停/拖拽时
+// 本手柄让位，其被悬停/拖拽时变换游标让位。
+
+import pkg::std;
+
+import je;
+import je::ecs;
+import je::gui;
+import je::internal;
+import je::typeinfo;
+
+import je::towoo;
+import je::towoo::types;
+import je::towoo::components;
+
+import pkg::try;
+
+import builtin::editor::Editor::Action::ModifyComponentMember;
+
+import Definition;
+import GizmoMath;
+import EntityPicking;
+import TransformGizmo;
+
+using std;
+
+using je;
+using je::gui;
+
+using JEEditor::Editor::Action;
+
+namespace JEEditor::Editor::WorldEditorViewport
+{
+    // ==================== 几何辅助（交互与绘制共用） ====================
+
+    // 发射器框架：发射形状局部坐标 -> 世界坐标的变换。与粒子系统口径
+    // 一致（发射偏移/object2world = pos + rot * (local 逐分量乘
+    // local_scale)），scale 取实体 local_scale 全部三个分量
+    protected func particleFrame(e: entity)=> option<(vec3, quat, vec3)>
+    {
+        return or(option::none: option<(vec3, quat, vec3)>) <| try!{
+            try! trans = e->towoo::get_component:<Transform::Translation>();
+            return_value! option::value((
+                trans->get_global_pos,
+                trans->get_global_rot,
+                trans->get_local_scale));
+        };
+    }
+
+    // 发射形状局部坐标 -> 世界坐标（local_scale 逐分量乘入）
+    protected func particleShapeToWorld(
+        center: vec3, rotation: quat, scale: vec3, local: vec3)=> vec3
+    {
+        return center + rotation * (
+            (local[0] * scale[0], local[1] * scale[1], local[2] * scale[2]) as vec3);
+    }
+
+    // 除数保护：scale 分量过小时按符号保留极小值避免除零
+    protected func particleSafeScaleDiv(v: real)=> real
+    {
+        if (mathf::abs(v) < 0.0001)
+            return (v < 0.) ? -0.0001 | 0.0001;
+        return v;
+    }
+
+    // 世界坐标 -> 发射形状局部坐标（除回 local_scale），供拖拽写回
+    // 组件值使用
+    protected func particleWorldToLocal(
+        center: vec3, rotation: quat, scale: vec3, world: vec3)=> vec3
+    {
+        let local = rotation->inverse * (world - center);
+        return (
+            local[0] / particleSafeScaleDiv(scale[0]),
+            local[1] / particleSafeScaleDiv(scale[1]),
+            local[2] / particleSafeScaleDiv(scale[2])) as vec3;
+    }
+
+    // 向量按轴取分量（0/1/2；避免对 vec3 动态索引的辅助）
+    protected func particleAxisComp(v: vec3, axis: int)=> real
+    {
+        if (axis == 1)
+            return v[1];
+        if (axis == 2)
+            return v[2];
+        return v[0];
+    }
+
+    // 替换向量指定轴分量后的新向量（0/1/2；同上）
+    protected func particleWithAxisComp(
+        v: vec3, axis: int, value: real)=> vec3
+    {
+        if (axis == 0)
+            return (value, v[1], v[2]) as vec3;
+        if (axis == 1)
+            return (v[0], value, v[2]) as vec3;
+        return (v[0], v[1], value) as vec3;
+    }
+
+    // 发射形状种类（Emitter 的 shape：0=点 1=球 2=圆(2D) 3=盒，
+    // 超出范围按点处理）
+    protected func particleShapeKind(emitter: Particle::Emitter)=> ParticleShapeKind
+    {
+        let shape = emitter.shape->get as int;
+        if (shape == 1)
+            return ParticleShapeKind::SPHERE;
+        if (shape == 2)
+            return ParticleShapeKind::CIRCLE;
+        if (shape == 3)
+            return ParticleShapeKind::BOX;
+        return ParticleShapeKind::POINT;
+    }
+
+    // 主发射方向的世界单位向量：world_rotation * direction；零向量时
+    // 退回世界 +Y（与粒子系统散布采样的回退一致）
+    protected func particleDirectionWorld(
+        rotation: quat, direction: vec3)=> vec3
+    {
+        let d = rotation * direction;
+        if (d->length < 0.00001)
+            return (0., 1., 0.) as vec3;
+        return d->unit;
+    }
+
+    // 发射形状的外扩半径（世界单位）：球取 |shape_radius| 乘三轴缩放
+    // 绝对值的最大值，圆取乘 xy 两轴缩放的最大值，盒取各半边长乘对应
+    // 缩放绝对值的最大值，点为 0。供方向箭头定长使用
+    protected func particleShapeExtent(
+        scale: vec3, emitter: Particle::Emitter)=> real
+    {
+        let kind = particleShapeKind(emitter);
+        let mut extent = 0.;
+        if (kind == ParticleShapeKind::SPHERE)
+        {
+            let r = mathf::abs(emitter.shape_radius->get);
+            let mut s = mathf::abs(scale[0]);
+            if (mathf::abs(scale[1]) > s)
+                s = mathf::abs(scale[1]);
+            if (mathf::abs(scale[2]) > s)
+                s = mathf::abs(scale[2]);
+            extent = r * s;
+        }
+        else if (kind == ParticleShapeKind::CIRCLE)
+        {
+            let r = mathf::abs(emitter.shape_radius->get);
+            let mut s = mathf::abs(scale[0]);
+            if (mathf::abs(scale[1]) > s)
+                s = mathf::abs(scale[1]);
+            extent = r * s;
+        }
+        else if (kind == ParticleShapeKind::BOX)
+        {
+            let h = emitter.shape_size->get;
+            extent = mathf::abs(h[0] * scale[0]);
+            if (mathf::abs(h[1] * scale[1]) > extent)
+                extent = mathf::abs(h[1] * scale[1]);
+            if (mathf::abs(h[2] * scale[2]) > extent)
+                extent = mathf::abs(h[2] * scale[2]);
+        }
+        return extent;
+    }
+
+    // 方向箭头：(世界方向单位向量, 箭头长)。箭头长取发射形状外扩半径的
+    // PARTICLE_DIRECTION_ARROW_RATIO 倍，形状退化（点发射）时退回
+    // PARTICLE_DIRECTION_ARROW_MIN，保证箭头始终可见可拖
+    protected func getParticleArrow(
+        frame: (vec3, quat, vec3), emitter: Particle::Emitter)=> (vec3, real)
+    {
+        let dir = particleDirectionWorld(frame.1, emitter.direction->get);
+        let mut len = particleShapeExtent(frame.2, emitter)
+            * PARTICLE_DIRECTION_ARROW_RATIO;
+        if (len < PARTICLE_DIRECTION_ARROW_MIN)
+            len = PARTICLE_DIRECTION_ARROW_MIN;
+        return (dir, len);
+    }
+
+    // 散布角环：(环采样点表（世界坐标，首尾不重复）, 环把手位置)。
+    // 环位于过箭头尖端、垂直主方向的平面内，半径 = 箭头长 * tan(半散布角)；
+    // 散布角达 180 度时环半径发散，按 179 度封顶绘制
+    protected func getParticleSpreadRing(
+        center: vec3,
+        dir: vec3,
+        arrow_len: real,
+        spread_deg: real)=> (array<vec3>, vec3)
+    {
+        let half = mathf::clamp(spread_deg, 0., 179.) * 0.5 * mathf::DEG2RAD;
+        let ring_r = arrow_len * mathf::tan(half);
+        let ring_center = center + dir * arrow_len;
+        let (ba, bb) = gizmoPlaneBasis(dir);
+
+        let pts = []mut: vec<vec3>;
+        for (let mut i = 0; i < COLLIDER_CIRCLE_SEGMENTS; i += 1)
+        {
+            let ang = 2. * mathf::PI
+                * (i as real / COLLIDER_CIRCLE_SEGMENTS as real);
+            pts->add(ring_center
+                + (ba * mathf::cos(ang) + bb * mathf::sin(ang)) * ring_r);
+        }
+        return (pts->to_array, ring_center + ba * ring_r);
+    }
+
+    // 选中发射器的（形状种类, 形状手柄世界坐标列表）；无发射器时为
+    // none。手柄含义按种类：Sphere=三根局部轴正向的半径手柄（手柄下标
+    // 即轴号）；Circle=形状平面内 ±X/±Y 四个半径手柄；Box=六面中心
+    // 手柄（下标 0..5 依序为 +X/-X/+Y/-Y/+Z/-Z，下标整除 2 得轴号）；
+    // Point=无形状手柄（仅方向/散布把手）
+    protected func getParticleShapeHandles(
+        e: entity)=> option<(ParticleShapeKind, array<vec3>)>
+    {
+        return or(option::none: option<(ParticleShapeKind, array<vec3>)>) <| try!{
+            try! emitter = e->towoo::get_component:<Particle::Emitter>();
+            try! frame = particleFrame(e);
+            let center = frame.0;
+            let rotation = frame.1;
+            let scale = frame.2;
+            let kind = particleShapeKind(emitter);
+
+            let pts = []mut: vec<vec3>;
+            if (kind == ParticleShapeKind::SPHERE)
+            {
+                let r = mathf::abs(emitter.shape_radius->get);
+                for (let mut axis = 0; axis < 3; axis += 1)
+                    pts->add(particleShapeToWorld(
+                        center, rotation, scale, gizmoUnitAxis(axis) * r));
+            }
+            else if (kind == ParticleShapeKind::CIRCLE)
+            {
+                let r = mathf::abs(emitter.shape_radius->get);
+                pts->add(particleShapeToWorld(
+                    center, rotation, scale, (r, 0., 0.) as vec3));
+                pts->add(particleShapeToWorld(
+                    center, rotation, scale, (-r, 0., 0.) as vec3));
+                pts->add(particleShapeToWorld(
+                    center, rotation, scale, (0., r, 0.) as vec3));
+                pts->add(particleShapeToWorld(
+                    center, rotation, scale, (0., -r, 0.) as vec3));
+            }
+            else if (kind == ParticleShapeKind::BOX)
+            {
+                let h = emitter.shape_size->get;
+                for (let mut axis = 0; axis < 3; axis += 1)
+                {
+                    let half = mathf::abs(particleAxisComp(h, axis));
+                    let ea = gizmoUnitAxis(axis);
+                    pts->add(particleShapeToWorld(
+                        center, rotation, scale, ea * half));
+                    pts->add(particleShapeToWorld(
+                        center, rotation, scale, ea * -half));
+                }
+            }
+
+            return_value! option::value((kind, pts->to_array));
+        };
+    }
+
+    // 发射形状线框（世界坐标）：(形状种类, 各闭合环顶点表（首尾不重复，
+    // 绘制时闭合）)。Sphere=XY/XZ/YZ 三个平面上的大圆；Circle=XY 平面
+    // 圆；Box=六面四边形环（相邻面共享边会重复绘制，换取统一的环表达）
+    protected func getParticleShapeOutline(
+        e: entity)=> option<(ParticleShapeKind, array<array<vec3>>)>
+    {
+        return or(option::none: option<(ParticleShapeKind, array<array<vec3>>)>) <| try!{
+            try! emitter = e->towoo::get_component:<Particle::Emitter>();
+            try! frame = particleFrame(e);
+            let center = frame.0;
+            let rotation = frame.1;
+            let scale = frame.2;
+            let kind = particleShapeKind(emitter);
+
+            let rings = []mut: vec<array<vec3>>;
+            if (kind == ParticleShapeKind::SPHERE)
+            {
+                let r = mathf::abs(emitter.shape_radius->get);
+                // 三向大圆：与各局部主轴正交平面内的单位圆采样
+                //（平面基与轴正交即在该主平面内，基向量是否恰为另两轴
+                // 不影响圆的点集）
+                for (let mut axis = 0; axis < 3; axis += 1)
+                {
+                    let (ba, bb) = gizmoPlaneBasis(gizmoUnitAxis(axis));
+                    let ring = []mut: vec<vec3>;
+                    for (let mut i = 0; i < COLLIDER_CIRCLE_SEGMENTS; i += 1)
+                    {
+                        let ang = 2. * mathf::PI
+                            * (i as real / COLLIDER_CIRCLE_SEGMENTS as real);
+                        ring->add(particleShapeToWorld(center, rotation, scale,
+                            (ba * mathf::cos(ang) + bb * mathf::sin(ang)) * r));
+                    }
+                    rings->add(ring->to_array);
+                }
+            }
+            else if (kind == ParticleShapeKind::CIRCLE)
+            {
+                let r = mathf::abs(emitter.shape_radius->get);
+                let ring = []mut: vec<vec3>;
+                for (let mut i = 0; i < COLLIDER_CIRCLE_SEGMENTS; i += 1)
+                {
+                    let ang = 2. * mathf::PI
+                        * (i as real / COLLIDER_CIRCLE_SEGMENTS as real);
+                    ring->add(particleShapeToWorld(center, rotation, scale,
+                        (mathf::cos(ang) * r, mathf::sin(ang) * r, 0.) as vec3));
+                }
+                rings->add(ring->to_array);
+            }
+            else if (kind == ParticleShapeKind::BOX)
+            {
+                let h = emitter.shape_size->get;
+                // 六个面：面心在 ±axis 处，四角沿面内两切向轴绕一圈
+                for (let mut axis = 0; axis < 3; axis += 1)
+                {
+                    let ta = (axis + 1) % 3;
+                    let tb = (axis + 2) % 3;
+                    let ha = mathf::abs(particleAxisComp(h, axis));
+                    let ht = mathf::abs(particleAxisComp(h, ta));
+                    let hb = mathf::abs(particleAxisComp(h, tb));
+                    let ea = gizmoUnitAxis(axis);
+                    let et = gizmoUnitAxis(ta);
+                    let eb = gizmoUnitAxis(tb);
+                    for (let mut s = 0; s < 2; s += 1)
+                    {
+                        let base = ea * ((s == 0) ? ha | -ha);
+                        let ring = []mut: vec<vec3>;
+                        ring->add(particleShapeToWorld(
+                            center, rotation, scale,
+                            base + et * -ht + eb * -hb));
+                        ring->add(particleShapeToWorld(
+                            center, rotation, scale,
+                            base + et * ht + eb * -hb));
+                        ring->add(particleShapeToWorld(
+                            center, rotation, scale,
+                            base + et * ht + eb * hb));
+                        ring->add(particleShapeToWorld(
+                            center, rotation, scale,
+                            base + et * -ht + eb * hb));
+                        rings->add(ring->to_array);
+                    }
+                }
+            }
+
+            return_value! option::value((kind, rings->to_array));
+        };
+    }
+
+    // ==================== 交互（悬停 / 拖拽 / 撤销） ====================
+
+    // 每帧更新粒子发射器编辑手柄状态：选中带 Particle::Emitter 的实体
+    // 即显示手柄、无需模式开关可直接拖拽。本函数在 updateLightGizmo
+    // 之后、updateTransformGizmo 之前运行——碰撞体/光源手柄优先于本
+    // 手柄（其被悬停/拖拽中时本手柄让位），本手柄被悬停/拖拽中时变换
+    // 游标让位。松开左键结束拖拽并提交撤销记录；拖拽中按鼠标射线应用
+    // 编辑；否则做屏幕空间悬停检测，悬停手柄上按下左键开始拖拽。
+    protected func updateParticleGizmo(
+        self: WorldEditorViewport,
+        debug_camera: option<entity>,
+        hovered: bool,
+        rect_min: ImVec2,
+        rect_size: ImVec2)=> void
+    {
+        self.m_particle_hover_handle = GIZMO_HANDLE_NONE;
+
+        // 松开左键时结束拖拽并提交撤销记录
+        if (self.m_particle_dragging
+            && !IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left))
+        {
+            self->finishParticleDrag();
+            self.m_particle_dragging = false;
+            self.m_particle_drag_handle = GIZMO_HANDLE_NONE;
+        }
+
+        if (self.m_selected_entity_id->is_none)
+            return;
+
+        do try!{
+            try! camera_entity = debug_camera;
+            try! camera_trans =
+                camera_entity->towoo::get_component:<Transform::Translation>();
+            try! camera_proj =
+                camera_entity->towoo::get_component:<Camera::Projection>();
+            try! selected_euid = self.m_selected_entity_id;
+            try! selected_entity = self->findEntityByEuid(selected_euid);
+            try! emitter =
+                selected_entity->towoo::get_component:<Particle::Emitter>();
+            try! frame = particleFrame(selected_entity);
+            let kind = particleShapeKind(emitter);
+
+            let rmin = rect_min as vec2;
+            let rsize = rect_size as vec2;
+            if (rsize[0] <= 0. || rsize[1] <= 0.)
+                return_value!;
+
+            let mouse = GetMousePos() as vec2;
+            let mouse_local = (mouse - rmin) / rsize;
+            let mouse_ndc = (mouse_local - (0.5, 0.5) as vec2) * 2.;
+            let mouse_ray = towoo::ray::from(
+                camera_trans, camera_proj,
+                (mouse_ndc[0], -mouse_ndc[1]) as vec2,
+                camera_entity->towoo::get_component:<Camera::PerspectiveProjection>->is_none);
+
+            // 拖拽进行中：按当前鼠标射线应用编辑
+            if (self.m_particle_dragging)
+            {
+                self.m_particle_hover_handle = self.m_particle_drag_handle;
+
+                self->applyParticleDrag(
+                    selected_entity, mouse_ray->origin, mouse_ray->direction);
+                return_value!;
+            }
+
+            if (!(hovered
+                && !self.m_is_look_active
+                && !self.m_is_pan_active
+                && !self.m_is_orbit_active
+                // 变换游标/碰撞体/光源手柄拖拽进行中时由其接管
+                && !self.m_gizmo_dragging
+                && !self.m_collider_dragging
+                && !self.m_light_dragging
+                // 碰撞体/光源手柄悬停时让位（其先运行，目标更小更具体）
+                && self.m_collider_hover_handle == GIZMO_HANDLE_NONE
+                && self.m_light_hover_handle == GIZMO_HANDLE_NONE))
+                return_value!;
+
+            // 悬停检测：手柄世界坐标投影到屏幕，取距离最近者；
+            // 散布环按环分段距离参与竞争（与碰撞体旋转环同一判定口径）
+            let view_proj = camera_proj->get_view_proj_mat;
+            let mut best = GIZMO_HANDLE_NONE;
+            let mut best_dist = GIZMO_HIT_PX;
+
+            match (getParticleShapeHandles(selected_entity))
+            {
+                none?;
+                value(handles_info)?
+                {
+                    let handles = handles_info.1;
+                    for (let mut i = 0; i < handles->len; i += 1)
+                    {
+                        let d = (mouse - gizmoWorldToScreen(
+                                view_proj, handles[i], rmin, rsize))->length;
+                        if (d < best_dist)
+                        {
+                            best_dist = d;
+                            best = i;
+                        }
+                    }
+                }
+            }
+
+            {
+                let (dir, len) = getParticleArrow(frame, emitter);
+
+                // 散布把手按点距 + 环分段距离；先于方向手柄检测——散布
+                // 角为 0 时环收缩到箭头尖端与方向手柄重合，重合处由
+                // 散布把手胜出（自 0 拉起散布），其余位置仍按最近者
+                let (ring, hp) = getParticleSpreadRing(
+                    frame.0, dir, len, emitter.spread_angle->get);
+                let dh = (mouse - gizmoWorldToScreen(
+                        view_proj, hp, rmin, rsize))->length;
+                if (dh < best_dist)
+                {
+                    best_dist = dh;
+                    best = PARTICLE_HANDLE_SPREAD;
+                }
+                for (let mut i = 0; i < ring->len; i += 1)
+                {
+                    let a = gizmoWorldToScreen(
+                        view_proj, ring[i], rmin, rsize);
+                    let b = gizmoWorldToScreen(
+                        view_proj, ring[(i + 1) % ring->len], rmin, rsize);
+                    let d = gizmoScreenDistToSegment(mouse, a, b);
+                    if (d < best_dist)
+                    {
+                        best_dist = d;
+                        best = PARTICLE_HANDLE_SPREAD;
+                    }
+                }
+
+                // 方向手柄（箭头尖端）按点距
+                let tip = frame.0 + dir * len;
+                let d = (mouse - gizmoWorldToScreen(
+                        view_proj, tip, rmin, rsize))->length;
+                if (d < best_dist)
+                {
+                    best_dist = d;
+                    best = PARTICLE_HANDLE_DIRECTION;
+                }
+            }
+            self.m_particle_hover_handle = best;
+
+            // 悬停手柄上按下左键：开始拖拽
+            if (self.m_particle_hover_handle != GIZMO_HANDLE_NONE
+                && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left))
+            {
+                self->beginParticleDrag(
+                    selected_entity, selected_euid, kind,
+                    self.m_particle_hover_handle, camera_trans);
+            }
+
+            return_value!;
+        };
+    }
+
+    // 开始一次手柄拖拽：捕获发射器中心/拖拽轴/拖拽平面与撤销用旧值，
+    // 条件不满足时放弃
+    protected func beginParticleDrag(
+        self: WorldEditorViewport,
+        selected_entity: entity,
+        selected_euid: entity::internal::euid_t,
+        kind: ParticleShapeKind,
+        handle: int,
+        camera_trans: Transform::Translation)=> void
+    {
+        do try!{
+            try! emitter =
+                selected_entity->towoo::get_component:<Particle::Emitter>();
+            try! frame = particleFrame(selected_entity);
+
+            // 撤销记录的目标成员按手柄而定（形状手柄依种类：
+            // 盒写 shape_size，球/圆写 shape_radius）
+            let mut undo_member = "";
+            if (handle == PARTICLE_HANDLE_DIRECTION)
+                undo_member = "direction";
+            else if (handle == PARTICLE_HANDLE_SPREAD)
+                undo_member = "spread_angle";
+            else if (kind == ParticleShapeKind::BOX)
+                undo_member = "shape_size";
+            else
+                undo_member = "shape_radius";
+
+            try! old_value = serializeMemberValue(
+                selected_entity, "Particle::Emitter", undo_member);
+
+            // 按手柄种类冻结拖拽几何：轴手柄沿其世界轴取最近点参数；
+            // 圆半径在形状平面内求交；方向在面向调试摄像机的平面内
+            // 求交（任何视角均可直观拖拽）；散布在环平面内求交并冻结
+            // 基准箭头长
+            let mut axis = frame.1 * ((1., 0., 0.) as vec3);
+            if (kind == ParticleShapeKind::SPHERE)
+                axis = frame.1 * gizmoUnitAxis(handle);
+            else if (kind == ParticleShapeKind::BOX)
+                axis = frame.1 * gizmoUnitAxis(handle / 2);
+
+            let mut plane_normal = frame.1 * ((0., 0., 1.) as vec3);
+            let mut plane_point = frame.0;
+            if (handle == PARTICLE_HANDLE_DIRECTION)
+            {
+                plane_normal =
+                    camera_trans->get_global_rot * ((0., 0., 1.) as vec3);
+                plane_point = frame.0;
+            }
+            else if (handle == PARTICLE_HANDLE_SPREAD)
+            {
+                let (dir, len) = getParticleArrow(frame, emitter);
+                plane_normal = dir;
+                plane_point = frame.0 + dir * len;
+                self.m_particle_drag_len = len;
+            }
+
+            self.m_particle_dragging = true;
+            self.m_particle_drag_handle = handle;
+            self.m_particle_drag_euid = selected_euid;
+            self.m_particle_drag_kind = kind;
+            self.m_particle_drag_center = frame.0;
+            self.m_particle_drag_axis = axis;
+            self.m_particle_drag_plane_normal = plane_normal;
+            self.m_particle_drag_plane_point = plane_point;
+            self.m_particle_drag_undo_component = "Particle::Emitter";
+            self.m_particle_drag_undo_member = undo_member;
+            self.m_particle_drag_undo_old_value = old_value;
+            return_value!;
+        };
+    }
+
+    // 拖拽进行中：按手柄含义换算鼠标射线并写回组件值（框架取当前帧的，
+    // 实体移动/旋转中拖拽仍跟随；拖拽轴/平面取冻结值）
+    protected func applyParticleDrag(
+        self: WorldEditorViewport,
+        selected_entity: entity,
+        ray_origin: vec3,
+        ray_dir: vec3)=> void
+    {
+        do try!{
+            try! emitter =
+                selected_entity->towoo::get_component:<Particle::Emitter>();
+            try! frame = particleFrame(selected_entity);
+
+            let kind = self.m_particle_drag_kind;
+            let handle = self.m_particle_drag_handle;
+
+            if (handle == PARTICLE_HANDLE_DIRECTION)
+            {
+                // 面向调试摄像机的冻结平面内取命中点，方向 = 命中点 -
+                // 发射器中心 归一，经全局旋转逆变换写回局部方向
+                try! hit = gizmoRayPlaneHit(
+                    ray_origin, ray_dir,
+                    self.m_particle_drag_plane_normal,
+                    self.m_particle_drag_plane_point);
+                let world_dir = hit - self.m_particle_drag_center;
+                if (world_dir->length < 0.0001)
+                    return_value!;
+                emitter.direction->set(
+                    frame.1->inverse * world_dir->unit);
+            }
+            else if (handle == PARTICLE_HANDLE_SPREAD)
+            {
+                // 环平面内命中点到环心的距离 -> 散布角 = 2*atan(距离/箭头长)
+                try! hit = gizmoRayPlaneHit(
+                    ray_origin, ray_dir,
+                    self.m_particle_drag_plane_normal,
+                    self.m_particle_drag_plane_point);
+                let r = (hit - self.m_particle_drag_plane_point)->length;
+                emitter.spread_angle->set(mathf::clamp(
+                    2. * mathf::atan2(r, self.m_particle_drag_len)
+                        * mathf::RAD2DEG,
+                    0., 180.));
+            }
+            else if (kind == ParticleShapeKind::SPHERE)
+            {
+                // 半径手柄：沿冻结轴取最近点参数，除回轴向缩放写回半径
+                try! param = gizmoClosestAxisParam(
+                    self.m_particle_drag_center, self.m_particle_drag_axis,
+                    ray_origin, ray_dir);
+                let r = mathf::abs(param
+                    / particleSafeScaleDiv(particleAxisComp(frame.2, handle)));
+                emitter.shape_radius->set(
+                    (r < PARTICLE_MIN_SHAPE_SIZE) ? PARTICLE_MIN_SHAPE_SIZE | r);
+            }
+            else if (kind == ParticleShapeKind::CIRCLE)
+            {
+                // 半径手柄：形状平面内命中点换算回局部坐标，取 xy 模长
+                try! hit = gizmoRayPlaneHit(
+                    ray_origin, ray_dir,
+                    self.m_particle_drag_plane_normal,
+                    self.m_particle_drag_plane_point);
+                let local = particleWorldToLocal(
+                    frame.0, frame.1, frame.2, hit);
+                let r = ((local[0], local[1]) as vec2)->length;
+                emitter.shape_radius->set(
+                    (r < PARTICLE_MIN_SHAPE_SIZE) ? PARTICLE_MIN_SHAPE_SIZE | r);
+            }
+            else if (kind == ParticleShapeKind::BOX)
+            {
+                // 盒面手柄：沿冻结轴取最近点参数，除回轴向缩放写回对应
+                // 半边长分量（手柄下标整除 2 得轴号）
+                try! param = gizmoClosestAxisParam(
+                    self.m_particle_drag_center, self.m_particle_drag_axis,
+                    ray_origin, ray_dir);
+                let axis = handle / 2;
+                let half = mathf::abs(param
+                    / particleSafeScaleDiv(particleAxisComp(frame.2, axis)));
+                emitter.shape_size->set(particleWithAxisComp(
+                    emitter.shape_size->get, axis,
+                    (half < PARTICLE_MIN_SHAPE_SIZE)
+                        ? PARTICLE_MIN_SHAPE_SIZE
+                        | half));
+            }
+            return_value!;
+        };
+    }
+
+    // 结束拖拽：值有变化时发布一条可撤销的 Action
+    protected func finishParticleDrag(self: WorldEditorViewport)=> void
+    {
+        if (self.m_particle_drag_undo_old_value == "")
+            return;
+
+        do try!{
+            try! selected_entity =
+                self->findEntityByEuid(self.m_particle_drag_euid);
+            let new_value = serializeMemberValue(
+                selected_entity,
+                self.m_particle_drag_undo_component,
+                self.m_particle_drag_undo_member)->or("");
+
+            if (new_value != "" && new_value != self.m_particle_drag_undo_old_value)
+                self->doAction(ModifyComponentMember::create(
+                        self.m_particle_drag_euid,
+                        self.m_particle_drag_undo_component,
+                        self.m_particle_drag_undo_member,
+                        self.m_particle_drag_undo_old_value,
+                        new_value));
+            return_value!;
+        };
+    }
+}

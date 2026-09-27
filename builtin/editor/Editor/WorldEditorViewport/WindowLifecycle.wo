@@ -50,6 +50,7 @@ import EntityPicking;
 import TransformGizmo;
 import ColliderGizmo;
 import LightGizmo;
+import ParticleGizmo;
 import GizmoDrawing;
 import ViewportUI;
 import WorldSaving;
@@ -89,6 +90,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         m_parallel_light2d_entity_selector: entity_selector,
         m_anchor_parent_entity_selector: entity_selector,
         m_physics2d_body_entity_selector: entity_selector,
+        m_particle_emitter_entity_selector: entity_selector,
     }
     {
         func create(w: world)=> WorldSelectors
@@ -148,6 +150,15 @@ namespace JEEditor::Editor::WorldEditorViewport
                         requirement::contains(Transform::Translation::type::typeinfo),
                         requirement::contains(Physics2D::Rigidbody::type::typeinfo),
                     ]),
+
+                // 粒子发射器实体（Translation+Particle::Emitter 且不带
+                // Invisible）：发射器图标 gizmo 与发射形状/方向/散布编辑
+                // 手柄以它为准（发射器仍是常规渲染实体，也参与射线拾取）
+                m_particle_emitter_entity_selector = w->create_selector([
+                        requirement::except(Editor::Invisible::type::typeinfo),
+                        requirement::contains(Transform::Translation::type::typeinfo),
+                        requirement::contains(Particle::Emitter::type::typeinfo),
+                    ]),
             };
         }
     }
@@ -202,8 +213,10 @@ namespace JEEditor::Editor::WorldEditorViewport
             m_parallel_light2d_entity_selector = mut selectors.m_parallel_light2d_entity_selector,
             
             m_anchor_parent_entity_selector = mut selectors.m_anchor_parent_entity_selector,
-            
+
             m_physics2d_body_entity_selector = mut selectors.m_physics2d_body_entity_selector,
+
+            m_particle_emitter_entity_selector = mut selectors.m_particle_emitter_entity_selector,
             
             // Camera control state:
             m_last_time = mut 0.,
@@ -273,6 +286,20 @@ namespace JEEditor::Editor::WorldEditorViewport
             m_light_drag_undo_component = mut "",
             m_light_drag_undo_member = mut "",
             m_light_drag_undo_old_value = mut "",
+
+            m_particle_hover_handle = mut GIZMO_HANDLE_NONE,
+            m_particle_dragging = mut false,
+            m_particle_drag_handle = mut GIZMO_HANDLE_NONE,
+            m_particle_drag_euid = mut (0h as entity::internal::euid_t),
+            m_particle_drag_kind = mut ParticleShapeKind::POINT,
+            m_particle_drag_center = mut ((0., 0., 0.) as vec3),
+            m_particle_drag_axis = mut ((1., 0., 0.) as vec3),
+            m_particle_drag_plane_normal = mut ((0., 0., 1.) as vec3),
+            m_particle_drag_plane_point = mut ((0., 0., 0.) as vec3),
+            m_particle_drag_len = mut 0.,
+            m_particle_drag_undo_component = mut "",
+            m_particle_drag_undo_member = mut "",
+            m_particle_drag_undo_old_value = mut "",
         };
         
         // “调试执行/导出时才启用”的系统保存在视口中（编辑器内不 add_system），
@@ -658,6 +685,20 @@ namespace JEEditor::Editor::WorldEditorViewport
             none?;
             value((rect_min, rect_max))?
                 self->updateLightGizmo(
+                    debug_camera,
+                    viewport_hovered && !toolbar_hovered,
+                    rect_min,
+                    (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
+        }
+
+        // 粒子发射器编辑手柄交互：优先级介于光源手柄与变换游标之间
+        //（碰撞体/光源手柄被悬停/拖拽时让位，其被悬停/拖拽时变换
+        // 游标让位），同样先于摄像机控制
+        match (viewport_rect)
+        {
+            none?;
+            value((rect_min, rect_max))?
+                self->updateParticleGizmo(
                     debug_camera,
                     viewport_hovered && !toolbar_hovered,
                     rect_min,

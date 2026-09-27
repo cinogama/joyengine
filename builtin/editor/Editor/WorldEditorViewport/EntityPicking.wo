@@ -150,10 +150,10 @@ namespace JEEditor::Editor::WorldEditorViewport
         return option::value(hits[0].1);
     }
 
-    // 鼠标位置命中的实体图标 gizmo（摄像机/2D 光源，返回实体 EUID）：
-    // 命中按到图标中心的距离由近及远排序；cycle 为真时沿用实体拾取的
-    // “循环选中下一个”规则，否则已选中的实体在命中列表中时保持其选中
-    //（右键菜单语义）。
+    // 鼠标位置命中的实体图标 gizmo（摄像机/2D 光源/粒子发射器，返回
+    // 实体 EUID）：命中按到图标中心的距离由近及远排序；cycle 为真时
+    // 沿用实体拾取的“循环选中下一个”规则，否则已选中的实体在命中
+    // 列表中时保持其选中（右键菜单语义）。
     protected func pickIconGizmo(
         self: WorldEditorViewport,
         mouse: vec2,
@@ -193,9 +193,9 @@ namespace JEEditor::Editor::WorldEditorViewport
         return option::value(hits[next_index].1);
     }
 
-    // 每帧重建实体图标 gizmo（摄像机/2D 光源）的屏幕命中矩形
-    //（Translation 位置投影到屏幕，半径 = 图标半边长 + 手柄命中余量）
-    // 与悬停状态；位于调试摄像机身后的实体不参与命中。
+    // 每帧重建实体图标 gizmo（摄像机/2D 光源/粒子发射器）的屏幕命中
+    // 矩形（Translation 位置投影到屏幕，半径 = 图标半边长 + 手柄命中
+    // 余量）与悬停状态；位于调试摄像机身后的实体不参与命中。
     protected func updateIconGizmos(
         self: WorldEditorViewport,
         debug_camera: option<entity>,
@@ -251,6 +251,9 @@ namespace JEEditor::Editor::WorldEditorViewport
             addIconRects(self.m_point_light2d_entity_selector, LIGHT2D_GIZMO_ICON_SIZE_PX);
             addIconRects(self.m_range_light2d_entity_selector, LIGHT2D_GIZMO_ICON_SIZE_PX);
             addIconRects(self.m_parallel_light2d_entity_selector, LIGHT2D_GIZMO_ICON_SIZE_PX);
+            // 发射器仍是常规渲染实体（粒子池空时网格近乎不可命中），
+            // 图标命中保证其任何时候都可在视口内点击选中
+            addIconRects(self.m_particle_emitter_entity_selector, PARTICLE_GIZMO_ICON_SIZE_PX);
 
             if (hovered
                 && !self.m_is_look_active
@@ -267,9 +270,9 @@ namespace JEEditor::Editor::WorldEditorViewport
     // 视口右键的生命周期：记录按下起点（供环视的延迟激活使用，须先于
     // updateCameraControl 调用），并在松开时按位移分流——位移不超过
     // RMB_CLICK_MAX_DRAG_PX 视为点击：命中实体（渲染实体或摄像机/
-    // 2D 光源图标）时选中该实体并在鼠标处弹出上下文菜单（内容与实体
-    // 列表一致，见 drawEntityContextMenuItems）；点击空白处则弹出仅含
-    // “粘贴”的菜单（run 中的 VIEWPORT_BLANK_CONTEXT_MENU_ID）。
+    // 2D 光源/粒子发射器图标）时选中该实体并在鼠标处弹出上下文菜单
+    //（内容与实体列表一致，见 drawEntityContextMenuItems）；点击空白处
+    // 则弹出仅含“粘贴”的菜单（run 中的 VIEWPORT_BLANK_CONTEXT_MENU_ID）。
     protected func updateViewportRightClick(
         self: WorldEditorViewport,
         debug_camera: option<entity>,

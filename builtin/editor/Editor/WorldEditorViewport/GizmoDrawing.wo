@@ -1,8 +1,9 @@
 // 世界编辑器视口 —— gizmo 绘制。
 // 世界坐标网格、被选中实体高亮、摄像机实体 gizmo（视锥体线框 + 图标）、
-// 2D 光源实体图标、变换游标本体、2D 物理碰撞体线框与编辑手柄、
-// 2D 光源形状（Range 同心环 / BlockShadow 遮挡多边形）线框与编辑手柄
-// 的渲染，走视口自有的 rendchain 分支。
+// 2D 光源实体图标、粒子发射器实体图标、变换游标本体、2D 物理碰撞体
+// 线框与编辑手柄、2D 光源形状（Range 同心环 / BlockShadow 遮挡多边形）
+// 线框与编辑手柄、粒子发射器（发射形状 / 方向箭头 / 散布角环）线框
+// 与编辑手柄的渲染，走视口自有的 rendchain 分支。
 
 import pkg::std;
 
@@ -29,6 +30,7 @@ import GizmoMath;
 import EntityPicking;
 import ColliderGizmo;
 import LightGizmo;
+import ParticleGizmo;
 
 using std;
 
@@ -362,14 +364,17 @@ namespace JEEditor::Editor::WorldEditorViewport
                 return_value!;
             };
 
-            // 绘制 2D 光源实体 gizmo（仅图标，无附加线框）：
+            // 绘制 2D 光源与粒子发射器实体图标 gizmo（仅图标，无附加线框）：
             // 点光源（Translation+Point/Range 且不带 Invisible）绘制
             // gizmo_point_light2d，平行光源（Translation+Parallel 且不带
-            // Invisible）绘制 gizmo_parallel_light2d；绘制规则与摄像机
-            // 图标一致（Translation 位置、面向调试摄像机的公告板、屏幕
-            // 像素恒定大小、身后不绘制），默认染色跟随光源自身的
-            // Renderer::Color（无该组件则白色），悬停提亮/选中染黄；
-            // 平行光源图标额外随实体最终旋转自转（箭头指向照射方向）。
+            // Invisible）绘制 gizmo_parallel_light2d，粒子发射器
+            //（Translation+Particle::Emitter 且不带 Invisible）绘制
+            // gizmo_particle；绘制规则与摄像机图标一致（Translation 位置、
+            // 面向调试摄像机的公告板、屏幕像素恒定大小、身后不绘制），
+            // 光源图标默认染色跟随光源自身的 Renderer::Color（无该组件
+            // 则白色）、发射器图标默认染色取其初始颜色区间中点，悬停
+            // 提亮/选中染黄；平行光源图标额外随实体最终旋转自转（箭头
+            // 指向照射方向）。
             do try!{
                 try! debug_camera_trans =
                     camera_entity->towoo::get_component:<Transform::Translation>();
@@ -452,6 +457,67 @@ namespace JEEditor::Editor::WorldEditorViewport
                     };
                 }
 
+                // 粒子发射器图标：绘制规则与光源图标一致（Translation
+                // 位置、面向调试摄像机的公告板、屏幕像素恒定大小、身后
+                // 不绘制），默认染色取发射器自身初始颜色区间的中点
+                //（color_min 与 color_max 的均值，逐分量钳制 0~1），
+                // 全向发射不随旋转，悬停提亮/选中染黄
+                func drawParticleEmitterIcon(e: entity, icon: option<texture>)=> void
+                {
+                    do try!{
+                        try! trans =
+                            e->towoo::get_component:<Transform::Translation>();
+                        try! emitter =
+                            e->towoo::get_component:<Particle::Emitter>();
+                        try! euid = e->internal::get_entity_uid;
+                        try! icon_instance = icon;
+
+                        let pos = trans->get_global_pos;
+
+                        let mut is_selected = false;
+                        match (self.m_selected_entity_id)
+                        {
+                            none?;
+                            value(selected)?
+                                is_selected = selected == euid;
+                        }
+                        let mut is_hover = false;
+                        match (self.m_icon_gizmo_hover)
+                        {
+                            none?;
+                            value(hovered)?
+                                is_hover = hovered == euid;
+                        }
+
+                        let cmin = emitter.color_min->get;
+                        let cmax = emitter.color_max->get;
+                        let mut icon_tint = (
+                            mathf::clamp((cmin.0 + cmax.0) * 0.5, 0., 1.),
+                            mathf::clamp((cmin.1 + cmax.1) * 0.5, 0., 1.),
+                            mathf::clamp((cmin.2 + cmax.2) * 0.5, 0., 1.),
+                            1.);
+                        if (is_hover)
+                            icon_tint = (1., 1., 0.6, 1.);
+                        if (is_selected)
+                            icon_tint = (1., 1., 0.25, 1.);
+
+                        // 位于调试摄像机身后的发射器不绘制图标（避免镜像投影）
+                        if ((pos - debug_cam_pos)->dot(debug_cam_forward) > 0.)
+                        {
+                            let world_per_pixel = gizmoWorldPerPixel(
+                                camera_entity, debug_camera_trans,
+                                debug_view_proj, pos, fb_rsize);
+                            drawBillboardIcon(
+                                pos,
+                                debug_camera_trans->get_global_rot,
+                                PARTICLE_GIZMO_ICON_SIZE_PX * world_per_pixel,
+                                icon_instance,
+                                icon_tint);
+                        }
+                        return_value!;
+                    };
+                }
+
                 for (let e : self.m_point_light2d_entity_selector)
                 {
                     drawLight2DIcon(e, Icons::GIZMO_POINT_LIGHT2D, false);
@@ -463,6 +529,10 @@ namespace JEEditor::Editor::WorldEditorViewport
                 for (let e : self.m_parallel_light2d_entity_selector)
                 {
                     drawLight2DIcon(e, Icons::GIZMO_PARALLEL_LIGHT2D, true);
+                }
+                for (let e : self.m_particle_emitter_entity_selector)
+                {
+                    drawParticleEmitterIcon(e, Icons::GIZMO_PARTICLE);
                 }
                 return_value!;
             };
@@ -734,6 +804,135 @@ namespace JEEditor::Editor::WorldEditorViewport
                                 drawLightHandle(handles[i], i == active_handle);
                         }
                     }
+                    return_value!;
+                };
+                return_value!;
+            };
+
+            // 绘制粒子发射器编辑 gizmo（仅选中实体）：
+            // 发射形状线框（球=三向大圆 / 圆=XY 平面圆 / 盒=六面边环）、
+            // 主发射方向箭头（轴线段 + 箭头锥，尖端为方向手柄）与散布
+            // 角环（过箭头尖端、垂直主方向，半径 = 箭头长 * tan(半散布
+            // 角)），及可拖拽手柄（形状手柄 / 方向手柄 / 散布把手）。
+            // 线段与手柄的绘制方式同碰撞体/光源形状；本块在其后提交，
+            // 绘制在最上层。
+            do try!{
+                try! debug_camera_trans =
+                    camera_entity->towoo::get_component:<Transform::Translation>();
+                let (fbw, fbh) = fb->size();
+                let fb_rsize = (fbw as real, fbh as real) as vec2;
+                let debug_view_proj = camera_projection->get_view_proj_mat;
+                let billboard_rot = debug_camera_trans->get_global_rot;
+
+                // 单条形状边：单位 X 轴线段旋到 ab 方向（同碰撞体边）
+                func drawParticleEdge(
+                    a: vec3, b: vec3, color: (real, real, real, real))=> void
+                {
+                    let ab = b - a;
+                    let len = ab->length;
+                    if (len < 0.0001)
+                        return;
+                    drawSolid(
+                        a, gizmoEdgeRotation(ab), (len, len, len) as vec3,
+                        GIZMO_LINE_X, color);
+                }
+
+                // 手柄方块：面向调试摄像机、屏幕像素恒定大小，激活时染黄
+                func drawParticleHandle(
+                    pos: vec3,
+                    active: bool,
+                    color: (real, real, real, real))=> void
+                {
+                    let world_per_pixel = gizmoWorldPerPixel(
+                        camera_entity, debug_camera_trans,
+                        debug_view_proj, pos, fb_rsize);
+                    let size = COLLIDER_HANDLE_SIZE_PX * world_per_pixel;
+                    drawSolid(
+                        pos, billboard_rot, (size, size, size) as vec3,
+                        DEFAULT_SQUARE_SHAPE,
+                        active ? GIZMO_COLOR_HOVER | color);
+                }
+
+                do try!{
+                    try! selected_euid = self.m_selected_entity_id;
+                    try! selected_entity = self->findEntityByEuid(selected_euid);
+                    try! emitter =
+                        selected_entity->towoo::get_component:<Particle::Emitter>();
+                    try! frame = particleFrame(selected_entity);
+
+                    let active_handle = self.m_particle_dragging
+                        ? self.m_particle_drag_handle
+                        | self.m_particle_hover_handle;
+
+                    // ---- 发射形状线框（各环按闭合环绘制；点发射无环） ----
+                    match (getParticleShapeOutline(selected_entity))
+                    {
+                        none?;
+                        value((_, rings))?
+                        {
+                            for (let mut r = 0; r < rings->len; r += 1)
+                            {
+                                let ring = rings[r];
+                                if (ring->len < 2)
+                                    continue;
+                                for (let mut i = 0; i + 1 < ring->len; i += 1)
+                                    drawParticleEdge(
+                                        ring[i], ring[i + 1], PARTICLE_GIZMO_COLOR);
+                                if (ring->len > 2)
+                                    drawParticleEdge(
+                                        ring[ring->len - 1], ring[0],
+                                        PARTICLE_GIZMO_COLOR);
+                            }
+                        }
+                    }
+
+                    // 形状手柄
+                    match (getParticleShapeHandles(selected_entity))
+                    {
+                        none?;
+                        value(handles_info)?
+                        {
+                            let handles = handles_info.1;
+                            for (let mut i = 0; i < handles->len; i += 1)
+                                drawParticleHandle(
+                                    handles[i], i == active_handle,
+                                    COLLIDER_HANDLE_COLOR);
+                        }
+                    }
+
+                    // ---- 方向箭头（轴线段 + 箭头锥，沿主方向） ----
+                    let (dir, len) = getParticleArrow(frame, emitter);
+                    let arrow_scale = (len, len, len) as vec3;
+                    let arrow_rot = gizmoEdgeRotation(dir);
+                    let arrow_color =
+                        (active_handle == PARTICLE_HANDLE_DIRECTION)
+                        ? GIZMO_COLOR_HOVER
+                        | PARTICLE_DIRECTION_GIZMO_COLOR;
+                    drawSolid(
+                        frame.0, arrow_rot, arrow_scale,
+                        GIZMO_LINE_X, arrow_color);
+                    drawSolid(
+                        frame.0, arrow_rot, arrow_scale,
+                        GIZMO_CONE_X, arrow_color);
+                    drawParticleHandle(
+                        frame.0 + dir * len,
+                        active_handle == PARTICLE_HANDLE_DIRECTION,
+                        PARTICLE_DIRECTION_GIZMO_COLOR);
+
+                    // ---- 散布角环（过箭头尖端、垂直主方向） ----
+                    let (ring, hp) = getParticleSpreadRing(
+                        frame.0, dir, len, emitter.spread_angle->get);
+                    let ring_color =
+                        (active_handle == PARTICLE_HANDLE_SPREAD)
+                        ? GIZMO_COLOR_HOVER
+                        | PARTICLE_SPREAD_GIZMO_COLOR;
+                    for (let mut i = 0; i < ring->len; i += 1)
+                        drawParticleEdge(
+                            ring[i], ring[(i + 1) % ring->len], ring_color);
+                    drawParticleHandle(
+                        hp,
+                        active_handle == PARTICLE_HANDLE_SPREAD,
+                        PARTICLE_SPREAD_GIZMO_COLOR);
                     return_value!;
                 };
                 return_value!;

@@ -103,6 +103,11 @@ namespace JEEditor::Editor
         // 碰撞体线框 gizmo 与“编辑碰撞体”手柄以它为准（与物理系统的
         // 查询语义一致：碰撞体组件只有在 Rigidbody 实体上才生效）
         protected m_physics2d_body_entity_selector: mut entity_selector,
+
+        // 粒子发射器实体（Translation+Particle::Emitter 且不带 Invisible）
+        // 选择器：发射器图标 gizmo 与发射形状/方向/散布编辑手柄以它为准
+        //（发射器仍是常规渲染实体，参与射线拾取）
+        protected m_particle_emitter_entity_selector: mut entity_selector,
         
         protected m_last_time: mut real,
         protected m_is_look_active: mut bool,
@@ -188,6 +193,26 @@ namespace JEEditor::Editor
         protected m_light_drag_undo_component: mut string,
         protected m_light_drag_undo_member: mut string,
         protected m_light_drag_undo_old_value: mut string,
+
+        // ---- 粒子发射器 gizmo（编辑手柄）状态 ----
+        // 选中带 Particle::Emitter 的实体即显示发射形状线框、方向箭头、
+        // 散布角环与手柄、可直接拖拽（无需模式开关；仅选中时绘制）
+        protected m_particle_hover_handle: mut int,
+        protected m_particle_dragging: mut bool,
+        protected m_particle_drag_handle: mut int,
+        // 拖拽开始时捕获的快照：发射器中心与轴手柄的世界轴（冻结）、
+        // 平面手柄（圆半径/方向/散布）的拖拽平面（法线与过点，冻结）、
+        // 散布环拖拽的基准箭头长（冻结）与撤销记录所需的组件成员旧值
+        protected m_particle_drag_euid: mut entity::internal::euid_t,
+        protected m_particle_drag_kind: mut ParticleShapeKind,
+        protected m_particle_drag_center: mut vec3,
+        protected m_particle_drag_axis: mut vec3,
+        protected m_particle_drag_plane_normal: mut vec3,
+        protected m_particle_drag_plane_point: mut vec3,
+        protected m_particle_drag_len: mut real,
+        protected m_particle_drag_undo_component: mut string,
+        protected m_particle_drag_undo_member: mut string,
+        protected m_particle_drag_undo_old_value: mut string,
     }
     {
         // 编辑器上下文：重建 WorldEditorViewport 窗口所需的全部状态。
@@ -277,6 +302,26 @@ namespace JEEditor::Editor
         // GIZMO_COLOR_HOVER、方块手柄复用 COLLIDER_HANDLE 系列参数
         protected let LIGHT2D_RANGE_GIZMO_COLOR = (1., 0.78, 0.35, 0.65);
         protected let LIGHT2D_BLOCK_GIZMO_COLOR = (0.62, 0.52, 0.95, 0.65);
+
+        // ---- 粒子发射器 gizmo 参数 ----
+        protected let PARTICLE_GIZMO_ICON_SIZE_PX = 48.;  // 发射器图标边长（像素）
+        // 特殊手柄编号（负数哨兵，形状手柄为 >= 0 的数组下标，
+        // 与 GIZMO_HANDLE_NONE = -1 不冲突）：
+        // Direction = 拖拽方向箭头尖端；Spread = 拖拽散布角环把手
+        protected let PARTICLE_HANDLE_DIRECTION = -2;
+        protected let PARTICLE_HANDLE_SPREAD = -3;
+        protected let PARTICLE_MIN_SHAPE_SIZE = 0.01;     // 半径/半边长下限
+        // 方向箭头长相对发射形状外扩半径的比例；形状退化（点发射）时
+        // 退回最小箭头长，保证方向箭头始终可见可拖
+        protected let PARTICLE_DIRECTION_ARROW_RATIO = 1.5;
+        protected let PARTICLE_DIRECTION_ARROW_MIN = 0.3;
+        // 发射器编辑 gizmo 配色：形状线框粉、方向箭头蓝、散布角环橙
+        //（与碰撞体旋转环一致），仅选中实体绘制故无常态/选中两套，
+        // 手柄激活高亮复用 GIZMO_COLOR_HOVER、方块手柄复用
+        // COLLIDER_HANDLE_SIZE_PX
+        protected let PARTICLE_GIZMO_COLOR = (1., 0.5, 0.75, 0.65);
+        protected let PARTICLE_DIRECTION_GIZMO_COLOR = (0.4, 0.85, 1., 0.85);
+        protected let PARTICLE_SPREAD_GIZMO_COLOR = (1., 0.62, 0.25, 0.75);
         
         // 右键同时承担“拖拽环视”职责：以按下起点为基准，位移切实超过该
         // 像素阈值后才激活环视（阈值内的位移不转动摄像机）；松开时位移
@@ -313,12 +358,23 @@ namespace JEEditor::Editor
         }
         
         // 可编辑形状的 2D 光源组件种类（Light2D::Range / Light2D::BlockShadow
-        // 两个互斥的形状编辑目标；枚举成员可见性继承声明，跨文件使用的
-        // 枚举须为 public）
+        // 两个互斥的形状编辑目标；枚举成员可见性继承声明，跨文件使用的枚举
+        // 须为 public）
         public enum LightShapeKind
         {
             RANGE,
             BLOCK_SHADOW,
+        }
+
+        // 粒子发射器的发射形状种类（与 Particle::Emitter 的 shape 对应：
+        // 0=点 1=球 2=圆(2D) 3=盒；枚举成员可见性继承声明，跨文件使用的
+        // 枚举须为 public）
+        public enum ParticleShapeKind
+        {
+            POINT,
+            SPHERE,
+            CIRCLE,
+            BOX,
         }
         
         public enum CloseRequest
