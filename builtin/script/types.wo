@@ -474,6 +474,38 @@ namespace Particle::scalar_curve
         }
     }
 }
+// Particle::Emitter::shape_type：发射形状种类（点/球体/圆/盒）。
+// 序列化为整数值，与旧的 int 存档数据兼容
+namespace Particle::Emitter::shape_type
+{
+    using parser = void
+    {
+        public extern func saving(val: Particle::Emitter::shape_type)=> string
+        {
+            return val as int as string;
+        }
+        public extern func restoring(dat: string)=> Particle::Emitter::shape_type
+        {
+            return dat as int as Particle::Emitter::shape_type;
+        }
+    }
+}
+// Particle::Emitter::simulation_space_type：模拟空间（世界/发射器局部）。
+// 序列化为整数值，与旧的 int 存档数据兼容
+namespace Particle::Emitter::simulation_space_type
+{
+    using parser = void
+    {
+        public extern func saving(val: Particle::Emitter::simulation_space_type)=> string
+        {
+            return val as int as string;
+        }
+        public extern func restoring(dat: string)=> Particle::Emitter::simulation_space_type
+        {
+            return dat as int as Particle::Emitter::simulation_space_type;
+        }
+    }
+}
 namespace file_resource
 {
     using parser = void

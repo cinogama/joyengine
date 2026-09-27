@@ -906,3 +906,43 @@ namespace UserInterface::Origin::origin_center
         }
     }
 }
+
+namespace Particle::Emitter::shape_type
+{
+    using parser = void
+    {
+        public extern func edit(val: Particle::Emitter::shape_type, tag: string)=> option<Particle::Emitter::shape_type>
+        {
+            // 发射形状下拉选择（枚举值与选项下标一致）
+            match (Combo(F"##{tag}",
+                ["点", "球体", "圆（2D）", "盒"],
+                option::value(val as int)))
+            {
+                value(idx)?
+                    return option::value(idx as Particle::Emitter::shape_type);
+                none?;
+            }
+            return option::none;
+        }
+    }
+}
+
+namespace Particle::Emitter::simulation_space_type
+{
+    using parser = void
+    {
+        public extern func edit(val: Particle::Emitter::simulation_space_type, tag: string)=> option<Particle::Emitter::simulation_space_type>
+        {
+            // 模拟空间下拉选择（枚举值与选项下标一致）
+            match (Combo(F"##{tag}",
+                ["世界空间", "发射器局部空间"],
+                option::value(val as int)))
+            {
+                value(idx)?
+                    return option::value(idx as Particle::Emitter::simulation_space_type);
+                none?;
+            }
+            return option::none;
+        }
+    }
+}

@@ -114,16 +114,16 @@ namespace JEEditor::Editor::WorldEditorViewport
         return (v[0], v[1], value) as vec3;
     }
 
-    // 发射形状种类（Emitter 的 shape：0=点 1=球 2=圆(2D) 3=盒，
-    // 超出范围按点处理）
+    // 发射形状种类（Emitter 的 shape 枚举映射到 gizmo 侧的种类，
+    // 未识别值按点处理）
     protected func particleShapeKind(emitter: Particle::Emitter)=> ParticleShapeKind
     {
-        let shape = emitter.shape->get as int;
-        if (shape == 1)
+        let shape = emitter.shape->get;
+        if (shape == Particle::Emitter::shape_type::sphere)
             return ParticleShapeKind::SPHERE;
-        if (shape == 2)
+        if (shape == Particle::Emitter::shape_type::circle)
             return ParticleShapeKind::CIRCLE;
-        if (shape == 3)
+        if (shape == Particle::Emitter::shape_type::box)
             return ParticleShapeKind::BOX;
         return ParticleShapeKind::POINT;
     }

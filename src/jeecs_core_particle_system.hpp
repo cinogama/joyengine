@@ -151,7 +151,7 @@ namespace jeecs
             math::vec3 offset = {};
             switch (emitter.m_shape)
             {
-            case 1: // 球体（体积内均匀）
+            case Emitter::shape_type::sphere: // 球体（体积内均匀）
             {
                 const math::vec3 dir = random_direction_around(
                     math::vec3(0.f, 1.f, 0.f), math::PI);
@@ -159,7 +159,7 @@ namespace jeecs
                     * std::cbrt(math::random(0.0f, 1.0f)));
                 break;
             }
-            case 2: // 圆（局部 XY 平面内）
+            case Emitter::shape_type::circle: // 圆（局部 XY 平面内）
             {
                 const float angle = math::random(0.0f, 2.f * math::PI);
                 const float radius = emitter.m_shape_radius
@@ -170,13 +170,13 @@ namespace jeecs
                     0.f);
                 break;
             }
-            case 3: // 盒（半边长 m_shape_size）
+            case Emitter::shape_type::box: // 盒（半边长 m_shape_size）
                 offset = math::vec3(
                     math::random(-1.0f, 1.0f) * emitter.m_shape_size.x,
                     math::random(-1.0f, 1.0f) * emitter.m_shape_size.y,
                     math::random(-1.0f, 1.0f) * emitter.m_shape_size.z);
                 break;
-            case 0: // 点
+            case Emitter::shape_type::point: // 点
             default:
                 break;
             }
@@ -330,7 +330,8 @@ namespace jeecs
                     emitter.m_clear_particles = false;
                 }
 
-                const bool world_space = emitter.m_simulation_space != 0;
+                const bool world_space =
+                    emitter.m_simulation_space != Emitter::simulation_space_type::local;
 
                 if (emitter.m_playing)
                 {

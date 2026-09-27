@@ -12253,9 +12253,9 @@ namespace jeecs
         常规渲染管线（系统会在缺失时自动补齐并挂上内置粒子着色器）；
         粒子纹理绑定在 Renderer::Textures 的 pass 0，混合模式由所选着色器决定。
         角度类成员（散布角/初始自转/自转速度）以度为单位。
-        m_simulation_space 为 0 时粒子在世界空间模拟（发射器移动不携带已发射
-        粒子），为 1 时在发射器局部空间模拟（整体随发射器刚体运动）；
-        局部空间下 m_direction 与 m_gravity 按发射器局部坐标系解释。
+        m_simulation_space 为 world 时粒子在世界空间模拟（发射器移动不携带
+        已发射粒子），为 local 时在发射器局部空间模拟（整体随发射器刚体
+        运动）；局部空间下 m_direction 与 m_gravity 按发射器局部坐标系解释。
         m_clear_particles 置为 true 后系统会清空全部已发射粒子并把该标记复位。
         */
         struct Emitter
@@ -12508,7 +12508,15 @@ namespace jeecs
             JECS_DEFAULT_CONSTRUCTOR(Emitter);
 
             // ===== 发射 =====
-            int m_shape = 0;                        // 0=点 1=球体 2=圆(2D) 3=盒
+            // 发射形状种类：决定发射偏移的采样区域（见 emit_one 的 switch）
+            enum shape_type : int32_t
+            {
+                point = 0,      // 点：无发射偏移
+                sphere = 1,     // 球体：体积内均匀
+                circle = 2,     // 圆（2D）：局部 XY 平面内
+                box = 3,        // 盒：半边长 m_shape_size
+            };
+            shape_type m_shape = shape_type::point;
             float m_shape_radius = 0.25f;           // 球/圆 的发射半径
             math::vec3 m_shape_size = { 0.5f, 0.5f, 0.5f }; // 盒的半边长
             float m_spawn_rate = 32.0f;             // 每秒发射数量
@@ -12541,7 +12549,14 @@ namespace jeecs
 
             // ===== 通用 =====
             int m_max_particles = 512;
-            int m_simulation_space = 0;             // 0=世界空间 1=局部空间
+            // 模拟空间：world=世界空间（发射器移动不携带已发射粒子），
+            // local=发射器局部空间（整体随发射器刚体运动）
+            enum simulation_space_type : int32_t
+            {
+                world = 0,
+                local = 1,
+            };
+            simulation_space_type m_simulation_space = simulation_space_type::world;
             bool m_playing = true;
             bool m_clear_particles = false;
 
@@ -13295,6 +13310,49 @@ namespace jeecs
                 "        right   = 2,\n"
                 "        top     = 4,\n"
                 "        bottom  = 8,\n"
+                "    }\n"
+                "}\n");
+
+            typing::register_script_parser<Particle::Emitter::shape_type>(
+                guard,
+                [](const Particle::Emitter::shape_type* v, woort_value value)
+                {
+                    woort_set_int(value, *v);
+                },
+                [](Particle::Emitter::shape_type* v, woort_value value)
+                {
+                    *v = static_cast<Particle::Emitter::shape_type>(woort_int(value));
+                },
+                "Particle::Emitter::shape_type",
+                "namespace Particle::Emitter\n"
+                "{\n"
+                "    public enum shape_type\n"
+                "    {\n"
+                "        point   = 0,\n"
+                "\n"
+                "        sphere  = 1,\n"
+                "        circle  = 2,\n"
+                "        box     = 3,\n"
+                "    }\n"
+                "}\n");
+
+            typing::register_script_parser<Particle::Emitter::simulation_space_type>(
+                guard,
+                [](const Particle::Emitter::simulation_space_type* v, woort_value value)
+                {
+                    woort_set_int(value, *v);
+                },
+                [](Particle::Emitter::simulation_space_type* v, woort_value value)
+                {
+                    *v = static_cast<Particle::Emitter::simulation_space_type>(woort_int(value));
+                },
+                "Particle::Emitter::simulation_space_type",
+                "namespace Particle::Emitter\n"
+                "{\n"
+                "    public enum simulation_space_type\n"
+                "    {\n"
+                "        world   = 0,\n"
+                "        local   = 1,\n"
                 "    }\n"
                 "}\n");
 
