@@ -1947,8 +1947,7 @@ void jegl_update_vertex_buffer(
     size_t vertex_length,
     size_t active_index_count)
 {
-    if (vertex == nullptr)
-        return;
+    assert(vertex != nullptr);
 
     if (active_index_count > vertex->m_index_capacity)
         active_index_count = vertex->m_index_capacity;

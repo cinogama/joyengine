@@ -96,27 +96,10 @@ namespace jeecs
 
         std::unordered_map<uint32_t, particle_pool> _m_pools;
         std::vector<uint32_t> _m_alive_emitter_ids;
-        basic::optional<basic::resource<graphic::shader>> _m_default_particle_shader;
 
         ParticleSystem(game_world w)
             : game_system(w)
         {
-        }
-
-        const basic::resource<graphic::shader>& default_particle_shader()
-        {
-            if (!_m_default_particle_shader.has_value())
-            {
-                auto loaded = graphic::shader::load(
-                    nullptr, "!/builtin/shader/ParticleBlend.shader");
-                if (loaded.has_value())
-                    _m_default_particle_shader.emplace(std::move(loaded.value()));
-                else
-                    jeecs::debug::logerr(
-                        "ParticleSystem: failed to load builtin shader "
-                        "'!/builtin/shader/ParticleBlend.shader'.");
-            }
-            return _m_default_particle_shader.value();
         }
 
         // 在 axis 周围半角 spread_rad 的圆锥内均匀取方向；spread 覆盖全球面时
@@ -200,7 +183,7 @@ namespace jeecs
 
             // 初速方向：散布角围绕主方向
             math::vec3 direction = random_direction_around(
-                emitter.m_direction,
+                translation->world_rotation * emitter.m_direction,
                 math::clamp(emitter.m_spread_angle, 0.0f, 180.0f) * math::DEG2RAD);
             float speed = math::random(
                 std::min(emitter.m_speed_min, emitter.m_speed_max),
@@ -273,52 +256,25 @@ namespace jeecs
                     break;
         }
 
-        void Update()
+        void GraphicUpdate()
         {
             const float dt = deltatime();
             _m_alive_emitter_ids.clear();
 
             for (auto&& [
-                e, emitter, translation, shape, shaders, textures, rendqueue
+                e, emitter, translation, shape
             ] : query_entity<
                 view typesof(
                     Particle::Emitter&,
                     Translation*,
-                    Shape*,
-                    Shaders*,
-                    Textures*,
-                    Rendqueue*
+                    Shape&
                 )
             >())
             {
                 _m_alive_emitter_ids.push_back(e._m_raw._m_id);
 
-                // 渲染三件套缺失时补齐（命令缓冲延迟生效，下一帧开始模拟）；
-                // Shape 由本系统托管，Shaders 缺省挂内置粒子着色器
                 bool renderer_ready = true;
-                if (shape == nullptr)
-                {
-                    e.add_component<Shape>();
-                    renderer_ready = false;
-                }
-                if (shaders == nullptr)
-                {
-                    if (auto* created = e.add_component<Shaders>())
-                        created->shaders.push_back(default_particle_shader());
-                    renderer_ready = false;
-                }
-                if (textures == nullptr)
-                {
-                    e.add_component<Textures>();
-                    renderer_ready = false;
-                }
-                if (rendqueue == nullptr)
-                {
-                    // 半透明粒子默认在不透明物体之后绘制
-                    if (auto* created = e.add_component<Rendqueue>())
-                        created->rend_queue = 1000;
-                    renderer_ready = false;
-                }
+               
                 if (!renderer_ready)
                     continue;
 
@@ -358,7 +314,7 @@ namespace jeecs
                     if (created.has_value())
                     {
                         pool.gpu_vertex.emplace(std::move(created.value()));
-                        shape->vertex = pool.gpu_vertex;
+                        shape.vertex = pool.gpu_vertex;
                     }
                     else
                     {
