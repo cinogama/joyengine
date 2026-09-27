@@ -6990,7 +6990,7 @@ namespace jeecs
         inline SystemT* add_system()
         {
             static_assert(
-                std::is_base_of_v<game_system, SystemT>, 
+                std::is_base_of_v<game_system, SystemT>,
                 "SystemT must be based of `game_system`.");
 
             return static_cast<SystemT*>(
@@ -12245,250 +12245,6 @@ namespace jeecs
     }
     namespace Particle
     {
-        // 颜色渐变：随生命周期时间（0~1）插值的一组 RGBA 关键帧。
-        // m_times 与 m_colors 一一对应且应按时间升序排列；
-        // 采样时 t 会被钳制到首末关键帧覆盖的范围。
-        struct color_gradient
-        {
-            basic::vector<float> m_times;
-            basic::vector<math::vec4> m_colors;
-
-            color_gradient()
-            {
-                m_times.push_back(0.0f);
-                m_times.push_back(1.0f);
-                m_colors.push_back(math::vec4(1.0f, 1.0f, 1.0f, 1.0f));
-                m_colors.push_back(math::vec4(1.0f, 1.0f, 1.0f, 0.0f));
-            }
-
-            // 关键帧数量（times/colors 以较短者为准）
-            size_t size() const noexcept
-            {
-                return std::min(m_times.size(), m_colors.size());
-            }
-            // 采样：空渐变返回 fallback；t 超出范围时钳制到首/末关键帧
-            math::vec4 sample(float t, const math::vec4& fallback) const
-            {
-                const size_t key_count = size();
-                if (key_count == 0)
-                    return fallback;
-                if (key_count == 1 || t <= m_times.at(0))
-                    return m_colors.at(0);
-                if (t >= m_times.at(key_count - 1))
-                    return m_colors.at(key_count - 1);
-
-                for (size_t i = 1; i < key_count; ++i)
-                {
-                    if (t <= m_times.at(i))
-                    {
-                        const float t0 = m_times.at(i - 1), t1 = m_times.at(i);
-                        const float span = t1 - t0;
-                        const float k = span > 0.0f ? (t - t0) / span : 0.0f;
-                        const math::vec4& c0 = m_colors.at(i - 1);
-                        const math::vec4& c1 = m_colors.at(i);
-                        return math::vec4(
-                            c0.x + (c1.x - c0.x) * k,
-                            c0.y + (c1.y - c0.y) * k,
-                            c0.z + (c1.z - c0.z) * k,
-                            c0.w + (c1.w - c0.w) * k);
-                    }
-                }
-                return m_colors.at(key_count - 1);
-            }
-
-            static const char* JEScriptTypeName()
-            {
-                return "Particle::color_gradient";
-            }
-            static const char* JEScriptTypeDeclare()
-            {
-                return
-                    "namespace Particle\n"
-                    "{\n"
-                    "    public using color_gradient = struct{\n"
-                    "        public m_times: array<float>,\n"
-                    "        public m_colors: array<vec4>,\n"
-                    "    };\n"
-                    "}";
-            }
-            void JEParseFromScriptType(woort_value v)
-            {
-                woort_value s;
-                if (!woort_push_reserve(3, &s))
-                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
-                else
-                {
-                    const woort_value tmp = s + 0;
-                    const woort_value times = s + 1;
-                    const woort_value colors = s + 2;
-
-                    woort_struct_get(times, v, 0);
-                    woort_struct_get(colors, v, 1);
-
-                    const size_t time_count = woort_vec_len(times);
-                    const size_t color_count = woort_vec_len(colors);
-                    const size_t key_count = std::min(time_count, color_count);
-
-                    m_times.clear();
-                    m_colors.clear();
-                    for (size_t i = 0; i < key_count; ++i)
-                    {
-                        if (woort_vec_get(tmp, times, i))
-                            m_times.push_back(woort_unbox_float(tmp));
-                        if (woort_vec_get(tmp, colors, i))
-                        {
-                            math::vec4 color;
-                            color.JEParseFromScriptType(tmp);
-                            m_colors.push_back(color);
-                        }
-                    }
-
-                    woort_pop(3);
-                }
-            }
-            void JEParseToScriptType(woort_value v) const
-            {
-                woort_value s;
-                if (!woort_push_reserve(2, &s))
-                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
-                else
-                {
-                    const woort_value tmp = s + 0;
-                    const woort_value arr = s + 1;
-
-                    const size_t key_count = size();
-
-                    woort_set_struct(v, 2);
-
-                    woort_set_vec(arr);
-                    woort_vec_resize(arr, key_count);
-                    for (size_t i = 0; i < key_count; ++i)
-                    {
-                        woort_set_box_float(tmp, m_times.at(i));
-                        (void)woort_vec_set(arr, i, tmp);
-                    }
-                    woort_struct_set(v, 0, arr);
-
-                    woort_set_vec(arr);
-                    woort_vec_resize(arr, key_count);
-                    for (size_t i = 0; i < key_count; ++i)
-                    {
-                        m_colors.at(i).JEParseToScriptType(tmp);
-                        (void)woort_vec_set(arr, i, tmp);
-                    }
-                    woort_struct_set(v, 1, arr);
-
-                    woort_pop(2);
-                }
-            }
-        };
-
-        // 标量曲线：随生命周期时间（0~1）插值的一组 (时间, 数值) 关键帧，
-        // 用于尺寸等标量的生命周期调制；采样规则与 color_gradient 相同。
-        struct scalar_curve
-        {
-            basic::vector<math::vec2> m_keys;
-
-            scalar_curve()
-            {
-                m_keys.push_back(math::vec2(0.0f, 1.0f));
-                m_keys.push_back(math::vec2(1.0f, 1.0f));
-            }
-
-            size_t size() const noexcept
-            {
-                return m_keys.size();
-            }
-            float sample(float t, float fallback) const
-            {
-                const size_t key_count = m_keys.size();
-                if (key_count == 0)
-                    return fallback;
-                if (key_count == 1 || t <= m_keys.at(0).x)
-                    return m_keys.at(0).y;
-                if (t >= m_keys.at(key_count - 1).x)
-                    return m_keys.at(key_count - 1).y;
-
-                for (size_t i = 1; i < key_count; ++i)
-                {
-                    const math::vec2& k1 = m_keys.at(i);
-                    if (t <= k1.x)
-                    {
-                        const math::vec2& k0 = m_keys.at(i - 1);
-                        const float span = k1.x - k0.x;
-                        const float k = span > 0.0f ? (t - k0.x) / span : 0.0f;
-                        return k0.y + (k1.y - k0.y) * k;
-                    }
-                }
-                return m_keys.at(key_count - 1).y;
-            }
-
-            static const char* JEScriptTypeName()
-            {
-                return "Particle::scalar_curve";
-            }
-            static const char* JEScriptTypeDeclare()
-            {
-                return
-                    "namespace Particle\n"
-                    "{\n"
-                    "    public using scalar_curve = struct{\n"
-                    "        public m_keys: array<vec2>,\n"
-                    "    };\n"
-                    "}";
-            }
-            void JEParseFromScriptType(woort_value v)
-            {
-                woort_value s;
-                if (!woort_push_reserve(2, &s))
-                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
-                else
-                {
-                    const woort_value tmp = s + 0;
-                    const woort_value keys = s + 1;
-
-                    woort_struct_get(keys, v, 0);
-
-                    const size_t key_count = woort_vec_len(keys);
-                    m_keys.clear();
-                    for (size_t i = 0; i < key_count; ++i)
-                    {
-                        if (woort_vec_get(tmp, keys, i))
-                        {
-                            math::vec2 key;
-                            key.JEParseFromScriptType(tmp);
-                            m_keys.push_back(key);
-                        }
-                    }
-                    woort_pop(2);
-                }
-            }
-            void JEParseToScriptType(woort_value v) const
-            {
-                woort_value s;
-                if (!woort_push_reserve(2, &s))
-                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
-                else
-                {
-                    const woort_value tmp = s + 0;
-                    const woort_value arr = s + 1;
-
-                    woort_set_struct(v, 1);
-
-                    woort_set_vec(arr);
-                    woort_vec_resize(arr, m_keys.size());
-                    for (size_t i = 0; i < m_keys.size(); ++i)
-                    {
-                        m_keys.at(i).JEParseToScriptType(tmp);
-                        (void)woort_vec_set(arr, i, tmp);
-                    }
-                    woort_struct_set(v, 0, arr);
-
-                    woort_pop(2);
-                }
-            }
-        };
-
         /*
         Emitter [组件]
         粒子发射器：描述一类粒子的发射与生命周期行为，模拟与网格构建由
@@ -12504,6 +12260,250 @@ namespace jeecs
         */
         struct Emitter
         {
+            // 颜色渐变：随生命周期时间（0~1）插值的一组 RGBA 关键帧。
+// m_times 与 m_colors 一一对应且应按时间升序排列；
+// 采样时 t 会被钳制到首末关键帧覆盖的范围。
+            struct color_gradient
+            {
+                basic::vector<float> m_times;
+                basic::vector<math::vec4> m_colors;
+
+                color_gradient()
+                {
+                    m_times.push_back(0.0f);
+                    m_times.push_back(1.0f);
+                    m_colors.push_back(math::vec4(1.0f, 1.0f, 1.0f, 1.0f));
+                    m_colors.push_back(math::vec4(1.0f, 1.0f, 1.0f, 0.0f));
+                }
+
+                // 关键帧数量（times/colors 以较短者为准）
+                size_t size() const noexcept
+                {
+                    return std::min(m_times.size(), m_colors.size());
+                }
+                // 采样：空渐变返回 fallback；t 超出范围时钳制到首/末关键帧
+                math::vec4 sample(float t, const math::vec4& fallback) const
+                {
+                    const size_t key_count = size();
+                    if (key_count == 0)
+                        return fallback;
+                    if (key_count == 1 || t <= m_times.at(0))
+                        return m_colors.at(0);
+                    if (t >= m_times.at(key_count - 1))
+                        return m_colors.at(key_count - 1);
+
+                    for (size_t i = 1; i < key_count; ++i)
+                    {
+                        if (t <= m_times.at(i))
+                        {
+                            const float t0 = m_times.at(i - 1), t1 = m_times.at(i);
+                            const float span = t1 - t0;
+                            const float k = span > 0.0f ? (t - t0) / span : 0.0f;
+                            const math::vec4& c0 = m_colors.at(i - 1);
+                            const math::vec4& c1 = m_colors.at(i);
+                            return math::vec4(
+                                c0.x + (c1.x - c0.x) * k,
+                                c0.y + (c1.y - c0.y) * k,
+                                c0.z + (c1.z - c0.z) * k,
+                                c0.w + (c1.w - c0.w) * k);
+                        }
+                    }
+                    return m_colors.at(key_count - 1);
+                }
+
+                static const char* JEScriptTypeName()
+                {
+                    return "Particle::color_gradient";
+                }
+                static const char* JEScriptTypeDeclare()
+                {
+                    return
+                        "namespace Particle\n"
+                        "{\n"
+                        "    public using color_gradient = struct{\n"
+                        "        public m_times: array<float>,\n"
+                        "        public m_colors: array<vec4>,\n"
+                        "    };\n"
+                        "}";
+                }
+                void JEParseFromScriptType(woort_value v)
+                {
+                    woort_value s;
+                    if (!woort_push_reserve(3, &s))
+                        woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                    else
+                    {
+                        const woort_value tmp = s + 0;
+                        const woort_value times = s + 1;
+                        const woort_value colors = s + 2;
+
+                        woort_struct_get(times, v, 0);
+                        woort_struct_get(colors, v, 1);
+
+                        const size_t time_count = woort_vec_len(times);
+                        const size_t color_count = woort_vec_len(colors);
+                        const size_t key_count = std::min(time_count, color_count);
+
+                        m_times.clear();
+                        m_colors.clear();
+                        for (size_t i = 0; i < key_count; ++i)
+                        {
+                            if (woort_vec_get(tmp, times, i))
+                                m_times.push_back(woort_unbox_float(tmp));
+                            if (woort_vec_get(tmp, colors, i))
+                            {
+                                math::vec4 color;
+                                color.JEParseFromScriptType(tmp);
+                                m_colors.push_back(color);
+                            }
+                        }
+
+                        woort_pop(3);
+                    }
+                }
+                void JEParseToScriptType(woort_value v) const
+                {
+                    woort_value s;
+                    if (!woort_push_reserve(2, &s))
+                        woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                    else
+                    {
+                        const woort_value tmp = s + 0;
+                        const woort_value arr = s + 1;
+
+                        const size_t key_count = size();
+
+                        woort_set_struct(v, 2);
+
+                        woort_set_vec(arr);
+                        woort_vec_resize(arr, key_count);
+                        for (size_t i = 0; i < key_count; ++i)
+                        {
+                            woort_set_box_float(tmp, m_times.at(i));
+                            (void)woort_vec_set(arr, i, tmp);
+                        }
+                        woort_struct_set(v, 0, arr);
+
+                        woort_set_vec(arr);
+                        woort_vec_resize(arr, key_count);
+                        for (size_t i = 0; i < key_count; ++i)
+                        {
+                            m_colors.at(i).JEParseToScriptType(tmp);
+                            (void)woort_vec_set(arr, i, tmp);
+                        }
+                        woort_struct_set(v, 1, arr);
+
+                        woort_pop(2);
+                    }
+                }
+            };
+
+            // 标量曲线：随生命周期时间（0~1）插值的一组 (时间, 数值) 关键帧，
+            // 用于尺寸等标量的生命周期调制；采样规则与 color_gradient 相同。
+            struct scalar_curve
+            {
+                basic::vector<math::vec2> m_keys;
+
+                scalar_curve()
+                {
+                    m_keys.push_back(math::vec2(0.0f, 1.0f));
+                    m_keys.push_back(math::vec2(1.0f, 1.0f));
+                }
+
+                size_t size() const noexcept
+                {
+                    return m_keys.size();
+                }
+                float sample(float t, float fallback) const
+                {
+                    const size_t key_count = m_keys.size();
+                    if (key_count == 0)
+                        return fallback;
+                    if (key_count == 1 || t <= m_keys.at(0).x)
+                        return m_keys.at(0).y;
+                    if (t >= m_keys.at(key_count - 1).x)
+                        return m_keys.at(key_count - 1).y;
+
+                    for (size_t i = 1; i < key_count; ++i)
+                    {
+                        const math::vec2& k1 = m_keys.at(i);
+                        if (t <= k1.x)
+                        {
+                            const math::vec2& k0 = m_keys.at(i - 1);
+                            const float span = k1.x - k0.x;
+                            const float k = span > 0.0f ? (t - k0.x) / span : 0.0f;
+                            return k0.y + (k1.y - k0.y) * k;
+                        }
+                    }
+                    return m_keys.at(key_count - 1).y;
+                }
+
+                static const char* JEScriptTypeName()
+                {
+                    return "Particle::scalar_curve";
+                }
+                static const char* JEScriptTypeDeclare()
+                {
+                    return
+                        "namespace Particle\n"
+                        "{\n"
+                        "    public using scalar_curve = struct{\n"
+                        "        public m_keys: array<vec2>,\n"
+                        "    };\n"
+                        "}";
+                }
+                void JEParseFromScriptType(woort_value v)
+                {
+                    woort_value s;
+                    if (!woort_push_reserve(2, &s))
+                        woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                    else
+                    {
+                        const woort_value tmp = s + 0;
+                        const woort_value keys = s + 1;
+
+                        woort_struct_get(keys, v, 0);
+
+                        const size_t key_count = woort_vec_len(keys);
+                        m_keys.clear();
+                        for (size_t i = 0; i < key_count; ++i)
+                        {
+                            if (woort_vec_get(tmp, keys, i))
+                            {
+                                math::vec2 key;
+                                key.JEParseFromScriptType(tmp);
+                                m_keys.push_back(key);
+                            }
+                        }
+                        woort_pop(2);
+                    }
+                }
+                void JEParseToScriptType(woort_value v) const
+                {
+                    woort_value s;
+                    if (!woort_push_reserve(2, &s))
+                        woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                    else
+                    {
+                        const woort_value tmp = s + 0;
+                        const woort_value arr = s + 1;
+
+                        woort_set_struct(v, 1);
+
+                        woort_set_vec(arr);
+                        woort_vec_resize(arr, m_keys.size());
+                        for (size_t i = 0; i < m_keys.size(); ++i)
+                        {
+                            m_keys.at(i).JEParseToScriptType(tmp);
+                            (void)woort_vec_set(arr, i, tmp);
+                        }
+                        woort_struct_set(v, 0, arr);
+
+                        woort_pop(2);
+                    }
+                }
+            };
+
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Emitter);
             JECS_DEFAULT_CONSTRUCTOR(Emitter);
 

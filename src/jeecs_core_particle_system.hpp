@@ -106,29 +106,29 @@ namespace jeecs
         // 退化为均匀球面采样
         static math::vec3 random_direction_around(const math::vec3& axis, float spread_rad)
         {
-            math::vec3 dir = axis.length() > math::EPSILON ? axis.unit()
+            const math::vec3 dir = axis.length() > math::EPSILON ? axis.unit()
                 : math::vec3(0.f, 1.f, 0.f);
 
             if (spread_rad >= math::PI)
             {
                 // 均匀球面：z ∈ [-1,1]，φ ∈ [0,2π)
-                float z = math::random(-1.0f, 1.0f);
-                float phi = math::random(0.0f, 2.f * math::PI);
-                float r = std::sqrt(std::max(0.f, 1.f - z * z));
+                const float z = math::random(-1.0f, 1.0f);
+                const float phi = math::random(0.0f, 2.f * math::PI);
+                const float r = std::sqrt(std::max(0.f, 1.f - z * z));
                 return math::vec3(r * std::cos(phi), r * std::sin(phi), z);
             }
 
             // 圆锥内余弦均匀：cosθ ∈ [cos(spread), 1]
-            float cos_theta = math::lerp(
+            const float cos_theta = math::lerp(
                 std::cos(spread_rad), 1.0f, math::random(0.0f, 1.0f));
-            float sin_theta = std::sqrt(std::max(0.f, 1.f - cos_theta * cos_theta));
-            float phi = math::random(0.0f, 2.f * math::PI);
+            const float sin_theta = std::sqrt(std::max(0.f, 1.f - cos_theta * cos_theta));
+            const float phi = math::random(0.0f, 2.f * math::PI);
 
-            math::vec3 helper = std::abs(dir.y) < 0.9f
+            const math::vec3 helper = std::abs(dir.y) < 0.9f
                 ? math::vec3(0.f, 1.f, 0.f)
                 : math::vec3(1.f, 0.f, 0.f);
-            math::vec3 u = dir.cross(helper).unit();
-            math::vec3 v = dir.cross(u);
+            const math::vec3 u = dir.cross(helper).unit();
+            const math::vec3 v = dir.cross(u);
 
             return (dir * cos_theta
                 + (u * std::cos(phi) + v * std::sin(phi)) * sin_theta)
@@ -153,7 +153,7 @@ namespace jeecs
             {
             case 1: // 球体（体积内均匀）
             {
-                math::vec3 dir = random_direction_around(
+                const math::vec3 dir = random_direction_around(
                     math::vec3(0.f, 1.f, 0.f), math::PI);
                 offset = dir * (emitter.m_shape_radius
                     * std::cbrt(math::random(0.0f, 1.0f)));
@@ -161,8 +161,8 @@ namespace jeecs
             }
             case 2: // 圆（局部 XY 平面内）
             {
-                float angle = math::random(0.0f, 2.f * math::PI);
-                float radius = emitter.m_shape_radius
+                const float angle = math::random(0.0f, 2.f * math::PI);
+                const float radius = emitter.m_shape_radius
                     * std::sqrt(math::random(0.0f, 1.0f));
                 offset = math::vec3(
                     std::cos(angle) * radius,
@@ -182,21 +182,21 @@ namespace jeecs
             }
 
             // 初速方向：散布角围绕主方向
-            math::vec3 direction = random_direction_around(
+            const math::vec3 direction = random_direction_around(
                 translation->world_rotation * emitter.m_direction,
                 math::clamp(emitter.m_spread_angle, 0.0f, 180.0f) * math::DEG2RAD);
-            float speed = math::random(
+            const float speed = math::random(
                 std::min(emitter.m_speed_min, emitter.m_speed_max),
                 std::max(emitter.m_speed_min, emitter.m_speed_max));
 
             if (world_space && translation != nullptr)
             {
                 // 世界空间模拟：偏移经发射器变换到世界，方向按世界坐标解释
-                math::vec3 scaled_offset = math::vec3(
+                const math::vec3 scaled_offset = math::vec3(
                     offset.x * translation->local_scale.x,
                     offset.y * translation->local_scale.y,
                     offset.z * translation->local_scale.z);
-                math::vec3 world_offset = translation->world_rotation * scaled_offset;
+                const math::vec3 world_offset = translation->world_rotation * scaled_offset;
 
                 pool.pos_x[i] = translation->world_position.x + world_offset.x;
                 pool.pos_y[i] = translation->world_position.y + world_offset.y;
@@ -227,7 +227,7 @@ namespace jeecs
                 std::min(emitter.m_size_min, emitter.m_size_max),
                 std::max(emitter.m_size_min, emitter.m_size_max));
 
-            float color_k = math::random(0.0f, 1.0f);
+            const float color_k = math::random(0.0f, 1.0f);
             pool.base_color[i] = math::vec4(
                 math::lerp(emitter.m_color_min.x, emitter.m_color_max.x, color_k),
                 math::lerp(emitter.m_color_min.y, emitter.m_color_max.y, color_k),
@@ -467,6 +467,7 @@ namespace jeecs
 
                     float* quad = pool.staging.data()
                         + i * 4 * FLOATS_PER_VERTEX;
+
                     for (size_t c = 0; c < 4; ++c)
                     {
                         const float cx = CORNER_UV[c][0];
