@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <cmath>
 #include <algorithm>
+#include <bit>
 
 namespace jeecs
 {
@@ -31,7 +32,8 @@ namespace jeecs
         写入 Renderer::Shape，由常规图形管线（如 UnlitGraphicPipelineSystem）
         随实体一起绘制；粒子纹理绑定在 Renderer::Textures 的 pass 0；
       * 公告板朝向在粒子着色器中用视图矩阵展开（顶点属性携带中心
-        位置/颜色/已自转缩放的角点），CPU 只做模拟，因此多摄像机自动正确；
+        位置/颜色/已自转缩放的角点/粒子 ID），CPU 只做模拟，因此多
+        摄像机自动正确；
       * 模拟空间：世界空间下粒子位置存于世界坐标，构建网格时经发射器
         逆变换转回局部（发射器移动不携带已发射粒子）；局部空间下粒子
         直接存于发射器局部坐标（整体随发射器刚体运动），此时 direction
@@ -50,8 +52,8 @@ namespace jeecs
             { -1.f, 1.f, 0.f, 1.f },
             { 1.f, 1.f, 1.f, 1.f },
         };
-        // 顶点布局：中心位置(3) + 颜色(4) + 角点偏移(2) + UV(2)
-        inline constexpr static size_t FLOATS_PER_VERTEX = 11;
+        // 顶点布局：中心位置(3) + 颜色(4) + 角点偏移(2) + UV(2) + 粒子ID(1, INT32)
+        inline constexpr static size_t FLOATS_PER_VERTEX = 12;
         inline constexpr static size_t MAX_PARTICLE_LIMIT = 65536;
 
         // ===== 每发射器粒子池（SoA，存于模拟坐标系） =====
@@ -62,6 +64,10 @@ namespace jeecs
             std::vector<float> age, lifetime;
             std::vector<float> base_size, rot, rot_speed;
             std::vector<math::vec4> base_color;
+            // 粒子唯一 ID：发射时按 next_particle_id 单调递增分配，
+            // 交换删除时随粒子一起移动，供着色器区分不同粒子
+            std::vector<uint32_t> particle_ids;
+            uint32_t next_particle_id = 0;
 
             size_t alive_count = 0;
             size_t capacity = 0;
@@ -89,6 +95,7 @@ namespace jeecs
                 age.resize(capacity); lifetime.resize(capacity);
                 base_size.resize(capacity); rot.resize(capacity); rot_speed.resize(capacity);
                 base_color.resize(capacity);
+                particle_ids.resize(capacity);
                 staging.assign(capacity * 4 * FLOATS_PER_VERTEX, 0.0f);
                 reset();
             }
@@ -241,6 +248,13 @@ namespace jeecs
                 std::min(emitter.m_angular_min, emitter.m_angular_max),
                 std::max(emitter.m_angular_min, emitter.m_angular_max)) * math::DEG2RAD;
 
+            // ID 通道为 INT32，在 INT32_MAX 处回绕，
+            // 保证着色器读到的粒子 ID 始终为非负整数
+            pool.particle_ids[i] = pool.next_particle_id;
+            pool.next_particle_id = pool.next_particle_id >= 0x7FFFFFFFu
+                ? 0u
+                : pool.next_particle_id + 1;
+
             return true;
         }
 
@@ -309,6 +323,7 @@ namespace jeecs
                             { jegl_vertex::data_type::FLOAT32, 4 }, // 颜色 RGBA
                             { jegl_vertex::data_type::FLOAT32, 2 }, // 角点偏移（已自转缩放）
                             { jegl_vertex::data_type::FLOAT32, 2 }, // UV
+                            { jegl_vertex::data_type::INT32, 1 },   // 粒子 ID
                         });
 
                     if (created.has_value())
@@ -386,6 +401,7 @@ namespace jeecs
                                 pool.base_color[i] = pool.base_color[last];
                                 pool.rot[i] = pool.rot[last];
                                 pool.rot_speed[i] = pool.rot_speed[last];
+                                pool.particle_ids[i] = pool.particle_ids[last];
                             }
                             continue; // 重试交换到 i 槽位的粒子
                         }
@@ -466,6 +482,11 @@ namespace jeecs
                     const float cs = std::cos(pool.rot[i]) * size;
                     const float sn = std::sin(pool.rot[i]) * size;
 
+                    // 粒子 ID 通道声明为 INT32，GPU 按整型读取顶点字节，
+                    // 故此处以位模式暂存于 float 暂存缓冲
+                    const float pid_bits = std::bit_cast<float>(
+                        pool.particle_ids[i]);
+
                     float* quad = pool.staging.data()
                         + i * 4 * FLOATS_PER_VERTEX;
 
@@ -486,6 +507,7 @@ namespace jeecs
                         v[8] = sn * cx + cs * cy;
                         v[9] = CORNER_UV[c][2];
                         v[10] = CORNER_UV[c][3];
+                        v[11] = pid_bits;
                     }
 
                     if (!has_bounds)

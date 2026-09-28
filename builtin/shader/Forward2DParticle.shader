@@ -30,6 +30,7 @@ WOSHADER_VERTEX_IN!
         color   : float4,    // 粒子颜色 RGBA（初始随机色 × 生命周期渐变）
         corner  : float2,    // 已自转、已缩放的角点偏移
         uv      : float2,    // UV
+        pid     : integer,   // 粒子 ID（发射器内单调递增；如需传入 v2f 请先转 float）
     };
 
 WOSHADER_VERTEX_TO_FRAGMENT!
