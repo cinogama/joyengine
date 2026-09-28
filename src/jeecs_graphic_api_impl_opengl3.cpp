@@ -275,7 +275,7 @@ namespace jeecs::graphic::api::gl3
             glBindBuffer(GL_UNIFORM_BUFFER, m_uniform_buffer_object);
             glBufferData(GL_UNIFORM_BUFFER,
                 resource->m_buffer_size,
-                NULL, GL_DYNAMIC_COPY); // 预分配空间
+                NULL, GL_DYNAMIC_DRAW); // 预分配空间
 
             m_binding_place =
                 (GLuint)(resource->m_buffer_binding_place + 1);
@@ -1343,12 +1343,16 @@ namespace jeecs::graphic::api::gl3
         jegl3_vertex_data* vertex_data =
             static_cast<jegl3_vertex_data*>(resource->m_handle.m_ptr);
 
-        // 整体重传顶点数据（索引缓冲内容不变），并同步激活索引数量
+        // 整体重传顶点数据（索引缓冲内容不变），并同步激活索引数量。
+        // 每次 glBufferData 重指定：首次将 STATIC 升级为 DYNAMIC 用途（对齐
+        // DX11 后端的 IMMUTABLE→DYNAMIC 懒升级）；之后每次重指定同时孤儿化
+        // 旧数据存储，等价于 Map(WRITE_DISCARD)，避免 GPU 仍在读取旧数据时
+        // glBufferSubData 阻塞图形线程
         glBindBuffer(GL_ARRAY_BUFFER, vertex_data->m_vbo);
-        glBufferSubData(GL_ARRAY_BUFFER,
-            0,
+        glBufferData(GL_ARRAY_BUFFER,
             resource->m_vertex_length,
-            resource->m_vertexs);
+            resource->m_vertexs,
+            GL_DYNAMIC_DRAW);
 
         vertex_data->m_pointcount = (GLsizei)resource->m_index_count;
     }
