@@ -12,6 +12,8 @@ import pkg::worst;
 import pkg::iterator;
 import pkg::toml;
 import pkg::try;
+import pkg::buffer;
+import pkg::filestream;
 
 import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Shortcut;
@@ -24,6 +26,7 @@ import builtin::editor::Singleton;
 import builtin::editor::Singleton::Universe;
 
 import builtin::editor::Editor::Project;
+import builtin::editor::Editor::Template;
 
 using std;
 
@@ -32,6 +35,7 @@ using je::gui;
 using je::graphic;
 using je::internal;
 using fsys;
+using filestream;
 
 using JEEditor::GUI;
 using JEEditor::GUI::Windows;
@@ -250,7 +254,8 @@ namespace JEEditor::Editor
         
         // 为新项目准备资源目录：在项目根目录下创建 resource/，再把宿主
         // builtin/shader 下的内置着色器整体拷贝成 resource/shader，便于项目
-        // 直接引用或改造。任一步失败都返回错误描述，调用方据此提示，
+        // 直接引用或改造；最后按 project.gitignore 模板在项目根写入 .gitignore。
+        // 任一步失败都返回错误描述，调用方据此提示，
         // 此时尚未写入项目文件，目录不会被当作有效项目打开。
         func initProjectResources(project_dir: path_t)=> result<void, string>
         {
@@ -275,7 +280,21 @@ namespace JEEditor::Editor
                 
             try! _ = copy(type_script_path / "types.wo", editor_scripts)
                 -> or_map(\e = F"拷贝 types.wo 到 \"{editor_scripts->to_string}\" 失败：{e}";);
-                
+
+            let gitignore_path = project_dir / ".gitignore";
+
+            try! ignore_content = Template::load(Template::Type::PROJECT_GITIGNORE)
+                -> ok_or("读取 project.gitignore 模板失败。");
+
+            try! ignore_file = open(gitignore_path, mode::write)
+                -> ok_or(F"创建 \"{gitignore_path->to_string}\" 失败。");
+
+            defer do ignore_file->close;
+
+            let ignore_buf = ignore_content as buffer;
+            if (!ignore_file->write(ignore_buf, 0, ignore_buf->len))
+                throw! F"写入 \"{gitignore_path->to_string}\" 失败。";
+
             return_ok!;
         }
         
