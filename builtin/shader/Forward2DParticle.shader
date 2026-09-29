@@ -76,9 +76,9 @@ public func vert(v: vin)
     };
 }
 
-let LinearSampler  = Sampler2D::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
+let NearestSampler  = Sampler2D::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
 WOSHADER_UNIFORM!
-    let Main        = texture2d::uniform(0, LinearSampler);
+    let Main        = texture2d::uniform(0, NearestSampler);
 
 public func frag(vf: v2f)
 {

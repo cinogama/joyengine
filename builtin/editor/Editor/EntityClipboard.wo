@@ -10,7 +10,7 @@ import pkg::toml;
 
 import builtin::editor::Editor::Saving::Entity;
 
-import WorldEditorViewport;
+import WorldEditorViewport::Definition;
 import Action::CreateEntity;
 import ComponentPresets;
 
@@ -42,9 +42,9 @@ namespace JEEditor::Editor::EntityClipboard
 {
     // 最近一次复制的实体快照；粘贴不清空，可连续粘贴出多个副本
     let mut s_copied_entity_content = option::none: option<Toml>;
-
+    
     // ===== 实体快速创建预设（驱动“创建...”子菜单） =====
-
+    
     // 快速创建预设：菜单显示文本、创建时的实体名、组件类型名列表与
     // 创建后自动挂载的默认着色器路径（可选）
     public using EntityPreset = struct{
@@ -53,13 +53,13 @@ namespace JEEditor::Editor::EntityClipboard
         public components: array<string>,
         public default_shader: option<string>,
     };
-
+    
     // 预设分组：组前绘制分隔线，区分基础实体/光源/摄像机/物理等类别
     public using EntityPresetGroup = struct{
         public separator_before: bool,
         public presets: array<EntityPreset>,
     };
-
+    
     // 共享组件列表见 ComponentPresets；光源实体额外携带
     // Renderer::Color（光源着色）
     let ENTITY_PRESET_GROUPS = [
@@ -101,12 +101,8 @@ namespace JEEditor::Editor::EntityClipboard
                         ->connect(BASE_RENDERER_COMPONENTS)
                         ->connect(["Renderer::Rendqueue"])
                         ->connect(PARTICLE_EMITTER_COMPONENTS),
-                    // 引擎内置着色器（! 前缀指向可执行文件目录），无需
-                    // 项目资源即可工作；需要加色混合时换用 ParticleAdd.shader，
-                    // 延迟渲染管线（Light2D::CameraPostPass 相机）下换用
-                    // Forward2DParticle.shader / Forward2DParticleSelfGlowing.shader
                     default_shader = option::value(
-                        "!/builtin/shader/ParticleBlend.shader"),
+                        "@/resource/shader/ParticleBlend.shader"),
                 },
             ],
         },
@@ -176,7 +172,7 @@ namespace JEEditor::Editor::EntityClipboard
             ],
         },
     ];
-
+    
     // 复制实体：原样保存快照（挂预设体的实体为差异数据 + "prefab" 键，
     // 派生关系随之保留）
     public func copy(e: entity)=> void
@@ -184,7 +180,7 @@ namespace JEEditor::Editor::EntityClipboard
         s_copied_entity_content =
             option::value(Entity::save(e, false));
     }
-
+    
     // 按实体预设发布可撤销的“创建实体”动作：实体名、组件集合与默认
     // 着色器写入内容表的 "name"/"components"/"shaders" 键（与存档同
     // 格式，见 Saving::Entity），由还原端落实——着色器按路径重新加载，
@@ -214,11 +210,11 @@ namespace JEEditor::Editor::EntityClipboard
             logerr(F"快速创建：预设“{preset.menu_label}”的组件类型均已失效");
             return;
         }
-
+        
         let entity_dat = new_table();
         entity_dat->set("name", preset.entity_name);
         entity_dat->set("components", components_dat);
-
+        
         match (preset.default_shader)
         {
             none?;
@@ -231,11 +227,11 @@ namespace JEEditor::Editor::EntityClipboard
                 entity_dat->set("shaders", shaders_dat);
             }
         }
-
+        
         wctx->doAction(
             CreateEntity::try_create_with_content_at(entity_dat, spawn_pos));
     }
-
+    
     // “创建”/“粘贴”菜单项（生成点版本）：spawn_pos 有值时，创建/粘贴出的
     // 实体被放置到该世界坐标（视口内创建/粘贴传入调试摄像机前方的生成
     // 点，见 WorldEditorViewport 的 getSpawnPosInFrontOfCamera）；none 时
@@ -246,7 +242,7 @@ namespace JEEditor::Editor::EntityClipboard
         if (BeginMenu("创建..."))
         {
             defer EndMenu();
-
+            
             // 快速创建预设：组分隔线隔开语义类别；悬停提示预设的全部
             // 组件（有默认着色器时附注路径）；点击发布 CreateEntity 动作
             //（MenuItem 点击后自动收起整个弹出层）
@@ -254,12 +250,12 @@ namespace JEEditor::Editor::EntityClipboard
             {
                 if (group.separator_before)
                     Separator();
-
+                    
                 for (let preset : group.presets)
                 {
                     if (MenuItem(preset.menu_label))
                         quickCreatePresetEntity(wctx, preset, spawn_pos);
-
+                        
                     if (IsItemHovered())
                     {
                         let tip = ComponentPresets::presetTipText(
