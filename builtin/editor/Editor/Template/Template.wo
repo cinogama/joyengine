@@ -29,13 +29,14 @@ namespace JEEditor::Editor::Template
         public WORKFLOW_EVAL_NODE,
         public WORKFLOW_FLOW_NODE,
         public WORKFLOW_TYPE,
+        public PROJECT_GITIGNORE,
     }
 
     public func load(type: Type)=> option<string>
     {
         static let type_to_filename = {
             [Type::NATIVE_MODULE_CMAKELISTS] = "CMakeLists.txt",
-            [Type::NATIVE_MODULE_GITIGNORE] = ".gitignore",
+            [Type::NATIVE_MODULE_GITIGNORE] = "native_module.gitignore",
             [Type::NATIVE_MODULE_LOADER_HPP] = "loader.hpp",
             [Type::NATIVE_MODULE_MAIN_CPP] = "main.cpp",
             [Type::NATIVE_MODULE_COMPONENT_HPP] = "native_module_component.hpp",
@@ -51,6 +52,7 @@ namespace JEEditor::Editor::Template
             [Type::WORKFLOW_EVAL_NODE] = "workflow_eval_node.wo",
             [Type::WORKFLOW_FLOW_NODE] = "workflow_flow_node.wo",
             [Type::WORKFLOW_TYPE] = "workflow_type.wo",
+            [Type::PROJECT_GITIGNORE] = "project.gitignore",
         };
         
         try! template_filename = type_to_filename->get(type);

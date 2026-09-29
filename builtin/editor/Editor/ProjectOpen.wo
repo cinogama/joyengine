@@ -307,7 +307,7 @@ namespace JEEditor::Editor
                     
                 try! _ = initProjectResources(project_dir);
                 try! _ = toml::save(toml::new_table(), project_dir / Project::PROJECT_FILE_NAME);
-                
+                                
                 // confirmOpen 以 m_current 为待打开目录，
                 // 先跳转进新目录再打开；若切换工作目录失败，
                 // 浏览器也已停在新目录处。
