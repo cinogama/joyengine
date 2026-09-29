@@ -1,0 +1,295 @@
+import pkg::std;
+
+import je;
+import je::gui;
+import je::graphic;
+
+import pkg::fsys;
+import pkg::interface;
+import pkg::worst;
+
+import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Shortcut;
+
+using std;
+
+using je;
+using je::gui;
+using je::graphic;
+using fsys;
+
+using JEEditor::GUI;
+using JEEditor::GUI::Windows;
+
+namespace JEEditor::Editor
+{
+    // 「关于」窗口：展示引擎信息，以及宿主路径（exe 所在目录）下 licenses
+    // 目录内的所有第三方授权文件——该目录由 prebuild 脚本从 3rd/ 各依赖
+    // 中收集而来。左栏为授权文件列表（按相对路径排序），右栏查看选中文件
+    // 的路径、大小与全文；全文在选中时才读取，避免打开窗口时的批量 IO。
+    using About = struct{
+        m_license_files: mut array<path_t>,  // licenses 下的全部授权文件（按路径排序）
+        m_selected: mut int,                 // 当前选中的文件下标，-1 表示未选中
+        m_content: mut option<string>,       // 选中文件的内容，选中时懒加载
+        m_closed: mut bool,
+    }
+    {
+        // 窗口顶部的引擎吉祥物（像素画 Joy，256x256，按 1/4 缩放保持锐利）
+        let s_joy_logo = texture::load(option::none, "!/builtin/icon/Joy.png");
+
+        // 主题色（取自 Joy 的暖橙色系）
+        let k_title_color = (242, 176, 109, 255);
+        let k_panel_bg_color = (37, 37, 42, 255);
+
+        // licenses 目录锚定在宿主路径（exe 所在目录）而非 cwd：与项目
+        // 工作目录无关，prebuild 会把它生成到与 jedriver.exe 同级的位置。
+        func licensesRoot()=> path_t
+        {
+            return normalize(host_path()) / "licenses";
+        }
+
+        // 相对 licenses 根目录的显示路径（如 "imgui/LICENSE.txt"），
+        // relative 失败时退化为仅显示文件名。
+        func relPathOf(file: path_t, root: path_t)=> string
+        {
+            match (relative(file, root))
+            {
+                ok(rel)?
+                    return rel;
+                err(_)?
+                    return filename(file);
+            }
+        }
+
+        // 收集 licenses 目录下的全部授权文件：目录不存在（如未经 prebuild
+        // 直接从源码目录运行）时返回空列表，由列表面板给出提示。
+        func collectLicenseFiles()=> array<path_t>
+        {
+            let root = licensesRoot();
+            if (!exist(root))
+                return []: array<path_t>;
+
+            match (allsubpath(root))
+            {
+                ok(paths)?
+                {
+                    let mut files = []mut: vec<path_t>;
+                    for (let p : paths)
+                    {
+                        if (isfile(p))
+                            files->add(p);
+                    }
+                    return sort(files, \l, r = relPathOf(l, root) < relPathOf(r, root););
+                }
+                err(_)?
+                    return []: array<path_t>;
+            }
+        }
+
+        // 文件大小的友好显示（B/KB/MB），读取失败时以 "-" 显示
+        func prettySizeOf(file: path_t)=> string
+        {
+            match (size(file))
+            {
+                ok(bytes)?
+                {
+                    if (bytes < 1024)
+                        return F"{bytes} B";
+                    if (bytes < 1024 * 1024)
+                        return F"{bytes / 1024} KB";
+                    return F"{bytes / 1024 / 1024} MB";
+                }
+                err(_)?
+                    return "-";
+            }
+        }
+
+        // 过长的路径只显示末尾部分（len/sub 均按字符计数，中文安全），
+        // 避免撑宽自适应尺寸的模态窗口；完整路径经 tooltip 展示。
+        func shrinkPath(path: string, max_chars: int)=> string
+        {
+            if (path->len <= max_chars)
+                return path;
+            return "..." + path->sub(path->len - max_chars + 3);
+        }
+
+        public func create()=> About
+            where require!(About: Windows::IWindows);
+        {
+            return About{
+                m_license_files = mut collectLicenseFiles(),
+                m_selected = mut -1,
+                m_content = mut option::none: option<string>,
+                m_closed = mut false,
+            };
+        }
+
+        public func showAbout()
+        {
+            do Windows::show(create());
+        }
+
+        public func getTitle(_: About)=> string
+        {
+            return "关于";
+        }
+        public func getAttrib(_: About)=> WindowsAttribute
+        {
+            return WindowsAttribute::ImGuiWindowFlags_NoDocking
+                + WindowsAttribute::ImGuiWindowFlags_NoCollapse
+                + WindowsAttribute::ImGuiWindowFlags_NoSavedSettings
+                ;
+        }
+        public func isModal(_: About)=> bool
+        {
+            return true;
+        }
+        public func getShortcut(self: About)=> option<Shortcut>
+        {
+            return option::value <|
+                Shortcut::begin()
+                    -> shortCut([ImGuiKey::ImGuiKey_Enter], \=self.m_closed = true;)
+                    -> finish
+                    ;
+        }
+
+        // 选中一个授权文件：记录下标并读取全文。读取失败时保持
+        // option::none，由查看面板显示加载失败的提示。
+        func selectLicense(self: About, index: int)=> void
+        {
+            if (index == self.m_selected)
+                return;
+            self.m_selected = index;
+            self.m_content = file::readall(self.m_license_files[index]->to_string);
+        }
+
+        public func run(self: About)=> bool
+        {
+            self->drawHeader();
+            Separator();
+
+            // 双栏：左侧授权文件列表，右侧选中文件的内容查看
+            let panel_height = 320.;
+            PushStyleColor(ImGuiCol::ImGuiCol_ChildBg, k_panel_bg_color);
+            if (BeginChildSizeFlags("##license_list", 280., panel_height,
+                    WindowsAttribute::ImGuiWindowFlags_None))
+            {
+                self->drawLicenseListPanel();
+            }
+            EndChild();
+
+            SameLine();
+
+            if (BeginChildSizeFlags("##license_view", 470., panel_height,
+                    WindowsAttribute::ImGuiWindowFlags_None))
+            {
+                self->drawLicenseViewPanel();
+            }
+            EndChild();
+            PopStyleColor(1);
+
+            Separator();
+
+            if (Button("关闭"))
+                self.m_closed = true;
+
+            return !self.m_closed;
+        }
+
+        // 顶部横幅：Joy 吉祥物 + 引擎名 + licenses 目录信息
+        func drawHeader(self: About)=> void
+        {
+            match (s_joy_logo)
+            {
+                none?;
+                value(logo)?
+                {
+                    ImageSize(logo, 64., 64.);
+                    SameLine();
+                }
+            }
+
+            SetWindowFontScale(1.5);
+            TextColored(k_title_color, "JoyEngine 4.X");
+            SetWindowFontScale(1.);
+
+            TextDisabled("JoyEngine 编辑器 · 内置第三方组件授权信息");
+
+            let root = licensesRoot()->to_string;
+            TextDisabled(F"许可证目录: {shrinkPath(root, 48)}（共 {self.m_license_files->len} 个文件）");
+            if (IsItemHovered())
+                do SetTooltip(root);
+        }
+
+        func drawLicenseListPanel(self: About)=> void
+        {
+            SeparatorText("许可证文件");
+
+            if (self.m_license_files->len == 0)
+            {
+                Spacing();
+                TextDisabled("未找到许可证文件");
+                TextDisabled(F"目录不存在或为空: {shrinkPath(licensesRoot()->to_string, 36)}");
+                return;
+            }
+
+            let root = licensesRoot();
+            let mut index = 0;
+            for (let p : self.m_license_files)
+            {
+                let rel = relPathOf(p, root);
+                if (SelectableSelected(F"{shrinkPath(rel, 34)}##{index}", index == self.m_selected))
+                {
+                    self->selectLicense(index);
+                }
+                if (IsItemHovered())
+                    do SetTooltip(p->to_string);
+                index += 1;
+            }
+        }
+
+        func drawLicenseViewPanel(self: About)=> void
+        {
+            if (self.m_selected < 0)
+            {
+                Spacing();
+                TextDisabled("在左侧选择一个许可证文件");
+                TextDisabled("即可查看其路径、大小与授权全文");
+                return;
+            }
+
+            let p = self.m_license_files[self.m_selected];
+            SeparatorText(filename(p));
+
+            // 信息与全文都在窗口宽度内自动换行，避免超长行撑破布局
+            PushTextWrapPos(0.);
+            TextDisabled(F"路径: {p->to_string}");
+            TextDisabled(F"大小: {prettySizeOf(p)}");
+            PopTextWrapPos();
+
+            match (self.m_content)
+            {
+                none?;
+                value(content)?
+                {
+                    if (Button("复制内容"))
+                        SetClipboardText(content);
+                }
+            }
+
+            Separator();
+
+            match (self.m_content)
+            {
+                none?
+                    TextDisabled("（无法读取该文件的内容）");
+                value(content)?
+                {
+                    PushTextWrapPos(0.);
+                    Text(content);
+                    PopTextWrapPos();
+                }
+            }
+        }
+    }
+}
