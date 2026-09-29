@@ -136,7 +136,10 @@ namespace je
             
         extern("libjoyecs", "wojeapi_woolang_version")
             public func woolang_version()=> string;
-            
+
+        extern("libjoyecs", "wojeapi_woort_version")
+            public func woort_version()=> string;
+
         extern("libjoyecs", "wojeapi_crc64_file")
             public func crc64file(file_path: string)=> option<int>;
             

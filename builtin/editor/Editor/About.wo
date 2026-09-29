@@ -3,6 +3,7 @@ import pkg::std;
 import je;
 import je::gui;
 import je::graphic;
+import je::internal;
 
 import pkg::fsys;
 import pkg::interface;
@@ -210,10 +211,14 @@ namespace JEEditor::Editor
             }
 
             SetWindowFontScale(1.5);
-            TextColored(k_title_color, "JoyEngine 4.X");
+            TextColored(k_title_color, F"JoyEngine {internal::build_version()}");
             SetWindowFontScale(1.);
 
             TextDisabled("JoyEngine 编辑器 · 内置第三方组件授权信息");
+
+            Text(F"JoyEngine {internal::build_version()} · commit {internal::build_commit()}");
+            Text(F"Woolang {internal::woolang_version()}");
+            Text(F"WooRT {internal::woort_version()}");
 
             let root = licensesRoot()->to_string;
             TextDisabled(F"许可证目录: {shrinkPath(root, 48)}（共 {self.m_license_files->len} 个文件）");

@@ -183,8 +183,12 @@ WOORT_API woort_api wojeapi_set_sleep_suppression(void)
 
 WOORT_API woort_api wojeapi_woolang_version(void)
 {
-    std::string woolang_version_info = "Woolang ";
-    return woort_ret_string((woolang_version_info + wo_version() + " " + wo_compile_date()).c_str());
+    return woort_ret_string(wo_version());
+}
+
+WOORT_API woort_api wojeapi_woort_version(void)
+{
+    return woort_ret_string(woort_version());
 }
 
 WOORT_API woort_api wojeapi_crc64_file(void)
