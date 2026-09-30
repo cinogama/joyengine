@@ -49,7 +49,7 @@ namespace JEEditor::Singleton
             has_singleton_sequence:<T> ? typeof<T>::SINGLETON_SEQUENCE | 100000000,
             func(){
                 let toml_data = load(workpath() / ".temp" / F"{typeof<T>::SINGLETON_LABEL}.toml");
-                let inst = typeof<T>::createAndLoad(toml_data);
+                let inst = typeof<T>::createAndLoad(toml_data->okay);
                 
                 singleton_record_list()->apply(
                     func(m){
