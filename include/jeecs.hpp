@@ -10836,22 +10836,18 @@ namespace jeecs
             // 因此使用文本的实体必须持有 Renderer::Textures 和 Renderer::Shaders。
             basic::file_resource<graphic::font> font;
 
-            // 字号，单位为像素。
-            float size = 16.0f;
-
             // 为 true 时，UI 元素的绝对大小取 Textures 通道0纹理的自然像素尺寸
             //（Relatively::scale 的相对增量仍然叠加）；为 false 时按 Origin 常规布局拉伸显示。
             bool auto_size = true;
 
             // 以下为渲染管线的脏检查缓存，请勿手动修改。
-            basic::string texture_content;
-            float texture_size = -1.0f;
+            basic::string cached_texture_content;
+            float cached_font_size = -1.0f;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Text::content, "content");
                 typing::register_member(guard, &Text::font, "font");
-                typing::register_member(guard, &Text::size, "size");
                 typing::register_member(guard, &Text::auto_size, "auto_size");
             }
         };

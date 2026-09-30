@@ -562,33 +562,85 @@ public let frag =
 
             // 把脏文本光栅化进实体 Textures 的通道0。文本渲染复用标准 UI 渲染路径，
             // 因此实体必须持有 Renderer::Textures 和 Renderer::Shaders 才会被处理。
-            for (auto&& [text, texs] : query<view typesof(Text&, Textures&)>())
+            // 实际像素字号 = Text::size × Origin 最终计算的元素绝对大小
+            //（keep_vertical_ratio 取 y 分量，否则取 x 分量），文字随元素与
+            // 窗口分辨率等比缩放；auto_size 只影响绘制，不参与字号计算。
+            for (auto&& [text, texs, origin, abs, rel] : query<view typesof(Text&, Textures&, Origin&, Absolute*, Relatively*)>())
             {
                 auto font_res = text.font.get_resource();
                 if (!font_res.has_value())
                 {
                     // 字体未指定则不渲染；移除先前光栅化残留的通道0纹理。
-                    if (text.texture_size > 0.f)
+                    if (text.cached_font_size > 0.f)
                     {
                         texs.remove_texture(0);
-                        text.texture_content = "";
-                        text.texture_size = -1.f;
+                        text.cached_texture_content = "";
+                        text.cached_font_size = -1.f;
+                    }
+                    continue;
+                }
+
+                // 以窗口尺寸求 Origin 最终绝对大小作为字号系数；
+                // 元素在该轴上无尺寸则视为不渲染文本。
+                math::vec2 layout_abssize = {};
+                origin.get_layout(
+                    (float)WINDOWS_WIDTH,
+                    (float)WINDOWS_HEIGHT,
+                    nullptr,
+                    &layout_abssize,
+                    nullptr);
+
+                const float font_size =
+                    origin.keep_vertical_ratio ? layout_abssize.y : layout_abssize.x;
+
+                if (font_size <= 0.f)
+                {
+                    if (text.cached_font_size > 0.f)
+                    {
+                        texs.remove_texture(0);
+                        text.cached_texture_content = "";
+                        text.cached_font_size = -1.f;
                     }
                     continue;
                 }
 
                 // 通道0为空也视为脏（如场景重载后纹理丢失，可自愈重建）。
-                const bool dirty = false == texs.get_texture(0).has_value()
-                    || text.texture_content != text.content
-                    || text.texture_size != text.size;
+                // 布局或窗口尺寸变化会改变 font_size，经 texture_size 触发重光栅化。
+                const bool dirty =
+                    !texs.get_texture(0).has_value()
+                    || text.cached_texture_content != text.content
+                    || text.cached_font_size != font_size;
 
                 if (dirty)
                 {
-                    texs.bind_texture(
-                        0, font_res.value()->u8text_texture(
-                            text.content.cpp_str(), text.size));
-                    text.texture_content = text.content;
-                    text.texture_size = text.size;
+                    auto new_generated_texture =
+                        font_res.value()->u8text_texture(
+                            text.content.cpp_str(), font_size);
+
+                    texs.bind_texture(0, new_generated_texture);
+                    text.cached_texture_content = text.content;
+                    text.cached_font_size = font_size;
+
+                    if (text.auto_size)
+                    {
+                        const auto texture_size = new_generated_texture->size();
+                        if (origin.keep_vertical_ratio)
+                        {
+                            const float ratio = 
+                                static_cast<float>(texture_size.x) / static_cast<float>(texture_size.y);
+
+                            if (abs != nullptr) abs->size.x = abs->size.y * ratio;
+                            if (rel != nullptr) rel->scale.x = rel->scale.y * ratio;
+                        }
+                        else
+                        {
+                            const float ratio =
+                                static_cast<float>(texture_size.y) / static_cast<float>(texture_size.x);
+
+                            if (abs != nullptr) abs->size.y = abs->size.x * ratio;
+                            if (rel != nullptr) rel->scale.y = rel->scale.x * ratio;
+                        }
+                    }
                 }
             }
 
@@ -675,22 +727,7 @@ public let frag =
 
                     math::vec2 uioffset, uisize, uicenteroffset;
 
-                    // auto_size：以通道0纹理的自然像素尺寸作为 UI 元素的绝对大小，
-                    // 锚点与旋转枢轴随之取实际尺寸；Relatively 的相对增量仍然叠加。
-                    // Origin 仅禁用了赋值运算符，拷贝构造可用，这里复制后覆写 size。
-                    Origin layout_origin = *rendentity.ui_origin;
-                    if (rendentity.ui_text != nullptr && rendentity.ui_text->auto_size
-                        && rendentity.textures != nullptr)
-                    {
-                        if (auto channel0 = rendentity.textures->get_texture(0);
-                            channel0.has_value())
-                        {
-                            layout_origin.size = math::vec2(
-                                (float)channel0.value()->width(),
-                                (float)channel0.value()->height());
-                        }
-                    }
-                    layout_origin.get_layout(
+                    rendentity.ui_origin->get_layout(
                         (float)RENDAIMBUFFER_WIDTH,
                         (float)RENDAIMBUFFER_HEIGHT,
                         &uioffset, &uisize, &uicenteroffset);
