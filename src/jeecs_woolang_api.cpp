@@ -1760,13 +1760,10 @@ WOORT_API woort_api wojeapi_font_open(void)
     std::optional<jeecs::basic::resource<jeecs::graphic::font>> loaded_font;
 
     const woort_U8CString font_path = woort_string(0);
-    const size_t font_size = (size_t)woort_int(1);
 
     woort_vm* const last = woort_vm_swap(nullptr);
     {
-        loaded_font = jeecs::graphic::font::load(
-            font_path,
-            font_size);
+        loaded_font = jeecs::graphic::font::load(font_path);
     }
     (void)woort_vm_swap(last);
 
@@ -1793,7 +1790,8 @@ WOORT_API woort_api wojeapi_font_load_char(void)
 
     const jeecs::graphic::character* ch =
         loaded_font->get()->get_character(
-            static_cast<woort_Char>(woort_int(1)));
+            (float)woort_int(1),
+            static_cast<woort_Char>(woort_int(2)));
 
     /*
     public using character = struct{
@@ -1853,6 +1851,7 @@ WOORT_API woort_api wojeapi_font_string_texture(void)
     jeecs::basic::resource<jeecs::graphic::texture>* text_texture;
 
     const woort_U8CString text = woort_string(1);
+    const float text_size = (float)woort_int(2);
 
     std::u32string wstr;
     wstr.resize(woort_str_to_u32str(text, nullptr, 0));
@@ -1862,7 +1861,7 @@ WOORT_API woort_api wojeapi_font_string_texture(void)
     {
         text_texture =
             new jeecs::basic::resource<jeecs::graphic::texture>(
-                loaded_font->get()->u32text_texture(wstr));
+                loaded_font->get()->u32text_texture(wstr, text_size));
     }
     (void)woort_vm_swap(last);
 

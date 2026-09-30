@@ -8,13 +8,12 @@ struct je_stb_font_data
 {
     stbtt_fontinfo m_font;
     std::mutex m_character_set_mx;
-    std::map<char32_t, jeecs::graphic::character> m_character_set;
+    // 字形缓存按（字号, 码点）两级索引；字号在 je_font_get_char 调用时给出
+    std::map<float, std::map<char32_t, jeecs::graphic::character>> m_character_set;
 };
 
 je_font* je_font_load(
     const char* font_path,
-    float scalex,
-    float scaley,
     size_t board_blank_size_x,
     size_t board_blank_size_y,
     je_font_char_updater_t char_texture_updater)
@@ -24,6 +23,8 @@ je_font* je_font_load(
 
     font->m_path = strdup(font_path);
     font->m_font_file_buf = nullptr;
+
+    bool font_initialized = false;
 
     if (auto* file = jeecs_file_open(font_path))
     {
@@ -36,33 +37,31 @@ je_font* je_font_load(
 
         jeecs_file_close(file);
 
-        font->m_scale_x = scalex;
-        font->m_scale_y = scaley;
         font->m_board_size_x = board_blank_size_x;
         font->m_board_size_y = board_blank_size_y;
         font->m_updater = char_texture_updater;
 
-        stbtt_InitFont(&font->m_stb_font_data->m_font, font->m_font_file_buf,
-            stbtt_GetFontOffsetForIndex(font->m_font_file_buf, 0));
+        font_initialized =
+            stbtt_InitFont(&font->m_stb_font_data->m_font, font->m_font_file_buf,
+                stbtt_GetFontOffsetForIndex(font->m_font_file_buf, 0)) != 0;
 
-        int ascent, descent, line_gap;
-        stbtt_GetFontVMetrics(&font->m_stb_font_data->m_font, &ascent, &descent, &line_gap);
+        if (font_initialized)
+        {
+            int ascent, descent, line_gap;
+            stbtt_GetFontVMetrics(&font->m_stb_font_data->m_font, &ascent, &descent, &line_gap);
 
-        font->m_ascent = (int32_t)ascent;
-        font->m_descent = (int32_t)descent;
-        font->m_line_gap = (int32_t)line_gap;
+            font->m_ascent = (int32_t)ascent;
+            font->m_descent = (int32_t)descent;
+            font->m_line_gap = (int32_t)line_gap;
 
-        // https://www.ffutop.com/posts/2024-06-19-freetype-glyph/
-        font->m_line_space = font->m_ascent - font->m_descent + font->m_line_gap;
-
-        font->m_x_scale_for_pix =
-            stbtt_ScaleForPixelHeight(&font->m_stb_font_data->m_font, font->m_scale_x);
-        font->m_y_scale_for_pix =
-            stbtt_ScaleForPixelHeight(&font->m_stb_font_data->m_font, font->m_scale_y);
+            // https://www.ffutop.com/posts/2024-06-19-freetype-glyph/
+            font->m_line_space = font->m_ascent - font->m_descent + font->m_line_gap;
+        }
     }
-    else
+
+    if (!font_initialized)
     {
-        assert(font->m_font_file_buf == nullptr);
+        free(font->m_font_file_buf);
 
         free(const_cast<char*>(font->m_path));
 
@@ -88,18 +87,24 @@ void je_font_free(je_font* font)
 }
 
 const jeecs::graphic::character* je_font_get_char(
-    je_font* font, char32_t unicode32_char)
+    je_font* font, float size, char32_t unicode32_char)
 {
     assert(font != nullptr);
+    assert(size > 0.f);
 
     std::lock_guard g1(font->m_stb_font_data->m_character_set_mx);
 
-    if (auto fnd = font->m_stb_font_data->m_character_set.find(unicode32_char);
-        fnd != font->m_stb_font_data->m_character_set.end())
+    auto& sized_char_set = font->m_stb_font_data->m_character_set[size];
+
+    if (auto fnd = sized_char_set.find(unicode32_char);
+        fnd != sized_char_set.end())
         return &fnd->second;
 
     /////////////////////////////////////////////////
     int x0, y0, x1, y1, advance, lsb, pixel_w, pixel_h;
+
+    const float scale =
+        stbtt_ScaleForPixelHeight(&font->m_stb_font_data->m_font, size);
 
     stbtt_GetCodepointHMetrics(
         &font->m_stb_font_data->m_font,
@@ -119,8 +124,8 @@ const jeecs::graphic::character* je_font_get_char(
     {
         ch_tex_buffer = stbtt_GetCodepointBitmap(
             &font->m_stb_font_data->m_font,
-            font->m_x_scale_for_pix,
-            font->m_y_scale_for_pix,
+            scale,
+            scale,
             static_cast<int>(unicode32_char),
             &pixel_w,
             &pixel_h,
@@ -139,12 +144,12 @@ const jeecs::graphic::character* je_font_get_char(
     int texture_pixel_height = pixel_h + 2 * (int)font->m_board_size_y;
 
     jeecs::graphic::character& ch =
-        font->m_stb_font_data->m_character_set.emplace(
-                static_cast<int>(unicode32_char),
+        sized_char_set.emplace(
+                unicode32_char,
                 jeecs::graphic::character{
                     jeecs::graphic::texture::create(
                         (size_t)texture_pixel_width,
-                        (size_t)texture_pixel_width,
+                        (size_t)texture_pixel_height,
                         jegl_texture::format::RGBA) }).first->second;
 
     ch.m_char = unicode32_char;
@@ -154,16 +159,10 @@ const jeecs::graphic::character* je_font_get_char(
     // 基线偏移亦要考虑边框
     ch.m_width = texture_pixel_width;
     ch.m_height = texture_pixel_height;
-    ch.m_advance_x = (int)round(font->m_x_scale_for_pix * (float)advance);
-    ch.m_advance_y = -(int)round(font->m_y_scale_for_pix * (float)font->m_line_space);
-    ch.m_baseline_offset_x = pixel_w ? (int)round(font->m_x_scale_for_pix * (float)x0) - (int)font->m_board_size_x : 0;
-    ch.m_baseline_offset_y = pixel_h ? (int)round(font->m_y_scale_for_pix * (float)y0) - (int)font->m_board_size_y : 0;
-
-    ch.m_texture =
-        jeecs::graphic::texture::create(
-            (size_t)ch.m_width,
-            (size_t)ch.m_height,
-            jegl_texture::format::RGBA);
+    ch.m_advance_x = (int)round(scale * (float)advance);
+    ch.m_advance_y = -(int)round(scale * (float)font->m_line_space);
+    ch.m_baseline_offset_x = pixel_w ? (int)round(scale * (float)x0) - (int)font->m_board_size_x : 0;
+    ch.m_baseline_offset_y = pixel_h ? (int)round(scale * (float)y0) - (int)font->m_board_size_y : 0;
 
     if (ch_tex_buffer != nullptr)
     {

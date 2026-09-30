@@ -3295,8 +3295,6 @@ struct je_font
     const char* m_path;
     uint8_t* m_font_file_buf;
 
-    float m_scale_x;
-    float m_scale_y;
     size_t m_board_size_x;
     size_t m_board_size_y;
     je_font_char_updater_t m_updater;
@@ -3306,27 +3304,22 @@ struct je_font
     int32_t m_line_gap;
     int32_t m_line_space;
 
-    float m_x_scale_for_pix;
-    float m_y_scale_for_pix;
-
     je_stb_font_data* m_stb_font_data;
 };
 
 /*
 je_font_load [基本接口]
 加载一个字体
-scalex和scaley 分别是此字体的横线和纵向字号（单位像素）
-samp用于指示此字体创建的文字纹理的采样方式
+    * 字体对象与字号解耦：加载时不需要指定字号，字号在 je_font_get_char 调用时给出
 board_blank_size_x、board_blank_size_y用于指示文字纹理的横线和纵向预留空间
 char_texture_updater 用于指示文字纹理创建后所需的预处理方法，不需要可以指定为nullptr
 使用完毕之后的字体需要使用je_font_free关闭
 请参见：
     je_font_free
+    je_font_get_char
 */
 JE_API je_font* je_font_load(
     const char* font_path,
-    float scalex,
-    float scaley,
     size_t board_blank_size_x,
     size_t board_blank_size_y,
     je_font_char_updater_t char_texture_updater);
@@ -3339,11 +3332,15 @@ JE_API void je_font_free(je_font* font);
 
 /*
 je_font_get_char [基本接口]
-从字体中加载指定的一个字符的纹理及其他信息
+以指定的字号（单位像素）从字体中加载指定的一个字符的纹理及其他信息
+    * 同一字号与字符的字形会被缓存，重复获取直接返回缓存结果
 请参见：
     jeecs::graphic::character
 */
-JE_API const jeecs::graphic::character* je_font_get_char(je_font* font, char32_t unicode32_char);
+JE_API const jeecs::graphic::character* je_font_get_char(
+    je_font* font,
+    float size,
+    char32_t unicode32_char);
 
 /*
 jegl_mark_shared_resources_outdated [基本接口]
@@ -9754,14 +9751,11 @@ namespace jeecs
         public:
             static std::optional<basic::resource<font>> load(
                 const std::string& fontfile,
-                size_t size,
                 size_t board_size = 0,
                 je_font_char_updater_t char_texture_updater = nullptr)
             {
                 auto* font_res = je_font_load(
                     fontfile.c_str(),
-                    (float)size,
-                    (float)size,
                     board_size,
                     board_size,
                     char_texture_updater);
@@ -9774,18 +9768,18 @@ namespace jeecs
             {
                 je_font_free(m_font);
             }
-            const character* get_character(char32_t wcharacter) const noexcept
+            const character* get_character(float size, char32_t wcharacter) const noexcept
             {
-                return je_font_get_char(m_font, wcharacter);
+                return je_font_get_char(m_font, size, wcharacter);
             }
 
             basic::resource<texture> u32text_texture(
-                const std::u32string& text)
+                const std::u32string& text, float size)
             {
-                return text_texture_impl(*this, text);
+                return text_texture_impl(*this, text, size);
             }
             basic::resource<texture> u8text_texture(
-                const std::string& text)
+                const std::string& text, float size)
             {
                 const size_t sz = woort_str_to_u32str(text.c_str(), nullptr, 0);
                 std::u32string wstr;
@@ -9793,7 +9787,7 @@ namespace jeecs
                 wstr.resize(sz);
                 (void)woort_str_to_u32str(text.c_str(), wstr.data(), sz);
 
-                return text_texture_impl(*this, wstr);
+                return text_texture_impl(*this, wstr, size);
             }
 
             je_font* resource() const noexcept
@@ -9803,9 +9797,9 @@ namespace jeecs
         private:
             inline static basic::resource<texture> text_texture_impl(
                 font& font_base,
-                const std::u32string& text) noexcept
+                const std::u32string& text,
+                float base_size) noexcept
             {
-                const auto* base_font_resource = font_base.resource();
 
                 // u32 -> utf8 conversion helper.
                 const auto u32_to_utf8 = [](std::u32string_view sv) -> std::string
@@ -9856,28 +9850,22 @@ namespace jeecs
                             src_a + dst.w * inv_a);
                     };
 
-                // Cached scaled-font pool shared by both passes.
-                using font_key_t = std::pair<std::string, size_t>;
-                std::map<font_key_t, basic::resource<font>> font_pool;
-
                 // Mutable text style, driven by attribute events and read by char
                 // events. Grouped so a single reset() restores the default state.
                 struct
                 {
-                    float      scale = 1.0f;
+                    float      size;
                     math::vec4 color = math::vec4{ 1, 1, 1, 1 };
                     math::vec2 offset = math::vec2{ 0, 0 };
-                    font* current = nullptr;
                 } style;
-                style.current = &font_base;
+                style.size = base_size;
 
                 const auto reset_style = [&]() noexcept
-                    {
-                        style.scale = 1.0f;
-                        style.color = math::vec4{ 1, 1, 1, 1 };
-                        style.offset = math::vec2{ 0, 0 };
-                        style.current = &font_base;
-                    };
+                {
+                    style.size = base_size;
+                    style.color = math::vec4{ 1, 1, 1, 1 };
+                    style.offset = math::vec2{ 0, 0 };
+                };
 
                 // Single source of truth for attribute application — shared by the
                 // measure and raster passes so their state cannot drift apart.
@@ -9887,37 +9875,13 @@ namespace jeecs
 
                         if (field == U"scale")
                         {
-                            style.scale = std::stof(u8value);
-                            if (style.scale == 1.0f)
-                            {
-                                style.current = &font_base;
-                                return;
-                            }
-                            const auto key = std::make_pair(
-                                std::string(base_font_resource->m_path),
-                                static_cast<size_t>(std::round(
-                                    style.scale * base_font_resource->m_scale_x)));
-
-                            auto found = font_pool.find(key);
-                            if (found == font_pool.end())
-                            {
-                                auto loaded = font::load(
-                                    key.first,
-                                    key.second,
-                                    base_font_resource->m_board_size_x,
-                                    base_font_resource->m_updater);
-
-                                if (!loaded.has_value())
-                                {
-                                    debug::logerr(
-                                        "Failed to open font: '%s'.",
-                                        base_font_resource->m_path);
-                                    style.current = &font_base;
-                                    return;
-                                }
-                                found = font_pool.emplace(key, std::move(*loaded)).first;
-                            }
-                            style.current = found->second.get();
+                            // Scale is a multiplier of the base size; the glyph
+                            // cache inside je_font keys on size, so switching it
+                            // needs no font reload. Non-positive results are
+                            // ignored (there is no meaningful glyph for them).
+                            const float scale = std::stof(u8value);
+                            if (scale > 0.f)
+                                style.size = base_size * scale;
                         }
                         else if (field == U"color")
                         {
@@ -9977,12 +9941,12 @@ namespace jeecs
                     };
 
                 // Pixel offset contributed by the current text offset, in text-space
-                // units (note: y uses m_scale_x too, preserved from the original).
+                // units (note: y uses the base size too, preserved from the original).
                 const auto offset_dx = [&]() noexcept {
-                    return static_cast<int>(style.offset.x * base_font_resource->m_scale_x);
+                    return static_cast<int>(style.offset.x * base_size);
                     };
                 const auto offset_dy = [&]() noexcept {
-                    return static_cast<int>(style.offset.y * base_font_resource->m_scale_x);
+                    return static_cast<int>(style.offset.y * base_size);
                     };
 
                 int next_ch_x = 0;
@@ -9996,7 +9960,7 @@ namespace jeecs
                     apply_attr,
                     [&](char32_t ch)
                     {
-                        const auto* info = style.current->get_character(ch);
+                        const auto* info = font_base.get_character(style.size, ch);
                         if (info == nullptr)
                             return;
                         if (ch == U'\n')
@@ -10059,7 +10023,7 @@ namespace jeecs
                     apply_attr,
                     [&](char32_t ch)
                     {
-                        const auto* info = style.current->get_character(ch);
+                        const auto* info = font_base.get_character(style.size, ch);
                         if (info == nullptr)
                             return;
                         if (ch == U'\n')

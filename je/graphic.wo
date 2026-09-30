@@ -82,13 +82,13 @@ namespace je
         public using font = gchandle
         {
             extern("libjoyecs", "wojeapi_font_open")
-                public func load(path: string, font_width: int)=> option<font>;
-                
+                public func load(path: string)=> option<font>;
+
             extern("libjoyecs", "wojeapi_font_load_char")
-                public func load_char(self: font, ch: char)=> character;
-                
+                public func load_char(self: font, size: int, ch: char)=> character;
+
             extern("libjoyecs", "wojeapi_font_string_texture")
-                public func load_string(self: font, str: string)=> texture;
+                public func load_string(self: font, str: string, size: int)=> texture;
         }
         
         public using shader = gchandle
