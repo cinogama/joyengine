@@ -10672,6 +10672,8 @@ namespace jeecs
             origin_center elem_center = origin_center::center;
             origin_center root_center = origin_center::center;
 
+            bool keep_vertical_ratio = true;
+
             // Will be update by uipipeline
             // Abs
             math::vec2 size = {};
@@ -10680,7 +10682,6 @@ namespace jeecs
             math::vec2 scale = {};
             math::vec2 global_location = {};
 
-            bool keep_vertical_ratio = false;
 
             // 用于计算ui元素的绝对坐标和大小，接受显示区域的宽度和高度，获取以屏幕左下角为原点的元素位置和大小。
             // 其中位置是ui元素中心位置，而非坐标原点位置。
@@ -10779,6 +10780,7 @@ namespace jeecs
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Origin::elem_center, "elem_center");
+                typing::register_member(guard, &Origin::keep_vertical_ratio, "keep_vertical_ratio");
             }
         };
         struct Absolute
@@ -10802,13 +10804,11 @@ namespace jeecs
 
             jeecs::math::vec2 location = {};
             jeecs::math::vec2 scale = { 0.0f, 0.0f };
-            bool use_vertical_ratio = false;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Relatively::location, "location");
                 typing::register_member(guard, &Relatively::scale, "scale");
-                typing::register_member(guard, &Relatively::use_vertical_ratio, "use_vertical_ratio");
             }
         };
         struct Rotation

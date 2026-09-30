@@ -151,14 +151,9 @@ namespace jeecs
                 {
                     origin.global_location = relatively->location;
                     origin.scale = relatively->scale;
-
-                    origin.keep_vertical_ratio = relatively->use_vertical_ratio;
                 }
                 else
-                {
                     origin.scale = {};
-                    // NOTE: We dont care `keep_vertical_ratio` if rel is not exist.
-                }
 
                 if (l2p != nullptr)
                 {
