@@ -17,7 +17,7 @@ namespace JEEditor::Singleton
     let has_singleton_sequence<T> = concept!{
         typeof<T>::SINGLETON_SEQUENCE: int;
     };
-
+    
     let singleton_loader_concept<T> = concept!(content: option<Toml>){
         typeof<T>::SINGLETON_LABEL: string;
         /* OPTIONAL typeof<T>::SINGLETON_SEQUENCE: int */
@@ -63,7 +63,7 @@ namespace JEEditor::Singleton
                     =>> \p = load(p);
                     -> okay
                     ;
-
+                    
                 let inst = typeof<T>::createAndLoad(toml_data);
                 
                 singleton_record_list()->apply(
@@ -87,14 +87,11 @@ namespace JEEditor::Singleton
     public func saveAll()
     {
         do try!{
-            let temp_path = workpath() / ".temp";
-            
-            if (!exist(temp_path))
-            {
-                try! _ = mkdir(temp_path)->or_map(\eno = F"无法创建临时目录：{eno}";);
-            }
-            
-            return singleton_record_list()->apply(func(v){
+            return singleton_record_list()->apply(
+                func(v){
+                    let temp_path = workpath() / ".temp";
+                    let mut temp_path_check_and_created = false;
+                    
                     for (let (label, s): v)
                     {
                         match (s->save)
@@ -102,6 +99,11 @@ namespace JEEditor::Singleton
                             none?;
                             value(saved_data)?
                             {
+                                if (!temp_path_check_and_created && !exist(temp_path))
+                                {
+                                    try! _ = mkdir(temp_path)->or_map(\eno = F"无法创建临时目录：{eno}";);
+                                    temp_path_check_and_created = true;
+                                }
                                 try! _ = save(saved_data, temp_path / F"{label}.toml");
                             }
                         }
