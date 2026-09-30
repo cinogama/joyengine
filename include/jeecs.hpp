@@ -6,15 +6,11 @@
 
 #define _CRT_SECURE_NO_WARNINGS
 
-// woort.h 自身已是 C/C++ 双兼容（内部用 #ifdef __cplusplus 分段），
-// 它是 C ABI 段的依赖，因此无条件包含。
 #include "woort.h"
 
 #define WO_FAIL_JE_FATAL_ERROR 0xD201
 #define WO_FAIL_JE_BAD_INIT_SHADER_VALUE 0xD202
 
-// C++ 标准库头文件仅在 C++ 下需要（C++ 辅助声明段与 C++ 包装段使用）。
-// C ABI 段不得依赖这些头文件。
 #ifdef __cplusplus
 #   include <cstdint>
 #   include <cstring>
@@ -52,10 +48,6 @@
 #   include <execution>
 #endif // __cplusplus
 
-// JE_FORCE_CAPI / JE_FORCE_CAPI_END
-// C++ 下展开为 extern "C" { ... }，用于将 C ABI 包裹以保证链接约定；
-// 纯 C 下展开为空（C 本身即为 C 链接）。
-// 这是编译防火墙的关键骨架：C ABI 段应仅使用 C 构造，使其可被纯 C 编译器处理。
 #ifdef __cplusplus
 #   define JE_FORCE_CAPI extern "C"{
 #   define JE_FORCE_CAPI_END }
@@ -9861,11 +9853,11 @@ namespace jeecs
                 style.size = base_size;
 
                 const auto reset_style = [&]() noexcept
-                {
-                    style.size = base_size;
-                    style.color = math::vec4{ 1, 1, 1, 1 };
-                    style.offset = math::vec2{ 0, 0 };
-                };
+                    {
+                        style.size = base_size;
+                        style.color = math::vec4{ 1, 1, 1, 1 };
+                        style.offset = math::vec2{ 0, 0 };
+                    };
 
                 // Single source of truth for attribute application — shared by the
                 // measure and raster passes so their state cannot drift apart.
@@ -10828,6 +10820,39 @@ namespace jeecs
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Rotation::angle, "angle");
+            }
+        };
+        struct Text
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Text);
+            JECS_DEFAULT_CONSTRUCTOR(Text);
+
+            // UTF-8 文本内容，支持内联标记：{scale:f} {color:RRGGBBAA} {offset:(x,y)}，
+            // '\{' 转义输出字面 '{'（与 graphic::font::u8text_texture 的标记语法一致）。
+            basic::string content;
+
+            // 字体文件资源；未指定时不渲染文本。
+            // 渲染管线会把光栅化出的文本纹理写入实体 Renderer::Textures 的通道0，
+            // 因此使用文本的实体必须持有 Renderer::Textures 和 Renderer::Shaders。
+            basic::file_resource<graphic::font> font;
+
+            // 字号，单位为像素。
+            float size = 16.0f;
+
+            // 为 true 时，UI 元素的绝对大小取 Textures 通道0纹理的自然像素尺寸
+            //（Relatively::scale 的相对增量仍然叠加）；为 false 时按 Origin 常规布局拉伸显示。
+            bool auto_size = true;
+
+            // 以下为渲染管线的脏检查缓存，请勿手动修改。
+            basic::string texture_content;
+            float texture_size = -1.0f;
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &Text::content, "content");
+                typing::register_member(guard, &Text::font, "font");
+                typing::register_member(guard, &Text::size, "size");
+                typing::register_member(guard, &Text::auto_size, "auto_size");
             }
         };
     };
@@ -13077,6 +13102,7 @@ namespace jeecs
             jeecs::typing::register_type<UserInterface::Rotation>(guard, "UserInterface::Rotation");
             jeecs::typing::register_type<UserInterface::Absolute>(guard, "UserInterface::Absolute");
             jeecs::typing::register_type<UserInterface::Relatively>(guard, "UserInterface::Relatively");
+            jeecs::typing::register_type<UserInterface::Text>(guard, "UserInterface::Text");
 
             jeecs::typing::register_type<Renderer::Rendqueue>(guard, "Renderer::Rendqueue");
             jeecs::typing::register_type<Renderer::Shape>(guard, "Renderer::Shape");
