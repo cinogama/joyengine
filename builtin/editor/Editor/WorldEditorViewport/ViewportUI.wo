@@ -12,6 +12,7 @@ import builtin::editor::Editor::Practice;
 
 import Definition;
 import CameraControl;
+import UIGizmo;
 
 using std;
 
@@ -26,6 +27,12 @@ namespace JEEditor::Editor::WorldEditorViewport
         debug_camera: option<entity>,
         rect_min: ImVec2)=> bool
     {
+        // UI 编辑模式（选中 UI 元素）：隐藏整个工具栏，保持视口干净
+        //（移动/旋转/缩放选项对 UI 手柄无意义，2D 模式等视口开关亦
+        // 不在 UI 编辑中显示）
+        if (self->uiEditingActive())
+            return false;
+
         SetCursorScreenPos((rect_min.0 + 8., rect_min.1 + 8.));
 
         let mut toolbar_hovered = false;

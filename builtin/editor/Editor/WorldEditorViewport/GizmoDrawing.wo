@@ -33,6 +33,7 @@ import EntityPicking;
 import ColliderGizmo;
 import LightGizmo;
 import ParticleGizmo;
+import UIGizmo;
 
 using std;
 
@@ -52,16 +53,24 @@ namespace JEEditor::Editor::WorldEditorViewport
         do try!{
             try! camera_entity = debug_camera;
             try! camera_projection = camera_entity->towoo::get_component:<Camera::Projection>();
-            
+
             // 获取目标纹理缓冲区，如果没有就不绘制 gizmo 了。
             try! fb = self.m_editor_walk_camera_frame_buffer;
-            
+
             // GIZMO 的绘制层级，需要一个足够大的数字以确保 GIZMO 总是最后绘制
             let GIZMO_REND_QUEUE = 1000000;
-            
+
             // 开始新的一帧~
             self.m_gizmo_draw_branch->new_frame(GIZMO_REND_QUEUE);
-            
+
+            // UI 编辑模式（选中 UI 元素）：世界坐标网格/实体图标/选中
+            // 高亮等 3D gizmo 对屏幕空间的 UI 编辑无意义，本帧不再提交
+            // 任何内容，保持视口干净。注意 branch 的帧内容保留到下一次
+            // new_frame（上面的空帧即用于清掉上一帧的世界网格，直接
+            // 跳过本函数会让旧内容残留）
+            if (self->uiEditingActive())
+                return_value!;
+
             let gizmo_rend_chain = self.m_gizmo_draw_branch->new_chain(
                 option::value(fb), 0, 0, 0, 0);
                 

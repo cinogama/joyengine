@@ -26,6 +26,7 @@ import Definition;
 import CameraControl;
 import GizmoMath;
 import WindowLifecycle;
+import UIGizmo;
 
 using std;
 
@@ -204,6 +205,10 @@ namespace JEEditor::Editor::WorldEditorViewport
     {
         self.m_icon_gizmo_rects->clear();
         self.m_icon_gizmo_hover = option::none;
+
+        // UI 编辑模式（选中 UI 元素）：图标 gizmo 不显示、不参与命中
+        if (self->uiEditingActive())
+            return;
 
         do try!{
             try! camera_entity = debug_camera;

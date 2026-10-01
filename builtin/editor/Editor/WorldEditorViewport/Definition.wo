@@ -399,6 +399,7 @@ namespace JEEditor::Editor
         protected let UI_GIZMO_MIN_SIZE = 1.;         // 缩放下限（显示像素）
         protected let UI_MOVE_CLICK_MAX_DRAG_PX = 4.; // 判定为点击而非拖拽的位移阈值
         protected let UI_ROTATE_STALK_PX = 30.;       // 旋转手柄到元素上缘的距离
+        protected let UI_SNAP_PX = 8.;                 // Ctrl 吸附的移动/缩放步进（显示像素）
         protected let UI_ROTATE_SNAP_DEG = 15.;       // Ctrl 吸附的角度步进
         // UI gizmo 配色（ImGui DrawList 的 Color32RGBA，0-255）：
         // 元素矩形青、参考矩形/锚点橙、pivot 白、手柄浅灰、激活高亮黄；

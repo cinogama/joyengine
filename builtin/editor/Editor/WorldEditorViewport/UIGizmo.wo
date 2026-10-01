@@ -11,8 +11,10 @@
 // 时冻结。比例通道的像素换算系数（单位一）= 参考矩形尺寸按
 // ratio_unit 折叠（height_unit 两轴取参考高 / width_unit 两轴取参考
 // 宽 / per_axis 逐轴），size_ratio 与 offset_ratio 共用；写回时层像
-// 素增量按轴除以单位一。Ctrl 为吸附键（移动/缩放吸附整像素、旋转
-// 吸附 15°，对两层移动/缩放均生效）。
+// 素增量按轴除以单位一。Ctrl 为吸附键（移动/缩放按 UI_SNAP_PX 吸附、旋转
+// 吸附 15°，对两层移动/缩放均生效）。UI 编辑模式下视口不显示任何
+// 网格与其他 gizmo（见 uiEditingActive），仅保留本文件的矩形手柄与
+// 参考矩形/锚点/pivot 标记。
 // 布局解析复用引擎的 Element::get_layout（显示像素空间，原点=显示区
 // 左下、y 向上），祖先旋转链按
 // UserInterfaceGraphicPipelineSystem::ResolveUiNodes 同式在脚本侧
@@ -819,8 +821,8 @@ namespace JEEditor::Editor::WorldEditorViewport
                 let mut ty = self.m_ui_drag_start_member_px[1] + delta_local[1];
                 if (ctrl_down)
                 {
-                    tx = uiRoundTo(tx, 1.);
-                    ty = uiRoundTo(ty, 1.);
+                    tx = uiRoundTo(tx, UI_SNAP_PX);
+                    ty = uiRoundTo(ty, UI_SNAP_PX);
                 }
                 let dx = (unit[0] > 0.0001)
                     ? (tx - self.m_ui_drag_start_member_px[0]) / unit[0]
@@ -869,7 +871,15 @@ namespace JEEditor::Editor::WorldEditorViewport
                         if (sx_new < self.m_ui_drag_other_box_px[0])
                             sx_new = self.m_ui_drag_other_box_px[0];
                         if (ctrl_down)
-                            sx_new = uiRoundTo(sx_new, 1.);
+                        {
+                            sx_new = uiRoundTo(sx_new, UI_SNAP_PX);
+                            // round 可能回跳到低于下限的格点，取下限上方
+                            // 最近的格点（保证 size_ratio ≥ 0）
+                            if (sx_new < self.m_ui_drag_other_box_px[0])
+                                sx_new = uiRoundTo(
+                                    self.m_ui_drag_other_box_px[0] + UI_SNAP_PX * 0.5,
+                                    UI_SNAP_PX);
+                        }
                         let target = self.m_ui_drag_other_box_px[0]
                             + self.m_ui_drag_start_member_px[0];
                         sx_new = sx_new - target + self.m_ui_drag_start_member_px[0];
@@ -882,7 +892,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                         if (sx_new < UI_GIZMO_MIN_SIZE)
                             sx_new = UI_GIZMO_MIN_SIZE;
                         if (ctrl_down)
-                            sx_new = uiRoundTo(sx_new, 1.);
+                            sx_new = uiRoundTo(sx_new, UI_SNAP_PX);
                     }
                 }
                 let mut sy_new = self.m_ui_drag_start_member_px[1];
@@ -896,7 +906,13 @@ namespace JEEditor::Editor::WorldEditorViewport
                         if (sy_new < self.m_ui_drag_other_box_px[1])
                             sy_new = self.m_ui_drag_other_box_px[1];
                         if (ctrl_down)
-                            sy_new = uiRoundTo(sy_new, 1.);
+                        {
+                            sy_new = uiRoundTo(sy_new, UI_SNAP_PX);
+                            if (sy_new < self.m_ui_drag_other_box_px[1])
+                                sy_new = uiRoundTo(
+                                    self.m_ui_drag_other_box_px[1] + UI_SNAP_PX * 0.5,
+                                    UI_SNAP_PX);
+                        }
                         let target = self.m_ui_drag_other_box_px[1]
                             + self.m_ui_drag_start_member_px[1];
                         sy_new = sy_new - target + self.m_ui_drag_start_member_px[1];
@@ -909,7 +925,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                         if (sy_new < UI_GIZMO_MIN_SIZE)
                             sy_new = UI_GIZMO_MIN_SIZE;
                         if (ctrl_down)
-                            sy_new = uiRoundTo(sy_new, 1.);
+                            sy_new = uiRoundTo(sy_new, UI_SNAP_PX);
                     }
                 }
 
@@ -1212,178 +1228,13 @@ namespace JEEditor::Editor::WorldEditorViewport
         }
     }
 
-    // ---- 视口覆盖 UI：锚点/轴心九宫格与 ratio_unit 切换 ----
-
-    // 选中 UI 元素时在工具栏下方显示一行快捷控件。返回控件区域是否被
-    // 悬停（悬停时应抑制视口内的点击选取；须在视口鼠标守卫之前提交）
-    protected func drawUIToolsOverlay(
-        self: WorldEditorViewport,
-        rect_min: ImVec2)=> bool
+    // 当前是否处于 UI 编辑模式（选中实体为 UI 元素）：此模式下视口
+    // 保持干净——跳过世界网格/实体图标/选中高亮等 3D gizmo（见
+    // drawGizmos/updateIconGizmos），隐藏视口工具栏，仅保留 UI 矩形
+    // 手柄与参考矩形/锚点/pivot 标记
+    protected func uiEditingActive(self: WorldEditorViewport)=> bool
     {
-        let selected = self->uiFindSelectedUIElement();
-        if (selected->is_none)
-            return false;
-
-        // try! 块内对外部捕获变量的赋值不可变，悬停标志在块内收集后返回
-        return or(false) <| try!{
-            try! e = selected;
-            try! elem = e->towoo::get_component:<UserInterface::Element>();
-            let euid = e->internal::get_entity_uid
-                ->or(0h as entity::internal::euid_t);
-
-            // 工具栏下一行
-            SetCursorScreenPos(
-                (rect_min.0 + 8., rect_min.1 + 8. + GetFrameHeightWithSpacing()));
-            do TextDisabled("UI:");
-            SameLine();
-
-            let mut hovered = false;
-            if (self->drawUIAlignGrid(
-                    "锚点", "##ui_anchor",
-                    elem.anchor->get as int, "anchor", e, elem, euid))
-                hovered = true;
-            SameLine();
-            if (self->drawUIAlignGrid(
-                    "轴心", "##ui_pivot",
-                    elem.pivot->get as int, "pivot", e, elem, euid))
-                hovered = true;
-
-            SameLine();
-
-            // ratio_unit 三态（切换后比例通道的单位随之改变）
-            let ru = elem.ratio_unit->get;
-            if (RadioButton("高单位", ru == UserInterface::ratio_unit::height_unit))
-                self->uiSetRatioUnit(
-                    e, euid, elem, UserInterface::ratio_unit::height_unit);
-            if (IsItemHovered())
-            {
-                hovered = true;
-                do SetTooltip("比例通道两轴都以参考矩形高度为单位");
-            }
-            SameLine();
-            if (RadioButton("宽单位", ru == UserInterface::ratio_unit::width_unit))
-                self->uiSetRatioUnit(
-                    e, euid, elem, UserInterface::ratio_unit::width_unit);
-            if (IsItemHovered())
-            {
-                hovered = true;
-                do SetTooltip("比例通道两轴都以参考矩形宽度为单位");
-            }
-            SameLine();
-            if (RadioButton("分轴", ru == UserInterface::ratio_unit::per_axis))
-                self->uiSetRatioUnit(
-                    e, euid, elem, UserInterface::ratio_unit::per_axis);
-            if (IsItemHovered())
-            {
-                hovered = true;
-                do SetTooltip("x 用参考矩形宽度、y 用高度");
-            }
-
-            return_value! hovered;
-        };
+        return self->uiFindSelectedUIElement()->is_value;
     }
 
-    // 锚点/轴心的 3×3 预设网格（列：左/中/右，行：上/中/下）。
-    // 点击即写入对应 alignment 组合并发布可撤销记录；当前预设格子
-    // 橙色高亮。返回网格区域是否被悬停
-    protected func drawUIAlignGrid(
-        self: WorldEditorViewport,
-        label: string,
-        id_prefix: string,
-        current_bits: int,
-        member_name: string,
-        e: entity,
-        elem: UserInterface::Element,
-        euid: entity::internal::euid_t)=> bool
-    {
-        let mut hovered_any = false;
-
-        do TextDisabled(label);
-        SameLine();
-
-        let draw_list = GetWindowDrawList();
-
-        for (let mut r = 0; r < 3; r += 1)
-        {
-            for (let mut c = 0; c < 3; c += 1)
-            {
-                // 列：左(1)/中(0)/右(2)；行：上(4)/中(0)/下(8)
-                let mut col_bits = 0;
-                if (c == 0)
-                    col_bits = 1;
-                else if (c == 2)
-                    col_bits = 2;
-                let mut row_bits = 0;
-                if (r == 0)
-                    row_bits = 4;
-                else if (r == 2)
-                    row_bits = 8;
-                let bits = col_bits->bor(row_bits);
-
-                if (InvisibleButton(F"{id_prefix}_{r}_{c}", (11., 11.)))
-                {
-                    let old = serializeMemberValue(
-                        e, "UserInterface::Element", member_name)->or("");
-                    if (member_name == "anchor")
-                        elem.anchor->set(bits as UserInterface::alignment);
-                    else
-                        elem.pivot->set(bits as UserInterface::alignment);
-                    let new = serializeMemberValue(
-                        e, "UserInterface::Element", member_name)->or("");
-                    if (old != "" && new != "" && old != new)
-                        self->doAction(ModifyComponentMember::create(
-                                euid, "UserInterface::Element",
-                                member_name, old, new));
-                }
-                if (IsItemHovered())
-                {
-                    hovered_any = true;
-                    let mut col_name = "中";
-                    if (c == 0)
-                        col_name = "左";
-                    else if (c == 2)
-                        col_name = "右";
-                    let mut row_name = "中";
-                    if (r == 0)
-                        row_name = "上";
-                    else if (r == 2)
-                        row_name = "下";
-                    do SetTooltip(F"{label}{col_name}{row_name}");
-                }
-
-                // 当前预设格子橙色高亮 + 网格线
-                let (cell_min, cell_max) = GetItemRect();
-                if (current_bits == bits)
-                    do draw_list->AddRectFilled(
-                        (cell_min.0, cell_min.1), (cell_max.0, cell_max.1),
-                        (255, 158, 64, 190));
-                do draw_list->AddRect(
-                    (cell_min.0, cell_min.1), (cell_max.0, cell_max.1),
-                    (153, 153, 153, 205), 1.);
-
-                if (c < 2)
-                    SameLine();
-            }
-        }
-
-        return hovered_any;
-    }
-
-    // 写入 ratio_unit 并发布可撤销记录
-    protected func uiSetRatioUnit(
-        self: WorldEditorViewport,
-        e: entity,
-        euid: entity::internal::euid_t,
-        elem: UserInterface::Element,
-        unit_value: UserInterface::ratio_unit)=> void
-    {
-        let old = serializeMemberValue(
-            e, "UserInterface::Element", "ratio_unit")->or("");
-        elem.ratio_unit->set(unit_value);
-        let new = serializeMemberValue(
-            e, "UserInterface::Element", "ratio_unit")->or("");
-        if (old != "" && new != "" && old != new)
-            self->doAction(ModifyComponentMember::create(
-                    euid, "UserInterface::Element", "ratio_unit", old, new));
-    }
 }

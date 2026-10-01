@@ -667,10 +667,6 @@ namespace JEEditor::Editor::WorldEditorViewport
             value((rect_min, rect_max))?
             {
                 toolbar_hovered = self->drawGizmoToolbar(debug_camera, rect_min);
-                // UI 元素选中时的快捷控件行（锚点/轴心九宫格与
-                // ratio_unit 切换），须与工具栏一样先于鼠标守卫提交
-                if (self->drawUIToolsOverlay(rect_min))
-                    toolbar_hovered = true;
                 // 未保存标记悬停时同样抑制视口内的点击选取
                 if (self->drawUnsavedMark(rect_min, rect_max))
                     toolbar_hovered = true;
