@@ -119,18 +119,33 @@ namespace jeecs
         }
         void UserInterfaceStageUpdate()
         {
-            // UI 布局阶段：每帧把 Element 的输入重建到 WorldLayout，并沿
-            // Transform 层级（Anchor + LocalToParent 的 parent_uid）累加祖先偏移。
-            // WorldLayout 是唯一的派生状态，Element 等输入组件不会被任何系统回写。
-            std::unordered_map<typing::uuid, UserInterface::WorldLayout*> resolved_layouts;
+            // UI 布局阶段：每帧把 Element 输入解析为 WorldLayout（参考系 = 基点 + 单位一，
+            // 双通道，相对显示区中心表达）。
+            // 根元素的 anchor 与相对通道（offset_ratio/size_ratio）以显示区为参考；
+            // 子元素的以父元素矩形为参考——anchor 锚定父矩形方位，相对通道按自身
+            // keep_vertical_ratio 以父矩形的高（true）或宽（false）为标量单位一
+            //（父矩形有效尺寸 = 父输入尺寸 + 父 size_ratio ⊙ 祖传单位一，递归）。
+            // 因此先解父后解子；WorldLayout 是唯一的派生状态，输入组件不会被任何系统回写。
+
+            struct ResolvedParent
+            {
+                UserInterface::Element* elem;
+                UserInterface::WorldLayout* layout;
+            };
+            std::unordered_map<typing::uuid, ResolvedParent> resolved_parents;
 
             struct AnchoredLayout
             {
                 Anchor* anchor_may_null;
-                UserInterface::WorldLayout* layout;
+                Element* elem;
+                WorldLayout* layout;
                 LocalToParent* l2p;
             };
             std::list<AnchoredLayout> pending_anchor_information;
+
+            // 显示区作为根元素的参照矩形与单位一（双通道：绝对0 + 相对1）。
+            const UserInterface::layout_value display_rect{
+                math::vec2(0.f, 0.f), math::vec2(1.f, 1.f) };
 
             for (auto&& [anchor, l2p, elem, layout] : query<
                 view typesof(
@@ -141,22 +156,37 @@ namespace jeecs
                 )
             >())
             {
-                // 每帧从输入重建（用户可随意修改 Element，无持久派生数据需要维护）。
-                layout.offset = elem.offset;
-                layout.offset_ratio = elem.offset_ratio;
-
                 if (l2p != nullptr)
                 {
+                    // 子元素：先按根语义暂存（父元素解析后覆盖为完整参考系；
+                    // 若父链缺失则保留此退化结果，问题可立即被发现）。
+                    layout.offset = elem.offset;
+                    layout.offset_ratio = elem.offset_ratio;
+                    layout.unit = display_rect.absolute;
+                    layout.unit_ratio = display_rect.relative;
+
                     pending_anchor_information.push_back(
                         AnchoredLayout{
                             anchor,
+                            &elem,
                             &layout,
                             l2p });
                 }
-                else if (anchor != nullptr)
+                else
                 {
-                    // 是根UI元素，注册为父级查找目标
-                    resolved_layouts.emplace(anchor->uid, &layout);
+                    // 根元素：anchor 相对显示区解析，单位一即显示区。
+                    const auto anchored = anchor_shift(elem.anchor, display_rect);
+
+                    layout.offset = elem.offset + anchored.absolute;
+                    layout.offset_ratio = elem.offset_ratio + anchored.relative;
+                    layout.unit = display_rect.absolute;
+                    layout.unit_ratio = display_rect.relative;
+
+                    if (anchor != nullptr)
+                    {
+                        resolved_parents.emplace(
+                            anchor->uid, ResolvedParent{ &elem, &layout });
+                    }
                 }
             }
 
@@ -169,18 +199,62 @@ namespace jeecs
                 {
                     auto current_idx = idx++;
 
-                    auto fnd = resolved_layouts.find(current_idx->l2p->parent_uid);
-                    if (fnd != resolved_layouts.end())
+                    auto fnd = resolved_parents.find(current_idx->l2p->parent_uid);
+                    if (fnd != resolved_parents.end())
                     {
-                        // 父布局已决，累加之
-                        const UserInterface::WorldLayout* parent_layout = fnd->second;
+                        const auto& [parent_elem, parent_layout] = fnd->second;
 
-                        current_idx->layout->offset += parent_layout->offset;
-                        current_idx->layout->offset_ratio += parent_layout->offset_ratio;
+                        // 父矩形的有效尺寸通道（递归），用作：
+                        // 1) 父枢轴修正与子 anchor 锚定的参照尺寸（几何量，按各自轴取半）；
+                        // 2) 子元素相对通道的单位一——按子元素的 keep_vertical_ratio
+                        //    取父高（true）或父宽（false）作为标量单位广播到两轴，
+                        //    与根元素“以显示区高/宽为单位”的语义一致。
+                        const UserInterface::layout_value parent_unit{
+                            parent_layout->unit, parent_layout->unit_ratio };
+                        const auto parent_scaled_ratio =
+                            scale_channels(parent_elem->size_ratio, parent_unit);
+                        const UserInterface::layout_value parent_rect{
+                            parent_elem->size + parent_scaled_ratio.absolute,
+                            parent_scaled_ratio.relative };
+
+                        const float unit_absolute = current_idx->elem->keep_vertical_ratio
+                            ? parent_rect.absolute.y
+                            : parent_rect.absolute.x;
+                        const float unit_relative = current_idx->elem->keep_vertical_ratio
+                            ? parent_rect.relative.y
+                            : parent_rect.relative.x;
+
+                        // 子单位一 = 父高（或父宽）标量，广播到两轴。
+                        current_idx->layout->unit = math::vec2(unit_absolute, unit_absolute);
+                        current_idx->layout->unit_ratio = math::vec2(unit_relative, unit_relative);
+
+                        // 子基点 = 父矩形中心（父基点 + 父枢轴修正）
+                        //         + 子 anchor 相对父矩形的锚定偏移
+                        //         + 自身偏移（offset_ratio 以同一标量单位折算）。
+                        const auto parent_pivot = pivot_shift(parent_elem->pivot, parent_rect);
+                        const auto anchored = anchor_shift(current_idx->elem->anchor, parent_rect);
+                        const auto own_offset = scale_channels(
+                            current_idx->elem->offset_ratio,
+                            UserInterface::layout_value{
+                                current_idx->layout->unit,
+                                current_idx->layout->unit_ratio });
+
+                        current_idx->layout->offset =
+                            current_idx->elem->offset + own_offset.absolute
+                            + parent_layout->offset + parent_pivot.absolute
+                            + anchored.absolute;
+                        current_idx->layout->offset_ratio =
+                            own_offset.relative
+                            + parent_layout->offset_ratio + parent_pivot.relative
+                            + anchored.relative;
 
                         // 完成应用，将当前布局绑定到binding，然后从pending中删除当前项
                         if (current_idx->anchor_may_null != nullptr)
-                            resolved_layouts.emplace(current_idx->anchor_may_null->uid, current_idx->layout);
+                            resolved_parents.emplace(
+                                current_idx->anchor_may_null->uid,
+                                ResolvedParent{
+                                    current_idx->elem,
+                                    current_idx->layout });
 
                         pending_anchor_information.erase(current_idx);
                     }

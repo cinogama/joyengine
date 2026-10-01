@@ -1909,6 +1909,24 @@ WOORT_API woort_api wojeapi_towoo_audio_source_get_source(void)
         nullptr);
 }
 
+// 解析 UI 元素矩形；未挂 WorldLayout 时按根元素回退（anchor 相对显示区解析）。
+static jeecs::UserInterface::resolved_rect wo_resolve_element_rect(
+    const jeecs::UserInterface::Element& elem,
+    const jeecs::UserInterface::WorldLayout* layout,
+    float w, float h)
+{
+    if (layout != nullptr)
+        return jeecs::UserInterface::resolve_layout(elem, *layout, w, h);
+
+    jeecs::UserInterface::WorldLayout fallback;
+    fallback.offset_ratio = jeecs::UserInterface::anchor_shift(
+        elem.anchor,
+        jeecs::UserInterface::layout_value{
+            jeecs::math::vec2(0.f, 0.f), jeecs::math::vec2(1.f, 1.f) }).relative;
+    fallback.unit_ratio = jeecs::math::vec2(1.f, 1.f);
+    return jeecs::UserInterface::resolve_layout(elem, fallback, w, h);
+}
+
 WOORT_API woort_api wojeapi_towoo_userinterface_element_layout(void)
 {
     woort_value stack_base;
@@ -1920,9 +1938,7 @@ WOORT_API woort_api wojeapi_towoo_userinterface_element_layout(void)
         1, WOORT_RETURN_SLOT);
     auto r = wo_vec2(2);
 
-    const jeecs::UserInterface::WorldLayout empty_layout;
-    auto rect = jeecs::UserInterface::resolve_layout(
-        elem, layout != nullptr ? *layout : empty_layout, r.x, r.y);
+    auto rect = wo_resolve_element_rect(elem, layout, r.x, r.y);
 
     woort_set_struct(stack_base + 0, 3);
 
@@ -1947,9 +1963,7 @@ WOORT_API woort_api wojeapi_towoo_userinterface_element_mouse_on(void)
     auto a = woort_float(3);
     auto m = wo_vec2(4);
 
-    const jeecs::UserInterface::WorldLayout empty_layout;
-    auto rect = jeecs::UserInterface::resolve_layout(
-        elem, layout != nullptr ? *layout : empty_layout, r.x, r.y);
+    auto rect = wo_resolve_element_rect(elem, layout, r.x, r.y);
 
     return woort_ret_bool(jeecs::UserInterface::hit_test(rect, a, m, r.x, r.y));
 }

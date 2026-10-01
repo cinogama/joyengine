@@ -10673,17 +10673,23 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Element);
             JECS_DEFAULT_CONSTRUCTOR(Element);
 
-            // 参照锚点：显示区上的哪个点作为偏移起点（默认显示区中心）。
+            // 参照锚点：偏移起点位于参照矩形的哪个方位（默认中心）。
+            // 根元素的参照矩形是整个显示区；子元素（经 Transform::LocalToParent
+            // 挂钩）的参照矩形是父 UI 元素的矩形。由布局阶段解析进 WorldLayout。
             alignment anchor = alignment::center;
 
             // 元素枢轴：元素盒上的哪个点对齐到偏移起点（默认元素中心）。
             alignment pivot = alignment::center;
 
-            // 相对量（offset_ratio/size_ratio）换算为绝对量时的比例基准：
-            // true 以竖向为基准，横向相对量按 h/w 折算；false 以横向为基准，纵向按 w/h 折算。
+            // 相对量（offset_ratio/size_ratio）的单位一基准（标量，两轴同单位，
+            // 比例不随参考矩形的宽高比拉伸）：true 时以参考矩形的“高”为单位一，
+            // false 时以“宽”为单位一。参考矩形：根元素为显示区，子元素为父元素矩形。
             bool keep_vertical_ratio = true;
 
-            // 偏移与尺寸各含绝对（像素）与相对（×显示区尺寸）两个通道，最终取两者之和。
+            // 偏移与尺寸各含绝对（像素）与相对两个通道，最终取两者之和。
+            // 相对通道按 keep_vertical_ratio 取参考矩形的高/宽为标量单位一：
+            // 根元素的参考矩形为显示区，子元素（经 Transform::LocalToParent 挂钩）
+            // 为父元素矩形。由布局阶段解析进 WorldLayout。
             math::vec2 offset = {};
             math::vec2 offset_ratio = {};
             math::vec2 size = {};
@@ -10702,18 +10708,102 @@ namespace jeecs
         };
 
         // 布局层级的解析结果：由 UI 布局阶段（TranslationUpdatingSystem）每帧
-        // 从 Element 重建并累加祖先偏移后写入，用户只读。
+        // 从 Element 重建后写入，用户只读。内容为元素的“参考系”（双通道）：
+        //   基点（offset/offset_ratio）= 参考锚点（根元素相对显示区，子元素相对
+        //   父元素矩形）+ 自身偏移，相对显示区中心表达；
+        //   单位一（unit/unit_ratio）= 相对通道（offset_ratio/size_ratio）的参照尺寸，
+        //   根元素为显示区，子元素为父元素矩形的有效尺寸。
         // 未携带本组件的元素不参与 UI 布局与渲染（参见编辑器的 UI 组件预设）。
         struct WorldLayout
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(WorldLayout);
             JECS_DEFAULT_CONSTRUCTOR(WorldLayout);
 
-            // 自身与所有祖先的绝对偏移累加（像素）。
+            // 基点的绝对通道（像素）。
             math::vec2 offset = {};
-            // 自身与所有祖先的相对偏移累加（×显示区尺寸）。
+            // 基点的相对通道（×显示区尺寸）。
             math::vec2 offset_ratio = {};
+            // 单位一的绝对通道（像素）；已按本元素 keep_vertical_ratio 取参考矩形的
+            // 高/宽标量并广播到两轴。根元素为 0。
+            math::vec2 unit = {};
+            // 单位一的相对通道（×显示区尺寸）；根元素为 (1,1)。
+            math::vec2 unit_ratio = {};
         };
+
+        // 双通道布局量：绝对（像素）+ 相对（×显示区尺寸）。
+        // 层级锚定与单位一在通道空间中传播——父矩形的位置/尺寸也以通道形式
+        // 传给子元素，最终像素值 = absolute + relative × 显示区尺寸
+        //（含 keep_vertical_ratio 折算）。
+        struct layout_value
+        {
+            math::vec2 absolute = {};
+            math::vec2 relative = {};
+        };
+
+        // 参照锚点相对参照矩形（双通道尺寸）的偏移，按方位标记取半尺寸符号：
+        // left 取 -x/2，right 取 +x/2，top 取 +y/2，bottom 取 -y/2。
+        // 根元素的参照矩形是显示区（绝对0 + 相对1），子元素是父元素矩形。
+        inline layout_value anchor_shift(alignment anchor, const layout_value& rect) noexcept
+        {
+            layout_value result;
+            if (anchor & alignment::left)
+            {
+                result.absolute.x -= rect.absolute.x / 2.0f;
+                result.relative.x -= rect.relative.x / 2.0f;
+            }
+            if (anchor & alignment::right)
+            {
+                result.absolute.x += rect.absolute.x / 2.0f;
+                result.relative.x += rect.relative.x / 2.0f;
+            }
+            if (anchor & alignment::top)
+            {
+                result.absolute.y += rect.absolute.y / 2.0f;
+                result.relative.y += rect.relative.y / 2.0f;
+            }
+            if (anchor & alignment::bottom)
+            {
+                result.absolute.y -= rect.absolute.y / 2.0f;
+                result.relative.y -= rect.relative.y / 2.0f;
+            }
+            return result;
+        }
+
+        // 枢轴到矩形中心的偏移（双通道），按方位标记取半尺寸符号：
+        // left 取 +x/2，right 取 -x/2，top 取 -y/2，bottom 取 +y/2。
+        inline layout_value pivot_shift(alignment pivot, const layout_value& rect) noexcept
+        {
+            layout_value result;
+            if (pivot & alignment::left)
+            {
+                result.absolute.x += rect.absolute.x / 2.0f;
+                result.relative.x += rect.relative.x / 2.0f;
+            }
+            if (pivot & alignment::right)
+            {
+                result.absolute.x -= rect.absolute.x / 2.0f;
+                result.relative.x -= rect.relative.x / 2.0f;
+            }
+            if (pivot & alignment::top)
+            {
+                result.absolute.y -= rect.absolute.y / 2.0f;
+                result.relative.y -= rect.relative.y / 2.0f;
+            }
+            if (pivot & alignment::bottom)
+            {
+                result.absolute.y += rect.absolute.y / 2.0f;
+                result.relative.y += rect.relative.y / 2.0f;
+            }
+            return result;
+        }
+
+        // 用无单位比例（如 offset_ratio/size_ratio）同时缩放双通道量的两个通道。
+        // 因为比例无量纲，两通道同乘后像素语义保持：
+        // ratio ⊙ v 最终解析为 ratio ∘ (v.absolute + v.relative × 显示区尺寸)。
+        inline layout_value scale_channels(const math::vec2& ratio, const layout_value& v) noexcept
+        {
+            return layout_value{ v.absolute * ratio, v.relative * ratio };
+        }
 
         // 解析后的 UI 元素矩形：以显示区左下角为原点，单位像素。
         struct resolved_rect
@@ -10746,6 +10836,10 @@ namespace jeecs
         };
 
         // 将布局输入解析为显示区（宽 w、高 h）内的最终矩形。
+        // world 为布局阶段解析好的参考系（基点 + 单位一）：
+        // 元素自身的 anchor 与 offset_ratio 的层级语义（根元素相对显示区、
+        // 子元素相对父元素矩形）已由布局阶段折算进 world，此处只做像素化
+        // 与枢轴修正。
         inline resolved_rect resolve_layout(
             const Element& elem,
             const WorldLayout& world,
@@ -10758,34 +10852,27 @@ namespace jeecs
             else
                 ratio_scale.y = w / h;
 
+            const auto to_pixels = [w, h, &ratio_scale](const layout_value& v) -> math::vec2
+            {
+                return v.absolute + v.relative * math::vec2(w, h) * ratio_scale;
+            };
+
+            // 单位一（相对通道的参照尺寸）：根元素为显示区，子元素为父矩形的
+            // 有效尺寸。尺寸 = 绝对输入 + size_ratio ⊙ 单位一；枢轴修正按该尺寸取半。
+            const layout_value unit{world.unit, world.unit_ratio};
+            const layout_value scaled_size_ratio = scale_channels(elem.size_ratio, unit);
+            const layout_value size_channels{
+                elem.size + scaled_size_ratio.absolute,
+                scaled_size_ratio.relative };
+
             resolved_rect rect;
-            rect.size = elem.size + elem.size_ratio * math::vec2(w, h) * ratio_scale;
+            rect.size = to_pixels(size_channels);
+            rect.pivot_offset = to_pixels(pivot_shift(elem.pivot, size_channels));
 
-            // 偏移起点默认为显示区中心，再按参照锚点修正。
-            math::vec2 position =
-                world.offset + world.offset_ratio * math::vec2(w, h) * ratio_scale
-                + math::vec2(w / 2.0f, h / 2.0f);
-
-            if (elem.anchor & alignment::left)
-                position.x -= w / 2.0f;
-            if (elem.anchor & alignment::right)
-                position.x += w / 2.0f;
-            if (elem.anchor & alignment::top)
-                position.y += h / 2.0f;
-            if (elem.anchor & alignment::bottom)
-                position.y -= h / 2.0f;
-
-            // 元素中心 = 偏移起点 + 枢轴到中心的修正量。
-            if (elem.pivot & alignment::left)
-                rect.pivot_offset.x = rect.size.x / 2.0f;
-            if (elem.pivot & alignment::right)
-                rect.pivot_offset.x = -rect.size.x / 2.0f;
-            if (elem.pivot & alignment::top)
-                rect.pivot_offset.y = -rect.size.y / 2.0f;
-            if (elem.pivot & alignment::bottom)
-                rect.pivot_offset.y = rect.size.y / 2.0f;
-
-            rect.center = position + rect.pivot_offset;
+            // 元素中心 = 显示区中心 + 基点 + 枢轴修正。
+            rect.center = math::vec2(w / 2.0f, h / 2.0f)
+                + to_pixels(layout_value{world.offset, world.offset_ratio})
+                + rect.pivot_offset;
             return rect;
         }
 
