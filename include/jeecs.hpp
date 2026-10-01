@@ -10712,7 +10712,8 @@ namespace jeecs
         //   基点（offset/offset_ratio）= 参考锚点（根元素相对显示区，子元素相对
         //   父元素矩形）+ 自身偏移，相对显示区中心表达；
         //   单位一（unit/unit_ratio）= 相对通道（offset_ratio/size_ratio）的参照尺寸，
-        //   根元素为显示区，子元素为父元素矩形的有效尺寸。
+        //   根元素为显示区，子元素为父元素矩形的有效尺寸；
+        //   有效旋转角（rotation）= 全部祖先与自身 Rotation::angle 之和（度）。
         // 未携带本组件的元素不参与 UI 布局与渲染（参见编辑器的 UI 组件预设）。
         struct WorldLayout
         {
@@ -10728,6 +10729,14 @@ namespace jeecs
             math::vec2 unit = {};
             // 单位一的相对通道（×显示区尺寸）；根元素为 (1,1)。
             math::vec2 unit_ratio = {};
+
+            // 有效旋转角（度，绕元素枢轴）= 全部祖先与自身的 Rotation::angle 之和
+            //（未挂 Rotation 组件的实体按 0 计）。与 Translation::world_rotation 同理，
+            // 由布局阶段沿 Anchor+LocalToParent 父链逐级递推缓存（父有效角+自身角），
+            // 绘制与命中测试直接读取本值。注意旋转是像素空间量，无法在双通道中
+            // 传播：基点/单位一仍是“祖先未旋转”的参考系，旋转只由绘制阶段在
+            // 像素空间复合（见 UserInterfaceGraphicPipelineSystem）。
+            float rotation = 0.f;
         };
 
         // 双通道布局量：绝对（像素）+ 相对（×显示区尺寸）。
@@ -10884,7 +10893,8 @@ namespace jeecs
         }
 
         // 鼠标命中测试：mouse_view_pos 为视口空间坐标（-1..1，y 轴向上），
-        // rot_angle 为元素旋转角（度，与 Rotation::angle 同单位）。
+        // rot_angle 为元素旋转角（度，与 Rotation::angle 同单位；通常传
+        // WorldLayout::rotation，即全部祖先累计 + 自身的有效角）。
         inline bool hit_test(
             const resolved_rect& rect,
             float rot_angle,
@@ -10909,7 +10919,8 @@ namespace jeecs
             // 旋转角（度，绕元素枢轴，与 Transform 欧拉角同单位，
             // 绘制端经 quat::euler 按 DEG2RAD 消费）。
             // 旋转会带动整个 UI 子树：子元素绕本元素枢轴一同旋转，
-            // 子元素的有效旋转角为全部祖先角与自身角之和（绘制阶段复合）。
+            // 子元素的有效旋转角为全部祖先角与自身角之和，由布局阶段沿父链
+            // 递推缓存进 WorldLayout::rotation。
             float angle = 0.0f;
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {

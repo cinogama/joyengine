@@ -523,8 +523,9 @@ public let frag =
         {
         }
 
-        // UI 节点树：绘制阶段需要沿父链复合祖先旋转（像素空间操作，无法在
-        // 双通道里传播），因此每帧重建结构、每个相机目标尺寸解析一次。
+        // UI 节点树：累计旋转角已由布局阶段沿父链缓存进 WorldLayout.rotation，
+        // 但旋转后的中心位置是像素空间量（依赖相机目标尺寸，无法在双通道里
+        // 传播），绘制阶段仍需沿父链复合，因此每帧重建结构、每个相机目标尺寸解析一次。
         static constexpr size_t INVALID_UI_NODE = SIZE_MAX;
 
         struct ui_node_t
@@ -540,7 +541,7 @@ public let frag =
             // 以下为每相机解析缓存（ResolveUiNodes 覆写）：
             UserInterface::resolved_rect rect{};   // 局部矩形（父元素未旋转的坐标系）
             math::vec2 display_center{};           // center 经祖先旋转链后的显示位置
-            float angle_acc = 0.f;                 // 祖先累计旋转角（不含自身）
+            float angle_acc = 0.f;                 // 祖先累计旋转角（不含自身）= WorldLayout.rotation − 自身角
         };
 
         std::vector<ui_node_t> m_ui_nodes;
@@ -688,8 +689,9 @@ public let frag =
         // 按依赖序（父先于子）解析全部 UI 节点，每个相机目标尺寸调用一次：
         // 1) resolve_layout 得到局部（父元素未旋转坐标系）矩形；
         // 2) auto_size 按通道0文本纹理宽高比调整矩形（父先于子，子元素同帧可见）；
-        // 3) 沿父链复合祖先旋转：A(x) = display_center + R(angle_acc)·(x − rect.center)，
-        //    display_center 与 angle_acc 逐级递归（父旋转绕父枢轴，再经父的祖先链上溯）。
+        // 3) 沿父链复合祖先旋转（像素空间）：A(x) = display_center + R(angle_acc)·(x − rect.center)，
+        //    display_center 逐级递归（父旋转绕父枢轴，再经父的祖先链上溯）；
+        //    angle_acc 直接取 WorldLayout.rotation − 自身角（布局阶段已缓存，此处不再累加）。
         void ResolveUiNodes(float width, float height)
         {
             for (size_t node_index : m_ui_resolve_order)
@@ -726,10 +728,14 @@ public let frag =
                     }
                 }
 
+                // 祖先累计角（不含自身）：布局阶段已沿父链缓存进 WorldLayout.rotation，
+                // 此处仅扣除自身分量，不再逐级重复累加。
+                node.angle_acc = node.layout->rotation
+                    - (node.rotation != nullptr ? node.rotation->angle : 0.f);
+
                 if (node.parent == INVALID_UI_NODE)
                 {
                     node.display_center = node.rect.center;
-                    node.angle_acc = 0.f;
                 }
                 else
                 {
@@ -752,7 +758,6 @@ public let frag =
                     node.display_center = parent.display_center
                         + UserInterface::rotate_vector(
                             parent.angle_acc * math::DEG2RAD, rotated_by_parent - parent.rect.center);
-                    node.angle_acc = parent.angle_acc + parent_angle;
                 }
             }
         }
@@ -894,13 +899,13 @@ public let frag =
                     const ui_node_t& node = m_ui_nodes[rendentity.ui_node];
                     const auto& rect = node.rect;
 
-                    // 总旋转角 = 祖先累计 + 自身（度，quat::euler 按度消费）；
+                    // 总旋转角 = 布局阶段缓存的 WorldLayout::rotation（祖先累计 + 自身，
+                    // 度，quat::euler 按度消费，等价于 angle_acc + 自身角）；
                     // 矩阵结构与未旋转时一致（T(枢轴)·R·T(pivot_offset)·S 的展开形式）：
                     // uioffset 保证枢轴落在其经祖先旋转链后的显示位置 A(Q)，
                     // 即 uioffset = D_C + (I − R(Θ_acc))·pivot_offset
                     //（R 在此处按弧度计算，需先换算）。
-                    const float total_angle = node.angle_acc
-                        + (node.rotation != nullptr ? node.rotation->angle : 0.f);
+                    const float total_angle = node.layout->rotation;
 
                     const math::vec2 uioffset = node.display_center
                         + (rect.pivot_offset

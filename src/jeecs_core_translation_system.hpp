@@ -126,6 +126,12 @@ namespace jeecs
             // keep_vertical_ratio 以父矩形的高（true）或宽（false）为标量单位一
             //（父矩形有效尺寸 = 父输入尺寸 + 父 size_ratio ⊙ 祖传单位一，递归）。
             // 因此先解父后解子；WorldLayout 是唯一的派生状态，输入组件不会被任何系统回写。
+            //
+            // 有效旋转角（rotation）的缓存与 TransfromStageUpdate 递推 world_rotation
+            // 同理：根元素 = 自身 Rotation::angle，子元素 = 父有效角 + 自身角，
+            // 沿 Anchor+LocalToParent 父链逐级累加（未挂 Rotation 组件按 0 计）。
+            // 旋转是像素空间量，无法在双通道中传播，故只缓存角度本身；
+            // 旋转后的位置仍由绘制阶段按相机目标尺寸在像素空间复合。
 
             struct ResolvedParent
             {
@@ -140,6 +146,7 @@ namespace jeecs
                 Element* elem;
                 WorldLayout* layout;
                 LocalToParent* l2p;
+                Rotation* rotation_may_null;
             };
             std::list<AnchoredLayout> pending_anchor_information;
 
@@ -147,12 +154,13 @@ namespace jeecs
             const UserInterface::layout_value display_rect{
                 math::vec2(0.f, 0.f), math::vec2(1.f, 1.f) };
 
-            for (auto&& [anchor, l2p, elem, layout] : query<
+            for (auto&& [anchor, l2p, elem, layout, rotation] : query<
                 view typesof(
                     Anchor*,
                     LocalToParent*,
                     Element&,
-                    WorldLayout&
+                    WorldLayout&,
+                    Rotation*
                 )
             >())
             {
@@ -164,13 +172,15 @@ namespace jeecs
                     layout.offset_ratio = elem.offset_ratio;
                     layout.unit = display_rect.absolute;
                     layout.unit_ratio = display_rect.relative;
+                    layout.rotation = rotation ? rotation->angle : 0.f;
 
                     pending_anchor_information.push_back(
                         AnchoredLayout{
                             anchor,
                             &elem,
                             &layout,
-                            l2p });
+                            l2p,
+                            rotation });
                 }
                 else
                 {
@@ -181,6 +191,7 @@ namespace jeecs
                     layout.offset_ratio = elem.offset_ratio + anchored.relative;
                     layout.unit = display_rect.absolute;
                     layout.unit_ratio = display_rect.relative;
+                    layout.rotation = rotation ? rotation->angle : 0.f;
 
                     if (anchor != nullptr)
                     {
@@ -227,6 +238,15 @@ namespace jeecs
                         // 子单位一 = 父高（或父宽）标量，广播到两轴。
                         current_idx->layout->unit = math::vec2(unit_absolute, unit_absolute);
                         current_idx->layout->unit_ratio = math::vec2(unit_relative, unit_relative);
+
+                        // 子有效旋转角 = 父有效角 + 自身角（度）。
+                        // 父自身的角已含于父的 WorldLayout::rotation，与
+                        // TransfromStageUpdate 中“父 world_rotation 已含父局部旋转”
+                        // 的递推结构一致，因此这里无需再读父的 Rotation 组件。
+                        current_idx->layout->rotation = parent_layout->rotation
+                            + (current_idx->rotation_may_null != nullptr
+                                ? current_idx->rotation_may_null->angle
+                                : 0.f);
 
                         // 子基点 = 父矩形中心（父基点 + 父枢轴修正）
                         //         + 子 anchor 相对父矩形的锚定偏移
