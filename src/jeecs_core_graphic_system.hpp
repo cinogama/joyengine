@@ -138,10 +138,9 @@ public let frag =
             const Shaders* shaders;
             const Textures* textures;
 
-            const UserInterface::Element* ui_element;
-            const UserInterface::WorldLayout* ui_layout;
-            const UserInterface::Rotation* ui_rotation;
-            const UserInterface::Text* ui_text;
+            // UI 节点在 UserInterfaceGraphicPipelineSystem::m_ui_nodes 中的索引；
+            // 仅 UI 渲染路径使用，其它管线不读写。
+            size_t ui_node;
 
             bool operator<(const renderer_arch& another) const noexcept
             {
@@ -524,6 +523,40 @@ public let frag =
         {
         }
 
+        // UI 节点树：绘制阶段需要沿父链复合祖先旋转（像素空间操作，无法在
+        // 双通道里传播），因此每帧重建结构、每个相机目标尺寸解析一次。
+        static constexpr size_t INVALID_UI_NODE = SIZE_MAX;
+
+        struct ui_node_t
+        {
+            const UserInterface::Element* elem = nullptr;
+            const UserInterface::WorldLayout* layout = nullptr;
+            const UserInterface::Rotation* rotation = nullptr; // 可空
+            const UserInterface::Text* text = nullptr;         // 可空
+            const Textures* textures = nullptr;                // 可空，auto_size 用
+
+            size_t parent = INVALID_UI_NODE;
+
+            // 以下为每相机解析缓存（ResolveUiNodes 覆写）：
+            UserInterface::resolved_rect rect{};   // 局部矩形（父元素未旋转的坐标系）
+            math::vec2 display_center{};           // center 经祖先旋转链后的显示位置
+            float angle_acc = 0.f;                 // 祖先累计旋转角（不含自身）
+        };
+
+        std::vector<ui_node_t> m_ui_nodes;
+        std::vector<size_t> m_ui_resolve_order; // 父先于子，孤儿殿后（按根回退）
+        std::unordered_map<typing::uuid, size_t> m_ui_node_by_anchor;
+
+        struct pending_ui_node_t
+        {
+            Transform::Anchor* anchor_may_null;
+            size_t node;
+            Transform::LocalToParent* l2p;
+        };
+        // 必须是 list：解析扫描中边遍历边删除，list 的 erase 不会失效其它迭代器
+        //（vector 的 erase 会失效删除点之后的迭代器，同款循环即 UB）。
+        std::list<pending_ui_node_t> m_ui_pending_nodes;
+
         void GraphicUpdate()
         {
             auto WINDOWS_SIZE = jeecs::input::windowsize();
@@ -563,19 +596,165 @@ public let frag =
 
             RasterizeDirtyTexts();
 
-            for (auto&& [shads, texs, shape, rendqueue, elem, layout, rotation, color, text] : query<
-                view typesof(Shaders&, Textures*, Shape&, Rendqueue*, Element&, WorldLayout&, Rotation*, Color*, Text*),
-                except typesof(Point, Parallel, Range)
+            // 构建 UI 节点树（结构与相机无关，每帧重建），并从中收集可渲染实体：
+            // 节点必须覆盖全部 UI 元素（含纯布局容器），渲染列表仅取带 Shaders+Shape
+            // 且非 2D 光源的节点（等价于原先渲染查询的 except 语义）。
+            m_ui_nodes.clear();
+            m_ui_resolve_order.clear();
+            m_ui_node_by_anchor.clear();
+            m_ui_pending_nodes.clear();
+
+            for (auto&& [
+                anchor, l2p, elem, layout, rotation, text, texs,
+                shads, shape, rendqueue, color, point, parallel, range
+            ] : query<
+                view typesof(
+                    Transform::Anchor*,
+                    Transform::LocalToParent*,
+                    Element&,
+                    WorldLayout&,
+                    Rotation*,
+                    Text*,
+                    Textures*,
+                    Shaders*,
+                    Shape*,
+                    Rendqueue*,
+                    Color*,
+                    Point*,
+                    Parallel*,
+                    Range*
+                )
             >())
             {
-                m_renderer_list.emplace(
-                    renderer_arch{
-                        color, rendqueue, nullptr, &shape, &shads, texs,
-                        &elem, &layout, rotation, text });
+                m_ui_nodes.push_back(ui_node_t{
+                    &elem, &layout, rotation, text, texs,
+                    INVALID_UI_NODE, {}, {}, 0.f });
+                const size_t node_index = m_ui_nodes.size() - 1;
+
+                if (l2p != nullptr)
+                {
+                    m_ui_pending_nodes.push_back(
+                        pending_ui_node_t{ anchor, node_index, l2p });
+                }
+                else
+                {
+                    m_ui_resolve_order.push_back(node_index);
+                    if (anchor != nullptr)
+                        m_ui_node_by_anchor.emplace(anchor->uid, node_index);
+                }
+
+                if (shads != nullptr && shape != nullptr
+                    && point == nullptr && parallel == nullptr && range == nullptr)
+                {
+                    m_renderer_list.emplace(
+                        renderer_arch{
+                            color, rendqueue, nullptr, shape, shads, texs, node_index });
+                }
             }
+
+            for (;;)
+            {
+                const size_t count = m_ui_pending_nodes.size();
+                for (auto idx = m_ui_pending_nodes.begin();
+                    idx != m_ui_pending_nodes.end();)
+                {
+                    auto current_idx = idx++;
+
+                    auto fnd = m_ui_node_by_anchor.find(current_idx->l2p->parent_uid);
+                    if (fnd != m_ui_node_by_anchor.end())
+                    {
+                        m_ui_nodes[current_idx->node].parent = fnd->second;
+                        m_ui_resolve_order.push_back(current_idx->node);
+
+                        if (current_idx->anchor_may_null != nullptr)
+                            m_ui_node_by_anchor.emplace(
+                                current_idx->anchor_may_null->uid, current_idx->node);
+
+                        m_ui_pending_nodes.erase(current_idx);
+                    }
+                }
+                if (m_ui_pending_nodes.size() == count)
+                    break;
+            }
+            // 父链缺失的孤儿按无父（根语义）处理，附加到解析序末尾。
+            for (auto& orphan : m_ui_pending_nodes)
+                m_ui_resolve_order.push_back(orphan.node);
+            m_ui_pending_nodes.clear();
 
             this->branch_allocate_end();
             DrawFrame();
+        }
+
+        // 按依赖序（父先于子）解析全部 UI 节点，每个相机目标尺寸调用一次：
+        // 1) resolve_layout 得到局部（父元素未旋转坐标系）矩形；
+        // 2) auto_size 按通道0文本纹理宽高比调整矩形（父先于子，子元素同帧可见）；
+        // 3) 沿父链复合祖先旋转：A(x) = display_center + R(angle_acc)·(x − rect.center)，
+        //    display_center 与 angle_acc 逐级递归（父旋转绕父枢轴，再经父的祖先链上溯）。
+        void ResolveUiNodes(float width, float height)
+        {
+            for (size_t node_index : m_ui_resolve_order)
+            {
+                ui_node_t& node = m_ui_nodes[node_index];
+                node.rect = resolve_layout(*node.elem, *node.layout, width, height);
+
+                // auto_size：按文本纹理自然宽高比调整元素尺寸，基准轴与字号计算
+                // 一致（keep_vertical_ratio 取 y 否则取 x）；只作用于本次解析结果，
+                // 不回写布局输入，也不参与字号计算。
+                if (node.text != nullptr && node.text->auto_size
+                    && node.textures != nullptr)
+                {
+                    if (auto text_texture = node.textures->get_texture(0);
+                        text_texture.has_value())
+                    {
+                        const auto texture_size = text_texture.value()->size();
+                        if (node.elem->keep_vertical_ratio && texture_size.y > 0)
+                        {
+                            const float ratio =
+                                static_cast<float>(texture_size.x) / static_cast<float>(texture_size.y);
+                            node.rect.resize_around_pivot(
+                                node.elem->pivot,
+                                math::vec2(node.rect.size.y * ratio, node.rect.size.y));
+                        }
+                        else if (!node.elem->keep_vertical_ratio && texture_size.x > 0)
+                        {
+                            const float ratio =
+                                static_cast<float>(texture_size.y) / static_cast<float>(texture_size.x);
+                            node.rect.resize_around_pivot(
+                                node.elem->pivot,
+                                math::vec2(node.rect.size.x, node.rect.size.x * ratio));
+                        }
+                    }
+                }
+
+                if (node.parent == INVALID_UI_NODE)
+                {
+                    node.display_center = node.rect.center;
+                    node.angle_acc = 0.f;
+                }
+                else
+                {
+                    const ui_node_t& parent = m_ui_nodes[node.parent];
+
+                    // 父的旋转：绕父枢轴（父的局部未旋转系）转动子中心；
+                    // 结果再经父的祖先旋转链 A_parent 平移到显示系。
+                    // Rotation.angle 单位为度（与 Transform 欧拉角一致，绘制端
+                    // quat::euler 按 DEG2RAD 消费）；rotate_vector 是纯数学助手，
+                    // 接受弧度，因此此处需要显式换算。
+                    const math::vec2 parent_pivot =
+                        parent.rect.center - parent.rect.pivot_offset;
+                    const float parent_angle =
+                        parent.rotation != nullptr ? parent.rotation->angle : 0.f;
+
+                    const math::vec2 rotated_by_parent =
+                        parent_pivot + UserInterface::rotate_vector(
+                            parent_angle * math::DEG2RAD, node.rect.center - parent_pivot);
+
+                    node.display_center = parent.display_center
+                        + UserInterface::rotate_vector(
+                            parent.angle_acc * math::DEG2RAD, rotated_by_parent - parent.rect.center);
+                    node.angle_acc = parent.angle_acc + parent_angle;
+                }
+            }
         }
 
         // 把脏文本光栅化进实体 Textures 的通道0。文本渲染复用标准 UI 渲染路径，
@@ -693,10 +872,13 @@ public let frag =
                 jegl_rchain_bind_uniform_buffer(rend_chain,
                     current_camera.projection->default_uniform_buffer->resource());
 
+                // 先按本相机目标尺寸解析 UI 节点（局部矩形/auto_size/祖先旋转链）。
+                ResolveUiNodes(
+                    (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT);
+
                 for (auto& rendentity : m_renderer_list)
                 {
-                    assert(rendentity.ui_element != nullptr
-                        && rendentity.ui_layout != nullptr
+                    assert(rendentity.ui_node < m_ui_nodes.size()
                         && rendentity.shaders != nullptr
                         && rendentity.shape != nullptr);
 
@@ -709,44 +891,21 @@ public let frag =
                         ? rendentity.shaders->shaders
                         : m_default_resources.default_shaders_list;
 
-                    auto rect = resolve_layout(
-                        *rendentity.ui_element,
-                        *rendentity.ui_layout,
-                        (float)RENDAIMBUFFER_WIDTH,
-                        (float)RENDAIMBUFFER_HEIGHT);
+                    const ui_node_t& node = m_ui_nodes[rendentity.ui_node];
+                    const auto& rect = node.rect;
 
-                    // auto_size：绘制时按通道0文本纹理的自然宽高比调整元素尺寸，
-                    // 基准轴与字号计算一致（keep_vertical_ratio 取 y 否则取 x）；
-                    // 只作用于本次解析结果，不回写布局输入组件。
-                    if (rendentity.ui_text != nullptr && rendentity.ui_text->auto_size
-                        && rendentity.textures != nullptr)
-                    {
-                        if (auto text_texture = rendentity.textures->get_texture(0);
-                            text_texture.has_value())
-                        {
-                            const auto texture_size = text_texture.value()->size();
-                            if (rendentity.ui_element->keep_vertical_ratio
-                                && texture_size.y > 0)
-                            {
-                                const float ratio =
-                                    static_cast<float>(texture_size.x) / static_cast<float>(texture_size.y);
-                                rect.resize_around_pivot(
-                                    rendentity.ui_element->pivot,
-                                    math::vec2(rect.size.y * ratio, rect.size.y));
-                            }
-                            else if (!rendentity.ui_element->keep_vertical_ratio
-                                && texture_size.x > 0)
-                            {
-                                const float ratio =
-                                    static_cast<float>(texture_size.y) / static_cast<float>(texture_size.x);
-                                rect.resize_around_pivot(
-                                    rendentity.ui_element->pivot,
-                                    math::vec2(rect.size.x, rect.size.x * ratio));
-                            }
-                        }
-                    }
+                    // 总旋转角 = 祖先累计 + 自身（度，quat::euler 按度消费）；
+                    // 矩阵结构与未旋转时一致（T(枢轴)·R·T(pivot_offset)·S 的展开形式）：
+                    // uioffset 保证枢轴落在其经祖先旋转链后的显示位置 A(Q)，
+                    // 即 uioffset = D_C + (I − R(Θ_acc))·pivot_offset
+                    //（R 在此处按弧度计算，需先换算）。
+                    const float total_angle = node.angle_acc
+                        + (node.rotation != nullptr ? node.rotation->angle : 0.f);
 
-                    const math::vec2 uioffset = rect.center
+                    const math::vec2 uioffset = node.display_center
+                        + (rect.pivot_offset
+                            - UserInterface::rotate_vector(
+                                node.angle_acc * math::DEG2RAD, rect.pivot_offset))
                         - math::vec2(
                             (float)RENDAIMBUFFER_WIDTH / 2.0f,
                             (float)RENDAIMBUFFER_HEIGHT / 2.0f);
@@ -774,8 +933,8 @@ public let frag =
                         {0.0f, 0.0f, 0.0f, 1.0f},
                     };
 
-                    if (rendentity.ui_rotation != nullptr)
                     {
+                        // 旋转绕枢轴进行（角度为 0 时 quat 即单位矩阵）。
                         const float MAT4_UI_CENTER_OFFSET[4][4] = {
                             {1.0f, 0.0f, 0.0f, 0.0f},
                             {0.0f, 1.0f, 0.0f, 0.0f},
@@ -786,7 +945,7 @@ public let frag =
                             {0.0f, 1.0f, 0.0f, 0.0f},
                             {0.0f, 0.0f, 1.0f, 0.0f},
                             {-uicenteroffset.x, -uicenteroffset.y, 0.0f, 1.0f} };
-                        math::quat q(0.0f, 0.0f, rendentity.ui_rotation->angle);
+                        math::quat q(0.0f, 0.0f, total_angle);
                         q.create_matrix(MAT4_UI_ROTATION);
 
                         math::mat4xmat4(MAT4_UI_MV /* tmp */, MAT4_UI_ROTATION, MAT4_UI_CENTER_OFFSET);

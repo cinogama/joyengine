@@ -10805,6 +10805,13 @@ namespace jeecs
             return layout_value{ v.absolute * ratio, v.relative * ratio };
         }
 
+        // 将二维向量旋转 angle（弧度）。用于 UI 层级旋转链的像素空间复合。
+        inline math::vec2 rotate_vector(float angle, const math::vec2& v) noexcept
+        {
+            const float c = std::cos(angle), s = std::sin(angle);
+            return math::vec2(c * v.x - s * v.y, s * v.x + c * v.y);
+        }
+
         // 解析后的 UI 元素矩形：以显示区左下角为原点，单位像素。
         struct resolved_rect
         {
@@ -10877,7 +10884,7 @@ namespace jeecs
         }
 
         // 鼠标命中测试：mouse_view_pos 为视口空间坐标（-1..1，y 轴向上），
-        // rot_angle 为元素旋转角（弧度）。
+        // rot_angle 为元素旋转角（度，与 Rotation::angle 同单位）。
         inline bool hit_test(
             const resolved_rect& rect,
             float rot_angle,
@@ -10899,6 +10906,10 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Rotation);
             JECS_DEFAULT_CONSTRUCTOR(Rotation);
 
+            // 旋转角（度，绕元素枢轴，与 Transform 欧拉角同单位，
+            // 绘制端经 quat::euler 按 DEG2RAD 消费）。
+            // 旋转会带动整个 UI 子树：子元素绕本元素枢轴一同旋转，
+            // 子元素的有效旋转角为全部祖先角与自身角之和（绘制阶段复合）。
             float angle = 0.0f;
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
