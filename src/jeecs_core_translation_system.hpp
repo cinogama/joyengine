@@ -119,12 +119,13 @@ namespace jeecs
         }
         void UserInterfaceStageUpdate()
         {
-            // UI 布局阶段：每帧把 Element 输入解析为 WorldLayout（参考系 = 基点 + 单位一，
-            // 双通道，相对显示区中心表达）。
+            // UI 布局阶段：每帧把 Element 输入解析为 WorldLayout（参考系 =
+            // 锚定基准点 + 自身偏移 + 单位一，双通道，相对显示区中心表达）。
             // 根元素的 anchor 与相对通道（offset_ratio/size_ratio）以显示区为参考；
-            // 子元素的以父元素矩形为参考——anchor 锚定父矩形方位，相对通道按自身
-            // ratio_unit 以父矩形的高/宽为单位一（height_unit/width_unit 两轴同用
-            // 高/宽标量，per_axis 则 x 轴用宽、y 轴用高）
+            // 子元素的以父元素矩形为参考——anchor 锚定父矩形方位（纯几何量，
+            // 写入 base 通道，逐轴解析、不受 ratio_unit 影响），自身相对通道
+            // 按自身 ratio_unit 以父矩形的高/宽为单位一（height_unit/width_unit
+            // 两轴同用高/宽标量，per_axis 则 x 轴用宽、y 轴用高）
             //（父矩形有效尺寸 = 父输入尺寸 + 父 size_ratio ⊙ 祖传单位一，递归）。
             // 因此先解父后解子；WorldLayout 是唯一的派生状态，输入组件不会被任何系统回写。
             //
@@ -171,6 +172,8 @@ namespace jeecs
                     // 若父链缺失则保留此退化结果，问题可立即被发现）。
                     layout.offset = elem.offset;
                     layout.offset_ratio = elem.offset_ratio;
+                    layout.base_offset = math::vec2(0.f, 0.f);
+                    layout.base_offset_ratio = math::vec2(0.f, 0.f);
                     layout.unit = display_rect.absolute;
                     layout.unit_ratio = display_rect.relative;
                     layout.rotation = rotation ? rotation->angle : 0.f;
@@ -185,11 +188,14 @@ namespace jeecs
                 }
                 else
                 {
-                    // 根元素：anchor 相对显示区解析，单位一即显示区。
+                    // 根元素：anchor 相对显示区解析；锚定基准点走 base 通道
+                    //（逐轴，不受 ratio_unit 影响），offset 通道只留自身偏移。
                     const auto anchored = anchor_shift(elem.anchor, display_rect);
 
-                    layout.offset = elem.offset + anchored.absolute;
-                    layout.offset_ratio = elem.offset_ratio + anchored.relative;
+                    layout.offset = elem.offset;
+                    layout.offset_ratio = elem.offset_ratio;
+                    layout.base_offset = anchored.absolute;
+                    layout.base_offset_ratio = anchored.relative;
                     layout.unit = display_rect.absolute;
                     layout.unit_ratio = display_rect.relative;
                     layout.rotation = rotation ? rotation->angle : 0.f;
@@ -268,11 +274,26 @@ namespace jeecs
                                 ? current_idx->rotation_may_null->angle
                                 : 0.f);
 
-                        // 子基点 = 父矩形中心（父基点 + 父枢轴修正）
-                        //         + 子 anchor 相对父矩形的锚定偏移
-                        //         + 自身偏移（offset_ratio 以同一单位一折算）。
+                        // 锚定基准点（base 通道，逐轴，不受 ratio_unit 影响）：
+                        // 父链基准点 + 父枢轴修正 + 自身 anchor 相对父矩形的锚定。
+                        // 子元素永远以父矩形的中心/边角为基准点——即便父矩形
+                        // 由 size_ratio 撑起、且子元素 ratio_unit 不是 per_axis，
+                        // 锚定位置也不产生额外偏移。
                         const auto parent_pivot = pivot_shift(parent_elem->pivot, parent_rect);
                         const auto anchored = anchor_shift(current_idx->elem->anchor, parent_rect);
+
+                        current_idx->layout->base_offset =
+                            parent_layout->base_offset + parent_layout->offset
+                            + parent_pivot.absolute
+                            + anchored.absolute;
+                        current_idx->layout->base_offset_ratio =
+                            parent_layout->base_offset_ratio + parent_pivot.relative
+                            + anchored.relative;
+
+                        // 自身偏移通道（按自身 ratio_unit 折算）：
+                        // 绝对部分在布局期按单位一折算；相对部分保持自身
+                        // offset_ratio（绘制端按 ratio_unit 折算），并继承
+                        // 父链自身的 offset_ratio。
                         const auto own_offset = scale_channels(
                             current_idx->elem->offset_ratio,
                             UserInterface::layout_value{
@@ -280,13 +301,9 @@ namespace jeecs
                                 current_idx->layout->unit_ratio });
 
                         current_idx->layout->offset =
-                            current_idx->elem->offset + own_offset.absolute
-                            + parent_layout->offset + parent_pivot.absolute
-                            + anchored.absolute;
+                            current_idx->elem->offset + own_offset.absolute;
                         current_idx->layout->offset_ratio =
-                            own_offset.relative
-                            + parent_layout->offset_ratio + parent_pivot.relative
-                            + anchored.relative;
+                            own_offset.relative + parent_layout->offset_ratio;
 
                         // 完成应用，将当前布局绑定到binding，然后从pending中删除当前项
                         if (current_idx->anchor_may_null != nullptr)

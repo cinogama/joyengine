@@ -10739,8 +10739,15 @@ namespace jeecs
 
             // 基点的绝对通道（像素）。
             math::vec2 offset = {};
-            // 基点的相对通道（×显示区尺寸）。
+            // 基点的相对通道（×显示区尺寸；按本元素 ratio_unit 折算，
+            // 仅含自身 offset_ratio 及继承的父链偏移，不含锚定基准点）。
             math::vec2 offset_ratio = {};
+            // 锚定基准点的绝对通道（像素）：父链基点 + 父枢轴修正 + 自身
+            // anchor 锚定（根元素为相对显示区的锚定）。纯几何量，解析时
+            // 不受 ratio_unit 影响——子元素永远以父矩形的中心/边角为基准点。
+            math::vec2 base_offset = {};
+            // 锚定基准点的相对通道（×显示区尺寸，逐轴，不做 ratio_unit 折算）。
+            math::vec2 base_offset_ratio = {};
             // 单位一的绝对通道（像素）；已按本元素 ratio_unit 折算：
             // height_unit/width_unit 时取参考矩形的高/宽标量并广播到两轴，
             // per_axis 时 x 轴取参考矩形的宽、y 轴取高。根元素为 0。
@@ -10882,6 +10889,9 @@ namespace jeecs
             // 相对量的比例折算：height_unit 时横向乘 h/w（两轴同以高为单位一），
             // width_unit 时纵向乘 w/h（两轴同以宽为单位一），per_axis 不折算
             //（x 轴乘 w、y 轴乘 h，宽高分别以对应轴为单位一）。
+            // 注意：该折算只作用于相对通道中的“自身偏移/尺寸”分量；
+            // 锚定基准点（base_offset/base_offset_ratio，父矩形中心/边角）
+            // 是纯几何量，永远逐轴解析，不经 ratio_unit 折算。
             math::vec2 ratio_scale(1.0f, 1.0f);
             switch (elem.ratio_unit)
             {
@@ -10900,6 +10910,11 @@ namespace jeecs
             {
                 return v.absolute + v.relative * math::vec2(w, h) * ratio_scale;
             };
+            // 锚定基准点：逐轴像素化，不做 ratio_unit 折算。
+            const auto to_pixels_base = [w, h](const layout_value& v) -> math::vec2
+            {
+                return v.absolute + v.relative * math::vec2(w, h);
+            };
 
             // 单位一（相对通道的参照尺寸）：根元素为显示区，子元素为父矩形的
             // 有效尺寸。尺寸 = 绝对输入 + size_ratio ⊙ 单位一；枢轴修正按该尺寸取半。
@@ -10913,8 +10928,10 @@ namespace jeecs
             rect.size = to_pixels(size_channels);
             rect.pivot_offset = to_pixels(pivot_shift(elem.pivot, size_channels));
 
-            // 元素中心 = 显示区中心 + 基点 + 枢轴修正。
+            // 元素中心 = 显示区中心 + 锚定基准点（不受 ratio_unit 影响）
+            //          + 自身偏移（按 ratio_unit 折算）+ 枢轴修正。
             rect.center = math::vec2(w / 2.0f, h / 2.0f)
+                + to_pixels_base(layout_value{world.base_offset, world.base_offset_ratio})
                 + to_pixels(layout_value{world.offset, world.offset_ratio})
                 + rect.pivot_offset;
             return rect;

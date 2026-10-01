@@ -1919,7 +1919,8 @@ static jeecs::UserInterface::resolved_rect wo_resolve_element_rect(
         return jeecs::UserInterface::resolve_layout(elem, *layout, w, h);
 
     jeecs::UserInterface::WorldLayout fallback;
-    fallback.offset_ratio = jeecs::UserInterface::anchor_shift(
+    // 锚定基准点走 base 通道（逐轴，不受 ratio_unit 影响）。
+    fallback.base_offset_ratio = jeecs::UserInterface::anchor_shift(
         elem.anchor,
         jeecs::UserInterface::layout_value{
             jeecs::math::vec2(0.f, 0.f), jeecs::math::vec2(1.f, 1.f) }).relative;
