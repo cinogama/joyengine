@@ -248,6 +248,7 @@ namespace JEEditor::Editor
         // drawUIGizmo 读取；参考矩形 = 父元素或整个显示区）
         protected m_ui_draw_visible: mut bool,
         protected m_ui_draw_can_resize: mut bool,
+        protected m_ui_draw_can_rotate: mut bool,
         protected m_ui_draw_display_range: mut vec2,
         protected m_ui_draw_center: mut vec2,
         protected m_ui_draw_size: mut vec2,

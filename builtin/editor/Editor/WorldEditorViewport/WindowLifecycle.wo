@@ -331,6 +331,7 @@ namespace JEEditor::Editor::WorldEditorViewport
 
             m_ui_draw_visible = mut false,
             m_ui_draw_can_resize = mut false,
+            m_ui_draw_can_rotate = mut false,
             m_ui_draw_display_range = mut (0., 0.) as vec2,
             m_ui_draw_center = mut (0., 0.) as vec2,
             m_ui_draw_size = mut (0., 0.) as vec2,

@@ -456,13 +456,17 @@ namespace JEEditor::Editor::WorldEditorViewport
         let total = info.m_angle_acc + info.m_own_angle;
         let half = info.m_size * 0.5;
 
-        // 旋转手柄：沿元素自身 up 轴、距上缘 UI_ROTATE_STALK_PX 的圆点
-        let up = uiRotateVec2(total, (0., 1.) as vec2);
-        let rot_pos = info.m_pivot_display + up * (half[1] + UI_ROTATE_STALK_PX);
-        if ((mouse
-                - uiDisplayToScreen(rot_pos, rmin, rsize, display_range))->length
-            < UI_HIT_PX)
-            return UI_HANDLE_ROTATE;
+        // 旋转手柄：沿元素自身 up 轴、距上缘 UI_ROTATE_STALK_PX 的圆点；
+        // 无 Rotation 组件的实体不提供旋转手柄（避免拖拽隐式添加组件）
+        if (e->towoo::get_component:<UserInterface::Rotation>->is_value)
+        {
+            let up = uiRotateVec2(total, (0., 1.) as vec2);
+            let rot_pos = info.m_pivot_display + up * (half[1] + UI_ROTATE_STALK_PX);
+            if ((mouse
+                    - uiDisplayToScreen(rot_pos, rmin, rsize, display_range))->length
+                < UI_HIT_PX)
+                return UI_HANDLE_ROTATE;
+        }
 
         // 缩放手柄；auto_size 文本每帧按纹理重算尺寸，不提供缩放
         let mut auto_sized = false;
@@ -560,7 +564,8 @@ namespace JEEditor::Editor::WorldEditorViewport
                             }
                     }
 
-                    // auto_size 文本每帧按纹理重算尺寸，禁用缩放手柄
+                    // auto_size 文本每帧按纹理重算尺寸，禁用缩放手柄；
+                    // 无 Rotation 组件不显示旋转手柄
                     let mut auto_sized = false;
                     match (e->towoo::get_component:<UserInterface::Text>)
                     {
@@ -571,6 +576,8 @@ namespace JEEditor::Editor::WorldEditorViewport
                     // 写入本帧绘制快照
                     self.m_ui_draw_visible = true;
                     self.m_ui_draw_can_resize = !auto_sized;
+                    self.m_ui_draw_can_rotate =
+                        e->towoo::get_component:<UserInterface::Rotation>->is_value;
                     self.m_ui_draw_display_range = dr;
                     self.m_ui_draw_center = ui_info.m_center;
                     self.m_ui_draw_size = ui_info.m_size;
@@ -661,14 +668,8 @@ namespace JEEditor::Editor::WorldEditorViewport
             }
             else
             {
-                // 旋转：缺 Rotation 组件则补挂一个（撤销记录仅覆盖 angle
-                // 成员，撤销后组件残留为已知瑕疵）
-                match (selected_entity->towoo::get_component:<UserInterface::Rotation>)
-                {
-                    none?
-                        do selected_entity->towoo::add_component:<UserInterface::Rotation>();
-                    value(_)?;
-                }
+                // 旋转：旋转手柄仅在实体已带 Rotation 组件时提供
+                //（见 pickUIHandle），此处直接取用
                 try! rot =
                     selected_entity->towoo::get_component:<UserInterface::Rotation>();
                 self.m_ui_drag_start_angle_deg = rot.angle->get;
@@ -925,15 +926,19 @@ namespace JEEditor::Editor::WorldEditorViewport
             (pv[0], pv[1] - 6.), (pv[0], pv[1] + 6.), UI_GIZMO_COLOR_PIVOT, 1.);
 
         // 旋转手柄：从 pivot 沿元素自身 up 轴伸出茎 + 端点圆
-        let up = uiRotateVec2(total, (0., 1.) as vec2);
-        let rpos = uiDisplayToScreen(
-            self.m_ui_draw_pivot_display + up * (half[1] + UI_ROTATE_STALK_PX),
-            rmin, rsize, dr);
-        let rot_color = (self.m_ui_hover_handle == UI_HANDLE_ROTATE)
-            ? UI_GIZMO_COLOR_HOVER
-            | UI_GIZMO_COLOR_REF;
-        do draw_list->AddLine((pv[0], pv[1]), (rpos[0], rpos[1]), rot_color, 1.);
-        do draw_list->AddCircle((rpos[0], rpos[1]), 5., rot_color, 1.5);
+        //（无 Rotation 组件的实体不显示）
+        if (self.m_ui_draw_can_rotate)
+        {
+            let up = uiRotateVec2(total, (0., 1.) as vec2);
+            let rpos = uiDisplayToScreen(
+                self.m_ui_draw_pivot_display + up * (half[1] + UI_ROTATE_STALK_PX),
+                rmin, rsize, dr);
+            let rot_color = (self.m_ui_hover_handle == UI_HANDLE_ROTATE)
+                ? UI_GIZMO_COLOR_HOVER
+                | UI_GIZMO_COLOR_REF;
+            do draw_list->AddLine((pv[0], pv[1]), (rpos[0], rpos[1]), rot_color, 1.);
+            do draw_list->AddCircle((rpos[0], rpos[1]), 5., rot_color, 1.5);
+        }
 
         // 缩放手柄方块（四角+四边中点，悬停/拖拽高亮）
         if (self.m_ui_draw_can_resize)
