@@ -2,17 +2,24 @@
 // 选中带 Element 的实体即在其解析后的显示矩形上提供可视化编辑：
 // 矩形/参考矩形/锚点/pivot 的显示、矩形内部拖拽移动（写 offset）、
 // 四角四边 8 向缩放（写 size，pivot 固定语义）、旋转茎环（写
-// Rotation.angle），以及视口覆盖 UI 的锚点/轴心九宫格与 ratio_unit
-// 三态切换。布局解析复用引擎的 Element::get_layout（显示像素空间，
-// 原点=显示区左下、y 向上），祖先旋转链按
+// Rotation.angle，仅实体已带 Rotation 组件时提供），以及视口覆盖
+// UI 的锚点/轴心九宫格与 ratio_unit 三态切换。
+// 尺寸/偏移分两层编辑：绝对通道（size/offset）与比例通道
+//（size_ratio/offset_ratio）各画一个与有效矩形同心的层框（有效尺寸
+// = 两层之和），缩放手柄默认挂在绝对层框上；按住 Shift 切到比例层
+//（手柄挂比例层框、移动拖拽改写 offset_ratio），层在拖拽开始时冻结。
+// 比例通道的像素换算系数（单位一）= 参考矩形尺寸按 ratio_unit 折叠
+//（height_unit 两轴取参考高 / width_unit 两轴取参考宽 / per_axis 逐
+// 轴），size_ratio 与 offset_ratio 共用；写回时层像素增量按轴除以单
+// 位一。Ctrl 保持吸附键（移动/缩放吸附整像素、旋转吸附 15°）。
+// 布局解析复用引擎的 Element::get_layout（显示像素空间，原点=显示区
+// 左下、y 向上），祖先旋转链按
 // UserInterfaceGraphicPipelineSystem::ResolveUiNodes 同式在脚本侧
 // 复算（WorldLayout 的成员未暴露给脚本，累计角沿 Transform 锚点链
-// 求 Rotation.angle 之和得到）。拖拽只写绝对通道（offset/size），
-// 比例通道（offset_ratio/size_ratio）保持不变——有效值 = 绝对 +
-// 比例⊙单位，写绝对通道加增量后视觉必然跟随鼠标。拖拽结束值有变化
-// 时发布可撤销的 ModifyComponentMember（与变换游标同一套撤销机制）。
-// 覆盖层绘制走 ImGui 窗口 DrawList（屏幕空间，语义上与 UI 的屏幕
-// 空间一致），交互命中判定复用 ColliderGizmo 的屏幕空间距离方式。
+// 求 Rotation.angle 之和得到）。拖拽结束值有变化时发布可撤销的
+// ModifyComponentMember（与变换游标同一套撤销机制）。覆盖层绘制走
+// ImGui 窗口 DrawList（屏幕空间，语义上与 UI 的屏幕空间一致），
+// 交互命中判定复用 ColliderGizmo 的屏幕空间距离方式。
 
 import pkg::std;
 
@@ -283,6 +290,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             let mut out_angle_acc = 0.;
             let mut out_own = 0.;
             let mut out_anchor = (0., 0.) as vec2;
+            let mut out_unit_px = (1., 1.) as vec2;
 
             let mut i = ui_chain->len - 1;
             while (i >= 0)
@@ -313,6 +321,18 @@ namespace JEEditor::Editor::WorldEditorViewport
                     out_display = display_center;
                     out_angle_acc = prev_angle_acc + prev_own;
                     out_own = own_angle;
+
+                    // 单位一（比例通道的像素换算系数）：按自身 ratio_unit
+                    // 折叠参考矩形——height_unit 两轴取参考高、width_unit
+                    // 两轴取参考宽、per_axis 逐轴取参考宽/高；根元素参考
+                    // 矩形为整个显示区（与布局阶段的 unit 折叠 +
+                    // resolve_layout 的 ratio_scale 折算一致）
+                    let ref_size = have_prev ? prev_size | display_range;
+                    out_unit_px = ref_size;
+                    if (ent_elem.ratio_unit->get == UserInterface::ratio_unit::height_unit)
+                        out_unit_px = (ref_size[1], ref_size[1]) as vec2;
+                    else if (ent_elem.ratio_unit->get == UserInterface::ratio_unit::width_unit)
+                        out_unit_px = (ref_size[0], ref_size[0]) as vec2;
 
                     // 锚点基点：参考矩形中心 − 参考 pivot 偏移 + 锚点在
                     // 参考矩形内的偏移（未旋转帧），再经父的祖先链旋转
@@ -361,6 +381,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 m_own_angle = out_own,
                 m_anchor_display = out_anchor,
                 m_depth = ui_chain->len - 1,
+                m_unit_px = out_unit_px,
             });
         };
     }
@@ -444,24 +465,27 @@ namespace JEEditor::Editor::WorldEditorViewport
     // ---- 交互（悬停检测、拖拽开始/进行/结束） ----
 
     // 检测当前鼠标悬停的 UI 手柄（屏幕空间距离判定），返回手柄编号。
-    // 优先级：旋转手柄 > 缩放手柄（四角+四边中点）> 矩形内部（移动）
+    // 优先级：旋转手柄 > 缩放手柄（四角+四边中点，挂在 handle_box 给出
+    // 的编辑层框上）> 矩形内部（移动）
     protected func pickUIHandle(
         e: entity,
         info: UIRectInfo,
+        handle_box: vec2,
         mouse: vec2,
         rmin: vec2,
         rsize: vec2,
         display_range: vec2)=> int
     {
         let total = info.m_angle_acc + info.m_own_angle;
-        let half = info.m_size * 0.5;
+        let handle_half = handle_box * 0.5;
 
         // 旋转手柄：沿元素自身 up 轴、距上缘 UI_ROTATE_STALK_PX 的圆点；
         // 无 Rotation 组件的实体不提供旋转手柄（避免拖拽隐式添加组件）
         if (e->towoo::get_component:<UserInterface::Rotation>->is_value)
         {
             let up = uiRotateVec2(total, (0., 1.) as vec2);
-            let rot_pos = info.m_pivot_display + up * (half[1] + UI_ROTATE_STALK_PX);
+            let rot_pos = info.m_pivot_display
+                + up * (info.m_size[1] * 0.5 + UI_ROTATE_STALK_PX);
             if ((mouse
                     - uiDisplayToScreen(rot_pos, rmin, rsize, display_range))->length
                 < UI_HIT_PX)
@@ -482,7 +506,9 @@ namespace JEEditor::Editor::WorldEditorViewport
             {
                 let (sx, sy) = uiHandleSigns(h);
                 let cpos = info.m_center
-                    + uiRotateVec2(total, ((sx as real) * half[0], (sy as real) * half[1]) as vec2);
+                    + uiRotateVec2(
+                        total,
+                        ((sx as real) * handle_half[0], (sy as real) * handle_half[1]) as vec2);
                 if ((mouse
                         - uiDisplayToScreen(cpos, rmin, rsize, display_range))->length
                     < UI_HIT_PX)
@@ -492,6 +518,8 @@ namespace JEEditor::Editor::WorldEditorViewport
         }
 
         // 矩形内部（含退化尺寸的点击容差）→ 移动
+        //（按有效矩形判定，与编辑层无关）
+        let half = info.m_size * 0.5;
         let tol = uiHitTolerance(rsize, display_range);
         let local = uiRotateVec2(
             -total,
@@ -573,6 +601,13 @@ namespace JEEditor::Editor::WorldEditorViewport
                         value(text)? auto_sized = text.auto_size->get;
                     }
 
+                    // 两层框（与有效矩形同心）：绝对层框 = size 的像素
+                    // 贡献；比例层框 = 单位一 ⊙ size_ratio 的像素贡献。
+                    // 有效尺寸 = 两层之和
+                    try! elem = e->towoo::get_component:<UserInterface::Element>();
+                    let size_box = elem.size->get;
+                    let ratio_box = ui_info.m_unit_px * elem.size_ratio->get;
+
                     // 写入本帧绘制快照
                     self.m_ui_draw_visible = true;
                     self.m_ui_draw_can_resize = !auto_sized;
@@ -585,6 +620,9 @@ namespace JEEditor::Editor::WorldEditorViewport
                         ui_info.m_angle_acc + ui_info.m_own_angle;
                     self.m_ui_draw_pivot_display = ui_info.m_pivot_display;
                     self.m_ui_draw_anchor_display = ui_info.m_anchor_display;
+                    self.m_ui_draw_unit_px = ui_info.m_unit_px;
+                    self.m_ui_draw_size_box = size_box;
+                    self.m_ui_draw_ratio_box = ratio_box;
                     self.m_ui_draw_has_ref = true;
                     self.m_ui_draw_ref_center = ref_center;
                     self.m_ui_draw_ref_size = ref_size;
@@ -613,8 +651,15 @@ namespace JEEditor::Editor::WorldEditorViewport
                     if (!hoverable)
                         return_value!;
 
+                    // 编辑层：Shift 按住时缩放手柄挂到比例层框
+                    //（offset 拖拽亦写 offset_ratio）；Ctrl 为吸附键
+                    let handle_box = IsKeyDown(ImGuiKey::ImGuiKey_LeftShift)
+                        ? ratio_box
+                        | size_box;
+
                     let mouse = GetMousePos() as vec2;
-                    let handle = pickUIHandle(e, ui_info, mouse, rmin, rsize, dr);
+                    let handle = pickUIHandle(
+                        e, ui_info, handle_box, mouse, rmin, rsize, dr);
                     self.m_ui_hover_handle = handle;
 
                     // 悬停手柄上按下左键：开始拖拽
@@ -644,7 +689,6 @@ namespace JEEditor::Editor::WorldEditorViewport
         self.m_ui_drag_start_mouse = uiScreenToDisplay(mouse, rmin, rsize, display_range);
         self.m_ui_drag_moved = false;
         self.m_ui_drag_angle_acc = info.m_angle_acc;
-        self.m_ui_drag_effective_size = info.m_size;
         self.m_ui_drag_undo_component = "";
         self.m_ui_drag_undo_member = "";
         self.m_ui_drag_undo_old_value = "";
@@ -654,17 +698,48 @@ namespace JEEditor::Editor::WorldEditorViewport
             try! elem =
                 selected_entity->towoo::get_component:<UserInterface::Element>();
 
+            // 编辑层：移动/缩放在拖拽开始时按 Shift 定层并冻结
+            //（单位一随之冻结；绝对层的换算系数恒为 1）
+            let edit_ratio = handle != UI_HANDLE_ROTATE
+                && IsKeyDown(ImGuiKey::ImGuiKey_LeftShift);
+            self.m_ui_drag_edit_ratio = edit_ratio;
+            self.m_ui_drag_unit_px = edit_ratio ? info.m_unit_px | (1., 1.) as vec2;
+
             if (handle == UI_HANDLE_MOVE)
             {
-                self.m_ui_drag_start_offset = elem.offset->get;
+                if (edit_ratio)
+                {
+                    self.m_ui_drag_start_offset = elem.offset_ratio->get;
+                    self.m_ui_drag_undo_member = "offset_ratio";
+                }
+                else
+                {
+                    self.m_ui_drag_start_offset = elem.offset->get;
+                    self.m_ui_drag_undo_member = "offset";
+                }
+                self.m_ui_drag_start_member_px = self.m_ui_drag_unit_px
+                    * self.m_ui_drag_start_offset;
                 self.m_ui_drag_undo_component = "UserInterface::Element";
-                self.m_ui_drag_undo_member = "offset";
             }
             else if (handle >= UI_HANDLE_RESIZE_LB && handle <= UI_HANDLE_RESIZE_T)
             {
-                self.m_ui_drag_start_size = elem.size->get;
+                let other_box = edit_ratio
+                    ? elem.size->get
+                    | info.m_unit_px * elem.size_ratio->get;
+                if (edit_ratio)
+                {
+                    self.m_ui_drag_start_size = elem.size_ratio->get;
+                    self.m_ui_drag_undo_member = "size_ratio";
+                }
+                else
+                {
+                    self.m_ui_drag_start_size = elem.size->get;
+                    self.m_ui_drag_undo_member = "size";
+                }
+                self.m_ui_drag_start_member_px = self.m_ui_drag_unit_px
+                    * self.m_ui_drag_start_size;
+                self.m_ui_drag_other_box_px = other_box;
                 self.m_ui_drag_undo_component = "UserInterface::Element";
-                self.m_ui_drag_undo_member = "size";
             }
             else
             {
@@ -717,18 +792,38 @@ namespace JEEditor::Editor::WorldEditorViewport
 
             let ctrl_down = IsKeyDown(ImGuiKey::ImGuiMod_Ctrl);
             let handle = self.m_ui_drag_handle;
+            // 拖拽期间编辑层与单位一冻结（拖拽开始时按 Shift 定层）
+            let edit_ratio = self.m_ui_drag_edit_ratio;
+            let unit = self.m_ui_drag_unit_px;
 
             if (handle == UI_HANDLE_MOVE)
             {
                 try! elem =
                     selected_entity->towoo::get_component:<UserInterface::Element>();
-                // 显示位移 → 未旋转帧 offset 增量：d(display)/d(offset)
+                // 显示位移 → 未旋转帧偏移增量：d(display)/d(offset)
                 // = R(angle_acc)，故逆旋转祖先累计角（不含自身角）
                 let delta_local = uiRotateVec2(-self.m_ui_drag_angle_acc, delta_disp);
-                let mut new_offset = self.m_ui_drag_start_offset + delta_local;
+
+                // 先在“层像素”空间合成目标并按 Ctrl 吸附，再除以单位一
+                // 换算回成员增量（绝对层单位一恒为 1）
+                let mut tx = self.m_ui_drag_start_member_px[0] + delta_local[0];
+                let mut ty = self.m_ui_drag_start_member_px[1] + delta_local[1];
                 if (ctrl_down)
-                    new_offset = (uiRoundTo(new_offset[0], 1.), uiRoundTo(new_offset[1], 1.)) as vec2;
-                elem.offset->set(new_offset);
+                {
+                    tx = uiRoundTo(tx, 1.);
+                    ty = uiRoundTo(ty, 1.);
+                }
+                let dx = (unit[0] > 0.0001)
+                    ? (tx - self.m_ui_drag_start_member_px[0]) / unit[0]
+                    | 0.;
+                let dy = (unit[1] > 0.0001)
+                    ? (ty - self.m_ui_drag_start_member_px[1]) / unit[1]
+                    | 0.;
+
+                if (edit_ratio)
+                    elem.offset_ratio->set(self.m_ui_drag_start_offset + (dx, dy) as vec2);
+                else
+                    elem.offset->set(self.m_ui_drag_start_offset + (dx, dy) as vec2);
             }
             else if (handle >= UI_HANDLE_RESIZE_LB && handle <= UI_HANDLE_RESIZE_T)
             {
@@ -745,36 +840,54 @@ namespace JEEditor::Editor::WorldEditorViewport
                 let spx = uiPivotSide(pivot_bits, 0);
                 let spy = uiPivotSide(pivot_bits, 1);
 
-                // pivot 固定语义逐轴解新尺寸：pivot 居中 → 对称伸缩（边界
-                // 在 ±s/2）；pivot 靠边 → 从 pivot 单向伸缩；把手与 pivot
-                // 同侧的轴锁定（把手即 pivot 所在边界）。增量写绝对通道，
-                // 比例通道贡献保持不变
-                let mut sx_new = self.m_ui_drag_effective_size[0];
+                // 逐轴解编辑层框的新尺寸（pivot 固定语义对有效矩形生效）：
+                // pivot 居中 → 该层框对称伸缩（边界在中心 ±s/2）；pivot 靠边
+                // → 该层框从“pivot + 另一层框半宽”处单向伸缩；把手与 pivot
+                // 同侧的轴锁定。层像素目标经 Ctrl 吸附后除以单位一写回成员
+                let mut sx_new = self.m_ui_drag_start_member_px[0];
                 if (shx != 0 && !(spx != 0 && spx == shx))
                 {
                     sx_new = (spx == 0)
-                        ? mathf::abs(c[0]) * 2.
-                        | mathf::abs(c[0]);
-                    if (sx_new < UI_GIZMO_MIN_SIZE)
+                        ? (shx as real) * c[0] * 2.
+                        | (shx as real) * c[0] - self.m_ui_drag_other_box_px[0] * 0.5;
+                    if (edit_ratio)
+                    {
+                        if (sx_new < 0.)
+                            sx_new = 0.;
+                    }
+                    else if (sx_new < UI_GIZMO_MIN_SIZE)
                         sx_new = UI_GIZMO_MIN_SIZE;
                     if (ctrl_down)
                         sx_new = uiRoundTo(sx_new, 1.);
                 }
-                let mut sy_new = self.m_ui_drag_effective_size[1];
+                let mut sy_new = self.m_ui_drag_start_member_px[1];
                 if (shy != 0 && !(spy != 0 && spy == shy))
                 {
                     sy_new = (spy == 0)
-                        ? mathf::abs(c[1]) * 2.
-                        | mathf::abs(c[1]);
-                    if (sy_new < UI_GIZMO_MIN_SIZE)
+                        ? (shy as real) * c[1] * 2.
+                        | (shy as real) * c[1] - self.m_ui_drag_other_box_px[1] * 0.5;
+                    if (edit_ratio)
+                    {
+                        if (sy_new < 0.)
+                            sy_new = 0.;
+                    }
+                    else if (sy_new < UI_GIZMO_MIN_SIZE)
                         sy_new = UI_GIZMO_MIN_SIZE;
                     if (ctrl_down)
                         sy_new = uiRoundTo(sy_new, 1.);
                 }
 
-                elem.size->set(self.m_ui_drag_start_size
-                    + (sx_new - self.m_ui_drag_effective_size[0],
-                        sy_new - self.m_ui_drag_effective_size[1]) as vec2);
+                let dx = (unit[0] > 0.0001)
+                    ? (sx_new - self.m_ui_drag_start_member_px[0]) / unit[0]
+                    | 0.;
+                let dy = (unit[1] > 0.0001)
+                    ? (sy_new - self.m_ui_drag_start_member_px[1]) / unit[1]
+                    | 0.;
+
+                if (edit_ratio)
+                    elem.size_ratio->set(self.m_ui_drag_start_size + (dx, dy) as vec2);
+                else
+                    elem.size->set(self.m_ui_drag_start_size + (dx, dy) as vec2);
             }
             else
             {
@@ -865,6 +978,13 @@ namespace JEEditor::Editor::WorldEditorViewport
         let total = self.m_ui_draw_total_angle;
         let half = self.m_ui_draw_size * 0.5;
 
+        // 当前编辑层（拖拽期间冻结为拖拽开始时的层；否则按 Shift 即时
+        // 切换）：缩放手柄挂在编辑层框上，offset 拖拽写对应成员
+        let edit_ratio = self.m_ui_dragging
+            ? self.m_ui_drag_edit_ratio
+            | IsKeyDown(ImGuiKey::ImGuiKey_LeftShift);
+        let handle_half = (edit_ratio ? self.m_ui_draw_ratio_box | self.m_ui_draw_size_box) * 0.5;
+
         // 参考矩形（父元素矩形或整个显示区）
         {
             let ref_half = self.m_ui_draw_ref_size * 0.5;
@@ -898,6 +1018,67 @@ namespace JEEditor::Editor::WorldEditorViewport
             (an[0] - 7., an[1]), (an[0] + 7., an[1]), UI_GIZMO_COLOR_REF, 1.);
         do draw_list->AddLine(
             (an[0], an[1] - 7.), (an[0], an[1] + 7.), UI_GIZMO_COLOR_REF, 1.);
+
+        // 两层框（与有效矩形同心，旋转对齐）：绝对层 = size 的像素贡献
+        //（浅灰）、比例层 = 单位一 ⊙ size_ratio 的像素贡献（紫），
+        // 编辑层框描粗以示当前写入目标
+        {
+            let size_w = edit_ratio ? 1. | 1.5;
+            let ratio_w = edit_ratio ? 1.5 | 1.;
+
+            let s_half = self.m_ui_draw_size_box * 0.5;
+            let s0 = uiDisplayToScreen(
+                self.m_ui_draw_center
+                    + uiRotateVec2(total, (-s_half[0], -s_half[1]) as vec2),
+                rmin, rsize, dr);
+            let s1 = uiDisplayToScreen(
+                self.m_ui_draw_center
+                    + uiRotateVec2(total, (s_half[0], -s_half[1]) as vec2),
+                rmin, rsize, dr);
+            let s2 = uiDisplayToScreen(
+                self.m_ui_draw_center
+                    + uiRotateVec2(total, (s_half[0], s_half[1]) as vec2),
+                rmin, rsize, dr);
+            let s3 = uiDisplayToScreen(
+                self.m_ui_draw_center
+                    + uiRotateVec2(total, (-s_half[0], s_half[1]) as vec2),
+                rmin, rsize, dr);
+            do draw_list->AddLine((s0[0], s0[1]), (s1[0], s1[1]), UI_GIZMO_COLOR_SIZE_LAYER, size_w);
+            do draw_list->AddLine((s1[0], s1[1]), (s2[0], s2[1]), UI_GIZMO_COLOR_SIZE_LAYER, size_w);
+            do draw_list->AddLine((s2[0], s2[1]), (s3[0], s3[1]), UI_GIZMO_COLOR_SIZE_LAYER, size_w);
+            do draw_list->AddLine((s3[0], s3[1]), (s0[0], s0[1]), UI_GIZMO_COLOR_SIZE_LAYER, size_w);
+
+            let q_half = self.m_ui_draw_ratio_box * 0.5;
+            let q0 = uiDisplayToScreen(
+                self.m_ui_draw_center
+                    + uiRotateVec2(total, (-q_half[0], -q_half[1]) as vec2),
+                rmin, rsize, dr);
+            let q1 = uiDisplayToScreen(
+                self.m_ui_draw_center
+                    + uiRotateVec2(total, (q_half[0], -q_half[1]) as vec2),
+                rmin, rsize, dr);
+            let q2 = uiDisplayToScreen(
+                self.m_ui_draw_center
+                    + uiRotateVec2(total, (q_half[0], q_half[1]) as vec2),
+                rmin, rsize, dr);
+            let q3 = uiDisplayToScreen(
+                self.m_ui_draw_center
+                    + uiRotateVec2(total, (-q_half[0], q_half[1]) as vec2),
+                rmin, rsize, dr);
+            do draw_list->AddLine((q0[0], q0[1]), (q1[0], q1[1]), UI_GIZMO_COLOR_RATIO_LAYER, ratio_w);
+            do draw_list->AddLine((q1[0], q1[1]), (q2[0], q2[1]), UI_GIZMO_COLOR_RATIO_LAYER, ratio_w);
+            do draw_list->AddLine((q2[0], q2[1]), (q3[0], q3[1]), UI_GIZMO_COLOR_RATIO_LAYER, ratio_w);
+            do draw_list->AddLine((q3[0], q3[1]), (q0[0], q0[1]), UI_GIZMO_COLOR_RATIO_LAYER, ratio_w);
+        }
+
+        // 比例层激活时（Shift）画锚点基点 → 矩形中心的偏移链连线，
+        // 提示 offset 拖拽当前写入 offset_ratio
+        if (edit_ratio)
+        {
+            let ct = uiDisplayToScreen(self.m_ui_draw_center, rmin, rsize, dr);
+            do draw_list->AddLine(
+                (an[0], an[1]), (ct[0], ct[1]), UI_GIZMO_COLOR_RATIO_LAYER, 1.);
+        }
 
         // 元素矩形（旋转后的四角连线）
         let c0 = uiDisplayToScreen(
@@ -940,7 +1121,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             do draw_list->AddCircle((rpos[0], rpos[1]), 5., rot_color, 1.5);
         }
 
-        // 缩放手柄方块（四角+四边中点，悬停/拖拽高亮）
+        // 缩放手柄方块（四角+四边中点，挂在编辑层框上，悬停/拖拽高亮）
         if (self.m_ui_draw_can_resize)
         {
             let hs = COLLIDER_HANDLE_SIZE_PX * 0.5;
@@ -950,7 +1131,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 let (sx, sy) = uiHandleSigns(h);
                 let hp = uiDisplayToScreen(
                     self.m_ui_draw_center
-                        + uiRotateVec2(total, ((sx as real) * half[0], (sy as real) * half[1]) as vec2),
+                        + uiRotateVec2(total, ((sx as real) * handle_half[0], (sy as real) * handle_half[1]) as vec2),
                     rmin, rsize, dr);
                 let hcolor = (self.m_ui_hover_handle == h)
                     ? UI_GIZMO_COLOR_HOVER
@@ -961,7 +1142,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             }
         }
 
-        // 拖拽中的数值标签（跟随鼠标）
+        // 拖拽中的数值标签（跟随鼠标，按编辑层显示对应成员）
         if (self.m_ui_dragging)
         {
             let mouse = GetMousePos() as vec2;
@@ -975,16 +1156,31 @@ namespace JEEditor::Editor::WorldEditorViewport
                 {
                     try! elem =
                         selected_entity->towoo::get_component:<UserInterface::Element>();
-                    let o = elem.offset->get;
-                    let ox = uiRoundTo(o[0], 0.1);
-                    let oy = uiRoundTo(o[1], 0.1);
-                    label = F"offset: ({ox}, {oy})";
+                    if (self.m_ui_drag_edit_ratio)
+                    {
+                        let o = elem.offset_ratio->get;
+                        let ox = uiRoundTo(o[0], 0.001);
+                        let oy = uiRoundTo(o[1], 0.001);
+                        label = F"offset_ratio: ({ox}, {oy})";
+                    }
+                    else
+                    {
+                        let o = elem.offset->get;
+                        let ox = uiRoundTo(o[0], 0.1);
+                        let oy = uiRoundTo(o[1], 0.1);
+                        label = F"offset: ({ox}, {oy})";
+                    }
                 }
                 else if (handle >= UI_HANDLE_RESIZE_LB && handle <= UI_HANDLE_RESIZE_T)
                 {
-                    let sw = uiRoundTo(self.m_ui_draw_size[0], 0.1);
-                    let sh = uiRoundTo(self.m_ui_draw_size[1], 0.1);
-                    label = F"{sw} × {sh}";
+                    let box = self.m_ui_drag_edit_ratio
+                        ? self.m_ui_draw_ratio_box
+                        | self.m_ui_draw_size_box;
+                    let sw = uiRoundTo(box[0], 0.1);
+                    let sh = uiRoundTo(box[1], 0.1);
+                    label = self.m_ui_drag_edit_ratio
+                        ? F"size_ratio: {sw} × {sh} px"
+                        | F"size: {sw} × {sh} px";
                 }
                 else
                 {
