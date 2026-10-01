@@ -138,7 +138,8 @@ public let frag =
             const Shaders* shaders;
             const Textures* textures;
 
-            const UserInterface::Origin* ui_origin;
+            const UserInterface::Element* ui_element;
+            const UserInterface::WorldLayout* ui_layout;
             const UserInterface::Rotation* ui_rotation;
             const UserInterface::Text* ui_text;
 
@@ -560,52 +561,68 @@ public let frag =
                     });
             }
 
-            // 把脏文本光栅化进实体 Textures 的通道0。文本渲染复用标准 UI 渲染路径，
-            // 因此实体必须持有 Renderer::Textures 和 Renderer::Shaders 才会被处理。
-            // 实际像素字号 = Text::size × Origin 最终计算的元素绝对大小
-            //（keep_vertical_ratio 取 y 分量，否则取 x 分量），文字随元素与
-            // 窗口分辨率等比缩放；auto_size 只影响绘制，不参与字号计算。
-            for (auto&& [text, texs, origin, abs, rel] : query<view typesof(Text&, Textures&, Origin&, Absolute*, Relatively*)>())
+            RasterizeDirtyTexts();
+
+            for (auto&& [shads, texs, shape, rendqueue, elem, layout, rotation, color, text] : query<
+                view typesof(Shaders&, Textures*, Shape&, Rendqueue*, Element&, WorldLayout&, Rotation*, Color*, Text*),
+                except typesof(Point, Parallel, Range)
+            >())
             {
+                m_renderer_list.emplace(
+                    renderer_arch{
+                        color, rendqueue, nullptr, &shape, &shads, texs,
+                        &elem, &layout, rotation, text });
+            }
+
+            this->branch_allocate_end();
+            DrawFrame();
+        }
+
+        // 把脏文本光栅化进实体 Textures 的通道0。文本渲染复用标准 UI 渲染路径，
+        // 因此实体必须持有 Renderer::Textures 和 Renderer::Shaders 才会被处理。
+        // 实际像素字号 = 元素按窗口尺寸解析后的最终布局尺寸
+        //（keep_vertical_ratio 取 y 分量，否则取 x 分量），文字随元素与
+        // 窗口分辨率等比缩放；auto_size 只影响绘制（见 DrawFrame），
+        // 不参与字号计算，也不回写任何布局输入组件。
+        void RasterizeDirtyTexts()
+        {
+            for (auto&& [text, texs, elem, layout] : query<view typesof(
+                Text&, Textures&, Element&, WorldLayout&)>())
+            {
+                const auto clear_raster_cache = [&]()
+                {
+                    if (text.cached_font_size > 0.f)
+                    {
+                        texs.remove_texture(0);
+                        text.cached_texture_content = "";
+                        text.cached_font_size = 0.f;
+                    }
+                };
+
                 auto font_res = text.font.get_resource();
                 if (!font_res.has_value())
                 {
                     // 字体未指定则不渲染；移除先前光栅化残留的通道0纹理。
-                    if (text.cached_font_size > 0.f)
-                    {
-                        texs.remove_texture(0);
-                        text.cached_texture_content = "";
-                        text.cached_font_size = -1.f;
-                    }
+                    clear_raster_cache();
                     continue;
                 }
 
-                // 以窗口尺寸求 Origin 最终绝对大小作为字号系数；
-                // 元素在该轴上无尺寸则视为不渲染文本。
-                math::vec2 layout_abssize = {};
-                origin.get_layout(
-                    (float)WINDOWS_WIDTH,
-                    (float)WINDOWS_HEIGHT,
-                    nullptr,
-                    &layout_abssize,
-                    nullptr);
+                const auto rect = resolve_layout(
+                    elem, layout,
+                    (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT);
 
                 const float font_size =
-                    origin.keep_vertical_ratio ? layout_abssize.y : layout_abssize.x;
+                    elem.keep_vertical_ratio ? rect.size.y : rect.size.x;
 
                 if (font_size <= 0.f)
                 {
-                    if (text.cached_font_size > 0.f)
-                    {
-                        texs.remove_texture(0);
-                        text.cached_texture_content = "";
-                        text.cached_font_size = -1.f;
-                    }
+                    // 元素在该轴上无尺寸则视为不渲染文本。
+                    clear_raster_cache();
                     continue;
                 }
 
                 // 通道0为空也视为脏（如场景重载后纹理丢失，可自愈重建）。
-                // 布局或窗口尺寸变化会改变 font_size，经 texture_size 触发重光栅化。
+                // 布局或窗口尺寸变化会改变 font_size，经比较触发重光栅化。
                 const bool dirty =
                     !texs.get_texture(0).has_value()
                     || text.cached_texture_content != text.content
@@ -613,50 +630,14 @@ public let frag =
 
                 if (dirty)
                 {
-                    auto new_generated_texture =
-                        font_res.value()->u8text_texture(
-                            text.content.cpp_str(), font_size);
+                    texs.bind_texture(
+                        0, font_res.value()->u8text_texture(
+                            text.content.cpp_str(), font_size));
 
-                    texs.bind_texture(0, new_generated_texture);
                     text.cached_texture_content = text.content;
                     text.cached_font_size = font_size;
-
-                    if (text.auto_size)
-                    {
-                        const auto texture_size = new_generated_texture->size();
-                        if (origin.keep_vertical_ratio)
-                        {
-                            const float ratio = 
-                                static_cast<float>(texture_size.x) / static_cast<float>(texture_size.y);
-
-                            if (abs != nullptr) abs->size.x = abs->size.y * ratio;
-                            if (rel != nullptr) rel->scale.x = rel->scale.y * ratio;
-                        }
-                        else
-                        {
-                            const float ratio =
-                                static_cast<float>(texture_size.y) / static_cast<float>(texture_size.x);
-
-                            if (abs != nullptr) abs->size.y = abs->size.x * ratio;
-                            if (rel != nullptr) rel->scale.y = rel->scale.x * ratio;
-                        }
-                    }
                 }
             }
-
-            for (auto&& [shads, texs, shape, rendqueue, origin, rotation, color, text] : query<
-                view typesof(Shaders&, Textures*, Shape&, Rendqueue*, Origin&, Rotation*, Color*, Text*),
-                anyof typesof(Absolute, Relatively),
-                except typesof(Point, Parallel, Range)
-            >())
-            {
-                m_renderer_list.emplace(
-                    renderer_arch{
-                        color, rendqueue, nullptr, &shape, &shads, texs, &origin, rotation, text });
-            }
-
-            this->branch_allocate_end();
-            DrawFrame();
         }
 
         void DrawFrame()
@@ -714,7 +695,10 @@ public let frag =
 
                 for (auto& rendentity : m_renderer_list)
                 {
-                    assert(rendentity.ui_origin != nullptr && rendentity.shaders != nullptr && rendentity.shape != nullptr);
+                    assert(rendentity.ui_element != nullptr
+                        && rendentity.ui_layout != nullptr
+                        && rendentity.shaders != nullptr
+                        && rendentity.shape != nullptr);
 
                     auto& drawing_shape =
                         rendentity.shape->vertex.has_value()
@@ -725,15 +709,49 @@ public let frag =
                         ? rendentity.shaders->shaders
                         : m_default_resources.default_shaders_list;
 
-                    math::vec2 uioffset, uisize, uicenteroffset;
-
-                    rendentity.ui_origin->get_layout(
+                    auto rect = resolve_layout(
+                        *rendentity.ui_element,
+                        *rendentity.ui_layout,
                         (float)RENDAIMBUFFER_WIDTH,
-                        (float)RENDAIMBUFFER_HEIGHT,
-                        &uioffset, &uisize, &uicenteroffset);
+                        (float)RENDAIMBUFFER_HEIGHT);
 
-                    uioffset.x -= (float)RENDAIMBUFFER_WIDTH / 2.0f;
-                    uioffset.y -= (float)RENDAIMBUFFER_HEIGHT / 2.0f;
+                    // auto_size：绘制时按通道0文本纹理的自然宽高比调整元素尺寸，
+                    // 基准轴与字号计算一致（keep_vertical_ratio 取 y 否则取 x）；
+                    // 只作用于本次解析结果，不回写布局输入组件。
+                    if (rendentity.ui_text != nullptr && rendentity.ui_text->auto_size
+                        && rendentity.textures != nullptr)
+                    {
+                        if (auto text_texture = rendentity.textures->get_texture(0);
+                            text_texture.has_value())
+                        {
+                            const auto texture_size = text_texture.value()->size();
+                            if (rendentity.ui_element->keep_vertical_ratio
+                                && texture_size.y > 0)
+                            {
+                                const float ratio =
+                                    static_cast<float>(texture_size.x) / static_cast<float>(texture_size.y);
+                                rect.resize_around_pivot(
+                                    rendentity.ui_element->pivot,
+                                    math::vec2(rect.size.y * ratio, rect.size.y));
+                            }
+                            else if (!rendentity.ui_element->keep_vertical_ratio
+                                && texture_size.x > 0)
+                            {
+                                const float ratio =
+                                    static_cast<float>(texture_size.y) / static_cast<float>(texture_size.x);
+                                rect.resize_around_pivot(
+                                    rendentity.ui_element->pivot,
+                                    math::vec2(rect.size.x, rect.size.x * ratio));
+                            }
+                        }
+                    }
+
+                    const math::vec2 uioffset = rect.center
+                        - math::vec2(
+                            (float)RENDAIMBUFFER_WIDTH / 2.0f,
+                            (float)RENDAIMBUFFER_HEIGHT / 2.0f);
+                    const math::vec2& uisize = rect.size;
+                    const math::vec2& uicenteroffset = rect.pivot_offset;
 
                     // TODO: 这里俩矩阵实际上可以优化，但是UI实际上也没有多少，暂时直接矩阵乘法也无所谓
                     // NOTE: 这里的大小和偏移大小乘二是因为一致空间是 -1 到 1，天然有一个1/2的压缩，为了保证单位正确，这里乘二
@@ -858,7 +876,7 @@ public let frag =
                 except typesof(
                     Point,
                     Parallel,
-                    Origin
+                    Element
                 )
             >())
             {
@@ -1810,7 +1828,7 @@ public func frag(vf: v2f)
                     Point,
                     Parallel,
                     Range,
-                    Origin
+                    Element
                 )
             >())
             {

@@ -10654,163 +10654,159 @@ namespace jeecs
     }
     namespace UserInterface
     {
-        struct Origin
+        // UI 元素的对齐标记，可按位组合（如 left | top）；center 为 0 即无标记。
+        enum alignment : uint8_t
         {
-            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Origin);
-            JECS_DEFAULT_CONSTRUCTOR(Origin);
+            center = 0,
 
-            enum origin_center : uint8_t
-            {
-                center = 0,
+            left = 1 << 0,
+            right = 1 << 1,
+            top = 1 << 2,
+            bottom = 1 << 3,
+        };
 
-                left = 1 << 0,
-                right = 1 << 1,
-                top = 1 << 2,
-                bottom = 1 << 3,
-            };
+        // UI 元素的布局输入（用户编写，系统只读）。
+        // 一个 UI 元素 = Element（布局输入）+ WorldLayout（层级解析结果，系统写入），
+        // 层级关系复用 Transform 的 Anchor + LocalToParent。
+        struct Element
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Element);
+            JECS_DEFAULT_CONSTRUCTOR(Element);
 
-            origin_center elem_center = origin_center::center;
-            origin_center root_center = origin_center::center;
+            // 参照锚点：显示区上的哪个点作为偏移起点（默认显示区中心）。
+            alignment anchor = alignment::center;
 
+            // 元素枢轴：元素盒上的哪个点对齐到偏移起点（默认元素中心）。
+            alignment pivot = alignment::center;
+
+            // 相对量（offset_ratio/size_ratio）换算为绝对量时的比例基准：
+            // true 以竖向为基准，横向相对量按 h/w 折算；false 以横向为基准，纵向按 w/h 折算。
             bool keep_vertical_ratio = true;
 
-            // Will be update by uipipeline
-            // Abs
+            // 偏移与尺寸各含绝对（像素）与相对（×显示区尺寸）两个通道，最终取两者之和。
+            math::vec2 offset = {};
+            math::vec2 offset_ratio = {};
             math::vec2 size = {};
-            math::vec2 global_offset = {};
-            // Rel
-            math::vec2 scale = {};
-            math::vec2 global_location = {};
-
-
-            // 用于计算ui元素的绝对坐标和大小，接受显示区域的宽度和高度，获取以屏幕左下角为原点的元素位置和大小。
-            // 其中位置是ui元素中心位置，而非坐标原点位置。
-            void get_layout(
-                float w,
-                float h,
-                math::vec2* out_absoffset,
-                math::vec2* out_abssize,
-                math::vec2* out_center_offset) const
-            {
-                math::vec2 rel2abssize = scale * math::vec2(w, h);
-                math::vec2 rel2absoffset = global_location * math::vec2(w, h);
-
-                if (keep_vertical_ratio)
-                {
-                    rel2abssize.x *= h / w;
-                    rel2absoffset.x *= h / w;
-                }
-                else
-                {
-                    rel2abssize.y *= w / h;
-                    rel2absoffset.y *= w / h;
-                }
-
-                math::vec2 abssize = size + rel2abssize;
-                math::vec2 absoffset = global_offset + rel2absoffset;
-
-                // 消除中心偏差
-                math::vec2 center_offset = {};
-
-                absoffset.x += w / 2.0f;
-                absoffset.y += h / 2.0f;
-
-                ////////////////////////////////////
-                if (root_center & origin_center::left)
-                    absoffset.x += -w / 2.0f;
-                if (root_center & origin_center::right)
-                    absoffset.x += w / 2.0f;
-
-                if (root_center & origin_center::top)
-                    absoffset.y += h / 2.0f;
-                if (root_center & origin_center::bottom)
-                    absoffset.y += -h / 2.0f;
-
-                ////////////////////////////////////
-                if (elem_center & origin_center::left)
-                {
-                    absoffset.x += abssize.x / 2.0f;
-                    center_offset.x = abssize.x / 2.0f;
-                }
-                if (elem_center & origin_center::right)
-                {
-                    absoffset.x += -abssize.x / 2.0f;
-                    center_offset.x = -abssize.x / 2.0f;
-                }
-                if (elem_center & origin_center::top)
-                {
-                    absoffset.y += -abssize.y / 2.0f;
-                    center_offset.y = -abssize.y / 2.0f;
-                }
-                if (elem_center & origin_center::bottom)
-                {
-                    absoffset.y += abssize.y / 2.0f;
-                    center_offset.y = abssize.y / 2.0f;
-                }
-
-                if (out_center_offset)
-                    *out_center_offset = center_offset;
-                if (out_abssize)
-                    *out_abssize = abssize;
-                if (out_absoffset)
-                    *out_absoffset = absoffset;
-            }
-
-            bool mouse_on(
-                float w,
-                float h,
-                float rot_angle,
-                math::vec2 mouse_view_pos) const
-            {
-                math::vec2 absoffset;
-                math::vec2 abssize;
-
-                math::vec2 absmouse = (mouse_view_pos + math::vec2(1.f, 1.f)) / 2.f * math::vec2(w, h);
-                get_layout(w, h, &absoffset, &abssize, nullptr);
-
-                const math::vec3 corrected_mouse_diff =
-                    (math::quat::euler(0., 0., -rot_angle) * math::vec3(absmouse - absoffset));
-
-                const float absdiffx = abs(corrected_mouse_diff.x);
-                const float absdiffy = abs(corrected_mouse_diff.y);
-
-                return absdiffx < abssize.x / 2.f && absdiffy < abssize.y / 2.f;
-            }
+            math::vec2 size_ratio = {};
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(guard, &Origin::elem_center, "elem_center");
-                typing::register_member(guard, &Origin::keep_vertical_ratio, "keep_vertical_ratio");
+                typing::register_member(guard, &Element::anchor, "anchor");
+                typing::register_member(guard, &Element::pivot, "pivot");
+                typing::register_member(guard, &Element::keep_vertical_ratio, "keep_vertical_ratio");
+                typing::register_member(guard, &Element::offset, "offset");
+                typing::register_member(guard, &Element::offset_ratio, "offset_ratio");
+                typing::register_member(guard, &Element::size, "size");
+                typing::register_member(guard, &Element::size_ratio, "size_ratio");
             }
         };
-        struct Absolute
+
+        // 布局层级的解析结果：由 UI 布局阶段（TranslationUpdatingSystem）每帧
+        // 从 Element 重建并累加祖先偏移后写入，用户只读。
+        // 未携带本组件的元素不参与 UI 布局与渲染（参见编辑器的 UI 组件预设）。
+        struct WorldLayout
         {
-            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Absolute);
-            JECS_DEFAULT_CONSTRUCTOR(Absolute);
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(WorldLayout);
+            JECS_DEFAULT_CONSTRUCTOR(WorldLayout);
 
-            math::vec2 size = { 0.0f, 0.0f };
-            math::vec2 offset = { 0.0f, 0.0f };
-
-            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
-            {
-                typing::register_member(guard, &Absolute::size, "size");
-                typing::register_member(guard, &Absolute::offset, "offset");
-            }
+            // 自身与所有祖先的绝对偏移累加（像素）。
+            math::vec2 offset = {};
+            // 自身与所有祖先的相对偏移累加（×显示区尺寸）。
+            math::vec2 offset_ratio = {};
         };
-        struct Relatively
+
+        // 解析后的 UI 元素矩形：以显示区左下角为原点，单位像素。
+        struct resolved_rect
         {
-            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Relatively);
-            JECS_DEFAULT_CONSTRUCTOR(Relatively);
+            // 元素中心位置（非枢轴位置）。
+            math::vec2 center = {};
+            math::vec2 size = {};
+            // 枢轴点到元素中心的偏移，绘制旋转时作为旋转中心修正量。
+            math::vec2 pivot_offset = {};
 
-            jeecs::math::vec2 location = {};
-            jeecs::math::vec2 scale = { 0.0f, 0.0f };
-
-            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            // 在保持枢轴点不动的条件下修改元素尺寸（供 Text::auto_size
+            // 按文本纹理宽高比调整尺寸，不回写布局输入）。
+            void resize_around_pivot(alignment pivot, const math::vec2& new_size) noexcept
             {
-                typing::register_member(guard, &Relatively::location, "location");
-                typing::register_member(guard, &Relatively::scale, "scale");
+                const math::vec2 pivot_point = center - pivot_offset;
+
+                size = new_size;
+                pivot_offset = {};
+                if (pivot & alignment::left)
+                    pivot_offset.x = size.x / 2.0f;
+                if (pivot & alignment::right)
+                    pivot_offset.x = -size.x / 2.0f;
+                if (pivot & alignment::top)
+                    pivot_offset.y = -size.y / 2.0f;
+                if (pivot & alignment::bottom)
+                    pivot_offset.y = size.y / 2.0f;
+
+                center = pivot_point + pivot_offset;
             }
         };
+
+        // 将布局输入解析为显示区（宽 w、高 h）内的最终矩形。
+        inline resolved_rect resolve_layout(
+            const Element& elem,
+            const WorldLayout& world,
+            float w, float h) noexcept
+        {
+            // 相对量的比例折算：竖向基准时横向乘 h/w，横向基准时纵向乘 w/h。
+            math::vec2 ratio_scale(1.0f, 1.0f);
+            if (elem.keep_vertical_ratio)
+                ratio_scale.x = h / w;
+            else
+                ratio_scale.y = w / h;
+
+            resolved_rect rect;
+            rect.size = elem.size + elem.size_ratio * math::vec2(w, h) * ratio_scale;
+
+            // 偏移起点默认为显示区中心，再按参照锚点修正。
+            math::vec2 position =
+                world.offset + world.offset_ratio * math::vec2(w, h) * ratio_scale
+                + math::vec2(w / 2.0f, h / 2.0f);
+
+            if (elem.anchor & alignment::left)
+                position.x -= w / 2.0f;
+            if (elem.anchor & alignment::right)
+                position.x += w / 2.0f;
+            if (elem.anchor & alignment::top)
+                position.y += h / 2.0f;
+            if (elem.anchor & alignment::bottom)
+                position.y -= h / 2.0f;
+
+            // 元素中心 = 偏移起点 + 枢轴到中心的修正量。
+            if (elem.pivot & alignment::left)
+                rect.pivot_offset.x = rect.size.x / 2.0f;
+            if (elem.pivot & alignment::right)
+                rect.pivot_offset.x = -rect.size.x / 2.0f;
+            if (elem.pivot & alignment::top)
+                rect.pivot_offset.y = -rect.size.y / 2.0f;
+            if (elem.pivot & alignment::bottom)
+                rect.pivot_offset.y = rect.size.y / 2.0f;
+
+            rect.center = position + rect.pivot_offset;
+            return rect;
+        }
+
+        // 鼠标命中测试：mouse_view_pos 为视口空间坐标（-1..1，y 轴向上），
+        // rot_angle 为元素旋转角（弧度）。
+        inline bool hit_test(
+            const resolved_rect& rect,
+            float rot_angle,
+            math::vec2 mouse_view_pos,
+            float w, float h) noexcept
+        {
+            const math::vec2 abs_mouse =
+                (mouse_view_pos + math::vec2(1.f, 1.f)) / 2.f * math::vec2(w, h);
+
+            const math::vec3 corrected_mouse_diff =
+                math::quat::euler(0., 0., -rot_angle) * math::vec3(abs_mouse - rect.center);
+
+            return abs(corrected_mouse_diff.x) < rect.size.x / 2.f
+                && abs(corrected_mouse_diff.y) < rect.size.y / 2.f;
+        }
+
         struct Rotation
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Rotation);
@@ -10832,17 +10828,19 @@ namespace jeecs
             basic::string content;
 
             // 字体文件资源；未指定时不渲染文本。
-            // 渲染管线会把光栅化出的文本纹理写入实体 Renderer::Textures 的通道0，
-            // 因此使用文本的实体必须持有 Renderer::Textures 和 Renderer::Shaders。
+            // 渲染管线会把光栅化出的文本纹理写入实体 Renderer::Textures 的通道0
+            //（文本实体的通道0由文本系统占用），因此使用文本的实体必须持有
+            // Renderer::Textures 和 Renderer::Shaders 才会被处理。
             basic::file_resource<graphic::font> font;
 
-            // 为 true 时，UI 元素的绝对大小取 Textures 通道0纹理的自然像素尺寸
-            //（Relatively::scale 的相对增量仍然叠加）；为 false 时按 Origin 常规布局拉伸显示。
+            // 为 true 时，绘制阶段按通道0文本纹理的自然宽高比调整元素尺寸
+            //（keep_vertical_ratio 取竖向为基准轴，否则取横向），不回写布局输入，
+            // 也不参与字号计算；为 false 时按 Element 常规布局拉伸显示。
             bool auto_size = true;
 
             // 以下为渲染管线的脏检查缓存，请勿手动修改。
             basic::string cached_texture_content;
-            float cached_font_size = -1.0f;
+            float cached_font_size = 0.0f;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
@@ -13094,10 +13092,9 @@ namespace jeecs
             jeecs::typing::register_type<Transform::LocalToParent>(guard, "Transform::LocalToParent");
             jeecs::typing::register_type<Transform::Translation>(guard, "Transform::Translation");
 
-            jeecs::typing::register_type<UserInterface::Origin>(guard, "UserInterface::Origin");
+            jeecs::typing::register_type<UserInterface::Element>(guard, "UserInterface::Element");
+            jeecs::typing::register_type<UserInterface::WorldLayout>(guard, "UserInterface::WorldLayout");
             jeecs::typing::register_type<UserInterface::Rotation>(guard, "UserInterface::Rotation");
-            jeecs::typing::register_type<UserInterface::Absolute>(guard, "UserInterface::Absolute");
-            jeecs::typing::register_type<UserInterface::Relatively>(guard, "UserInterface::Relatively");
             jeecs::typing::register_type<UserInterface::Text>(guard, "UserInterface::Text");
 
             jeecs::typing::register_type<Renderer::Rendqueue>(guard, "Renderer::Rendqueue");
@@ -13275,20 +13272,20 @@ namespace jeecs
                 },
                 "string", "");
 
-            typing::register_script_parser<UserInterface::Origin::origin_center>(
+            typing::register_script_parser<UserInterface::alignment>(
                 guard,
-                [](const UserInterface::Origin::origin_center* v, woort_value value)
+                [](const UserInterface::alignment* v, woort_value value)
                 {
                     woort_set_int(value, *v);
                 },
-                [](UserInterface::Origin::origin_center* v, woort_value value)
+                [](UserInterface::alignment* v, woort_value value)
                 {
-                    *v = static_cast<UserInterface::Origin::origin_center>(woort_int(value));
+                    *v = static_cast<UserInterface::alignment>(woort_int(value));
                 },
-                "UserInterface::Origin::origin_center",
-                "namespace UserInterface::Origin\n"
+                "UserInterface::alignment",
+                "namespace UserInterface\n"
                 "{\n"
-                "    public enum origin_center\n"
+                "    public enum alignment\n"
                 "    {\n"
                 "        center  = 0,\n"
                 "\n"

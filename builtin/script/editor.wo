@@ -868,19 +868,19 @@ namespace string
     }
 }
 
-namespace UserInterface::Origin::origin_center
+namespace UserInterface::alignment
 {
     using parser = void
     {
-        public extern func edit(val: UserInterface::Origin::origin_center, tag: string)=> option<UserInterface::Origin::origin_center>
+        public extern func edit(val: UserInterface::alignment, tag: string)=> option<UserInterface::alignment>
         {
             // 3×3 方位选择格：行=上/中/下，列=左/中/右，当前方位以实心
             // 圆点（RadioButton）标出；格子从控件列起点排布、间距均匀，
             // 读作一块“方位垫”，不再是一串平铺的复选框
             let cells = [
-                origin_center::left + origin_center::top, origin_center::top, origin_center::right + origin_center::top,
-                origin_center::left, origin_center::center, origin_center::right,
-                origin_center::left + origin_center::bottom, origin_center::bottom, origin_center::right + origin_center::bottom,
+                alignment::left + alignment::top, alignment::top, alignment::right + alignment::top,
+                alignment::left, alignment::center, alignment::right,
+                alignment::left + alignment::bottom, alignment::bottom, alignment::right + alignment::bottom,
             ];
             let mut newval = val;
             let col_x = Widgets::editColumnX();

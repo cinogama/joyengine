@@ -1909,45 +1909,49 @@ WOORT_API woort_api wojeapi_towoo_audio_source_get_source(void)
         nullptr);
 }
 
-WOORT_API woort_api wojeapi_towoo_userinterface_origin_layout(void)
+WOORT_API woort_api wojeapi_towoo_userinterface_element_layout(void)
 {
     woort_value stack_base;
     if (!woort_push_reserve(2, &stack_base))
         return woort_ret_panic("Stack overflow.");
 
-    auto& origin = wo_component<jeecs::UserInterface::Origin>(0, WOORT_RETURN_SLOT);
+    auto& elem = wo_component<jeecs::UserInterface::Element>(0, WOORT_RETURN_SLOT);
+    auto* layout = wo_option_component<jeecs::UserInterface::WorldLayout>(
+        1, WOORT_RETURN_SLOT);
+    auto r = wo_vec2(2);
 
-    auto r = wo_vec2(1);
-
-    jeecs::math::vec2 abssize;
-    jeecs::math::vec2 absoffset;
-    jeecs::math::vec2 center_offset;
-
-    origin.get_layout(r.x, r.y, &absoffset, &abssize, &center_offset);
+    const jeecs::UserInterface::WorldLayout empty_layout;
+    auto rect = jeecs::UserInterface::resolve_layout(
+        elem, layout != nullptr ? *layout : empty_layout, r.x, r.y);
 
     woort_set_struct(stack_base + 0, 3);
 
-    wo_set_vec2(stack_base + 1, absoffset);
+    wo_set_vec2(stack_base + 1, rect.center);
     woort_struct_set(stack_base + 0, 0, stack_base + 1);
 
-    wo_set_vec2(stack_base + 1, abssize);
+    wo_set_vec2(stack_base + 1, rect.size);
     woort_struct_set(stack_base + 0, 1, stack_base + 1);
 
-    wo_set_vec2(stack_base + 1, center_offset);
+    wo_set_vec2(stack_base + 1, rect.pivot_offset);
     woort_struct_set(stack_base + 0, 2, stack_base + 1);
 
     return woort_ret_value(stack_base + 0);
 }
 
-WOORT_API woort_api wojeapi_towoo_userinterface_origin_mouse_on(void)
+WOORT_API woort_api wojeapi_towoo_userinterface_element_mouse_on(void)
 {
-    auto& origin = wo_component<jeecs::UserInterface::Origin>(0, WOORT_RETURN_SLOT);
+    auto& elem = wo_component<jeecs::UserInterface::Element>(0, WOORT_RETURN_SLOT);
+    auto* layout = wo_option_component<jeecs::UserInterface::WorldLayout>(
+        1, WOORT_RETURN_SLOT);
+    auto r = wo_vec2(2);
+    auto a = woort_float(3);
+    auto m = wo_vec2(4);
 
-    auto r = wo_vec2(1);
-    auto a = woort_float(2);
-    auto m = wo_vec2(3);
+    const jeecs::UserInterface::WorldLayout empty_layout;
+    auto rect = jeecs::UserInterface::resolve_layout(
+        elem, layout != nullptr ? *layout : empty_layout, r.x, r.y);
 
-    return woort_ret_bool(origin.mouse_on(r.x, r.y, a, m));
+    return woort_ret_bool(jeecs::UserInterface::hit_test(rect, a, m, r.x, r.y));
 }
 
 // ==========================================================================

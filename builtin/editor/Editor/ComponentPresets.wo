@@ -38,8 +38,8 @@ namespace JEEditor::Editor::ComponentPresets
     ];
 
     public let UI_TRANSFORM_COMPONENTS = [
-        "UserInterface::Origin", "UserInterface::Absolute",
-        "UserInterface::Relatively", "Transform::Translation",
+        "UserInterface::Element", "UserInterface::WorldLayout",
+        "Transform::Translation",
     ];
 
     public let BASE_RENDERER_COMPONENTS = [
@@ -92,8 +92,8 @@ namespace JEEditor::Editor::ComponentPresets
             // 文本纹理由 UI 管线写入 Textures 通道0，着色器需用户自行指定为
             // 透明混合类（如 UnlitBlend）才能正确显示文本
             ("UI文本", [
-                "UserInterface::Origin", "UserInterface::Absolute",
-                "UserInterface::Relatively", "UserInterface::Text",
+                "UserInterface::Element", "UserInterface::WorldLayout",
+                "UserInterface::Text",
                 "Renderer::Shape", "Renderer::Shaders", "Renderer::Textures"]),
             ("帧动画", ["Animation::FrameAnimation"]),
             ("粒子发射器", PARTICLE_EMITTER_COMPONENTS),

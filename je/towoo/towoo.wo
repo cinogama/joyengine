@@ -460,12 +460,12 @@ namespace Transform
 }
 namespace UserInterface
 {
-    namespace Origin
+    namespace Element
     {
-        extern("libjoyecs", "wojeapi_towoo_userinterface_origin_layout")
-            public func get_layout(self: Origin, display_range: vec2)=> (vec2, vec2, vec2);
-        extern("libjoyecs", "wojeapi_towoo_userinterface_origin_mouse_on")
-            public func mouse_on(self: Origin, display_range: vec2, angle: real, mouse_pos: vec2)=> bool;
+        extern("libjoyecs", "wojeapi_towoo_userinterface_element_layout")
+            public func get_layout(self: Element, world: option<WorldLayout>, display_range: vec2)=> (vec2, vec2, vec2);
+        extern("libjoyecs", "wojeapi_towoo_userinterface_element_mouse_on")
+            public func mouse_on(self: Element, world: option<WorldLayout>, display_range: vec2, angle: real, mouse_pos: vec2)=> bool;
     }
 }
 namespace Renderer

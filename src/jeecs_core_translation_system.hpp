@@ -119,58 +119,44 @@ namespace jeecs
         }
         void UserInterfaceStageUpdate()
         {
-            std::unordered_map<typing::uuid, UserInterface::Origin*> binded_origins;
+            // UI 布局阶段：每帧把 Element 的输入重建到 WorldLayout，并沿
+            // Transform 层级（Anchor + LocalToParent 的 parent_uid）累加祖先偏移。
+            // WorldLayout 是唯一的派生状态，Element 等输入组件不会被任何系统回写。
+            std::unordered_map<typing::uuid, UserInterface::WorldLayout*> resolved_layouts;
 
-            struct AnchoredOrigin
+            struct AnchoredLayout
             {
                 Anchor* anchor_may_null;
-                UserInterface::Origin* origin;
+                UserInterface::WorldLayout* layout;
                 LocalToParent* l2p;
             };
-            std::list<AnchoredOrigin> pending_anchor_information;
+            std::list<AnchoredLayout> pending_anchor_information;
 
-            for (auto&& [anchor, l2p, origin, absolute, relatively] : query<
+            for (auto&& [anchor, l2p, elem, layout] : query<
                 view typesof(
                     Anchor*,
                     LocalToParent*,
-                    Origin&,
-                    Absolute*,
-                    Relatively*
+                    Element&,
+                    WorldLayout&
                 )
             >())
             {
-                if (absolute != nullptr)
-                {
-                    origin.global_offset = absolute->offset;
-                    origin.size = absolute->size;
-                }
-                else
-                    origin.size = {};
-
-                if (relatively != nullptr)
-                {
-                    origin.global_location = relatively->location;
-                    origin.scale = relatively->scale;
-                }
-                else
-                    origin.scale = {};
+                // 每帧从输入重建（用户可随意修改 Element，无持久派生数据需要维护）。
+                layout.offset = elem.offset;
+                layout.offset_ratio = elem.offset_ratio;
 
                 if (l2p != nullptr)
                 {
                     pending_anchor_information.push_back(
-                        AnchoredOrigin{
+                        AnchoredLayout{
                             anchor,
-                            &origin,
+                            &layout,
                             l2p });
                 }
-                else
+                else if (anchor != nullptr)
                 {
-                    // 是根UI元素
-                    origin.root_center = origin.elem_center;
-                    if (anchor != nullptr)
-                    {
-                        binded_origins.emplace(anchor->uid, &origin);
-                    }
+                    // 是根UI元素，注册为父级查找目标
+                    resolved_layouts.emplace(anchor->uid, &layout);
                 }
             }
 
@@ -183,26 +169,25 @@ namespace jeecs
                 {
                     auto current_idx = idx++;
 
-                    auto fnd = binded_origins.find(current_idx->l2p->parent_uid);
-                    if (fnd != binded_origins.end())
+                    auto fnd = resolved_layouts.find(current_idx->l2p->parent_uid);
+                    if (fnd != resolved_layouts.end())
                     {
-                        // 父变换已决，应用之
-                        const UserInterface::Origin* parent_origin = fnd->second;
+                        // 父布局已决，累加之
+                        const UserInterface::WorldLayout* parent_layout = fnd->second;
 
-                        current_idx->origin->root_center = parent_origin->root_center;
-                        current_idx->origin->global_location += parent_origin->global_location;
-                        current_idx->origin->global_offset += parent_origin->global_offset;
+                        current_idx->layout->offset += parent_layout->offset;
+                        current_idx->layout->offset_ratio += parent_layout->offset_ratio;
 
-                        // 完成应用，将当前变换绑定到binding，然后从pending中删除当前项
+                        // 完成应用，将当前布局绑定到binding，然后从pending中删除当前项
                         if (current_idx->anchor_may_null != nullptr)
-                            binded_origins.emplace(current_idx->anchor_may_null->uid, current_idx->origin);
+                            resolved_layouts.emplace(current_idx->anchor_may_null->uid, current_idx->layout);
 
                         pending_anchor_information.erase(current_idx);
                     }
                 }
                 if (pending_anchor_information.size() == count)
                 {
-                    // 剩余变换缺失父变换或祖变换，不做处理以确保问题立即被发现；
+                    // 剩余布局缺失父布局或祖布局，不做处理以确保问题立即被发现；
                     break;
                 }
             }

@@ -552,17 +552,17 @@ namespace string
     }
 }
 
-namespace UserInterface::Origin::origin_center
+namespace UserInterface::alignment
 {
     using parser = void
     {
-        public extern func saving(val: UserInterface::Origin::origin_center)=> string
+        public extern func saving(val: UserInterface::alignment)=> string
         {
             return val as int as string;
         }
-        public extern func restoring(dat: string)=> UserInterface::Origin::origin_center
+        public extern func restoring(dat: string)=> UserInterface::alignment
         {
-            return dat as int as UserInterface::Origin::origin_center;
+            return dat as int as UserInterface::alignment;
         }
     }
 }
