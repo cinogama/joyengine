@@ -222,9 +222,10 @@ namespace JEEditor::Editor
         // ---- UI 元素 gizmo（编辑手柄）状态 ----
         // 选中带 UserInterface::Element 的实体即显示解析后的 UI 矩形与
         // 手柄、可直接拖拽（无需模式开关；此时变换游标整体让位，UI 布局
-        // 不读 Translation，3D 游标对其无意义）。尺寸/偏移分两层编辑：
-        // 绝对通道（size/offset）与比例通道（size_ratio/offset_ratio），
-        // 默认编辑绝对层，按住 Shift 手柄切到比例层（写回按单位一换算）
+        // 不读 Translation，3D 游标对其无意义）。尺寸/偏移分两层编辑，
+        // 默认编辑比例通道（size_ratio/offset_ratio，手柄挂实际渲染
+        // 矩形即外层框），按住 Shift 切到绝对通道（size/offset，手柄挂
+        // size 层框即内侧框），写回按单位一换算
         protected m_ui_hover_handle: mut int,
         protected m_ui_dragging: mut bool,
         protected m_ui_drag_handle: mut int,
@@ -261,7 +262,9 @@ namespace JEEditor::Editor
         protected m_ui_draw_pivot_display: mut vec2,
         protected m_ui_draw_anchor_display: mut vec2,
         protected m_ui_draw_unit_px: mut vec2,
+        // 绝对层框 = size 的像素贡献（同心内侧）
         protected m_ui_draw_size_box: mut vec2,
+        // 比例层框 = 实际渲染矩形（外层，与 m_ui_draw_size 相同）
         protected m_ui_draw_ratio_box: mut vec2,
         protected m_ui_draw_has_ref: mut bool,
         protected m_ui_draw_ref_center: mut vec2,

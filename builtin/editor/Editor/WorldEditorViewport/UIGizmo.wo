@@ -1,17 +1,18 @@
 // 世界编辑器视口 —— UI 元素（UserInterface::Element）gizmo。
 // 选中带 Element 的实体即在其解析后的显示矩形上提供可视化编辑：
-// 矩形/参考矩形/锚点/pivot 的显示、矩形内部拖拽移动（写 offset）、
-// 四角四边 8 向缩放（写 size，pivot 固定语义）、旋转茎环（写
-// Rotation.angle，仅实体已带 Rotation 组件时提供），以及视口覆盖
-// UI 的锚点/轴心九宫格与 ratio_unit 三态切换。
-// 尺寸/偏移分两层编辑：绝对通道（size/offset）与比例通道
-//（size_ratio/offset_ratio）各画一个与有效矩形同心的层框（有效尺寸
-// = 两层之和），缩放手柄默认挂在绝对层框上；按住 Shift 切到比例层
-//（手柄挂比例层框、移动拖拽改写 offset_ratio），层在拖拽开始时冻结。
-// 比例通道的像素换算系数（单位一）= 参考矩形尺寸按 ratio_unit 折叠
-//（height_unit 两轴取参考高 / width_unit 两轴取参考宽 / per_axis 逐
-// 轴），size_ratio 与 offset_ratio 共用；写回时层像素增量按轴除以单
-// 位一。Ctrl 保持吸附键（移动/缩放吸附整像素、旋转吸附 15°）。
+// 矩形/参考矩形/锚点/pivot 的显示、矩形内部拖拽移动、四角四边 8 向
+// 缩放（pivot 固定语义）、旋转茎环（写 Rotation.angle，仅实体已带
+// Rotation 组件时提供），以及视口覆盖 UI 的锚点/轴心九宫格与
+// ratio_unit 三态切换。
+// 尺寸/偏移分两层编辑，默认编辑比例通道（size_ratio/offset_ratio）：
+// 比例层框即元素的实际渲染矩形（外层，青色主线框），缩放手柄默认
+// 挂在外层框上；按住 Shift 切到绝对通道（size/offset），手柄挂到
+// size 层框（同心内侧的浅灰细框，= size 的像素贡献），层在拖拽开始
+// 时冻结。比例通道的像素换算系数（单位一）= 参考矩形尺寸按
+// ratio_unit 折叠（height_unit 两轴取参考高 / width_unit 两轴取参考
+// 宽 / per_axis 逐轴），size_ratio 与 offset_ratio 共用；写回时层像
+// 素增量按轴除以单位一。Ctrl 为吸附键（移动/缩放吸附整像素、旋转
+// 吸附 15°，对两层移动/缩放均生效）。
 // 布局解析复用引擎的 Element::get_layout（显示像素空间，原点=显示区
 // 左下、y 向上），祖先旋转链按
 // UserInterfaceGraphicPipelineSystem::ResolveUiNodes 同式在脚本侧
@@ -149,11 +150,17 @@ namespace JEEditor::Editor::WorldEditorViewport
             UI_HIT_PX / (rsize[1] / display_range[1])) as vec2;
     }
 
-    // 按步进取整（mathf 未提供 round）
+    // 向下取整（mathf 未提供 floor；as int 是向零截断，负数会偏一格）
+    protected func uiFloor(v: real)=> real
+    {
+        let i = v as int;
+        return (v < i as real) ? (i as real) - 1. | i as real;
+    }
+
+    // 按步进取整（half-up；mathf 未提供 round）
     protected func uiRoundTo(v: real, step: real)=> real
     {
-        let idx = (v / step + 0.5) as int;
-        return (idx as real) * step;
+        return uiFloor(v / step + 0.5) * step;
     }
 
     // ---- 解析与查询 ----
@@ -601,12 +608,12 @@ namespace JEEditor::Editor::WorldEditorViewport
                         value(text)? auto_sized = text.auto_size->get;
                     }
 
-                    // 两层框（与有效矩形同心）：绝对层框 = size 的像素
-                    // 贡献；比例层框 = 单位一 ⊙ size_ratio 的像素贡献。
-                    // 有效尺寸 = 两层之和
+                    // 两层框：比例层框（默认编辑层）即有效矩形本身
+                    //（外层，与 UI 对象实际渲染大小一致）；绝对层框 =
+                    // size 的像素贡献（同心内侧）。有效尺寸 = 两层之和
                     try! elem = e->towoo::get_component:<UserInterface::Element>();
                     let size_box = elem.size->get;
-                    let ratio_box = ui_info.m_unit_px * elem.size_ratio->get;
+                    let ratio_box = ui_info.m_size;
 
                     // 写入本帧绘制快照
                     self.m_ui_draw_visible = true;
@@ -651,11 +658,12 @@ namespace JEEditor::Editor::WorldEditorViewport
                     if (!hoverable)
                         return_value!;
 
-                    // 编辑层：Shift 按住时缩放手柄挂到比例层框
-                    //（offset 拖拽亦写 offset_ratio）；Ctrl 为吸附键
+                    // 编辑层：默认编辑比例通道（size_ratio/offset_ratio），
+                    // 手柄挂有效矩形（外层）；按住 Shift 切到绝对通道，
+                    // 手柄挂 size 层框（内侧）；Ctrl 为吸附键
                     let handle_box = IsKeyDown(ImGuiKey::ImGuiKey_LeftShift)
-                        ? ratio_box
-                        | size_box;
+                        ? size_box
+                        | ratio_box;
 
                     let mouse = GetMousePos() as vec2;
                     let handle = pickUIHandle(
@@ -698,10 +706,11 @@ namespace JEEditor::Editor::WorldEditorViewport
             try! elem =
                 selected_entity->towoo::get_component:<UserInterface::Element>();
 
-            // 编辑层：移动/缩放在拖拽开始时按 Shift 定层并冻结
+            // 编辑层：默认编辑比例通道（size_ratio/offset_ratio），按住
+            // Shift 切到绝对通道；移动/缩放在拖拽开始时定层并冻结
             //（单位一随之冻结；绝对层的换算系数恒为 1）
             let edit_ratio = handle != UI_HANDLE_ROTATE
-                && IsKeyDown(ImGuiKey::ImGuiKey_LeftShift);
+                && !IsKeyDown(ImGuiKey::ImGuiKey_LeftShift);
             self.m_ui_drag_edit_ratio = edit_ratio;
             self.m_ui_drag_unit_px = edit_ratio ? info.m_unit_px | (1., 1.) as vec2;
 
@@ -841,40 +850,67 @@ namespace JEEditor::Editor::WorldEditorViewport
                 let spy = uiPivotSide(pivot_bits, 1);
 
                 // 逐轴解编辑层框的新尺寸（pivot 固定语义对有效矩形生效）：
-                // pivot 居中 → 该层框对称伸缩（边界在中心 ±s/2）；pivot 靠边
-                // → 该层框从“pivot + 另一层框半宽”处单向伸缩；把手与 pivot
-                // 同侧的轴锁定。层像素目标经 Ctrl 吸附后除以单位一写回成员
+                // pivot 居中 → 对称伸缩（边界在中心 ±s/2）；pivot 靠边 →
+                // 从 pivot 单向伸缩；把手与 pivot 同侧的轴锁定。
+                // 比例层（默认）手柄挂在有效矩形（外层）上，直接解有效
+                // 尺寸目标，下限为 size 的像素贡献（保证 ratio ≥ 0）；
+                // 绝对层（Shift）手柄挂在 size 层框（同心内侧）上，其边
+                // 界在 pivot 之外还差比例贡献的半宽（−other/2）。层像素
+                // 目标经 Ctrl 吸附后除以单位一写回成员
                 let mut sx_new = self.m_ui_drag_start_member_px[0];
                 if (shx != 0 && !(spx != 0 && spx == shx))
                 {
-                    sx_new = (spx == 0)
-                        ? (shx as real) * c[0] * 2.
-                        | (shx as real) * c[0] - self.m_ui_drag_other_box_px[0] * 0.5;
                     if (edit_ratio)
                     {
-                        if (sx_new < 0.)
-                            sx_new = 0.;
+                        // 有效框目标；起始有效尺寸 = size 贡献 + 比例贡献
+                        sx_new = (spx == 0)
+                            ? (shx as real) * c[0] * 2.
+                            | (shx as real) * c[0];
+                        if (sx_new < self.m_ui_drag_other_box_px[0])
+                            sx_new = self.m_ui_drag_other_box_px[0];
+                        if (ctrl_down)
+                            sx_new = uiRoundTo(sx_new, 1.);
+                        let target = self.m_ui_drag_other_box_px[0]
+                            + self.m_ui_drag_start_member_px[0];
+                        sx_new = sx_new - target + self.m_ui_drag_start_member_px[0];
                     }
-                    else if (sx_new < UI_GIZMO_MIN_SIZE)
-                        sx_new = UI_GIZMO_MIN_SIZE;
-                    if (ctrl_down)
-                        sx_new = uiRoundTo(sx_new, 1.);
+                    else
+                    {
+                        sx_new = (spx == 0)
+                            ? (shx as real) * c[0] * 2.
+                            | (shx as real) * c[0] - self.m_ui_drag_other_box_px[0] * 0.5;
+                        if (sx_new < UI_GIZMO_MIN_SIZE)
+                            sx_new = UI_GIZMO_MIN_SIZE;
+                        if (ctrl_down)
+                            sx_new = uiRoundTo(sx_new, 1.);
+                    }
                 }
                 let mut sy_new = self.m_ui_drag_start_member_px[1];
                 if (shy != 0 && !(spy != 0 && spy == shy))
                 {
-                    sy_new = (spy == 0)
-                        ? (shy as real) * c[1] * 2.
-                        | (shy as real) * c[1] - self.m_ui_drag_other_box_px[1] * 0.5;
                     if (edit_ratio)
                     {
-                        if (sy_new < 0.)
-                            sy_new = 0.;
+                        sy_new = (spy == 0)
+                            ? (shy as real) * c[1] * 2.
+                            | (shy as real) * c[1];
+                        if (sy_new < self.m_ui_drag_other_box_px[1])
+                            sy_new = self.m_ui_drag_other_box_px[1];
+                        if (ctrl_down)
+                            sy_new = uiRoundTo(sy_new, 1.);
+                        let target = self.m_ui_drag_other_box_px[1]
+                            + self.m_ui_drag_start_member_px[1];
+                        sy_new = sy_new - target + self.m_ui_drag_start_member_px[1];
                     }
-                    else if (sy_new < UI_GIZMO_MIN_SIZE)
-                        sy_new = UI_GIZMO_MIN_SIZE;
-                    if (ctrl_down)
-                        sy_new = uiRoundTo(sy_new, 1.);
+                    else
+                    {
+                        sy_new = (spy == 0)
+                            ? (shy as real) * c[1] * 2.
+                            | (shy as real) * c[1] - self.m_ui_drag_other_box_px[1] * 0.5;
+                        if (sy_new < UI_GIZMO_MIN_SIZE)
+                            sy_new = UI_GIZMO_MIN_SIZE;
+                        if (ctrl_down)
+                            sy_new = uiRoundTo(sy_new, 1.);
+                    }
                 }
 
                 let dx = (unit[0] > 0.0001)
@@ -978,11 +1014,12 @@ namespace JEEditor::Editor::WorldEditorViewport
         let total = self.m_ui_draw_total_angle;
         let half = self.m_ui_draw_size * 0.5;
 
-        // 当前编辑层（拖拽期间冻结为拖拽开始时的层；否则按 Shift 即时
-        // 切换）：缩放手柄挂在编辑层框上，offset 拖拽写对应成员
+        // 当前编辑层（拖拽期间冻结为拖拽开始时的层）：默认编辑比例通道，
+        // 按住 Shift 切到绝对通道；缩放手柄挂在编辑层框上，offset 拖拽
+        // 写对应成员
         let edit_ratio = self.m_ui_dragging
             ? self.m_ui_drag_edit_ratio
-            | IsKeyDown(ImGuiKey::ImGuiKey_LeftShift);
+            | !IsKeyDown(ImGuiKey::ImGuiKey_LeftShift);
         let handle_half = (edit_ratio ? self.m_ui_draw_ratio_box | self.m_ui_draw_size_box) * 0.5;
 
         // 参考矩形（父元素矩形或整个显示区）
@@ -1019,14 +1056,12 @@ namespace JEEditor::Editor::WorldEditorViewport
         do draw_list->AddLine(
             (an[0], an[1] - 7.), (an[0], an[1] + 7.), UI_GIZMO_COLOR_REF, 1.);
 
-        // 两层框（与有效矩形同心，旋转对齐）：绝对层 = size 的像素贡献
-        //（浅灰）、比例层 = 单位一 ⊙ size_ratio 的像素贡献（紫），
-        // 编辑层框描粗以示当前写入目标
+        // 绝对层框（size 的像素贡献，同心内侧，浅灰）：Shift 激活绝对层
+        // 时描粗以示当前写入目标。比例层框即有效矩形本身（外层，与
+        // UI 对象实际渲染大小一致），随下方主框绘制
         {
-            let size_w = edit_ratio ? 1. | 1.5;
-            let ratio_w = edit_ratio ? 1.5 | 1.;
-
             let s_half = self.m_ui_draw_size_box * 0.5;
+            let size_w = edit_ratio ? 1. | 1.5;
             let s0 = uiDisplayToScreen(
                 self.m_ui_draw_center
                     + uiRotateVec2(total, (-s_half[0], -s_half[1]) as vec2),
@@ -1047,31 +1082,9 @@ namespace JEEditor::Editor::WorldEditorViewport
             do draw_list->AddLine((s1[0], s1[1]), (s2[0], s2[1]), UI_GIZMO_COLOR_SIZE_LAYER, size_w);
             do draw_list->AddLine((s2[0], s2[1]), (s3[0], s3[1]), UI_GIZMO_COLOR_SIZE_LAYER, size_w);
             do draw_list->AddLine((s3[0], s3[1]), (s0[0], s0[1]), UI_GIZMO_COLOR_SIZE_LAYER, size_w);
-
-            let q_half = self.m_ui_draw_ratio_box * 0.5;
-            let q0 = uiDisplayToScreen(
-                self.m_ui_draw_center
-                    + uiRotateVec2(total, (-q_half[0], -q_half[1]) as vec2),
-                rmin, rsize, dr);
-            let q1 = uiDisplayToScreen(
-                self.m_ui_draw_center
-                    + uiRotateVec2(total, (q_half[0], -q_half[1]) as vec2),
-                rmin, rsize, dr);
-            let q2 = uiDisplayToScreen(
-                self.m_ui_draw_center
-                    + uiRotateVec2(total, (q_half[0], q_half[1]) as vec2),
-                rmin, rsize, dr);
-            let q3 = uiDisplayToScreen(
-                self.m_ui_draw_center
-                    + uiRotateVec2(total, (-q_half[0], q_half[1]) as vec2),
-                rmin, rsize, dr);
-            do draw_list->AddLine((q0[0], q0[1]), (q1[0], q1[1]), UI_GIZMO_COLOR_RATIO_LAYER, ratio_w);
-            do draw_list->AddLine((q1[0], q1[1]), (q2[0], q2[1]), UI_GIZMO_COLOR_RATIO_LAYER, ratio_w);
-            do draw_list->AddLine((q2[0], q2[1]), (q3[0], q3[1]), UI_GIZMO_COLOR_RATIO_LAYER, ratio_w);
-            do draw_list->AddLine((q3[0], q3[1]), (q0[0], q0[1]), UI_GIZMO_COLOR_RATIO_LAYER, ratio_w);
         }
 
-        // 比例层激活时（Shift）画锚点基点 → 矩形中心的偏移链连线，
+        // 比例层激活（默认态）时画锚点基点 → 矩形中心的偏移链连线，
         // 提示 offset 拖拽当前写入 offset_ratio
         if (edit_ratio)
         {
@@ -1080,7 +1093,9 @@ namespace JEEditor::Editor::WorldEditorViewport
                 (an[0], an[1]), (ct[0], ct[1]), UI_GIZMO_COLOR_RATIO_LAYER, 1.);
         }
 
-        // 元素矩形（旋转后的四角连线）
+        // 元素矩形（旋转后的四角连线）= 比例层框（外层，与 UI 对象实际
+        // 渲染大小一致），默认编辑层时描粗
+        let main_w = edit_ratio ? 1.5 | 1.;
         let c0 = uiDisplayToScreen(
             self.m_ui_draw_center + uiRotateVec2(total, (-half[0], -half[1]) as vec2),
             rmin, rsize, dr);
@@ -1093,10 +1108,10 @@ namespace JEEditor::Editor::WorldEditorViewport
         let c3 = uiDisplayToScreen(
             self.m_ui_draw_center + uiRotateVec2(total, (-half[0], half[1]) as vec2),
             rmin, rsize, dr);
-        do draw_list->AddLine((c0[0], c0[1]), (c1[0], c1[1]), UI_GIZMO_COLOR, 1.5);
-        do draw_list->AddLine((c1[0], c1[1]), (c2[0], c2[1]), UI_GIZMO_COLOR, 1.5);
-        do draw_list->AddLine((c2[0], c2[1]), (c3[0], c3[1]), UI_GIZMO_COLOR, 1.5);
-        do draw_list->AddLine((c3[0], c3[1]), (c0[0], c0[1]), UI_GIZMO_COLOR, 1.5);
+        do draw_list->AddLine((c0[0], c0[1]), (c1[0], c1[1]), UI_GIZMO_COLOR, main_w);
+        do draw_list->AddLine((c1[0], c1[1]), (c2[0], c2[1]), UI_GIZMO_COLOR, main_w);
+        do draw_list->AddLine((c2[0], c2[1]), (c3[0], c3[1]), UI_GIZMO_COLOR, main_w);
+        do draw_list->AddLine((c3[0], c3[1]), (c0[0], c0[1]), UI_GIZMO_COLOR, main_w);
 
         // pivot 标记（圆 + 十字）
         let pv = uiDisplayToScreen(self.m_ui_draw_pivot_display, rmin, rsize, dr);
