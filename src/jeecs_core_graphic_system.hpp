@@ -700,8 +700,9 @@ public let frag =
                 node.rect = resolve_layout(*node.elem, *node.layout, width, height);
 
                 // auto_size：按文本纹理自然宽高比调整元素尺寸，基准轴与字号计算
-                // 一致（keep_vertical_ratio 取 y 否则取 x）；只作用于本次解析结果，
-                // 不回写布局输入，也不参与字号计算。
+                // 一致（width_unit 取 x 否则取 y——per_axis 亦取 y，文本以字高为
+                // 基准更自然）；只作用于本次解析结果，不回写布局输入，
+                // 也不参与字号计算。
                 if (node.text != nullptr && node.text->auto_size
                     && node.textures != nullptr)
                 {
@@ -709,7 +710,9 @@ public let frag =
                         text_texture.has_value())
                     {
                         const auto texture_size = text_texture.value()->size();
-                        if (node.elem->keep_vertical_ratio && texture_size.y > 0)
+                        const bool base_on_y =
+                            node.elem->ratio_unit != ratio_unit::width_unit;
+                        if (base_on_y && texture_size.y > 0)
                         {
                             const float ratio =
                                 static_cast<float>(texture_size.x) / static_cast<float>(texture_size.y);
@@ -717,7 +720,7 @@ public let frag =
                                 node.elem->pivot,
                                 math::vec2(node.rect.size.y * ratio, node.rect.size.y));
                         }
-                        else if (!node.elem->keep_vertical_ratio && texture_size.x > 0)
+                        else if (!base_on_y && texture_size.x > 0)
                         {
                             const float ratio =
                                 static_cast<float>(texture_size.y) / static_cast<float>(texture_size.x);
@@ -765,9 +768,9 @@ public let frag =
         // 把脏文本光栅化进实体 Textures 的通道0。文本渲染复用标准 UI 渲染路径，
         // 因此实体必须持有 Renderer::Textures 和 Renderer::Shaders 才会被处理。
         // 实际像素字号 = 元素按窗口尺寸解析后的最终布局尺寸
-        //（keep_vertical_ratio 取 y 分量，否则取 x 分量），文字随元素与
-        // 窗口分辨率等比缩放；auto_size 只影响绘制（见 DrawFrame），
-        // 不参与字号计算，也不回写任何布局输入组件。
+        //（width_unit 取 x 分量，否则取 y 分量——per_axis 亦取 y，文字以字高
+        // 为基准），文字随元素与窗口分辨率等比缩放；auto_size 只影响绘制
+        //（见 DrawFrame），不参与字号计算，也不回写任何布局输入组件。
         void RasterizeDirtyTexts()
         {
             for (auto&& [text, texs, elem, layout] : query<view typesof(
@@ -796,7 +799,9 @@ public let frag =
                     (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT);
 
                 const float font_size =
-                    elem.keep_vertical_ratio ? rect.size.y : rect.size.x;
+                    elem.ratio_unit != ratio_unit::width_unit
+                    ? rect.size.y
+                    : rect.size.x;
 
                 if (font_size <= 0.f)
                 {

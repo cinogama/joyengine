@@ -907,6 +907,28 @@ namespace UserInterface::alignment
     }
 }
 
+namespace UserInterface::ratio_unit
+{
+    using parser = void
+    {
+        public extern func edit(val: UserInterface::ratio_unit, tag: string)=> option<UserInterface::ratio_unit>
+        {
+            // 相对量（offset_ratio/size_ratio）单位一基准的下拉选择
+            //（枚举值与选项下标一致；根元素的参考矩形是显示区，
+            // 子元素的是父元素矩形，因此选项不写“父”字）
+            match (Combo(F"##{tag}",
+                ["以高为单位1", "以宽为单位1", "宽高分别取1"],
+                option::value(val as int)))
+            {
+                value(idx)?
+                    return option::value(idx as UserInterface::ratio_unit);
+                none?;
+            }
+            return option::none;
+        }
+    }
+}
+
 namespace Particle::Emitter::shape_type
 {
     using parser = void

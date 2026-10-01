@@ -123,7 +123,8 @@ namespace jeecs
             // 双通道，相对显示区中心表达）。
             // 根元素的 anchor 与相对通道（offset_ratio/size_ratio）以显示区为参考；
             // 子元素的以父元素矩形为参考——anchor 锚定父矩形方位，相对通道按自身
-            // keep_vertical_ratio 以父矩形的高（true）或宽（false）为标量单位一
+            // ratio_unit 以父矩形的高/宽为单位一（height_unit/width_unit 两轴同用
+            // 高/宽标量，per_axis 则 x 轴用宽、y 轴用高）
             //（父矩形有效尺寸 = 父输入尺寸 + 父 size_ratio ⊙ 祖传单位一，递归）。
             // 因此先解父后解子；WorldLayout 是唯一的派生状态，输入组件不会被任何系统回写。
             //
@@ -217,9 +218,10 @@ namespace jeecs
 
                         // 父矩形的有效尺寸通道（递归），用作：
                         // 1) 父枢轴修正与子 anchor 锚定的参照尺寸（几何量，按各自轴取半）；
-                        // 2) 子元素相对通道的单位一——按子元素的 keep_vertical_ratio
-                        //    取父高（true）或父宽（false）作为标量单位广播到两轴，
-                        //    与根元素“以显示区高/宽为单位”的语义一致。
+                        // 2) 子元素相对通道的单位一——按子元素的 ratio_unit 折算：
+                        //    height_unit 取父高、width_unit 取父宽作为标量广播到两轴
+                        //    （与根元素“以显示区高/宽为单位”的语义一致），
+                        //    per_axis 则 x 轴取父宽、y 轴取父高。
                         const UserInterface::layout_value parent_unit{
                             parent_layout->unit, parent_layout->unit_ratio };
                         const auto parent_scaled_ratio =
@@ -228,16 +230,34 @@ namespace jeecs
                             parent_elem->size + parent_scaled_ratio.absolute,
                             parent_scaled_ratio.relative };
 
-                        const float unit_absolute = current_idx->elem->keep_vertical_ratio
-                            ? parent_rect.absolute.y
-                            : parent_rect.absolute.x;
-                        const float unit_relative = current_idx->elem->keep_vertical_ratio
-                            ? parent_rect.relative.y
-                            : parent_rect.relative.x;
+                        math::vec2 unit_absolute = {};
+                        math::vec2 unit_relative = {};
+                        switch (current_idx->elem->ratio_unit)
+                        {
+                        case ratio_unit::height_unit:
+                            // 子单位一 = 父高标量，广播到两轴。
+                            unit_absolute = math::vec2(
+                                parent_rect.absolute.y, parent_rect.absolute.y);
+                            unit_relative = math::vec2(
+                                parent_rect.relative.y, parent_rect.relative.y);
+                            break;
+                        case ratio_unit::width_unit:
+                            // 子单位一 = 父宽标量，广播到两轴。
+                            unit_absolute = math::vec2(
+                                parent_rect.absolute.x, parent_rect.absolute.x);
+                            unit_relative = math::vec2(
+                                parent_rect.relative.x, parent_rect.relative.x);
+                            break;
+                        case ratio_unit::per_axis:
+                        default:
+                            // 子单位一 = 父宽（x 轴）与父高（y 轴）分轴取值。
+                            unit_absolute = parent_rect.absolute;
+                            unit_relative = parent_rect.relative;
+                            break;
+                        }
 
-                        // 子单位一 = 父高（或父宽）标量，广播到两轴。
-                        current_idx->layout->unit = math::vec2(unit_absolute, unit_absolute);
-                        current_idx->layout->unit_ratio = math::vec2(unit_relative, unit_relative);
+                        current_idx->layout->unit = unit_absolute;
+                        current_idx->layout->unit_ratio = unit_relative;
 
                         // 子有效旋转角 = 父有效角 + 自身角（度）。
                         // 父自身的角已含于父的 WorldLayout::rotation，与
@@ -250,7 +270,7 @@ namespace jeecs
 
                         // 子基点 = 父矩形中心（父基点 + 父枢轴修正）
                         //         + 子 anchor 相对父矩形的锚定偏移
-                        //         + 自身偏移（offset_ratio 以同一标量单位折算）。
+                        //         + 自身偏移（offset_ratio 以同一单位一折算）。
                         const auto parent_pivot = pivot_shift(parent_elem->pivot, parent_rect);
                         const auto anchored = anchor_shift(current_idx->elem->anchor, parent_rect);
                         const auto own_offset = scale_channels(

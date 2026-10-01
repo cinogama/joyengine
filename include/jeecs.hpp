@@ -10665,6 +10665,22 @@ namespace jeecs
             bottom = 1 << 3,
         };
 
+        // 相对量（offset_ratio/size_ratio）的单位一基准：
+        //   height_unit —— 两轴都以参考矩形的“高”为单位一（标量单位，
+        //                  比例不随参考矩形宽高比拉伸，等同旧
+        //                  keep_vertical_ratio = true）；
+        //   width_unit  —— 两轴都以参考矩形的“宽”为单位一（等同旧
+        //                  keep_vertical_ratio = false）；
+        //   per_axis    —— x 轴以参考矩形的“宽”、y 轴以“高”为单位一，
+        //                  宽高各自按参考矩形对应轴的比例缩放。
+        // 参考矩形：根元素为显示区，子元素为父元素矩形。
+        enum ratio_unit : uint8_t
+        {
+            height_unit = 0,
+            width_unit = 1,
+            per_axis = 2,
+        };
+
         // UI 元素的布局输入（用户编写，系统只读）。
         // 一个 UI 元素 = Element（布局输入）+ WorldLayout（层级解析结果，系统写入），
         // 层级关系复用 Transform 的 Anchor + LocalToParent。
@@ -10681,13 +10697,14 @@ namespace jeecs
             // 元素枢轴：元素盒上的哪个点对齐到偏移起点（默认元素中心）。
             alignment pivot = alignment::center;
 
-            // 相对量（offset_ratio/size_ratio）的单位一基准（标量，两轴同单位，
-            // 比例不随参考矩形的宽高比拉伸）：true 时以参考矩形的“高”为单位一，
-            // false 时以“宽”为单位一。参考矩形：根元素为显示区，子元素为父元素矩形。
-            bool keep_vertical_ratio = true;
+            // 相对量（offset_ratio/size_ratio）的单位一基准，三选一，见
+            // UserInterface::ratio_unit（默认 height_unit，即以参考矩形的
+            // 高为单位一）。参考矩形：根元素为显示区，子元素为父元素矩形。
+            // 由布局阶段解析进 WorldLayout。
+            ratio_unit ratio_unit = UserInterface::ratio_unit::height_unit;
 
             // 偏移与尺寸各含绝对（像素）与相对两个通道，最终取两者之和。
-            // 相对通道按 keep_vertical_ratio 取参考矩形的高/宽为标量单位一：
+            // 相对通道按 ratio_unit 取参考矩形的高/宽为单位一：
             // 根元素的参考矩形为显示区，子元素（经 Transform::LocalToParent 挂钩）
             // 为父元素矩形。由布局阶段解析进 WorldLayout。
             math::vec2 offset = {};
@@ -10699,7 +10716,7 @@ namespace jeecs
             {
                 typing::register_member(guard, &Element::anchor, "anchor");
                 typing::register_member(guard, &Element::pivot, "pivot");
-                typing::register_member(guard, &Element::keep_vertical_ratio, "keep_vertical_ratio");
+                typing::register_member(guard, &Element::ratio_unit, "ratio_unit");
                 typing::register_member(guard, &Element::offset, "offset");
                 typing::register_member(guard, &Element::offset_ratio, "offset_ratio");
                 typing::register_member(guard, &Element::size, "size");
@@ -10724,8 +10741,9 @@ namespace jeecs
             math::vec2 offset = {};
             // 基点的相对通道（×显示区尺寸）。
             math::vec2 offset_ratio = {};
-            // 单位一的绝对通道（像素）；已按本元素 keep_vertical_ratio 取参考矩形的
-            // 高/宽标量并广播到两轴。根元素为 0。
+            // 单位一的绝对通道（像素）；已按本元素 ratio_unit 折算：
+            // height_unit/width_unit 时取参考矩形的高/宽标量并广播到两轴，
+            // per_axis 时 x 轴取参考矩形的宽、y 轴取高。根元素为 0。
             math::vec2 unit = {};
             // 单位一的相对通道（×显示区尺寸）；根元素为 (1,1)。
             math::vec2 unit_ratio = {};
@@ -10742,7 +10760,7 @@ namespace jeecs
         // 双通道布局量：绝对（像素）+ 相对（×显示区尺寸）。
         // 层级锚定与单位一在通道空间中传播——父矩形的位置/尺寸也以通道形式
         // 传给子元素，最终像素值 = absolute + relative × 显示区尺寸
-        //（含 keep_vertical_ratio 折算）。
+        //（含 ratio_unit 折算）。
         struct layout_value
         {
             math::vec2 absolute = {};
@@ -10861,12 +10879,22 @@ namespace jeecs
             const WorldLayout& world,
             float w, float h) noexcept
         {
-            // 相对量的比例折算：竖向基准时横向乘 h/w，横向基准时纵向乘 w/h。
+            // 相对量的比例折算：height_unit 时横向乘 h/w（两轴同以高为单位一），
+            // width_unit 时纵向乘 w/h（两轴同以宽为单位一），per_axis 不折算
+            //（x 轴乘 w、y 轴乘 h，宽高分别以对应轴为单位一）。
             math::vec2 ratio_scale(1.0f, 1.0f);
-            if (elem.keep_vertical_ratio)
+            switch (elem.ratio_unit)
+            {
+            case ratio_unit::height_unit:
                 ratio_scale.x = h / w;
-            else
+                break;
+            case ratio_unit::width_unit:
                 ratio_scale.y = w / h;
+                break;
+            case ratio_unit::per_axis:
+            default:
+                break;
+            }
 
             const auto to_pixels = [w, h, &ratio_scale](const layout_value& v) -> math::vec2
             {
@@ -10943,7 +10971,8 @@ namespace jeecs
             basic::file_resource<graphic::font> font;
 
             // 为 true 时，绘制阶段按通道0文本纹理的自然宽高比调整元素尺寸
-            //（keep_vertical_ratio 取竖向为基准轴，否则取横向），不回写布局输入，
+            //（基准轴与字号计算一致：width_unit 取横向，height_unit 与
+            // per_axis 取纵向），不回写布局输入，
             // 也不参与字号计算；为 false 时按 Element 常规布局拉伸显示。
             bool auto_size = true;
 
@@ -13402,6 +13431,28 @@ namespace jeecs
                 "        right   = 2,\n"
                 "        top     = 4,\n"
                 "        bottom  = 8,\n"
+                "    }\n"
+                "}\n");
+
+            typing::register_script_parser<UserInterface::ratio_unit>(
+                guard,
+                [](const UserInterface::ratio_unit* v, woort_value value)
+                {
+                    woort_set_int(value, *v);
+                },
+                [](UserInterface::ratio_unit* v, woort_value value)
+                {
+                    *v = static_cast<UserInterface::ratio_unit>(woort_int(value));
+                },
+                "UserInterface::ratio_unit",
+                "namespace UserInterface\n"
+                "{\n"
+                "    public enum ratio_unit\n"
+                "    {\n"
+                "        height_unit = 0,\n"
+                "\n"
+                "        width_unit  = 1,\n"
+                "        per_axis    = 2,\n"
                 "    }\n"
                 "}\n");
 

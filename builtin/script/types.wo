@@ -566,3 +566,18 @@ namespace UserInterface::alignment
         }
     }
 }
+
+namespace UserInterface::ratio_unit
+{
+    using parser = void
+    {
+        public extern func saving(val: UserInterface::ratio_unit)=> string
+        {
+            return val as int as string;
+        }
+        public extern func restoring(dat: string)=> UserInterface::ratio_unit
+        {
+            return dat as int as UserInterface::ratio_unit;
+        }
+    }
+}
