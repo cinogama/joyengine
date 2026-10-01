@@ -1,0 +1,1173 @@
+// 世界编辑器视口 —— UI 元素（UserInterface::Element）gizmo。
+// 选中带 Element 的实体即在其解析后的显示矩形上提供可视化编辑：
+// 矩形/参考矩形/锚点/pivot 的显示、矩形内部拖拽移动（写 offset）、
+// 四角四边 8 向缩放（写 size，pivot 固定语义）、旋转茎环（写
+// Rotation.angle），以及视口覆盖 UI 的锚点/轴心九宫格与 ratio_unit
+// 三态切换。布局解析复用引擎的 Element::get_layout（显示像素空间，
+// 原点=显示区左下、y 向上），祖先旋转链按
+// UserInterfaceGraphicPipelineSystem::ResolveUiNodes 同式在脚本侧
+// 复算（WorldLayout 的成员未暴露给脚本，累计角沿 Transform 锚点链
+// 求 Rotation.angle 之和得到）。拖拽只写绝对通道（offset/size），
+// 比例通道（offset_ratio/size_ratio）保持不变——有效值 = 绝对 +
+// 比例⊙单位，写绝对通道加增量后视觉必然跟随鼠标。拖拽结束值有变化
+// 时发布可撤销的 ModifyComponentMember（与变换游标同一套撤销机制）。
+// 覆盖层绘制走 ImGui 窗口 DrawList（屏幕空间，语义上与 UI 的屏幕
+// 空间一致），交互命中判定复用 ColliderGizmo 的屏幕空间距离方式。
+
+import pkg::std;
+
+import je;
+import je::ecs;
+import je::graphic;
+import je::gui;
+import je::internal;
+import je::typeinfo;
+
+import je::towoo;
+import je::towoo::types;
+import je::towoo::components;
+
+import pkg::iterator;
+import pkg::try;
+import pkg::worst;
+
+import builtin::editor::Editor::Action::ModifyComponentMember;
+
+import Definition;
+import GizmoMath;
+import EntityPicking;
+import TransformGizmo;
+
+using std;
+using iterator;
+
+using je;
+using je::gui;
+
+using JEEditor::Editor::Action;
+
+namespace JEEditor::Editor::WorldEditorViewport
+{
+    // ---- 纯函数几何工具（显示像素空间） ----
+
+    // 二维旋转（角度制，逆时针；显示空间 y 向上）
+    protected func uiRotateVec2(deg: real, v: vec2)=> vec2
+    {
+        let rad = deg * mathf::DEG2RAD;
+        let c = mathf::cos(rad);
+        let s = mathf::sin(rad);
+        return (v[0] * c - v[1] * s, v[0] * s + v[1] * c) as vec2;
+    }
+
+    // alignment 位组合在参考矩形内的锚点偏移：left → −x/2、right → +x/2、
+    // top → +y/2、bottom → −y/2（与引擎 UserInterface::anchor_shift 同式）
+    protected func uiAnchorShift(alignment_bits: int, ref_size: vec2)=> vec2
+    {
+        let mut sx = 0.;
+        if ((alignment_bits->band(1)) != 0)
+            sx -= 0.5;
+        if ((alignment_bits->band(2)) != 0)
+            sx += 0.5;
+        let mut sy = 0.;
+        if ((alignment_bits->band(4)) != 0)
+            sy += 0.5;
+        if ((alignment_bits->band(8)) != 0)
+            sy -= 0.5;
+        return (sx * ref_size[0], sy * ref_size[1]) as vec2;
+    }
+
+    // pivot 位组合在某轴上的侧别：−1（left/bottom）/ 0（居中）/ +1（right/top）
+    protected func uiPivotSide(pivot_bits: int, axis: int)=> int
+    {
+        if (axis == 0)
+        {
+            if ((pivot_bits->band(1)) != 0)
+                return -1;
+            if ((pivot_bits->band(2)) != 0)
+                return 1;
+            return 0;
+        }
+        if ((pivot_bits->band(4)) != 0)
+            return 1;
+        if ((pivot_bits->band(8)) != 0)
+            return -1;
+        return 0;
+    }
+
+    // 缩放手柄的轴向符号（显示空间）：axis 0 → x、axis 1 → y，
+    // 四角 ±1/±1、四边非零轴 ±1、另一轴 0
+    protected func uiHandleSigns(handle: int)=> (int, int)
+    {
+        if (handle == UI_HANDLE_RESIZE_LB)
+            return (-1, -1);
+        if (handle == UI_HANDLE_RESIZE_RB)
+            return (1, -1);
+        if (handle == UI_HANDLE_RESIZE_LT)
+            return (-1, 1);
+        if (handle == UI_HANDLE_RESIZE_RT)
+            return (1, 1);
+        if (handle == UI_HANDLE_RESIZE_L)
+            return (-1, 0);
+        if (handle == UI_HANDLE_RESIZE_R)
+            return (1, 0);
+        if (handle == UI_HANDLE_RESIZE_B)
+            return (0, -1);
+        if (handle == UI_HANDLE_RESIZE_T)
+            return (0, 1);
+        return (0, 0);
+    }
+
+    // 显示像素 → ImGui 屏幕坐标（视口图像整幅显示在 rect 内，等比
+    // 缩放 + y 翻转；显示空间原点在左下，ImGui 在左上）
+    protected func uiDisplayToScreen(
+        p: vec2, rmin: vec2, rsize: vec2, display_range: vec2)=> vec2
+    {
+        return (rmin[0] + p[0] / display_range[0] * rsize[0],
+            rmin[1] + (1. - p[1] / display_range[1]) * rsize[1]) as vec2;
+    }
+
+    // ImGui 屏幕坐标 → 显示像素
+    protected func uiScreenToDisplay(
+        p: vec2, rmin: vec2, rsize: vec2, display_range: vec2)=> vec2
+    {
+        return ((p[0] - rmin[0]) / rsize[0] * display_range[0],
+            (1. - (p[1] - rmin[1]) / rsize[1]) * display_range[1]) as vec2;
+    }
+
+    // 屏幕命中半径（UI_HIT_PX 像素）换算为各轴的显示像素容差
+    //（用于退化尺寸元素的点命中）
+    protected func uiHitTolerance(rsize: vec2, display_range: vec2)=> vec2
+    {
+        return (UI_HIT_PX / (rsize[0] / display_range[0]),
+            UI_HIT_PX / (rsize[1] / display_range[1])) as vec2;
+    }
+
+    // 按步进取整（mathf 未提供 round）
+    protected func uiRoundTo(v: real, step: real)=> real
+    {
+        let idx = (v / step + 0.5) as int;
+        return (idx as real) * step;
+    }
+
+    // ---- 解析与查询 ----
+
+    // 显示空间 = 调试摄像机 framebuffer 的尺寸（UI 管线按相机渲染
+    // 目标尺寸解析布局；walk camera 的渲染目标即视口显示的画面）
+    protected func uiGetDisplayRange(self: WorldEditorViewport)=> option<vec2>
+    {
+        return or(option::none: option<vec2>) <| try!{
+            try! fb = self.m_editor_walk_camera_frame_buffer;
+            let (w, h) = fb->size;
+            if (w <= 0 || h <= 0)
+                return_value! option::none: option<vec2>;
+            return_value! option::value((w as real, h as real) as vec2);
+        };
+    }
+
+    // 当前选中的 UI 元素实体（在 UI 元素选择器范围内按调试 EUID 反查）
+    protected func uiFindSelectedUIElement(
+        self: WorldEditorViewport)=> option<entity>
+    {
+        return or(option::none: option<entity>) <| try!{
+            try! euid = self.m_selected_entity_id;
+            for (let e : self.m_ui_element_entity_selector)
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(entity_uid)? if (entity_uid == euid)
+                        return_value! option::value(e);
+                }
+            }
+            return_value! option::none: option<entity>;
+        };
+    }
+
+    // 按调试 EUID 在 UI 元素选择器范围内反查实体（拖拽期间重取实体用）
+    protected func uiFindEntityByEuidInSelector(
+        self: WorldEditorViewport,
+        euid: entity::internal::euid_t)=> option<entity>
+    {
+        return or(option::none: option<entity>) <| try!{
+            for (let e : self.m_ui_element_entity_selector)
+            {
+                match (e->internal::get_entity_uid)
+                {
+                    none?;
+                    value(entity_uid)? if (entity_uid == euid)
+                        return_value! option::value(e);
+                }
+            }
+            return_value! option::none: option<entity>;
+        };
+    }
+
+    // 实体的 UI 父元素（LocalToParent.parent_uid 指向的锚点主人须同为
+    // UI 元素才构成参考矩形；与 UI 管线的节点匹配语义一致）
+    protected func uiFindUIParent(
+        self: WorldEditorViewport, e: entity)=> option<entity>
+    {
+        return or(option::none: option<entity>) <| try!{
+            try! l2p = e->towoo::get_component:<Transform::LocalToParent>();
+            try! parent = self->findEntityByAnchorUid(l2p.parent_uid->get as string);
+            if (parent->towoo::get_component:<UserInterface::Element>->is_none)
+                return_value! option::none: option<entity>;
+            return_value! option::value(parent);
+        };
+    }
+
+    // 解析 UI 元素在显示像素空间的矩形（含祖先旋转链合成）。
+    // 自底向上沿 Transform 锚点链收集同为 UI 元素的祖先，再自顶向下
+    // 逐级用 Element::get_layout 解析（get_layout 返回祖先未旋转帧中的
+    // 矩形），显示中心按 ResolveUiNodes 的旋转链公式合成：子中心先绕
+    // 父 pivot 转父自身角，再经父的祖先累计角提升。链断/非 UI 父即视
+    // 为根（与引擎“问题可见”的回退策略一致）。
+    protected func uiResolveDisplay(
+        self: WorldEditorViewport,
+        e: entity,
+        display_range: vec2)=> option<UIRectInfo>
+    {
+        return or(option::none: option<UIRectInfo>) <| try!{
+            // 自底向上收集祖先链（实体 + 各自 Rotation 角，无组件则 0）
+            let ui_chain = []mut: vec<mut (entity, real)>;
+            {
+                let mut cur = e;
+                let mut guard_count = 0;
+                let mut walking = true;
+                while (walking && guard_count < 64)
+                {
+                    guard_count += 1;
+
+                    let mut own_angle = 0.;
+                    match (cur->towoo::get_component:<UserInterface::Rotation>)
+                    {
+                        none?;
+                        value(rot)? own_angle = rot.angle->get;
+                    }
+                    ui_chain->add(mut (cur, own_angle));
+
+                    match (cur->towoo::get_component:<Transform::LocalToParent>)
+                    {
+                        none? walking = false;
+                        value(l2p)?
+                            match (self->findEntityByAnchorUid(l2p.parent_uid->get as string))
+                            {
+                                none? walking = false;
+                                value(parent)?
+                                {
+                                    // 父必须同为 UI 元素才参与 UI 布局，
+                                    // 否则当前元素按根元素处理
+                                    if (parent->towoo::get_component:<UserInterface::Element>->is_none)
+                                        walking = false;
+                                    else
+                                        cur = parent;
+                                }
+                            }
+                    }
+                }
+            }
+
+            // 自顶向下逐级解析并合成（ui_chain 末尾是根）
+            let mut have_prev = false;
+            let mut prev_center = (0., 0.) as vec2;
+            let mut prev_size = (0., 0.) as vec2;
+            let mut prev_pivot_off = (0., 0.) as vec2;
+            let mut prev_display = (0., 0.) as vec2;
+            let mut prev_angle_acc = 0.;
+            let mut prev_own = 0.;
+
+            let mut out_center = (0., 0.) as vec2;
+            let mut out_size = (0., 0.) as vec2;
+            let mut out_pivot_off = (0., 0.) as vec2;
+            let mut out_display = (0., 0.) as vec2;
+            let mut out_angle_acc = 0.;
+            let mut out_own = 0.;
+            let mut out_anchor = (0., 0.) as vec2;
+
+            let mut i = ui_chain->len - 1;
+            while (i >= 0)
+            {
+                let (ent, own_angle) = ui_chain[i];
+                try! ent_elem = ent->towoo::get_component:<UserInterface::Element>();
+                let (rc, rs, rp) = ent_elem->get_layout(
+                    ent->towoo::get_component:<UserInterface::WorldLayout>,
+                    display_range);
+
+                let mut display_center = rc;
+                if (have_prev)
+                {
+                    let p_pivot = prev_center - prev_pivot_off;
+                    let rotated_by_parent =
+                        p_pivot + uiRotateVec2(prev_own, rc - p_pivot);
+                    display_center = prev_display
+                        + uiRotateVec2(
+                            prev_angle_acc, rotated_by_parent - prev_center);
+                }
+
+                if (i == 0)
+                {
+                    // 目标实体：累计角 = 父之上的祖先和 + 父自身角
+                    out_center = rc;
+                    out_size = rs;
+                    out_pivot_off = rp;
+                    out_display = display_center;
+                    out_angle_acc = prev_angle_acc + prev_own;
+                    out_own = own_angle;
+
+                    // 锚点基点：参考矩形中心 − 参考 pivot 偏移 + 锚点在
+                    // 参考矩形内的偏移（未旋转帧），再经父的祖先链旋转
+                    // 提升到显示空间；根元素的参考矩形即整个显示区
+                    let anchor_bits = ent_elem.anchor->get as int;
+                    let base_unrot = have_prev
+                        ? (prev_center - prev_pivot_off
+                            + uiAnchorShift(anchor_bits, prev_size))
+                        | (display_range * 0.5
+                            + uiAnchorShift(anchor_bits, display_range));
+                    out_anchor = have_prev
+                        ? (prev_display
+                            + uiRotateVec2(prev_angle_acc, base_unrot - prev_center))
+                        | base_unrot;
+                }
+                else
+                {
+                    // 为下一级准备父量：angle_acc(本实体) = 父之上累计 + 父自身
+                    let next_angle_acc = prev_angle_acc + prev_own;
+                    prev_center = rc;
+                    prev_size = rs;
+                    prev_pivot_off = rp;
+                    prev_display = display_center;
+                    prev_own = own_angle;
+                    prev_angle_acc = next_angle_acc;
+                    have_prev = true;
+                }
+                i -= 1;
+            }
+
+            // 绘制四边形中心 D = display_center − R(acc)·p + R(total)·p，
+            // pivot 显示位置 K = display_center − R(acc)·p（旋转不动点）
+            let total = out_angle_acc + out_own;
+            let out_draw_center = out_display
+                - uiRotateVec2(out_angle_acc, out_pivot_off)
+                + uiRotateVec2(total, out_pivot_off);
+            let out_pivot_display =
+                out_display - uiRotateVec2(out_angle_acc, out_pivot_off);
+
+            return_value! option::value(UIRectInfo{
+                m_center = out_draw_center,
+                m_size = out_size,
+                m_pivot_display = out_pivot_display,
+                m_pivot_offset = out_pivot_off,
+                m_angle_acc = out_angle_acc,
+                m_own_angle = out_own,
+                m_anchor_display = out_anchor,
+                m_depth = ui_chain->len - 1,
+            });
+        };
+    }
+
+    // ---- 拾取（点击选取，UI 空间优先于 3D 射线） ----
+
+    // 鼠标位置命中的全部 UI 元素（旋转矩形包含测试，退化尺寸按点命中
+    // 容差），按层级深度降序（子画在父之上，更深的为优先候选）
+    protected func pickUIElementsAt(
+        self: WorldEditorViewport,
+        rmin: vec2,
+        rsize: vec2,
+        display_range: vec2)=> vec<mut (int, entity::internal::euid_t)>
+    {
+        let mut hits = []mut: vec<mut (int, entity::internal::euid_t)>;
+        let mouse_disp =
+            uiScreenToDisplay(GetMousePos() as vec2, rmin, rsize, display_range);
+        let tol = uiHitTolerance(rsize, display_range);
+
+        for (let e : self.m_ui_element_entity_selector)
+        {
+            match (self->uiResolveDisplay(e, display_range))
+            {
+                none?;
+                value(info)?
+                {
+                    let total = info.m_angle_acc + info.m_own_angle;
+                    let local =
+                        uiRotateVec2(-total, mouse_disp - info.m_center);
+                    if (mathf::abs(local[0]) <= info.m_size[0] * 0.5 + tol[0]
+                        && mathf::abs(local[1]) <= info.m_size[1] * 0.5 + tol[1])
+                    {
+                        match (e->internal::get_entity_uid)
+                        {
+                            none?;
+                            value(entity_uid)? hits->add(mut (info.m_depth, entity_uid));
+                        }
+                    }
+                }
+            }
+        }
+
+        sort_in_place(hits, \(da, _), (db, _) = da > db;);
+        return hits;
+    }
+
+    // 鼠标位置点击选取 UI 元素：命中列表按深度降序循环选中下一个
+    //（与射线拾取的循环规则一致）；未命中返回 none（由调用方决定是否
+    // 回落到 3D 射线拾取，且不应清空当前选中）
+    protected func selectUIElementAt(
+        self: WorldEditorViewport,
+        rmin: vec2,
+        rsize: vec2)=> option<entity::internal::euid_t>
+    {
+        return or(option::none: option<entity::internal::euid_t>) <| try!{
+            try! display_range = self->uiGetDisplayRange();
+            let hits = self->pickUIElementsAt(rmin, rsize, display_range);
+            if (hits->empty)
+                return_value! option::none: option<entity::internal::euid_t>;
+
+            let mut next_index = 0;
+            match (self.m_selected_entity_id)
+            {
+                none?;
+                value(current_uid)?
+                {
+                    for (let mut i = 0; i < hits->len; i += 1)
+                    {
+                        if (hits[i].1 == current_uid)
+                        {
+                            next_index = (i + 1) % hits->len;
+                            break;
+                        }
+                    }
+                }
+            }
+            return_value! option::value(hits[next_index].1);
+        };
+    }
+
+    // ---- 交互（悬停检测、拖拽开始/进行/结束） ----
+
+    // 检测当前鼠标悬停的 UI 手柄（屏幕空间距离判定），返回手柄编号。
+    // 优先级：旋转手柄 > 缩放手柄（四角+四边中点）> 矩形内部（移动）
+    protected func pickUIHandle(
+        e: entity,
+        info: UIRectInfo,
+        mouse: vec2,
+        rmin: vec2,
+        rsize: vec2,
+        display_range: vec2)=> int
+    {
+        let total = info.m_angle_acc + info.m_own_angle;
+        let half = info.m_size * 0.5;
+
+        // 旋转手柄：沿元素自身 up 轴、距上缘 UI_ROTATE_STALK_PX 的圆点
+        let up = uiRotateVec2(total, (0., 1.) as vec2);
+        let rot_pos = info.m_pivot_display + up * (half[1] + UI_ROTATE_STALK_PX);
+        if ((mouse
+                - uiDisplayToScreen(rot_pos, rmin, rsize, display_range))->length
+            < UI_HIT_PX)
+            return UI_HANDLE_ROTATE;
+
+        // 缩放手柄；auto_size 文本每帧按纹理重算尺寸，不提供缩放
+        let mut auto_sized = false;
+        match (e->towoo::get_component:<UserInterface::Text>)
+        {
+            none?;
+            value(text)? auto_sized = text.auto_size->get;
+        }
+        if (!auto_sized)
+        {
+            let mut h = UI_HANDLE_RESIZE_LB;
+            while (h <= UI_HANDLE_RESIZE_T)
+            {
+                let (sx, sy) = uiHandleSigns(h);
+                let cpos = info.m_center
+                    + uiRotateVec2(total, ((sx as real) * half[0], (sy as real) * half[1]) as vec2);
+                if ((mouse
+                        - uiDisplayToScreen(cpos, rmin, rsize, display_range))->length
+                    < UI_HIT_PX)
+                    return h;
+                h += 1;
+            }
+        }
+
+        // 矩形内部（含退化尺寸的点击容差）→ 移动
+        let tol = uiHitTolerance(rsize, display_range);
+        let local = uiRotateVec2(
+            -total,
+            uiScreenToDisplay(mouse, rmin, rsize, display_range) - info.m_center);
+        if (mathf::abs(local[0]) <= half[0] + tol[0]
+            && mathf::abs(local[1]) <= half[1] + tol[1])
+            return UI_HANDLE_MOVE;
+
+        return UI_HANDLE_NONE;
+    }
+
+    // 每帧更新 UI gizmo 状态：解析选中元素写绘制快照、悬停检测、
+    // 拖拽开始/进行/结束。选中实体不带 Element 时不做任何事
+    protected func updateUIGizmo(
+        self: WorldEditorViewport,
+        hovered: bool,
+        rect_min: ImVec2,
+        rect_size: ImVec2)=> void
+    {
+        self.m_ui_draw_visible = false;
+
+        // 松开左键：结束拖拽并提交撤销记录
+        if (self.m_ui_dragging
+            && !IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left))
+        {
+            self->finishUIDrag(rect_min as vec2, rect_size as vec2);
+            self.m_ui_dragging = false;
+            self.m_ui_drag_handle = UI_HANDLE_NONE;
+        }
+
+        self.m_ui_hover_handle = UI_HANDLE_NONE;
+
+        let rmin = rect_min as vec2;
+        let rsize = rect_size as vec2;
+        if (rsize[0] <= 0. || rsize[1] <= 0.)
+            return;
+
+        // 显示空间 = 调试摄像机 framebuffer 的尺寸
+        let display_opt = self->uiGetDisplayRange();
+        if (display_opt->is_none)
+            return;
+        let dr = display_opt->unwrap;
+        {
+                let selected = self->uiFindSelectedUIElement();
+                if (selected->is_none)
+                    return;
+
+                do try!{
+                    try! e = selected;
+                    let info = self->uiResolveDisplay(e, dr);
+                    try! ui_info = info;
+
+                    // 参考矩形：父元素（同为 UI 元素）或整个显示区
+                    let mut ref_center = dr * 0.5;
+                    let mut ref_size = dr;
+                    let mut ref_total = 0.;
+                    match (self->uiFindUIParent(e))
+                    {
+                        none?;
+                        value(parent)?
+                            match (self->uiResolveDisplay(parent, dr))
+                            {
+                                none?;
+                                value(pinfo)?
+                                {
+                                    ref_center = pinfo.m_center;
+                                    ref_size = pinfo.m_size;
+                                    ref_total = pinfo.m_angle_acc + pinfo.m_own_angle;
+                                }
+                            }
+                    }
+
+                    // auto_size 文本每帧按纹理重算尺寸，禁用缩放手柄
+                    let mut auto_sized = false;
+                    match (e->towoo::get_component:<UserInterface::Text>)
+                    {
+                        none?;
+                        value(text)? auto_sized = text.auto_size->get;
+                    }
+
+                    // 写入本帧绘制快照
+                    self.m_ui_draw_visible = true;
+                    self.m_ui_draw_can_resize = !auto_sized;
+                    self.m_ui_draw_display_range = dr;
+                    self.m_ui_draw_center = ui_info.m_center;
+                    self.m_ui_draw_size = ui_info.m_size;
+                    self.m_ui_draw_total_angle =
+                        ui_info.m_angle_acc + ui_info.m_own_angle;
+                    self.m_ui_draw_pivot_display = ui_info.m_pivot_display;
+                    self.m_ui_draw_anchor_display = ui_info.m_anchor_display;
+                    self.m_ui_draw_has_ref = true;
+                    self.m_ui_draw_ref_center = ref_center;
+                    self.m_ui_draw_ref_size = ref_size;
+                    self.m_ui_draw_ref_total_angle = ref_total;
+
+                    // 拖拽进行中：每帧按当前鼠标应用（不要求仍悬停视口内）
+                    if (self.m_ui_dragging)
+                    {
+                        self->applyUIDrag(rmin, rsize, dr);
+                        self.m_ui_hover_handle = self.m_ui_drag_handle;
+                        return_value!;
+                    }
+
+                    let hoverable = hovered
+                        && !self.m_is_look_active
+                        && !self.m_is_pan_active
+                        && !self.m_is_orbit_active
+                        // 碰撞体/光源/粒子编辑手柄优先
+                        && self.m_collider_hover_handle == GIZMO_HANDLE_NONE
+                        && !self.m_collider_dragging
+                        && self.m_light_hover_handle == GIZMO_HANDLE_NONE
+                        && !self.m_light_dragging
+                        && self.m_particle_hover_handle == GIZMO_HANDLE_NONE
+                        && !self.m_particle_dragging;
+
+                    if (!hoverable)
+                        return_value!;
+
+                    let mouse = GetMousePos() as vec2;
+                    let handle = pickUIHandle(e, ui_info, mouse, rmin, rsize, dr);
+                    self.m_ui_hover_handle = handle;
+
+                    // 悬停手柄上按下左键：开始拖拽
+                    if (handle != UI_HANDLE_NONE
+                        && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left))
+                        self->beginUIDrag(e, ui_info, handle, mouse, rmin, rsize, dr);
+
+                    return_value!;
+                };
+        }
+    }
+
+    // 开始一次拖拽：按手柄语义捕获快照与撤销记录所需的旧值
+    protected func beginUIDrag(
+        self: WorldEditorViewport,
+        selected_entity: entity,
+        info: UIRectInfo,
+        handle: int,
+        mouse: vec2,
+        rmin: vec2,
+        rsize: vec2,
+        display_range: vec2)=> void
+    {
+        self.m_ui_drag_handle = handle;
+        self.m_ui_drag_euid =
+            selected_entity->internal::get_entity_uid->or(0h as entity::internal::euid_t);
+        self.m_ui_drag_start_mouse = uiScreenToDisplay(mouse, rmin, rsize, display_range);
+        self.m_ui_drag_moved = false;
+        self.m_ui_drag_angle_acc = info.m_angle_acc;
+        self.m_ui_drag_effective_size = info.m_size;
+        self.m_ui_drag_undo_component = "";
+        self.m_ui_drag_undo_member = "";
+        self.m_ui_drag_undo_old_value = "";
+        self.m_ui_dragging = false;
+
+        do try!{
+            try! elem =
+                selected_entity->towoo::get_component:<UserInterface::Element>();
+
+            if (handle == UI_HANDLE_MOVE)
+            {
+                self.m_ui_drag_start_offset = elem.offset->get;
+                self.m_ui_drag_undo_component = "UserInterface::Element";
+                self.m_ui_drag_undo_member = "offset";
+            }
+            else if (handle >= UI_HANDLE_RESIZE_LB && handle <= UI_HANDLE_RESIZE_T)
+            {
+                self.m_ui_drag_start_size = elem.size->get;
+                self.m_ui_drag_undo_component = "UserInterface::Element";
+                self.m_ui_drag_undo_member = "size";
+            }
+            else
+            {
+                // 旋转：缺 Rotation 组件则补挂一个（撤销记录仅覆盖 angle
+                // 成员，撤销后组件残留为已知瑕疵）
+                match (selected_entity->towoo::get_component:<UserInterface::Rotation>)
+                {
+                    none?
+                        do selected_entity->towoo::add_component:<UserInterface::Rotation>();
+                    value(_)?;
+                }
+                try! rot =
+                    selected_entity->towoo::get_component:<UserInterface::Rotation>();
+                self.m_ui_drag_start_angle_deg = rot.angle->get;
+                self.m_ui_drag_undo_component = "UserInterface::Rotation";
+                self.m_ui_drag_undo_member = "angle";
+            }
+
+            // 撤销旧值序列统一在拖拽开始时采集
+            self.m_ui_drag_undo_old_value = serializeMemberValue(
+                selected_entity,
+                self.m_ui_drag_undo_component,
+                self.m_ui_drag_undo_member)->or("");
+
+            if (handle == UI_HANDLE_ROTATE)
+            {
+                // 起始鼠标绕 pivot 的方位角（显示空间，弧度）
+                self.m_ui_drag_start_mouse_angle = mathf::atan2(
+                    self.m_ui_drag_start_mouse[1] - info.m_pivot_display[1],
+                    self.m_ui_drag_start_mouse[0] - info.m_pivot_display[0]);
+            }
+
+            self.m_ui_dragging = true;
+            return_value!;
+        };
+    }
+
+    // 拖拽进行中：按当前鼠标换算并写回组件值（每帧重取实体与解析，
+    // 框架/角度取当前帧的，元素随拖拽实时反馈）
+    protected func applyUIDrag(
+        self: WorldEditorViewport,
+        rmin: vec2,
+        rsize: vec2,
+        display_range: vec2)=> void
+    {
+        do try!{
+            try! selected_entity =
+                self->uiFindEntityByEuidInSelector(self.m_ui_drag_euid);
+
+            let mouse_disp = uiScreenToDisplay(
+                GetMousePos() as vec2, rmin, rsize, display_range);
+            let delta_disp = mouse_disp - self.m_ui_drag_start_mouse;
+            if (!self.m_ui_drag_moved
+                && delta_disp->length > UI_MOVE_CLICK_MAX_DRAG_PX)
+                self.m_ui_drag_moved = true;
+
+            let ctrl_down = IsKeyDown(ImGuiKey::ImGuiMod_Ctrl);
+            let handle = self.m_ui_drag_handle;
+
+            if (handle == UI_HANDLE_MOVE)
+            {
+                try! elem =
+                    selected_entity->towoo::get_component:<UserInterface::Element>();
+                // 显示位移 → 未旋转帧 offset 增量：d(display)/d(offset)
+                // = R(angle_acc)，故逆旋转祖先累计角（不含自身角）
+                let delta_local = uiRotateVec2(-self.m_ui_drag_angle_acc, delta_disp);
+                let mut new_offset = self.m_ui_drag_start_offset + delta_local;
+                if (ctrl_down)
+                    new_offset = (uiRoundTo(new_offset[0], 1.), uiRoundTo(new_offset[1], 1.)) as vec2;
+                elem.offset->set(new_offset);
+            }
+            else if (handle >= UI_HANDLE_RESIZE_LB && handle <= UI_HANDLE_RESIZE_T)
+            {
+                try! elem =
+                    selected_entity->towoo::get_component:<UserInterface::Element>();
+                try! info = self->uiResolveDisplay(selected_entity, display_range);
+                let total = info.m_angle_acc + info.m_own_angle;
+
+                // 鼠标 → 元素本地坐标（相对 pivot，随元素旋转）
+                let c = uiRotateVec2(-total, mouse_disp - info.m_pivot_display);
+
+                let pivot_bits = elem.pivot->get as int;
+                let (shx, shy) = uiHandleSigns(handle);
+                let spx = uiPivotSide(pivot_bits, 0);
+                let spy = uiPivotSide(pivot_bits, 1);
+
+                // pivot 固定语义逐轴解新尺寸：pivot 居中 → 对称伸缩（边界
+                // 在 ±s/2）；pivot 靠边 → 从 pivot 单向伸缩；把手与 pivot
+                // 同侧的轴锁定（把手即 pivot 所在边界）。增量写绝对通道，
+                // 比例通道贡献保持不变
+                let mut sx_new = self.m_ui_drag_effective_size[0];
+                if (shx != 0 && !(spx != 0 && spx == shx))
+                {
+                    sx_new = (spx == 0)
+                        ? mathf::abs(c[0]) * 2.
+                        | mathf::abs(c[0]);
+                    if (sx_new < UI_GIZMO_MIN_SIZE)
+                        sx_new = UI_GIZMO_MIN_SIZE;
+                    if (ctrl_down)
+                        sx_new = uiRoundTo(sx_new, 1.);
+                }
+                let mut sy_new = self.m_ui_drag_effective_size[1];
+                if (shy != 0 && !(spy != 0 && spy == shy))
+                {
+                    sy_new = (spy == 0)
+                        ? mathf::abs(c[1]) * 2.
+                        | mathf::abs(c[1]);
+                    if (sy_new < UI_GIZMO_MIN_SIZE)
+                        sy_new = UI_GIZMO_MIN_SIZE;
+                    if (ctrl_down)
+                        sy_new = uiRoundTo(sy_new, 1.);
+                }
+
+                elem.size->set(self.m_ui_drag_start_size
+                    + (sx_new - self.m_ui_drag_effective_size[0],
+                        sy_new - self.m_ui_drag_effective_size[1]) as vec2);
+            }
+            else
+            {
+                try! rot =
+                    selected_entity->towoo::get_component:<UserInterface::Rotation>();
+                try! info = self->uiResolveDisplay(selected_entity, display_range);
+                // 绕 pivot 显示位置的角度增量（拖拽期间 pivot 不动）
+                let angle_now = mathf::atan2(
+                    mouse_disp[1] - info.m_pivot_display[1],
+                    mouse_disp[0] - info.m_pivot_display[0]);
+                let mut delta = angle_now - self.m_ui_drag_start_mouse_angle;
+                while (delta > mathf::PI)
+                {
+                    delta -= 2. * mathf::PI;
+                }
+                while (delta < -mathf::PI)
+                {
+                    delta += 2. * mathf::PI;
+                }
+
+                let mut new_deg =
+                    self.m_ui_drag_start_angle_deg + delta * mathf::RAD2DEG;
+                if (ctrl_down)
+                    new_deg = uiRoundTo(new_deg, UI_ROTATE_SNAP_DEG);
+                rot.angle->set(new_deg);
+            }
+            return_value!;
+        };
+    }
+
+    // 结束拖拽：值有变化时发布一条可撤销的 Action；未发生切实位移的
+    // 移动“点击”转为 UI 空间循环选取（便于选中父元素矩形内部的子元素）
+    protected func finishUIDrag(
+        self: WorldEditorViewport,
+        rmin: vec2,
+        rsize: vec2)=> void
+    {
+        if (!self.m_ui_drag_moved && self.m_ui_drag_handle == UI_HANDLE_MOVE)
+        {
+            match (self->selectUIElementAt(rmin, rsize))
+            {
+                none?;
+                value(picked_uid)? self.m_selected_entity_id = option::value(picked_uid);
+            }
+        }
+
+        if (self.m_ui_drag_undo_old_value == "")
+            return;
+
+        do try!{
+            try! selected_entity =
+                self->uiFindEntityByEuidInSelector(self.m_ui_drag_euid);
+            let new_value = serializeMemberValue(
+                selected_entity,
+                self.m_ui_drag_undo_component,
+                self.m_ui_drag_undo_member)->or("");
+
+            if (new_value != "" && new_value != self.m_ui_drag_undo_old_value)
+                self->doAction(ModifyComponentMember::create(
+                        self.m_ui_drag_euid,
+                        self.m_ui_drag_undo_component,
+                        self.m_ui_drag_undo_member,
+                        self.m_ui_drag_undo_old_value,
+                        new_value));
+            return_value!;
+        };
+    }
+
+    // ---- 绘制（ImGui 窗口 DrawList 覆盖层） ----
+
+    // UI gizmo 覆盖层：参考矩形+锚点基点、元素矩形、pivot、缩放手柄、
+    // 旋转茎环与拖拽数值标签。在视口图像之后提交，天然盖在画面上
+    protected func drawUIGizmo(
+        self: WorldEditorViewport,
+        rect_min: ImVec2,
+        rect_size: ImVec2)=> void
+    {
+        if (!self.m_ui_draw_visible)
+            return;
+
+        let rmin = rect_min as vec2;
+        let rsize = rect_size as vec2;
+        let dr = self.m_ui_draw_display_range;
+        if (rsize[0] <= 0. || rsize[1] <= 0. || dr[0] <= 0. || dr[1] <= 0.)
+            return;
+
+        let draw_list = GetWindowDrawList();
+        let total = self.m_ui_draw_total_angle;
+        let half = self.m_ui_draw_size * 0.5;
+
+        // 参考矩形（父元素矩形或整个显示区）
+        {
+            let ref_half = self.m_ui_draw_ref_size * 0.5;
+            let rt = self.m_ui_draw_ref_total_angle;
+            let r0 = uiDisplayToScreen(
+                self.m_ui_draw_ref_center
+                    + uiRotateVec2(rt, (-ref_half[0], -ref_half[1]) as vec2),
+                rmin, rsize, dr);
+            let r1 = uiDisplayToScreen(
+                self.m_ui_draw_ref_center
+                    + uiRotateVec2(rt, (ref_half[0], -ref_half[1]) as vec2),
+                rmin, rsize, dr);
+            let r2 = uiDisplayToScreen(
+                self.m_ui_draw_ref_center
+                    + uiRotateVec2(rt, (ref_half[0], ref_half[1]) as vec2),
+                rmin, rsize, dr);
+            let r3 = uiDisplayToScreen(
+                self.m_ui_draw_ref_center
+                    + uiRotateVec2(rt, (-ref_half[0], ref_half[1]) as vec2),
+                rmin, rsize, dr);
+            do draw_list->AddLine((r0[0], r0[1]), (r1[0], r1[1]), UI_GIZMO_COLOR_REF, 1.);
+            do draw_list->AddLine((r1[0], r1[1]), (r2[0], r2[1]), UI_GIZMO_COLOR_REF, 1.);
+            do draw_list->AddLine((r2[0], r2[1]), (r3[0], r3[1]), UI_GIZMO_COLOR_REF, 1.);
+            do draw_list->AddLine((r3[0], r3[1]), (r0[0], r0[1]), UI_GIZMO_COLOR_REF, 1.);
+        }
+
+        // 锚点基点标记（小圆 + 十字）
+        let an = uiDisplayToScreen(self.m_ui_draw_anchor_display, rmin, rsize, dr);
+        do draw_list->AddCircle((an[0], an[1]), 5., UI_GIZMO_COLOR_REF, 1.5);
+        do draw_list->AddLine(
+            (an[0] - 7., an[1]), (an[0] + 7., an[1]), UI_GIZMO_COLOR_REF, 1.);
+        do draw_list->AddLine(
+            (an[0], an[1] - 7.), (an[0], an[1] + 7.), UI_GIZMO_COLOR_REF, 1.);
+
+        // 元素矩形（旋转后的四角连线）
+        let c0 = uiDisplayToScreen(
+            self.m_ui_draw_center + uiRotateVec2(total, (-half[0], -half[1]) as vec2),
+            rmin, rsize, dr);
+        let c1 = uiDisplayToScreen(
+            self.m_ui_draw_center + uiRotateVec2(total, (half[0], -half[1]) as vec2),
+            rmin, rsize, dr);
+        let c2 = uiDisplayToScreen(
+            self.m_ui_draw_center + uiRotateVec2(total, (half[0], half[1]) as vec2),
+            rmin, rsize, dr);
+        let c3 = uiDisplayToScreen(
+            self.m_ui_draw_center + uiRotateVec2(total, (-half[0], half[1]) as vec2),
+            rmin, rsize, dr);
+        do draw_list->AddLine((c0[0], c0[1]), (c1[0], c1[1]), UI_GIZMO_COLOR, 1.5);
+        do draw_list->AddLine((c1[0], c1[1]), (c2[0], c2[1]), UI_GIZMO_COLOR, 1.5);
+        do draw_list->AddLine((c2[0], c2[1]), (c3[0], c3[1]), UI_GIZMO_COLOR, 1.5);
+        do draw_list->AddLine((c3[0], c3[1]), (c0[0], c0[1]), UI_GIZMO_COLOR, 1.5);
+
+        // pivot 标记（圆 + 十字）
+        let pv = uiDisplayToScreen(self.m_ui_draw_pivot_display, rmin, rsize, dr);
+        do draw_list->AddCircle((pv[0], pv[1]), 4., UI_GIZMO_COLOR_PIVOT, 1.5);
+        do draw_list->AddLine(
+            (pv[0] - 6., pv[1]), (pv[0] + 6., pv[1]), UI_GIZMO_COLOR_PIVOT, 1.);
+        do draw_list->AddLine(
+            (pv[0], pv[1] - 6.), (pv[0], pv[1] + 6.), UI_GIZMO_COLOR_PIVOT, 1.);
+
+        // 旋转手柄：从 pivot 沿元素自身 up 轴伸出茎 + 端点圆
+        let up = uiRotateVec2(total, (0., 1.) as vec2);
+        let rpos = uiDisplayToScreen(
+            self.m_ui_draw_pivot_display + up * (half[1] + UI_ROTATE_STALK_PX),
+            rmin, rsize, dr);
+        let rot_color = (self.m_ui_hover_handle == UI_HANDLE_ROTATE)
+            ? UI_GIZMO_COLOR_HOVER
+            | UI_GIZMO_COLOR_REF;
+        do draw_list->AddLine((pv[0], pv[1]), (rpos[0], rpos[1]), rot_color, 1.);
+        do draw_list->AddCircle((rpos[0], rpos[1]), 5., rot_color, 1.5);
+
+        // 缩放手柄方块（四角+四边中点，悬停/拖拽高亮）
+        if (self.m_ui_draw_can_resize)
+        {
+            let hs = COLLIDER_HANDLE_SIZE_PX * 0.5;
+            let mut h = UI_HANDLE_RESIZE_LB;
+            while (h <= UI_HANDLE_RESIZE_T)
+            {
+                let (sx, sy) = uiHandleSigns(h);
+                let hp = uiDisplayToScreen(
+                    self.m_ui_draw_center
+                        + uiRotateVec2(total, ((sx as real) * half[0], (sy as real) * half[1]) as vec2),
+                    rmin, rsize, dr);
+                let hcolor = (self.m_ui_hover_handle == h)
+                    ? UI_GIZMO_COLOR_HOVER
+                    | UI_GIZMO_COLOR_HANDLE;
+                do draw_list->AddRectFilled(
+                    (hp[0] - hs, hp[1] - hs), (hp[0] + hs, hp[1] + hs), hcolor);
+                h += 1;
+            }
+        }
+
+        // 拖拽中的数值标签（跟随鼠标）
+        if (self.m_ui_dragging)
+        {
+            let mouse = GetMousePos() as vec2;
+            do try!{
+                try! selected_entity =
+                    self->uiFindEntityByEuidInSelector(self.m_ui_drag_euid);
+                let handle = self.m_ui_drag_handle;
+
+                let mut label = "";
+                if (handle == UI_HANDLE_MOVE)
+                {
+                    try! elem =
+                        selected_entity->towoo::get_component:<UserInterface::Element>();
+                    let o = elem.offset->get;
+                    let ox = uiRoundTo(o[0], 0.1);
+                    let oy = uiRoundTo(o[1], 0.1);
+                    label = F"offset: ({ox}, {oy})";
+                }
+                else if (handle >= UI_HANDLE_RESIZE_LB && handle <= UI_HANDLE_RESIZE_T)
+                {
+                    let sw = uiRoundTo(self.m_ui_draw_size[0], 0.1);
+                    let sh = uiRoundTo(self.m_ui_draw_size[1], 0.1);
+                    label = F"{sw} × {sh}";
+                }
+                else
+                {
+                    try! rot =
+                        selected_entity->towoo::get_component:<UserInterface::Rotation>();
+                    let deg = uiRoundTo(rot.angle->get, 0.1);
+                    label = F"角度: {deg}°";
+                }
+
+                do draw_list->AddText(
+                    (mouse[0] + 14., mouse[1] - 20.), UI_GIZMO_COLOR_HOVER, label);
+                return_value!;
+            };
+        }
+    }
+
+    // ---- 视口覆盖 UI：锚点/轴心九宫格与 ratio_unit 切换 ----
+
+    // 选中 UI 元素时在工具栏下方显示一行快捷控件。返回控件区域是否被
+    // 悬停（悬停时应抑制视口内的点击选取；须在视口鼠标守卫之前提交）
+    protected func drawUIToolsOverlay(
+        self: WorldEditorViewport,
+        rect_min: ImVec2)=> bool
+    {
+        let selected = self->uiFindSelectedUIElement();
+        if (selected->is_none)
+            return false;
+
+        // try! 块内对外部捕获变量的赋值不可变，悬停标志在块内收集后返回
+        return or(false) <| try!{
+            try! e = selected;
+            try! elem = e->towoo::get_component:<UserInterface::Element>();
+            let euid = e->internal::get_entity_uid
+                ->or(0h as entity::internal::euid_t);
+
+            // 工具栏下一行
+            SetCursorScreenPos(
+                (rect_min.0 + 8., rect_min.1 + 8. + GetFrameHeightWithSpacing()));
+            do TextDisabled("UI:");
+            SameLine();
+
+            let mut hovered = false;
+            if (self->drawUIAlignGrid(
+                    "锚点", "##ui_anchor",
+                    elem.anchor->get as int, "anchor", e, elem, euid))
+                hovered = true;
+            SameLine();
+            if (self->drawUIAlignGrid(
+                    "轴心", "##ui_pivot",
+                    elem.pivot->get as int, "pivot", e, elem, euid))
+                hovered = true;
+
+            SameLine();
+
+            // ratio_unit 三态（切换后比例通道的单位随之改变）
+            let ru = elem.ratio_unit->get;
+            if (RadioButton("高单位", ru == UserInterface::ratio_unit::height_unit))
+                self->uiSetRatioUnit(
+                    e, euid, elem, UserInterface::ratio_unit::height_unit);
+            if (IsItemHovered())
+            {
+                hovered = true;
+                do SetTooltip("比例通道两轴都以参考矩形高度为单位");
+            }
+            SameLine();
+            if (RadioButton("宽单位", ru == UserInterface::ratio_unit::width_unit))
+                self->uiSetRatioUnit(
+                    e, euid, elem, UserInterface::ratio_unit::width_unit);
+            if (IsItemHovered())
+            {
+                hovered = true;
+                do SetTooltip("比例通道两轴都以参考矩形宽度为单位");
+            }
+            SameLine();
+            if (RadioButton("分轴", ru == UserInterface::ratio_unit::per_axis))
+                self->uiSetRatioUnit(
+                    e, euid, elem, UserInterface::ratio_unit::per_axis);
+            if (IsItemHovered())
+            {
+                hovered = true;
+                do SetTooltip("x 用参考矩形宽度、y 用高度");
+            }
+
+            return_value! hovered;
+        };
+    }
+
+    // 锚点/轴心的 3×3 预设网格（列：左/中/右，行：上/中/下）。
+    // 点击即写入对应 alignment 组合并发布可撤销记录；当前预设格子
+    // 橙色高亮。返回网格区域是否被悬停
+    protected func drawUIAlignGrid(
+        self: WorldEditorViewport,
+        label: string,
+        id_prefix: string,
+        current_bits: int,
+        member_name: string,
+        e: entity,
+        elem: UserInterface::Element,
+        euid: entity::internal::euid_t)=> bool
+    {
+        let mut hovered_any = false;
+
+        do TextDisabled(label);
+        SameLine();
+
+        let draw_list = GetWindowDrawList();
+
+        for (let mut r = 0; r < 3; r += 1)
+        {
+            for (let mut c = 0; c < 3; c += 1)
+            {
+                // 列：左(1)/中(0)/右(2)；行：上(4)/中(0)/下(8)
+                let mut col_bits = 0;
+                if (c == 0)
+                    col_bits = 1;
+                else if (c == 2)
+                    col_bits = 2;
+                let mut row_bits = 0;
+                if (r == 0)
+                    row_bits = 4;
+                else if (r == 2)
+                    row_bits = 8;
+                let bits = col_bits->bor(row_bits);
+
+                if (InvisibleButton(F"{id_prefix}_{r}_{c}", (11., 11.)))
+                {
+                    let old = serializeMemberValue(
+                        e, "UserInterface::Element", member_name)->or("");
+                    if (member_name == "anchor")
+                        elem.anchor->set(bits as UserInterface::alignment);
+                    else
+                        elem.pivot->set(bits as UserInterface::alignment);
+                    let new = serializeMemberValue(
+                        e, "UserInterface::Element", member_name)->or("");
+                    if (old != "" && new != "" && old != new)
+                        self->doAction(ModifyComponentMember::create(
+                                euid, "UserInterface::Element",
+                                member_name, old, new));
+                }
+                if (IsItemHovered())
+                {
+                    hovered_any = true;
+                    let mut col_name = "中";
+                    if (c == 0)
+                        col_name = "左";
+                    else if (c == 2)
+                        col_name = "右";
+                    let mut row_name = "中";
+                    if (r == 0)
+                        row_name = "上";
+                    else if (r == 2)
+                        row_name = "下";
+                    do SetTooltip(F"{label}{col_name}{row_name}");
+                }
+
+                // 当前预设格子橙色高亮 + 网格线
+                let (cell_min, cell_max) = GetItemRect();
+                if (current_bits == bits)
+                    do draw_list->AddRectFilled(
+                        (cell_min.0, cell_min.1), (cell_max.0, cell_max.1),
+                        (255, 158, 64, 190));
+                do draw_list->AddRect(
+                    (cell_min.0, cell_min.1), (cell_max.0, cell_max.1),
+                    (153, 153, 153, 205), 1.);
+
+                if (c < 2)
+                    SameLine();
+            }
+        }
+
+        return hovered_any;
+    }
+
+    // 写入 ratio_unit 并发布可撤销记录
+    protected func uiSetRatioUnit(
+        self: WorldEditorViewport,
+        e: entity,
+        euid: entity::internal::euid_t,
+        elem: UserInterface::Element,
+        unit_value: UserInterface::ratio_unit)=> void
+    {
+        let old = serializeMemberValue(
+            e, "UserInterface::Element", "ratio_unit")->or("");
+        elem.ratio_unit->set(unit_value);
+        let new = serializeMemberValue(
+            e, "UserInterface::Element", "ratio_unit")->or("");
+        if (old != "" && new != "" && old != new)
+            self->doAction(ModifyComponentMember::create(
+                    euid, "UserInterface::Element", "ratio_unit", old, new));
+    }
+}

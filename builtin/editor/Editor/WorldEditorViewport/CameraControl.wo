@@ -23,6 +23,7 @@ import pkg::try;
 
 import Definition;
 import EntityPicking;
+import UIGizmo;
 
 using std;
 using iterator;
@@ -277,8 +278,8 @@ namespace JEEditor::Editor::WorldEditorViewport
         
         let perspectiveProjection = cam->towoo::get_component:<Camera::PerspectiveProjection>;
         
-        // 游标手柄/碰撞体/光源形状/粒子发射器编辑手柄被悬停或拖拽时，
-        // 点击不用于选取实体
+        // 游标手柄/碰撞体/光源形状/粒子发射器/UI 元素编辑手柄被悬停或
+        // 拖拽时，点击不用于选取实体
         if (hovered && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left)
             && self.m_gizmo_hover_handle == GIZMO_HANDLE_NONE
             && self.m_collider_hover_handle == GIZMO_HANDLE_NONE
@@ -286,11 +287,14 @@ namespace JEEditor::Editor::WorldEditorViewport
             && self.m_light_hover_handle == GIZMO_HANDLE_NONE
             && !self.m_light_dragging
             && self.m_particle_hover_handle == GIZMO_HANDLE_NONE
-            && !self.m_particle_dragging)
+            && !self.m_particle_dragging
+            && self.m_ui_hover_handle == UI_HANDLE_NONE
+            && !self.m_ui_dragging)
         {
             // 摄像机/2D 光源/粒子发射器实体：点击其图标 gizmo 即选中
-            //（沿用实体拾取的循环规则），未命中图标时才走渲染实体的
-            // 射线拾取
+            //（沿用实体拾取的循环规则），未命中图标时先做 UI 空间拾取
+            //（UI 元素按视口内的显示矩形命中，与其 3D 位置无关），
+            // 仍未命中才走渲染实体的射线拾取
             match (self->pickIconGizmo(GetMousePos() as vec2, true))
             {
                 value(icon_euid)?
@@ -301,18 +305,34 @@ namespace JEEditor::Editor::WorldEditorViewport
                         none?;
                         value((rect_min, rect_max))?
                         {
-                            let mouse_diff = GetMousePos() as vec2 - rect_min as vec2;
-                            let viewport_size = rect_max as vec2 - rect_min as vec2;
-                            
-                            let (vpx, vpy) =
-                                ((mouse_diff / viewport_size) - (0.5, 0.5) as vec2) * 2.;
-                                
-                            self->sendMouseClickToChoiceEntityRequest(
-                                towoo::ray::from(
-                                    trans,
-                                    proj,
-                                    (vpx, -vpy) as vec2,
-                                    perspectiveProjection->is_none));
+                            let rect_size =
+                                (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1);
+                            match (self->selectUIElementAt(
+                                    rect_min as vec2, rect_size as vec2))
+                            {
+                                // UI 空间命中：直接选中（含循环规则）
+                                value(ui_euid)?
+                                    self.m_selected_entity_id =
+                                        option::value(ui_euid);
+                                // 未命中 UI：回退 3D 射线拾取
+                                none?
+                                {
+                                    let mouse_diff =
+                                        GetMousePos() as vec2 - rect_min as vec2;
+                                    let viewport_size =
+                                        rect_max as vec2 - rect_min as vec2;
+
+                                    let (vpx, vpy) =
+                                        ((mouse_diff / viewport_size) - (0.5, 0.5) as vec2) * 2.;
+
+                                    self->sendMouseClickToChoiceEntityRequest(
+                                        towoo::ray::from(
+                                            trans,
+                                            proj,
+                                            (vpx, -vpy) as vec2,
+                                            perspectiveProjection->is_none));
+                                }
+                            }
                         }
                     }
             }

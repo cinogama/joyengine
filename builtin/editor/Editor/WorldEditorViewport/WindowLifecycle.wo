@@ -51,6 +51,7 @@ import TransformGizmo;
 import ColliderGizmo;
 import LightGizmo;
 import ParticleGizmo;
+import UIGizmo;
 import GizmoDrawing;
 import ViewportUI;
 import WorldSaving;
@@ -91,6 +92,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         m_anchor_parent_entity_selector: entity_selector,
         m_physics2d_body_entity_selector: entity_selector,
         m_particle_emitter_entity_selector: entity_selector,
+        m_ui_element_entity_selector: entity_selector,
     }
     {
         func create(w: world)=> WorldSelectors
@@ -159,6 +161,14 @@ namespace JEEditor::Editor::WorldEditorViewport
                         requirement::contains(Transform::Translation::type::typeinfo),
                         requirement::contains(Particle::Emitter::type::typeinfo),
                     ]),
+
+                // UI 元素实体（带 UserInterface::Element 且不带 Invisible）：
+                // UI 矩形 gizmo 与视口内 UI 空间点击拾取以它为准
+                //（UI 布局不读 Translation，故不要求 Translation）
+                m_ui_element_entity_selector = w->create_selector([
+                        requirement::except(Editor::Invisible::type::typeinfo),
+                        requirement::contains(UserInterface::Element::type::typeinfo),
+                    ]),
             };
         }
     }
@@ -217,6 +227,8 @@ namespace JEEditor::Editor::WorldEditorViewport
             m_physics2d_body_entity_selector = mut selectors.m_physics2d_body_entity_selector,
 
             m_particle_emitter_entity_selector = mut selectors.m_particle_emitter_entity_selector,
+
+            m_ui_element_entity_selector = mut selectors.m_ui_element_entity_selector,
             
             // Camera control state:
             m_last_time = mut 0.,
@@ -300,6 +312,35 @@ namespace JEEditor::Editor::WorldEditorViewport
             m_particle_drag_undo_component = mut "",
             m_particle_drag_undo_member = mut "",
             m_particle_drag_undo_old_value = mut "",
+
+            m_ui_hover_handle = mut UI_HANDLE_NONE,
+            m_ui_dragging = mut false,
+            m_ui_drag_handle = mut UI_HANDLE_NONE,
+            m_ui_drag_euid = mut (0h as entity::internal::euid_t),
+            m_ui_drag_start_mouse = mut (0., 0.) as vec2,
+            m_ui_drag_start_offset = mut (0., 0.) as vec2,
+            m_ui_drag_start_size = mut (0., 0.) as vec2,
+            m_ui_drag_effective_size = mut (0., 0.) as vec2,
+            m_ui_drag_angle_acc = mut 0.,
+            m_ui_drag_start_angle_deg = mut 0.,
+            m_ui_drag_start_mouse_angle = mut 0.,
+            m_ui_drag_moved = mut false,
+            m_ui_drag_undo_component = mut "",
+            m_ui_drag_undo_member = mut "",
+            m_ui_drag_undo_old_value = mut "",
+
+            m_ui_draw_visible = mut false,
+            m_ui_draw_can_resize = mut false,
+            m_ui_draw_display_range = mut (0., 0.) as vec2,
+            m_ui_draw_center = mut (0., 0.) as vec2,
+            m_ui_draw_size = mut (0., 0.) as vec2,
+            m_ui_draw_total_angle = mut 0.,
+            m_ui_draw_pivot_display = mut (0., 0.) as vec2,
+            m_ui_draw_anchor_display = mut (0., 0.) as vec2,
+            m_ui_draw_has_ref = mut false,
+            m_ui_draw_ref_center = mut (0., 0.) as vec2,
+            m_ui_draw_ref_size = mut (0., 0.) as vec2,
+            m_ui_draw_ref_total_angle = mut 0.,
         };
         
         // “调试执行/导出时才启用”的系统保存在视口中（编辑器内不 add_system），
@@ -619,6 +660,10 @@ namespace JEEditor::Editor::WorldEditorViewport
             value((rect_min, rect_max))?
             {
                 toolbar_hovered = self->drawGizmoToolbar(debug_camera, rect_min);
+                // UI 元素选中时的快捷控件行（锚点/轴心九宫格与
+                // ratio_unit 切换），须与工具栏一样先于鼠标守卫提交
+                if (self->drawUIToolsOverlay(rect_min))
+                    toolbar_hovered = true;
                 // 未保存标记悬停时同样抑制视口内的点击选取
                 if (self->drawUnsavedMark(rect_min, rect_max))
                     toolbar_hovered = true;
@@ -704,6 +749,20 @@ namespace JEEditor::Editor::WorldEditorViewport
                     rect_min,
                     (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
         }
+
+        // UI 元素编辑手柄交互：选中带 UserInterface::Element 的实体即
+        // 生效，优先级介于粒子手柄与变换游标之间（其被悬停/拖拽时变换
+        // 游标让位；且 UI 元素实体的变换游标整体让位，见
+        // updateTransformGizmo），同样先于摄像机控制
+        match (viewport_rect)
+        {
+            none?;
+            value((rect_min, rect_max))?
+                self->updateUIGizmo(
+                    viewport_hovered && !toolbar_hovered,
+                    rect_min,
+                    (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
+        }
         
         // 变换游标交互（碰撞体手柄被悬停/拖拽时让位，见 updateTransformGizmo）
         match (viewport_rect)
@@ -755,7 +814,18 @@ namespace JEEditor::Editor::WorldEditorViewport
         
         // Draw gizmo here.
         self->drawGizmos(debug_camera);
-        
+
+        // UI 元素 gizmo 覆盖层（ImGui DrawList，屏幕空间；在视口图像
+        // 之后提交，天然盖在画面与 rendchain gizmo 之上）
+        match (viewport_rect)
+        {
+            none?;
+            value((rect_min, rect_max))?
+                self->drawUIGizmo(
+                    rect_min,
+                    (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
+        }
+
         return self.m_close == CloseRequest::NORMALLY;
     }
     

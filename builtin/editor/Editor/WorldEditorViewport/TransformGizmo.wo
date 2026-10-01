@@ -158,6 +158,13 @@ namespace JEEditor::Editor::WorldEditorViewport
                 camera_entity->towoo::get_component:<Camera::Projection>();
             try! selected_euid = self.m_selected_entity_id;
             try! selected_entity = self->findEntityByEuid(selected_euid);
+
+            // UI 元素实体：布局完全由 UserInterface::Element 决定（不读
+            // Translation），3D 游标对其无意义，整体让位给 UI 矩形手柄
+            //（见 updateUIGizmo）
+            if (selected_entity->towoo::get_component:<UserInterface::Element>->is_value)
+                return_value!;
+
             try! trans =
                 selected_entity->towoo::get_component:<Transform::Translation>();
 
@@ -254,16 +261,19 @@ namespace JEEditor::Editor::WorldEditorViewport
                     view_proj, origin, orientation,
                     self.m_gizmo_draw_size, mouse, rmin, rsize, is_2d);
 
-            // 碰撞体/光源形状/粒子发射器编辑手柄优先：其被悬停或拖拽中
-            // 时变换游标让位（不响应悬停高亮与左键拖拽；游标本帧仍照常
-            // 绘制）。本函数在 updateColliderGizmo/updateLightGizmo/
-            // updateParticleGizmo 之后运行，读到的即本帧结果。
+            // 碰撞体/光源形状/粒子发射器/UI 元素编辑手柄优先：其被悬停
+            // 或拖拽中时变换游标让位（不响应悬停高亮与左键拖拽；游标
+            // 本帧仍照常绘制）。本函数在 updateColliderGizmo/
+            // updateLightGizmo/updateParticleGizmo/updateUIGizmo 之后运行，
+            // 读到的即本帧结果。
             if (self.m_collider_hover_handle != GIZMO_HANDLE_NONE
                 || self.m_collider_dragging
                 || self.m_light_hover_handle != GIZMO_HANDLE_NONE
                 || self.m_light_dragging
                 || self.m_particle_hover_handle != GIZMO_HANDLE_NONE
-                || self.m_particle_dragging)
+                || self.m_particle_dragging
+                || self.m_ui_hover_handle != UI_HANDLE_NONE
+                || self.m_ui_dragging)
                 self.m_gizmo_hover_handle = GIZMO_HANDLE_NONE;
 
             // 悬停手柄上按下左键：开始拖拽

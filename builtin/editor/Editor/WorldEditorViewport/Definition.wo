@@ -108,6 +108,11 @@ namespace JEEditor::Editor
         // 选择器：发射器图标 gizmo 与发射形状/方向/散布编辑手柄以它为准
         //（发射器仍是常规渲染实体，参与射线拾取）
         protected m_particle_emitter_entity_selector: mut entity_selector,
+
+        // UI 元素实体（带 UserInterface::Element 且不带 Invisible）选择器：
+        // UI 矩形 gizmo 与视口内 UI 空间点击拾取以它为准（UI 布局不读
+        // Translation，故不要求 Translation）
+        protected m_ui_element_entity_selector: mut entity_selector,
         
         protected m_last_time: mut real,
         protected m_is_look_active: mut bool,
@@ -213,6 +218,46 @@ namespace JEEditor::Editor
         protected m_particle_drag_undo_component: mut string,
         protected m_particle_drag_undo_member: mut string,
         protected m_particle_drag_undo_old_value: mut string,
+
+        // ---- UI 元素 gizmo（编辑手柄）状态 ----
+        // 选中带 UserInterface::Element 的实体即显示解析后的 UI 矩形与
+        // 手柄、可直接拖拽（无需模式开关；此时变换游标整体让位，UI 布局
+        // 不读 Translation，3D 游标对其无意义）
+        protected m_ui_hover_handle: mut int,
+        protected m_ui_dragging: mut bool,
+        protected m_ui_drag_handle: mut int,
+        // 拖拽开始时捕获的快照：起始鼠标（显示像素空间）、各手柄语义
+        // 所需的起始值（Element.offset/size 成员旧值、解析后的有效尺寸、
+        // 祖先累计角、Rotation 起始角与起始鼠标方位角）、位移是否超过
+        // 阈值（未超过的“点击”用于 UI 空间循环选取）与撤销记录所需的
+        // 组件成员旧值序列
+        protected m_ui_drag_euid: mut entity::internal::euid_t,
+        protected m_ui_drag_start_mouse: mut vec2,
+        protected m_ui_drag_start_offset: mut vec2,
+        protected m_ui_drag_start_size: mut vec2,
+        protected m_ui_drag_effective_size: mut vec2,
+        protected m_ui_drag_angle_acc: mut real,
+        protected m_ui_drag_start_angle_deg: mut real,
+        protected m_ui_drag_start_mouse_angle: mut real,
+        protected m_ui_drag_moved: mut bool,
+        protected m_ui_drag_undo_component: mut string,
+        protected m_ui_drag_undo_member: mut string,
+        protected m_ui_drag_undo_old_value: mut string,
+
+        // 本帧绘制 UI gizmo 所需的快照（由 updateUIGizmo 写入，
+        // drawUIGizmo 读取；参考矩形 = 父元素或整个显示区）
+        protected m_ui_draw_visible: mut bool,
+        protected m_ui_draw_can_resize: mut bool,
+        protected m_ui_draw_display_range: mut vec2,
+        protected m_ui_draw_center: mut vec2,
+        protected m_ui_draw_size: mut vec2,
+        protected m_ui_draw_total_angle: mut real,
+        protected m_ui_draw_pivot_display: mut vec2,
+        protected m_ui_draw_anchor_display: mut vec2,
+        protected m_ui_draw_has_ref: mut bool,
+        protected m_ui_draw_ref_center: mut vec2,
+        protected m_ui_draw_ref_size: mut vec2,
+        protected m_ui_draw_ref_total_angle: mut real,
     }
     {
         // 编辑器上下文：重建 WorldEditorViewport 窗口所需的全部状态。
@@ -322,6 +367,58 @@ namespace JEEditor::Editor
         protected let PARTICLE_GIZMO_COLOR = (1., 0.5, 0.75, 0.65);
         protected let PARTICLE_DIRECTION_GIZMO_COLOR = (0.4, 0.85, 1., 0.85);
         protected let PARTICLE_SPREAD_GIZMO_COLOR = (1., 0.62, 0.25, 0.75);
+
+        // ---- UI 元素 gizmo 参数 ----
+        // 手柄编号：移动（矩形内部）、8 个缩放手柄（四角+四边，命名以
+        // 显示空间 y 向上为准）、旋转手柄（沿元素自身 up 轴伸出的茎环）
+        protected let UI_HANDLE_NONE = -1;
+        protected let UI_HANDLE_MOVE = 0;
+        protected let UI_HANDLE_RESIZE_LB = 1;
+        protected let UI_HANDLE_RESIZE_RB = 2;
+        protected let UI_HANDLE_RESIZE_LT = 3;
+        protected let UI_HANDLE_RESIZE_RT = 4;
+        protected let UI_HANDLE_RESIZE_L = 5;
+        protected let UI_HANDLE_RESIZE_R = 6;
+        protected let UI_HANDLE_RESIZE_B = 7;
+        protected let UI_HANDLE_RESIZE_T = 8;
+        protected let UI_HANDLE_ROTATE = 9;
+
+        protected let UI_HIT_PX = 10.;                // 手柄命中判定半径（像素）
+        protected let UI_GIZMO_MIN_SIZE = 1.;         // 缩放下限（显示像素）
+        protected let UI_MOVE_CLICK_MAX_DRAG_PX = 4.; // 判定为点击而非拖拽的位移阈值
+        protected let UI_ROTATE_STALK_PX = 30.;       // 旋转手柄到元素上缘的距离
+        protected let UI_ROTATE_SNAP_DEG = 15.;       // Ctrl 吸附的角度步进
+        // UI gizmo 配色（ImGui DrawList 的 Color32RGBA，0-255）：
+        // 元素矩形青、参考矩形/锚点橙、pivot 白、手柄浅灰、激活高亮黄
+        protected let UI_GIZMO_COLOR = (77, 230, 242, 230);
+        protected let UI_GIZMO_COLOR_REF = (255, 158, 64, 200);
+        protected let UI_GIZMO_COLOR_PIVOT = (255, 255, 255, 230);
+        protected let UI_GIZMO_COLOR_HANDLE = (217, 217, 217, 230);
+        protected let UI_GIZMO_COLOR_HOVER = (255, 255, 64, 255);
+
+        // UI 元素在显示像素空间（原点=显示区左下、y 向上）的解析结果：
+        // 由 UIGizmo.wo 的 uiResolveDisplay 沿 Transform 锚点链逐级解析
+        // 并按 UI 管线的旋转链合成（与
+        // UserInterfaceGraphicPipelineSystem::ResolveUiNodes 同式）
+        protected using UIRectInfo = struct{
+            // 绘制四边形的中心（已含祖先旋转链与自身旋转的合成偏移）
+            protected m_center: vec2,
+            // 解析后有效尺寸（绝对 + 比例通道合成，显示像素）
+            protected m_size: vec2,
+            // pivot 的显示位置（旋转不动点，显示像素空间）
+            protected m_pivot_display: vec2,
+            // pivot→中心偏移（祖先未旋转帧，解析结果原值）
+            protected m_pivot_offset: vec2,
+            // 祖先累计旋转角（度，不含自身）
+            protected m_angle_acc: real,
+            // 自身 Rotation 角（度，无组件则 0）
+            protected m_own_angle: real,
+            // 锚点基点（anchor 对齐到参考矩形的位置）的显示位置
+            protected m_anchor_display: vec2,
+            // 层级深度（UI 根元素=0）
+            protected m_depth: int,
+        };
+
         
         // 右键同时承担“拖拽环视”职责：以按下起点为基准，位移切实超过该
         // 像素阈值后才激活环视（阈值内的位移不转动摄像机）；松开时位移
