@@ -242,6 +242,7 @@ namespace JEEditor::Editor
         protected m_ui_drag_start_size: mut vec2,
         protected m_ui_drag_start_member_px: mut vec2,
         protected m_ui_drag_other_box_px: mut vec2,
+        protected m_ui_drag_start_unrot_center: mut vec2,
         protected m_ui_drag_angle_acc: mut real,
         protected m_ui_drag_start_angle_deg: mut real,
         protected m_ui_drag_start_mouse_angle: mut real,
@@ -249,6 +250,11 @@ namespace JEEditor::Editor
         protected m_ui_drag_undo_component: mut string,
         protected m_ui_drag_undo_member: mut string,
         protected m_ui_drag_undo_old_value: mut string,
+
+        // Ctrl 对齐吸附命中的参考线（祖先未旋转帧坐标；none = 无），
+        // 拖拽中每帧由 applyUIDrag 写入、drawUIGizmo 绘制
+        protected m_ui_snap_guide_x: mut option<real>,
+        protected m_ui_snap_guide_y: mut option<real>,
 
         // 本帧绘制 UI gizmo 所需的快照（由 updateUIGizmo 写入，
         // drawUIGizmo 读取；参考矩形 = 父元素或整个显示区）
@@ -399,7 +405,9 @@ namespace JEEditor::Editor
         protected let UI_GIZMO_MIN_SIZE = 1.;         // 缩放下限（显示像素）
         protected let UI_MOVE_CLICK_MAX_DRAG_PX = 4.; // 判定为点击而非拖拽的位移阈值
         protected let UI_ROTATE_STALK_PX = 30.;       // 旋转手柄到元素上缘的距离
-        protected let UI_SNAP_PX = 8.;                 // Ctrl 吸附的移动/缩放步进（显示像素）
+        protected let UI_SNAP_PX = 8.;                 // Ctrl 吸附的格点步进（显示像素）
+        protected let UI_SNAP_ALIGN_PX = 6.;           // Ctrl 吸附的边缘/中心对齐判定半径（显示像素）
+        protected let UI_SNAP_GUIDE_EXT_PX = 30.;      // 吸附参考线超出参考矩形的延长量
         protected let UI_ROTATE_SNAP_DEG = 15.;       // Ctrl 吸附的角度步进
         // UI gizmo 配色（ImGui DrawList 的 Color32RGBA，0-255）：
         // 元素矩形青、参考矩形/锚点橙、pivot 白、手柄浅灰、激活高亮黄；
@@ -410,6 +418,7 @@ namespace JEEditor::Editor
         protected let UI_GIZMO_COLOR_PIVOT = (255, 255, 255, 230);
         protected let UI_GIZMO_COLOR_HANDLE = (217, 217, 217, 230);
         protected let UI_GIZMO_COLOR_HOVER = (255, 255, 64, 255);
+        protected let UI_GIZMO_COLOR_SNAP = (255, 80, 255, 200);
         protected let UI_GIZMO_COLOR_SIZE_LAYER = (200, 200, 200, 170);
         protected let UI_GIZMO_COLOR_RATIO_LAYER = (178, 128, 255, 210);
 
@@ -434,6 +443,12 @@ namespace JEEditor::Editor
             protected m_anchor_display: vec2,
             // 层级深度（UI 根元素=0）
             protected m_depth: int,
+            // 祖先未旋转帧中的元素中心（对齐吸附计算用）
+            protected m_unrot_center: vec2,
+            // 参考矩形（祖先未旋转帧；根元素为整个显示区）——对齐吸附
+            // 的目标（其左/中/右与下/中/上六条关键线）
+            protected m_ref_center: vec2,
+            protected m_ref_size: vec2,
             // 单位一（比例通道的像素换算系数，逐轴）：按自身 ratio_unit
             // 折叠参考矩形尺寸——height_unit 两轴取参考高、width_unit
             // 两轴取参考宽、per_axis 逐轴取参考宽/高；根元素参考矩形为

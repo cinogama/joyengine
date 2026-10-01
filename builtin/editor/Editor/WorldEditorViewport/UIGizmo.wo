@@ -165,6 +165,36 @@ namespace JEEditor::Editor::WorldEditorViewport
         return uiFloor(v / step + 0.5) * step;
     }
 
+    // 某轴的边缘/中心对齐吸附：元素的三条关键线（负边/中心/正边）
+    // 与参考矩形的三条关键线两两比对，距离在 UI_SNAP_ALIGN_PX 内时返回
+    //（吸附修正量, 命中的参考线坐标）；无命中返回 none。坐标均在祖先
+    // 未旋转帧（显示像素）
+    protected func uiSnapAlignAxis(
+        e0: real, e1: real, e2: real,
+        r0: real, r1: real, r2: real)=> option<(real, real)>
+    {
+        let elem_lines = [e0, e1, e2];
+        let ref_lines = [r0, r1, r2];
+
+        let mut best = option::none: option<(real, real)>;
+        let mut best_dist = UI_SNAP_ALIGN_PX + 0.001;
+
+        for (let el : elem_lines)
+        {
+            for (let rl : ref_lines)
+            {
+                let d = rl - el;
+                let ad = mathf::abs(d);
+                if (ad < best_dist)
+                {
+                    best_dist = ad;
+                    best = option::value((d, rl));
+                }
+            }
+        }
+        return best;
+    }
+
     // ---- 解析与查询 ----
 
     // 显示空间 = 调试摄像机 framebuffer 的尺寸（UI 管线按相机渲染
@@ -300,6 +330,9 @@ namespace JEEditor::Editor::WorldEditorViewport
             let mut out_own = 0.;
             let mut out_anchor = (0., 0.) as vec2;
             let mut out_unit_px = (1., 1.) as vec2;
+            let mut out_unrot_center = (0., 0.) as vec2;
+            let mut out_ref_center = (0., 0.) as vec2;
+            let mut out_ref_size = (0., 0.) as vec2;
 
             let mut i = ui_chain->len - 1;
             while (i >= 0)
@@ -323,8 +356,12 @@ namespace JEEditor::Editor::WorldEditorViewport
 
                 if (i == 0)
                 {
-                    // 目标实体：累计角 = 父之上的祖先和 + 父自身角
+                    // 目标实体：累计角 = 父之上的祖先和 + 父自身角；
+                    // 参考矩形（祖先未旋转帧）：父矩形或整个显示区
                     out_center = rc;
+                    out_unrot_center = rc;
+                    out_ref_center = have_prev ? prev_center | display_range * 0.5;
+                    out_ref_size = have_prev ? prev_size | display_range;
                     out_size = rs;
                     out_pivot_off = rp;
                     out_display = display_center;
@@ -391,6 +428,9 @@ namespace JEEditor::Editor::WorldEditorViewport
                 m_anchor_display = out_anchor,
                 m_depth = ui_chain->len - 1,
                 m_unit_px = out_unit_px,
+                m_unrot_center = out_unrot_center,
+                m_ref_center = out_ref_center,
+                m_ref_size = out_ref_size,
             });
         };
     }
@@ -549,6 +589,8 @@ namespace JEEditor::Editor::WorldEditorViewport
         rect_size: ImVec2)=> void
     {
         self.m_ui_draw_visible = false;
+        self.m_ui_snap_guide_x = option::none: option<real>;
+        self.m_ui_snap_guide_y = option::none: option<real>;
 
         // 松开左键：结束拖拽并提交撤销记录
         if (self.m_ui_dragging
@@ -811,18 +853,61 @@ namespace JEEditor::Editor::WorldEditorViewport
             {
                 try! elem =
                     selected_entity->towoo::get_component:<UserInterface::Element>();
+                try! info = self->uiResolveDisplay(selected_entity, display_range);
                 // 显示位移 → 未旋转帧偏移增量：d(display)/d(offset)
                 // = R(angle_acc)，故逆旋转祖先累计角（不含自身角）
-                let delta_local = uiRotateVec2(-self.m_ui_drag_angle_acc, delta_disp);
+                let mut delta_local = uiRotateVec2(-self.m_ui_drag_angle_acc, delta_disp);
 
-                // 先在“层像素”空间合成目标并按 Ctrl 吸附，再除以单位一
-                // 换算回成员增量（绝对层单位一恒为 1）
+                // Ctrl 对齐吸附（优先于格点）：元素的三条关键线（左/中/
+                // 右、下/中/上）对齐参考矩形的三条关键线（祖先未旋转帧）
+                let mut snapped_x = false;
+                let mut snapped_y = false;
+                if (ctrl_down)
+                {
+                    let target_c = self.m_ui_drag_start_unrot_center + delta_local;
+                    let hw = info.m_size[0] * 0.5;
+                    let hh = info.m_size[1] * 0.5;
+                    let rhw = info.m_ref_size[0] * 0.5;
+                    let rhh = info.m_ref_size[1] * 0.5;
+
+                    match (uiSnapAlignAxis(
+                            target_c[0] - hw, target_c[0], target_c[0] + hw,
+                            info.m_ref_center[0] - rhw, info.m_ref_center[0],
+                            info.m_ref_center[0] + rhw))
+                    {
+                        none?;
+                        value((d, line))?
+                        {
+                            delta_local = (delta_local[0] + d, delta_local[1]) as vec2;
+                            self.m_ui_snap_guide_x = option::value(line);
+                            snapped_x = true;
+                        }
+                    }
+                    match (uiSnapAlignAxis(
+                            target_c[1] - hh, target_c[1], target_c[1] + hh,
+                            info.m_ref_center[1] - rhh, info.m_ref_center[1],
+                            info.m_ref_center[1] + rhh))
+                    {
+                        none?;
+                        value((d, line))?
+                        {
+                            delta_local = (delta_local[0], delta_local[1] + d) as vec2;
+                            self.m_ui_snap_guide_y = option::value(line);
+                            snapped_y = true;
+                        }
+                    }
+                }
+
+                // 再在“层像素”空间合成目标；对齐未命中的轴按 Ctrl 格点
+                // 吸附，最后除以单位一换算回成员增量（绝对层单位一恒为 1）
                 let mut tx = self.m_ui_drag_start_member_px[0] + delta_local[0];
                 let mut ty = self.m_ui_drag_start_member_px[1] + delta_local[1];
                 if (ctrl_down)
                 {
-                    tx = uiRoundTo(tx, UI_SNAP_PX);
-                    ty = uiRoundTo(ty, UI_SNAP_PX);
+                    if (!snapped_x)
+                        tx = uiRoundTo(tx, UI_SNAP_PX);
+                    if (!snapped_y)
+                        ty = uiRoundTo(ty, UI_SNAP_PX);
                 }
                 let dx = (unit[0] > 0.0001)
                     ? (tx - self.m_ui_drag_start_member_px[0]) / unit[0]
@@ -844,12 +929,59 @@ namespace JEEditor::Editor::WorldEditorViewport
                 let total = info.m_angle_acc + info.m_own_angle;
 
                 // 鼠标 → 元素本地坐标（相对 pivot，随元素旋转）
-                let c = uiRotateVec2(-total, mouse_disp - info.m_pivot_display);
+                let mut c = uiRotateVec2(-total, mouse_disp - info.m_pivot_display);
 
                 let pivot_bits = elem.pivot->get as int;
                 let (shx, shy) = uiHandleSigns(handle);
                 let spx = uiPivotSide(pivot_bits, 0);
                 let spy = uiPivotSide(pivot_bits, 1);
+
+                // Ctrl 对齐吸附（优先于格点）：被拖边缘恒在鼠标处（未旋转
+                // 帧），把该轴的鼠标坐标吸附到参考矩形的关键线上即可让
+                // 边缘对齐；仅在元素自身无旋转时做（旋转下边缘方位随角
+                // 变化，线对齐无确定方向）
+                let mut snapped_x = false;
+                let mut snapped_y = false;
+                if (ctrl_down && mathf::abs(info.m_own_angle) < 0.01)
+                {
+                    let pivot_unrot = info.m_unrot_center - info.m_pivot_offset;
+                    let mouse_unrot = pivot_unrot + c;
+                    let rhw = info.m_ref_size[0] * 0.5;
+                    let rhh = info.m_ref_size[1] * 0.5;
+
+                    if (shx != 0)
+                    {
+                        match (uiSnapAlignAxis(
+                                mouse_unrot[0], mouse_unrot[0], mouse_unrot[0],
+                                info.m_ref_center[0] - rhw, info.m_ref_center[0],
+                                info.m_ref_center[0] + rhw))
+                        {
+                            none?;
+                            value((d, line))?
+                            {
+                                c = (c[0] + d, c[1]) as vec2;
+                                self.m_ui_snap_guide_x = option::value(line);
+                                snapped_x = true;
+                            }
+                        }
+                    }
+                    if (shy != 0)
+                    {
+                        match (uiSnapAlignAxis(
+                                mouse_unrot[1], mouse_unrot[1], mouse_unrot[1],
+                                info.m_ref_center[1] - rhh, info.m_ref_center[1],
+                                info.m_ref_center[1] + rhh))
+                        {
+                            none?;
+                            value((d, line))?
+                            {
+                                c = (c[0], c[1] + d) as vec2;
+                                self.m_ui_snap_guide_y = option::value(line);
+                                snapped_y = true;
+                            }
+                        }
+                    }
+                }
 
                 // 逐轴解编辑层框的新尺寸（pivot 固定语义对有效矩形生效）：
                 // pivot 居中 → 对称伸缩（边界在中心 ±s/2）；pivot 靠边 →
@@ -870,7 +1002,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                             | (shx as real) * c[0];
                         if (sx_new < self.m_ui_drag_other_box_px[0])
                             sx_new = self.m_ui_drag_other_box_px[0];
-                        if (ctrl_down)
+                        if (ctrl_down && !snapped_x)
                         {
                             sx_new = uiRoundTo(sx_new, UI_SNAP_PX);
                             // round 可能回跳到低于下限的格点，取下限上方
@@ -891,7 +1023,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                             | (shx as real) * c[0] - self.m_ui_drag_other_box_px[0] * 0.5;
                         if (sx_new < UI_GIZMO_MIN_SIZE)
                             sx_new = UI_GIZMO_MIN_SIZE;
-                        if (ctrl_down)
+                        if (ctrl_down && !snapped_x)
                             sx_new = uiRoundTo(sx_new, UI_SNAP_PX);
                     }
                 }
@@ -905,7 +1037,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                             | (shy as real) * c[1];
                         if (sy_new < self.m_ui_drag_other_box_px[1])
                             sy_new = self.m_ui_drag_other_box_px[1];
-                        if (ctrl_down)
+                        if (ctrl_down && !snapped_y)
                         {
                             sy_new = uiRoundTo(sy_new, UI_SNAP_PX);
                             if (sy_new < self.m_ui_drag_other_box_px[1])
@@ -924,7 +1056,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                             | (shy as real) * c[1] - self.m_ui_drag_other_box_px[1] * 0.5;
                         if (sy_new < UI_GIZMO_MIN_SIZE)
                             sy_new = UI_GIZMO_MIN_SIZE;
-                        if (ctrl_down)
+                        if (ctrl_down && !snapped_y)
                             sy_new = uiRoundTo(sy_new, UI_SNAP_PX);
                     }
                 }
@@ -1170,6 +1302,42 @@ namespace JEEditor::Editor::WorldEditorViewport
                 do draw_list->AddRectFilled(
                     (hp[0] - hs, hp[1] - hs), (hp[0] + hs, hp[1] + hs), hcolor);
                 h += 1;
+            }
+        }
+
+        // Ctrl 对齐吸附命中的参考线（洋红；跟随参考矩形旋转、两端延长）
+        match (self.m_ui_snap_guide_x)
+        {
+            none?;
+            value(lx)?
+            {
+                let rt = self.m_ui_draw_ref_total_angle;
+                let dx = lx - self.m_ui_draw_ref_center[0];
+                let hh2 = self.m_ui_draw_ref_size[1] * 0.5 + UI_SNAP_GUIDE_EXT_PX;
+                let g0 = uiDisplayToScreen(
+                    self.m_ui_draw_ref_center + uiRotateVec2(rt, (dx, -hh2) as vec2),
+                    rmin, rsize, dr);
+                let g1 = uiDisplayToScreen(
+                    self.m_ui_draw_ref_center + uiRotateVec2(rt, (dx, hh2) as vec2),
+                    rmin, rsize, dr);
+                do draw_list->AddLine((g0[0], g0[1]), (g1[0], g1[1]), UI_GIZMO_COLOR_SNAP, 1.);
+            }
+        }
+        match (self.m_ui_snap_guide_y)
+        {
+            none?;
+            value(ly)?
+            {
+                let rt = self.m_ui_draw_ref_total_angle;
+                let dy = ly - self.m_ui_draw_ref_center[1];
+                let ww2 = self.m_ui_draw_ref_size[0] * 0.5 + UI_SNAP_GUIDE_EXT_PX;
+                let g0 = uiDisplayToScreen(
+                    self.m_ui_draw_ref_center + uiRotateVec2(rt, (-ww2, dy) as vec2),
+                    rmin, rsize, dr);
+                let g1 = uiDisplayToScreen(
+                    self.m_ui_draw_ref_center + uiRotateVec2(rt, (ww2, dy) as vec2),
+                    rmin, rsize, dr);
+                do draw_list->AddLine((g0[0], g0[1]), (g1[0], g1[1]), UI_GIZMO_COLOR_SNAP, 1.);
             }
         }
 
