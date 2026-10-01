@@ -258,8 +258,47 @@ namespace JEEditor::Editor
                 }
                 TreePop();
             }
+            else if (has_children)
+            {
+                // 收起的节点：子孙不再渲染，但仍须记入 rendering，
+                // 否则 showEntitiesInWorld 的兜底平铺会把它们误判为
+                // “不在任何根链上”的坏数据，重新平铺到根级显示
+                //（表现为收起父实体后子实体依然留在列表里）
+                markCollapsedDescendants(
+                    children_map, rendering, children->unwrap);
+            }
 
             return any_hovered;
+        }
+        // 把收起节点的全部子孙“只标记、不渲染”地记入 rendering，
+        // 使兜底平铺不会把这些实体当成坏数据重复显示。
+        // 环防御与 drawEntityNode 一致：已标记的实体不再进入，
+        // 父链成环时安全终止
+        func markCollapsedDescendants(
+            children_map: map<entity::internal::euid_t,
+                vec<mut (entity, option<entity::internal::euid_t>)>>,
+            rendering: map<entity::internal::euid_t, bool>,
+            children: vec<mut (entity, option<entity::internal::euid_t>)>)=> void
+        {
+            for (let (_, child_euid) : children)
+            {
+                match (child_euid)
+                {
+                    none?;
+                    value(child_eid)?
+                        if (!rendering->contains(child_eid))
+                        {
+                            do rendering->set(child_eid, true);
+                            match (children_map->get(child_eid))
+                            {
+                                none?;
+                                value(grandchildren)?
+                                    markCollapsedDescendants(
+                                        children_map, rendering, grandchildren);
+                            }
+                        }
+                }
+            }
         }
         // 返回值：本帧鼠标是否悬停在任一实体项上（供 run 里空白右键
         // 菜单的判定使用）。实体按父子层级显示：根级与各级子项均按
@@ -346,8 +385,10 @@ namespace JEEditor::Editor
             }
 
             // 兜底：不在任何根链上的实体（父链成环等坏数据）平铺到
-            // 根级，保证列表始终可见全部实体。无 EUID 的实体必然已随
-            // roots/children 渲染（分组不依赖 EUID），跳过以防重复
+            // 根级，保证列表始终显示全部实体。被收起而未渲染的子孙
+            // 已由 markCollapsedDescendants 记入 rendering，不会在此
+            // 重复显示。无 EUID 的实体必然已随 roots/children 渲染
+            //（分组不依赖 EUID），跳过以防重复
             for (let (rest_e, rest_euid) : entities)
             {
                 match (rest_euid)
