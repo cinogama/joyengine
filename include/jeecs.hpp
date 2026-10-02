@@ -8052,6 +8052,14 @@ namespace jeecs
                 return x * _v2.x + y * _v2.y;
             }
 
+            // 绕原点旋转 _angle（度）后的新向量。
+            inline vec2 rotate(float _angle) const noexcept
+            {
+                const float rad = _angle * DEG2RAD;
+                const float c = std::cos(rad), s = std::sin(rad);
+                return vec2(c * x - s * y, s * x + c * y);
+            }
+
             inline float max() const noexcept
             {
                 return std::max(x, y);
@@ -10697,13 +10705,6 @@ namespace jeecs
             // 子元素的有效旋转角为全部祖先角与自身角之和，由布局阶段沿父链
             // 递推缓存进 WorldLayout::rotation。
             float angle = 0.0f;
-
-            // 将二维向量旋转 angle（弧度）。用于 UI 层级旋转链的像素空间复合。
-            static math::vec2 rotate_vector(float angle, const math::vec2& v) noexcept
-            {
-                const float c = std::cos(angle), s = std::sin(angle);
-                return math::vec2(c * v.x - s * v.y, s * v.x + c * v.y);
-            }
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {

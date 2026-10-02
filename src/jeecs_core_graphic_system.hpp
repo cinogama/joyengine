@@ -780,20 +780,18 @@ public let frag =
                     // 父的旋转：绕父枢轴（父的局部未旋转系）转动子中心；
                     // 结果再经父的祖先旋转链 A_parent 平移到显示系。
                     // Rotation.angle 单位为度（与 Transform 欧拉角一致，绘制端
-                    // quat::euler 按 DEG2RAD 消费）；rotate_vector 是纯数学助手，
-                    // 接受弧度，因此此处需要显式换算。
+                    // quat::euler 按 DEG2RAD 消费）；vec2::rotate 同样按度
+                    // 接受，直接传角度即可。
                     const math::vec2 parent_pivot =
                         parent.rect.center - parent.rect.pivot_offset;
                     const float parent_angle =
                         parent.rotation != nullptr ? parent.rotation->angle : 0.f;
 
                     const math::vec2 rotated_by_parent =
-                        parent_pivot + UserInterface::Rotation::rotate_vector(
-                            parent_angle * math::DEG2RAD, node.rect.center - parent_pivot);
+                        parent_pivot + (node.rect.center - parent_pivot).rotate(parent_angle);
 
                     node.display_center = parent.display_center
-                        + UserInterface::Rotation::rotate_vector(
-                            parent.angle_acc * math::DEG2RAD, rotated_by_parent - parent.rect.center);
+                        + (rotated_by_parent - parent.rect.center).rotate(parent.angle_acc);
                 }
             }
         }
@@ -886,7 +884,7 @@ public let frag =
                     // 矩阵结构与未旋转时一致（T(枢轴)·R·T(pivot_offset)·S 的展开形式）：
                     // uioffset 保证枢轴落在其经祖先旋转链后的显示位置 A(Q)，
                     // 即 uioffset = D_C + (I − R(Θ_acc))·pivot_offset
-                    //（R 在此处按弧度计算，需先换算）。
+                    //（R 由 vec2::rotate 按度计算）。
                     // 该矩阵把“单位矩形坐标”（±0.5 张成元素矩形）映射到相机
                     // 像素空间，常规四边形路径（着色器侧 MVP）与逐字文本路径
                     //（CPU 侧烘焙进顶点）共用同一映射。
@@ -894,8 +892,7 @@ public let frag =
 
                     const math::vec2 uioffset = node.display_center
                         + (rect.pivot_offset
-                            - UserInterface::Rotation::rotate_vector(
-                                node.angle_acc * math::DEG2RAD, rect.pivot_offset))
+                            - rect.pivot_offset.rotate(node.angle_acc))
                         - math::vec2(
                             (float)RENDAIMBUFFER_WIDTH / 2.0f,
                             (float)RENDAIMBUFFER_HEIGHT / 2.0f);
