@@ -532,63 +532,9 @@ public let frag =
 
         UserInterfaceGraphicPipelineSystem(game_world w)
             : BaseImpledGraphicPipeline(w)
-            , m_text_shader(graphic::shader::create(
-                nullptr,
-                "!/builtin/builtin_ui_text.shader", R"(
-// Builtin UI text shader
-import pkg::std;
-
-import je::shader;
-import pkg::woshader;
-
-using woshader;
-using je::shader;
-
-SHARED  (true);
-ZTEST   (LESS);
-ZWRITE  (DISABLE);
-BLEND   (ADD, SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
-CULL    (NONE);
-
-WOSHADER_VERTEX_IN!
-    using vin = struct {
-        vertex  : float3,
-        uv      : float2,
-        color   : float4,
-    };
-
-WOSHADER_VERTEX_TO_FRAGMENT!
-    using v2f = struct {
-        pos     : float4,
-        uv      : float2,
-        color   : float4,
-    };
-
-WOSHADER_FRAGMENT_OUT!
-    using fout = struct {
-        color   : float4,
-    };
-
-public func vert(v: vin)
-{
-    return v2f{
-        pos = JE_MVP * vec4!(v.vertex, 1.),
-        uv = v.uv,
-        color = v.color,
-    };
-}
-
-let linear_clamp = Sampler2D::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
-WOSHADER_UNIFORM!
-    let Main = texture2d::uniform(0, linear_clamp);
-
-public func frag(vf: v2f)
-{
-    return fout{
-        color = vf.color * tex2d(Main, vf.uv),
-    };
-}
-)").value())
+            // 内嵌源码与 builtin/shader/UIText.shader 保持同源；两处以相同
+            // 路径加载，命中同一共享缓存实例（引擎核心自足性约定：核心
+            // 管线着色器不依赖内容文件，见 DefaultResources 与 DeferLight2D）。
         {
         }
 
@@ -633,8 +579,7 @@ public func frag(vf: v2f)
         // ---- 文本逐字渲染运行时 ----
         // 字形图集 + 行网格布局引擎（LRU、脏检查细节见 jeecs_ui_text_renderer.hpp）。
         ui_text_renderer m_text_renderer;
-        // 内置文本着色器（无自定义 Shaders 的文本节点使用）。
-        basic::resource<graphic::shader> m_text_shader;
+
         // 动态顶点缓冲池：跨帧复用；同一帧内每个运行段独占一块（rendchain
         // 记录绘制动作后图形线程滞后消费，同帧内重复更新同一缓冲会互相覆盖）。
         std::vector<basic::resource<graphic::vertex>> m_text_vb_pool;
@@ -711,14 +656,15 @@ public func frag(vf: v2f)
                     Rotation*,
                     Text*,
                     Textures*,
-                    Shaders*,
+                    Shaders&,
                     Shape*,
                     Rendqueue*,
                     Color*,
                     Point*,
                     Parallel*,
                     Range*
-                )
+                ),
+                anyof typesof(Shape, Text)
             >())
             {
                 m_ui_nodes.push_back(ui_node_t{
@@ -740,12 +686,12 @@ public func frag(vf: v2f)
 
                 const bool is_2d_light =
                     point != nullptr || parallel != nullptr || range != nullptr;
-                if (!is_2d_light
-                    && (text != nullptr || (shads != nullptr && shape != nullptr)))
+
+                if (!is_2d_light && (text != nullptr))
                 {
                     m_renderer_list.emplace(
                         renderer_arch{
-                            color, rendqueue, nullptr, shape, shads, texs,
+                            color, rendqueue, nullptr, shape, &shads, texs,
                             node_index, text });
                 }
             }
@@ -1011,7 +957,7 @@ public func frag(vf: v2f)
 
                     // 常规四边形路径：Shaders+Shape 齐备的实体（文本实体若
                     // 同时挂有两者则先画背景板，文字叠于其上）。
-                    if (rendentity.shape != nullptr && rendentity.shaders != nullptr)
+                    if (rendentity.shape != nullptr)
                     {
                         auto& drawing_shape =
                             rendentity.shape->vertex.has_value()
@@ -1065,8 +1011,8 @@ public func frag(vf: v2f)
         // 颜色 = 逐字标记颜色 × 节点 Renderer::Color 色调。
         void EmitTextGlyphs(
             jegl_rendchain* chain,
-            const float (&view)[4][4],
-            const float (&model)[4][4],
+            const float(&view)[4][4],
+            const float(&model)[4][4],
             const UserInterface::Text& text,
             const ui_node_t& node,
             const renderer_arch& rendentity)
@@ -1093,8 +1039,8 @@ public func frag(vf: v2f)
 
             // 着色器：实体 Shaders 的第一个 woshader pass（自定义文本特效），
             // 否则内置文本着色器。
-            graphic::shader* shader_res = m_text_shader.get();
-            if (rendentity.shaders != nullptr && !rendentity.shaders->shaders.empty())
+            graphic::shader* shader_res = m_default_resources.default_shader.get();
+            if (!rendentity.shaders->shaders.empty())
             {
                 auto& user_shader = rendentity.shaders->shaders.front();
                 if (user_shader->m_builtin != nullptr)
@@ -1182,7 +1128,7 @@ public func frag(vf: v2f)
         // 从池中取下一块顶点缓冲。
         void PrepareTextBatch(
             jegl_rendchain* chain,
-            const float (&view)[4][4],
+            const float(&view)[4][4],
             jegl_texture* page,
             graphic::shader* shader_res)
         {
@@ -1218,7 +1164,7 @@ public func frag(vf: v2f)
 
         // 冲刷当前批：一次 jegl_update_vertex_buffer + 一次 jegl_rchain_draw。
         // 顶点已烘焙至相机像素空间，M=I、MVP/MV=UI 视图矩阵。
-        void FlushTextBatch(jegl_rendchain* chain, const float (&view)[4][4])
+        void FlushTextBatch(jegl_rendchain* chain, const float(&view)[4][4])
         {
             if (m_text_batch_quads == 0 || m_text_batch_vb == nullptr)
             {
@@ -1278,7 +1224,7 @@ public func frag(vf: v2f)
             {
                 const uint32_t base = (uint32_t)(q * 4);
                 for (uint32_t idx : { base + 0, base + 1, base + 2,
-                                      base + 2, base + 1, base + 3 })
+                    base + 2, base + 1, base + 3 })
                     indices.push_back(idx);
             }
 
