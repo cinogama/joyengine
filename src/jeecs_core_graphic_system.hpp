@@ -637,8 +637,9 @@ public let frag =
             m_text_vb_used = 0;
 
             // 构建 UI 节点树（结构与相机无关，每帧重建），并从中收集可渲染实体：
-            // 节点必须覆盖全部 UI 元素（含纯布局容器），渲染列表取非 2D 光源、
-            // 且带 Shaders+Shape（常规四边形）或带 Text（逐字文本）的节点。
+            // 节点必须覆盖全部 UI 元素（含纯布局容器），渲染列表取带 Shaders、
+            // 且带 Shape（常规四边形）或 Text（逐字文本）的节点；2D 光源由
+            // 专用查询收集，此处不再单独排除。
             m_ui_nodes.clear();
             m_ui_resolve_order.clear();
             m_ui_node_by_anchor.clear();
@@ -646,8 +647,7 @@ public let frag =
 
             for (auto&& [
                 anchor, l2p, elem, layout, rotation, text, texs,
-                shads, shape, rendqueue, color, point, parallel, range
-            ] : query<
+                shads, shape, rendqueue, color] : query<
                 view typesof(
                     Transform::Anchor*,
                     Transform::LocalToParent*,
@@ -659,13 +659,9 @@ public let frag =
                     Shaders&,
                     Shape*,
                     Rendqueue*,
-                    Color*,
-                    Point*,
-                    Parallel*,
-                    Range*
-                ),
+                    Color*),
                 anyof typesof(Shape, Text)
-            >())
+                >())
             {
                 m_ui_nodes.push_back(ui_node_t{
                     &elem, &layout, rotation, text,
@@ -684,16 +680,10 @@ public let frag =
                         m_ui_node_by_anchor.emplace(anchor->uid, node_index);
                 }
 
-                const bool is_2d_light =
-                    point != nullptr || parallel != nullptr || range != nullptr;
-
-                if (!is_2d_light && (text != nullptr))
-                {
-                    m_renderer_list.emplace(
-                        renderer_arch{
-                            color, rendqueue, nullptr, shape, &shads, texs,
-                            node_index, text });
-                }
+                m_renderer_list.emplace(
+                    renderer_arch{
+                        color, rendqueue, nullptr, shape, &shads, texs,
+                        node_index, text });
             }
 
             for (;;)
