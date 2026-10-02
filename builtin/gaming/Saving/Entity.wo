@@ -72,7 +72,7 @@ namespace JEGaming::Saving::Entity
             if (uname->begin_with("JE_"))
                 /* Donot save engine builtin uniforms. */
                 continue;
-
+                
             match (uinst)
             {
                 integer(vi)?
@@ -126,7 +126,7 @@ namespace JEGaming::Saving::Entity
         }
         return textures_dat;
     }
-
+    
     func _save_shape(e: entity)=> option<string>
     {
         match (e->get_shape())
@@ -427,7 +427,7 @@ namespace JEGaming::Saving::Entity
         do _diff_shaders(entity_shaders_dat, prefab_shaders_dat)
             ->> \sdiff = diff_dat->set("shaders", sdiff);
             ;
-
+            
         // -- shape --
         // 与预设体路径不同才记录；空串哨兵表示实体移除了预设体的模型
         //（apply 时以此擦除键，restore 不再加载模型）。
@@ -435,10 +435,10 @@ namespace JEGaming::Saving::Entity
             entity_dat->get("shape")=>> \v = v->as_string;->or("");
         let prefab_shape_path =
             prefab_entity_dat->get("shape")=>> \v = v->as_string;->or("");
-
+            
         if (entity_shape_path != prefab_shape_path)
             diff_dat->set("shape", entity_shape_path);
-
+            
         return diff_dat;
     }
     
@@ -540,7 +540,7 @@ namespace JEGaming::Saving::Entity
                 modifing_exist_dat->set("shaders", result_shaders);
             }
         }
-
+        
         // 5. Shape.
         // Empty string means the shape was removed relative to the prefab.
         match (patching_dat->get("shape")=>> \v = v->as_string;)
@@ -595,36 +595,36 @@ namespace JEGaming::Saving::Entity
     func saveFull(e: entity)=> Toml
     {
         let toml = new_table();
-
+        
         // 0. Save name.
         toml->set("name", e->internal::name);
-
+        
         // 1. Walk through all components.
         toml->set("components", _save_components(e));
-
+        
         // 2. Save shaders.
         toml->set("shaders", _save_shaders(e));
-
+        
         // 3. Save textures.
         toml->set("textures", _save_textures(e));
-
+        
         // 4. Save shape.
         do _save_shape(e)->> \shape_path = toml->set("shape", shape_path);
-        ;
-
+            ;
+            
         return toml;
     }
-
+    
     // 与 save_full 同为完整数据，供编辑器侧（JEEditor::Saving::Entity）转发使用
     public func save_full(e: entity)=> Toml
     {
         return saveFull(e);
     }
-
+    
     public func save(e: entity)=> Toml
     {
         let toml = saveFull(e);
-
+        
         // Calc diff by prefab data.
         match (e->internal::get_prefab_path())
         {
@@ -634,13 +634,13 @@ namespace JEGaming::Saving::Entity
             {
                 let diff_dat_may_none = try!{
                     try! prefab_dat = Entity::load(prefab_path);
-
+                    
                     let diff_dat = diff(toml, prefab_dat);
                     diff_dat->set("prefab", prefab_path);
-
+                    
                     return_value! diff_dat;
                 };
-
+                
                 match (diff_dat_may_none)
                 {
                     value(diff_dat)?
@@ -665,7 +665,7 @@ namespace JEGaming::Saving::Entity
         }
         return false;
     }
-
+    
     // 按序列化数据重建实体的着色器组：逐条 shader::load 并回填 uniforms，
     // 整组 set_shaders；加载失败的条目跳过（restore 与 refresh 共用）
     func _apply_shaders_dat(
@@ -678,7 +678,7 @@ namespace JEGaming::Saving::Entity
             do try!{
                 try! shader_path = sdat->get("path")=>> \v = v->as_string;;
                 try! sinst = shader::load(universe, shader_path);
-
+                
                 for (let (uname, uval) : sdat->as_table->or({}))
                 {
                     if (uval->is_int)
@@ -711,15 +711,15 @@ namespace JEGaming::Saving::Entity
                         }
                     }
                 }
-
+                
                 shaders->add(sinst);
                 return_value!;
             };
         }
-
+        
         e->set_shaders(shaders->to_array());
     }
-
+    
     // 把组件成员的序列化值逐条写回组件实例（数据未记录的成员保持现值，
     // 无法解析的成员跳过）；restore 与 refresh 共用
     func _apply_component_dat(cinst: component, cdat: Toml)=> void
@@ -729,14 +729,14 @@ namespace JEGaming::Saving::Entity
             do try!{
                 try! mdata = mdat->as_string;
                 try! (mtype, minst) = cinst->get_member(mname);
-
+                
                 do towoo::unsafe::dynamic_parser::restore(
                     mtype, minst, mdata);
                 return_value!;
             };
         }
     }
-
+    
     // 就地把既有实体从 old_dat 描述的状态迁移到 new_dat 描述的状态
     //（预设体实例同步的 redo/undo 共用，两个方向对称）：
     // - 名称按 new_dat 设置；
@@ -753,7 +753,7 @@ namespace JEGaming::Saving::Entity
     public func refresh(w: world, e: entity, old_dat: Toml, new_dat: Toml)=> void
     {
         let universe = option::value(w->get_universe);
-
+        
         // 1. Name.
         match (new_dat->get("name")=>> \v = v->as_string;)
         {
@@ -761,13 +761,13 @@ namespace JEGaming::Saving::Entity
             value(name)?
                 e->internal::set_name(name);
         }
-
+        
         // 2. Components.
         let new_components =
             new_dat->get("components")=>> \v = v->as_table;->or({});
         let old_components =
             old_dat->get("components")=>> \v = v->as_table;->or({});
-
+            
         for (let (ctype_name, cdat) : new_components)
         {
             match (typeinfo::load(ctype_name))
@@ -788,7 +788,7 @@ namespace JEGaming::Saving::Entity
                     }
             }
         }
-
+        
         for (let (ctype_name, _) : old_components)
         {
             if (!new_components->contains(ctype_name))
@@ -802,13 +802,13 @@ namespace JEGaming::Saving::Entity
                 }
             }
         }
-
+        
         // 3. Textures.
         let new_textures =
             new_dat->get("textures")=>> \v = v->as_table;->or({});
         let old_textures =
             old_dat->get("textures")=>> \v = v->as_table;->or({});
-
+            
         for (let (tpass, tinst) : e->get_textures)
         {
             match (tinst->path)
@@ -825,7 +825,7 @@ namespace JEGaming::Saving::Entity
         {
             do try!{
                 try! texture_path = tpath->as_string;
-
+                
                 match (texture::load(universe, texture_path))
                 {
                     // 加载失败保持旧绑定
@@ -837,12 +837,12 @@ namespace JEGaming::Saving::Entity
                 return_value!;
             };
         }
-
+        
         // 4. Shaders.
         _apply_shaders_dat(
             e, universe,
             new_dat->get("shaders")=>> \v = v->as_array;->or([]));
-
+            
         // 5. Shape.
         match (new_dat->get("shape")=>> \v = v->as_string;)
         {
@@ -858,7 +858,7 @@ namespace JEGaming::Saving::Entity
                 }
         }
     }
-
+    
     public func restore(w: world, edat: Toml)=> option<entity>
     {
         let component_dats =
@@ -873,7 +873,7 @@ namespace JEGaming::Saving::Entity
                 ;
                 
         let universe = option::value(w->get_universe);
-
+        
         // Create entity.
         try! e = w->add_entity(
             component_dats->> \(ctype, _) = ctype;);
@@ -881,37 +881,37 @@ namespace JEGaming::Saving::Entity
         // Apply component data.
         for (let (ctype, cdat) : component_dats)
         {
-            do try!{
-                let cinst = e->get_component(ctype)->unwrap;
-                for (let (mname, mdat) : cdat->as_table->or({}))
-                {
+            let cinst = e->get_component(ctype)->unwrap;
+            for (let (mname, mdat) : cdat->as_table->or({}))
+            {
+                do try!{
                     try! mdata = mdat->as_string;
                     try! (mtype, minst) = cinst->get_member(mname);
                     
                     do towoo::unsafe::dynamic_parser::restore(
                         mtype, minst, mdata);
-                }
-                return_value!;
-            };
+                    return_value!;
+                };
+            }
         }
         
         // Apply textures.
         let textures_dat = edat->get("textures")
             =>> \v = v->as_table;->or({});
-
+            
         for (let (tpass, tpath) : textures_dat)
         {
             do try!{
                 try! texture_path = tpath->as_string;
-
+                
                 e->bind_texture(
-                    tpass as int, 
+                    tpass as int,
                     texture::load(universe, texture_path));
-
+                    
                 return_value!;
             };
         }
-
+        
         // Apply shape.
         // set_shape only takes effect when the entity has the
         // Renderer::Shape component, which is created above from
@@ -922,12 +922,12 @@ namespace JEGaming::Saving::Entity
             value(shape_path)?
                 e->set_shape(vertex::load(universe, shape_path));
         }
-
+        
         // Apply shaders.
         _apply_shaders_dat(
             e, universe,
             edat->get("shaders")=>> \v = v->as_array;->or([]));
-
+            
         return_value! e;
     }
 }
