@@ -375,9 +375,9 @@ namespace JEEditor::Editor::WorldEditorViewport
                     // resolve_layout 的 ratio_scale 折算一致）
                     let ref_size = have_prev ? prev_size | display_range;
                     out_unit_px = ref_size;
-                    if (ent_elem.ratio_unit->get == UserInterface::ratio_unit::height_unit)
+                    if (ent_elem.unit_kind->get == UserInterface::ratio_unit::height_unit)
                         out_unit_px = (ref_size[1], ref_size[1]) as vec2;
-                    else if (ent_elem.ratio_unit->get == UserInterface::ratio_unit::width_unit)
+                    else if (ent_elem.unit_kind->get == UserInterface::ratio_unit::width_unit)
                         out_unit_px = (ref_size[0], ref_size[0]) as vec2;
 
                     // 锚点基点：参考矩形中心 − 参考 pivot 偏移 + 锚点在

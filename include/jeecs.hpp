@@ -10701,7 +10701,7 @@ namespace jeecs
             // UserInterface::ratio_unit（默认 height_unit，即以参考矩形的
             // 高为单位一）。参考矩形：根元素为显示区，子元素为父元素矩形。
             // 由布局阶段解析进 WorldLayout。
-            ratio_unit ratio_unit = UserInterface::ratio_unit::height_unit;
+            ratio_unit unit_kind = ratio_unit::height_unit;
 
             // 偏移与尺寸各含绝对（像素）与相对两个通道，最终取两者之和。
             // 相对通道按 ratio_unit 取参考矩形的高/宽为单位一：
@@ -10716,7 +10716,7 @@ namespace jeecs
             {
                 typing::register_member(guard, &Element::anchor, "anchor");
                 typing::register_member(guard, &Element::pivot, "pivot");
-                typing::register_member(guard, &Element::ratio_unit, "ratio_unit");
+                typing::register_member(guard, &Element::unit_kind, "unit_kind");
                 typing::register_member(guard, &Element::offset, "offset");
                 typing::register_member(guard, &Element::offset_ratio, "offset_ratio");
                 typing::register_member(guard, &Element::size, "size");
@@ -10893,7 +10893,7 @@ namespace jeecs
             // 锚定基准点（base_offset/base_offset_ratio，父矩形中心/边角）
             // 是纯几何量，永远逐轴解析，不经 ratio_unit 折算。
             math::vec2 ratio_scale(1.0f, 1.0f);
-            switch (elem.ratio_unit)
+            switch (elem.unit_kind)
             {
             case ratio_unit::height_unit:
                 ratio_scale.x = h / w;

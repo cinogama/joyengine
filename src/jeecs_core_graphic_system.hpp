@@ -711,7 +711,7 @@ public let frag =
                     {
                         const auto texture_size = text_texture.value()->size();
                         const bool base_on_y =
-                            node.elem->ratio_unit != ratio_unit::width_unit;
+                            node.elem->unit_kind != ratio_unit::width_unit;
                         if (base_on_y && texture_size.y > 0)
                         {
                             const float ratio =
@@ -799,7 +799,7 @@ public let frag =
                     (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT);
 
                 const float font_size =
-                    elem.ratio_unit != ratio_unit::width_unit
+                    elem.unit_kind != ratio_unit::width_unit
                     ? rect.size.y
                     : rect.size.x;
 

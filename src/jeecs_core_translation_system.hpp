@@ -238,7 +238,7 @@ namespace jeecs
 
                         math::vec2 unit_absolute = {};
                         math::vec2 unit_relative = {};
-                        switch (current_idx->elem->ratio_unit)
+                        switch (current_idx->elem->unit_kind)
                         {
                         case ratio_unit::height_unit:
                             // 子单位一 = 父高标量，广播到两轴。
