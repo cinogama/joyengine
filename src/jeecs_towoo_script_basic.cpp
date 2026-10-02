@@ -1918,13 +1918,13 @@ static jeecs::UserInterface::resolved_rect wo_resolve_element_rect(
     if (layout != nullptr)
         return jeecs::UserInterface::resolve_layout(elem, *layout, w, h);
 
+    // 显示区 = 绝对0 + 逐轴相对1；锚定基准点走 base 通道（纯几何量），
+    // 单位一 = 显示区按自身 ratio_unit 折算，无父链偏移。
+    const jeecs::UserInterface::ratio_space display_rect{
+        jeecs::math::vec2(0.f, 0.f), jeecs::math::vec2(1.f, 1.f) };
     jeecs::UserInterface::WorldLayout fallback;
-    // 锚定基准点走 base 通道（逐轴，不受 ratio_unit 影响）。
-    fallback.base_offset_ratio = jeecs::UserInterface::anchor_shift(
-        elem.anchor,
-        jeecs::UserInterface::layout_value{
-            jeecs::math::vec2(0.f, 0.f), jeecs::math::vec2(1.f, 1.f) }).relative;
-    fallback.unit_ratio = jeecs::math::vec2(1.f, 1.f);
+    fallback.base = jeecs::UserInterface::anchor_shift(elem.anchor, display_rect);
+    fallback.unit = jeecs::UserInterface::fold_unit(display_rect, elem.unit_kind);
     return jeecs::UserInterface::resolve_layout(elem, fallback, w, h);
 }
 
