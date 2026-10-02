@@ -336,6 +336,11 @@ namespace JEEditor::Editor::WorldEditorViewport
 
             m_ui_edit_locked = mut false,
 
+            m_ui_view_zoom = mut 1.,
+            m_ui_view_offset = mut (0., 0.) as vec2,
+            m_ui_view_panning = mut false,
+            m_ui_view_last_range = mut (0., 0.) as vec2,
+
             m_ui_snap_guide_x = mut option::none: option<real>,
             m_ui_snap_guide_y = mut option::none: option<real>,
 
@@ -661,7 +666,23 @@ namespace JEEditor::Editor::WorldEditorViewport
             value(fbtex)?
             {
                 let (w, h) = GetContentRegionAvail();
-                ImageSize(fbtex, w, h);
+                // UI 编辑模式且视口已缩放：按可见子矩形放大显示（ImageUV，
+                // 引擎 UV 约定 V 向上，uv0/uv1 = 可见窗口在显示空间中的
+                // 归一化 min/max 角）；UI 布局仍按完整 framebuffer 尺寸
+                // 解析，缩放只是显示级放大。未缩放时回退全图绘制
+                let mut drawn_zoomed = false;
+                match (self->uiVisibleUV())
+                {
+                    none?;
+                    value((uv0, uv1))?
+                    {
+                        ImageUV(fbtex, w, h,
+                            (uv0[0], uv0[1]), (uv1[0], uv1[1]));
+                        drawn_zoomed = true;
+                    }
+                }
+                if (!drawn_zoomed)
+                    ImageSize(fbtex, w, h);
                 viewport_rect = option::value <| GetItemRect();
             }
         }

@@ -263,6 +263,22 @@ namespace JEEditor::Editor
         // 绘制）：锁定时手柄不悬停、不拖拽，点击回落为常规 UI 空间选取
         protected m_ui_edit_locked: mut bool,
 
+        // ---- UI 编辑视口缩放（显示级放大，不改变 framebuffer）----
+        // 可见子矩形 = [offset, offset + display_range/zoom]（显示像素，
+        // 原点左下 y 向上）。UI 布局始终按完整 framebuffer 尺寸解析
+        //（uiGetDisplayRange / 引擎 ResolveUiNodes 的输入不变），缩放只
+        // 作用于显示：ImageUV 取纹理子矩形放大 + 屏幕↔显示换算折叠
+        //（见 uiViewScreenRect）。仅 UI 编辑模式生效；zoom==1 时 offset
+        // 恒被夹取为 0，即恒等视图（所有行为与未缩放完全一致）。
+        // 交互：滚轮以鼠标为锚缩放、中键拖拽平移可见窗口、F 聚焦选中
+        // 元素、工具栏 +/−/重置（见 updateUIViewNavigation / ViewportUI.wo）
+        protected m_ui_view_zoom: mut real,
+        protected m_ui_view_offset: mut vec2,
+        // 中键拖拽平移可见窗口进行中
+        protected m_ui_view_panning: mut bool,
+        // 上次见到的显示范围（framebuffer 重建后 offset 按比例迁移再夹取）
+        protected m_ui_view_last_range: mut vec2,
+
         // Ctrl 对齐吸附命中的参考线（祖先未旋转帧坐标；none = 无），
         // 拖拽中每帧由 applyUIDrag 写入、drawUIGizmo 绘制
         protected m_ui_snap_guide_x: mut option<real>,
@@ -446,6 +462,16 @@ namespace JEEditor::Editor
         protected let UI_GIZMO_COLOR_SNAP = (255, 80, 255, 200);
         protected let UI_GIZMO_COLOR_SIZE_LAYER = (200, 200, 200, 170);
         protected let UI_GIZMO_COLOR_RATIO_LAYER = (178, 128, 255, 210);
+
+        // ---- UI 编辑视口缩放参数 ----
+        // 缩放下限取 1（不提供缩小）：framebuffer 本就 1:1 匹配视口内容
+        // 区，zoom=1 时已完整可见整个布局；且 zoom<1 会使可见窗口超出
+        // 显示范围、纹理 UV 越出 [0,1]（ImGui 采样可能平铺出错图像）
+        protected let UI_VIEW_ZOOM_MIN = 1.;
+        protected let UI_VIEW_ZOOM_MAX = 16.;       // 缩放上限（纹理放大 16 倍）
+        protected let UI_VIEW_WHEEL_STEP = 0.2;     // 每格滚轮的倍率增量（×1.2/格）
+        protected let UI_VIEW_TOOL_STEP = 1.25;     // 工具栏 +/- 按钮的倍率步进
+        protected let UI_VIEW_FIT_MARGIN = 0.8;     // F 聚焦时元素包围盒占视口的比例
 
         // UI 元素在显示像素空间（原点=显示区左下、y 向上）的解析结果：
         // 由 UIGizmo.wo 的 uiResolveDisplay 沿 Transform 锚点链逐级解析

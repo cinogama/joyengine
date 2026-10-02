@@ -29,6 +29,7 @@ import Definition;
 import GizmoMath;
 import EntityPicking;
 import TransformGizmo;
+import UIGizmo;
 
 using std;
 
@@ -335,6 +336,11 @@ namespace JEEditor::Editor::WorldEditorViewport
             self.m_collider_dragging = false;
             self.m_collider_drag_handle = GIZMO_HANDLE_NONE;
         }
+
+        // UI 编辑视口缩放期间让位：本手柄的世界→屏幕映射不感知视口
+        // 缩放，缩放下显示/命中会错位（zoom==1 时行为不变）
+        if (self->uiEditingActive() && self.m_ui_view_zoom != 1.)
+            return;
 
         if (self.m_selected_entity_id->is_none)
             return;

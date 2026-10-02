@@ -323,17 +323,30 @@ namespace JEEditor::Editor::WorldEditorViewport
                         }
                         none?
                         {
-                            let mouse_diff = GetMousePos() as vec2 - rect_min as vec2;
-                            let viewport_size = rect_max as vec2 - rect_min as vec2;
-                            let (vpx, vpy) =
-                                ((mouse_diff / viewport_size) - (0.5, 0.5) as vec2) * 2.;
+                            // 屏幕坐标 -> NDC：优先经显示空间换算（含视口
+                            // 缩放感知，y 已随显示空间向上无需翻转；与
+                            // updateCameraControl 的左键拾取同款），显示
+                            // 范围不可得时退回旧换算（imgui y 向下，需翻转）
+                            let mouse = GetMousePos() as vec2;
+                            let ndc = or(
+                                (
+                                    (mouse[0] - rect_min.0)
+                                        / (rect_max.0 - rect_min.0) * 2. - 1.,
+                                    -((mouse[1] - rect_min.1)
+                                        / (rect_max.1 - rect_min.1) * 2. - 1.)
+                                ) as vec2)
+                                <| self->uiMouseToViewportNDC(
+                                    mouse,
+                                    rect_min as vec2,
+                                    ((rect_max.0 - rect_min.0,
+                                      rect_max.1 - rect_min.1)) as vec2);
 
                             // 命中渲染实体：选中并弹实体菜单；未命中
                             //（空白处）：保持当前选中不变，弹出仅含
                             //“粘贴”的空白菜单
                             let picked_euid = self->pickEntityForContextMenu(
                                 towoo::ray::from(
-                                    trans, proj, (vpx, -vpy) as vec2,
+                                    trans, proj, ndc,
                                     camera_entity->towoo::get_component:<Camera::PerspectiveProjection>->is_none));
 
                             match (picked_euid)

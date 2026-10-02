@@ -314,22 +314,32 @@ namespace JEEditor::Editor::WorldEditorViewport
                                 value(ui_euid)?
                                     self.m_selected_entity_id =
                                         option::value(ui_euid);
-                                // 未命中 UI：回退 3D 射线拾取
+                                // 未命中 UI：回退 3D 射线拾取。NDC 优先经
+                                // 显示空间换算（含视口缩放感知，y 已随显示
+                                // 空间向上无需翻转），显示范围不可得时退回
+                                // 旧换算（imgui y 向下，需翻转）
                                 none?
                                 {
-                                    let mouse_diff =
-                                        GetMousePos() as vec2 - rect_min as vec2;
-                                    let viewport_size =
-                                        rect_max as vec2 - rect_min as vec2;
-
-                                    let (vpx, vpy) =
-                                        ((mouse_diff / viewport_size) - (0.5, 0.5) as vec2) * 2.;
+                                    let mouse = GetMousePos() as vec2;
+                                    let ndc = or(
+                                        (
+                                            (mouse[0] - rect_min.0)
+                                                / (rect_max.0 - rect_min.0)
+                                                * 2. - 1.,
+                                            -((mouse[1] - rect_min.1)
+                                                / (rect_max.1 - rect_min.1)
+                                                * 2. - 1.)
+                                        ) as vec2)
+                                        <| self->uiMouseToViewportNDC(
+                                            mouse,
+                                            rect_min as vec2,
+                                            rect_size as vec2);
 
                                     self->sendMouseClickToChoiceEntityRequest(
                                         towoo::ray::from(
                                             trans,
                                             proj,
-                                            (vpx, -vpy) as vec2,
+                                            ndc,
                                             perspectiveProjection->is_none));
                                 }
                             }
@@ -338,6 +348,11 @@ namespace JEEditor::Editor::WorldEditorViewport
             }
         }
         
+        // UI 编辑模式的视口导航（滚轮缩放/中键平移/F 聚焦，见
+        // UIGizmo.wo 的 updateUIViewNavigation）：接管滚轮与中键，
+        // 下方摄像机控制的对应输入让位（见 control*Camera 内卫语句）
+        self->updateUIViewNavigation(hovered, viewport_rect);
+
         match (perspectiveProjection)
         {
             value(_)?
@@ -380,9 +395,11 @@ namespace JEEditor::Editor::WorldEditorViewport
             if (self.m_lock_mouse_on_look)
                 input::set_lock_mouse(true);
         }
-        if (hovered && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Middle))
+        // UI 编辑模式下中键已由 updateUIViewNavigation 接管为视图平移
+        if (hovered && !self->uiEditingActive()
+            && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Middle))
             self.m_is_pan_active = true;
-            
+
         if (!IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Right))
         {
             if (self.m_is_look_active)
@@ -444,7 +461,8 @@ namespace JEEditor::Editor::WorldEditorViewport
         }
         
         // ---- 滚轮缩放 ----
-        if (hovered && wv != 0.)
+        // UI 编辑模式下滚轮已由 updateUIViewNavigation 接管为视口缩放
+        if (hovered && !self->uiEditingActive() && wv != 0.)
         {
             if (self.m_is_orbit_active)
             {
@@ -497,7 +515,9 @@ namespace JEEditor::Editor::WorldEditorViewport
         {
             self.m_is_pan_active = true;
         }
-        if (hovered && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Middle))
+        // UI 编辑模式下中键已由 updateUIViewNavigation 接管为视图平移
+        if (hovered && !self->uiEditingActive()
+            && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Middle))
             self.m_is_pan_active = true;
         if (!IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Right)
             && !IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Middle))
@@ -567,7 +587,8 @@ namespace JEEditor::Editor::WorldEditorViewport
         }
         
         // ---- 滚轮 ----
-        if (hovered && wv != 0.)
+        // UI 编辑模式下滚轮已由 updateUIViewNavigation 接管为视口缩放
+        if (hovered && !self->uiEditingActive() && wv != 0.)
         {
             let scale = ortho.scale->get;
             if (IsKeyDown(ImGuiKey::ImGuiMod_Ctrl))
@@ -637,12 +658,19 @@ namespace JEEditor::Editor::WorldEditorViewport
             if (rect_size[0] <= 0. || rect_size[1] <= 0.)
                 return_value! option::none: option<vec3>;
                 
-            // 屏幕坐标 -> NDC（与实体拾取同款换算，含 y 翻转）
-            let ndc = ((screen_pos - rect_min as vec2) / rect_size
-                - (0.5, 0.5) as vec2) * 2.;
-                
+            // 屏幕坐标 -> NDC（与实体拾取同款）：优先经显示空间换算
+            //（含视口缩放感知，y 已随显示空间向上无需翻转），显示范围
+            // 不可得时退回旧换算（imgui y 向下，需翻转）
+            let ndc = or(
+                (
+                    (screen_pos[0] - rect_min.0) / rect_size[0] * 2. - 1.,
+                    -((screen_pos[1] - rect_min.1) / rect_size[1] * 2. - 1.)
+                ) as vec2)
+                <| self->uiMouseToViewportNDC(
+                    screen_pos, rect_min as vec2, rect_size);
+
             let ray = towoo::ray::from(
-                trans, proj, (ndc[0], -ndc[1]) as vec2,
+                trans, proj, ndc,
                 isDebugCamera2DMode(camera));
                 
             let distance = isDebugCamera2DMode(camera)

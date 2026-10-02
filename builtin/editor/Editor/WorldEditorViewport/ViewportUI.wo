@@ -8,6 +8,7 @@ import pkg::std;
 import je;
 import je::ecs;
 import je::gui;
+import je::towoo::types;
 
 import builtin::editor::Editor::Practice;
 
@@ -30,8 +31,9 @@ namespace JEEditor::Editor::WorldEditorViewport
     {
         // UI 编辑模式（选中 UI 元素）：隐藏变换游标工具栏，保持视口干净
         //（移动/旋转/缩放选项对 UI 手柄无意义，2D 模式等视口开关亦
-        // 不在 UI 编辑中显示），仅保留一个“锁定编辑”开关——锁定时
-        // 手柄不悬停不拖拽、点击仅做 UI 空间选取（浏览层级零误操作）
+        // 不在 UI 编辑中显示），仅保留“锁定编辑”开关与视口缩放控件
+        //（滚轮缩放/中键平移的显式入口，见 updateUIViewNavigation）——
+        // 锁定时手柄不悬停不拖拽、点击仅做 UI 空间选取（浏览层级零误操作）
         if (self->uiEditingActive())
         {
             SetCursorScreenPos((rect_min.0 + 8., rect_min.1 + 8.));
@@ -49,6 +51,42 @@ namespace JEEditor::Editor::WorldEditorViewport
                 do SetTooltip(
                     "锁定 UI 手柄编辑：移动/缩放/旋转手柄不响应，点击仅选取元素");
             }
+
+            // 视口缩放：+/- 步进（锚点=可见窗口中心）、当前倍率、重置。
+            // 滚轮以鼠标为锚缩放、中键拖拽平移、F 聚焦选中元素
+            let mut zoom_ctrl_hovered = false;
+            SameLine();
+            if (Button("-"))
+                self->uiZoomStep(1. / UI_VIEW_TOOL_STEP);
+            if (IsItemHovered())
+            {
+                toolbar_hovered = true;
+                zoom_ctrl_hovered = true;
+            }
+            SameLine();
+            if (Button("+"))
+                self->uiZoomStep(UI_VIEW_TOOL_STEP);
+            if (IsItemHovered())
+            {
+                toolbar_hovered = true;
+                zoom_ctrl_hovered = true;
+            }
+            SameLine();
+            Text(F"{(self.m_ui_view_zoom * 100.) as int}%");
+            SameLine();
+            if (Button("重置视图"))
+            {
+                self.m_ui_view_zoom = 1.;
+                self.m_ui_view_offset = (0., 0.) as vec2;
+            }
+            if (IsItemHovered())
+            {
+                toolbar_hovered = true;
+                zoom_ctrl_hovered = true;
+            }
+            if (zoom_ctrl_hovered)
+                do SetTooltip(
+                    "视口缩放：滚轮以鼠标为锚缩放，中键拖拽平移，F 聚焦选中元素");
 
             return toolbar_hovered;
         }

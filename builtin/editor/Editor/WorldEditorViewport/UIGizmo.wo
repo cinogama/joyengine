@@ -31,6 +31,12 @@
 // ModifyComponentMember（与变换游标同一套撤销机制）。覆盖层绘制走
 // ImGui 窗口 DrawList（屏幕空间，语义上与 UI 的屏幕空间一致），
 // 交互命中判定复用 ColliderGizmo 的屏幕空间距离方式。
+// 视口缩放：UI 编辑模式下可对视口纹理做显示级放大（滚轮以鼠标为锚
+// 缩放、中键拖拽平移、F 聚焦选中元素，见 updateUIViewNavigation）。
+// framebuffer 尺寸与布局解析不变，显示侧按可见子矩形放大（ImageUV），
+// 屏幕↔显示换算经 uiViewScreenRect 折叠为“虚拟全图”矩形——现有
+// uiDisplayToScreen/uiScreenToDisplay/uiHitTolerance 无需感知缩放；
+// zoom==1 时为恒等视图，全部行为与未缩放一致。
 
 import pkg::std;
 
@@ -46,6 +52,7 @@ import je::towoo::types;
 import je::towoo::components;
 
 import pkg::iterator;
+import pkg::math;
 import pkg::try;
 import pkg::worst;
 
@@ -215,6 +222,232 @@ namespace JEEditor::Editor::WorldEditorViewport
             if (w <= 0 || h <= 0)
                 return_value! option::none: option<vec2>;
             return_value! option::value((w as real, h as real) as vec2);
+        };
+    }
+
+    // ---- UI 编辑视口缩放（显示级放大，不改变 framebuffer）----
+    // 可见子矩形 = [m_ui_view_offset, offset + display_range/zoom]。缩放
+    // 只作用于显示：布局解析（uiResolveDisplay/get_layout/引擎
+    // ResolveUiNodes）始终按完整 display_range 进行，与游戏运行一致。
+
+    // 视口缩放折叠后的有效映射矩形（“虚拟全图”）：把完整显示空间图像
+    // 等效视作绘制在 (rmin_v, rsize_v) 上、其中的可见窗口恰好落在真实
+    // (rmin, rsize) 上。uiDisplayToScreen/uiScreenToDisplay/uiHitTolerance
+    // 不改签名与实现，继续以 (rmin_v, rsize_v, display_range) 调用即自动
+    // 获得缩放语义（display_range 保持完整值，布局解析与换算共用）：
+    // 容差/屏幕尺寸随 zoom 放大，uiScreenToDisplay 的输出仍是完整显示
+    // 空间坐标（写回组件所需）。非 UI 编辑或 zoom==1（offset 恒为 0）
+    // 时即原始 (rmin, rsize)，与未缩放行为逐位一致。
+    protected func uiViewScreenRect(
+        self: WorldEditorViewport,
+        rmin: vec2, rsize: vec2, display_range: vec2)=> (vec2, vec2)
+    {
+        if (!self->uiEditingActive() || self.m_ui_view_zoom == 1.)
+            return (rmin, rsize);
+
+        let z = self.m_ui_view_zoom;
+        let rsize_v = rsize * z;
+        let k = rsize_v / display_range;
+        let off = self.m_ui_view_offset;
+        let rmin_v = (
+            rmin[0] - k[0] * off[0],
+            rmin[1] + rsize[1] + k[1] * off[1] - rsize_v[1]) as vec2;
+        return (rmin_v, rsize_v);
+    }
+
+    // 可见子矩形 → 纹理 UV（引擎约定 V 向上，uv0/uv1 = 可见窗口在显示
+    // 空间中的归一化 min/max 角）；未缩放（或非 UI 编辑）返回 none，
+    // 调用方回退 ImageSize 全图绘制
+    protected func uiVisibleUV(self: WorldEditorViewport)=> option<(vec2, vec2)>
+    {
+        if (!self->uiEditingActive() || self.m_ui_view_zoom == 1.)
+            return option::none: option<(vec2, vec2)>;
+
+        return or(option::none: option<(vec2, vec2)>) <| try!{
+            try! dr = self->uiGetDisplayRange();
+            let vis = dr / self.m_ui_view_zoom;
+            let off = self.m_ui_view_offset;
+            return_value! option::value <|
+                ((off[0] / dr[0], off[1] / dr[1]) as vec2,
+                 ((off[0] + vis[0]) / dr[0],
+                  (off[1] + vis[1]) / dr[1]) as vec2);
+        };
+    }
+
+    // 可见窗口 offset 夹取到合法范围（每轴 [0, dr-vis]，保证可见子矩形
+    // 落在显示范围内、纹理 UV 不越出 [0,1]）。UI_VIEW_ZOOM_MIN 为 1，
+    // vis <= dr 恒成立；vis > dr 的居中分支仅为防御性保留
+    protected func uiClampViewOffset(
+        off: vec2, vis: vec2, display_range: vec2)=> vec2
+    {
+        return (mathf::clamp(off[0],
+                math::min(0., display_range[0] - vis[0]),
+                math::max(0., display_range[0] - vis[0])),
+            mathf::clamp(off[1],
+                math::min(0., display_range[1] - vis[1]),
+                math::max(0., display_range[1] - vis[1]))) as vec2;
+    }
+
+    // 缩放到 new_zoom：保持显示空间锚点 anchor 在可见窗口内的比例不变
+    //（滚轮缩放传鼠标下的显示点即“以鼠标为锚”），随后夹取 offset
+    protected func uiZoomAt(
+        self: WorldEditorViewport, new_zoom: real, anchor: vec2)=> void
+    {
+        do try!{
+            try! dr = self->uiGetDisplayRange();
+            let z = mathf::clamp(new_zoom, UI_VIEW_ZOOM_MIN, UI_VIEW_ZOOM_MAX);
+            let vis = dr / z;
+            let frac = (anchor - self.m_ui_view_offset)
+                / (dr / self.m_ui_view_zoom);
+            self.m_ui_view_zoom = z;
+            self.m_ui_view_offset =
+                uiClampViewOffset(anchor - frac * vis, vis, dr);
+            return_value!;
+        };
+    }
+
+    // 工具栏步进缩放：锚点取当前可见窗口中心（工具栏不在视口内，
+    // 无法以鼠标为锚）
+    protected func uiZoomStep(self: WorldEditorViewport, factor: real)=> void
+    {
+        do try!{
+            try! dr = self->uiGetDisplayRange();
+            let vis = dr / self.m_ui_view_zoom;
+            self->uiZoomAt(self.m_ui_view_zoom * factor,
+                self.m_ui_view_offset + vis * 0.5);
+            return_value!;
+        };
+    }
+
+    // 鼠标屏幕坐标 → 完整显示空间 NDC（缩放感知）。y 已随显示空间向上，
+    // 无需再翻转；zoom==1 时与旧换算 ((mouse-rect)/size-0.5)*2 逐位等价。
+    // 供 3D 射线拾取的回退路径（点击选取/右键菜单/拖放生成点）保持与
+    // 缩放后的可见图像一致
+    protected func uiMouseToViewportNDC(
+        self: WorldEditorViewport,
+        mouse: vec2, rmin: vec2, rsize: vec2)=> option<vec2>
+    {
+        return or(option::none: option<vec2>) <| try!{
+            try! dr = self->uiGetDisplayRange();
+            let (rmin_v, rsize_v) = self->uiViewScreenRect(rmin, rsize, dr);
+            let disp = uiScreenToDisplay(mouse, rmin_v, rsize_v, dr);
+            return_value! option::value <|
+                (disp[0] / dr[0] * 2. - 1.,
+                 disp[1] / dr[1] * 2. - 1.) as vec2;
+        };
+    }
+
+    // UI 编辑模式的视口导航（由 updateCameraControl 在 UI 编辑模式下
+    // 调用，摄像机控制的滚轮/中键此时让位，见 control*Camera 的卫语句）：
+    // 滚轮以鼠标为锚缩放显示、中键拖拽平移可见窗口、F 聚焦选中元素。
+    // framebuffer 重建（尺寸变化）时 offset 按比例迁移后夹取，zoom 保留
+    protected func updateUIViewNavigation(
+        self: WorldEditorViewport,
+        hovered: bool,
+        viewport_rect: option<(ImVec2, ImVec2)>)=> void
+    {
+        if (!self->uiEditingActive())
+            return;
+
+        do try!{
+            try! dr = self->uiGetDisplayRange();
+
+            // 显示范围变化（窗口尺寸稳定后 framebuffer 重建）：
+            // offset 按比例迁移（保持相对视野）后夹取到新范围
+            if (self.m_ui_view_last_range[0] != dr[0]
+                || self.m_ui_view_last_range[1] != dr[1])
+            {
+                let old = self.m_ui_view_last_range;
+                self.m_ui_view_offset = (old[0] > 0. && old[1] > 0.)
+                    ? uiClampViewOffset(
+                        self.m_ui_view_offset * dr / old,
+                        dr / self.m_ui_view_zoom, dr)
+                    | uiClampViewOffset(
+                        self.m_ui_view_offset,
+                        dr / self.m_ui_view_zoom, dr);
+                self.m_ui_view_last_range = dr;
+            }
+
+            match (viewport_rect)
+            {
+                none?;
+                value((rect_min, rect_max))?
+                {
+                    let rmin = rect_min as vec2;
+                    let rsize = (rect_max.0 - rect_min.0,
+                        rect_max.1 - rect_min.1) as vec2;
+                    if (rsize[0] <= 0. || rsize[1] <= 0.)
+                        return_value!;
+                    let vis = dr / self.m_ui_view_zoom;
+
+                    // 中键拖拽平移可见窗口（内容跟手；屏幕 y 向下、
+                    // 显示空间 y 向上，故 y 取反）
+                    if (hovered && IsMouseClicked(
+                            ImGuiMouseButton::ImGuiMouseButton_Middle))
+                        self.m_ui_view_panning = true;
+                    if (!IsMouseDown(
+                            ImGuiMouseButton::ImGuiMouseButton_Middle))
+                        self.m_ui_view_panning = false;
+                    if (self.m_ui_view_panning)
+                    {
+                        let (mdx, mdy) = GetMouseDeltaPos();
+                        self.m_ui_view_offset = uiClampViewOffset(
+                            (self.m_ui_view_offset[0]
+                                - mdx * vis[0] / rsize[0],
+                             self.m_ui_view_offset[1]
+                                + mdy * vis[1] / rsize[1]) as vec2,
+                            vis, dr);
+                    }
+
+                    // 滚轮缩放：以鼠标下的显示点为锚
+                    let wv = GetMouseWheel().1;
+                    if (hovered && wv != 0.)
+                    {
+                        let (rmin_v, rsize_v) =
+                            self->uiViewScreenRect(rmin, rsize, dr);
+                        self->uiZoomAt(
+                            self.m_ui_view_zoom
+                                * (1. + wv * UI_VIEW_WHEEL_STEP),
+                            uiScreenToDisplay(
+                                GetMousePos() as vec2, rmin_v, rsize_v, dr));
+                    }
+
+                    // F 聚焦选中元素
+                    if (hovered && IsKeyPressed(ImGuiKey::ImGuiKey_F, false))
+                        self->uiFocusSelected();
+                }
+            }
+            return_value!;
+        };
+    }
+
+    // F 聚焦：选中元素的显示矩形（旋转后取轴对齐包围盒）缩放到约占
+    // 视口 UI_VIEW_FIT_MARGIN 并居中；元素本身接近铺满显示范围时即 1x
+    protected func uiFocusSelected(self: WorldEditorViewport)=> void
+    {
+        if (!self.m_ui_draw_visible)
+            return;
+
+        do try!{
+            try! dr = self->uiGetDisplayRange();
+
+            // 旋转矩形的轴对齐包围盒半宽：两相邻角向量各分量绝对值之和
+            let half = self.m_ui_draw_size * 0.5;
+            let total = self.m_ui_draw_total_angle;
+            let c = uiRotateVec2(total, (half[0], half[1]) as vec2);
+            let s = uiRotateVec2(total, (half[0], -half[1]) as vec2);
+            let ext = (mathf::abs(c[0]) + mathf::abs(s[0]),
+                mathf::abs(c[1]) + mathf::abs(s[1])) as vec2;
+
+            let z = mathf::clamp(
+                math::min(dr[0] / math::max(ext[0] * 2., 1.),
+                    dr[1] / math::max(ext[1] * 2., 1.)) * UI_VIEW_FIT_MARGIN,
+                UI_VIEW_ZOOM_MIN, UI_VIEW_ZOOM_MAX);
+            let vis = dr / z;
+            self.m_ui_view_zoom = z;
+            self.m_ui_view_offset =
+                uiClampViewOffset(self.m_ui_draw_center - vis * 0.5, vis, dr);
+            return_value!;
         };
     }
 
@@ -495,7 +728,10 @@ namespace JEEditor::Editor::WorldEditorViewport
     {
         return or(option::none: option<entity::internal::euid_t>) <| try!{
             try! display_range = self->uiGetDisplayRange();
-            let hits = self->pickUIElementsAt(rmin, rsize, display_range);
+            // 视口缩放折叠（zoom==1 时即原值；rmin/rsize 为真实视口矩形）
+            let (vrmin, vrsize) =
+                self->uiViewScreenRect(rmin, rsize, display_range);
+            let hits = self->pickUIElementsAt(vrmin, vrsize, display_range);
             if (hits->empty)
                 return_value! option::none: option<entity::internal::euid_t>;
 
@@ -648,9 +884,7 @@ namespace JEEditor::Editor::WorldEditorViewport
 
         self.m_ui_hover_handle = UI_HANDLE_NONE;
 
-        let rmin = rect_min as vec2;
-        let rsize = rect_size as vec2;
-        if (rsize[0] <= 0. || rsize[1] <= 0.)
+        if (rect_size.0 <= 0. || rect_size.1 <= 0.)
             return;
 
         // 显示空间 = 调试摄像机 framebuffer 的尺寸
@@ -658,6 +892,14 @@ namespace JEEditor::Editor::WorldEditorViewport
         if (display_opt->is_none)
             return;
         let dr = display_opt->unwrap;
+
+        // 视口缩放折叠：屏幕↔显示换算改用“虚拟全图”矩形（zoom==1 时
+        // 即原值），下游 pickUIHandle/beginUIDrag/applyUIDrag 透传即自动
+        // 感知缩放（display_range 保持完整值，布局解析不受影响）。注意
+        // finishUIDrag 在此之前已按真实矩形调用（其内部的选取入口
+        // selectUIElementAt 自行折叠）
+        let (rmin, rsize) = self->uiViewScreenRect(
+            rect_min as vec2, rect_size as vec2, dr);
         {
                 let selected = self->uiFindSelectedUIElement();
                 if (selected->is_none)
@@ -738,6 +980,8 @@ namespace JEEditor::Editor::WorldEditorViewport
                         && !self.m_is_look_active
                         && !self.m_is_pan_active
                         && !self.m_is_orbit_active
+                        // 视图平移（UI 编辑缩放的中键拖拽）期间不悬停手柄
+                        && !self.m_ui_view_panning
                         // 碰撞体/光源/粒子编辑手柄优先
                         && self.m_collider_hover_handle == GIZMO_HANDLE_NONE
                         && !self.m_collider_dragging
@@ -1263,11 +1507,15 @@ namespace JEEditor::Editor::WorldEditorViewport
         if (!self.m_ui_draw_visible)
             return;
 
-        let rmin = rect_min as vec2;
-        let rsize = rect_size as vec2;
         let dr = self.m_ui_draw_display_range;
-        if (rsize[0] <= 0. || rsize[1] <= 0. || dr[0] <= 0. || dr[1] <= 0.)
+        if (rect_size.0 <= 0. || rect_size.1 <= 0.
+            || dr[0] <= 0. || dr[1] <= 0.)
             return;
+
+        // 视口缩放折叠：换算用“虚拟全图”矩形（zoom==1 时即原值），
+        // 所有 uiDisplayToScreen 透传即自动感知缩放
+        let (rmin, rsize) = self->uiViewScreenRect(
+            rect_min as vec2, rect_size as vec2, dr);
 
         let draw_list = GetWindowDrawList();
         let total = self.m_ui_draw_total_angle;
