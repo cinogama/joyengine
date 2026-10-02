@@ -114,6 +114,12 @@ const jeecs::graphic::character* je_font_get_char(
 
     unsigned char* ch_tex_buffer = nullptr;
 
+    // 位图相对基线的像素空间偏移，由光栅化结果直接给出：
+    // bmp_x0 是墨水左列；bmp_y0 是墨水顶边（stb 的 y 轴向下，负值表示墨水顶在基线上方）。
+    // 不能用字体单位包围盒乘 scale 再舍入来推算，否则舍入方向与光栅化不一致，
+    // 带 overshoot 的圆形字母（o/a 等）会相对平底字母（n 等）整体偏移 1px。
+    int bmp_x0 = 0, bmp_y0 = 0;
+
     if (stbtt_GetCodepointBox(
         &font->m_stb_font_data->m_font,
         static_cast<int>(unicode32_char),
@@ -129,8 +135,8 @@ const jeecs::graphic::character* je_font_get_char(
             static_cast<int>(unicode32_char),
             &pixel_w,
             &pixel_h,
-            nullptr,
-            nullptr);
+            &bmp_x0,
+            &bmp_y0);
     }
 
     if (ch_tex_buffer == nullptr)
@@ -161,8 +167,10 @@ const jeecs::graphic::character* je_font_get_char(
     ch.m_height = texture_pixel_height;
     ch.m_advance_x = (int)round(scale * (float)advance);
     ch.m_advance_y = -(int)round(scale * (float)font->m_line_space);
-    ch.m_baseline_offset_x = pixel_w ? (int)round(scale * (float)x0) - (int)font->m_board_size_x : 0;
-    ch.m_baseline_offset_y = pixel_h ? (int)round(scale * (float)y0) - (int)font->m_board_size_y : 0;
+    ch.m_baseline_offset_x = pixel_w ? bmp_x0 - (int)font->m_board_size_x : 0;
+    // 字符纹理的 y 轴向上、第 0 行是墨水底边下方 board 处，而 bmp_y0 以 y 向下
+    // 记录墨水顶边，故墨水底边在基线上方 -(bmp_y0 + pixel_h) 像素
+    ch.m_baseline_offset_y = pixel_h ? -(bmp_y0 + pixel_h) - (int)font->m_board_size_y : 0;
 
     if (ch_tex_buffer != nullptr)
     {
