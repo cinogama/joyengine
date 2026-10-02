@@ -340,6 +340,11 @@ namespace JEEditor::Editor::WorldEditorViewport
             m_ui_view_offset = mut (0., 0.) as vec2,
             m_ui_view_panning = mut false,
             m_ui_view_last_range = mut (0., 0.) as vec2,
+            m_ui_view_input_rect = mut option::none: option<(ImVec2, ImVec2)>,
+            m_ui_view_input_hovered = mut false,
+            m_ui_view_draw_active = mut false,
+            m_ui_view_draw_zoom = mut 1.,
+            m_ui_view_draw_offset = mut (0., 0.) as vec2,
 
             m_ui_snap_guide_x = mut option::none: option<real>,
             m_ui_snap_guide_y = mut option::none: option<real>,
@@ -654,7 +659,21 @@ namespace JEEditor::Editor::WorldEditorViewport
         }
         
         self->updateWalkCameraFramebuffer(debug_camera);
-        
+
+        // UI 编辑视口导航（滚轮缩放/中键平移/F 聚焦）：必须在绘制视口
+        // 图像与更新/绘制 UI gizmo 之前处理，本帧内图像、拾取与覆盖层
+        // 使用同一份缩放状态（否则图像用旧状态、gizmo 框用新状态，
+        // 缩放/平移发生的当帧两者错位）。锚定/平移换算用上一帧的视口
+        // 矩形与悬停态（帧尾缓存到 m_ui_view_input_*）
+        self->updateUIViewNavigation(
+            self.m_ui_view_input_hovered, self.m_ui_view_input_rect);
+
+        // 本帧视口缩放一致性快照（见 Definition.wo 字段注释）：此后同帧
+        // 的状态变化不影响已捕获的这份，下一帧生效
+        self.m_ui_view_draw_active = self->uiEditingActive();
+        self.m_ui_view_draw_zoom = self.m_ui_view_zoom;
+        self.m_ui_view_draw_offset = self.m_ui_view_offset;
+
         let mut viewport_hovered = false;
         let mut viewport_rect = option::none: option<(ImVec2, ImVec2)>;
         match (self.m_editor_walk_camera_frame_buffer=>>\fb = fb->attachment(0);)
@@ -856,6 +875,11 @@ namespace JEEditor::Editor::WorldEditorViewport
                     rect_min,
                     (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
         }
+
+        // 缓存本帧视口矩形与悬停态，供下一帧帧首的 UI 编辑视口导航
+        //（updateUIViewNavigation）使用
+        self.m_ui_view_input_rect = viewport_rect;
+        self.m_ui_view_input_hovered = viewport_hovered && !toolbar_hovered;
 
         return self.m_close == CloseRequest::NORMALLY;
     }

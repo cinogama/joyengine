@@ -180,6 +180,27 @@ namespace JEEditor::Editor::WorldEditorViewport
         return uiFloor(v / step + 0.5) * step;
     }
 
+    // 未旋转矩形的纹素对齐（GPU 光栅化覆盖规则：纹素中心被覆盖即填充）：
+    // 可见内容边缘落在覆盖纹素区间 [floor(L+0.5), floor(R-0.5)+1] 上，
+    // 而解析出的浮点矩形与之每边最多差半个显示像素（比例布局折算出的
+    // 中心/尺寸几乎必然带小数部分）——100% 下不可见，视口放大（×z）
+    // 后被放大成数个屏幕像素，即“框与元素错位”的观感来源。绘制与手柄
+    // 命中共用本量化保证“所见即所点”；旋转矩形不量化。仅影响显示与
+    // 命中几何，拖拽写值/吸附/撤销仍用精确浮点矩形
+    protected func uiQuantizeRect(
+        center: vec2, size: vec2, total_angle: real)=> (vec2, vec2)
+    {
+        if (total_angle != 0.)
+            return (center, size);
+
+        let l = uiFloor(center[0] - size[0] * 0.5 + 0.5);
+        let r = uiFloor(center[0] + size[0] * 0.5 - 0.5) + 1.;
+        let b = uiFloor(center[1] - size[1] * 0.5 + 0.5);
+        let t = uiFloor(center[1] + size[1] * 0.5 - 0.5) + 1.;
+        return (((l + r) * 0.5, (b + t) * 0.5) as vec2,
+            (r - l, t - b) as vec2);
+    }
+
     // 某轴的边缘/中心对齐吸附：元素的三条关键线（负边/中心/正边）
     // 与参考矩形的三条关键线两两比对，距离在 UI_SNAP_ALIGN_PX 内时返回
     //（吸附修正量, 命中的参考线坐标）；无命中返回 none。坐标均在祖先
@@ -236,19 +257,20 @@ namespace JEEditor::Editor::WorldEditorViewport
     // 不改签名与实现，继续以 (rmin_v, rsize_v, display_range) 调用即自动
     // 获得缩放语义（display_range 保持完整值，布局解析与换算共用）：
     // 容差/屏幕尺寸随 zoom 放大，uiScreenToDisplay 的输出仍是完整显示
-    // 空间坐标（写回组件所需）。非 UI 编辑或 zoom==1（offset 恒为 0）
-    // 时即原始 (rmin, rsize)，与未缩放行为逐位一致。
+    // 空间坐标（写回组件所需）。读帧内一致性快照（m_ui_view_draw_*，
+    // 与本帧视口图像的显示状态严格一致）；非 UI 编辑或 zoom==1（offset
+    // 恒为 0）时即原始 (rmin, rsize)，与未缩放行为逐位一致。
     protected func uiViewScreenRect(
         self: WorldEditorViewport,
         rmin: vec2, rsize: vec2, display_range: vec2)=> (vec2, vec2)
     {
-        if (!self->uiEditingActive() || self.m_ui_view_zoom == 1.)
+        if (!self.m_ui_view_draw_active || self.m_ui_view_draw_zoom == 1.)
             return (rmin, rsize);
 
-        let z = self.m_ui_view_zoom;
+        let z = self.m_ui_view_draw_zoom;
         let rsize_v = rsize * z;
         let k = rsize_v / display_range;
-        let off = self.m_ui_view_offset;
+        let off = self.m_ui_view_draw_offset;
         let rmin_v = (
             rmin[0] - k[0] * off[0],
             rmin[1] + rsize[1] + k[1] * off[1] - rsize_v[1]) as vec2;
@@ -257,16 +279,17 @@ namespace JEEditor::Editor::WorldEditorViewport
 
     // 可见子矩形 → 纹理 UV（引擎约定 V 向上，uv0/uv1 = 可见窗口在显示
     // 空间中的归一化 min/max 角）；未缩放（或非 UI 编辑）返回 none，
-    // 调用方回退 ImageSize 全图绘制
+    // 调用方回退 ImageSize 全图绘制。读帧内一致性快照
+    //（m_ui_view_draw_*，与 uiViewScreenRect 同源）
     protected func uiVisibleUV(self: WorldEditorViewport)=> option<(vec2, vec2)>
     {
-        if (!self->uiEditingActive() || self.m_ui_view_zoom == 1.)
+        if (!self.m_ui_view_draw_active || self.m_ui_view_draw_zoom == 1.)
             return option::none: option<(vec2, vec2)>;
 
         return or(option::none: option<(vec2, vec2)>) <| try!{
             try! dr = self->uiGetDisplayRange();
-            let vis = dr / self.m_ui_view_zoom;
-            let off = self.m_ui_view_offset;
+            let vis = dr / self.m_ui_view_draw_zoom;
+            let off = self.m_ui_view_draw_offset;
             return_value! option::value <|
                 ((off[0] / dr[0], off[1] / dr[1]) as vec2,
                  ((off[0] + vis[0]) / dr[0],
@@ -337,8 +360,10 @@ namespace JEEditor::Editor::WorldEditorViewport
         };
     }
 
-    // UI 编辑模式的视口导航（由 updateCameraControl 在 UI 编辑模式下
-    // 调用，摄像机控制的滚轮/中键此时让位，见 control*Camera 的卫语句）：
+    // UI 编辑模式的视口导航（由 run() 在每帧帧首调用——须先于视口图像
+    // 绘制与 UI gizmo 更新/绘制，保证本帧内图像与覆盖层用同一份缩放状态；
+    // 锚定/平移换算用上一帧的视口矩形与悬停态，即 m_ui_view_input_* 缓存。
+    // 摄像机控制的滚轮/中键此时让位，见 control*Camera 内卫语句）：
     // 滚轮以鼠标为锚缩放显示、中键拖拽平移可见窗口、F 聚焦选中元素。
     // framebuffer 重建（尺寸变化）时 offset 按比例迁移后夹取，zoom 保留
     protected func updateUIViewNavigation(
@@ -776,12 +801,19 @@ namespace JEEditor::Editor::WorldEditorViewport
         let total = info.m_angle_acc + info.m_own_angle;
         let handle_half = handle_box * 0.5;
 
+        // 纹素对齐（与 drawUIGizmo 同款，见 uiQuantizeRect）：手柄的绘制
+        // 位置按光栅化覆盖规则量化，命中检测必须用同一份量化矩形，
+        // 否则高倍缩放下“所见手柄”与“可点位置”最多差半个显示像素
+        //（×z 个屏幕像素）
+        let (main_center, main_size) = uiQuantizeRect(
+            info.m_center, info.m_size, total);
+
         // 鼠标在元素本地坐标系（相对中心，随元素旋转）与显示容差，
         // 缩放/移动判定共用
         let local = uiRotateVec2(
             -total,
-            uiScreenToDisplay(mouse, rmin, rsize, display_range) - info.m_center);
-        let half = info.m_size * 0.5;
+            uiScreenToDisplay(mouse, rmin, rsize, display_range) - main_center);
+        let half = main_size * 0.5;
         let tol = uiHitTolerance(rsize, display_range);
 
         // 旋转手柄：沿元素自身 up 轴、距上缘 UI_ROTATE_STALK_PX 的圆点；
@@ -790,7 +822,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         {
             let up = uiRotateVec2(total, (0., 1.) as vec2);
             let rot_pos = info.m_pivot_display
-                + up * (info.m_size[1] * 0.5 + UI_ROTATE_STALK_PX);
+                + up * (half[1] + UI_ROTATE_STALK_PX);
             if ((mouse
                     - uiDisplayToScreen(rot_pos, rmin, rsize, display_range))->length
                 < UI_HANDLE_HIT_PX)
@@ -812,8 +844,8 @@ namespace JEEditor::Editor::WorldEditorViewport
             let near_border = !(mathf::abs(local[0]) <= half[0] - tol[0]
                 && mathf::abs(local[1]) <= half[1] - tol[1]);
             // 元素的屏幕尺寸（换算到屏幕像素，判定与视口缩放无关）
-            let elem_scr = (info.m_size[0] * rsize[0] / display_range[0],
-                info.m_size[1] * rsize[1] / display_range[1]) as vec2;
+            let elem_scr = (main_size[0] * rsize[0] / display_range[0],
+                main_size[1] * rsize[1] / display_range[1]) as vec2;
             if (near_border)
             {
                 let mut h = UI_HANDLE_RESIZE_LB;
@@ -829,7 +861,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                             && elem_scr[1] < UI_EDGE_HANDLE_MIN_ELEM_PX);
                     if (!edge_h_disabled)
                     {
-                        let cpos = info.m_center
+                        let cpos = main_center
                             + uiRotateVec2(
                                 total,
                                 ((sx as real) * handle_half[0], (sy as real) * handle_half[1]) as vec2);
@@ -998,10 +1030,15 @@ namespace JEEditor::Editor::WorldEditorViewport
 
                     // 编辑层：默认编辑比例通道（size_ratio/offset_ratio），
                     // 手柄挂有效矩形（外层）；按住 Shift 切到绝对通道，
-                    // 手柄挂 size 层框（内侧）；Ctrl 为吸附键
+                    // 手柄挂 size 层框（内侧）；Ctrl 为吸附键。
+                    // 比例层框与绘制一致做纹素对齐（uiQuantizeRect），
+                    // 保证手柄“所见即所点”
                     let handle_box = IsKeyDown(ImGuiKey::ImGuiKey_LeftShift)
                         ? size_box
-                        | ratio_box;
+                        | uiQuantizeRect(
+                            ui_info.m_center,
+                            ratio_box,
+                            ui_info.m_angle_acc + ui_info.m_own_angle).1;
 
                     let mouse = GetMousePos() as vec2;
                     let handle = pickUIHandle(
@@ -1519,34 +1556,47 @@ namespace JEEditor::Editor::WorldEditorViewport
 
         let draw_list = GetWindowDrawList();
         let total = self.m_ui_draw_total_angle;
-        let half = self.m_ui_draw_size * 0.5;
+
+        // 主框与参考框的纹素对齐（未旋转时，见 uiQuantizeRect）：使框
+        // 在任何缩放下都与可见内容边缘严格重合
+        let (main_center, main_size) = uiQuantizeRect(
+            self.m_ui_draw_center, self.m_ui_draw_size, total);
+        let half = main_size * 0.5;
 
         // 当前编辑层（拖拽期间冻结为拖拽开始时的层）：默认编辑比例通道，
         // 按住 Shift 切到绝对通道；缩放手柄挂在编辑层框上，offset 拖拽
-        // 写对应成员
+        // 写对应成员（比例层框即量化后的有效矩形；绝对层框无对应光栅化
+        // 内容、保持浮点）
         let edit_ratio = self.m_ui_dragging
             ? self.m_ui_drag_edit_ratio
             | !IsKeyDown(ImGuiKey::ImGuiKey_LeftShift);
-        let handle_half = (edit_ratio ? self.m_ui_draw_ratio_box | self.m_ui_draw_size_box) * 0.5;
+        let handle_half = (edit_ratio ? main_size | self.m_ui_draw_size_box) * 0.5;
+
+        // 参考矩形（父元素矩形或整个显示区）：父的可见边缘同样量化到
+        // 纹素边界，未旋转时同款对齐
+        let (ref_center, ref_size) = uiQuantizeRect(
+            self.m_ui_draw_ref_center,
+            self.m_ui_draw_ref_size,
+            self.m_ui_draw_ref_total_angle);
 
         // 参考矩形（父元素矩形或整个显示区）
         {
-            let ref_half = self.m_ui_draw_ref_size * 0.5;
+            let ref_half = ref_size * 0.5;
             let rt = self.m_ui_draw_ref_total_angle;
             let r0 = uiDisplayToScreen(
-                self.m_ui_draw_ref_center
+                ref_center
                     + uiRotateVec2(rt, (-ref_half[0], -ref_half[1]) as vec2),
                 rmin, rsize, dr);
             let r1 = uiDisplayToScreen(
-                self.m_ui_draw_ref_center
+                ref_center
                     + uiRotateVec2(rt, (ref_half[0], -ref_half[1]) as vec2),
                 rmin, rsize, dr);
             let r2 = uiDisplayToScreen(
-                self.m_ui_draw_ref_center
+                ref_center
                     + uiRotateVec2(rt, (ref_half[0], ref_half[1]) as vec2),
                 rmin, rsize, dr);
             let r3 = uiDisplayToScreen(
-                self.m_ui_draw_ref_center
+                ref_center
                     + uiRotateVec2(rt, (-ref_half[0], ref_half[1]) as vec2),
                 rmin, rsize, dr);
             do draw_list->AddLine((r0[0], r0[1]), (r1[0], r1[1]), UI_GIZMO_COLOR_REF, 1.);
@@ -1608,16 +1658,16 @@ namespace JEEditor::Editor::WorldEditorViewport
             ? UI_GIZMO_COLOR_LOCKED
             | UI_GIZMO_COLOR;
         let c0 = uiDisplayToScreen(
-            self.m_ui_draw_center + uiRotateVec2(total, (-half[0], -half[1]) as vec2),
+            main_center + uiRotateVec2(total, (-half[0], -half[1]) as vec2),
             rmin, rsize, dr);
         let c1 = uiDisplayToScreen(
-            self.m_ui_draw_center + uiRotateVec2(total, (half[0], -half[1]) as vec2),
+            main_center + uiRotateVec2(total, (half[0], -half[1]) as vec2),
             rmin, rsize, dr);
         let c2 = uiDisplayToScreen(
-            self.m_ui_draw_center + uiRotateVec2(total, (half[0], half[1]) as vec2),
+            main_center + uiRotateVec2(total, (half[0], half[1]) as vec2),
             rmin, rsize, dr);
         let c3 = uiDisplayToScreen(
-            self.m_ui_draw_center + uiRotateVec2(total, (-half[0], half[1]) as vec2),
+            main_center + uiRotateVec2(total, (-half[0], half[1]) as vec2),
             rmin, rsize, dr);
         do draw_list->AddLine((c0[0], c0[1]), (c1[0], c1[1]), main_color, main_w);
         do draw_list->AddLine((c1[0], c1[1]), (c2[0], c2[1]), main_color, main_w);
@@ -1656,7 +1706,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             {
                 let (sx, sy) = uiHandleSigns(h);
                 let hp = uiDisplayToScreen(
-                    self.m_ui_draw_center
+                    main_center
                         + uiRotateVec2(total, ((sx as real) * handle_half[0], (sy as real) * handle_half[1]) as vec2),
                     rmin, rsize, dr);
                 let hcolor = (self.m_ui_hover_handle == h)

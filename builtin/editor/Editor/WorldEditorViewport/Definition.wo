@@ -278,6 +278,20 @@ namespace JEEditor::Editor
         protected m_ui_view_panning: mut bool,
         // 上次见到的显示范围（framebuffer 重建后 offset 按比例迁移再夹取）
         protected m_ui_view_last_range: mut vec2,
+        // 上一帧的视口矩形与悬停态缓存：updateUIViewNavigation 在帧首
+        //（绘制视口图像之前）处理滚轮/中键/F，锚定与平移换算用上一帧
+        // 的矩形——保证本帧内图像、拾取、覆盖层使用同一份缩放状态，
+        // 否则“图像用旧状态、gizmo 框用新状态”，缩放/平移当帧两者错位
+        protected m_ui_view_input_rect: mut option<(ImVec2, ImVec2)>,
+        protected m_ui_view_input_hovered: mut bool,
+        // 本帧一致性快照：run() 在处理完帧首导航、即将绘制视口图像前
+        // 捕获，图像显示（uiVisibleUV）与拾取/覆盖层换算
+        //（uiViewScreenRect）本帧一律读这份快照——同帧更晚发生的状态
+        // 变化（工具栏按钮、选中切换等）下一帧才生效，杜绝“图像用旧
+        // 状态、框用新状态”的错位
+        protected m_ui_view_draw_active: mut bool,
+        protected m_ui_view_draw_zoom: mut real,
+        protected m_ui_view_draw_offset: mut vec2,
 
         // Ctrl 对齐吸附命中的参考线（祖先未旋转帧坐标；none = 无），
         // 拖拽中每帧由 applyUIDrag 写入、drawUIGizmo 绘制

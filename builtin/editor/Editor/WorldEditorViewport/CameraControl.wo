@@ -348,10 +348,10 @@ namespace JEEditor::Editor::WorldEditorViewport
             }
         }
         
-        // UI 编辑模式的视口导航（滚轮缩放/中键平移/F 聚焦，见
-        // UIGizmo.wo 的 updateUIViewNavigation）：接管滚轮与中键，
-        // 下方摄像机控制的对应输入让位（见 control*Camera 内卫语句）
-        self->updateUIViewNavigation(hovered, viewport_rect);
+        // UI 编辑模式的视口导航（滚轮缩放/中键平移/F 聚焦）已移至 run()
+        // 帧首处理（绘制视口图像之前，见 WindowLifecycle.wo），保证本帧
+        // 内图像与 gizmo 使用同一份缩放状态；摄像机控制的滚轮/中键在
+        // UI 编辑模式下让位（见 control*Camera 内卫语句）
 
         match (perspectiveProjection)
         {
