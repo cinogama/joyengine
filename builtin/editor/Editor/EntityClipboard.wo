@@ -82,6 +82,13 @@ namespace JEEditor::Editor::EntityClipboard
                     default_shader = option::none,
                 },
                 EntityPreset{
+                    menu_label = "基本UI文本",
+                    entity_name = "UI文本",
+                    components = ["Transform::LocalToWorld", "UserInterface::Text", "Renderer::Shaders"]
+                        ->connect(UI_TRANSFORM_COMPONENTS),
+                    default_shader = option::value("@/resource/shader/UIText.shader"),
+                },
+                EntityPreset{
                     menu_label = "带2D阴影的基本渲染实体",
                     entity_name = "默认2D阴影物体",
                     components = BASE_TRANSFORM_COMPONENTS
