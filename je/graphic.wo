@@ -86,9 +86,6 @@ namespace je
 
             extern("libjoyecs", "wojeapi_font_load_char")
                 public func load_char(self: font, size: int, ch: char)=> character;
-
-            extern("libjoyecs", "wojeapi_font_string_texture")
-                public func load_string(self: font, str: string, size: int)=> texture;
         }
         
         public using shader = gchandle

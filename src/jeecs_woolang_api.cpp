@@ -1842,39 +1842,6 @@ WOORT_API woort_api wojeapi_font_load_char(void)
     return woort_ret_value(result);
 }
 
-WOORT_API woort_api wojeapi_font_string_texture(void)
-{
-    auto* loaded_font =
-        static_cast<jeecs::basic::resource<jeecs::graphic::font> *>(
-            woort_gcpointer(0));
-
-    jeecs::basic::resource<jeecs::graphic::texture>* text_texture;
-
-    const woort_U8CString text = woort_string(1);
-    const float text_size = (float)woort_int(2);
-
-    std::u32string wstr;
-    wstr.resize(woort_str_to_u32str(text, nullptr, 0));
-    (void)woort_str_to_u32str(text, wstr.data(), wstr.size());
-
-    woort_vm* const last = woort_vm_swap(nullptr);
-    {
-        text_texture =
-            new jeecs::basic::resource<jeecs::graphic::texture>(
-                loaded_font->get()->u32text_texture(wstr, text_size));
-    }
-    (void)woort_vm_swap(last);
-
-    return woort_ret_gchandle(
-        text_texture,
-        WOORT_IGNORE,
-        [](void* ptr)
-        {
-            delete (jeecs::basic::resource<jeecs::graphic::texture> *)ptr;
-        },
-        nullptr);
-}
-
 /////////////////////////////////////////////////////////////
 WOORT_API woort_api wojeapi_shader_open(void)
 {

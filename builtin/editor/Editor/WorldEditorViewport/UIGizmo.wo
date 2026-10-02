@@ -829,7 +829,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 return UI_HANDLE_ROTATE;
         }
 
-        // 缩放手柄；auto_size 文本每帧按纹理重算尺寸，不提供缩放
+        // 缩放手柄；auto_size 文本每帧按布局自然尺寸重算，不提供缩放
         let mut auto_sized = false;
         match (e->towoo::get_component:<UserInterface::Text>)
         {
@@ -962,7 +962,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                             }
                     }
 
-                    // auto_size 文本每帧按纹理重算尺寸，禁用缩放手柄；
+                    // auto_size 文本每帧按布局自然尺寸重算，禁用缩放手柄；
                     // 无 Rotation 组件不显示旋转手柄
                     let mut auto_sized = false;
                     match (e->towoo::get_component:<UserInterface::Text>)

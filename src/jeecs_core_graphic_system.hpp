@@ -8,6 +8,7 @@
 #endif
 #include "jeecs.hpp"
 #include "jeecs_core_rendchain_helpers.hpp"
+#include "jeecs_ui_text_renderer.hpp"
 
 #include <queue>
 #include <list>
@@ -141,6 +142,10 @@ public let frag =
             // UI 节点在 UserInterfaceGraphicPipelineSystem::m_ui_nodes 中的索引；
             // 仅 UI 渲染路径使用，其它管线不读写。
             size_t ui_node;
+
+            // UI 文本（逐字渲染路径）；仅 UI 渲染路径使用，为空时该实体走
+            // 常规四边形路径（两者可并存：先四边形后文本，文字在背景板之上）。
+            const UserInterface::Text* text = nullptr;
 
             bool operator<(const renderer_arch& another) const noexcept
             {
@@ -514,8 +519,76 @@ public let frag =
 
     struct UserInterfaceGraphicPipelineSystem : public BaseImpledGraphicPipeline
     {
+        // ---- 文本逐字渲染常量 ----
+        // 顶点格式（与内置文本着色器的 vin 声明顺序一致）：
+        // float3 位置（相机像素空间，元素矩阵已烘焙）+ float2 UV（字形图集）
+        // + float4 颜色（逐字颜色 × 节点色调）。
+        static constexpr size_t TEXT_VERTEX_FLOATS = 9;
+        // 单个动态顶点缓冲的字形容量（8192 四边形 ≈ 1.15MB 顶点 + 192KB 索引）。
+        static constexpr size_t MAX_TEXT_QUADS_PER_VB = 8192;
+        // 顶点缓冲池上限：每个“连续同键（图集页, 着色器）文本运行段”占用一块，
+        // 池跨帧复用；超限丢弃溢出文本并告警（正常 UI 场景为个位数）。
+        static constexpr size_t MAX_TEXT_VB_COUNT = 32;
+
         UserInterfaceGraphicPipelineSystem(game_world w)
             : BaseImpledGraphicPipeline(w)
+            , m_text_shader(graphic::shader::create(
+                nullptr,
+                "!/builtin/builtin_ui_text.shader", R"(
+// Builtin UI text shader
+import pkg::std;
+
+import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
+SHARED  (true);
+ZTEST   (LESS);
+ZWRITE  (DISABLE);
+BLEND   (ADD, SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+CULL    (NONE);
+
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex  : float3,
+        uv      : float2,
+        color   : float4,
+    };
+
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos     : float4,
+        uv      : float2,
+        color   : float4,
+    };
+
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        color   : float4,
+    };
+
+public func vert(v: vin)
+{
+    return v2f{
+        pos = JE_MVP * vec4!(v.vertex, 1.),
+        uv = v.uv,
+        color = v.color,
+    };
+}
+
+let linear_clamp = Sampler2D::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
+WOSHADER_UNIFORM!
+    let Main = texture2d::uniform(0, linear_clamp);
+
+public func frag(vf: v2f)
+{
+    return fout{
+        color = vf.color * tex2d(Main, vf.uv),
+    };
+}
+)").value())
         {
         }
 
@@ -534,7 +607,6 @@ public let frag =
             const UserInterface::WorldLayout* layout = nullptr;
             const UserInterface::Rotation* rotation = nullptr; // 可空
             const UserInterface::Text* text = nullptr;         // 可空
-            const Textures* textures = nullptr;                // 可空，auto_size 用
 
             size_t parent = INVALID_UI_NODE;
 
@@ -557,6 +629,24 @@ public let frag =
         // 必须是 list：解析扫描中边遍历边删除，list 的 erase 不会失效其它迭代器
         //（vector 的 erase 会失效删除点之后的迭代器，同款循环即 UB）。
         std::list<pending_ui_node_t> m_ui_pending_nodes;
+
+        // ---- 文本逐字渲染运行时 ----
+        // 字形图集 + 行网格布局引擎（LRU、脏检查细节见 jeecs_ui_text_renderer.hpp）。
+        ui_text_renderer m_text_renderer;
+        // 内置文本着色器（无自定义 Shaders 的文本节点使用）。
+        basic::resource<graphic::shader> m_text_shader;
+        // 动态顶点缓冲池：跨帧复用；同一帧内每个运行段独占一块（rendchain
+        // 记录绘制动作后图形线程滞后消费，同帧内重复更新同一缓冲会互相覆盖）。
+        std::vector<basic::resource<graphic::vertex>> m_text_vb_pool;
+        size_t m_text_vb_used = 0;
+        bool m_warned_text_vb_exhausted = false;
+        // 当前批（连续同键运行段）状态；发射端逐字追加，键变化/缓冲满/相机
+        // 切换时 flush 成一次 jegl_rchain_draw。
+        std::vector<float> m_text_quad_data;
+        jegl_texture* m_text_batch_page = nullptr;
+        graphic::shader* m_text_batch_shader = nullptr;
+        basic::resource<graphic::vertex>* m_text_batch_vb = nullptr;
+        size_t m_text_batch_quads = 0;
 
         void GraphicUpdate()
         {
@@ -595,11 +685,15 @@ public let frag =
                     });
             }
 
-            RasterizeDirtyTexts();
+            // 帧首推进字形图集 LRU，并按窗口分辨率重建全部文本的逐字布局
+            //（布局与相机无关，相机目标分辨率差异由发射端统一缩放）。
+            m_text_renderer.begin_frame();
+            PrepareTextLayouts();
+            m_text_vb_used = 0;
 
             // 构建 UI 节点树（结构与相机无关，每帧重建），并从中收集可渲染实体：
-            // 节点必须覆盖全部 UI 元素（含纯布局容器），渲染列表仅取带 Shaders+Shape
-            // 且非 2D 光源的节点（等价于原先渲染查询的 except 语义）。
+            // 节点必须覆盖全部 UI 元素（含纯布局容器），渲染列表取非 2D 光源、
+            // 且带 Shaders+Shape（常规四边形）或带 Text（逐字文本）的节点。
             m_ui_nodes.clear();
             m_ui_resolve_order.clear();
             m_ui_node_by_anchor.clear();
@@ -628,7 +722,7 @@ public let frag =
             >())
             {
                 m_ui_nodes.push_back(ui_node_t{
-                    &elem, &layout, rotation, text, texs,
+                    &elem, &layout, rotation, text,
                     INVALID_UI_NODE, {}, {}, 0.f });
                 const size_t node_index = m_ui_nodes.size() - 1;
 
@@ -644,12 +738,15 @@ public let frag =
                         m_ui_node_by_anchor.emplace(anchor->uid, node_index);
                 }
 
-                if (shads != nullptr && shape != nullptr
-                    && point == nullptr && parallel == nullptr && range == nullptr)
+                const bool is_2d_light =
+                    point != nullptr || parallel != nullptr || range != nullptr;
+                if (!is_2d_light
+                    && (text != nullptr || (shads != nullptr && shape != nullptr)))
                 {
                     m_renderer_list.emplace(
                         renderer_arch{
-                            color, rendqueue, nullptr, shape, shads, texs, node_index });
+                            color, rendqueue, nullptr, shape, shads, texs,
+                            node_index, text });
                 }
             }
 
@@ -688,7 +785,7 @@ public let frag =
 
         // 按依赖序（父先于子）解析全部 UI 节点，每个相机目标尺寸调用一次：
         // 1) resolve_layout 得到局部（父元素未旋转坐标系）矩形；
-        // 2) auto_size 按通道0文本纹理宽高比调整矩形（父先于子，子元素同帧可见）；
+        // 2) auto_size 按文本布局自然尺寸的宽高比调整矩形（父先于子，子元素同帧可见）；
         // 3) 沿父链复合祖先旋转（像素空间）：A(x) = display_center + R(angle_acc)·(x − rect.center)，
         //    display_center 逐级递归（父旋转绕父枢轴，再经父的祖先链上溯）；
         //    angle_acc 直接取 WorldLayout.rotation − 自身角（布局阶段已缓存，此处不再累加）。
@@ -699,31 +796,31 @@ public let frag =
                 ui_node_t& node = m_ui_nodes[node_index];
                 node.rect = node.elem->resolve_layout(*node.layout, width, height);
 
-                // auto_size：按文本纹理自然宽高比调整元素尺寸，基准轴与字号计算
-                // 一致（width_unit 取 x 否则取 y——per_axis 亦取 y，文本以字高为
+                // auto_size：按文本布局的自然宽高比（Text::runtime_layout，
+                // 与纹理彻底解耦）调整元素尺寸，基准轴与字号计算一致
+                //（width_unit 取 x 否则取 y——per_axis 亦取 y，文本以字高为
                 // 基准更自然）；只作用于本次解析结果，不回写布局输入，
                 // 也不参与字号计算。
-                if (node.text != nullptr && node.text->auto_size
-                    && node.textures != nullptr)
+                if (node.text != nullptr && node.text->auto_size)
                 {
-                    if (auto text_texture = node.textures->get_texture(0);
-                        text_texture.has_value())
+                    const auto& text_layout = node.text->runtime_layout;
+                    if (text_layout.valid
+                        && text_layout.block_w > 0.f && text_layout.block_h > 0.f)
                     {
-                        const auto texture_size = text_texture.value()->size();
                         const bool base_on_y =
                             node.elem->unit_kind != Element::ratio_unit::width_unit;
-                        if (base_on_y && texture_size.y > 0)
+                        if (base_on_y)
                         {
                             const float ratio =
-                                static_cast<float>(texture_size.x) / static_cast<float>(texture_size.y);
+                                text_layout.block_w / text_layout.block_h;
                             node.rect.resize_around_pivot(
                                 node.elem->pivot,
                                 math::vec2(node.rect.size.y * ratio, node.rect.size.y));
                         }
-                        else if (!base_on_y && texture_size.x > 0)
+                        else
                         {
                             const float ratio =
-                                static_cast<float>(texture_size.y) / static_cast<float>(texture_size.x);
+                                text_layout.block_h / text_layout.block_w;
                             node.rect.resize_around_pivot(
                                 node.elem->pivot,
                                 math::vec2(node.rect.size.x, node.rect.size.x * ratio));
@@ -765,67 +862,22 @@ public let frag =
             }
         }
 
-        // 把脏文本光栅化进实体 Textures 的通道0。文本渲染复用标准 UI 渲染路径，
-        // 因此实体必须持有 Renderer::Textures 和 Renderer::Shaders 才会被处理。
-        // 实际像素字号 = 元素按窗口尺寸解析后的最终布局尺寸
-        //（width_unit 取 x 分量，否则取 y 分量——per_axis 亦取 y，文字以字高
-        // 为基准），文字随元素与窗口分辨率等比缩放；auto_size 只影响绘制
-        //（见 DrawFrame），不参与字号计算，也不回写任何布局输入组件。
-        void RasterizeDirtyTexts()
+        // 按窗口分辨率重建全部 UI 文本的逐字布局（标记解析 → 字形度量 →
+        // 折行 → 对齐 → 放置），结果缓存于 Text::runtime_layout，仅脏文本
+        // 重建。实际像素字号 = 元素按窗口尺寸解析后的最终布局尺寸（基准轴
+        // 与旧路径一致：width_unit 取 x 分量，否则取 y 分量——per_axis 亦取
+        // y，文字以字高为基准），并量化为整像素以获得稳定的字形缓存命中；
+        // 相机目标分辨率的差异由发射端按基准轴比例统一缩放。
+        // auto_size 只影响绘制（见 ResolveUiNodes），不参与字号计算，
+        // 也不回写任何布局输入组件。
+        void PrepareTextLayouts()
         {
-            for (auto&& [text, texs, elem, layout] : query<view typesof(
-                Text&, Textures&, Element&, WorldLayout&)>())
+            for (auto&& [text, elem, layout] : query<view typesof(
+                Text&, Element&, WorldLayout&)>())
             {
-                const auto clear_raster_cache = [&]()
-                {
-                    if (text.cached_font_size > 0.f)
-                    {
-                        texs.remove_texture(0);
-                        text.cached_texture_content = "";
-                        text.cached_font_size = 0.f;
-                    }
-                };
-
-                auto font_res = text.font.get_resource();
-                if (!font_res.has_value())
-                {
-                    // 字体未指定则不渲染；移除先前光栅化残留的通道0纹理。
-                    clear_raster_cache();
-                    continue;
-                }
-
-                const auto rect = elem.resolve_layout(
-                    layout,
+                m_text_renderer.layout_text(
+                    text, elem, layout,
                     (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT);
-
-                const float font_size =
-                    elem.unit_kind != Element::ratio_unit::width_unit
-                    ? rect.size.y
-                    : rect.size.x;
-
-                if (font_size <= 0.f)
-                {
-                    // 元素在该轴上无尺寸则视为不渲染文本。
-                    clear_raster_cache();
-                    continue;
-                }
-
-                // 通道0为空也视为脏（如场景重载后纹理丢失，可自愈重建）。
-                // 布局或窗口尺寸变化会改变 font_size，经比较触发重光栅化。
-                const bool dirty =
-                    !texs.get_texture(0).has_value()
-                    || text.cached_texture_content != text.content
-                    || text.cached_font_size != font_size;
-
-                if (dirty)
-                {
-                    texs.bind_texture(
-                        0, font_res.value()->u8text_texture(
-                            text.content.cpp_str(), font_size));
-
-                    text.cached_texture_content = text.content;
-                    text.cached_font_size = font_size;
-                }
             }
         }
 
@@ -888,18 +940,7 @@ public let frag =
 
                 for (auto& rendentity : m_renderer_list)
                 {
-                    assert(rendentity.ui_node < m_ui_nodes.size()
-                        && rendentity.shaders != nullptr
-                        && rendentity.shape != nullptr);
-
-                    auto& drawing_shape =
-                        rendentity.shape->vertex.has_value()
-                        ? rendentity.shape->vertex.value()
-                        : m_default_resources.default_shape_quad;
-                    auto& drawing_shaders =
-                        rendentity.shaders->shaders.empty() == false
-                        ? rendentity.shaders->shaders
-                        : m_default_resources.default_shaders_list;
+                    assert(rendentity.ui_node < m_ui_nodes.size());
 
                     const ui_node_t& node = m_ui_nodes[rendentity.ui_node];
                     const auto& rect = node.rect;
@@ -910,6 +951,9 @@ public let frag =
                     // uioffset 保证枢轴落在其经祖先旋转链后的显示位置 A(Q)，
                     // 即 uioffset = D_C + (I − R(Θ_acc))·pivot_offset
                     //（R 在此处按弧度计算，需先换算）。
+                    // 该矩阵把“单位矩形坐标”（±0.5 张成元素矩形）映射到相机
+                    // 像素空间，常规四边形路径（着色器侧 MVP）与逐字文本路径
+                    //（CPU 侧烘焙进顶点）共用同一映射。
                     const float total_angle = node.layout->rotation;
 
                     const math::vec2 uioffset = node.display_center
@@ -965,21 +1009,293 @@ public let frag =
                     math::mat4xmat4(MAT4_UI_MODEL, MAT4_UI_MV /* tmp */, MAT4_UI_SIZE);
                     math::mat4xmat4(MAT4_UI_MV, MAT4_UI_VIEW, MAT4_UI_MODEL);
 
-                    auto bound = bind_entity_textures(rend_chain, rendentity.textures);
+                    // 常规四边形路径：Shaders+Shape 齐备的实体（文本实体若
+                    // 同时挂有两者则先画背景板，文字叠于其上）。
+                    if (rendentity.shape != nullptr && rendentity.shaders != nullptr)
+                    {
+                        auto& drawing_shape =
+                            rendentity.shape->vertex.has_value()
+                            ? rendentity.shape->vertex.value()
+                            : m_default_resources.default_shape_quad;
+                        auto& drawing_shaders =
+                            rendentity.shaders->shaders.empty() == false
+                            ? rendentity.shaders->shaders
+                            : m_default_resources.default_shaders_list;
 
-                    pass_uniforms_t u;
-                    u.m = MAT4_UI_MODEL;
-                    // UI uses MV for both mvp and mv slots.
-                    u.mv = MAT4_UI_MV;
-                    u.mvp = MAT4_UI_MV;
-                    u.tiling = bound.tiling;
-                    u.offset = bound.offset;
-                    if (rendentity.color != nullptr)
-                        u.color = rendentity.color->color;
+                        auto bound = bind_entity_textures(rend_chain, rendentity.textures);
 
-                    draw_shader_passes(rend_chain, drawing_shape, drawing_shaders, bound.group, u);
+                        pass_uniforms_t u;
+                        u.m = MAT4_UI_MODEL;
+                        // UI uses MV for both mvp and mv slots.
+                        u.mv = MAT4_UI_MV;
+                        u.mvp = MAT4_UI_MV;
+                        u.tiling = bound.tiling;
+                        u.offset = bound.offset;
+                        if (rendentity.color != nullptr)
+                            u.color = rendentity.color->color;
+
+                        draw_shader_passes(rend_chain, drawing_shape, drawing_shaders, bound.group, u);
+                    }
+
+                    // 逐字文本路径：字形四边形按（图集页, 着色器）合并成连续
+                    // 运行段，段满/键变化/相机切换时冲刷为一次绘制调用。
+                    if (rendentity.text != nullptr)
+                    {
+                        EmitTextGlyphs(
+                            rend_chain, MAT4_UI_VIEW, MAT4_UI_MODEL,
+                            *rendentity.text, node, rendentity);
+                    }
+                }
+
+                // 冲刷本相机最后一个文本运行段（批状态跨相机持有视图矩阵，
+                // 必须在视图离开作用域前落盘），并放弃对当前缓冲的占用——
+                // 已记录的绘制动作仍引用它，下一相机必须取新缓冲，否则
+                // 同帧内重复更新同一缓冲会与图形线程的滞后消费竞争。
+                FlushTextBatch(rend_chain, MAT4_UI_VIEW);
+                m_text_batch_vb = nullptr;
+            }
+        }
+
+        // ---- 文本逐字批处理 ----
+
+        // 发射一个文本节点的全部字形四边形。字形放置来自布局缓存（文本
+        // 空间，窗口分辨率），经 s（相机基准轴/量化字号）统一缩放、按
+        // alignment 九宫格放置进元素矩形（矩形局部像素 → 单位矩形坐标），
+        // 再经与四边形路径完全相同的元素矩阵烘焙成相机像素空间顶点；
+        // 颜色 = 逐字标记颜色 × 节点 Renderer::Color 色调。
+        void EmitTextGlyphs(
+            jegl_rendchain* chain,
+            const float (&view)[4][4],
+            const float (&model)[4][4],
+            const UserInterface::Text& text,
+            const ui_node_t& node,
+            const renderer_arch& rendentity)
+        {
+            const auto& layout = text.runtime_layout;
+            if (!layout.valid || layout.glyphs.size() == 0)
+                return;
+
+            const auto& rect = node.rect;
+            if (rect.size.x <= 0.f || rect.size.y <= 0.f)
+                return;
+
+            // 字号基准轴与布局一致：width_unit 取 x，否则取 y。
+            const float base_axis =
+                node.elem->unit_kind == Element::ratio_unit::width_unit
+                ? rect.size.x : rect.size.y;
+            if (base_axis <= 0.f || layout.key_font_px <= 0)
+                return;
+
+            auto font_holder = text.font.get_resource();
+            if (!font_holder.has_value())
+                return;
+            auto& font_res = font_holder.value();
+
+            // 着色器：实体 Shaders 的第一个 woshader pass（自定义文本特效），
+            // 否则内置文本着色器。
+            graphic::shader* shader_res = m_text_shader.get();
+            if (rendentity.shaders != nullptr && !rendentity.shaders->shaders.empty())
+            {
+                auto& user_shader = rendentity.shaders->shaders.front();
+                if (user_shader->m_builtin != nullptr)
+                    shader_res = user_shader.get();
+            }
+
+            // 节点色调烘焙进顶点色（批内共享一次绘制，无法逐节点传 uniform）。
+            math::vec4 tint(1.f, 1.f, 1.f, 1.f);
+            if (rendentity.color != nullptr)
+                tint = rendentity.color->color;
+
+            // 文本像素 → 相机像素：布局在窗口分辨率下量化，相机目标分辨率
+            // 不同时按基准轴比例统一缩放（行为与旧纹理路径等价）。
+            const float s = base_axis / (float)layout.key_font_px;
+
+            // 文本块左下角（矩形局部像素系，原点=矩形中心）与单位矩形换算。
+            const math::vec2 block_origin = ui_text_renderer::block_origin_local(
+                rect, layout, text.alignment, s);
+            const float inv_size_x = 1.f / rect.size.x;
+            const float inv_size_y = 1.f / rect.size.y;
+
+            for (const auto& glyph : layout.glyphs)
+            {
+                const auto* slot = m_text_renderer.resolve(
+                    font_res, glyph.raster_px, glyph.cp);
+                if (slot->page == nullptr)
+                    continue; // 无位图字形（布局阶段已过滤，防御）
+
+                PrepareTextBatch(
+                    chain, view,
+                    slot->page->m_texture->resource(), shader_res);
+                if (m_text_batch_vb == nullptr)
+                    return; // 顶点缓冲池耗尽，丢弃剩余文本（已告警）
+
+                // 字形盒（文本空间，y 向上）→ 矩形局部像素 → 单位矩形坐标
+                //（MODEL 期望 ±0.5 张成元素矩形）→ 相机像素（行向量约定：
+                // p' = p·M，平移位于 m[3][*]）。
+                const float lx0 = block_origin.x + s * glyph.x;
+                const float ly0 = block_origin.y + s * glyph.y;
+                const float lx1 = lx0 + s * (float)slot->w;
+                const float ly1 = ly0 + s * (float)slot->h;
+
+                const float quad[4][2] = {
+                    { lx0 * inv_size_x, ly0 * inv_size_y }, // 左下
+                    { lx0 * inv_size_x, ly1 * inv_size_y }, // 左上
+                    { lx1 * inv_size_x, ly0 * inv_size_y }, // 右下
+                    { lx1 * inv_size_x, ly1 * inv_size_y }, // 右上
+                };
+
+                const float r = tint.x * glyph.color.x;
+                const float g = tint.y * glyph.color.y;
+                const float b = tint.z * glyph.color.z;
+                const float a = tint.w * glyph.color.w;
+
+                // 角点索引 0,1,2,2,1,3（与粒子系统同款四边形剖分）；
+                // UV 与位置同角序（图集行序自底向上，v0 对应字形底边）。
+                static constexpr size_t CORNER_UV[4][2] = {
+                    { 0, 0 }, { 0, 1 }, { 1, 0 }, { 1, 1 } };
+
+                float* v = &m_text_quad_data[
+                    m_text_batch_quads * 4 * TEXT_VERTEX_FLOATS];
+                ++m_text_batch_quads;
+
+                for (size_t corner = 0; corner < 4; ++corner, v += TEXT_VERTEX_FLOATS)
+                {
+                    const float vx = quad[corner][0];
+                    const float vy = quad[corner][1];
+
+                    v[0] = vx * model[0][0] + vy * model[1][0] + model[3][0];
+                    v[1] = vx * model[0][1] + vy * model[1][1] + model[3][1];
+                    v[2] = 0.f;
+                    v[3] = CORNER_UV[corner][0]
+                        ? slot->u1 : slot->u0;
+                    v[4] = CORNER_UV[corner][1]
+                        ? slot->v1 : slot->v0;
+                    v[5] = r;
+                    v[6] = g;
+                    v[7] = b;
+                    v[8] = a;
                 }
             }
+        }
+
+        // 批维护：键（图集页, 着色器）变化或当前缓冲写满时冲刷旧批、
+        // 从池中取下一块顶点缓冲。
+        void PrepareTextBatch(
+            jegl_rendchain* chain,
+            const float (&view)[4][4],
+            jegl_texture* page,
+            graphic::shader* shader_res)
+        {
+            if (m_text_batch_page == page && m_text_batch_shader == shader_res
+                && m_text_batch_vb != nullptr
+                && m_text_batch_quads < MAX_TEXT_QUADS_PER_VB)
+                return;
+
+            FlushTextBatch(chain, view);
+
+            m_text_batch_page = page;
+            m_text_batch_shader = shader_res;
+            m_text_batch_vb = nullptr;
+
+            if (m_text_vb_used >= MAX_TEXT_VB_COUNT)
+            {
+                if (!m_warned_text_vb_exhausted)
+                {
+                    m_warned_text_vb_exhausted = true;
+                    jeecs::debug::logwarn(
+                        "UserInterfaceGraphicPipelineSystem: text vertex buffer "
+                        "pool (%zu buffers x %zu quads) exhausted, dropping "
+                        "overflowing text runs this frame.",
+                        MAX_TEXT_VB_COUNT, MAX_TEXT_QUADS_PER_VB);
+                }
+                return;
+            }
+
+            if (m_text_vb_pool.size() <= m_text_vb_used)
+                m_text_vb_pool.push_back(CreateTextVertexBuffer());
+            m_text_batch_vb = &m_text_vb_pool[m_text_vb_used++];
+        }
+
+        // 冲刷当前批：一次 jegl_update_vertex_buffer + 一次 jegl_rchain_draw。
+        // 顶点已烘焙至相机像素空间，M=I、MVP/MV=UI 视图矩阵。
+        void FlushTextBatch(jegl_rendchain* chain, const float (&view)[4][4])
+        {
+            if (m_text_batch_quads == 0 || m_text_batch_vb == nullptr)
+            {
+                m_text_batch_quads = 0;
+                return;
+            }
+
+            auto& vb = *m_text_batch_vb;
+            vb->update_buffer(
+                m_text_quad_data.data(),
+                m_text_batch_quads * 4 * TEXT_VERTEX_FLOATS * sizeof(float),
+                m_text_batch_quads * 6);
+
+            auto* texture_group = jegl_rchain_allocate_texture_group(chain);
+            jegl_rchain_bind_texture(
+                chain, texture_group, 0, m_text_batch_page);
+
+            auto* draw_action = jegl_rchain_draw(
+                chain, m_text_batch_shader->resource(), vb->resource(), texture_group);
+            auto* builtin_uniform = m_text_batch_shader->m_builtin;
+
+            static const float MAT4_IDENTITY[4][4] = {
+                {1.f, 0.f, 0.f, 0.f},
+                {0.f, 1.f, 0.f, 0.f},
+                {0.f, 0.f, 1.f, 0.f},
+                {0.f, 0.f, 0.f, 1.f},
+            };
+
+            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, m, float4x4, MAT4_IDENTITY);
+            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, mv, float4x4, view);
+            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, mvp, float4x4, view);
+
+            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, local_scale, float3, 1.f, 1.f, 1.f);
+            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, tiling, float2, 1.f, 1.f);
+            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, offset, float2, 0.f, 0.f);
+            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, color, float4, 1.f, 1.f, 1.f, 1.f);
+
+            m_text_batch_quads = 0;
+        }
+
+        // 创建一块文本动态顶点缓冲：静态角点索引一次分配，顶点数据逐帧
+        // 整体重写并收缩激活索引数量（与粒子系统同款机制，见
+        // jegl_update_vertex_buffer）。
+        basic::resource<graphic::vertex> CreateTextVertexBuffer()
+        {
+            const size_t floats_per_vb =
+                MAX_TEXT_QUADS_PER_VB * 4 * TEXT_VERTEX_FLOATS;
+
+            // 首块缓冲顺带把共享发射暂存区扩到容量（零初始化同时作为
+            // 缓冲创建期的初始数据）。
+            if (m_text_quad_data.size() < floats_per_vb)
+                m_text_quad_data.resize(floats_per_vb, 0.f);
+
+            std::vector<uint32_t> indices;
+            indices.reserve(MAX_TEXT_QUADS_PER_VB * 6);
+            for (size_t q = 0; q < MAX_TEXT_QUADS_PER_VB; ++q)
+            {
+                const uint32_t base = (uint32_t)(q * 4);
+                for (uint32_t idx : { base + 0, base + 1, base + 2,
+                                      base + 2, base + 1, base + 3 })
+                    indices.push_back(idx);
+            }
+
+            auto created = graphic::vertex::create(
+                jegl_vertex::TRIANGLES,
+                m_text_quad_data.data(),
+                m_text_quad_data.size() * sizeof(float),
+                indices,
+                {
+                    { jegl_vertex::data_type::FLOAT32, 3 }, // vertex
+                    { jegl_vertex::data_type::FLOAT32, 2 }, // uv
+                    { jegl_vertex::data_type::FLOAT32, 4 }, // color
+                });
+
+            // 创建失败即显式失败（引擎资源创建约定，见 DefaultResources）。
+            assert(created.has_value());
+            return std::move(created.value());
         }
     };
 

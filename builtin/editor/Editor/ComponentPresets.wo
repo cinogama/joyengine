@@ -89,12 +89,12 @@ namespace JEEditor::Editor::ComponentPresets
         ]),
         ("渲染", [
             ("基本渲染", BASE_RENDERER_COMPONENTS),
-            // 文本纹理由 UI 管线写入 Textures 通道0，着色器需用户自行指定为
-            // 透明混合类（如 UnlitBlend）才能正确显示文本
+            // 文本由 UI 管线逐字直接绘制（内置文本着色器），无需任何
+            // Renderer 渲染组件；可选挂 Renderer::Shaders 以自定义着色器
+            // 绘制文本特效，可选挂 Renderer::Color 作整段色调
             ("UI文本", [
                 "UserInterface::Element", "UserInterface::WorldLayout",
-                "UserInterface::Text",
-                "Renderer::Shape", "Renderer::Shaders", "Renderer::Textures"]),
+                "UserInterface::Text"]),
             ("帧动画", ["Animation::FrameAnimation"]),
             ("粒子发射器", PARTICLE_EMITTER_COMPONENTS),
         ]),

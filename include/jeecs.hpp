@@ -9764,290 +9764,9 @@ namespace jeecs
             {
                 return je_font_get_char(m_font, size, wcharacter);
             }
-
-            basic::resource<texture> u32text_texture(
-                const std::u32string& text, float size)
-            {
-                return text_texture_impl(*this, text, size);
-            }
-            basic::resource<texture> u8text_texture(
-                const std::string& text, float size)
-            {
-                const size_t sz = woort_str_to_u32str(text.c_str(), nullptr, 0);
-                std::u32string wstr;
-
-                wstr.resize(sz);
-                (void)woort_str_to_u32str(text.c_str(), wstr.data(), sz);
-
-                return text_texture_impl(*this, wstr, size);
-            }
-
             je_font* resource() const noexcept
             {
                 return m_font;
-            }
-        private:
-            inline static basic::resource<texture> text_texture_impl(
-                font& font_base,
-                const std::u32string& text,
-                float base_size) noexcept
-            {
-
-                // u32 -> utf8 conversion helper.
-                const auto u32_to_utf8 = [](std::u32string_view sv) -> std::string
-                    {
-                        const size_t sz = woort_u32strn_to_str(sv.data(), sv.size(), nullptr, 0);
-                        std::string out;
-                        out.resize(sz);
-                        (void)woort_u32strn_to_str(sv.data(), sv.size(), out.data(), sz);
-                        return out;
-                    };
-
-                // Parse hex color ("RRGGBBAA"; shorter input zero-pads, matching
-                // the legacy strncpy-into-"00000000" behavior) into normalized RGBA.
-                // Bytes are unpacked in the same order the old code used.
-                const auto parse_hex_color = [&](std::u32string_view hex) -> math::vec4
-                    {
-                        char buf[9] = "00000000";
-                        const auto u8hex = u32_to_utf8(hex);
-                        std::strncpy(buf, u8hex.c_str(), 8);
-                        const unsigned int packed = std::strtoul(buf, nullptr, 16);
-                        const auto* b = reinterpret_cast<const unsigned char*>(&packed);
-                        return math::vec4{
-                            b[3] / 255.0f, // R
-                            b[2] / 255.0f, // G
-                            b[1] / 255.0f, // B
-                            b[0] / 255.0f  // A
-                        };
-                    };
-
-                // Alpha-over compositing of a glyph pixel onto the destination.
-                // A fully-transparent destination reads back as white (1,1,1) for
-                // RGB, preserving the engine's text-rendering look; the alpha
-                // channel uses standard Porter-Duff 'over'.
-                const auto blend_glyph_pixel = [](
-                    const math::vec4& dst,
-                    const math::vec4& src,
-                    const math::vec4& tint) -> math::vec4
-                    {
-                        const float src_a = src.w * tint.w;
-                        const float inv_a = 1.0f - src_a;
-                        const float dst_r = dst.w ? dst.x : 1.0f;
-                        const float dst_g = dst.w ? dst.y : 1.0f;
-                        const float dst_b = dst.w ? dst.z : 1.0f;
-                        return math::vec4(
-                            tint.x * src.x * src_a + dst_r * inv_a,
-                            tint.y * src.y * src_a + dst_g * inv_a,
-                            tint.z * src.z * src_a + dst_b * inv_a,
-                            src_a + dst.w * inv_a);
-                    };
-
-                // Mutable text style, driven by attribute events and read by char
-                // events. Grouped so a single reset() restores the default state.
-                struct
-                {
-                    float      size;
-                    math::vec4 color = math::vec4{ 1, 1, 1, 1 };
-                    math::vec2 offset = math::vec2{ 0, 0 };
-                } style;
-                style.size = base_size;
-
-                const auto reset_style = [&]() noexcept
-                    {
-                        style.size = base_size;
-                        style.color = math::vec4{ 1, 1, 1, 1 };
-                        style.offset = math::vec2{ 0, 0 };
-                    };
-
-                // Single source of truth for attribute application — shared by the
-                // measure and raster passes so their state cannot drift apart.
-                const auto apply_attr = [&](std::u32string_view field, std::u32string_view value)
-                    {
-                        const auto u8value = u32_to_utf8(value);
-
-                        if (field == U"scale")
-                        {
-                            // Scale is a multiplier of the base size; the glyph
-                            // cache inside je_font keys on size, so switching it
-                            // needs no font reload. Non-positive results are
-                            // ignored (there is no meaningful glyph for them).
-                            const float scale = std::stof(u8value);
-                            if (scale > 0.f)
-                                style.size = base_size * scale;
-                        }
-                        else if (field == U"color")
-                        {
-                            style.color = parse_hex_color(value);
-                        }
-                        else if (field == U"offset")
-                        {
-                            math::vec2 delta = math::vec2{ 0, 0 };
-                            (void)std::sscanf(u8value.c_str(), "(%f,%f)", &delta.x, &delta.y);
-                            style.offset = style.offset + delta;
-                        }
-                    };
-
-                // Markup scanner. Supports {field:value} attribute spans and a
-                // backslash escape: '\' makes the next character literal (so '\{'
-                // emits '{', '\\' emits '\'). A lone trailing '\' is dropped.
-                const auto walk_text = [&text](
-                    const std::function<void(std::u32string_view, std::u32string_view)>& on_attr,
-                    const std::function<void(char32_t)>& on_char)
-                    {
-                        const auto end = text.cend();
-                        for (auto it = text.cbegin(); it != end; ++it)
-                        {
-                            const char32_t ch = *it;
-
-                            if (ch == U'\\')
-                            {
-                                if (++it; it != end)
-                                    on_char(*it);
-                                continue;
-                            }
-                            if (ch == U'{')
-                            {
-                                bool in_field = true;
-                                std::u32string field;
-                                std::u32string value;
-
-                                for (++it; it != end; ++it)
-                                {
-                                    const char32_t c = *it;
-                                    if (c == U':')
-                                        in_field = false;
-                                    else if (c == U'}')
-                                    {
-                                        on_attr(field, value);
-                                        break;
-                                    }
-                                    else if (in_field)
-                                        field += c;
-                                    else
-                                        value += c;
-                                }
-                                continue;
-                            }
-                            on_char(ch);
-                        }
-                    };
-
-                // Pixel offset contributed by the current text offset, in text-space
-                // units (note: y uses the base size too, preserved from the original).
-                const auto offset_dx = [&]() noexcept {
-                    return static_cast<int>(style.offset.x * base_size);
-                    };
-                const auto offset_dy = [&]() noexcept {
-                    return static_cast<int>(style.offset.y * base_size);
-                    };
-
-                int next_ch_x = 0;
-                int next_ch_y = 0;
-
-                // ---------- Pass 1: measure bounding box ----------
-                bool first_char = true;
-                int min_px = 0, min_py = 0, max_px = 0, max_py = 0;
-
-                walk_text(
-                    apply_attr,
-                    [&](char32_t ch)
-                    {
-                        const auto* info = font_base.get_character(style.size, ch);
-                        if (info == nullptr)
-                            return;
-                        if (ch == U'\n')
-                        {
-                            next_ch_x = 0;
-                            next_ch_y += info->m_advance_y;
-                            return;
-                        }
-
-                        const int px_min = next_ch_x + info->m_baseline_offset_x + offset_dx();
-                        const int py_min = next_ch_y + info->m_baseline_offset_y + offset_dy();
-                        const int px_max = px_min + info->m_width;
-                        const int py_max = py_min + info->m_height;
-
-                        if (first_char)
-                        {
-                            min_px = px_min; min_py = py_min;
-                            max_px = px_max; max_py = py_max;
-                            first_char = false;
-                        }
-                        else
-                        {
-                            min_px = std::min(min_px, px_min);
-                            min_py = std::min(min_py, py_min);
-                            max_px = std::max(max_px, px_max);
-                            max_py = std::max(max_py, py_max);
-                        }
-                        next_ch_x += info->m_advance_x;
-                    });
-
-                // Empty / attribute-only text: emit a 1x1 transparent texture,
-                // making the historical accidental output explicit.
-                if (first_char)
-                {
-                    min_px = min_py = 0;
-                    max_px = max_py = 0;
-                }
-
-                const int size_x = max_px - min_px + 1;
-                const int size_y = max_py - min_py + 1;
-                const int correct_x = -min_px;
-                const int correct_y = -min_py;
-
-                auto new_texture = texture::create(
-                    static_cast<size_t>(size_x),
-                    static_cast<size_t>(size_y),
-                    jegl_texture::format::RGBA);
-
-                std::memset(
-                    new_texture->resource()->m_pixels,
-                    0,
-                    static_cast<size_t>(size_x) * static_cast<size_t>(size_y) * 4);
-
-                // ---------- Pass 2: rasterize ----------
-                next_ch_x = 0;
-                next_ch_y = 0;
-                reset_style();
-
-                walk_text(
-                    apply_attr,
-                    [&](char32_t ch)
-                    {
-                        const auto* info = font_base.get_character(style.size, ch);
-                        if (info == nullptr)
-                            return;
-                        if (ch == U'\n')
-                        {
-                            next_ch_x = 0;
-                            next_ch_y += info->m_advance_y;
-                            return;
-                        }
-
-                        const auto& glyph = info->m_texture;
-                        const int base_dst_x = correct_x + next_ch_x + info->m_baseline_offset_x + offset_dx();
-                        const int base_dst_y = correct_y + next_ch_y + info->m_baseline_offset_y + offset_dy();
-
-                        const size_t glyph_h = glyph->height();
-                        const size_t glyph_w = glyph->width();
-                        for (size_t fy = 0; fy < glyph_h; ++fy)
-                        {
-                            for (size_t fx = 0; fx < glyph_w; ++fx)
-                            {
-                                const size_t x = static_cast<size_t>(base_dst_x + static_cast<int>(fx));
-                                const size_t y = static_cast<size_t>(base_dst_y + static_cast<int>(fy));
-
-                                auto dst = new_texture->pix(x, y);
-                                const auto src = glyph->pix(fx, fy).get();
-                                dst.set(blend_glyph_pixel(dst.get(), src, style.color));
-                            }
-                        }
-
-                        next_ch_x += info->m_advance_x;
-                    });
-
-                return new_texture;
             }
         };
 
@@ -10996,31 +10715,88 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Text);
             JECS_DEFAULT_CONSTRUCTOR(Text);
 
-            // UTF-8 文本内容，支持内联标记：{scale:f} {color:RRGGBBAA} {offset:(x,y)}，
-            // '\{' 转义输出字面 '{'（与 graphic::font::u8text_texture 的标记语法一致）。
+            // 自动换行策略（显式 '\n' 硬换行始终支持，'\r' 被忽略）：
+            //   none —— 不自动换行，长文本溢出元素宽度（无逐绘制裁剪能力，
+            //           溢出部分可见）；
+            //   word —— auto_size=false 时按元素宽度折行：CJK 字符间可断行、
+            //           拉丁文本按空格断词、超宽单词逐字断行，行尾空格不计宽；
+            //           auto_size=true 时元素随文本自然尺寸，不折行。
+            enum wrap_mode : uint8_t
+            {
+                none = 0,
+                word = 1,
+            };
+
+            // UTF-8 文本内容，支持内联标记：{scale:f} {color:RRGGBBAA}
+            // {offset:(x,y)}（三者均为绝对设置，非累加），'\' 转义下一个字符
+            //（如 '\{' 输出字面 '{'）。标记是逐字实时属性：修改颜色 / 缩放 /
+            // 偏移不触发任何重光栅化。offset 单位为基准字号的倍数，y 向上。
             basic::string content;
 
             // 字体文件资源；未指定时不渲染文本。
-            // 渲染管线会把光栅化出的文本纹理写入实体 Renderer::Textures 的通道0
-            //（文本实体的通道0由文本系统占用），因此使用文本的实体必须持有
-            // Renderer::Textures 和 Renderer::Shaders 才会被处理。
+            // 文本由渲染管线逐字直接绘制（字形图集 + 批量四边形），无需
+            // Renderer::Shaders/Shape/Textures：
+            //   * 若实体持有 Renderer::Shaders，用其第一个着色器替代内置文本
+            //     着色器绘制该文本的字形（自定义文本特效入口；顶点输入为
+            //     vertex:float3, uv:float2, color:float4，纹理通道0为字形图集，
+            //     坐标已烘焙进顶点，MVP 为 UI 视图矩阵）；
+            //   * 若实体持有 Renderer::Color，作为整段文本的色调（与逐字
+            //     颜色标记相乘）。
             basic::file_resource<graphic::font> font;
 
-            // 为 true 时，绘制阶段按通道0文本纹理的自然宽高比调整元素尺寸
+            // 为 true 时，绘制阶段按文本自然尺寸的宽高比调整元素尺寸
             //（基准轴与字号计算一致：width_unit 取横向，height_unit 与
-            // per_axis 取纵向），不回写布局输入，
-            // 也不参与字号计算；为 false 时按 Element 常规布局拉伸显示。
+            // per_axis 取纵向），不回写布局输入，也不参与字号计算；
+            // 为 false 时文本块按 alignment 对齐放置进元素矩形（不拉伸）。
             bool auto_size = true;
 
-            // 以下为渲染管线的脏检查缓存，请勿手动修改。
-            basic::string cached_texture_content;
-            float cached_font_size = 0.0f;
+            // 文本块在元素矩形内的对齐（位掩码复用 Element::alignment，
+            // center=0 即水平垂直都居中）：
+            //   水平位（left/right）—— 各行在文本块宽内的对齐；
+            //   垂直位（top/bottom）—— 文本块在元素矩形内的放置。
+            // 行布局采用固定行网格（行高只取决于字体与基准字号，与内容、
+            // {scale:} 标记无关），字形按基线相对放置，基线稳定不跳变；
+            // 垂直对齐锚定字体度量行盒（ascent..descent），而非墨水包围盒。
+            Element::alignment alignment = Element::alignment::center;
+
+            // 自动换行策略，见 wrap_mode（默认按词换行）。
+            wrap_mode wrap = wrap_mode::word;
+
+            // 渲染管线的运行期逐字布局缓存，请勿手动修改（不反射、不序列化）。
+            // 脏检查键为（内容, 字体, 量化字号, 折行宽度, 对齐）；布局结果为
+            // 文本空间（原点=块左下角，y 向上，单位=基准字号像素）的字形放置。
+            struct runtime_layout_t
+            {
+                // ---- 脏检查键 ----
+                bool valid = false;
+                const void* key_font = nullptr; // je_font*（图集条目持有字体引用，键存活期内稳定）
+                int32_t key_font_px = 0;
+                int32_t key_wrap_width_px = 0;  // -1 = 不折行
+                uint32_t key_alignment = 0;
+                basic::string key_content;
+
+                // ---- 布局结果 ----
+                struct glyph_t
+                {
+                    char32_t cp = 0;
+                    int32_t raster_px = 0; // 该字形的量化光栅字号（基准字号×scale）
+                    float x = 0.f, y = 0.f; // 字形盒左下角（含 offset 标记）
+                    math::vec4 color = math::vec4(0.f, 0.f, 0.f, 0.f);
+                };
+                basic::vector<glyph_t> glyphs; // 仅含有位图的字形（空格等不出席）
+                float block_w = 0.f; // 自然尺寸：最长行进距（剔除行尾空格）
+                float block_h = 0.f; // 自然尺寸：ascent+descent+(行数-1)×行高
+                float win_base_px = 0.f; // 布局时基准轴的未量化像素，供相机目标间缩放
+            };
+            runtime_layout_t runtime_layout;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Text::content, "content");
                 typing::register_member(guard, &Text::font, "font");
                 typing::register_member(guard, &Text::auto_size, "auto_size");
+                typing::register_member(guard, &Text::alignment, "alignment");
+                typing::register_member(guard, &Text::wrap, "wrap");
             }
         };
     };
@@ -13489,6 +13265,26 @@ namespace jeecs
                 "\n"
                 "        width_unit  = 1,\n"
                 "        per_axis    = 2,\n"
+                "    }\n"
+                "}\n");
+
+            typing::register_script_parser<UserInterface::Text::wrap_mode>(
+                guard,
+                [](const UserInterface::Text::wrap_mode* v, woort_value value)
+                {
+                    woort_set_int(value, *v);
+                },
+                [](UserInterface::Text::wrap_mode* v, woort_value value)
+                {
+                    *v = static_cast<UserInterface::Text::wrap_mode>(woort_int(value));
+                },
+                "UserInterface::Text::wrap_mode",
+                "namespace UserInterface::Text\n"
+                "{\n"
+                "    public enum wrap_mode\n"
+                "    {\n"
+                "        none = 0,\n"
+                "        word = 1,\n"
                 "    }\n"
                 "}\n");
 
