@@ -225,17 +225,26 @@ namespace JEEditor::Editor
         // 不读 Translation，3D 游标对其无意义）。尺寸/偏移分两层编辑，
         // 默认编辑比例通道（size_ratio/offset_ratio，手柄挂实际渲染
         // 矩形即外层框），按住 Shift 切到绝对通道（size/offset，手柄挂
-        // size 层框即内侧框），写回按单位一换算
+        // size 层框即内侧框），写回按单位一换算。
+        // 拖拽带激活死区：按下只捕获快照（ARMED），位移超过
+        // UI_DRAG_ACTIVATE_PX（屏幕像素）才激活写值（ACTIVE）；阈值内
+        // 松开视为点击（移动手柄转 UI 空间循环选取，不写值、不产生撤销
+        // 记录）。激活中的拖拽可按 Esc 取消（恢复快照值，不发布撤销）。
+        // m_ui_edit_locked 为“锁定编辑”开关：锁定时不响应任何手柄拖拽，
+        // 点击仅做选取（便于浏览层级零风险误操作）
         protected m_ui_hover_handle: mut int,
         protected m_ui_dragging: mut bool,
         protected m_ui_drag_handle: mut int,
-        // 拖拽开始时捕获的快照：起始鼠标（显示像素空间）、各手柄语义
+        // 拖拽开始时捕获的快照：起始鼠标（显示像素空间）与按下时的屏幕
+        // 坐标（激活阈值按屏幕像素判定，不受视口缩放影响）、各手柄语义
         // 所需的起始值（编辑层成员旧值与其像素贡献、另一层框的像素
-        // 尺寸、单位一、祖先累计角、Rotation 起始角与起始鼠标方位角）、
-        // 位移是否超过阈值（未超过的“点击”用于 UI 空间循环选取）与
+        // 尺寸、单位一、祖先累计角与祖先未旋转帧的中心、Rotation 起始
+        // 角与起始鼠标方位角）、拖拽是否已激活（ARMED → ACTIVE）与
         // 撤销记录所需的组件成员旧值序列
         protected m_ui_drag_euid: mut entity::internal::euid_t,
         protected m_ui_drag_start_mouse: mut vec2,
+        protected m_ui_drag_press_screen: mut vec2,
+        protected m_ui_drag_active: mut bool,
         protected m_ui_drag_edit_ratio: mut bool,
         protected m_ui_drag_unit_px: mut vec2,
         protected m_ui_drag_start_offset: mut vec2,
@@ -246,10 +255,13 @@ namespace JEEditor::Editor
         protected m_ui_drag_angle_acc: mut real,
         protected m_ui_drag_start_angle_deg: mut real,
         protected m_ui_drag_start_mouse_angle: mut real,
-        protected m_ui_drag_moved: mut bool,
         protected m_ui_drag_undo_component: mut string,
         protected m_ui_drag_undo_member: mut string,
         protected m_ui_drag_undo_old_value: mut string,
+
+        // “锁定编辑”开关（每个世界视口独立；见 ViewportUI.wo 的开关
+        // 绘制）：锁定时手柄不悬停、不拖拽，点击回落为常规 UI 空间选取
+        protected m_ui_edit_locked: mut bool,
 
         // Ctrl 对齐吸附命中的参考线（祖先未旋转帧坐标；none = 无），
         // 拖拽中每帧由 applyUIDrag 写入、drawUIGizmo 绘制
@@ -401,9 +413,20 @@ namespace JEEditor::Editor
         protected let UI_HANDLE_RESIZE_T = 8;
         protected let UI_HANDLE_ROTATE = 9;
 
-        protected let UI_HIT_PX = 10.;                // 手柄命中判定半径（像素）
-        protected let UI_GIZMO_MIN_SIZE = 1.;         // 缩放下限（显示像素）
-        protected let UI_MOVE_CLICK_MAX_DRAG_PX = 4.; // 判定为点击而非拖拽的位移阈值
+        protected let UI_HIT_PX = 10.;                // 移动/选取的点击容差半径（像素）
+        protected let UI_HANDLE_HIT_PX = 6.;          // 缩放/旋转手柄的命中半径（像素，
+                                                       // 与绘制的 8px 方块匹配；小于移动
+                                                       // 容差，降低误抓手柄的概率）
+        protected let UI_DRAG_ACTIVATE_PX = 6.;       // 按下后位移超过该阈值才激活拖拽
+                                                       // 并写值（屏幕像素，与右键环视的
+                                                       // RMB_CLICK_MAX_DRAG_PX 同约定；
+                                                       // 阈值内松开视为点击，不写值、
+                                                       // 不产生撤销记录）
+        protected let UI_EDGE_HANDLE_MIN_ELEM_PX = 36.; // 元素某轴的屏幕尺寸小于该值时
+                                                       // 不提供该轴的四边中点缩放手柄
+                                                       //（小元素中心区域距边手柄过近，
+                                                       // 只保留四角手柄）
+        protected let UI_GIZMO_MIN_SIZE = 1.;         // 缩写下限（显示像素）
         protected let UI_ROTATE_STALK_PX = 30.;       // 旋转手柄到元素上缘的距离
         protected let UI_SNAP_PX = 8.;                 // Ctrl 吸附的格点步进（显示像素）
         protected let UI_SNAP_ALIGN_PX = 6.;           // Ctrl 吸附的边缘/中心对齐判定半径（显示像素）
@@ -414,6 +437,8 @@ namespace JEEditor::Editor
         // 分层框：绝对层（size/offset 贡献）浅灰、比例层（size_ratio/
         // offset_ratio 贡献）紫
         protected let UI_GIZMO_COLOR = (77, 230, 242, 230);
+        // 锁定编辑（m_ui_edit_locked）时元素矩形改用的暗淡配色（手柄不绘制）
+        protected let UI_GIZMO_COLOR_LOCKED = (77, 230, 242, 80);
         protected let UI_GIZMO_COLOR_REF = (255, 158, 64, 200);
         protected let UI_GIZMO_COLOR_PIVOT = (255, 255, 255, 230);
         protected let UI_GIZMO_COLOR_HANDLE = (217, 217, 217, 230);

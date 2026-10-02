@@ -15,6 +15,14 @@
 // 吸附 15°，对两层移动/缩放均生效）。UI 编辑模式下视口不显示任何
 // 网格与其他 gizmo（见 uiEditingActive），仅保留本文件的矩形手柄与
 // 参考矩形/锚点/pivot 标记。
+// 防误操作交互：拖拽带激活死区——按下手柄仅捕获快照（ARMED），位移
+// 超过 UI_DRAG_ACTIVATE_PX（屏幕像素，不受视口缩放影响）才激活写值
+//（ACTIVE），阈值内松开视为点击（移动手柄转 UI 空间循环选取，不写
+// 值、不产生撤销记录）；激活中的拖拽可按 Esc 取消（恢复快照值，不
+// 发布撤销）。缩放/旋转手柄命中半径收紧为 UI_HANDLE_HIT_PX 且仅在
+// 元素边界带（UI_HIT_PX 容差）内响应，元素某轴屏幕尺寸过小时跳过
+// 该轴四边中点手柄（防小元素中心误抓）。“锁定编辑”开关（见
+// ViewportUI.wo）打开时不响应任何手柄，点击仅做 UI 空间选取。
 // 布局解析复用引擎的 Element::get_layout（显示像素空间，原点=显示区
 // 左下、y 向上），祖先旋转链按
 // UserInterfaceGraphicPipelineSystem::ResolveUiNodes 同式在脚本侧
@@ -515,7 +523,11 @@ namespace JEEditor::Editor::WorldEditorViewport
 
     // 检测当前鼠标悬停的 UI 手柄（屏幕空间距离判定），返回手柄编号。
     // 优先级：旋转手柄 > 缩放手柄（四角+四边中点，挂在 handle_box 给出
-    // 的编辑层框上）> 矩形内部（移动）
+    // 的编辑层框上）> 矩形内部（移动）。命中细化（防误抓）：手柄命中
+    // 半径收紧为 UI_HANDLE_HIT_PX（与绘制的方块匹配）；点击位于元素
+    // 边界带（UI_HIT_PX 容差）之内深处时不判缩放手柄，直接归移动
+    //（大元素想拖动内部不会误抓角落缩放）；元素某轴屏幕尺寸过小时
+    // 跳过该轴四边中点手柄（小元素中心区域距边手柄过近，只留四角）
     protected func pickUIHandle(
         e: entity,
         info: UIRectInfo,
@@ -528,6 +540,14 @@ namespace JEEditor::Editor::WorldEditorViewport
         let total = info.m_angle_acc + info.m_own_angle;
         let handle_half = handle_box * 0.5;
 
+        // 鼠标在元素本地坐标系（相对中心，随元素旋转）与显示容差，
+        // 缩放/移动判定共用
+        let local = uiRotateVec2(
+            -total,
+            uiScreenToDisplay(mouse, rmin, rsize, display_range) - info.m_center);
+        let half = info.m_size * 0.5;
+        let tol = uiHitTolerance(rsize, display_range);
+
         // 旋转手柄：沿元素自身 up 轴、距上缘 UI_ROTATE_STALK_PX 的圆点；
         // 无 Rotation 组件的实体不提供旋转手柄（避免拖拽隐式添加组件）
         if (e->towoo::get_component:<UserInterface::Rotation>->is_value)
@@ -537,7 +557,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 + up * (info.m_size[1] * 0.5 + UI_ROTATE_STALK_PX);
             if ((mouse
                     - uiDisplayToScreen(rot_pos, rmin, rsize, display_range))->length
-                < UI_HIT_PX)
+                < UI_HANDLE_HIT_PX)
                 return UI_HANDLE_ROTATE;
         }
 
@@ -550,29 +570,45 @@ namespace JEEditor::Editor::WorldEditorViewport
         }
         if (!auto_sized)
         {
-            let mut h = UI_HANDLE_RESIZE_LB;
-            while (h <= UI_HANDLE_RESIZE_T)
+            // 边界带判定：位于按容差收缩后的矩形之内（离四边均超过
+            // UI_HIT_PX）的点击不判缩放手柄；小元素收缩矩形为空，
+            // 自然退化为全域可抓手柄
+            let near_border = !(mathf::abs(local[0]) <= half[0] - tol[0]
+                && mathf::abs(local[1]) <= half[1] - tol[1]);
+            // 元素的屏幕尺寸（换算到屏幕像素，判定与视口缩放无关）
+            let elem_scr = (info.m_size[0] * rsize[0] / display_range[0],
+                info.m_size[1] * rsize[1] / display_range[1]) as vec2;
+            if (near_border)
             {
-                let (sx, sy) = uiHandleSigns(h);
-                let cpos = info.m_center
-                    + uiRotateVec2(
-                        total,
-                        ((sx as real) * handle_half[0], (sy as real) * handle_half[1]) as vec2);
-                if ((mouse
-                        - uiDisplayToScreen(cpos, rmin, rsize, display_range))->length
-                    < UI_HIT_PX)
-                    return h;
-                h += 1;
+                let mut h = UI_HANDLE_RESIZE_LB;
+                while (h <= UI_HANDLE_RESIZE_T)
+                {
+                    let (sx, sy) = uiHandleSigns(h);
+                    // 某轴过小的元素跳过该轴的四边中点手柄（L/R 看
+                    // 宽、T/B 看高），中心区域让给移动
+                    let edge_h_disabled =
+                        ((h == UI_HANDLE_RESIZE_L || h == UI_HANDLE_RESIZE_R)
+                            && elem_scr[0] < UI_EDGE_HANDLE_MIN_ELEM_PX)
+                        || ((h == UI_HANDLE_RESIZE_B || h == UI_HANDLE_RESIZE_T)
+                            && elem_scr[1] < UI_EDGE_HANDLE_MIN_ELEM_PX);
+                    if (!edge_h_disabled)
+                    {
+                        let cpos = info.m_center
+                            + uiRotateVec2(
+                                total,
+                                ((sx as real) * handle_half[0], (sy as real) * handle_half[1]) as vec2);
+                        if ((mouse
+                                - uiDisplayToScreen(cpos, rmin, rsize, display_range))->length
+                            < UI_HANDLE_HIT_PX)
+                            return h;
+                    }
+                    h += 1;
+                }
             }
         }
 
         // 矩形内部（含退化尺寸的点击容差）→ 移动
         //（按有效矩形判定，与编辑层无关）
-        let half = info.m_size * 0.5;
-        let tol = uiHitTolerance(rsize, display_range);
-        let local = uiRotateVec2(
-            -total,
-            uiScreenToDisplay(mouse, rmin, rsize, display_range) - info.m_center);
         if (mathf::abs(local[0]) <= half[0] + tol[0]
             && mathf::abs(local[1]) <= half[1] + tol[1])
             return UI_HANDLE_MOVE;
@@ -591,6 +627,15 @@ namespace JEEditor::Editor::WorldEditorViewport
         self.m_ui_draw_visible = false;
         self.m_ui_snap_guide_x = option::none: option<real>;
         self.m_ui_snap_guide_y = option::none: option<real>;
+
+        // 激活中的拖拽按 Esc 取消：恢复拖拽前捕获的成员值，不发布撤销
+        //（置于左键松开判定之前，优先于提交）
+        if (self.m_ui_dragging
+            && self.m_ui_drag_active
+            && IsKeyPressed(ImGuiKey::ImGuiKey_Escape, false))
+        {
+            self->cancelUIDrag();
+        }
 
         // 松开左键：结束拖拽并提交撤销记录
         if (self.m_ui_dragging
@@ -659,11 +704,13 @@ namespace JEEditor::Editor::WorldEditorViewport
                     let size_box = elem.size->get;
                     let ratio_box = ui_info.m_size;
 
-                    // 写入本帧绘制快照
+                    // 写入本帧绘制快照（锁定编辑时不绘制手柄，仅保留
+                    // 矩形与参考标记）
                     self.m_ui_draw_visible = true;
-                    self.m_ui_draw_can_resize = !auto_sized;
+                    self.m_ui_draw_can_resize = !auto_sized && !self.m_ui_edit_locked;
                     self.m_ui_draw_can_rotate =
-                        e->towoo::get_component:<UserInterface::Rotation>->is_value;
+                        e->towoo::get_component:<UserInterface::Rotation>->is_value
+                        && !self.m_ui_edit_locked;
                     self.m_ui_draw_display_range = dr;
                     self.m_ui_draw_center = ui_info.m_center;
                     self.m_ui_draw_size = ui_info.m_size;
@@ -697,7 +744,10 @@ namespace JEEditor::Editor::WorldEditorViewport
                         && self.m_light_hover_handle == GIZMO_HANDLE_NONE
                         && !self.m_light_dragging
                         && self.m_particle_hover_handle == GIZMO_HANDLE_NONE
-                        && !self.m_particle_dragging;
+                        && !self.m_particle_dragging
+                        // 锁定编辑：不响应任何手柄（悬停保持 NONE，点击
+                        // 回落为 CameraControl 的常规 UI 空间选取）
+                        && !self.m_ui_edit_locked;
 
                     if (!hoverable)
                         return_value!;
@@ -739,7 +789,10 @@ namespace JEEditor::Editor::WorldEditorViewport
         self.m_ui_drag_euid =
             selected_entity->internal::get_entity_uid->or(0h as entity::internal::euid_t);
         self.m_ui_drag_start_mouse = uiScreenToDisplay(mouse, rmin, rsize, display_range);
-        self.m_ui_drag_moved = false;
+        // 按下时的屏幕坐标与激活标记：位移超过 UI_DRAG_ACTIVATE_PX
+        //（屏幕像素）前不写值（ARMED），避免点击抖动误改组件
+        self.m_ui_drag_press_screen = mouse;
+        self.m_ui_drag_active = false;
         self.m_ui_drag_angle_acc = info.m_angle_acc;
         self.m_ui_drag_undo_component = "";
         self.m_ui_drag_undo_member = "";
@@ -772,6 +825,8 @@ namespace JEEditor::Editor::WorldEditorViewport
                 }
                 self.m_ui_drag_start_member_px = self.m_ui_drag_unit_px
                     * self.m_ui_drag_start_offset;
+                // Ctrl 对齐吸附的基准：拖拽起始时祖先未旋转帧中的元素中心
+                self.m_ui_drag_start_unrot_center = info.m_unrot_center;
                 self.m_ui_drag_undo_component = "UserInterface::Element";
             }
             else if (handle >= UI_HANDLE_RESIZE_LB && handle <= UI_HANDLE_RESIZE_T)
@@ -825,7 +880,8 @@ namespace JEEditor::Editor::WorldEditorViewport
     }
 
     // 拖拽进行中：按当前鼠标换算并写回组件值（每帧重取实体与解析，
-    // 框架/角度取当前帧的，元素随拖拽实时反馈）
+    // 框架/角度取当前帧的，元素随拖拽实时反馈）。带激活死区：位移
+    // 超过 UI_DRAG_ACTIVATE_PX（屏幕像素）前不写值
     protected func applyUIDrag(
         self: WorldEditorViewport,
         rmin: vec2,
@@ -833,15 +889,22 @@ namespace JEEditor::Editor::WorldEditorViewport
         display_range: vec2)=> void
     {
         do try!{
+            // 激活死区（屏幕像素判定，不受视口缩放影响）：阈值内的轻微
+            // 抖动不修改组件（松开视为点击，见 finishUIDrag），亦不
+            // 产生吸附引导线
+            if (!self.m_ui_drag_active
+                && (GetMousePos() as vec2 - self.m_ui_drag_press_screen)->length
+                    > UI_DRAG_ACTIVATE_PX)
+                self.m_ui_drag_active = true;
+            if (!self.m_ui_drag_active)
+                return_value!;
+
             try! selected_entity =
                 self->uiFindEntityByEuidInSelector(self.m_ui_drag_euid);
 
             let mouse_disp = uiScreenToDisplay(
                 GetMousePos() as vec2, rmin, rsize, display_range);
             let delta_disp = mouse_disp - self.m_ui_drag_start_mouse;
-            if (!self.m_ui_drag_moved
-                && delta_disp->length > UI_MOVE_CLICK_MAX_DRAG_PX)
-                self.m_ui_drag_moved = true;
 
             let ctrl_down = IsKeyDown(ImGuiKey::ImGuiMod_Ctrl);
             let handle = self.m_ui_drag_handle;
@@ -1102,20 +1165,26 @@ namespace JEEditor::Editor::WorldEditorViewport
         };
     }
 
-    // 结束拖拽：值有变化时发布一条可撤销的 Action；未发生切实位移的
-    // 移动“点击”转为 UI 空间循环选取（便于选中父元素矩形内部的子元素）
+    // 结束拖拽：未激活（位移在死区内）的按下视为“点击”——移动手柄转
+    // UI 空间循环选取（便于选中父元素矩形内部的子元素），缩放/旋转手柄
+    // 无操作；此路径未写值，不发布撤销记录。已激活的拖拽在值有变化时
+    // 发布一条可撤销的 Action
     protected func finishUIDrag(
         self: WorldEditorViewport,
         rmin: vec2,
         rsize: vec2)=> void
     {
-        if (!self.m_ui_drag_moved && self.m_ui_drag_handle == UI_HANDLE_MOVE)
+        if (!self.m_ui_drag_active)
         {
-            match (self->selectUIElementAt(rmin, rsize))
+            if (self.m_ui_drag_handle == UI_HANDLE_MOVE)
             {
-                none?;
-                value(picked_uid)? self.m_selected_entity_id = option::value(picked_uid);
+                match (self->selectUIElementAt(rmin, rsize))
+                {
+                    none?;
+                    value(picked_uid)? self.m_selected_entity_id = option::value(picked_uid);
+                }
             }
+            return;
         }
 
         if (self.m_ui_drag_undo_old_value == "")
@@ -1138,6 +1207,48 @@ namespace JEEditor::Editor::WorldEditorViewport
                         new_value));
             return_value!;
         };
+    }
+
+    // 取消激活中的拖拽（Esc）：把 beginUIDrag 捕获的成员旧值写回组件，
+    // 清除拖拽状态；不走 finishUIDrag 的撤销发布路径。值恢复失败（实体
+    // 已不可寻回等）时拖拽状态仍一并清空
+    protected func cancelUIDrag(self: WorldEditorViewport)=> void
+    {
+        do try!{
+            try! selected_entity =
+                self->uiFindEntityByEuidInSelector(self.m_ui_drag_euid);
+            let handle = self.m_ui_drag_handle;
+
+            if (handle == UI_HANDLE_MOVE)
+            {
+                try! elem =
+                    selected_entity->towoo::get_component:<UserInterface::Element>();
+                if (self.m_ui_drag_edit_ratio)
+                    elem.offset_ratio->set(self.m_ui_drag_start_offset);
+                else
+                    elem.offset->set(self.m_ui_drag_start_offset);
+            }
+            else if (handle >= UI_HANDLE_RESIZE_LB && handle <= UI_HANDLE_RESIZE_T)
+            {
+                try! elem =
+                    selected_entity->towoo::get_component:<UserInterface::Element>();
+                if (self.m_ui_drag_edit_ratio)
+                    elem.size_ratio->set(self.m_ui_drag_start_size);
+                else
+                    elem.size->set(self.m_ui_drag_start_size);
+            }
+            else
+            {
+                try! rot =
+                    selected_entity->towoo::get_component:<UserInterface::Rotation>();
+                rot.angle->set(self.m_ui_drag_start_angle_deg);
+            }
+            return_value!;
+        };
+
+        self.m_ui_dragging = false;
+        self.m_ui_drag_handle = UI_HANDLE_NONE;
+        self.m_ui_drag_active = false;
     }
 
     // ---- 绘制（ImGui 窗口 DrawList 覆盖层） ----
@@ -1242,8 +1353,12 @@ namespace JEEditor::Editor::WorldEditorViewport
         }
 
         // 元素矩形（旋转后的四角连线）= 比例层框（外层，与 UI 对象实际
-        // 渲染大小一致），默认编辑层时描粗
+        // 渲染大小一致），默认编辑层时描粗；锁定编辑时改用暗淡配色
+        //（手柄不绘制，见 m_ui_draw_can_resize / m_ui_draw_can_rotate）
         let main_w = edit_ratio ? 1.5 | 1.;
+        let main_color = self.m_ui_edit_locked
+            ? UI_GIZMO_COLOR_LOCKED
+            | UI_GIZMO_COLOR;
         let c0 = uiDisplayToScreen(
             self.m_ui_draw_center + uiRotateVec2(total, (-half[0], -half[1]) as vec2),
             rmin, rsize, dr);
@@ -1256,10 +1371,10 @@ namespace JEEditor::Editor::WorldEditorViewport
         let c3 = uiDisplayToScreen(
             self.m_ui_draw_center + uiRotateVec2(total, (-half[0], half[1]) as vec2),
             rmin, rsize, dr);
-        do draw_list->AddLine((c0[0], c0[1]), (c1[0], c1[1]), UI_GIZMO_COLOR, main_w);
-        do draw_list->AddLine((c1[0], c1[1]), (c2[0], c2[1]), UI_GIZMO_COLOR, main_w);
-        do draw_list->AddLine((c2[0], c2[1]), (c3[0], c3[1]), UI_GIZMO_COLOR, main_w);
-        do draw_list->AddLine((c3[0], c3[1]), (c0[0], c0[1]), UI_GIZMO_COLOR, main_w);
+        do draw_list->AddLine((c0[0], c0[1]), (c1[0], c1[1]), main_color, main_w);
+        do draw_list->AddLine((c1[0], c1[1]), (c2[0], c2[1]), main_color, main_w);
+        do draw_list->AddLine((c2[0], c2[1]), (c3[0], c3[1]), main_color, main_w);
+        do draw_list->AddLine((c3[0], c3[1]), (c0[0], c0[1]), main_color, main_w);
 
         // pivot 标记（圆 + 十字）
         let pv = uiDisplayToScreen(self.m_ui_draw_pivot_display, rmin, rsize, dr);
@@ -1341,8 +1456,9 @@ namespace JEEditor::Editor::WorldEditorViewport
             }
         }
 
-        // 拖拽中的数值标签（跟随鼠标，按编辑层显示对应成员）
-        if (self.m_ui_dragging)
+        // 拖拽中的数值标签（跟随鼠标，按编辑层显示对应成员）；激活死区
+        // 内（ARMED 未写值）不显示
+        if (self.m_ui_dragging && self.m_ui_drag_active)
         {
             let mouse = GetMousePos() as vec2;
             do try!{

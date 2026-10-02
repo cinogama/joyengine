@@ -318,6 +318,8 @@ namespace JEEditor::Editor::WorldEditorViewport
             m_ui_drag_handle = mut UI_HANDLE_NONE,
             m_ui_drag_euid = mut (0h as entity::internal::euid_t),
             m_ui_drag_start_mouse = mut (0., 0.) as vec2,
+            m_ui_drag_press_screen = mut (0., 0.) as vec2,
+            m_ui_drag_active = mut false,
             m_ui_drag_edit_ratio = mut false,
             m_ui_drag_unit_px = mut (1., 1.) as vec2,
             m_ui_drag_start_offset = mut (0., 0.) as vec2,
@@ -328,10 +330,11 @@ namespace JEEditor::Editor::WorldEditorViewport
             m_ui_drag_angle_acc = mut 0.,
             m_ui_drag_start_angle_deg = mut 0.,
             m_ui_drag_start_mouse_angle = mut 0.,
-            m_ui_drag_moved = mut false,
             m_ui_drag_undo_component = mut "",
             m_ui_drag_undo_member = mut "",
             m_ui_drag_undo_old_value = mut "",
+
+            m_ui_edit_locked = mut false,
 
             m_ui_snap_guide_x = mut option::none: option<real>,
             m_ui_snap_guide_y = mut option::none: option<real>,

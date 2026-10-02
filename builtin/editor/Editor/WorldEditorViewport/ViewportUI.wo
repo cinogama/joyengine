@@ -1,6 +1,7 @@
 // 世界编辑器视口 —— 视口覆盖 UI。
 // 绘制在视口左上角的变换游标工具栏（模式/参考系/2D 模式/锁定鼠标/
-// 2D 光照开关）与左下角的未保存修改标记。
+// 2D 光照开关；UI 编辑模式下仅保留“锁定编辑”开关）与左下角的
+// 未保存修改标记。
 
 import pkg::std;
 
@@ -27,11 +28,30 @@ namespace JEEditor::Editor::WorldEditorViewport
         debug_camera: option<entity>,
         rect_min: ImVec2)=> bool
     {
-        // UI 编辑模式（选中 UI 元素）：隐藏整个工具栏，保持视口干净
+        // UI 编辑模式（选中 UI 元素）：隐藏变换游标工具栏，保持视口干净
         //（移动/旋转/缩放选项对 UI 手柄无意义，2D 模式等视口开关亦
-        // 不在 UI 编辑中显示）
+        // 不在 UI 编辑中显示），仅保留一个“锁定编辑”开关——锁定时
+        // 手柄不悬停不拖拽、点击仅做 UI 空间选取（浏览层级零误操作）
         if (self->uiEditingActive())
-            return false;
+        {
+            SetCursorScreenPos((rect_min.0 + 8., rect_min.1 + 8.));
+
+            let mut toolbar_hovered = false;
+
+            match (CheckBox("锁定编辑", self.m_ui_edit_locked))
+            {
+                none?;
+                value(v)? self.m_ui_edit_locked = v;
+            }
+            if (IsItemHovered())
+            {
+                toolbar_hovered = true;
+                do SetTooltip(
+                    "锁定 UI 手柄编辑：移动/缩放/旋转手柄不响应，点击仅选取元素");
+            }
+
+            return toolbar_hovered;
+        }
 
         SetCursorScreenPos((rect_min.0 + 8., rect_min.1 + 8.));
 
