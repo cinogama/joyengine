@@ -85,7 +85,7 @@ namespace JEEditor::Editor::WorldEditorViewport
     }
 
     // alignment 位组合在参考矩形内的锚点偏移：left → −x/2、right → +x/2、
-    // top → +y/2、bottom → −y/2（与引擎 UserInterface::anchor_shift 同式）
+    // top → +y/2、bottom → −y/2（与引擎 UserInterface::Element::anchor_shift 同式）
     protected func uiAnchorShift(alignment_bits: int, ref_size: vec2)=> vec2
     {
         let mut sx = 0.;
@@ -641,9 +641,9 @@ namespace JEEditor::Editor::WorldEditorViewport
                     // resolve_layout 的 ratio_scale 折算一致）
                     let ref_size = have_prev ? prev_size | display_range;
                     out_unit_px = ref_size;
-                    if (ent_elem.unit_kind->get == UserInterface::ratio_unit::height_unit)
+                    if (ent_elem.unit_kind->get == UserInterface::Element::ratio_unit::height_unit)
                         out_unit_px = (ref_size[1], ref_size[1]) as vec2;
-                    else if (ent_elem.unit_kind->get == UserInterface::ratio_unit::width_unit)
+                    else if (ent_elem.unit_kind->get == UserInterface::Element::ratio_unit::width_unit)
                         out_unit_px = (ref_size[0], ref_size[0]) as vec2;
 
                     // 锚点基点：参考矩形中心 − 参考 pivot 偏移 + 锚点在

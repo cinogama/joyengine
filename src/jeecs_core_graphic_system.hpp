@@ -539,7 +539,7 @@ public let frag =
             size_t parent = INVALID_UI_NODE;
 
             // 以下为每相机解析缓存（ResolveUiNodes 覆写）：
-            UserInterface::resolved_rect rect{};   // 局部矩形（父元素未旋转的坐标系）
+            UserInterface::Element::resolved_rect rect{};   // 局部矩形（父元素未旋转的坐标系）
             math::vec2 display_center{};           // center 经祖先旋转链后的显示位置
             float angle_acc = 0.f;                 // 祖先累计旋转角（不含自身）= WorldLayout.rotation − 自身角
         };
@@ -697,7 +697,7 @@ public let frag =
             for (size_t node_index : m_ui_resolve_order)
             {
                 ui_node_t& node = m_ui_nodes[node_index];
-                node.rect = resolve_layout(*node.elem, *node.layout, width, height);
+                node.rect = node.elem->resolve_layout(*node.layout, width, height);
 
                 // auto_size：按文本纹理自然宽高比调整元素尺寸，基准轴与字号计算
                 // 一致（width_unit 取 x 否则取 y——per_axis 亦取 y，文本以字高为
@@ -711,7 +711,7 @@ public let frag =
                     {
                         const auto texture_size = text_texture.value()->size();
                         const bool base_on_y =
-                            node.elem->unit_kind != ratio_unit::width_unit;
+                            node.elem->unit_kind != Element::ratio_unit::width_unit;
                         if (base_on_y && texture_size.y > 0)
                         {
                             const float ratio =
@@ -755,11 +755,11 @@ public let frag =
                         parent.rotation != nullptr ? parent.rotation->angle : 0.f;
 
                     const math::vec2 rotated_by_parent =
-                        parent_pivot + UserInterface::rotate_vector(
+                        parent_pivot + UserInterface::Rotation::rotate_vector(
                             parent_angle * math::DEG2RAD, node.rect.center - parent_pivot);
 
                     node.display_center = parent.display_center
-                        + UserInterface::rotate_vector(
+                        + UserInterface::Rotation::rotate_vector(
                             parent.angle_acc * math::DEG2RAD, rotated_by_parent - parent.rect.center);
                 }
             }
@@ -794,12 +794,12 @@ public let frag =
                     continue;
                 }
 
-                const auto rect = resolve_layout(
-                    elem, layout,
+                const auto rect = elem.resolve_layout(
+                    layout,
                     (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT);
 
                 const float font_size =
-                    elem.unit_kind != ratio_unit::width_unit
+                    elem.unit_kind != Element::ratio_unit::width_unit
                     ? rect.size.y
                     : rect.size.x;
 
@@ -914,7 +914,7 @@ public let frag =
 
                     const math::vec2 uioffset = node.display_center
                         + (rect.pivot_offset
-                            - UserInterface::rotate_vector(
+                            - UserInterface::Rotation::rotate_vector(
                                 node.angle_acc * math::DEG2RAD, rect.pivot_offset))
                         - math::vec2(
                             (float)RENDAIMBUFFER_WIDTH / 2.0f,

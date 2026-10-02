@@ -158,7 +158,7 @@ namespace jeecs
 
             // 显示区作为根元素的参照矩形与单位一来源
             //（单位一空间：绝对0 + 逐轴相对1，其余分桶为 0）。
-            const UserInterface::ratio_space display_rect{
+            const WorldLayout::ratio_space display_rect{
                 math::vec2(0.f, 0.f), math::vec2(1.f, 1.f) };
 
             for (auto&& [anchor, l2p, elem, layout, rotation] : query<
@@ -175,9 +175,9 @@ namespace jeecs
                 {
                     // 子元素：先按根语义暂存（父元素解析后覆盖为完整参考系；
                     // 若父链缺失则保留此退化结果，问题可立即被发现）。
-                    layout.base = UserInterface::ratio_space{};
-                    layout.offset = UserInterface::ratio_space{};
-                    layout.unit = fold_unit(display_rect, elem.unit_kind);
+                    layout.base = WorldLayout::ratio_space{};
+                    layout.offset = WorldLayout::ratio_space{};
+                    layout.unit = Element::fold_unit(display_rect, elem.unit_kind);
                     layout.rotation = rotation ? rotation->angle : 0.f;
 
                     pending_anchor_information.push_back(
@@ -192,9 +192,9 @@ namespace jeecs
                 {
                     // 根元素：anchor 相对显示区解析进 base 通道（纯几何量），
                     // 无父链偏移；单位一 = 显示区按自身 ratio_unit 折算。
-                    layout.base = anchor_shift(elem.anchor, display_rect);
-                    layout.offset = UserInterface::ratio_space{};
-                    layout.unit = fold_unit(display_rect, elem.unit_kind);
+                    layout.base = Element::anchor_shift(elem.anchor, display_rect);
+                    layout.offset = WorldLayout::ratio_space{};
+                    layout.unit = Element::fold_unit(display_rect, elem.unit_kind);
                     layout.rotation = rotation ? rotation->angle : 0.f;
 
                     if (anchor != nullptr)
@@ -225,12 +225,11 @@ namespace jeecs
                         //    折算（height_unit 取父高、width_unit 取父宽标量
                         //    广播到两轴，per_axis 逐轴取父宽/父高）。
                         const auto parent_rect =
-                            UserInterface::ratio_space{ parent_elem->size, {}, {}, {} }
-                            + scale_space(
-                                parent_elem->size_ratio, parent_layout->unit);
+                            WorldLayout::ratio_space{ parent_elem->size, {}, {}, {} }
+                            + parent_layout->unit.scaled(parent_elem->size_ratio);
 
                         // 子单位一 = 父矩形按子元素 ratio_unit 折算后的通道。
-                        current_idx->layout->unit = fold_unit(
+                        current_idx->layout->unit = Element::fold_unit(
                             parent_rect, current_idx->elem->unit_kind);
 
                         // 子有效旋转角 = 父有效角 + 自身角（度）。
@@ -248,9 +247,9 @@ namespace jeecs
                         // 由 size_ratio 撑起、且子元素 ratio_unit 不是 per_axis，
                         // 锚定位置也不受子元素 ratio_unit 影响。
                         const auto parent_pivot =
-                            pivot_shift(parent_elem->pivot, parent_rect);
+                            Element::pivot_shift(parent_elem->pivot, parent_rect);
                         const auto anchored =
-                            anchor_shift(current_idx->elem->anchor, parent_rect);
+                            Element::anchor_shift(current_idx->elem->anchor, parent_rect);
 
                         current_idx->layout->base =
                             parent_layout->base + parent_pivot + anchored;
@@ -261,12 +260,11 @@ namespace jeecs
                         // 继承，不再被子元素的 ratio_unit 重新解释——修复
                         // height_unit/width_unit 子元素跟随父 offset_ratio
                         // 位移时单位不一致的问题。本元素自身偏移不在此累加，
-                        // 由 resolve_layout 按本元素单位一现算。
+                        // 由 Element::resolve_layout 按本元素单位一现算。
                         current_idx->layout->offset =
                             parent_layout->offset
-                            + UserInterface::ratio_space{ parent_elem->offset, {}, {}, {} }
-                            + scale_space(
-                                parent_elem->offset_ratio, parent_layout->unit);
+                            + WorldLayout::ratio_space{ parent_elem->offset, {}, {}, {} }
+                            + parent_layout->unit.scaled(parent_elem->offset_ratio);
 
                         // 完成应用，将当前布局绑定到binding，然后从pending中删除当前项
                         if (current_idx->anchor_may_null != nullptr)

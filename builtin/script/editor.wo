@@ -868,11 +868,11 @@ namespace string
     }
 }
 
-namespace UserInterface::alignment
+namespace UserInterface::Element::alignment
 {
     using parser = void
     {
-        public extern func edit(val: UserInterface::alignment, tag: string)=> option<UserInterface::alignment>
+        public extern func edit(val: UserInterface::Element::alignment, tag: string)=> option<UserInterface::Element::alignment>
         {
             // 3×3 方位选择格：行=上/中/下，列=左/中/右，当前方位以实心
             // 圆点（RadioButton）标出；格子从控件列起点排布、间距均匀，
@@ -907,11 +907,11 @@ namespace UserInterface::alignment
     }
 }
 
-namespace UserInterface::ratio_unit
+namespace UserInterface::Element::ratio_unit
 {
     using parser = void
     {
-        public extern func edit(val: UserInterface::ratio_unit, tag: string)=> option<UserInterface::ratio_unit>
+        public extern func edit(val: UserInterface::Element::ratio_unit, tag: string)=> option<UserInterface::Element::ratio_unit>
         {
             // 相对量（offset_ratio/size_ratio）单位一基准的下拉选择
             //（枚举值与选项下标一致；根元素的参考矩形是显示区，
@@ -921,7 +921,7 @@ namespace UserInterface::ratio_unit
                 option::value(val as int)))
             {
                 value(idx)?
-                    return option::value(idx as UserInterface::ratio_unit);
+                    return option::value(idx as UserInterface::Element::ratio_unit);
                 none?;
             }
             return option::none;

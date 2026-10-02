@@ -1910,22 +1910,22 @@ WOORT_API woort_api wojeapi_towoo_audio_source_get_source(void)
 }
 
 // 解析 UI 元素矩形；未挂 WorldLayout 时按根元素回退（anchor 相对显示区解析）。
-static jeecs::UserInterface::resolved_rect wo_resolve_element_rect(
+static jeecs::UserInterface::Element::resolved_rect wo_resolve_element_rect(
     const jeecs::UserInterface::Element& elem,
     const jeecs::UserInterface::WorldLayout* layout,
     float w, float h)
 {
     if (layout != nullptr)
-        return jeecs::UserInterface::resolve_layout(elem, *layout, w, h);
+        return elem.resolve_layout(*layout, w, h);
 
     // 显示区 = 绝对0 + 逐轴相对1；锚定基准点走 base 通道（纯几何量），
     // 单位一 = 显示区按自身 ratio_unit 折算，无父链偏移。
-    const jeecs::UserInterface::ratio_space display_rect{
+    const jeecs::UserInterface::WorldLayout::ratio_space display_rect{
         jeecs::math::vec2(0.f, 0.f), jeecs::math::vec2(1.f, 1.f) };
     jeecs::UserInterface::WorldLayout fallback;
-    fallback.base = jeecs::UserInterface::anchor_shift(elem.anchor, display_rect);
-    fallback.unit = jeecs::UserInterface::fold_unit(display_rect, elem.unit_kind);
-    return jeecs::UserInterface::resolve_layout(elem, fallback, w, h);
+    fallback.base = jeecs::UserInterface::Element::anchor_shift(elem.anchor, display_rect);
+    fallback.unit = jeecs::UserInterface::Element::fold_unit(display_rect, elem.unit_kind);
+    return elem.resolve_layout(fallback, w, h);
 }
 
 WOORT_API woort_api wojeapi_towoo_userinterface_element_layout(void)
@@ -1966,7 +1966,7 @@ WOORT_API woort_api wojeapi_towoo_userinterface_element_mouse_on(void)
 
     auto rect = wo_resolve_element_rect(elem, layout, r.x, r.y);
 
-    return woort_ret_bool(jeecs::UserInterface::hit_test(rect, a, m, r.x, r.y));
+    return woort_ret_bool(rect.hit_test(a, m, r.x, r.y));
 }
 
 // ==========================================================================

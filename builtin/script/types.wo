@@ -552,32 +552,32 @@ namespace string
     }
 }
 
-namespace UserInterface::alignment
+namespace UserInterface::Element::alignment
 {
     using parser = void
     {
-        public extern func saving(val: UserInterface::alignment)=> string
+        public extern func saving(val: UserInterface::Element::alignment)=> string
         {
             return val as int as string;
         }
-        public extern func restoring(dat: string)=> UserInterface::alignment
+        public extern func restoring(dat: string)=> UserInterface::Element::alignment
         {
-            return dat as int as UserInterface::alignment;
+            return dat as int as UserInterface::Element::alignment;
         }
     }
 }
 
-namespace UserInterface::ratio_unit
+namespace UserInterface::Element::ratio_unit
 {
     using parser = void
     {
-        public extern func saving(val: UserInterface::ratio_unit)=> string
+        public extern func saving(val: UserInterface::Element::ratio_unit)=> string
         {
             return val as int as string;
         }
-        public extern func restoring(dat: string)=> UserInterface::ratio_unit
+        public extern func restoring(dat: string)=> UserInterface::Element::ratio_unit
         {
-            return dat as int as UserInterface::ratio_unit;
+            return dat as int as UserInterface::Element::ratio_unit;
         }
     }
 }
