@@ -265,9 +265,13 @@ namespace JEEditor::Editor
                 
             let bulitin_path = normalize(host_path()) / "builtin";
             let shader_dst = resource_dir / "shader";
+            let font_dst = resource_dir / "font";
             
             try! _ = copy(bulitin_path / "shader", shader_dst)
                 -> or_map(\e = F"拷贝内置着色器到 \"{shader_dst->to_string}\" 失败：{e}";);
+                
+            try! _ = copy(bulitin_path / "font", font_dst)
+                -> or_map(\e = F"拷贝内置字体到 \"{font_dst->to_string}\" 失败：{e}";);
                 
             let type_script_path = bulitin_path / "script";
             
