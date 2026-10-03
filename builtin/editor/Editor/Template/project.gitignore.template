@@ -1,3 +1,6 @@
 # JoyEngine Project.
 
 /.temp/
+/.vscode/
+
+*.je4cache
