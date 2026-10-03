@@ -30,6 +30,7 @@ namespace JEEditor::Editor::Template
         public WORKFLOW_FLOW_NODE,
         public WORKFLOW_TYPE,
         public PROJECT_GITIGNORE,
+        public PROJECT_GITATTRIBUTE,
     }
 
     public func load(type: Type)=> option<string>
@@ -53,6 +54,7 @@ namespace JEEditor::Editor::Template
             [Type::WORKFLOW_FLOW_NODE] = "workflow_flow_node.wo",
             [Type::WORKFLOW_TYPE] = "workflow_type.wo",
             [Type::PROJECT_GITIGNORE] = "project.gitignore",
+            [Type::PROJECT_GITATTRIBUTE] = "project.gitattribute",
         };
         
         try! template_filename = type_to_filename->get(type);

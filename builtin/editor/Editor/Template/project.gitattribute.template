@@ -1,0 +1,5 @@
+# JoyEngine Project.
+
+*.je4entity text eol=lf
+*.je4world text eol=lf
+*.je4animation binary
