@@ -1405,7 +1405,6 @@ namespace JEEditor::Editor
                 [".wo"] = Icons::WOOLANG,
                 
                 [".je4animation"] = Icons::ANIMATION,
-                [".je4tilemap"] = Icons::TILEMAP,
                 [".je4world"] = Icons::WORLD,
                 [".je4entity"] = Icons::ENTITY,
                 [".je4workflow"] = Icons::WORKFLOW,
