@@ -266,7 +266,7 @@ namespace JEEditor::Editor
         // ---- UI 编辑视口缩放（显示级放大，不改变 framebuffer）----
         // 可见子矩形 = [offset, offset + display_range/zoom]（显示像素，
         // 原点左下 y 向上）。UI 布局始终按完整 framebuffer 尺寸解析
-        //（uiGetDisplayRange / 引擎 ResolveUiNodes 的输入不变），缩放只
+        //（uiGetDisplayRange / 引擎布局阶段的输入不变），缩放只
         // 作用于显示：ImageUV 取纹理子矩形放大 + 屏幕↔显示换算折叠
         //（见 uiViewScreenRect）。仅 UI 编辑模式生效；zoom==1 时 offset
         // 恒被夹取为 0，即恒等视图（所有行为与未缩放完全一致）。
@@ -488,9 +488,9 @@ namespace JEEditor::Editor
         protected let UI_VIEW_FIT_MARGIN = 0.8;     // F 聚焦时元素包围盒占视口的比例
 
         // UI 元素在显示像素空间（原点=显示区左下、y 向上）的解析结果：
-        // 由 UIGizmo.wo 的 uiResolveDisplay 沿 Transform 锚点链逐级解析
-        // 并按 UI 管线的旋转链合成（与
-        // UserInterfaceGraphicPipelineSystem::ResolveUiNodes 同式）
+        // 由 UIGizmo.wo 的 uiResolveDisplay 经引擎布局阶段已复合的
+        // WorldLayout 仿射系数像素化得到（父子层级与祖先旋转链已在
+        // TranslationUpdatingSystem 展开，见 Element::get_display_layout）
         protected using UIRectInfo = struct{
             // 绘制四边形的中心（已含祖先旋转链与自身旋转的合成偏移）
             protected m_center: vec2,

@@ -119,30 +119,43 @@ namespace jeecs
         }
         void UserInterfaceStageUpdate()
         {
-            // UI 布局阶段：每帧把 Element 输入解析为 WorldLayout（参考系 =
-            // 锚定基准点 + 父链偏移 + 单位一，均以单位一空间 ratio_space 分桶
-            // 表达、相对显示区中心）。根元素的 anchor 与相对通道
-            //（offset_ratio/size_ratio）以显示区为参考；子元素的以父元素
-            // 矩形为参考——anchor 锚定父矩形方位（纯几何量，写入 base 通道），
-            // 自身相对通道按自身 ratio_unit 以父矩形的高/宽为单位一
-            //（height_unit/width_unit 两轴同用高/宽标量，per_axis 则 x 轴用宽、
-            // y 轴用高）（父矩形有效尺寸 = 父输入尺寸 + 父 size_ratio ⊙ 父
-            // 单位一，递归）。父链偏移（offset 通道）把每个祖先自身的
-            // offset/offset_ratio 按**祖先自己的单位一**折算进对应分桶后逐级
-            // 累加，绘制端按各桶参照像素化——因此父 offset_ratio 位移被子
-            // 元素按原像素量继承，不受子元素 ratio_unit 影响。
+            // UI 布局阶段：每帧把 Element 输入解析为 WorldLayout 的两层派生状态：
+            //  1) 参考系（base/offset/unit 以单位一空间 ratio_space 分桶表达、
+            //     相对显示区中心，各通道语义见 WorldLayout 注释）。根元素的
+            //     anchor 与相对通道（offset_ratio/size_ratio）以显示区为参考；
+            //     子元素的以父元素矩形为参考——anchor 锚定父矩形方位（纯几何
+            //     量，写入 base 通道），自身相对通道按自身 ratio_unit 以父矩形
+            //     的高/宽为单位一（height_unit/width_unit 两轴同用高/宽标量，
+            //     per_axis 则 x 轴用宽、y 轴用高）（父矩形有效尺寸 = 父输入
+            //     尺寸 + 父 size_ratio ⊙ 父单位一，递归）。父链偏移（offset
+            //     通道）把每个祖先自身的 offset/offset_ratio 按**祖先自己的
+            //     单位一**折算进对应分桶后逐级累加——因此父 offset_ratio 位移
+            //     被子元素按原像素量继承，不受子元素 ratio_unit 影响；
+            //  2) 已复合显示矩形（center/size/pivot_offset/anchor，affine2
+            //     系数）——父子关系在此完全展开：每个通道只是目标缓冲区宽高
+            //     (w,h) 的线性函数，祖先旋转链也在系数空间复合完成（定点旋转
+            //     是线性映射，对 k0/kw/kh 各系数向量旋转即可；带语义的分桶
+            //     空间对旋转不封闭，from_ratio 的并桶恰好完成转换）。绘制/
+            //     命中测试端只需按相机目标尺寸像素化
+            //    （Element::resolve_display_rect），不再沿父链遍历。
+            // 有效旋转角（rotation）的缓存与 TransfromStageUpdate 递推
+            // world_rotation 同理：根元素 = 自身 Rotation::angle，子元素 =
+            // 父有效角 + 自身角，沿 Anchor+LocalToParent 父链逐级累加（未挂
+            // Rotation 组件按 0 计）。
             // 因此先解父后解子；WorldLayout 是唯一的派生状态，输入组件不会被任何系统回写。
-            //
-            // 有效旋转角（rotation）的缓存与 TransfromStageUpdate 递推 world_rotation
-            // 同理：根元素 = 自身 Rotation::angle，子元素 = 父有效角 + 自身角，
-            // 沿 Anchor+LocalToParent 父链逐级累加（未挂 Rotation 组件按 0 计）。
-            // 旋转是像素空间量，无法在单位一空间中传播，故只缓存角度本身；
-            // 旋转后的位置仍由绘制阶段按相机目标尺寸在像素空间复合。
 
             struct ResolvedParent
             {
                 UserInterface::Element* elem;
                 UserInterface::WorldLayout* layout;
+
+                // 父链传播量（系数空间）：local_center 为祖先未旋转帧中的
+                // 中心，display_center 为含祖先旋转链的中心，pivot_offset 为
+                // 枢轴修正，own_angle 为自身角（绕自身枢轴，未计入 display）。
+                WorldLayout::affine2 local_center;
+                WorldLayout::affine2 display_center;
+                WorldLayout::affine2 pivot_offset;
+                float own_angle;
             };
             std::unordered_map<typing::uuid, ResolvedParent> resolved_parents;
 
@@ -160,6 +173,57 @@ namespace jeecs
             //（单位一空间：绝对0 + 逐轴相对1，其余分桶为 0）。
             const WorldLayout::ratio_space display_rect{
                 math::vec2(0.f, 0.f), math::vec2(1.f, 1.f) };
+
+            // 把当前布局通道 + 元素输入合成为本元素的仿射矩形系数（祖先
+            // 未旋转帧中的局部量）。与 Element::resolve_layout 同式，只是
+            // 保持 (w,h) 为符号量；center 通道含半屏项（左下原点像素系，
+            // 与 resolved_rect 约定一致）。
+            const auto compose_local_channels = [](
+                const Element& elem, const WorldLayout& layout,
+                WorldLayout::affine2& size,
+                WorldLayout::affine2& pivot_offset,
+                WorldLayout::affine2& local_center,
+                WorldLayout::affine2& anchor)
+            {
+                const auto size_space =
+                    WorldLayout::ratio_space{ elem.size, {}, {}, {} }
+                    + layout.unit.scaled(elem.size_ratio);
+
+                size = WorldLayout::affine2::from_ratio(size_space);
+                pivot_offset = WorldLayout::affine2::from_ratio(
+                    Element::pivot_shift(elem.pivot, size_space));
+
+                const WorldLayout::affine2 half_screen{
+                    math::vec2(), math::vec2(0.5f, 0.f), math::vec2(0.f, 0.5f) };
+                local_center = WorldLayout::affine2::from_ratio(
+                    layout.base + layout.offset
+                    + WorldLayout::ratio_space{ elem.offset, {}, {}, {} }
+                    + layout.unit.scaled(elem.offset_ratio))
+                    + pivot_offset + half_screen;
+                // 锚点 = 自身偏移通道（offset/offset_ratio）归零时的枢轴落点，
+                // 供编辑器偏移拖拽作参考原点。
+                anchor = WorldLayout::affine2::from_ratio(
+                    layout.base + layout.offset)
+                    + pivot_offset + half_screen;
+            };
+
+            // 沿父链复合祖先旋转（系数空间）：子局部量先绕父枢轴转父自身角，
+            // 再经父祖先累计角提升到显示系。与旧图形端逐相机像素复合逐位
+            // 等价（线性映射与线性代入可交换，仅浮点舍入顺序不同）。
+            const auto orbit_to_display = [](
+                const WorldLayout::affine2& local,
+                const ResolvedParent& parent)
+            {
+                const auto parent_pivot =
+                    parent.local_center - parent.pivot_offset;
+                const auto rotated_by_parent = parent_pivot
+                    + (local - parent_pivot).rotated(parent.own_angle);
+                const float parent_angle_acc =
+                    parent.layout->rotation - parent.own_angle;
+                return parent.display_center
+                    + (rotated_by_parent - parent.local_center)
+                    .rotated(parent_angle_acc);
+            };
 
             for (auto&& [anchor, l2p, elem, layout, rotation] : query<
                 view typesof(
@@ -197,10 +261,22 @@ namespace jeecs
                     layout.unit = Element::fold_unit(display_rect, elem.unit_kind);
                     layout.rotation = rotation ? rotation->angle : 0.f;
 
+                    // 根的显示量 = 局部量（无祖先旋转链）。
+                    WorldLayout::affine2 size, pivot_off, local_center, anchor_pos;
+                    compose_local_channels(
+                        elem, layout, size, pivot_off, local_center, anchor_pos);
+                    layout.size = size;
+                    layout.pivot_offset = pivot_off;
+                    layout.center = local_center;
+                    layout.anchor = anchor_pos;
+
                     if (anchor != nullptr)
                     {
                         resolved_parents.emplace(
-                            anchor->uid, ResolvedParent{ &elem, &layout });
+                            anchor->uid, ResolvedParent{
+                                &elem, &layout,
+                                local_center, local_center, pivot_off,
+                                rotation ? rotation->angle : 0.f });
                     }
                 }
             }
@@ -217,7 +293,9 @@ namespace jeecs
                     auto fnd = resolved_parents.find(current_idx->l2p->parent_uid);
                     if (fnd != resolved_parents.end())
                     {
-                        const auto& [parent_elem, parent_layout] = fnd->second;
+                        const auto& parent = fnd->second;
+                        const auto* parent_elem = parent.elem;
+                        const auto* parent_layout = parent.layout;
 
                         // 父矩形的有效尺寸（递归，单位一空间），用作：
                         // 1) 父枢轴修正与子 anchor 锚定的参照（几何量，按各自轴取半）；
@@ -266,13 +344,33 @@ namespace jeecs
                             + WorldLayout::ratio_space{ parent_elem->offset, {}, {}, {} }
                             + parent_layout->unit.scaled(parent_elem->offset_ratio);
 
+                        // 已复合显示矩形：局部系数 + 祖先旋转链（系数空间复合，
+                        // 与旧图形端逐相机像素复合逐位等价）。
+                        WorldLayout::affine2 size, pivot_off, local_center, anchor_local;
+                        compose_local_channels(
+                            *current_idx->elem, *current_idx->layout,
+                            size, pivot_off, local_center, anchor_local);
+
+                        current_idx->layout->size = size;
+                        current_idx->layout->pivot_offset = pivot_off;
+                        current_idx->layout->center =
+                            orbit_to_display(local_center, parent);
+                        current_idx->layout->anchor =
+                            orbit_to_display(anchor_local, parent);
+
                         // 完成应用，将当前布局绑定到binding，然后从pending中删除当前项
                         if (current_idx->anchor_may_null != nullptr)
                             resolved_parents.emplace(
                                 current_idx->anchor_may_null->uid,
                                 ResolvedParent{
                                     current_idx->elem,
-                                    current_idx->layout });
+                                    current_idx->layout,
+                                    local_center,
+                                    current_idx->layout->center,
+                                    pivot_off,
+                                    current_idx->rotation_may_null != nullptr
+                                        ? current_idx->rotation_may_null->angle
+                                        : 0.f });
 
                         pending_anchor_information.erase(current_idx);
                     }
@@ -282,6 +380,20 @@ namespace jeecs
                     // 剩余布局缺失父布局或祖布局，不做处理以确保问题立即被发现；
                     break;
                 }
+            }
+
+            // 父链缺失的孤儿按根语义复合已显示矩形（与旧图形端“孤儿按根
+            // 回退”一致）；不注册 anchor——其子孙同样回退为根。
+            for (auto& orphan : pending_anchor_information)
+            {
+                WorldLayout::affine2 size, pivot_off, local_center, anchor_pos;
+                compose_local_channels(
+                    *orphan.elem, *orphan.layout,
+                    size, pivot_off, local_center, anchor_pos);
+                orphan.layout->size = size;
+                orphan.layout->pivot_offset = pivot_off;
+                orphan.layout->center = local_center;
+                orphan.layout->anchor = anchor_pos;
             }
         }
 

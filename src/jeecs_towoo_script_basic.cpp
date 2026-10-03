@@ -1969,6 +1969,77 @@ WOORT_API woort_api wojeapi_towoo_userinterface_element_mouse_on(void)
     return woort_ret_bool(rect.hit_test(a, m, r.x, r.y));
 }
 
+// 解析 UI 元素的已复合显示矩形：父子层级与祖先旋转链已由布局阶段
+//（TranslationUpdatingSystem）复合进 WorldLayout 的仿射系数通道，此处
+// 只按 display_range（相机/显示区尺寸）像素化。返回
+// (center, size, pivot_offset, total_angle, anchor_display, unit_px)：
+//   center/anchor_display —— 含祖先旋转链的显示位置（不含自身角，
+//       自身旋转由调用方按 total_angle 绕枢轴施加）；
+//   anchor_display —— 自身偏移归零时枢轴的落点（偏移拖拽参考原点）；
+//   unit_px —— 本元素相对量（offset_ratio/size_ratio）的单位一像素尺寸。
+// 未挂 WorldLayout 时按根元素回退（角度 0）。
+WOORT_API woort_api wojeapi_towoo_userinterface_element_display_layout(void)
+{
+    woort_value stack_base;
+    if (!woort_push_reserve(2, &stack_base))
+        return woort_ret_panic("Stack overflow.");
+
+    auto& elem = wo_component<jeecs::UserInterface::Element>(0, WOORT_RETURN_SLOT);
+    auto* layout = wo_option_component<jeecs::UserInterface::WorldLayout>(
+        1, WOORT_RETURN_SLOT);
+    auto r = wo_vec2(2);
+
+    jeecs::UserInterface::Element::resolved_rect rect;
+    float total_angle = 0.f;
+    jeecs::math::vec2 anchor_display, unit_px;
+    if (layout != nullptr)
+    {
+        rect = elem.resolve_display_rect(*layout, r.x, r.y);
+        total_angle = layout->rotation;
+        anchor_display = layout->anchor.resolve(r.x, r.y);
+        unit_px = layout->unit.resolve(r.x, r.y);
+    }
+    else
+    {
+        // 显示区 = 绝对0 + 逐轴相对1；根语义回退：局部矩形即显示矩形。
+        const jeecs::UserInterface::WorldLayout::ratio_space display_rect{
+            jeecs::math::vec2(0.f, 0.f), jeecs::math::vec2(1.f, 1.f) };
+        jeecs::UserInterface::WorldLayout fallback;
+        fallback.base =
+            jeecs::UserInterface::Element::anchor_shift(elem.anchor, display_rect);
+        fallback.unit =
+            jeecs::UserInterface::Element::fold_unit(display_rect, elem.unit_kind);
+        rect = elem.resolve_layout(fallback, r.x, r.y);
+        anchor_display =
+            jeecs::math::vec2(r.x / 2.f, r.y / 2.f)
+            + fallback.base.resolve(r.x, r.y)
+            + rect.pivot_offset;
+        unit_px = fallback.unit.resolve(r.x, r.y);
+    }
+
+    woort_set_struct(stack_base + 0, 6);
+
+    wo_set_vec2(stack_base + 1, rect.center);
+    woort_struct_set(stack_base + 0, 0, stack_base + 1);
+
+    wo_set_vec2(stack_base + 1, rect.size);
+    woort_struct_set(stack_base + 0, 1, stack_base + 1);
+
+    wo_set_vec2(stack_base + 1, rect.pivot_offset);
+    woort_struct_set(stack_base + 0, 2, stack_base + 1);
+
+    woort_set_real(stack_base + 1, total_angle);
+    woort_struct_set(stack_base + 0, 3, stack_base + 1);
+
+    wo_set_vec2(stack_base + 1, anchor_display);
+    woort_struct_set(stack_base + 0, 4, stack_base + 1);
+
+    wo_set_vec2(stack_base + 1, unit_px);
+    woort_struct_set(stack_base + 0, 5, stack_base + 1);
+
+    return woort_ret_value(stack_base + 0);
+}
+
 // ==========================================================================
 // Camera::RendToFramebuffer
 // ==========================================================================

@@ -936,7 +936,7 @@ namespace UserInterface::Text::wrap_mode
         public extern func edit(val: UserInterface::Text::wrap_mode, tag: string)=> option<UserInterface::Text::wrap_mode>
         {
             // 文本换行策略下拉选择（枚举值与选项下标一致；
-            // word 仅在 auto_size=false 时按元素宽度折行生效）
+            // word 按元素宽度折行生效）
             match (Combo(F"##{tag}",
                 ["不自动换行", "按元素宽度换行"],
                 option::value(val as int)))

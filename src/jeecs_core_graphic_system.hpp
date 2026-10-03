@@ -139,9 +139,11 @@ public let frag =
             const Shaders* shaders;
             const Textures* textures;
 
-            // UI 节点在 UserInterfaceGraphicPipelineSystem::m_ui_nodes 中的索引；
-            // 仅 UI 渲染路径使用，其它管线不读写。
-            size_t ui_node;
+            // UI 布局量：父子层级（含祖先旋转链）已由布局阶段复合进
+            // WorldLayout 的仿射系数通道，绘制端只按相机目标尺寸像素化。
+            const UserInterface::Element* ui_elem = nullptr;
+            const UserInterface::WorldLayout* ui_layout = nullptr;
+            const UserInterface::Rotation* ui_rotation = nullptr; // 可空
 
             // UI 文本（逐字渲染路径）；仅 UI 渲染路径使用，为空时该实体走
             // 常规四边形路径（两者可并存：先四边形后文本，文字在背景板之上）。
@@ -542,40 +544,6 @@ public let frag =
         {
         }
 
-        // UI 节点树：累计旋转角已由布局阶段沿父链缓存进 WorldLayout.rotation，
-        // 但旋转后的中心位置是像素空间量（依赖相机目标尺寸，无法在双通道里
-        // 传播），绘制阶段仍需沿父链复合，因此每帧重建结构、每个相机目标尺寸解析一次。
-        static constexpr size_t INVALID_UI_NODE = SIZE_MAX;
-
-        struct ui_node_t
-        {
-            const UserInterface::Element* elem = nullptr;
-            const UserInterface::WorldLayout* layout = nullptr;
-            const UserInterface::Rotation* rotation = nullptr; // 可空
-            const UserInterface::Text* text = nullptr;         // 可空
-
-            size_t parent = INVALID_UI_NODE;
-
-            // 以下为每相机解析缓存（ResolveUiNodes 覆写）：
-            UserInterface::Element::resolved_rect rect{};   // 局部矩形（父元素未旋转的坐标系）
-            math::vec2 display_center{};           // center 经祖先旋转链后的显示位置
-            float angle_acc = 0.f;                 // 祖先累计旋转角（不含自身）= WorldLayout.rotation − 自身角
-        };
-
-        std::vector<ui_node_t> m_ui_nodes;
-        std::vector<size_t> m_ui_resolve_order; // 父先于子，孤儿殿后（按根回退）
-        std::unordered_map<typing::uuid, size_t> m_ui_node_by_anchor;
-
-        struct pending_ui_node_t
-        {
-            Transform::Anchor* anchor_may_null;
-            size_t node;
-            Transform::LocalToParent* l2p;
-        };
-        // 必须是 list：解析扫描中边遍历边删除，list 的 erase 不会失效其它迭代器
-        //（vector 的 erase 会失效删除点之后的迭代器，同款循环即 UB）。
-        std::list<pending_ui_node_t> m_ui_pending_nodes;
-
         // ---- 文本逐字渲染运行时 ----
         // 字形图集 + 行网格布局引擎（LRU、脏检查细节见 jeecs_ui_text_renderer.hpp）。
         ui_text_renderer m_text_renderer;
@@ -636,21 +604,14 @@ public let frag =
             PrepareTextLayouts();
             m_text_vb_used = 0;
 
-            // 构建 UI 节点树（结构与相机无关，每帧重建），并从中收集可渲染实体：
-            // 节点必须覆盖全部 UI 元素（含纯布局容器），渲染列表取带 Shaders、
-            // 且带 Shape（常规四边形）或 Text（逐字文本）的节点；2D 光源由
-            // 专用查询收集，此处不再单独排除。
-            m_ui_nodes.clear();
-            m_ui_resolve_order.clear();
-            m_ui_node_by_anchor.clear();
-            m_ui_pending_nodes.clear();
-
+            // 收集可渲染 UI 实体：带 Shaders 且带 Shape（常规四边形）或
+            // Text（逐字文本）。父子层级已由布局阶段复合进 WorldLayout 的
+            // 仿射系数通道，此处不再构建节点树、不读 Anchor/LocalToParent。
+            // 2D 光源由专用查询收集，此处不再单独排除。
             for (auto&& [
-                anchor, l2p, elem, layout, rotation, text, texs,
+                elem, layout, rotation, text, texs,
                 shads, shape, rendqueue, color] : query<
                 view typesof(
-                    Transform::Anchor*,
-                    Transform::LocalToParent*,
                     Element&,
                     WorldLayout&,
                     Rotation*,
@@ -663,147 +624,23 @@ public let frag =
                 anyof typesof(Shape, Text)
                 >())
             {
-                m_ui_nodes.push_back(ui_node_t{
-                    &elem, &layout, rotation, text,
-                    INVALID_UI_NODE, {}, {}, 0.f });
-                const size_t node_index = m_ui_nodes.size() - 1;
-
-                if (l2p != nullptr)
-                {
-                    m_ui_pending_nodes.push_back(
-                        pending_ui_node_t{ anchor, node_index, l2p });
-                }
-                else
-                {
-                    m_ui_resolve_order.push_back(node_index);
-                    if (anchor != nullptr)
-                        m_ui_node_by_anchor.emplace(anchor->uid, node_index);
-                }
-
                 m_renderer_list.emplace(
                     renderer_arch{
                         color, rendqueue, nullptr, shape, &shads, texs,
-                        node_index, text });
+                        &elem, &layout, rotation, text });
             }
-
-            for (;;)
-            {
-                const size_t count = m_ui_pending_nodes.size();
-                for (auto idx = m_ui_pending_nodes.begin();
-                    idx != m_ui_pending_nodes.end();)
-                {
-                    auto current_idx = idx++;
-
-                    auto fnd = m_ui_node_by_anchor.find(current_idx->l2p->parent_uid);
-                    if (fnd != m_ui_node_by_anchor.end())
-                    {
-                        m_ui_nodes[current_idx->node].parent = fnd->second;
-                        m_ui_resolve_order.push_back(current_idx->node);
-
-                        if (current_idx->anchor_may_null != nullptr)
-                            m_ui_node_by_anchor.emplace(
-                                current_idx->anchor_may_null->uid, current_idx->node);
-
-                        m_ui_pending_nodes.erase(current_idx);
-                    }
-                }
-                if (m_ui_pending_nodes.size() == count)
-                    break;
-            }
-            // 父链缺失的孤儿按无父（根语义）处理，附加到解析序末尾。
-            for (auto& orphan : m_ui_pending_nodes)
-                m_ui_resolve_order.push_back(orphan.node);
-            m_ui_pending_nodes.clear();
 
             this->branch_allocate_end();
             DrawFrame();
         }
 
-        // 按依赖序（父先于子）解析全部 UI 节点，每个相机目标尺寸调用一次：
-        // 1) resolve_layout 得到局部（父元素未旋转坐标系）矩形；
-        // 2) auto_size 按文本布局自然尺寸的宽高比调整矩形（父先于子，子元素同帧可见）；
-        // 3) 沿父链复合祖先旋转（像素空间）：A(x) = display_center + R(angle_acc)·(x − rect.center)，
-        //    display_center 逐级递归（父旋转绕父枢轴，再经父的祖先链上溯）；
-        //    angle_acc 直接取 WorldLayout.rotation − 自身角（布局阶段已缓存，此处不再累加）。
-        void ResolveUiNodes(float width, float height)
-        {
-            for (size_t node_index : m_ui_resolve_order)
-            {
-                ui_node_t& node = m_ui_nodes[node_index];
-                node.rect = node.elem->resolve_layout(*node.layout, width, height);
-
-                // auto_size：按文本布局的自然宽高比（Text::runtime_layout，
-                // 与纹理彻底解耦）调整元素尺寸，基准轴与字号计算一致
-                //（width_unit 取 x 否则取 y——per_axis 亦取 y，文本以字高为
-                // 基准更自然）；只作用于本次解析结果，不回写布局输入，
-                // 也不参与字号计算。
-                if (node.text != nullptr && node.text->auto_size)
-                {
-                    const auto& text_layout = node.text->runtime_layout;
-                    if (text_layout.valid
-                        && text_layout.block_w > 0.f && text_layout.block_h > 0.f)
-                    {
-                        const bool base_on_y =
-                            node.elem->unit_kind != Element::ratio_unit::width_unit;
-                        if (base_on_y)
-                        {
-                            const float ratio =
-                                text_layout.block_w / text_layout.block_h;
-                            node.rect.resize_around_pivot(
-                                node.elem->pivot,
-                                math::vec2(node.rect.size.y * ratio, node.rect.size.y));
-                        }
-                        else
-                        {
-                            const float ratio =
-                                text_layout.block_h / text_layout.block_w;
-                            node.rect.resize_around_pivot(
-                                node.elem->pivot,
-                                math::vec2(node.rect.size.x, node.rect.size.x * ratio));
-                        }
-                    }
-                }
-
-                // 祖先累计角（不含自身）：布局阶段已沿父链缓存进 WorldLayout.rotation，
-                // 此处仅扣除自身分量，不再逐级重复累加。
-                node.angle_acc = node.layout->rotation
-                    - (node.rotation != nullptr ? node.rotation->angle : 0.f);
-
-                if (node.parent == INVALID_UI_NODE)
-                {
-                    node.display_center = node.rect.center;
-                }
-                else
-                {
-                    const ui_node_t& parent = m_ui_nodes[node.parent];
-
-                    // 父的旋转：绕父枢轴（父的局部未旋转系）转动子中心；
-                    // 结果再经父的祖先旋转链 A_parent 平移到显示系。
-                    // Rotation.angle 单位为度（与 Transform 欧拉角一致，绘制端
-                    // quat::euler 按 DEG2RAD 消费）；vec2::rotate 同样按度
-                    // 接受，直接传角度即可。
-                    const math::vec2 parent_pivot =
-                        parent.rect.center - parent.rect.pivot_offset;
-                    const float parent_angle =
-                        parent.rotation != nullptr ? parent.rotation->angle : 0.f;
-
-                    const math::vec2 rotated_by_parent =
-                        parent_pivot + (node.rect.center - parent_pivot).rotate(parent_angle);
-
-                    node.display_center = parent.display_center
-                        + (rotated_by_parent - parent.rect.center).rotate(parent.angle_acc);
-                }
-            }
-        }
-
         // 按窗口分辨率重建全部 UI 文本的逐字布局（标记解析 → 字形度量 →
         // 折行 → 对齐 → 放置），结果缓存于 Text::runtime_layout，仅脏文本
-        // 重建。实际像素字号 = 元素按窗口尺寸解析后的最终布局尺寸（基准轴
-        // 与旧路径一致：width_unit 取 x 分量，否则取 y 分量——per_axis 亦取
-        // y，文字以字高为基准），并量化为整像素以获得稳定的字形缓存命中；
-        // 相机目标分辨率的差异由发射端按基准轴比例统一缩放。
-        // auto_size 只影响绘制（见 ResolveUiNodes），不参与字号计算，
-        // 也不回写任何布局输入组件。
+        // 重建。实际像素字号 = 元素按窗口尺寸解析后的最终布局尺寸（基准轴：
+        // width_unit 取 x 分量，否则取 y 分量——per_axis 亦取 y，文字以字高
+        // 为基准），并量化为整像素以获得稳定的字形缓存命中；相机目标分辨率
+        // 的差异由发射端按基准轴比例统一缩放。字号取局部（未旋转）矩形，
+        // 不回写任何布局输入组件。
         void PrepareTextLayouts()
         {
             for (auto&& [text, elem, layout] : query<view typesof(
@@ -868,31 +705,35 @@ public let frag =
                 jegl_rchain_bind_uniform_buffer(rend_chain,
                     current_camera.projection->default_uniform_buffer->resource());
 
-                // 先按本相机目标尺寸解析 UI 节点（局部矩形/auto_size/祖先旋转链）。
-                ResolveUiNodes(
-                    (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT);
-
                 for (auto& rendentity : m_renderer_list)
                 {
-                    assert(rendentity.ui_node < m_ui_nodes.size());
+                    assert(rendentity.ui_elem != nullptr
+                        && rendentity.ui_layout != nullptr);
 
-                    const ui_node_t& node = m_ui_nodes[rendentity.ui_node];
-                    const auto& rect = node.rect;
+                    // 布局阶段已把父子层级与祖先旋转链复合进 WorldLayout 的
+                    // 仿射系数，此处只按本相机目标尺寸像素化。
+                    const auto rect = rendentity.ui_elem->resolve_display_rect(
+                        *rendentity.ui_layout,
+                        (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT);
 
-                    // 总旋转角 = 布局阶段缓存的 WorldLayout::rotation（祖先累计 + 自身，
-                    // 度，quat::euler 按度消费，等价于 angle_acc + 自身角）；
-                    // 矩阵结构与未旋转时一致（T(枢轴)·R·T(pivot_offset)·S 的展开形式）：
-                    // uioffset 保证枢轴落在其经祖先旋转链后的显示位置 A(Q)，
-                    // 即 uioffset = D_C + (I − R(Θ_acc))·pivot_offset
-                    //（R 由 vec2::rotate 按度计算）。
+                    // 总旋转角 = 布局阶段缓存的 WorldLayout::rotation（祖先累计
+                    // + 自身，度，quat::euler 按度消费）；祖先累计角 = 总角 −
+                    // 自身角。矩阵结构与未旋转时一致
+                    //（T(枢轴)·R·T(pivot_offset)·S 的展开形式）：uioffset 保证
+                    // 枢轴落在其经祖先旋转链后的显示位置 A(Q)，即
+                    // uioffset = D_C + (I − R(Θ_acc))·pivot_offset（D_C 为已
+                    // 复合显示中心 = rect.center，R 由 vec2::rotate 按度计算）。
                     // 该矩阵把“单位矩形坐标”（±0.5 张成元素矩形）映射到相机
                     // 像素空间，常规四边形路径（着色器侧 MVP）与逐字文本路径
                     //（CPU 侧烘焙进顶点）共用同一映射。
-                    const float total_angle = node.layout->rotation;
+                    const float total_angle = rendentity.ui_layout->rotation;
+                    const float angle_acc = total_angle
+                        - (rendentity.ui_rotation != nullptr
+                            ? rendentity.ui_rotation->angle : 0.f);
 
-                    const math::vec2 uioffset = node.display_center
+                    const math::vec2 uioffset = rect.center
                         + (rect.pivot_offset
-                            - rect.pivot_offset.rotate(node.angle_acc))
+                            - rect.pivot_offset.rotate(angle_acc))
                         - math::vec2(
                             (float)RENDAIMBUFFER_WIDTH / 2.0f,
                             (float)RENDAIMBUFFER_HEIGHT / 2.0f);
@@ -976,7 +817,7 @@ public let frag =
                     {
                         EmitTextGlyphs(
                             rend_chain, MAT4_UI_VIEW, MAT4_UI_MODEL,
-                            *rendentity.text, node, rendentity);
+                            *rendentity.text, *rendentity.ui_elem, rect, rendentity);
                     }
                 }
 
@@ -1001,20 +842,20 @@ public let frag =
             const float(&view)[4][4],
             const float(&model)[4][4],
             const UserInterface::Text& text,
-            const ui_node_t& node,
+            const UserInterface::Element& elem,
+            const UserInterface::Element::resolved_rect& rect,
             const renderer_arch& rendentity)
         {
             const auto& layout = text.runtime_layout;
             if (!layout.valid || layout.glyphs.size() == 0)
                 return;
 
-            const auto& rect = node.rect;
             if (rect.size.x <= 0.f || rect.size.y <= 0.f)
                 return;
 
             // 字号基准轴与布局一致：width_unit 取 x，否则取 y。
             const float base_axis =
-                node.elem->unit_kind == Element::ratio_unit::width_unit
+                elem.unit_kind == Element::ratio_unit::width_unit
                 ? rect.size.x : rect.size.y;
             if (base_axis <= 0.f || layout.key_font_px <= 0)
                 return;

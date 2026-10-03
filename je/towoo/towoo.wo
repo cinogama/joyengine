@@ -466,6 +466,10 @@ namespace UserInterface
             public func get_layout(self: Element, world: option<WorldLayout>, display_range: vec2)=> (vec2, vec2, vec2);
         extern("libjoyecs", "wojeapi_towoo_userinterface_element_mouse_on")
             public func mouse_on(self: Element, world: option<WorldLayout>, display_range: vec2, angle: real, mouse_pos: vec2)=> bool;
+        // 已复合显示矩形（父子层级与祖先旋转链已展开，只随 display_range 像素化）：
+        // 返回 (center, size, pivot_offset, total_angle, anchor_display, unit_px)。
+        extern("libjoyecs", "wojeapi_towoo_userinterface_element_display_layout")
+            public func get_display_layout(self: Element, world: option<WorldLayout>, display_range: vec2)=> (vec2, vec2, vec2, real, vec2, vec2);
     }
 }
 namespace Renderer

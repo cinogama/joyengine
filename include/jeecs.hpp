@@ -10382,8 +10382,10 @@ namespace jeecs
     namespace UserInterface
     {
         // 布局层级的解析结果：由 UI 布局阶段（TranslationUpdatingSystem）每帧
-        // 从 Element 重建后写入，用户只读。内容为元素的“参考系”，各通道以
-        // 单位一空间（ratio_space）表达、相对显示区中心：
+        // 从 Element 重建后写入，用户只读。分两层：
+        //   参考系（base/offset/unit，单位一空间 ratio_space 分桶、相对显示区
+        //中心）——层级传播的中间态，也是 Element::resolve_layout（祖先未旋转
+        //帧中的局部矩形）的输入：
         //   锚定基准点（base）= 父链基点 + 父枢轴修正 + 自身 anchor 锚定
         //（根元素为相对显示区的锚定），纯几何量；
         //   父链偏移（offset）= 全部祖先自身偏移（offset + offset_ratio 按
@@ -10393,6 +10395,10 @@ namespace jeecs
         //尺寸——根元素为显示区、子元素为父元素有效尺寸，已按本元素
         //ratio_unit 折算（height_unit/width_unit 取高/宽标量广播到两轴，
         //per_axis 逐轴取宽/高）；
+        //   已复合显示矩形（center/size/pivot_offset/anchor，affine2 系数）
+        //——父子关系已完全展开：每个通道只是目标缓冲区宽高 (w,h) 的线性
+        //函数（含祖先旋转链复合，不含自身角），绘制/命中测试端按相机目标
+        //尺寸像素化即可（Element::resolve_display_rect），无需再沿父链遍历；
         //   有效旋转角（rotation）= 全部祖先与自身 Rotation::angle 之和（度）。
         // 未携带本组件的元素不参与 UI 布局与渲染（参见编辑器的 UI 组件预设）。
         struct WorldLayout
@@ -10450,6 +10456,56 @@ namespace jeecs
                 }
             };
 
+            // 已复合显示矩形的系数空间：值 = k0 + kw*w + kh*h（对目标缓冲区
+            // 宽高 (w,h) 线性）。ratio_space 的 resolve 对 (w,h) 线性，且定点
+            // 旋转是线性映射——R·(k0 + kw·w + kh·h) = R·k0 + R·kw·w + R·kh·h
+            //——因此布局阶段可以在系数空间完成“像素化 + 祖先旋转链复合”
+            //（子中心绕父枢轴转父自身角、再经父祖先累计角提升，逐级都是
+            // 旋转+平移+系数线性组合），绘制端只需代入具体宽高；同一份系数
+            // 对任意相机目标尺寸都成立。带语义的分桶空间对旋转不封闭
+            //（per_axis 桶会在旋转下分裂进宽/高桶），from_ratio 的有损合并
+            // 恰好完成这一步。
+            struct affine2
+            {
+                math::vec2 k0 = {}; // 常数项（像素）
+                math::vec2 kw = {}; // ×宽系数
+                math::vec2 kh = {}; // ×高系数
+
+                math::vec2 resolve(float w, float h) const noexcept
+                {
+                    return k0 + kw * w + kh * h;
+                }
+
+                // 三系数向量各自旋转（度）：等价于对任意 (w,h) 的 resolve
+                // 结果整体绕原点旋转。
+                affine2 rotated(float deg) const noexcept
+                {
+                    return affine2{
+                        k0.rotate(deg), kw.rotate(deg), kh.rotate(deg) };
+                }
+
+                affine2 operator+(const affine2& another) const noexcept
+                {
+                    return affine2{
+                        k0 + another.k0, kw + another.kw, kh + another.kh };
+                }
+                affine2 operator-(const affine2& another) const noexcept
+                {
+                    return affine2{
+                        k0 - another.k0, kw - another.kw, kh - another.kh };
+                }
+
+                // 分桶 → 系数（有损合并：per_axis 与 width 的 x 系数、
+                // per_axis 与 height 的 y 系数并桶；resolve 结果不变）。
+                static affine2 from_ratio(const ratio_space& s) noexcept
+                {
+                    return affine2{
+                        s.absolute,
+                        math::vec2(s.per_axis.x + s.width.x, s.width.y),
+                        math::vec2(s.height.x, s.per_axis.y + s.height.y) };
+                }
+            };
+
             // 锚定基准点（单位一空间）：父链基点 + 父枢轴修正 + 自身 anchor
             // 锚定（根元素为相对显示区的锚定）。纯几何量——子元素永远以
             // 父矩形的中心/边角为基准点，即便父矩形由 size_ratio 撑起、且
@@ -10465,12 +10521,25 @@ namespace jeecs
             // 子元素=父元素有效尺寸）按本元素 ratio_unit 折算后的通道。
             ratio_space unit = {};
 
+            // ---- 已复合显示矩形系数（布局阶段写入，父子关系已展开）----
+
+            // 元素中心的显示位置系数：含半屏 (w/2,h/2) 项与全部祖先旋转链的
+            // 复合（子中心绕父枢轴转父自身角、再经父祖先累计角逐级提升）；
+            // 不含自身角——自身旋转由绘制端按 rotation 绕枢轴施加。resolve
+            // 后为左下原点像素系（与 Element::resolved_rect 同约定）。
+            affine2 center = {};
+            // 有效尺寸系数（未旋转局部量 = 绝对输入 + size_ratio ⊙ 单位一）。
+            affine2 size = {};
+            // 枢轴到元素中心的偏移系数（未旋转局部量，绘制旋转的中心修正量）。
+            affine2 pivot_offset = {};
+            // 锚点显示位置系数：自身 offset/offset_ratio 归零时枢轴的落点
+            //（偏移拖拽的参考原点，含祖先旋转链；供编辑器/命中测试使用）。
+            affine2 anchor = {};
+
             // 有效旋转角（度，绕元素枢轴）= 全部祖先与自身的 Rotation::angle 之和
-            //（未挂 Rotation 组件的实体按 0 计）。与 Translation::world_rotation 同理，
-            // 由布局阶段沿 Anchor+LocalToParent 父链逐级递推缓存（父有效角+自身角），
-            // 绘制与命中测试直接读取本值。注意旋转是像素空间量，无法在单位一
-            // 空间中传播：基点/单位一仍是“祖先未旋转”的参考系，旋转只由绘制
-            // 阶段在像素空间复合（见 UserInterfaceGraphicPipelineSystem）。
+            //（未挂 Rotation 组件的实体按 0 计）。由布局阶段沿 Anchor+LocalToParent
+            // 父链逐级递推缓存（父有效角+自身角）；祖先分量已复合进 center/anchor
+            // 系数，本值供绘制端构建自身旋转矩阵与命中测试使用。
             float rotation = 0.f;
         };
 
@@ -10540,26 +10609,6 @@ namespace jeecs
                 math::vec2 size = {};
                 // 枢轴点到元素中心的偏移，绘制旋转时作为旋转中心修正量。
                 math::vec2 pivot_offset = {};
-
-                // 在保持枢轴点不动的条件下修改元素尺寸（供 Text::auto_size
-                // 按文本纹理宽高比调整尺寸，不回写布局输入）。
-                void resize_around_pivot(alignment pivot, const math::vec2& new_size) noexcept
-                {
-                    const math::vec2 pivot_point = center - pivot_offset;
-
-                    size = new_size;
-                    pivot_offset = {};
-                    if (pivot & alignment::left)
-                        pivot_offset.x = size.x / 2.0f;
-                    if (pivot & alignment::right)
-                        pivot_offset.x = -size.x / 2.0f;
-                    if (pivot & alignment::top)
-                        pivot_offset.y = -size.y / 2.0f;
-                    if (pivot & alignment::bottom)
-                        pivot_offset.y = size.y / 2.0f;
-
-                    center = pivot_point + pivot_offset;
-                }
 
                 // 鼠标命中测试：mouse_view_pos 为视口空间坐标（-1..1，y 轴向上），
                 // rot_angle 为元素旋转角（度，与 Rotation::angle 同单位；通常传
@@ -10682,6 +10731,20 @@ namespace jeecs
                 return rect;
             }
 
+            // 像素化布局阶段已复合的显示矩形（WorldLayout 的仿射系数通道）：
+            // 父子层级与祖先旋转链已在系数中展开，本函数只做线性代入，
+            // 任意相机目标尺寸各调用一次即可。rect.center 为含祖先旋转链的
+            // 显示位置；自身旋转仍由消费方按 world.rotation 绕枢轴施加。
+            resolved_rect resolve_display_rect(
+                const WorldLayout& world, float w, float h) const noexcept
+            {
+                resolved_rect rect;
+                rect.center = world.center.resolve(w, h);
+                rect.size = world.size.resolve(w, h);
+                rect.pivot_offset = world.pivot_offset.resolve(w, h);
+                return rect;
+            }
+
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Element::anchor, "anchor");
@@ -10719,9 +10782,8 @@ namespace jeecs
             // 自动换行策略（显式 '\n' 硬换行始终支持，'\r' 被忽略）：
             //   none —— 不自动换行，长文本溢出元素宽度（无逐绘制裁剪能力，
             //           溢出部分可见）；
-            //   word —— auto_size=false 时按元素宽度折行：CJK 字符间可断行、
-            //           拉丁文本按空格断词、超宽单词逐字断行，行尾空格不计宽；
-            //           auto_size=true 时元素随文本自然尺寸，不折行。
+            //   word —— 按元素宽度折行：CJK 字符间可断行、拉丁文本按空格
+            //           断词、超宽单词逐字断行，行尾空格不计宽。
             enum wrap_mode : uint8_t
             {
                 none = 0,
@@ -10744,12 +10806,6 @@ namespace jeecs
             //   * 若实体持有 Renderer::Color，作为整段文本的色调（与逐字
             //     颜色标记相乘）。
             basic::file_resource<graphic::font> font;
-
-            // 为 true 时，绘制阶段按文本自然尺寸的宽高比调整元素尺寸
-            //（基准轴与字号计算一致：width_unit 取横向，height_unit 与
-            // per_axis 取纵向），不回写布局输入，也不参与字号计算；
-            // 为 false 时文本块按 alignment 对齐放置进元素矩形（不拉伸）。
-            bool auto_size = true;
 
             // 文本块在元素矩形内的对齐（位掩码复用 Element::alignment，
             // center=0 即水平垂直都居中）：
@@ -10795,7 +10851,6 @@ namespace jeecs
             {
                 typing::register_member(guard, &Text::content, "content");
                 typing::register_member(guard, &Text::font, "font");
-                typing::register_member(guard, &Text::auto_size, "auto_size");
                 typing::register_member(guard, &Text::alignment, "alignment");
                 typing::register_member(guard, &Text::wrap, "wrap");
             }

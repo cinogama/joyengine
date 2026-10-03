@@ -23,11 +23,10 @@
 // 元素边界带（UI_HIT_PX 容差）内响应，元素某轴屏幕尺寸过小时跳过
 // 该轴四边中点手柄（防小元素中心误抓）。“锁定编辑”开关（见
 // ViewportUI.wo）打开时不响应任何手柄，点击仅做 UI 空间选取。
-// 布局解析复用引擎的 Element::get_layout（显示像素空间，原点=显示区
-// 左下、y 向上），祖先旋转链按
-// UserInterfaceGraphicPipelineSystem::ResolveUiNodes 同式在脚本侧
-// 复算（WorldLayout 的成员未暴露给脚本，累计角沿 Transform 锚点链
-// 求 Rotation.angle 之和得到）。拖拽结束值有变化时发布可撤销的
+// 布局解析复用引擎的 Element::get_display_layout（显示像素空间，原点=
+// 显示区左下、y 向上）——父子层级与祖先旋转链已由布局阶段复合进
+// WorldLayout 的仿射系数通道，脚本侧只需像素化；局部/参考矩形另经
+// Element::get_layout 求取。拖拽结束值有变化时发布可撤销的
 // ModifyComponentMember（与变换游标同一套撤销机制）。覆盖层绘制走
 // ImGui 窗口 DrawList（屏幕空间，语义上与 UI 的屏幕空间一致），
 // 交互命中判定复用 ColliderGizmo 的屏幕空间距离方式。
@@ -82,23 +81,6 @@ namespace JEEditor::Editor::WorldEditorViewport
         let c = mathf::cos(rad);
         let s = mathf::sin(rad);
         return (v[0] * c - v[1] * s, v[0] * s + v[1] * c) as vec2;
-    }
-
-    // alignment 位组合在参考矩形内的锚点偏移：left → −x/2、right → +x/2、
-    // top → +y/2、bottom → −y/2（与引擎 UserInterface::Element::anchor_shift 同式）
-    protected func uiAnchorShift(alignment_bits: int, ref_size: vec2)=> vec2
-    {
-        let mut sx = 0.;
-        if ((alignment_bits->band(1)) != 0)
-            sx -= 0.5;
-        if ((alignment_bits->band(2)) != 0)
-            sx += 0.5;
-        let mut sy = 0.;
-        if ((alignment_bits->band(4)) != 0)
-            sy += 0.5;
-        if ((alignment_bits->band(8)) != 0)
-            sy -= 0.5;
-        return (sx * ref_size[0], sy * ref_size[1]) as vec2;
     }
 
     // pivot 位组合在某轴上的侧别：−1（left/bottom）/ 0（居中）/ +1（right/top）
@@ -248,8 +230,8 @@ namespace JEEditor::Editor::WorldEditorViewport
 
     // ---- UI 编辑视口缩放（显示级放大，不改变 framebuffer）----
     // 可见子矩形 = [m_ui_view_offset, offset + display_range/zoom]。缩放
-    // 只作用于显示：布局解析（uiResolveDisplay/get_layout/引擎
-    // ResolveUiNodes）始终按完整 display_range 进行，与游戏运行一致。
+    // 只作用于显示：布局解析（uiResolveDisplay/get_layout/
+    // get_display_layout）始终按完整 display_range 进行，与游戏运行一致。
 
     // 视口缩放折叠后的有效映射矩形（“虚拟全图”）：把完整显示空间图像
     // 等效视作绘制在 (rmin_v, rsize_v) 上、其中的可见窗口恰好落在真实
@@ -528,20 +510,51 @@ namespace JEEditor::Editor::WorldEditorViewport
         };
     }
 
-    // 解析 UI 元素在显示像素空间的矩形（含祖先旋转链合成）。
-    // 自底向上沿 Transform 锚点链收集同为 UI 元素的祖先，再自顶向下
-    // 逐级用 Element::get_layout 解析（get_layout 返回祖先未旋转帧中的
-    // 矩形），显示中心按 ResolveUiNodes 的旋转链公式合成：子中心先绕
-    // 父 pivot 转父自身角，再经父的祖先累计角提升。链断/非 UI 父即视
-    // 为根（与引擎“问题可见”的回退策略一致）。
+    // 解析 UI 元素在显示像素空间的矩形（含祖先旋转链）。
+    // 父子层级与祖先旋转链已由布局阶段（TranslationUpdatingSystem）复合
+    // 进 WorldLayout 的仿射系数通道，这里经 Element::get_display_layout
+    // 一次像素化即可；本元素的局部（祖先未旋转帧）矩形与参考矩形
+    //（父矩形/显示区）另经 get_layout 求取，链深供拾取排序用。
+    // 链断/非 UI 父即视为根（与引擎“问题可见”的回退策略一致）。
     protected func uiResolveDisplay(
         self: WorldEditorViewport,
         e: entity,
         display_range: vec2)=> option<UIRectInfo>
     {
         return or(option::none: option<UIRectInfo>) <| try!{
-            // 自底向上收集祖先链（实体 + 各自 Rotation 角，无组件则 0）
-            let ui_chain = []mut: vec<mut (entity, real)>;
+            try! elem = e->towoo::get_component:<UserInterface::Element>();
+
+            let mut own_angle = 0.;
+            match (e->towoo::get_component:<UserInterface::Rotation>)
+            {
+                none?;
+                value(rot)? own_angle = rot.angle->get;
+            }
+
+            // 已复合显示矩形（父子关系与祖先旋转链已在系数中展开）：
+            // (center, size, pivot_offset, total_angle, anchor_display, unit_px)
+            let (display_center, disp_size, pivot_off, total, anchor_display, unit_px) =
+                elem->get_display_layout(
+                    e->towoo::get_component:<UserInterface::WorldLayout>,
+                    display_range);
+
+            // 祖先累计角 = 总角 − 自身角；绘制四边形中心
+            // D = display − R(acc)·p + R(total)·p，
+            // pivot 显示位置 K = display − R(acc)·p（旋转不动点）
+            let angle_acc = total - own_angle;
+            let pivot_display = display_center - uiRotateVec2(angle_acc, pivot_off);
+            let draw_center = pivot_display + uiRotateVec2(total, pivot_off);
+
+            // 局部（祖先未旋转帧）矩形（get_layout 语义保持不变）
+            let (local_center, _, _) = elem->get_layout(
+                e->towoo::get_component:<UserInterface::WorldLayout>,
+                display_range);
+
+            // 参考矩形（祖先未旋转帧）：最近 UI 父的局部矩形，根元素为
+            // 整个显示区；同时统计链深（UI 祖先计数，上限防环）
+            let mut ref_center = display_range * 0.5;
+            let mut ref_size = display_range;
+            let mut depth = 0;
             {
                 let mut cur = e;
                 let mut guard_count = 0;
@@ -549,154 +562,41 @@ namespace JEEditor::Editor::WorldEditorViewport
                 while (walking && guard_count < 64)
                 {
                     guard_count += 1;
-
-                    let mut own_angle = 0.;
-                    match (cur->towoo::get_component:<UserInterface::Rotation>)
-                    {
-                        none?;
-                        value(rot)? own_angle = rot.angle->get;
-                    }
-                    ui_chain->add(mut (cur, own_angle));
-
-                    match (cur->towoo::get_component:<Transform::LocalToParent>)
+                    match (self->uiFindUIParent(cur))
                     {
                         none? walking = false;
-                        value(l2p)?
-                            match (self->findEntityByAnchorUid(l2p.parent_uid->get as string))
+                        value(parent)?
+                        {
+                            if (depth == 0)
                             {
-                                none? walking = false;
-                                value(parent)?
-                                {
-                                    // 父必须同为 UI 元素才参与 UI 布局，
-                                    // 否则当前元素按根元素处理
-                                    if (parent->towoo::get_component:<UserInterface::Element>->is_none)
-                                        walking = false;
-                                    else
-                                        cur = parent;
-                                }
+                                try! parent_elem =
+                                    parent->towoo::get_component:<UserInterface::Element>();
+                                let (pc, ps, _) = parent_elem->get_layout(
+                                    parent->towoo::get_component:<UserInterface::WorldLayout>,
+                                    display_range);
+                                ref_center = pc;
+                                ref_size = ps;
                             }
+                            depth += 1;
+                            cur = parent;
+                        }
                     }
                 }
             }
 
-            // 自顶向下逐级解析并合成（ui_chain 末尾是根）
-            let mut have_prev = false;
-            let mut prev_center = (0., 0.) as vec2;
-            let mut prev_size = (0., 0.) as vec2;
-            let mut prev_pivot_off = (0., 0.) as vec2;
-            let mut prev_display = (0., 0.) as vec2;
-            let mut prev_angle_acc = 0.;
-            let mut prev_own = 0.;
-
-            let mut out_center = (0., 0.) as vec2;
-            let mut out_size = (0., 0.) as vec2;
-            let mut out_pivot_off = (0., 0.) as vec2;
-            let mut out_display = (0., 0.) as vec2;
-            let mut out_angle_acc = 0.;
-            let mut out_own = 0.;
-            let mut out_anchor = (0., 0.) as vec2;
-            let mut out_unit_px = (1., 1.) as vec2;
-            let mut out_unrot_center = (0., 0.) as vec2;
-            let mut out_ref_center = (0., 0.) as vec2;
-            let mut out_ref_size = (0., 0.) as vec2;
-
-            let mut i = ui_chain->len - 1;
-            while (i >= 0)
-            {
-                let (ent, own_angle) = ui_chain[i];
-                try! ent_elem = ent->towoo::get_component:<UserInterface::Element>();
-                let (rc, rs, rp) = ent_elem->get_layout(
-                    ent->towoo::get_component:<UserInterface::WorldLayout>,
-                    display_range);
-
-                let mut display_center = rc;
-                if (have_prev)
-                {
-                    let p_pivot = prev_center - prev_pivot_off;
-                    let rotated_by_parent =
-                        p_pivot + uiRotateVec2(prev_own, rc - p_pivot);
-                    display_center = prev_display
-                        + uiRotateVec2(
-                            prev_angle_acc, rotated_by_parent - prev_center);
-                }
-
-                if (i == 0)
-                {
-                    // 目标实体：累计角 = 父之上的祖先和 + 父自身角；
-                    // 参考矩形（祖先未旋转帧）：父矩形或整个显示区
-                    out_center = rc;
-                    out_unrot_center = rc;
-                    out_ref_center = have_prev ? prev_center | display_range * 0.5;
-                    out_ref_size = have_prev ? prev_size | display_range;
-                    out_size = rs;
-                    out_pivot_off = rp;
-                    out_display = display_center;
-                    out_angle_acc = prev_angle_acc + prev_own;
-                    out_own = own_angle;
-
-                    // 单位一（比例通道的像素换算系数）：按自身 ratio_unit
-                    // 折叠参考矩形——height_unit 两轴取参考高、width_unit
-                    // 两轴取参考宽、per_axis 逐轴取参考宽/高；根元素参考
-                    // 矩形为整个显示区（与布局阶段的 unit 折叠 +
-                    // resolve_layout 的 ratio_scale 折算一致）
-                    let ref_size = have_prev ? prev_size | display_range;
-                    out_unit_px = ref_size;
-                    if (ent_elem.unit_kind->get == UserInterface::Element::ratio_unit::height_unit)
-                        out_unit_px = (ref_size[1], ref_size[1]) as vec2;
-                    else if (ent_elem.unit_kind->get == UserInterface::Element::ratio_unit::width_unit)
-                        out_unit_px = (ref_size[0], ref_size[0]) as vec2;
-
-                    // 锚点基点：参考矩形中心 − 参考 pivot 偏移 + 锚点在
-                    // 参考矩形内的偏移（未旋转帧），再经父的祖先链旋转
-                    // 提升到显示空间；根元素的参考矩形即整个显示区
-                    let anchor_bits = ent_elem.anchor->get as int;
-                    let base_unrot = have_prev
-                        ? (prev_center - prev_pivot_off
-                            + uiAnchorShift(anchor_bits, prev_size))
-                        | (display_range * 0.5
-                            + uiAnchorShift(anchor_bits, display_range));
-                    out_anchor = have_prev
-                        ? (prev_display
-                            + uiRotateVec2(prev_angle_acc, base_unrot - prev_center))
-                        | base_unrot;
-                }
-                else
-                {
-                    // 为下一级准备父量：angle_acc(本实体) = 父之上累计 + 父自身
-                    let next_angle_acc = prev_angle_acc + prev_own;
-                    prev_center = rc;
-                    prev_size = rs;
-                    prev_pivot_off = rp;
-                    prev_display = display_center;
-                    prev_own = own_angle;
-                    prev_angle_acc = next_angle_acc;
-                    have_prev = true;
-                }
-                i -= 1;
-            }
-
-            // 绘制四边形中心 D = display_center − R(acc)·p + R(total)·p，
-            // pivot 显示位置 K = display_center − R(acc)·p（旋转不动点）
-            let total = out_angle_acc + out_own;
-            let out_draw_center = out_display
-                - uiRotateVec2(out_angle_acc, out_pivot_off)
-                + uiRotateVec2(total, out_pivot_off);
-            let out_pivot_display =
-                out_display - uiRotateVec2(out_angle_acc, out_pivot_off);
-
             return_value! option::value(UIRectInfo{
-                m_center = out_draw_center,
-                m_size = out_size,
-                m_pivot_display = out_pivot_display,
-                m_pivot_offset = out_pivot_off,
-                m_angle_acc = out_angle_acc,
-                m_own_angle = out_own,
-                m_anchor_display = out_anchor,
-                m_depth = ui_chain->len - 1,
-                m_unit_px = out_unit_px,
-                m_unrot_center = out_unrot_center,
-                m_ref_center = out_ref_center,
-                m_ref_size = out_ref_size,
+                m_center = draw_center,
+                m_size = disp_size,
+                m_pivot_display = pivot_display,
+                m_pivot_offset = pivot_off,
+                m_angle_acc = angle_acc,
+                m_own_angle = own_angle,
+                m_anchor_display = anchor_display,
+                m_depth = depth,
+                m_unit_px = unit_px,
+                m_unrot_center = local_center,
+                m_ref_center = ref_center,
+                m_ref_size = ref_size,
             });
         };
     }
@@ -829,49 +729,40 @@ namespace JEEditor::Editor::WorldEditorViewport
                 return UI_HANDLE_ROTATE;
         }
 
-        // 缩放手柄；auto_size 文本每帧按布局自然尺寸重算，不提供缩放
-        let mut auto_sized = false;
-        match (e->towoo::get_component:<UserInterface::Text>)
+        // 缩放手柄
+        // 边界带判定：位于按容差收缩后的矩形之内（离四边均超过
+        // UI_HIT_PX）的点击不判缩放手柄；小元素收缩矩形为空，
+        // 自然退化为全域可抓手柄
+        let near_border = !(mathf::abs(local[0]) <= half[0] - tol[0]
+            && mathf::abs(local[1]) <= half[1] - tol[1]);
+        // 元素的屏幕尺寸（换算到屏幕像素，判定与视口缩放无关）
+        let elem_scr = (main_size[0] * rsize[0] / display_range[0],
+            main_size[1] * rsize[1] / display_range[1]) as vec2;
+        if (near_border)
         {
-            none?;
-            value(text)? auto_sized = text.auto_size->get;
-        }
-        if (!auto_sized)
-        {
-            // 边界带判定：位于按容差收缩后的矩形之内（离四边均超过
-            // UI_HIT_PX）的点击不判缩放手柄；小元素收缩矩形为空，
-            // 自然退化为全域可抓手柄
-            let near_border = !(mathf::abs(local[0]) <= half[0] - tol[0]
-                && mathf::abs(local[1]) <= half[1] - tol[1]);
-            // 元素的屏幕尺寸（换算到屏幕像素，判定与视口缩放无关）
-            let elem_scr = (main_size[0] * rsize[0] / display_range[0],
-                main_size[1] * rsize[1] / display_range[1]) as vec2;
-            if (near_border)
+            let mut h = UI_HANDLE_RESIZE_LB;
+            while (h <= UI_HANDLE_RESIZE_T)
             {
-                let mut h = UI_HANDLE_RESIZE_LB;
-                while (h <= UI_HANDLE_RESIZE_T)
+                let (sx, sy) = uiHandleSigns(h);
+                // 某轴过小的元素跳过该轴的四边中点手柄（L/R 看
+                // 宽、T/B 看高），中心区域让给移动
+                let edge_h_disabled =
+                    ((h == UI_HANDLE_RESIZE_L || h == UI_HANDLE_RESIZE_R)
+                        && elem_scr[0] < UI_EDGE_HANDLE_MIN_ELEM_PX)
+                    || ((h == UI_HANDLE_RESIZE_B || h == UI_HANDLE_RESIZE_T)
+                        && elem_scr[1] < UI_EDGE_HANDLE_MIN_ELEM_PX);
+                if (!edge_h_disabled)
                 {
-                    let (sx, sy) = uiHandleSigns(h);
-                    // 某轴过小的元素跳过该轴的四边中点手柄（L/R 看
-                    // 宽、T/B 看高），中心区域让给移动
-                    let edge_h_disabled =
-                        ((h == UI_HANDLE_RESIZE_L || h == UI_HANDLE_RESIZE_R)
-                            && elem_scr[0] < UI_EDGE_HANDLE_MIN_ELEM_PX)
-                        || ((h == UI_HANDLE_RESIZE_B || h == UI_HANDLE_RESIZE_T)
-                            && elem_scr[1] < UI_EDGE_HANDLE_MIN_ELEM_PX);
-                    if (!edge_h_disabled)
-                    {
-                        let cpos = main_center
-                            + uiRotateVec2(
-                                total,
-                                ((sx as real) * handle_half[0], (sy as real) * handle_half[1]) as vec2);
-                        if ((mouse
-                                - uiDisplayToScreen(cpos, rmin, rsize, display_range))->length
-                            < UI_HANDLE_HIT_PX)
-                            return h;
-                    }
-                    h += 1;
+                    let cpos = main_center
+                        + uiRotateVec2(
+                            total,
+                            ((sx as real) * handle_half[0], (sy as real) * handle_half[1]) as vec2);
+                    if ((mouse
+                            - uiDisplayToScreen(cpos, rmin, rsize, display_range))->length
+                        < UI_HANDLE_HIT_PX)
+                        return h;
                 }
+                h += 1;
             }
         }
 
@@ -962,14 +853,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                             }
                     }
 
-                    // auto_size 文本每帧按布局自然尺寸重算，禁用缩放手柄；
                     // 无 Rotation 组件不显示旋转手柄
-                    let mut auto_sized = false;
-                    match (e->towoo::get_component:<UserInterface::Text>)
-                    {
-                        none?;
-                        value(text)? auto_sized = text.auto_size->get;
-                    }
 
                     // 两层框：比例层框（默认编辑层）即有效矩形本身
                     //（外层，与 UI 对象实际渲染大小一致）；绝对层框 =
@@ -981,7 +865,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                     // 写入本帧绘制快照（锁定编辑时不绘制手柄，仅保留
                     // 矩形与参考标记）
                     self.m_ui_draw_visible = true;
-                    self.m_ui_draw_can_resize = !auto_sized && !self.m_ui_edit_locked;
+                    self.m_ui_draw_can_resize = !self.m_ui_edit_locked;
                     self.m_ui_draw_can_rotate =
                         e->towoo::get_component:<UserInterface::Rotation>->is_value
                         && !self.m_ui_edit_locked;

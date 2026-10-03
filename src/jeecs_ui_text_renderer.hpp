@@ -239,7 +239,7 @@ namespace jeecs
 
             const int font_px = (int)std::lround(base);
             const int wrap_w =
-                text.wrap == UserInterface::Text::wrap_mode::word && !text.auto_size
+                text.wrap == UserInterface::Text::wrap_mode::word
                 ? (int)std::lround(rect.size.x) : -1;
 
             // 脏检查：键完全一致则沿用上一帧布局。
