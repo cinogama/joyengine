@@ -2,4 +2,5 @@
 
 *.je4entity text eol=lf
 *.je4world text eol=lf
+*.je4workflow text eol=lf
 *.je4animation binary
