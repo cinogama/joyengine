@@ -27,6 +27,14 @@ namespace je
             extern("libjoyecs", "wojeapi_vertex_path")
                 public func path(self: vertex)=> option<string>;
 
+            // 整体重写顶点数据并收缩激活索引数量（语义见
+            // jegl_update_vertex_buffer）：vertices 为一份完整的顶点数据，
+            // 不能超过创建时的容量；indices 只取"激活索引数量"一个语义
+            //（索引缓冲保持创建时的内容不变）。注意包围盒不会重算，
+            // 依赖视锥剔除的调用方应以覆盖完整范围的初始数据创建缓冲。
+            extern("libjoyecs", "wojeapi_vertex_update")
+                public func update(self: vertex, vertices: array<real>, indices: int)=> void;
+
             // 模型顶点数据的局部空间包围盒，返回
             // (min_x, min_y, min_z, max_x, max_y, max_z)；
             // 顶点格式不含 3 分量位置时包围盒为全 0（由调用方处理退化）

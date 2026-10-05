@@ -2115,6 +2115,32 @@ WOORT_API woort_api wojeapi_vertex_aabb(void)
     return woort_ret();
 }
 
+// 整体重写已有顶点缓冲的数据并收缩激活索引数量（语义见
+// jegl_update_vertex_buffer）。索引缓冲保持创建时的内容不变，因此
+// 调用方应按"最坏容量创建、静态角点索引"的方式使用（文本批处理与
+// 粒子系统在 C++ 侧的同款消费者）。注意包围盒不会被重算：需要视锥
+// 剔除正确时应以覆盖完整范围的初始数据创建缓冲。
+WOORT_API woort_api wojeapi_vertex_update(void)
+{
+    auto* loaded_vertex =
+        (jeecs::basic::resource<jeecs::graphic::vertex> *)woort_gcpointer(0);
+    const size_t active_index_count = (size_t)woort_int(2);
+
+    std::vector<float> vertices(woort_vec_len(1));
+    for (size_t i = 0; i < vertices.size(); ++i)
+    {
+        (void)woort_vec_get(WOORT_RETURN_SLOT, 1, i);
+        vertices[i] = woort_unbox_float(WOORT_RETURN_SLOT);
+    }
+
+    (*loaded_vertex)->update_buffer(
+        vertices.data(),
+        vertices.size() * sizeof(float),
+        active_index_count);
+
+    return woort_ret_void();
+}
+
 WOORT_API woort_api wojeapi_shaders_of_entity(void)
 {
     je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
