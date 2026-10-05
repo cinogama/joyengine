@@ -111,11 +111,6 @@
           "name": "JE4_ENABLE_WIN32_CONSOLE",
           "value": "True",
           "type": "BOOL"
-        },
-        {
-          "name": "WO_SUPPORT_ASMJIT",
-          "value": "False",
-          "type": "BOOL"
         }
       ]
     },
@@ -153,11 +148,6 @@
         {
           "name": "JE4_ENABLE_WIN32_CONSOLE",
           "value": "True",
-          "type": "BOOL"
-        },
-        {
-          "name": "WO_SUPPORT_ASMJIT",
-          "value": "False",
           "type": "BOOL"
         }
       ]
