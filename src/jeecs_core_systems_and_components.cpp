@@ -11,6 +11,7 @@
 #include "jeecs_core_script_system.hpp"
 #include "jeecs_core_audio_system.hpp"
 #include "jeecs_core_input_system.hpp"
+#include "jeecs_core_tilemap_system.hpp"
 
 WOORT_API woort_api wojeapi_deltatime(void)
 {
@@ -86,4 +87,8 @@ void _jeecs_entry_register_core_systems(jeecs::typing::type_unregister_guard* gu
     jeecs::typing::register_type<jeecs::DeferLight2DGraphicPipelineSystem>(guard, "Graphic::DeferLight2DGraphicPipelineSystem");
     jeecs::typing::register_type<jeecs::AudioUpdatingSystem>(guard, "Audio::AudioUpdatingSystem");
     jeecs::typing::register_type<jeecs::VirtualGamepadInputSystem>(guard, "Input::VirtualGamepadInputSystem");
+
+    jeecs::typing::register_type<jeecs::Tilemap::Map>(guard, "Tilemap::Map");
+    jeecs::typing::register_type<jeecs::Tilemap::RenderPart>(guard, "Tilemap::RenderPart");
+    jeecs::typing::register_type<jeecs::TilemapSystem>(guard, "Tilemap::TilemapSystem");
 }

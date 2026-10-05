@@ -1,0 +1,27 @@
+// 瓦片地图编辑器（包入口）。
+// RPGMaker 式瓦片地图编辑：调色板/多图层/画笔(铅笔-矩形-填充-吸管-橡皮)/
+// 自动图块(RPGMaker 四象限与 blob47，由引擎内核解析)/自定义瓦片属性。
+// 编辑基于引擎内核的 je::tilemap 文档 API（进程内全局缓存）：
+// 任何修改（未保存亦然）都会实时同步到所有世界中该地图的实例。
+//
+// 各部分均在命名空间 JEEditor::Editor::TilemapEditor 下：
+//
+//   DataModel.wo     文档包装：打开/保存/图集解析缓存
+//   EditorState.wo   工具/视图/撤销重做等编辑期状态
+//   Palette.wo       图集调色板（普通瓦片点选与地形选择）
+//   Canvas.wo        地图画布（缩放平移/网格/笔划交互）
+//   Tools.wo         绘制工具（铅笔/矩形/填充/吸管/橡皮与笔划撤销）
+//   LayerPanel.wo    图层面板
+//   PropertyPanel.wo 格子属性覆盖与图集设置
+//   UI.wo            工具栏与整体布局
+//   Window.wo        TilemapEditorWindow（IWindows）与静态入口
+
+export import DataModel;
+export import EditorState;
+export import Palette;
+export import Canvas;
+export import Tools;
+export import LayerPanel;
+export import PropertyPanel;
+export import UI;
+export import Window;

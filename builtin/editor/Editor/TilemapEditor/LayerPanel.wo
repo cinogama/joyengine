@@ -1,0 +1,122 @@
+// 瓦片地图编辑器 —— 图层面板。
+// 底部栏：图层自上而下列出（列表顶 = 最上层）。点击选择活动图层；
+// 显隐/锁定切换；新建/删除/上移/下移/重命名。
+// 注意：图层增删/移动不进入撤销栈（绘制类操作才可撤销）。
+
+import pkg::std;
+
+import je;
+import je::gui;
+import je::tilemap;
+
+import pkg::fsys;
+
+import builtin::editor::GUI::Forms::InputBox;
+import builtin::editor::GUI::Forms::MsgBox;
+
+import DataModel;
+import EditorState;
+
+using std;
+using je;
+using je::gui;
+using je::tilemap;
+using fsys;
+using JEEditor::GUI::Forms;
+using JEEditor::Editor::TilemapEditor;
+
+namespace JEEditor::Editor::TilemapEditor
+{
+    public func draw_layers(state: EditorState, ctx: TilemapContext)=> void
+    {
+        let map = ctx.m_map;
+        let (_, _, _, layer_count) = tilemap::map_size(map);
+
+        // 操作按钮行
+        if (Button("+ 新建图层"))
+        {
+            do InputBox::show("新建图层", "请输入图层名称：", F"图层 {layer_count + 1}")
+                ->then(func(name)
+                    {
+                        let idx = tilemap::add_layer(ctx.m_map, name);
+                        if (idx >= 0)
+                        {
+                            state.m_layer = idx;
+                            state.m_dirty = true;
+                        }
+                    });
+        }
+        SameLine();
+        if (Button("- 删除"))
+        {
+            if (layer_count > 1)
+            {
+                do tilemap::remove_layer(map, state.m_layer);
+                if (state.m_layer >= layer_count - 1)
+                    state.m_layer = layer_count - 2;
+                state.m_dirty = true;
+            }
+            else
+                do MsgBox::err("无法删除", "至少保留一个图层");
+        }
+        SameLine();
+        if (Button("上移"))
+        {
+            if (tilemap::move_layer(map, state.m_layer, state.m_layer + 1))
+            {
+                state.m_layer += 1;
+                state.m_dirty = true;
+            }
+        }
+        SameLine();
+        if (Button("下移"))
+        {
+            if (tilemap::move_layer(map, state.m_layer, state.m_layer - 1))
+            {
+                state.m_layer -= 1;
+                state.m_dirty = true;
+            }
+        }
+        SameLine();
+        if (Button("重命名"))
+        {
+            let (cur_name, _, _) = tilemap::get_layer(map, state.m_layer);
+            do InputBox::show("重命名图层", "请输入新名称：", cur_name)
+                ->then(func(name)
+                    {
+                        let (_, visible, locked) = tilemap::get_layer(ctx.m_map, state.m_layer);
+                        do tilemap::set_layer(ctx.m_map, state.m_layer, name, visible, locked);
+                        state.m_dirty = true;
+                    });
+        }
+
+        // 图层列表（顶 = 最上层，与渲染顺序一致）
+        if (BeginChildSize("##layer_list", GetContentRegionAvail()[0], 0.))
+        {
+            for (let mut row = layer_count - 1; row >= 0; row -= 1)
+            {
+                let (lname, visible, locked) = tilemap::get_layer(map, row);
+                if (SelectableSelected(
+                        F"{lname}##layer{row}", row == state.m_layer))
+                    state.m_layer = row;
+
+                // 行内显隐/锁定开关
+                SameLine();
+                if (Button(visible != 0 ? F"可见##v{row}" | F"隐藏##v{row}"))
+                {
+                    do tilemap::set_layer(map, row, lname,
+                        visible != 0 ? 0 | 1, locked);
+                    state.m_dirty = true;
+                }
+                SameLine();
+                if (Button(locked != 0 ? F"锁定##l{row}" | F"未锁##l{row}"))
+                {
+                    do tilemap::set_layer(map, row, lname, visible,
+                        locked != 0 ? 0 | 1);
+                    state.m_dirty = true;
+                }
+            }
+        }
+        EndChild();
+    }
+}

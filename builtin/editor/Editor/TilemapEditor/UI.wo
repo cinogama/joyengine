@@ -1,0 +1,121 @@
+// 瓦片地图编辑器 —— 工具栏与整体布局。
+// 地图模式：上工具栏 + 左调色板 + 中画布 + 右属性 + 底部图层；
+// 图集模式：左调色板 + 右图集设置。
+
+import pkg::std;
+
+import je;
+import je::gui;
+import je::tilemap;
+
+import pkg::fsys;
+import pkg::math;
+
+import DataModel;
+import EditorState;
+import Palette;
+import Canvas;
+import Tools;
+import LayerPanel;
+import PropertyPanel;
+
+using std;
+using je;
+using je::gui;
+using je::tilemap;
+using fsys;
+using math;
+using JEEditor::Editor::TilemapEditor;
+
+namespace JEEditor::Editor::TilemapEditor
+{
+    func toolbar_button(state: EditorState, t: tool, hotkey: string)=> void
+    {
+        let pressed = Button(F"{tool::name(t)} [{hotkey}]##tool{t as int}");
+        if (state.m_tool == t)
+        {
+            // 当前工具：画个下划线指示
+            let (rmin, rmax) = GetItemRect();
+            do GetWindowDrawList()->AddRect(
+                rmin, (rmax[0], rmax[1] + 2.), (110, 200, 255, 255), 2.);
+        }
+        if (pressed)
+            state.m_tool = t;
+        SameLine();
+    }
+
+    public func draw_toolbar(state: EditorState, ctx: TilemapContext)=> void
+    {
+        do toolbar_button(state, tool::PENCIL, "B");
+        do toolbar_button(state, tool::ERASER, "E");
+        do toolbar_button(state, tool::RECT, "R");
+        do toolbar_button(state, tool::FILL, "F");
+        do toolbar_button(state, tool::EYEDROPPER, "I");
+
+        if (Button("撤销"))
+            do state->undo();
+        SameLine();
+        if (Button("重做"))
+            do state->redo();
+        SameLine();
+        if (Button("适应窗口"))
+            do reset_view(state);
+
+        // 状态文本
+        SameLine();
+        let (w, h, tile_px, layer_count) = tilemap::map_size(ctx.m_map);
+        let (lname, _, _) = tilemap::get_layer(ctx.m_map, state.m_layer);
+        do Text(F"{w}×{h} @ {tile_px}px | 图层{state.m_layer + 1}/{layer_count}「{lname}」"
+            + (state.m_dirty ? " | 未保存" | ""));
+    }
+
+    public func render_main(state: EditorState, ctx: TilemapContext)=> void
+    {
+        let avail = GetContentRegionAvail();
+
+        // 图集模式：仅调色板 + 图集设置
+        if (state.m_tileset_only > 0)
+        {
+            if (BeginChildSize("##tm_left", 380., avail[1]))
+                do draw_palette(state, ctx);
+            EndChild();
+            SameLine();
+            if (BeginChildSize("##tm_right", GetContentRegionAvail()[0], 0.))
+                do draw_tileset_settings(state, ctx);
+            EndChild();
+            return;
+        }
+
+        // 工具栏（整宽）
+        do draw_toolbar(state, ctx);
+
+        let bottom_h = 128.;
+        let left_w = 320.;
+        let right_w = 340.;
+        let mut center_w = avail[0] - left_w - right_w - 12.;
+        if (center_w < 200.) center_w = 200.;
+        let body_h = GetContentRegionAvail()[1] - bottom_h;
+
+        // 左：调色板
+        if (BeginChildSize("##tm_left", left_w, body_h))
+            do draw_palette(state, ctx);
+        EndChild();
+        SameLine();
+
+        // 中：画布
+        if (BeginChildSize("##tm_center", center_w, body_h))
+            do draw_canvas(state, ctx);
+        EndChild();
+        SameLine();
+
+        // 右：属性
+        if (BeginChildSize("##tm_right", right_w, body_h))
+            do draw_properties(state, ctx);
+        EndChild();
+
+        // 底：图层
+        if (BeginChildSize("##tm_bottom", GetContentRegionAvail()[0], 0.))
+            do draw_layers(state, ctx);
+        EndChild();
+    }
+}

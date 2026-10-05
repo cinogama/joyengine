@@ -1,0 +1,270 @@
+// 瓦片地图编辑器 —— 地图画布。
+// 以 ImGui 窗口绘制列表渲染全部可见图层（与实际渲染一致：普通瓦片整块、
+// 四象限地形按象限拼合，数据来自 je::tilemap::cell_quad），叠加网格、
+// 悬停高亮与矩形工具预览。滚轮缩放（以鼠标为中心）、中键拖拽平移。
+
+import pkg::std;
+
+import je;
+import je::gui;
+import je::tilemap;
+
+import pkg::math;
+
+import DataModel;
+import EditorState;
+import Tools;
+
+using std;
+using je;
+using je::gui;
+using je::tilemap;
+using math;
+using JEEditor::Editor::TilemapEditor;
+
+namespace JEEditor::Editor::TilemapEditor
+{
+    // 画布可见性判定 + LOD：瓦片屏幕尺寸过小时跳过贴图绘制（只画底色）
+    func canvas_cell_screen_size(state: EditorState)=> real
+    {
+        let (_, _, tile_px, _) = tilemap::map_size(state.m_context.m_map);
+        return tile_px as real * state.m_zoom;
+    }
+
+    public func draw_canvas(state: EditorState, ctx: TilemapContext)=> void
+    {
+        let avail = GetContentRegionAvail();
+        if (avail[0] < 8. || avail[1] < 8.)
+            return;
+
+        let (w, h, tile_px, layer_count) = tilemap::map_size(ctx.m_map);
+        let pmin = GetCursorScreenPos();
+        let pmax = (pmin[0] + avail[0], pmin[1] + avail[1]);
+        let cellpx = tile_px as real * state.m_zoom;
+
+        // 交互守卫：整块不可见按钮承接鼠标（避免拖动窗口）
+        do InvisibleButton("##tm_canvas", avail);
+        let hovered = IsItemHovered();
+        let active = IsItemActive();
+
+        // ---- 缩放（滚轮，以鼠标为锚）与平移（中键拖拽） ----
+        let mouse = GetMousePos();
+        if (hovered)
+        {
+            let wheel = GetMouseWheel();
+            if (wheel[1] != 0.)
+            {
+                let old_zoom = state.m_zoom;
+                let mut new_zoom = old_zoom * (wheel[1] > 0. ? 1.15 | 0.87);
+                if (new_zoom < 0.05) new_zoom = 0.05;
+                if (new_zoom > 16.) new_zoom = 16.;
+                // 保持鼠标下的世界位置不动
+                let wx = (mouse[0] - (pmin[0] + state.m_pan[0])) / (tile_px as real * old_zoom);
+                let wy = (mouse[1] - (pmin[1] + state.m_pan[1])) / (tile_px as real * old_zoom);
+                state.m_zoom = new_zoom;
+                state.m_pan = (
+                    mouse[0] - pmin[0] - wx * tile_px as real * new_zoom,
+                    mouse[1] - pmin[1] - wy * tile_px as real * new_zoom);
+            }
+        }
+        if (IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Middle) && (hovered || active))
+        {
+            let delta = GetMouseDeltaPos();
+            state.m_pan = (state.m_pan[0] + delta[0], state.m_pan[1] + delta[1]);
+        }
+
+        let origin = (pmin[0] + state.m_pan[0], pmin[1] + state.m_pan[1]);
+
+        // ---- 悬停格子 ----
+        let mut hover_cell = option::none: option<(int, int)>;
+        if (hovered)
+        {
+            let cx = ((mouse[0] - origin[0]) / cellpx) as int;
+            let cy = ((mouse[1] - origin[1]) / cellpx) as int;
+            if (cx >= 0 && cy >= 0 && cx < w && cy < h)
+                hover_cell = option::value((cx, cy));
+        }
+        state.m_hover_cell = hover_cell;
+
+        let dl = GetWindowDrawList();
+        do dl->AddRectFilled(pmin, pmax, (26, 26, 30, 255));
+        // 地图外区域压暗，突出地图范围
+        do PushClipRect(pmin, pmax);
+        do dl->AddRectFilled(
+            origin,
+            (origin[0] + w as real * cellpx, origin[1] + h as real * cellpx),
+            (52, 52, 58, 255));
+
+        // ---- 可见范围 ----
+        let vis_x0 = math::max(0, ((pmin[0] - origin[0]) / cellpx) as int) - 1;
+        let vis_y0 = math::max(0, ((pmin[1] - origin[1]) / cellpx) as int) - 1;
+        let vis_x1 = math::min(w - 1, ((pmax[0] - origin[0]) / cellpx) as int + 1);
+        let vis_y1 = math::min(h - 1, ((pmax[1] - origin[1]) / cellpx) as int + 1);
+
+        // ---- 逐层绘制可见格子（含自动图块象限，与运行时一致） ----
+        let draw_detail = cellpx >= 6.;
+        if (draw_detail)
+        {
+            for (let mut layer = 0; layer < layer_count; layer += 1)
+            {
+                let (_, visible, _) = tilemap::get_layer(ctx.m_map, layer);
+                if (visible == 0)
+                    continue;
+                for (let mut y = vis_y0; y <= vis_y1; y += 1)
+                {
+                    for (let mut x = vis_x0; x <= vis_x1; x += 1)
+                    {
+                        let quad_count = tilemap::cell_quad_count(ctx.m_map, layer, x, y);
+                        if (quad_count <= 0)
+                            continue;
+                        let cell_min = (origin[0] + x as real * cellpx, origin[1] + y as real * cellpx);
+                        let cell_max = (cell_min[0] + cellpx, cell_min[1] + cellpx);
+                        for (let mut q = 0; q < quad_count; q += 1)
+                        {
+                            match (tilemap::cell_quad(ctx.m_map, layer, x, y, q))
+                            {
+                                value((tex_path, u0, v0, u1, v1, qx, qy, qcols))?
+                                {
+                                    match (state->atlas_texture(tex_path))
+                                    {
+                                        value(tex)?
+                                        {
+                                            // 引擎 UV(v 向上) -> ImGui UV(v 向下)：
+                                            // 两者相对贴图图像同为"顶部=高v"，直接换算
+                                            let iu0 = u0;
+                                            let iu1 = u1;
+                                            let iv0 = v1;
+                                            let iv1 = v0;
+                                            let sub_w = (cell_max[0] - cell_min[0]) / qcols as real;
+                                            let sub_h = (cell_max[1] - cell_min[1]) / qcols as real;
+                                            do dl->AddImageUV(
+                                                (cell_min[0] + qx as real * sub_w,
+                                                 cell_min[1] + qy as real * sub_h),
+                                                (cell_min[0] + (qx + 1) as real * sub_w,
+                                                 cell_min[1] + (qy + 1) as real * sub_h),
+                                                (iu0, iv0), (iu1, iv1), tex, (255, 255, 255, 255));
+                                        }
+                                        none?;
+                                    }
+                                }
+                                none?;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---- 网格 ----
+        if (cellpx >= 14.)
+        {
+            let grid_color = (70, 70, 78, 140);
+            for (let mut x = vis_x0; x <= vis_x1 + 1; x += 1)
+            {
+                let gx = origin[0] + x as real * cellpx;
+                do dl->AddLine((gx, math::max(pmin[1], origin[1] + vis_y0 as real * cellpx)),
+                    (gx, math::min(pmax[1], origin[1] + (vis_y1 + 1) as real * cellpx)),
+                    grid_color, 1.);
+            }
+            for (let mut y = vis_y0; y <= vis_y1 + 1; y += 1)
+            {
+                let gy = origin[1] + y as real * cellpx;
+                do dl->AddLine((math::max(pmin[0], origin[0] + vis_x0 as real * cellpx), gy),
+                    (math::min(pmax[0], origin[0] + (vis_x1 + 1) as real * cellpx), gy),
+                    grid_color, 1.);
+            }
+        }
+
+        // ---- 矩形工具预览 ----
+        if (state.m_tool == tool::RECT)
+        {
+            match (state.m_rect_anchor)
+            {
+                value((ax, ay))?
+                {
+                    match (hover_cell)
+                    {
+                        value((hx, hy))?
+                        {
+                            let left = math::min(ax, hx);
+                            let top = math::min(ay, hy);
+                            let rw = (math::abs(ax - hx) + 1) as real * cellpx;
+                            let rh = (math::abs(ay - hy) + 1) as real * cellpx;
+                            do dl->AddRect(
+                                (origin[0] + left as real * cellpx, origin[1] + top as real * cellpx),
+                                (origin[0] + left as real * cellpx + rw,
+                                 origin[1] + top as real * cellpx + rh),
+                                (90, 160, 255, 220), 2.);
+                        }
+                        none?;
+                    }
+                }
+                none?;
+            }
+        }
+
+        // ---- 悬停高亮与坐标 ----
+        match (hover_cell)
+        {
+            value((hx, hy))?
+            {
+                do dl->AddRect(
+                    (origin[0] + hx as real * cellpx, origin[1] + hy as real * cellpx),
+                    (origin[0] + (hx + 1) as real * cellpx,
+                     origin[1] + (hy + 1) as real * cellpx),
+                    (255, 255, 255, 180), 1.5);
+                do SetTooltip(F"({hx}, {hy})");
+            }
+            none?;
+        }
+
+        // ---- 地图边界 ----
+        do dl->AddRect(
+            origin,
+            (origin[0] + w as real * cellpx, origin[1] + h as real * cellpx),
+            (120, 120, 130, 200), 1.5);
+
+        do PopClipRect();
+
+        // ---- 笔划交互（仅本窗口聚焦时，避免与其他面板抢输入） ----
+        if (hovered && IsWindowFocused())
+        {
+            let down = IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left);
+            let dragging = IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left);
+            let up = IsMouseReleased(ImGuiMouseButton::ImGuiMouseButton_Left);
+            match (hover_cell)
+            {
+                value(cell)?
+                {
+                    if (down || dragging || up)
+                        do handle_canvas_input(state, ctx, cell, down, dragging && !down, up);
+                }
+                none?
+                {
+                    // 在画布外抬起时也要结束笔划/矩形
+                    if (up)
+                        do handle_canvas_input(state, ctx, (0, 0), false, false, true);
+                }
+            }
+        }
+    }
+
+    // 视图重置：地图居中并选择合适缩放
+    public func reset_view(state: EditorState)=> void
+    {
+        let (w, h, _, _) = tilemap::map_size(state.m_context.m_map);
+        let avail = GetContentRegionAvail();
+        if (w <= 0 || h <= 0 || avail[0] <= 0. || avail[1] <= 0.)
+            return;
+        let (_, _, tile_px, _) = tilemap::map_size(state.m_context.m_map);
+        let mut zoom = math::min(
+            (avail[0] - 32.) / (w as real * tile_px as real),
+            (avail[1] - 32.) / (h as real * tile_px as real));
+        if (zoom < 0.05) zoom = 0.05;
+        if (zoom > 4.) zoom = 4.;
+        state.m_zoom = zoom;
+        state.m_pan = (
+            (avail[0] - w as real * tile_px as real * zoom) / 2.,
+            (avail[1] - h as real * tile_px as real * zoom) / 2.);
+    }
+}

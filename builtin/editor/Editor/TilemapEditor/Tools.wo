@@ -1,0 +1,207 @@
+// 瓦片地图编辑器 —— 绘制工具。
+// 铅笔/橡皮/矩形/填充/吸管；除吸管外都经 EditorState 的笔划机制
+// 产生可撤销命令。自动图块地形无需特殊处理：网格只记录地形值，
+// 邻接变体由引擎在渲染时解析（相邻笔划会即时改变已绘制格的形状）。
+
+import pkg::std;
+
+import je;
+import je::gui;
+import je::tilemap;
+
+import pkg::math;
+
+import DataModel;
+import EditorState;
+
+using std;
+using je;
+using je::gui;
+using je::tilemap;
+using math;
+using JEEditor::Editor::TilemapEditor;
+
+namespace JEEditor::Editor::TilemapEditor
+{
+    // 当前画笔生效值（橡皮固定 0）
+    func paint_value(state: EditorState)=> int
+    {
+        return state.m_tool == tool::ERASER ? 0 | state.m_paint;
+    }
+
+    // 吸管：取格子值并回填调色板选择
+    func apply_eyedropper(state: EditorState, ctx: TilemapContext, x: int, y: int)=> void
+    {
+        let v = tilemap::get_tile(ctx.m_map, state.m_layer, x, y);
+        if (v == 0)
+        {
+            state.m_paint = 0;
+            return;
+        }
+        state.m_paint = v;
+        // 回填调色板：图集页签与地形/瓦片高亮
+        let (ts_idx, local, is_terrain) = tilemap::decode_value(v);
+        do ctx->sync_tilesets();
+        let ts_count = tilemap::tileset_count(ctx.m_map);
+        if (ts_idx >= 0 && ts_idx < ts_count)
+            state.m_palette_tileset = ts_idx;
+        if (is_terrain)
+        {
+            state.m_palette_terrain = option::value(local);
+            state.m_palette_cell = option::none;
+        }
+        else
+        {
+            let ts_id = ctx->tileset_id(ts_idx);
+            if (ts_id > 0)
+            {
+                let (src, ix, iy, _) = tilemap::tile_info(ts_id, local);
+                state.m_palette_source = src;
+                state.m_palette_cell = option::value((ix, iy));
+                state.m_palette_terrain = option::none;
+            }
+        }
+    }
+
+    // 铅笔/橡皮：单格写入（经笔划快照）
+    func apply_pencil(state: EditorState, x: int, y: int)=> void
+    {
+        do state->touch_cell(x, y, paint_value(state));
+    }
+
+    // 矩形：在锚点与当前格之间填充
+    func apply_rect(state: EditorState, x0: int, y0: int, x1: int, y1: int)=> void
+    {
+        let left = math::min(x0, x1);
+        let right = math::max(x0, x1);
+        let top = math::min(y0, y1);
+        let bottom = math::max(y0, y1);
+        do state->begin_stroke(state.m_layer, "矩形填充");
+        for (let mut y = top; y <= bottom; y += 1)
+        {
+            for (let mut x = left; x <= right; x += 1)
+            {
+                do state->touch_cell(x, y, paint_value(state));
+            }
+        }
+        do state->end_stroke();
+    }
+
+    // 填充：同值连通域（4 邻接）替换为画笔值
+    func apply_fill(state: EditorState, ctx: TilemapContext, sx: int, sy: int)=> void
+    {
+        let (w, h, _, layer_count) = tilemap::map_size(ctx.m_map);
+        let layer = state.m_layer;
+        if (sx < 0 || sy < 0 || sx >= w || sy >= h || layer < 0 || layer >= layer_count)
+            return;
+        let target = tilemap::get_tile(ctx.m_map, layer, sx, sy);
+        let repl = paint_value(state);
+        if (target == repl)
+            return;
+
+        // BFS：直接读写文档（touch_cell 负责撤销快照），访问标记用
+        // map<int, mut bool>（支持索引赋值）
+        do state->begin_stroke(layer, "填充");
+        let mut queue = []mut: vec<int>;
+        do queue->add(sx + sy * w);
+        let mut visited = new_int_bool_map();
+        visited[sx + sy * w] = true;
+        while (queue->len > 0)
+        {
+            match (queue->pop())
+            {
+                value(cell)?
+                {
+                    let cx = cell % w;
+                    let cy = cell / w;
+                    if (tilemap::get_tile(ctx.m_map, layer, cx, cy) == target)
+                    {
+                        do state->touch_cell(cx, cy, repl);
+                        if (cx > 0 && visited->get(cell - 1)->is_none)
+                        {
+                            visited[cell - 1] = true;
+                            do queue->add(cell - 1);
+                        }
+                        if (cx + 1 < w && visited->get(cell + 1)->is_none)
+                        {
+                            visited[cell + 1] = true;
+                            do queue->add(cell + 1);
+                        }
+                        if (cy > 0 && visited->get(cell - w)->is_none)
+                        {
+                            visited[cell - w] = true;
+                            do queue->add(cell - w);
+                        }
+                        if (cy + 1 < h && visited->get(cell + w)->is_none)
+                        {
+                            visited[cell + w] = true;
+                            do queue->add(cell + w);
+                        }
+                    }
+                }
+                none? { break; }
+            }
+        }
+        do state->end_stroke();
+    }
+
+    // 构造 map<int, mut bool>（经函数返回类型统一元素可变性）
+    func new_int_bool_map()=> map<int, mut bool>
+    {
+        let m = {}mut;
+        return m;
+    }
+
+    // 画布交互入口：down=本帧按下，drag=按住拖动中，up=本帧抬起
+    public func handle_canvas_input(
+        state: EditorState, ctx: TilemapContext,
+        cell: (int, int), down: bool, drag: bool, up: bool)=> void
+    {
+        let (x, y) = cell;
+        if (state.m_tool == tool::EYEDROPPER)
+        {
+            if (down)
+                do apply_eyedropper(state, ctx, x, y);
+            return;
+        }
+
+        if (state.m_tool == tool::RECT)
+        {
+            if (down)
+                state.m_rect_anchor = option::value((x, y));
+            else if (up)
+            {
+                match (state.m_rect_anchor)
+                {
+                    value((ax, ay))?
+                    {
+                        do apply_rect(state, ax, ay, x, y);
+                        state.m_rect_anchor = option::none;
+                    }
+                    none?;
+                }
+            }
+            return;
+        }
+
+        if (state.m_tool == tool::FILL)
+        {
+            if (down)
+                do apply_fill(state, ctx, x, y);
+            return;
+        }
+
+        // 铅笔/橡皮：按下开笔划，拖动续写，抬起提交
+        if (down)
+        {
+            do state->begin_stroke(state.m_layer, tool::name(state.m_tool));
+            do apply_pencil(state, x, y);
+        }
+        else if (drag)
+        {
+            do apply_pencil(state, x, y);
+        }
+        if (up)
+            do state->end_stroke();
+    }
+}

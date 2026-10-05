@@ -1,0 +1,485 @@
+// 瓦片地图编辑器 —— 属性面板。
+// 两个页签：
+//   格子属性：悬停/最后交互格子的属性取值链展示与逐格覆盖编辑；
+//   图集设置：当前调色板图集的源纹理管理、地形编辑、属性 schema、
+//             选中瓦片/地形的默认值与可通行性。
+
+import pkg::std;
+
+import je;
+import je::gui;
+import je::tilemap;
+
+import pkg::fsys;
+
+import builtin::editor::GUI::Forms::MsgBox;
+import builtin::editor::GUI::Forms::InputBox;
+
+import DataModel;
+import EditorState;
+import Palette;
+
+using std;
+using je;
+using je::gui;
+using je::tilemap;
+using fsys;
+using JEEditor::GUI::Forms;
+using JEEditor::Editor::TilemapEditor;
+
+namespace JEEditor::Editor::TilemapEditor
+{
+    public let PROPERTY_TYPE_NAMES = ["bool", "int", "float", "string", "vec2", "vec3", "vec4"];
+
+    // 属性类型的缺省值
+    func property_type_default(type: string)=> string
+    {
+        if (type == "bool")
+            return "false";
+        if (type == "int" || type == "float")
+            return "0";
+        if (type == "string")
+            return "";
+        return "0, 0";
+    }
+
+    public func draw_properties(state: EditorState, ctx: TilemapContext)=> void
+    {
+        if (BeginTabBar("##prop_tabs"))
+        {
+            if (state.m_tileset_only == 0)
+            {
+                if (BeginTabItem("格子属性"))
+                {
+                    if (BeginChildSize("##cell_props", GetContentRegionAvail()[0], 0.))
+                        do draw_cell_properties(state, ctx);
+                    EndChild();
+                    do EndTabItem();
+                }
+            }
+            if (BeginTabItem("图集设置"))
+            {
+                if (BeginChildSize("##tileset_props", GetContentRegionAvail()[0], 0.))
+                    do draw_tileset_settings(state, ctx);
+                EndChild();
+                do EndTabItem();
+            }
+            do EndTabBar();
+        }
+    }
+
+    // ---- 格子属性：取值链展示 + 覆盖编辑 ----
+    func draw_cell_properties(state: EditorState, ctx: TilemapContext)=> void
+    {
+        match (state.m_hover_cell)
+        {
+            none? { do TextDisabled("把鼠标移到画布格子上查看属性"); return; }
+            value((x, y))?
+            {
+                do Text(F"格子 ({x}, {y})，图层 {state.m_layer}");
+                do Separator();
+
+                // 该格所在瓦片的图集 schema（跨全部引用图集并集展示）
+                let ts_count = tilemap::tileset_count(ctx.m_map);
+                let mut shown_any = false;
+                for (let mut tsi = 0; tsi < ts_count; tsi += 1)
+                {
+                    let ts_id = ctx->tileset_id(tsi);
+                    if (ts_id <= 0)
+                        continue;
+                    let pcount = tilemap::property_count(ts_id);
+                    for (let mut pi = 0; pi < pcount; pi += 1)
+                    {
+                        let (pname, ptype, _) = tilemap::property_info(ts_id, pi);
+                        if (!shown_any)
+                        {
+                            do TextDisabled("逐格覆盖（留空 = 用默认值）：");
+                            shown_any = true;
+                        }
+                        do draw_one_property_editor(state, ctx, x, y, pname, ptype);
+                    }
+                }
+                if (!shown_any)
+                    do TextDisabled("图集未定义任何属性 schema");
+                else
+                {
+                    do Separator();
+                    let v = tilemap::get_tile(ctx.m_map, state.m_layer, x, y);
+                    if (v == 0)
+                        do TextDisabled("空格子");
+                    else
+                    {
+                        let w = tilemap::walkable(ctx.m_map, x, y);
+                        do Text(w ? "通行性：可通行" | "通行性：不可通行");
+                    }
+                }
+            }
+        }
+    }
+
+    // 单条属性：覆盖值编辑器 + 当前生效值显示
+    func draw_one_property_editor(state: EditorState, ctx: TilemapContext,
+        x: int, y: int, name: string, type: string)=> void
+    {
+        let map = ctx.m_map;
+        let layer = state.m_layer;
+        let override = tilemap::get_cell_property(map, layer, x, y, name);
+        let resolved = tilemap::get_property(map, layer, x, y, name);
+
+        match (override)
+        {
+            none?
+            {
+                if (Button(F"+##ov_{name}"))
+                {
+                    // 进入覆盖：以当前生效值初始化
+                    let mut init_val = property_type_default(type);
+                    match (resolved)
+                    {
+                        value(r)? { init_val = r; }
+                        none?;
+                    }
+                    do tilemap::set_cell_property(map, layer, x, y, name,
+                        option::value(init_val));
+                    state.m_dirty = true;
+                }
+                SameLine();
+                do Text(F"{name} = {resolved->or("「无值」")}");
+                do SetTooltip(F"类型 {type}，点击 + 设置逐格覆盖");
+            }
+            value(cur)?
+            {
+                do Text(name);
+                SameLine();
+                if (Button(F"清除##ov_{name}"))
+                {
+                    do tilemap::set_cell_property(map, layer, x, y, name, option::none);
+                    state.m_dirty = true;
+                }
+                SameLine();
+                let label = F"##cellprop_{name}";
+                // bool 用勾选，其余用文本编辑
+                if (type == "bool")
+                {
+                    match (CheckBox(label, cur == "true"))
+                    {
+                        value(b)?
+                        {
+                            do tilemap::set_cell_property(map, layer, x, y, name,
+                                option::value(b ? "true" | "false"));
+                            state.m_dirty = true;
+                        }
+                        none?;
+                    }
+                }
+                else
+                {
+                    match (InputText(label, cur))
+                    {
+                        value(s)?
+                        {
+                            do tilemap::set_cell_property(map, layer, x, y, name,
+                                option::value(s));
+                            state.m_dirty = true;
+                        }
+                        none?;
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- 图集设置 ----
+    public func draw_tileset_settings(state: EditorState, ctx: TilemapContext)=> void
+    {
+        let ts_id = palette_tileset_doc(state, ctx);
+        if (ts_id <= 0)
+        {
+            do TextDisabled("没有可用图集");
+            return;
+        }
+
+        // 名称
+        match (InputText("图集名称", tilemap::tileset_name(ts_id)))
+        {
+            value(s)?
+            {
+                do tilemap::tileset_set_name(ts_id, s);
+                state.m_dirty = true;
+            }
+            none?;
+        }
+        do Separator();
+
+        // 源纹理
+        do Text("源纹理：");
+        let src_count = tilemap::source_count(ts_id);
+        for (let mut i = 0; i < src_count; i += 1)
+        {
+            let (path, _, xc, yc) = tilemap::source_info(ts_id, i);
+            do PushIDInt(i);
+            do Text(F"{path}（{xc}×{yc} 格）");
+            SameLine();
+            if (Button("移除"))
+            {
+                do tilemap::remove_source(ts_id, i);
+                state.m_dirty = true;
+            }
+            do PopID();
+        }
+        match (InputText("纹理路径(@/..)", state.m_new_source_path))
+        {
+            value(s)? state.m_new_source_path = s;
+            none?;
+        }
+        match (InputInt("瓦片像素", state.m_new_source_tilepx))
+        {
+            value(v)? state.m_new_source_tilepx = v < 1 ? 1 | v;
+            none?;
+        }
+        if (Button("添加源纹理"))
+        {
+            let idx = tilemap::add_source(ts_id,
+                state.m_new_source_path, state.m_new_source_tilepx);
+            if (idx >= 0)
+            {
+                state.m_palette_source = idx;
+                state.m_dirty = true;
+            }
+            else
+                do MsgBox::err("添加失败",
+                    "无法加载该纹理，请检查路径（如 @/resource/tileset.png）与瓦片像素");
+        }
+        do Separator();
+
+        // 地形编辑
+        do draw_terrain_editing(state, ts_id);
+        do Separator();
+
+        // 属性 schema
+        do draw_schema_editing(state, ts_id);
+        do Separator();
+
+        // 选中瓦片/地形的默认值
+        do draw_defaults_editing(state, ts_id);
+    }
+
+    func draw_terrain_editing(state: EditorState, ts_id: int)=> void
+    {
+        do Text("自动图块地形：");
+        let terr_total = tilemap::terrain_count(ts_id);
+        if (terr_total == 0)
+        {
+            do TextDisabled("（在左侧调色板中新建地形）");
+            return;
+        }
+        match (state.m_palette_terrain)
+        {
+            none? { do TextDisabled("选择一个地形以编辑"); }
+            value(tid)?
+            {
+                if (tid > terr_total)
+                {
+                    state.m_palette_terrain = option::none;
+                    return;
+                }
+                let (tname, kind, src, ix, iy, wk, _) =
+                    tilemap::terrain_info(ts_id, tid);
+                do Text(F"地形 #{tid}");
+                match (InputText("名称##tname", tname))
+                {
+                    value(s)?
+                    {
+                        do tilemap::set_terrain(ts_id, tid, s, kind, src, ix, iy, wk != 0 ? 1 | 0);
+                        state.m_dirty = true;
+                    }
+                    none?;
+                }
+                let kinds = ["单块", "四象限(RPGMaker)", "blob47"];
+                match (ListBoxSelect("##terrain_kind_edit", kinds, kind))
+                {
+                    value(k)?
+                    {
+                        do tilemap::set_terrain(ts_id, tid, tname, k, src, ix, iy, wk != 0 ? 1 | 0);
+                        state.m_dirty = true;
+                    }
+                    none?;
+                }
+                match (InputInt2("锚点(列,行)", ix, iy))
+                {
+                    value((nx, ny))?
+                    {
+                        do tilemap::set_terrain(ts_id, tid, tname, kind, src, nx, ny, wk != 0 ? 1 | 0);
+                        state.m_dirty = true;
+                    }
+                    none?;
+                }
+                match (CheckBox("可通行##twalk", wk != 0))
+                {
+                    value(b)?
+                    {
+                        do tilemap::set_terrain(ts_id, tid, tname, kind, src, ix, iy, b ? 1 | 0);
+                        state.m_dirty = true;
+                    }
+                    none?;
+                }
+                SameLine();
+                if (Button("删除地形"))
+                {
+                    do tilemap::remove_terrain(ts_id, tid);
+                    state.m_palette_terrain = option::none;
+                    state.m_dirty = true;
+                }
+                do TextDisabled("四象限布局：锚点右2格×下3格条带（与旧编辑器兼容）");
+                do TextDisabled("blob47 默认布局：锚点起行优先连续 47 块");
+            }
+        }
+    }
+
+    func draw_schema_editing(state: EditorState, ts_id: int)=> void
+    {
+        do Text("属性 schema（作用于整个图集）：");
+        let pcount = tilemap::property_count(ts_id);
+        for (let mut i = 0; i < pcount; i += 1)
+        {
+            let (pname, ptype, pdefault) = tilemap::property_info(ts_id, i);
+            do PushIDInt(i);
+            do Text(F"{pname} : {ptype} = {pdefault}");
+            SameLine();
+            if (Button("删除"))
+            {
+                do tilemap::remove_property(ts_id, pname);
+                state.m_dirty = true;
+            }
+            do PopID();
+        }
+        match (InputText("属性名", state.m_new_prop_name))
+        {
+            value(s)? state.m_new_prop_name = s;
+            none?;
+        }
+        match (ListBoxSelect("##prop_type", PROPERTY_TYPE_NAMES, state.m_new_prop_type))
+        {
+            value(t)? state.m_new_prop_type = t;
+            none?;
+        }
+        if (Button("+ 添加属性"))
+        {
+            if (state.m_new_prop_name != "")
+            {
+                let tname = PROPERTY_TYPE_NAMES[state.m_new_prop_type];
+                if (tilemap::add_property(ts_id, state.m_new_prop_name, tname,
+                        property_type_default(tname)) >= 0)
+                {
+                    state.m_new_prop_name = "";
+                    state.m_dirty = true;
+                }
+                else
+                    do MsgBox::err("添加失败", "同名属性已存在");
+            }
+        }
+    }
+
+    func draw_defaults_editing(state: EditorState, ts_id: int)=> void
+    {
+        let pcount = tilemap::property_count(ts_id);
+        if (pcount == 0)
+            return;
+
+        // 选中地形：编辑地形默认值
+        match (state.m_palette_terrain)
+        {
+            value(tid)?
+            {
+                do Text(F"地形 #{tid} 默认属性：");
+                for (let mut i = 0; i < pcount; i += 1)
+                {
+                    let (pname, ptype, _) = tilemap::property_info(ts_id, i);
+                    let cur = tilemap::get_terrain_property(ts_id, tid, pname);
+                    do draw_default_editor(state, pname, ptype, cur,
+                        func(val) { do tilemap::set_terrain_property(ts_id, tid, pname, val); });
+                }
+                return;
+            }
+            none?;
+        }
+
+        // 选中普通瓦片：编辑瓦片默认值与可通行
+        match (state.m_palette_cell)
+        {
+            value((cx, cy))?
+            {
+                do Text(F"瓦片 ({cx},{cy}) 默认属性：");
+                if (state.m_palette_source < tilemap::source_count(ts_id))
+                {
+                    let tile_id = tilemap::add_tile(ts_id, state.m_palette_source, cx, cy, 1);
+                    if (tile_id > 0)
+                    {
+                        let (_, _, _, wk) = tilemap::tile_info(ts_id, tile_id);
+                        match (CheckBox("可通行", wk != 0))
+                        {
+                            value(b)?
+                            {
+                                do tilemap::set_tile_walkable(ts_id, tile_id, b ? 1 | 0);
+                                state.m_dirty = true;
+                            }
+                            none?;
+                        }
+                        for (let mut i = 0; i < pcount; i += 1)
+                        {
+                            let (pname, ptype, _) = tilemap::property_info(ts_id, i);
+                            let cur = tilemap::get_tile_property(ts_id, tile_id, pname);
+                            do draw_default_editor(state, pname, ptype, cur,
+                                func(val) { do tilemap::set_tile_property(ts_id, tile_id, pname, val); });
+                        }
+                    }
+                }
+            }
+            none? { do TextDisabled("在调色板选中瓦片或地形以编辑默认值"); }
+        }
+    }
+
+    // 默认值编辑器：一行（属性名 + 文本/布尔输入），空串 = 清除
+    func draw_default_editor(state: EditorState,
+        name: string, type: string, current: option<string>,
+        setter: (option<string>)=>void)=> void
+    {
+        do PushIDStr(name);
+        match (current)
+        {
+            none?
+            {
+                if (Button("+"))
+                    do setter(option::value(property_type_default(type)));
+                SameLine();
+                do Text(F"{name}（默认）");
+            }
+            value(cur)?
+            {
+                do Text(name);
+                SameLine();
+                if (Button("清除"))
+                    do setter(option::none);
+                SameLine();
+                if (type == "bool")
+                {
+                    match (CheckBox("##def", cur == "true"))
+                    {
+                        value(b)? do setter(option::value(b ? "true" | "false"));
+                        none?;
+                    }
+                }
+                else
+                {
+                    match (InputText("##def", cur))
+                    {
+                        value(s)? do setter(option::value(s));
+                        none?;
+                    }
+                }
+            }
+        }
+        do state->mark_dirty();
+        do PopID();
+    }
+}

@@ -1,0 +1,327 @@
+// 瓦片地图编辑器 —— 图集调色板。
+// 左栏：图集页签（地图引用的每个 .je4tileset）-> 源纹理网格视图。
+// 点击网格格：选中为画笔（普通瓦片，按需注册进瓦片表）；
+// 下方地形列表选择自动图块画笔；"+" 从选中格新建地形。
+
+import pkg::std;
+
+import je;
+import je::gui;
+import je::graphic;
+import je::tilemap;
+
+import pkg::fsys;
+import pkg::math;
+
+import builtin::editor::GUI::Forms::MsgBox;
+import builtin::editor::GUI::Forms::InputBox;
+
+import DataModel;
+import EditorState;
+
+using std;
+using je;
+using je::gui;
+using je::graphic;
+using je::tilemap;
+using fsys;
+using math;
+using JEEditor::GUI::Forms;
+using JEEditor::Editor::TilemapEditor;
+
+namespace JEEditor::Editor::TilemapEditor
+{
+    // 地形解析种类的显示名
+    func terrain_kind_name(kind: int)=> string
+    {
+        if (kind == tilemap::terrain_kind::SINGLE as int)
+            return "单块";
+        if (kind == tilemap::terrain_kind::RPGMAKER as int)
+            return "四象限";
+        if (kind == tilemap::terrain_kind::BLOB47 as int)
+            return "blob47";
+        return "?";
+    }
+
+    // 调色板当前图集的文档句柄（无图集返回 0）
+    public func palette_tileset_doc(state: EditorState, ctx: TilemapContext)=> int
+    {
+        if (state.m_tileset_only > 0)
+            return state.m_tileset_only;
+        let count = tilemap::tileset_count(ctx.m_map);
+        if (state.m_palette_tileset < 0 || state.m_palette_tileset >= count)
+            return 0;
+        return ctx->tileset_id(state.m_palette_tileset);
+    }
+
+    public func draw_palette(state: EditorState, ctx: TilemapContext)=> void
+    {
+        do ctx->sync_tilesets();
+
+        // ---- 图集页签（地图模式） ----
+        if (state.m_tileset_only == 0)
+        {
+            let ts_count = tilemap::tileset_count(ctx.m_map);
+            if (ts_count == 0)
+            {
+                do TextDisabled("地图未引用任何图集");
+                do TextDisabled("请在右侧「图集设置」中添加");
+                return;
+            }
+            if (state.m_palette_tileset >= ts_count)
+                state.m_palette_tileset = ts_count - 1;
+            if (BeginTabBar("##tileset_tabs"))
+            {
+                for (let mut i = 0; i < ts_count; i += 1)
+                {
+                    if (BeginTabItem(F"图集{i + 1}##ts{i}"))
+                    {
+                        state.m_palette_tileset = i;
+                        do EndTabItem();
+                    }
+                }
+                do EndTabBar();
+            }
+        }
+
+        let ts_id = palette_tileset_doc(state, ctx);
+        if (ts_id <= 0)
+        {
+            do TextDisabled("图集文档不可用");
+            return;
+        }
+
+        // ---- 源纹理选择 ----
+        let src_count = tilemap::source_count(ts_id);
+        if (src_count == 0)
+        {
+            do TextDisabled("图集没有源纹理");
+            do TextDisabled("请在右侧「图集设置」中添加");
+            return;
+        }
+        if (state.m_palette_source >= src_count)
+            state.m_palette_source = 0;
+        if (src_count > 1)
+        {
+            let mut names = []mut: vec<string>;
+            for (let mut i = 0; i < src_count; i += 1)
+                do names->add(F"源纹理 {i + 1}");
+            match (ListBoxSelectHeight("##palette_source", names->to_array,
+                state.m_palette_source, 3))
+            {
+                value(sel)?
+                {
+                    state.m_palette_source = sel;
+                    state.m_palette_cell = option::none;
+                }
+                none?;
+            }
+        }
+
+        // ---- 地形列表（先画，占住底部固定高度） ----
+        let terrain_h = 140.;
+        if (BeginChildSize("##palette_terrains", GetContentRegionAvail()[0],
+                GetContentRegionAvail()[1] - terrain_h))
+        {
+            draw_palette_grid(state, ts_id);
+        }
+        EndChild();
+
+        if (BeginChildSize("##palette_terrain_list", GetContentRegionAvail()[0], 0.))
+        {
+            if (Button("+ 新建地形（用选中的格作为锚点）"))
+            {
+                if (state.m_palette_cell->is_value)
+                    do OpenPopup("##new_terrain_popup");
+                else
+                    do MsgBox::err("缺少锚点", "请先在上方网格中点选一个格子作为地形锚点");
+            }
+            draw_new_terrain_popup(state, ts_id);
+
+            let terr_total = tilemap::terrain_count(ts_id);
+            if (terr_total == 0)
+            {
+                do TextDisabled("没有自动图块地形");
+            }
+            else
+            {
+                for (let mut t = 1; t <= terr_total; t += 1)
+                {
+                    let (tname, kind, _, _, _, _, _) = tilemap::terrain_info(ts_id, t);
+                    let mut is_selected = false;
+                    match (state.m_palette_terrain)
+                    {
+                        value(cur)? { is_selected = cur == t; }
+                        none?;
+                    }
+                    if (SelectableSelected(F"{tname} [{terrain_kind_name(kind)}]##terr{t}", is_selected))
+                    {
+                        state.m_palette_terrain = option::value(t);
+                        state.m_palette_cell = option::none;
+                        state.m_paint = tilemap::terrain_value(
+                            state.m_tileset_only > 0 ? 0 | state.m_palette_tileset, t);
+                    }
+                }
+            }
+        }
+        EndChild();
+    }
+
+    // 源纹理网格视图（贴图 + 网格 + 交互选中）
+    func draw_palette_grid(state: EditorState, ts_id: int)=> void
+    {
+        if (state.m_palette_source < 0
+            || state.m_palette_source >= tilemap::source_count(ts_id))
+            return;
+        let (tex_path, tile_px, xc, yc) =
+            tilemap::source_info(ts_id, state.m_palette_source);
+
+        match (state->atlas_texture(tex_path))
+        {
+            none? { do TextDisabled(F"纹理加载失败：{tex_path}"); return; }
+            value(tex)?
+            {
+                let (tw, th) = tex->size();
+                let avail = GetContentRegionAvail();
+                // 整张贴图缩放到面板宽度内（保持像素清晰由 NEAREST 采样保证）
+                let scale = math::min(1., avail[0] / tw as real);
+                let img_w = tw as real * scale;
+                let img_h = th as real * scale;
+                do ImageSize(tex, img_w, img_h);
+
+                let (rect_min, rect_max) = GetItemRect();
+                let cell_px = tile_px as real * scale;
+                if (cell_px < 3.)
+                    return;
+                let dl = GetWindowDrawList();
+
+                // 网格线
+                if (cell_px >= 10.)
+                {
+                    for (let mut gx = 0; gx <= xc; gx += 1)
+                    {
+                        do dl->AddLine(
+                            (rect_min[0] + gx as real * cell_px, rect_min[1]),
+                            (rect_min[0] + gx as real * cell_px, rect_max[1]),
+                            (255, 255, 255, 36), 1.);
+                    }
+                    for (let mut gy = 0; gy <= yc; gy += 1)
+                    {
+                        do dl->AddLine(
+                            (rect_min[0], rect_min[1] + gy as real * cell_px),
+                            (rect_max[0], rect_min[1] + gy as real * cell_px),
+                            (255, 255, 255, 36), 1.);
+                    }
+                }
+
+                // 悬停格
+                if (IsItemHovered())
+                {
+                    let mouse = GetMousePos();
+                    let cx = ((mouse[0] - rect_min[0]) / cell_px) as int;
+                    let cy = ((mouse[1] - rect_min[1]) / cell_px) as int;
+                    if (cx >= 0 && cy >= 0 && cx < xc && cy < yc)
+                    {
+                        do dl->AddRect(
+                            (rect_min[0] + cx as real * cell_px,
+                             rect_min[1] + cy as real * cell_px),
+                            (rect_min[0] + (cx + 1) as real * cell_px,
+                             rect_min[1] + (cy + 1) as real * cell_px),
+                            (255, 255, 255, 220), 1.5);
+                        if (IsItemClickedLeft())
+                        {
+                            state.m_palette_cell = option::value((cx, cy));
+                            state.m_palette_terrain = option::none;
+                            let tile_id = tilemap::add_tile(
+                                ts_id, state.m_palette_source, cx, cy, 1);
+                            if (tile_id > 0)
+                            {
+                                // 地图模式下使用地图内图集下标编码画笔值；
+                                // 图集模式（无地图）仅记录到 0 号图集
+                                let ts_idx = state.m_tileset_only > 0
+                                    ? 0 | state.m_palette_tileset;
+                                state.m_paint = tilemap::tile_value(ts_idx, tile_id);
+                            }
+                        }
+                    }
+                }
+
+                // 选中格高亮
+                match (state.m_palette_cell)
+                {
+                    value((sx, sy))?
+                    {
+                        do dl->AddRect(
+                            (rect_min[0] + sx as real * cell_px,
+                             rect_min[1] + sy as real * cell_px),
+                            (rect_min[0] + (sx + 1) as real * cell_px,
+                             rect_min[1] + (sy + 1) as real * cell_px),
+                            (110, 200, 255, 255), 2.);
+                    }
+                    none?;
+                }
+            }
+        }
+    }
+
+    // 新建地形弹窗：锚点 = 调色板选中格
+    func draw_new_terrain_popup(state: EditorState, ts_id: int)=> void
+    {
+        if (BeginPopup("##new_terrain_popup"))
+        {
+            do Text("锚点：调色板选中的格子");
+            match (state.m_palette_cell)
+            {
+                value((ax, ay))? { do Text(F"({ax}, {ay})"); }
+                none? { do TextDisabled("未选中"); }
+            }
+            match (InputText("名称", state.m_new_terrain_name))
+            {
+                value(s)? state.m_new_terrain_name = s;
+                none?;
+            }
+            let kinds = ["单块", "四象限(RPGMaker)", "blob47"];
+            match (ListBoxSelect("##terrain_kind", kinds, state.m_new_terrain_kind))
+            {
+                value(k)? state.m_new_terrain_kind = k;
+                none?;
+            }
+            match (CheckBox("可通行", state.m_new_terrain_walkable))
+            {
+                value(v)? state.m_new_terrain_walkable = v;
+                none?;
+            }
+            do TextDisabled("四象限：锚点右侧2格、下方3格的条带");
+            do TextDisabled("blob47：锚点起行优先47块（或显式变体表）");
+            if (Button("创建"))
+            {
+                match (state.m_palette_cell)
+                {
+                    value((ax, ay))?
+                    {
+                        let name = state.m_new_terrain_name == ""
+                            ? "新地形" | state.m_new_terrain_name;
+                        let tid = tilemap::add_terrain(ts_id, name, state.m_new_terrain_kind,
+                            state.m_palette_source, ax, ay,
+                            state.m_new_terrain_walkable ? 1 | 0);
+                        if (tid > 0)
+                        {
+                            state.m_palette_terrain = option::value(tid);
+                            let ts_idx = state.m_tileset_only > 0
+                                ? 0 | state.m_palette_tileset;
+                            state.m_paint = tilemap::terrain_value(ts_idx, tid);
+                            do CloseCurrentPopup();
+                        }
+                        else
+                            do MsgBox::err("创建失败", "无法创建地形（参数无效）");
+                    }
+                    none?;
+                }
+            }
+            SameLine();
+            if (Button("取消"))
+                do CloseCurrentPopup();
+            do EndPopup();
+        }
+    }
+}

@@ -8,6 +8,7 @@ import je::internal;
 import je::typeinfo;
 import je::towoo;
 import je::towoo::components;
+import je::tilemap;
 
 import pkg::fsys;
 import pkg::filestream;
@@ -38,6 +39,7 @@ import builtin::editor::Editor::Project;
 import builtin::editor::Editor::Template;
 import builtin::editor::Editor::Animation2D;
 import builtin::editor::Editor::Workflow;
+import builtin::editor::Editor::TilemapEditor;
 import ResourcePath;
 import ShaderUpdater;
 import Action::ModifyPrefab;
@@ -47,6 +49,7 @@ using std;
 using je;
 using je::gui;
 using je::graphic;
+using je::tilemap;
 using fsys;
 using toml;
 
@@ -817,6 +820,106 @@ namespace JEEditor::Editor
                 ;
         }
 
+        // 新建瓦片地图（右键菜单“新建→瓦片地图”）：.je4tilemap 为引擎内核
+        // 的二进制格式，经 je::tilemap 文档 API 落盘（默认 32×32、32px 单图层）。
+        func askToCreateNewTilemap(self: Browser)=> void
+        {
+            let target_dir = self.m_current;
+            let dirty = self.m_fs_dirty;
+
+            func writeTo(dst: path_t)=> void
+            {
+                let map = tilemap::create_map(32, 32, 32);
+                if (map > 0 && tilemap::save_map(map, dst->to_string()))
+                {
+                    dirty->set(true);
+                    let path_str = dst->to_string();
+                    Statebar::showState(3.) <| func(){
+                        Text(F"瓦片地图 \"{path_str}\" 已创建");
+                    };
+                }
+                else
+                    MsgBox::err("新建瓦片地图",
+                        F"无法创建 \"{dst->to_string()}\"，可能是文件名非法或磁盘已满");
+            }
+
+            func createAs(file_name: string)=> void
+            {
+                if (file_name->len == 0)
+                {
+                    MsgBox::err("新建瓦片地图", "文件名不能为空");
+                    return;
+                }
+                let full_name = file_name->end_with(".je4tilemap")
+                    ? file_name
+                    | F"{file_name}.je4tilemap";
+                let dst = target_dir / full_name;
+                if (isfile(dst))
+                {
+                    do AskBox::show(
+                        "新建瓦片地图", F"目录中已存在 \"{full_name}\"，确认覆盖吗？")
+                        ->onYes(\= writeTo(dst);)
+                        ;
+                }
+                else
+                    writeTo(dst);
+            }
+
+            do InputBox::show("新建瓦片地图", "请输入地图文件名：", "NewMap")
+                ->then(createAs)
+                ;
+        }
+
+        // 新建瓦片图集（右键菜单“新建→瓦片图集”）：.je4tileset 同为内核二
+        // 进制格式；创建后可在瓦片地图编辑器的“图集设置”里添加源纹理。
+        func askToCreateNewTileset(self: Browser)=> void
+        {
+            let target_dir = self.m_current;
+            let dirty = self.m_fs_dirty;
+
+            func writeTo(dst: path_t)=> void
+            {
+                let ts = tilemap::create_tileset("新建图集");
+                if (ts > 0 && tilemap::save_tileset(ts, dst->to_string()))
+                {
+                    dirty->set(true);
+                    let path_str = dst->to_string();
+                    Statebar::showState(3.) <| func(){
+                        Text(F"瓦片图集 \"{path_str}\" 已创建");
+                    };
+                }
+                else
+                    MsgBox::err("新建瓦片图集",
+                        F"无法创建 \"{dst->to_string()}\"，可能是文件名非法或磁盘已满");
+            }
+
+            func createAs(file_name: string)=> void
+            {
+                if (file_name->len == 0)
+                {
+                    MsgBox::err("新建瓦片图集", "文件名不能为空");
+                    return;
+                }
+                let full_name = file_name->end_with(".je4tileset")
+                    ? file_name
+                    | F"{file_name}.je4tileset";
+                let dst = target_dir / full_name;
+                if (isfile(dst))
+                {
+                    do AskBox::show(
+                        "新建瓦片图集", F"目录中已存在 \"{full_name}\"，确认覆盖吗？")
+                        ->onYes(\= writeTo(dst);)
+                        ;
+                }
+                else
+                    writeTo(dst);
+            }
+
+            do InputBox::show("新建瓦片图集", "请输入图集文件名：", "NewTileset")
+                ->then(createAs)
+                ;
+        }
+
         // 新建 Workflow 集（右键菜单“新建→Workflow→创建 Workflow 集”）：
         // 创建 {name}.je4workflows 目录，并在其中生成固定骨架——
         //   .gitattributes（git 换行策略，见 workflow_gitattributes.template）、
@@ -1408,6 +1511,8 @@ namespace JEEditor::Editor
                 [".je4world"] = Icons::WORLD,
                 [".je4entity"] = Icons::ENTITY,
                 [".je4workflow"] = Icons::WORKFLOW,
+                [".je4tilemap"] = Icons::TILEMAP,
+                [".je4tileset"] = Icons::TILEMAP,
             };
 
 
@@ -1565,6 +1670,14 @@ namespace JEEditor::Editor
                     if (MenuItem("动画"))
                     {
                         self->askToCreateNewAnimation();
+                    }
+                    if (MenuItem("瓦片地图"))
+                    {
+                        self->askToCreateNewTilemap();
+                    }
+                    if (MenuItem("瓦片图集"))
+                    {
+                        self->askToCreateNewTileset();
                     }
                     if (MenuItem("物理世界配置"))
                     {
@@ -1763,6 +1876,12 @@ namespace JEEditor::Editor
                 },
                 [".je4animation"] = func(p: fsys::path_t) {
                     Animation2D::openAnimationEditorFromFile(p);
+                },
+                [".je4tilemap"] = func(p: fsys::path_t) {
+                    TilemapEditor::openTilemapEditorFromFile(p);
+                },
+                [".je4tileset"] = func(p: fsys::path_t) {
+                    TilemapEditor::openTilesetEditorFromFile(p);
                 },
             };
             

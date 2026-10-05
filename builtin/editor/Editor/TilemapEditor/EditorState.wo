@@ -1,0 +1,314 @@
+// 瓦片地图编辑器 —— 编辑期状态与撤销/重做。
+// 撤销采用命令模式（仿 Animation2D）：笔划级别的格子快照闭包。
+// 结构性操作（图层增删/移动、地图尺寸）不进入撤销栈，绘制类操作
+//（铅笔/矩形/填充/属性覆盖）均可撤销。
+
+import pkg::std;
+
+import je;
+import je::graphic;
+import je::tilemap;
+
+import pkg::fsys;
+
+import DataModel;
+
+using std;
+using je;
+using je::graphic;
+using je::tilemap;
+using fsys;
+
+namespace JEEditor::Editor::TilemapEditor
+{
+    // 绘制工具
+    public enum tool
+    {
+        PENCIL,     // 铅笔：按下/拖动逐格绘制
+        ERASER,     // 橡皮：逐格清除
+        RECT,       // 矩形：拖拽框选批量填充
+        FILL,       // 填充：点击同值连通域
+        EYEDROPPER, // 吸管：取格子值作为画笔
+    }
+    namespace tool
+    {
+        public func name(self: tool)=> string
+        {
+            if (self == tool::PENCIL)
+                return "铅笔";
+            if (self == tool::ERASER)
+                return "橡皮";
+            if (self == tool::RECT)
+                return "矩形";
+            if (self == tool::FILL)
+                return "填充";
+            if (self == tool::EYEDROPPER)
+                return "吸管";
+            return "?";
+        }
+    }
+
+    // 一条可撤销命令：闭包捕获地图句柄与受影响格子
+    using UndoCommand = struct{
+        m_apply: ()=>void,
+        m_undo: ()=>void,
+        m_desc: string,
+    };
+    public using UndoStack = struct{
+        protected m_past: vec<UndoCommand>,
+        protected m_future: vec<UndoCommand>,
+    }
+    {
+        public func create() => UndoStack
+        {
+            return UndoStack{ m_past = []mut, m_future = []mut };
+        }
+        public func can_undo(self: UndoStack) => bool { return self.m_past->len > 0; }
+        public func can_redo(self: UndoStack) => bool { return self.m_future->len > 0; }
+        public func clear(self: UndoStack)
+        {
+            self.m_past->clear();
+            self.m_future->clear();
+        }
+        public func push(self: UndoStack, cmd: UndoCommand)
+        {
+            self.m_future->clear();
+            self.m_past->add(cmd);
+        }
+    }
+
+    public using EditorState = struct{
+        protected m_context: TilemapContext,
+        // TILESET 模式：直接编辑单个图集文档（无画布/图层）
+        protected m_tileset_only: mut int,   // 图集文档句柄（0=地图模式）
+
+        // ===== 工具与画笔 =====
+        protected m_tool: mut tool,
+        // 当前画笔瓦片值（tile_value/terrain_value/0=橡皮）
+        protected m_paint: mut int,
+        // 矩形工具的按下锚点（屏幕世界格子坐标；none=未按下）
+        protected m_rect_anchor: mut option<(int, int)>,
+
+        // ===== 调色板选择 =====
+        protected m_palette_tileset: mut int,    // 地图图集下标
+        protected m_palette_source: mut int,     // 图集内源纹理下标
+        protected m_palette_cell: mut option<(int, int)>,  // 选中的源纹理网格
+        protected m_palette_terrain: mut option<int>,      // 选中的地形 id
+        // 新建地形弹窗的编辑期字段
+        protected m_new_terrain_name: mut string,
+        protected m_new_terrain_kind: mut int,
+        protected m_new_terrain_walkable: mut bool,
+        // 添加源纹理弹窗
+        protected m_new_source_path: mut string,
+        protected m_new_source_tilepx: mut int,
+        // 新建属性弹窗
+        protected m_new_prop_name: mut string,
+        protected m_new_prop_type: mut int,
+        protected m_new_prop_default: mut string,
+        // 重命名图层弹窗
+        protected m_rename_layer: mut option<int>,
+
+        // ===== 视图 =====
+        protected m_zoom: mut real,          // 每瓦片屏幕像素 = tilepx * zoom
+        protected m_pan: mut (real, real),   // 格(0,0)左上角相对画布左上角的屏幕偏移
+        protected m_hover_cell: mut option<(int, int)>,
+
+        // ===== 图层 =====
+        protected m_layer: mut int,          // 活动图层下标
+
+        // ===== 撤销与脏标记 =====
+        protected m_undo: UndoStack,
+        protected m_dirty: mut bool,
+        // 进行中的笔划：(cellkey, 修改前值) 对（cellkey = x + y*width）
+        protected m_stroke_layer: mut int,
+        protected m_stroke_cells: vec<(int, int)>,
+        protected m_stroke_desc: mut string,
+
+        // ===== 图集纹理显示缓存（(路径, 纹理) / 失败路径；线性扫描） =====
+        protected m_textures: vec<(string, texture)>,
+        protected m_textures_failed: vec<string>,
+
+        // 尺寸调整弹窗
+        protected m_resize_w: mut int,
+        protected m_resize_h: mut int,
+    }
+    {
+        public func create(context: TilemapContext)=> EditorState
+        {
+            return EditorState::create_internal(context, 0);
+        }
+        public func create_tileset_only(tileset_doc: int)=> EditorState
+        {
+            return EditorState::create_internal(
+                TilemapContext{
+                    m_path = mut fsys::normalize(""),
+                    m_map = mut 0,
+                    m_tileset_ids = []mut,
+                    m_tileset_paths = []mut,
+                },
+                tileset_doc);
+        }
+        func create_internal(context: TilemapContext, tileset_only: int)=> EditorState
+        {
+            return EditorState{
+                m_context = context,
+                m_tileset_only = mut tileset_only,
+
+                m_tool = mut tool::PENCIL,
+                m_paint = mut 0,
+                m_rect_anchor = mut option::none,
+
+                m_palette_tileset = mut 0,
+                m_palette_source = mut 0,
+                m_palette_cell = mut option::none,
+                m_palette_terrain = mut option::none,
+                m_new_terrain_name = mut "",
+                m_new_terrain_kind = mut 1,
+                m_new_terrain_walkable = mut true,
+                m_new_source_path = mut "",
+                m_new_source_tilepx = mut 32,
+                m_new_prop_name = mut "",
+                m_new_prop_type = mut 0,
+                m_new_prop_default = mut "",
+                m_rename_layer = mut option::none,
+
+                m_zoom = mut 1.,
+                m_pan = mut (64., 64.),
+                m_hover_cell = mut option::none,
+
+                m_layer = mut 0,
+
+                m_undo = UndoStack::create(),
+                m_dirty = mut false,
+                m_stroke_layer = mut -1,
+                m_stroke_cells = []mut,
+                m_stroke_desc = mut "",
+
+                m_textures = []mut,
+                m_textures_failed = []mut,
+
+                m_resize_w = mut 0,
+                m_resize_h = mut 0,
+            };
+        }
+
+        public func mark_dirty(self: EditorState)=> void { self.m_dirty = true; }
+
+        // 按路径取图集显示纹理（带缓存；失败记录避免重复加载）
+        public func atlas_texture(self: EditorState, path: string)=> option<texture>
+        {
+            for (let (cached_path, tex): self.m_textures)
+            {
+                if (cached_path == path)
+                    return option::value(tex);
+            }
+            for (let failed: self.m_textures_failed)
+            {
+                if (failed == path)
+                    return option::none;
+            }
+            match (texture::load(option::none, path))
+            {
+                value(tex)?
+                {
+                    do self.m_textures->add((path, tex));
+                    return option::value(tex);
+                }
+                none?
+                {
+                    do self.m_textures_failed->add(path);
+                    return option::none;
+                }
+            }
+        }
+
+        // ===== 笔划（一次按下到抬起的连续编辑 -> 一条撤销命令） =====
+        public func begin_stroke(self: EditorState, layer: int, desc: string)=> void
+        {
+            self.m_stroke_layer = layer;
+            self.m_stroke_desc = desc;
+            self.m_stroke_cells->clear();
+        }
+        // 记录格子修改前值（首次触碰时快照）并写值
+        public func touch_cell(self: EditorState, x: int, y: int, value: int)=> void
+        {
+            let (w, _, _, _) = tilemap::map_size(self.m_context.m_map);
+            let key = x + y * w;
+            let mut known = false;
+            for (let (cached_key, _): self.m_stroke_cells)
+            {
+                if (cached_key == key)
+                {
+                    known = true;
+                    break;
+                }
+            }
+            if (!known)
+            {
+                do self.m_stroke_cells->add((key, tilemap::get_tile(
+                    self.m_context.m_map, self.m_stroke_layer, x, y)));
+            }
+            do tilemap::set_tile(self.m_context.m_map, self.m_stroke_layer, x, y, value);
+        }
+        public func end_stroke(self: EditorState)=> void
+        {
+            if (self.m_stroke_cells->len == 0)
+            {
+                self.m_stroke_layer = -1;
+                return;
+            }
+            let (w, _, _, _) = tilemap::map_size(self.m_context.m_map);
+            let map = self.m_context.m_map;
+            let layer = self.m_stroke_layer;
+            // 捕获修改前/后值并注册撤销命令（闭包按 (key, value) 对恢复）
+            let before = self.m_stroke_cells->dup();
+            let mut after = []mut: vec<(int, int)>;
+            for (let (key, _): before)
+            {
+                do after->add((key, tilemap::get_tile(map, layer, key % w, key / w)));
+            }
+            let desc = self.m_stroke_desc;
+            self.m_undo->push(UndoCommand{
+                    m_apply = func() {
+                        for (let (key, v): after)
+                            do tilemap::set_tile(map, layer, key % w, key / w, v);
+                    },
+                    m_undo = func() {
+                        for (let (key, v): before)
+                            do tilemap::set_tile(map, layer, key % w, key / w, v);
+                    },
+                    m_desc = desc,
+                });
+            self.m_stroke_cells->clear();
+            self.m_stroke_layer = -1;
+            self.m_dirty = true;
+        }
+
+        public func undo(self: EditorState)=> void
+        {
+            match (self.m_undo.m_past->pop())
+            {
+                value(cmd)?
+                {
+                    do cmd.m_undo();
+                    self.m_undo.m_future->add(cmd);
+                    self.m_dirty = true;
+                }
+                none?;
+            }
+        }
+        public func redo(self: EditorState)=> void
+        {
+            match (self.m_undo.m_future->pop())
+            {
+                value(cmd)?
+                {
+                    do cmd.m_apply();
+                    self.m_undo.m_past->add(cmd);
+                    self.m_dirty = true;
+                }
+                none?;
+            }
+        }
+    }
+}
