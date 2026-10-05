@@ -846,7 +846,10 @@ namespace JEEditor::Editor::WorldEditorViewport
         {
             do try!{
                 try! euid = self.m_selected_entity_id;
-                try! e = self->findEntityByEuid(euid);
+                // UI 元素实体可以不带 Translation（不在可拾取实体选择器
+                // 内），反查回落到 UI 元素选择器
+                try! e = self->findEntityByEuid(euid)->or_bind(
+                    \= self->uiFindEntityByEuidInSelector(euid););
                 self->drawEntityContextMenuItems(e, true);
                 return_value!;
             };

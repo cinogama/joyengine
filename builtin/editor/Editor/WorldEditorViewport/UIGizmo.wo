@@ -680,6 +680,44 @@ namespace JEEditor::Editor::WorldEditorViewport
         };
     }
 
+    // 右键点击的 UI 空间拾取（右键菜单语义，与 pickEntityForContextMenu
+    // 一致）：已选实体在命中列表中时保持其选中（右键作用于选中的元素，
+    // 被遮挡时依然有效），否则选中层级最深（画在最上）的命中元素；
+    // 未命中返回 none 且不改变当前选中（右键空白处不应清空选中，由
+    // 调用方回落到 3D 射线拾取）
+    protected func pickUIElementForContextMenu(
+        self: WorldEditorViewport,
+        rmin: vec2,
+        rsize: vec2)=> option<entity::internal::euid_t>
+    {
+        return or(option::none: option<entity::internal::euid_t>) <| try!{
+            try! display_range = self->uiGetDisplayRange();
+            // 视口缩放折叠（zoom==1 时即原值；rmin/rsize 为真实视口矩形）
+            let (vrmin, vrsize) =
+                self->uiViewScreenRect(rmin, rsize, display_range);
+            let hits = self->pickUIElementsAt(vrmin, vrsize, display_range);
+            if (hits->empty)
+                return_value! option::none: option<entity::internal::euid_t>;
+
+            // 已选实体在命中列表中：菜单作用于它。
+            match (self.m_selected_entity_id)
+            {
+                none?;
+                value(current)?
+                {
+                    for (let (_, euid) : hits)
+                    {
+                        if (euid == current)
+                            return_value! option::value(current);
+                    }
+                }
+            }
+
+            // 否则选中并作用于最上层的命中元素。
+            return_value! option::value(hits[0].1);
+        };
+    }
+
     // ---- 交互（悬停检测、拖拽开始/进行/结束） ----
 
     // 检测当前鼠标悬停的 UI 手柄（屏幕空间距离判定），返回手柄编号。

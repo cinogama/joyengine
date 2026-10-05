@@ -274,10 +274,12 @@ namespace JEEditor::Editor::WorldEditorViewport
 
     // 视口右键的生命周期：记录按下起点（供环视的延迟激活使用，须先于
     // updateCameraControl 调用），并在松开时按位移分流——位移不超过
-    // RMB_CLICK_MAX_DRAG_PX 视为点击：命中实体（渲染实体或摄像机/
-    // 2D 光源/粒子发射器图标）时选中该实体并在鼠标处弹出上下文菜单
-    //（内容与实体列表一致，见 drawEntityContextMenuItems）；点击空白处
-    // 则弹出仅含“粘贴”的菜单（run 中的 VIEWPORT_BLANK_CONTEXT_MENU_ID）。
+    // RMB_CLICK_MAX_DRAG_PX 视为点击：命中实体（渲染实体、摄像机/
+    // 2D 光源/粒子发射器图标或 UI 元素的显示矩形）时选中该实体并在
+    // 鼠标处弹出上下文菜单（内容与实体列表一致，见
+    // drawEntityContextMenuItems）；点击空白处则弹出仅含“粘贴”的菜单
+    //（run 中的 VIEWPORT_BLANK_CONTEXT_MENU_ID）。拾取优先级与左键
+    // 选取一致：图标 gizmo → UI 空间 → 3D 射线。
     protected func updateViewportRightClick(
         self: WorldEditorViewport,
         debug_camera: option<entity>,
@@ -323,41 +325,60 @@ namespace JEEditor::Editor::WorldEditorViewport
                         }
                         none?
                         {
-                            // 屏幕坐标 -> NDC：优先经显示空间换算（含视口
-                            // 缩放感知，y 已随显示空间向上无需翻转；与
-                            // updateCameraControl 的左键拾取同款），显示
-                            // 范围不可得时退回旧换算（imgui y 向下，需翻转）
-                            let mouse = GetMousePos() as vec2;
-                            let ndc = or(
-                                (
-                                    (mouse[0] - rect_min.0)
-                                        / (rect_max.0 - rect_min.0) * 2. - 1.,
-                                    -((mouse[1] - rect_min.1)
-                                        / (rect_max.1 - rect_min.1) * 2. - 1.)
-                                ) as vec2)
-                                <| self->uiMouseToViewportNDC(
-                                    mouse,
+                            // UI 元素实体：命中其显示矩形时直接选中（右键
+                            // 菜单作用于它；与左键选取的“UI 空间优先于
+                            // 3D 射线”一致），未命中才走渲染实体的射线拾取
+                            match (self->pickUIElementForContextMenu(
                                     rect_min as vec2,
                                     ((rect_max.0 - rect_min.0,
-                                      rect_max.1 - rect_min.1)) as vec2);
-
-                            // 命中渲染实体：选中并弹实体菜单；未命中
-                            //（空白处）：保持当前选中不变，弹出仅含
-                            //“粘贴”的空白菜单
-                            let picked_euid = self->pickEntityForContextMenu(
-                                towoo::ray::from(
-                                    trans, proj, ndc,
-                                    camera_entity->towoo::get_component:<Camera::PerspectiveProjection>->is_none));
-
-                            match (picked_euid)
+                                      rect_max.1 - rect_min.1)) as vec2))
                             {
-                                value(euid)?
+                                value(ui_euid)?
                                 {
-                                    self.m_selected_entity_id = option::value(euid);
+                                    self.m_selected_entity_id =
+                                        option::value(ui_euid);
                                     OpenPopup(VIEWPORT_ENTITY_CONTEXT_MENU_ID);
                                 }
                                 none?
-                                    OpenPopup(VIEWPORT_BLANK_CONTEXT_MENU_ID);
+                                {
+                                    // 屏幕坐标 -> NDC：优先经显示空间换算（含
+                                    // 视口缩放感知，y 已随显示空间向上无需
+                                    // 翻转；与 updateCameraControl 的左键拾取
+                                    // 同款），显示范围不可得时退回旧换算
+                                    //（imgui y 向下，需翻转）
+                                    let mouse = GetMousePos() as vec2;
+                                    let ndc = or(
+                                        (
+                                            (mouse[0] - rect_min.0)
+                                                / (rect_max.0 - rect_min.0) * 2. - 1.,
+                                            -((mouse[1] - rect_min.1)
+                                                / (rect_max.1 - rect_min.1) * 2. - 1.)
+                                        ) as vec2)
+                                        <| self->uiMouseToViewportNDC(
+                                            mouse,
+                                            rect_min as vec2,
+                                            ((rect_max.0 - rect_min.0,
+                                              rect_max.1 - rect_min.1)) as vec2);
+
+                                    // 命中渲染实体：选中并弹实体菜单；未命中
+                                    //（空白处）：保持当前选中不变，弹出仅含
+                                    //“粘贴”的空白菜单
+                                    let picked_euid = self->pickEntityForContextMenu(
+                                        towoo::ray::from(
+                                            trans, proj, ndc,
+                                            camera_entity->towoo::get_component:<Camera::PerspectiveProjection>->is_none));
+
+                                    match (picked_euid)
+                                    {
+                                        value(euid)?
+                                        {
+                                            self.m_selected_entity_id = option::value(euid);
+                                            OpenPopup(VIEWPORT_ENTITY_CONTEXT_MENU_ID);
+                                        }
+                                        none?
+                                            OpenPopup(VIEWPORT_BLANK_CONTEXT_MENU_ID);
+                                    }
+                                }
                             }
                         }
                     }
