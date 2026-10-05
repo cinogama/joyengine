@@ -1,8 +1,8 @@
 // 瓦片地图编辑器 —— 属性面板。
 // 两个页签：
 //   格子属性：悬停/最后交互格子的属性取值链展示与逐格覆盖编辑；
-//   图集设置：当前调色板图集的源纹理管理、地形编辑、属性 schema、
-//             选中瓦片/地形的默认值与可通行性。
+//   图集设置：地图的图集引用管理、当前调色板图集的源纹理管理、
+//             地形编辑、属性 schema、选中瓦片/地形的默认值与可通行性。
 
 import pkg::std;
 
@@ -11,9 +11,13 @@ import je::gui;
 import je::tilemap;
 
 import pkg::fsys;
+import pkg::iterator;
+import pkg::worst;
 
 import builtin::editor::GUI::Forms::MsgBox;
 import builtin::editor::GUI::Forms::InputBox;
+
+import builtin::editor::Editor::ResourcePath;
 
 import DataModel;
 import EditorState;
@@ -24,7 +28,10 @@ using je;
 using je::gui;
 using je::tilemap;
 using fsys;
+using iterator;
+using worst;
 using JEEditor::GUI::Forms;
+using JEEditor::Editor::ResourcePath;
 using JEEditor::Editor::TilemapEditor;
 
 namespace JEEditor::Editor::TilemapEditor
@@ -121,10 +128,10 @@ namespace JEEditor::Editor::TilemapEditor
     func draw_one_property_editor(state: EditorState, ctx: TilemapContext,
         x: int, y: int, name: string, type: string)=> void
     {
-        let map = ctx.m_map;
+        let doc_id = ctx.m_map;
         let layer = state.m_layer;
-        let override = tilemap::get_cell_property(map, layer, x, y, name);
-        let resolved = tilemap::get_property(map, layer, x, y, name);
+        let override = tilemap::get_cell_property(doc_id, layer, x, y, name);
+        let resolved = tilemap::get_property(doc_id, layer, x, y, name);
 
         match (override)
         {
@@ -139,7 +146,7 @@ namespace JEEditor::Editor::TilemapEditor
                         value(r)? { init_val = r; }
                         none?;
                     }
-                    do tilemap::set_cell_property(map, layer, x, y, name,
+                    do tilemap::set_cell_property(doc_id, layer, x, y, name,
                         option::value(init_val));
                     state.m_dirty = true;
                 }
@@ -153,7 +160,7 @@ namespace JEEditor::Editor::TilemapEditor
                 SameLine();
                 if (Button(F"清除##ov_{name}"))
                 {
-                    do tilemap::set_cell_property(map, layer, x, y, name, option::none);
+                    do tilemap::set_cell_property(doc_id, layer, x, y, name, option::none);
                     state.m_dirty = true;
                 }
                 SameLine();
@@ -165,7 +172,7 @@ namespace JEEditor::Editor::TilemapEditor
                     {
                         value(b)?
                         {
-                            do tilemap::set_cell_property(map, layer, x, y, name,
+                            do tilemap::set_cell_property(doc_id, layer, x, y, name,
                                 option::value(b ? "true" | "false"));
                             state.m_dirty = true;
                         }
@@ -178,7 +185,7 @@ namespace JEEditor::Editor::TilemapEditor
                     {
                         value(s)?
                         {
-                            do tilemap::set_cell_property(map, layer, x, y, name,
+                            do tilemap::set_cell_property(doc_id, layer, x, y, name,
                                 option::value(s));
                             state.m_dirty = true;
                         }
@@ -189,15 +196,116 @@ namespace JEEditor::Editor::TilemapEditor
         }
     }
 
-    // ---- 图集设置 ----
+    // ---- 图集设置入口：地图模式先管理引用，再编辑当前调色板图集 ----
     public func draw_tileset_settings(state: EditorState, ctx: TilemapContext)=> void
     {
+        if (state.m_tileset_only == 0)
+            do draw_tileset_references(state, ctx);
+
         let ts_id = palette_tileset_doc(state, ctx);
         if (ts_id <= 0)
         {
-            do TextDisabled("没有可用图集");
+            if (state.m_tileset_only > 0)
+                do TextDisabled("没有可用图集");
             return;
         }
+        do draw_tileset_content(state, ts_id);
+    }
+
+    // ---- 地图对图集的引用管理 ----
+    // 图集(.je4tileset)是独立文件，地图须显式引用（引用表随 .je4tilemap
+    // 保存）。此处列出引用并支持添加/移除；添加弹窗扫描项目内的
+    // .je4tileset 文件供选择，也接受手动输入路径。
+    func draw_tileset_references(state: EditorState, ctx: TilemapContext)=> void
+    {
+        do Text("引用的图集：");
+        let ref_count = tilemap::tileset_count(ctx.m_map);
+        if (ref_count == 0)
+            do TextDisabled("（未引用任何图集，地图无法绘制瓦片）");
+        for (let mut i = 0; i < ref_count; i += 1)
+        {
+            let ref_path = tilemap::tileset_path(ctx.m_map, i);
+            do PushIDInt(i);
+            do Text(F"[{i}] {ref_path}");
+            SameLine();
+            if (Button("取消引用"))
+            {
+                do tilemap::remove_tileset(ctx.m_map, i);
+                state.m_dirty = true;
+            }
+            do PopID();
+        }
+        if (Button("+ 引用图集"))
+        {
+            // 打开弹窗时扫描项目内的 .je4tileset
+            state.m_found_tilesets->clear();
+            for (let p : recursive_walk(workpath()) |> iter_result
+                |> filter(\p = isfile(p)
+                    && string::lower(extension(p)) == ".je4tileset";)
+                |> collect
+                |> sort(\l, r = l->to_string() < r->to_string();))
+            {
+                do state.m_found_tilesets->add(
+                    ResourcePath::toRuntimeResourcePath(p));
+            }
+            do OpenPopup("##add_tileset_ref_popup");
+        }
+        do draw_add_tileset_ref_popup(state, ctx);
+        do Separator();
+    }
+
+    func draw_add_tileset_ref_popup(state: EditorState, ctx: TilemapContext)=> void
+    {
+        if (BeginPopup("##add_tileset_ref_popup"))
+        {
+            do Text("项目中的图集（点击引用）：");
+            if (state.m_found_tilesets->len == 0)
+                do TextDisabled("未在项目中找到 .je4tileset");
+            for (let found : state.m_found_tilesets)
+            {
+                if (SelectableSelected(F"{found}##found", false))
+                {
+                    let idx = tilemap::add_tileset(ctx.m_map, found);
+                    if (idx >= 0)
+                    {
+                        state.m_palette_tileset = idx;
+                        state.m_palette_source = 0;
+                        state.m_dirty = true;
+                        do CloseCurrentPopup();
+                    }
+                }
+            }
+            do Separator();
+            match (InputText("手动路径", state.m_add_ref_path))
+            {
+                value(s)? state.m_add_ref_path = s;
+                none?;
+            }
+            if (Button("按路径引用"))
+            {
+                let idx = tilemap::add_tileset(ctx.m_map, state.m_add_ref_path);
+                if (idx >= 0)
+                {
+                    state.m_palette_tileset = idx;
+                    state.m_palette_source = 0;
+                    state.m_add_ref_path = "";
+                    state.m_dirty = true;
+                    do CloseCurrentPopup();
+                }
+                else
+                    do MsgBox::err("引用失败",
+                        F"无法打开图集 \"{state.m_add_ref_path}\"，请检查路径");
+            }
+            SameLine();
+            if (Button("取消"))
+                do CloseCurrentPopup();
+            do EndPopup();
+        }
+    }
+
+    // ---- 图集设置：名称/源纹理/地形/schema/默认值 ----
+    func draw_tileset_content(state: EditorState, ts_id: int)=> void
+    {
 
         // 名称
         match (InputText("图集名称", tilemap::tileset_name(ts_id)))
