@@ -608,6 +608,22 @@ namespace jeecs
             };
             return { TABLE[corner][state][0], TABLE[corner][state][1] };
         }
+        // RPGMaker VX/VX Ace 式：2(宽)x3(高) 块的 4x6 半格取件表。
+        // 布局：锚点整块=孤块(仅作单块预览)，右上 2x2 半格=内部填充，
+        // 其余为直边/凹角/外凸角件。表值 = (列,行)。经 mkxp-z 的
+        // autotileVXRectsA(48 变体表)结构约束推导并交叉验证。
+        // 状态序与 corner_state 一致：[内部, 凹角, 第一方向边, 第二方向边, 外角]
+        //   LU/RU 第一方向为 U；LD/RD 为 D；第二方向 L/R。
+        inline half_cell rpgmaker_vx_quadrant(int corner /*0=LU 1=RU 2=LD 3=RD*/, int state)
+        {
+            static constexpr int TABLE[4][5][2] = {
+                /*LU*/ { {2,0},{2,4},{0,4},{2,2},{0,2} },
+                /*RU*/ { {3,0},{1,4},{3,4},{1,2},{3,2} },
+                /*LD*/ { {2,1},{2,3},{0,3},{2,5},{0,5} },
+                /*RD*/ { {3,1},{1,3},{3,3},{1,5},{3,5} },
+            };
+            return { TABLE[corner][state][0], TABLE[corner][state][1] };
+        }
         inline int corner_state(int mask, int o1, int o2, int diag)
         {
             if ((mask & o1) && (mask & o2))
@@ -930,9 +946,10 @@ namespace jeecs
                 return false;
             const auto& src = ts->sources[terrain.source];
 
-            if (terrain.kind == 1)
+            if (terrain.kind == 1 || terrain.kind == 3)
             {
-                // RPGMaker 四象限：按邻接掩码为四个角各取一个半格
+                // RPGMaker 四象限（XP 式条带 / VX 式 2x3 块）：
+                // 按邻接掩码为四个角各取一个半格
                 int mask = Tilemap::compute_mask(doc, layer, x, y, v);
                 const float half = tpx * 0.5f;
                 const float xm = x0 + half, ym = ybot + half;
@@ -948,35 +965,30 @@ namespace jeecs
                     vt = 1.f - py / h;
                     vb = 1.f - (py + shalf) / h;
                 };
+                // 按解析器种类选择半格表（XP 式条带 / VX 式 2x3 块）
+                #define JE_TL_QUAD(CORNER, O1, O2, DIAG)                     (terrain.kind == 1                         ? Tilemap::rpgmaker_quadrant(CORNER,                             Tilemap::corner_state(mask, O1, O2, DIAG))                         : Tilemap::rpgmaker_vx_quadrant(CORNER,                             Tilemap::corner_state(mask, O1, O2, DIAG)))
                 float u0, vb, u1, vt;
                 // LU（角 0：邻接 U/L/UL）
-                half_uv(Tilemap::rpgmaker_quadrant(0,
-                    Tilemap::corner_state(mask, Tilemap::NB_U, Tilemap::NB_L, Tilemap::NB_UL)).col,
-                    Tilemap::rpgmaker_quadrant(0,
-                        Tilemap::corner_state(mask, Tilemap::NB_U, Tilemap::NB_L, Tilemap::NB_UL)).row,
+                half_uv(JE_TL_QUAD(0, Tilemap::NB_U, Tilemap::NB_L, Tilemap::NB_UL).col,
+                    JE_TL_QUAD(0, Tilemap::NB_U, Tilemap::NB_L, Tilemap::NB_UL).row,
                     u0, vb, u1, vt);
                 write_quad(dst + 0 * 4 * FLOATS_PER_VERTEX, x0, ym, xm, ytop, u0, vb, u1, vt);
                 // RU（角 1：U/R/RU）
-                half_uv(Tilemap::rpgmaker_quadrant(1,
-                    Tilemap::corner_state(mask, Tilemap::NB_U, Tilemap::NB_R, Tilemap::NB_RU)).col,
-                    Tilemap::rpgmaker_quadrant(1,
-                        Tilemap::corner_state(mask, Tilemap::NB_U, Tilemap::NB_R, Tilemap::NB_RU)).row,
+                half_uv(JE_TL_QUAD(1, Tilemap::NB_U, Tilemap::NB_R, Tilemap::NB_RU).col,
+                    JE_TL_QUAD(1, Tilemap::NB_U, Tilemap::NB_R, Tilemap::NB_RU).row,
                     u0, vb, u1, vt);
                 write_quad(dst + 1 * 4 * FLOATS_PER_VERTEX, xm, ym, x1, ytop, u0, vb, u1, vt);
                 // LD（角 2：D/L/LD）
-                half_uv(Tilemap::rpgmaker_quadrant(2,
-                    Tilemap::corner_state(mask, Tilemap::NB_D, Tilemap::NB_L, Tilemap::NB_LD)).col,
-                    Tilemap::rpgmaker_quadrant(2,
-                        Tilemap::corner_state(mask, Tilemap::NB_D, Tilemap::NB_L, Tilemap::NB_LD)).row,
+                half_uv(JE_TL_QUAD(2, Tilemap::NB_D, Tilemap::NB_L, Tilemap::NB_LD).col,
+                    JE_TL_QUAD(2, Tilemap::NB_D, Tilemap::NB_L, Tilemap::NB_LD).row,
                     u0, vb, u1, vt);
                 write_quad(dst + 2 * 4 * FLOATS_PER_VERTEX, x0, ybot, xm, ym, u0, vb, u1, vt);
                 // RD（角 3：D/R/RD）
-                half_uv(Tilemap::rpgmaker_quadrant(3,
-                    Tilemap::corner_state(mask, Tilemap::NB_D, Tilemap::NB_R, Tilemap::NB_RD)).col,
-                    Tilemap::rpgmaker_quadrant(3,
-                        Tilemap::corner_state(mask, Tilemap::NB_D, Tilemap::NB_R, Tilemap::NB_RD)).row,
+                half_uv(JE_TL_QUAD(3, Tilemap::NB_D, Tilemap::NB_R, Tilemap::NB_RD).col,
+                    JE_TL_QUAD(3, Tilemap::NB_D, Tilemap::NB_R, Tilemap::NB_RD).row,
                     u0, vb, u1, vt);
                 write_quad(dst + 3 * 4 * FLOATS_PER_VERTEX, xm, ybot, x1, ym, u0, vb, u1, vt);
+                #undef JE_TL_QUAD
                 return true;
             }
 
@@ -1902,7 +1914,7 @@ JE_API int32_t je_tilemap_add_terrain(int32_t tileset, const char* name, int32_t
     int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
-    if (doc == nullptr || name == nullptr || kind < 0 || kind > 2
+    if (doc == nullptr || name == nullptr || kind < 0 || kind > 3
         || source_idx < 0 || source_idx >= (int32_t)doc->sources.size()
         || ix < 0 || iy < 0
         || ix >= doc->sources[source_idx].xcount || iy >= doc->sources[source_idx].ycount)
@@ -1978,7 +1990,7 @@ JE_API bool je_tilemap_set_terrain(int32_t tileset, int32_t terrain_id,
 {
     auto* doc = je_tilemap_ts_doc(tileset);
     if (doc == nullptr || terrain_id <= 0 || terrain_id >= (int32_t)doc->terrains.size()
-        || kind < 0 || kind > 2
+        || kind < 0 || kind > 3
         || source_idx < 0 || source_idx >= (int32_t)doc->sources.size()
         || ix < 0 || iy < 0
         || ix >= doc->sources[source_idx].xcount || iy >= doc->sources[source_idx].ycount)
@@ -2181,9 +2193,10 @@ namespace jeecs::Tilemap
             return 0;
         const auto& src = ts->sources[terrain.source];
 
-        if (terrain.kind == 1)
+        if (terrain.kind == 1 || terrain.kind == 3)
         {
-            // RPGMaker 四象限：槽位序 [LU, RU, LD, RD]，与渲染系统一致
+            // RPGMaker 四象限（XP 式条带 / VX 式 2x3 块）：
+            // 槽位序 [LU, RU, LD, RD]，与渲染系统一致
             int mask = compute_mask(doc, layer, x, y, v);
             const float shalf = src.tile_px * 0.5f;
             float w = (float)(src.tex_w ? src.tex_w : src.xcount * src.tile_px);
@@ -2197,7 +2210,9 @@ namespace jeecs::Tilemap
             const int32_t dst_qy[4] = { 0, 0, 1, 1 };
             for (int c = 0; c < 4; ++c)
             {
-                half_cell hc = rpgmaker_quadrant(c, corner_state(mask, cb[c].o1, cb[c].o2, cb[c].diag));
+                half_cell hc = terrain.kind == 1
+                    ? rpgmaker_quadrant(c, corner_state(mask, cb[c].o1, cb[c].o2, cb[c].diag))
+                    : rpgmaker_vx_quadrant(c, corner_state(mask, cb[c].o1, cb[c].o2, cb[c].diag));
                 float px = terrain.ix * src.tile_px + hc.col * shalf;
                 float py = terrain.iy * src.tile_px + hc.row * shalf;
                 out[c].source_idx = terrain.source;

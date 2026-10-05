@@ -37,9 +37,11 @@ namespace JEEditor::Editor::TilemapEditor
         if (kind == tilemap::terrain_kind::SINGLE as int)
             return "单块";
         if (kind == tilemap::terrain_kind::RPGMAKER as int)
-            return "四象限";
+            return "四象限(XP)";
         if (kind == tilemap::terrain_kind::BLOB47 as int)
             return "blob47";
+        if (kind == tilemap::terrain_kind::RPGMAKER_VX as int)
+            return "四象限(VX)";
         return "?";
     }
 
@@ -280,7 +282,7 @@ namespace JEEditor::Editor::TilemapEditor
                 value(s)? state.m_new_terrain_name = s;
                 none?;
             }
-            let kinds = ["单块", "四象限(RPGMaker)", "blob47"];
+            let kinds = ["单块", "四象限(XP条带)", "blob47", "四象限(VX 2x3块)"];
             match (ListBoxSelect("##terrain_kind", kinds, state.m_new_terrain_kind))
             {
                 value(k)? state.m_new_terrain_kind = k;
@@ -291,7 +293,8 @@ namespace JEEditor::Editor::TilemapEditor
                 value(v)? state.m_new_terrain_walkable = v;
                 none?;
             }
-            do TextDisabled("四象限：锚点右侧2格、下方3格的条带");
+            do TextDisabled("XP条带：锚点右2x下3格（旧版格式）");
+            do TextDisabled("VX块：锚点右2x下3格，右上2x2为内部填充");
             do TextDisabled("blob47：锚点起行优先47块（或显式变体表）");
             if (Button("创建"))
             {

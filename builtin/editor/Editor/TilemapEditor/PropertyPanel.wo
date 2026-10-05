@@ -403,7 +403,7 @@ namespace JEEditor::Editor::TilemapEditor
                     }
                     none?;
                 }
-                let kinds = ["单块", "四象限(RPGMaker)", "blob47"];
+                let kinds = ["单块", "四象限(XP条带)", "blob47", "四象限(VX 2x3块)"];
                 match (ListBoxSelect("##terrain_kind_edit", kinds, kind))
                 {
                     value(k)?
@@ -438,7 +438,8 @@ namespace JEEditor::Editor::TilemapEditor
                     state.m_palette_terrain = option::none;
                     state.m_dirty = true;
                 }
-                do TextDisabled("四象限布局：锚点右2格×下3格条带（与旧编辑器兼容）");
+                do TextDisabled("XP条带：锚点右2格×下3格（旧编辑器格式）");
+                do TextDisabled("VX块：锚点右2格×下3格，右上2x2为内部填充");
                 do TextDisabled("blob47 默认布局：锚点起行优先连续 47 块");
             }
         }

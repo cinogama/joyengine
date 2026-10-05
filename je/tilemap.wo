@@ -181,8 +181,10 @@ namespace je
         public enum terrain_kind
         {
             SINGLE = 0,     // 单块：始终取锚点整块
-            RPGMAKER = 1,   // RPGMaker 式四象限：锚点起 2x3 格条带
+            RPGMAKER = 1,   // RPGMaker XP 式四象限：锚点起 2x3 格条带
             BLOB47 = 2,     // blob47：47 变体（显式变体表或锚点行优先扫描）
+            RPGMAKER_VX = 3, // RPGMaker VX/VX Ace 式四象限：锚点起 2x3 格
+                             // 块（右上 2x2 为内部填充，与 A2 表兼容）
         }
 
         extern("libjoyecs", "wojeapi_tilemap_add_terrain")

@@ -4858,7 +4858,8 @@ JE_API bool    je_tilemap_tile_info(int32_t tileset, int32_t tile_id,
     int32_t* source_idx, int32_t* ix, int32_t* iy, int32_t* walkable);
 JE_API void    je_tilemap_set_tile_walkable(int32_t tileset, int32_t tile_id, int32_t walkable);
 
-// 自动图块地形：kind 0=单块(取锚点整块) 1=RPGMaker式四象限(2x3条带) 2=blob47(47变体)
+// 自动图块地形：kind 0=单块(取锚点整块) 1=RPGMaker XP式四象限(2x3条带)
+//   2=blob47(47变体) 3=RPGMaker VX式四象限(2x3块, 右上2x2为内部填充)
 JE_API int32_t je_tilemap_add_terrain(int32_t tileset, const char* name, int32_t kind,
     int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable);
 JE_API bool    je_tilemap_remove_terrain(int32_t tileset, int32_t terrain_id);
