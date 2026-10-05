@@ -313,7 +313,7 @@ namespace jeecs
             for (uint32_t i = 0; i < terr_n && r.ok; ++i)
             {
                 TerrainDef t;
-                t.name = r.str(); t.kind = r.i32();
+                t.name = r.str(); t.kind = r.u8();
                 t.source = r.i32(); t.ix = r.i32(); t.iy = r.i32();
                 t.walkable = r.u8() != 0;
                 uint32_t vn = r.u32();
