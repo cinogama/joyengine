@@ -17,6 +17,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cmath>
+#include <cctype>
 #include <algorithm>
 
 /*
@@ -259,12 +260,28 @@ namespace jeecs
                 w.u32((uint32_t)t.variant_tiles.size());
                 for (int32_t v : t.variant_tiles) w.i32(v);
             }
-            uint32_t tileprop_count = 0;
-            for (const auto& [tid, kvs] : ts.tile_properties) tileprop_count += (uint32_t)(1 + kvs.size());
-            w.u32(tileprop_count);
+            // 此计数是"带属性的瓦片条目数"，与读取侧逐条 (tid, kv 数) 对应；
+            // 误写成键值对总数会让读取器越过数据末尾而判定整文件损坏。
+            w.u32((uint32_t)ts.tile_properties.size());
             for (const auto& [tid, kvs] : ts.tile_properties)
             {
                 w.i32(tid); w.u32((uint32_t)kvs.size());
+                for (const auto& [k, v] : kvs) { w.str(k); w.str(v); }
+            }
+            // 尾块：地形默认属性（键为地形 id）。旧版读取器按计数读完即止，
+            // 多余的尾块被忽略；旧文件无此块时加载侧保持为空（与地图
+            // z 偏移尾块同款做法）。
+            uint32_t terrprop_count = 0;
+            for (size_t i = 1; i < ts.terrains.size(); ++i)
+                if (!ts.terrains[i].properties.empty())
+                    ++terrprop_count;
+            w.u32(terrprop_count);
+            for (size_t i = 1; i < ts.terrains.size(); ++i)
+            {
+                const auto& kvs = ts.terrains[i].properties;
+                if (kvs.empty())
+                    continue;
+                w.i32((int32_t)i); w.u32((uint32_t)kvs.size());
                 for (const auto& [k, v] : kvs) { w.str(k); w.str(v); }
             }
 
@@ -342,6 +359,28 @@ namespace jeecs
             }
             if (!r.ok)
                 return nullptr;
+            // 尾块（可选）：地形默认属性。旧文件无此块 → 跳过；条目至少
+            // 8 字节（地形 id + 键值数），总量越界视为损坏。
+            if (r.o + 4 <= r.n)
+            {
+                uint32_t tprop_n = r.u32();
+                if (tprop_n > ts->terrains.size() || r.o + (size_t)tprop_n * 8 > r.n)
+                    return nullptr;
+                for (uint32_t i = 0; i < tprop_n && r.ok; ++i)
+                {
+                    int32_t tid = r.i32();
+                    uint32_t kv_n = r.u32();
+                    if (tid <= 0 || tid >= (int32_t)ts->terrains.size())
+                    { r.ok = false; break; }
+                    for (uint32_t k = 0; k < kv_n && r.ok; ++k)
+                    {
+                        std::string key = r.str(), val = r.str();
+                        ts->terrains[tid].properties[std::move(key)] = std::move(val);
+                    }
+                }
+                if (!r.ok)
+                    return nullptr;
+            }
             ts->rebuild_flat_index();
             return ts;
         }
@@ -463,20 +502,32 @@ namespace jeecs
             std::unordered_map<std::string, int32_t> tilesets_by_path;
             std::set<std::string> tilesets_failed;
 
-            // 注册表键规范化：@/ 与 !/ 前缀解析为真实目录，反斜杠统一为正斜杠。
-            // 无前缀的相对路径（浏览器工作目录形态）按运行时目录补全，
-            // 与 jeecs_file_open 的解析一致。同一文件的不同形态字符串
-            // 必须映射到同一文档实例，否则编辑器两侧会各自持有独立副本。
+            // 注册表键规范化：@/ 与 !/ 前缀解析为真实目录，反斜杠统一为
+            // 正斜杠，连续斜杠折叠，Windows 下再统一小写（文件系统不分
+            // 大小写）。无前缀的相对路径（浏览器工作目录形态）按运行时
+            // 目录补全，与 jeecs_file_open 的解析一致。同一文件的不同
+            // 形态字符串必须映射到同一文档实例，否则编辑器两侧会各自
+            // 持有独立副本，后一次保存会覆盖掉前一份里的新增数据
+            //（曾表现为：新加的自动图块地形保存后消失）。
             std::string canonical_key(const std::string& path) const
             {
                 std::string s = resolve_runtime_prefix(path);
                 bool absolute = s.size() >= 2 && (s[1] == ':' || s[0] == '/');
                 if (!absolute)
                     s = std::string(::jeecs_file_get_runtime_path()) + '/' + s;
-                for (auto& ch : s)
-                    if (ch == '\\')
-                        ch = '/';
-                return s;
+                std::string key;
+                key.reserve(s.size());
+                for (char raw : s)
+                {
+                    char ch = raw == '\\' ? '/' : raw;
+#ifdef _WIN32
+                    ch = (char)std::tolower((unsigned char)ch);
+#endif
+                    if (ch == '/' && !key.empty() && key.back() == '/')
+                        continue;
+                    key.push_back(ch);
+                }
+                return key;
             }
 
             MapDocument* map(int32_t id)
@@ -527,6 +578,27 @@ namespace jeecs
                     if (d != nullptr)
                         return { fnd->second, d };
                 }
+                // 键未命中时先按已注册文档的路径反查同一文件：此前若以
+                // 另一种路径形态打开过（或绑定被另存/新建覆盖），必须复用
+                // 同一实例（多份命中取 version 最新者），否则两份文档会
+                // 互相覆盖丢数据。这与键规范化的目标一致。
+                int32_t healed = 0;
+                uint64_t healed_ver = 0;
+                for (size_t i = 0; i < maps.size(); ++i)
+                {
+                    const auto& d = maps[i];
+                    if (d != nullptr && !d->path.empty() && d->version >= healed_ver
+                        && canonical_key(d->path) == key)
+                    {
+                        healed = (int32_t)i + 1;
+                        healed_ver = d->version;
+                    }
+                }
+                if (healed > 0)
+                {
+                    bind_map_path(key, healed);
+                    return { healed, maps[healed - 1].get() };
+                }
                 if (maps_failed.count(key) != 0)
                     return { 0, nullptr };
                 auto doc = load_map_from(path);
@@ -553,6 +625,25 @@ namespace jeecs
                     if (d != nullptr)
                         return { fnd->second, d };
                 }
+                // 同 open_map：反查复用既有实例，避免同文件多副本互覆盖
+                //（曾表现为图集编辑器新增的自动图块地形被旧副本保存抹掉）。
+                int32_t healed = 0;
+                uint64_t healed_ver = 0;
+                for (size_t i = 0; i < tilesets.size(); ++i)
+                {
+                    const auto& d = tilesets[i];
+                    if (d != nullptr && !d->path.empty() && d->version >= healed_ver
+                        && canonical_key(d->path) == key)
+                    {
+                        healed = (int32_t)i + 1;
+                        healed_ver = d->version;
+                    }
+                }
+                if (healed > 0)
+                {
+                    bind_tileset_path(key, healed);
+                    return { healed, tilesets[healed - 1].get() };
+                }
                 if (tilesets_failed.count(key) != 0)
                     return { 0, nullptr };
                 auto doc = load_tileset_from(path);
@@ -569,13 +660,39 @@ namespace jeecs
 
             void reload_map(const std::string& path)
             {
-                maps_by_path.erase(canonical_key(path));
-                maps_failed.erase(canonical_key(path));
+                detach_map(canonical_key(path));
             }
             void reload_tileset(const std::string& path)
             {
-                tilesets_by_path.erase(canonical_key(path));
-                tilesets_failed.erase(canonical_key(path));
+                detach_tileset(canonical_key(path));
+            }
+
+            // 重载除清空绑定/失败记录外，还须解除旧文档与路径的关联：
+            // open_* 的反查会按文档自身路径复活旧实例，若不解除，重载
+            // 语义（下次打开强制从磁盘重读）会被破坏。
+            void detach_map(const std::string& key)
+            {
+                auto fnd = maps_by_path.find(key);
+                if (fnd != maps_by_path.end())
+                {
+                    MapDocument* d = map(fnd->second);
+                    if (d != nullptr && canonical_key(d->path) == key)
+                        d->path.clear();
+                }
+                maps_by_path.erase(key);
+                maps_failed.erase(key);
+            }
+            void detach_tileset(const std::string& key)
+            {
+                auto fnd = tilesets_by_path.find(key);
+                if (fnd != tilesets_by_path.end())
+                {
+                    TilesetDocument* d = tileset(fnd->second);
+                    if (d != nullptr && canonical_key(d->path) == key)
+                        d->path.clear();
+                }
+                tilesets_by_path.erase(key);
+                tilesets_failed.erase(key);
             }
 
             // 保证地图文档的图集解析与注册表中的最新文档一致

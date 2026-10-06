@@ -101,7 +101,6 @@ namespace JEEditor::Editor::TilemapEditor
         // 添加源纹理弹窗
         protected m_new_source_path: mut string,
         protected m_new_source_tilepx: mut int,
-        protected m_new_source_auto_terrain: mut bool,  // 默认为每个格子创建单块地形
         // 引用图集弹窗：手动路径输入 + 扫描到的图集缓存（@/ 运行时路径）
         protected m_add_ref_path: mut string,
         protected m_found_tilesets: vec<string>,
@@ -177,7 +176,6 @@ namespace JEEditor::Editor::TilemapEditor
                 m_new_terrain_walkable = mut true,
                 m_new_source_path = mut "",
                 m_new_source_tilepx = mut 32,
-                m_new_source_auto_terrain = mut true,
                 m_add_ref_path = mut "",
                 m_found_tilesets = []mut,
                 m_new_prop_name = mut "",

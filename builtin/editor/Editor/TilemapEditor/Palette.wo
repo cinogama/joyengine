@@ -523,7 +523,7 @@ namespace JEEditor::Editor::TilemapEditor
                             if (IsItemClickedLeft())
                             {
                                 state.m_palette_cell = option::value((cx, cy));
-                                // 优先选择该格的单块地形（新图集默认全格单块地形）
+                                // 优先选择该格已有的单块地形（早期图集曾按格自动创建）
                                 let mut st = 0;
                                 let tc0 = tilemap::terrain_count(ts_id);
                                 for (let mut t = 1; t <= tc0; t += 1)
@@ -542,7 +542,7 @@ namespace JEEditor::Editor::TilemapEditor
                                 }
                                 else
                                 {
-                                    // 旧图集没有单块地形：回退为普通瓦片
+                                    // 该格没有单块地形：回退为普通瓦片
                                     state.m_palette_terrain = option::none;
                                     let tile_id = tilemap::add_tile(
                                         ts_id, state.m_palette_source, cx, cy, 1);

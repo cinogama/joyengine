@@ -67,21 +67,26 @@ namespace JEEditor::Editor::TilemapEditor
             return true;
         }
 
-        // 同步图集解析缓存：与地图当前引用表对齐（增删/重开后刷新）
+        // 同步图集解析缓存：与地图当前引用表对齐（增删/重开后刷新）。
+        // 除路径变化外还须检测文档句柄漂移：图集被另存/覆盖保存后注册
+        // 表会把路径重绑到新文档实例，缓存若不跟随，地图调色板与图集
+        // 编辑器会各持一份副本，一边的修改被另一边的保存覆盖丢失。
         public func sync_tilesets(self: TilemapContext)=> void
         {
             let count = tilemap::tileset_count(self.m_map);
-            // 数量或任一路径变化时重建缓存（就地清空重填，保持下标对齐）
+            // 数量、任一路径或任一句柄变化时重建缓存（就地清空重填，保持下标对齐）
             let mut need_rebuild = self.m_tileset_paths->len != count;
             if (!need_rebuild)
             {
                 for (let mut i = 0; i < count; i += 1)
                 {
+                    let cur_path = tilemap::tileset_path(self.m_map, i);
                     match (self.m_tileset_paths->get(i))
                     {
                         value(cached)?
                         {
-                            if (tilemap::tileset_path(self.m_map, i) != cached)
+                            if (cur_path != cached
+                                || tilemap::open_tileset(cur_path) != self.m_tileset_ids[i])
                             {
                                 need_rebuild = true;
                                 break;
