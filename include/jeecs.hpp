@@ -4806,6 +4806,10 @@ JE_API void    je_tilemap_get_layer(int32_t map, int32_t layer,
     const char** name, int32_t* visible, int32_t* locked);
 JE_API void    je_tilemap_set_layer(int32_t map, int32_t layer,
     const char* name /*nullptr 保持不变*/, int32_t visible, int32_t locked);
+// 图层的世界 z 偏移（相对地图根实体；不同层须错开以避免深度冲突。
+// 旧格式文件缺省为层下标 0,1,2...）
+JE_API float   je_tilemap_layer_z(int32_t map, int32_t layer);
+JE_API void    je_tilemap_set_layer_z(int32_t map, int32_t layer, float z);
 
 // ---- 瓦片读写 ----
 JE_API int32_t je_tilemap_get_tile(int32_t map, int32_t layer, int32_t x, int32_t y);

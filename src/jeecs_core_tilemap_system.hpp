@@ -140,6 +140,9 @@ namespace jeecs
             std::string name;
             bool visible = true;
             bool locked = false;    // 编辑器锁定标记（运行时忽略）
+            // 该层在世界中的 z 偏移（相对地图根实体，世界单位）。
+            // 不同层须错开 z 以避免深度冲突；旧文件缺省为层下标。
+            float z = 0.f;
             std::vector<int32_t> grid;  // w*h 稠密网格，行优先、y 自上而下
         };
         struct MapDocument
@@ -173,6 +176,7 @@ namespace jeecs
             std::vector<char> b;
             void u32(uint32_t v) { b.insert(b.end(), (char*)&v, (char*)&v + 4); }
             void i32(int32_t v) { u32((uint32_t)v); }
+            void f32(float v) { uint32_t bits; memcpy(&bits, &v, 4); u32(bits); }
             void u8(uint8_t v) { b.push_back((char)v); }
             void str(const std::string& s)
             {
@@ -196,6 +200,11 @@ namespace jeecs
                 uint32_t v; memcpy(&v, p + o, 4); o += 4; return v;
             }
             int32_t i32() { return (int32_t)u32(); }
+            float f32()
+            {
+                uint32_t bits = u32();
+                float v; memcpy(&v, &bits, 4); return v;
+            }
             uint8_t u8()
             {
                 if (!need(1)) return 0;
@@ -358,6 +367,11 @@ namespace jeecs
                 w.u32((uint32_t)kvs.size());
                 for (const auto& [k, v] : kvs) { w.str(k); w.str(v); }
             }
+            // 尾块：每层 z 偏移（f32）。旧版读取器按计数读完即止，多余的
+            // 尾块被忽略；旧文件无此块时加载侧按层下标补默认值。
+            w.u32((uint32_t)m.layers.size());
+            for (const auto& l : m.layers)
+                w.f32(l.z);
             FILE* f = fopen(resolve_runtime_prefix(path).c_str(), "wb");
             if (f == nullptr)
                 return false;
@@ -413,6 +427,18 @@ namespace jeecs
             }
             if (!r.ok)
                 return nullptr;
+            // 尾块（可选）：每层 z 偏移。旧文件无此块 → 按层下标错开，
+            // 保证多层默认不发生深度冲突。
+            for (size_t i = 0; i < m->layers.size(); ++i)
+                m->layers[i].z = (float)i;
+            if (r.o + 4 <= r.n)
+            {
+                uint32_t zn = r.u32();
+                if (zn > (uint32_t)m->layers.size() || r.o + (size_t)zn * 4 > r.n)
+                    return nullptr;
+                for (uint32_t i = 0; i < zn && r.ok; ++i)
+                    m->layers[i].z = r.f32();
+            }
             return m;
         }
 
@@ -869,6 +895,35 @@ namespace jeecs
             return cached;
         }
 
+        // 根实体 Renderer::Shaders 指示的瓦片着色器（未挂/为空 → 无值）
+        static std::optional<basic::resource<graphic::shader>> root_shader(
+            const game_entity& root)
+        {
+            auto* comp = root.get_component<Renderer::Shaders>();
+            if (comp == nullptr || comp->shaders.empty())
+                return std::nullopt;
+            return comp->shaders.front();
+        }
+
+        // 分片着色器与期望一致则不动，否则重写（资源句柄不同即更新）
+        static void refresh_part_shader(const game_entity& root, const game_entity& part)
+        {
+            auto* comp = part.get_component<Renderer::Shaders>();
+            if (comp == nullptr)
+                return;
+            auto desired = root_shader(root);
+            if (!desired.has_value())
+                desired = shared_tile_shader();
+            if (!desired.has_value())
+                return;
+            const auto& want = desired.value();
+            if (comp->shaders.size() == 1
+                && comp->shaders.front().get() == want.get())
+                return;
+            comp->shaders.clear();
+            comp->shaders.push_back(want);
+        }
+
         // 分块静态角点索引：每格 4 个四边形槽位，各 6 索引（0,1,2 2,1,3）
         static const std::vector<uint32_t>& shared_indices()
         {
@@ -1050,7 +1105,7 @@ namespace jeecs
             return true;
         }
 
-        game_entity create_part_entity(game_entity root, int32_t layer, int32_t z_layer,
+        game_entity create_part_entity(game_entity root, int32_t layer, float layer_z,
             const Tilemap::SourceTexture& src)
         {
             auto world = get_world();
@@ -1068,13 +1123,17 @@ namespace jeecs
             l2p->parent_uid = anchor->uid;
 
             auto* pos = part.get_component<Transform::LocalPosition>();
-            // 图层沿 +z 逐层抬升（近摄像机者后绘制）
-            pos->pos = math::vec3(0.f, 0.f, 0.002f * (float)z_layer);
+            // 图层 z 由地图数据（图层属性）指定，可手动调整
+            pos->pos = math::vec3(0.f, 0.f, layer_z);
             part.get_component<Renderer::Rendqueue>()->rend_queue = layer;
 
+            // 着色器：根实体挂 Renderer::Shaders 时以其指示为准，
+            // 否则用内置 Forward2D
             auto* shaders = part.get_component<Renderer::Shaders>();
-            if (auto shad = shared_tile_shader())
+            if (auto shad = root_shader(root); shad.has_value())
                 shaders->shaders.push_back(shad.value());
+            else if (auto def = shared_tile_shader())
+                shaders->shaders.push_back(def.value());
 
             auto* textures = part.get_component<Renderer::Textures>();
             if (auto tex = graphic::texture::load(nullptr, src.path))
@@ -1160,8 +1219,13 @@ namespace jeecs
             raw->m_x_max = (std::min<int32_t>(bx + (int32_t)CHUNK, doc.width)) * tpx;
             raw->m_y_max = -(by * tpx);
             raw->m_y_min = -(std::min<int32_t>(by + (int32_t)CHUNK, doc.height)) * tpx;
-            raw->m_z_min = -0.01f;
-            raw->m_z_max = 0.01f + 0.002f * (float)part.layer;
+            const float lz = doc.layers[part.layer].z;
+            raw->m_z_min = lz - 0.01f;
+            raw->m_z_max = lz + 0.01f;
+
+            // 层 z 变化时同步分片位置（分片实体常驻，仅重建顶点）
+            if (auto* pos = e.get_component<Transform::LocalPosition>())
+                pos->pos = math::vec3(0.f, 0.f, lz);
         }
 
         void Update()
@@ -1293,6 +1357,9 @@ namespace jeecs
                             rebuild_part(*r.doc, *fnd->second);
                             fnd->second->built_stamp = stamp;
                         }
+                        // 着色器跟随根实体 Renderer::Shaders（组件变化不
+                        // 计入地图版本戳，故每帧对齐）
+                        refresh_part_shader(root, game_entity{ fnd->second->entity });
                         continue;
                     }
                     // 解包 key
@@ -1320,7 +1387,8 @@ namespace jeecs
                         continue;
 
                     game_entity part_entity =
-                        create_part_entity(root, layer, layer, *src_info);
+                        create_part_entity(root, layer,
+                            r.doc != nullptr ? r.doc->layers[layer].z : 0.f, *src_info);
                     auto* tag = part_entity.get_component<Tilemap::RenderPart>();
                     tag->owner_id = root_id;
                     tag->layer = layer;
@@ -1440,6 +1508,7 @@ JE_API int32_t je_tilemap_add_layer(int32_t map, const char* name)
         return -1;
     jeecs::Tilemap::MapLayer layer;
     layer.name = name ? name : ("图层 " + std::to_string(doc->layers.size() + 1));
+    layer.z = (float)doc->layers.size(); // 新层默认置于最上（沿 +z 错开）
     layer.grid.assign((size_t)doc->width * doc->height, 0);
     doc->layers.push_back(std::move(layer));
     ++doc->version;
@@ -1511,6 +1580,25 @@ JE_API void je_tilemap_set_layer(int32_t map, int32_t layer,
     l.visible = visible != 0;
     l.locked = locked != 0;
     ++doc->version;
+}
+
+// 图层的世界 z 偏移（相对地图根实体；不同层错开以避免深度冲突）
+JE_API float je_tilemap_layer_z(int32_t map, int32_t layer)
+{
+    auto* doc = je_tilemap_map_doc(map);
+    return doc != nullptr && layer >= 0 && layer < (int32_t)doc->layers.size()
+        ? doc->layers[layer].z : 0.f;
+}
+JE_API void je_tilemap_set_layer_z(int32_t map, int32_t layer, float z)
+{
+    auto* doc = je_tilemap_map_doc(map);
+    if (doc == nullptr || layer < 0 || layer >= (int32_t)doc->layers.size())
+        return;
+    if (doc->layers[layer].z != z)
+    {
+        doc->layers[layer].z = z;
+        ++doc->version;
+    }
 }
 
 JE_API int32_t je_tilemap_get_tile(int32_t map, int32_t layer, int32_t x, int32_t y)
@@ -2394,6 +2482,17 @@ WOORT_API woort_api wojeapi_tilemap_set_layer(void)
 {
     je_tilemap_set_layer((int32_t)woort_int(0), (int32_t)woort_int(1),
         woort_string(2), (int32_t)woort_int(3), (int32_t)woort_int(4));
+    return woort_ret_void();
+}
+WOORT_API woort_api wojeapi_tilemap_layer_z(void)
+{
+    return woort_ret_float(je_tilemap_layer_z(
+        (int32_t)woort_int(0), (int32_t)woort_int(1)));
+}
+WOORT_API woort_api wojeapi_tilemap_set_layer_z(void)
+{
+    je_tilemap_set_layer_z((int32_t)woort_int(0), (int32_t)woort_int(1),
+        woort_float(2));
     return woort_ret_void();
 }
 WOORT_API woort_api wojeapi_tilemap_get_tile(void)

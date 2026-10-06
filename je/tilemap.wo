@@ -66,6 +66,13 @@ namespace je
             public func set_layer(map: int, layer: int,
                 name: string, visible: int, locked: int)=> void;
 
+        // 图层的世界 z 偏移（相对地图根实体；不同层错开以避免深度冲突）
+        extern("libjoyecs", "wojeapi_tilemap_layer_z")
+            public func layer_z(map: int, layer: int)=> real;
+
+        extern("libjoyecs", "wojeapi_tilemap_set_layer_z")
+            public func set_layer_z(map: int, layer: int, z: real)=> void;
+
         // ==================== 瓦片读写 ====================
         extern("libjoyecs", "wojeapi_tilemap_get_tile")
             public func get_tile(map: int, layer: int, x: int, y: int)=> int;
