@@ -411,6 +411,12 @@ namespace JEEditor::Editor::TilemapEditor
                 }
                 let (tname, kind, src, ix, iy, wk, _) =
                     tilemap::terrain_info(ts_id, tid);
+                // 已删除（墓碑）地形不可编辑
+                if (kind > 3 || src < 0)
+                {
+                    state.m_palette_terrain = option::none;
+                    return;
+                }
                 do Text(F"地形 #{tid}");
                 match (InputText("名称##tname", tname))
                 {

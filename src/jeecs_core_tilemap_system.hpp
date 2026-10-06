@@ -1814,20 +1814,28 @@ JE_API bool je_tilemap_remove_source(int32_t tileset, int32_t source_idx)
     if (doc == nullptr || source_idx < 0 || source_idx >= (int32_t)doc->sources.size())
         return false;
     doc->sources.erase(doc->sources.begin() + source_idx);
-    // 移除引用该源的瓦片/地形并重排 source 下标
-    auto fix_def = [&](auto& defs)
+    // 引用该源的瓦片/地形做墓碑（source=-1），其余重排 source 下标。
+    // 与 remove_terrain 同理：不移动数组元素，地图按 id 引用永不漂移。
+    for (auto& d : doc->tiles)
     {
-        for (size_t i = defs.size(); i > 0; --i)
+        if (d.source == source_idx) { d.source = -1; continue; }
+        if (d.source > source_idx) d.source -= 1;
+    }
+    for (auto& d : doc->terrains)
+    {
+        if (d.source == source_idx)
         {
-            auto& d = defs[i - 1];
-            if (d.source == source_idx)
-                defs.erase(defs.begin() + (i - 1));
-            else if (d.source > source_idx)
-                d.source -= 1;
+            if (d.source >= 0) { /* 已是墓碑则跳过 */ }
+            d.source = -1;
+            d.kind = 255;
+            d.name.clear();
+            d.ix = 0; d.iy = 0;
+            d.variant_tiles.clear();
+            d.properties.clear();
+            continue;
         }
-    };
-    fix_def(doc->tiles);
-    fix_def(doc->terrains);
+        if (d.source > source_idx) d.source -= 1;
+    }
     doc->rebuild_flat_index();
     ++doc->version;
     return true;
@@ -1876,34 +1884,14 @@ JE_API bool je_tilemap_remove_tile(int32_t tileset, int32_t tile_id)
     auto* doc = je_tilemap_ts_doc(tileset);
     if (doc == nullptr || tile_id <= 0 || tile_id >= (int32_t)doc->tiles.size())
         return false;
-    doc->tiles.erase(doc->tiles.begin() + tile_id);
+    // 墓碑删除（同 remove_terrain）：地图按 id 引用瓦片，不移动数组，
+    // id 永不漂移，跨会话安全。
+    auto& t = doc->tiles[tile_id];
+    if (t.source < 0)
+        return false;
+    t.source = -1;
+    t.ix = 0; t.iy = 0;
     doc->tile_properties.erase(tile_id);
-    // 图集内部 id 重排：引用该图集的地图格子需要整体修正，代价是扫描
-    // 所有缓存地图（图集定义变更属于低频操作）
-    for (auto& map_doc : jeecs::Tilemap::documents::inst().maps)
-    {
-        if (map_doc == nullptr)
-            continue;
-        bool changed = false;
-        for (size_t ts_idx = 0; ts_idx < map_doc->resolved.size(); ++ts_idx)
-        {
-            if (map_doc->resolved[ts_idx].get() != doc)
-                continue;
-            for (auto& layer : map_doc->layers)
-                for (auto& v : layer.grid)
-                {
-                    if (v <= 0) continue;
-                    int32_t ti = 0, local = 0;
-                    jeecs::Tilemap::decode_tile_value(v, &ti, &local);
-                    if (ti != (int32_t)ts_idx || local < tile_id)
-                        continue;
-                    if (local == tile_id) { v = 0; changed = true; }
-                    else { v = jeecs::Tilemap::encode_tile_value(ti, local - 1); changed = true; }
-                }
-        }
-        if (changed)
-            ++map_doc->version;
-    }
     doc->rebuild_flat_index();
     ++doc->version;
     return true;
@@ -1959,31 +1947,18 @@ JE_API bool je_tilemap_remove_terrain(int32_t tileset, int32_t terrain_id)
     auto* doc = je_tilemap_ts_doc(tileset);
     if (doc == nullptr || terrain_id <= 0 || terrain_id >= (int32_t)doc->terrains.size())
         return false;
-    doc->terrains.erase(doc->terrains.begin() + terrain_id);
-    for (auto& map_doc : jeecs::Tilemap::documents::inst().maps)
-    {
-        if (map_doc == nullptr)
-            continue;
-        bool changed = false;
-        for (size_t ts_idx = 0; ts_idx < map_doc->resolved.size(); ++ts_idx)
-        {
-            if (map_doc->resolved[ts_idx].get() != doc)
-                continue;
-            for (auto& layer : map_doc->layers)
-                for (auto& v : layer.grid)
-                {
-                    if (v >= 0) continue;
-                    int32_t ti = 0, local = 0;
-                    jeecs::Tilemap::decode_tile_value(v, &ti, &local);
-                    if (ti != (int32_t)ts_idx || local < terrain_id)
-                        continue;
-                    if (local == terrain_id) { v = 0; changed = true; }
-                    else { v = jeecs::Tilemap::encode_terrain_value(ti, local - 1); changed = true; }
-                }
-        }
-        if (changed)
-            ++map_doc->version;
-    }
+    // 墓碑删除：只标记不移动数组。地图格子按 id 引用地形，若抹除元素，
+    // 其后所有地形 id 前移，已保存地图（可能在其他会话中绘制）将整体
+    // 错位。标记为 source=-1（渲染/查询自然失效），id 永不复用。
+    auto& t = doc->terrains[terrain_id];
+    if (t.source < 0)
+        return false;
+    t.source = -1;
+    t.kind = 255; // 已删除标记（u8 序列化往返安全）
+    t.name.clear();
+    t.ix = 0; t.iy = 0;
+    t.variant_tiles.clear();
+    t.properties.clear();
     ++doc->version;
     return true;
 }
@@ -2019,6 +1994,9 @@ JE_API bool je_tilemap_set_terrain(int32_t tileset, int32_t terrain_id,
         || source_idx < 0 || source_idx >= (int32_t)doc->sources.size()
         || ix < 0 || iy < 0
         || ix >= doc->sources[source_idx].xcount || iy >= doc->sources[source_idx].ycount)
+        return false;
+    // 墓碑槽位不可编辑（防止复活已删除 id 造成旧引用错位）
+    if (doc->terrains[terrain_id].source < 0)
         return false;
     auto& t = doc->terrains[terrain_id];
     if (name != nullptr) t.name = name;

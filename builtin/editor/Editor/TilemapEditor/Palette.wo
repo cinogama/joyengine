@@ -178,14 +178,28 @@ namespace JEEditor::Editor::TilemapEditor
             do TextDisabled("在图集编辑器中添加源纹理并创建地形。");
             return;
         }
+        // 先过滤已删除地形（墓碑，kind>3 或 source<0），再按有效数排布
+        let valid_ids = []mut: vec<int>;
+        for (let mut t = 1; t <= total; t += 1)
+        {
+            let (_, k, s, _, _, _, _) = tilemap::terrain_info(ts_id, t);
+            if (k <= 3 && s >= 0)
+                do valid_ids->add(t);
+        }
+        let count = valid_ids->len;
+        if (count == 0)
+        {
+            do TextDisabled("图集中没有可用地形");
+            return;
+        }
         let cell = 32.;
         let avail_w = GetContentRegionAvail()[0];
         let per_row = math::max(1, (avail_w / cell) as int);
-        let rows = (total + per_row - 1) / per_row;
-        let mut tid = 1;
+        let rows = (count + per_row - 1) / per_row;
+        let mut slot = 0;
         for (let mut r = 0; r < rows; r += 1)
         {
-            let n = math::min(per_row, total - tid + 1);
+            let n = math::min(per_row, count - slot);
             let pos = GetCursorScreenPos();
             // 整行一个占位项：格子零间隙紧排
             do Dummy((n as real * cell, cell));
@@ -200,6 +214,7 @@ namespace JEEditor::Editor::TilemapEditor
             }
             for (let mut c = 0; c < n; c += 1)
             {
+                let tid = valid_ids[slot + c];
                 let (tname, k, s, ix, iy, _, _) = tilemap::terrain_info(ts_id, tid);
                 let x0 = pos[0] + c as real * cell;
                 let x1 = x0 + cell;
@@ -248,8 +263,8 @@ namespace JEEditor::Editor::TilemapEditor
                         ? 0 | state.m_palette_tileset;
                     state.m_paint = tilemap::terrain_value(ts_idx, tid);
                 }
-                tid += 1;
             }
+            slot += n;
         }
     }
 
