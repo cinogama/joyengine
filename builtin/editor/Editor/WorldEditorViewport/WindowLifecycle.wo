@@ -947,19 +947,13 @@ namespace JEEditor::Editor::WorldEditorViewport
         // 基础变换（成员留空 = 默认值；位置由生成点动作写入）
         for (let comp_name : [
             "Transform::LocalPosition", "Transform::LocalRotation",
-            "Transform::LocalToWorld", "Transform::Translation",
+            "Transform::LocalScale", "Transform::LocalToWorld",
+            "Transform::Translation",
         ])
             components_dat->set(comp_name, new_table());
 
-        // 默认比例尺：1 格 = 1 世界单位（瓦片像素的倒数）。
-        // 地图分片是根实体的子级，根缩放即整图比例尺，可随时在
-        // 视口中手动调整。
-        let (_, _, tpx, _) = tilemap::map_size(map_doc);
-        let inv_scale = 1. / tpx as real;
-        let scale_tab = new_table();
-        // vec3 成员按 towoo 序列化约定写作逗号分隔字符串
-        do scale_tab->set("scale", F"{inv_scale}, {inv_scale}, 1.");
-        components_dat->set("Transform::LocalScale", scale_tab);
+        // 比例尺默认 (1,1,1)：瓦片地图几何按"1 格 = 1 单位长度"发射，
+        // 根 LocalScale 即比例尺，可随时在视口中手动调整。
 
         let map_comp = new_table();
         map_comp->set("map_path", ResourcePath::toRuntimeResourcePath(path));

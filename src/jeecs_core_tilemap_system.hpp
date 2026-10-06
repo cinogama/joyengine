@@ -1003,9 +1003,10 @@ namespace jeecs
                 return false;
             const auto* ts = doc.resolved[ts_idx].get();
 
-            const float tpx = (float)doc.tile_px;
-            const float x0 = x * tpx, x1 = x0 + tpx;
-            const float ytop = -y * tpx, ybot = ytop - tpx;
+            // 几何约定：1 格 = 1 世界单位（tile_px 只用于图集采样 UV；
+            // 根实体 LocalScale 即比例尺，(1,1,1) 时格子边长恰为 1）
+            const float x0 = (float)x, x1 = x0 + 1.f;
+            const float ytop = -(float)y, ybot = ytop - 1.f;
 
             // 先全部写成退化四边形（零面积，不产生像素）
             for (size_t q = 0; q < 4; ++q)
@@ -1048,7 +1049,7 @@ namespace jeecs
                     emit_full_tile(src, terrain.ix, terrain.iy);
                     return true;
                 }
-                const float half = tpx * 0.5f;
+                const float half = 0.5f;
                 const float xm = x0 + half, ym = ybot + half;
                 const float shalf = src.tile_px * 0.5f;
                 float w = (float)(src.tex_w ? src.tex_w : src.xcount * src.tile_px);
@@ -1235,12 +1236,11 @@ namespace jeecs
                 _m_staging.size() * sizeof(float),
                 used_cells * 4 * 6);
 
-            // 分块包围盒（局部空间：地图向 +x 与 -y 展开）
-            const float tpx = (float)doc.tile_px;
-            raw->m_x_min = bx * tpx;
-            raw->m_x_max = (std::min<int32_t>(bx + (int32_t)CHUNK, doc.width)) * tpx;
-            raw->m_y_max = -(by * tpx);
-            raw->m_y_min = -(std::min<int32_t>(by + (int32_t)CHUNK, doc.height)) * tpx;
+            // 分块包围盒（局部空间：1 格 = 1 单位，向 +x 与 -y 展开）
+            raw->m_x_min = (float)bx;
+            raw->m_x_max = (float)std::min<int32_t>(bx + (int32_t)CHUNK, doc.width);
+            raw->m_y_max = -(float)by;
+            raw->m_y_min = -(float)std::min<int32_t>(by + (int32_t)CHUNK, doc.height);
             const float lz = doc.layers[part.layer].z;
             raw->m_z_min = lz - 0.01f;
             raw->m_z_max = lz + 0.01f;

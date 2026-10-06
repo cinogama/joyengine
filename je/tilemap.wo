@@ -329,19 +329,19 @@ namespace je
         }
 
         // ==================== 坐标换算 ====================
+        // 几何约定：1 格 = 1 单位长度（与渲染一致；根实体 LocalScale
+        // 即比例尺，(1,1,1) 时格子边长恰为 1）。tile_px 仅用于图集采样。
         // 瓦片中心的世界坐标（相对地图根实体；地图向 +x 与 -y 展开）
         public func tile_center(map: int, x: int, y: int)=> (real, real)
         {
-            let (_, _, tile_px, _) = map_size(map);
-            let tpx = tile_px as real;
-            return ((x as real + 0.5) * tpx, -(y as real + 0.5) * tpx);
+            do map;
+            return (x as real + 0.5, -(y as real + 0.5));
         }
         // 世界坐标（相对地图根实体）所在瓦片
         public func tile_at_world(map: int, world_x: real, world_y: real)=> (int, int)
         {
-            let (_, _, tile_px, _) = map_size(map);
-            let tpx = tile_px as real;
-            return ((world_x / tpx) as int, ((-world_y) / tpx) as int);
+            do map;
+            return (world_x as int, (-world_y) as int);
         }
     }
 }
