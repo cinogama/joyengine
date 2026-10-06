@@ -1178,7 +1178,7 @@ namespace jeecs
             return part;
         }
 
-        void rebuild_part(Tilemap::MapDocument& doc, part_entry& part)
+        void rebuild_part(Tilemap::MapDocument& doc, game_entity root, part_entry& part)
         {
             auto world = get_world();
             game_entity e{ part.entity };
@@ -1245,9 +1245,15 @@ namespace jeecs
             raw->m_z_min = lz - 0.01f;
             raw->m_z_max = lz + 0.01f;
 
-            // 层 z 变化时同步分片位置（分片实体常驻，仅重建顶点）
+            // 层 z 变化时同步分片位置；比例尺兜底写入
+            //（常态由 sync_part_scale 每帧对齐，此处确保任何路径都不漏）
             if (auto* pos = e.get_component<Transform::LocalPosition>())
                 pos->pos = math::vec3(0.f, 0.f, lz);
+            if (auto* root_scale = root.get_component<Transform::LocalScale>())
+            {
+                if (auto* sc = e.get_component<Transform::LocalScale>())
+                    sc->scale = root_scale->scale;
+            }
         }
 
         void Update()
@@ -1376,7 +1382,7 @@ namespace jeecs
                     {
                         if (r.doc != nullptr && fnd->second->built_stamp != stamp)
                         {
-                            rebuild_part(*r.doc, *fnd->second);
+                            rebuild_part(*r.doc, root, *fnd->second);
                             fnd->second->built_stamp = stamp;
                         }
                         // 着色器跟随根实体 Renderer::Shaders（组件变化不
@@ -1423,7 +1429,7 @@ namespace jeecs
 
                     if (r.doc != nullptr)
                     {
-                        rebuild_part(*r.doc, entry);
+                        rebuild_part(*r.doc, root, entry);
                         entry.built_stamp = stamp;
                     }
                     parts[part_entity._m_raw._m_id] = entry;
