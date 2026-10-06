@@ -1,6 +1,7 @@
 // 瓦片地图编辑器 —— 图层面板。
 // 底部栏：图层自上而下列出（列表顶 = 最上层）。点击选择活动图层；
-// 显隐/锁定切换；新建/删除/上移/下移/重命名。
+// 显隐/锁定切换与 Z 偏移编辑在行尾；新建/删除/上移/下移/重命名在
+// 工具条，行内右键也有等价的快捷菜单。
 // 注意：图层增删/移动不进入撤销栈（绘制类操作才可撤销）。
 
 import pkg::std;
@@ -13,6 +14,7 @@ import pkg::fsys;
 
 import builtin::editor::GUI::Forms::InputBox;
 import builtin::editor::GUI::Forms::MsgBox;
+import builtin::editor::GUI::Widgets;
 
 import DataModel;
 import EditorState;
@@ -23,10 +25,191 @@ using je::gui;
 using je::tilemap;
 using fsys;
 using JEEditor::GUI::Forms;
+using JEEditor::GUI::Widgets;
 using JEEditor::Editor::TilemapEditor;
 
 namespace JEEditor::Editor::TilemapEditor
 {
+    // 活动层高亮与锁定提示的强调色：与系统列表分组标题同族的
+    // 强调蓝 / 强调琥珀（0..1 浮点 RGBA，与主题文字色混合使用，
+    // 明暗主题都保持可读）
+    public let ACTIVE_LAYER_ACCENT = (0.42, 0.62, 0.95, 1.);
+    public let LOCKED_ACCENT = (0.90, 0.75, 0.31, 1.);
+
+    // 重命名 row 号图层（输入框确认后写回显隐/锁定状态并标记脏）
+    func rename_layer(state: EditorState, ctx: TilemapContext, row: int)=> void
+    {
+        let (cur_name, _, _) = tilemap::get_layer(ctx.m_map, row);
+        do InputBox::show("重命名图层", "请输入新名称：", cur_name)
+            ->then(func(name)
+                {
+                    let (_, visible, locked) = tilemap::get_layer(ctx.m_map, row);
+                    do tilemap::set_layer(ctx.m_map, row, name, visible, locked);
+                    state.m_dirty = true;
+                });
+    }
+
+    // 将 row 号图层上移（delta > 0，朝列表顶）或下移（delta < 0）；
+    // 被移动的是活动层时活动层下标跟随
+    func shift_layer(state: EditorState, ctx: TilemapContext, row: int, delta: int)=> void
+    {
+        if (tilemap::move_layer(ctx.m_map, row, row + delta))
+        {
+            if (state.m_layer == row)
+                state.m_layer = row + delta;
+            state.m_dirty = true;
+        }
+    }
+
+    // 删除 row 号图层：其后图层下标前移，活动层跟随调整；至少保留一个图层
+    func delete_layer(state: EditorState, ctx: TilemapContext, row: int)=> void
+    {
+        let (_, _, _, layer_count) = tilemap::map_size(ctx.m_map);
+        if (layer_count <= 1)
+        {
+            do MsgBox::err("无法删除", "至少保留一个图层");
+            return;
+        }
+        do tilemap::remove_layer(ctx.m_map, row);
+        if (state.m_layer > row)
+            state.m_layer -= 1;
+        if (state.m_layer >= layer_count - 1)
+            state.m_layer = layer_count - 2;
+        state.m_dirty = true;
+    }
+
+    // 单行图层条目：与系统列表条目 / 检视面板组件块同款的分区标题栏
+    // 样式（见 Widgets::pushSectionHeaderStyle）整行绘制。
+    // ImGui 点击测试按提交顺序，先提交的行项会占据重叠区域的悬停，
+    // AllowItemOverlap 放行行尾的显隐/锁定开关与 Z 输入框抢占命中；
+    // 行自身仍在剩余空白处响应左键（选中活动层）与右键（快捷菜单）。
+    func draw_layer_row(state: EditorState, ctx: TilemapContext, row: int)=> void
+    {
+        let map = ctx.m_map;
+        let (lname, visible, locked) = tilemap::get_layer(map, row);
+        let is_active = row == state.m_layer;
+        let row_label = F"{lname}##layer{row}";
+
+        let text_c = GetStyleColor(ImGuiCol::ImGuiCol_Text);
+
+        pushSectionHeaderStyle();
+        // 活动层：标题栏填充向强调蓝偏移（此刻 GetStyleColor 取到的
+        // 已是 pushSectionHeaderStyle 混出的底色）
+        if (is_active)
+            PushStyleColor(ImGuiCol::ImGuiCol_Header,
+                mixStyleColor(GetStyleColor(ImGuiCol::ImGuiCol_Header),
+                    ACTIVE_LAYER_ACCENT, 0.30, 255));
+        // 隐藏层：整行文字弱化（行名、按钮文字、Z 输入框内容一并变淡）
+        if (visible == 0)
+            PushStyleColor(ImGuiCol::ImGuiCol_Text,
+                mixStyleColor(text_c, text_c, 0., 110));
+
+        do TreeNodeEx(row_label,
+            TreeNodeAttribute::ImGuiTreeNodeFlags_Leaf
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_Framed
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_NoTreePushOnOpen
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_AllowItemOverlap);
+
+        // 行的命中事件必须紧跟行项读取（此刻行项仍是最后绘制的 item，
+        // 随后提交的行尾控件会自然接管重叠区域的悬停与点击）
+        if (IsItemClickedLeft())
+            state.m_layer = row;
+        if (IsItemHovered())
+            do SetTooltip("左键选中为编辑层，右键打开图层菜单");
+
+        // 活动层左缘强调竖条（同系统列表分组标题的画法）
+        if (is_active)
+        {
+            let (rect_min, rect_size) = GetItemRect();
+            let (rect_x, rect_y) = rect_min;
+            let (_, rect_h) = rect_size;
+            do GetWindowDrawList()->AddRectFilled((rect_x, rect_y),
+                (rect_x + 3., rect_y + rect_h),
+                mixStyleColor(text_c, ACTIVE_LAYER_ACCENT, 0.75, 220));
+        }
+
+        // 右键快捷菜单：与工具条等价的图层操作
+        if (BeginPopupContextItemLabel(row_label))
+        {
+            if (MenuItem("重命名"))
+                do rename_layer(state, ctx, row);
+            if (MenuItem("上移"))
+                do shift_layer(state, ctx, row, 1);
+            if (MenuItem("下移"))
+                do shift_layer(state, ctx, row, -1);
+            Separator();
+            if (MenuItem("删除"))
+                do delete_layer(state, ctx, row);
+            defer EndPopup();
+        }
+
+        // 行尾控件：透明底“薄片”开关（悬停浮出底色，保持标题栏安静），
+        // 锁定时开关文字染琥珀色；在标题栏样式内提交，与标题栏同高同圆角
+        PushStyleColor(ImGuiCol::ImGuiCol_Button, (0, 0, 0, 0));
+        PushStyleColor(ImGuiCol::ImGuiCol_ButtonHovered,
+            mixStyleColor(text_c, text_c, 0., 34));
+        PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive,
+            mixStyleColor(text_c, text_c, 0., 60));
+
+        SameLine();
+        let (line_x, line_y) = GetCursorPos();
+        let avail_w = GetContentRegionAvail().0;
+
+        // 从行右缘向左排布：Z 输入框（右侧带 Z 标签）→ 锁定 → 显隐；
+        // 开关宽度按当前字体实算（2 字标签 + 分区样式的 FramePadding.x 6×2）
+        let vis_w = CalcTextSize("可见").0 + 12.;
+        let lock_w = CalcTextSize("未锁").0 + 12.;
+        let z_w = 96.;
+        let z_label_w = CalcTextSize("Z").0 + 8.;
+        let gap = 4.;
+        let z_x = line_x + avail_w - z_label_w - z_w;
+        let lock_x = z_x - gap - lock_w;
+        let vis_x = lock_x - gap - vis_w;
+
+        SetCursorPos((vis_x, line_y));
+        if (ButtonSize(visible != 0 ? F"可见##v{row}" | F"隐藏##v{row}", (vis_w, 0.)))
+        {
+            do tilemap::set_layer(map, row, lname, visible != 0 ? 0 | 1, locked);
+            state.m_dirty = true;
+        }
+
+        SetCursorPos((lock_x, line_y));
+        if (locked != 0)
+            PushStyleColor(ImGuiCol::ImGuiCol_Text,
+                mixStyleColor(text_c, LOCKED_ACCENT, 0.65, 255));
+        if (ButtonSize(locked != 0 ? F"锁定##l{row}" | F"未锁##l{row}", (lock_w, 0.)))
+        {
+            do tilemap::set_layer(map, row, lname, visible, locked != 0 ? 0 | 1);
+            state.m_dirty = true;
+        }
+        if (locked != 0)
+            PopStyleColor(1);
+        PopStyleColor(3);
+
+        // 世界 z 偏移（相对地图根实体；不同层错开避免深度冲突）
+        SetCursorPos((z_x, line_y));
+        SetNextItemWidth(z_w);
+        match (InputFloat(F"Z##z{row}", tilemap::layer_z(map, row)))
+        {
+            value(z)?
+            {
+                do tilemap::set_layer_z(map, row, z);
+                state.m_dirty = true;
+            }
+            none?;
+        }
+        if (IsItemHovered())
+            do SetTooltip("图层的世界 Z 偏移（相对地图根实体），不同层错开可避免深度冲突");
+
+        if (visible == 0)
+            PopStyleColor(1);
+        if (is_active)
+            PopStyleColor(1);
+        popSectionHeaderStyle();
+        Spacing();
+    }
+
     public func draw_layers(state: EditorState, ctx: TilemapContext)=> void
     {
         let map = ctx.m_map;
@@ -48,89 +231,22 @@ namespace JEEditor::Editor::TilemapEditor
         }
         SameLine();
         if (Button("- 删除"))
-        {
-            if (layer_count > 1)
-            {
-                // 删除活动层：其后图层下标前移，活动层跟随调整
-                let deleted = state.m_layer;
-                do tilemap::remove_layer(map, deleted);
-                if (state.m_layer > deleted)
-                    state.m_layer -= 1;
-                if (state.m_layer >= layer_count - 1)
-                    state.m_layer = layer_count - 2;
-                state.m_dirty = true;
-            }
-            else
-                do MsgBox::err("无法删除", "至少保留一个图层");
-        }
+            do delete_layer(state, ctx, state.m_layer);
         SameLine();
         if (Button("上移"))
-        {
-            if (tilemap::move_layer(map, state.m_layer, state.m_layer + 1))
-            {
-                state.m_layer += 1;
-                state.m_dirty = true;
-            }
-        }
+            do shift_layer(state, ctx, state.m_layer, 1);
         SameLine();
         if (Button("下移"))
-        {
-            if (tilemap::move_layer(map, state.m_layer, state.m_layer - 1))
-            {
-                state.m_layer -= 1;
-                state.m_dirty = true;
-            }
-        }
+            do shift_layer(state, ctx, state.m_layer, -1);
         SameLine();
         if (Button("重命名"))
-        {
-            let (cur_name, _, _) = tilemap::get_layer(map, state.m_layer);
-            do InputBox::show("重命名图层", "请输入新名称：", cur_name)
-                ->then(func(name)
-                    {
-                        let (_, visible, locked) = tilemap::get_layer(ctx.m_map, state.m_layer);
-                        do tilemap::set_layer(ctx.m_map, state.m_layer, name, visible, locked);
-                        state.m_dirty = true;
-                    });
-        }
+            do rename_layer(state, ctx, state.m_layer);
 
         // 图层列表（顶 = 最上层，与渲染顺序一致）
         if (BeginChildSize("##layer_list", GetContentRegionAvail()[0], 0.))
         {
             for (let mut row = layer_count - 1; row >= 0; row -= 1)
-            {
-                let (lname, visible, locked) = tilemap::get_layer(map, row);
-                if (SelectableSelected(
-                        F"{lname}##layer{row}", row == state.m_layer))
-                    state.m_layer = row;
-
-                // 行内显隐/锁定开关
-                SameLine();
-                if (Button(visible != 0 ? F"可见##v{row}" | F"隐藏##v{row}"))
-                {
-                    do tilemap::set_layer(map, row, lname,
-                        visible != 0 ? 0 | 1, locked);
-                    state.m_dirty = true;
-                }
-                SameLine();
-                if (Button(locked != 0 ? F"锁定##l{row}" | F"未锁##l{row}"))
-                {
-                    do tilemap::set_layer(map, row, lname, visible,
-                        locked != 0 ? 0 | 1);
-                    state.m_dirty = true;
-                }
-                // 世界 z 偏移（相对地图根实体；不同层错开避免深度冲突）
-                SameLine();
-                match (InputFloat(F"Z##z{row}", tilemap::layer_z(map, row)))
-                {
-                    value(z)?
-                    {
-                        do tilemap::set_layer_z(map, row, z);
-                        state.m_dirty = true;
-                    }
-                    none?;
-                }
-            }
+                do draw_layer_row(state, ctx, row);
         }
         EndChild();
     }
