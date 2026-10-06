@@ -924,6 +924,23 @@ namespace jeecs
             comp->shaders.push_back(want);
         }
 
+        // 比例尺同步：把根实体 LocalScale 复制到分片 LocalScale。
+        // 变换系统的缩放为纯局部语义（不沿父链复合，设计如此），
+        // 瓦片地图的比例尺因此由本系统显式维护。
+        static void sync_part_scale(const game_entity& root, const game_entity& part)
+        {
+            auto* root_scale = root.get_component<Transform::LocalScale>();
+            auto* part_scale = part.get_component<Transform::LocalScale>();
+            if (root_scale == nullptr || part_scale == nullptr)
+                return;
+            if (part_scale->scale.x != root_scale->scale.x
+                || part_scale->scale.y != root_scale->scale.y
+                || part_scale->scale.z != root_scale->scale.z)
+            {
+                part_scale->scale = root_scale->scale;
+            }
+        }
+
         // 分块静态角点索引：每格 4 个四边形槽位，各 6 索引（0,1,2 2,1,3）
         static const std::vector<uint32_t>& shared_indices()
         {
@@ -1126,6 +1143,11 @@ namespace jeecs
             // 图层 z 由地图数据（图层属性）指定，可手动调整
             pos->pos = math::vec3(0.f, 0.f, layer_z);
             part.get_component<Renderer::Rendqueue>()->rend_queue = layer;
+
+            // 比例尺：根实体的缩放即整图比例尺（变换系统的缩放为纯局部
+            // 语义、不沿父链复合，故由本系统显式同步到各分片）
+            if (auto* root_scale = root.get_component<Transform::LocalScale>())
+                part.get_component<Transform::LocalScale>()->scale = root_scale->scale;
 
             // 着色器：根实体挂 Renderer::Shaders 时以其指示为准，
             // 否则用内置 Forward2D
@@ -1360,6 +1382,8 @@ namespace jeecs
                         // 着色器跟随根实体 Renderer::Shaders（组件变化不
                         // 计入地图版本戳，故每帧对齐）
                         refresh_part_shader(root, game_entity{ fnd->second->entity });
+                        // 比例尺同理：根 LocalScale 变化即时同步到分片
+                        sync_part_scale(root, game_entity{ fnd->second->entity });
                         continue;
                     }
                     // 解包 key
