@@ -1017,9 +1017,15 @@ namespace jeecs
                 return true;
             }
 
-            // blob47 / 单块：解析为一个整块变体
+            // 单块：直接取锚点整块（不依赖瓦片定义表）
+            if (terrain.kind == 0)
+            {
+                emit_full_tile(src, terrain.ix, terrain.iy);
+                return true;
+            }
+
+            // blob47：按邻接掩码解析为一个整块变体
             int32_t variant_tile = 0;
-            if (terrain.kind == 2)
             {
                 int mask = Tilemap::compute_mask(doc, layer, x, y, v);
                 uint8_t variant = Tilemap::blob47_table()[(uint8_t)(mask & 0xFF)];
@@ -1031,12 +1037,6 @@ namespace jeecs
                     int32_t flat = terrain.iy * src.xcount + terrain.ix + variant;
                     variant_tile = ts->tile_at_flat(terrain.source, flat);
                 }
-            }
-            else
-            {
-                // 单块：锚点整块
-                variant_tile = ts->tile_at_flat(terrain.source,
-                    terrain.iy * src.xcount + terrain.ix);
             }
             if (variant_tile > 0 && variant_tile < (int32_t)ts->tiles.size())
             {
@@ -2259,9 +2259,16 @@ namespace jeecs::Tilemap
             return 4;
         }
 
-        // 单块 / blob47：整块变体
+        // 单块：直接取锚点整块（不依赖瓦片定义表）
+        if (terrain.kind == 0)
+        {
+            fill_full(src, terrain.ix, terrain.iy);
+            out[0].source_idx = terrain.source;
+            return 1;
+        }
+
+        // blob47：整块变体
         int32_t variant_tile = 0;
-        if (terrain.kind == 2)
         {
             int mask = compute_mask(doc, layer, x, y, v);
             uint8_t variant = blob47_table()[(uint8_t)(mask & 0xFF)];
@@ -2270,11 +2277,6 @@ namespace jeecs::Tilemap
             else
                 variant_tile = ts->tile_at_flat(terrain.source,
                     terrain.iy * src.xcount + terrain.ix + variant);
-        }
-        else
-        {
-            variant_tile = ts->tile_at_flat(terrain.source,
-                terrain.iy * src.xcount + terrain.ix);
         }
         if (variant_tile > 0 && variant_tile < (int32_t)ts->tiles.size())
         {

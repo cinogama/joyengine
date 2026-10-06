@@ -166,8 +166,9 @@ namespace JEEditor::Editor::TilemapEditor
     }
 
     // 自动图块地形缩略选择行：VX/XP 显示整块缩略，blob47 显示锚点块
-    // 地图编辑器的地形调色板：一个地形一格，按"自动图块 -> 单块"分区。
-    // 原始 tileset 的查看与地形创建在图集编辑器中进行。
+    // 地图编辑器的地形调色板：一个地形一格（32px 紧排，RM 式）。
+    // 图标 = 该地形单独出现时的样式（锚点孤块）。原始 tileset 的查看
+    // 与地形创建在图集编辑器中进行。
     func draw_terrain_cell_palette(state: EditorState, ts_id: int)=> void
     {
         let total = tilemap::terrain_count(ts_id);
@@ -177,121 +178,78 @@ namespace JEEditor::Editor::TilemapEditor
             do TextDisabled("在图集编辑器中添加源纹理并创建地形。");
             return;
         }
+        let cell = 32.;
         let avail_w = GetContentRegionAvail()[0];
-        let cell = 36.;
         let per_row = math::max(1, (avail_w / cell) as int);
-
-        do Text("自动图块：");
-        let mut col = 0;
-        for (let mut t = 1; t <= total; t += 1)
+        let rows = (total + per_row - 1) / per_row;
+        let mut tid = 1;
+        for (let mut r = 0; r < rows; r += 1)
         {
-            let (_, k, _, _, _, _, _) = tilemap::terrain_info(ts_id, t);
-            if (k == 0)
+            let n = math::min(per_row, total - tid + 1);
+            let pos = GetCursorScreenPos();
+            // 整行一个占位项：格子零间隙紧排
+            do Dummy((n as real * cell, cell));
+            let dl = GetWindowDrawList();
+            let hovered = IsItemHovered();
+            let clicked = IsItemClickedLeft();
+            let mut hover_cx = -1;
+            if (hovered)
             {
-                continue;
+                let mouse = GetMousePos();
+                hover_cx = ((mouse[0] - pos[0]) / cell) as int;
             }
-            if (col % per_row != 0)
-                do SameLine();
-            do draw_terrain_cell(state, ts_id, t, cell);
-            col += 1;
-        }
-
-        do Separator();
-        do Text("单块：");
-        let mut col2 = 0;
-        for (let mut t = 1; t <= total; t += 1)
-        {
-            let (_, k, _, _, _, _, _) = tilemap::terrain_info(ts_id, t);
-            if (k != 0)
+            for (let mut c = 0; c < n; c += 1)
             {
-                continue;
-            }
-            if (col2 % per_row != 0)
-                do SameLine();
-            do draw_terrain_cell(state, ts_id, t, cell);
-            col2 += 1;
-        }
-    }
-
-    // 单个地形格子：一个地形一格。自动图块显示"完全连接"的内部填充
-    // 外观（隐藏预览地图的中心格），单块显示其瓦片；图集未保存时
-    // 自动图块回退为锚点孤块图标。
-    func draw_terrain_cell(state: EditorState, ts_id: int, tid: int, cell: real)=> void
-    {
-        let (tname, k, s, ix, iy, _, _) = tilemap::terrain_info(ts_id, tid);
-        let pos = GetCursorScreenPos();
-        do Dummy((cell, cell));
-        let dl = GetWindowDrawList();
-        let mut is_sel = false;
-        match (state.m_palette_terrain)
-        {
-            value(cur)? { is_sel = cur == tid; }
-            none?;
-        }
-        let mut drawn = false;
-        if (k >= 1)
-        {
-            let pm = terrain_preview_map(state, ts_id, tid);
-            if (pm > 0)
-            {
-                // 中心格 = 完全连接的内部填充外观
-                let qn = tilemap::cell_quad_count(pm, 0, 1, 1);
-                for (let mut q = 0; q < qn; q += 1)
+                let (tname, k, s, ix, iy, _, _) = tilemap::terrain_info(ts_id, tid);
+                let x0 = pos[0] + c as real * cell;
+                let x1 = x0 + cell;
+                // 图标 = 锚点孤块（该地形单独出现在地图中的样式）
+                let mut drawn = false;
+                if (s >= 0 && s < tilemap::source_count(ts_id))
                 {
-                    match (tilemap::cell_quad(pm, 0, 1, 1, q))
+                    let (tp, tpx, _, _) = tilemap::source_info(ts_id, s);
+                    match (state->atlas_texture(tp))
                     {
-                        value((tp, u0, v0, u1, v1, qx, qy, qcols))?
+                        value(tex)?
                         {
-                            match (state->atlas_texture(tp))
-                            {
-                                value(tex)?
-                                {
-                                    let sw = cell / qcols as real;
-                                    let sh = cell / qcols as real;
-                                    do dl->AddImageUV(
-                                        (pos[0] + qx as real * sw, pos[1] + qy as real * sh),
-                                        (pos[0] + (qx + 1) as real * sw, pos[1] + (qy + 1) as real * sh),
-                                        (u0, v0), (u1, v1), tex, (255, 255, 255, 255));
-                                    drawn = true;
-                                }
-                                none?;
-                            }
+                            let (tw, th) = tex->size();
+                            let u_l = ix as real * tpx as real / tw as real;
+                            // AddImageUV 采样引擎 v（v=1-图像行/高），须换算
+                            let v_t = 1.0 - iy as real * tpx as real / th as real;
+                            let u_r = (ix + 1) as real * tpx as real / tw as real;
+                            let v_b = 1.0 - (iy + 1) as real * tpx as real / th as real;
+                            do dl->AddImageUV((x0, pos[1]), (x1, pos[1] + cell),
+                                (u_l, v_b), (u_r, v_t), tex, (255, 255, 255, 255));
+                            drawn = true;
                         }
                         none?;
                     }
                 }
-            }
-        }
-        if (!drawn && s >= 0 && s < tilemap::source_count(ts_id))
-        {
-            let (tp, tpx, _, _) = tilemap::source_info(ts_id, s);
-            match (state->atlas_texture(tp))
-            {
-                value(tex)?
+                if (!drawn)
+                    do dl->AddRectFilled((x0, pos[1]), (x1, pos[1] + cell), (60, 60, 66, 255));
+                let mut is_sel = false;
+                match (state.m_palette_terrain)
                 {
-                    let (tw, th) = tex->size();
-                    let u_l = ix as real * tpx as real / tw as real;
-                    // AddImageUV 采样引擎 v（v=1-图像行/高），须换算
-                    let v_t = 1.0 - iy as real * tpx as real / th as real;
-                    let u_r = (ix + 1) as real * tpx as real / tw as real;
-                    let v_b = 1.0 - (iy + 1) as real * tpx as real / th as real;
-                    do dl->AddImageUV(pos, (pos[0] + cell, pos[1] + cell),
-                        (u_l, v_b), (u_r, v_t), tex, (255, 255, 255, 255));
+                    value(cur)? { is_sel = cur == tid; }
+                    none?;
                 }
-                none?;
+                if (is_sel)
+                    do dl->AddRect((x0, pos[1]), (x1, pos[1] + cell), (255, 255, 255, 255), 2.);
+                if (hovered && c == hover_cx)
+                {
+                    do dl->AddRect((x0, pos[1]), (x1, pos[1] + cell), (255, 255, 255, 220), 1.5);
+                    do SetTooltip(F"{tname} [{terrain_kind_name(k)}]：点击选择绘制");
+                }
+                if (clicked && c == hover_cx)
+                {
+                    state.m_palette_terrain = option::value(tid);
+                    state.m_palette_cell = option::none;
+                    let ts_idx = state.m_tileset_only > 0
+                        ? 0 | state.m_palette_tileset;
+                    state.m_paint = tilemap::terrain_value(ts_idx, tid);
+                }
+                tid += 1;
             }
-        }
-        do dl->AddRect(pos, (pos[0] + cell, pos[1] + cell), (255, 255, 255, 70), 1.);
-        if (is_sel)
-            do dl->AddRect(pos, (pos[0] + cell, pos[1] + cell), (255, 255, 255, 255), 2.);
-        do SetTooltip(F"{tname} [{terrain_kind_name(k)}]：点击选择绘制");
-        if (IsItemClickedLeft())
-        {
-            state.m_palette_terrain = option::value(tid);
-            state.m_palette_cell = option::none;
-            let ts_idx = state.m_tileset_only > 0
-                ? 0 | state.m_palette_tileset;
-            state.m_paint = tilemap::terrain_value(ts_idx, tid);
         }
     }
 
