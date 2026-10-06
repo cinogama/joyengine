@@ -7,963 +7,51 @@
 #   error JE_ENABLE_DEBUG_API must be defined, please check `jeecs_core_systems_and_components.cpp`
 #endif
 #include "jeecs.hpp"
+#include "jeecs_core_tilemap_model.hpp"
 
 #include <vector>
 #include <map>
 #include <unordered_map>
 #include <set>
+#include <tuple>
 #include <string>
 #include <memory>
-#include <cstdio>
 #include <cstring>
-#include <cmath>
-#include <cctype>
 #include <algorithm>
 
 /*
 TilemapSystem [系统] 与 je_tilemap_* C API 实现
-瓦片地图核心：文档模型、.je4tilemap/.je4tileset 二进制读写、自动图块
-（RPGMaker 式四象限 / blob47）、属性取值链、运行时查询，以及把地图
-实例化为"图层 × 分块 × 图集"渲染子实体的系统。
+瓦片地图核心的渲染侧：把地图文档实例化为"图层 × 分块 × 图集源"的
+渲染子实体。文档模型、序列化与自动图块解析见
+jeecs_core_tilemap_model.hpp；本文件只做三件事：
+
+  * TilemapSystem —— Update 相位把文档变化翻译成渲染分片的增删与
+    顶点重写（渲染之前完成数据构建）；
+  * je_tilemap_* JE_API —— 文档读写与运行时查询的 C 边界；
+  * wojeapi_tilemap_* —— 上述 C API 的 Woolang 绑定胶水
+    （je/tilemap.wo 经 extern 声明引用，机械对应，勿手写签名）。
 
 工作方式：
-  * 地图/图集文档进程内全局缓存（documents），按路径共享；编辑器经
-    je_tilemap_* 修改文档后 version 自增，各世界的 TilemapSystem 在
-    Update 相位比对版本并重建受影响的渲染分片 —— 未保存的编辑也会
-    实时同步到所有世界实例（编辑器与世界共用同一份文档）。
+  * 地图/图集文档进程内全局缓存（documents 注册表），按路径共享；
+    编辑器经 je_tilemap_* 修改文档后 version 自增，各世界的
+    TilemapSystem 在 Update 相位比对合并版本戳（map_stamp，含图集
+    实例身份）并重建受影响的渲染分片 —— 未保存的编辑也会实时同步
+    到所有世界实例。版本戳未变化的帧只做分片着色器/比例尺对齐，
+    不再扫描网格。
   * 渲染分片（RenderPart）为地图根实体的子实体，每个分片持有
-    32×32 格、单一图集纹理的动态顶点缓冲（创建时一次分配到容量上限、
-    静态角点索引，之后整体重写并收缩激活索引数，与粒子系统同款）。
-    分片实体带 Editor::Invisible：不显示于实体列表、不参与世界保存，
-    加载/重载后由本系统自动重建。
+    32×32 格、单一图集源纹理的动态顶点缓冲（创建时一次分配到容量
+    上限、静态角点索引，之后整体重写并收缩激活索引数，与粒子系统
+    同款）。分片实体带 Editor::Invisible：不显示于实体列表、不参与
+    世界保存，加载/重载后由本系统自动重建。
   * 自动图块在网格中只存地形 id，邻接掩码与具体变体在构建顶点时
-    动态解析，因此相邻地形变化时无需改写网格数据。
-运行相位：Update（渲染之前完成数据构建）。
+    动态解析（resolve_cell_quads），因此相邻地形变化时无需改写
+    网格数据。
 */
 
 namespace jeecs
 {
     using namespace Renderer;
     using namespace Transform;
-
-    namespace Tilemap
-    {
-        // ==================== 瓦片值编码 ====================
-        // 0 = 空；v>0 普通瓦片；v<0 自动图块地形
-        // |v| = (tileset_idx + 1) * TILE_ID_BASE + local_id
-        constexpr int32_t TILE_ID_BASE = 0x100000;
-
-        inline int32_t encode_tile_value(int32_t tileset_idx, int32_t local_id)
-        {
-            return (tileset_idx + 1) * TILE_ID_BASE + local_id;
-        }
-        inline int32_t encode_terrain_value(int32_t tileset_idx, int32_t local_id)
-        {
-            return -encode_tile_value(tileset_idx, local_id);
-        }
-        // 解码出 (tileset_idx, |v| 里的 local id)；不关心正负时可先取 abs
-        inline bool decode_tile_value(int32_t v, int32_t* tileset_idx, int32_t* local_id)
-        {
-            if (v == 0)
-                return false;
-            int32_t a = v < 0 ? -v : v;
-            *tileset_idx = a / TILE_ID_BASE - 1;
-            *local_id = a % TILE_ID_BASE;
-            return true;
-        }
-
-        // ==================== 文档数据模型 ====================
-        struct SourceTexture
-        {
-            std::string path;   // 运行时路径（@/ 或 !/）
-            int32_t tile_px = 32;
-            int32_t xcount = 1, ycount = 1;
-            int32_t tex_w = 0, tex_h = 0;   // 纹理像素尺寸（UV 计算用）
-        };
-        struct TileDef
-        {
-            int32_t source = 0; // 所属源纹理下标
-            int32_t ix = 0, iy = 0; // 图集网格坐标（自左上角）
-            bool walkable = true;
-        };
-        struct TerrainDef
-        {
-            std::string name;
-            int32_t kind = 0;   // 0=单块 1=RPGMaker四象限 2=blob47
-            int32_t source = 0;
-            int32_t ix = 0, iy = 0; // 锚点图集网格坐标
-            bool walkable = true;
-            std::vector<int32_t> variant_tiles;             // blob47 显式变体表（普通瓦片 id）
-            std::map<std::string, std::string> properties;  // 地形默认属性
-        };
-        struct PropertyDef
-        {
-            std::string name;
-            std::string type;           // "bool"/"int"/"float"/"string"/"vec2"/"vec3"/"vec4"
-            std::string default_value;
-        };
-
-        struct TilesetDocument
-        {
-            std::string name;
-            std::string path;   // .je4tileset 运行时路径；未保存为空
-            std::vector<SourceTexture> sources;
-            std::vector<TileDef> tiles;        // tiles[0] 占位，瓦片 id = 下标（1 起）
-            std::vector<TerrainDef> terrains;   // terrains[0] 占位，地形 id = 下标（1 起）
-            std::vector<PropertyDef> properties;
-            std::map<int32_t, std::map<std::string, std::string>> tile_properties;
-
-            uint64_t version = 1;
-            // (source<<32|flat_pos) -> tile id 的反查表，懒构建
-            std::unordered_map<int64_t, int32_t> flat_tile_index;
-
-            int32_t tile_at_flat(int32_t source_idx, int32_t flat) const
-            {
-                auto fnd = flat_tile_index.find(((int64_t)source_idx << 32) | (uint32_t)flat);
-                return fnd == flat_tile_index.end() ? 0 : fnd->second;
-            }
-            void rebuild_flat_index()
-            {
-                flat_tile_index.clear();
-                for (size_t i = 1; i < tiles.size(); ++i)
-                {
-                    const auto& t = tiles[i];
-                    if (t.source < 0 || t.source >= (int32_t)sources.size())
-                        continue;
-                    flat_tile_index[((int64_t)t.source << 32)
-                        | (uint32_t)(t.iy * sources[t.source].xcount + t.ix)] = (int32_t)i;
-                }
-            }
-        };
-
-        struct MapLayer
-        {
-            std::string name;
-            bool visible = true;
-            bool locked = false;    // 编辑器锁定标记（运行时忽略）
-            // 该层在世界中的 z 偏移（相对地图根实体，世界单位）。
-            // 不同层须错开 z 以避免深度冲突；旧文件缺省为层下标。
-            float z = 0.f;
-            std::vector<int32_t> grid;  // w*h 稠密网格，行优先、y 自上而下
-        };
-        struct MapDocument
-        {
-            std::string path;   // .je4tilemap 运行时路径；未保存为空
-            int32_t width = 0, height = 0, tile_px = 32;
-            std::vector<std::string> tilesets;  // 引用的图集路径
-            std::vector<std::shared_ptr<TilesetDocument>> resolved;    // 与 tilesets 对应
-            std::vector<MapLayer> layers;
-            // 逐格属性覆盖：(layer, x + y*width) -> (name -> value)
-            std::map<std::pair<int32_t, int32_t>, std::map<std::string, std::string>> cell_properties;
-
-            uint64_t version = 1;
-            std::vector<std::pair<int32_t, int32_t>> find_result; // find_cells 结果缓存
-
-            bool in_bounds(int32_t layer, int32_t x, int32_t y) const
-            {
-                return layer >= 0 && layer < (int32_t)layers.size()
-                    && x >= 0 && x < width && y >= 0 && y < height;
-            }
-        };
-
-        // ==================== 二进制读写 ====================
-        // 与 .je4animation 同风格的自有二进制格式（魔数 + 小端字段），
-        // 由 C++ 侧统一读写，避免在内核引入 TOML 依赖。
-        constexpr uint32_t TILESET_MAGIC = 0x4A545331; // "JTS1"
-        constexpr uint32_t MAP_MAGIC = 0x4A544D31;     // "JTM1"
-
-        struct bin_writer
-        {
-            std::vector<char> b;
-            void u32(uint32_t v) { b.insert(b.end(), (char*)&v, (char*)&v + 4); }
-            void i32(int32_t v) { u32((uint32_t)v); }
-            void f32(float v) { uint32_t bits; memcpy(&bits, &v, 4); u32(bits); }
-            void u8(uint8_t v) { b.push_back((char)v); }
-            void str(const std::string& s)
-            {
-                u32((uint32_t)s.size());
-                b.insert(b.end(), s.begin(), s.end());
-            }
-        };
-        struct bin_reader
-        {
-            const char* p = nullptr;
-            size_t n = 0, o = 0;
-            bool ok = true;
-            bool need(size_t c)
-            {
-                if (!ok || o + c > n) { ok = false; return false; }
-                return true;
-            }
-            uint32_t u32()
-            {
-                if (!need(4)) return 0;
-                uint32_t v; memcpy(&v, p + o, 4); o += 4; return v;
-            }
-            int32_t i32() { return (int32_t)u32(); }
-            float f32()
-            {
-                uint32_t bits = u32();
-                float v; memcpy(&v, &bits, 4); return v;
-            }
-            uint8_t u8()
-            {
-                if (!need(1)) return 0;
-                return (uint8_t)p[o++];
-            }
-            std::string str()
-            {
-                uint32_t len = u32();
-                if (!ok || len > 0x10000000 || !need(len)) { ok = false; return ""; }
-                std::string s(p + o, len); o += len; return s;
-            }
-        };
-
-        // @/!/ 前缀 -> 本地文件系统路径（保存用；读取走 jeecs_file_open 支持 fimg 包）
-        inline std::string resolve_runtime_prefix(const std::string& path)
-        {
-            if (!path.empty() && path[0] == '@')
-                return std::string(::jeecs_file_get_runtime_path()) + path.substr(1);
-            if (!path.empty() && path[0] == '!')
-                return std::string(::jeecs_file_get_host_path()) + path.substr(1);
-            return path;
-        }
-
-        inline bool save_tileset_to(const TilesetDocument& ts, const std::string& path)
-        {
-            bin_writer w;
-            w.u32(TILESET_MAGIC);
-            w.str(ts.name);
-            w.u32((uint32_t)ts.sources.size());
-            for (const auto& s : ts.sources)
-            {
-                w.str(s.path); w.i32(s.tile_px); w.i32(s.xcount); w.i32(s.ycount);
-                w.i32(s.tex_w); w.i32(s.tex_h);
-            }
-            w.u32((uint32_t)(ts.tiles.size() - 1));
-            for (size_t i = 1; i < ts.tiles.size(); ++i)
-            {
-                const auto& t = ts.tiles[i];
-                w.i32(t.source); w.i32(t.ix); w.i32(t.iy); w.u8(t.walkable ? 1 : 0);
-            }
-            w.u32((uint32_t)ts.properties.size());
-            for (const auto& pd : ts.properties)
-            {
-                w.str(pd.name); w.str(pd.type); w.str(pd.default_value);
-            }
-            w.u32((uint32_t)(ts.terrains.size() - 1));
-            for (size_t i = 1; i < ts.terrains.size(); ++i)
-            {
-                const auto& t = ts.terrains[i];
-                w.str(t.name); w.u8((uint8_t)t.kind);
-                w.i32(t.source); w.i32(t.ix); w.i32(t.iy); w.u8(t.walkable ? 1 : 0);
-                w.u32((uint32_t)t.variant_tiles.size());
-                for (int32_t v : t.variant_tiles) w.i32(v);
-            }
-            // 此计数是"带属性的瓦片条目数"，与读取侧逐条 (tid, kv 数) 对应；
-            // 误写成键值对总数会让读取器越过数据末尾而判定整文件损坏。
-            w.u32((uint32_t)ts.tile_properties.size());
-            for (const auto& [tid, kvs] : ts.tile_properties)
-            {
-                w.i32(tid); w.u32((uint32_t)kvs.size());
-                for (const auto& [k, v] : kvs) { w.str(k); w.str(v); }
-            }
-            // 尾块：地形默认属性（键为地形 id）。旧版读取器按计数读完即止，
-            // 多余的尾块被忽略；旧文件无此块时加载侧保持为空（与地图
-            // z 偏移尾块同款做法）。
-            uint32_t terrprop_count = 0;
-            for (size_t i = 1; i < ts.terrains.size(); ++i)
-                if (!ts.terrains[i].properties.empty())
-                    ++terrprop_count;
-            w.u32(terrprop_count);
-            for (size_t i = 1; i < ts.terrains.size(); ++i)
-            {
-                const auto& kvs = ts.terrains[i].properties;
-                if (kvs.empty())
-                    continue;
-                w.i32((int32_t)i); w.u32((uint32_t)kvs.size());
-                for (const auto& [k, v] : kvs) { w.str(k); w.str(v); }
-            }
-
-            FILE* f = fopen(resolve_runtime_prefix(path).c_str(), "wb");
-            if (f == nullptr)
-                return false;
-            bool written = fwrite(w.b.data(), 1, w.b.size(), f) == w.b.size();
-            fclose(f);
-            return written;
-        }
-
-        inline std::shared_ptr<TilesetDocument> load_tileset_from(const std::string& path)
-        {
-            jeecs_file* f = jeecs_file_open(path.c_str());
-            if (f == nullptr)
-                return nullptr;
-            std::vector<char> buf(f->m_file_length);
-            size_t got = jeecs_file_read(buf.data(), 1, buf.size(), f);
-            jeecs_file_close(f);
-            if (got != buf.size())
-                return nullptr;
-
-            bin_reader r{ buf.data(), buf.size(), 0, true };
-            auto ts = std::make_shared<TilesetDocument>();
-            ts->path = path;
-            if (r.u32() != TILESET_MAGIC) return nullptr;
-            ts->name = r.str();
-            uint32_t src_n = r.u32();
-            for (uint32_t i = 0; i < src_n && r.ok; ++i)
-            {
-                SourceTexture s;
-                s.path = r.str();
-                s.tile_px = r.i32(); s.xcount = r.i32(); s.ycount = r.i32();
-                s.tex_w = r.i32(); s.tex_h = r.i32();
-                ts->sources.push_back(std::move(s));
-            }
-            ts->tiles.push_back(TileDef{}); // id 0 占位
-            uint32_t tile_n = r.u32();
-            for (uint32_t i = 0; i < tile_n && r.ok; ++i)
-            {
-                TileDef t;
-                t.source = r.i32(); t.ix = r.i32(); t.iy = r.i32();
-                t.walkable = r.u8() != 0;
-                ts->tiles.push_back(t);
-            }
-            uint32_t prop_n = r.u32();
-            for (uint32_t i = 0; i < prop_n && r.ok; ++i)
-            {
-                PropertyDef pd;
-                pd.name = r.str(); pd.type = r.str(); pd.default_value = r.str();
-                ts->properties.push_back(std::move(pd));
-            }
-            ts->terrains.push_back(TerrainDef{}); // id 0 占位
-            uint32_t terr_n = r.u32();
-            for (uint32_t i = 0; i < terr_n && r.ok; ++i)
-            {
-                TerrainDef t;
-                t.name = r.str(); t.kind = r.u8();
-                t.source = r.i32(); t.ix = r.i32(); t.iy = r.i32();
-                t.walkable = r.u8() != 0;
-                uint32_t vn = r.u32();
-                for (uint32_t k = 0; k < vn && r.ok; ++k) t.variant_tiles.push_back(r.i32());
-                ts->terrains.push_back(std::move(t));
-            }
-            uint32_t tp_n = r.u32();
-            for (uint32_t i = 0; i < tp_n && r.ok; ++i)
-            {
-                int32_t tid = r.i32();
-                uint32_t kv_n = r.u32();
-                for (uint32_t k = 0; k < kv_n && r.ok; ++k)
-                {
-                    std::string key = r.str(), val = r.str();
-                    ts->tile_properties[tid][key] = val;
-                }
-            }
-            if (!r.ok)
-                return nullptr;
-            // 尾块（可选）：地形默认属性。旧文件无此块 → 跳过；条目至少
-            // 8 字节（地形 id + 键值数），总量越界视为损坏。
-            if (r.o + 4 <= r.n)
-            {
-                uint32_t tprop_n = r.u32();
-                if (tprop_n > ts->terrains.size() || r.o + (size_t)tprop_n * 8 > r.n)
-                    return nullptr;
-                for (uint32_t i = 0; i < tprop_n && r.ok; ++i)
-                {
-                    int32_t tid = r.i32();
-                    uint32_t kv_n = r.u32();
-                    if (tid <= 0 || tid >= (int32_t)ts->terrains.size())
-                    { r.ok = false; break; }
-                    for (uint32_t k = 0; k < kv_n && r.ok; ++k)
-                    {
-                        std::string key = r.str(), val = r.str();
-                        ts->terrains[tid].properties[std::move(key)] = std::move(val);
-                    }
-                }
-                if (!r.ok)
-                    return nullptr;
-            }
-            ts->rebuild_flat_index();
-            return ts;
-        }
-
-        inline bool save_map_to(const MapDocument& m, const std::string& path)
-        {
-            bin_writer w;
-            w.u32(MAP_MAGIC);
-            w.i32(m.width); w.i32(m.height); w.i32(m.tile_px);
-            w.u32((uint32_t)m.tilesets.size());
-            for (const auto& p : m.tilesets) w.str(p);
-            w.u32((uint32_t)m.layers.size());
-            for (const auto& l : m.layers)
-            {
-                w.str(l.name); w.u8(l.visible ? 1 : 0); w.u8(l.locked ? 1 : 0);
-                w.u32((uint32_t)l.grid.size());
-                for (int32_t v : l.grid) w.i32(v);
-            }
-            w.u32((uint32_t)m.cell_properties.size());
-            for (const auto& [key, kvs] : m.cell_properties)
-            {
-                w.i32(key.first); w.i32(key.second);
-                w.u32((uint32_t)kvs.size());
-                for (const auto& [k, v] : kvs) { w.str(k); w.str(v); }
-            }
-            // 尾块：每层 z 偏移（f32）。旧版读取器按计数读完即止，多余的
-            // 尾块被忽略；旧文件无此块时加载侧按层下标补默认值。
-            w.u32((uint32_t)m.layers.size());
-            for (const auto& l : m.layers)
-                w.f32(l.z);
-            FILE* f = fopen(resolve_runtime_prefix(path).c_str(), "wb");
-            if (f == nullptr)
-                return false;
-            bool written = fwrite(w.b.data(), 1, w.b.size(), f) == w.b.size();
-            fclose(f);
-            return written;
-        }
-
-        inline std::shared_ptr<MapDocument> load_map_from(const std::string& path)
-        {
-            jeecs_file* f = jeecs_file_open(path.c_str());
-            if (f == nullptr)
-                return nullptr;
-            std::vector<char> buf(f->m_file_length);
-            size_t got = jeecs_file_read(buf.data(), 1, buf.size(), f);
-            jeecs_file_close(f);
-            if (got != buf.size())
-                return nullptr;
-
-            bin_reader r{ buf.data(), buf.size(), 0, true };
-            auto m = std::make_shared<MapDocument>();
-            m->path = path;
-            if (r.u32() != MAP_MAGIC) return nullptr;
-            m->width = r.i32(); m->height = r.i32(); m->tile_px = r.i32();
-            if (m->width < 0 || m->height < 0 || m->tile_px <= 0
-                || m->width > 65536 || m->height > 65536)
-                return nullptr;
-            uint32_t ts_n = r.u32();
-            for (uint32_t i = 0; i < ts_n && r.ok; ++i) m->tilesets.push_back(r.str());
-            uint32_t layer_n = r.u32();
-            for (uint32_t i = 0; i < layer_n && r.ok; ++i)
-            {
-                MapLayer l;
-                l.name = r.str();
-                l.visible = r.u8() != 0;
-                l.locked = r.u8() != 0;
-                uint32_t cells = r.u32();
-                if (cells != (uint32_t)(m->width * m->height)) { r.ok = false; break; }
-                l.grid.resize(cells);
-                for (uint32_t k = 0; k < cells && r.ok; ++k) l.grid[k] = r.i32();
-                m->layers.push_back(std::move(l));
-            }
-            uint32_t cp_n = r.u32();
-            for (uint32_t i = 0; i < cp_n && r.ok; ++i)
-            {
-                int32_t layer = r.i32(), cell = r.i32();
-                uint32_t kv_n = r.u32();
-                for (uint32_t k = 0; k < kv_n && r.ok; ++k)
-                {
-                    std::string key = r.str(), val = r.str();
-                    m->cell_properties[{ layer, cell }][key] = val;
-                }
-            }
-            if (!r.ok)
-                return nullptr;
-            // 尾块（可选）：每层 z 偏移。旧文件无此块 → 按层下标错开，
-            // 保证多层默认不发生深度冲突。
-            for (size_t i = 0; i < m->layers.size(); ++i)
-                m->layers[i].z = (float)i;
-            if (r.o + 4 <= r.n)
-            {
-                uint32_t zn = r.u32();
-                if (zn > (uint32_t)m->layers.size() || r.o + (size_t)zn * 4 > r.n)
-                    return nullptr;
-                for (uint32_t i = 0; i < zn && r.ok; ++i)
-                    m->layers[i].z = r.f32();
-            }
-            return m;
-        }
-
-        // ==================== 文档注册表 ====================
-        // 进程内全局唯一：按路径共享文档实例，编辑器与世界经由同一份
-        // 数据实现"未保存修改实时同步"。失败路径只尝试一次，避免逐帧
-        // 重试造成日志刷屏；保存/重载会清除失败记录。
-        class documents
-        {
-        public:
-            static documents& inst()
-            {
-                static documents d;
-                return d;
-            }
-
-            std::vector<std::shared_ptr<MapDocument>> maps;
-            std::unordered_map<std::string, int32_t> maps_by_path;
-            std::set<std::string> maps_failed;
-
-            std::vector<std::shared_ptr<TilesetDocument>> tilesets;
-            std::unordered_map<std::string, int32_t> tilesets_by_path;
-            std::set<std::string> tilesets_failed;
-
-            // 注册表键规范化：@/ 与 !/ 前缀解析为真实目录，反斜杠统一为
-            // 正斜杠，连续斜杠折叠，Windows 下再统一小写（文件系统不分
-            // 大小写）。无前缀的相对路径（浏览器工作目录形态）按运行时
-            // 目录补全，与 jeecs_file_open 的解析一致。同一文件的不同
-            // 形态字符串必须映射到同一文档实例，否则编辑器两侧会各自
-            // 持有独立副本，后一次保存会覆盖掉前一份里的新增数据
-            //（曾表现为：新加的自动图块地形保存后消失）。
-            std::string canonical_key(const std::string& path) const
-            {
-                std::string s = resolve_runtime_prefix(path);
-                bool absolute = s.size() >= 2 && (s[1] == ':' || s[0] == '/');
-                if (!absolute)
-                    s = std::string(::jeecs_file_get_runtime_path()) + '/' + s;
-                std::string key;
-                key.reserve(s.size());
-                for (char raw : s)
-                {
-                    char ch = raw == '\\' ? '/' : raw;
-#ifdef _WIN32
-                    ch = (char)std::tolower((unsigned char)ch);
-#endif
-                    if (ch == '/' && !key.empty() && key.back() == '/')
-                        continue;
-                    key.push_back(ch);
-                }
-                return key;
-            }
-
-            MapDocument* map(int32_t id)
-            {
-                if (id <= 0 || id > (int32_t)maps.size() || maps[id - 1] == nullptr)
-                    return nullptr;
-                return maps[id - 1].get();
-            }
-            TilesetDocument* tileset(int32_t id)
-            {
-                if (id <= 0 || id > (int32_t)tilesets.size() || tilesets[id - 1] == nullptr)
-                    return nullptr;
-                return tilesets[id - 1].get();
-            }
-
-            int32_t register_map(std::shared_ptr<MapDocument> doc)
-            {
-                maps.push_back(std::move(doc));
-                return (int32_t)maps.size();
-            }
-            int32_t register_tileset(std::shared_ptr<TilesetDocument> doc)
-            {
-                tilesets.push_back(std::move(doc));
-                return (int32_t)tilesets.size();
-            }
-
-            void bind_map_path(const std::string& path, int32_t id)
-            {
-                maps_by_path[path] = id;
-                maps_failed.erase(path);
-            }
-            void bind_tileset_path(const std::string& path, int32_t id)
-            {
-                tilesets_by_path[path] = id;
-                tilesets_failed.erase(path);
-            }
-
-            // 打开（或复用缓存）地图文档；失败记录进 maps_failed
-            std::pair<int32_t, MapDocument*> open_map(const std::string& path)
-            {
-                if (path.empty())
-                    return { 0, nullptr };
-                std::string key = canonical_key(path);
-                auto fnd = maps_by_path.find(key);
-                if (fnd != maps_by_path.end())
-                {
-                    MapDocument* d = map(fnd->second);
-                    if (d != nullptr)
-                        return { fnd->second, d };
-                }
-                // 键未命中时先按已注册文档的路径反查同一文件：此前若以
-                // 另一种路径形态打开过（或绑定被另存/新建覆盖），必须复用
-                // 同一实例（多份命中取 version 最新者），否则两份文档会
-                // 互相覆盖丢数据。这与键规范化的目标一致。
-                int32_t healed = 0;
-                uint64_t healed_ver = 0;
-                for (size_t i = 0; i < maps.size(); ++i)
-                {
-                    const auto& d = maps[i];
-                    if (d != nullptr && !d->path.empty() && d->version >= healed_ver
-                        && canonical_key(d->path) == key)
-                    {
-                        healed = (int32_t)i + 1;
-                        healed_ver = d->version;
-                    }
-                }
-                if (healed > 0)
-                {
-                    bind_map_path(key, healed);
-                    return { healed, maps[healed - 1].get() };
-                }
-                if (maps_failed.count(key) != 0)
-                    return { 0, nullptr };
-                auto doc = load_map_from(path);
-                if (doc == nullptr)
-                {
-                    maps_failed.insert(key);
-                    debug::logerr("Tilemap: unable to open map file '%s'.", path.c_str());
-                    return { 0, nullptr };
-                }
-                int32_t id = register_map(doc);
-                bind_map_path(key, id);
-                return { id, doc.get() };
-            }
-
-            std::pair<int32_t, TilesetDocument*> open_tileset(const std::string& path)
-            {
-                if (path.empty())
-                    return { 0, nullptr };
-                std::string key = canonical_key(path);
-                auto fnd = tilesets_by_path.find(key);
-                if (fnd != tilesets_by_path.end())
-                {
-                    TilesetDocument* d = tileset(fnd->second);
-                    if (d != nullptr)
-                        return { fnd->second, d };
-                }
-                // 同 open_map：反查复用既有实例，避免同文件多副本互覆盖
-                //（曾表现为图集编辑器新增的自动图块地形被旧副本保存抹掉）。
-                int32_t healed = 0;
-                uint64_t healed_ver = 0;
-                for (size_t i = 0; i < tilesets.size(); ++i)
-                {
-                    const auto& d = tilesets[i];
-                    if (d != nullptr && !d->path.empty() && d->version >= healed_ver
-                        && canonical_key(d->path) == key)
-                    {
-                        healed = (int32_t)i + 1;
-                        healed_ver = d->version;
-                    }
-                }
-                if (healed > 0)
-                {
-                    bind_tileset_path(key, healed);
-                    return { healed, tilesets[healed - 1].get() };
-                }
-                if (tilesets_failed.count(key) != 0)
-                    return { 0, nullptr };
-                auto doc = load_tileset_from(path);
-                if (doc == nullptr)
-                {
-                    tilesets_failed.insert(key);
-                    debug::logerr("Tilemap: unable to open tileset file '%s'.", path.c_str());
-                    return { 0, nullptr };
-                }
-                int32_t id = register_tileset(doc);
-                bind_tileset_path(key, id);
-                return { id, doc.get() };
-            }
-
-            void reload_map(const std::string& path)
-            {
-                detach_map(canonical_key(path));
-            }
-            void reload_tileset(const std::string& path)
-            {
-                detach_tileset(canonical_key(path));
-            }
-
-            // 重载除清空绑定/失败记录外，还须解除旧文档与路径的关联：
-            // open_* 的反查会按文档自身路径复活旧实例，若不解除，重载
-            // 语义（下次打开强制从磁盘重读）会被破坏。
-            void detach_map(const std::string& key)
-            {
-                auto fnd = maps_by_path.find(key);
-                if (fnd != maps_by_path.end())
-                {
-                    MapDocument* d = map(fnd->second);
-                    if (d != nullptr && canonical_key(d->path) == key)
-                        d->path.clear();
-                }
-                maps_by_path.erase(key);
-                maps_failed.erase(key);
-            }
-            void detach_tileset(const std::string& key)
-            {
-                auto fnd = tilesets_by_path.find(key);
-                if (fnd != tilesets_by_path.end())
-                {
-                    TilesetDocument* d = tileset(fnd->second);
-                    if (d != nullptr && canonical_key(d->path) == key)
-                        d->path.clear();
-                }
-                tilesets_by_path.erase(key);
-                tilesets_failed.erase(key);
-            }
-
-            // 保证地图文档的图集解析与注册表中的最新文档一致
-            // （处理图集被重载/替换的情况），并返回引用计数不变的共享指针。
-            void ensure_tilesets(MapDocument& m)
-            {
-                if (m.resolved.size() != m.tilesets.size())
-                    m.resolved.assign(m.tilesets.size(), nullptr);
-                for (size_t i = 0; i < m.tilesets.size(); ++i)
-                {
-                    auto [id, live] = open_tileset(m.tilesets[i]);
-                    if (live == nullptr)
-                    {
-                        if (m.resolved[i] != nullptr)
-                            m.resolved[i].reset();
-                        continue;
-                    }
-                    // 与注册表当前实例保持同一份（open 命中缓存即同指针）
-                    m.resolved[i] = tilesets[id - 1];
-                }
-            }
-
-            // 地图 + 其图集的合并版本戳：任一变化都会改变
-            uint64_t map_stamp(const MapDocument& m) const
-            {
-                uint64_t stamp = m.version * 0x9E3779B97F4A7C15ull;
-                for (const auto& ts : m.resolved)
-                    stamp = stamp * 31 + (ts ? ts->version : 0) + 0x2545F491;
-                return stamp;
-            }
-        };
-
-        // ==================== 自动图块 ====================
-        // 邻接掩码位（与旧版编辑器 WrappingTileWay 一致）
-        constexpr int NB_U = 1, NB_D = 2, NB_L = 4, NB_R = 8;
-        constexpr int NB_UL = 16, NB_LD = 32, NB_RU = 64, NB_RD = 128;
-
-        // 计算某格地形的 8 邻接掩码：邻居与该格存储值完全相同才算连接
-        inline int compute_mask(const MapDocument& m, int32_t layer, int32_t x, int32_t y, int32_t encoded)
-        {
-            const auto& grid = m.layers[layer].grid;
-            auto same = [&](int32_t nx, int32_t ny) -> bool
-            {
-                if (nx < 0 || ny < 0 || nx >= m.width || ny >= m.height)
-                    return false;
-                return grid[ny * m.width + nx] == encoded;
-            };
-            int mask = 0;
-            if (same(x, y - 1)) mask |= NB_U;
-            if (same(x, y + 1)) mask |= NB_D;
-            if (same(x - 1, y)) mask |= NB_L;
-            if (same(x + 1, y)) mask |= NB_R;
-            if (same(x - 1, y - 1)) mask |= NB_UL;
-            if (same(x - 1, y + 1)) mask |= NB_LD;
-            if (same(x + 1, y - 1)) mask |= NB_RU;
-            if (same(x + 1, y + 1)) mask |= NB_RD;
-            return mask;
-        }
-
-        // RPGMaker 式四象限：地形占据锚点右侧 2 格、下方 3 格？——否，
-        // 条带位于锚点 (ix,iy) 起的 2(宽)×3(高) 图集格，四象限自条带的
-        // 4×6 半格网格中取样。下表为各角 5 种邻接状态到半格 (列,行) 的
-        // 映射，自旧版编辑器（f8a48343^ 的 tilemap/main.wo）像素采样逻辑
-        // 解码移植。状态序：[两侧+斜角, 两侧无斜角, 第一方向边, 第二方向边, 无邻接]
-        // LU/RU 的“第一方向”为 U（上下中的上）；LD/RD 为 D；第二方向 L/R。
-        struct half_cell { int col, row; };
-        inline half_cell rpgmaker_quadrant(int corner /*0=LU 1=RU 2=LD 3=RD*/, int state)
-        {
-            static constexpr int TABLE[4][5][2] = {
-                /*LU*/ { {2,4},{2,0},{0,4},{2,2},{0,2} },
-                /*RU*/ { {1,4},{3,0},{3,4},{1,2},{3,2} },
-                /*LD*/ { {2,3},{2,1},{0,3},{2,5},{0,5} },
-                /*RD*/ { {1,3},{3,1},{3,3},{1,5},{3,5} },
-            };
-            return { TABLE[corner][state][0], TABLE[corner][state][1] };
-        }
-        // RPGMaker VX/VX Ace 式：2(宽)x3(高) 块的 4x6 半格取件表。
-        // 表值 = (列,行)。自 mkxp-z autotileVXRectsA(48 变体权威表)机械推导：
-        // 除孤块(mask==0，mkxp 变体47=锚点整块)外，各件槽位由"件频次==签名计数"
-        // 唯一确定(13内/13凹/8边/8边/5外, 1=备用锚点件)，边件手性经 16 组合
-        // 全掩码验证为唯一解(255/255 掩码命中 mkxp 行, 47/47 行全覆盖)。
-        // 状态序与 corner_state 一致：[内部, 凹角, 第一方向边, 第二方向边, 外角]
-        //   LU/RU 第一方向为 U；LD/RD 为 D；第二方向 L/R。
-        inline half_cell rpgmaker_vx_quadrant(int corner /*0=LU 1=RU 2=LD 3=RD*/, int state)
-        {
-            static constexpr int TABLE[4][5][2] = {
-                /*LU*/ { {2,4},{2,0},{0,4},{2,2},{0,2} },
-                /*RU*/ { {1,4},{3,0},{3,4},{1,2},{3,2} },
-                /*LD*/ { {2,3},{2,1},{0,3},{2,5},{0,5} },
-                /*RD*/ { {1,3},{3,1},{3,3},{1,5},{3,5} },
-            };
-            return { TABLE[corner][state][0], TABLE[corner][state][1] };
-        }
-        inline int corner_state(int mask, int o1, int o2, int diag)
-        {
-            if ((mask & o1) && (mask & o2))
-                return (mask & diag) ? 0 : 1;
-            if (mask & o1) return 2;
-            if (mask & o2) return 3;
-            return 4;
-        }
-
-        // blob47 归约：256 个 8bit 掩码 -> 47 个变体号。
-        // 角状态无关的对角位被吸收；枚举序 = 正交掩码 0..15 为主序、
-        // 相关对角组合为次序的首次出现序（即本引擎的规范 47 变体序）。
-        inline const std::vector<uint8_t>& blob47_table()
-        {
-            static std::vector<uint8_t> table = []
-            {
-                std::vector<uint8_t> t(256, 0);
-                std::map<std::pair<int, int>, uint8_t> variant_ids;
-                uint8_t next = 0;
-                for (int omask = 0; omask < 16; ++omask)
-                {
-                    bool u = omask & NB_U, d = omask & NB_D, l = omask & NB_L, r = omask & NB_R;
-                    // 仅当两个相邻正交位都存在时对应对角位才参与区分
-                    int diag_relevant = 0;
-                    if (u && l) diag_relevant |= NB_UL;
-                    if (d && l) diag_relevant |= NB_LD;
-                    if (u && r) diag_relevant |= NB_RU;
-                    if (d && r) diag_relevant |= NB_RD;
-                    for (int dmask = 0; dmask < 16; ++dmask)
-                    {
-                        // 把 4 个对角位映射到 dmask 的位 0..3 (UL,LD,RU,RD)
-                        int real = 0;
-                        if (dmask & 1) real |= NB_UL;
-                        if (dmask & 2) real |= NB_LD;
-                        if (dmask & 4) real |= NB_RU;
-                        if (dmask & 8) real |= NB_RD;
-                        int key_d = real & diag_relevant;
-                        auto key = std::make_pair(omask, key_d);
-                        auto fnd = variant_ids.find(key);
-                        if (fnd == variant_ids.end())
-                        {
-                            // 检查是否与更早的正交组合等价（角状态相同）：
-                            // 直接以四角状态为键去重，保证恰好 47 个
-                            int su = 0, sd = 0, sl = 0, sr = 0;
-                            // 每角的 2bit 状态：0凸 1边 2凹 3内
-                            auto corner = [](bool o1, bool o2, bool dg) -> int
-                            {
-                                if (o1 && o2) return dg ? 3 : 2;
-                                if (o1 || o2) return 1;
-                                return 0;
-                            };
-                            std::tuple<int, int, int, int> skey(
-                                corner(u, l, (key_d & NB_UL) != 0),
-                                corner(u, r, (key_d & NB_RU) != 0),
-                                corner(d, l, (key_d & NB_LD) != 0),
-                                corner(d, r, (key_d & NB_RD) != 0));
-                            static std::map<std::tuple<int, int, int, int>, uint8_t> states;
-                            auto sfnd = states.find(skey);
-                            if (sfnd == states.end())
-                            {
-                                states[skey] = next;
-                                t[omask | (real & 0xF0)] = next;
-                                variant_ids[key] = next;
-                                ++next;
-                            }
-                            else
-                            {
-                                t[omask | (real & 0xF0)] = sfnd->second;
-                                variant_ids[key] = sfnd->second;
-                            }
-                        }
-                        else
-                            t[omask | (real & 0xF0)] = fnd->second;
-                    }
-                }
-                return t;
-            }();
-            return table;
-        }
-
-        // ==================== 属性与通行性 ====================
-        inline const std::string* resolve_property(
-            MapDocument* doc, int32_t layer, int32_t x, int32_t y, const std::string& name)
-        {
-            if (doc == nullptr || !doc->in_bounds(layer, x, y))
-                return nullptr;
-            // API 直调时无系统代管图集解析，此处兜底（幂等）
-            documents::inst().ensure_tilesets(*doc);
-            // 1. 逐格覆盖
-            auto cit = doc->cell_properties.find({ layer, x + y * doc->width });
-            if (cit != doc->cell_properties.end())
-            {
-                auto fnd = cit->second.find(name);
-                if (fnd != cit->second.end())
-                    return &fnd->second;
-            }
-            int32_t v = doc->layers[layer].grid[y * doc->width + x];
-            if (v != 0)
-            {
-                int32_t ts_idx = 0, local = 0;
-                decode_tile_value(v, &ts_idx, &local);
-                if (ts_idx >= 0 && ts_idx < (int32_t)doc->resolved.size()
-                    && doc->resolved[ts_idx] != nullptr)
-                {
-                    const auto* ts = doc->resolved[ts_idx].get();
-                    const std::map<std::string, std::string>* defaults = nullptr;
-                    if (v < 0)
-                    {
-                        if (local < (int32_t)ts->terrains.size())
-                            defaults = &ts->terrains[local].properties;
-                    }
-                    else if (local < (int32_t)ts->tiles.size())
-                    {
-                        auto tit = ts->tile_properties.find(local);
-                        if (tit != ts->tile_properties.end())
-                            defaults = &tit->second;
-                    }
-                    if (defaults != nullptr)
-                    {
-                        auto fnd = defaults->find(name);
-                        if (fnd != defaults->end())
-                            return &fnd->second;
-                    }
-                    // 3. schema 默认值
-                    for (const auto& pd : ts->properties)
-                        if (pd.name == name)
-                            return &pd.default_value;
-                }
-            }
-            return nullptr;
-        }
-
-        inline bool walkable_on(MapDocument* doc, int32_t layer, int32_t x, int32_t y)
-        {
-            if (doc == nullptr || !doc->in_bounds(layer, x, y))
-                return false;
-            documents::inst().ensure_tilesets(*doc);
-            int32_t v = doc->layers[layer].grid[y * doc->width + x];
-            if (v == 0)
-                return true;
-            int32_t ts_idx = 0, local = 0;
-            decode_tile_value(v, &ts_idx, &local);
-            if (ts_idx < 0 || ts_idx >= (int32_t)doc->resolved.size()
-                || doc->resolved[ts_idx] == nullptr)
-                return true;
-            const auto* ts = doc->resolved[ts_idx].get();
-            if (v < 0)
-                return local < (int32_t)ts->terrains.size() ? ts->terrains[local].walkable : true;
-            return local < (int32_t)ts->tiles.size() ? ts->tiles[local].walkable : true;
-        }
-
-        // 从所有缓存地图中清除引用了指定瓦片/地形的格子（删除定义时调用）
-        inline void purge_value_from_maps(int32_t tileset_idx, int32_t local_id, bool is_terrain)
-        {
-            int32_t value = is_terrain
-                ? encode_terrain_value(tileset_idx, local_id)
-                : encode_tile_value(tileset_idx, local_id);
-            for (auto& doc : documents::inst().maps)
-            {
-                if (doc == nullptr)
-                    continue;
-                bool changed = false;
-                for (auto& layer : doc->layers)
-                {
-                    for (auto& v : layer.grid)
-                    {
-                        if (v == value)
-                        {
-                            v = 0;
-                            changed = true;
-                        }
-                    }
-                }
-                if (changed)
-                    ++doc->version;
-            }
-        }
-    }
 
     // ==================================================================
     // TilemapSystem：把地图文档实例化为分块渲染子实体
@@ -975,14 +63,32 @@ namespace jeecs
         static constexpr size_t VERTS_PER_CELL = 16;     // 每格 4 个子四边形槽位
         static constexpr size_t FLOATS_PER_CELL = VERTS_PER_CELL * FLOATS_PER_VERTEX;
 
+        // 分片标识：一个分片承载某图层某分块中来自某图集某源纹理的
+        // 全部格子（不同源纹理顶点无法合批进同一缓冲）
+        struct part_key
+        {
+            int32_t layer = 0, chunk_x = 0, chunk_y = 0, tileset = 0, source = 0;
+            bool operator<(const part_key& o) const
+            {
+                return std::tie(layer, chunk_x, chunk_y, tileset, source)
+                    < std::tie(o.layer, o.chunk_x, o.chunk_y, o.tileset, o.source);
+            }
+        };
         struct part_entry
         {
             je_GameEntity entity{};
-            int32_t layer = 0, chunk_x = 0, chunk_y = 0, source = 0;
             uint64_t built_stamp = 0;
         };
-        // root entity id -> 分片表（key: 分片实体 id）
-        std::unordered_map<uint32_t, std::map<uint32_t, part_entry>> _m_roots;
+        // 每个地图根实体的分片表 + 上次网格扫描结果（版本戳命中时免扫）
+        struct root_state
+        {
+            std::map<part_key, part_entry> parts;
+            std::set<part_key> needed;
+            uint64_t needed_stamp = 0;
+            bool needed_valid = false;
+        };
+
+        std::unordered_map<uint32_t, root_state> _m_roots;
         std::vector<float> _m_staging;
 
         TilemapSystem(game_world w)
@@ -991,11 +97,7 @@ namespace jeecs
             _m_staging.assign(CHUNK * CHUNK * FLOATS_PER_CELL, 0.f);
         }
 
-        static int64_t pack_key(int32_t layer, int32_t cx, int32_t cy, int32_t source)
-        {
-            return ((int64_t)layer << 46) | ((int64_t)(uint32_t)cx << 34)
-                | ((int64_t)(uint32_t)cy << 22) | (uint32_t)source;
-        }
+        // ---- 共享资源 ----
 
         // 共享的 Forward2D 着色器（共享资源缓存，路径加载）
         static std::optional<basic::resource<graphic::shader>> shared_tile_shader()
@@ -1078,6 +180,8 @@ namespace jeecs
             return indices;
         }
 
+        // ---- 顶点写入 ----
+
         // 写一个四边形（x0/y0 左下，x1/y1 右上；v 引擎空间向上增长）
         static void write_quad(float* v,
             float x0, float y0, float x1, float y1,
@@ -1091,154 +195,44 @@ namespace jeecs
             *p++ = x1; *p++ = y1; *p++ = 0.f; *p++ = u1; *p++ = v1; *p++ = 0.f; *p++ = 0.f; *p++ = -1.f;
         }
 
-        // UV 矩形（图集源纹理网格坐标 -> 引擎 UV；v0 下 v1 上）
-        static void tile_uv(const Tilemap::SourceTexture& src, int32_t ix, int32_t iy,
-            float& u0, float& v0_bot, float& u1, float& v1_top)
+        // 把某格的解析结果写入 staging（16 顶点槽位：未用槽位写零面积
+        // 退化四边形，不产生像素）。几何约定：1 格 = 1 世界单位
+        //（tile_px 只用于图集采样 UV；根实体 LocalScale 即比例尺）。
+        static void write_cell(float* dst, int32_t x, int32_t y,
+            const Tilemap::cell_quad_info* quads, int32_t count)
         {
-            float px = (float)(ix * src.tile_px), py = (float)(iy * src.tile_px);
-            float sz = (float)src.tile_px;
-            float w = (float)(src.tex_w ? src.tex_w : src.xcount * src.tile_px);
-            float h = (float)(src.tex_h ? src.tex_h : src.ycount * src.tile_px);
-            u0 = px / w;
-            u1 = (px + sz) / w;
-            v1_top = 1.f - py / h;
-            v0_bot = 1.f - (py + sz) / h;
-        }
-
-        // 把一格写入 staging（已保证该格属于此 source），返回是否写入
-        bool emit_cell(float* dst, Tilemap::MapDocument& doc, int32_t layer,
-            int32_t x, int32_t y)
-        {
-            int32_t v = doc.layers[layer].grid[y * doc.width + x];
-            if (v == 0)
-                return false;
-
-            int32_t ts_idx = 0, local = 0;
-            Tilemap::decode_tile_value(v, &ts_idx, &local);
-            if (ts_idx < 0 || ts_idx >= (int32_t)doc.resolved.size()
-                || doc.resolved[ts_idx] == nullptr)
-                return false;
-            const auto* ts = doc.resolved[ts_idx].get();
-
-            // 几何约定：1 格 = 1 世界单位（tile_px 只用于图集采样 UV；
-            // 根实体 LocalScale 即比例尺，(1,1,1) 时格子边长恰为 1）
             const float x0 = (float)x, x1 = x0 + 1.f;
             const float ytop = -(float)y, ybot = ytop - 1.f;
+            const float half = 0.5f;
+            const float xm = x0 + half, ym = ybot + half;
 
-            // 先全部写成退化四边形（零面积，不产生像素）
             for (size_t q = 0; q < 4; ++q)
                 write_quad(dst + q * 4 * FLOATS_PER_VERTEX, x0, ytop, x0, ytop, 0.f, 0.f, 0.f, 0.f);
-
-            auto emit_full_tile = [&](const Tilemap::SourceTexture& src, int32_t ix, int32_t iy)
+            for (int32_t i = 0; i < count; ++i)
             {
-                float u0, vb, u1, vt;
-                tile_uv(src, ix, iy, u0, vb, u1, vt);
-                write_quad(dst, x0, ybot, x1, ytop, u0, vb, u1, vt);
-            };
-
-            if (v > 0)
-            {
-                if (local <= 0 || local >= (int32_t)ts->tiles.size())
-                    return false;
-                const auto& t = ts->tiles[local];
-                if (t.source < 0 || t.source >= (int32_t)ts->sources.size())
-                    return false;
-                emit_full_tile(ts->sources[t.source], t.ix, t.iy);
-                return true;
-            }
-
-            // 自动图块地形
-            if (local <= 0 || local >= (int32_t)ts->terrains.size())
-                return false;
-            const auto& terrain = ts->terrains[local];
-            if (terrain.source < 0 || terrain.source >= (int32_t)ts->sources.size())
-                return false;
-            const auto& src = ts->sources[terrain.source];
-
-            if (terrain.kind == 1 || terrain.kind == 3)
-            {
-                // RPGMaker 四象限（XP 式条带 / VX 式 2x3 块）：
-                // 按邻接掩码为四个角各取一个半格
-                int mask = Tilemap::compute_mask(doc, layer, x, y, v);
-                if (terrain.kind == 3 && mask == 0)
+                const auto& q = quads[i];
+                if (q.corner < 0)
                 {
-                    // VX 孤块：mkxp 变体47 = 锚点整块
-                    emit_full_tile(src, terrain.ix, terrain.iy);
-                    return true;
+                    write_quad(dst, x0, ybot, x1, ytop, q.u0, q.v0, q.u1, q.v1);
                 }
-                const float half = 0.5f;
-                const float xm = x0 + half, ym = ybot + half;
-                const float shalf = src.tile_px * 0.5f;
-                float w = (float)(src.tex_w ? src.tex_w : src.xcount * src.tile_px);
-                float h = (float)(src.tex_h ? src.tex_h : src.ycount * src.tile_px);
-                // 半格 (col,row) 的 UV：row 自条带锚点顶部向下增长
-                auto half_uv = [&](int col, int row, float& u0, float& vb, float& u1, float& vt)
-                {
-                    float px = terrain.ix * src.tile_px + col * shalf;
-                    float py = terrain.iy * src.tile_px + row * shalf;
-                    u0 = px / w; u1 = (px + shalf) / w;
-                    vt = 1.f - py / h;
-                    vb = 1.f - (py + shalf) / h;
-                };
-                // 按解析器种类选择半格表（XP 式条带 / VX 式 2x3 块）
-                #define JE_TL_QUAD(CORNER, O1, O2, DIAG)                     (terrain.kind == 1                         ? Tilemap::rpgmaker_quadrant(CORNER,                             Tilemap::corner_state(mask, O1, O2, DIAG))                         : Tilemap::rpgmaker_vx_quadrant(CORNER,                             Tilemap::corner_state(mask, O1, O2, DIAG)))
-                float u0, vb, u1, vt;
-                // LU（角 0：邻接 U/L/UL）
-                half_uv(JE_TL_QUAD(0, Tilemap::NB_U, Tilemap::NB_L, Tilemap::NB_UL).col,
-                    JE_TL_QUAD(0, Tilemap::NB_U, Tilemap::NB_L, Tilemap::NB_UL).row,
-                    u0, vb, u1, vt);
-                write_quad(dst + 0 * 4 * FLOATS_PER_VERTEX, x0, ym, xm, ytop, u0, vb, u1, vt);
-                // RU（角 1：U/R/RU）
-                half_uv(JE_TL_QUAD(1, Tilemap::NB_U, Tilemap::NB_R, Tilemap::NB_RU).col,
-                    JE_TL_QUAD(1, Tilemap::NB_U, Tilemap::NB_R, Tilemap::NB_RU).row,
-                    u0, vb, u1, vt);
-                write_quad(dst + 1 * 4 * FLOATS_PER_VERTEX, xm, ym, x1, ytop, u0, vb, u1, vt);
-                // LD（角 2：D/L/LD）
-                half_uv(JE_TL_QUAD(2, Tilemap::NB_D, Tilemap::NB_L, Tilemap::NB_LD).col,
-                    JE_TL_QUAD(2, Tilemap::NB_D, Tilemap::NB_L, Tilemap::NB_LD).row,
-                    u0, vb, u1, vt);
-                write_quad(dst + 2 * 4 * FLOATS_PER_VERTEX, x0, ybot, xm, ym, u0, vb, u1, vt);
-                // RD（角 3：D/R/RD）
-                half_uv(JE_TL_QUAD(3, Tilemap::NB_D, Tilemap::NB_R, Tilemap::NB_RD).col,
-                    JE_TL_QUAD(3, Tilemap::NB_D, Tilemap::NB_R, Tilemap::NB_RD).row,
-                    u0, vb, u1, vt);
-                write_quad(dst + 3 * 4 * FLOATS_PER_VERTEX, xm, ybot, x1, ym, u0, vb, u1, vt);
-                #undef JE_TL_QUAD
-                return true;
-            }
-
-            // 单块：直接取锚点整块（不依赖瓦片定义表）
-            if (terrain.kind == 0)
-            {
-                emit_full_tile(src, terrain.ix, terrain.iy);
-                return true;
-            }
-
-            // blob47：按邻接掩码解析为一个整块变体
-            int32_t variant_tile = 0;
-            {
-                int mask = Tilemap::compute_mask(doc, layer, x, y, v);
-                uint8_t variant = Tilemap::blob47_table()[(uint8_t)(mask & 0xFF)];
-                if ((size_t)variant < terrain.variant_tiles.size())
-                    variant_tile = terrain.variant_tiles[variant];
                 else
                 {
-                    // 默认布局：自锚点起行优先连续取 47 块
-                    int32_t flat = terrain.iy * src.xcount + terrain.ix + variant;
-                    variant_tile = ts->tile_at_flat(terrain.source, flat);
+                    // 四象限槽位：0=LU 1=RU 2=LD 3=RD
+                    float cx0, cy0, cx1, cy1;
+                    switch (q.corner)
+                    {
+                    case 0: cx0 = x0; cy0 = ym;  cx1 = xm; cy1 = ytop; break;
+                    case 1: cx0 = xm;  cy0 = ym;  cx1 = x1; cy1 = ytop; break;
+                    case 2: cx0 = x0;  cy0 = ybot; cx1 = xm; cy1 = ym;  break;
+                    default: cx0 = xm;  cy0 = ybot; cx1 = x1; cy1 = ym;  break;
+                    }
+                    write_quad(dst + (size_t)q.corner * 4 * FLOATS_PER_VERTEX,
+                        cx0, cy0, cx1, cy1, q.u0, q.v0, q.u1, q.v1);
                 }
             }
-            if (variant_tile > 0 && variant_tile < (int32_t)ts->tiles.size())
-            {
-                const auto& t = ts->tiles[variant_tile];
-                if (t.source >= 0 && t.source < (int32_t)ts->sources.size())
-                {
-                    emit_full_tile(ts->sources[t.source], t.ix, t.iy);
-                    return true;
-                }
-            }
-            return true;
         }
+
+        // ---- 分片生命周期 ----
 
         game_entity create_part_entity(game_entity root, int32_t layer, float layer_z,
             const Tilemap::SourceTexture& src)
@@ -1296,9 +290,9 @@ namespace jeecs
             return part;
         }
 
-        void rebuild_part(Tilemap::MapDocument& doc, game_entity root, part_entry& part)
+        void rebuild_part(Tilemap::MapDocument& doc, game_entity root,
+            const part_key& key, part_entry& part)
         {
-            auto world = get_world();
             game_entity e{ part.entity };
             auto* shape = e.get_component<Renderer::Shape>();
             if (shape == nullptr || !shape->vertex.has_value())
@@ -1306,8 +300,8 @@ namespace jeecs
 
             memset(_m_staging.data(), 0, _m_staging.size() * sizeof(float));
             size_t used_cells = 0;
-            const int32_t bx = part.chunk_x * (int32_t)CHUNK;
-            const int32_t by = part.chunk_y * (int32_t)CHUNK;
+            const int32_t bx = key.chunk_x * (int32_t)CHUNK;
+            const int32_t by = key.chunk_y * (int32_t)CHUNK;
 
             for (int32_t ly = 0; ly < (int32_t)CHUNK; ++ly)
             {
@@ -1317,33 +311,17 @@ namespace jeecs
                 {
                     int32_t x = bx + lx;
                     if (x >= doc.width) break;
-                    int32_t v = doc.layers[part.layer].grid[y * doc.width + x];
-                    if (v == 0)
+                    Tilemap::cell_quad_info quads[4];
+                    int32_t count = Tilemap::resolve_cell_quads(doc, key.layer, x, y, quads);
+                    if (count <= 0)
                         continue;
                     // 该格须属于此分片的 (图集, 源纹理)
-                    int32_t ts_idx = 0, local = 0;
-                    Tilemap::decode_tile_value(v, &ts_idx, &local);
-                    if (ts_idx < 0 || ts_idx >= (int32_t)doc.resolved.size()
-                        || doc.resolved[ts_idx] == nullptr)
+                    if (quads[0].tileset_idx != key.tileset
+                        || quads[0].source_idx != key.source)
                         continue;
-                    const auto* ts = doc.resolved[ts_idx].get();
-                    int32_t src_idx = -1;
-                    if (v > 0)
-                    {
-                        if (local > 0 && local < (int32_t)ts->tiles.size())
-                            src_idx = ts->tiles[local].source;
-                    }
-                    else if (local > 0 && local < (int32_t)ts->terrains.size())
-                        src_idx = ts->terrains[local].source;
-                    if (src_idx < 0 || src_idx >= (int32_t)ts->sources.size())
-                        continue;
-                    // source 打包：图集下标 * 1024 + 源纹理下标
-                    if (ts_idx * 1024 + src_idx != part.source)
-                        continue;
-
-                    if (emit_cell(_m_staging.data() + used_cells * FLOATS_PER_CELL,
-                        doc, part.layer, x, y))
-                        ++used_cells;
+                    write_cell(_m_staging.data() + used_cells * FLOATS_PER_CELL,
+                        x, y, quads, count);
+                    ++used_cells;
                 }
             }
 
@@ -1358,7 +336,7 @@ namespace jeecs
             raw->m_x_max = (float)std::min<int32_t>(bx + (int32_t)CHUNK, doc.width);
             raw->m_y_max = -(float)by;
             raw->m_y_min = -(float)std::min<int32_t>(by + (int32_t)CHUNK, doc.height);
-            const float lz = doc.layers[part.layer].z;
+            const float lz = doc.layers[key.layer].z;
             raw->m_z_min = lz - 0.01f;
             raw->m_z_max = lz + 0.01f;
 
@@ -1373,12 +351,52 @@ namespace jeecs
             }
         }
 
+        // ---- 网格扫描：收集某文档当前需要的全部分片 ----
+        static void scan_needed(Tilemap::MapDocument& doc, std::set<part_key>& needed)
+        {
+            auto& docs = Tilemap::documents::inst();
+            docs.ensure_tilesets(doc);
+            for (size_t li = 0; li < doc.layers.size(); ++li)
+            {
+                if (!doc.layers[li].visible)
+                    continue;
+                const auto& grid = doc.layers[li].grid;
+                for (int32_t y = 0; y < doc.height; ++y)
+                {
+                    for (int32_t x = 0; x < doc.width; ++x)
+                    {
+                        int32_t v = grid[y * doc.width + x];
+                        if (v == 0) continue;
+                        int32_t ts_idx = 0, local = 0;
+                        Tilemap::decode_tile_value(v, &ts_idx, &local);
+                        if (ts_idx < 0 || ts_idx >= (int32_t)doc.resolved.size()
+                            || doc.resolved[ts_idx] == nullptr)
+                            continue;
+                        const auto* ts = doc.resolved[ts_idx].get();
+                        int32_t src_idx = -1;
+                        if (v > 0)
+                        {
+                            if (local > 0 && local < (int32_t)ts->tiles.size())
+                                src_idx = ts->tiles[local].source;
+                        }
+                        else if (local > 0 && local < (int32_t)ts->terrains.size())
+                            src_idx = ts->terrains[local].source;
+                        if (src_idx < 0 || src_idx >= (int32_t)ts->sources.size())
+                            continue;
+                        needed.insert(part_key{
+                            (int32_t)li, x / (int32_t)CHUNK, y / (int32_t)CHUNK,
+                            ts_idx, src_idx });
+                    }
+                }
+            }
+        }
+
         void Update()
         {
             auto world = get_world();
             auto& docs = Tilemap::documents::inst();
 
-            // 1. 收集地图根实体与文档
+            // 1. 收集地图根实体并解析文档
             struct root_info
             {
                 je_GameEntity raw{};
@@ -1397,11 +415,10 @@ namespace jeecs
             {
                 const std::string path =
                     r.comp != nullptr ? std::string(r.comp->map_path.c_str()) : std::string();
-                auto [id, doc] = docs.open_map(path);
-                r.doc = doc;
+                r.doc = docs.open_map(path).second;
             }
 
-            // 2. 回收孤儿分片（所有者不存在或不再持有 Map 组件）
+            // 2. 回收孤儿分片与根簿记（所有者不存在或不再持有 Map 组件）
             std::vector<je_GameEntity> dead_parts;
             for (auto&& [e, part] :
                 query_entity<view typesof(Tilemap::RenderPart&)>())
@@ -1410,146 +427,93 @@ namespace jeecs
                     dead_parts.push_back(e._m_raw);
             }
             for (auto& raw : dead_parts)
-            {
                 world.remove_entity(game_entity{ raw });
-                for (auto& [root_id, parts] : _m_roots)
-                    parts.erase(raw._m_id);
+            for (auto it = _m_roots.begin(); it != _m_roots.end();)
+            {
+                if (alive_root_ids.count(it->first) == 0)
+                    it = _m_roots.erase(it);
+                else
+                    ++it;
             }
 
             // 3. 逐根同步分片集合与版本
             for (auto& r : roots)
             {
                 uint32_t root_id = r.raw._m_id;
-                auto& parts = _m_roots[root_id];
+                root_state& state = _m_roots[root_id];
                 game_entity root{ r.raw };
 
-                // 计算需要的分片：(layer, chunk, source) -> 存在
-                std::set<int64_t> needed;
+                // 网格扫描只在版本戳变化时执行（map_stamp 已含图集实例身份，
+                // 图集被重载/替换同样会触发重扫）
                 uint64_t stamp = 0;
                 if (r.doc != nullptr)
-                {
-                    docs.ensure_tilesets(*r.doc);
                     stamp = docs.map_stamp(*r.doc);
-                    auto& doc = *r.doc;
-                    for (size_t li = 0; li < doc.layers.size(); ++li)
-                    {
-                        if (!doc.layers[li].visible)
-                            continue;
-                        // (chunk_y<<16|chunk_x) -> 使用的 source 集合
-                        std::map<int32_t, std::set<int32_t>> usage;
-                        const auto& grid = doc.layers[li].grid;
-                        for (int32_t y = 0; y < doc.height; ++y)
-                        {
-                            for (int32_t x = 0; x < doc.width; ++x)
-                            {
-                                int32_t v = grid[y * doc.width + x];
-                                if (v == 0) continue;
-                                int32_t ts_idx = 0, local = 0;
-                                Tilemap::decode_tile_value(v, &ts_idx, &local);
-                                if (ts_idx < 0 || ts_idx >= (int32_t)doc.resolved.size()
-                                    || doc.resolved[ts_idx] == nullptr)
-                                    continue;
-                                const auto* ts = doc.resolved[ts_idx].get();
-                                int32_t src_idx = -1;
-                                if (v > 0)
-                                {
-                                    if (local > 0 && local < (int32_t)ts->tiles.size())
-                                        src_idx = ts->tiles[local].source;
-                                }
-                                else if (local > 0 && local < (int32_t)ts->terrains.size())
-                                    src_idx = ts->terrains[local].source;
-                                if (src_idx < 0 || src_idx >= (int32_t)ts->sources.size())
-                                    continue;
-                                usage[((y / (int32_t)CHUNK) << 16) | (uint32_t)(x / (int32_t)CHUNK)]
-                                    .insert(ts_idx * 1024 + src_idx);
-                            }
-                        }
-                        for (const auto& [chunk_key, sources] : usage)
-                        {
-                            int32_t cy = chunk_key >> 16, cx = chunk_key & 0xFFFF;
-                            for (int32_t src : sources)
-                                needed.insert(pack_key((int32_t)li, cx, cy, src));
-                        }
-                    }
+                if (!state.needed_valid || state.needed_stamp != stamp)
+                {
+                    state.needed.clear();
+                    if (r.doc != nullptr)
+                        scan_needed(*r.doc, state.needed);
+                    state.needed_stamp = stamp;
+                    state.needed_valid = true;
                 }
+                const std::set<part_key>& needed = state.needed;
 
                 // 删除不再需要的分片
-                std::vector<uint32_t> removed;
-                for (auto& [pid, entry] : parts)
+                std::vector<part_key> removed;
+                for (auto& [key, entry] : state.parts)
+                    if (needed.count(key) == 0)
+                        removed.push_back(key);
+                for (const auto& key : removed)
                 {
-                    if (needed.count(pack_key(entry.layer, entry.chunk_x, entry.chunk_y, entry.source)) == 0)
-                        removed.push_back(pid);
-                }
-                for (uint32_t pid : removed)
-                {
-                    auto& entry = parts[pid];
-                    world.remove_entity(game_entity{ entry.entity });
-                    parts.erase(pid);
+                    world.remove_entity(game_entity{ state.parts.at(key).entity });
+                    state.parts.erase(key);
                 }
 
                 // 重建/刷新保留与新增的分片
-                std::map<int64_t, part_entry*> by_key;
-                for (auto& [pid, entry] : parts)
-                    by_key[pack_key(entry.layer, entry.chunk_x, entry.chunk_y, entry.source)] = &entry;
-
-                for (int64_t key : needed)
+                for (const auto& key : needed)
                 {
-                    auto fnd = by_key.find(key);
-                    if (fnd != by_key.end())
+                    auto fnd = state.parts.find(key);
+                    if (fnd != state.parts.end())
                     {
-                        if (r.doc != nullptr && fnd->second->built_stamp != stamp)
+                        if (r.doc != nullptr && fnd->second.built_stamp != stamp)
                         {
-                            rebuild_part(*r.doc, root, *fnd->second);
-                            fnd->second->built_stamp = stamp;
+                            rebuild_part(*r.doc, root, key, fnd->second);
+                            fnd->second.built_stamp = stamp;
                         }
-                        // 着色器跟随根实体 Renderer::Shaders（组件变化不
-                        // 计入地图版本戳，故每帧对齐）
-                        refresh_part_shader(root, game_entity{ fnd->second->entity });
-                        // 比例尺同理：根 LocalScale 变化即时同步到分片
-                        sync_part_scale(root, game_entity{ fnd->second->entity });
+                        // 着色器/比例尺跟随根实体（组件变化不计入地图
+                        // 版本戳，故每帧对齐）
+                        game_entity part{ fnd->second.entity };
+                        refresh_part_shader(root, part);
+                        sync_part_scale(root, part);
                         continue;
                     }
-                    // 解包 key
-                    int32_t src = (int32_t)((uint64_t)key & 0x3FFFFF);
-                    int32_t cy = (int32_t)(((uint64_t)key >> 22) & 0xFFF);
-                    int32_t cx = (int32_t)(((uint64_t)key >> 34) & 0xFFF);
-                    int32_t layer = (int32_t)(((uint64_t)key >> 46) & 0xFFFF);
-                    (void)cx; (void)cy;
-
-                    int32_t ts_idx = src / 1024, src_idx = src % 1024;
-                    part_entry entry{};
-                    entry.layer = layer;
-                    entry.chunk_x = (int32_t)(((uint64_t)key >> 34) & 0xFFF);
-                    entry.chunk_y = (int32_t)(((uint64_t)key >> 22) & 0xFFF);
-                    entry.source = src;
-                    entry.built_stamp = 0;
 
                     const Tilemap::SourceTexture* src_info = nullptr;
                     if (r.doc != nullptr
-                        && ts_idx < (int32_t)r.doc->resolved.size()
-                        && r.doc->resolved[ts_idx] != nullptr
-                        && src_idx < (int32_t)r.doc->resolved[ts_idx]->sources.size())
-                        src_info = &r.doc->resolved[ts_idx]->sources[src_idx];
+                        && key.tileset < (int32_t)r.doc->resolved.size()
+                        && r.doc->resolved[key.tileset] != nullptr
+                        && key.source < (int32_t)r.doc->resolved[key.tileset]->sources.size())
+                        src_info = &r.doc->resolved[key.tileset]->sources[key.source];
                     if (src_info == nullptr)
                         continue;
 
-                    game_entity part_entity =
-                        create_part_entity(root, layer,
-                            r.doc != nullptr ? r.doc->layers[layer].z : 0.f, *src_info);
+                    game_entity part_entity = create_part_entity(
+                        root, key.layer, r.doc->layers[key.layer].z, *src_info);
                     auto* tag = part_entity.get_component<Tilemap::RenderPart>();
                     tag->owner_id = root_id;
-                    tag->layer = layer;
-                    tag->chunk_x = entry.chunk_x;
-                    tag->chunk_y = entry.chunk_y;
-                    tag->source = src;
-                    entry.entity = part_entity._m_raw;
+                    tag->layer = key.layer;
+                    tag->chunk_x = key.chunk_x;
+                    tag->chunk_y = key.chunk_y;
+                    tag->source = key.tileset * 1024 + key.source;
 
+                    part_entry entry{};
+                    entry.entity = part_entity._m_raw;
                     if (r.doc != nullptr)
                     {
-                        rebuild_part(*r.doc, root, entry);
+                        rebuild_part(*r.doc, root, key, entry);
                         entry.built_stamp = stamp;
                     }
-                    parts[part_entity._m_raw._m_id] = entry;
+                    state.parts[key] = entry;
                 }
             }
         }
@@ -1568,10 +532,10 @@ jeecs::Tilemap::TilesetDocument* je_tilemap_ts_doc(int32_t id)
     return jeecs::Tilemap::documents::inst().tileset(id);
 }
 
+// ---------------- 地图文档 ----------------
 JE_API int32_t je_tilemap_open_map(const char* path)
 {
-    auto [id, doc] = jeecs::Tilemap::documents::inst().open_map(path ? path : "");
-    return id;
+    return jeecs::Tilemap::documents::inst().open_map(path ? path : "").first;
 }
 JE_API int32_t je_tilemap_create_map(int32_t w, int32_t h, int32_t tile_px)
 {
@@ -1587,17 +551,7 @@ JE_API int32_t je_tilemap_create_map(int32_t w, int32_t h, int32_t tile_px)
 }
 JE_API bool je_tilemap_save_map(int32_t map, const char* path)
 {
-    auto* doc = je_tilemap_map_doc(map);
-    if (doc == nullptr || path == nullptr || path[0] == '\0')
-        return false;
-    if (!jeecs::Tilemap::save_map_to(*doc, path))
-        return false;
-    auto& inst = jeecs::Tilemap::documents::inst();
-    if (!doc->path.empty() && doc->path != path)
-        inst.maps_by_path.erase(inst.canonical_key(doc->path));
-    doc->path = path;
-    inst.bind_map_path(inst.canonical_key(path), map);
-    return true;
+    return jeecs::Tilemap::documents::inst().save_map(map, path ? path : "");
 }
 JE_API void je_tilemap_reload_map(const char* path)
 {
@@ -1648,6 +602,7 @@ JE_API void je_tilemap_resize_map(int32_t map, int32_t new_w, int32_t new_h)
     ++doc->version;
 }
 
+// ---------------- 图层 ----------------
 JE_API int32_t je_tilemap_add_layer(int32_t map, const char* name)
 {
     auto* doc = je_tilemap_map_doc(map);
@@ -1723,10 +678,12 @@ JE_API void je_tilemap_set_layer(int32_t map, int32_t layer,
     if (doc == nullptr || layer < 0 || layer >= (int32_t)doc->layers.size())
         return;
     auto& l = doc->layers[layer];
-    if (name != nullptr) l.name = name;
-    l.visible = visible != 0;
-    l.locked = locked != 0;
-    ++doc->version;
+    bool changed = false;
+    if (name != nullptr && l.name != name) { l.name = name; changed = true; }
+    if (l.visible != (visible != 0)) { l.visible = visible != 0; changed = true; }
+    if (l.locked != (locked != 0)) { l.locked = locked != 0; changed = true; }
+    if (changed)
+        ++doc->version;
 }
 
 // 图层的世界 z 偏移（相对地图根实体；不同层错开以避免深度冲突）
@@ -1748,6 +705,7 @@ JE_API void je_tilemap_set_layer_z(int32_t map, int32_t layer, float z)
     }
 }
 
+// ---------------- 瓦片读写 ----------------
 JE_API int32_t je_tilemap_get_tile(int32_t map, int32_t layer, int32_t x, int32_t y)
 {
     auto* doc = je_tilemap_map_doc(map);
@@ -1788,6 +746,7 @@ JE_API void je_tilemap_fill_tiles(int32_t map, int32_t layer,
         ++doc->version;
 }
 
+// ---------------- 引用图集 ----------------
 JE_API int32_t je_tilemap_tileset_count(int32_t map)
 {
     auto* doc = je_tilemap_map_doc(map);
@@ -1838,6 +797,7 @@ JE_API const char* je_tilemap_tileset_path(int32_t map, int32_t idx)
     return doc->tilesets[idx].c_str();
 }
 
+// ---------------- 属性与查询 ----------------
 JE_API void je_tilemap_set_cell_property(int32_t map, int32_t layer,
     int32_t x, int32_t y, const char* name, const char* value)
 {
@@ -1884,16 +844,12 @@ JE_API const char* je_tilemap_get_property(int32_t map, int32_t layer,
 JE_API int32_t je_tilemap_is_walkable(int32_t map, int32_t x, int32_t y)
 {
     auto* doc = je_tilemap_map_doc(map);
-    if (doc == nullptr)
-        return 0;
+    if (doc == nullptr || !doc->in_bounds(0, x, y))
+        return 0;   // 出界视为不可通行
     for (int32_t l = 0; l < (int32_t)doc->layers.size(); ++l)
         if (!jeecs::Tilemap::walkable_on(doc, l, x, y))
             return 0;
-    // 出界由 walkable_on 返回 false（视为不可通行）
-    for (int32_t l = 0; l < (int32_t)doc->layers.size(); ++l)
-        if (doc->in_bounds(l, x, y))
-            return 1;
-    return 0;
+    return 1;
 }
 JE_API int32_t je_tilemap_is_walkable_on(int32_t map, int32_t layer, int32_t x, int32_t y)
 {
@@ -1905,7 +861,8 @@ JE_API int32_t je_tilemap_find_cells(int32_t map, int32_t layer, const char* nam
     auto* doc = je_tilemap_map_doc(map);
     if (doc == nullptr || name == nullptr || value == nullptr)
         return 0;
-    doc->find_result.clear();
+    auto& result = jeecs::Tilemap::documents::inst().find_result(doc);
+    result.clear();
     std::set<int32_t> matched;
     auto try_layer = [&](int32_t l)
     {
@@ -1928,7 +885,7 @@ JE_API int32_t je_tilemap_find_cells(int32_t map, int32_t layer, const char* nam
                 if (hit)
                 {
                     matched.insert(x + y * doc->width);
-                    doc->find_result.push_back({ x, y });
+                    result.push_back({ x, y });
                 }
             }
     };
@@ -1939,23 +896,25 @@ JE_API int32_t je_tilemap_find_cells(int32_t map, int32_t layer, const char* nam
     }
     else if (layer < (int32_t)doc->layers.size())
         try_layer(layer);
-    return (int32_t)doc->find_result.size();
+    return (int32_t)result.size();
 }
 JE_API bool je_tilemap_find_get(int32_t map, int32_t index, int32_t* x, int32_t* y)
 {
     auto* doc = je_tilemap_map_doc(map);
-    if (doc == nullptr || index < 0 || index >= (int32_t)doc->find_result.size())
+    if (doc == nullptr)
         return false;
-    if (x != nullptr) *x = doc->find_result[index].first;
-    if (y != nullptr) *y = doc->find_result[index].second;
+    const auto& result = jeecs::Tilemap::documents::inst().find_result(doc);
+    if (index < 0 || index >= (int32_t)result.size())
+        return false;
+    if (x != nullptr) *x = result[index].first;
+    if (y != nullptr) *y = result[index].second;
     return true;
 }
 
 // ---------------- 图集文档 ----------------
 JE_API int32_t je_tilemap_open_tileset(const char* path)
 {
-    auto [id, doc] = jeecs::Tilemap::documents::inst().open_tileset(path ? path : "");
-    return id;
+    return jeecs::Tilemap::documents::inst().open_tileset(path ? path : "").first;
 }
 JE_API int32_t je_tilemap_create_tileset(const char* name)
 {
@@ -1967,17 +926,7 @@ JE_API int32_t je_tilemap_create_tileset(const char* name)
 }
 JE_API bool je_tilemap_save_tileset(int32_t tileset, const char* path)
 {
-    auto* doc = je_tilemap_ts_doc(tileset);
-    if (doc == nullptr || path == nullptr || path[0] == '\0')
-        return false;
-    if (!jeecs::Tilemap::save_tileset_to(*doc, path))
-        return false;
-    auto& inst = jeecs::Tilemap::documents::inst();
-    if (!doc->path.empty() && doc->path != path)
-        inst.tilesets_by_path.erase(inst.canonical_key(doc->path));
-    doc->path = path;
-    inst.bind_tileset_path(inst.canonical_key(path), tileset);
-    return true;
+    return jeecs::Tilemap::documents::inst().save_tileset(tileset, path ? path : "");
 }
 JE_API void je_tilemap_reload_tileset(const char* path)
 {
@@ -2008,6 +957,7 @@ JE_API const char* je_tilemap_tileset_name(int32_t tileset)
     return doc ? doc->name.c_str() : "";
 }
 
+// ---------------- 图集源纹理 ----------------
 JE_API int32_t je_tilemap_add_source(int32_t tileset, const char* texture_path, int32_t tile_px)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
@@ -2060,7 +1010,6 @@ JE_API bool je_tilemap_remove_source(int32_t tileset, int32_t source_idx)
     {
         if (d.source == source_idx)
         {
-            if (d.source >= 0) { /* 已是墓碑则跳过 */ }
             d.source = -1;
             d.kind = 255;
             d.name.clear();
@@ -2094,6 +1043,7 @@ JE_API bool je_tilemap_source_info(int32_t tileset, int32_t source_idx,
     return true;
 }
 
+// ---------------- 普通瓦片表 ----------------
 JE_API int32_t je_tilemap_add_tile(int32_t tileset, int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
@@ -2158,6 +1108,7 @@ JE_API void je_tilemap_set_tile_walkable(int32_t tileset, int32_t tile_id, int32
     ++doc->version;
 }
 
+// ---------------- 自动图块地形 ----------------
 JE_API int32_t je_tilemap_add_terrain(int32_t tileset, const char* name, int32_t kind,
     int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable)
 {
@@ -2264,6 +1215,7 @@ JE_API bool je_tilemap_terrain_add_variant(int32_t tileset, int32_t terrain_id, 
     return true;
 }
 
+// ---------------- 属性 schema 与默认值 ----------------
 JE_API int32_t je_tilemap_add_property(int32_t tileset, const char* name, const char* type, const char* default_value)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
@@ -2369,142 +1321,8 @@ JE_API const char* je_tilemap_get_terrain_property(int32_t tileset, int32_t terr
 }
 
 // ======================================================================
-// 单元格渲染信息（编辑器预览用，与实际渲染一致）
+// 单元格渲染信息（编辑器预览用）：resolve_cell_quads 的 C 边界映射
 // ======================================================================
-namespace jeecs::Tilemap
-{
-    struct cell_quad_info
-    {
-        int32_t source_idx = 0;         // 图集内源纹理下标
-        float u0 = 0.f, v0 = 0.f, u1 = 0.f, v1 = 0.f; // 引擎空间 UV（v0 下 v1 上）
-        int32_t qx = 0, qy = 0, qcols = 1;            // 目标象限（qcols×qcols 自左上角）
-    };
-
-    // 解析某格的 1~4 个子四边形；返回数量（0 = 空格或不可解析）
-    inline int32_t resolve_cell_quads(MapDocument& doc, int32_t layer,
-        int32_t x, int32_t y, cell_quad_info* out /*至少 4 项*/)
-    {
-        if (!doc.in_bounds(layer, x, y))
-            return 0;
-        // API 直调时无系统代管图集解析，此处兜底（幂等）
-        documents::inst().ensure_tilesets(doc);
-        int32_t v = doc.layers[layer].grid[y * doc.width + x];
-        if (v == 0)
-            return 0;
-        int32_t ts_idx = 0, local = 0;
-        decode_tile_value(v, &ts_idx, &local);
-        if (ts_idx < 0 || ts_idx >= (int32_t)doc.resolved.size()
-            || doc.resolved[ts_idx] == nullptr)
-            return 0;
-        const auto* ts = doc.resolved[ts_idx].get();
-
-        auto fill_full = [&](const SourceTexture& src, int32_t ix, int32_t iy)
-        {
-            out[0].source_idx = -1; // 由调用方按位置填
-            float w = (float)(src.tex_w ? src.tex_w : src.xcount * src.tile_px);
-            float h = (float)(src.tex_h ? src.tex_h : src.ycount * src.tile_px);
-            float px = (float)(ix * src.tile_px), py = (float)(iy * src.tile_px);
-            float sz = (float)src.tile_px;
-            out[0].u0 = px / w;
-            out[0].u1 = (px + sz) / w;
-            out[0].v1 = 1.f - py / h;
-            out[0].v0 = 1.f - (py + sz) / h;
-            out[0].qx = 0; out[0].qy = 0; out[0].qcols = 1;
-        };
-
-        if (v > 0)
-        {
-            if (local <= 0 || local >= (int32_t)ts->tiles.size())
-                return 0;
-            const auto& t = ts->tiles[local];
-            if (t.source < 0 || t.source >= (int32_t)ts->sources.size())
-                return 0;
-            fill_full(ts->sources[t.source], t.ix, t.iy);
-            out[0].source_idx = t.source;
-            return 1;
-        }
-
-        if (local <= 0 || local >= (int32_t)ts->terrains.size())
-            return 0;
-        const auto& terrain = ts->terrains[local];
-        if (terrain.source < 0 || terrain.source >= (int32_t)ts->sources.size())
-            return 0;
-        const auto& src = ts->sources[terrain.source];
-
-        if (terrain.kind == 1 || terrain.kind == 3)
-        {
-            // RPGMaker 四象限（XP 式条带 / VX 式 2x3 块）：
-            // 槽位序 [LU, RU, LD, RD]，与渲染系统一致
-            int mask = compute_mask(doc, layer, x, y, v);
-            if (terrain.kind == 3 && mask == 0)
-            {
-                // VX 孤块：mkxp 变体47 = 锚点整块
-                fill_full(src, terrain.ix, terrain.iy);
-                out[0].source_idx = terrain.source;
-                return 1;
-            }
-            const float shalf = src.tile_px * 0.5f;
-            float w = (float)(src.tex_w ? src.tex_w : src.xcount * src.tile_px);
-            float h = (float)(src.tex_h ? src.tex_h : src.ycount * src.tile_px);
-            struct corner_bits { int o1, o2, diag; };
-            const corner_bits cb[4] = {
-                { NB_U, NB_L, NB_UL }, { NB_U, NB_R, NB_RU },
-                { NB_D, NB_L, NB_LD }, { NB_D, NB_R, NB_RD },
-            };
-            const int32_t dst_qx[4] = { 0, 1, 0, 1 };
-            const int32_t dst_qy[4] = { 0, 0, 1, 1 };
-            for (int c = 0; c < 4; ++c)
-            {
-                half_cell hc = terrain.kind == 1
-                    ? rpgmaker_quadrant(c, corner_state(mask, cb[c].o1, cb[c].o2, cb[c].diag))
-                    : rpgmaker_vx_quadrant(c, corner_state(mask, cb[c].o1, cb[c].o2, cb[c].diag));
-                float px = terrain.ix * src.tile_px + hc.col * shalf;
-                float py = terrain.iy * src.tile_px + hc.row * shalf;
-                out[c].source_idx = terrain.source;
-                out[c].u0 = px / w;
-                out[c].u1 = (px + shalf) / w;
-                out[c].v1 = 1.f - py / h;
-                out[c].v0 = 1.f - (py + shalf) / h;
-                out[c].qx = dst_qx[c];
-                out[c].qy = dst_qy[c];
-                out[c].qcols = 2;
-            }
-            return 4;
-        }
-
-        // 单块：直接取锚点整块（不依赖瓦片定义表）
-        if (terrain.kind == 0)
-        {
-            fill_full(src, terrain.ix, terrain.iy);
-            out[0].source_idx = terrain.source;
-            return 1;
-        }
-
-        // blob47：整块变体
-        int32_t variant_tile = 0;
-        {
-            int mask = compute_mask(doc, layer, x, y, v);
-            uint8_t variant = blob47_table()[(uint8_t)(mask & 0xFF)];
-            if ((size_t)variant < terrain.variant_tiles.size())
-                variant_tile = terrain.variant_tiles[variant];
-            else
-                variant_tile = ts->tile_at_flat(terrain.source,
-                    terrain.iy * src.xcount + terrain.ix + variant);
-        }
-        if (variant_tile > 0 && variant_tile < (int32_t)ts->tiles.size())
-        {
-            const auto& t = ts->tiles[variant_tile];
-            if (t.source >= 0 && t.source < (int32_t)ts->sources.size())
-            {
-                fill_full(ts->sources[t.source], t.ix, t.iy);
-                out[0].source_idx = t.source;
-                return 1;
-            }
-        }
-        return 0;
-    }
-}
-
 JE_API int32_t je_tilemap_cell_quad_count(int32_t map, int32_t layer, int32_t x, int32_t y)
 {
     auto* doc = je_tilemap_map_doc(map);
@@ -2522,28 +1340,26 @@ JE_API bool je_tilemap_cell_quad(int32_t map, int32_t layer, int32_t x, int32_t 
     if (doc == nullptr || idx < 0 || idx > 3)
         return false;
     jeecs::Tilemap::cell_quad_info quads[4];
-    if (idx >= jeecs::Tilemap::resolve_cell_quads(*doc, layer, x, y, quads))
+    int32_t count = jeecs::Tilemap::resolve_cell_quads(*doc, layer, x, y, quads);
+    if (idx >= count)
         return false;
 
     const auto& q = quads[idx];
-    // 反查图集与源纹理
-    int32_t v = doc->in_bounds(layer, x, y) ? doc->layers[layer].grid[y * doc->width + x] : 0;
-    int32_t ts_idx = 0, local = 0;
-    jeecs::Tilemap::decode_tile_value(v, &ts_idx, &local);
-    if (ts_idx < 0 || ts_idx >= (int32_t)doc->resolved.size()
-        || doc->resolved[ts_idx] == nullptr
-        || q.source_idx < 0 || q.source_idx >= (int32_t)doc->resolved[ts_idx]->sources.size())
+    if (q.tileset_idx < 0 || q.tileset_idx >= (int32_t)doc->resolved.size()
+        || doc->resolved[q.tileset_idx] == nullptr
+        || q.source_idx < 0 || q.source_idx >= (int32_t)doc->resolved[q.tileset_idx]->sources.size())
         return false;
 
     if (texture_path != nullptr)
-        *texture_path = doc->resolved[ts_idx]->sources[q.source_idx].path.c_str();
+        *texture_path = doc->resolved[q.tileset_idx]->sources[q.source_idx].path.c_str();
     if (u0 != nullptr) *u0 = q.u0;
     if (v0 != nullptr) *v0 = q.v0;
     if (u1 != nullptr) *u1 = q.u1;
     if (v1 != nullptr) *v1 = q.v1;
-    if (qx != nullptr) *qx = q.qx;
-    if (qy != nullptr) *qy = q.qy;
-    if (qcols != nullptr) *qcols = q.qcols;
+    // 象限自左上角起于 qcols×qcols 网格：corner 0..3 -> (0,0)(1,0)(0,1)(1,1)
+    if (qx != nullptr) *qx = q.corner < 0 ? 0 : (q.corner & 1);
+    if (qy != nullptr) *qy = q.corner < 0 ? 0 : (q.corner >> 1);
+    if (qcols != nullptr) *qcols = q.corner < 0 ? 1 : 2;
     return true;
 }
 

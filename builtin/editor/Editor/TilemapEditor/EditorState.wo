@@ -108,8 +108,6 @@ namespace JEEditor::Editor::TilemapEditor
         protected m_new_prop_name: mut string,
         protected m_new_prop_type: mut int,
         protected m_new_prop_default: mut string,
-        // 重命名图层弹窗
-        protected m_rename_layer: mut option<int>,
 
         // ===== 视图 =====
         protected m_zoom: mut real,          // 每瓦片屏幕像素 = tilepx * zoom
@@ -122,18 +120,14 @@ namespace JEEditor::Editor::TilemapEditor
         // ===== 撤销与脏标记 =====
         protected m_undo: UndoStack,
         protected m_dirty: mut bool,
-        // 进行中的笔划：(cellkey, 修改前值) 对（cellkey = x + y*width）
+        // 进行中的笔划：cellkey -> 修改前值（cellkey = x + y*width）
         protected m_stroke_layer: mut int,
-        protected m_stroke_cells: vec<(int, int)>,
+        protected m_stroke_cells: map<int, int>,
         protected m_stroke_desc: mut string,
 
         // ===== 图集纹理显示缓存（(路径, 纹理) / 失败路径；线性扫描） =====
         protected m_textures: vec<(string, texture)>,
         protected m_textures_failed: vec<string>,
-
-        // 尺寸调整弹窗
-        protected m_resize_w: mut int,
-        protected m_resize_h: mut int,
 
         // ===== 地形连接预览（每个自动图块地形一张隐藏 3x3 预览地图） =====
         // 键 = "图集路径#地形id"，值 = 预览地图句柄
@@ -181,7 +175,6 @@ namespace JEEditor::Editor::TilemapEditor
                 m_new_prop_name = mut "",
                 m_new_prop_type = mut 0,
                 m_new_prop_default = mut "",
-                m_rename_layer = mut option::none,
 
                 m_zoom = mut 1.,
                 m_pan = mut (64., 64.),
@@ -192,14 +185,11 @@ namespace JEEditor::Editor::TilemapEditor
                 m_undo = UndoStack::create(),
                 m_dirty = mut false,
                 m_stroke_layer = mut -1,
-                m_stroke_cells = []mut,
+                m_stroke_cells = {}mut: map<int, int>,
                 m_stroke_desc = mut "",
 
                 m_textures = []mut,
                 m_textures_failed = []mut,
-
-                m_resize_w = mut 0,
-                m_resize_h = mut 0,
 
                 m_preview_maps = []mut,
                 m_last_cell_click = mut (0., -1, -1),
@@ -248,25 +238,16 @@ namespace JEEditor::Editor::TilemapEditor
         {
             let (w, _, _, _) = tilemap::map_size(self.m_context.m_map);
             let key = x + y * w;
-            let mut known = false;
-            for (let (cached_key, _): self.m_stroke_cells)
+            if (!self.m_stroke_cells->contains(key))
             {
-                if (cached_key == key)
-                {
-                    known = true;
-                    break;
-                }
-            }
-            if (!known)
-            {
-                do self.m_stroke_cells->add((key, tilemap::get_tile(
-                    self.m_context.m_map, self.m_stroke_layer, x, y)));
+                self.m_stroke_cells->set(key, tilemap::get_tile(
+                    self.m_context.m_map, self.m_stroke_layer, x, y));
             }
             do tilemap::set_tile(self.m_context.m_map, self.m_stroke_layer, x, y, value);
         }
         public func end_stroke(self: EditorState)=> void
         {
-            if (self.m_stroke_cells->len == 0)
+            if (self.m_stroke_cells->empty)
             {
                 self.m_stroke_layer = -1;
                 return;
@@ -275,10 +256,11 @@ namespace JEEditor::Editor::TilemapEditor
             let map = self.m_context.m_map;
             let layer = self.m_stroke_layer;
             // 捕获修改前/后值并注册撤销命令（闭包按 (key, value) 对恢复）
-            let before = self.m_stroke_cells->dup();
+            let before = []mut: vec<(int, int)>;
             let mut after = []mut: vec<(int, int)>;
-            for (let (key, _): before)
+            for (let (key, oldv): self.m_stroke_cells)
             {
+                do before->add((key, oldv));
                 do after->add((key, tilemap::get_tile(map, layer, key % w, key / w)));
             }
             let desc = self.m_stroke_desc;

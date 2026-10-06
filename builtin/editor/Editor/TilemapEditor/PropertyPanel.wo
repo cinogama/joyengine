@@ -47,7 +47,11 @@ namespace JEEditor::Editor::TilemapEditor
             return "0";
         if (type == "string")
             return "";
-        return "0, 0";
+        if (type == "vec2")
+            return "0, 0";
+        if (type == "vec3")
+            return "0, 0, 0";
+        return "0, 0, 0, 0";   // vec4
     }
 
     public func draw_properties(state: EditorState, ctx: TilemapContext)=> void
@@ -510,8 +514,12 @@ namespace JEEditor::Editor::TilemapEditor
                 {
                     let (pname, ptype, _) = tilemap::property_info(ts_id, i);
                     let cur = tilemap::get_terrain_property(ts_id, tid, pname);
-                    do draw_default_editor(state, pname, ptype, cur,
-                        func(val) { do tilemap::set_terrain_property(ts_id, tid, pname, val); });
+                    do draw_default_editor(pname, ptype, cur,
+                        func(val)
+                        {
+                            do tilemap::set_terrain_property(ts_id, tid, pname, val);
+                            state.m_dirty = true;
+                        });
                 }
                 return;
             }
@@ -543,8 +551,12 @@ namespace JEEditor::Editor::TilemapEditor
                         {
                             let (pname, ptype, _) = tilemap::property_info(ts_id, i);
                             let cur = tilemap::get_tile_property(ts_id, tile_id, pname);
-                            do draw_default_editor(state, pname, ptype, cur,
-                                func(val) { do tilemap::set_tile_property(ts_id, tile_id, pname, val); });
+                            do draw_default_editor(pname, ptype, cur,
+                                func(val)
+                                {
+                                    do tilemap::set_tile_property(ts_id, tile_id, pname, val);
+                                    state.m_dirty = true;
+                                });
                         }
                     }
                 }
@@ -553,9 +565,9 @@ namespace JEEditor::Editor::TilemapEditor
         }
     }
 
-    // 默认值编辑器：一行（属性名 + 文本/布尔输入），空串 = 清除
-    func draw_default_editor(state: EditorState,
-        name: string, type: string, current: option<string>,
+    // 默认值编辑器：一行（属性名 + 文本/布尔输入），空串 = 清除。
+    // 脏标记由各编辑路径的 setter 闭包负责，此处不标（否则每帧误标脏）
+    func draw_default_editor(name: string, type: string, current: option<string>,
         setter: (option<string>)=>void)=> void
     {
         do PushIDStr(name);
@@ -593,7 +605,6 @@ namespace JEEditor::Editor::TilemapEditor
                 }
             }
         }
-        do state->mark_dirty();
         do PopID();
     }
 }

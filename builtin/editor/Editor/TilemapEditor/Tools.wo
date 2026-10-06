@@ -87,7 +87,10 @@ namespace JEEditor::Editor::TilemapEditor
         do state->end_stroke();
     }
 
-    // 填充：同值连通域（4 邻接）替换为画笔值
+    // 填充：同值连通域（4 邻接）替换为画笔值。泛洪遍历用显式栈
+    //（vec pop，DFS 序，与结果集无关），直接读写文档
+    //（touch_cell 负责撤销快照），访问标记用 map<int, mut bool>
+    //（支持索引赋值）
     func apply_fill(state: EditorState, ctx: TilemapContext, sx: int, sy: int)=> void
     {
         let (w, h, _, layer_count) = tilemap::map_size(ctx.m_map);
@@ -99,16 +102,14 @@ namespace JEEditor::Editor::TilemapEditor
         if (target == repl)
             return;
 
-        // BFS：直接读写文档（touch_cell 负责撤销快照），访问标记用
-        // map<int, mut bool>（支持索引赋值）
         do state->begin_stroke(layer, "填充");
-        let mut queue = []mut: vec<int>;
-        do queue->add(sx + sy * w);
+        let mut pending = []mut: vec<int>;
+        do pending->add(sx + sy * w);
         let mut visited = new_int_bool_map();
         visited[sx + sy * w] = true;
-        while (queue->len > 0)
+        while (pending->len > 0)
         {
-            match (queue->pop())
+            match (pending->pop())
             {
                 value(cell)?
                 {
@@ -120,22 +121,22 @@ namespace JEEditor::Editor::TilemapEditor
                         if (cx > 0 && visited->get(cell - 1)->is_none)
                         {
                             visited[cell - 1] = true;
-                            do queue->add(cell - 1);
+                            do pending->add(cell - 1);
                         }
                         if (cx + 1 < w && visited->get(cell + 1)->is_none)
                         {
                             visited[cell + 1] = true;
-                            do queue->add(cell + 1);
+                            do pending->add(cell + 1);
                         }
                         if (cy > 0 && visited->get(cell - w)->is_none)
                         {
                             visited[cell - w] = true;
-                            do queue->add(cell - w);
+                            do pending->add(cell - w);
                         }
                         if (cy + 1 < h && visited->get(cell + w)->is_none)
                         {
                             visited[cell + w] = true;
-                            do queue->add(cell + w);
+                            do pending->add(cell + w);
                         }
                     }
                 }

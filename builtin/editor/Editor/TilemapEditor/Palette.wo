@@ -31,6 +31,8 @@ using JEEditor::Editor::TilemapEditor;
 
 namespace JEEditor::Editor::TilemapEditor
 {
+    // ==================== 画笔选择与 UV 工具 ====================
+
     // 地形解析种类的显示名
     func terrain_kind_name(kind: int)=> string
     {
@@ -45,6 +47,42 @@ namespace JEEditor::Editor::TilemapEditor
         return "?";
     }
 
+    // 画笔值编码所用的"图集下标"：地图模式取当前调色板图集页签；
+    // 图集编辑模式无地图（画笔不可用），固定 0
+    func brush_tileset_index(state: EditorState)=> int
+    {
+        return state.m_tileset_only > 0 ? 0 | state.m_palette_tileset;
+    }
+
+    // 选定地形为画笔（清除瓦片格选择）
+    func select_terrain_brush(state: EditorState, tid: int)=> void
+    {
+        state.m_palette_terrain = option::value(tid);
+        state.m_palette_cell = option::none;
+        state.m_paint = tilemap::terrain_value(brush_tileset_index(state), tid);
+    }
+
+    // 选定普通瓦片为画笔（清除地形选择）
+    func select_tile_brush(state: EditorState, tile_id: int)=> void
+    {
+        state.m_palette_terrain = option::none;
+        state.m_paint = tilemap::tile_value(brush_tileset_index(state), tile_id);
+    }
+
+    // 图集源纹理网格格的引擎空间 UV，供 AddImageUV 使用：
+    // 返回 (左, 下, 右, 上)；引擎 v 向上增长而图像行向下增长，
+    // 故 v = 1 - 图像行分数
+    func atlas_cell_uv(tex: texture, tile_px: int, ix: int, iy: int)
+        => (real, real, real, real)
+    {
+        let (tw, th) = tex->size();
+        let u0 = ix as real * tile_px as real / tw as real;
+        let u1 = (ix + 1) as real * tile_px as real / tw as real;
+        let v1 = 1.0 - iy as real * tile_px as real / th as real;
+        let v0 = 1.0 - (iy + 1) as real * tile_px as real / th as real;
+        return (u0, v0, u1, v1);
+    }
+
     // 调色板当前图集的文档句柄（无图集返回 0）
     public func palette_tileset_doc(state: EditorState, ctx: TilemapContext)=> int
     {
@@ -55,6 +93,8 @@ namespace JEEditor::Editor::TilemapEditor
             return 0;
         return ctx->tileset_id(state.m_palette_tileset);
     }
+
+    // ==================== 调色板入口 ====================
 
     public func draw_palette(state: EditorState, ctx: TilemapContext)=> void
     {
@@ -165,9 +205,10 @@ namespace JEEditor::Editor::TilemapEditor
         }
     }
 
-    // 自动图块地形缩略选择行：VX/XP 显示整块缩略，blob47 显示锚点块
+    // ==================== 地图模式：地形一格列表 ====================
+
     // 地图编辑器的地形调色板：一个地形一格（32px 紧排，RM 式）。
-    // 图标 = 该地形单独出现时的样式（锚点孤块）。原始 tileset 的查看
+    // 图标 = 该地形单独出现时的样式（锚点孤块）。原始图集的查看
     // 与地形创建在图集编辑器中进行。
     func draw_terrain_cell_palette(state: EditorState, ts_id: int)=> void
     {
@@ -178,7 +219,7 @@ namespace JEEditor::Editor::TilemapEditor
             do TextDisabled("在图集编辑器中添加源纹理并创建地形。");
             return;
         }
-        // 先过滤已删除地形（墓碑，kind>3 或 source<0），再按有效数排布
+        // 过滤已删除地形（墓碑，kind>3 或 source<0）后按有效数排布
         let valid_ids = []mut: vec<int>;
         for (let mut t = 1; t <= total; t += 1)
         {
@@ -227,12 +268,7 @@ namespace JEEditor::Editor::TilemapEditor
                     {
                         value(tex)?
                         {
-                            let (tw, th) = tex->size();
-                            let u_l = ix as real * tpx as real / tw as real;
-                            // AddImageUV 采样引擎 v（v=1-图像行/高），须换算
-                            let v_t = 1.0 - iy as real * tpx as real / th as real;
-                            let u_r = (ix + 1) as real * tpx as real / tw as real;
-                            let v_b = 1.0 - (iy + 1) as real * tpx as real / th as real;
+                            let (u_l, v_b, u_r, v_t) = atlas_cell_uv(tex, tpx, ix, iy);
                             do dl->AddImageUV((x0, pos[1]), (x1, pos[1] + cell),
                                 (u_l, v_b), (u_r, v_t), tex, (255, 255, 255, 255));
                             drawn = true;
@@ -256,17 +292,13 @@ namespace JEEditor::Editor::TilemapEditor
                     do SetTooltip(F"{tname} [{terrain_kind_name(k)}]：点击选择绘制");
                 }
                 if (clicked && c == hover_cx)
-                {
-                    state.m_palette_terrain = option::value(tid);
-                    state.m_palette_cell = option::none;
-                    let ts_idx = state.m_tileset_only > 0
-                        ? 0 | state.m_palette_tileset;
-                    state.m_paint = tilemap::terrain_value(ts_idx, tid);
-                }
+                    do select_terrain_brush(state, tid);
             }
             slot += n;
         }
     }
+
+    // ==================== 地形连接预览 ====================
 
     // 取（或创建）某地形的连接预览地图（3x3 全铺该地形）。
     // 返回 0 表示不可用（图集尚未保存到磁盘）。
@@ -358,35 +390,31 @@ namespace JEEditor::Editor::TilemapEditor
                 }
             }
             do dl->AddRect(base, (base[0] + w, base[1] + h), (255, 255, 255, 60), 1.);
+            return;
         }
-        else
+
+        // 图集未保存：退化为锚点孤块图标
+        let (_, _, src, ix, iy, _, _) = tilemap::terrain_info(ts_id, tid);
+        if (src >= 0 && src < tilemap::source_count(ts_id))
         {
-            let (_, _, src, ix, iy, _, _) = tilemap::terrain_info(ts_id, tid);
-            if (src >= 0 && src < tilemap::source_count(ts_id))
+            let (tp, tpx, _, _) = tilemap::source_info(ts_id, src);
+            match (state->atlas_texture(tp))
             {
-                let (tp, tpx, _, _) = tilemap::source_info(ts_id, src);
-                match (state->atlas_texture(tp))
+                value(tex)?
                 {
-                    value(tex)?
-                    {
-                        let (tw, th) = tex->size();
-                        let u_l = ix as real * tpx as real / tw as real;
-                        // 同上：AddImageUV 采样引擎 v，须取 1-图像分数
-                        let v_t = 1.0 - iy as real * tpx as real / th as real;
-                        let u_r = (ix + 1) as real * tpx as real / tw as real;
-                        let v_b = 1.0 - (iy + 1) as real * tpx as real / th as real;
-                        do dl->AddImageUV(base, (base[0] + w, base[1] + h),
-                            (u_l, v_b), (u_r, v_t), tex, (255, 255, 255, 255));
-                    }
-                    none?;
+                    let (u_l, v_b, u_r, v_t) = atlas_cell_uv(tex, tpx, ix, iy);
+                    do dl->AddImageUV(base, (base[0] + w, base[1] + h),
+                        (u_l, v_b), (u_r, v_t), tex, (255, 255, 255, 255));
                 }
+                none?;
             }
-            do dl->AddRect(base, (base[0] + w, base[1] + h), (255, 255, 255, 60), 1.);
         }
+        do dl->AddRect(base, (base[0] + w, base[1] + h), (255, 255, 255, 60), 1.);
     }
 
+    // ==================== 图集模式：源纹理网格视图 ====================
 
-    // 源纹理网格视图（贴图 + 网格 + 交互选中）
+    // 源纹理网格视图（贴图 + 网格线 + 已注册地形块覆盖 + 交互选中）
     func draw_palette_grid(state: EditorState, ts_id: int)=> void
     {
         if (state.m_palette_source < 0
@@ -413,205 +441,193 @@ namespace JEEditor::Editor::TilemapEditor
                 let avail = GetContentRegionAvail();
                 // 整张贴图缩放到面板宽度内（保持像素清晰由 NEAREST 采样保证）
                 let scale = math::min(1., avail[0] / tw as real);
-                let img_w = tw as real * scale;
-                let img_h = th as real * scale;
-                do ImageSize(tex, img_w, img_h);
+                do ImageSize(tex, tw as real * scale, th as real * scale);
 
                 let (rect_min, rect_max) = GetItemRect();
                 let cell_px = tile_px as real * scale;
                 if (cell_px < 3.)
                     return;
-                let dl = GetWindowDrawList();
 
-                // 网格线
-                if (cell_px >= 10.)
-                {
-                    for (let mut gx = 0; gx <= xc; gx += 1)
-                    {
-                        do dl->AddLine(
-                            (rect_min[0] + gx as real * cell_px, rect_min[1]),
-                            (rect_min[0] + gx as real * cell_px, rect_max[1]),
-                            (255, 255, 255, 36), 1.);
-                    }
-                    for (let mut gy = 0; gy <= yc; gy += 1)
-                    {
-                        do dl->AddLine(
-                            (rect_min[0], rect_min[1] + gy as real * cell_px),
-                            (rect_max[0], rect_min[1] + gy as real * cell_px),
-                            (255, 255, 255, 36), 1.);
-                    }
-                }
-
-                // 已注册 VX/XP 地形块：常驻淡描边，提示可整块选择
-                let terr_all = tilemap::terrain_count(ts_id);
-                for (let mut t = 1; t <= terr_all; t += 1)
-                {
-                    let (_, k, s, bx, by, _, _) = tilemap::terrain_info(ts_id, t);
-                    if (s == state.m_palette_source && (k == 1 || k == 3))
-                    {
-                        // 覆盖区变暗：这些格子的绘制由其所属自动图块接管
-                        do dl->AddRectFilled(
-                            (rect_min[0] + bx as real * cell_px,
-                             rect_min[1] + by as real * cell_px),
-                            (rect_min[0] + (bx + 2) as real * cell_px,
-                             rect_min[1] + (by + 3) as real * cell_px),
-                            (20, 24, 34, 110));
-                        do dl->AddRect(
-                            (rect_min[0] + bx as real * cell_px,
-                             rect_min[1] + by as real * cell_px),
-                            (rect_min[0] + (bx + 2) as real * cell_px,
-                             rect_min[1] + (by + 3) as real * cell_px),
-                            (110, 200, 255, 90), 1.);
-                    }
-                }
-
-                // 悬停格 / 悬停地形块（RM 式整块感知）
+                do draw_atlas_grid_lines(rect_min, rect_max, cell_px, xc, yc);
+                do draw_registered_terrain_overlays(state, ts_id, rect_min, cell_px);
                 if (IsItemHovered())
-                {
-                    let mouse = GetMousePos();
-                    let cx = ((mouse[0] - rect_min[0]) / cell_px) as int;
-                    let cy = ((mouse[1] - rect_min[1]) / cell_px) as int;
-                    if (cx >= 0 && cy >= 0 && cx < xc && cy < yc)
-                    {
-                        // 命中已注册地形块？
-                        let mut hit_tid = 0;
-                        let mut hit_name = "";
-                        let mut hit_kind = 0;
-                        let mut hit_bx = 0;
-                        let mut hit_by = 0;
-                        for (let mut t = 1; t <= terr_all; t += 1)
-                        {
-                            let (tname, k, s, bx, by, _, _) = tilemap::terrain_info(ts_id, t);
-                            if (s == state.m_palette_source && (k == 1 || k == 3)
-                                && cx >= bx && cx < bx + 2 && cy >= by && cy < by + 3)
-                            {
-                                hit_tid = t;
-                                hit_name = tname;
-                                hit_kind = k;
-                                hit_bx = bx;
-                                hit_by = by;
-                            }
-                        }
-
-                        if (hit_tid > 0)
-                        {
-                            // 整块高亮 + 提示；点击选择地形进行绘制（RM 式）
-                            let bx0 = rect_min[0] + hit_bx as real * cell_px;
-                            let by0 = rect_min[1] + hit_by as real * cell_px;
-                            do dl->AddRect((bx0, by0),
-                                (bx0 + 2. * cell_px, by0 + 3. * cell_px),
-                                (110, 200, 255, 230), 2.);
-                            do SetTooltip(F"{hit_name} [{terrain_kind_name(hit_kind)}]：点击选择绘制");
-                            if (IsItemClickedLeft())
-                            {
-                                state.m_palette_terrain = option::value(hit_tid);
-                                state.m_palette_cell = option::none;
-                                let ts_idx = state.m_tileset_only > 0
-                                    ? 0 | state.m_palette_tileset;
-                                state.m_paint = tilemap::terrain_value(ts_idx, hit_tid);
-                            }
-                        }
-                        else
-                        {
-                            // 未注册格子：单格高亮；双击快速新建地形（锚点自动对齐块）
-                            do dl->AddRect(
-                                (rect_min[0] + cx as real * cell_px,
-                                 rect_min[1] + cy as real * cell_px),
-                                (rect_min[0] + (cx + 1) as real * cell_px,
-                                 rect_min[1] + (cy + 1) as real * cell_px),
-                                (255, 255, 255, 220), 1.5);
-                            if (IsItemClickedLeft())
-                            {
-                                state.m_palette_cell = option::value((cx, cy));
-                                // 优先选择该格已有的单块地形（早期图集曾按格自动创建）
-                                let mut st = 0;
-                                let tc0 = tilemap::terrain_count(ts_id);
-                                for (let mut t = 1; t <= tc0; t += 1)
-                                {
-                                    let (_, k2, s2, ix2, iy2, _, _) = tilemap::terrain_info(ts_id, t);
-                                    if (k2 == 0 && s2 == state.m_palette_source
-                                        && ix2 == cx && iy2 == cy)
-                                        st = t;
-                                }
-                                if (st > 0)
-                                {
-                                    state.m_palette_terrain = option::value(st);
-                                    let ts_idx = state.m_tileset_only > 0
-                                        ? 0 | state.m_palette_tileset;
-                                    state.m_paint = tilemap::terrain_value(ts_idx, st);
-                                }
-                                else
-                                {
-                                    // 该格没有单块地形：回退为普通瓦片
-                                    state.m_palette_terrain = option::none;
-                                    let tile_id = tilemap::add_tile(
-                                        ts_id, state.m_palette_source, cx, cy, 1);
-                                    if (tile_id > 0)
-                                    {
-                                        // 地图模式下使用地图内图集下标编码画笔值；
-                                        // 图集模式（无地图）仅记录到 0 号图集
-                                        let ts_idx = state.m_tileset_only > 0
-                                            ? 0 | state.m_palette_tileset;
-                                        state.m_paint = tilemap::tile_value(ts_idx, tile_id);
-                                    }
-                                }
-                                // 双击检测：快速打开新建地形弹窗
-                                let now = GetTime();
-                                let mut dbl = false;
-                                let (t0, lx, ly) = state.m_last_cell_click;
-                                if (now - t0 < 0.45 && lx == cx && ly == cy)
-                                {
-                                    dbl = true;
-                                    state.m_last_cell_click = (0., -1, -1);
-                                }
-                                else
-                                    state.m_last_cell_click = (now, cx, cy);
-                                if (dbl)
-                                    do OpenPopup("##new_terrain_popup");
-                            }
-                        }
-                    }
-                }
-
-                // 选中格高亮
-                match (state.m_palette_cell)
-                {
-                    value((sx, sy))?
-                    {
-                        do dl->AddRect(
-                            (rect_min[0] + sx as real * cell_px,
-                             rect_min[1] + sy as real * cell_px),
-                            (rect_min[0] + (sx + 1) as real * cell_px,
-                             rect_min[1] + (sy + 1) as real * cell_px),
-                            (110, 200, 255, 255), 2.);
-                    }
-                    none?;
-                }
-
-                // 选中地形的整块描边（RM 式白框）
-                match (state.m_palette_terrain)
-                {
-                    value(tid)?
-                    {
-                        let (tn, k, s, bx, by, _, _) = tilemap::terrain_info(ts_id, tid);
-                        do (tn, k);
-                        if (s == state.m_palette_source && (k == 1 || k == 3))
-                        {
-                            do dl->AddRect(
-                                (rect_min[0] + bx as real * cell_px,
-                                 rect_min[1] + by as real * cell_px),
-                                (rect_min[0] + (bx + 2) as real * cell_px,
-                                 rect_min[1] + (by + 3) as real * cell_px),
-                                (255, 255, 255, 255), 2.);
-                        }
-                    }
-                    none?;
-                }
+                    do handle_atlas_hover(state, ts_id, rect_min, cell_px, xc, yc);
+                do draw_atlas_selection(state, ts_id, rect_min, cell_px);
             }
         }
     }
 
-    // 新建地形弹窗：锚点 = 调色板选中格
+    // 网格线（放大到可辨认时）
+    func draw_atlas_grid_lines(rect_min: (real, real), rect_max: (real, real),
+        cell_px: real, xc: int, yc: int)=> void
+    {
+        if (cell_px < 10.)
+            return;
+        let dl = GetWindowDrawList();
+        for (let mut gx = 0; gx <= xc; gx += 1)
+        {
+            do dl->AddLine(
+                (rect_min[0] + gx as real * cell_px, rect_min[1]),
+                (rect_min[0] + gx as real * cell_px, rect_max[1]),
+                (255, 255, 255, 36), 1.);
+        }
+        for (let mut gy = 0; gy <= yc; gy += 1)
+        {
+            do dl->AddLine(
+                (rect_min[0], rect_min[1] + gy as real * cell_px),
+                (rect_max[0], rect_min[1] + gy as real * cell_px),
+                (255, 255, 255, 36), 1.);
+        }
+    }
+
+    // 已注册四象限地形块：常驻淡描边，覆盖区变暗（这些格子的绘制由
+    // 其所属自动图块接管）
+    func draw_registered_terrain_overlays(state: EditorState, ts_id: int,
+        rect_min: (real, real), cell_px: real)=> void
+    {
+        let dl = GetWindowDrawList();
+        let total = tilemap::terrain_count(ts_id);
+        for (let mut t = 1; t <= total; t += 1)
+        {
+            let (_, k, s, bx, by, _, _) = tilemap::terrain_info(ts_id, t);
+            if (s == state.m_palette_source && (k == 1 || k == 3))
+            {
+                let x0 = rect_min[0] + bx as real * cell_px;
+                let y0 = rect_min[1] + by as real * cell_px;
+                do dl->AddRectFilled((x0, y0), (x0 + 2. * cell_px, y0 + 3. * cell_px),
+                    (20, 24, 34, 110));
+                do dl->AddRect((x0, y0), (x0 + 2. * cell_px, y0 + 3. * cell_px),
+                    (110, 200, 255, 90), 1.);
+            }
+        }
+    }
+
+    // 命中测试：某源纹理网格格是否落在已注册的四象限地形块（2x3）内。
+    // 返回地形 id（0 = 未命中）
+    func palette_terrain_at(ts_id: int, source: int, cx: int, cy: int)=> int
+    {
+        let mut hit = 0;
+        let total = tilemap::terrain_count(ts_id);
+        for (let mut t = 1; t <= total; t += 1)
+        {
+            let (_, k, s, bx, by, _, _) = tilemap::terrain_info(ts_id, t);
+            if (s == source && (k == 1 || k == 3)
+                && cx >= bx && cx < bx + 2 && cy >= by && cy < by + 3)
+                hit = t;
+        }
+        return hit;
+    }
+
+    // 悬停处理：命中已注册地形块时整块高亮（RM 式整块感知，点击选
+    // 地形画笔）；否则单格高亮，点击选瓦片画笔（双击新建地形）
+    func handle_atlas_hover(state: EditorState, ts_id: int,
+        rect_min: (real, real), cell_px: real, xc: int, yc: int)=> void
+    {
+        let mouse = GetMousePos();
+        let cx = ((mouse[0] - rect_min[0]) / cell_px) as int;
+        let cy = ((mouse[1] - rect_min[1]) / cell_px) as int;
+        if (cx < 0 || cy < 0 || cx >= xc || cy >= yc)
+            return;
+        let dl = GetWindowDrawList();
+
+        let hit_tid = palette_terrain_at(ts_id, state.m_palette_source, cx, cy);
+        if (hit_tid > 0)
+        {
+            let (hit_name, hit_kind, _, bx, by, _, _) = tilemap::terrain_info(ts_id, hit_tid);
+            let bx0 = rect_min[0] + bx as real * cell_px;
+            let by0 = rect_min[1] + by as real * cell_px;
+            do dl->AddRect((bx0, by0), (bx0 + 2. * cell_px, by0 + 3. * cell_px),
+                (110, 200, 255, 230), 2.);
+            do SetTooltip(F"{hit_name} [{terrain_kind_name(hit_kind)}]：点击选择绘制");
+            if (IsItemClickedLeft())
+                do select_terrain_brush(state, hit_tid);
+            return;
+        }
+
+        do dl->AddRect(
+            (rect_min[0] + cx as real * cell_px, rect_min[1] + cy as real * cell_px),
+            (rect_min[0] + (cx + 1) as real * cell_px, rect_min[1] + (cy + 1) as real * cell_px),
+            (255, 255, 255, 220), 1.5);
+        if (IsItemClickedLeft())
+            do handle_palette_cell_click(state, ts_id, cx, cy);
+    }
+
+    // 点击未注册的源纹理格：优先选中该格已有的单块地形（早期图集曾
+    // 按格自动创建），否则注册普通瓦片并选为画笔；双击打开新建地形
+    // 弹窗（锚点自动对齐 2x3 块）
+    func handle_palette_cell_click(state: EditorState, ts_id: int,
+        cx: int, cy: int)=> void
+    {
+        let mut single = 0;
+        let total = tilemap::terrain_count(ts_id);
+        for (let mut t = 1; t <= total; t += 1)
+        {
+            let (_, k, s, ix, iy, _, _) = tilemap::terrain_info(ts_id, t);
+            if (k == 0 && s == state.m_palette_source && ix == cx && iy == cy)
+                single = t;
+        }
+        if (single > 0)
+            do select_terrain_brush(state, single);
+        else
+        {
+            let tile_id = tilemap::add_tile(ts_id, state.m_palette_source, cx, cy, 1);
+            if (tile_id > 0)
+                do select_tile_brush(state, tile_id);
+        }
+        state.m_palette_cell = option::value((cx, cy));
+
+        // 双击检测：快速打开新建地形弹窗
+        let now = GetTime();
+        let (t0, lx, ly) = state.m_last_cell_click;
+        if (now - t0 < 0.45 && lx == cx && ly == cy)
+        {
+            state.m_last_cell_click = (0., -1, -1);
+            do OpenPopup("##new_terrain_popup");
+        }
+        else
+            state.m_last_cell_click = (now, cx, cy);
+    }
+
+    // 选中态描边：选中格（蓝框）与选中四象限地形块（RM 式白框）
+    func draw_atlas_selection(state: EditorState, ts_id: int,
+        rect_min: (real, real), cell_px: real)=> void
+    {
+        let dl = GetWindowDrawList();
+        match (state.m_palette_cell)
+        {
+            value((sx, sy))?
+            {
+                do dl->AddRect(
+                    (rect_min[0] + sx as real * cell_px,
+                     rect_min[1] + sy as real * cell_px),
+                    (rect_min[0] + (sx + 1) as real * cell_px,
+                     rect_min[1] + (sy + 1) as real * cell_px),
+                    (110, 200, 255, 255), 2.);
+            }
+            none?;
+        }
+        match (state.m_palette_terrain)
+        {
+            value(tid)?
+            {
+                let (_, k, s, bx, by, _, _) = tilemap::terrain_info(ts_id, tid);
+                if (s == state.m_palette_source && (k == 1 || k == 3))
+                {
+                    do dl->AddRect(
+                        (rect_min[0] + bx as real * cell_px,
+                         rect_min[1] + by as real * cell_px),
+                        (rect_min[0] + (bx + 2) as real * cell_px,
+                         rect_min[1] + (by + 3) as real * cell_px),
+                        (255, 255, 255, 255), 2.);
+                }
+            }
+            none?;
+        }
+    }
+
+    // ==================== 新建地形弹窗 ====================
+
+    // 新建地形弹窗：锚点 = 调色板选中格（四象限种类自动对齐 2x3 块）
     func draw_new_terrain_popup(state: EditorState, ts_id: int)=> void
     {
         if (BeginPopup("##new_terrain_popup"))
@@ -660,9 +676,8 @@ namespace JEEditor::Editor::TilemapEditor
             {
                 match (state.m_palette_cell)
                 {
-                    value((ax, ay))?
+                    value((_, _))?
                     {
-                        do (ax, ay);
                         let name = state.m_new_terrain_name == ""
                             ? "新地形" | state.m_new_terrain_name;
                         let tid = tilemap::add_terrain(ts_id, name, state.m_new_terrain_kind,
@@ -670,10 +685,10 @@ namespace JEEditor::Editor::TilemapEditor
                             state.m_new_terrain_walkable ? 1 | 0);
                         if (tid > 0)
                         {
-                            state.m_palette_terrain = option::value(tid);
-                            let ts_idx = state.m_tileset_only > 0
-                                ? 0 | state.m_palette_tileset;
-                            state.m_paint = tilemap::terrain_value(ts_idx, tid);
+                            // 保留锚点格选中（与创建前一致，便于继续创建）
+                            let anchor = state.m_palette_cell;
+                            do select_terrain_brush(state, tid);
+                            state.m_palette_cell = anchor;
                             do CloseCurrentPopup();
                         }
                         else

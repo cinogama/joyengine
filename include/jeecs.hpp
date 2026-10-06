@@ -4833,7 +4833,7 @@ JE_API const char* je_tilemap_get_property(int32_t map, int32_t layer,
 JE_API int32_t je_tilemap_is_walkable(int32_t map, int32_t x, int32_t y);   // 全图层合并通行性，出界视为不可通行
 JE_API int32_t je_tilemap_is_walkable_on(int32_t map, int32_t layer, int32_t x, int32_t y);
 // 按属性值查找格子：layer<0 搜索全部图层；name="walkable" 时按通行性匹配
-// (value 为 "true"/"false")；结果缓存在文档内，经 je_tilemap_find_get 逐个取出。
+// (value 为 "true"/"false")；结果按文档缓存于注册表，经 je_tilemap_find_get 逐个取出。
 JE_API int32_t je_tilemap_find_cells(int32_t map, int32_t layer, const char* name, const char* value);
 JE_API bool    je_tilemap_find_get(int32_t map, int32_t index, int32_t* x, int32_t* y);
 

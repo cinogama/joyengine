@@ -92,12 +92,14 @@ namespace JEEditor::Editor::TilemapEditor
         }
     }
 
-    // 保存：无路径（新建未保存）时先询问路径
-    func try_save(state: EditorState)=> void
+    // 保存：无路径（新建未保存）时先询问路径。保存成功（含异步询问
+    // 路径后）才调用 after 继续后续流程（关闭窗口/切换文档）；
+    // 失败或取消时不调用 —— 调用方保持现状即可。
+    func try_save_then(state: EditorState, after: ()=>void)=> void
     {
         if (state.m_tileset_only > 0)
         {
-            do try_save_tileset(state);
+            do try_save_tileset_then(state, after);
             return;
         }
         let path = state.m_context.m_path->to_string;
@@ -106,6 +108,7 @@ namespace JEEditor::Editor::TilemapEditor
             if (state.m_context->save_to(state.m_context.m_path))
             {
                 state.m_dirty = false;
+                do after();
                 do Statebar::showState(3.) <| func()
                 {
                     do Text(F"瓦片地图已保存：{path}");
@@ -122,6 +125,7 @@ namespace JEEditor::Editor::TilemapEditor
                     if (state.m_context->save_to(fsys::normalize(p)))
                     {
                         state.m_dirty = false;
+                        do after();
                         do Statebar::showState(3.) <| func()
                         {
                             do Text(F"瓦片地图已保存：{p}");
@@ -132,7 +136,7 @@ namespace JEEditor::Editor::TilemapEditor
                 });
     }
 
-    func try_save_tileset(state: EditorState)=> void
+    func try_save_tileset_then(state: EditorState, after: ()=>void)=> void
     {
         let ts = state.m_tileset_only;
         let cur_path = tilemap::tileset_doc_path(ts);
@@ -141,6 +145,7 @@ namespace JEEditor::Editor::TilemapEditor
             if (tilemap::save_tileset(ts, cur_path))
             {
                 state.m_dirty = false;
+                do after();
                 do Statebar::showState(3.) <| func()
                 {
                     do Text(F"图集已保存：{cur_path}");
@@ -157,6 +162,7 @@ namespace JEEditor::Editor::TilemapEditor
                     if (tilemap::save_tileset(ts, p))
                     {
                         state.m_dirty = false;
+                        do after();
                         do Statebar::showState(3.) <| func()
                         {
                             do Text(F"图集已保存：{p}");
@@ -165,6 +171,12 @@ namespace JEEditor::Editor::TilemapEditor
                     else
                         do MsgBox::err("保存失败", F"无法写入文件：{p}");
                 });
+    }
+
+    // 保存（无后续动作）
+    func try_save(state: EditorState)=> void
+    {
+        do try_save_then(state, func() { });
     }
 
     using TilemapEditorWindow = struct{
@@ -184,7 +196,8 @@ namespace JEEditor::Editor::TilemapEditor
             };
         }
 
-        // 切换到另一个文件：脏数据先询问保存
+        // 切换到另一个文件：脏数据先询问保存，保存完成后（含异步询问
+        // 保存路径的情形）再切换
         func retargetTo(self: TilemapEditorWindow,
             context: TilemapContext, tileset_only: int)=> void
         {
@@ -194,9 +207,10 @@ namespace JEEditor::Editor::TilemapEditor
                 do AskBox::show("是否保存", "当前编辑尚未保存，是否保存？")
                     ->onYes(func()
                         {
-                            do try_save(editor.m_state);
-                            if (!editor.m_state.m_dirty)
-                                editor->applyRetarget(context, tileset_only);
+                            do try_save_then(editor.m_state, func()
+                                {
+                                    editor->applyRetarget(context, tileset_only);
+                                });
                         })
                     ->onNo(func()
                         {
@@ -289,9 +303,10 @@ namespace JEEditor::Editor::TilemapEditor
             do AskBox::show("是否保存", "是否保存当前的修改？")
                 ->onYes(func()
                     {
-                        do try_save(editor.m_state);
-                        if (!editor.m_state.m_dirty)
-                            editor.m_close = true;
+                        do try_save_then(editor.m_state, func()
+                            {
+                                editor.m_close = true;
+                            });
                     })
                 ->onNo(func()
                     {

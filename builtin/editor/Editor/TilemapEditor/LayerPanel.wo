@@ -51,7 +51,11 @@ namespace JEEditor::Editor::TilemapEditor
         {
             if (layer_count > 1)
             {
-                do tilemap::remove_layer(map, state.m_layer);
+                // 删除活动层：其后图层下标前移，活动层跟随调整
+                let deleted = state.m_layer;
+                do tilemap::remove_layer(map, deleted);
+                if (state.m_layer > deleted)
+                    state.m_layer -= 1;
                 if (state.m_layer >= layer_count - 1)
                     state.m_layer = layer_count - 2;
                 state.m_dirty = true;

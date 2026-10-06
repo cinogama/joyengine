@@ -24,13 +24,6 @@ using JEEditor::Editor::TilemapEditor;
 
 namespace JEEditor::Editor::TilemapEditor
 {
-    // 画布可见性判定 + LOD：瓦片屏幕尺寸过小时跳过贴图绘制（只画底色）
-    func canvas_cell_screen_size(state: EditorState)=> real
-    {
-        let (_, _, tile_px, _) = tilemap::map_size(state.m_context.m_map);
-        return tile_px as real * state.m_zoom;
-    }
-
     public func draw_canvas(state: EditorState, ctx: TilemapContext)=> void
     {
         let avail = GetContentRegionAvail();
@@ -133,10 +126,6 @@ namespace JEEditor::Editor::TilemapEditor
                                             // je_gui_draw_list_add_image_uv 绑定内部会交叉两角的
                                             // v（uvmin=(uv0.x,uv1.y)），期望第一角=左下、第二角=右上，
                                             // 因此这里必须按 (u0,v0)/(u1,v1) 自然顺序直传，不可交换。
-                                            let iu0 = u0;
-                                            let iu1 = u1;
-                                            let iv0 = v0;
-                                            let iv1 = v1;
                                             let sub_w = (cell_max[0] - cell_min[0]) / qcols as real;
                                             let sub_h = (cell_max[1] - cell_min[1]) / qcols as real;
                                             do dl->AddImageUV(
@@ -144,7 +133,7 @@ namespace JEEditor::Editor::TilemapEditor
                                                  cell_min[1] + qy as real * sub_h),
                                                 (cell_min[0] + (qx + 1) as real * sub_w,
                                                  cell_min[1] + (qy + 1) as real * sub_h),
-                                                (iu0, iv0), (iu1, iv1), tex, (255, 255, 255, 255));
+                                                (u0, v0), (u1, v1), tex, (255, 255, 255, 255));
                                         }
                                         none?;
                                     }

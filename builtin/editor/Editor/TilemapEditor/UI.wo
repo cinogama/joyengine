@@ -29,9 +29,9 @@ using JEEditor::Editor::TilemapEditor;
 
 namespace JEEditor::Editor::TilemapEditor
 {
-    func toolbar_button(state: EditorState, t: tool, hotkey: string)=> void
+    func toolbar_button(state: EditorState, t: tool)=> void
     {
-        let pressed = Button(F"{tool::name(t)} [{hotkey}]##tool{t as int}");
+        let pressed = Button(F"{tool::name(t)}##tool{t as int}");
         if (state.m_tool == t)
         {
             // 当前工具：画个下划线指示
@@ -46,11 +46,11 @@ namespace JEEditor::Editor::TilemapEditor
 
     public func draw_toolbar(state: EditorState, ctx: TilemapContext)=> void
     {
-        do toolbar_button(state, tool::PENCIL, "B");
-        do toolbar_button(state, tool::ERASER, "E");
-        do toolbar_button(state, tool::RECT, "R");
-        do toolbar_button(state, tool::FILL, "F");
-        do toolbar_button(state, tool::EYEDROPPER, "I");
+        do toolbar_button(state, tool::PENCIL);
+        do toolbar_button(state, tool::ERASER);
+        do toolbar_button(state, tool::RECT);
+        do toolbar_button(state, tool::FILL);
+        do toolbar_button(state, tool::EYEDROPPER);
 
         if (Button("撤销"))
             do state->undo();
