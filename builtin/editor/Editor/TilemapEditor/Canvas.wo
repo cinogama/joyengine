@@ -129,12 +129,14 @@ namespace JEEditor::Editor::TilemapEditor
                                     {
                                         value(tex)?
                                         {
-                                            // 引擎 UV(v 向上) -> ImGui UV(v 向下)：
-                                            // 两者相对贴图图像同为"顶部=高v"，直接换算
+                                            // cell_quad 返回引擎约定 UV：v0=件底、v1=件顶。
+                                            // je_gui_draw_list_add_image_uv 绑定内部会交叉两角的
+                                            // v（uvmin=(uv0.x,uv1.y)），期望第一角=左下、第二角=右上，
+                                            // 因此这里必须按 (u0,v0)/(u1,v1) 自然顺序直传，不可交换。
                                             let iu0 = u0;
                                             let iu1 = u1;
-                                            let iv0 = v1;
-                                            let iv1 = v0;
+                                            let iv0 = v0;
+                                            let iv1 = v1;
                                             let sub_w = (cell_max[0] - cell_min[0]) / qcols as real;
                                             let sub_h = (cell_max[1] - cell_min[1]) / qcols as real;
                                             do dl->AddImageUV(
