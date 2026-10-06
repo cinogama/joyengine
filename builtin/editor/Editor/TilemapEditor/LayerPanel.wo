@@ -2,7 +2,8 @@
 // 底部栏：图层自上而下列出（列表顶 = 最上层）。点击选择活动图层；
 // 显隐/锁定切换与 Z 偏移编辑在行尾；新建/删除/上移/下移/重命名在
 // 工具条，行内右键也有等价的快捷菜单。
-// 注意：图层增删/移动不进入撤销栈（绘制类操作才可撤销）。
+// 注意：图层增删/移动不进入撤销栈（绘制类操作才可撤销）；
+// 删除层级前会弹窗确认。
 
 import pkg::std;
 
@@ -12,6 +13,7 @@ import je::tilemap;
 
 import pkg::fsys;
 
+import builtin::editor::GUI::Forms::AskBox;
 import builtin::editor::GUI::Forms::InputBox;
 import builtin::editor::GUI::Forms::MsgBox;
 import builtin::editor::GUI::Widgets;
@@ -61,7 +63,9 @@ namespace JEEditor::Editor::TilemapEditor
         }
     }
 
-    // 删除 row 号图层：其后图层下标前移，活动层跟随调整；至少保留一个图层
+    // 删除 row 号图层：删除不可撤销，先弹窗确认；确认后其后图层
+    // 下标前移，活动层跟随调整；至少保留一个图层。
+    // 弹窗为模态，确认回调里的 row/layer_count 不会过期
     func delete_layer(state: EditorState, ctx: TilemapContext, row: int)=> void
     {
         let (_, _, _, layer_count) = tilemap::map_size(ctx.m_map);
@@ -70,12 +74,18 @@ namespace JEEditor::Editor::TilemapEditor
             do MsgBox::err("无法删除", "至少保留一个图层");
             return;
         }
-        do tilemap::remove_layer(ctx.m_map, row);
-        if (state.m_layer > row)
-            state.m_layer -= 1;
-        if (state.m_layer >= layer_count - 1)
-            state.m_layer = layer_count - 2;
-        state.m_dirty = true;
+        let (lname, _, _) = tilemap::get_layer(ctx.m_map, row);
+        do AskBox::show("删除图层",
+                F"确定删除图层「{lname}」吗？删除后无法撤销。")
+            ->onYes(func()
+                {
+                    do tilemap::remove_layer(ctx.m_map, row);
+                    if (state.m_layer > row)
+                        state.m_layer -= 1;
+                    if (state.m_layer >= layer_count - 1)
+                        state.m_layer = layer_count - 2;
+                    state.m_dirty = true;
+                });
     }
 
     // 单行图层条目：与系统列表条目 / 检视面板组件块同款的分区标题栏
