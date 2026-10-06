@@ -745,9 +745,10 @@ namespace JEEditor::Editor::WorldEditorViewport
                     // 拖 .je4entity 预设体文件到视口创建实例：以守卫
                     // 按钮为拖放目标（须紧随其后调用），仅视口图像
                     // 区域内接收
-                    self->acceptPrefabFileDrop(rect_min, rect_max);
-                    // 拖 .je4tilemap 到视口创建瓦片地图实例
-                    self->acceptTilemapFileDrop(rect_min, rect_max);
+                    // 拖 .je4entity 预设体 / .je4tilemap 到视口创建实例。
+                    // 注意 ImGui 的 AcceptDrag 每帧对同一载荷只交付一次，
+                    // 必须统一接收后按扩展名分发，多个接收器会互相抢载荷。
+                    self->acceptWorldFileDrop(rect_min, rect_max);
                 }
             }
         }
@@ -892,11 +893,12 @@ namespace JEEditor::Editor::WorldEditorViewport
         return self.m_close == CloseRequest::NORMALLY;
     }
     
-    // 拖放接收：把资源管理器（Browser 的 FilePayload）拖来的
-    // .je4entity 预设体文件创建为实例。须在 run 中紧随视口交互守卫
-    // 按钮调用（以守卫按钮为拖放目标，仅视口图像区域内接收）；
-    // 非预设体文件留给未来的其他拖放用途，静默忽略。
-    protected func acceptPrefabFileDrop(
+    // 拖放接收：把资源管理器（Browser 的 FilePayload）拖来的文件按
+    // 扩展名分发创建：.je4entity 预设体 / .je4tilemap 瓦片地图。须在
+    // run 中紧随视口交互守卫按钮调用（以守卫按钮为拖放目标，仅视口
+    // 图像区域内接收）；其余类型静默忽略。ImGui 的 AcceptDrag 每帧对
+    // 同一载荷只交付一次，切勿按类型拆成多个接收器。
+    protected func acceptWorldFileDrop(
         self: WorldEditorViewport,
         rect_min: ImVec2,
         rect_max: ImVec2)=> void
@@ -905,24 +907,11 @@ namespace JEEditor::Editor::WorldEditorViewport
         {
             none?;
             value(payload)?
-                self->spawnPrefabInstanceFromFile(
-                    payload->path->to_string(), rect_min, rect_max);
-        }
-    }
-
-    // 拖放接收：把 .je4tilemap 文件创建为世界中的瓦片地图实例
-    //（Tilemap::Map 组件 + TilemapSystem；渲染分片由系统自动重建）。
-    protected func acceptTilemapFileDrop(
-        self: WorldEditorViewport,
-        rect_min: ImVec2,
-        rect_max: ImVec2)=> void
-    {
-        match (Drag::AcceptDrag:<FilePayload>())
-        {
-            none?;
-            value(payload)?
-                self->spawnTilemapInstanceFromFile(
-                    payload->path->to_string(), rect_min, rect_max);
+            {
+                let path_str = payload->path->to_string();
+                do self->spawnPrefabInstanceFromFile(path_str, rect_min, rect_max);
+                do self->spawnTilemapInstanceFromFile(path_str, rect_min, rect_max);
+            }
         }
     }
 
