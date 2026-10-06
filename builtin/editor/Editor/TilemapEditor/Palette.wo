@@ -211,9 +211,10 @@ namespace JEEditor::Editor::TilemapEditor
                     let wt = k == 2 ? 1 | 2;
                     let ht = k == 2 ? 1 | 3;
                     let u_l = ix as real * tpx as real / tw as real;
-                    let v_b = (iy + ht) as real * tpx as real / th as real;
+                    // AddImageUV 采样引擎 v（v=1-图像行/高），须换算，不可用图像分数
+                    let v_b = 1.0 - (iy + ht) as real * tpx as real / th as real;
                     let u_r = (ix + wt) as real * tpx as real / tw as real;
-                    let v_t = iy as real * tpx as real / th as real;
+                    let v_t = 1.0 - iy as real * tpx as real / th as real;
                     do dl->AddImageUV(pos, (pos[0] + 40., pos[1] + th_h),
                         (u_l, v_b), (u_r, v_t), tex, (255, 255, 255, 255));
                 }
@@ -351,9 +352,10 @@ namespace JEEditor::Editor::TilemapEditor
                     {
                         let (tw, th) = tex->size();
                         let u_l = ix as real * tpx as real / tw as real;
-                        let v_t = iy as real * tpx as real / th as real;
+                        // 同上：AddImageUV 采样引擎 v，须取 1-图像分数
+                        let v_t = 1.0 - iy as real * tpx as real / th as real;
                         let u_r = (ix + 1) as real * tpx as real / tw as real;
-                        let v_b = (iy + 1) as real * tpx as real / th as real;
+                        let v_b = 1.0 - (iy + 1) as real * tpx as real / th as real;
                         do dl->AddImageUV(base, (base[0] + w, base[1] + h),
                             (u_l, v_b), (u_r, v_t), tex, (255, 255, 255, 255));
                     }
