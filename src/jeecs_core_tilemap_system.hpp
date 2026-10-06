@@ -609,18 +609,19 @@ namespace jeecs
             return { TABLE[corner][state][0], TABLE[corner][state][1] };
         }
         // RPGMaker VX/VX Ace 式：2(宽)x3(高) 块的 4x6 半格取件表。
-        // 布局：锚点整块=孤块(仅作单块预览)，右上 2x2 半格=内部填充，
-        // 其余为直边/凹角/外凸角件。表值 = (列,行)。经 mkxp-z 的
-        // autotileVXRectsA(48 变体表)结构约束推导并交叉验证。
+        // 表值 = (列,行)。自 mkxp-z autotileVXRectsA(48 变体权威表)机械推导：
+        // 除孤块(mask==0，mkxp 变体47=锚点整块)外，各件槽位由"件频次==签名计数"
+        // 唯一确定(13内/13凹/8边/8边/5外, 1=备用锚点件)，边件手性经 16 组合
+        // 全掩码验证为唯一解(255/255 掩码命中 mkxp 行, 47/47 行全覆盖)。
         // 状态序与 corner_state 一致：[内部, 凹角, 第一方向边, 第二方向边, 外角]
         //   LU/RU 第一方向为 U；LD/RD 为 D；第二方向 L/R。
         inline half_cell rpgmaker_vx_quadrant(int corner /*0=LU 1=RU 2=LD 3=RD*/, int state)
         {
             static constexpr int TABLE[4][5][2] = {
-                /*LU*/ { {2,0},{2,4},{0,4},{2,2},{0,2} },
-                /*RU*/ { {3,0},{1,4},{3,4},{1,2},{3,2} },
-                /*LD*/ { {2,1},{2,3},{0,3},{2,5},{0,5} },
-                /*RD*/ { {3,1},{1,3},{3,3},{1,5},{3,5} },
+                /*LU*/ { {2,4},{2,0},{0,4},{2,2},{0,2} },
+                /*RU*/ { {1,4},{3,0},{3,4},{1,2},{3,2} },
+                /*LD*/ { {2,3},{2,1},{0,3},{2,5},{0,5} },
+                /*RD*/ { {1,3},{3,1},{3,3},{1,5},{3,5} },
             };
             return { TABLE[corner][state][0], TABLE[corner][state][1] };
         }
@@ -951,6 +952,12 @@ namespace jeecs
                 // RPGMaker 四象限（XP 式条带 / VX 式 2x3 块）：
                 // 按邻接掩码为四个角各取一个半格
                 int mask = Tilemap::compute_mask(doc, layer, x, y, v);
+                if (terrain.kind == 3 && mask == 0)
+                {
+                    // VX 孤块：mkxp 变体47 = 锚点整块
+                    emit_full_tile(src, terrain.ix, terrain.iy);
+                    return true;
+                }
                 const float half = tpx * 0.5f;
                 const float xm = x0 + half, ym = ybot + half;
                 const float shalf = src.tile_px * 0.5f;
@@ -2198,6 +2205,13 @@ namespace jeecs::Tilemap
             // RPGMaker 四象限（XP 式条带 / VX 式 2x3 块）：
             // 槽位序 [LU, RU, LD, RD]，与渲染系统一致
             int mask = compute_mask(doc, layer, x, y, v);
+            if (terrain.kind == 3 && mask == 0)
+            {
+                // VX 孤块：mkxp 变体47 = 锚点整块
+                fill_full(src, terrain.ix, terrain.iy);
+                out[0].source_idx = terrain.source;
+                return 1;
+            }
             const float shalf = src.tile_px * 0.5f;
             float w = (float)(src.tex_w ? src.tex_w : src.xcount * src.tile_px);
             float h = (float)(src.tex_h ? src.tex_h : src.ycount * src.tile_px);
