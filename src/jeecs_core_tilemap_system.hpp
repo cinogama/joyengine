@@ -437,6 +437,22 @@ namespace jeecs
             std::unordered_map<std::string, int32_t> tilesets_by_path;
             std::set<std::string> tilesets_failed;
 
+            // 注册表键规范化：@/ 与 !/ 前缀解析为真实目录，反斜杠统一为正斜杠。
+            // 无前缀的相对路径（浏览器工作目录形态）按运行时目录补全，
+            // 与 jeecs_file_open 的解析一致。同一文件的不同形态字符串
+            // 必须映射到同一文档实例，否则编辑器两侧会各自持有独立副本。
+            std::string canonical_key(const std::string& path) const
+            {
+                std::string s = resolve_runtime_prefix(path);
+                bool absolute = s.size() >= 2 && (s[1] == ':' || s[0] == '/');
+                if (!absolute)
+                    s = std::string(::jeecs_file_get_runtime_path()) + '/' + s;
+                for (auto& ch : s)
+                    if (ch == '\\')
+                        ch = '/';
+                return s;
+            }
+
             MapDocument* map(int32_t id)
             {
                 if (id <= 0 || id > (int32_t)maps.size() || maps[id - 1] == nullptr)
@@ -477,24 +493,25 @@ namespace jeecs
             {
                 if (path.empty())
                     return { 0, nullptr };
-                auto fnd = maps_by_path.find(path);
+                std::string key = canonical_key(path);
+                auto fnd = maps_by_path.find(key);
                 if (fnd != maps_by_path.end())
                 {
                     MapDocument* d = map(fnd->second);
                     if (d != nullptr)
                         return { fnd->second, d };
                 }
-                if (maps_failed.count(path) != 0)
+                if (maps_failed.count(key) != 0)
                     return { 0, nullptr };
                 auto doc = load_map_from(path);
                 if (doc == nullptr)
                 {
-                    maps_failed.insert(path);
+                    maps_failed.insert(key);
                     debug::logerr("Tilemap: unable to open map file '%s'.", path.c_str());
                     return { 0, nullptr };
                 }
                 int32_t id = register_map(doc);
-                bind_map_path(path, id);
+                bind_map_path(key, id);
                 return { id, doc.get() };
             }
 
@@ -502,36 +519,37 @@ namespace jeecs
             {
                 if (path.empty())
                     return { 0, nullptr };
-                auto fnd = tilesets_by_path.find(path);
+                std::string key = canonical_key(path);
+                auto fnd = tilesets_by_path.find(key);
                 if (fnd != tilesets_by_path.end())
                 {
                     TilesetDocument* d = tileset(fnd->second);
                     if (d != nullptr)
                         return { fnd->second, d };
                 }
-                if (tilesets_failed.count(path) != 0)
+                if (tilesets_failed.count(key) != 0)
                     return { 0, nullptr };
                 auto doc = load_tileset_from(path);
                 if (doc == nullptr)
                 {
-                    tilesets_failed.insert(path);
+                    tilesets_failed.insert(key);
                     debug::logerr("Tilemap: unable to open tileset file '%s'.", path.c_str());
                     return { 0, nullptr };
                 }
                 int32_t id = register_tileset(doc);
-                bind_tileset_path(path, id);
+                bind_tileset_path(key, id);
                 return { id, doc.get() };
             }
 
             void reload_map(const std::string& path)
             {
-                maps_by_path.erase(path);
-                maps_failed.erase(path);
+                maps_by_path.erase(canonical_key(path));
+                maps_failed.erase(canonical_key(path));
             }
             void reload_tileset(const std::string& path)
             {
-                tilesets_by_path.erase(path);
-                tilesets_failed.erase(path);
+                tilesets_by_path.erase(canonical_key(path));
+                tilesets_failed.erase(canonical_key(path));
             }
 
             // 保证地图文档的图集解析与注册表中的最新文档一致
@@ -1361,9 +1379,9 @@ JE_API bool je_tilemap_save_map(int32_t map, const char* path)
         return false;
     auto& inst = jeecs::Tilemap::documents::inst();
     if (!doc->path.empty() && doc->path != path)
-        inst.maps_by_path.erase(doc->path);
+        inst.maps_by_path.erase(inst.canonical_key(doc->path));
     doc->path = path;
-    inst.bind_map_path(path, map);
+    inst.bind_map_path(inst.canonical_key(path), map);
     return true;
 }
 JE_API void je_tilemap_reload_map(const char* path)
@@ -1721,9 +1739,9 @@ JE_API bool je_tilemap_save_tileset(int32_t tileset, const char* path)
         return false;
     auto& inst = jeecs::Tilemap::documents::inst();
     if (!doc->path.empty() && doc->path != path)
-        inst.tilesets_by_path.erase(doc->path);
+        inst.tilesets_by_path.erase(inst.canonical_key(doc->path));
     doc->path = path;
-    inst.bind_tileset_path(path, tileset);
+    inst.bind_tileset_path(inst.canonical_key(path), tileset);
     return true;
 }
 JE_API void je_tilemap_reload_tileset(const char* path)

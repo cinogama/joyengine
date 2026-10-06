@@ -15,6 +15,7 @@ import pkg::interface;
 
 import builtin::editor::Singleton::Universe;
 
+import builtin::editor::Editor::ResourcePath;
 import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Menu;
 import builtin::editor::GUI::Shortcut;
@@ -32,6 +33,7 @@ using je;
 using je::gui;
 using je::tilemap;
 using fsys;
+using JEEditor::Editor::ResourcePath;
 using JEEditor::GUI;
 using JEEditor::GUI::Windows;
 using JEEditor::GUI::Forms;
@@ -51,7 +53,8 @@ namespace JEEditor::Editor::TilemapEditor
     // 从 .je4tilemap 文件打开地图编辑器
     public func openTilemapEditorFromFile(path: fsys::path_t)=> void
     {
-        match (TilemapContext::open(path))
+        let res_path = fsys::normalize(ResourcePath::toRuntimeResourcePath(path));
+        match (TilemapContext::open(res_path))
         {
             err(why)?
                 do MsgBox::err("打开失败", why);
@@ -69,10 +72,11 @@ namespace JEEditor::Editor::TilemapEditor
     // 从 .je4tileset 文件打开图集编辑（无画布模式）
     public func openTilesetEditorFromFile(path: fsys::path_t)=> void
     {
-        let ts = tilemap::open_tileset(path->to_string);
+        let path_str = ResourcePath::toRuntimeResourcePath(path);
+        let ts = tilemap::open_tileset(path_str);
         if (ts <= 0)
         {
-            do MsgBox::err("打开失败", F"无法解析图集文件：{path->to_string}");
+            do MsgBox::err("打开失败", F"无法解析图集文件：{path_str}");
             return;
         }
         let dummy_ctx = TilemapContext{
