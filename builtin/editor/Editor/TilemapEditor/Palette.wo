@@ -60,30 +60,70 @@ namespace JEEditor::Editor::TilemapEditor
     {
         do ctx->sync_tilesets();
 
-        // ---- 图集页签（地图模式） ----
-        if (state.m_tileset_only == 0)
+        if (state.m_tileset_only > 0)
         {
-            let ts_count = tilemap::tileset_count(ctx.m_map);
-            if (ts_count == 0)
+            // ===== 图集编辑器：原始图块管理视图（源纹理/地形创建在此进行） =====
+            let ts_id = palette_tileset_doc(state, ctx);
+            if (ts_id <= 0)
             {
-                do TextDisabled("地图未引用任何图集");
+                do TextDisabled("图集文档不可用");
+                return;
+            }
+            // ---- 源纹理选择 ----
+            let src_count = tilemap::source_count(ts_id);
+            if (src_count == 0)
+            {
+                do TextDisabled("图集没有源纹理");
                 do TextDisabled("请在右侧「图集设置」中添加");
                 return;
             }
-            if (state.m_palette_tileset >= ts_count)
-                state.m_palette_tileset = ts_count - 1;
-            if (BeginTabBar("##tileset_tabs"))
+            if (state.m_palette_source >= src_count)
+                state.m_palette_source = 0;
+            if (src_count > 1)
             {
-                for (let mut i = 0; i < ts_count; i += 1)
+                let mut names = []mut: vec<string>;
+                for (let mut i = 0; i < src_count; i += 1)
+                    do names->add(F"源纹理 {i + 1}");
+                match (ListBoxSelectHeight("##palette_source", names->to_array,
+                    state.m_palette_source, 3))
                 {
-                    if (BeginTabItem(F"图集{i + 1}##ts{i}"))
+                    value(sel)?
                     {
-                        state.m_palette_tileset = i;
-                        do EndTabItem();
+                        state.m_palette_source = sel;
+                        state.m_palette_cell = option::none;
                     }
+                    none?;
                 }
-                do EndTabBar();
             }
+            if (BeginChildSize("##palette_grid", GetContentRegionAvail()[0], 0.))
+            {
+                do draw_palette_grid(state, ts_id);
+            }
+            EndChild();
+            return;
+        }
+
+        // ===== 地图编辑器：纯地形调色板（RM 式，一个地形一格） =====
+        let ts_count = tilemap::tileset_count(ctx.m_map);
+        if (ts_count == 0)
+        {
+            do TextDisabled("地图未引用任何图集");
+            do TextDisabled("请在右侧「图集设置」中添加");
+            return;
+        }
+        if (state.m_palette_tileset >= ts_count)
+            state.m_palette_tileset = ts_count - 1;
+        if (BeginTabBar("##tileset_tabs"))
+        {
+            for (let mut i = 0; i < ts_count; i += 1)
+            {
+                if (BeginTabItem(F"图集{i + 1}##ts{i}"))
+                {
+                    state.m_palette_tileset = i;
+                    do EndTabItem();
+                }
+            }
+            do EndTabBar();
         }
 
         let ts_id = palette_tileset_doc(state, ctx);
@@ -93,49 +133,10 @@ namespace JEEditor::Editor::TilemapEditor
             return;
         }
 
-        // ---- 源纹理选择 ----
-        let src_count = tilemap::source_count(ts_id);
-        if (src_count == 0)
-        {
-            do TextDisabled("图集没有源纹理");
-            do TextDisabled("请在右侧「图集设置」中添加");
-            return;
-        }
-        if (state.m_palette_source >= src_count)
-            state.m_palette_source = 0;
-        if (src_count > 1)
-        {
-            let mut names = []mut: vec<string>;
-            for (let mut i = 0; i < src_count; i += 1)
-                do names->add(F"源纹理 {i + 1}");
-            match (ListBoxSelectHeight("##palette_source", names->to_array,
-                state.m_palette_source, 3))
-            {
-                value(sel)?
-                {
-                    state.m_palette_source = sel;
-                    state.m_palette_cell = option::none;
-                }
-                none?;
-            }
-        }
-
-        // ---- 自动图块地形（VX/XP/blob 缩略块，点击选择绘制） ----
-        do draw_autotile_palette(state, ts_id);
-
-        // ---- 网格管理视图：单块地形选择 / 地形创建 ----
-        let is_auto = palette_selected_is_auto(state, ts_id);
-        let avail0 = GetContentRegionAvail();
-        let preview_h = is_auto ? 118. | 0.;
-        let grid_h = math::max(90., avail0[1] - preview_h);
-        if (BeginChildSize("##palette_grid", avail0[0], grid_h))
-        {
-            do draw_palette_grid(state, ts_id);
-        }
-        EndChild();
+        do draw_terrain_cell_palette(state, ts_id);
 
         // ---- 选中自动图块的连接预览 ----
-        if (is_auto)
+        if (palette_selected_is_auto(state, ts_id))
         {
             match (state.m_palette_terrain)
             {
@@ -165,74 +166,173 @@ namespace JEEditor::Editor::TilemapEditor
     }
 
     // 自动图块地形缩略选择行：VX/XP 显示整块缩略，blob47 显示锚点块
-    func draw_autotile_palette(state: EditorState, ts_id: int)=> void
+    // 地图编辑器的地形调色板：一个地形一格，按"自动图块 -> 单块"分区。
+    // 原始 tileset 的查看与地形创建在图集编辑器中进行。
+    func draw_terrain_cell_palette(state: EditorState, ts_id: int)=> void
     {
         let total = tilemap::terrain_count(ts_id);
-        let mut any = false;
-        for (let mut t = 1; t <= total; t += 1)
+        if (total == 0)
         {
-            let (_, k, s, _, _, _, _) = tilemap::terrain_info(ts_id, t);
-            if (k >= 1 && s == state.m_palette_source)
-                any = true;
-        }
-        if (!any)
+            do TextDisabled("图集中没有地形，请在资源浏览器中双击图集文件，");
+            do TextDisabled("在图集编辑器中添加源纹理并创建地形。");
             return;
-        do Separator();
-        do Text("自动图块地形：");
+        }
         let avail_w = GetContentRegionAvail()[0];
-        let mut line_x = 0.;
+        let cell = 36.;
+        let per_row = math::max(1, (avail_w / cell) as int);
+
+        do Text("自动图块：");
+        let mut col = 0;
         for (let mut t = 1; t <= total; t += 1)
         {
-            let (tname, k, s, ix, iy, _, _) = tilemap::terrain_info(ts_id, t);
-            if (k == 0 || s != state.m_palette_source)
+            let (_, k, _, _, _, _, _) = tilemap::terrain_info(ts_id, t);
+            if (k == 0)
             {
                 continue;
             }
-            let th_h = k == 2 ? 40. | 60.;
-            if (line_x + 48. > avail_w)
-                line_x = 0.;
-            if (line_x > 0.)
+            if (col % per_row != 0)
                 do SameLine();
-            let pos = GetCursorScreenPos();
-            do Dummy((40., th_h));
-            let dl = GetWindowDrawList();
-            let mut is_sel = false;
-            match (state.m_palette_terrain)
+            do draw_terrain_cell(state, ts_id, t, cell);
+            col += 1;
+        }
+
+        do Separator();
+        do Text("单块：");
+        let mut col2 = 0;
+        for (let mut t = 1; t <= total; t += 1)
+        {
+            let (_, k, _, _, _, _, _) = tilemap::terrain_info(ts_id, t);
+            if (k != 0)
             {
-                value(cur)? { is_sel = cur == t; }
-                none?;
+                continue;
             }
-            let (tex_path, tpx, _, _) = tilemap::source_info(ts_id, s);
-            match (state->atlas_texture(tex_path))
+            if (col2 % per_row != 0)
+                do SameLine();
+            do draw_terrain_cell(state, ts_id, t, cell);
+            col2 += 1;
+        }
+    }
+
+    // 单个地形格子：一个地形一格。自动图块显示"完全连接"的内部填充
+    // 外观（隐藏预览地图的中心格），单块显示其瓦片；图集未保存时
+    // 自动图块回退为锚点孤块图标。
+    func draw_terrain_cell(state: EditorState, ts_id: int, tid: int, cell: real)=> void
+    {
+        let (tname, k, s, ix, iy, _, _) = tilemap::terrain_info(ts_id, tid);
+        let pos = GetCursorScreenPos();
+        do Dummy((cell, cell));
+        let dl = GetWindowDrawList();
+        let mut is_sel = false;
+        match (state.m_palette_terrain)
+        {
+            value(cur)? { is_sel = cur == tid; }
+            none?;
+        }
+        let mut drawn = false;
+        if (k >= 1)
+        {
+            let pm = terrain_preview_map(state, ts_id, tid);
+            if (pm > 0)
+            {
+                // 中心格 = 完全连接的内部填充外观
+                let qn = tilemap::cell_quad_count(pm, 0, 1, 1);
+                for (let mut q = 0; q < qn; q += 1)
+                {
+                    match (tilemap::cell_quad(pm, 0, 1, 1, q))
+                    {
+                        value((tp, u0, v0, u1, v1, qx, qy, qcols))?
+                        {
+                            match (state->atlas_texture(tp))
+                            {
+                                value(tex)?
+                                {
+                                    let sw = cell / qcols as real;
+                                    let sh = cell / qcols as real;
+                                    do dl->AddImageUV(
+                                        (pos[0] + qx as real * sw, pos[1] + qy as real * sh),
+                                        (pos[0] + (qx + 1) as real * sw, pos[1] + (qy + 1) as real * sh),
+                                        (u0, v0), (u1, v1), tex, (255, 255, 255, 255));
+                                    drawn = true;
+                                }
+                                none?;
+                            }
+                        }
+                        none?;
+                    }
+                }
+            }
+        }
+        if (!drawn && s >= 0 && s < tilemap::source_count(ts_id))
+        {
+            let (tp, tpx, _, _) = tilemap::source_info(ts_id, s);
+            match (state->atlas_texture(tp))
             {
                 value(tex)?
                 {
                     let (tw, th) = tex->size();
-                    let wt = k == 2 ? 1 | 2;
-                    let ht = k == 2 ? 1 | 3;
                     let u_l = ix as real * tpx as real / tw as real;
-                    // AddImageUV 采样引擎 v（v=1-图像行/高），须换算，不可用图像分数
-                    let v_b = 1.0 - (iy + ht) as real * tpx as real / th as real;
-                    let u_r = (ix + wt) as real * tpx as real / tw as real;
+                    // AddImageUV 采样引擎 v（v=1-图像行/高），须换算
                     let v_t = 1.0 - iy as real * tpx as real / th as real;
-                    do dl->AddImageUV(pos, (pos[0] + 40., pos[1] + th_h),
+                    let u_r = (ix + 1) as real * tpx as real / tw as real;
+                    let v_b = 1.0 - (iy + 1) as real * tpx as real / th as real;
+                    do dl->AddImageUV(pos, (pos[0] + cell, pos[1] + cell),
                         (u_l, v_b), (u_r, v_t), tex, (255, 255, 255, 255));
                 }
                 none?;
             }
-            if (is_sel)
-                do dl->AddRect(pos, (pos[0] + 40., pos[1] + th_h), (255, 255, 255, 255), 2.);
-            do SetTooltip(F"{tname} [{terrain_kind_name(k)}]：点击选择绘制");
-            if (IsItemClickedLeft())
-            {
-                state.m_palette_terrain = option::value(t);
-                state.m_palette_cell = option::none;
-                let ts_idx = state.m_tileset_only > 0
-                    ? 0 | state.m_palette_tileset;
-                state.m_paint = tilemap::terrain_value(ts_idx, t);
-            }
-            line_x = line_x + 48.;
         }
+        do dl->AddRect(pos, (pos[0] + cell, pos[1] + cell), (255, 255, 255, 70), 1.);
+        if (is_sel)
+            do dl->AddRect(pos, (pos[0] + cell, pos[1] + cell), (255, 255, 255, 255), 2.);
+        do SetTooltip(F"{tname} [{terrain_kind_name(k)}]：点击选择绘制");
+        if (IsItemClickedLeft())
+        {
+            state.m_palette_terrain = option::value(tid);
+            state.m_palette_cell = option::none;
+            let ts_idx = state.m_tileset_only > 0
+                ? 0 | state.m_palette_tileset;
+            state.m_paint = tilemap::terrain_value(ts_idx, tid);
+        }
+    }
+
+    // 取（或创建）某地形的连接预览地图（3x3 全铺该地形）。
+    // 返回 0 表示不可用（图集尚未保存到磁盘）。
+    func terrain_preview_map(state: EditorState, ts_id: int, tid: int)=> int
+    {
+        let doc_path = tilemap::tileset_doc_path(ts_id);
+        if (doc_path == "")
+            return 0;
+        let key = F"{doc_path}#{tid}";
+        for (let mut i = 0; i < state.m_preview_maps->len; i += 1)
+        {
+            match (state.m_preview_maps->get(i))
+            {
+                value((k, mid))?
+                {
+                    if (k == key)
+                        return mid;
+                }
+                none?;
+            }
+        }
+        let pm = tilemap::create_map(3, 3, 32);
+        if (pm <= 0)
+            return 0;
+        let idx = tilemap::add_tileset(pm, doc_path);
+        if (idx >= 0)
+        {
+            let tv = tilemap::terrain_value(idx, tid);
+            for (let mut gy = 0; gy < 3; gy += 1)
+            {
+                for (let mut gx = 0; gx < 3; gx += 1)
+                {
+                    do tilemap::set_tile(pm, 0, gx, gy, tv);
+                }
+            }
+        }
+        // 即使引用失败也登记，避免每帧重试创建
+        do state.m_preview_maps->add((key, pm));
+        return idx >= 0 ? pm | 0;
     }
 
     // 地形连接预览：在隐藏 3x3 地图上铺满该地形并绘制中心区域，
@@ -242,67 +342,13 @@ namespace JEEditor::Editor::TilemapEditor
     {
         let w = 96.;
         let h = 96.;
-        let doc_path = tilemap::tileset_doc_path(ts_id);
-        let mut ready = false;
-
-        if (doc_path != "")
-        {
-            if (state.m_preview_map <= 0)
-            {
-                state.m_preview_map = tilemap::create_map(3, 3, 32);
-                state.m_preview_key = "";
-            }
-            if (state.m_preview_map > 0 && state.m_preview_key != F"{doc_path}#{tid}")
-            {
-                let mut idx = -1;
-                for (let mut i = 0; i < state.m_preview_ts_paths->len; i += 1)
-                {
-                    match (state.m_preview_ts_paths->get(i))
-                    {
-                        value(p)?
-                        {
-                            if (p == doc_path)
-                            {
-                                match (state.m_preview_ts_idxs->get(i))
-                                {
-                                    value(v)? { idx = v; }
-                                    none?;
-                                }
-                            }
-                        }
-                        none?;
-                    }
-                }
-                if (idx < 0)
-                {
-                    idx = tilemap::add_tileset(state.m_preview_map, doc_path);
-                    if (idx >= 0)
-                    {
-                        do state.m_preview_ts_paths->add(doc_path);
-                        do state.m_preview_ts_idxs->add(idx);
-                    }
-                }
-                if (idx >= 0)
-                {
-                    let tv = tilemap::terrain_value(idx, tid);
-                    for (let mut gy = 0; gy < 3; gy += 1)
-                    {
-                        for (let mut gx = 0; gx < 3; gx += 1)
-                        {
-                            do tilemap::set_tile(state.m_preview_map, 0, gx, gy, tv);
-                        }
-                    }
-                    state.m_preview_key = F"{doc_path}#{tid}";
-                }
-            }
-            ready = state.m_preview_map > 0 && state.m_preview_key == F"{doc_path}#{tid}";
-        }
+        let pm = terrain_preview_map(state, ts_id, tid);
 
         let base = GetCursorScreenPos();
         do Dummy((w, h));
         let dl = GetWindowDrawList();
 
-        if (ready)
+        if (pm > 0)
         {
             let cw = w / 3.;
             let ch = h / 3.;
@@ -310,10 +356,10 @@ namespace JEEditor::Editor::TilemapEditor
             {
                 for (let mut gx = 0; gx < 3; gx += 1)
                 {
-                    let qn = tilemap::cell_quad_count(state.m_preview_map, 0, gx, gy);
+                    let qn = tilemap::cell_quad_count(pm, 0, gx, gy);
                     for (let mut q = 0; q < qn; q += 1)
                     {
-                        match (tilemap::cell_quad(state.m_preview_map, 0, gx, gy, q))
+                        match (tilemap::cell_quad(pm, 0, gx, gy, q))
                         {
                             value((tp, u0, v0, u1, v1, qx, qy, qcols))?
                             {

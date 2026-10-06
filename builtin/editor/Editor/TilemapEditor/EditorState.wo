@@ -136,11 +136,9 @@ namespace JEEditor::Editor::TilemapEditor
         protected m_resize_w: mut int,
         protected m_resize_h: mut int,
 
-        // ===== 地形连接预览（隐藏 3x3 预览地图） =====
-        protected m_preview_map: mut int,        // 0 = 未创建
-        protected m_preview_key: mut string,     // "图集路径#地形id"
-        protected m_preview_ts_paths: vec<string>,
-        protected m_preview_ts_idxs: vec<int>,
+        // ===== 地形连接预览（每个自动图块地形一张隐藏 3x3 预览地图） =====
+        // 键 = "图集路径#地形id"，值 = 预览地图句柄
+        protected m_preview_maps: vec<(string, int)>,
         // 调色板未注册格的双击计时（time, x, y）
         protected m_last_cell_click: mut (real, int, int),
     }
@@ -205,10 +203,7 @@ namespace JEEditor::Editor::TilemapEditor
                 m_resize_w = mut 0,
                 m_resize_h = mut 0,
 
-                m_preview_map = mut 0,
-                m_preview_key = mut "",
-                m_preview_ts_paths = []mut,
-                m_preview_ts_idxs = []mut,
+                m_preview_maps = []mut,
                 m_last_cell_click = mut (0., -1, -1),
             };
         }

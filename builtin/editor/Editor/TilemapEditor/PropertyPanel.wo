@@ -196,20 +196,19 @@ namespace JEEditor::Editor::TilemapEditor
         }
     }
 
-    // ---- 图集设置入口：地图模式先管理引用，再编辑当前调色板图集 ----
+    // ---- 图集设置入口：地图模式只管理引用；图集内容编辑在图集编辑器 ----
     public func draw_tileset_settings(state: EditorState, ctx: TilemapContext)=> void
     {
         if (state.m_tileset_only == 0)
-            do draw_tileset_references(state, ctx);
-
-        let ts_id = palette_tileset_doc(state, ctx);
-        if (ts_id <= 0)
         {
-            if (state.m_tileset_only > 0)
-                do TextDisabled("没有可用图集");
+            do draw_tileset_references(state, ctx);
+            do Separator();
+            do TextDisabled("图集内容（源纹理/地形/属性）的编辑");
+            do TextDisabled("请在资源浏览器中双击图集文件，");
+            do TextDisabled("在图集编辑器中进行。");
             return;
         }
-        do draw_tileset_content(state, ts_id);
+        do draw_tileset_content(state, state.m_tileset_only);
     }
 
     // ---- 地图对图集的引用管理 ----
