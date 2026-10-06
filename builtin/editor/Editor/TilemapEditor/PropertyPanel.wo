@@ -345,14 +345,33 @@ namespace JEEditor::Editor::TilemapEditor
             value(v)? state.m_new_source_tilepx = v < 1 ? 1 | v;
             none?;
         }
+        match (CheckBox("为每个格子创建单块地形", state.m_new_source_auto_terrain))
+        {
+            value(v)? state.m_new_source_auto_terrain = v;
+            none?;
+        }
         if (Button("添加源纹理"))
         {
+            let prev = tilemap::source_count(ts_id);
             let idx = tilemap::add_source(ts_id,
                 state.m_new_source_path, state.m_new_source_tilepx);
             if (idx >= 0)
             {
                 state.m_palette_source = idx;
                 state.m_dirty = true;
+                // 新增源纹理：默认为每个格子创建一个单块地形（绘制入口统一走地形）
+                if (state.m_new_source_auto_terrain && idx >= prev)
+                {
+                    let (_, _, xc, yc) = tilemap::source_info(ts_id, idx);
+                    for (let mut iy = 0; iy < yc; iy += 1)
+                    {
+                        for (let mut ix = 0; ix < xc; ix += 1)
+                        {
+                            do tilemap::add_terrain(ts_id, F"单块 ({ix},{iy})",
+                                0, idx, ix, iy, 1);
+                        }
+                    }
+                }
             }
             else
                 do MsgBox::err("添加失败",
