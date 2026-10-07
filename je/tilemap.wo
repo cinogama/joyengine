@@ -333,9 +333,9 @@ namespace je
                 public func terrain_add_variant(self: Tileset, terrain_id: int, tile_id: int)=> bool;
 
             // ==================== 属性 schema 与默认值 ====================
-            // 返回新增属性的下标
+            // 返回新增属性的下标（重名或参数不合法返回 none）
             extern("libjoyecs", "wojeapi_tilemap_add_property")
-                public func add_property(self: Tileset, name: string, type: string, default_value: string)=> int;
+                public func add_property(self: Tileset, name: string, type: string, default_value: string)=> option<int>;
 
             extern("libjoyecs", "wojeapi_tilemap_remove_property")
                 public func remove_property(self: Tileset, name: string)=> bool;

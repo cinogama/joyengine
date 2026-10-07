@@ -488,14 +488,16 @@ namespace JEEditor::Editor::TilemapEditor
             if (state.m_new_prop_name != "")
             {
                 let tname = PROPERTY_TYPE_NAMES[state.m_new_prop_type];
-                if (ts_id->add_property(state.m_new_prop_name, tname,
-                        property_type_default(tname)) >= 0)
+                match (ts_id->add_property(state.m_new_prop_name, tname,
+                        property_type_default(tname)))
                 {
-                    state.m_new_prop_name = "";
-                    state.m_dirty = true;
+                    value(_)?
+                    {
+                        state.m_new_prop_name = "";
+                        state.m_dirty = true;
+                    }
+                    none? do MsgBox::err("添加失败", "同名属性已存在");
                 }
-                else
-                    do MsgBox::err("添加失败", "同名属性已存在");
             }
         }
     }

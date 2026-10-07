@@ -534,21 +534,29 @@ jeecs::Tilemap::TilesetDocument* je_tilemap_ts_doc(je_TilesetHandle id)
 }
 
 // ---------------- 地图文档 ----------------
-je_TilemapHandle je_tilemap_open_map(const char* path)
+bool je_tilemap_open_map(const char* path, je_TilemapHandle* out_hdl)
 {
-    return jeecs::Tilemap::documents::inst().open_map(path ? path : "").first;
+    auto [id, doc] = jeecs::Tilemap::documents::inst().open_map(path ? path : "");
+    if (doc == nullptr)
+        return false;
+    if (out_hdl != nullptr)
+        *out_hdl = id;
+    return true;
 }
-je_TilemapHandle je_tilemap_create_map(int32_t w, int32_t h, int32_t tile_px)
+bool je_tilemap_create_map(int32_t w, int32_t h, int32_t tile_px, je_TilemapHandle* out_hdl)
 {
     if (w <= 0 || h <= 0 || tile_px <= 0 || w > 65536 || h > 65536)
-        return 0;
+        return false;
     auto doc = std::make_shared<jeecs::Tilemap::MapDocument>();
     doc->width = w; doc->height = h; doc->tile_px = tile_px;
     jeecs::Tilemap::MapLayer layer;
     layer.name = "图层 1";
     layer.grid.assign((size_t)w * h, 0);
     doc->layers.push_back(std::move(layer));
-    return jeecs::Tilemap::documents::inst().register_map(doc);
+    je_TilemapHandle id = jeecs::Tilemap::documents::inst().register_map(doc);
+    if (out_hdl != nullptr)
+        *out_hdl = id;
+    return true;
 }
 bool je_tilemap_save_map(je_TilemapHandle map, const char* path)
 {
@@ -1217,17 +1225,19 @@ bool je_tilemap_terrain_add_variant(je_TilesetHandle tileset, int32_t terrain_id
 }
 
 // ---------------- 属性 schema 与默认值 ----------------
-int32_t je_tilemap_add_property(je_TilesetHandle tileset, const char* name, const char* type, const char* default_value)
+bool je_tilemap_add_property(je_TilesetHandle tileset, const char* name, const char* type, const char* default_value, int32_t* out_index)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
     if (doc == nullptr || name == nullptr || name[0] == '\0' || type == nullptr)
-        return -1;
+        return false;
     for (const auto& pd : doc->properties)
         if (pd.name == name)
-            return -1;
+            return false;
     doc->properties.push_back({ name, type, default_value ? default_value : "" });
     ++doc->version;
-    return (int32_t)doc->properties.size() - 1;
+    if (out_index != nullptr)
+        *out_index = (int32_t)doc->properties.size() - 1;
+    return true;
 }
 bool je_tilemap_remove_property(je_TilesetHandle tileset, const char* name)
 {
@@ -1369,16 +1379,16 @@ bool je_tilemap_cell_quad(je_TilemapHandle map, int32_t layer, int32_t x, int32_
 // ======================================================================
 WOORT_API woort_api wojeapi_tilemap_open_map(void)
 {
-    je_TilemapHandle map = je_tilemap_open_map(woort_string(0));
-    if (map <= 0)
+    je_TilemapHandle map = 0;
+    if (!je_tilemap_open_map(woort_string(0), &map))
         return woort_ret_option_none();
     return woort_ret_option_pointer((void*)(intptr_t)map);
 }
 WOORT_API woort_api wojeapi_tilemap_create_map(void)
 {
-    je_TilemapHandle map = je_tilemap_create_map(
-        (int32_t)woort_int(0), (int32_t)woort_int(1), (int32_t)woort_int(2));
-    if (map <= 0)
+    je_TilemapHandle map = 0;
+    if (!je_tilemap_create_map(
+        (int32_t)woort_int(0), (int32_t)woort_int(1), (int32_t)woort_int(2), &map))
         return woort_ret_option_none();
     return woort_ret_option_pointer((void*)(intptr_t)map);
 }
@@ -1718,8 +1728,11 @@ WOORT_API woort_api wojeapi_tilemap_terrain_add_variant(void)
 }
 WOORT_API woort_api wojeapi_tilemap_add_property(void)
 {
-    return woort_ret_int(je_tilemap_add_property(
-        (int32_t)woort_int(0), woort_string(1), woort_string(2), woort_string(3)));
+    int32_t index = 0;
+    if (!je_tilemap_add_property((int32_t)woort_int(0), woort_string(1),
+            woort_string(2), woort_string(3), &index))
+        return woort_ret_option_none();
+    return woort_ret_option_int(index);
 }
 WOORT_API woort_api wojeapi_tilemap_remove_property(void)
 {

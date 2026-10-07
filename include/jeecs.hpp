@@ -4812,21 +4812,21 @@ typedef int32_t je_TilesetHandle;
 
 /*
 je_tilemap_open_map [基本接口]
-打开（或取进程内缓存）指定路径的地图文档，返回其句柄
-    * 路径不存在或无法解析时返回 0
+打开（或取进程内缓存）指定路径的地图文档，句柄经 out_hdl 返回
+    * 路径不存在或无法解析时返回 false，不写出句柄
 请参见：
     je_TilemapHandle
 */
-JE_API je_TilemapHandle je_tilemap_open_map(const char* path);
+JE_API bool je_tilemap_open_map(const char* path, je_TilemapHandle* out_hdl);
 
 /*
 je_tilemap_create_map [基本接口]
-新建一个未保存的地图文档（单图层），返回其句柄
-    * 尺寸不合法（<=0 或超过 65536）时返回 0
+新建一个未保存的地图文档（单图层），句柄经 out_hdl 返回
+    * 尺寸不合法（<=0 或超过 65536）时返回 false，不写出句柄
 请参见：
     je_TilemapHandle
 */
-JE_API je_TilemapHandle je_tilemap_create_map(int32_t w, int32_t h, int32_t tile_px);
+JE_API bool je_tilemap_create_map(int32_t w, int32_t h, int32_t tile_px, je_TilemapHandle* out_hdl);
 
 /*
 je_tilemap_save_map [基本接口]
@@ -5235,11 +5235,11 @@ JE_API bool je_tilemap_terrain_add_variant(je_TilesetHandle tileset,
 /*
 je_tilemap_add_property [基本接口]
 向图集 schema 添加属性定义，type 为类型名字符串
-（"bool"/"int"/"float"/"string"/"vec2"/"vec3"/"vec4"），返回属性下标
-    * 重名或参数不合法返回 -1
+（"bool"/"int"/"float"/"string"/"vec2"/"vec3"/"vec4"），属性下标经 out_index 返回
+    * 重名或参数不合法返回 false，不写出下标
 */
-JE_API int32_t je_tilemap_add_property(je_TilesetHandle tileset,
-    const char* name, const char* type, const char* default_value);
+JE_API bool je_tilemap_add_property(je_TilesetHandle tileset,
+    const char* name, const char* type, const char* default_value, int32_t* out_index);
 
 /*
 je_tilemap_remove_property [基本接口]
