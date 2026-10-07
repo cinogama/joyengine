@@ -243,11 +243,11 @@ namespace JEEditor::Editor::TilemapEditor
     // 视图重置：地图居中并选择合适缩放
     public func reset_view(state: EditorState)=> void
     {
-        let (w, h, _, _) = state.m_context.m_map->size();
+        let (w, h, _, _) = state.m_context->unwrap().m_map->size();
         let avail = GetContentRegionAvail();
         if (w <= 0 || h <= 0 || avail[0] <= 0. || avail[1] <= 0.)
             return;
-        let (_, _, tile_px, _) = state.m_context.m_map->size();
+        let (_, _, tile_px, _) = state.m_context->unwrap().m_map->size();
         let mut zoom = math::min(
             (avail[0] - 32.) / (w as real * tile_px as real),
             (avail[1] - 32.) / (h as real * tile_px as real));

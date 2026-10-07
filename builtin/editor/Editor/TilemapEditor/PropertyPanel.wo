@@ -58,7 +58,7 @@ namespace JEEditor::Editor::TilemapEditor
     {
         if (BeginTabBar("##prop_tabs"))
         {
-            if (!state.m_tileset_only->valid())
+            if (state.m_tileset_only->is_none)
             {
                 if (BeginTabItem("格子属性"))
                 {
@@ -71,7 +71,7 @@ namespace JEEditor::Editor::TilemapEditor
             if (BeginTabItem("图集设置"))
             {
                 if (BeginChildSize("##tileset_props", GetContentRegionAvail()[0], 0.))
-                    do draw_tileset_settings(state, ctx);
+                    do draw_tileset_settings(state, option::value(ctx));
                 EndChild();
                 do EndTabItem();
             }
@@ -95,9 +95,10 @@ namespace JEEditor::Editor::TilemapEditor
                 let mut shown_any = false;
                 for (let mut tsi = 0; tsi < ts_count; tsi += 1)
                 {
-                    let ts_id = ctx->tileset_id(tsi);
-                    if (!ts_id->valid())
+                    let ts_doc = ctx->tileset_id(tsi);
+                    if (ts_doc->is_none)
                         continue;
+                    let ts_id = ts_doc->unwrap();
                     let pcount = ts_id->property_count();
                     for (let mut pi = 0; pi < pcount; pi += 1)
                     {
@@ -201,18 +202,19 @@ namespace JEEditor::Editor::TilemapEditor
     }
 
     // ---- 图集设置入口：地图模式只管理引用；图集内容编辑在图集编辑器 ----
-    public func draw_tileset_settings(state: EditorState, ctx: TilemapContext)=> void
+    public func draw_tileset_settings(state: EditorState,
+        ctx: option<TilemapContext>)=> void
     {
-        if (!state.m_tileset_only->valid())
+        if (state.m_tileset_only->is_none)
         {
-            do draw_tileset_references(state, ctx);
+            do draw_tileset_references(state, ctx->unwrap());
             do Separator();
             do TextDisabled("图集内容（源纹理/地形/属性）的编辑");
             do TextDisabled("请在资源浏览器中双击图集文件，");
             do TextDisabled("在图集编辑器中进行。");
             return;
         }
-        do draw_tileset_content(state, state.m_tileset_only);
+        do draw_tileset_content(state, state.m_tileset_only->unwrap());
     }
 
     // ---- 地图对图集的引用管理 ----

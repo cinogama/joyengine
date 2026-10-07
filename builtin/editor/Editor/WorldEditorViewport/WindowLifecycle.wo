@@ -932,12 +932,15 @@ namespace JEEditor::Editor::WorldEditorViewport
             return;
 
         // 可解析性检查（内核文档缓存按路径共享，不产生额外开销）
-        let map_doc = tilemap::Tilemap::open(path->to_string);
-        if (!map_doc->valid())
+        match (tilemap::Tilemap::open(path->to_string))
         {
-            MsgBox::err("创建瓦片地图实例",
-                F"无法解析瓦片地图文件 \"{path->to_string()}\"");
-            return;
+            none?
+            {
+                MsgBox::err("创建瓦片地图实例",
+                    F"无法解析瓦片地图文件 \"{path->to_string()}\"");
+                return;
+            }
+            value(_)? { }
         }
 
         let dat = new_table();

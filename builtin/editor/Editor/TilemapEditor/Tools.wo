@@ -52,13 +52,16 @@ namespace JEEditor::Editor::TilemapEditor
         }
         else
         {
-            let ts_id = ctx->tileset_id(ts_idx);
-            if (ts_id->valid())
+            match (ctx->tileset_id(ts_idx))
             {
-                let (src, ix, iy, _) = ts_id->tile_info(local);
-                state.m_palette_source = src;
-                state.m_palette_cell = option::value((ix, iy));
-                state.m_palette_terrain = option::none;
+                value(ts_id)?
+                {
+                    let (src, ix, iy, _) = ts_id->tile_info(local);
+                    state.m_palette_source = src;
+                    state.m_palette_cell = option::value((ix, iy));
+                    state.m_palette_terrain = option::none;
+                }
+                none? { }
             }
         }
     }

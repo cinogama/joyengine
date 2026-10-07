@@ -51,7 +51,7 @@ namespace JEEditor::Editor::TilemapEditor
     // 图集编辑模式无地图（画笔不可用），固定 0
     func brush_tileset_index(state: EditorState)=> int
     {
-        return state.m_tileset_only->valid() ? 0 | state.m_palette_tileset;
+        return state.m_tileset_only->is_value ? 0 | state.m_palette_tileset;
     }
 
     // 选定地形为画笔（清除瓦片格选择）
@@ -83,110 +83,135 @@ namespace JEEditor::Editor::TilemapEditor
         return (u0, v0, u1, v1);
     }
 
-    // 调色板当前图集的文档句柄（无图集返回 Tileset::invalid）
-    public func palette_tileset_doc(state: EditorState, ctx: TilemapContext)=> tilemap::Tileset
+    // 调色板当前图集的文档句柄（图集模式直接用编辑对象；地图模式取
+    // 当前页签的引用解析结果；无可用图集返回 none）
+    public func palette_tileset_doc(state: EditorState,
+        ctx: option<TilemapContext>)=> option<tilemap::Tileset>
     {
-        if (state.m_tileset_only->valid())
-            return state.m_tileset_only;
-        let count = ctx.m_map->tileset_count();
-        if (state.m_palette_tileset < 0 || state.m_palette_tileset >= count)
-            return tilemap::Tileset::invalid;
-        return ctx->tileset_id(state.m_palette_tileset);
+        match (state.m_tileset_only)
+        {
+            value(ts)? { return option::value(ts); }
+            none? { }
+        }
+        match (ctx)
+        {
+            value(c)?
+            {
+                let count = c.m_map->tileset_count();
+                if (state.m_palette_tileset < 0 || state.m_palette_tileset >= count)
+                    return option::none;
+                return c->tileset_id(state.m_palette_tileset);
+            }
+            none? { return option::none; }
+        }
     }
 
     // ==================== 调色板入口 ====================
 
-    public func draw_palette(state: EditorState, ctx: TilemapContext)=> void
+    public func draw_palette(state: EditorState, ctx: option<TilemapContext>)=> void
     {
-        do ctx->sync_tilesets();
+        match (ctx)
+        {
+            value(c)? do c->sync_tilesets();
+            none? { }
+        }
 
-        if (state.m_tileset_only->valid())
+        if (state.m_tileset_only->is_value)
         {
             // ===== 图集编辑器：原始图块管理视图（源纹理/地形创建在此进行） =====
-            let ts_id = palette_tileset_doc(state, ctx);
-            if (!ts_id->valid())
+            match (palette_tileset_doc(state, ctx))
             {
-                do TextDisabled("图集文档不可用");
-                return;
-            }
-            // ---- 源纹理选择 ----
-            let src_count = ts_id->source_count();
-            if (src_count == 0)
-            {
-                do TextDisabled("图集没有源纹理");
-                do TextDisabled("请在右侧「图集设置」中添加");
-                return;
-            }
-            if (state.m_palette_source >= src_count)
-                state.m_palette_source = 0;
-            if (src_count > 1)
-            {
-                let mut names = []mut: vec<string>;
-                for (let mut i = 0; i < src_count; i += 1)
-                    do names->add(F"源纹理 {i + 1}");
-                match (ListBoxSelectHeight("##palette_source", names->to_array,
-                    state.m_palette_source, 3))
+                none? { do TextDisabled("图集文档不可用"); return; }
+                value(ts_id)?
                 {
-                    value(sel)?
+                    // ---- 源纹理选择 ----
+                    let src_count = ts_id->source_count();
+                    if (src_count == 0)
                     {
-                        state.m_palette_source = sel;
-                        state.m_palette_cell = option::none;
+                        do TextDisabled("图集没有源纹理");
+                        do TextDisabled("请在右侧「图集设置」中添加");
+                        return;
                     }
-                    none?;
+                    if (state.m_palette_source >= src_count)
+                        state.m_palette_source = 0;
+                    if (src_count > 1)
+                    {
+                        let mut names = []mut: vec<string>;
+                        for (let mut i = 0; i < src_count; i += 1)
+                            do names->add(F"源纹理 {i + 1}");
+                        match (ListBoxSelectHeight("##palette_source", names->to_array,
+                            state.m_palette_source, 3))
+                        {
+                            value(sel)?
+                            {
+                                state.m_palette_source = sel;
+                                state.m_palette_cell = option::none;
+                            }
+                            none?;
+                        }
+                    }
+                    if (BeginChildSize("##palette_grid", GetContentRegionAvail()[0], 0.))
+                    {
+                        do draw_palette_grid(state, ts_id);
+                    }
+                    EndChild();
                 }
             }
-            if (BeginChildSize("##palette_grid", GetContentRegionAvail()[0], 0.))
-            {
-                do draw_palette_grid(state, ts_id);
-            }
-            EndChild();
             return;
         }
 
         // ===== 地图编辑器：纯地形调色板（RM 式，一个地形一格） =====
-        let ts_count = ctx.m_map->tileset_count();
-        if (ts_count == 0)
+        //（render_main 已保证此处 ctx 必有值）
+        match (ctx)
         {
-            do TextDisabled("地图未引用任何图集");
-            do TextDisabled("请在右侧「图集设置」中添加");
-            return;
-        }
-        if (state.m_palette_tileset >= ts_count)
-            state.m_palette_tileset = ts_count - 1;
-        if (BeginTabBar("##tileset_tabs"))
-        {
-            for (let mut i = 0; i < ts_count; i += 1)
+            none? { }
+            value(c)?
             {
-                if (BeginTabItem(F"图集{i + 1}##ts{i}"))
+                let ts_count = c.m_map->tileset_count();
+                if (ts_count == 0)
                 {
-                    state.m_palette_tileset = i;
-                    do EndTabItem();
+                    do TextDisabled("地图未引用任何图集");
+                    do TextDisabled("请在右侧「图集设置」中添加");
+                    return;
                 }
-            }
-            do EndTabBar();
-        }
-
-        let ts_id = palette_tileset_doc(state, ctx);
-        if (!ts_id->valid())
-        {
-            do TextDisabled("图集文档不可用");
-            return;
-        }
-
-        do draw_terrain_cell_palette(state, ts_id);
-
-        // ---- 选中自动图块的连接预览 ----
-        if (palette_selected_is_auto(state, ts_id))
-        {
-            match (state.m_palette_terrain)
-            {
-                value(tid)?
+                if (state.m_palette_tileset >= ts_count)
+                    state.m_palette_tileset = ts_count - 1;
+                if (BeginTabBar("##tileset_tabs"))
                 {
-                    do Separator();
-                    do Text("连接预览：");
-                    do draw_terrain_preview(state, ts_id, tid);
+                    for (let mut i = 0; i < ts_count; i += 1)
+                    {
+                        if (BeginTabItem(F"图集{i + 1}##ts{i}"))
+                        {
+                            state.m_palette_tileset = i;
+                            do EndTabItem();
+                        }
+                    }
+                    do EndTabBar();
                 }
-                none?;
+
+                match (palette_tileset_doc(state, ctx))
+                {
+                    none? { do TextDisabled("图集文档不可用"); return; }
+                    value(ts_id)?
+                    {
+                        do draw_terrain_cell_palette(state, ts_id);
+
+                        // ---- 选中自动图块的连接预览 ----
+                        if (palette_selected_is_auto(state, ts_id))
+                        {
+                            match (state.m_palette_terrain)
+                            {
+                                value(tid)?
+                                {
+                                    do Separator();
+                                    do Text("连接预览：");
+                                    do draw_terrain_preview(state, ts_id, tid);
+                                }
+                                none?;
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -301,12 +326,12 @@ namespace JEEditor::Editor::TilemapEditor
     // ==================== 地形连接预览 ====================
 
     // 取（或创建）某地形的连接预览地图（3x3 全铺该地形）。
-    // 返回 Tilemap::invalid 表示不可用（图集尚未保存到磁盘）。
-    func terrain_preview_map(state: EditorState, ts_id: tilemap::Tileset, tid: int)=> tilemap::Tilemap
+    // 返回 none 表示不可用（图集尚未保存到磁盘或引用加入失败）。
+    func terrain_preview_map(state: EditorState, ts_id: tilemap::Tileset, tid: int)=> option<tilemap::Tilemap>
     {
         let doc_path = ts_id->doc_path();
         if (doc_path == "")
-            return tilemap::Tilemap::invalid;
+            return option::none;
         let key = F"{doc_path}#{tid}";
         for (let mut i = 0; i < state.m_preview_maps->len; i += 1)
         {
@@ -320,24 +345,29 @@ namespace JEEditor::Editor::TilemapEditor
                 none?;
             }
         }
-        let pm = tilemap::Tilemap::create(3, 3, 32);
-        if (!pm->valid())
-            return tilemap::Tilemap::invalid;
-        let idx = pm->add_tileset(doc_path);
-        if (idx >= 0)
+        match (tilemap::Tilemap::create(3, 3, 32))
         {
-            let tv = tilemap::terrain_value(idx, tid);
-            for (let mut gy = 0; gy < 3; gy += 1)
+            none? { return option::none; }
+            value(pm)?
             {
-                for (let mut gx = 0; gx < 3; gx += 1)
+                let idx = pm->add_tileset(doc_path);
+                if (idx >= 0)
                 {
-                    do pm->set_tile(0, gx, gy, tv);
+                    let tv = tilemap::terrain_value(idx, tid);
+                    for (let mut gy = 0; gy < 3; gy += 1)
+                    {
+                        for (let mut gx = 0; gx < 3; gx += 1)
+                        {
+                            do pm->set_tile(0, gx, gy, tv);
+                        }
+                    }
                 }
+                let usable = idx >= 0 ? option::value(pm) | option::none;
+                // 即使引用失败也登记（none），避免每帧重试创建
+                do state.m_preview_maps->add((key, usable));
+                return usable;
             }
         }
-        // 即使引用失败也登记，避免每帧重试创建
-        do state.m_preview_maps->add((key, pm));
-        return idx >= 0 ? pm | tilemap::Tilemap::invalid;
     }
 
     // 地形连接预览：在隐藏 3x3 地图上铺满该地形并绘制中心区域，
@@ -353,18 +383,19 @@ namespace JEEditor::Editor::TilemapEditor
         do Dummy((w, h));
         let dl = GetWindowDrawList();
 
-        if (pm->valid())
+        if (pm->is_value)
         {
+            let p = pm->unwrap();
             let cw = w / 3.;
             let ch = h / 3.;
             for (let mut gy = 0; gy < 3; gy += 1)
             {
                 for (let mut gx = 0; gx < 3; gx += 1)
                 {
-                    let qn = pm->cell_quad_count(0, gx, gy);
+                    let qn = p->cell_quad_count(0, gx, gy);
                     for (let mut q = 0; q < qn; q += 1)
                     {
-                        match (pm->cell_quad(0, gx, gy, q))
+                        match (p->cell_quad(0, gx, gy, q))
                         {
                             value((tp, u0, v0, u1, v1, qx, qy, qcols))?
                             {

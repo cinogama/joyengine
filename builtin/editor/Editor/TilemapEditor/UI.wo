@@ -69,22 +69,37 @@ namespace JEEditor::Editor::TilemapEditor
             + (state.m_dirty ? " | 未保存" | ""));
     }
 
-    public func render_main(state: EditorState, ctx: TilemapContext)=> void
+    public func render_main(state: EditorState)=> void
     {
         let avail = GetContentRegionAvail();
 
-        // 图集模式：仅调色板 + 图集设置
-        if (state.m_tileset_only->valid())
+        // 图集模式：仅调色板 + 图集设置（无地图上下文）
+        if (state.m_tileset_only->is_value)
         {
             if (BeginChildSize("##tm_left", 380., avail[1]))
-                do draw_palette(state, ctx);
+                do draw_palette(state, option::none);
             EndChild();
             SameLine();
             if (BeginChildSize("##tm_right", GetContentRegionAvail()[0], 0.))
-                do draw_tileset_settings(state, ctx);
+                do draw_tileset_settings(state, option::none);
             EndChild();
             return;
         }
+
+        // 地图模式：上下文必在（与 m_tileset_only 恒互补）
+        match (state.m_context)
+        {
+            none? { }
+            value(ctx)?
+            {
+                do render_map_layout(state, ctx);
+            }
+        }
+    }
+
+    func render_map_layout(state: EditorState, ctx: TilemapContext)=> void
+    {
+        let avail = GetContentRegionAvail();
 
         // 工具栏（整宽）
         do draw_toolbar(state, ctx);
@@ -98,7 +113,7 @@ namespace JEEditor::Editor::TilemapEditor
 
         // 左：调色板
         if (BeginChildSize("##tm_left", left_w, body_h))
-            do draw_palette(state, ctx);
+            do draw_palette(state, option::value(ctx));
         EndChild();
         SameLine();
 

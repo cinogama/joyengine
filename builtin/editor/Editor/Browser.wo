@@ -829,18 +829,26 @@ namespace JEEditor::Editor
 
             func writeTo(dst: path_t)=> void
             {
-                let map = tilemap::Tilemap::create(32, 32, 32);
-                if (map->valid() && map->save(dst->to_string()))
+                match (tilemap::Tilemap::create(32, 32, 32))
                 {
-                    dirty->set(true);
-                    let path_str = dst->to_string();
-                    Statebar::showState(3.) <| func(){
-                        Text(F"瓦片地图 \"{path_str}\" 已创建");
-                    };
+                    value(map)?
+                    {
+                        if (map->save(dst->to_string()))
+                        {
+                            dirty->set(true);
+                            let path_str = dst->to_string();
+                            Statebar::showState(3.) <| func(){
+                                Text(F"瓦片地图 \"{path_str}\" 已创建");
+                            };
+                        }
+                        else
+                            MsgBox::err("新建瓦片地图",
+                                F"无法保存 \"{dst->to_string()}\"，可能是文件名非法或磁盘已满");
+                    }
+                    none?
+                        MsgBox::err("新建瓦片地图",
+                            F"无法创建 \"{dst->to_string()}\"，可能是文件名非法或磁盘已满");
                 }
-                else
-                    MsgBox::err("新建瓦片地图",
-                        F"无法创建 \"{dst->to_string()}\"，可能是文件名非法或磁盘已满");
             }
 
             func createAs(file_name: string)=> void
@@ -879,18 +887,26 @@ namespace JEEditor::Editor
 
             func writeTo(dst: path_t)=> void
             {
-                let ts = tilemap::Tileset::create("新建图集");
-                if (ts->valid() && ts->save(dst->to_string()))
+                match (tilemap::Tileset::create("新建图集"))
                 {
-                    dirty->set(true);
-                    let path_str = dst->to_string();
-                    Statebar::showState(3.) <| func(){
-                        Text(F"瓦片图集 \"{path_str}\" 已创建");
-                    };
+                    value(ts)?
+                    {
+                        if (ts->save(dst->to_string()))
+                        {
+                            dirty->set(true);
+                            let path_str = dst->to_string();
+                            Statebar::showState(3.) <| func(){
+                                Text(F"瓦片图集 \"{path_str}\" 已创建");
+                            };
+                        }
+                        else
+                            MsgBox::err("新建瓦片图集",
+                                F"无法保存 \"{dst->to_string()}\"，可能是文件名非法或磁盘已满");
+                    }
+                    none?
+                        MsgBox::err("新建瓦片图集",
+                            F"无法创建 \"{dst->to_string()}\"，可能是文件名非法或磁盘已满");
                 }
-                else
-                    MsgBox::err("新建瓦片图集",
-                        F"无法创建 \"{dst->to_string()}\"，可能是文件名非法或磁盘已满");
             }
 
             func createAs(file_name: string)=> void

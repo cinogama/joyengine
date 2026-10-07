@@ -2,10 +2,11 @@
 // 瓦片地图运行时 API：je_tilemap_* C API 的 Woolang 绑定与友好封装。
 //
 // 文档句柄类型为 Tilemap / Tileset（基于 handle 声明的新类型，储存方式
-// 与 int 相同；>0 有效，invalid 表示无效句柄）。文档由引擎全局缓存并按
-// 路径共享：编辑器与世界共用同一份数据，任何修改（未保存亦然）都会在
-// 下一帧同步到所有世界实例。相关方法声明在对应类型的命名空间中，可用
-// 接收者形式调用：map->save(path)、tileset->add_source(...)。
+// 与 int 相同）。open / create 失败时返回 none，成功返回有效句柄。文档
+// 由引擎全局缓存并按路径共享：编辑器与世界共用同一份数据，任何修改
+//（未保存亦然）都会在下一帧同步到所有世界实例。相关方法声明在对应类型
+// 的命名空间中，可用接收者形式调用：map->save(path)、
+// tileset->add_source(...)。
 //
 // 瓦片值编码（网格与笔刷统一）：
 //     0            空
@@ -38,20 +39,13 @@ namespace je
                 return !(self == another);
             }
 
-            // 无效句柄（open / create 失败时返回）
-            public let invalid = 0 as handle as Tilemap;
-            public func valid(self: Tilemap)=> bool
-            {
-                return (self as handle as int) > 0;
-            }
-
-            // 打开 .je4tilemap 文件（无法解析时返回 invalid）
+            // 打开 .je4tilemap 文件（无法解析时返回 none）
             extern("libjoyecs", "wojeapi_tilemap_open_map")
-                public func open(path: string)=> Tilemap;
+                public func open(path: string)=> option<Tilemap>;
 
-            // 新建空地图文档（未保存，路径为空）
+            // 新建空地图文档（未保存，路径为空；创建失败返回 none）
             extern("libjoyecs", "wojeapi_tilemap_create_map")
-                public func create(w: int, h: int, tile_px: int)=> Tilemap;
+                public func create(w: int, h: int, tile_px: int)=> option<Tilemap>;
 
             // 按路径重载（另存/覆盖保存后各世界下一帧同步）
             extern("libjoyecs", "wojeapi_tilemap_reload_map")
@@ -249,20 +243,13 @@ namespace je
                 return !(self == another);
             }
 
-            // 无效句柄（open / create 失败时返回）
-            public let invalid = 0 as handle as Tileset;
-            public func valid(self: Tileset)=> bool
-            {
-                return (self as handle as int) > 0;
-            }
-
-            // 打开 .je4tileset 文件（无法解析时返回 invalid）
+            // 打开 .je4tileset 文件（无法解析时返回 none）
             extern("libjoyecs", "wojeapi_tilemap_open_tileset")
-                public func open(path: string)=> Tileset;
+                public func open(path: string)=> option<Tileset>;
 
-            // 新建空图集文档（未保存）
+            // 新建空图集文档（未保存；创建失败返回 none）
             extern("libjoyecs", "wojeapi_tilemap_create_tileset")
-                public func create(name: string)=> Tileset;
+                public func create(name: string)=> option<Tileset>;
 
             // 按路径重载（另存/覆盖保存后各世界下一帧同步）
             extern("libjoyecs", "wojeapi_tilemap_reload_tileset")

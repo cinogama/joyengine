@@ -62,8 +62,8 @@ namespace JEEditor::Editor::TilemapEditor
             {
                 match (s_editor_singleton)
                 {
-                    none? do show(TilemapEditorWindow::create(ctx, tilemap::Tileset::invalid));
-                    value(editor)? editor->retargetTo(ctx, tilemap::Tileset::invalid);
+                    none? do show(TilemapEditorWindow::create_map(ctx));
+                    value(editor)? editor->retargetToMap(ctx);
                 }
             }
         }
@@ -73,22 +73,18 @@ namespace JEEditor::Editor::TilemapEditor
     public func openTilesetEditorFromFile(path: fsys::path_t)=> void
     {
         let path_str = ResourcePath::toRuntimeResourcePath(path);
-        let ts = tilemap::Tileset::open(path_str);
-        if (!ts->valid())
+        match (tilemap::Tileset::open(path_str))
         {
-            do MsgBox::err("打开失败", F"无法解析图集文件：{path_str}");
-            return;
-        }
-        let dummy_ctx = TilemapContext{
-            m_path = mut fsys::normalize(""),
-            m_map = mut tilemap::Tilemap::invalid,
-            m_tileset_ids = []mut,
-            m_tileset_paths = []mut,
-        };
-        match (s_editor_singleton)
-        {
-            none? do show(TilemapEditorWindow::create(dummy_ctx, ts));
-            value(editor)? editor->retargetTo(dummy_ctx, ts);
+            none?
+                do MsgBox::err("打开失败", F"无法解析图集文件：{path_str}");
+            value(ts)?
+            {
+                match (s_editor_singleton)
+                {
+                    none? do show(TilemapEditorWindow::create_tileset(ts));
+                    value(editor)? editor->retargetToTileset(ts);
+                }
+            }
         }
     }
 
@@ -97,15 +93,16 @@ namespace JEEditor::Editor::TilemapEditor
     // 失败或取消时不调用 —— 调用方保持现状即可。
     func try_save_then(state: EditorState, after: ()=>void)=> void
     {
-        if (state.m_tileset_only->valid())
+        if (state.m_tileset_only->is_value)
         {
             do try_save_tileset_then(state, after);
             return;
         }
-        let path = state.m_context.m_path->to_string;
+        let ctx = state.m_context->unwrap();
+        let path = ctx.m_path->to_string;
         if (path != "")
         {
-            if (state.m_context->save_to(state.m_context.m_path))
+            if (ctx->save_to(ctx.m_path))
             {
                 state.m_dirty = false;
                 do after();
@@ -122,7 +119,7 @@ namespace JEEditor::Editor::TilemapEditor
                 "@/resource/maps/newmap.je4tilemap")
             ->then(func(p)
                 {
-                    if (state.m_context->save_to(fsys::normalize(p)))
+                    if (ctx->save_to(fsys::normalize(p)))
                     {
                         state.m_dirty = false;
                         do after();
@@ -138,7 +135,7 @@ namespace JEEditor::Editor::TilemapEditor
 
     func try_save_tileset_then(state: EditorState, after: ()=>void)=> void
     {
-        let ts = state.m_tileset_only;
+        let ts = state.m_tileset_only->unwrap();
         let cur_path = ts->doc_path();
         if (cur_path != "")
         {
@@ -184,22 +181,38 @@ namespace JEEditor::Editor::TilemapEditor
         m_state: mut EditorState,
     }
     {
-        func create(context: TilemapContext, tileset_only: tilemap::Tileset)=> TilemapEditorWindow
+        func create_map(context: TilemapContext)=> TilemapEditorWindow
             where require!(TilemapEditorWindow: IWindows);
         {
-            let state = tileset_only->valid()
-                ? EditorState::create_tileset_only(tileset_only)
-                | EditorState::create(context);
             return TilemapEditorWindow{
                 m_close = mut false,
-                m_state = mut state,
+                m_state = mut EditorState::create(context),
+            };
+        }
+        func create_tileset(tileset_doc: tilemap::Tileset)=> TilemapEditorWindow
+            where require!(TilemapEditorWindow: IWindows);
+        {
+            return TilemapEditorWindow{
+                m_close = mut false,
+                m_state = mut EditorState::create_tileset_only(tileset_doc),
             };
         }
 
         // 切换到另一个文件：脏数据先询问保存，保存完成后（含异步询问
-        // 保存路径的情形）再切换
-        func retargetTo(self: TilemapEditorWindow,
-            context: TilemapContext, tileset_only: tilemap::Tileset)=> void
+        // 保存路径的情形）再以 make_state 重建编辑状态
+        func retargetToMap(self: TilemapEditorWindow, context: TilemapContext)=> void
+        {
+            self->retargetWith(func() { return EditorState::create(context); });
+        }
+        func retargetToTileset(self: TilemapEditorWindow,
+            tileset_doc: tilemap::Tileset)=> void
+        {
+            self->retargetWith(func()
+                {
+                    return EditorState::create_tileset_only(tileset_doc);
+                });
+        }
+        func retargetWith(self: TilemapEditorWindow, make_state: ()=> EditorState)=> void
         {
             if (self.m_state.m_dirty && !self.m_close)
             {
@@ -209,23 +222,16 @@ namespace JEEditor::Editor::TilemapEditor
                         {
                             do try_save_then(editor.m_state, func()
                                 {
-                                    editor->applyRetarget(context, tileset_only);
+                                    editor.m_state = make_state();
                                 });
                         })
                     ->onNo(func()
                         {
-                            editor->applyRetarget(context, tileset_only);
+                            editor.m_state = make_state();
                         });
                 return;
             }
-            self->applyRetarget(context, tileset_only);
-        }
-        func applyRetarget(self: TilemapEditorWindow,
-            context: TilemapContext, tileset_only: tilemap::Tileset)=> void
-        {
-            self.m_state = tileset_only->valid()
-                ? EditorState::create_tileset_only(tileset_only)
-                | EditorState::create(context);
+            self.m_state = make_state();
         }
 
         public func onCreate(self: TilemapEditorWindow)=> void
@@ -238,7 +244,7 @@ namespace JEEditor::Editor::TilemapEditor
         }
         public func getTitle(self: TilemapEditorWindow)=> string
         {
-            return self.m_state.m_tileset_only->valid() ? "瓦片图集编辑器" | "瓦片地图编辑器";
+            return self.m_state.m_tileset_only->is_value ? "瓦片图集编辑器" | "瓦片地图编辑器";
         }
         public func getSizeConstraints(_: TilemapEditorWindow)=> SizeConstraints
         {
@@ -316,7 +322,7 @@ namespace JEEditor::Editor::TilemapEditor
 
         public func run(self: TilemapEditorWindow)=> bool
         {
-            do render_main(self.m_state, self.m_state.m_context);
+            do render_main(self.m_state);
             return !self.m_close;
         }
     }

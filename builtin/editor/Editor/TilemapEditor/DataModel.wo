@@ -1,7 +1,7 @@
 // 瓦片地图编辑器 —— 文档模型。
 // TilemapContext 包装 je::tilemap 的地图文档句柄与文件路径，并维护
 // "地图引用的图集 -> 已打开图集文档句柄"的解析缓存（图集文档同样由
-// 引擎按路径全局缓存，多地图共享同一实例）。
+// 引擎按路径全局缓存，多地图共享同一实例；打开失败以 none 占位）。
 
 import pkg::std;
 
@@ -17,14 +17,25 @@ using je::tilemap;
 
 namespace JEEditor::Editor::TilemapEditor
 {
+    // 两个图集句柄 option 的相等性（均为 none 视为相等；均有句柄时比较句柄）
+    func same_tileset(a: option<tilemap::Tileset>, b: option<tilemap::Tileset>)=> bool
+    {
+        if (a->is_none != b->is_none)
+            return false;
+        if (a->is_none)
+            return true;
+        return a->unwrap() == b->unwrap();
+    }
+
     public using TilemapContext = struct{
         // .je4tilemap 文件路径（未保存的新地图为空串）
         protected m_path: mut fsys::path_t,
-        // 地图文档句柄（valid() 有效）
+        // 地图文档句柄（构造起恒有效）
         protected m_map: mut tilemap::Tilemap,
 
         // 图集解析缓存：与地图 tilesets 引用表平行的图集文档句柄
-        protected m_tileset_ids: vec<tilemap::Tileset>,
+        //（打开失败的引用以 none 占位）
+        protected m_tileset_ids: vec<option<tilemap::Tileset>>,
         protected m_tileset_paths: vec<string>,
     }
     {
@@ -32,29 +43,37 @@ namespace JEEditor::Editor::TilemapEditor
         public func open(path: fsys::path_t)=> result<TilemapContext, string>
         {
             let path_str = path->to_string;
-            let map = tilemap::Tilemap::open(path_str);
-            if (!map->valid())
-                return result::err(F"无法解析瓦片地图文件：{path_str}");
-            return result::ok(TilemapContext{
-                    m_path = mut path,
-                    m_map = mut map,
-                    m_tileset_ids = []mut,
-                    m_tileset_paths = []mut,
-                });
+            match (tilemap::Tilemap::open(path_str))
+            {
+                none? { return result::err(F"无法解析瓦片地图文件：{path_str}"); }
+                value(map)?
+                {
+                    return result::ok(TilemapContext{
+                            m_path = mut path,
+                            m_map = mut map,
+                            m_tileset_ids = []mut,
+                            m_tileset_paths = []mut,
+                        });
+                }
+            }
         }
 
         // 新建地图文档（未保存，路径为空）
         public func create_new(w: int, h: int, tile_px: int)=> result<TilemapContext, string>
         {
-            let map = tilemap::Tilemap::create(w, h, tile_px);
-            if (!map->valid())
-                return result::err("创建地图文档失败");
-            return result::ok(TilemapContext{
-                    m_path = mut fsys::normalize(""),
-                    m_map = mut map,
-                    m_tileset_ids = []mut,
-                    m_tileset_paths = []mut,
-                });
+            match (tilemap::Tilemap::create(w, h, tile_px))
+            {
+                none? { return result::err("创建地图文档失败"); }
+                value(map)?
+                {
+                    return result::ok(TilemapContext{
+                            m_path = mut fsys::normalize(""),
+                            m_map = mut map,
+                            m_tileset_ids = []mut,
+                            m_tileset_paths = []mut,
+                        });
+                }
+            }
         }
 
         // 保存到指定路径并更新文档登记（保存后各世界按新路径共享）
@@ -86,7 +105,8 @@ namespace JEEditor::Editor::TilemapEditor
                         value(cached)?
                         {
                             if (cur_path != cached
-                                || tilemap::Tileset::open(cur_path) != self.m_tileset_ids[i])
+                                || !same_tileset(tilemap::Tileset::open(cur_path),
+                                    self.m_tileset_ids[i]))
                             {
                                 need_rebuild = true;
                                 break;
@@ -109,11 +129,11 @@ namespace JEEditor::Editor::TilemapEditor
             }
         }
 
-        // 第 idx 个图集的文档句柄（须先 sync_tilesets；无效返回 Tileset::invalid）
-        public func tileset_id(self: TilemapContext, idx: int)=> tilemap::Tileset
+        // 第 idx 个图集的文档句柄（须先 sync_tilesets；越界或打开失败返回 none）
+        public func tileset_id(self: TilemapContext, idx: int)=> option<tilemap::Tileset>
         {
             if (idx < 0 || idx >= self.m_tileset_ids->len)
-                return tilemap::Tileset::invalid;
+                return option::none;
             return self.m_tileset_ids[idx];
         }
     }

@@ -1368,12 +1368,18 @@ JE_API bool je_tilemap_cell_quad(int32_t map, int32_t layer, int32_t x, int32_t 
 // ======================================================================
 WOORT_API woort_api wojeapi_tilemap_open_map(void)
 {
-    return woort_ret_int(je_tilemap_open_map(woort_string(0)));
+    int32_t map = je_tilemap_open_map(woort_string(0));
+    if (map <= 0)
+        return woort_ret_option_none();
+    return woort_ret_option_pointer((void*)(intptr_t)map);
 }
 WOORT_API woort_api wojeapi_tilemap_create_map(void)
 {
-    return woort_ret_int(je_tilemap_create_map(
-        (int32_t)woort_int(0), (int32_t)woort_int(1), (int32_t)woort_int(2)));
+    int32_t map = je_tilemap_create_map(
+        (int32_t)woort_int(0), (int32_t)woort_int(1), (int32_t)woort_int(2));
+    if (map <= 0)
+        return woort_ret_option_none();
+    return woort_ret_option_pointer((void*)(intptr_t)map);
 }
 WOORT_API woort_api wojeapi_tilemap_save_map(void)
 {
@@ -1554,11 +1560,17 @@ WOORT_API woort_api wojeapi_tilemap_find_get(void)
 
 WOORT_API woort_api wojeapi_tilemap_open_tileset(void)
 {
-    return woort_ret_int(je_tilemap_open_tileset(woort_string(0)));
+    int32_t tileset = je_tilemap_open_tileset(woort_string(0));
+    if (tileset <= 0)
+        return woort_ret_option_none();
+    return woort_ret_option_pointer((void*)(intptr_t)tileset);
 }
 WOORT_API woort_api wojeapi_tilemap_create_tileset(void)
 {
-    return woort_ret_int(je_tilemap_create_tileset(woort_string(0)));
+    int32_t tileset = je_tilemap_create_tileset(woort_string(0));
+    if (tileset <= 0)
+        return woort_ret_option_none();
+    return woort_ret_option_pointer((void*)(intptr_t)tileset);
 }
 WOORT_API woort_api wojeapi_tilemap_save_tileset(void)
 {
