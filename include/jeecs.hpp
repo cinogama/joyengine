@@ -4778,9 +4778,9 @@ JE_API bool je_main_script_entry();
 // =============================================================================
 // je_tilemap_* —— 瓦片地图 C API
 // 地图(.je4tilemap)与图集(.je4tileset)文档的读写、瓦片/属性查询与自动图块支持。
-// 文档以 int32 句柄（>0 有效）标识，进程内全局缓存、按路径共享：
-// 编辑器经此修改文档后版本号自增，各世界的 TilemapSystem 下一帧即重建
-// 渲染分片（未保存的修改也会实时同步到世界实例）。
+// 文档以 je_TilemapHandle / je_TilesetHandle 句柄（0 为无效值）标识，进程内
+// 全局缓存、按路径共享：编辑器经此修改文档后版本号自增，各世界的 TilemapSystem
+// 下一帧即重建渲染分片（未保存的修改也会实时同步到世界实例）。
 // 瓦片值编码（网格/笔刷统一使用）：
 //     0            空
 //     v > 0        普通瓦片: (tileset_idx + 1) * 0x100000 + tile_id
@@ -4788,117 +4788,532 @@ JE_API bool je_main_script_entry();
 // 属性取值链：逐格覆盖 -> 瓦片/地形默认值 -> 图集 schema 默认值，均为字符串。
 // =============================================================================
 
+/*
+je_TilemapHandle [类型别名]
+地图文档(.je4tilemap)的句柄，标识全局缓存、按路径共享的地图文档
+    * 0 是无效值
+请参见：
+    je_TilesetHandle
+    je_tilemap_open_map
+*/
+typedef int32_t je_TilemapHandle;
+
+/*
+je_TilesetHandle [类型别名]
+图集文档(.je4tileset)的句柄，标识全局缓存、按路径共享的图集文档
+    * 0 是无效值
+请参见：
+    je_TilemapHandle
+    je_tilemap_open_tileset
+*/
+typedef int32_t je_TilesetHandle;
+
 // ---- 地图文档 ----
-JE_API int32_t je_tilemap_open_map(const char* path);                       // 打开(或取缓存)地图文档，失败返回 0
-JE_API int32_t je_tilemap_create_map(int32_t w, int32_t h, int32_t tile_px);// 新建未保存的地图文档(单图层)，返回句柄
-JE_API bool    je_tilemap_save_map(int32_t map, const char* path);          // 保存为 .je4tilemap 并登记路径
-JE_API void    je_tilemap_reload_map(const char* path);                     // 丢弃缓存中的未保存修改，下次访问从磁盘重读
-JE_API void    je_tilemap_map_size(int32_t map, int32_t* w, int32_t* h, int32_t* tile_px, int32_t* layer_count);
-JE_API const char* je_tilemap_map_path(int32_t map);                        // 文档路径(未保存为空串)
-JE_API uint64_t   je_tilemap_map_version(int32_t map);                      // 修改版本号，随任何编辑自增
-JE_API void    je_tilemap_resize_map(int32_t map, int32_t new_w, int32_t new_h);
+
+/*
+je_tilemap_open_map [基本接口]
+打开（或取进程内缓存）指定路径的地图文档，返回其句柄
+    * 路径不存在或无法解析时返回 0
+请参见：
+    je_TilemapHandle
+*/
+JE_API je_TilemapHandle je_tilemap_open_map(const char* path);
+
+/*
+je_tilemap_create_map [基本接口]
+新建一个未保存的地图文档（单图层），返回其句柄
+    * 尺寸不合法（<=0 或超过 65536）时返回 0
+请参见：
+    je_TilemapHandle
+*/
+JE_API je_TilemapHandle je_tilemap_create_map(int32_t w, int32_t h, int32_t tile_px);
+
+/*
+je_tilemap_save_map [基本接口]
+将地图文档保存为 .je4tilemap，并把该路径登记为文档路径
+    * 句柄无效或写出失败返回 false
+*/
+JE_API bool je_tilemap_save_map(je_TilemapHandle map, const char* path);
+
+/*
+je_tilemap_reload_map [基本接口]
+丢弃指定路径地图文档在缓存中的未保存修改，下次访问时从磁盘重读
+*/
+JE_API void je_tilemap_reload_map(const char* path);
+
+/*
+je_tilemap_map_size [基本接口]
+取地图文档的尺寸信息，经出参返回 (宽, 高, 瓦片边长像素, 图层数)
+    * 各出参均可传 nullptr 跳过；句柄无效时写出 0
+*/
+JE_API void je_tilemap_map_size(je_TilemapHandle map,
+    int32_t* w, int32_t* h, int32_t* tile_px, int32_t* layer_count);
+
+/*
+je_tilemap_map_path [基本接口]
+取地图文档的登记路径，未保存（新建后未另存）时返回空串
+*/
+JE_API const char* je_tilemap_map_path(je_TilemapHandle map);
+
+/*
+je_tilemap_map_version [基本接口]
+取地图文档的修改版本号，任何经本组 API 的修改都会使其自增
+*/
+JE_API uint64_t je_tilemap_map_version(je_TilemapHandle map);
+
+/*
+je_tilemap_resize_map [基本接口]
+调整地图文档的网格尺寸，越界格子的逐格属性覆盖将被丢弃
+    * 新尺寸不合法（<=0 或超过 65536）时不做任何修改
+*/
+JE_API void je_tilemap_resize_map(je_TilemapHandle map, int32_t new_w, int32_t new_h);
 
 // ---- 图层 ----
-JE_API int32_t je_tilemap_add_layer(int32_t map, const char* name);         // 返回新图层下标，-1 失败
-JE_API bool    je_tilemap_remove_layer(int32_t map, int32_t layer);
-JE_API bool    je_tilemap_move_layer(int32_t map, int32_t layer, int32_t new_pos);
-JE_API void    je_tilemap_get_layer(int32_t map, int32_t layer,
+
+/*
+je_tilemap_add_layer [基本接口]
+向地图文档末尾追加一个图层，返回新图层下标
+    * 失败（句柄无效）返回 -1
+*/
+JE_API int32_t je_tilemap_add_layer(je_TilemapHandle map, const char* name);
+
+/*
+je_tilemap_remove_layer [基本接口]
+移除指定下标的图层，并重排逐格属性键
+    * 下标越界返回 false
+*/
+JE_API bool je_tilemap_remove_layer(je_TilemapHandle map, int32_t layer);
+
+/*
+je_tilemap_move_layer [基本接口]
+把图层移动到新下标（自动钳制到 [0, 图层数-1]），并重排逐格属性键
+*/
+JE_API bool je_tilemap_move_layer(je_TilemapHandle map, int32_t layer, int32_t new_pos);
+
+/*
+je_tilemap_get_layer [基本接口]
+取指定下标图层的信息，经出参返回 (名称, 是否可见, 是否锁定)
+    * 各出参均可传 nullptr 跳过；下标越界时名称写出空串、其余写出 0
+*/
+JE_API void je_tilemap_get_layer(je_TilemapHandle map, int32_t layer,
     const char** name, int32_t* visible, int32_t* locked);
-JE_API void    je_tilemap_set_layer(int32_t map, int32_t layer,
-    const char* name /*nullptr 保持不变*/, int32_t visible, int32_t locked);
-// 图层的世界 z 偏移（相对地图根实体；不同层须错开以避免深度冲突。
-// 旧格式文件缺省为层下标 0,1,2...）
-JE_API float   je_tilemap_layer_z(int32_t map, int32_t layer);
-JE_API void    je_tilemap_set_layer_z(int32_t map, int32_t layer, float z);
+
+/*
+je_tilemap_set_layer [基本接口]
+修改指定下标图层的名称、可见性与锁定状态
+    * name 传 nullptr 表示保持名称不变
+    * 下标越界时不做任何修改
+*/
+JE_API void je_tilemap_set_layer(je_TilemapHandle map, int32_t layer,
+    const char* name, int32_t visible, int32_t locked);
+
+/*
+je_tilemap_layer_z [基本接口]
+取图层的世界 z 偏移（相对地图根实体；不同层须错开以避免深度冲突，
+旧格式文件缺省为层下标 0,1,2...）
+*/
+JE_API float je_tilemap_layer_z(je_TilemapHandle map, int32_t layer);
+
+/*
+je_tilemap_set_layer_z [基本接口]
+设置图层的世界 z 偏移
+请参见：
+    je_tilemap_layer_z
+*/
+JE_API void je_tilemap_set_layer_z(je_TilemapHandle map, int32_t layer, float z);
 
 // ---- 瓦片读写 ----
-JE_API int32_t je_tilemap_get_tile(int32_t map, int32_t layer, int32_t x, int32_t y);
-JE_API void    je_tilemap_set_tile(int32_t map, int32_t layer, int32_t x, int32_t y, int32_t value);
-JE_API void    je_tilemap_fill_tiles(int32_t map, int32_t layer,
-    int32_t x, int32_t y, int32_t w, int32_t h, int32_t value);             // 矩形/填充工具的批量写入
+
+/*
+je_tilemap_get_tile [基本接口]
+取指定图层某格的瓦片值（编码见本段说明），越界返回 0（空格值亦为 0）
+*/
+JE_API int32_t je_tilemap_get_tile(je_TilemapHandle map, int32_t layer,
+    int32_t x, int32_t y);
+
+/*
+je_tilemap_set_tile [基本接口]
+设置指定图层某格的瓦片值（编码见本段说明）
+*/
+JE_API void je_tilemap_set_tile(je_TilemapHandle map, int32_t layer,
+    int32_t x, int32_t y, int32_t value);
+
+/*
+je_tilemap_fill_tiles [基本接口]
+把矩形区域内的格子批量设为同一瓦片值，供矩形/填充工具使用
+    * 自动跳过越界格子；无实际变化时不自增版本号
+*/
+JE_API void je_tilemap_fill_tiles(je_TilemapHandle map, int32_t layer,
+    int32_t x, int32_t y, int32_t w, int32_t h, int32_t value);
 
 // ---- 地图引用的图集 ----
-JE_API int32_t je_tilemap_tileset_count(int32_t map);
-JE_API int32_t je_tilemap_add_tileset(int32_t map, const char* path);       // 返回图集下标，-1 失败
-JE_API bool    je_tilemap_remove_tileset(int32_t map, int32_t idx);
-JE_API const char* je_tilemap_tileset_path(int32_t map, int32_t idx);
+
+/*
+je_tilemap_tileset_count [基本接口]
+取地图文档引用的图集数量
+*/
+JE_API int32_t je_tilemap_tileset_count(je_TilemapHandle map);
+
+/*
+je_tilemap_add_tileset [基本接口]
+向地图文档登记一个图集引用，返回图集下标；已引用同一路径时直接返回其下标
+    * 失败（句柄无效或路径为空）返回 -1
+    * 不要求图集此刻可解析，可先引用后保存图集
+*/
+JE_API int32_t je_tilemap_add_tileset(je_TilemapHandle map, const char* path);
+
+/*
+je_tilemap_remove_tileset [基本接口]
+移除地图文档对指定下标图集的引用，并清除引用该图集的所有格子
+*/
+JE_API bool je_tilemap_remove_tileset(je_TilemapHandle map, int32_t idx);
+
+/*
+je_tilemap_tileset_path [基本接口]
+取地图文档引用的指定下标图集的路径，下标越界返回空串
+*/
+JE_API const char* je_tilemap_tileset_path(je_TilemapHandle map, int32_t idx);
 
 // ---- 属性与查询 ----
-JE_API void    je_tilemap_set_cell_property(int32_t map, int32_t layer,
-    int32_t x, int32_t y, const char* name, const char* value /*nullptr 清除覆盖*/);
-JE_API const char* je_tilemap_get_cell_property(int32_t map, int32_t layer,
-    int32_t x, int32_t y, const char* name);                                // 仅逐格覆盖，无覆盖返回 nullptr
-JE_API const char* je_tilemap_get_property(int32_t map, int32_t layer,
-    int32_t x, int32_t y, const char* name);                                // 按取值链解析，无值返回 nullptr
-JE_API int32_t je_tilemap_is_walkable(int32_t map, int32_t x, int32_t y);   // 全图层合并通行性，出界视为不可通行
-JE_API int32_t je_tilemap_is_walkable_on(int32_t map, int32_t layer, int32_t x, int32_t y);
-// 按属性值查找格子：layer<0 搜索全部图层；name="walkable" 时按通行性匹配
-// (value 为 "true"/"false")；结果按文档缓存于注册表，经 je_tilemap_find_get 逐个取出。
-JE_API int32_t je_tilemap_find_cells(int32_t map, int32_t layer, const char* name, const char* value);
-JE_API bool    je_tilemap_find_get(int32_t map, int32_t index, int32_t* x, int32_t* y);
+
+/*
+je_tilemap_set_cell_property [基本接口]
+设置某格的属性逐格覆盖值
+    * value 传 nullptr 表示清除该格此属性的覆盖
+*/
+JE_API void je_tilemap_set_cell_property(je_TilemapHandle map, int32_t layer,
+    int32_t x, int32_t y, const char* name, const char* value);
+
+/*
+je_tilemap_get_cell_property [基本接口]
+取某格的属性逐格覆盖值，不沿取值链解析
+    * 无覆盖返回 nullptr
+请参见：
+    je_tilemap_get_property
+*/
+JE_API const char* je_tilemap_get_cell_property(je_TilemapHandle map, int32_t layer,
+    int32_t x, int32_t y, const char* name);
+
+/*
+je_tilemap_get_property [基本接口]
+按取值链（逐格覆盖 -> 瓦片/地形默认值 -> 图集 schema 默认值）解析某格属性
+    * 无值返回 nullptr
+*/
+JE_API const char* je_tilemap_get_property(je_TilemapHandle map, int32_t layer,
+    int32_t x, int32_t y, const char* name);
+
+/*
+je_tilemap_is_walkable [基本接口]
+取某格全图层合并的通行性（任一图层不可通行即不可通行），出界视为不可通行
+    * 返回 1/0
+*/
+JE_API int32_t je_tilemap_is_walkable(je_TilemapHandle map, int32_t x, int32_t y);
+
+/*
+je_tilemap_is_walkable_on [基本接口]
+取某格在指定图层上的通行性
+    * 返回 1/0
+请参见：
+    je_tilemap_is_walkable
+*/
+JE_API int32_t je_tilemap_is_walkable_on(je_TilemapHandle map, int32_t layer,
+    int32_t x, int32_t y);
+
+/*
+je_tilemap_find_cells [基本接口]
+按属性值查找格子，返回命中数量；结果按文档缓存，经 je_tilemap_find_get 逐个取出
+    * layer < 0 时搜索全部图层
+    * name 为 "walkable" 时按通行性匹配，value 取 "true"/"false"
+请参见：
+    je_tilemap_find_get
+*/
+JE_API int32_t je_tilemap_find_cells(je_TilemapHandle map, int32_t layer,
+    const char* name, const char* value);
+
+/*
+je_tilemap_find_get [基本接口]
+取出 je_tilemap_find_cells 结果中第 index 个格子，经出参返回其 (x, y)
+    * 越界返回 false
+请参见：
+    je_tilemap_find_cells
+*/
+JE_API bool je_tilemap_find_get(je_TilemapHandle map, int32_t index, int32_t* x, int32_t* y);
 
 // ---- 图集文档(.je4tileset) ----
-JE_API int32_t je_tilemap_open_tileset(const char* path);
-JE_API int32_t je_tilemap_create_tileset(const char* name);
-JE_API bool    je_tilemap_save_tileset(int32_t tileset, const char* path);
-JE_API void    je_tilemap_reload_tileset(const char* path);
-JE_API uint64_t je_tilemap_tileset_version(int32_t tileset);
-JE_API const char* je_tilemap_tileset_doc_path(int32_t tileset);
-JE_API void    je_tilemap_tileset_set_name(int32_t tileset, const char* name);
-JE_API const char* je_tilemap_tileset_name(int32_t tileset);
 
-// 图集源纹理：tile_px 为瓦片边长(像素)，网格数由纹理尺寸推得
-JE_API int32_t je_tilemap_add_source(int32_t tileset, const char* texture_path, int32_t tile_px);
-JE_API bool    je_tilemap_remove_source(int32_t tileset, int32_t source_idx);
-JE_API int32_t je_tilemap_source_count(int32_t tileset);
-JE_API bool    je_tilemap_source_info(int32_t tileset, int32_t source_idx,
+/*
+je_tilemap_open_tileset [基本接口]
+打开（或取进程内缓存）指定路径的图集文档，返回其句柄
+    * 路径不存在或无法解析时返回 0
+请参见：
+    je_TilesetHandle
+*/
+JE_API je_TilesetHandle je_tilemap_open_tileset(const char* path);
+
+/*
+je_tilemap_create_tileset [基本接口]
+新建一个未保存的图集文档，返回其句柄
+请参见：
+    je_TilesetHandle
+*/
+JE_API je_TilesetHandle je_tilemap_create_tileset(const char* name);
+
+/*
+je_tilemap_save_tileset [基本接口]
+将图集文档保存为 .je4tileset，并把该路径登记为文档路径
+*/
+JE_API bool je_tilemap_save_tileset(je_TilesetHandle tileset, const char* path);
+
+/*
+je_tilemap_reload_tileset [基本接口]
+丢弃指定路径图集文档在缓存中的未保存修改，下次访问时从磁盘重读
+*/
+JE_API void je_tilemap_reload_tileset(const char* path);
+
+/*
+je_tilemap_tileset_version [基本接口]
+取图集文档的修改版本号，任何经本组 API 的修改都会使其自增
+*/
+JE_API uint64_t je_tilemap_tileset_version(je_TilesetHandle tileset);
+
+/*
+je_tilemap_tileset_doc_path [基本接口]
+取图集文档的登记路径，未保存时返回空串
+*/
+JE_API const char* je_tilemap_tileset_doc_path(je_TilesetHandle tileset);
+
+/*
+je_tilemap_tileset_set_name [基本接口]
+设置图集文档的名称
+*/
+JE_API void je_tilemap_tileset_set_name(je_TilesetHandle tileset, const char* name);
+
+/*
+je_tilemap_tileset_name [基本接口]
+取图集文档的名称
+*/
+JE_API const char* je_tilemap_tileset_name(je_TilesetHandle tileset);
+
+// ---- 图集源纹理 ----
+
+/*
+je_tilemap_add_source [基本接口]
+向图集文档添加源纹理，tile_px 为瓦片边长（像素），网格数由纹理尺寸推得，
+返回源下标
+    * 已有同路径源时直接返回其下标；失败（纹理无法加载或 tile_px 不合法）返回 -1
+*/
+JE_API int32_t je_tilemap_add_source(je_TilesetHandle tileset,
+    const char* texture_path, int32_t tile_px);
+
+/*
+je_tilemap_remove_source [基本接口]
+移除指定下标的源纹理：引用该源的瓦片/地形被标记失效，其余源下标前移
+*/
+JE_API bool je_tilemap_remove_source(je_TilesetHandle tileset, int32_t source_idx);
+
+/*
+je_tilemap_source_count [基本接口]
+取图集文档的源纹理数量
+*/
+JE_API int32_t je_tilemap_source_count(je_TilesetHandle tileset);
+
+/*
+je_tilemap_source_info [基本接口]
+取指定下标源纹理的信息，经出参返回 (纹理路径, 瓦片边长, 横向格数, 纵向格数)
+    * 下标越界返回 false
+*/
+JE_API bool je_tilemap_source_info(je_TilesetHandle tileset, int32_t source_idx,
     const char** texture_path, int32_t* tile_px, int32_t* xcount, int32_t* ycount);
 
-// 普通瓦片表：tile_id 从 1 开始
-JE_API int32_t je_tilemap_add_tile(int32_t tileset, int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable);
-JE_API bool    je_tilemap_remove_tile(int32_t tileset, int32_t tile_id);
-JE_API int32_t je_tilemap_tile_count(int32_t tileset);
-JE_API bool    je_tilemap_tile_info(int32_t tileset, int32_t tile_id,
-    int32_t* source_idx, int32_t* ix, int32_t* iy, int32_t* walkable);
-JE_API void    je_tilemap_set_tile_walkable(int32_t tileset, int32_t tile_id, int32_t walkable);
+// ---- 普通瓦片表 ----
 
-// 自动图块地形：kind 0=单块(取锚点整块) 1=RPGMaker XP式四象限(2x3条带)
-//   2=blob47(47变体) 3=RPGMaker VX式四象限(2x3块, 中央十字为内部填充;
-//   孤块取锚点整块; 与 RPG Maker VX Ace 渲染逐像素一致)
-JE_API int32_t je_tilemap_add_terrain(int32_t tileset, const char* name, int32_t kind,
+/*
+je_tilemap_add_tile [基本接口]
+在指定源纹理的 (ix, iy) 格位定义一个普通瓦片，返回瓦片 id（从 1 开始）
+    * 已有同位置瓦片时直接返回其 id；参数不合法返回 0
+*/
+JE_API int32_t je_tilemap_add_tile(je_TilesetHandle tileset,
     int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable);
-JE_API bool    je_tilemap_remove_terrain(int32_t tileset, int32_t terrain_id);
-JE_API int32_t je_tilemap_terrain_count(int32_t tileset);
-JE_API bool    je_tilemap_terrain_info(int32_t tileset, int32_t terrain_id,
+
+/*
+je_tilemap_remove_tile [基本接口]
+按 id 移除普通瓦片：墓碑标记、id 永不复用（地图按 id 引用，不漂移），
+并清除其属性默认值
+    * id 越界或已移除返回 false
+*/
+JE_API bool je_tilemap_remove_tile(je_TilesetHandle tileset, int32_t tile_id);
+
+/*
+je_tilemap_tile_count [基本接口]
+取图集文档中普通瓦片的数量（不含 0 号占位槽）
+*/
+JE_API int32_t je_tilemap_tile_count(je_TilesetHandle tileset);
+
+/*
+je_tilemap_tile_info [基本接口]
+取指定 id 普通瓦片的信息，经出参返回 (源下标, 源内格位 ix/iy, 是否可通行)
+    * id 越界返回 false；已移除的瓦片源下标为 -1
+*/
+JE_API bool je_tilemap_tile_info(je_TilesetHandle tileset, int32_t tile_id,
+    int32_t* source_idx, int32_t* ix, int32_t* iy, int32_t* walkable);
+
+/*
+je_tilemap_set_tile_walkable [基本接口]
+设置指定 id 普通瓦片的默认通行性
+*/
+JE_API void je_tilemap_set_tile_walkable(je_TilesetHandle tileset,
+    int32_t tile_id, int32_t walkable);
+
+// ---- 自动图块地形 ----
+
+/*
+je_tilemap_add_terrain [基本接口]
+定义一个自动图块地形，返回地形 id（从 1 开始）
+    * kind：0=单块(取锚点整块) 1=RPGMaker XP 式四象限(2x3 条带)
+      2=blob47(47 变体) 3=RPGMaker VX 式四象限(2x3 块，中央十字为内部
+      填充；孤块取锚点整块；与 RPG Maker VX Ace 渲染逐像素一致)
+    * 参数不合法返回 0
+*/
+JE_API int32_t je_tilemap_add_terrain(je_TilesetHandle tileset, const char* name,
+    int32_t kind, int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable);
+
+/*
+je_tilemap_remove_terrain [基本接口]
+按 id 移除地形：墓碑标记、id 永不复用（地图按 id 引用，不漂移）
+    * id 越界或已移除返回 false
+*/
+JE_API bool je_tilemap_remove_terrain(je_TilesetHandle tileset, int32_t terrain_id);
+
+/*
+je_tilemap_terrain_count [基本接口]
+取图集文档中地形的数量（不含 0 号占位槽）
+*/
+JE_API int32_t je_tilemap_terrain_count(je_TilesetHandle tileset);
+
+/*
+je_tilemap_terrain_info [基本接口]
+取指定 id 地形的信息，经出参返回 (名称, kind, 源下标, 锚点 ix/iy,
+是否可通行, 显式变体数)
+    * id 越界返回 false
+*/
+JE_API bool je_tilemap_terrain_info(je_TilesetHandle tileset, int32_t terrain_id,
     const char** name, int32_t* kind, int32_t* source_idx, int32_t* ix, int32_t* iy,
     int32_t* walkable, int32_t* variant_count);
-JE_API bool    je_tilemap_set_terrain(int32_t tileset, int32_t terrain_id,
-    const char* name /*nullptr 保持不变*/, int32_t kind,
-    int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable);
-// blob47 显式变体表(普通瓦片 id 列表，按 47 变体序)；空表时按锚点行优先扫描 47 块
-JE_API void    je_tilemap_terrain_clear_variants(int32_t tileset, int32_t terrain_id);
-JE_API bool    je_tilemap_terrain_add_variant(int32_t tileset, int32_t terrain_id, int32_t tile_id);
 
-// 属性 schema 与默认值：type 为类型名字符串("bool"/"int"/"float"/"string"/"vec2"/"vec3"/"vec4")
-JE_API int32_t je_tilemap_add_property(int32_t tileset, const char* name, const char* type, const char* default_value);
-JE_API bool    je_tilemap_remove_property(int32_t tileset, const char* name);
-JE_API int32_t je_tilemap_property_count(int32_t tileset);
-JE_API bool    je_tilemap_property_info(int32_t tileset, int32_t index,
+/*
+je_tilemap_set_terrain [基本接口]
+修改指定 id 地形的定义，kind 语义与参数约束同 je_tilemap_add_terrain
+    * name 传 nullptr 表示保持名称不变
+    * 墓碑槽位不可编辑（防止复活已删除 id 造成旧引用错位），返回 false
+请参见：
+    je_tilemap_add_terrain
+*/
+JE_API bool je_tilemap_set_terrain(je_TilesetHandle tileset, int32_t terrain_id,
+    const char* name, int32_t kind,
+    int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable);
+
+/*
+je_tilemap_terrain_clear_variants [基本接口]
+清空指定地形的 blob47 显式变体表（普通瓦片 id 列表，按 47 变体序）；
+空表时按锚点行优先扫描 47 块
+请参见：
+    je_tilemap_terrain_add_variant
+*/
+JE_API void je_tilemap_terrain_clear_variants(je_TilesetHandle tileset, int32_t terrain_id);
+
+/*
+je_tilemap_terrain_add_variant [基本接口]
+向指定地形的 blob47 显式变体表追加一个普通瓦片 id（按 47 变体序）
+请参见：
+    je_tilemap_terrain_clear_variants
+*/
+JE_API bool je_tilemap_terrain_add_variant(je_TilesetHandle tileset,
+    int32_t terrain_id, int32_t tile_id);
+
+// ---- 属性 schema 与默认值 ----
+
+/*
+je_tilemap_add_property [基本接口]
+向图集 schema 添加属性定义，type 为类型名字符串
+（"bool"/"int"/"float"/"string"/"vec2"/"vec3"/"vec4"），返回属性下标
+    * 重名或参数不合法返回 -1
+*/
+JE_API int32_t je_tilemap_add_property(je_TilesetHandle tileset,
+    const char* name, const char* type, const char* default_value);
+
+/*
+je_tilemap_remove_property [基本接口]
+按名称移除图集 schema 中的属性定义
+*/
+JE_API bool je_tilemap_remove_property(je_TilesetHandle tileset, const char* name);
+
+/*
+je_tilemap_property_count [基本接口]
+取图集 schema 中属性定义的数量
+*/
+JE_API int32_t je_tilemap_property_count(je_TilesetHandle tileset);
+
+/*
+je_tilemap_property_info [基本接口]
+取指定下标属性定义的信息，经出参返回 (名称, 类型名, 默认值)
+    * 下标越界返回 false
+*/
+JE_API bool je_tilemap_property_info(je_TilesetHandle tileset, int32_t index,
     const char** name, const char** type, const char** default_value);
-JE_API void    je_tilemap_set_tile_property(int32_t tileset, int32_t tile_id,
-    const char* name, const char* value /*nullptr 清除*/);
-JE_API const char* je_tilemap_get_tile_property(int32_t tileset, int32_t tile_id, const char* name);
-JE_API void    je_tilemap_set_terrain_property(int32_t tileset, int32_t terrain_id,
-    const char* name, const char* value /*nullptr 清除*/);
-JE_API const char* je_tilemap_get_terrain_property(int32_t tileset, int32_t terrain_id, const char* name);
+
+/*
+je_tilemap_set_tile_property [基本接口]
+设置指定 id 普通瓦片的属性默认值
+    * value 传 nullptr 表示清除该默认值
+*/
+JE_API void je_tilemap_set_tile_property(je_TilesetHandle tileset, int32_t tile_id,
+    const char* name, const char* value);
+
+/*
+je_tilemap_get_tile_property [基本接口]
+取指定 id 普通瓦片的属性默认值
+    * 无值返回 nullptr
+*/
+JE_API const char* je_tilemap_get_tile_property(je_TilesetHandle tileset,
+    int32_t tile_id, const char* name);
+
+/*
+je_tilemap_set_terrain_property [基本接口]
+设置指定 id 地形的属性默认值
+    * value 传 nullptr 表示清除该默认值
+*/
+JE_API void je_tilemap_set_terrain_property(je_TilesetHandle tileset,
+    int32_t terrain_id, const char* name, const char* value);
+
+/*
+je_tilemap_get_terrain_property [基本接口]
+取指定 id 地形的属性默认值
+    * 无值返回 nullptr
+*/
+JE_API const char* je_tilemap_get_terrain_property(je_TilesetHandle tileset,
+    int32_t terrain_id, const char* name);
 
 // ---- 单元格渲染信息（编辑器预览用，与实际渲染一致） ----
-// 某格被拆分为 1 个(普通瓦片/整块地形)或 4 个(四象限地形)子四边形；
-// 先用 je_tilemap_cell_quad_count 取数量，再逐个取回：
-// (源纹理路径, UV 矩形 u0/v0/u1/v1 引擎空间, 目标象限 qx/qy 于 qcols×qcols
-//  网格、自左上角起)。idx 越界或格子为空返回 false。
-JE_API int32_t je_tilemap_cell_quad_count(int32_t map, int32_t layer, int32_t x, int32_t y);
-JE_API bool    je_tilemap_cell_quad(int32_t map, int32_t layer, int32_t x, int32_t y, int32_t idx,
+
+/*
+je_tilemap_cell_quad_count [基本接口]
+取某格渲染子四边形的数量：普通瓦片/整块地形为 1，四象限地形为 4，空格为 0
+请参见：
+    je_tilemap_cell_quad
+*/
+JE_API int32_t je_tilemap_cell_quad_count(je_TilemapHandle map,
+    int32_t layer, int32_t x, int32_t y);
+
+/*
+je_tilemap_cell_quad [基本接口]
+取某格第 idx 个渲染子四边形，经出参返回 (源纹理路径, UV 矩形 u0/v0/u1/v1
+引擎空间, 目标象限 qx/qy 于 qcols×qcols 网格、自左上角起)
+    * idx 越界或格子为空返回 false
+请参见：
+    je_tilemap_cell_quad_count
+*/
+JE_API bool je_tilemap_cell_quad(je_TilemapHandle map, int32_t layer,
+    int32_t x, int32_t y, int32_t idx,
     const char** texture_path,
     float* u0, float* v0, float* u1, float* v1,
     int32_t* qx, int32_t* qy, int32_t* qcols);
