@@ -711,19 +711,20 @@ namespace JEEditor::Editor::TilemapEditor
                     {
                         let name = state.m_new_terrain_name == ""
                             ? "新地形" | state.m_new_terrain_name;
-                        let tid = ts_id->add_terrain(name, state.m_new_terrain_kind,
+                        match (ts_id->add_terrain(name, state.m_new_terrain_kind,
                             state.m_palette_source, snap_x, snap_y,
-                            state.m_new_terrain_walkable ? 1 | 0);
-                        if (tid > 0)
+                            state.m_new_terrain_walkable ? 1 | 0))
                         {
-                            // 保留锚点格选中（与创建前一致，便于继续创建）
-                            let anchor = state.m_palette_cell;
-                            do select_terrain_brush(state, tid);
-                            state.m_palette_cell = anchor;
-                            do CloseCurrentPopup();
+                            value(tid)?
+                            {
+                                // 保留锚点格选中（与创建前一致，便于继续创建）
+                                let anchor = state.m_palette_cell;
+                                do select_terrain_brush(state, tid);
+                                state.m_palette_cell = anchor;
+                                do CloseCurrentPopup();
+                            }
+                            none? do MsgBox::err("创建失败", "无法创建地形（参数无效）");
                         }
-                        else
-                            do MsgBox::err("创建失败", "无法创建地形（参数无效）");
                     }
                     none?;
                 }

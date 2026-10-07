@@ -4808,6 +4808,17 @@ je_TilesetHandle [类型别名]
 */
 typedef int32_t je_TilesetHandle;
 
+/*
+je_TerrainId [类型别名]
+自动图块地形在图集文档内的 id，由 je_tilemap_add_terrain 经 out_id 返回
+    * 从 1 开始，0 是无效值（亦为文档内占位槽的下标）
+    * 按文档内槽位下标分配；墓碑删除后永不复用，跨保存/重载稳定
+请参见：
+    je_TilesetHandle
+    je_tilemap_add_terrain
+*/
+typedef int32_t je_TerrainId;
+
 // ---- 地图文档 ----
 
 /*
@@ -5168,21 +5179,24 @@ JE_API void je_tilemap_set_tile_walkable(je_TilesetHandle tileset,
 
 /*
 je_tilemap_add_terrain [基本接口]
-定义一个自动图块地形，返回地形 id（从 1 开始）
+定义一个自动图块地形，地形 id（je_TerrainId，从 1 开始）经 out_id 返回
     * kind：0=单块(取锚点整块) 1=RPGMaker XP 式四象限(2x3 条带)
       2=blob47(47 变体) 3=RPGMaker VX 式四象限(2x3 块，中央十字为内部
       填充；孤块取锚点整块；与 RPG Maker VX Ace 渲染逐像素一致)
-    * 参数不合法返回 0
+    * 参数不合法返回 false，不写出 id
+请参见：
+    je_TerrainId
 */
-JE_API int32_t je_tilemap_add_terrain(je_TilesetHandle tileset, const char* name,
-    int32_t kind, int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable);
+JE_API bool je_tilemap_add_terrain(je_TilesetHandle tileset, const char* name,
+    int32_t kind, int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable,
+    je_TerrainId* out_id);
 
 /*
 je_tilemap_remove_terrain [基本接口]
 按 id 移除地形：墓碑标记、id 永不复用（地图按 id 引用，不漂移）
     * id 越界或已移除返回 false
 */
-JE_API bool je_tilemap_remove_terrain(je_TilesetHandle tileset, int32_t terrain_id);
+JE_API bool je_tilemap_remove_terrain(je_TilesetHandle tileset, je_TerrainId terrain_id);
 
 /*
 je_tilemap_terrain_count [基本接口]
@@ -5196,7 +5210,7 @@ je_tilemap_terrain_info [基本接口]
 是否可通行, 显式变体数)
     * id 越界返回 false
 */
-JE_API bool je_tilemap_terrain_info(je_TilesetHandle tileset, int32_t terrain_id,
+JE_API bool je_tilemap_terrain_info(je_TilesetHandle tileset, je_TerrainId terrain_id,
     const char** name, int32_t* kind, int32_t* source_idx, int32_t* ix, int32_t* iy,
     int32_t* walkable, int32_t* variant_count);
 
@@ -5208,7 +5222,7 @@ je_tilemap_set_terrain [基本接口]
 请参见：
     je_tilemap_add_terrain
 */
-JE_API bool je_tilemap_set_terrain(je_TilesetHandle tileset, int32_t terrain_id,
+JE_API bool je_tilemap_set_terrain(je_TilesetHandle tileset, je_TerrainId terrain_id,
     const char* name, int32_t kind,
     int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable);
 
@@ -5219,7 +5233,7 @@ je_tilemap_terrain_clear_variants [基本接口]
 请参见：
     je_tilemap_terrain_add_variant
 */
-JE_API void je_tilemap_terrain_clear_variants(je_TilesetHandle tileset, int32_t terrain_id);
+JE_API void je_tilemap_terrain_clear_variants(je_TilesetHandle tileset, je_TerrainId terrain_id);
 
 /*
 je_tilemap_terrain_add_variant [基本接口]
@@ -5228,7 +5242,7 @@ je_tilemap_terrain_add_variant [基本接口]
     je_tilemap_terrain_clear_variants
 */
 JE_API bool je_tilemap_terrain_add_variant(je_TilesetHandle tileset,
-    int32_t terrain_id, int32_t tile_id);
+    je_TerrainId terrain_id, int32_t tile_id);
 
 // ---- 属性 schema 与默认值 ----
 
@@ -5283,7 +5297,7 @@ je_tilemap_set_terrain_property [基本接口]
     * value 传 nullptr 表示清除该默认值
 */
 JE_API void je_tilemap_set_terrain_property(je_TilesetHandle tileset,
-    int32_t terrain_id, const char* name, const char* value);
+    je_TerrainId terrain_id, const char* name, const char* value);
 
 /*
 je_tilemap_get_terrain_property [基本接口]
@@ -5291,7 +5305,7 @@ je_tilemap_get_terrain_property [基本接口]
     * 无值返回 nullptr
 */
 JE_API const char* je_tilemap_get_terrain_property(je_TilesetHandle tileset,
-    int32_t terrain_id, const char* name);
+    je_TerrainId terrain_id, const char* name);
 
 // ---- 单元格渲染信息（编辑器预览用，与实际渲染一致） ----
 

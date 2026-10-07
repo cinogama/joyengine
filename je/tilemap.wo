@@ -307,10 +307,10 @@ namespace je
                 public func set_tile_walkable(self: Tileset, tile_id: int, walkable: int)=> void;
 
             // ==================== 自动图块地形 ====================
-            // kind 取 terrain_kind 枚举值；返回新增地形的 id（>0）
+            // kind 取 terrain_kind 枚举值；返回新增地形的 id（>0，参数无效返回 none）
             extern("libjoyecs", "wojeapi_tilemap_add_terrain")
                 public func add_terrain(self: Tileset, name: string, kind: int,
-                    source_idx: int, ix: int, iy: int, walkable: int)=> int;
+                    source_idx: int, ix: int, iy: int, walkable: int)=> option<int>;
 
             extern("libjoyecs", "wojeapi_tilemap_remove_terrain")
                 public func remove_terrain(self: Tileset, terrain_id: int)=> bool;

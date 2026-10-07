@@ -1118,15 +1118,15 @@ void je_tilemap_set_tile_walkable(je_TilesetHandle tileset, int32_t tile_id, int
 }
 
 // ---------------- 自动图块地形 ----------------
-int32_t je_tilemap_add_terrain(je_TilesetHandle tileset, const char* name, int32_t kind,
-    int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable)
+bool je_tilemap_add_terrain(je_TilesetHandle tileset, const char* name, int32_t kind,
+    int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable, je_TerrainId* out_id)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
     if (doc == nullptr || name == nullptr || kind < 0 || kind > 3
         || source_idx < 0 || source_idx >= (int32_t)doc->sources.size()
         || ix < 0 || iy < 0
         || ix >= doc->sources[source_idx].xcount || iy >= doc->sources[source_idx].ycount)
-        return 0;
+        return false;
     jeecs::Tilemap::TerrainDef t;
     t.name = name;
     t.kind = kind;
@@ -1135,9 +1135,11 @@ int32_t je_tilemap_add_terrain(je_TilesetHandle tileset, const char* name, int32
     t.walkable = walkable != 0;
     doc->terrains.push_back(std::move(t));
     ++doc->version;
-    return (int32_t)doc->terrains.size() - 1;
+    if (out_id != nullptr)
+        *out_id = (int32_t)doc->terrains.size() - 1;
+    return true;
 }
-bool je_tilemap_remove_terrain(je_TilesetHandle tileset, int32_t terrain_id)
+bool je_tilemap_remove_terrain(je_TilesetHandle tileset, je_TerrainId terrain_id)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
     if (doc == nullptr || terrain_id <= 0 || terrain_id >= (int32_t)doc->terrains.size())
@@ -1162,7 +1164,7 @@ int32_t je_tilemap_terrain_count(je_TilesetHandle tileset)
     auto* doc = je_tilemap_ts_doc(tileset);
     return doc ? (int32_t)doc->terrains.size() - 1 : 0;
 }
-bool je_tilemap_terrain_info(je_TilesetHandle tileset, int32_t terrain_id,
+bool je_tilemap_terrain_info(je_TilesetHandle tileset, je_TerrainId terrain_id,
     const char** name, int32_t* kind, int32_t* source_idx, int32_t* ix, int32_t* iy,
     int32_t* walkable, int32_t* variant_count)
 {
@@ -1179,7 +1181,7 @@ bool je_tilemap_terrain_info(je_TilesetHandle tileset, int32_t terrain_id,
     if (variant_count != nullptr) *variant_count = (int32_t)t.variant_tiles.size();
     return true;
 }
-bool je_tilemap_set_terrain(je_TilesetHandle tileset, int32_t terrain_id,
+bool je_tilemap_set_terrain(je_TilesetHandle tileset, je_TerrainId terrain_id,
     const char* name, int32_t kind,
     int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable)
 {
@@ -1202,7 +1204,7 @@ bool je_tilemap_set_terrain(je_TilesetHandle tileset, int32_t terrain_id,
     ++doc->version;
     return true;
 }
-void je_tilemap_terrain_clear_variants(je_TilesetHandle tileset, int32_t terrain_id)
+void je_tilemap_terrain_clear_variants(je_TilesetHandle tileset, je_TerrainId terrain_id)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
     if (doc == nullptr || terrain_id <= 0 || terrain_id >= (int32_t)doc->terrains.size())
@@ -1213,7 +1215,7 @@ void je_tilemap_terrain_clear_variants(je_TilesetHandle tileset, int32_t terrain
         ++doc->version;
     }
 }
-bool je_tilemap_terrain_add_variant(je_TilesetHandle tileset, int32_t terrain_id, int32_t tile_id)
+bool je_tilemap_terrain_add_variant(je_TilesetHandle tileset, je_TerrainId terrain_id, int32_t tile_id)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
     if (doc == nullptr || terrain_id <= 0 || terrain_id >= (int32_t)doc->terrains.size()
@@ -1304,7 +1306,7 @@ const char* je_tilemap_get_tile_property(je_TilesetHandle tileset, int32_t tile_
     auto vit = fnd->second.find(name);
     return vit == fnd->second.end() ? nullptr : vit->second.c_str();
 }
-void je_tilemap_set_terrain_property(je_TilesetHandle tileset, int32_t terrain_id,
+void je_tilemap_set_terrain_property(je_TilesetHandle tileset, je_TerrainId terrain_id,
     const char* name, const char* value)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
@@ -1321,7 +1323,7 @@ void je_tilemap_set_terrain_property(je_TilesetHandle tileset, int32_t terrain_i
     props[name] = value;
     ++doc->version;
 }
-const char* je_tilemap_get_terrain_property(je_TilesetHandle tileset, int32_t terrain_id, const char* name)
+const char* je_tilemap_get_terrain_property(je_TilesetHandle tileset, je_TerrainId terrain_id, const char* name)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
     if (doc == nullptr || terrain_id <= 0 || terrain_id >= (int32_t)doc->terrains.size()
@@ -1677,9 +1679,13 @@ WOORT_API woort_api wojeapi_tilemap_set_tile_walkable(void)
 }
 WOORT_API woort_api wojeapi_tilemap_add_terrain(void)
 {
-    return woort_ret_int(je_tilemap_add_terrain(
+    je_TerrainId id = 0;
+    if (!je_tilemap_add_terrain(
         (int32_t)woort_int(0), woort_string(1), (int32_t)woort_int(2),
-        (int32_t)woort_int(3), (int32_t)woort_int(4), (int32_t)woort_int(5), (int32_t)woort_int(6)));
+        (int32_t)woort_int(3), (int32_t)woort_int(4), (int32_t)woort_int(5),
+        (int32_t)woort_int(6), &id))
+        return woort_ret_option_none();
+    return woort_ret_option_int(id);
 }
 WOORT_API woort_api wojeapi_tilemap_remove_terrain(void)
 {
