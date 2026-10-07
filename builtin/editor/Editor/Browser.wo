@@ -1854,8 +1854,10 @@ namespace JEEditor::Editor
                     
                     Separator();
                     
+                    // 复制 @/ 相对运行时路径，方便粘贴到引擎各处使用；
+                    // 目标在工作路径之外时退回绝对路径（见 ResourcePath）
                     if (MenuItem("复制路径"))
-                        SetClipboardText(sel->to_string());
+                        SetClipboardText(ResourcePath::toRuntimeResourcePath(sel));
                         
                     if (MenuItem("在资源管理器中展示"))
                         revealInSystemExplorer(sel);
