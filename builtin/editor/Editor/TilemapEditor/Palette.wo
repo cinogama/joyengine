@@ -350,19 +350,23 @@ namespace JEEditor::Editor::TilemapEditor
             none? { return option::none; }
             value(pm)?
             {
-                let idx = pm->add_tileset(doc_path);
-                if (idx >= 0)
+                let mut usable = option::none: option<tilemap::Tilemap>;
+                match (pm->add_tileset(doc_path))
                 {
-                    let tv = tilemap::terrain_value(idx, tid);
-                    for (let mut gy = 0; gy < 3; gy += 1)
+                    value(idx)?
                     {
-                        for (let mut gx = 0; gx < 3; gx += 1)
+                        let tv = tilemap::terrain_value(idx, tid);
+                        for (let mut gy = 0; gy < 3; gy += 1)
                         {
-                            do pm->set_tile(0, gx, gy, tv);
+                            for (let mut gx = 0; gx < 3; gx += 1)
+                            {
+                                do pm->set_tile(0, gx, gy, tv);
+                            }
                         }
+                        usable = option::value(pm);
                     }
+                    none?;
                 }
-                let usable = idx >= 0 ? option::value(pm) | option::none;
                 // 即使引用失败也登记（none），避免每帧重试创建
                 do state.m_preview_maps->add((key, usable));
                 return usable;
@@ -601,9 +605,11 @@ namespace JEEditor::Editor::TilemapEditor
             do select_terrain_brush(state, single);
         else
         {
-            let tile_id = ts_id->add_tile(state.m_palette_source, cx, cy, 1);
-            if (tile_id > 0)
-                do select_tile_brush(state, tile_id);
+            match (ts_id->add_tile(state.m_palette_source, cx, cy, 1))
+            {
+                value(tile_id)? do select_tile_brush(state, tile_id);
+                none?;
+            }
         }
         state.m_palette_cell = option::value((cx, cy));
 

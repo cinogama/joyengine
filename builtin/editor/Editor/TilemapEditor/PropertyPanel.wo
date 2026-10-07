@@ -270,13 +270,16 @@ namespace JEEditor::Editor::TilemapEditor
             {
                 if (SelectableSelected(F"{found}##found", false))
                 {
-                    let idx = ctx.m_map->add_tileset(found);
-                    if (idx >= 0)
+                    match (ctx.m_map->add_tileset(found))
                     {
-                        state.m_palette_tileset = idx;
-                        state.m_palette_source = 0;
-                        state.m_dirty = true;
-                        do CloseCurrentPopup();
+                        value(idx)?
+                        {
+                            state.m_palette_tileset = idx;
+                            state.m_palette_source = 0;
+                            state.m_dirty = true;
+                            do CloseCurrentPopup();
+                        }
+                        none?;
                     }
                 }
             }
@@ -288,18 +291,19 @@ namespace JEEditor::Editor::TilemapEditor
             }
             if (Button("按路径引用"))
             {
-                let idx = ctx.m_map->add_tileset(state.m_add_ref_path);
-                if (idx >= 0)
+                match (ctx.m_map->add_tileset(state.m_add_ref_path))
                 {
-                    state.m_palette_tileset = idx;
-                    state.m_palette_source = 0;
-                    state.m_add_ref_path = "";
-                    state.m_dirty = true;
-                    do CloseCurrentPopup();
-                }
-                else
-                    do MsgBox::err("引用失败",
+                    value(idx)?
+                    {
+                        state.m_palette_tileset = idx;
+                        state.m_palette_source = 0;
+                        state.m_add_ref_path = "";
+                        state.m_dirty = true;
+                        do CloseCurrentPopup();
+                    }
+                    none? do MsgBox::err("引用失败",
                         F"无法打开图集 \"{state.m_add_ref_path}\"，请检查路径");
+                }
             }
             SameLine();
             if (Button("取消"))
@@ -352,16 +356,17 @@ namespace JEEditor::Editor::TilemapEditor
         }
         if (Button("添加源纹理"))
         {
-            let idx = ts_id->add_source(
-                state.m_new_source_path, state.m_new_source_tilepx);
-            if (idx >= 0)
+            match (ts_id->add_source(
+                state.m_new_source_path, state.m_new_source_tilepx))
             {
-                state.m_palette_source = idx;
-                state.m_dirty = true;
-            }
-            else
-                do MsgBox::err("添加失败",
+                value(idx)?
+                {
+                    state.m_palette_source = idx;
+                    state.m_dirty = true;
+                }
+                none? do MsgBox::err("添加失败",
                     "无法加载该纹理，请检查路径（如 @/resource/tileset.png）与瓦片像素");
+            }
         }
         do Separator();
 
@@ -538,30 +543,33 @@ namespace JEEditor::Editor::TilemapEditor
                 do Text(F"瓦片 ({cx},{cy}) 默认属性：");
                 if (state.m_palette_source < ts_id->source_count())
                 {
-                    let tile_id = ts_id->add_tile(state.m_palette_source, cx, cy, 1);
-                    if (tile_id > 0)
+                    match (ts_id->add_tile(state.m_palette_source, cx, cy, 1))
                     {
-                        let (_, _, _, wk) = ts_id->tile_info(tile_id);
-                        match (CheckBox("可通行", wk != 0))
+                        value(tile_id)?
                         {
-                            value(b)?
+                            let (_, _, _, wk) = ts_id->tile_info(tile_id);
+                            match (CheckBox("可通行", wk != 0))
                             {
-                                do ts_id->set_tile_walkable(tile_id, b ? 1 | 0);
-                                state.m_dirty = true;
-                            }
-                            none?;
-                        }
-                        for (let mut i = 0; i < pcount; i += 1)
-                        {
-                            let (pname, ptype, _) = ts_id->property_info(i);
-                            let cur = ts_id->get_tile_property(tile_id, pname);
-                            do draw_default_editor(pname, ptype, cur,
-                                func(val)
+                                value(b)?
                                 {
-                                    do ts_id->set_tile_property(tile_id, pname, val);
+                                    do ts_id->set_tile_walkable(tile_id, b ? 1 | 0);
                                     state.m_dirty = true;
-                                });
+                                }
+                                none?;
+                            }
+                            for (let mut i = 0; i < pcount; i += 1)
+                            {
+                                let (pname, ptype, _) = ts_id->property_info(i);
+                                let cur = ts_id->get_tile_property(tile_id, pname);
+                                do draw_default_editor(pname, ptype, cur,
+                                    func(val)
+                                    {
+                                        do ts_id->set_tile_property(tile_id, pname, val);
+                                        state.m_dirty = true;
+                                    });
+                            }
                         }
+                        none?;
                     }
                 }
             }

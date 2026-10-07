@@ -231,11 +231,14 @@ namespace JEEditor::Editor::TilemapEditor
             do InputBox::show("新建图层", "请输入图层名称：", F"图层 {layer_count + 1}")
                 ->then(func(name)
                     {
-                        let idx = ctx.m_map->add_layer(name);
-                        if (idx >= 0)
+                        match (ctx.m_map->add_layer(name))
                         {
-                            state.m_layer = idx;
-                            state.m_dirty = true;
+                            value(idx)?
+                            {
+                                state.m_layer = idx;
+                                state.m_dirty = true;
+                            }
+                            none?;
                         }
                     });
         }

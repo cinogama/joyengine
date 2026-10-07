@@ -71,8 +71,9 @@ namespace je
                 public func resize(self: Tilemap, new_w: int, new_h: int)=> void;
 
             // ==================== 图层 ====================
+            // 返回新增图层的下标（句柄无效返回 none）
             extern("libjoyecs", "wojeapi_tilemap_add_layer")
-                public func add_layer(self: Tilemap, name: string)=> int;
+                public func add_layer(self: Tilemap, name: string)=> option<int>;
 
             extern("libjoyecs", "wojeapi_tilemap_remove_layer")
                 public func remove_layer(self: Tilemap, layer: int)=> bool;
@@ -112,9 +113,9 @@ namespace je
             extern("libjoyecs", "wojeapi_tilemap_tileset_count")
                 public func tileset_count(self: Tilemap)=> int;
 
-            // 返回新增图集的引用下标
+            // 返回新增图集的引用下标（句柄无效或路径为空返回 none）
             extern("libjoyecs", "wojeapi_tilemap_add_tileset")
-                public func add_tileset(self: Tilemap, path: string)=> int;
+                public func add_tileset(self: Tilemap, path: string)=> option<int>;
 
             extern("libjoyecs", "wojeapi_tilemap_remove_tileset")
                 public func remove_tileset(self: Tilemap, idx: int)=> bool;
@@ -273,9 +274,9 @@ namespace je
                 public func name(self: Tileset)=> string;
 
             // ==================== 图集源纹理 ====================
-            // 返回新增源的下标
+            // 返回新增源的下标（纹理无法加载或参数不合法返回 none）
             extern("libjoyecs", "wojeapi_tilemap_add_source")
-                public func add_source(self: Tileset, texture_path: string, tile_px: int)=> int;
+                public func add_source(self: Tileset, texture_path: string, tile_px: int)=> option<int>;
 
             extern("libjoyecs", "wojeapi_tilemap_remove_source")
                 public func remove_source(self: Tileset, source_idx: int)=> bool;
@@ -288,10 +289,10 @@ namespace je
                 public func source_info(self: Tileset, source_idx: int)=> (string, int, int, int);
 
             // ==================== 普通瓦片表 ====================
-            // 返回新增瓦片的 id（>0）
+            // 返回新增瓦片的 id（>0，参数无效返回 none）
             extern("libjoyecs", "wojeapi_tilemap_add_tile")
                 public func add_tile(self: Tileset, source_idx: int,
-                    ix: int, iy: int, walkable: int)=> int;
+                    ix: int, iy: int, walkable: int)=> option<int>;
 
             extern("libjoyecs", "wojeapi_tilemap_remove_tile")
                 public func remove_tile(self: Tileset, tile_id: int)=> bool;
