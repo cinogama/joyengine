@@ -1,6 +1,6 @@
 // 瓦片地图编辑器 —— 地图画布。
 // 以 ImGui 窗口绘制列表渲染全部可见图层（与实际渲染一致：普通瓦片整块、
-// 四象限地形按象限拼合，数据来自 je::tilemap::cell_quad），叠加网格、
+// 四象限地形按象限拼合，数据来自 Tilemap::cell_quad），叠加网格、
 // 悬停高亮与矩形工具预览。滚轮缩放（以鼠标为中心）、中键拖拽平移。
 
 import pkg::std;
@@ -30,7 +30,7 @@ namespace JEEditor::Editor::TilemapEditor
         if (avail[0] < 8. || avail[1] < 8.)
             return;
 
-        let (w, h, tile_px, layer_count) = tilemap::map_size(ctx.m_map);
+        let (w, h, tile_px, layer_count) = ctx.m_map->size();
         let pmin = GetCursorScreenPos();
         let pmax = (pmin[0] + avail[0], pmin[1] + avail[1]);
         let cellpx = tile_px as real * state.m_zoom;
@@ -100,21 +100,21 @@ namespace JEEditor::Editor::TilemapEditor
         {
             for (let mut layer = 0; layer < layer_count; layer += 1)
             {
-                let (_, visible, _) = tilemap::get_layer(ctx.m_map, layer);
+                let (_, visible, _) = ctx.m_map->get_layer(layer);
                 if (visible == 0)
                     continue;
                 for (let mut y = vis_y0; y <= vis_y1; y += 1)
                 {
                     for (let mut x = vis_x0; x <= vis_x1; x += 1)
                     {
-                        let quad_count = tilemap::cell_quad_count(ctx.m_map, layer, x, y);
+                        let quad_count = ctx.m_map->cell_quad_count(layer, x, y);
                         if (quad_count <= 0)
                             continue;
                         let cell_min = (origin[0] + x as real * cellpx, origin[1] + y as real * cellpx);
                         let cell_max = (cell_min[0] + cellpx, cell_min[1] + cellpx);
                         for (let mut q = 0; q < quad_count; q += 1)
                         {
-                            match (tilemap::cell_quad(ctx.m_map, layer, x, y, q))
+                            match (ctx.m_map->cell_quad(layer, x, y, q))
                             {
                                 value((tex_path, u0, v0, u1, v1, qx, qy, qcols))?
                                 {
@@ -243,11 +243,11 @@ namespace JEEditor::Editor::TilemapEditor
     // 视图重置：地图居中并选择合适缩放
     public func reset_view(state: EditorState)=> void
     {
-        let (w, h, _, _) = tilemap::map_size(state.m_context.m_map);
+        let (w, h, _, _) = state.m_context.m_map->size();
         let avail = GetContentRegionAvail();
         if (w <= 0 || h <= 0 || avail[0] <= 0. || avail[1] <= 0.)
             return;
-        let (_, _, tile_px, _) = tilemap::map_size(state.m_context.m_map);
+        let (_, _, tile_px, _) = state.m_context.m_map->size();
         let mut zoom = math::min(
             (avail[0] - 32.) / (w as real * tile_px as real),
             (avail[1] - 32.) / (h as real * tile_px as real));

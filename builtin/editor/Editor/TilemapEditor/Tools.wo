@@ -32,7 +32,7 @@ namespace JEEditor::Editor::TilemapEditor
     // 吸管：取格子值并回填调色板选择
     func apply_eyedropper(state: EditorState, ctx: TilemapContext, x: int, y: int)=> void
     {
-        let v = tilemap::get_tile(ctx.m_map, state.m_layer, x, y);
+        let v = ctx.m_map->get_tile(state.m_layer, x, y);
         if (v == 0)
         {
             state.m_paint = 0;
@@ -42,7 +42,7 @@ namespace JEEditor::Editor::TilemapEditor
         // 回填调色板：图集页签与地形/瓦片高亮
         let (ts_idx, local, is_terrain) = tilemap::decode_value(v);
         do ctx->sync_tilesets();
-        let ts_count = tilemap::tileset_count(ctx.m_map);
+        let ts_count = ctx.m_map->tileset_count();
         if (ts_idx >= 0 && ts_idx < ts_count)
             state.m_palette_tileset = ts_idx;
         if (is_terrain)
@@ -53,9 +53,9 @@ namespace JEEditor::Editor::TilemapEditor
         else
         {
             let ts_id = ctx->tileset_id(ts_idx);
-            if (ts_id > 0)
+            if (ts_id->valid())
             {
-                let (src, ix, iy, _) = tilemap::tile_info(ts_id, local);
+                let (src, ix, iy, _) = ts_id->tile_info(local);
                 state.m_palette_source = src;
                 state.m_palette_cell = option::value((ix, iy));
                 state.m_palette_terrain = option::none;
@@ -93,11 +93,11 @@ namespace JEEditor::Editor::TilemapEditor
     //（支持索引赋值）
     func apply_fill(state: EditorState, ctx: TilemapContext, sx: int, sy: int)=> void
     {
-        let (w, h, _, layer_count) = tilemap::map_size(ctx.m_map);
+        let (w, h, _, layer_count) = ctx.m_map->size();
         let layer = state.m_layer;
         if (sx < 0 || sy < 0 || sx >= w || sy >= h || layer < 0 || layer >= layer_count)
             return;
-        let target = tilemap::get_tile(ctx.m_map, layer, sx, sy);
+        let target = ctx.m_map->get_tile(layer, sx, sy);
         let repl = paint_value(state);
         if (target == repl)
             return;
@@ -115,7 +115,7 @@ namespace JEEditor::Editor::TilemapEditor
                 {
                     let cx = cell % w;
                     let cy = cell / w;
-                    if (tilemap::get_tile(ctx.m_map, layer, cx, cy) == target)
+                    if (ctx.m_map->get_tile(layer, cx, cy) == target)
                     {
                         do state->touch_cell(cx, cy, repl);
                         if (cx > 0 && visited->get(cell - 1)->is_none)

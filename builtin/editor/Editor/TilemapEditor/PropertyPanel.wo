@@ -58,7 +58,7 @@ namespace JEEditor::Editor::TilemapEditor
     {
         if (BeginTabBar("##prop_tabs"))
         {
-            if (state.m_tileset_only == 0)
+            if (!state.m_tileset_only->valid())
             {
                 if (BeginTabItem("格子属性"))
                 {
@@ -91,17 +91,17 @@ namespace JEEditor::Editor::TilemapEditor
                 do Separator();
 
                 // 该格所在瓦片的图集 schema（跨全部引用图集并集展示）
-                let ts_count = tilemap::tileset_count(ctx.m_map);
+                let ts_count = ctx.m_map->tileset_count();
                 let mut shown_any = false;
                 for (let mut tsi = 0; tsi < ts_count; tsi += 1)
                 {
                     let ts_id = ctx->tileset_id(tsi);
-                    if (ts_id <= 0)
+                    if (!ts_id->valid())
                         continue;
-                    let pcount = tilemap::property_count(ts_id);
+                    let pcount = ts_id->property_count();
                     for (let mut pi = 0; pi < pcount; pi += 1)
                     {
-                        let (pname, ptype, _) = tilemap::property_info(ts_id, pi);
+                        let (pname, ptype, _) = ts_id->property_info(pi);
                         if (!shown_any)
                         {
                             do TextDisabled("逐格覆盖（留空 = 用默认值）：");
@@ -115,12 +115,12 @@ namespace JEEditor::Editor::TilemapEditor
                 else
                 {
                     do Separator();
-                    let v = tilemap::get_tile(ctx.m_map, state.m_layer, x, y);
+                    let v = ctx.m_map->get_tile(state.m_layer, x, y);
                     if (v == 0)
                         do TextDisabled("空格子");
                     else
                     {
-                        let w = tilemap::walkable(ctx.m_map, x, y);
+                        let w = ctx.m_map->walkable(x, y);
                         do Text(w ? "通行性：可通行" | "通行性：不可通行");
                     }
                 }
@@ -134,8 +134,8 @@ namespace JEEditor::Editor::TilemapEditor
     {
         let doc_id = ctx.m_map;
         let layer = state.m_layer;
-        let override = tilemap::get_cell_property(doc_id, layer, x, y, name);
-        let resolved = tilemap::get_property(doc_id, layer, x, y, name);
+        let override = doc_id->get_cell_property(layer, x, y, name);
+        let resolved = doc_id->get_property(layer, x, y, name);
 
         match (override)
         {
@@ -150,7 +150,7 @@ namespace JEEditor::Editor::TilemapEditor
                         value(r)? { init_val = r; }
                         none?;
                     }
-                    do tilemap::set_cell_property(doc_id, layer, x, y, name,
+                    do doc_id->set_cell_property(layer, x, y, name,
                         option::value(init_val));
                     state.m_dirty = true;
                 }
@@ -164,7 +164,7 @@ namespace JEEditor::Editor::TilemapEditor
                 SameLine();
                 if (Button(F"清除##ov_{name}"))
                 {
-                    do tilemap::set_cell_property(doc_id, layer, x, y, name, option::none);
+                    do doc_id->set_cell_property(layer, x, y, name, option::none);
                     state.m_dirty = true;
                 }
                 SameLine();
@@ -176,7 +176,7 @@ namespace JEEditor::Editor::TilemapEditor
                     {
                         value(b)?
                         {
-                            do tilemap::set_cell_property(doc_id, layer, x, y, name,
+                            do doc_id->set_cell_property(layer, x, y, name,
                                 option::value(b ? "true" | "false"));
                             state.m_dirty = true;
                         }
@@ -189,7 +189,7 @@ namespace JEEditor::Editor::TilemapEditor
                     {
                         value(s)?
                         {
-                            do tilemap::set_cell_property(doc_id, layer, x, y, name,
+                            do doc_id->set_cell_property(layer, x, y, name,
                                 option::value(s));
                             state.m_dirty = true;
                         }
@@ -203,7 +203,7 @@ namespace JEEditor::Editor::TilemapEditor
     // ---- 图集设置入口：地图模式只管理引用；图集内容编辑在图集编辑器 ----
     public func draw_tileset_settings(state: EditorState, ctx: TilemapContext)=> void
     {
-        if (state.m_tileset_only == 0)
+        if (!state.m_tileset_only->valid())
         {
             do draw_tileset_references(state, ctx);
             do Separator();
@@ -222,18 +222,18 @@ namespace JEEditor::Editor::TilemapEditor
     func draw_tileset_references(state: EditorState, ctx: TilemapContext)=> void
     {
         do Text("引用的图集：");
-        let ref_count = tilemap::tileset_count(ctx.m_map);
+        let ref_count = ctx.m_map->tileset_count();
         if (ref_count == 0)
             do TextDisabled("（未引用任何图集，地图无法绘制瓦片）");
         for (let mut i = 0; i < ref_count; i += 1)
         {
-            let ref_path = tilemap::tileset_path(ctx.m_map, i);
+            let ref_path = ctx.m_map->tileset_path(i);
             do PushIDInt(i);
             do Text(F"[{i}] {ref_path}");
             SameLine();
             if (Button("取消引用"))
             {
-                do tilemap::remove_tileset(ctx.m_map, i);
+                do ctx.m_map->remove_tileset(i);
                 state.m_dirty = true;
             }
             do PopID();
@@ -268,7 +268,7 @@ namespace JEEditor::Editor::TilemapEditor
             {
                 if (SelectableSelected(F"{found}##found", false))
                 {
-                    let idx = tilemap::add_tileset(ctx.m_map, found);
+                    let idx = ctx.m_map->add_tileset(found);
                     if (idx >= 0)
                     {
                         state.m_palette_tileset = idx;
@@ -286,7 +286,7 @@ namespace JEEditor::Editor::TilemapEditor
             }
             if (Button("按路径引用"))
             {
-                let idx = tilemap::add_tileset(ctx.m_map, state.m_add_ref_path);
+                let idx = ctx.m_map->add_tileset(state.m_add_ref_path);
                 if (idx >= 0)
                 {
                     state.m_palette_tileset = idx;
@@ -307,15 +307,15 @@ namespace JEEditor::Editor::TilemapEditor
     }
 
     // ---- 图集设置：名称/源纹理/地形/schema/默认值 ----
-    func draw_tileset_content(state: EditorState, ts_id: int)=> void
+    func draw_tileset_content(state: EditorState, ts_id: tilemap::Tileset)=> void
     {
 
         // 名称
-        match (InputText("图集名称", tilemap::tileset_name(ts_id)))
+        match (InputText("图集名称", ts_id->name()))
         {
             value(s)?
             {
-                do tilemap::tileset_set_name(ts_id, s);
+                do ts_id->set_name(s);
                 state.m_dirty = true;
             }
             none?;
@@ -324,16 +324,16 @@ namespace JEEditor::Editor::TilemapEditor
 
         // 源纹理
         do Text("源纹理：");
-        let src_count = tilemap::source_count(ts_id);
+        let src_count = ts_id->source_count();
         for (let mut i = 0; i < src_count; i += 1)
         {
-            let (path, _, xc, yc) = tilemap::source_info(ts_id, i);
+            let (path, _, xc, yc) = ts_id->source_info(i);
             do PushIDInt(i);
             do Text(F"{path}（{xc}×{yc} 格）");
             SameLine();
             if (Button("移除"))
             {
-                do tilemap::remove_source(ts_id, i);
+                do ts_id->remove_source(i);
                 state.m_dirty = true;
             }
             do PopID();
@@ -350,7 +350,7 @@ namespace JEEditor::Editor::TilemapEditor
         }
         if (Button("添加源纹理"))
         {
-            let idx = tilemap::add_source(ts_id,
+            let idx = ts_id->add_source(
                 state.m_new_source_path, state.m_new_source_tilepx);
             if (idx >= 0)
             {
@@ -375,10 +375,10 @@ namespace JEEditor::Editor::TilemapEditor
         do draw_defaults_editing(state, ts_id);
     }
 
-    func draw_terrain_editing(state: EditorState, ts_id: int)=> void
+    func draw_terrain_editing(state: EditorState, ts_id: tilemap::Tileset)=> void
     {
         do Text("自动图块地形：");
-        let terr_total = tilemap::terrain_count(ts_id);
+        let terr_total = ts_id->terrain_count();
         if (terr_total == 0)
         {
             do TextDisabled("（在左侧调色板中新建地形）");
@@ -395,7 +395,7 @@ namespace JEEditor::Editor::TilemapEditor
                     return;
                 }
                 let (tname, kind, src, ix, iy, wk, _) =
-                    tilemap::terrain_info(ts_id, tid);
+                    ts_id->terrain_info(tid);
                 // 已删除（墓碑）地形不可编辑
                 if (kind > 3 || src < 0)
                 {
@@ -407,7 +407,7 @@ namespace JEEditor::Editor::TilemapEditor
                 {
                     value(s)?
                     {
-                        do tilemap::set_terrain(ts_id, tid, s, kind, src, ix, iy, wk != 0 ? 1 | 0);
+                        do ts_id->set_terrain(tid, s, kind, src, ix, iy, wk != 0 ? 1 | 0);
                         state.m_dirty = true;
                     }
                     none?;
@@ -417,7 +417,7 @@ namespace JEEditor::Editor::TilemapEditor
                 {
                     value(k)?
                     {
-                        do tilemap::set_terrain(ts_id, tid, tname, k, src, ix, iy, wk != 0 ? 1 | 0);
+                        do ts_id->set_terrain(tid, tname, k, src, ix, iy, wk != 0 ? 1 | 0);
                         state.m_dirty = true;
                     }
                     none?;
@@ -426,7 +426,7 @@ namespace JEEditor::Editor::TilemapEditor
                 {
                     value((nx, ny))?
                     {
-                        do tilemap::set_terrain(ts_id, tid, tname, kind, src, nx, ny, wk != 0 ? 1 | 0);
+                        do ts_id->set_terrain(tid, tname, kind, src, nx, ny, wk != 0 ? 1 | 0);
                         state.m_dirty = true;
                     }
                     none?;
@@ -435,7 +435,7 @@ namespace JEEditor::Editor::TilemapEditor
                 {
                     value(b)?
                     {
-                        do tilemap::set_terrain(ts_id, tid, tname, kind, src, ix, iy, b ? 1 | 0);
+                        do ts_id->set_terrain(tid, tname, kind, src, ix, iy, b ? 1 | 0);
                         state.m_dirty = true;
                     }
                     none?;
@@ -443,7 +443,7 @@ namespace JEEditor::Editor::TilemapEditor
                 SameLine();
                 if (Button("删除地形"))
                 {
-                    do tilemap::remove_terrain(ts_id, tid);
+                    do ts_id->remove_terrain(tid);
                     state.m_palette_terrain = option::none;
                     state.m_dirty = true;
                 }
@@ -454,19 +454,19 @@ namespace JEEditor::Editor::TilemapEditor
         }
     }
 
-    func draw_schema_editing(state: EditorState, ts_id: int)=> void
+    func draw_schema_editing(state: EditorState, ts_id: tilemap::Tileset)=> void
     {
         do Text("属性 schema（作用于整个图集）：");
-        let pcount = tilemap::property_count(ts_id);
+        let pcount = ts_id->property_count();
         for (let mut i = 0; i < pcount; i += 1)
         {
-            let (pname, ptype, pdefault) = tilemap::property_info(ts_id, i);
+            let (pname, ptype, pdefault) = ts_id->property_info(i);
             do PushIDInt(i);
             do Text(F"{pname} : {ptype} = {pdefault}");
             SameLine();
             if (Button("删除"))
             {
-                do tilemap::remove_property(ts_id, pname);
+                do ts_id->remove_property(pname);
                 state.m_dirty = true;
             }
             do PopID();
@@ -486,7 +486,7 @@ namespace JEEditor::Editor::TilemapEditor
             if (state.m_new_prop_name != "")
             {
                 let tname = PROPERTY_TYPE_NAMES[state.m_new_prop_type];
-                if (tilemap::add_property(ts_id, state.m_new_prop_name, tname,
+                if (ts_id->add_property(state.m_new_prop_name, tname,
                         property_type_default(tname)) >= 0)
                 {
                     state.m_new_prop_name = "";
@@ -498,9 +498,9 @@ namespace JEEditor::Editor::TilemapEditor
         }
     }
 
-    func draw_defaults_editing(state: EditorState, ts_id: int)=> void
+    func draw_defaults_editing(state: EditorState, ts_id: tilemap::Tileset)=> void
     {
-        let pcount = tilemap::property_count(ts_id);
+        let pcount = ts_id->property_count();
         if (pcount == 0)
             return;
 
@@ -512,12 +512,12 @@ namespace JEEditor::Editor::TilemapEditor
                 do Text(F"地形 #{tid} 默认属性：");
                 for (let mut i = 0; i < pcount; i += 1)
                 {
-                    let (pname, ptype, _) = tilemap::property_info(ts_id, i);
-                    let cur = tilemap::get_terrain_property(ts_id, tid, pname);
+                    let (pname, ptype, _) = ts_id->property_info(i);
+                    let cur = ts_id->get_terrain_property(tid, pname);
                     do draw_default_editor(pname, ptype, cur,
                         func(val)
                         {
-                            do tilemap::set_terrain_property(ts_id, tid, pname, val);
+                            do ts_id->set_terrain_property(tid, pname, val);
                             state.m_dirty = true;
                         });
                 }
@@ -532,29 +532,29 @@ namespace JEEditor::Editor::TilemapEditor
             value((cx, cy))?
             {
                 do Text(F"瓦片 ({cx},{cy}) 默认属性：");
-                if (state.m_palette_source < tilemap::source_count(ts_id))
+                if (state.m_palette_source < ts_id->source_count())
                 {
-                    let tile_id = tilemap::add_tile(ts_id, state.m_palette_source, cx, cy, 1);
+                    let tile_id = ts_id->add_tile(state.m_palette_source, cx, cy, 1);
                     if (tile_id > 0)
                     {
-                        let (_, _, _, wk) = tilemap::tile_info(ts_id, tile_id);
+                        let (_, _, _, wk) = ts_id->tile_info(tile_id);
                         match (CheckBox("可通行", wk != 0))
                         {
                             value(b)?
                             {
-                                do tilemap::set_tile_walkable(ts_id, tile_id, b ? 1 | 0);
+                                do ts_id->set_tile_walkable(tile_id, b ? 1 | 0);
                                 state.m_dirty = true;
                             }
                             none?;
                         }
                         for (let mut i = 0; i < pcount; i += 1)
                         {
-                            let (pname, ptype, _) = tilemap::property_info(ts_id, i);
-                            let cur = tilemap::get_tile_property(ts_id, tile_id, pname);
+                            let (pname, ptype, _) = ts_id->property_info(i);
+                            let cur = ts_id->get_tile_property(tile_id, pname);
                             do draw_default_editor(pname, ptype, cur,
                                 func(val)
                                 {
-                                    do tilemap::set_tile_property(ts_id, tile_id, pname, val);
+                                    do ts_id->set_tile_property(tile_id, pname, val);
                                     state.m_dirty = true;
                                 });
                         }

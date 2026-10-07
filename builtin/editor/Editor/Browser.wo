@@ -829,8 +829,8 @@ namespace JEEditor::Editor
 
             func writeTo(dst: path_t)=> void
             {
-                let map = tilemap::create_map(32, 32, 32);
-                if (map > 0 && tilemap::save_map(map, dst->to_string()))
+                let map = tilemap::Tilemap::create(32, 32, 32);
+                if (map->valid() && map->save(dst->to_string()))
                 {
                     dirty->set(true);
                     let path_str = dst->to_string();
@@ -879,8 +879,8 @@ namespace JEEditor::Editor
 
             func writeTo(dst: path_t)=> void
             {
-                let ts = tilemap::create_tileset("新建图集");
-                if (ts > 0 && tilemap::save_tileset(ts, dst->to_string()))
+                let ts = tilemap::Tileset::create("新建图集");
+                if (ts->valid() && ts->save(dst->to_string()))
                 {
                     dirty->set(true);
                     let path_str = dst->to_string();

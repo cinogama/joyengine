@@ -80,7 +80,7 @@ namespace JEEditor::Editor::TilemapEditor
     public using EditorState = struct{
         protected m_context: TilemapContext,
         // TILESET 模式：直接编辑单个图集文档（无画布/图层）
-        protected m_tileset_only: mut int,   // 图集文档句柄（0=地图模式）
+        protected m_tileset_only: mut tilemap::Tileset,   // 图集文档句柄（invalid=地图模式）
 
         // ===== 工具与画笔 =====
         protected m_tool: mut tool,
@@ -131,27 +131,27 @@ namespace JEEditor::Editor::TilemapEditor
 
         // ===== 地形连接预览（每个自动图块地形一张隐藏 3x3 预览地图） =====
         // 键 = "图集路径#地形id"，值 = 预览地图句柄
-        protected m_preview_maps: vec<(string, int)>,
+        protected m_preview_maps: vec<(string, tilemap::Tilemap)>,
         // 调色板未注册格的双击计时（time, x, y）
         protected m_last_cell_click: mut (real, int, int),
     }
     {
         public func create(context: TilemapContext)=> EditorState
         {
-            return EditorState::create_internal(context, 0);
+            return EditorState::create_internal(context, tilemap::Tileset::invalid);
         }
-        public func create_tileset_only(tileset_doc: int)=> EditorState
+        public func create_tileset_only(tileset_doc: tilemap::Tileset)=> EditorState
         {
             return EditorState::create_internal(
                 TilemapContext{
                     m_path = mut fsys::normalize(""),
-                    m_map = mut 0,
+                    m_map = mut tilemap::Tilemap::invalid,
                     m_tileset_ids = []mut,
                     m_tileset_paths = []mut,
                 },
                 tileset_doc);
         }
-        func create_internal(context: TilemapContext, tileset_only: int)=> EditorState
+        func create_internal(context: TilemapContext, tileset_only: tilemap::Tileset)=> EditorState
         {
             return EditorState{
                 m_context = context,
@@ -236,14 +236,14 @@ namespace JEEditor::Editor::TilemapEditor
         // 记录格子修改前值（首次触碰时快照）并写值
         public func touch_cell(self: EditorState, x: int, y: int, value: int)=> void
         {
-            let (w, _, _, _) = tilemap::map_size(self.m_context.m_map);
+            let (w, _, _, _) = self.m_context.m_map->size();
             let key = x + y * w;
             if (!self.m_stroke_cells->contains(key))
             {
-                self.m_stroke_cells->set(key, tilemap::get_tile(
-                    self.m_context.m_map, self.m_stroke_layer, x, y));
+                self.m_stroke_cells->set(key,
+                    self.m_context.m_map->get_tile(self.m_stroke_layer, x, y));
             }
-            do tilemap::set_tile(self.m_context.m_map, self.m_stroke_layer, x, y, value);
+            do self.m_context.m_map->set_tile(self.m_stroke_layer, x, y, value);
         }
         public func end_stroke(self: EditorState)=> void
         {
@@ -252,7 +252,7 @@ namespace JEEditor::Editor::TilemapEditor
                 self.m_stroke_layer = -1;
                 return;
             }
-            let (w, _, _, _) = tilemap::map_size(self.m_context.m_map);
+            let (w, _, _, _) = self.m_context.m_map->size();
             let map = self.m_context.m_map;
             let layer = self.m_stroke_layer;
             // 捕获修改前/后值并注册撤销命令（闭包按 (key, value) 对恢复）
@@ -261,17 +261,17 @@ namespace JEEditor::Editor::TilemapEditor
             for (let (key, oldv): self.m_stroke_cells)
             {
                 do before->add((key, oldv));
-                do after->add((key, tilemap::get_tile(map, layer, key % w, key / w)));
+                do after->add((key, map->get_tile(layer, key % w, key / w)));
             }
             let desc = self.m_stroke_desc;
             self.m_undo->push(UndoCommand{
                     m_apply = func() {
                         for (let (key, v): after)
-                            do tilemap::set_tile(map, layer, key % w, key / w, v);
+                            do map->set_tile(layer, key % w, key / w, v);
                     },
                     m_undo = func() {
                         for (let (key, v): before)
-                            do tilemap::set_tile(map, layer, key % w, key / w, v);
+                            do map->set_tile(layer, key % w, key / w, v);
                     },
                     m_desc = desc,
                 });

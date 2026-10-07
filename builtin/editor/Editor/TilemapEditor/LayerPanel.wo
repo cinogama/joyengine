@@ -41,12 +41,12 @@ namespace JEEditor::Editor::TilemapEditor
     // 重命名 row 号图层（输入框确认后写回显隐/锁定状态并标记脏）
     func rename_layer(state: EditorState, ctx: TilemapContext, row: int)=> void
     {
-        let (cur_name, _, _) = tilemap::get_layer(ctx.m_map, row);
+        let (cur_name, _, _) = ctx.m_map->get_layer(row);
         do InputBox::show("重命名图层", "请输入新名称：", cur_name)
             ->then(func(name)
                 {
-                    let (_, visible, locked) = tilemap::get_layer(ctx.m_map, row);
-                    do tilemap::set_layer(ctx.m_map, row, name, visible, locked);
+                    let (_, visible, locked) = ctx.m_map->get_layer(row);
+                    do ctx.m_map->set_layer(row, name, visible, locked);
                     state.m_dirty = true;
                 });
     }
@@ -55,7 +55,7 @@ namespace JEEditor::Editor::TilemapEditor
     // 被移动的是活动层时活动层下标跟随
     func shift_layer(state: EditorState, ctx: TilemapContext, row: int, delta: int)=> void
     {
-        if (tilemap::move_layer(ctx.m_map, row, row + delta))
+        if (ctx.m_map->move_layer(row, row + delta))
         {
             if (state.m_layer == row)
                 state.m_layer = row + delta;
@@ -68,18 +68,18 @@ namespace JEEditor::Editor::TilemapEditor
     // 弹窗为模态，确认回调里的 row/layer_count 不会过期
     func delete_layer(state: EditorState, ctx: TilemapContext, row: int)=> void
     {
-        let (_, _, _, layer_count) = tilemap::map_size(ctx.m_map);
+        let (_, _, _, layer_count) = ctx.m_map->size();
         if (layer_count <= 1)
         {
             do MsgBox::err("无法删除", "至少保留一个图层");
             return;
         }
-        let (lname, _, _) = tilemap::get_layer(ctx.m_map, row);
+        let (lname, _, _) = ctx.m_map->get_layer(row);
         do AskBox::show("删除图层",
                 F"确定删除图层「{lname}」吗？删除后无法撤销。")
             ->onYes(func()
                 {
-                    do tilemap::remove_layer(ctx.m_map, row);
+                    do ctx.m_map->remove_layer(row);
                     if (state.m_layer > row)
                         state.m_layer -= 1;
                     if (state.m_layer >= layer_count - 1)
@@ -96,7 +96,7 @@ namespace JEEditor::Editor::TilemapEditor
     func draw_layer_row(state: EditorState, ctx: TilemapContext, row: int)=> void
     {
         let map = ctx.m_map;
-        let (lname, visible, locked) = tilemap::get_layer(map, row);
+        let (lname, visible, locked) = map->get_layer(row);
         let is_active = row == state.m_layer;
         let row_label = F"{lname}##layer{row}";
 
@@ -180,7 +180,7 @@ namespace JEEditor::Editor::TilemapEditor
         SetCursorPos((vis_x, line_y));
         if (ButtonSize(visible != 0 ? F"可见##v{row}" | F"隐藏##v{row}", (vis_w, 0.)))
         {
-            do tilemap::set_layer(map, row, lname, visible != 0 ? 0 | 1, locked);
+            do map->set_layer(row, lname, visible != 0 ? 0 | 1, locked);
             state.m_dirty = true;
         }
 
@@ -190,7 +190,7 @@ namespace JEEditor::Editor::TilemapEditor
                 mixStyleColor(text_c, LOCKED_ACCENT, 0.65, 255));
         if (ButtonSize(locked != 0 ? F"锁定##l{row}" | F"未锁##l{row}", (lock_w, 0.)))
         {
-            do tilemap::set_layer(map, row, lname, visible, locked != 0 ? 0 | 1);
+            do map->set_layer(row, lname, visible, locked != 0 ? 0 | 1);
             state.m_dirty = true;
         }
         if (locked != 0)
@@ -200,11 +200,11 @@ namespace JEEditor::Editor::TilemapEditor
         // 世界 z 偏移（相对地图根实体；不同层错开避免深度冲突）
         SetCursorPos((z_x, line_y));
         SetNextItemWidth(z_w);
-        match (InputFloat(F"Z##z{row}", tilemap::layer_z(map, row)))
+        match (InputFloat(F"Z##z{row}", map->layer_z(row)))
         {
             value(z)?
             {
-                do tilemap::set_layer_z(map, row, z);
+                do map->set_layer_z(row, z);
                 state.m_dirty = true;
             }
             none?;
@@ -223,7 +223,7 @@ namespace JEEditor::Editor::TilemapEditor
     public func draw_layers(state: EditorState, ctx: TilemapContext)=> void
     {
         let map = ctx.m_map;
-        let (_, _, _, layer_count) = tilemap::map_size(map);
+        let (_, _, _, layer_count) = map->size();
 
         // 操作按钮行
         if (Button("+ 新建图层"))
@@ -231,7 +231,7 @@ namespace JEEditor::Editor::TilemapEditor
             do InputBox::show("新建图层", "请输入图层名称：", F"图层 {layer_count + 1}")
                 ->then(func(name)
                     {
-                        let idx = tilemap::add_layer(ctx.m_map, name);
+                        let idx = ctx.m_map->add_layer(name);
                         if (idx >= 0)
                         {
                             state.m_layer = idx;

@@ -63,8 +63,8 @@ namespace JEEditor::Editor::TilemapEditor
 
         // 状态文本
         SameLine();
-        let (w, h, tile_px, layer_count) = tilemap::map_size(ctx.m_map);
-        let (lname, _, _) = tilemap::get_layer(ctx.m_map, state.m_layer);
+        let (w, h, tile_px, layer_count) = ctx.m_map->size();
+        let (lname, _, _) = ctx.m_map->get_layer(state.m_layer);
         do Text(F"{w}×{h} @ {tile_px}px | 图层{state.m_layer + 1}/{layer_count}「{lname}」"
             + (state.m_dirty ? " | 未保存" | ""));
     }
@@ -74,7 +74,7 @@ namespace JEEditor::Editor::TilemapEditor
         let avail = GetContentRegionAvail();
 
         // 图集模式：仅调色板 + 图集设置
-        if (state.m_tileset_only > 0)
+        if (state.m_tileset_only->valid())
         {
             if (BeginChildSize("##tm_left", 380., avail[1]))
                 do draw_palette(state, ctx);

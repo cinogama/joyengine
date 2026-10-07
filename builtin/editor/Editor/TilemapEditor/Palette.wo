@@ -51,7 +51,7 @@ namespace JEEditor::Editor::TilemapEditor
     // 图集编辑模式无地图（画笔不可用），固定 0
     func brush_tileset_index(state: EditorState)=> int
     {
-        return state.m_tileset_only > 0 ? 0 | state.m_palette_tileset;
+        return state.m_tileset_only->valid() ? 0 | state.m_palette_tileset;
     }
 
     // 选定地形为画笔（清除瓦片格选择）
@@ -83,14 +83,14 @@ namespace JEEditor::Editor::TilemapEditor
         return (u0, v0, u1, v1);
     }
 
-    // 调色板当前图集的文档句柄（无图集返回 0）
-    public func palette_tileset_doc(state: EditorState, ctx: TilemapContext)=> int
+    // 调色板当前图集的文档句柄（无图集返回 Tileset::invalid）
+    public func palette_tileset_doc(state: EditorState, ctx: TilemapContext)=> tilemap::Tileset
     {
-        if (state.m_tileset_only > 0)
+        if (state.m_tileset_only->valid())
             return state.m_tileset_only;
-        let count = tilemap::tileset_count(ctx.m_map);
+        let count = ctx.m_map->tileset_count();
         if (state.m_palette_tileset < 0 || state.m_palette_tileset >= count)
-            return 0;
+            return tilemap::Tileset::invalid;
         return ctx->tileset_id(state.m_palette_tileset);
     }
 
@@ -100,17 +100,17 @@ namespace JEEditor::Editor::TilemapEditor
     {
         do ctx->sync_tilesets();
 
-        if (state.m_tileset_only > 0)
+        if (state.m_tileset_only->valid())
         {
             // ===== 图集编辑器：原始图块管理视图（源纹理/地形创建在此进行） =====
             let ts_id = palette_tileset_doc(state, ctx);
-            if (ts_id <= 0)
+            if (!ts_id->valid())
             {
                 do TextDisabled("图集文档不可用");
                 return;
             }
             // ---- 源纹理选择 ----
-            let src_count = tilemap::source_count(ts_id);
+            let src_count = ts_id->source_count();
             if (src_count == 0)
             {
                 do TextDisabled("图集没有源纹理");
@@ -144,7 +144,7 @@ namespace JEEditor::Editor::TilemapEditor
         }
 
         // ===== 地图编辑器：纯地形调色板（RM 式，一个地形一格） =====
-        let ts_count = tilemap::tileset_count(ctx.m_map);
+        let ts_count = ctx.m_map->tileset_count();
         if (ts_count == 0)
         {
             do TextDisabled("地图未引用任何图集");
@@ -167,7 +167,7 @@ namespace JEEditor::Editor::TilemapEditor
         }
 
         let ts_id = palette_tileset_doc(state, ctx);
-        if (ts_id <= 0)
+        if (!ts_id->valid())
         {
             do TextDisabled("图集文档不可用");
             return;
@@ -192,13 +192,13 @@ namespace JEEditor::Editor::TilemapEditor
     }
 
     // 当前选中的画笔是否为自动图块地形（VX/XP/blob）
-    func palette_selected_is_auto(state: EditorState, ts_id: int)=> bool
+    func palette_selected_is_auto(state: EditorState, ts_id: tilemap::Tileset)=> bool
     {
         match (state.m_palette_terrain)
         {
             value(t)?
             {
-                let (_, k, _, _, _, _, _) = tilemap::terrain_info(ts_id, t);
+                let (_, k, _, _, _, _, _) = ts_id->terrain_info(t);
                 return k == 1 || k == 2 || k == 3;
             }
             none? { return false; }
@@ -210,9 +210,9 @@ namespace JEEditor::Editor::TilemapEditor
     // 地图编辑器的地形调色板：一个地形一格（32px 紧排，RM 式）。
     // 图标 = 该地形单独出现时的样式（锚点孤块）。原始图集的查看
     // 与地形创建在图集编辑器中进行。
-    func draw_terrain_cell_palette(state: EditorState, ts_id: int)=> void
+    func draw_terrain_cell_palette(state: EditorState, ts_id: tilemap::Tileset)=> void
     {
-        let total = tilemap::terrain_count(ts_id);
+        let total = ts_id->terrain_count();
         if (total == 0)
         {
             do TextDisabled("图集中没有地形，请在资源浏览器中双击图集文件，");
@@ -223,7 +223,7 @@ namespace JEEditor::Editor::TilemapEditor
         let valid_ids = []mut: vec<int>;
         for (let mut t = 1; t <= total; t += 1)
         {
-            let (_, k, s, _, _, _, _) = tilemap::terrain_info(ts_id, t);
+            let (_, k, s, _, _, _, _) = ts_id->terrain_info(t);
             if (k <= 3 && s >= 0)
                 do valid_ids->add(t);
         }
@@ -256,14 +256,14 @@ namespace JEEditor::Editor::TilemapEditor
             for (let mut c = 0; c < n; c += 1)
             {
                 let tid = valid_ids[slot + c];
-                let (tname, k, s, ix, iy, _, _) = tilemap::terrain_info(ts_id, tid);
+                let (tname, k, s, ix, iy, _, _) = ts_id->terrain_info(tid);
                 let x0 = pos[0] + c as real * cell;
                 let x1 = x0 + cell;
                 // 图标 = 锚点孤块（该地形单独出现在地图中的样式）
                 let mut drawn = false;
-                if (s >= 0 && s < tilemap::source_count(ts_id))
+                if (s >= 0 && s < ts_id->source_count())
                 {
-                    let (tp, tpx, _, _) = tilemap::source_info(ts_id, s);
+                    let (tp, tpx, _, _) = ts_id->source_info(s);
                     match (state->atlas_texture(tp))
                     {
                         value(tex)?
@@ -301,12 +301,12 @@ namespace JEEditor::Editor::TilemapEditor
     // ==================== 地形连接预览 ====================
 
     // 取（或创建）某地形的连接预览地图（3x3 全铺该地形）。
-    // 返回 0 表示不可用（图集尚未保存到磁盘）。
-    func terrain_preview_map(state: EditorState, ts_id: int, tid: int)=> int
+    // 返回 Tilemap::invalid 表示不可用（图集尚未保存到磁盘）。
+    func terrain_preview_map(state: EditorState, ts_id: tilemap::Tileset, tid: int)=> tilemap::Tilemap
     {
-        let doc_path = tilemap::tileset_doc_path(ts_id);
+        let doc_path = ts_id->doc_path();
         if (doc_path == "")
-            return 0;
+            return tilemap::Tilemap::invalid;
         let key = F"{doc_path}#{tid}";
         for (let mut i = 0; i < state.m_preview_maps->len; i += 1)
         {
@@ -320,10 +320,10 @@ namespace JEEditor::Editor::TilemapEditor
                 none?;
             }
         }
-        let pm = tilemap::create_map(3, 3, 32);
-        if (pm <= 0)
-            return 0;
-        let idx = tilemap::add_tileset(pm, doc_path);
+        let pm = tilemap::Tilemap::create(3, 3, 32);
+        if (!pm->valid())
+            return tilemap::Tilemap::invalid;
+        let idx = pm->add_tileset(doc_path);
         if (idx >= 0)
         {
             let tv = tilemap::terrain_value(idx, tid);
@@ -331,19 +331,19 @@ namespace JEEditor::Editor::TilemapEditor
             {
                 for (let mut gx = 0; gx < 3; gx += 1)
                 {
-                    do tilemap::set_tile(pm, 0, gx, gy, tv);
+                    do pm->set_tile(0, gx, gy, tv);
                 }
             }
         }
         // 即使引用失败也登记，避免每帧重试创建
         do state.m_preview_maps->add((key, pm));
-        return idx >= 0 ? pm | 0;
+        return idx >= 0 ? pm | tilemap::Tilemap::invalid;
     }
 
     // 地形连接预览：在隐藏 3x3 地图上铺满该地形并绘制中心区域，
     // 展示"周围都是同类地形"时的实际渲染效果。图集未保存时退化为
     // 锚点瓦片（孤块形态）图标。
-    func draw_terrain_preview(state: EditorState, ts_id: int, tid: int)=> void
+    func draw_terrain_preview(state: EditorState, ts_id: tilemap::Tileset, tid: int)=> void
     {
         let w = 96.;
         let h = 96.;
@@ -353,7 +353,7 @@ namespace JEEditor::Editor::TilemapEditor
         do Dummy((w, h));
         let dl = GetWindowDrawList();
 
-        if (pm > 0)
+        if (pm->valid())
         {
             let cw = w / 3.;
             let ch = h / 3.;
@@ -361,10 +361,10 @@ namespace JEEditor::Editor::TilemapEditor
             {
                 for (let mut gx = 0; gx < 3; gx += 1)
                 {
-                    let qn = tilemap::cell_quad_count(pm, 0, gx, gy);
+                    let qn = pm->cell_quad_count(0, gx, gy);
                     for (let mut q = 0; q < qn; q += 1)
                     {
-                        match (tilemap::cell_quad(pm, 0, gx, gy, q))
+                        match (pm->cell_quad(0, gx, gy, q))
                         {
                             value((tp, u0, v0, u1, v1, qx, qy, qcols))?
                             {
@@ -394,10 +394,10 @@ namespace JEEditor::Editor::TilemapEditor
         }
 
         // 图集未保存：退化为锚点孤块图标
-        let (_, _, src, ix, iy, _, _) = tilemap::terrain_info(ts_id, tid);
-        if (src >= 0 && src < tilemap::source_count(ts_id))
+        let (_, _, src, ix, iy, _, _) = ts_id->terrain_info(tid);
+        if (src >= 0 && src < ts_id->source_count())
         {
-            let (tp, tpx, _, _) = tilemap::source_info(ts_id, src);
+            let (tp, tpx, _, _) = ts_id->source_info(src);
             match (state->atlas_texture(tp))
             {
                 value(tex)?
@@ -415,10 +415,10 @@ namespace JEEditor::Editor::TilemapEditor
     // ==================== 图集模式：源纹理网格视图 ====================
 
     // 源纹理网格视图（贴图 + 网格线 + 已注册地形块覆盖 + 交互选中）
-    func draw_palette_grid(state: EditorState, ts_id: int)=> void
+    func draw_palette_grid(state: EditorState, ts_id: tilemap::Tileset)=> void
     {
         if (state.m_palette_source < 0
-            || state.m_palette_source >= tilemap::source_count(ts_id))
+            || state.m_palette_source >= ts_id->source_count())
             return;
         do Text("单块地形（点击选择绘制）与地形创建：");
         if (Button("+ 新建自动图块（点选图块后双击，或用此按钮）"))
@@ -430,7 +430,7 @@ namespace JEEditor::Editor::TilemapEditor
         }
         do draw_new_terrain_popup(state, ts_id);
         let (tex_path, tile_px, xc, yc) =
-            tilemap::source_info(ts_id, state.m_palette_source);
+            ts_id->source_info(state.m_palette_source);
 
         match (state->atlas_texture(tex_path))
         {
@@ -482,14 +482,14 @@ namespace JEEditor::Editor::TilemapEditor
 
     // 已注册四象限地形块：常驻淡描边，覆盖区变暗（这些格子的绘制由
     // 其所属自动图块接管）
-    func draw_registered_terrain_overlays(state: EditorState, ts_id: int,
+    func draw_registered_terrain_overlays(state: EditorState, ts_id: tilemap::Tileset,
         rect_min: (real, real), cell_px: real)=> void
     {
         let dl = GetWindowDrawList();
-        let total = tilemap::terrain_count(ts_id);
+        let total = ts_id->terrain_count();
         for (let mut t = 1; t <= total; t += 1)
         {
-            let (_, k, s, bx, by, _, _) = tilemap::terrain_info(ts_id, t);
+            let (_, k, s, bx, by, _, _) = ts_id->terrain_info(t);
             if (s == state.m_palette_source && (k == 1 || k == 3))
             {
                 let x0 = rect_min[0] + bx as real * cell_px;
@@ -504,13 +504,13 @@ namespace JEEditor::Editor::TilemapEditor
 
     // 命中测试：某源纹理网格格是否落在已注册的四象限地形块（2x3）内。
     // 返回地形 id（0 = 未命中）
-    func palette_terrain_at(ts_id: int, source: int, cx: int, cy: int)=> int
+    func palette_terrain_at(ts_id: tilemap::Tileset, source: int, cx: int, cy: int)=> int
     {
         let mut hit = 0;
-        let total = tilemap::terrain_count(ts_id);
+        let total = ts_id->terrain_count();
         for (let mut t = 1; t <= total; t += 1)
         {
-            let (_, k, s, bx, by, _, _) = tilemap::terrain_info(ts_id, t);
+            let (_, k, s, bx, by, _, _) = ts_id->terrain_info(t);
             if (s == source && (k == 1 || k == 3)
                 && cx >= bx && cx < bx + 2 && cy >= by && cy < by + 3)
                 hit = t;
@@ -520,7 +520,7 @@ namespace JEEditor::Editor::TilemapEditor
 
     // 悬停处理：命中已注册地形块时整块高亮（RM 式整块感知，点击选
     // 地形画笔）；否则单格高亮，点击选瓦片画笔（双击新建地形）
-    func handle_atlas_hover(state: EditorState, ts_id: int,
+    func handle_atlas_hover(state: EditorState, ts_id: tilemap::Tileset,
         rect_min: (real, real), cell_px: real, xc: int, yc: int)=> void
     {
         let mouse = GetMousePos();
@@ -533,7 +533,7 @@ namespace JEEditor::Editor::TilemapEditor
         let hit_tid = palette_terrain_at(ts_id, state.m_palette_source, cx, cy);
         if (hit_tid > 0)
         {
-            let (hit_name, hit_kind, _, bx, by, _, _) = tilemap::terrain_info(ts_id, hit_tid);
+            let (hit_name, hit_kind, _, bx, by, _, _) = ts_id->terrain_info(hit_tid);
             let bx0 = rect_min[0] + bx as real * cell_px;
             let by0 = rect_min[1] + by as real * cell_px;
             do dl->AddRect((bx0, by0), (bx0 + 2. * cell_px, by0 + 3. * cell_px),
@@ -555,14 +555,14 @@ namespace JEEditor::Editor::TilemapEditor
     // 点击未注册的源纹理格：优先选中该格已有的单块地形（早期图集曾
     // 按格自动创建），否则注册普通瓦片并选为画笔；双击打开新建地形
     // 弹窗（锚点自动对齐 2x3 块）
-    func handle_palette_cell_click(state: EditorState, ts_id: int,
+    func handle_palette_cell_click(state: EditorState, ts_id: tilemap::Tileset,
         cx: int, cy: int)=> void
     {
         let mut single = 0;
-        let total = tilemap::terrain_count(ts_id);
+        let total = ts_id->terrain_count();
         for (let mut t = 1; t <= total; t += 1)
         {
-            let (_, k, s, ix, iy, _, _) = tilemap::terrain_info(ts_id, t);
+            let (_, k, s, ix, iy, _, _) = ts_id->terrain_info(t);
             if (k == 0 && s == state.m_palette_source && ix == cx && iy == cy)
                 single = t;
         }
@@ -570,7 +570,7 @@ namespace JEEditor::Editor::TilemapEditor
             do select_terrain_brush(state, single);
         else
         {
-            let tile_id = tilemap::add_tile(ts_id, state.m_palette_source, cx, cy, 1);
+            let tile_id = ts_id->add_tile(state.m_palette_source, cx, cy, 1);
             if (tile_id > 0)
                 do select_tile_brush(state, tile_id);
         }
@@ -589,7 +589,7 @@ namespace JEEditor::Editor::TilemapEditor
     }
 
     // 选中态描边：选中格（蓝框）与选中四象限地形块（RM 式白框）
-    func draw_atlas_selection(state: EditorState, ts_id: int,
+    func draw_atlas_selection(state: EditorState, ts_id: tilemap::Tileset,
         rect_min: (real, real), cell_px: real)=> void
     {
         let dl = GetWindowDrawList();
@@ -610,7 +610,7 @@ namespace JEEditor::Editor::TilemapEditor
         {
             value(tid)?
             {
-                let (_, k, s, bx, by, _, _) = tilemap::terrain_info(ts_id, tid);
+                let (_, k, s, bx, by, _, _) = ts_id->terrain_info(tid);
                 if (s == state.m_palette_source && (k == 1 || k == 3))
                 {
                     do dl->AddRect(
@@ -628,7 +628,7 @@ namespace JEEditor::Editor::TilemapEditor
     // ==================== 新建地形弹窗 ====================
 
     // 新建地形弹窗：锚点 = 调色板选中格（四象限种类自动对齐 2x3 块）
-    func draw_new_terrain_popup(state: EditorState, ts_id: int)=> void
+    func draw_new_terrain_popup(state: EditorState, ts_id: tilemap::Tileset)=> void
     {
         if (BeginPopup("##new_terrain_popup"))
         {
@@ -680,7 +680,7 @@ namespace JEEditor::Editor::TilemapEditor
                     {
                         let name = state.m_new_terrain_name == ""
                             ? "新地形" | state.m_new_terrain_name;
-                        let tid = tilemap::add_terrain(ts_id, name, state.m_new_terrain_kind,
+                        let tid = ts_id->add_terrain(name, state.m_new_terrain_kind,
                             state.m_palette_source, snap_x, snap_y,
                             state.m_new_terrain_walkable ? 1 | 0);
                         if (tid > 0)
