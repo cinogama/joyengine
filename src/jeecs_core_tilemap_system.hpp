@@ -1140,7 +1140,7 @@ void je_tilemap_set_tile_walkable(je_TilesetHandle tileset, je_TileId tile_id, i
 }
 
 // ---------------- 自动图块地形 ----------------
-bool je_tilemap_add_terrain(je_TilesetHandle tileset, const char* name, int32_t kind,
+bool je_tilemap_add_terrain(je_TilesetHandle tileset, const char* name, je_TerrainKind kind,
     int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable, je_TerrainId* out_id)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
@@ -1187,7 +1187,7 @@ int32_t je_tilemap_terrain_count(je_TilesetHandle tileset)
     return doc ? (int32_t)doc->terrains.size() - 1 : 0;
 }
 bool je_tilemap_terrain_info(je_TilesetHandle tileset, je_TerrainId terrain_id,
-    const char** name, int32_t* kind, int32_t* source_idx, int32_t* ix, int32_t* iy,
+    const char** name, je_TerrainKind* kind, int32_t* source_idx, int32_t* ix, int32_t* iy,
     int32_t* walkable, int32_t* variant_count)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
@@ -1195,7 +1195,7 @@ bool je_tilemap_terrain_info(je_TilesetHandle tileset, je_TerrainId terrain_id,
         return false;
     const auto& t = doc->terrains[terrain_id];
     if (name != nullptr) *name = t.name.c_str();
-    if (kind != nullptr) *kind = t.kind;
+    if (kind != nullptr) *kind = (je_TerrainKind)t.kind;
     if (source_idx != nullptr) *source_idx = t.source;
     if (ix != nullptr) *ix = t.ix;
     if (iy != nullptr) *iy = t.iy;
@@ -1204,7 +1204,7 @@ bool je_tilemap_terrain_info(je_TilesetHandle tileset, je_TerrainId terrain_id,
     return true;
 }
 bool je_tilemap_set_terrain(je_TilesetHandle tileset, je_TerrainId terrain_id,
-    const char* name, int32_t kind,
+    const char* name, je_TerrainKind kind,
     int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
@@ -1715,7 +1715,7 @@ WOORT_API woort_api wojeapi_tilemap_add_terrain(void)
 {
     je_TerrainId id = 0;
     if (!je_tilemap_add_terrain(
-        (int32_t)woort_int(0), woort_string(1), (int32_t)woort_int(2),
+        (int32_t)woort_int(0), woort_string(1), (je_TerrainKind)woort_int(2),
         (int32_t)woort_int(3), (int32_t)woort_int(4), (int32_t)woort_int(5),
         (int32_t)woort_int(6), &id))
         return woort_ret_option_none();
@@ -1736,12 +1736,13 @@ WOORT_API woort_api wojeapi_tilemap_terrain_info(void)
     if (!woort_push_reserve(1, &s))
         return woort_ret_panic("Stack overflow.");
     const char* name = "";
-    int32_t kind = 0, src = 0, ix = 0, iy = 0, wk = 1, vn = 0;
+    je_TerrainKind kind = JE_TERRAIN_KIND_SINGLE;
+    int32_t src = 0, ix = 0, iy = 0, wk = 1, vn = 0;
     je_tilemap_terrain_info((int32_t)woort_int(0), (int32_t)woort_int(1),
         &name, &kind, &src, &ix, &iy, &wk, &vn);
     woort_set_struct(s + 0, 7);
     woort_struct_set_string(s + 0, 0, name);
-    woort_struct_set_int(s + 0, 1, kind);
+    woort_struct_set_int(s + 0, 1, (int32_t)kind);
     woort_struct_set_int(s + 0, 2, src);
     woort_struct_set_int(s + 0, 3, ix);
     woort_struct_set_int(s + 0, 4, iy);
@@ -1753,7 +1754,7 @@ WOORT_API woort_api wojeapi_tilemap_set_terrain(void)
 {
     return woort_ret_bool(je_tilemap_set_terrain(
         (int32_t)woort_int(0), (int32_t)woort_int(1), woort_string(2),
-        (int32_t)woort_int(3), (int32_t)woort_int(4),
+        (je_TerrainKind)woort_int(3), (int32_t)woort_int(4),
         (int32_t)woort_int(5), (int32_t)woort_int(6), (int32_t)woort_int(7)) ? true : false);
 }
 WOORT_API woort_api wojeapi_tilemap_terrain_clear_variants(void)

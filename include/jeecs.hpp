@@ -4841,6 +4841,26 @@ je_TerrainId [类型别名]
 */
 typedef int32_t je_TerrainId;
 
+/*
+je_TerrainKind [枚举]
+自动图块地形的拼接类型，即 je_tilemap_add_terrain / je_tilemap_set_terrain
+的 kind 参数与 je_tilemap_terrain_info 的 kind 出参的取值
+    * JE_TERRAIN_KIND_SINGLE      单块：取锚点整块
+    * JE_TERRAIN_KIND_RPGMAKER_XP RPGMaker XP 式四象限（2x3 条带）
+    * JE_TERRAIN_KIND_BLOB47      blob47（47 变体）
+    * JE_TERRAIN_KIND_RPGMAKER_VX RPGMaker VX 式四象限（2x3 块，中央十字为
+      内部填充；孤块取锚点整块；与 RPG Maker VX Ace 渲染逐像素一致）
+请参见：
+    je_tilemap_add_terrain
+*/
+enum je_TerrainKind
+{
+    JE_TERRAIN_KIND_SINGLE = 0,
+    JE_TERRAIN_KIND_RPGMAKER_XP = 1,
+    JE_TERRAIN_KIND_BLOB47 = 2,
+    JE_TERRAIN_KIND_RPGMAKER_VX = 3,
+};
+
 // ---- 地图文档 ----
 
 /*
@@ -5212,15 +5232,14 @@ JE_API void je_tilemap_set_tile_walkable(je_TilesetHandle tileset,
 /*
 je_tilemap_add_terrain [基本接口]
 定义一个自动图块地形，地形 id（je_TerrainId，从 1 开始）经 out_id 返回
-    * kind：0=单块(取锚点整块) 1=RPGMaker XP 式四象限(2x3 条带)
-      2=blob47(47 变体) 3=RPGMaker VX 式四象限(2x3 块，中央十字为内部
-      填充；孤块取锚点整块；与 RPG Maker VX Ace 渲染逐像素一致)
-    * 参数不合法返回 false，不写出 id
+    * kind：地形拼接类型，取值见 je_TerrainKind
+    * 参数不合法（含 kind 非法）返回 false，不写出 id
 请参见：
     je_TerrainId
+    je_TerrainKind
 */
 JE_API bool je_tilemap_add_terrain(je_TilesetHandle tileset, const char* name,
-    int32_t kind, int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable,
+    je_TerrainKind kind, int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable,
     je_TerrainId* out_id);
 
 /*
@@ -5240,10 +5259,10 @@ JE_API int32_t je_tilemap_terrain_count(je_TilesetHandle tileset);
 je_tilemap_terrain_info [基本接口]
 取指定 id 地形的信息，经出参返回 (名称, kind, 源下标, 锚点 ix/iy,
 是否可通行, 显式变体数)
-    * id 越界返回 false
+    * id 越界返回 false；kind 类型为 je_TerrainKind
 */
 JE_API bool je_tilemap_terrain_info(je_TilesetHandle tileset, je_TerrainId terrain_id,
-    const char** name, int32_t* kind, int32_t* source_idx, int32_t* ix, int32_t* iy,
+    const char** name, je_TerrainKind* kind, int32_t* source_idx, int32_t* ix, int32_t* iy,
     int32_t* walkable, int32_t* variant_count);
 
 /*
@@ -5255,7 +5274,7 @@ je_tilemap_set_terrain [基本接口]
     je_tilemap_add_terrain
 */
 JE_API bool je_tilemap_set_terrain(je_TilesetHandle tileset, je_TerrainId terrain_id,
-    const char* name, int32_t kind,
+    const char* name, je_TerrainKind kind,
     int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable);
 
 /*
