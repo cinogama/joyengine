@@ -13,8 +13,9 @@
 //   Tools.wo         绘制工具（铅笔/矩形/填充/吸管/橡皮与笔划撤销）
 //   LayerPanel.wo    图层面板
 //   PropertyPanel.wo 格子属性覆盖与图集设置
-//   UI.wo            工具栏与整体布局
-//   Window.wo        TilemapEditorWindow（IWindows）与静态入口
+//   UI.wo            工具栏与整体布局（地图/图集两种）
+//   Window.wo        TilemapEditorWindow / TilesetEditorWindow（两个独立
+//                    的 IWindows 窗口）与静态入口
 
 export import DataModel;
 export import EditorState;

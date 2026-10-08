@@ -1,8 +1,10 @@
-// 瓦片地图编辑器 —— 窗口实现与静态入口。
-// 窗口为唯一实例（标题不含 $ID）：再次打开其他文件时重定向现有窗口
-//（脏数据先询问保存）。关闭前有未保存修改时经 onPreClose 否决并弹
-// 保存询问。保存走 je::tilemap 文档保存（写入 .je4tilemap/.je4tileset
-// 二进制文件）；未保存的修改在此之前已经实时同步到世界实例。
+// 瓦片地图/瓦片图集编辑器 —— 窗口实现与静态入口。
+// 两类编辑器是相互独立的窗口（标题不同、各自唯一实例）：打开另一类
+// 文件时新开/复用另一个窗口，互不抢占、互不影响编辑状态。同类文件
+// 再次打开时重定向现有窗口（脏数据先询问保存）。关闭前有未保存修改
+// 时经 onPreClose 否决并弹保存询问。保存走 je::tilemap 文档保存（写入
+// .je4tilemap/.je4tileset 二进制文件）；未保存的修改在此之前已经实时
+// 同步到世界实例。
 
 import pkg::std;
 
@@ -42,13 +44,9 @@ using JEEditor::Editor::TilemapEditor;
 
 namespace JEEditor::Editor::TilemapEditor
 {
-    // 编辑器窗口单例
-    let mut s_editor_singleton = option::none: option<TilemapEditorWindow>;
-
-    public func isTilemapEditorExist()=> bool
-    {
-        return s_editor_singleton->is_value;
-    }
+    // 地图/图集编辑器窗口各自单例（互相独立，互不抢占）
+    let mut s_map_editor_singleton = option::none: option<TilemapEditorWindow>;
+    let mut s_tileset_editor_singleton = option::none: option<TilesetEditorWindow>;
 
     // 从 .je4tilemap 文件打开地图编辑器
     public func openTilemapEditorFromFile(path: fsys::path_t)=> void
@@ -60,7 +58,7 @@ namespace JEEditor::Editor::TilemapEditor
                 do MsgBox::err("打开失败", why);
             ok(ctx)?
             {
-                match (s_editor_singleton)
+                match (s_map_editor_singleton)
                 {
                     none? do show(TilemapEditorWindow::create_map(ctx));
                     value(editor)? editor->retargetToMap(ctx);
@@ -69,7 +67,7 @@ namespace JEEditor::Editor::TilemapEditor
         }
     }
 
-    // 从 .je4tileset 文件打开图集编辑（无画布模式）
+    // 从 .je4tileset 文件打开图集编辑器（独立窗口，不影响地图编辑器）
     public func openTilesetEditorFromFile(path: fsys::path_t)=> void
     {
         let path_str = ResourcePath::toRuntimeResourcePath(path);
@@ -79,25 +77,21 @@ namespace JEEditor::Editor::TilemapEditor
                 do MsgBox::err("打开失败", F"无法解析图集文件：{path_str}");
             value(ts)?
             {
-                match (s_editor_singleton)
+                match (s_tileset_editor_singleton)
                 {
-                    none? do show(TilemapEditorWindow::create_tileset(ts));
+                    none? do show(TilesetEditorWindow::create_tileset(ts));
                     value(editor)? editor->retargetToTileset(ts);
                 }
             }
         }
     }
 
-    // 保存：无路径（新建未保存）时先询问路径。保存成功（含异步询问
+    // ===== 保存流程 =====
+    // 保存地图：无路径（新建未保存）时先询问路径。保存成功（含异步询问
     // 路径后）才调用 after 继续后续流程（关闭窗口/切换文档）；
     // 失败或取消时不调用 —— 调用方保持现状即可。
-    func try_save_then(state: EditorState, after: ()=>void)=> void
+    func try_save_map_then(state: EditorState, after: ()=>void)=> void
     {
-        if (state.m_tileset_only->is_value)
-        {
-            do try_save_tileset_then(state, after);
-            return;
-        }
         let ctx = state.m_context->unwrap();
         let path = ctx.m_path->to_string;
         if (path != "")
@@ -133,6 +127,7 @@ namespace JEEditor::Editor::TilemapEditor
                 });
     }
 
+    // 保存图集：规则同上
     func try_save_tileset_then(state: EditorState, after: ()=>void)=> void
     {
         let ts = state.m_tileset_only->unwrap();
@@ -171,11 +166,54 @@ namespace JEEditor::Editor::TilemapEditor
     }
 
     // 保存（无后续动作）
-    func try_save(state: EditorState)=> void
+    func try_save_map(state: EditorState)=> void
     {
-        do try_save_then(state, func() { });
+        do try_save_map_then(state, func() { });
+    }
+    func try_save_tileset(state: EditorState)=> void
+    {
+        do try_save_tileset_then(state, func() { });
     }
 
+    // ===== 保存询问（地图/图集两窗口共用的流程） =====
+    // 切换文档前：脏数据先询问，选择“是”则保存成功后（含异步询问保存
+    // 路径的情形）执行 after，取消/失败则保持现状；选择“否”直接执行
+    func ask_save_then(state: EditorState, after: ()=>void,
+        save_then: (EditorState, ()=>void)=>void)=> void
+    {
+        if (!state.m_dirty)
+        {
+            do after();
+            return;
+        }
+        do AskBox::show("是否保存", "当前编辑尚未保存，是否保存？")
+            ->onYes(func()
+                {
+                    do save_then(state, after);
+                })
+            ->onNo(func()
+                {
+                    do after();
+                });
+    }
+
+    // 关闭窗口前：保存成功（含异步询问保存路径后）或选择不保存时才
+    // 经 set_close 真正关闭
+    func ask_save_then_close(state: EditorState, set_close: ()=>void,
+        save_then: (EditorState, ()=>void)=>void)=> void
+    {
+        do AskBox::show("是否保存", "是否保存当前的修改？")
+            ->onYes(func()
+                {
+                    do save_then(state, set_close);
+                })
+            ->onNo(func()
+                {
+                    do set_close();
+                });
+    }
+
+    // ===== 地图编辑器窗口（唯一实例） =====
     using TilemapEditorWindow = struct{
         m_close: mut bool,
         m_state: mut EditorState,
@@ -189,62 +227,33 @@ namespace JEEditor::Editor::TilemapEditor
                 m_state = mut EditorState::create(context),
             };
         }
-        func create_tileset(tileset_doc: tilemap::Tileset)=> TilemapEditorWindow
-            where require!(TilemapEditorWindow: IWindows);
-        {
-            return TilemapEditorWindow{
-                m_close = mut false,
-                m_state = mut EditorState::create_tileset_only(tileset_doc),
-            };
-        }
 
-        // 切换到另一个文件：脏数据先询问保存，保存完成后（含异步询问
-        // 保存路径的情形）再以 make_state 重建编辑状态
+        // 切换到另一张地图：脏数据先询问保存，保存完成后再重建编辑
+        // 状态；关闭流程进行中则忽略（窗口即将销毁）
         func retargetToMap(self: TilemapEditorWindow, context: TilemapContext)=> void
         {
-            self->retargetWith(func() { return EditorState::create(context); });
-        }
-        func retargetToTileset(self: TilemapEditorWindow,
-            tileset_doc: tilemap::Tileset)=> void
-        {
-            self->retargetWith(func()
-                {
-                    return EditorState::create_tileset_only(tileset_doc);
-                });
-        }
-        func retargetWith(self: TilemapEditorWindow, make_state: ()=> EditorState)=> void
-        {
-            if (self.m_state.m_dirty && !self.m_close)
-            {
-                let editor = self;
-                do AskBox::show("是否保存", "当前编辑尚未保存，是否保存？")
-                    ->onYes(func()
-                        {
-                            do try_save_then(editor.m_state, func()
-                                {
-                                    editor.m_state = make_state();
-                                });
-                        })
-                    ->onNo(func()
-                        {
-                            editor.m_state = make_state();
-                        });
+            if (self.m_close)
                 return;
-            }
-            self.m_state = make_state();
+            let editor = self;
+            do ask_save_then(editor.m_state,
+                func()
+                {
+                    editor.m_state = EditorState::create(context);
+                },
+                try_save_map_then);
         }
 
         public func onCreate(self: TilemapEditorWindow)=> void
         {
-            s_editor_singleton = option::value(self);
+            s_map_editor_singleton = option::value(self);
         }
         public func onClose(_: TilemapEditorWindow)=> void
         {
-            s_editor_singleton = option::none;
+            s_map_editor_singleton = option::none;
         }
-        public func getTitle(self: TilemapEditorWindow)=> string
+        public func getTitle(_: TilemapEditorWindow)=> string
         {
-            return self.m_state.m_tileset_only->is_value ? "瓦片图集编辑器" | "瓦片地图编辑器";
+            return "瓦片地图编辑器";
         }
         public func getSizeConstraints(_: TilemapEditorWindow)=> SizeConstraints
         {
@@ -260,7 +269,7 @@ namespace JEEditor::Editor::TilemapEditor
             return option::value <|
                 Menu::create("")
                     -> subMenu("文件")
-                    ->  subItem("保存", \= try_save(editor.m_state);)
+                    ->  subItem("保存", \= try_save_map(editor.m_state);)
                     ->  shortCut("Ctrl+S")
                     ->  endItem
                     ->  subItem("关闭", \= editor->requestClose();)
@@ -281,7 +290,7 @@ namespace JEEditor::Editor::TilemapEditor
                 Shortcut::begin()
                     ->shortCut(
                         [ImGuiKey::ImGuiMod_Ctrl, ImGuiKey::ImGuiKey_S],
-                        \= try_save(editor.m_state);)
+                        \= try_save_map(editor.m_state);)
                     ->shortCut(
                         [ImGuiKey::ImGuiMod_Ctrl, ImGuiKey::ImGuiKey_Z],
                         \= editor.m_state->undo();)
@@ -298,35 +307,128 @@ namespace JEEditor::Editor::TilemapEditor
                 self.m_close = true;
                 return;
             }
-            do self->askSaveThenClose();
+            let editor = self;
+            do ask_save_then_close(editor.m_state,
+                func() { editor.m_close = true; },
+                try_save_map_then);
         }
         public func onPreClose(self: TilemapEditorWindow)=> bool
         {
             if (self.m_close || !self.m_state.m_dirty)
                 return true;
-            do self->askSaveThenClose();
-            return false;
-        }
-        func askSaveThenClose(self: TilemapEditorWindow)=> void
-        {
             let editor = self;
-            do AskBox::show("是否保存", "是否保存当前的修改？")
-                ->onYes(func()
-                    {
-                        do try_save_then(editor.m_state, func()
-                            {
-                                editor.m_close = true;
-                            });
-                    })
-                ->onNo(func()
-                    {
-                        editor.m_close = true;
-                    });
+            do ask_save_then_close(editor.m_state,
+                func() { editor.m_close = true; },
+                try_save_map_then);
+            return false;
         }
 
         public func run(self: TilemapEditorWindow)=> bool
         {
             do render_main(self.m_state);
+            return !self.m_close;
+        }
+    }
+
+    // ===== 图集编辑器窗口（唯一实例，独立于地图编辑器窗口） =====
+    using TilesetEditorWindow = struct{
+        m_close: mut bool,
+        m_state: mut EditorState,
+    }
+    {
+        func create_tileset(tileset_doc: tilemap::Tileset)=> TilesetEditorWindow
+            where require!(TilesetEditorWindow: IWindows);
+        {
+            return TilesetEditorWindow{
+                m_close = mut false,
+                m_state = mut EditorState::create_tileset_only(tileset_doc),
+            };
+        }
+
+        // 切换到另一个图集：脏数据先询问保存，保存完成后再重建编辑
+        // 状态；关闭流程进行中则忽略（窗口即将销毁）
+        func retargetToTileset(self: TilesetEditorWindow,
+            tileset_doc: tilemap::Tileset)=> void
+        {
+            if (self.m_close)
+                return;
+            let editor = self;
+            do ask_save_then(editor.m_state,
+                func()
+                {
+                    editor.m_state = EditorState::create_tileset_only(tileset_doc);
+                },
+                try_save_tileset_then);
+        }
+
+        public func onCreate(self: TilesetEditorWindow)=> void
+        {
+            s_tileset_editor_singleton = option::value(self);
+        }
+        public func onClose(_: TilesetEditorWindow)=> void
+        {
+            s_tileset_editor_singleton = option::none;
+        }
+        public func getTitle(_: TilesetEditorWindow)=> string
+        {
+            return "瓦片图集编辑器";
+        }
+        public func getSizeConstraints(_: TilesetEditorWindow)=> SizeConstraints
+        {
+            return SizeConstraints::Limited(((760., 480.), (4096., 4096.)));
+        }
+        // 菜单/快捷键捕获窗口自身，触发时再读当前的 m_state（同上）
+        public func getMenu(self: TilesetEditorWindow)=> option<Menu>
+        {
+            let editor = self;
+            return option::value <|
+                Menu::create("")
+                    -> subMenu("文件")
+                    ->  subItem("保存", \= try_save_tileset(editor.m_state);)
+                    ->  shortCut("Ctrl+S")
+                    ->  endItem
+                    ->  subItem("关闭", \= editor->requestClose();)
+                    ->  endItem
+                    -> endMenu
+                    ;
+        }
+        public func getShortcut(self: TilesetEditorWindow)=> option<Shortcut>
+        {
+            let editor = self;
+            return option::value <|
+                Shortcut::begin()
+                    ->shortCut(
+                        [ImGuiKey::ImGuiMod_Ctrl, ImGuiKey::ImGuiKey_S],
+                        \= try_save_tileset(editor.m_state);)
+                    ->finish();
+        }
+
+        func requestClose(self: TilesetEditorWindow)=> void
+        {
+            if (!self.m_state.m_dirty || self.m_close)
+            {
+                self.m_close = true;
+                return;
+            }
+            let editor = self;
+            do ask_save_then_close(editor.m_state,
+                func() { editor.m_close = true; },
+                try_save_tileset_then);
+        }
+        public func onPreClose(self: TilesetEditorWindow)=> bool
+        {
+            if (self.m_close || !self.m_state.m_dirty)
+                return true;
+            let editor = self;
+            do ask_save_then_close(editor.m_state,
+                func() { editor.m_close = true; },
+                try_save_tileset_then);
+            return false;
+        }
+
+        public func run(self: TilesetEditorWindow)=> bool
+        {
+            do render_tileset(self.m_state);
             return !self.m_close;
         }
     }

@@ -1,6 +1,7 @@
 // 瓦片地图编辑器 —— 工具栏与整体布局。
-// 地图模式：上工具栏 + 左调色板 + 中画布 + 右属性 + 底部图层；
-// 图集模式：左调色板 + 右图集设置。
+// 两个独立窗口各一套布局：
+//   地图编辑器（render_main）：上工具栏 + 左调色板 + 中画布 + 右属性 + 底部图层；
+//   图集编辑器（render_tileset）：左调色板 + 右图集设置。
 
 import pkg::std;
 
@@ -127,24 +128,9 @@ namespace JEEditor::Editor::TilemapEditor
         }
     }
 
+    // 地图编辑器窗口布局（上下文必在；图集编辑器走 render_tileset）
     public func render_main(state: EditorState)=> void
     {
-        let avail = GetContentRegionAvail();
-
-        // 图集模式：仅调色板 + 图集设置（无地图上下文）
-        if (state.m_tileset_only->is_value)
-        {
-            if (BeginChildSize("##tm_left", 380., avail[1]))
-                do draw_palette(state, option::none);
-            EndChild();
-            SameLine();
-            if (BeginChildSize("##tm_right", GetContentRegionAvail()[0], 0.))
-                do draw_tileset_settings(state, option::none);
-            EndChild();
-            return;
-        }
-
-        // 地图模式：上下文必在（与 m_tileset_only 恒互补）
         match (state.m_context)
         {
             none? { }
@@ -153,6 +139,19 @@ namespace JEEditor::Editor::TilemapEditor
                 do render_map_layout(state, ctx);
             }
         }
+    }
+
+    // 图集编辑器窗口布局：左调色板 + 右图集设置（无地图上下文）
+    public func render_tileset(state: EditorState)=> void
+    {
+        let avail = GetContentRegionAvail();
+        if (BeginChildSize("##ts_left", 380., avail[1]))
+            do draw_palette(state, option::none);
+        EndChild();
+        SameLine();
+        if (BeginChildSize("##ts_right", GetContentRegionAvail()[0], 0.))
+            do draw_tileset_settings(state, option::none);
+        EndChild();
     }
 
     func render_map_layout(state: EditorState, ctx: TilemapContext)=> void
