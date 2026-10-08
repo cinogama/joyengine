@@ -4989,25 +4989,6 @@ je_tilemap_set_layer_z [基本接口]
 */
 JE_API void je_tilemap_set_layer_z(je_TilemapHandle map, je_LayerId layer, float z);
 
-/*
-je_tilemap_layer_shader [基本接口]
-取图层分片渲染使用的着色器路径（运行时路径，@/ 或 !/；空串表示该层不渲染）
-    * 新建图层默认为 "@/resource/shader/UnlitBlend.shader"
-    * 渲染侧不提供兜底着色器：路径加载失败时分片不渲染
-    * 下标越界时返回空串
-*/
-JE_API const char* je_tilemap_layer_shader(je_TilemapHandle map, je_LayerId layer);
-
-/*
-je_tilemap_set_layer_shader [基本接口]
-设置图层分片渲染使用的着色器路径
-    * path 传 nullptr 或空串表示该层不渲染
-    * 下标越界时不做任何修改
-请参见：
-    je_tilemap_layer_shader
-*/
-JE_API void je_tilemap_set_layer_shader(je_TilemapHandle map, je_LayerId layer, const char* path);
-
 // ---- 瓦片读写 ----
 
 /*

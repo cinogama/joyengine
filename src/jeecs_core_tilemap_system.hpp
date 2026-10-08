@@ -79,9 +79,6 @@ namespace jeecs
         {
             je_GameEntity entity{};
             uint64_t built_stamp = 0;
-            // 分片当前着色器对应的图层着色器路径（按路径比对刷新，
-            // 见 refresh_part_shader）
-            std::string shader_path;
         };
         // 每个地图根实体的分片表 + 上次网格扫描结果（版本戳命中时免扫）
         struct root_state
@@ -94,8 +91,6 @@ namespace jeecs
 
         std::unordered_map<uint32_t, root_state> _m_roots;
         std::vector<float> _m_staging;
-        // 已报过加载失败的图层着色器路径（日志去重；加载成功后移除）
-        std::set<std::string> _m_failed_shader_paths;
 
         TilemapSystem(game_world w)
             : game_system(w)
@@ -105,44 +100,48 @@ namespace jeecs
 
         // ---- 共享资源 ----
 
-        // 按路径加载图层着色器。先探文件存在（jeecs_file_open 失败不
-        // 打日志）再走加载，失败日志按路径去重；本系统不提供任何兜底
-        // 着色器 —— 路径为空或加载失败的分片不渲染。
-        std::optional<basic::resource<graphic::shader>> load_layer_shader(
-            const std::string& path)
+        // 共享的 Forward2D 着色器（共享资源缓存，路径加载）
+        static std::optional<basic::resource<graphic::shader>> shared_tile_shader()
         {
-            if (path.empty())
-                return std::nullopt;
-            jeecs_file* probe = jeecs_file_open(path.c_str());
-            if (probe == nullptr)
+            static std::optional<basic::resource<graphic::shader>> cached;
+            static bool tried = false;
+            if (!tried)
             {
-                if (_m_failed_shader_paths.insert(path).second)
-                    debug::logerr("Tilemap: unable to load layer shader '%s'.", path.c_str());
-                return std::nullopt;
+                tried = true;
+                cached = graphic::shader::load(nullptr, "!/builtin/shader/Forward2D.shader");
+                if (!cached.has_value())
+                    debug::logerr("Tilemap: unable to load builtin shader 'Forward2D.shader'.");
             }
-            jeecs_file_close(probe);
-            auto shader = graphic::shader::load(nullptr, path);
-            if (shader.has_value())
-                _m_failed_shader_paths.erase(path);
-            return shader;
+            return cached;
         }
 
-        // 图层着色器路径与分片记录不一致时按路径重载。按路径而非资源
-        // 实例指针比对：编辑器“更新着色器”会就地替换分片上的实例，
-        // 路径未变化时不得用旧实例回写（否则破坏热重载）。
-        void refresh_part_shader(const Tilemap::MapDocument& doc,
-            const part_key& key, const game_entity& part, part_entry& entry)
+        // 根实体 Renderer::Shaders 指示的瓦片着色器（未挂/为空 → 无值）
+        static std::optional<basic::resource<graphic::shader>> root_shader(
+            const game_entity& root)
+        {
+            auto* comp = root.get_component<Renderer::Shaders>();
+            if (comp == nullptr || comp->shaders.empty())
+                return std::nullopt;
+            return comp->shaders.front();
+        }
+
+        // 分片着色器与期望一致则不动，否则重写（资源句柄不同即更新）
+        static void refresh_part_shader(const game_entity& root, const game_entity& part)
         {
             auto* comp = part.get_component<Renderer::Shaders>();
             if (comp == nullptr)
                 return;
-            const std::string& want = doc.layers[key.layer].shader;
-            if (entry.shader_path == want)
+            auto desired = root_shader(root);
+            if (!desired.has_value())
+                desired = shared_tile_shader();
+            if (!desired.has_value())
+                return;
+            const auto& want = desired.value();
+            if (comp->shaders.size() == 1
+                && comp->shaders.front().get() == want.get())
                 return;
             comp->shaders.clear();
-            if (auto shader = load_layer_shader(want))
-                comp->shaders.push_back(shader.value());
-            entry.shader_path = want;
+            comp->shaders.push_back(want);
         }
 
         // 比例尺同步：把根实体 LocalScale 复制到分片 LocalScale。
@@ -237,7 +236,7 @@ namespace jeecs
         // ---- 分片生命周期 ----
 
         game_entity create_part_entity(game_entity root, int32_t layer, float layer_z,
-            const Tilemap::SourceTexture& src, const std::string& layer_shader)
+            const Tilemap::SourceTexture& src)
         {
             auto world = get_world();
             auto part = world.add_entity<
@@ -263,10 +262,13 @@ namespace jeecs
             if (auto* root_scale = root.get_component<Transform::LocalScale>())
                 part.get_component<Transform::LocalScale>()->scale = root_scale->scale;
 
-            // 着色器：由图层属性指定（空路径/加载失败 → 分片不渲染）
+            // 着色器：根实体挂 Renderer::Shaders 时以其指示为准，
+            // 否则用内置 Forward2D
             auto* shaders = part.get_component<Renderer::Shaders>();
-            if (auto shad = load_layer_shader(layer_shader))
+            if (auto shad = root_shader(root); shad.has_value())
                 shaders->shaders.push_back(shad.value());
+            else if (auto def = shared_tile_shader())
+                shaders->shaders.push_back(def.value());
 
             auto* textures = part.get_component<Renderer::Textures>();
             if (auto tex = graphic::texture::load(nullptr, src.path))
@@ -479,11 +481,10 @@ namespace jeecs
                             rebuild_part(*r.doc, root, key, fnd->second);
                             fnd->second.built_stamp = stamp;
                         }
-                        // 着色器/比例尺跟随图层与根实体（组件变化不计入
-                        // 地图版本戳，故每帧对齐）
+                        // 着色器/比例尺跟随根实体（组件变化不计入地图
+                        // 版本戳，故每帧对齐）
                         game_entity part{ fnd->second.entity };
-                        if (r.doc != nullptr)
-                            refresh_part_shader(*r.doc, key, part, fnd->second);
+                        refresh_part_shader(root, part);
                         sync_part_scale(root, part);
                         continue;
                     }
@@ -498,8 +499,7 @@ namespace jeecs
                         continue;
 
                     game_entity part_entity = create_part_entity(
-                        root, key.layer, r.doc->layers[key.layer].z, *src_info,
-                        r.doc->layers[key.layer].shader);
+                        root, key.layer, r.doc->layers[key.layer].z, *src_info);
                     auto* tag = part_entity.get_component<Tilemap::RenderPart>();
                     tag->owner_id = root_id;
                     tag->layer = key.layer;
@@ -509,7 +509,6 @@ namespace jeecs
 
                     part_entry entry{};
                     entry.entity = part_entity._m_raw;
-                    entry.shader_path = r.doc->layers[key.layer].shader;
                     if (r.doc != nullptr)
                     {
                         rebuild_part(*r.doc, root, key, entry);
@@ -552,7 +551,6 @@ bool je_tilemap_create_map(int32_t w, int32_t h, int32_t tile_px, je_TilemapHand
     doc->width = w; doc->height = h; doc->tile_px = tile_px;
     jeecs::Tilemap::MapLayer layer;
     layer.name = "图层 1";
-    layer.shader = jeecs::Tilemap::DEFAULT_LAYER_SHADER;
     layer.grid.assign((size_t)w * h, 0);
     doc->layers.push_back(std::move(layer));
     je_TilemapHandle id = jeecs::Tilemap::documents::inst().register_map(doc);
@@ -622,7 +620,6 @@ bool je_tilemap_add_layer(je_TilemapHandle map, const char* name, je_LayerId* ou
     jeecs::Tilemap::MapLayer layer;
     layer.name = name ? name : ("图层 " + std::to_string(doc->layers.size() + 1));
     layer.z = (float)doc->layers.size(); // 新层默认置于最上（沿 +z 错开）
-    layer.shader = jeecs::Tilemap::DEFAULT_LAYER_SHADER;
     layer.grid.assign((size_t)doc->width * doc->height, 0);
     doc->layers.push_back(std::move(layer));
     ++doc->version;
@@ -715,27 +712,6 @@ void je_tilemap_set_layer_z(je_TilemapHandle map, je_LayerId layer, float z)
     if (doc->layers[layer].z != z)
     {
         doc->layers[layer].z = z;
-        ++doc->version;
-    }
-}
-
-// 图层分片渲染使用的着色器路径（运行时路径，@/ 或 !/；空 = 该层不渲染。
-// 新建图层默认为 DEFAULT_LAYER_SHADER，渲染侧不提供兜底着色器）
-const char* je_tilemap_layer_shader(je_TilemapHandle map, je_LayerId layer)
-{
-    auto* doc = je_tilemap_map_doc(map);
-    return doc != nullptr && layer >= 0 && layer < (int32_t)doc->layers.size()
-        ? doc->layers[layer].shader.c_str() : "";
-}
-void je_tilemap_set_layer_shader(je_TilemapHandle map, je_LayerId layer, const char* path)
-{
-    auto* doc = je_tilemap_map_doc(map);
-    if (doc == nullptr || layer < 0 || layer >= (int32_t)doc->layers.size())
-        return;
-    std::string want = path != nullptr ? path : "";
-    if (doc->layers[layer].shader != want)
-    {
-        doc->layers[layer].shader = std::move(want);
         ++doc->version;
     }
 }
@@ -1524,17 +1500,6 @@ WOORT_API woort_api wojeapi_tilemap_set_layer_z(void)
 {
     je_tilemap_set_layer_z((int32_t)woort_int(0), (int32_t)woort_int(1),
         woort_float(2));
-    return woort_ret_void();
-}
-WOORT_API woort_api wojeapi_tilemap_layer_shader(void)
-{
-    return woort_ret_string(je_tilemap_layer_shader(
-        (int32_t)woort_int(0), (int32_t)woort_int(1)));
-}
-WOORT_API woort_api wojeapi_tilemap_set_layer_shader(void)
-{
-    je_tilemap_set_layer_shader((int32_t)woort_int(0), (int32_t)woort_int(1),
-        woort_string(2));
     return woort_ret_void();
 }
 WOORT_API woort_api wojeapi_tilemap_get_tile(void)

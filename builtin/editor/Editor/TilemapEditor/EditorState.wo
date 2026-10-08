@@ -105,8 +105,6 @@ namespace JEEditor::Editor::TilemapEditor
         // 引用图集弹窗：手动路径输入 + 扫描到的图集缓存（@/ 运行时路径）
         protected m_add_ref_path: mut string,
         protected m_found_tilesets: vec<string>,
-        // 图层着色器弹窗：扫描到的 .shader 缓存（@/ 运行时路径）
-        protected m_found_shaders: vec<string>,
         // 新建属性弹窗
         protected m_new_prop_name: mut string,
         protected m_new_prop_type: mut int,
@@ -175,7 +173,6 @@ namespace JEEditor::Editor::TilemapEditor
                 m_new_source_tilepx = mut 32,
                 m_add_ref_path = mut "",
                 m_found_tilesets = []mut,
-                m_found_shaders = []mut,
                 m_new_prop_name = mut "",
                 m_new_prop_type = mut 0,
                 m_new_prop_default = mut "",

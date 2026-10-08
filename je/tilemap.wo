@@ -96,15 +96,6 @@ namespace je
             extern("libjoyecs", "wojeapi_tilemap_set_layer_z")
                 public func set_layer_z(self: Tilemap, layer: int, z: real)=> void;
 
-            // 图层分片渲染使用的着色器路径（运行时路径，@/ 或 !/）。
-            // 新建图层默认 "@/resource/shader/UnlitBlend.shader"；
-            // 空串 = 该层不渲染（渲染侧不提供兜底着色器）。
-            extern("libjoyecs", "wojeapi_tilemap_layer_shader")
-                public func layer_shader(self: Tilemap, layer: int)=> string;
-
-            extern("libjoyecs", "wojeapi_tilemap_set_layer_shader")
-                public func set_layer_shader(self: Tilemap, layer: int, path: string)=> void;
-
             // ==================== 瓦片读写 ====================
             extern("libjoyecs", "wojeapi_tilemap_get_tile")
                 public func get_tile(self: Tilemap, layer: int, x: int, y: int)=> int;
