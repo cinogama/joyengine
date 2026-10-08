@@ -607,7 +607,12 @@ namespace JEEditor::Editor::TilemapEditor
         {
             match (ts_id->add_tile(state.m_palette_source, cx, cy, 1))
             {
-                value(tile_id)? do select_tile_brush(state, tile_id);
+                // 注册新瓦片写入了图集文档，须置脏（否则切换/关闭不询问保存）
+                value(tile_id)?
+                {
+                    do select_tile_brush(state, tile_id);
+                    state.m_dirty = true;
+                }
                 none?;
             }
         }
@@ -727,6 +732,8 @@ namespace JEEditor::Editor::TilemapEditor
                                 let anchor = state.m_palette_cell;
                                 do select_terrain_brush(state, tid);
                                 state.m_palette_cell = anchor;
+                                // 新建地形写入了图集文档，须置脏（否则切换/关闭不询问保存）
+                                state.m_dirty = true;
                                 do CloseCurrentPopup();
                             }
                             none? do MsgBox::err("创建失败", "无法创建地形（参数无效）");
