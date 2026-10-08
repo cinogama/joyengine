@@ -109,6 +109,9 @@ namespace JEEditor::Editor::TilemapEditor
         protected m_new_prop_name: mut string,
         protected m_new_prop_type: mut int,
         protected m_new_prop_default: mut string,
+        // 调整地图尺寸弹窗（打开时初始化为当前尺寸）
+        protected m_resize_w: mut int,
+        protected m_resize_h: mut int,
 
         // ===== 视图 =====
         protected m_zoom: mut real,          // 每瓦片屏幕像素 = tilepx * zoom
@@ -173,6 +176,8 @@ namespace JEEditor::Editor::TilemapEditor
                 m_new_prop_name = mut "",
                 m_new_prop_type = mut 0,
                 m_new_prop_default = mut "",
+                m_resize_w = mut 32,
+                m_resize_h = mut 32,
 
                 m_zoom = mut 1.,
                 m_pan = mut (64., 64.),

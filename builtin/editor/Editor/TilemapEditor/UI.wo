@@ -65,8 +65,66 @@ namespace JEEditor::Editor::TilemapEditor
         SameLine();
         let (w, h, tile_px, layer_count) = ctx.m_map->size();
         let (lname, _, _) = ctx.m_map->get_layer(state.m_layer);
+        if (Button("调整尺寸"))
+        {
+            // 打开弹窗时以当前尺寸初始化输入框
+            state.m_resize_w = w;
+            state.m_resize_h = h;
+            do OpenPopup("##resize_map_popup");
+        }
+        SameLine();
         do Text(F"{w}×{h} @ {tile_px}px | 图层{state.m_layer + 1}/{layer_count}「{lname}」"
             + (state.m_dirty ? " | 未保存" | ""));
+        do draw_resize_map_popup(state, ctx);
+    }
+
+    // 地图尺寸输入钳制（与引擎上限一致：1..65536）
+    func clamp_map_dim(v: int)=> int
+    {
+        if (v < 1)
+            return 1;
+        if (v > 65536)
+            return 65536;
+        return v;
+    }
+
+    // 调整地图尺寸弹窗：左上角对齐保留原格子，缩小尺寸时越界格内容
+    // 与逐格属性覆盖被丢弃。属结构性操作不进撤销栈；且旧撤销命令的
+    // cellkey（x + y*宽）随宽度失效，应用时须清空撤销栈。
+    func draw_resize_map_popup(state: EditorState, ctx: TilemapContext)=> void
+    {
+        if (BeginPopup("##resize_map_popup"))
+        {
+            let (_, _, tile_px, _) = ctx.m_map->size();
+            do Text("调整地图尺寸");
+            match (InputInt("宽（格）", state.m_resize_w))
+            {
+                value(v)? state.m_resize_w = clamp_map_dim(v);
+                none?;
+            }
+            match (InputInt("高（格）", state.m_resize_h))
+            {
+                value(v)? state.m_resize_h = clamp_map_dim(v);
+                none?;
+            }
+            do TextDisabled(F"瓦片像素 {tile_px} 创建后不可修改；"
+                + "缩小尺寸时越界格内容与逐格属性将被丢弃，且无法撤销");
+            if (Button("应用"))
+            {
+                let (w, h, _, _) = ctx.m_map->size();
+                if (state.m_resize_w != w || state.m_resize_h != h)
+                {
+                    do ctx.m_map->resize(state.m_resize_w, state.m_resize_h);
+                    state.m_undo->clear();
+                    state.m_dirty = true;
+                }
+                do CloseCurrentPopup();
+            }
+            SameLine();
+            if (Button("取消"))
+                do CloseCurrentPopup();
+            do EndPopup();
+        }
     }
 
     public func render_main(state: EditorState)=> void
