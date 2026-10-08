@@ -4820,6 +4820,17 @@ je_LayerId [类型别名]
 typedef int32_t je_LayerId;
 
 /*
+je_SourceId [类型别名]
+源纹理在图集文档内的下标，由 je_tilemap_add_source 经 out_id 返回
+    * 从 0 开始；remove 后其余源下标前移，跨操作持有的下标需按
+      source_count 重新校验
+请参见：
+    je_TilesetHandle
+    je_tilemap_add_source
+*/
+typedef int32_t je_SourceId;
+
+/*
 je_TileId [类型别名]
 普通瓦片在图集文档内的 id，由 je_tilemap_add_tile 经 out_id 返回
     * 从 1 开始，0 是无效值（亦为文档内占位槽的下标）
@@ -5157,18 +5168,20 @@ JE_API const char* je_tilemap_tileset_name(je_TilesetHandle tileset);
 /*
 je_tilemap_add_source [基本接口]
 向图集文档添加源纹理，tile_px 为瓦片边长（像素），网格数由纹理尺寸推得，
-源下标经 out_index 返回
+源下标（je_SourceId）经 out_id 返回
     * 已有同路径源时返回 true 且写出其下标；失败（纹理无法加载或参数不合法）
       返回 false，不写出下标
+请参见：
+    je_SourceId
 */
 JE_API bool je_tilemap_add_source(je_TilesetHandle tileset,
-    const char* texture_path, int32_t tile_px, int32_t* out_index);
+    const char* texture_path, int32_t tile_px, je_SourceId* out_id);
 
 /*
 je_tilemap_remove_source [基本接口]
 移除指定下标的源纹理：引用该源的瓦片/地形被标记失效，其余源下标前移
 */
-JE_API bool je_tilemap_remove_source(je_TilesetHandle tileset, int32_t source_idx);
+JE_API bool je_tilemap_remove_source(je_TilesetHandle tileset, je_SourceId source_idx);
 
 /*
 je_tilemap_source_count [基本接口]
@@ -5181,7 +5194,7 @@ je_tilemap_source_info [基本接口]
 取指定下标源纹理的信息，经出参返回 (纹理路径, 瓦片边长, 横向格数, 纵向格数)
     * 下标越界返回 false
 */
-JE_API bool je_tilemap_source_info(je_TilesetHandle tileset, int32_t source_idx,
+JE_API bool je_tilemap_source_info(je_TilesetHandle tileset, je_SourceId source_idx,
     const char** texture_path, int32_t* tile_px, int32_t* xcount, int32_t* ycount);
 
 // ---- 普通瓦片表 ----
@@ -5195,7 +5208,7 @@ je_tilemap_add_tile [基本接口]
     je_TileId
 */
 JE_API bool je_tilemap_add_tile(je_TilesetHandle tileset,
-    int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable,
+    je_SourceId source_idx, int32_t ix, int32_t iy, int32_t walkable,
     je_TileId* out_id);
 
 /*
@@ -5218,7 +5231,7 @@ je_tilemap_tile_info [基本接口]
     * id 越界返回 false；已移除的瓦片源下标为 -1
 */
 JE_API bool je_tilemap_tile_info(je_TilesetHandle tileset, je_TileId tile_id,
-    int32_t* source_idx, int32_t* ix, int32_t* iy, int32_t* walkable);
+    je_SourceId* source_idx, int32_t* ix, int32_t* iy, int32_t* walkable);
 
 /*
 je_tilemap_set_tile_walkable [基本接口]
@@ -5239,7 +5252,7 @@ je_tilemap_add_terrain [基本接口]
     je_TerrainKind
 */
 JE_API bool je_tilemap_add_terrain(je_TilesetHandle tileset, const char* name,
-    je_TerrainKind kind, int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable,
+    je_TerrainKind kind, je_SourceId source_idx, int32_t ix, int32_t iy, int32_t walkable,
     je_TerrainId* out_id);
 
 /*
@@ -5262,7 +5275,7 @@ je_tilemap_terrain_info [基本接口]
     * id 越界返回 false；kind 类型为 je_TerrainKind
 */
 JE_API bool je_tilemap_terrain_info(je_TilesetHandle tileset, je_TerrainId terrain_id,
-    const char** name, je_TerrainKind* kind, int32_t* source_idx, int32_t* ix, int32_t* iy,
+    const char** name, je_TerrainKind* kind, je_SourceId* source_idx, int32_t* ix, int32_t* iy,
     int32_t* walkable, int32_t* variant_count);
 
 /*
@@ -5275,7 +5288,7 @@ je_tilemap_set_terrain [基本接口]
 */
 JE_API bool je_tilemap_set_terrain(je_TilesetHandle tileset, je_TerrainId terrain_id,
     const char* name, je_TerrainKind kind,
-    int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable);
+    je_SourceId source_idx, int32_t ix, int32_t iy, int32_t walkable);
 
 /*
 je_tilemap_terrain_clear_variants [基本接口]

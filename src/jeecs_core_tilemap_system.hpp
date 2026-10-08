@@ -976,7 +976,7 @@ const char* je_tilemap_tileset_name(je_TilesetHandle tileset)
 
 // ---------------- 图集源纹理 ----------------
 bool je_tilemap_add_source(je_TilesetHandle tileset, const char* texture_path,
-    int32_t tile_px, int32_t* out_index)
+    int32_t tile_px, je_SourceId* out_id)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
     if (doc == nullptr || texture_path == nullptr || texture_path[0] == '\0'
@@ -986,8 +986,8 @@ bool je_tilemap_add_source(je_TilesetHandle tileset, const char* texture_path,
     for (size_t i = 0; i < doc->sources.size(); ++i)
         if (doc->sources[i].path == texture_path)
         {
-            if (out_index != nullptr)
-                *out_index = (int32_t)i;
+            if (out_id != nullptr)
+                *out_id = (je_SourceId)i;
             return true;
         }
     // 读取纹理尺寸以推导网格数
@@ -1013,11 +1013,11 @@ bool je_tilemap_add_source(je_TilesetHandle tileset, const char* texture_path,
     src.tex_h = th;
     doc->sources.push_back(std::move(src));
     ++doc->version;
-    if (out_index != nullptr)
-        *out_index = (int32_t)doc->sources.size() - 1;
+    if (out_id != nullptr)
+        *out_id = (je_SourceId)doc->sources.size() - 1;
     return true;
 }
-bool je_tilemap_remove_source(je_TilesetHandle tileset, int32_t source_idx)
+bool je_tilemap_remove_source(je_TilesetHandle tileset, je_SourceId source_idx)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
     if (doc == nullptr || source_idx < 0 || source_idx >= (int32_t)doc->sources.size())
@@ -1053,7 +1053,7 @@ int32_t je_tilemap_source_count(je_TilesetHandle tileset)
     auto* doc = je_tilemap_ts_doc(tileset);
     return doc ? (int32_t)doc->sources.size() : 0;
 }
-bool je_tilemap_source_info(je_TilesetHandle tileset, int32_t source_idx,
+bool je_tilemap_source_info(je_TilesetHandle tileset, je_SourceId source_idx,
     const char** texture_path, int32_t* tile_px, int32_t* xcount, int32_t* ycount)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
@@ -1068,7 +1068,7 @@ bool je_tilemap_source_info(je_TilesetHandle tileset, int32_t source_idx,
 }
 
 // ---------------- 普通瓦片表 ----------------
-bool je_tilemap_add_tile(je_TilesetHandle tileset, int32_t source_idx,
+bool je_tilemap_add_tile(je_TilesetHandle tileset, je_SourceId source_idx,
     int32_t ix, int32_t iy, int32_t walkable, je_TileId* out_id)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
@@ -1118,7 +1118,7 @@ int32_t je_tilemap_tile_count(je_TilesetHandle tileset)
     return doc ? (int32_t)doc->tiles.size() - 1 : 0;
 }
 bool je_tilemap_tile_info(je_TilesetHandle tileset, je_TileId tile_id,
-    int32_t* source_idx, int32_t* ix, int32_t* iy, int32_t* walkable)
+    je_SourceId* source_idx, int32_t* ix, int32_t* iy, int32_t* walkable)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
     if (doc == nullptr || tile_id <= 0 || tile_id >= (int32_t)doc->tiles.size())
@@ -1141,7 +1141,7 @@ void je_tilemap_set_tile_walkable(je_TilesetHandle tileset, je_TileId tile_id, i
 
 // ---------------- 自动图块地形 ----------------
 bool je_tilemap_add_terrain(je_TilesetHandle tileset, const char* name, je_TerrainKind kind,
-    int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable, je_TerrainId* out_id)
+    je_SourceId source_idx, int32_t ix, int32_t iy, int32_t walkable, je_TerrainId* out_id)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
     if (doc == nullptr || name == nullptr || kind < 0 || kind > 3
@@ -1187,7 +1187,7 @@ int32_t je_tilemap_terrain_count(je_TilesetHandle tileset)
     return doc ? (int32_t)doc->terrains.size() - 1 : 0;
 }
 bool je_tilemap_terrain_info(je_TilesetHandle tileset, je_TerrainId terrain_id,
-    const char** name, je_TerrainKind* kind, int32_t* source_idx, int32_t* ix, int32_t* iy,
+    const char** name, je_TerrainKind* kind, je_SourceId* source_idx, int32_t* ix, int32_t* iy,
     int32_t* walkable, int32_t* variant_count)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
@@ -1205,7 +1205,7 @@ bool je_tilemap_terrain_info(je_TilesetHandle tileset, je_TerrainId terrain_id,
 }
 bool je_tilemap_set_terrain(je_TilesetHandle tileset, je_TerrainId terrain_id,
     const char* name, je_TerrainKind kind,
-    int32_t source_idx, int32_t ix, int32_t iy, int32_t walkable)
+    je_SourceId source_idx, int32_t ix, int32_t iy, int32_t walkable)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
     if (doc == nullptr || terrain_id <= 0 || terrain_id >= (int32_t)doc->terrains.size()
