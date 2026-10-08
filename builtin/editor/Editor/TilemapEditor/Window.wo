@@ -250,40 +250,44 @@ namespace JEEditor::Editor::TilemapEditor
         {
             return SizeConstraints::Limited(((1024., 600.), (4096., 4096.)));
         }
+        // 菜单/快捷键实例仅随窗口创建构建一次（Windows::_show 每帧复用，
+        // 见 GUI/Windows.wo），不能捕获创建时的 m_state 快照——retarget
+        // 换文档后会作用于旧文档。须捕获窗口自身，触发时再读当前的
+        // m_state（工具栏经 run 每帧取新状态，无此问题）。
         public func getMenu(self: TilemapEditorWindow)=> option<Menu>
         {
-            let state = self.m_state;
+            let editor = self;
             return option::value <|
                 Menu::create("")
                     -> subMenu("文件")
-                    ->  subItem("保存", \= try_save(state);)
+                    ->  subItem("保存", \= try_save(editor.m_state);)
                     ->  shortCut("Ctrl+S")
                     ->  endItem
-                    ->  subItem("关闭", \= self->requestClose();)
+                    ->  subItem("关闭", \= editor->requestClose();)
                     ->  endItem
                     -> endMenu
                     -> subMenu("编辑")
-                    ->  subItem("撤销", \= state->undo();)
+                    ->  subItem("撤销", \= editor.m_state->undo();)
                     ->  endItem
-                    ->  subItem("重做", \= state->redo();)
+                    ->  subItem("重做", \= editor.m_state->redo();)
                     ->  endItem
                     -> endMenu
                     ;
         }
         public func getShortcut(self: TilemapEditorWindow)=> option<Shortcut>
         {
-            let state = self.m_state;
+            let editor = self;
             return option::value <|
                 Shortcut::begin()
                     ->shortCut(
                         [ImGuiKey::ImGuiMod_Ctrl, ImGuiKey::ImGuiKey_S],
-                        \= try_save(state);)
+                        \= try_save(editor.m_state);)
                     ->shortCut(
                         [ImGuiKey::ImGuiMod_Ctrl, ImGuiKey::ImGuiKey_Z],
-                        \= state->undo();)
+                        \= editor.m_state->undo();)
                     ->shortCut(
                         [ImGuiKey::ImGuiMod_Ctrl, ImGuiKey::ImGuiKey_Y],
-                        \= state->redo();)
+                        \= editor.m_state->redo();)
                     ->finish();
         }
 
