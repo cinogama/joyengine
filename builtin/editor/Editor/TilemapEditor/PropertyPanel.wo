@@ -1,22 +1,27 @@
 // 瓦片地图编辑器 —— 属性面板。
-// 两个页签：
+// 三个页签：
 //   格子属性：悬停/最后交互格子的属性取值链展示与逐格覆盖编辑；
 //   图集设置：地图的图集引用管理、当前调色板图集的源纹理管理、
-//             地形编辑、属性 schema、选中瓦片/地形的默认值与可通行性。
+//             地形编辑、属性 schema、选中瓦片/地形的默认值与可通行性；
+//   图层样式：活动图层的专属着色器、附加纹理通道与 uniform 变量。
 
 import pkg::std;
 
 import je;
 import je::gui;
+import je::graphic;
 import je::tilemap;
 
 import pkg::fsys;
 import pkg::iterator;
 import pkg::worst;
 
+import builtin::editor::GUI::Drag;
 import builtin::editor::GUI::Forms::MsgBox;
 import builtin::editor::GUI::Forms::InputBox;
+import builtin::editor::GUI::Widgets;
 
+import builtin::editor::Editor::Browser;
 import builtin::editor::Editor::ResourcePath;
 
 import DataModel;
@@ -26,11 +31,14 @@ import Palette;
 using std;
 using je;
 using je::gui;
+using je::graphic;
 using je::tilemap;
 using fsys;
 using iterator;
 using worst;
+using JEEditor::GUI::Drag;
 using JEEditor::GUI::Forms;
+using JEEditor::GUI::Widgets;
 using JEEditor::Editor::ResourcePath;
 using JEEditor::Editor::TilemapEditor;
 
@@ -67,6 +75,14 @@ namespace JEEditor::Editor::TilemapEditor
                     EndChild();
                     do EndTabItem();
                 }
+
+                if (BeginTabItem("图层样式"))
+                {
+                    if (BeginChildSize("##layer_style", GetContentRegionAvail()[0], 0.))
+                        do draw_layer_style(state, ctx);
+                    EndChild();
+                    do EndTabItem();
+                }
             }
             if (BeginTabItem("图集设置"))
             {
@@ -76,6 +92,547 @@ namespace JEEditor::Editor::TilemapEditor
                 do EndTabItem();
             }
             do EndTabBar();
+        }
+    }
+
+    // ---- 图层样式：逐层着色器 + 附加纹理 + uniform ----
+
+    // JE_ 前缀的 uniform 是引擎内部渲染变量，不在此展示（与材质面板一致）
+    func isInternalUniformName(uname: string)=> bool
+    {
+        return uname->begin_with("JE_");
+    }
+
+    // 着色器反射缓存：面板按着色器声明的 uniform/采样通道生成编辑器。
+    // 本编辑器为纯文档编辑（无 world 句柄），shader::load 为独立实例，
+    // 只读声明不参与渲染；路径未变不重复加载。
+    let mut s_style_reflect_path = "";
+    let mut s_style_reflect_shader = option::none: option<shader>;
+
+    func reflect_layer_shader(path: string)=> option<shader>
+    {
+        if (s_style_reflect_path != path)
+        {
+            s_style_reflect_path = path;
+            s_style_reflect_shader = shader::load(option::none, path);
+        }
+        return s_style_reflect_shader;
+    }
+
+    // “选择着色器”菜单当前展示的快照：目录完整路径 → 组内 .shader 文件
+    //（按路径排序）；每次点击选择按钮时重新扫描工作目录
+    let mut s_style_shader_groups = map::create:<string, array<fsys::path_t>>(0);
+
+    func scan_style_shader_groups()=> map<string, array<fsys::path_t>>
+    {
+        let groups = map::create:<string, array<fsys::path_t>>(0);
+        for (let p : recursive_walk(workpath()) |> iter_result
+            |> filter(\p = isfile(p)
+                && string::lower(extension(p)) == ".shader";)
+            |> collect
+            |> sort(\l, r = l->to_string() < r->to_string();))
+        {
+            let dir = parent(p)->to_string();
+            groups->set(dir, groups->get_or(dir, []: array<fsys::path_t>)->append(p));
+        }
+        return groups;
+    }
+
+    func try_set_layer_shader(state: EditorState, ctx: TilemapContext, path: fsys::path_t)=> void
+    {
+        if (string::lower(extension(path)) != ".shader")
+        {
+            do MsgBox::err("设置着色器失败", F"`{path}` 不是着色器文件（.shader）");
+            return;
+        }
+        do ctx.m_map->set_layer_shader(state.m_layer,
+            ResourcePath::toRuntimeResourcePath(path));
+        state.m_dirty = true;
+    }
+
+    // “选择着色器”弹出菜单：工作目录根下的文件平铺在顶层，其余目录按
+    // 相对路径展开为子菜单（与材质面板的选择菜单同款交互）
+    func show_style_shader_menu(state: EditorState, ctx: TilemapContext)=> void
+    {
+        if (s_style_shader_groups->keys->len == 0)
+        {
+            do MenuItemEnabled("（工作目录下没有 .shader 文件）", false);
+            return;
+        }
+
+        let root_dir = workpath()->to_string();
+        for (let dir : s_style_shader_groups->keys |> sort(\l, r = l < r;))
+        {
+            let files = s_style_shader_groups->get(dir)->unwrap;
+
+            if (dir == root_dir)
+            {
+                for (let p : files)
+                {
+                    if (MenuItem(filename(p)))
+                        do try_set_layer_shader(state, ctx, p);
+                }
+                continue;
+            }
+
+            let mut disp = dir;
+            match (relative(normalize(dir), workpath()))
+            {
+                ok(rel)? disp = rel;
+                err(_)?;
+            }
+            if (BeginMenu(disp))
+            {
+                defer EndMenu();
+                for (let p : files)
+                {
+                    if (MenuItem(filename(p)))
+                        do try_set_layer_shader(state, ctx, p);
+                }
+            }
+        }
+    }
+
+    // 找到该层已配置的某名 uniform（原始形态：类型 + iv/fv 各 4 分量）
+    //（局部名避开 map/count：与 map 模块、iterator::count 有歧义）
+    func find_layer_uniform(tmap: tilemap::Tilemap, layer: int, uname: string)
+        => option<(int, int, int, int, int, real, real, real, real)>
+    {
+        let ucount = tmap->layer_uniform_count(layer);
+        for (let mut i = 0; i < ucount; i += 1)
+        {
+            let (n, t, iv0, iv1, iv2, iv3, fv0, fv1, fv2, fv3) = tmap->layer_uniform(layer, i);
+            if (n == uname)
+                return option::value((t, iv0, iv1, iv2, iv3, fv0, fv1, fv2, fv3));
+        }
+        return option::none;
+    }
+
+    // 已配置 uniform 的整型/浮点分量（未配置过的 uniform 以 0 参与编辑）
+    func stored_iv(stored: option<(int, int, int, int, int, real, real, real, real)>)=> (int, int, int, int)
+    {
+        match (stored)
+        {
+            value((_, a, b, c, d, _, _, _, _))? return (a, b, c, d);
+            none? return (0, 0, 0, 0);
+        }
+    }
+    func stored_fv(stored: option<(int, int, int, int, int, real, real, real, real)>)=> (real, real, real, real)
+    {
+        match (stored)
+        {
+            value((_, _, _, _, _, a, b, c, d))? return (a, b, c, d);
+            none? return (0., 0., 0., 0.);
+        }
+    }
+
+    // 渲染并编辑一个样式 uniform：类型按着色器声明，值写入地图文档
+    //（渲染系统下一帧应用，无需保存）
+    func draw_style_uniform_row(state: EditorState, tmap: tilemap::Tilemap, layer: int,
+        uname: string, declared: shader::uniform_variable)=> void
+    {
+        let stored = find_layer_uniform(tmap, layer, uname);
+        let (i0, i1, i2, i3) = stored_iv(stored);
+        let (f0, f1, f2, f3) = stored_fv(stored);
+        let tag = F"##layer_style_uniform_{uname}";
+
+        // 标量整数（InputInt）的步进按钮绘制在输入框之外，预留右侧空间
+        let mut step_reserve = 0.;
+        match (declared)
+        {
+            integer(_)? step_reserve = 56.;
+            _?;
+        }
+        do beginMemberRow(uname, option::none: option<Color32RGBA>, step_reserve);
+
+        match (declared)
+        {
+            integer(_)?
+            {
+                match (InputInt(tag, i0))
+                {
+                    value(nv)?
+                    {
+                        do tmap->set_layer_uniform_int(layer, uname, nv);
+                        state.m_dirty = true;
+                    }
+                    none?;
+                }
+            }
+            integer2(_)?
+            {
+                match (InputInt2(tag, i0, i1))
+                {
+                    value((a, b))?
+                    {
+                        do tmap->set_layer_uniform_int2(layer, uname, a, b);
+                        state.m_dirty = true;
+                    }
+                    none?;
+                }
+            }
+            integer3(_)?
+            {
+                match (InputInt3(tag, i0, i1, i2))
+                {
+                    value((a, b, c))?
+                    {
+                        do tmap->set_layer_uniform_int3(layer, uname, a, b, c);
+                        state.m_dirty = true;
+                    }
+                    none?;
+                }
+            }
+            integer4(_)?
+            {
+                match (InputInt4(tag, i0, i1, i2, i3))
+                {
+                    value((a, b, c, d))?
+                    {
+                        do tmap->set_layer_uniform_int4(layer, uname, a, b, c, d);
+                        state.m_dirty = true;
+                    }
+                    none?;
+                }
+            }
+            float(_)?
+            {
+                match (InputFloat(tag, f0))
+                {
+                    value(nv)?
+                    {
+                        do tmap->set_layer_uniform_float(layer, uname, nv);
+                        state.m_dirty = true;
+                    }
+                    none?;
+                }
+            }
+            float2(_)?
+            {
+                match (InputFloat2(tag, f0, f1))
+                {
+                    value((a, b))?
+                    {
+                        do tmap->set_layer_uniform_float2(layer, uname, a, b);
+                        state.m_dirty = true;
+                    }
+                    none?;
+                }
+            }
+            float3(_)?
+            {
+                match (InputFloat3(tag, f0, f1, f2))
+                {
+                    value((a, b, c))?
+                    {
+                        do tmap->set_layer_uniform_float3(layer, uname, a, b, c);
+                        state.m_dirty = true;
+                    }
+                    none?;
+                }
+            }
+            float4(_)?
+            {
+                match (InputFloat4(tag, f0, f1, f2, f3))
+                {
+                    value((a, b, c, d))?
+                    {
+                        do tmap->set_layer_uniform_float4(layer, uname, a, b, c, d);
+                        state.m_dirty = true;
+                    }
+                    none?;
+                }
+            }
+            texture(pass_id)?
+            {
+                // 采样器类型的 uniform 采样指定通道的纹理（通道在下方
+                // 纹理通道区编辑），这里只展示它采样的通道
+                do TextDisabled(F"采样纹理通道 {pass_id}");
+            }
+            _?
+                do TextDisabled("（不支持的 uniform 类型）");
+        }
+    }
+
+    func draw_style_uniforms(state: EditorState, tmap: tilemap::Tilemap, layer: int,
+        sinst: shader)=> void
+    {
+        let uniforms = sinst->get_uniforms;
+
+        let mut names = []: array<string>;
+        for (let (uname, _) : uniforms)
+        {
+            if (!isInternalUniformName(uname))
+                names = names->append(uname);
+        }
+        names = names |> sort(\l, r = l < r;);
+
+        if (names->len == 0)
+        {
+            do TextDisabled("（没有可编辑的 uniform 变量）");
+            return;
+        }
+
+        for (let mut i = 0; i < names->len; i += 1)
+        {
+            let uname = names[i];
+            do draw_style_uniform_row(state, tmap, layer, uname,
+                uniforms->get(uname)->unwrap);
+            if (i + 1 < names->len)
+                memberSeparator();
+        }
+    }
+
+    func isTextureFile(path: fsys::path_t)=> bool
+    {
+        // 与资源浏览器/材质面板的纹理扩展名列表保持一致
+        static let texture_exts = {
+            [".png"] = true,
+            [".jpg"] = true,
+            [".jpeg"] = true,
+            [".bmp"] = true,
+            [".tga"] = true,
+            [".tif"] = true,
+            [".tiff"] = true,
+            [".gif"] = true,
+            [".webp"] = true,
+            [".hdr"] = true,
+            [".exr"] = true,
+            [".dds"] = true,
+            [".ico"] = true,
+            [".pvr"] = true,
+            [".ktx"] = true,
+            [".psd"] = true,
+        };
+        return texture_exts->contains(string::lower(extension(path)));
+    }
+
+    func try_set_layer_texture(state: EditorState, tmap: tilemap::Tilemap, layer: int,
+        slot: int, path: fsys::path_t)=> void
+    {
+        if (slot < 1)
+        {
+            do MsgBox::err("绑定纹理失败", "通道 0 保留给图集源纹理");
+            return;
+        }
+        if (!isTextureFile(path))
+        {
+            do MsgBox::err("绑定纹理失败", F"`{path}` 不是纹理文件");
+            return;
+        }
+        do tmap->set_layer_texture(layer, slot, ResourcePath::toRuntimeResourcePath(path));
+        state.m_dirty = true;
+    }
+
+    // 纹理通道卡片：通道清单 = 着色器声明的采样通道 ∪ 已配置的槽位，
+    // 用户无需手动指定通道号；槽 0 恒为图集源纹理（引擎绑定，只读）
+    func draw_style_channels(state: EditorState, ctx: TilemapContext, sinst: shader)=> void
+    {
+        let tmap = ctx.m_map;
+        let layer = state.m_layer;
+
+        // 通道号 → 采样它的 uniform 名列表
+        let channels = map::create:<int, array<string>>(0);
+        for (let (uname, uvar) : sinst->get_uniforms)
+        {
+            if (isInternalUniformName(uname))
+                continue;
+            match (uvar)
+            {
+                texture(pass)?
+                {
+                    let refs = channels->get_or(pass, []: array<string>);
+                    do channels->set(pass, refs->append(uname));
+                }
+                _?;
+            }
+        }
+
+        let tcount = tmap->layer_texture_count(layer);
+        let mut passes = channels->keys;
+        for (let mut ti = 0; ti < tcount; ti += 1)
+        {
+            let (slot, _) = tmap->layer_texture(layer, ti);
+            if (!channels->contains(slot))
+                passes = passes->append(slot);
+        }
+        // 槽 0（图集源纹理）恒定展示（array 无 contains，显式探查）
+        let mut has_zero = false;
+        for (let p : passes)
+        {
+            if (p == 0)
+                has_zero = true;
+        }
+        if (!has_zero)
+            passes = passes->append(0);
+        passes = passes |> sort(\l, r = l < r;);
+
+        for (let pass : passes)
+        {
+            // 该通道当前绑定的纹理路径（未配置 → none）
+            let mut bound = option::none: option<string>;
+            for (let mut ti = 0; ti < tcount; ti += 1)
+            {
+                let (slot, path) = tmap->layer_texture(layer, ti);
+                if (slot == pass)
+                    bound = option::value(path);
+            }
+
+            // 悬停提示：绑定路径 + 采样引用 + 操作说明，每项一行
+            let mut tips = []: array<string>;
+            match (bound)
+            {
+                value(p)? tips = tips->append(p);
+                none?;
+            }
+            match (channels->get(pass))
+            {
+                none? tips = tips->append("（未被任何着色器采样）");
+                value(refs)?
+                {
+                    for (let ref_name : refs |> sort(\l, r = l < r;))
+                        tips = tips->append(F"采样于 {ref_name}");
+                }
+            }
+
+            let card_h = 36.;
+            let (row_start, content_x) =
+                beginCardRow(F"##layer_style_tex_{pass}", card_h);
+
+            if (pass == 0)
+            {
+                tips = tips->append("图集源纹理（引擎自动绑定，只读）");
+                if (IsItemHovered())
+                    do SetTooltip(tips->reduce(\l, r = l + "\n" + r;)->unwrap);
+
+                setCursorX(content_x);
+                setCursorY(row_start.1 + (card_h - GetTextLineHeight()) * 0.5);
+                do Text("通道 0");
+                SameLine();
+                do TextDisabled("图集源纹理（只读）");
+                endCardRow(row_start, card_h);
+                continue;
+            }
+
+            tips = tips->append("拖动纹理文件到此处绑定/替换纹理");
+            if (IsItemHovered())
+                do SetTooltip(tips->reduce(\l, r = l + "\n" + r;)->unwrap);
+
+            match (JEEditor::GUI::Drag::AcceptDrag:<FilePayload>())
+            {
+                none?;
+                value(payload)?
+                    do try_set_layer_texture(state, tmap, layer, pass, payload->path);
+            }
+
+            let (rcx, _) = GetCursorPos();
+            let right_x = rcx + GetContentRegionAvail().0;
+
+            setCursorX(content_x);
+            setCursorY(row_start.1 + (card_h - GetTextLineHeight()) * 0.5);
+            do Text(F"通道 {pass}");
+            SameLine();
+            match (bound)
+            {
+                none? do TextDisabled("（未绑定纹理）");
+                value(p)? do TextDisabled(filename(normalize(p)));
+            }
+
+            setCursorX(right_x - 30.);
+            setCursorY(row_start.1 + (card_h - GetFrameHeight()) * 0.5);
+            if (ButtonSize(F"×##layer_style_tex_del_{pass}", (26., 0.)))
+            {
+                do tmap->set_layer_texture(layer, pass, "");
+                state.m_dirty = true;
+            }
+            if (IsItemHovered())
+                do SetTooltip("解绑该通道的纹理");
+            endCardRow(row_start, card_h);
+        }
+    }
+
+    // “图层样式”页签主体：编辑活动图层（图层面板选中的层）的渲染样式
+    public func draw_layer_style(state: EditorState, ctx: TilemapContext)=> void
+    {
+        let tmap = ctx.m_map;
+        let layer = state.m_layer;
+        let shader_path = tmap->layer_shader(layer);
+
+        // 着色器卡片：文件名直显，整行是拖放命中区，行尾选择/清除
+        let card_h = 36.;
+        let (row_start, content_x) = beginCardRow("##layer_style_shader_card", card_h);
+        if (IsItemHovered())
+        {
+            if (shader_path->len != 0)
+                do SetTooltip(F"{shader_path}\n拖动 .shader 文件到此处替换");
+            else
+                do SetTooltip("拖动 .shader 文件到此处指定该图层的着色器");
+        }
+        match (JEEditor::GUI::Drag::AcceptDrag:<FilePayload>())
+        {
+            none?;
+            value(payload)? do try_set_layer_shader(state, ctx, payload->path);
+        }
+
+        let (rcx, _) = GetCursorPos();
+        let right_x = rcx + GetContentRegionAvail().0;
+        setCursorX(content_x);
+        setCursorY(row_start.1 + (card_h - GetTextLineHeight()) * 0.5);
+        do Text("着色器");
+        SameLine();
+        if (shader_path->len == 0)
+            do TextDisabled("（使用默认）");
+        else
+            do Text(filename(normalize(shader_path)));
+
+        SetCursorPos((right_x - 62., row_start.1 + (card_h - GetFrameHeight()) * 0.5));
+        if (ButtonSize("选择…##layer_style_shader_pick", (58., 0.)))
+        {
+            s_style_shader_groups = scan_style_shader_groups();
+            OpenPopup("##layer_style_shader_menu");
+        }
+        if (IsItemHovered())
+            do SetTooltip("从工作目录选择 .shader 文件");
+
+        if (shader_path->len != 0)
+        {
+            SameLine();
+            if (ButtonSize("×##layer_style_shader_clear", (26., 0.)))
+            {
+                do tmap->set_layer_shader(layer, "");
+                state.m_dirty = true;
+            }
+            if (IsItemHovered())
+                do SetTooltip("清除图层着色器（回落默认渲染）");
+        }
+        endCardRow(row_start, card_h);
+
+        if (BeginPopup("##layer_style_shader_menu"))
+        {
+            defer EndPopup();
+            show_style_shader_menu(state, ctx);
+        }
+
+        do TextDisabled("渲染优先级：图层样式 > 地图根实体 > 内置 Forward2D");
+        Spacing();
+
+        if (shader_path->len == 0)
+            return;
+
+        match (reflect_layer_shader(shader_path))
+        {
+            none?
+                do TextDisabled("（着色器无法加载）");
+            value(sinst)?
+            {
+                SeparatorText("Uniform 变量");
+                do draw_style_uniforms(state, tmap, layer, sinst);
+                Spacing();
+                SeparatorText("纹理通道");
+                if (IsItemHovered())
+                    do SetTooltip("采样通道由着色器的 uniform 声明");
+                do draw_style_channels(state, ctx, sinst);
+            }
         }
     }
 

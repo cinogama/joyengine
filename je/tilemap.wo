@@ -96,6 +96,85 @@ namespace je
             extern("libjoyecs", "wojeapi_tilemap_set_layer_z")
                 public func set_layer_z(self: Tilemap, layer: int, z: real)=> void;
 
+            // ==================== 图层着色器样式 ====================
+            // 每层可指定专属着色器与附加纹理/uniform；渲染优先级：
+            // 图层样式 > 地图根实体 Renderer::Shaders > 内置 Forward2D。
+            // 样式修改只触发渲染侧轻量对齐（不重扫网格/不重建顶点）。
+
+            // 样式着色器路径（未指定为空串）
+            extern("libjoyecs", "wojeapi_tilemap_layer_shader")
+                public func layer_shader(self: Tilemap, layer: int)=> string;
+
+            // 设置样式着色器；path 传空串清除样式
+            extern("libjoyecs", "wojeapi_tilemap_set_layer_shader")
+                public func set_layer_shader(self: Tilemap, layer: int, path: string)=> void;
+
+            extern("libjoyecs", "wojeapi_tilemap_layer_texture_count")
+                public func layer_texture_count(self: Tilemap, layer: int)=> int;
+
+            // 设置某槽位附加纹理（path 空串删除该槽绑定）；槽 0 保留给
+            // 图集源纹理，slot<1 返回 false
+            extern("libjoyecs", "wojeapi_tilemap_layer_set_texture")
+                public func set_layer_texture(self: Tilemap, layer: int,
+                    slot: int, path: string)=> bool;
+
+            // 按序号（非槽位）取附加纹理，返回 (槽位, 纹理路径)
+            extern("libjoyecs", "wojeapi_tilemap_layer_get_texture")
+                public func layer_texture(self: Tilemap, layer: int, index: int)=> (int, string);
+
+            extern("libjoyecs", "wojeapi_tilemap_layer_uniform_count")
+                public func layer_uniform_count(self: Tilemap, layer: int)=> int;
+
+            // 原始形态 uniform 写入：type 取 UNIFORM_* 常量，未用分量传 0
+            extern("libjoyecs", "wojeapi_tilemap_layer_set_uniform")
+                public func set_layer_uniform(self: Tilemap, layer: int, name: string,
+                    type: int, iv0: int, iv1: int, iv2: int, iv3: int,
+                    fv0: real, fv1: real, fv2: real, fv3: real)=> bool;
+
+            // 按序号取 uniform，返回 (名字, 类型, iv0..iv3, fv0..fv3)
+            extern("libjoyecs", "wojeapi_tilemap_layer_get_uniform")
+                public func layer_uniform(self: Tilemap, layer: int, index: int)
+                    => (string, int, int, int, int, int, real, real, real, real);
+
+            // 按名字删除 uniform（不存在返回 false）
+            extern("libjoyecs", "wojeapi_tilemap_layer_remove_uniform")
+                public func remove_layer_uniform(self: Tilemap, layer: int, name: string)=> bool;
+
+            // 类型化 uniform 写入（未用分量自动补 0）
+            public func set_layer_uniform_int(self: Tilemap, layer: int, name: string, x: int)=> bool
+            {
+                return set_layer_uniform(self, layer, name, UNIFORM_INT, x, 0, 0, 0, 0., 0., 0., 0.);
+            }
+            public func set_layer_uniform_int2(self: Tilemap, layer: int, name: string, x: int, y: int)=> bool
+            {
+                return set_layer_uniform(self, layer, name, UNIFORM_INT2, x, y, 0, 0, 0., 0., 0., 0.);
+            }
+            public func set_layer_uniform_int3(self: Tilemap, layer: int, name: string, x: int, y: int, z: int)=> bool
+            {
+                return set_layer_uniform(self, layer, name, UNIFORM_INT3, x, y, z, 0, 0., 0., 0., 0.);
+            }
+            public func set_layer_uniform_int4(self: Tilemap, layer: int, name: string, x: int, y: int, z: int, w: int)=> bool
+            {
+                return set_layer_uniform(self, layer, name, UNIFORM_INT4, x, y, z, w, 0., 0., 0., 0.);
+            }
+            public func set_layer_uniform_float(self: Tilemap, layer: int, name: string, x: real)=> bool
+            {
+                return set_layer_uniform(self, layer, name, UNIFORM_FLOAT, 0, 0, 0, 0, x, 0., 0., 0.);
+            }
+            public func set_layer_uniform_float2(self: Tilemap, layer: int, name: string, x: real, y: real)=> bool
+            {
+                return set_layer_uniform(self, layer, name, UNIFORM_FLOAT2, 0, 0, 0, 0, x, y, 0., 0.);
+            }
+            public func set_layer_uniform_float3(self: Tilemap, layer: int, name: string, x: real, y: real, z: real)=> bool
+            {
+                return set_layer_uniform(self, layer, name, UNIFORM_FLOAT3, 0, 0, 0, 0, x, y, z, 0.);
+            }
+            public func set_layer_uniform_float4(self: Tilemap, layer: int, name: string,
+                x: real, y: real, z: real, w: real)=> bool
+            {
+                return set_layer_uniform(self, layer, name, UNIFORM_FLOAT4, 0, 0, 0, 0, x, y, z, w);
+            }
+
             // ==================== 瓦片读写 ====================
             extern("libjoyecs", "wojeapi_tilemap_get_tile")
                 public func get_tile(self: Tilemap, layer: int, x: int, y: int)=> int;
@@ -376,6 +455,17 @@ namespace je
 
         // ==================== 瓦片值编解码 ====================
         public let TILE_ID_BASE = 0x100000;
+
+        // ==================== 图层样式 uniform 类型 ====================
+        // 与引擎着色器 uniform 类型对齐：整型 / 浮点各 1~4 分量
+        public let UNIFORM_INT = 0;
+        public let UNIFORM_INT2 = 1;
+        public let UNIFORM_INT3 = 2;
+        public let UNIFORM_INT4 = 3;
+        public let UNIFORM_FLOAT = 4;
+        public let UNIFORM_FLOAT2 = 5;
+        public let UNIFORM_FLOAT3 = 6;
+        public let UNIFORM_FLOAT4 = 7;
 
         public func tile_value(tileset_idx: int, tile_id: int)=> int
         {

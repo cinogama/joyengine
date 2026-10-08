@@ -121,6 +121,48 @@ namespace jeecs
             }
         };
 
+        // ==================== 图层着色器样式 ====================
+        // uniform 类型与 jegl_shader::uniform_type 的 INT..FLOAT4 对齐
+        //（TEXTURE 由纹理槽表达，矩阵类暂不开放）
+        enum layer_uniform_type : uint8_t
+        {
+            LAYER_UNIFORM_INT = 0,
+            LAYER_UNIFORM_INT2,
+            LAYER_UNIFORM_INT3,
+            LAYER_UNIFORM_INT4,
+            LAYER_UNIFORM_FLOAT = 4,
+            LAYER_UNIFORM_FLOAT2,
+            LAYER_UNIFORM_FLOAT3,
+            LAYER_UNIFORM_FLOAT4,
+        };
+        inline bool is_valid_layer_uniform_type(uint8_t t)
+        {
+            return t <= LAYER_UNIFORM_FLOAT4;
+        }
+
+        struct LayerUniform
+        {
+            std::string name;
+            uint8_t type = LAYER_UNIFORM_INT;
+            int32_t iv[4] = {};
+            float fv[4] = {};
+        };
+        struct LayerTexture
+        {
+            int32_t slot = 1;       // 槽 0 保留给图集源纹理
+            std::string path;
+        };
+        struct LayerStyle
+        {
+            std::string shader_path;                    // 空 = 未指定（回落根实体/内置）
+            std::vector<LayerTexture> textures;         // 附加纹理（槽 >= 1）
+            std::vector<LayerUniform> uniforms;
+            // 样式独立版本戳：样式变化不 bump doc->version，避免触发
+            // 全网格重扫与顶点重建；渲染侧只做轻量的着色器/纹理对齐。
+            // 不落盘（加载即 1）。
+            uint64_t style_version = 1;
+        };
+
         struct MapLayer
         {
             std::string name;
@@ -130,6 +172,7 @@ namespace jeecs
             // 不同层须错开 z 以避免深度冲突；旧文件缺省为层下标。
             float z = 0.f;
             std::vector<int32_t> grid;  // w*h 稠密网格，行优先、y 自上而下
+            LayerStyle style;           // 逐层着色器样式（可空）
         };
         struct MapDocument
         {
@@ -406,6 +449,28 @@ namespace jeecs
             w.u32((uint32_t)m.layers.size());
             for (const auto& l : m.layers)
                 w.f32(l.z);
+            // 尾块：每层着色器样式（路径 + 附加纹理 + uniform 表）。
+            // style_version 不落盘。
+            w.u32((uint32_t)m.layers.size());
+            for (const auto& l : m.layers)
+            {
+                const auto& st = l.style;
+                w.str(st.shader_path);
+                w.u32((uint32_t)st.textures.size());
+                for (const auto& t : st.textures)
+                {
+                    w.i32(t.slot);
+                    w.str(t.path);
+                }
+                w.u32((uint32_t)st.uniforms.size());
+                for (const auto& u : st.uniforms)
+                {
+                    w.str(u.name);
+                    w.u8(u.type);
+                    for (int32_t v : u.iv) w.i32(v);
+                    for (float v : u.fv) w.f32(v);
+                }
+            }
             return write_buffer_to_file(w.b, path);
         }
 
@@ -462,6 +527,42 @@ namespace jeecs
                     return nullptr;
                 for (uint32_t i = 0; i < zn && r.ok; ++i)
                     m->layers[i].z = r.f32();
+            }
+            // 尾块（可选）：每层着色器样式。槽位/uniform 类型非法视为
+            // 文件损坏，整体拒绝加载。
+            if (r.o + 4 <= r.n)
+            {
+                uint32_t sn = r.u32();
+                if (sn > (uint32_t)m->layers.size())
+                    return nullptr;
+                for (uint32_t i = 0; i < sn && r.ok; ++i)
+                {
+                    auto& st = m->layers[i].style;
+                    st.shader_path = r.str();
+                    uint32_t tn = r.u32();
+                    if (r.o + (size_t)tn * 4 > r.n) { r.ok = false; break; }
+                    for (uint32_t k = 0; k < tn && r.ok; ++k)
+                    {
+                        int32_t slot = r.i32();
+                        std::string path = r.str();
+                        if (slot < 1) { r.ok = false; break; }
+                        st.textures.push_back({ slot, std::move(path) });
+                    }
+                    uint32_t un = r.u32();
+                    if (r.o + (size_t)un * 36 > r.n) { r.ok = false; break; }
+                    for (uint32_t k = 0; k < un && r.ok; ++k)
+                    {
+                        LayerUniform u;
+                        u.name = r.str();
+                        u.type = r.u8();
+                        for (int c = 0; c < 4; ++c) u.iv[c] = r.i32();
+                        for (int c = 0; c < 4; ++c) u.fv[c] = r.f32();
+                        if (!is_valid_layer_uniform_type(u.type)) { r.ok = false; break; }
+                        st.uniforms.push_back(std::move(u));
+                    }
+                }
+                if (!r.ok)
+                    return nullptr;
             }
             return m;
         }
