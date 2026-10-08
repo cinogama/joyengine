@@ -2,6 +2,8 @@
 // 底部栏：图层自上而下列出（列表顶 = 最上层）。点击选择活动图层；
 // 显隐/锁定切换与 Z 偏移编辑在行尾；新建/删除/上移/下移/重命名在
 // 工具条，行内右键也有等价的快捷菜单。
+// 活动图层的分片渲染着色器在列表上方单独一行编辑（每层可各自指定；
+// 新建图层默认 @/resource/shader/UnlitBlend.shader）。
 // 注意：图层增删/移动不进入撤销栈（绘制类操作才可撤销）；
 // 删除层级前会弹窗确认。
 
@@ -12,11 +14,14 @@ import je::gui;
 import je::tilemap;
 
 import pkg::fsys;
+import pkg::iterator;
+import pkg::worst;
 
 import builtin::editor::GUI::Forms::AskBox;
 import builtin::editor::GUI::Forms::InputBox;
 import builtin::editor::GUI::Forms::MsgBox;
 import builtin::editor::GUI::Widgets;
+import builtin::editor::Editor::ResourcePath;
 
 import DataModel;
 import EditorState;
@@ -28,6 +33,7 @@ using je::tilemap;
 using fsys;
 using JEEditor::GUI::Forms;
 using JEEditor::GUI::Widgets;
+using JEEditor::Editor::ResourcePath;
 using JEEditor::Editor::TilemapEditor;
 
 namespace JEEditor::Editor::TilemapEditor
@@ -220,6 +226,78 @@ namespace JEEditor::Editor::TilemapEditor
         Spacing();
     }
 
+    // 活动图层的分片渲染着色器编辑行：路径可直接手输，或从项目内的
+    // .shader 文件中选择。空路径 = 该层不渲染（渲染侧无兜底着色器）。
+    // 输入框 ID 带层下标：切换活动层时不延续上一层的编辑中途态
+    func draw_layer_shader_row(state: EditorState, ctx: TilemapContext)=> void
+    {
+        let map = ctx.m_map;
+        match (InputText(F"着色器##lshader{state.m_layer}",
+                map->layer_shader(state.m_layer)))
+        {
+            value(s)?
+            {
+                do map->set_layer_shader(state.m_layer, s);
+                state.m_dirty = true;
+            }
+            none?;
+        }
+        if (IsItemHovered())
+            do SetTooltip(
+                "活动图层的分片渲染着色器（运行时路径，如 @/resource/shader/UnlitBlend.shader）\n"
+                + "留空 = 该层不渲染");
+        SameLine();
+        if (Button("选择..."))
+        {
+            // 打开弹窗时扫描项目内的 .shader（@/ 运行时路径）。
+            // iterator 的符号以限定名调用：iterator::map 会与本文件
+            // 既有的局部变量 map 重名冲突，不引入 using iterator；
+            // sort 由 worst 包补入 std 命名空间（裸名经 using std 可见）
+            state.m_found_shaders->clear();
+            for (let p : iterator::iter_result(recursive_walk(workpath()))
+                |> iterator::filter(\p = isfile(p)
+                    && string::lower(extension(p)) == ".shader";)
+                |> iterator::collect
+                |> sort(\l, r = l->to_string() < r->to_string();))
+            {
+                do state.m_found_shaders->add(ResourcePath::toRuntimeResourcePath(p));
+            }
+            do OpenPopup("##layer_shader_popup");
+        }
+        do draw_layer_shader_popup(state, ctx);
+    }
+
+    // 着色器选择弹窗：项目内 .shader 列表点选，或清空（该层不渲染）
+    func draw_layer_shader_popup(state: EditorState, ctx: TilemapContext)=> void
+    {
+        if (BeginPopup("##layer_shader_popup"))
+        {
+            do Text("项目中的着色器（点击选择）：");
+            if (state.m_found_shaders->len == 0)
+                do TextDisabled("未在项目中找到 .shader 文件");
+            for (let found : state.m_found_shaders)
+            {
+                if (SelectableSelected(F"{found}##lshader_pick", false))
+                {
+                    do ctx.m_map->set_layer_shader(state.m_layer, found);
+                    state.m_dirty = true;
+                    do CloseCurrentPopup();
+                }
+            }
+            do Separator();
+            if (Button("清空（该层不渲染）"))
+            {
+                do ctx.m_map->set_layer_shader(state.m_layer, "");
+                state.m_dirty = true;
+                do CloseCurrentPopup();
+            }
+            SameLine();
+            if (Button("取消"))
+                do CloseCurrentPopup();
+            do EndPopup();
+        }
+    }
+
     public func draw_layers(state: EditorState, ctx: TilemapContext)=> void
     {
         let map = ctx.m_map;
@@ -254,6 +332,9 @@ namespace JEEditor::Editor::TilemapEditor
         SameLine();
         if (Button("重命名"))
             do rename_layer(state, ctx, state.m_layer);
+
+        // 活动图层着色器（每层独立）
+        do draw_layer_shader_row(state, ctx);
 
         // 图层列表（顶 = 最上层，与渲染顺序一致）
         if (BeginChildSize("##layer_list", GetContentRegionAvail()[0], 0.))

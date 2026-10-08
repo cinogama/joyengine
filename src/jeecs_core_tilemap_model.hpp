@@ -121,6 +121,10 @@ namespace jeecs
             }
         };
 
+        // 新建图层的默认着色器（运行时路径）。渲染侧不提供任何兜底
+        // 着色器：路径为空或加载失败的分片不渲染。
+        constexpr const char* DEFAULT_LAYER_SHADER = "@/resource/shader/UnlitBlend.shader";
+
         struct MapLayer
         {
             std::string name;
@@ -129,6 +133,8 @@ namespace jeecs
             // 该层在世界中的 z 偏移（相对地图根实体，世界单位）。
             // 不同层须错开 z 以避免深度冲突；旧文件缺省为层下标。
             float z = 0.f;
+            // 该层分片渲染使用的着色器（运行时路径，@/ 或 !/；空 = 不渲染）
+            std::string shader;
             std::vector<int32_t> grid;  // w*h 稠密网格，行优先、y 自上而下
         };
         struct MapDocument
@@ -391,6 +397,7 @@ namespace jeecs
             for (const auto& l : m.layers)
             {
                 w.str(l.name); w.u8(l.visible ? 1 : 0); w.u8(l.locked ? 1 : 0);
+                w.str(l.shader);
                 w.u32((uint32_t)l.grid.size());
                 for (int32_t v : l.grid) w.i32(v);
             }
@@ -432,6 +439,7 @@ namespace jeecs
                 l.name = r.str();
                 l.visible = r.u8() != 0;
                 l.locked = r.u8() != 0;
+                l.shader = r.str();
                 uint32_t cells = r.u32();
                 if (cells != (uint32_t)(m->width * m->height)) { r.ok = false; break; }
                 l.grid.resize(cells);
