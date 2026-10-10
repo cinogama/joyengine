@@ -121,8 +121,25 @@ if ((JE4_ENABLE_OPENGL330_GAPI AND (JE4_ENABLE_OPENGLES300_GAPI OR JE4_ENABLE_WE
     message(FATAL_ERROR "Cannot use OpenGL3.3, OpenGLES3.0 or WebGL2.0 at same time.")
 endif()
 
+# Make executables and shared libs find sibling dynamic libraries in their own
+# directory, so build outputs can be relocated as a whole.
+# NOTE: Must be set before any add_subdirectory(), as these values only apply
+# to targets created afterwards.
+if (APPLE)
+    # dylibs are referenced as @rpath/<name>.dylib and resolved by the loader's dir.
+    set(CMAKE_INSTALL_NAME_DIR "@rpath")
+    set(CMAKE_BUILD_WITH_INSTALL_NAME_DIR ON)
+    set(CMAKE_INSTALL_RPATH "@executable_path;@loader_path")
+elseif (UNIX AND NOT ANDROID)
+    set(CMAKE_INSTALL_RPATH "\$ORIGIN")
+endif()
+# Build outputs are distributed directly from build/ (no install() rules),
+# so bake INSTALL_RPATH into build-tree binaries instead of the default
+# absolute build-directory rpath.
+set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
+
 if (JE4_SPECIFY_OPENAL_LIB_NAME STREQUAL "")
-    # openal-soft will be compiled to dynamic-libs to following LGPL license.
+    # openal-soft will be compiled to dynamic-libs to follow LGPL license.
     set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared opengal-soft" FORCE)
     add_subdirectory("3rd/openal-soft")
 endif()
