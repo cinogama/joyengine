@@ -1264,6 +1264,12 @@ WOORT_API woort_api je_gui_set_next_item_width(void)
     return woort_ret_void();
 }
 
+WOORT_API woort_api je_gui_set_next_item_allow_overlap(void)
+{
+    ImGui::SetNextItemAllowOverlap();
+    return woort_ret_void();
+}
+
 WOORT_API woort_api je_gui_set_next_window_size_constraints(void)
 {
     ImGui::SetNextWindowSizeConstraints(val2vec2(0), val2vec2(1));

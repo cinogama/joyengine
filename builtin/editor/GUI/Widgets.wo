@@ -273,8 +273,10 @@ namespace JEEditor::GUI::Widgets
     // 卡片行（材质面板的模型行/纹理通道行）：绘制淡色底与悬停描边，
     // 并提交一个覆盖整行的隐形交互项——调用方紧接着对它做
     // IsItemHovered 悬停提示与 AcceptDrag 拖放，使整行都是命中区；
-    // 随后在行内绘制内容（后绘制的控件可抢占点击）。返回
-    // (行的窗口坐标起点, 内容起点 X)，内容绘制完调用 endCardRow 复位。
+    // 随后在行内绘制内容。ImGui 的悬停归属按提交顺序先到先得，
+    // 隐形项必须先声明 AllowOverlap，行内后绘制的按钮才能夺回
+    // 悬停与点击（否则整行只有 tooltip 有反应，按钮点不动）。
+    // 返回 (行的窗口坐标起点, 内容起点 X)，内容绘制完调用 endCardRow 复位。
     public func beginCardRow(tag: string, height: real)=> ((real, real), real)
     {
         let (start_x, start_y) = GetCursorPos();
@@ -287,6 +289,7 @@ namespace JEEditor::GUI::Widgets
             ((text_c.0 * 255.) as int, (text_c.1 * 255.) as int,
                 (text_c.2 * 255.) as int, 14));
 
+        do SetNextItemAllowOverlap();
         do InvisibleButton(tag, (width, height));
         if (IsItemHovered())
             draw->AddRect((sx, sy), (sx + width, sy + height),

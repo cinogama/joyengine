@@ -764,7 +764,12 @@ namespace je::gui
         
     extern("libjoyecs", "je_gui_set_next_item_width")
         public func SetNextItemWidth(w: real)=> void;
-        
+
+    // 允许下一个控件被随后提交的重叠控件抢占悬停/点击
+    //（先提交的整行区域控件 + 后绘制的行内按钮的固定搭配）
+    extern("libjoyecs", "je_gui_set_next_item_allow_overlap")
+        public func SetNextItemAllowOverlap()=> void;
+
     extern("libjoyecs", "je_gui_set_next_window_size_constraints")
         public func SetNextWindowSizeConstraints(minsz: ImVec2, maxsz: ImVec2)=> void;
     extern("libjoyecs", "je_gui_set_next_window_size")
