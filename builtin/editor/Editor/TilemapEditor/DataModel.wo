@@ -17,6 +17,11 @@ using je::tilemap;
 
 namespace JEEditor::Editor::TilemapEditor
 {
+    // 新建地图/图层默认指配的图层着色器：渲染侧着色器唯一来源是图层
+    // 样式（不回落地图根实体或内置默认）。项目 resource/shader 在建项
+    // 目时由内置着色器整体拷贝而来（见 ProjectOpen::initProjectResources）。
+    public let DEFAULT_LAYER_SHADER = "@/resource/shader/UnlitBlend.shader";
+
     // 两个图集句柄 option 的相等性（均为 none 视为相等；均有句柄时比较句柄）
     func same_tileset(a: option<tilemap::Tileset>, b: option<tilemap::Tileset>)=> bool
     {

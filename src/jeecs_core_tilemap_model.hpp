@@ -154,7 +154,7 @@ namespace jeecs
         };
         struct LayerStyle
         {
-            std::string shader_path;                    // 空 = 未指定（回落根实体/内置）
+            std::string shader_path;                    // 空 = 未指定（分片着色器列表为空）
             std::vector<LayerTexture> textures;         // 附加纹理（槽 >= 1）
             std::vector<LayerUniform> uniforms;
             // 样式独立版本戳：样式变化不 bump doc->version，避免触发

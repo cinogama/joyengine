@@ -115,31 +115,6 @@ namespace jeecs
 
         // ---- 共享资源 ----
 
-        // 共享的 Forward2D 着色器（共享资源缓存，路径加载）
-        static std::optional<basic::resource<graphic::shader>> shared_tile_shader()
-        {
-            static std::optional<basic::resource<graphic::shader>> cached;
-            static bool tried = false;
-            if (!tried)
-            {
-                tried = true;
-                cached = graphic::shader::load(nullptr, "!/builtin/shader/Forward2D.shader");
-                if (!cached.has_value())
-                    debug::logerr("Tilemap: unable to load builtin shader 'Forward2D.shader'.");
-            }
-            return cached;
-        }
-
-        // 根实体 Renderer::Shaders 指示的瓦片着色器（未挂/为空 → 无值）
-        static std::optional<basic::resource<graphic::shader>> root_shader(
-            const game_entity& root)
-        {
-            auto* comp = root.get_component<Renderer::Shaders>();
-            if (comp == nullptr || comp->shaders.empty())
-                return std::nullopt;
-            return comp->shaders.front();
-        }
-
         // 把样式表中的 uniform 写入层专属着色器实例（名字/类型与着色器
         // 声明不符时由 shader::set_uniform 内部校验兜底并告警）
         static void apply_style_uniforms(
@@ -172,15 +147,15 @@ namespace jeecs
         }
 
         // 图层样式对齐：维护该层专属着色器实例与附加纹理缓存。
-        // 返回该层当前应使用的着色器（无样式/加载失败 → 无值，由调用
-        // 方回落根实体/内置）。每层每帧调用一次，未变化时只做比对。
+        // 返回该层当前应使用的着色器（无样式/加载失败 → 无值，分片
+        // 着色器列表被清空）。每层每帧调用一次，未变化时只做比对。
         static std::optional<basic::resource<graphic::shader>> align_layer_style(
             layer_style_state& st, const Tilemap::LayerStyle& style)
         {
             if (style.shader_path.empty())
             {
                 // 样式被清除：释放实例与纹理（分片着色器/纹理由逐帧
-                // 对齐回落到根实体/内置）
+                // 对齐同步清空）
                 if (!st.loaded_path.empty())
                 {
                     st.shader.reset();
@@ -231,20 +206,21 @@ namespace jeecs
         }
 
         // 分片着色器与期望一致则不动，否则重写（资源句柄不同即更新）。
-        // 期望优先级：图层样式 > 根实体 Renderer::Shaders > 内置 Forward2D
+        // 着色器唯一来源是图层样式：未配置样式的层清空分片着色器，
+        // 不回落地图根实体或内置默认（编辑器建图/建层时逐层指配）
         static void refresh_part_shader(
             const std::optional<basic::resource<graphic::shader>>& layer_shader,
-            const game_entity& root, const game_entity& part)
+            const game_entity& part)
         {
             auto* comp = part.get_component<Renderer::Shaders>();
             if (comp == nullptr)
                 return;
-            auto desired = layer_shader.has_value() ? layer_shader : root_shader(root);
-            if (!desired.has_value())
-                desired = shared_tile_shader();
-            if (!desired.has_value())
+            if (!layer_shader.has_value())
+            {
+                comp->shaders.clear();
                 return;
-            const auto& want = desired.value();
+            }
+            const auto& want = layer_shader.value();
             if (comp->shaders.size() == 1
                 && comp->shaders.front().get() == want.get())
                 return;
@@ -412,15 +388,11 @@ namespace jeecs
             if (auto* root_scale = root.get_component<Transform::LocalScale>())
                 part.get_component<Transform::LocalScale>()->scale = root_scale->scale;
 
-            // 着色器：图层样式优先，其次根实体挂 Renderer::Shaders 时以其
-            // 指示为准，否则用内置 Forward2D
+            // 着色器：唯一来源是图层样式（编辑器建图/建层时逐层指配；
+            // 未配置样式的层分片着色器列表为空，渲染端按通用规则处理）
             auto* shaders = part.get_component<Renderer::Shaders>();
             if (layer_shader.has_value())
                 shaders->shaders.push_back(layer_shader.value());
-            else if (auto shad = root_shader(root); shad.has_value())
-                shaders->shaders.push_back(shad.value());
-            else if (auto def = shared_tile_shader())
-                shaders->shaders.push_back(def.value());
 
             auto* textures = part.get_component<Renderer::Textures>();
             if (auto tex = graphic::texture::load(nullptr, src.path))
@@ -662,10 +634,10 @@ namespace jeecs
                             rebuild_part(*r.doc, root, key, fnd->second);
                             fnd->second.built_stamp = stamp;
                         }
-                        // 着色器/纹理/比例尺跟随图层样式与根实体（组件与
-                        // 样式变化均不计入地图版本戳，故每帧对齐）
+                        // 着色器/纹理跟随图层样式，比例尺跟随根实体（组件
+                        // 与样式变化均不计入地图版本戳，故每帧对齐）
                         game_entity part{ fnd->second.entity };
-                        refresh_part_shader(state.layer_styles[key.layer].shader, root, part);
+                        refresh_part_shader(state.layer_styles[key.layer].shader, part);
                         refresh_part_textures(part, state.layer_styles[key.layer].textures);
                         sync_part_scale(root, part);
                         continue;

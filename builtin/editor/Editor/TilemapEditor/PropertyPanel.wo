@@ -581,7 +581,7 @@ namespace JEEditor::Editor::TilemapEditor
         do Text("着色器");
         SameLine();
         if (shader_path->len == 0)
-            do TextDisabled("（使用默认）");
+            do TextDisabled("（未指定）");
         else
             do Text(filename(normalize(shader_path)));
 
@@ -603,7 +603,7 @@ namespace JEEditor::Editor::TilemapEditor
                 state.m_dirty = true;
             }
             if (IsItemHovered())
-                do SetTooltip("清除图层着色器（回落默认渲染）");
+                do SetTooltip("清除图层着色器（该层不再按样式着色）");
         }
         endCardRow(row_start, card_h);
 
@@ -613,7 +613,7 @@ namespace JEEditor::Editor::TilemapEditor
             show_style_shader_menu(state, ctx);
         }
 
-        do TextDisabled("渲染优先级：图层样式 > 地图根实体 > 内置 Forward2D");
+        do TextDisabled("着色器只取图层样式，不回落根实体或内置默认");
         Spacing();
 
         if (shader_path->len == 0)

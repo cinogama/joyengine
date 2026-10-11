@@ -235,6 +235,10 @@ namespace JEEditor::Editor::TilemapEditor
                         {
                             value(idx)?
                             {
+                                // 与建图同策略：新层默认指配 UnlitBlend
+                                //（渲染只认图层样式，不回落根实体/内置默认）
+                                do ctx.m_map->set_layer_shader(idx,
+                                    DEFAULT_LAYER_SHADER);
                                 state.m_layer = idx;
                                 state.m_dirty = true;
                             }

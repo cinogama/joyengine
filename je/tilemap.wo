@@ -97,9 +97,10 @@ namespace je
                 public func set_layer_z(self: Tilemap, layer: int, z: real)=> void;
 
             // ==================== 图层着色器样式 ====================
-            // 每层可指定专属着色器与附加纹理/uniform；渲染优先级：
-            // 图层样式 > 地图根实体 Renderer::Shaders > 内置 Forward2D。
-            // 样式修改只触发渲染侧轻量对齐（不重扫网格/不重建顶点）。
+            // 每层可指定专属着色器与附加纹理/uniform；着色器唯一来源是
+            // 图层样式（编辑器建图/建层时默认指配 UnlitBlend，运行时不
+            // 回落地图根实体或内置默认）。样式修改只触发渲染侧轻量对齐
+            //（不重扫网格/不重建顶点）。
 
             // 样式着色器路径（未指定为空串）
             extern("libjoyecs", "wojeapi_tilemap_layer_shader")
