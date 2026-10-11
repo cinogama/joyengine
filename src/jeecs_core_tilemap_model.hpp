@@ -122,41 +122,21 @@ namespace jeecs
         };
 
         // ==================== 图层着色器样式 ====================
-        // uniform 类型与 jegl_shader::uniform_type 的 INT..FLOAT4 对齐
-        //（TEXTURE 由纹理槽表达，矩阵类暂不开放）
-        enum layer_uniform_type : uint8_t
-        {
-            LAYER_UNIFORM_INT = 0,
-            LAYER_UNIFORM_INT2,
-            LAYER_UNIFORM_INT3,
-            LAYER_UNIFORM_INT4,
-            LAYER_UNIFORM_FLOAT = 4,
-            LAYER_UNIFORM_FLOAT2,
-            LAYER_UNIFORM_FLOAT3,
-            LAYER_UNIFORM_FLOAT4,
-        };
-        inline bool is_valid_layer_uniform_type(uint8_t t)
-        {
-            return t <= LAYER_UNIFORM_FLOAT4;
-        }
-
-        struct LayerUniform
-        {
-            std::string name;
-            uint8_t type = LAYER_UNIFORM_INT;
-            int32_t iv[4] = {};
-            float fv[4] = {};
-        };
+        // 图层样式直接持有渲染资源实例（basic::resource 为共享指针，复制
+        // 仍指向同一实例）：uniform 值储存在着色器实例本身，由实例的
+        // 持有方直接维护。落盘时着色器/纹理按资源句柄的来源路径记录，
+        // uniform 值读自实例（JE_ 引擎内置与 TEXTURE/矩阵类除外，与
+        // .je4entity 保存 Shaders 的口径一致），加载后写回新实例。
         struct LayerTexture
         {
             int32_t slot = 1;       // 槽 0 保留给图集源纹理
-            std::string path;
+            basic::resource<graphic::texture> texture;
         };
         struct LayerStyle
         {
-            std::string shader_path;                    // 空 = 未指定（分片着色器列表为空）
+            // 空 = 未指定（分片着色器列表为空）
+            std::optional<basic::resource<graphic::shader>> shader;
             std::vector<LayerTexture> textures;         // 附加纹理（槽 >= 1）
-            std::vector<LayerUniform> uniforms;
             // 样式独立版本戳：样式变化不 bump doc->version，避免触发
             // 全网格重扫与顶点重建；渲染侧只做轻量的着色器/纹理对齐。
             // 不落盘（加载即 1）。
@@ -423,6 +403,168 @@ namespace jeecs
             return ts;
         }
 
+        // 资源实例的来源路径（落盘用）；内置/源码创建的资源无路径，返回空
+        inline std::string graphic_resource_path(
+            const basic::resource<graphic::texture>& texture)
+        {
+            const char* p = texture->resource()->m_handle.m_path_may_null_if_builtin;
+            return p != nullptr ? std::string(p) : std::string();
+        }
+        inline std::string graphic_resource_path(
+            const basic::resource<graphic::shader>& shader)
+        {
+            const char* p = shader->resource()->m_handle.m_path_may_null_if_builtin;
+            return p != nullptr ? std::string(p) : std::string();
+        }
+
+        // 可落盘的 uniform：JE_ 前缀是引擎内置渲染变量，TEXTURE（采样
+        // 通道，由纹理槽表达）与矩阵类不落盘——与 .je4entity 保存
+        // Shaders 的口径一致
+        inline bool is_saved_uniform(const jegl_shader::unifrom_variables* u)
+        {
+            if (u->m_name == nullptr || strncmp(u->m_name, "JE_", 3) == 0)
+                return false;
+            return u->m_uniform_type >= jegl_shader::uniform_type::INT
+                && u->m_uniform_type <= jegl_shader::uniform_type::FLOAT4;
+        }
+
+        // 把着色器实例上的 uniform 当前值写入 w（紧凑形态：名字 + 类型
+        // + 按类型 1~4 个分量）
+        inline void write_style_uniforms(bin_writer& w, const graphic::shader& shad)
+        {
+            const auto* uniforms = shad.resource()->m_custom_uniforms;
+            uint32_t count = 0;
+            while (uniforms != nullptr)
+            {
+                if (is_saved_uniform(uniforms)) ++count;
+                uniforms = uniforms->m_next;
+            }
+            w.u32(count);
+
+            uniforms = shad.resource()->m_custom_uniforms;
+            while (uniforms != nullptr)
+            {
+                if (is_saved_uniform(uniforms))
+                {
+                    w.str(uniforms->m_name);
+                    w.u8((uint8_t)uniforms->m_uniform_type);
+                    switch (uniforms->m_uniform_type)
+                    {
+                    case jegl_shader::uniform_type::INT:
+                        w.i32(uniforms->m_value.m_int); break;
+                    case jegl_shader::uniform_type::INT2:
+                        w.i32(uniforms->m_value.m_int2[0]);
+                        w.i32(uniforms->m_value.m_int2[1]); break;
+                    case jegl_shader::uniform_type::INT3:
+                        w.i32(uniforms->m_value.m_int3[0]);
+                        w.i32(uniforms->m_value.m_int3[1]);
+                        w.i32(uniforms->m_value.m_int3[2]); break;
+                    case jegl_shader::uniform_type::INT4:
+                        for (int c : uniforms->m_value.m_int4) w.i32(c);
+                        break;
+                    case jegl_shader::uniform_type::FLOAT:
+                        w.f32(uniforms->m_value.m_float); break;
+                    case jegl_shader::uniform_type::FLOAT2:
+                        w.f32(uniforms->m_value.m_float2[0]);
+                        w.f32(uniforms->m_value.m_float2[1]); break;
+                    case jegl_shader::uniform_type::FLOAT3:
+                        w.f32(uniforms->m_value.m_float3[0]);
+                        w.f32(uniforms->m_value.m_float3[1]);
+                        w.f32(uniforms->m_value.m_float3[2]); break;
+                    case jegl_shader::uniform_type::FLOAT4:
+                        for (float c : uniforms->m_value.m_float4) w.f32(c);
+                        break;
+                    default: break;   // is_saved_uniform 已过滤，不会到达
+                    }
+                }
+                uniforms = uniforms->m_next;
+            }
+        }
+
+        // 读回 uniform 值表并写到实例上（名字/类型与着色器声明不符时由
+        // set_uniform 校验兜底：找不到名字为无操作，类型不符告警）。
+        // shad 为空（着色器未指定/加载失败）时只解析不应用，保持流位置
+        inline void read_style_uniforms(bin_reader& r, graphic::shader* shad)
+        {
+            uint32_t un = r.u32();
+            if (r.o + (size_t)un * 9 > r.n) { r.ok = false; return; }
+            for (uint32_t k = 0; k < un && r.ok; ++k)
+            {
+                std::string name = r.str();
+                uint8_t type = r.u8();
+                if (type > (uint8_t)jegl_shader::uniform_type::FLOAT4)
+                {
+                    r.ok = false;    // 类型非法视为文件损坏
+                    break;
+                }
+                switch ((jegl_shader::uniform_type)type)
+                {
+                case jegl_shader::uniform_type::INT:
+                {
+                    int32_t v = r.i32();
+                    if (r.ok && shad != nullptr) shad->set_uniform(name, v);
+                    break;
+                }
+                case jegl_shader::uniform_type::INT2:
+                {
+                    int32_t a = r.i32();
+                    int32_t b = r.i32();
+                    if (r.ok && shad != nullptr) shad->set_uniform(name, a, b);
+                    break;
+                }
+                case jegl_shader::uniform_type::INT3:
+                {
+                    int32_t a = r.i32();
+                    int32_t b = r.i32();
+                    int32_t c = r.i32();
+                    if (r.ok && shad != nullptr) shad->set_uniform(name, a, b, c);
+                    break;
+                }
+                case jegl_shader::uniform_type::INT4:
+                {
+                    int32_t a = r.i32();
+                    int32_t b = r.i32();
+                    int32_t c = r.i32();
+                    int32_t d = r.i32();
+                    if (r.ok && shad != nullptr) shad->set_uniform(name, a, b, c, d);
+                    break;
+                }
+                case jegl_shader::uniform_type::FLOAT:
+                {
+                    float a = r.f32();
+                    if (r.ok && shad != nullptr) shad->set_uniform(name, a);
+                    break;
+                }
+                case jegl_shader::uniform_type::FLOAT2:
+                {
+                    float a = r.f32();
+                    float b = r.f32();
+                    if (r.ok && shad != nullptr) shad->set_uniform(name, math::vec2(a, b));
+                    break;
+                }
+                case jegl_shader::uniform_type::FLOAT3:
+                {
+                    float a = r.f32();
+                    float b = r.f32();
+                    float c = r.f32();
+                    if (r.ok && shad != nullptr) shad->set_uniform(name, math::vec3(a, b, c));
+                    break;
+                }
+                case jegl_shader::uniform_type::FLOAT4:
+                {
+                    float a = r.f32();
+                    float b = r.f32();
+                    float c = r.f32();
+                    float d = r.f32();
+                    if (r.ok && shad != nullptr)
+                        shad->set_uniform(name, math::vec4(a, b, c, d));
+                    break;
+                }
+                default: break;      // type 已验证 0..7，不会到达
+                }
+            }
+        }
+
         inline bool save_map_to(const MapDocument& m, const std::string& path)
         {
             bin_writer w;
@@ -449,27 +591,46 @@ namespace jeecs
             w.u32((uint32_t)m.layers.size());
             for (const auto& l : m.layers)
                 w.f32(l.z);
-            // 尾块：每层着色器样式（路径 + 附加纹理 + uniform 表）。
-            // style_version 不落盘。
+            // 尾块：每层着色器样式（着色器路径 + 附加纹理表 + uniform 值
+            // 表）。资源按其来源路径落盘：无路径的实例（内置/源码创建）
+            // 告警并按未配置处理（uniform 值随之不落盘）。style_version
+            // 不落盘。
             w.u32((uint32_t)m.layers.size());
             for (const auto& l : m.layers)
             {
                 const auto& st = l.style;
-                w.str(st.shader_path);
-                w.u32((uint32_t)st.textures.size());
+                std::string shader_path =
+                    st.shader.has_value() ? graphic_resource_path(st.shader.value())
+                    : std::string();
+                const bool save_shader =
+                    st.shader.has_value() && !shader_path.empty();
+                if (st.shader.has_value() && !save_shader)
+                    debug::logerr("Tilemap: layer shader is not created from a file, "
+                        "style is dropped when saving.");
+                w.str(shader_path);
+
+                std::vector<std::pair<int32_t, std::string>> tex_entries;
                 for (const auto& t : st.textures)
                 {
-                    w.i32(t.slot);
-                    w.str(t.path);
+                    std::string tex_path = graphic_resource_path(t.texture);
+                    if (tex_path.empty())
+                    {
+                        debug::logerr("Tilemap: layer texture at slot %d is not created "
+                            "from a file, binding is dropped when saving.", t.slot);
+                        continue;
+                    }
+                    tex_entries.emplace_back(t.slot, std::move(tex_path));
                 }
-                w.u32((uint32_t)st.uniforms.size());
-                for (const auto& u : st.uniforms)
+                w.u32((uint32_t)tex_entries.size());
+                for (const auto& [slot, tex_path] : tex_entries)
                 {
-                    w.str(u.name);
-                    w.u8(u.type);
-                    for (int32_t v : u.iv) w.i32(v);
-                    for (float v : u.fv) w.f32(v);
+                    w.i32(slot);
+                    w.str(tex_path);
                 }
+                if (save_shader)
+                    write_style_uniforms(w, *st.shader.value());
+                else
+                    w.u32(0);
             }
             return write_buffer_to_file(w.b, path);
         }
@@ -528,8 +689,9 @@ namespace jeecs
                 for (uint32_t i = 0; i < zn && r.ok; ++i)
                     m->layers[i].z = r.f32();
             }
-            // 尾块（可选）：每层着色器样式。槽位/uniform 类型非法视为
-            // 文件损坏，整体拒绝加载。
+            // 尾块（可选）：每层着色器样式（着色器路径 + 附加纹理表 +
+            // uniform 值表）。槽位/uniform 类型非法视为文件损坏，整体
+            // 拒绝加载；资源加载失败只告警并按未配置处理（不拒绝文档）。
             if (r.o + 4 <= r.n)
             {
                 uint32_t sn = r.u32();
@@ -538,7 +700,20 @@ namespace jeecs
                 for (uint32_t i = 0; i < sn && r.ok; ++i)
                 {
                     auto& st = m->layers[i].style;
-                    st.shader_path = r.str();
+                    std::string shader_path = r.str();
+                    graphic::shader* shad = nullptr;
+                    if (!shader_path.empty())
+                    {
+                        if (auto loaded = graphic::shader::load(nullptr, shader_path))
+                        {
+                            st.shader = loaded;
+                            shad = st.shader.value().get();
+                        }
+                        else
+                            debug::logerr(
+                                "Tilemap: unable to load layer shader '%s'.",
+                                shader_path.c_str());
+                    }
                     uint32_t tn = r.u32();
                     if (r.o + (size_t)tn * 4 > r.n) { r.ok = false; break; }
                     for (uint32_t k = 0; k < tn && r.ok; ++k)
@@ -546,20 +721,15 @@ namespace jeecs
                         int32_t slot = r.i32();
                         std::string path = r.str();
                         if (slot < 1) { r.ok = false; break; }
-                        st.textures.push_back({ slot, std::move(path) });
+                        if (auto tex = graphic::texture::load(nullptr, path))
+                            st.textures.push_back(LayerTexture{ slot, std::move(tex.value()) });
+                        else
+                            debug::logerr(
+                                "Tilemap: unable to load layer texture '%s'.",
+                                path.c_str());
                     }
-                    uint32_t un = r.u32();
-                    if (r.o + (size_t)un * 36 > r.n) { r.ok = false; break; }
-                    for (uint32_t k = 0; k < un && r.ok; ++k)
-                    {
-                        LayerUniform u;
-                        u.name = r.str();
-                        u.type = r.u8();
-                        for (int c = 0; c < 4; ++c) u.iv[c] = r.i32();
-                        for (int c = 0; c < 4; ++c) u.fv[c] = r.f32();
-                        if (!is_valid_layer_uniform_type(u.type)) { r.ok = false; break; }
-                        st.uniforms.push_back(std::move(u));
-                    }
+                    // uniform 值写回着色器实例（shad 为空时只解析不应用）
+                    read_style_uniforms(r, shad);
                 }
                 if (!r.ok)
                     return nullptr;

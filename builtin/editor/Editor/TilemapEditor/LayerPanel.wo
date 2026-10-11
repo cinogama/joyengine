@@ -8,6 +8,7 @@
 import pkg::std;
 
 import je;
+import je::graphic;
 import je::gui;
 import je::tilemap;
 
@@ -23,6 +24,7 @@ import EditorState;
 
 using std;
 using je;
+using je::graphic;
 using je::gui;
 using je::tilemap;
 using fsys;
@@ -236,9 +238,16 @@ namespace JEEditor::Editor::TilemapEditor
                             value(idx)?
                             {
                                 // 与建图同策略：新层默认指配 UnlitBlend
-                                //（渲染只认图层样式，不回落根实体/内置默认）
-                                do ctx.m_map->set_layer_shader(idx,
-                                    DEFAULT_LAYER_SHADER);
+                                //（渲染只认图层样式，不回落根实体/内置
+                                // 默认；加载失败保持未指定）
+                                match (shader::load(option::none,
+                                    TilemapEditor::DEFAULT_LAYER_SHADER))
+                                {
+                                    value(sh)?
+                                        do ctx.m_map->set_layer_shader(idx,
+                                            option::value(sh));
+                                    none?;
+                                }
                                 state.m_layer = idx;
                                 state.m_dirty = true;
                             }

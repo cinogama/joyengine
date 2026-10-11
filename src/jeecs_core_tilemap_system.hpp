@@ -80,18 +80,9 @@ namespace jeecs
             je_GameEntity entity{};
             uint64_t built_stamp = 0;
         };
-        // 图层样式状态：每层一份专属着色器实例（uniform 值存于实例上，
-        // 独立实例使"同一路径多层各配各的 uniform"成立）与附加纹理缓存。
-        // 层下标漂移（增删/移动图层）由"路径 + 版本比对"自愈；版本戳
-        // 变化时 applied_version/textures_version 被清零强制重应用。
-        struct layer_style_state
-        {
-            std::optional<basic::resource<graphic::shader>> shader;
-            std::string loaded_path;               // 已加载（或已失败）的路径
-            uint64_t applied_version = 0;          // uniform 已应用的 style_version
-            uint64_t textures_version = 0;         // 附加纹理已解析的 style_version
-            std::vector<std::pair<int32_t, basic::resource<graphic::texture>>> textures;
-        };
+        // 图层样式（着色器实例与附加纹理）直接储存在文档的 LayerStyle 里：
+        // 资源随文档加载就绪、uniform 值设在着色器实例上，渲染侧逐帧
+        // 与文档比对即可，无需渲染侧再维护样式状态。
 
         // 每个地图根实体的分片表 + 上次网格扫描结果（版本戳命中时免扫）
         struct root_state
@@ -100,8 +91,6 @@ namespace jeecs
             std::set<part_key> needed;
             uint64_t needed_stamp = 0;
             bool needed_valid = false;
-            // 图层下标 -> 样式状态（含该层专属着色器实例与已解析纹理）
-            std::map<int32_t, layer_style_state> layer_styles;
         };
 
         std::unordered_map<uint32_t, root_state> _m_roots;
@@ -115,112 +104,21 @@ namespace jeecs
 
         // ---- 共享资源 ----
 
-        // 把样式表中的 uniform 写入层专属着色器实例（名字/类型与着色器
-        // 声明不符时由 shader::set_uniform 内部校验兜底并告警）
-        static void apply_style_uniforms(
-            const Tilemap::LayerStyle& style, graphic::shader& shad)
-        {
-            for (const auto& u : style.uniforms)
-            {
-                switch ((Tilemap::layer_uniform_type)u.type)
-                {
-                case Tilemap::LAYER_UNIFORM_INT:
-                    shad.set_uniform(u.name, u.iv[0]); break;
-                case Tilemap::LAYER_UNIFORM_INT2:
-                    shad.set_uniform(u.name, u.iv[0], u.iv[1]); break;
-                case Tilemap::LAYER_UNIFORM_INT3:
-                    shad.set_uniform(u.name, u.iv[0], u.iv[1], u.iv[2]); break;
-                case Tilemap::LAYER_UNIFORM_INT4:
-                    shad.set_uniform(u.name, u.iv[0], u.iv[1], u.iv[2], u.iv[3]); break;
-                case Tilemap::LAYER_UNIFORM_FLOAT:
-                    shad.set_uniform(u.name, u.fv[0]); break;
-                case Tilemap::LAYER_UNIFORM_FLOAT2:
-                    shad.set_uniform(u.name, math::vec2(u.fv[0], u.fv[1])); break;
-                case Tilemap::LAYER_UNIFORM_FLOAT3:
-                    shad.set_uniform(u.name, math::vec3(u.fv[0], u.fv[1], u.fv[2])); break;
-                case Tilemap::LAYER_UNIFORM_FLOAT4:
-                    shad.set_uniform(u.name, math::vec4(
-                        u.fv[0], u.fv[1], u.fv[2], u.fv[3])); break;
-                default: break;
-                }
-            }
-        }
-
-        // 图层样式对齐：维护该层专属着色器实例与附加纹理缓存。
-        // 返回该层当前应使用的着色器（无样式/加载失败 → 无值，分片
-        // 着色器列表被清空）。每层每帧调用一次，未变化时只做比对。
-        static std::optional<basic::resource<graphic::shader>> align_layer_style(
-            layer_style_state& st, const Tilemap::LayerStyle& style)
-        {
-            if (style.shader_path.empty())
-            {
-                // 样式被清除：释放实例与纹理（分片着色器/纹理由逐帧
-                // 对齐同步清空）
-                if (!st.loaded_path.empty())
-                {
-                    st.shader.reset();
-                    st.loaded_path.clear();
-                    st.applied_version = st.textures_version = 0;
-                    st.textures.clear();
-                }
-                return std::nullopt;
-            }
-
-            if (st.loaded_path != style.shader_path)
-            {
-                // 路径变化（或首次配置）：加载层专属实例。加载失败只
-                // 告警一次，路径再变前不重试（与文档注册表同策略）。
-                st.shader.reset();
-                st.textures.clear();
-                st.applied_version = st.textures_version = 0;
-                st.loaded_path = style.shader_path;
-                if (auto shad = graphic::shader::load(nullptr, style.shader_path))
-                    st.shader = shad;
-                else
-                    debug::logerr("Tilemap: unable to load layer shader '%s'.",
-                        style.shader_path.c_str());
-            }
-
-            if (st.shader.has_value() && st.applied_version != style.style_version)
-            {
-                apply_style_uniforms(style, *st.shader.value().get());
-                st.applied_version = style.style_version;
-            }
-
-            if (st.textures_version != style.style_version)
-            {
-                st.textures.clear();
-                for (const auto& t : style.textures)
-                {
-                    if (t.slot < 1)    // 槽 0 保留给图集源纹理（API 已拦）
-                        continue;
-                    if (auto tex = graphic::texture::load(nullptr, t.path))
-                        st.textures.emplace_back(t.slot, tex.value());
-                    else
-                        debug::logerr("Tilemap: unable to load layer texture '%s'.",
-                            t.path.c_str());
-                }
-                st.textures_version = style.style_version;
-            }
-            return st.shader;
-        }
-
         // 分片着色器与期望一致则不动，否则重写（资源句柄不同即更新）。
         // 着色器唯一来源是图层样式：未配置样式的层清空分片着色器，
         // 不回落地图根实体或内置默认（编辑器建图/建层时逐层指配）
-        static void refresh_part_shader(
-            const std::optional<basic::resource<graphic::shader>>& layer_shader,
+        static void refresh_part_shader(const Tilemap::LayerStyle* style,
             const game_entity& part)
         {
             auto* comp = part.get_component<Renderer::Shaders>();
             if (comp == nullptr)
                 return;
-            if (!layer_shader.has_value())
+            if (style == nullptr || !style->shader.has_value())
             {
                 comp->shaders.clear();
                 return;
             }
-            const auto& want = layer_shader.value();
+            const auto& want = style->shader.value();
             if (comp->shaders.size() == 1
                 && comp->shaders.front().get() == want.get())
                 return;
@@ -232,12 +130,13 @@ namespace jeecs
         // 其余槽按图层样式逐帧比对重绑。与着色器/比例尺对齐同理——
         // 组件变化不计入地图版本戳，故每帧检查。
         static void refresh_part_textures(const game_entity& part,
-            const std::vector<std::pair<int32_t, basic::resource<graphic::texture>>>&
-                layer_textures)
+            const Tilemap::LayerStyle* style)
         {
             auto* comp = part.get_component<Renderer::Textures>();
             if (comp == nullptr)
                 return;
+
+            const size_t want_count = style != nullptr ? style->textures.size() : 0;
 
             // 现状中的非 0 槽绑定与期望逐项比对，一致则不动
             size_t matched = 0;
@@ -245,16 +144,16 @@ namespace jeecs
             {
                 if (e.m_pass_id == 0)
                     continue;
-                if (matched >= layer_textures.size()
-                    || e.m_pass_id != (size_t)layer_textures[matched].first
-                    || e.m_texture.get() != layer_textures[matched].second.get())
+                if (matched >= want_count
+                    || e.m_pass_id != (size_t)style->textures[matched].slot
+                    || e.m_texture.get() != style->textures[matched].texture.get())
                 {
-                    matched = layer_textures.size() + 1;    // 标记不一致
+                    matched = want_count + 1;    // 标记不一致
                     break;
                 }
                 ++matched;
             }
-            if (matched == layer_textures.size())
+            if (matched == want_count)
                 return;
 
             // 重绑：保留槽 0（图集源纹理），其余按样式重建
@@ -263,8 +162,9 @@ namespace jeecs
                 if (e.m_pass_id == 0)
                     kept.push_back(e);
             comp->textures = kept;
-            for (const auto& [slot, tex] : layer_textures)
-                comp->bind_texture((size_t)slot, tex);
+            if (style != nullptr)
+                for (const auto& t : style->textures)
+                    comp->bind_texture((size_t)t.slot, t.texture);
         }
 
         // 比例尺同步：把根实体 LocalScale 复制到分片 LocalScale。
@@ -359,10 +259,7 @@ namespace jeecs
         // ---- 分片生命周期 ----
 
         game_entity create_part_entity(game_entity root, int32_t layer, float layer_z,
-            const Tilemap::SourceTexture& src,
-            const std::optional<basic::resource<graphic::shader>>& layer_shader,
-            const std::vector<std::pair<int32_t, basic::resource<graphic::texture>>>&
-                layer_textures)
+            const Tilemap::SourceTexture& src, const Tilemap::LayerStyle& style)
         {
             auto world = get_world();
             auto part = world.add_entity<
@@ -391,15 +288,15 @@ namespace jeecs
             // 着色器：唯一来源是图层样式（编辑器建图/建层时逐层指配；
             // 未配置样式的层分片着色器列表为空，渲染端按通用规则处理）
             auto* shaders = part.get_component<Renderer::Shaders>();
-            if (layer_shader.has_value())
-                shaders->shaders.push_back(layer_shader.value());
+            if (style.shader.has_value())
+                shaders->shaders.push_back(style.shader.value());
 
             auto* textures = part.get_component<Renderer::Textures>();
             if (auto tex = graphic::texture::load(nullptr, src.path))
                 textures->bind_texture(0, tex.value());
             // 图层样式的附加纹理占其余槽（槽 0 已是图集源纹理）
-            for (const auto& [slot, tex] : layer_textures)
-                textures->bind_texture((size_t)slot, tex);
+            for (const auto& t : style.textures)
+                textures->bind_texture((size_t)t.slot, t.texture);
 
             auto* shape = part.get_component<Renderer::Shape>();
             auto created = graphic::vertex::create(
@@ -583,34 +480,8 @@ namespace jeecs
                         scan_needed(*r.doc, state.needed);
                     state.needed_stamp = stamp;
                     state.needed_valid = true;
-                    // 图层增删/移动不 bump style_version 但层下标会漂移：
-                    // 清零样式应用版本，强制各层重应用 uniform 与附加纹理
-                    //（着色器实例按路径比对自愈）
-                    for (auto& [li, lst] : state.layer_styles)
-                        lst.applied_version = lst.textures_version = 0;
                 }
                 const std::set<part_key>& needed = state.needed;
-
-                // 图层样式对齐（每层一次，先于分片循环）：维护该层专属
-                // 着色器实例、uniform 与附加纹理；文档不可用时整体释放
-                if (r.doc == nullptr)
-                {
-                    state.layer_styles.clear();
-                }
-                else
-                {
-                    for (size_t li = 0; li < r.doc->layers.size(); ++li)
-                        (void)align_layer_style(
-                            state.layer_styles[(int32_t)li], r.doc->layers[li].style);
-                    for (auto it = state.layer_styles.begin();
-                        it != state.layer_styles.end();)
-                    {
-                        if (it->first >= (int32_t)r.doc->layers.size())
-                            it = state.layer_styles.erase(it);
-                        else
-                            ++it;
-                    }
-                }
 
                 // 删除不再需要的分片
                 std::vector<part_key> removed;
@@ -626,6 +497,13 @@ namespace jeecs
                 // 重建/刷新保留与新增的分片
                 for (const auto& key : needed)
                 {
+                    // 图层样式直接取自文档（资源随文档加载就绪）；文档
+                    // 不可用或层下标越界按无样式处理（清空分片着色器）
+                    const Tilemap::LayerStyle* style =
+                        r.doc != nullptr
+                        && key.layer < (int32_t)r.doc->layers.size()
+                        ? &r.doc->layers[key.layer].style : nullptr;
+
                     auto fnd = state.parts.find(key);
                     if (fnd != state.parts.end())
                     {
@@ -637,8 +515,8 @@ namespace jeecs
                         // 着色器/纹理跟随图层样式，比例尺跟随根实体（组件
                         // 与样式变化均不计入地图版本戳，故每帧对齐）
                         game_entity part{ fnd->second.entity };
-                        refresh_part_shader(state.layer_styles[key.layer].shader, part);
-                        refresh_part_textures(part, state.layer_styles[key.layer].textures);
+                        refresh_part_shader(style, part);
+                        refresh_part_textures(part, style);
                         sync_part_scale(root, part);
                         continue;
                     }
@@ -652,10 +530,9 @@ namespace jeecs
                     if (src_info == nullptr)
                         continue;
 
-                    const auto& lst = state.layer_styles[key.layer];
                     game_entity part_entity = create_part_entity(
                         root, key.layer, r.doc->layers[key.layer].z, *src_info,
-                        lst.shader, lst.textures);
+                        style != nullptr ? *style : Tilemap::LayerStyle{});
                     auto* tag = part_entity.get_component<Tilemap::RenderPart>();
                     tag->owner_id = root_id;
                     tag->layer = key.layer;
@@ -875,22 +752,37 @@ void je_tilemap_set_layer_z(je_TilemapHandle map, je_LayerId layer, float z)
 // ---------------- 图层着色器样式 ----------------
 // 样式修改只 bump 层内 style_version（不 bump doc->version）：样式与
 // 网格内容正交，不应触发渲染侧的全网格重扫与顶点重建。
-const char* je_tilemap_layer_shader(je_TilemapHandle map, je_LayerId layer)
+// 不透明指针 je_tilemap_shader_ref / je_tilemap_texture_ref 在此即
+// basic::resource<graphic::shader/texture>*（见 include/jeecs.hpp）。
+je_tilemap_shader_ref* je_tilemap_layer_shader(je_TilemapHandle map, je_LayerId layer)
 {
     auto* doc = je_tilemap_map_doc(map);
-    return doc != nullptr && layer >= 0 && layer < (int32_t)doc->layers.size()
-        ? doc->layers[layer].style.shader_path.c_str() : "";
+    if (doc == nullptr || layer < 0 || layer >= (int32_t)doc->layers.size()
+        || !doc->layers[layer].style.shader.has_value())
+        return nullptr;
+    return (je_tilemap_shader_ref*)new jeecs::basic::resource<jeecs::graphic::shader>(
+        doc->layers[layer].style.shader.value());
 }
-void je_tilemap_set_layer_shader(je_TilemapHandle map, je_LayerId layer, const char* path)
+void je_tilemap_set_layer_shader(je_TilemapHandle map, je_LayerId layer,
+    je_tilemap_shader_ref* shader)
 {
     auto* doc = je_tilemap_map_doc(map);
     if (doc == nullptr || layer < 0 || layer >= (int32_t)doc->layers.size())
         return;
-    std::string p = path != nullptr ? path : "";
     auto& style = doc->layers[layer].style;
-    if (style.shader_path != p)
+    auto* res = (jeecs::basic::resource<jeecs::graphic::shader>*)shader;
+    if (res == nullptr)
     {
-        style.shader_path = std::move(p);
+        if (style.shader.has_value())
+        {
+            style.shader.reset();
+            ++style.style_version;
+        }
+        return;
+    }
+    if (!style.shader.has_value() || style.shader.value().get() != res->get())
+    {
+        style.shader.emplace(*res);
         ++style.style_version;
     }
 }
@@ -901,18 +793,17 @@ int32_t je_tilemap_layer_texture_count(je_TilemapHandle map, je_LayerId layer)
         ? (int32_t)doc->layers[layer].style.textures.size() : 0;
 }
 bool je_tilemap_layer_set_texture(je_TilemapHandle map, je_LayerId layer,
-    int32_t slot, const char* path)
+    int32_t slot, je_tilemap_texture_ref* texture)
 {
     auto* doc = je_tilemap_map_doc(map);
     if (doc == nullptr || layer < 0 || layer >= (int32_t)doc->layers.size()
         || slot < 1)
         return false;
     auto& style = doc->layers[layer].style;
-    std::string p = path != nullptr ? path : "";
-
     auto fnd = std::find_if(style.textures.begin(), style.textures.end(),
         [slot](const jeecs::Tilemap::LayerTexture& t) { return t.slot == slot; });
-    if (p.empty())
+
+    if (texture == nullptr)
     {
         if (fnd == style.textures.end())
             return false;
@@ -920,19 +811,20 @@ bool je_tilemap_layer_set_texture(je_TilemapHandle map, je_LayerId layer,
         ++style.style_version;
         return true;
     }
+    auto* res = (jeecs::basic::resource<jeecs::graphic::texture>*)texture;
     if (fnd != style.textures.end())
     {
-        if (fnd->path == p)
+        if (fnd->texture.get() == res->get())
             return true;
-        fnd->path = std::move(p);
+        fnd->texture = *res;
     }
     else
-        style.textures.push_back({ slot, std::move(p) });
+        style.textures.push_back(jeecs::Tilemap::LayerTexture{ slot, *res });
     ++style.style_version;
     return true;
 }
 bool je_tilemap_layer_get_texture(je_TilemapHandle map, je_LayerId layer,
-    int32_t index, int32_t* slot, const char** path)
+    int32_t index, int32_t* slot, je_tilemap_texture_ref** texture)
 {
     auto* doc = je_tilemap_map_doc(map);
     if (doc == nullptr || layer < 0 || layer >= (int32_t)doc->layers.size()
@@ -940,75 +832,18 @@ bool je_tilemap_layer_get_texture(je_TilemapHandle map, je_LayerId layer,
         return false;
     const auto& t = doc->layers[layer].style.textures[index];
     if (slot != nullptr) *slot = t.slot;
-    if (path != nullptr) *path = t.path.c_str();
+    if (texture != nullptr)
+        *texture = (je_tilemap_texture_ref*)
+            new jeecs::basic::resource<jeecs::graphic::texture>(t.texture);
     return true;
 }
-int32_t je_tilemap_layer_uniform_count(je_TilemapHandle map, je_LayerId layer)
+void je_tilemap_free_shader_ref(je_tilemap_shader_ref* shader)
 {
-    auto* doc = je_tilemap_map_doc(map);
-    return doc != nullptr && layer >= 0 && layer < (int32_t)doc->layers.size()
-        ? (int32_t)doc->layers[layer].style.uniforms.size() : 0;
+    delete (jeecs::basic::resource<jeecs::graphic::shader>*)shader;
 }
-bool je_tilemap_layer_set_uniform(je_TilemapHandle map, je_LayerId layer,
-    const char* name, int32_t type, const int32_t* iv, const float* fv)
+void je_tilemap_free_texture_ref(je_tilemap_texture_ref* texture)
 {
-    auto* doc = je_tilemap_map_doc(map);
-    if (doc == nullptr || layer < 0 || layer >= (int32_t)doc->layers.size()
-        || name == nullptr || name[0] == '\0'
-        || !jeecs::Tilemap::is_valid_layer_uniform_type((uint8_t)type))
-        return false;
-    jeecs::Tilemap::LayerUniform u;
-    u.name = name;
-    u.type = (uint8_t)type;
-    for (int c = 0; c < 4; ++c)
-    {
-        u.iv[c] = iv != nullptr ? iv[c] : 0;
-        u.fv[c] = fv != nullptr ? fv[c] : 0.f;
-    }
-    auto& style = doc->layers[layer].style;
-    auto fnd = std::find_if(style.uniforms.begin(), style.uniforms.end(),
-        [&u](const jeecs::Tilemap::LayerUniform& o) { return o.name == u.name; });
-    if (fnd != style.uniforms.end())
-    {
-        if (fnd->type == u.type && memcmp(fnd->iv, u.iv, sizeof(u.iv)) == 0
-            && memcmp(fnd->fv, u.fv, sizeof(u.fv)) == 0)
-            return true;
-        *fnd = std::move(u);
-    }
-    else
-        style.uniforms.push_back(std::move(u));
-    ++style.style_version;
-    return true;
-}
-bool je_tilemap_layer_get_uniform(je_TilemapHandle map, je_LayerId layer,
-    int32_t index, const char** name, int32_t* type, int32_t* iv, float* fv)
-{
-    auto* doc = je_tilemap_map_doc(map);
-    if (doc == nullptr || layer < 0 || layer >= (int32_t)doc->layers.size()
-        || index < 0 || index >= (int32_t)doc->layers[layer].style.uniforms.size())
-        return false;
-    const auto& u = doc->layers[layer].style.uniforms[index];
-    if (name != nullptr) *name = u.name.c_str();
-    if (type != nullptr) *type = u.type;
-    if (iv != nullptr) memcpy(iv, u.iv, sizeof(u.iv));
-    if (fv != nullptr) memcpy(fv, u.fv, sizeof(u.fv));
-    return true;
-}
-bool je_tilemap_layer_remove_uniform(je_TilemapHandle map, je_LayerId layer,
-    const char* name)
-{
-    auto* doc = je_tilemap_map_doc(map);
-    if (doc == nullptr || layer < 0 || layer >= (int32_t)doc->layers.size()
-        || name == nullptr)
-        return false;
-    auto& style = doc->layers[layer].style;
-    auto fnd = std::find_if(style.uniforms.begin(), style.uniforms.end(),
-        [name](const jeecs::Tilemap::LayerUniform& o) { return o.name == name; });
-    if (fnd == style.uniforms.end())
-        return false;
-    style.uniforms.erase(fnd);
-    ++style.style_version;
-    return true;
+    delete (jeecs::basic::resource<jeecs::graphic::texture>*)texture;
 }
 
 // ---------------- 瓦片读写 ----------------
@@ -1799,13 +1634,28 @@ WOORT_API woort_api wojeapi_tilemap_set_layer_z(void)
 }
 WOORT_API woort_api wojeapi_tilemap_layer_shader(void)
 {
-    return woort_ret_string(je_tilemap_layer_shader(
-        (int32_t)woort_int(0), (int32_t)woort_int(1)));
+    je_tilemap_shader_ref* shader = je_tilemap_layer_shader(
+        (int32_t)woort_int(0), (int32_t)woort_int(1));
+    if (shader == nullptr)
+        return woort_ret_option_none();
+    // 新建引用副本交由 GC 释放（与 wojeapi_shader_open 同款）
+    return woort_ret_option_gchandle(
+        shader, WOORT_IGNORE,
+        [](void* ptr)
+        {
+            delete (jeecs::basic::resource<jeecs::graphic::shader> *)ptr;
+        },
+        nullptr);
 }
 WOORT_API woort_api wojeapi_tilemap_set_layer_shader(void)
 {
-    je_tilemap_set_layer_shader((int32_t)woort_int(0), (int32_t)woort_int(1),
-        woort_string(2));
+    // 第 2 参 shader 为 option<shader>：none 表示清除样式
+    woort_value s;
+    je_tilemap_shader_ref* shader = nullptr;
+    if (woort_push_reserve(1, &s) && woort_option_get(s, 2))
+        shader = (je_tilemap_shader_ref*)woort_gcpointer(s);
+    je_tilemap_set_layer_shader(
+        (int32_t)woort_int(0), (int32_t)woort_int(1), shader);
     return woort_ret_void();
 }
 WOORT_API woort_api wojeapi_tilemap_layer_texture_count(void)
@@ -1815,70 +1665,38 @@ WOORT_API woort_api wojeapi_tilemap_layer_texture_count(void)
 }
 WOORT_API woort_api wojeapi_tilemap_layer_set_texture(void)
 {
+    // 第 3 参 texture 为 option<texture>：none 表示删除该槽绑定
+    woort_value s;
+    je_tilemap_texture_ref* texture = nullptr;
+    if (woort_push_reserve(1, &s) && woort_option_get(s, 3))
+        texture = (je_tilemap_texture_ref*)woort_gcpointer(s);
     return woort_ret_bool(je_tilemap_layer_set_texture(
-        (int32_t)woort_int(0), (int32_t)woort_int(1),
-        (int32_t)woort_int(2), woort_string(3)) ? true : false);
+        (int32_t)woort_int(0), (int32_t)woort_int(1), (int32_t)woort_int(2),
+        texture) ? true : false);
 }
 WOORT_API woort_api wojeapi_tilemap_layer_get_texture(void)
 {
     woort_value s;
-    if (!woort_push_reserve(1, &s))
+    if (!woort_push_reserve(2, &s))
         return woort_ret_panic("Stack overflow.");
     int32_t slot = 0;
-    const char* path = "";
+    je_tilemap_texture_ref* texture = nullptr;
     je_tilemap_layer_get_texture((int32_t)woort_int(0), (int32_t)woort_int(1),
-        (int32_t)woort_int(2), &slot, &path);
+        (int32_t)woort_int(2), &slot, &texture);
     woort_set_struct(s + 0, 2);
     woort_struct_set_int(s + 0, 0, slot);
-    woort_struct_set_string(s + 0, 1, path);
+    if (texture != nullptr)
+        woort_set_option_gchandle(
+            s + 1, texture, WOORT_IGNORE,
+            [](void* ptr)
+            {
+                delete (jeecs::basic::resource<jeecs::graphic::texture> *)ptr;
+            },
+            nullptr);
+    else
+        woort_set_option_none(s + 1);
+    woort_struct_set(s + 0, 1, s + 1);
     return woort_ret_value(s + 0);
-}
-WOORT_API woort_api wojeapi_tilemap_layer_uniform_count(void)
-{
-    return woort_ret_int(je_tilemap_layer_uniform_count(
-        (int32_t)woort_int(0), (int32_t)woort_int(1)));
-}
-WOORT_API woort_api wojeapi_tilemap_layer_set_uniform(void)
-{
-    // 参序：self, layer, name, type, iv0..iv3, fv0..fv3
-    int32_t iv[4] = {
-        (int32_t)woort_int(4), (int32_t)woort_int(5),
-        (int32_t)woort_int(6), (int32_t)woort_int(7),
-    };
-    float fv[4] = {
-        woort_float(8), woort_float(9), woort_float(10), woort_float(11),
-    };
-    return woort_ret_bool(je_tilemap_layer_set_uniform(
-        (int32_t)woort_int(0), (int32_t)woort_int(1), woort_string(2),
-        (int32_t)woort_int(3), iv, fv) ? true : false);
-}
-WOORT_API woort_api wojeapi_tilemap_layer_get_uniform(void)
-{
-    woort_value s;
-    if (!woort_push_reserve(1, &s))
-        return woort_ret_panic("Stack overflow.");
-    const char* name = "";
-    int32_t type = 0, iv[4] = {};
-    float fv[4] = {};
-    je_tilemap_layer_get_uniform((int32_t)woort_int(0), (int32_t)woort_int(1),
-        (int32_t)woort_int(2), &name, &type, iv, fv);
-    woort_set_struct(s + 0, 10);
-    woort_struct_set_string(s + 0, 0, name);
-    woort_struct_set_int(s + 0, 1, type);
-    woort_struct_set_int(s + 0, 2, iv[0]);
-    woort_struct_set_int(s + 0, 3, iv[1]);
-    woort_struct_set_int(s + 0, 4, iv[2]);
-    woort_struct_set_int(s + 0, 5, iv[3]);
-    woort_struct_set_real(s + 0, 6, fv[0]);
-    woort_struct_set_real(s + 0, 7, fv[1]);
-    woort_struct_set_real(s + 0, 8, fv[2]);
-    woort_struct_set_real(s + 0, 9, fv[3]);
-    return woort_ret_value(s + 0);
-}
-WOORT_API woort_api wojeapi_tilemap_layer_remove_uniform(void)
-{
-    return woort_ret_bool(je_tilemap_layer_remove_uniform(
-        (int32_t)woort_int(0), (int32_t)woort_int(1), woort_string(2)) ? true : false);
 }
 WOORT_API woort_api wojeapi_tilemap_get_tile(void)
 {

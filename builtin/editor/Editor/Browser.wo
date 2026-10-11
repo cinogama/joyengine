@@ -835,7 +835,15 @@ namespace JEEditor::Editor
                 {
                     value(map)?
                     {
-                        do map->set_layer_shader(0, TilemapEditor::DEFAULT_LAYER_SHADER);
+                        // 建图时即加载 UnlitBlend 实例指配给默认图层
+                        //（加载失败保持未指定，渲染侧该层不可见）
+                        match (shader::load(option::none,
+                            TilemapEditor::DEFAULT_LAYER_SHADER))
+                        {
+                            value(sh)?
+                                do map->set_layer_shader(0, option::value(sh));
+                            none?;
+                        }
                         if (map->save(dst->to_string()))
                         {
                             dirty->set(true);

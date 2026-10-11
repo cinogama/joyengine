@@ -4990,28 +4990,39 @@ je_tilemap_set_layer_z [基本接口]
 JE_API void je_tilemap_set_layer_z(je_TilemapHandle map, je_LayerId layer, float z);
 
 // ---- 图层着色器样式 ----
-// 每层可指定一个专属着色器（含附加纹理槽与 uniform 变量表）；渲染时
-// 优先级：图层样式 > 地图根实体 Renderer::Shaders > 内置 Forward2D。
-// uniform 类型常量（type 取值）：
-//     0..3 = INT, INT2, INT3, INT4        （整型 1~4 分量，取 iv）
-//     4..7 = FLOAT, FLOAT2, FLOAT3, FLOAT4（浮点 1~4 分量，取 fv）
+// 每层可直接持有一个专属着色器实例与若干附加纹理槽；图层样式是该层
+// 分片渲染的唯一着色器来源（未配置样式的层分片着色器列表为空，不回落
+// 地图根实体或内置默认）。uniform 值不经过瓦片地图——它们储存在着色器
+// 实例本身，由实例的持有方直接设置与读取（graphic::shader::set_uniform），
+// 渲染侧直接使用图层样式持有的实例，改动即时生效；保存文档时实例上的
+// uniform 当前值随图层样式落盘（JE_ 引擎内置变量与 TEXTURE/矩阵类除外，
+// 与 .je4entity 保存 Shaders 的口径一致），加载后写回新实例。
 // 样式修改只自增图层样式版本（不走地图版本号），渲染侧做轻量对齐，
 // 不触发网格重扫与顶点重建。
+// 样式资源经下列不透明指针类型跨 C 边界传递（与 jegl_frame_buffer 的
+// attachment_t 同款姿势，C 侧不透明、实现侧按实际类型使用）：
+//     je_tilemap_shader_ref  实为 jeecs::basic::resource<jeecs::graphic::shader>
+//     je_tilemap_texture_ref 实为 jeecs::basic::resource<jeecs::graphic::texture>
+typedef struct je_tilemap_shader_ref je_tilemap_shader_ref;
+typedef struct je_tilemap_texture_ref je_tilemap_texture_ref;
 
 /*
 je_tilemap_layer_shader [基本接口]
-取图层样式的着色器路径，未指定时返回空串
+取图层样式的着色器实例，返回新建引用副本（用 je_tilemap_free_shader_ref 释放）
+    * 未指定样式时返回 nullptr
 */
-JE_API const char* je_tilemap_layer_shader(je_TilemapHandle map, je_LayerId layer);
+JE_API je_tilemap_shader_ref* je_tilemap_layer_shader(je_TilemapHandle map,
+    je_LayerId layer);
 
 /*
 je_tilemap_set_layer_shader [基本接口]
-设置图层样式的着色器路径
-    * path 传空串或 nullptr 表示清除样式（回落根实体着色器/内置）
+设置图层样式的着色器实例
+    * shader 传 nullptr 表示清除样式（该层分片着色器列表被清空）
+    * 样式共享持有传入实例：uniform 值设在实例上，改动下一帧生效
     * 下标越界时不做任何修改
 */
 JE_API void je_tilemap_set_layer_shader(je_TilemapHandle map, je_LayerId layer,
-    const char* path);
+    je_tilemap_shader_ref* shader);
 
 /*
 je_tilemap_layer_texture_count [基本接口]
@@ -5023,54 +5034,32 @@ JE_API int32_t je_tilemap_layer_texture_count(je_TilemapHandle map, je_LayerId l
 je_tilemap_layer_set_texture [基本接口]
 设置（或替换/删除）图层样式某槽位的附加纹理
     * 槽 0 保留给图集源纹理，slot < 1 时返回 false
-    * path 传空串或 nullptr 表示删除该槽位的绑定
+    * texture 传 nullptr 表示删除该槽位的绑定
     * 同槽位重复设置时替换旧值
 */
 JE_API bool je_tilemap_layer_set_texture(je_TilemapHandle map, je_LayerId layer,
-    int32_t slot, const char* path);
+    int32_t slot, je_tilemap_texture_ref* texture);
 
 /*
 je_tilemap_layer_get_texture [基本接口]
-按序号（非槽位）取图层样式的附加纹理，经出参返回 (槽位, 纹理路径)
+按序号（非槽位）取图层样式的附加纹理，经出参返回 (槽位, 纹理实例)
+    * 纹理实例为新建引用副本（用 je_tilemap_free_texture_ref 释放）
     * 各出参均可传 nullptr 跳过；序号越界返回 false
 */
 JE_API bool je_tilemap_layer_get_texture(je_TilemapHandle map, je_LayerId layer,
-    int32_t index, int32_t* slot, const char** path);
+    int32_t index, int32_t* slot, je_tilemap_texture_ref** texture);
 
 /*
-je_tilemap_layer_uniform_count [基本接口]
-取图层样式配置的 uniform 变量数量
+je_tilemap_free_shader_ref [基本接口]
+释放 je_tilemap_layer_shader 返回的着色器引用副本（传 nullptr 安全）
 */
-JE_API int32_t je_tilemap_layer_uniform_count(je_TilemapHandle map, je_LayerId layer);
+JE_API void je_tilemap_free_shader_ref(je_tilemap_shader_ref* shader);
 
 /*
-je_tilemap_layer_set_uniform [基本接口]
-设置（或替换）图层样式的一个 uniform 变量
-    * type 取值见本段说明（0..7）；iv/fv 按类型取前 1~4 个分量，
-      未用分量忽略；iv 或 fv 可传 nullptr（按零处理）
-    * 同名重复设置时替换旧值；名字为空返回 false
-    * 名字或类型与着色器实际声明不符时不报错，渲染侧按引擎
-      set_uniform 的校验兜底（值不生效并告警）
+je_tilemap_free_texture_ref [基本接口]
+释放 je_tilemap_layer_get_texture 出参返回的纹理引用副本（传 nullptr 安全）
 */
-JE_API bool je_tilemap_layer_set_uniform(je_TilemapHandle map, je_LayerId layer,
-    const char* name, int32_t type, const int32_t* iv, const float* fv);
-
-/*
-je_tilemap_layer_get_uniform [基本接口]
-按序号取图层样式的一个 uniform 变量，经出参返回 (名字, 类型, iv[4], fv[4])
-    * iv/fv 出参各自可传 nullptr 跳过；写出时固定 4 个分量（未用分量为 0）
-    * 序号越界返回 false
-*/
-JE_API bool je_tilemap_layer_get_uniform(je_TilemapHandle map, je_LayerId layer,
-    int32_t index, const char** name, int32_t* type, int32_t* iv, float* fv);
-
-/*
-je_tilemap_layer_remove_uniform [基本接口]
-按名字删除图层样式的一个 uniform 变量
-    * 名字不存在时返回 false
-*/
-JE_API bool je_tilemap_layer_remove_uniform(je_TilemapHandle map, je_LayerId layer,
-    const char* name);
+JE_API void je_tilemap_free_texture_ref(je_tilemap_texture_ref* texture);
 
 // ---- 瓦片读写 ----
 
