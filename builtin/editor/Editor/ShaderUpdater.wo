@@ -5,23 +5,27 @@ import je;
 import je::ecs;
 import je::graphic;
 import je::internal;
+import je::tilemap;
 import je::towoo::components;
 
 import builtin::editor::GUI::Forms::MsgBox;
 
+import builtin::editor::Editor::TilemapEditor;
 import builtin::editor::Singleton::Universe;
 import ResourcePath;
 
 using std;
 using je;
 using je::graphic;
+using je::tilemap;
 
 using JEEditor::GUI::Forms;
 using JEEditor::Singleton;
 using JEEditor::Editor::ResourcePath;
 
 // 浏览器右键 .shader 文件的“更新着色器”实现：失效缓存后重新加载，
-// 并刷新所有世界中对该着色器的引用。供 Browser.wo 调用。
+// 并刷新所有世界实体与当前打开瓦片地图图层样式中对该着色器的引用。
+// 供 Browser.wo 调用。
 namespace JEEditor::Editor::ShaderUpdater
 {
     // 把旧着色器实例上用户可写的 uniform 值复制到新实例，实现更新后
@@ -52,12 +56,61 @@ namespace JEEditor::Editor::ShaderUpdater
         }
     }
     
+    // 替换瓦片地图文档中指向该路径的图层样式着色器实例并保留 uniform
+    // 值。图层样式是瓦片渲染着色器的唯一来源，且文档按路径全局共享——
+    // 替换即同步编辑器画布与所有世界中该地图的实例。加载上下文与属性
+    // 面板指定图层着色器一致用 none；路径未变的样式替换不产生文档差异，
+    // 不触碰编辑器脏标记。
+    func updateTilemapLayers(tmap: tilemap::Tilemap, runtime_path: string)=> void
+    {
+        let (_, _, _, layer_count) = tmap->size();
+        for (let mut layer = 0; layer < layer_count; layer += 1)
+        {
+            // 仅当样式实例路径命中目标时替换；未指定/不命中原样保留
+            let mut sinst_opt = option::none: option<shader>;
+            match (tmap->layer_shader(layer))
+            {
+                value(sinst)?
+                {
+                    match (sinst->path)
+                    {
+                        value(p)?
+                            if (p == runtime_path)
+                                sinst_opt = option::value(sinst);
+                        none?;
+                    }
+                }
+                none?;
+            }
+
+            match (sinst_opt)
+            {
+                value(sinst)?
+                {
+                    match (shader::load(option::none, runtime_path))
+                    {
+                        value(snew)?
+                        {
+                            copyUniforms(sinst, snew);
+                            do tmap->set_layer_shader(layer, option::value(snew));
+                        }
+                        // 开头已校验可加载，这里失败仅防御性地保留旧实例
+                        none?;
+                    }
+                }
+                none?;
+            }
+        }
+    }
+
     // 更新流程：
     // 1. 失效该路径着色器的共享缓存（内存缓存条目与 GPU blob）；
     //    磁盘 .je4cache 由源码 CRC 自校验，文件改动后自动重新编译；
     // 2. 先加载一次校验新版可用，失败则弹窗提示并中止（保留旧实例）；
     // 3. 遍历所有世界的所有实体，替换 Renderer::Shaders 中指向该路径
-    //    的着色器实例并保留 uniform 值；其余实例原样保留。
+    //    的着色器实例并保留 uniform 值；其余实例原样保留；
+    // 4. 当前打开的瓦片地图：替换各图层样式中指向该路径的着色器实例
+    //    （保留 uniform 值），文档全局共享故各世界实例一并生效。
     // 每处替换都独立调用 shader::load：共享着色器（m_enable_to_shared）
     // 会命中共享缓存拿到同一实例；非共享着色器则各自创建全新实例——
     // 两种语义均由加载器保证，无需读取该标志。
@@ -115,6 +168,13 @@ namespace JEEditor::Editor::ShaderUpdater
                 if (changed)
                     e->set_shaders(rebuilt);
             }
+        }
+
+        // 4. 当前打开的瓦片地图（若有）：替换图层样式着色器实例
+        match (TilemapEditor::getOpenTilemapDocument())
+        {
+            none?;
+            value(tmap)? do updateTilemapLayers(tmap, runtime_path);
         }
     }
 }
