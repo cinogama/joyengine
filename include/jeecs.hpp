@@ -4926,6 +4926,27 @@ je_tilemap_map_version [基本接口]
 JE_API uint64_t je_tilemap_map_version(je_TilemapHandle map);
 
 /*
+je_tilemap_loaded_map_count [基本接口]
+返回进程内已注册的地图文档数量（含未保存的新建文档）
+    * 文档只增不删：计数也含被 je_tilemap_reload_map 弃用的旧实例，
+      其路径已清空、不再被任何世界使用
+请参见：
+    je_tilemap_loaded_map
+*/
+JE_API int32_t je_tilemap_loaded_map_count(void);
+
+/*
+je_tilemap_loaded_map [基本接口]
+按枚举下标取已注册地图文档的句柄，与 je_tilemap_loaded_map_count 配套遍历
+    * 下标从 0 起、小于 je_tilemap_loaded_map_count；越界返回 0（无效句柄）
+    * 枚举下标不是文档句柄：句柄稳定不变，而打开/新建文档会使后续
+      枚举下标位移，遍历中不应再打开/新建文档
+请参见：
+    je_tilemap_loaded_map_count
+*/
+JE_API je_TilemapHandle je_tilemap_loaded_map(int32_t index);
+
+/*
 je_tilemap_resize_map [基本接口]
 调整地图文档的网格尺寸，越界格子的逐格属性覆盖将被丢弃
     * 新尺寸不合法（<=0 或超过 65536）时不做任何修改

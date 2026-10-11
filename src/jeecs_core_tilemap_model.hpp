@@ -762,6 +762,21 @@ namespace jeecs
                 return doc_at(m_tilesets, id);
             }
 
+            // 已注册地图文档枚举（热更新等遍历用）：数量与按枚举下标
+            //（0 起，非句柄）取句柄。文档只增不删——计数含未保存的新建
+            // 文档，也含被 reload 弃用的旧实例（其路径已清空，不再被世界
+            // 使用，遍历侧替换样式无害）。
+            int32_t map_count() const
+            {
+                return (int32_t)m_maps.size();
+            }
+            je_TilemapHandle map_at(int32_t index) const
+            {
+                if (index < 0 || index >= (int32_t)m_maps.size() || m_maps[index] == nullptr)
+                    return 0;
+                return index + 1;
+            }
+
             // 打开（或复用缓存）地图文档；失败返回 {0, nullptr}
             std::pair<int32_t, MapDocument*> open_map(const std::string& path)
             {

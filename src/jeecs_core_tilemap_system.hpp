@@ -617,6 +617,14 @@ uint64_t je_tilemap_map_version(je_TilemapHandle map)
     auto* doc = je_tilemap_map_doc(map);
     return doc ? doc->version : 0;
 }
+int32_t je_tilemap_loaded_map_count(void)
+{
+    return jeecs::Tilemap::documents::inst().map_count();
+}
+je_TilemapHandle je_tilemap_loaded_map(int32_t index)
+{
+    return jeecs::Tilemap::documents::inst().map_at(index);
+}
 void je_tilemap_resize_map(je_TilemapHandle map, int32_t new_w, int32_t new_h)
 {
     auto* doc = je_tilemap_map_doc(map);
@@ -1577,6 +1585,17 @@ WOORT_API woort_api wojeapi_tilemap_map_path(void)
 WOORT_API woort_api wojeapi_tilemap_map_version(void)
 {
     return woort_ret_int((woort_Int)je_tilemap_map_version((int32_t)woort_int(0)));
+}
+WOORT_API woort_api wojeapi_tilemap_loaded_map_count(void)
+{
+    return woort_ret_int((woort_Int)je_tilemap_loaded_map_count());
+}
+WOORT_API woort_api wojeapi_tilemap_loaded_map(void)
+{
+    je_TilemapHandle map = je_tilemap_loaded_map((int32_t)woort_int(0));
+    if (map == 0)
+        return woort_ret_option_none();
+    return woort_ret_option_pointer((void*)(intptr_t)map);
 }
 WOORT_API woort_api wojeapi_tilemap_resize_map(void)
 {

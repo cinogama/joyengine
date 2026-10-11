@@ -86,20 +86,6 @@ namespace JEEditor::Editor::TilemapEditor
         }
     }
 
-    // 当前打开的地图文档句柄（地图编辑器未打开时为 none）。瓦片渲染的
-    // 着色器唯一来源是文档的图层样式，且文档按路径全局共享——热更新等
-    // 资源级操作拿到句柄替换样式实例，即同时作用于编辑器画布与所有世界
-    // 中的该地图实例。
-    public func getOpenTilemapDocument()=> option<tilemap::Tilemap>
-    {
-        match (s_map_editor_singleton)
-        {
-            none? { return option::none; }
-            value(editor)?
-                return option::value(editor.m_state.m_context->unwrap().m_map);
-        }
-    }
-
     // ===== 保存流程 =====
     // 保存地图：无路径（新建未保存）时先询问路径。保存成功（含异步询问
     // 路径后）才调用 after 继续后续流程（关闭窗口/切换文档）；

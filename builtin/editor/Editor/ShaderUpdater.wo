@@ -10,7 +10,6 @@ import je::towoo::components;
 
 import builtin::editor::GUI::Forms::MsgBox;
 
-import builtin::editor::Editor::TilemapEditor;
 import builtin::editor::Singleton::Universe;
 import ResourcePath;
 
@@ -24,7 +23,7 @@ using JEEditor::Singleton;
 using JEEditor::Editor::ResourcePath;
 
 // 浏览器右键 .shader 文件的“更新着色器”实现：失效缓存后重新加载，
-// 并刷新所有世界实体与当前打开瓦片地图图层样式中对该着色器的引用。
+// 并刷新所有世界实体与全部已加载瓦片地图图层样式中对该着色器的引用。
 // 供 Browser.wo 调用。
 namespace JEEditor::Editor::ShaderUpdater
 {
@@ -109,8 +108,8 @@ namespace JEEditor::Editor::ShaderUpdater
     // 2. 先加载一次校验新版可用，失败则弹窗提示并中止（保留旧实例）；
     // 3. 遍历所有世界的所有实体，替换 Renderer::Shaders 中指向该路径
     //    的着色器实例并保留 uniform 值；其余实例原样保留；
-    // 4. 当前打开的瓦片地图：替换各图层样式中指向该路径的着色器实例
-    //    （保留 uniform 值），文档全局共享故各世界实例一并生效。
+    // 4. 所有已加载的瓦片地图文档（含当前打开的）：替换各图层样式中
+    //    指向该路径的着色器实例（保留 uniform 值）。
     // 每处替换都独立调用 shader::load：共享着色器（m_enable_to_shared）
     // 会命中共享缓存拿到同一实例；非共享着色器则各自创建全新实例——
     // 两种语义均由加载器保证，无需读取该标志。
@@ -170,11 +169,17 @@ namespace JEEditor::Editor::ShaderUpdater
             }
         }
 
-        // 4. 当前打开的瓦片地图（若有）：替换图层样式着色器实例
-        match (TilemapEditor::getOpenTilemapDocument())
+        // 4. 所有已加载的瓦片地图文档（含当前打开的）：注册表只增不删，
+        //    一次遍历覆盖编辑器画布与各世界的全部地图实例；遍历中不
+        //    打开/新建文档，枚举下标保持有效。
+        let map_count = tilemap::Tilemap::loaded_map_count();
+        for (let mut mi = 0; mi < map_count; mi += 1)
         {
-            none?;
-            value(tmap)? do updateTilemapLayers(tmap, runtime_path);
+            match (tilemap::Tilemap::loaded_map(mi))
+            {
+                none?;
+                value(tmap)? do updateTilemapLayers(tmap, runtime_path);
+            }
         }
     }
 }

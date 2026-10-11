@@ -68,6 +68,19 @@ namespace je
             extern("libjoyecs", "wojeapi_tilemap_map_version")
                 public func version(self: Tilemap)=> int;
 
+            // ==================== 已加载文档枚举 ====================
+            // 进程内已注册的地图文档数量（含未保存的新建文档；文档只增
+            // 不删，亦含被 reload 弃用的旧实例——路径已清空，不被世界
+            // 使用，遍历侧替换图层样式无害）。
+            extern("libjoyecs", "wojeapi_tilemap_loaded_map_count")
+                public func loaded_map_count()=> int;
+
+            // 按枚举下标（0 起，< loaded_map_count）取已注册地图文档句柄；
+            // 越界返回 none。枚举下标不是文档句柄：打开/新建文档会使后续
+            // 下标位移，遍历中不应再打开/新建文档。
+            extern("libjoyecs", "wojeapi_tilemap_loaded_map")
+                public func loaded_map(index: int)=> option<Tilemap>;
+
             extern("libjoyecs", "wojeapi_tilemap_resize_map")
                 public func resize(self: Tilemap, new_w: int, new_h: int)=> void;
 
