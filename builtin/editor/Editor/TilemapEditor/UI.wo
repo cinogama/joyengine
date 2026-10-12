@@ -61,6 +61,11 @@ namespace JEEditor::Editor::TilemapEditor
         SameLine();
         if (Button("适应窗口"))
             do reset_view(state);
+        SameLine();
+        if (Button(state.m_dim_other_layers ? "突出选中层：开" | "突出选中层：关"))
+            state.m_dim_other_layers = !state.m_dim_other_layers;
+        if (IsItemHovered())
+            do SetTooltip("开启后其余图层在画布上半透明绘制，突出当前编辑的图层");
 
         // 状态文本
         SameLine();

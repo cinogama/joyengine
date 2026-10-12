@@ -1,7 +1,8 @@
 // 瓦片地图编辑器 —— 地图画布。
 // 以 ImGui 窗口绘制列表渲染全部可见图层（与实际渲染一致：普通瓦片整块、
 // 四象限地形按象限拼合，数据来自 Tilemap::cell_quad），叠加网格、
-// 悬停高亮与矩形工具预览。滚轮缩放（以鼠标为中心）、中键拖拽平移。
+// 悬停高亮与矩形工具预览；开启突出选中层时其余图层整体压为半透明。
+// 滚轮缩放（以鼠标为中心）、中键拖拽平移。
 
 import pkg::std;
 
@@ -103,6 +104,10 @@ namespace JEEditor::Editor::TilemapEditor
                 let (_, visible, _) = ctx.m_map->get_layer(layer);
                 if (visible == 0)
                     continue;
+                // 突出选中层：其余图层瓦片整体压为半透明（约 47% 不透明度）
+                let mut tint = (255, 255, 255, 255);
+                if (state.m_dim_other_layers && layer != state.m_layer)
+                    tint = (255, 255, 255, 120);
                 for (let mut y = vis_y0; y <= vis_y1; y += 1)
                 {
                     for (let mut x = vis_x0; x <= vis_x1; x += 1)
@@ -133,7 +138,7 @@ namespace JEEditor::Editor::TilemapEditor
                                                  cell_min[1] + qy as real * sub_h),
                                                 (cell_min[0] + (qx + 1) as real * sub_w,
                                                  cell_min[1] + (qy + 1) as real * sub_h),
-                                                (u0, v0), (u1, v1), tex, (255, 255, 255, 255));
+                                                (u0, v0), (u1, v1), tex, tint);
                                         }
                                         none?;
                                     }

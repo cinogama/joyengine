@@ -120,6 +120,8 @@ namespace JEEditor::Editor::TilemapEditor
 
         // ===== 图层 =====
         protected m_layer: mut int,          // 活动图层下标
+        // 突出选中层：开启时画布上其余图层半透明绘制
+        protected m_dim_other_layers: mut bool,
 
         // ===== 撤销与脏标记 =====
         protected m_undo: UndoStack,
@@ -184,6 +186,7 @@ namespace JEEditor::Editor::TilemapEditor
                 m_hover_cell = mut option::none,
 
                 m_layer = mut 0,
+                m_dim_other_layers = mut true,
 
                 m_undo = UndoStack::create(),
                 m_dirty = mut false,
