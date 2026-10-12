@@ -124,7 +124,7 @@ std::atomic_size_t registered_id = 0;
 std::shared_mutex registered_callbacks_mx;
 std::unordered_map<je_log_regid_t, std::pair<je_log_callback_t, void*>> registered_callbacks;
 
-je_log_regid_t je_log_register_callback(je_log_callback_t callback, void* userdata)
+je_log_regid_t je_log_register_callback(je_log_callback_t callback, /* OPTIONAL */ void* userdata)
 {
     size_t id = ++registered_id;
 
@@ -136,7 +136,7 @@ je_log_regid_t je_log_register_callback(je_log_callback_t callback, void* userda
     return id;
 }
 
-void* je_log_unregister_callback(je_log_regid_t regid)
+/* OPTIONAL: If registered userdata was null */ void* je_log_unregister_callback(je_log_regid_t regid)
 {
     std::lock_guard lg(registered_callbacks_mx);
     assert(registered_callbacks.find(regid) != registered_callbacks.end());

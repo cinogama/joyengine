@@ -515,7 +515,7 @@ namespace jeecs
 // File-scope helpers and WOORT_API / free functions (global scope)
 // ==========================================================================
 
-void je_towoo_unregister_system(const je_TypeInfo* tinfo);
+void je_towoo_unregister_system(/* OPTIONAL */ const je_TypeInfo* tinfo);
 
 namespace
 {
@@ -1029,7 +1029,7 @@ void je_towoo_update_api()
 #endif
 }
 
-void je_towoo_unregister_system(const je_TypeInfo* tinfo)
+void je_towoo_unregister_system(/* OPTIONAL */ const je_TypeInfo* tinfo)
 {
     if (tinfo == nullptr)
         return;
@@ -1051,7 +1051,7 @@ void je_towoo_unregister_system(const je_TypeInfo* tinfo)
     }
 }
 
-const je_TypeInfo* je_towoo_register_system(
+/* OPTIONAL: If registration failed */ const je_TypeInfo* je_towoo_register_system(
     const char* system_name,
     const char* script_path)
 {

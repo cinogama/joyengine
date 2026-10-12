@@ -18,6 +18,7 @@
 #include <memory>
 #include <cstring>
 #include <algorithm>
+#include <cassert>
 
 /*
 TilemapSystem [系统] 与 je_tilemap_* C API 实现
@@ -600,13 +601,14 @@ jeecs::Tilemap::TilesetDocument* je_tilemap_ts_doc(je_TilesetHandle id)
 // ---------------- 地图文档 ----------------
 bool je_tilemap_open_map(const char* path, je_TilemapHandle* out_hdl)
 {
-    auto [id, doc] = jeecs::Tilemap::documents::inst().open_map(path ? path : "");
+    assert(path != nullptr);
+    assert(out_hdl != nullptr);
+    auto [id, doc] = jeecs::Tilemap::documents::inst().open_map(path);
     if (doc == nullptr)
         return false;
     // 调用方持有 1 个引用（unload/gchandle 回收时释放）
     jeecs::Tilemap::documents::inst().keep_map(id);
-    if (out_hdl != nullptr)
-        *out_hdl = id;
+    *out_hdl = id;
     return true;
 }
 bool je_tilemap_create_map(int32_t w, int32_t h, int32_t tile_px, je_TilemapHandle* out_hdl)
@@ -621,8 +623,8 @@ bool je_tilemap_create_map(int32_t w, int32_t h, int32_t tile_px, je_TilemapHand
     doc->layers.push_back(std::move(layer));
     je_TilemapHandle id = jeecs::Tilemap::documents::inst().register_map(doc);
     jeecs::Tilemap::documents::inst().keep_map(id);
-    if (out_hdl != nullptr)
-        *out_hdl = id;
+    assert(out_hdl != nullptr);
+    *out_hdl = id;
     return true;
 }
 int32_t je_tilemap_keep_map(je_TilemapHandle map)
@@ -635,13 +637,15 @@ int32_t je_tilemap_unload_map(je_TilemapHandle map)
 }
 bool je_tilemap_save_map(je_TilemapHandle map, const char* path)
 {
-    return jeecs::Tilemap::documents::inst().save_map(map, path ? path : "");
+    assert(path != nullptr);
+    return jeecs::Tilemap::documents::inst().save_map(map, path);
 }
 void je_tilemap_reload_map(const char* path)
 {
-    jeecs::Tilemap::documents::inst().reload_map(path ? path : "");
+    assert(path != nullptr);
+    jeecs::Tilemap::documents::inst().reload_map(path);
 }
-void je_tilemap_map_size(je_TilemapHandle map, int32_t* w, int32_t* h, int32_t* tile_px, int32_t* layer_count)
+void je_tilemap_map_size(je_TilemapHandle map, /* OPTIONAL */ int32_t* w, /* OPTIONAL */ int32_t* h, /* OPTIONAL */ int32_t* tile_px, /* OPTIONAL */ int32_t* layer_count)
 {
     auto* const doc = je_tilemap_map_doc(map);
     if (w != nullptr) *w = doc ? doc->width : 0;
@@ -702,17 +706,18 @@ void je_tilemap_resize_map(je_TilemapHandle map, int32_t new_w, int32_t new_h)
 // ---------------- 图层 ----------------
 bool je_tilemap_add_layer(je_TilemapHandle map, const char* name, je_LayerId* out_id)
 {
+    assert(name != nullptr);
+    assert(out_id != nullptr);
     auto* doc = je_tilemap_map_doc(map);
     if (doc == nullptr)
         return false;
     jeecs::Tilemap::MapLayer layer;
-    layer.name = name ? name : ("图层 " + std::to_string(doc->layers.size() + 1));
+    layer.name = name;
     layer.z = (float)doc->layers.size(); // 新层默认置于最上（沿 +z 错开）
     layer.grid.assign((size_t)doc->width * doc->height, 0);
     doc->layers.push_back(std::move(layer));
     ++doc->version;
-    if (out_id != nullptr)
-        *out_id = (int32_t)doc->layers.size() - 1;
+    *out_id = (int32_t)doc->layers.size() - 1;
     return true;
 }
 bool je_tilemap_remove_layer(je_TilemapHandle map, je_LayerId layer)
@@ -760,7 +765,7 @@ bool je_tilemap_move_layer(je_TilemapHandle map, je_LayerId layer, je_LayerId ne
     return true;
 }
 void je_tilemap_get_layer(je_TilemapHandle map, je_LayerId layer,
-    const char** name, int32_t* visible, int32_t* locked)
+    /* OPTIONAL */ const char** name, /* OPTIONAL */ int32_t* visible, /* OPTIONAL */ int32_t* locked)
 {
     auto* doc = je_tilemap_map_doc(map);
     const jeecs::Tilemap::MapLayer* l =
@@ -771,7 +776,7 @@ void je_tilemap_get_layer(je_TilemapHandle map, je_LayerId layer,
     if (locked != nullptr) *locked = l ? (l->locked ? 1 : 0) : 0;
 }
 void je_tilemap_set_layer(je_TilemapHandle map, je_LayerId layer,
-    const char* name, int32_t visible, int32_t locked)
+    /* OPTIONAL */ const char* name, int32_t visible, int32_t locked)
 {
     auto* doc = je_tilemap_map_doc(map);
     if (doc == nullptr || layer < 0 || layer >= (int32_t)doc->layers.size())
@@ -809,7 +814,7 @@ void je_tilemap_set_layer_z(je_TilemapHandle map, je_LayerId layer, float z)
 // 网格内容正交，不应触发渲染侧的全网格重扫与顶点重建。
 // 不透明指针 je_tilemap_shader_ref / je_tilemap_texture_ref 在此即
 // basic::resource<graphic::shader/texture>*（见 include/jeecs.hpp）。
-je_tilemap_shader_ref* je_tilemap_layer_shader(je_TilemapHandle map, je_LayerId layer)
+/* OPTIONAL: If layer has no shader style */ je_tilemap_shader_ref* je_tilemap_layer_shader(je_TilemapHandle map, je_LayerId layer)
 {
     auto* doc = je_tilemap_map_doc(map);
     if (doc == nullptr || layer < 0 || layer >= (int32_t)doc->layers.size()
@@ -819,7 +824,7 @@ je_tilemap_shader_ref* je_tilemap_layer_shader(je_TilemapHandle map, je_LayerId 
         doc->layers[layer].style.shader.value());
 }
 void je_tilemap_set_layer_shader(je_TilemapHandle map, je_LayerId layer,
-    je_tilemap_shader_ref* shader)
+    /* OPTIONAL */ je_tilemap_shader_ref* shader)
 {
     auto* doc = je_tilemap_map_doc(map);
     if (doc == nullptr || layer < 0 || layer >= (int32_t)doc->layers.size())
@@ -848,7 +853,7 @@ int32_t je_tilemap_layer_texture_count(je_TilemapHandle map, je_LayerId layer)
         ? (int32_t)doc->layers[layer].style.textures.size() : 0;
 }
 bool je_tilemap_layer_set_texture(je_TilemapHandle map, je_LayerId layer,
-    int32_t slot, je_tilemap_texture_ref* texture)
+    int32_t slot, /* OPTIONAL */ je_tilemap_texture_ref* texture)
 {
     auto* doc = je_tilemap_map_doc(map);
     if (doc == nullptr || layer < 0 || layer >= (int32_t)doc->layers.size()
@@ -879,7 +884,7 @@ bool je_tilemap_layer_set_texture(je_TilemapHandle map, je_LayerId layer,
     return true;
 }
 bool je_tilemap_layer_get_texture(je_TilemapHandle map, je_LayerId layer,
-    int32_t index, int32_t* slot, je_tilemap_texture_ref** texture)
+    int32_t index, /* OPTIONAL */ int32_t* slot, /* OPTIONAL */ je_tilemap_texture_ref** texture)
 {
     auto* doc = je_tilemap_map_doc(map);
     if (doc == nullptr || layer < 0 || layer >= (int32_t)doc->layers.size()
@@ -892,11 +897,11 @@ bool je_tilemap_layer_get_texture(je_TilemapHandle map, je_LayerId layer,
         new jeecs::basic::resource<jeecs::graphic::texture>(t.texture);
     return true;
 }
-void je_tilemap_free_shader_ref(je_tilemap_shader_ref* shader)
+void je_tilemap_free_shader_ref(/* OPTIONAL */ je_tilemap_shader_ref* shader)
 {
     delete (jeecs::basic::resource<jeecs::graphic::shader>*)shader;
 }
-void je_tilemap_free_texture_ref(je_tilemap_texture_ref* texture)
+void je_tilemap_free_texture_ref(/* OPTIONAL */ je_tilemap_texture_ref* texture)
 {
     delete (jeecs::basic::resource<jeecs::graphic::texture>*)texture;
 }
@@ -950,21 +955,21 @@ int32_t je_tilemap_tileset_count(je_TilemapHandle map)
 }
 bool je_tilemap_add_tileset(je_TilemapHandle map, const char* path, int32_t* out_index)
 {
+    assert(path != nullptr);
+    assert(out_index != nullptr);
     auto* doc = je_tilemap_map_doc(map);
-    if (doc == nullptr || path == nullptr || path[0] == '\0')
+    if (doc == nullptr || path[0] == '\0')
         return false;
     // 不要求图集此刻可解析（可先引用后保存图集）
     for (size_t i = 0; i < doc->tilesets.size(); ++i)
         if (doc->tilesets[i] == path)
         {
-            if (out_index != nullptr)
-                *out_index = (int32_t)i;
+            *out_index = (int32_t)i;
             return true;
         }
     jeecs::Tilemap::documents::inst().append_tileset_entry(*doc, path);
     ++doc->version;
-    if (out_index != nullptr)
-        *out_index = (int32_t)doc->tilesets.size() - 1;
+    *out_index = (int32_t)doc->tilesets.size() - 1;
     return true;
 }
 bool je_tilemap_remove_tileset(je_TilemapHandle map, int32_t idx)
@@ -999,10 +1004,11 @@ const char* je_tilemap_tileset_path(je_TilemapHandle map, int32_t idx)
 
 // ---------------- 属性与查询 ----------------
 void je_tilemap_set_cell_property(je_TilemapHandle map, je_LayerId layer,
-    int32_t x, int32_t y, const char* name, const char* value)
+    int32_t x, int32_t y, const char* name, /* OPTIONAL */ const char* value)
 {
+    assert(name != nullptr);
     auto* doc = je_tilemap_map_doc(map);
-    if (doc == nullptr || !doc->in_bounds(layer, x, y) || name == nullptr)
+    if (doc == nullptr || !doc->in_bounds(layer, x, y))
         return;
     auto key = std::make_pair(layer, x + y * doc->width);
     if (value == nullptr)
@@ -1020,11 +1026,12 @@ void je_tilemap_set_cell_property(je_TilemapHandle map, je_LayerId layer,
     doc->cell_properties[key][name] = value;
     ++doc->version;
 }
-const char* je_tilemap_get_cell_property(je_TilemapHandle map, je_LayerId layer,
+/* OPTIONAL: If no override value set */ const char* je_tilemap_get_cell_property(je_TilemapHandle map, je_LayerId layer,
     int32_t x, int32_t y, const char* name)
 {
+    assert(name != nullptr);
     auto* doc = je_tilemap_map_doc(map);
-    if (doc == nullptr || !doc->in_bounds(layer, x, y) || name == nullptr)
+    if (doc == nullptr || !doc->in_bounds(layer, x, y))
         return nullptr;
     auto fnd = doc->cell_properties.find({ layer, x + y * doc->width });
     if (fnd == doc->cell_properties.end())
@@ -1032,12 +1039,11 @@ const char* je_tilemap_get_cell_property(je_TilemapHandle map, je_LayerId layer,
     auto vit = fnd->second.find(name);
     return vit == fnd->second.end() ? nullptr : vit->second.c_str();
 }
-const char* je_tilemap_get_property(je_TilemapHandle map, je_LayerId layer,
+/* OPTIONAL: If no value resolved */ const char* je_tilemap_get_property(je_TilemapHandle map, je_LayerId layer,
     int32_t x, int32_t y, const char* name)
 {
+    assert(name != nullptr);
     auto* doc = je_tilemap_map_doc(map);
-    if (name == nullptr)
-        return nullptr;
     const std::string* r = jeecs::Tilemap::resolve_property(doc, layer, x, y, name);
     return r == nullptr ? nullptr : r->c_str();
 }
@@ -1058,8 +1064,10 @@ int32_t je_tilemap_is_walkable_on(je_TilemapHandle map, je_LayerId layer, int32_
 }
 int32_t je_tilemap_find_cells(je_TilemapHandle map, je_LayerId layer, const char* name, const char* value)
 {
+    assert(name != nullptr);
+    assert(value != nullptr);
     auto* doc = je_tilemap_map_doc(map);
-    if (doc == nullptr || name == nullptr || value == nullptr)
+    if (doc == nullptr)
         return 0;
     auto& result = jeecs::Tilemap::documents::inst().find_result(doc);
     result.clear();
@@ -1100,21 +1108,24 @@ int32_t je_tilemap_find_cells(je_TilemapHandle map, je_LayerId layer, const char
 }
 bool je_tilemap_find_get(je_TilemapHandle map, int32_t index, int32_t* x, int32_t* y)
 {
+    assert(x != nullptr);
+    assert(y != nullptr);
     auto* doc = je_tilemap_map_doc(map);
     if (doc == nullptr)
         return false;
     const auto& result = jeecs::Tilemap::documents::inst().find_result(doc);
     if (index < 0 || index >= (int32_t)result.size())
         return false;
-    if (x != nullptr) *x = result[index].first;
-    if (y != nullptr) *y = result[index].second;
+    *x = result[index].first;
+    *y = result[index].second;
     return true;
 }
 
 // ---------------- 图集文档 ----------------
 je_TilesetHandle je_tilemap_open_tileset(const char* path)
 {
-    auto [id, doc] = jeecs::Tilemap::documents::inst().open_tileset(path ? path : "");
+    assert(path != nullptr);
+    auto [id, doc] = jeecs::Tilemap::documents::inst().open_tileset(path);
     if (doc == nullptr)
         return 0;
     // 调用方持有 1 个引用（unload/gchandle 回收时释放）
@@ -1123,8 +1134,9 @@ je_TilesetHandle je_tilemap_open_tileset(const char* path)
 }
 je_TilesetHandle je_tilemap_create_tileset(const char* name)
 {
+    assert(name != nullptr);
     auto doc = std::make_shared<jeecs::Tilemap::TilesetDocument>();
-    doc->name = name ? name : "新建图集";
+    doc->name = name;
     doc->tiles.push_back({});
     doc->terrains.push_back({});
     je_TilesetHandle id = jeecs::Tilemap::documents::inst().register_tileset(doc);
@@ -1141,11 +1153,13 @@ int32_t je_tilemap_unload_tileset(je_TilesetHandle tileset)
 }
 bool je_tilemap_save_tileset(je_TilesetHandle tileset, const char* path)
 {
-    return jeecs::Tilemap::documents::inst().save_tileset(tileset, path ? path : "");
+    assert(path != nullptr);
+    return jeecs::Tilemap::documents::inst().save_tileset(tileset, path);
 }
 void je_tilemap_reload_tileset(const char* path)
 {
-    jeecs::Tilemap::documents::inst().reload_tileset(path ? path : "");
+    assert(path != nullptr);
+    jeecs::Tilemap::documents::inst().reload_tileset(path);
 }
 uint64_t je_tilemap_tileset_version(je_TilesetHandle tileset)
 {
@@ -1159,8 +1173,9 @@ const char* je_tilemap_tileset_doc_path(je_TilesetHandle tileset)
 }
 void je_tilemap_tileset_set_name(je_TilesetHandle tileset, const char* name)
 {
+    assert(name != nullptr);
     auto* doc = je_tilemap_ts_doc(tileset);
-    if (doc != nullptr && name != nullptr)
+    if (doc != nullptr)
     {
         doc->name = name;
         ++doc->version;
@@ -1176,16 +1191,17 @@ const char* je_tilemap_tileset_name(je_TilesetHandle tileset)
 bool je_tilemap_add_source(je_TilesetHandle tileset, const char* texture_path,
     int32_t tile_px, je_SourceId* out_id)
 {
+    assert(texture_path != nullptr);
+    assert(out_id != nullptr);
     auto* doc = je_tilemap_ts_doc(tileset);
-    if (doc == nullptr || texture_path == nullptr || texture_path[0] == '\0'
+    if (doc == nullptr || texture_path[0] == '\0'
         || tile_px <= 0 || tile_px > 4096)
         return false;
     // 复用已有的同路径源
     for (size_t i = 0; i < doc->sources.size(); ++i)
         if (doc->sources[i].path == texture_path)
         {
-            if (out_id != nullptr)
-                *out_id = (je_SourceId)i;
+            *out_id = (je_SourceId)i;
             return true;
         }
     // 读取纹理尺寸以推导网格数
@@ -1211,8 +1227,7 @@ bool je_tilemap_add_source(je_TilesetHandle tileset, const char* texture_path,
     src.tex_h = th;
     doc->sources.push_back(std::move(src));
     ++doc->version;
-    if (out_id != nullptr)
-        *out_id = (je_SourceId)doc->sources.size() - 1;
+    *out_id = (je_SourceId)doc->sources.size() - 1;
     return true;
 }
 bool je_tilemap_remove_source(je_TilesetHandle tileset, je_SourceId source_idx)
@@ -1252,7 +1267,7 @@ int32_t je_tilemap_source_count(je_TilesetHandle tileset)
     return doc ? (int32_t)doc->sources.size() : 0;
 }
 bool je_tilemap_source_info(je_TilesetHandle tileset, je_SourceId source_idx,
-    const char** texture_path, int32_t* tile_px, int32_t* xcount, int32_t* ycount)
+    /* OPTIONAL */ const char** texture_path, /* OPTIONAL */ int32_t* tile_px, /* OPTIONAL */ int32_t* xcount, /* OPTIONAL */ int32_t* ycount)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
     if (doc == nullptr || source_idx < 0 || source_idx >= (int32_t)doc->sources.size())
@@ -1269,6 +1284,7 @@ bool je_tilemap_source_info(je_TilesetHandle tileset, je_SourceId source_idx,
 bool je_tilemap_add_tile(je_TilesetHandle tileset, je_SourceId source_idx,
     int32_t ix, int32_t iy, int32_t walkable, je_TileId* out_id)
 {
+    assert(out_id != nullptr);
     auto* doc = je_tilemap_ts_doc(tileset);
     if (doc == nullptr || source_idx < 0 || source_idx >= (int32_t)doc->sources.size()
         || ix < 0 || iy < 0
@@ -1279,8 +1295,7 @@ bool je_tilemap_add_tile(je_TilesetHandle tileset, je_SourceId source_idx,
         if (doc->tiles[i].source == source_idx
             && doc->tiles[i].ix == ix && doc->tiles[i].iy == iy)
         {
-            if (out_id != nullptr)
-                *out_id = (je_TileId)i;
+            *out_id = (je_TileId)i;
             return true;
         }
     jeecs::Tilemap::TileDef t;
@@ -1289,8 +1304,7 @@ bool je_tilemap_add_tile(je_TilesetHandle tileset, je_SourceId source_idx,
     doc->tiles.push_back(t);
     doc->rebuild_flat_index();
     ++doc->version;
-    if (out_id != nullptr)
-        *out_id = (je_TileId)doc->tiles.size() - 1;
+    *out_id = (je_TileId)doc->tiles.size() - 1;
     return true;
 }
 bool je_tilemap_remove_tile(je_TilesetHandle tileset, je_TileId tile_id)
@@ -1316,7 +1330,7 @@ int32_t je_tilemap_tile_count(je_TilesetHandle tileset)
     return doc ? (int32_t)doc->tiles.size() - 1 : 0;
 }
 bool je_tilemap_tile_info(je_TilesetHandle tileset, je_TileId tile_id,
-    je_SourceId* source_idx, int32_t* ix, int32_t* iy, int32_t* walkable)
+    /* OPTIONAL */ je_SourceId* source_idx, /* OPTIONAL */ int32_t* ix, /* OPTIONAL */ int32_t* iy, /* OPTIONAL */ int32_t* walkable)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
     if (doc == nullptr || tile_id <= 0 || tile_id >= (int32_t)doc->tiles.size())
@@ -1341,8 +1355,10 @@ void je_tilemap_set_tile_walkable(je_TilesetHandle tileset, je_TileId tile_id, i
 bool je_tilemap_add_terrain(je_TilesetHandle tileset, const char* name, je_TerrainKind kind,
     je_SourceId source_idx, int32_t ix, int32_t iy, int32_t walkable, je_TerrainId* out_id)
 {
+    assert(name != nullptr);
+    assert(out_id != nullptr);
     auto* doc = je_tilemap_ts_doc(tileset);
-    if (doc == nullptr || name == nullptr || kind < 0 || kind > 3
+    if (doc == nullptr || kind < 0 || kind > 3
         || source_idx < 0 || source_idx >= (int32_t)doc->sources.size()
         || ix < 0 || iy < 0
         || ix >= doc->sources[source_idx].xcount || iy >= doc->sources[source_idx].ycount)
@@ -1355,8 +1371,7 @@ bool je_tilemap_add_terrain(je_TilesetHandle tileset, const char* name, je_Terra
     t.walkable = walkable != 0;
     doc->terrains.push_back(std::move(t));
     ++doc->version;
-    if (out_id != nullptr)
-        *out_id = (int32_t)doc->terrains.size() - 1;
+    *out_id = (int32_t)doc->terrains.size() - 1;
     return true;
 }
 bool je_tilemap_remove_terrain(je_TilesetHandle tileset, je_TerrainId terrain_id)
@@ -1385,8 +1400,8 @@ int32_t je_tilemap_terrain_count(je_TilesetHandle tileset)
     return doc ? (int32_t)doc->terrains.size() - 1 : 0;
 }
 bool je_tilemap_terrain_info(je_TilesetHandle tileset, je_TerrainId terrain_id,
-    const char** name, je_TerrainKind* kind, je_SourceId* source_idx, int32_t* ix, int32_t* iy,
-    int32_t* walkable, int32_t* variant_count)
+    /* OPTIONAL */ const char** name, /* OPTIONAL */ je_TerrainKind* kind, /* OPTIONAL */ je_SourceId* source_idx, /* OPTIONAL */ int32_t* ix, /* OPTIONAL */ int32_t* iy,
+    /* OPTIONAL */ int32_t* walkable, /* OPTIONAL */ int32_t* variant_count)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
     if (doc == nullptr || terrain_id <= 0 || terrain_id >= (int32_t)doc->terrains.size())
@@ -1402,7 +1417,7 @@ bool je_tilemap_terrain_info(je_TilesetHandle tileset, je_TerrainId terrain_id,
     return true;
 }
 bool je_tilemap_set_terrain(je_TilesetHandle tileset, je_TerrainId terrain_id,
-    const char* name, je_TerrainKind kind,
+    /* OPTIONAL */ const char* name, je_TerrainKind kind,
     je_SourceId source_idx, int32_t ix, int32_t iy, int32_t walkable)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
@@ -1449,22 +1464,26 @@ bool je_tilemap_terrain_add_variant(je_TilesetHandle tileset, je_TerrainId terra
 // ---------------- 属性 schema 与默认值 ----------------
 bool je_tilemap_add_property(je_TilesetHandle tileset, const char* name, const char* type, const char* default_value, int32_t* out_index)
 {
+    assert(name != nullptr);
+    assert(type != nullptr);
+    assert(default_value != nullptr);
+    assert(out_index != nullptr);
     auto* doc = je_tilemap_ts_doc(tileset);
-    if (doc == nullptr || name == nullptr || name[0] == '\0' || type == nullptr)
+    if (doc == nullptr || name[0] == '\0')
         return false;
     for (const auto& pd : doc->properties)
         if (pd.name == name)
             return false;
-    doc->properties.push_back({ name, type, default_value ? default_value : "" });
+    doc->properties.push_back({ name, type, default_value });
     ++doc->version;
-    if (out_index != nullptr)
-        *out_index = (int32_t)doc->properties.size() - 1;
+    *out_index = (int32_t)doc->properties.size() - 1;
     return true;
 }
 bool je_tilemap_remove_property(je_TilesetHandle tileset, const char* name)
 {
+    assert(name != nullptr);
     auto* doc = je_tilemap_ts_doc(tileset);
-    if (doc == nullptr || name == nullptr)
+    if (doc == nullptr)
         return false;
     for (size_t i = 0; i < doc->properties.size(); ++i)
         if (doc->properties[i].name == name)
@@ -1481,7 +1500,7 @@ int32_t je_tilemap_property_count(je_TilesetHandle tileset)
     return doc ? (int32_t)doc->properties.size() : 0;
 }
 bool je_tilemap_property_info(je_TilesetHandle tileset, int32_t index,
-    const char** name, const char** type, const char** default_value)
+    /* OPTIONAL */ const char** name, /* OPTIONAL */ const char** type, /* OPTIONAL */ const char** default_value)
 {
     auto* doc = je_tilemap_ts_doc(tileset);
     if (doc == nullptr || index < 0 || index >= (int32_t)doc->properties.size())
@@ -1493,11 +1512,11 @@ bool je_tilemap_property_info(je_TilesetHandle tileset, int32_t index,
     return true;
 }
 void je_tilemap_set_tile_property(je_TilesetHandle tileset, je_TileId tile_id,
-    const char* name, const char* value)
+    const char* name, /* OPTIONAL */ const char* value)
 {
+    assert(name != nullptr);
     auto* doc = je_tilemap_ts_doc(tileset);
-    if (doc == nullptr || tile_id <= 0 || tile_id >= (int32_t)doc->tiles.size()
-        || name == nullptr)
+    if (doc == nullptr || tile_id <= 0 || tile_id >= (int32_t)doc->tiles.size())
         return;
     if (value == nullptr)
     {
@@ -1514,11 +1533,11 @@ void je_tilemap_set_tile_property(je_TilesetHandle tileset, je_TileId tile_id,
     doc->tile_properties[tile_id][name] = value;
     ++doc->version;
 }
-const char* je_tilemap_get_tile_property(je_TilesetHandle tileset, je_TileId tile_id, const char* name)
+/* OPTIONAL: If no default value set */ const char* je_tilemap_get_tile_property(je_TilesetHandle tileset, je_TileId tile_id, const char* name)
 {
+    assert(name != nullptr);
     auto* doc = je_tilemap_ts_doc(tileset);
-    if (doc == nullptr || tile_id <= 0 || tile_id >= (int32_t)doc->tiles.size()
-        || name == nullptr)
+    if (doc == nullptr || tile_id <= 0 || tile_id >= (int32_t)doc->tiles.size())
         return nullptr;
     auto fnd = doc->tile_properties.find(tile_id);
     if (fnd == doc->tile_properties.end())
@@ -1527,11 +1546,11 @@ const char* je_tilemap_get_tile_property(je_TilesetHandle tileset, je_TileId til
     return vit == fnd->second.end() ? nullptr : vit->second.c_str();
 }
 void je_tilemap_set_terrain_property(je_TilesetHandle tileset, je_TerrainId terrain_id,
-    const char* name, const char* value)
+    const char* name, /* OPTIONAL */ const char* value)
 {
+    assert(name != nullptr);
     auto* doc = je_tilemap_ts_doc(tileset);
-    if (doc == nullptr || terrain_id <= 0 || terrain_id >= (int32_t)doc->terrains.size()
-        || name == nullptr)
+    if (doc == nullptr || terrain_id <= 0 || terrain_id >= (int32_t)doc->terrains.size())
         return;
     auto& props = doc->terrains[terrain_id].properties;
     if (value == nullptr)
@@ -1543,11 +1562,11 @@ void je_tilemap_set_terrain_property(je_TilesetHandle tileset, je_TerrainId terr
     props[name] = value;
     ++doc->version;
 }
-const char* je_tilemap_get_terrain_property(je_TilesetHandle tileset, je_TerrainId terrain_id, const char* name)
+/* OPTIONAL: If no default value set */ const char* je_tilemap_get_terrain_property(je_TilesetHandle tileset, je_TerrainId terrain_id, const char* name)
 {
+    assert(name != nullptr);
     auto* doc = je_tilemap_ts_doc(tileset);
-    if (doc == nullptr || terrain_id <= 0 || terrain_id >= (int32_t)doc->terrains.size()
-        || name == nullptr)
+    if (doc == nullptr || terrain_id <= 0 || terrain_id >= (int32_t)doc->terrains.size())
         return nullptr;
     auto fnd = doc->terrains[terrain_id].properties.find(name);
     return fnd == doc->terrains[terrain_id].properties.end() ? nullptr : fnd->second.c_str();
@@ -1565,9 +1584,9 @@ int32_t je_tilemap_cell_quad_count(je_TilemapHandle map, je_LayerId layer, int32
     return jeecs::Tilemap::resolve_cell_quads(*doc, layer, x, y, quads);
 }
 bool je_tilemap_cell_quad(je_TilemapHandle map, je_LayerId layer, int32_t x, int32_t y, int32_t idx,
-    const char** texture_path,
-    float* u0, float* v0, float* u1, float* v1,
-    int32_t* qx, int32_t* qy, int32_t* qcols)
+    /* OPTIONAL */ const char** texture_path,
+    /* OPTIONAL */ float* u0, /* OPTIONAL */ float* v0, /* OPTIONAL */ float* u1, /* OPTIONAL */ float* v1,
+    /* OPTIONAL */ int32_t* qx, /* OPTIONAL */ int32_t* qy, /* OPTIONAL */ int32_t* qcols)
 {
     auto* doc = je_tilemap_map_doc(map);
     if (doc == nullptr || idx < 0 || idx > 3)

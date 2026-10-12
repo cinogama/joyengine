@@ -50,7 +50,7 @@ static std::string _je_woort_exe_path()
     return path;
 }
 
-void jegl_set_host_graphic_api(jegl_graphic_api_entry api)
+void jegl_set_host_graphic_api(/* OPTIONAL: nullptr to use platform default */ jegl_graphic_api_entry api)
 {
     _je_global_context._jegl_host_graphic_api = api;
 }
@@ -205,7 +205,7 @@ static void je_default_graphic_interface_sync_func(jegl_context* gthread, void*)
 void _jeecs_entry_register_core_systems(
     jeecs::typing::type_unregister_guard* guard);
 
-void je_init(int argc, char** argv)
+void je_init(int argc, /* OPTIONAL: If argc == 0 */ char** argv)
 {
     // Update default graphic sync funciton
     jegl_register_sync_thread_callback(
@@ -428,7 +428,7 @@ const char* je_build_commit()
         ;
 }
 
-woort_Dylib* je_module_load(const char* name, const char* path)
+/* OPTIONAL: If load failed */ woort_Dylib* je_module_load(const char* name, const char* path)
 {
     if (woort_Dylib* lib = woort_dylib_load(name, path, nullptr, false))
     {
@@ -443,7 +443,7 @@ woort_Dylib* je_module_load(const char* name, const char* path)
     return nullptr;
 }
 
-void* je_module_func(woort_Dylib* lib, const char* funcname)
+/* OPTIONAL: If symbol not found */ void* je_module_func(woort_Dylib* lib, const char* funcname)
 {
     assert(lib);
     return woort_dylib_load_func(lib, funcname);

@@ -230,7 +230,7 @@ void jegl_rchain_close(jegl_rendchain* chain)
 }
 void jegl_rchain_begin(
     jegl_rendchain* chain,
-    jegl_frame_buffer* framebuffer,
+    /* OPTIONAL: nullptr to render to screen */ jegl_frame_buffer* framebuffer,
     int32_t x, int32_t y, uint32_t w, uint32_t h)
 {
     assert(chain != nullptr);
@@ -321,7 +321,7 @@ jegl_rchain_texture_group* jegl_rchain_allocate_texture_group(jegl_rendchain* ch
     return &texture_group;
 }
 jegl_rendchain_rend_action* jegl_rchain_draw(
-    jegl_rendchain* chain, jegl_shader* shader, jegl_vertex* vertex, jegl_rchain_texture_group* texture_group)
+    jegl_rendchain* chain, jegl_shader* shader, jegl_vertex* vertex, /* OPTIONAL */ jegl_rchain_texture_group* texture_group)
 {
     assert(chain != nullptr);
     chain->m_used_resource.use_resource(shader);
@@ -354,7 +354,7 @@ void jegl_rchain_set_uniform_buffer(
 
 void jegl_rchain_set_uniform_int(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place,
     int val)
 {
     assert(act != nullptr);
@@ -369,7 +369,7 @@ void jegl_rchain_set_uniform_int(
 }
 void jegl_rchain_set_uniform_int2(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place,
     int x,
     int y)
 {
@@ -386,7 +386,7 @@ void jegl_rchain_set_uniform_int2(
 }
 void jegl_rchain_set_uniform_int3(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place,
     int x,
     int y,
     int z)
@@ -405,7 +405,7 @@ void jegl_rchain_set_uniform_int3(
 }
 void jegl_rchain_set_uniform_int4(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place,
     int x,
     int y,
     int z,
@@ -426,7 +426,7 @@ void jegl_rchain_set_uniform_int4(
 }
 void jegl_rchain_set_uniform_float(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place,
     float val)
 {
     assert(act != nullptr);
@@ -441,7 +441,7 @@ void jegl_rchain_set_uniform_float(
 }
 void jegl_rchain_set_uniform_float2(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place,
     float x,
     float y)
 {
@@ -458,7 +458,7 @@ void jegl_rchain_set_uniform_float2(
 }
 void jegl_rchain_set_uniform_float3(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place,
     float x,
     float y,
     float z)
@@ -477,7 +477,7 @@ void jegl_rchain_set_uniform_float3(
 }
 void jegl_rchain_set_uniform_float4(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place,
     float x,
     float y,
     float z,
@@ -498,7 +498,7 @@ void jegl_rchain_set_uniform_float4(
 }
 void jegl_rchain_set_uniform_float2x2(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place,
     const float (*mat)[2])
 {
     assert(act != nullptr);
@@ -515,7 +515,7 @@ void jegl_rchain_set_uniform_float2x2(
 }
 void jegl_rchain_set_uniform_float3x3(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place,
     const float (*mat)[3])
 {
     assert(act != nullptr);
@@ -532,7 +532,7 @@ void jegl_rchain_set_uniform_float3x3(
 }
 void jegl_rchain_set_uniform_float4x4(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place,
     const float (*mat)[4])
 {
     assert(act != nullptr);
@@ -574,7 +574,7 @@ void jegl_rchain_bind_texture(
     chain->m_used_resource.use_resource(texture);
 }
 
-jegl_frame_buffer* /* MAY NULL */ jegl_rchain_get_target_framebuf(jegl_rendchain* chain)
+/* OPTIONAL: nullptr if target is screen */ jegl_frame_buffer* jegl_rchain_get_target_framebuf(jegl_rendchain* chain)
 {
     assert(chain != nullptr);
     return chain->m_target_frame_buffer;

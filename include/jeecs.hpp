@@ -882,19 +882,19 @@ JE_FORCE_CAPI
 je_mem_alloc [基本接口]
 引擎的统一内存申请函数。
 */
-JE_API void* je_mem_alloc(size_t sz);
+JE_API /* OPTIONAL: If allocation fails */ void* je_mem_alloc(size_t sz);
 
 /*
 je_mem_realloc [基本接口]
 引擎的统一内存重申请函数。
 */
-JE_API void* je_mem_realloc(void* mem, size_t sz);
+JE_API /* OPTIONAL: If allocation fails */ void* je_mem_realloc(/* OPTIONAL */ void* mem, size_t sz);
 
 /*
 je_mem_free [基本接口]
 引擎的统一内存释放函数。
 */
-JE_API void je_mem_free(void* ptr);
+JE_API void je_mem_free(/* OPTIONAL */ void* ptr);
 
 /*
 je_init [基本接口]
@@ -904,7 +904,7 @@ je_init [基本接口]
 请参见：
     je_finish
 */
-JE_API void je_init(int argc, char** argv);
+JE_API void je_init(int argc, /* OPTIONAL: If argc == 0 */ char** argv);
 
 /*
 je_finish [基本接口]
@@ -965,13 +965,13 @@ typedef void (*je_log_callback_t)(int level, const char* msg, void* userdata);
 je_log_register_callback [基本接口]
 用于注册一个日志发生时的回调函数，返回注册句柄。
 */
-JE_API je_log_regid_t je_log_register_callback(je_log_callback_t callback, void* userdata);
+JE_API je_log_regid_t je_log_register_callback(je_log_callback_t callback, /* OPTIONAL */ void* userdata);
 
 /*
 je_log_unregister_callback [基本接口]
 用于释放（解除注册）一个之前注册的日志发生时回调函数。
 */
-JE_API void* je_log_unregister_callback(je_log_regid_t regid);
+JE_API /* OPTIONAL: If registered userdata was null */ void* je_log_unregister_callback(je_log_regid_t regid);
 
 /*
 je_log [基本接口]
@@ -1104,7 +1104,7 @@ je_typing_get_info_by_id [基本接口]
     je_TypeId
     je_TypeInfo
 */
-JE_API const je_TypeInfo* je_typing_get_info_by_id(
+JE_API /* OPTIONAL: If _id is invalid or unregistered */ const je_TypeInfo* je_typing_get_info_by_id(
     je_TypeId _id);
 
 /*
@@ -1114,7 +1114,7 @@ je_typing_get_info_by_hash [基本接口]
     je_TypeHash
     je_TypeInfo
 */
-JE_API const je_TypeInfo* je_typing_get_info_by_hash(
+JE_API /* OPTIONAL: If _hash is not registered */ const je_TypeInfo* je_typing_get_info_by_hash(
     je_TypeHash _hash);
 
 /*
@@ -1123,7 +1123,7 @@ je_typing_get_info_by_name [基本接口]
 请参见：
     je_TypeInfo
 */
-JE_API const je_TypeInfo* je_typing_get_info_by_name(
+JE_API /* OPTIONAL: If type_name is not found */ const je_TypeInfo* je_typing_get_info_by_name(
     const char* type_name);
 
 /*
@@ -1149,7 +1149,7 @@ JE_API void je_register_member(
     const je_TypeInfo* _classtype,
     const je_TypeInfo* _membertype,
     const char* _member_name,
-    const char* _woovalue_type_may_null,
+    /* OPTIONAL */ const char* _woovalue_type_may_null,
     woort_value _boxed_woovalue_init_may_ignored /* Use WOORT_IGNORE as none init */,
     ptrdiff_t _member_offset);
 
@@ -1196,11 +1196,11 @@ je_towoo_update_api [基本接口]
 */
 JE_API void je_towoo_update_api();
 
-JE_API const je_TypeInfo* je_towoo_register_system(
+JE_API /* OPTIONAL: If registration failed */ const je_TypeInfo* je_towoo_register_system(
     const char* system_name,
     const char* script_path);
 
-JE_API void je_towoo_unregister_system(const je_TypeInfo* tinfo);
+JE_API void je_towoo_unregister_system(/* OPTIONAL */ const je_TypeInfo* tinfo);
 
 ////////////////////// ARCH //////////////////////
 
@@ -1217,7 +1217,7 @@ je_arch_next_chunk [基本接口]
 通过给定的Chunk，获取其下一个Chunk，如果给定Chunk没有后继则返回nullptr
     * 此方法一般由 collection 调用，用于获取指定ArchType中的组件信息
 */
-JE_API je_Chunk* je_arch_next_chunk(je_Chunk* chunk);
+JE_API /* OPTIONAL: If no successor chunk */ je_Chunk* je_arch_next_chunk(je_Chunk* chunk);
 
 /*
 je_arch_entity_meta_addr_in_chunk [基本接口]
@@ -1296,7 +1296,7 @@ je_ecs_universe_register_exit_callback [基本接口]
 JE_API void je_ecs_universe_register_exit_callback(
     je_GameUniverse* universe,
     void (*callback)(void*),
-    void* arg);
+    /* OPTIONAL */ void* arg);
 
 typedef void (*je_job_for_worlds_t)(je_GameWorld* /*world*/, void* /*custom_data*/);
 typedef void (*je_job_call_once_t)(void* /*custom_data*/);
@@ -1308,8 +1308,8 @@ je_ecs_universe_register_pre_for_worlds_job [基本接口]
 JE_API void je_ecs_universe_register_pre_for_worlds_job(
     je_GameUniverse* universe,
     je_job_for_worlds_t job,
-    void* data,
-    void (*freefunc)(void*));
+    /* OPTIONAL */ void* data,
+    /* OPTIONAL */ void (*freefunc)(void*));
 
 /*
 je_ecs_universe_register_pre_for_worlds_job [基本接口]
@@ -1318,8 +1318,8 @@ je_ecs_universe_register_pre_for_worlds_job [基本接口]
 JE_API void je_ecs_universe_register_pre_call_once_job(
     je_GameUniverse* universe,
     je_job_call_once_t job,
-    void* data,
-    void (*freefunc)(void*));
+    /* OPTIONAL */ void* data,
+    /* OPTIONAL */ void (*freefunc)(void*));
 
 /*
 je_ecs_universe_register_for_worlds_job [基本接口]
@@ -1328,8 +1328,8 @@ je_ecs_universe_register_for_worlds_job [基本接口]
 JE_API void je_ecs_universe_register_for_worlds_job(
     je_GameUniverse* universe,
     je_job_for_worlds_t job,
-    void* data,
-    void (*freefunc)(void*));
+    /* OPTIONAL */ void* data,
+    /* OPTIONAL */ void (*freefunc)(void*));
 
 /*
 je_ecs_universe_register_call_once_job [基本接口]
@@ -1338,8 +1338,8 @@ je_ecs_universe_register_call_once_job [基本接口]
 JE_API void je_ecs_universe_register_call_once_job(
     je_GameUniverse* universe,
     je_job_call_once_t job,
-    void* data,
-    void (*freefunc)(void*));
+    /* OPTIONAL */ void* data,
+    /* OPTIONAL */ void (*freefunc)(void*));
 
 /*
 je_ecs_universe_register_after_for_worlds_job [基本接口]
@@ -1348,8 +1348,8 @@ je_ecs_universe_register_after_for_worlds_job [基本接口]
 JE_API void je_ecs_universe_register_after_for_worlds_job(
     je_GameUniverse* universe,
     je_job_for_worlds_t job,
-    void* data,
-    void (*freefunc)(void*));
+    /* OPTIONAL */ void* data,
+    /* OPTIONAL */ void (*freefunc)(void*));
 
 /*
 je_ecs_universe_register_after_call_once_job [基本接口]
@@ -1358,8 +1358,8 @@ je_ecs_universe_register_after_call_once_job [基本接口]
 JE_API void je_ecs_universe_register_after_call_once_job(
     je_GameUniverse* universe,
     je_job_call_once_t job,
-    void* data,
-    void (*freefunc)(void*));
+    /* OPTIONAL */ void* data,
+    /* OPTIONAL */ void (*freefunc)(void*));
 
 /*
 je_ecs_universe_unregister_pre_for_worlds_job [基本接口]
@@ -1534,7 +1534,7 @@ typedef struct je_RequirementCollection {
 }je_RequirementCollection;
 
 JE_API je_CollectedRequirements* je_ecs_collect_requirements(
-    const je_ComponentRequirement* requirements,
+    /* OPTIONAL: If total requirement count is 0 */ const je_ComponentRequirement* requirements,
     size_t view_requiremnt_count,
     size_t other_requiremnts_count);
 
@@ -1658,7 +1658,7 @@ je_ecs_world_entity_add_component [基本接口]
 请参见：
     je_GameEntity::add_component
 */
-JE_API void* je_ecs_world_entity_add_component(
+JE_API /* OPTIONAL: If entity is invalid */ void* je_ecs_world_entity_add_component(
     const je_GameEntity* entity,
     je_TypeId type);
 
@@ -1684,7 +1684,7 @@ je_ecs_world_entity_get_component [基本接口]
 请参见：
     je_GameEntity::get_component
 */
-JE_API void* je_ecs_world_entity_get_component(
+JE_API /* OPTIONAL: If entity is invalid or no such component */ void* je_ecs_world_entity_get_component(
     const je_GameEntity* entity,
     je_TypeId type);
 
@@ -1695,7 +1695,7 @@ je_ecs_world_of_entity [基本接口]
 请参见：
     je_GameEntity::game_world
 */
-JE_API je_GameWorld* je_ecs_world_of_entity(
+JE_API /* OPTIONAL: If entity is invalid */ je_GameWorld* je_ecs_world_of_entity(
     const je_GameEntity* entity);
 
 /*
@@ -1886,7 +1886,7 @@ JE_API void jeecs_file_set_runtime_path(const char* path);
     * 无论打开是否成功，之前打开的默认镜像都将被关闭
     * 若 path == nullptr，则仅关闭旧的镜像
 */
-JE_API void jeecs_file_update_default_fimg(const char* path);
+JE_API void jeecs_file_update_default_fimg(/* OPTIONAL: If path == nullptr, only close the old image */ const char* path);
 
 /*
 jeecs_file_get_host_path [基本接口]
@@ -1929,7 +1929,7 @@ jeecs_file_open [基本接口]
 请参见：
     jeecs_file_close
 */
-JE_API jeecs_file* jeecs_file_open(const char* path);
+JE_API /* OPTIONAL */ jeecs_file* jeecs_file_open(const char* path);
 
 /*
 jeecs_file_close [基本接口]
@@ -1987,7 +1987,7 @@ jeecs_file_image_pack_file [基本接口]
 */
 JE_API bool jeecs_file_image_pack_buffer(
     fimg_creating_context* context,
-    const void* buffer,
+    /* OPTIONAL: If len == 0 */ const void* buffer,
     size_t len,
     const char* packingpath);
 
@@ -2013,7 +2013,7 @@ jeecs_load_cache_file [基本接口]
     jeecs_file_read
     jeecs_file_close
 */
-JE_API jeecs_file* jeecs_load_cache_file(
+JE_API /* OPTIONAL */ jeecs_file* jeecs_load_cache_file(
     const char* filepath,
     uint32_t format_version,
     uint64_t virtual_crc64);
@@ -2032,7 +2032,7 @@ jeecs_create_cache_file [基本接口]
     jeecs_close_cache_file
     jeecs_write_cache_file
 */
-JE_API void* jeecs_create_cache_file(
+JE_API /* OPTIONAL */ void* jeecs_create_cache_file(
     const char* filepath,
     uint32_t format_version,
     uint64_t usecrc64);
@@ -2897,7 +2897,7 @@ jegl_register_sync_graphic_callback [基本接口]
 */
 JE_API void jegl_register_sync_thread_callback(
     jeecs_sync_callback_func_t callback,
-    void* arg);
+    /* OPTIONAL */ void* arg);
 
 enum jegl_sync_state
 {
@@ -2974,12 +2974,12 @@ jegl_start_graphic_thread [基本接口]
     jegl_update
     jegl_terminate_graphic_thread
 */
-JE_API jegl_context* jegl_start_graphic_thread(
+JE_API /* OPTIONAL: If failed to start up */ jegl_context* jegl_start_graphic_thread(
     jegl_interface_config config,
-    je_GameUniverse* universe_instance,
+    /* OPTIONAL: If no universe attached */ je_GameUniverse* universe_instance,
     jeecs_api_register_func_t register_func,
     jegl_context::frame_job_func_t frame_rend_work,
-    void* arg);
+    /* OPTIONAL */ void* arg);
 
 /*
 jegl_terminate_graphic_thread [基本接口]
@@ -3010,8 +3010,8 @@ jegl_update [基本接口]
 JE_API bool jegl_update(
     jegl_context* thread_handle,
     jegl_update_sync_mode mode,
-    jegl_update_sync_callback_t callback_after_wait_may_null,
-    void* callback_param);
+    /* OPTIONAL */ jegl_update_sync_callback_t callback_after_wait_may_null,
+    /* OPTIONAL */ void* callback_param);
 
 /*
 jegl_reboot_graphic_thread [基本接口]
@@ -3020,7 +3020,7 @@ jegl_reboot_graphic_thread [基本接口]
 */
 JE_API void jegl_reboot_graphic_thread(
     jegl_context* thread_handle,
-    const jegl_interface_config* config_may_null);
+    /* OPTIONAL: nullptr to keep current config */ const jegl_interface_config* config_may_null);
 
 /*
 jegl_share_resource_handle [基本接口]
@@ -3052,8 +3052,8 @@ jegl_load_shader_source [基本接口]
     jegl_share_resource
     jegl_close_shader
 */
-JE_API jegl_shader* jegl_load_shader_source(
-    jegl_context* context,
+JE_API /* OPTIONAL */ jegl_shader* jegl_load_shader_source(
+    /* OPTIONAL */ jegl_context* context,
     const char* path,
     const char* src,
     bool is_virtual_file);
@@ -3068,8 +3068,8 @@ jegl_load_shader [基本接口]
     jegl_share_resource
     jegl_close_shader
 */
-JE_API jegl_shader* jegl_load_shader(
-    jegl_context* context,
+JE_API /* OPTIONAL */ jegl_shader* jegl_load_shader(
+    /* OPTIONAL */ jegl_context* context,
     const char* path);
 
 /*
@@ -3095,8 +3095,8 @@ jegl_load_texture [基本接口]
     jegl_share_resource
     jegl_close_texture
 */
-JE_API jegl_texture* jegl_load_texture(
-    jegl_context* context,
+JE_API /* OPTIONAL */ jegl_texture* jegl_load_texture(
+    /* OPTIONAL */ jegl_context* context,
     const char* path);
 
 /*
@@ -3150,8 +3150,8 @@ jegl_load_vertex [基本接口]
     jegl_share_resource
     jegl_close_vertex
 */
-JE_API jegl_vertex* jegl_load_vertex(
-    jegl_context* context,
+JE_API /* OPTIONAL */ jegl_vertex* jegl_load_vertex(
+    /* OPTIONAL */ jegl_context* context,
     const char* path);
 
 /*
@@ -3165,7 +3165,7 @@ jegl_create_vertex [基本接口]
     jegl_share_resource
     jegl_close_vertex
 */
-JE_API jegl_vertex* jegl_create_vertex(
+JE_API /* OPTIONAL: If bad format or no completed vertex point */ jegl_vertex* jegl_create_vertex(
     jegl_vertex::type type,
     const void* datas,
     size_t data_length,
@@ -3193,7 +3193,7 @@ jegl_update_vertex_buffer [基本接口]
 */
 JE_API void jegl_update_vertex_buffer(
     jegl_vertex* vertex,
-    const void* vertex_data,
+    /* OPTIONAL */ const void* vertex_data,
     size_t vertex_length,
     size_t active_index_count);
 
@@ -3221,7 +3221,7 @@ jegl_create_framebuf [基本接口]
     jegl_share_resource
     jegl_close_framebuf
 */
-JE_API jegl_frame_buffer* jegl_create_framebuf(
+JE_API /* OPTIONAL: If size or color_attachment_count is zero */ jegl_frame_buffer* jegl_create_framebuf(
     size_t width,
     size_t height,
     const jegl_texture::format* color_attachment_formats,
@@ -3262,7 +3262,7 @@ jegl_update_uniformbuf [基本接口]
 */
 JE_API void jegl_update_uniformbuf(
     jegl_uniform_buffer* uniformbuf,
-    const void* buf,
+    /* OPTIONAL: If update_length == 0 */ const void* buf,
     size_t update_offset,
     size_t update_length);
 
@@ -3310,11 +3310,11 @@ char_texture_updater 用于指示文字纹理创建后所需的预处理方法�
     je_font_free
     je_font_get_char
 */
-JE_API je_font* je_font_load(
+JE_API /* OPTIONAL */ je_font* je_font_load(
     const char* font_path,
     size_t board_blank_size_x,
     size_t board_blank_size_y,
-    je_font_char_updater_t char_texture_updater);
+    /* OPTIONAL */ je_font_char_updater_t char_texture_updater);
 
 /*
 je_font_free [基本接口]
@@ -3359,7 +3359,7 @@ jegl_set_host_graphic_api [基本接口]
     * 若不设置或设置为 nullptr，引擎将使用默认的图形接口、
     * 请在je_init之后设置，引擎的初始化操作将重置此设置
 */
-JE_API void jegl_set_host_graphic_api(jegl_graphic_api_entry api);
+JE_API void jegl_set_host_graphic_api(/* OPTIONAL: nullptr to use platform default */ jegl_graphic_api_entry api);
 
 /*
 jegl_get_host_graphic_api [基本接口]
@@ -3461,9 +3461,9 @@ clear_operations 用于指定颜色附件或深度附件清除值，若为 nullp
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
 */
 JE_API void jegl_rend_to_framebuffer(
-    jegl_frame_buffer* framebuffer,
-    const int32_t(*viewport_xywh)[4],
-    const jegl_frame_buffer_clear_operation* clear_operations);
+    /* OPTIONAL */ jegl_frame_buffer* framebuffer,
+    /* OPTIONAL */ const int32_t(*viewport_xywh)[4],
+    /* OPTIONAL */ const jegl_frame_buffer_clear_operation* clear_operations);
 
 /*
 jegl_set_uniform_value [基本接口]
@@ -3536,7 +3536,7 @@ jegl_rchain_begin [基本接口]
 */
 JE_API void jegl_rchain_begin(
     jegl_rendchain* chain,
-    jegl_frame_buffer* framebuffer,
+    /* OPTIONAL: nullptr to render to screen */ jegl_frame_buffer* framebuffer,
     int32_t x, int32_t y, uint32_t w, uint32_t h);
 
 /*
@@ -3585,7 +3585,7 @@ JE_API jegl_rendchain_rend_action* jegl_rchain_draw(
     jegl_rendchain* chain,
     jegl_shader* shader,
     jegl_vertex* vertex,
-    jegl_rchain_texture_group* texture_group_may_null);
+    /* OPTIONAL */ jegl_rchain_texture_group* texture_group_may_null);
 
 /*
 jegl_rchain_set_uniform_buffer [基本接口]
@@ -3605,7 +3605,7 @@ jegl_rchain_set_uniform_int [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_int(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place_may_null,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
     int val);
 
 /*
@@ -3616,7 +3616,7 @@ jegl_rchain_set_uniform_int2 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_int2(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place_may_null,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
     int x,
     int y);
 
@@ -3628,7 +3628,7 @@ jegl_rchain_set_uniform_int3 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_int3(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place_may_null,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
     int x,
     int y,
     int z);
@@ -3641,7 +3641,7 @@ jegl_rchain_set_uniform_int4 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_int4(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place_may_null,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
     int x,
     int y,
     int z,
@@ -3655,7 +3655,7 @@ jegl_rchain_set_uniform_float [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_float(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place_may_null,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
     float val);
 
 /*
@@ -3666,7 +3666,7 @@ jegl_rchain_set_uniform_float2 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_float2(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place_may_null,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
     float x,
     float y);
 
@@ -3678,7 +3678,7 @@ jegl_rchain_set_uniform_float3 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_float3(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place_may_null,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
     float x,
     float y,
     float z);
@@ -3691,7 +3691,7 @@ jegl_rchain_set_uniform_float4 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_float4(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place_may_null,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
     float x,
     float y,
     float z,
@@ -3705,7 +3705,7 @@ jegl_rchain_set_uniform_float2x2 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_float2x2(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place_may_null,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
     const float (*mat)[2]);
 
 /*
@@ -3716,7 +3716,7 @@ jegl_rchain_set_uniform_float3x3 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_float3x3(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place_may_null,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
     const float (*mat)[3]);
 
 /*
@@ -3727,7 +3727,7 @@ jegl_rchain_set_uniform_float4x4 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_float4x4(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place_may_null,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
     const float (*mat)[4]);
 
 /*
@@ -3756,7 +3756,7 @@ jegl_rchain_get_target_framebuf [基本接口]
 获取当前绘制链的目标帧缓冲区
     * 如果当前绘制链的目标帧缓冲区是屏幕缓冲区，则返回 nullptr
 */
-JE_API jegl_frame_buffer* /* MAY NULL */ jegl_rchain_get_target_framebuf(
+JE_API /* OPTIONAL: nullptr if target is screen */ jegl_frame_buffer* jegl_rchain_get_target_framebuf(
     jegl_rendchain* chain);
 
 /*
@@ -3773,13 +3773,13 @@ jegl_uhost_get_or_create_for_universe [基本接口]
 */
 JE_API je_GraphicUhost* jegl_uhost_get_or_create_for_universe(
     je_GameUniverse* universe,
-    const jegl_interface_config* config);
+    /* OPTIONAL: nullptr to use default config */ const jegl_interface_config* config);
 
 /*
 jegl_uhost_get_context [基本接口]
 从指定的可编程图形上下文接口获取图形线程的正式描述符
 */
-JE_API jegl_context* jegl_uhost_get_context(
+JE_API /* OPTIONAL: If graphic thread failed to start up */ jegl_context* jegl_uhost_get_context(
     je_GraphicUhost* host);
 
 /*
@@ -3825,7 +3825,7 @@ jegl_branch_new_chain [基本接口]
 */
 JE_API jegl_rendchain* jegl_branch_new_chain(
     je_RendchainBranch* branch,
-    jegl_frame_buffer* framebuffer,
+    /* OPTIONAL: nullptr means screen framebuffer */ jegl_frame_buffer* framebuffer,
     int32_t x,
     int32_t y,
     uint32_t w,
@@ -3842,8 +3842,8 @@ jegui_set_font [基本接口]
     jegui_init_basic
 */
 JE_API void jegui_set_font(
-    const char* general_font_path,
-    const char* latin_font_path,
+    /* OPTIONAL */ const char* general_font_path,
+    /* OPTIONAL */ const char* latin_font_path,
     size_t size);
 
 typedef uint64_t jegui_user_image_handle_t;
@@ -3872,7 +3872,7 @@ jegui_update_basic [基本接口]
 */
 JE_API void jegui_update_basic(
     jegui_platform_draw_callback_t platform_draw_callback,
-    void* data);
+    /* OPTIONAL */ void* data);
 
 /*
 jegui_shutdown_basic [基本接口]
@@ -4013,7 +4013,7 @@ je_io_create_gamepad [基本接口]
     * guid 可用于区分不同的物理设备，如果为nullptr，则由引擎生成。
 */
 JE_API je_io_gamepad_handle_t je_io_create_gamepad(
-    const char* name_may_null, const char* guid_may_null);
+    /* OPTIONAL */ const char* name_may_null, /* OPTIONAL */ const char* guid_may_null);
 /*
 je_io_close_gamepad [基本接口]
 关闭一个虚拟手柄实例
@@ -4043,7 +4043,7 @@ je_io_gamepad_get [基本接口]
         则只返回前count个句柄；如果实际手柄数量小于count，则返回实际数量。
     * 作为特例，当 count 为 0 时，out_gamepads 可以为 nullptr，此时函数返回实际手柄数量。
 */
-JE_API size_t je_io_gamepad_get(size_t count, je_io_gamepad_handle_t* out_gamepads);
+JE_API size_t je_io_gamepad_get(size_t count, /* OPTIONAL: If count == 0 */ je_io_gamepad_handle_t* out_gamepads);
 
 /*
 je_io_gamepad_is_active [基本接口]
@@ -4060,7 +4060,7 @@ je_io_gamepad_is_active [基本接口]
 */
 JE_API bool je_io_gamepad_is_active(
     je_io_gamepad_handle_t gamepad,
-    je_TimestampMs* out_last_pushed_time_may_null);
+    /* OPTIONAL */ je_TimestampMs* out_last_pushed_time_may_null);
 /*
 je_io_gamepad_get_button_down [基本接口]
 获取指定虚拟手柄的指定按键是否被按下
@@ -4127,13 +4127,13 @@ JE_API void je_io_gamepad_stick_set_deadzone(
 je_module_load [基本接口]
 以name为名字，加载指定路径的动态库（遵循woolang规则）加载失败返回nullptr
 */
-JE_API woort_Dylib* je_module_load(const char* name, const char* path);
+JE_API /* OPTIONAL: If load failed */ woort_Dylib* je_module_load(const char* name, const char* path);
 
 /*
 je_module_func [基本接口]
 从动态库中加载某个函数，返回函数的地址
 */
-JE_API void* je_module_func(woort_Dylib* lib, const char* funcname);
+JE_API /* OPTIONAL: If symbol not found */ void* je_module_func(woort_Dylib* lib, const char* funcname);
 
 /*
 je_module_unload [基本接口]
@@ -4508,7 +4508,7 @@ jeal_create_buffer [基本接口]
 参见：
     jeal_close_buffer
 */
-JE_API const jeal_buffer* jeal_create_buffer(
+JE_API /* OPTIONAL: If format is invalid or buffer_data_len is not aligned to sample size */ const jeal_buffer* jeal_create_buffer(
     const void* data,
     size_t buffer_data_len,
     size_t sample_rate,
@@ -4524,7 +4524,7 @@ jeal_load_buffer_wav [基本接口]
 参见：
     jeal_close_buffer
 */
-JE_API const jeal_buffer* jeal_load_buffer_wav(const char* path);
+JE_API /* OPTIONAL: If wav file failed to load */ const jeal_buffer* jeal_load_buffer_wav(const char* path);
 
 /*
 jeal_close_buffer [基本接口]
@@ -4613,14 +4613,14 @@ jeal_set_source_effect_slot_and_filter [基本接口]
 JE_API void jeal_set_source_effect_slot_and_filter(
     jeal_source* source,
     size_t slot_idx,
-    jeal_effect_slot* slot_may_null,
-    jeal_filter* filter_may_null);
+    /* OPTIONAL */ jeal_effect_slot* slot_may_null,
+    /* OPTIONAL */ jeal_filter* filter_may_null);
 
 /*
 jeal_set_source_filter [基本接口]
 设置音频源的滤波器
 */
-JE_API void jeal_set_source_filter(jeal_source* source, jeal_filter* filter_may_null);
+JE_API void jeal_set_source_filter(jeal_source* source, /* OPTIONAL */ jeal_filter* filter_may_null);
 
 /*
 jeal_play_source [基本接口]
@@ -4689,7 +4689,7 @@ jeal_effect_slot_bind [基本接口]
 绑定一个效果到效果槽
     * 效果传入 nullptr 表示解除绑定
 */
-JE_API void jeal_effect_slot_bind(jeal_effect_slot* slot, void* effect_may_null);
+JE_API void jeal_effect_slot_bind(jeal_effect_slot* slot, /* OPTIONAL */ void* effect_may_null);
 
 /*
 jeal_effect_slot_close [基本接口]
@@ -4752,7 +4752,7 @@ jeal_enumerate_devices_and_do [基本接口]
         返回 nullptr 表示不改变当前使用的设备
 */
 JE_API void jeal_enumerate_devices_and_do(
-    jeal_enumerate_device_callback_t callback, void* userdata);
+    jeal_enumerate_device_callback_t callback, /* OPTIONAL */ void* userdata);
 
 /*
 jeal_disconnect_all_devices [基本接口]
@@ -4918,7 +4918,7 @@ je_tilemap_map_size [基本接口]
     * 各出参均可传 nullptr 跳过；句柄无效时写出 0
 */
 JE_API void je_tilemap_map_size(je_TilemapHandle map,
-    int32_t* w, int32_t* h, int32_t* tile_px, int32_t* layer_count);
+    /* OPTIONAL */ int32_t* w, /* OPTIONAL */ int32_t* h, /* OPTIONAL */ int32_t* tile_px, /* OPTIONAL */ int32_t* layer_count);
 
 /*
 je_tilemap_map_path [基本接口]
@@ -5017,7 +5017,7 @@ je_tilemap_get_layer [基本接口]
     * 各出参均可传 nullptr 跳过；下标越界时名称写出空串、其余写出 0
 */
 JE_API void je_tilemap_get_layer(je_TilemapHandle map, je_LayerId layer,
-    const char** name, int32_t* visible, int32_t* locked);
+    /* OPTIONAL */ const char** name, /* OPTIONAL */ int32_t* visible, /* OPTIONAL */ int32_t* locked);
 
 /*
 je_tilemap_set_layer [基本接口]
@@ -5026,7 +5026,7 @@ je_tilemap_set_layer [基本接口]
     * 下标越界时不做任何修改
 */
 JE_API void je_tilemap_set_layer(je_TilemapHandle map, je_LayerId layer,
-    const char* name, int32_t visible, int32_t locked);
+    /* OPTIONAL */ const char* name, int32_t visible, int32_t locked);
 
 /*
 je_tilemap_layer_z [基本接口]
@@ -5065,7 +5065,7 @@ je_tilemap_layer_shader [基本接口]
 取图层样式的着色器实例，返回新建引用副本（用 je_tilemap_free_shader_ref 释放）
     * 未指定样式时返回 nullptr
 */
-JE_API je_tilemap_shader_ref* je_tilemap_layer_shader(je_TilemapHandle map,
+JE_API /* OPTIONAL: If layer has no shader style */ je_tilemap_shader_ref* je_tilemap_layer_shader(je_TilemapHandle map,
     je_LayerId layer);
 
 /*
@@ -5076,7 +5076,7 @@ je_tilemap_set_layer_shader [基本接口]
     * 下标越界时不做任何修改
 */
 JE_API void je_tilemap_set_layer_shader(je_TilemapHandle map, je_LayerId layer,
-    je_tilemap_shader_ref* shader);
+    /* OPTIONAL */ je_tilemap_shader_ref* shader);
 
 /*
 je_tilemap_layer_texture_count [基本接口]
@@ -5092,7 +5092,7 @@ je_tilemap_layer_set_texture [基本接口]
     * 同槽位重复设置时替换旧值
 */
 JE_API bool je_tilemap_layer_set_texture(je_TilemapHandle map, je_LayerId layer,
-    int32_t slot, je_tilemap_texture_ref* texture);
+    int32_t slot, /* OPTIONAL */ je_tilemap_texture_ref* texture);
 
 /*
 je_tilemap_layer_get_texture [基本接口]
@@ -5101,19 +5101,19 @@ je_tilemap_layer_get_texture [基本接口]
     * 各出参均可传 nullptr 跳过；序号越界返回 false
 */
 JE_API bool je_tilemap_layer_get_texture(je_TilemapHandle map, je_LayerId layer,
-    int32_t index, int32_t* slot, je_tilemap_texture_ref** texture);
+    int32_t index, /* OPTIONAL */ int32_t* slot, /* OPTIONAL */ je_tilemap_texture_ref** texture);
 
 /*
 je_tilemap_free_shader_ref [基本接口]
 释放 je_tilemap_layer_shader 返回的着色器引用副本（传 nullptr 安全）
 */
-JE_API void je_tilemap_free_shader_ref(je_tilemap_shader_ref* shader);
+JE_API void je_tilemap_free_shader_ref(/* OPTIONAL */ je_tilemap_shader_ref* shader);
 
 /*
 je_tilemap_free_texture_ref [基本接口]
 释放 je_tilemap_layer_get_texture 出参返回的纹理引用副本（传 nullptr 安全）
 */
-JE_API void je_tilemap_free_texture_ref(je_tilemap_texture_ref* texture);
+JE_API void je_tilemap_free_texture_ref(/* OPTIONAL */ je_tilemap_texture_ref* texture);
 
 // ---- 瓦片读写 ----
 
@@ -5177,7 +5177,7 @@ je_tilemap_set_cell_property [基本接口]
     * value 传 nullptr 表示清除该格此属性的覆盖
 */
 JE_API void je_tilemap_set_cell_property(je_TilemapHandle map, je_LayerId layer,
-    int32_t x, int32_t y, const char* name, const char* value);
+    int32_t x, int32_t y, const char* name, /* OPTIONAL */ const char* value);
 
 /*
 je_tilemap_get_cell_property [基本接口]
@@ -5186,7 +5186,7 @@ je_tilemap_get_cell_property [基本接口]
 请参见：
     je_tilemap_get_property
 */
-JE_API const char* je_tilemap_get_cell_property(je_TilemapHandle map, je_LayerId layer,
+JE_API /* OPTIONAL: If no override value set */ const char* je_tilemap_get_cell_property(je_TilemapHandle map, je_LayerId layer,
     int32_t x, int32_t y, const char* name);
 
 /*
@@ -5194,7 +5194,7 @@ je_tilemap_get_property [基本接口]
 按取值链（逐格覆盖 -> 瓦片/地形默认值 -> 图集 schema 默认值）解析某格属性
     * 无值返回 nullptr
 */
-JE_API const char* je_tilemap_get_property(je_TilemapHandle map, je_LayerId layer,
+JE_API /* OPTIONAL: If no value resolved */ const char* je_tilemap_get_property(je_TilemapHandle map, je_LayerId layer,
     int32_t x, int32_t y, const char* name);
 
 /*
@@ -5345,7 +5345,7 @@ je_tilemap_source_info [基本接口]
     * 下标越界返回 false
 */
 JE_API bool je_tilemap_source_info(je_TilesetHandle tileset, je_SourceId source_idx,
-    const char** texture_path, int32_t* tile_px, int32_t* xcount, int32_t* ycount);
+    /* OPTIONAL */ const char** texture_path, /* OPTIONAL */ int32_t* tile_px, /* OPTIONAL */ int32_t* xcount, /* OPTIONAL */ int32_t* ycount);
 
 // ---- 普通瓦片表 ----
 
@@ -5381,7 +5381,7 @@ je_tilemap_tile_info [基本接口]
     * id 越界返回 false；已移除的瓦片源下标为 -1
 */
 JE_API bool je_tilemap_tile_info(je_TilesetHandle tileset, je_TileId tile_id,
-    je_SourceId* source_idx, int32_t* ix, int32_t* iy, int32_t* walkable);
+    /* OPTIONAL */ je_SourceId* source_idx, /* OPTIONAL */ int32_t* ix, /* OPTIONAL */ int32_t* iy, /* OPTIONAL */ int32_t* walkable);
 
 /*
 je_tilemap_set_tile_walkable [基本接口]
@@ -5425,8 +5425,8 @@ je_tilemap_terrain_info [基本接口]
     * id 越界返回 false；kind 类型为 je_TerrainKind
 */
 JE_API bool je_tilemap_terrain_info(je_TilesetHandle tileset, je_TerrainId terrain_id,
-    const char** name, je_TerrainKind* kind, je_SourceId* source_idx, int32_t* ix, int32_t* iy,
-    int32_t* walkable, int32_t* variant_count);
+    /* OPTIONAL */ const char** name, /* OPTIONAL */ je_TerrainKind* kind, /* OPTIONAL */ je_SourceId* source_idx, /* OPTIONAL */ int32_t* ix, /* OPTIONAL */ int32_t* iy,
+    /* OPTIONAL */ int32_t* walkable, /* OPTIONAL */ int32_t* variant_count);
 
 /*
 je_tilemap_set_terrain [基本接口]
@@ -5437,7 +5437,7 @@ je_tilemap_set_terrain [基本接口]
     je_tilemap_add_terrain
 */
 JE_API bool je_tilemap_set_terrain(je_TilesetHandle tileset, je_TerrainId terrain_id,
-    const char* name, je_TerrainKind kind,
+    /* OPTIONAL */ const char* name, je_TerrainKind kind,
     je_SourceId source_idx, int32_t ix, int32_t iy, int32_t walkable);
 
 /*
@@ -5487,7 +5487,7 @@ je_tilemap_property_info [基本接口]
     * 下标越界返回 false
 */
 JE_API bool je_tilemap_property_info(je_TilesetHandle tileset, int32_t index,
-    const char** name, const char** type, const char** default_value);
+    /* OPTIONAL */ const char** name, /* OPTIONAL */ const char** type, /* OPTIONAL */ const char** default_value);
 
 /*
 je_tilemap_set_tile_property [基本接口]
@@ -5495,14 +5495,14 @@ je_tilemap_set_tile_property [基本接口]
     * value 传 nullptr 表示清除该默认值
 */
 JE_API void je_tilemap_set_tile_property(je_TilesetHandle tileset, je_TileId tile_id,
-    const char* name, const char* value);
+    const char* name, /* OPTIONAL */ const char* value);
 
 /*
 je_tilemap_get_tile_property [基本接口]
 取指定 id 普通瓦片的属性默认值
     * 无值返回 nullptr
 */
-JE_API const char* je_tilemap_get_tile_property(je_TilesetHandle tileset,
+JE_API /* OPTIONAL: If no default value set */ const char* je_tilemap_get_tile_property(je_TilesetHandle tileset,
     je_TileId tile_id, const char* name);
 
 /*
@@ -5511,14 +5511,14 @@ je_tilemap_set_terrain_property [基本接口]
     * value 传 nullptr 表示清除该默认值
 */
 JE_API void je_tilemap_set_terrain_property(je_TilesetHandle tileset,
-    je_TerrainId terrain_id, const char* name, const char* value);
+    je_TerrainId terrain_id, const char* name, /* OPTIONAL */ const char* value);
 
 /*
 je_tilemap_get_terrain_property [基本接口]
 取指定 id 地形的属性默认值
     * 无值返回 nullptr
 */
-JE_API const char* je_tilemap_get_terrain_property(je_TilesetHandle tileset,
+JE_API /* OPTIONAL: If no default value set */ const char* je_tilemap_get_terrain_property(je_TilesetHandle tileset,
     je_TerrainId terrain_id, const char* name);
 
 // ---- 单元格渲染信息（编辑器预览用，与实际渲染一致） ----
@@ -5542,9 +5542,9 @@ je_tilemap_cell_quad [基本接口]
 */
 JE_API bool je_tilemap_cell_quad(je_TilemapHandle map, je_LayerId layer,
     int32_t x, int32_t y, int32_t idx,
-    const char** texture_path,
-    float* u0, float* v0, float* u1, float* v1,
-    int32_t* qx, int32_t* qy, int32_t* qcols);
+    /* OPTIONAL */ const char** texture_path,
+    /* OPTIONAL */ float* u0, /* OPTIONAL */ float* v0, /* OPTIONAL */ float* u1, /* OPTIONAL */ float* v1,
+    /* OPTIONAL */ int32_t* qx, /* OPTIONAL */ int32_t* qy, /* OPTIONAL */ int32_t* qcols);
 
 // DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR
 #ifdef JE_ENABLE_DEBUG_API

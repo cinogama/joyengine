@@ -3,15 +3,15 @@
 
 #include <cstdlib>
 
-void *je_mem_alloc(size_t sz)
+/* OPTIONAL: If allocation fails */ void *je_mem_alloc(size_t sz)
 {
     return malloc(sz);
 }
-void *je_mem_realloc(void *mem, size_t sz)
+/* OPTIONAL: If allocation fails */ void *je_mem_realloc(/* OPTIONAL */ void *mem, size_t sz)
 {
     return realloc(mem, sz);
 }
-void je_mem_free(void *ptr)
+void je_mem_free(/* OPTIONAL */ void *ptr)
 {
     return free(ptr);
 }

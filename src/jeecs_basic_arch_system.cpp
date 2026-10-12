@@ -2744,7 +2744,7 @@ je_GameUniverse* je_ecs_universe_create()
     return new jeecs_impl::ecs_universe();
 }
 
-void je_ecs_universe_register_exit_callback(je_GameUniverse* universe, void (*callback)(void*), void* arg)
+void je_ecs_universe_register_exit_callback(je_GameUniverse* universe, void (*callback)(void*), /* OPTIONAL */ void* arg)
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->register_exit_callback(
         [callback, arg]()
@@ -2796,7 +2796,7 @@ je_Chunk* je_arch_get_chunk(je_Archtype* archtype)
     return static_cast<jeecs_impl::arch_type*>(archtype)->get_head_chunk();
 }
 
-je_Chunk* je_arch_next_chunk(je_Chunk* chunk)
+/* OPTIONAL: If no successor chunk */ je_Chunk* je_arch_next_chunk(je_Chunk* chunk)
 {
     return static_cast<jeecs_impl::arch_type::arch_chunk*>(chunk)->last;
 }
@@ -2885,7 +2885,7 @@ void je_ecs_world_create_entity_with_prefab(
 }
 
 je_CollectedRequirements* je_ecs_collect_requirements(
-    const je_ComponentRequirement* requirements,
+    /* OPTIONAL: If total requirement count is 0 */ const je_ComponentRequirement* requirements,
     size_t view_requiremnt_count,
     size_t other_requiremnts_count)
 {
@@ -2935,7 +2935,7 @@ size_t je_ecs_world_get_arch_change_version(je_GameWorld* world)
     return static_cast<jeecs_impl::ecs_world*>(world)->get_arch_change_version();
 }
 
-void* je_ecs_world_entity_add_component(
+/* OPTIONAL: If entity is invalid */ void* je_ecs_world_entity_add_component(
     const je_GameEntity* entity,
     je_TypeId type)
 {
@@ -2965,7 +2965,7 @@ const je_GameEntityMeta* je_arch_entity_meta_addr_in_chunk(je_Chunk* chunk)
     return static_cast<jeecs_impl::arch_type::arch_chunk*>(chunk)->get_entity_meta();
 }
 
-void* je_ecs_world_entity_get_component(
+/* OPTIONAL: If entity is invalid or no such component */ void* je_ecs_world_entity_get_component(
     const je_GameEntity* entity,
     je_TypeId type)
 {
@@ -2988,7 +2988,7 @@ je_GameUniverse* je_ecs_world_in_universe(je_GameWorld* world)
     return static_cast<jeecs_impl::ecs_world*>(world)->get_universe();
 }
 
-je_GameWorld* je_ecs_world_of_entity(const je_GameEntity* entity)
+/* OPTIONAL: If entity is invalid */ je_GameWorld* je_ecs_world_of_entity(const je_GameEntity* entity)
 {
     auto* chunk = static_cast<jeecs_impl::arch_type::arch_chunk*>(entity->_m_in_chunk);
     if (chunk != nullptr)
@@ -3123,27 +3123,27 @@ void jedbg_get_entity_arch_information(
     *_out_all_entity_count_in_chunk = chunkaddr->get_entity_count_in_chunk();
 }
 
-void je_ecs_universe_register_pre_for_worlds_job(je_GameUniverse* universe, je_job_for_worlds_t job, void* data, void (*freefunc)(void*))
+void je_ecs_universe_register_pre_for_worlds_job(je_GameUniverse* universe, je_job_for_worlds_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->register_pre_for_worlds_job(job, data, freefunc);
 }
-void je_ecs_universe_register_pre_call_once_job(je_GameUniverse* universe, je_job_call_once_t job, void* data, void (*freefunc)(void*))
+void je_ecs_universe_register_pre_call_once_job(je_GameUniverse* universe, je_job_call_once_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->register_pre_call_once_job(job, data, freefunc);
 }
-void je_ecs_universe_register_for_worlds_job(je_GameUniverse* universe, je_job_for_worlds_t job, void* data, void (*freefunc)(void*))
+void je_ecs_universe_register_for_worlds_job(je_GameUniverse* universe, je_job_for_worlds_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->register_for_worlds_job(job, data, freefunc);
 }
-void je_ecs_universe_register_call_once_job(je_GameUniverse* universe, je_job_call_once_t job, void* data, void (*freefunc)(void*))
+void je_ecs_universe_register_call_once_job(je_GameUniverse* universe, je_job_call_once_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->register_call_once_job(job, data, freefunc);
 }
-void je_ecs_universe_register_after_for_worlds_job(je_GameUniverse* universe, je_job_for_worlds_t job, void* data, void (*freefunc)(void*))
+void je_ecs_universe_register_after_for_worlds_job(je_GameUniverse* universe, je_job_for_worlds_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->register_after_for_worlds_job(job, data, freefunc);
 }
-void je_ecs_universe_register_after_call_once_job(je_GameUniverse* universe, je_job_call_once_t job, void* data, void (*freefunc)(void*))
+void je_ecs_universe_register_after_call_once_job(je_GameUniverse* universe, je_job_call_once_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->register_after_call_once_job(job, data, freefunc);
 }

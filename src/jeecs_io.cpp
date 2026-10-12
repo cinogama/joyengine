@@ -196,7 +196,7 @@ void je_io_update_mouse_state(size_t group, je_Mousecode key, bool keydown)
 }
 
 je_io_gamepad_handle_t je_io_create_gamepad(
-    const char *name_may_null, const char *guid_may_null)
+    /* OPTIONAL */ const char *name_may_null, /* OPTIONAL */ const char *guid_may_null)
 {
     std::lock_guard g(_state._gamepads_mx);
 
@@ -283,7 +283,7 @@ const char *je_io_gamepad_guid(je_io_gamepad_handle_t gamepad)
 {
     return gamepad->_guid.c_str();
 }
-size_t je_io_gamepad_get(size_t count, je_io_gamepad_handle_t *out_gamepads)
+size_t je_io_gamepad_get(size_t count, /* OPTIONAL: If count == 0 */ je_io_gamepad_handle_t *out_gamepads)
 {
     std::shared_lock g(_state._gamepads_mx);
 
@@ -302,7 +302,7 @@ size_t je_io_gamepad_get(size_t count, je_io_gamepad_handle_t *out_gamepads)
 }
 bool je_io_gamepad_is_active(
     je_io_gamepad_handle_t gamepad,
-    je_TimestampMs *out_last_pushed_time_may_null)
+    /* OPTIONAL */ je_TimestampMs *out_last_pushed_time_may_null)
 {
     if (out_last_pushed_time_may_null != nullptr)
         *out_last_pushed_time_may_null = gamepad->_last_update_time;

@@ -343,7 +343,7 @@
 
 
 je_GraphicUhost* jegl_uhost_get_or_create_for_universe(
-    je_GameUniverse* universe, const jegl_interface_config* config)
+    je_GameUniverse* universe, /* OPTIONAL: nullptr to use default config */ const jegl_interface_config* config)
 {
     return je_GraphicUhost::get_default_graphic_pipeline_instance(universe, config);
 }
@@ -351,7 +351,7 @@ void jegl_uhost_set_skip_behavior(je_GraphicUhost* host, bool skip_all_draw)
 {
     host->m_skip_all_draw = skip_all_draw;
 }
-jegl_context* jegl_uhost_get_context(je_GraphicUhost* host)
+/* OPTIONAL: If graphic thread failed to start up */ jegl_context* jegl_uhost_get_context(je_GraphicUhost* host)
 {
     return host->glthread;
 }
@@ -364,7 +364,7 @@ void jegl_uhost_free_branch(je_GraphicUhost* host, je_RendchainBranch* free_bran
     return host->free_pipeline(free_branch);
 }
 jegl_rendchain* jegl_branch_new_chain(
-    je_RendchainBranch* branch, jegl_frame_buffer* framebuffer, int32_t x, int32_t y, uint32_t w, uint32_t h)
+    je_RendchainBranch* branch, /* OPTIONAL: nullptr means screen framebuffer */ jegl_frame_buffer* framebuffer, int32_t x, int32_t y, uint32_t w, uint32_t h)
 {
     return branch->allocate_new_chain(framebuffer, x, y, w, h);
 }

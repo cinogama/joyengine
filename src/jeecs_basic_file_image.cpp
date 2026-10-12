@@ -556,7 +556,7 @@ void jeecs_file_set_runtime_path(const char* path)
     jeecs_file_update_default_fimg(path);
 }
 
-void jeecs_file_update_default_fimg(const char* path)
+void jeecs_file_update_default_fimg(/* OPTIONAL: If path == nullptr, only close the old image */ const char* path)
 {
     if (_je_runtime_file_image != nullptr)
         fimg_close_img(_je_runtime_file_image);
@@ -577,7 +577,7 @@ const char* jeecs_file_get_runtime_path()
     return _je_runtime_path.c_str();
 }
 
-jeecs_file* jeecs_file_open(const char* path)
+/* OPTIONAL */ jeecs_file* jeecs_file_open(const char* path)
 {
     std::string path_str = path;
 
@@ -682,7 +682,7 @@ bool jeecs_file_image_pack_file(fimg_creating_context* context, const char* file
 {
     return fimg_storing_file_to_img(context, filepath, packingpath);
 }
-bool jeecs_file_image_pack_buffer(fimg_creating_context* context, const void* buffer, size_t len, const char* packingpath)
+bool jeecs_file_image_pack_buffer(fimg_creating_context* context, /* OPTIONAL: If len == 0 */ const void* buffer, size_t len, const char* packingpath)
 {
     return fimg_storing_buffer_to_img(context, buffer, len, packingpath);
 }

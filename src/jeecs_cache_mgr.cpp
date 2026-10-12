@@ -35,7 +35,7 @@ uint64_t _crc64_of_file(const char* filepath)
     return crc64_result;
 }
 
-jeecs_file* jeecs_load_cache_file(
+/* OPTIONAL */ jeecs_file* jeecs_load_cache_file(
     const char* filepath, uint32_t format_version, uint64_t virtual_crc64)
 {
     using namespace std;
@@ -99,7 +99,7 @@ jeecs_file* jeecs_load_cache_file(
     return nullptr;
 }
 
-void* jeecs_create_cache_file(
+/* OPTIONAL */ void* jeecs_create_cache_file(
     const char* filepath, uint32_t format_version, uint64_t usecrc64)
 {
     using namespace std;

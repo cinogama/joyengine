@@ -779,7 +779,7 @@ bool jegl_sync_shutdown(jegl_context* thread, bool isreboot)
 }
 
 void jegl_register_sync_thread_callback(
-    jeecs_sync_callback_func_t callback, void* arg)
+    jeecs_sync_callback_func_t callback, /* OPTIONAL */ void* arg)
 {
     assert(callback != nullptr);
 
@@ -787,12 +787,12 @@ void jegl_register_sync_thread_callback(
     jeecs::graphic::_jegl_sync_callback_arg = arg;
 }
 
-jegl_context* jegl_start_graphic_thread(
+/* OPTIONAL: If failed to start up */ jegl_context* jegl_start_graphic_thread(
     jegl_interface_config config,
-    je_GameUniverse* universe_instance,
+    /* OPTIONAL: If no universe attached */ je_GameUniverse* universe_instance,
     jeecs_api_register_func_t register_func,
     jegl_context::frame_job_func_t frame_rend_work,
-    void* arg)
+    /* OPTIONAL */ void* arg)
 {
     jegl_context* thread_handle = nullptr;
 
@@ -945,8 +945,8 @@ void jegl_terminate_graphic_thread(jegl_context* thread)
 bool jegl_update(
     jegl_context* thread,
     jegl_update_sync_mode mode,
-    jegl_update_sync_callback_t callback_after_wait_may_null,
-    void* callback_param)
+    /* OPTIONAL */ jegl_update_sync_callback_t callback_after_wait_may_null,
+    /* OPTIONAL */ void* callback_param)
 {
     if (thread->_m_thread_notifier->m_graphic_terminated)
         return false;
@@ -986,7 +986,7 @@ bool jegl_update(
     return true;
 }
 
-void jegl_reboot_graphic_thread(jegl_context* thread_handle, const jegl_interface_config* config_may_null)
+void jegl_reboot_graphic_thread(jegl_context* thread_handle, /* OPTIONAL: nullptr to keep current config */ const jegl_interface_config* config_may_null)
 {
     if (config_may_null != nullptr)
         thread_handle->m_config = *config_may_null;
@@ -1458,8 +1458,8 @@ jegl_shader* _jegl_load_shader_source_impl(
 #endif
 }
 
-jegl_shader* jegl_load_shader_source(
-    jegl_context* context, const char* path, const char* src, bool is_virtual_file)
+/* OPTIONAL */ jegl_shader* jegl_load_shader_source(
+    /* OPTIONAL */ jegl_context* context, const char* path, const char* src, bool is_virtual_file)
 {
     if (is_virtual_file)
     {
@@ -1480,7 +1480,7 @@ jegl_shader* jegl_load_shader_source(
     return shader_instance;
 }
 
-jegl_shader* jegl_load_shader(jegl_context* context, const char* path)
+/* OPTIONAL */ jegl_shader* jegl_load_shader(/* OPTIONAL */ jegl_context* context, const char* path)
 {
     auto* shared_shader =
         _jegl_try_load_shared_resource<jegl_shader>(
@@ -1522,7 +1522,7 @@ void jegl_share_resource_handle(jegl_resource_handle* resource_handle)
     ++resource_handle->m_raw_ref_count->m_binding_count;
 }
 
-jegl_texture* jegl_load_texture(jegl_context* context, const char* path)
+/* OPTIONAL */ jegl_texture* jegl_load_texture(/* OPTIONAL */ jegl_context* context, const char* path)
 {
     auto* shared_texture =
         _jegl_try_load_shared_resource<jegl_texture>(
@@ -1677,7 +1677,7 @@ jegl_vertex* _jegl_create_vertex_impl(
     return vertex;
 }
 
-jegl_vertex* jegl_load_vertex(jegl_context* context, const char* path)
+/* OPTIONAL */ jegl_vertex* jegl_load_vertex(/* OPTIONAL */ jegl_context* context, const char* path)
 {
     const size_t MAX_BONE_COUNT = 256;
 
@@ -1917,7 +1917,7 @@ jegl_vertex* jegl_load_vertex(jegl_context* context, const char* path)
 }
 
 
-jegl_vertex* jegl_create_vertex(
+/* OPTIONAL: If bad format or no completed vertex point */ jegl_vertex* jegl_create_vertex(
     jegl_vertex::type type,
     const void* datas,
     size_t data_length,
@@ -1943,7 +1943,7 @@ jegl_vertex* jegl_create_vertex(
 
 void jegl_update_vertex_buffer(
     jegl_vertex* vertex,
-    const void* vertex_data,
+    /* OPTIONAL */ const void* vertex_data,
     size_t vertex_length,
     size_t active_index_count)
 {
@@ -1979,7 +1979,7 @@ void jegl_update_vertex_buffer(
     vertex->m_index_count = active_index_count;
 }
 
-jegl_frame_buffer* jegl_create_framebuf(
+/* OPTIONAL: If size or color_attachment_count is zero */ jegl_frame_buffer* jegl_create_framebuf(
     size_t width,
     size_t height,
     const jegl_texture::format* color_attachment_formats,
@@ -2053,7 +2053,7 @@ jegl_uniform_buffer* jegl_create_uniformbuf(
 
 void jegl_update_uniformbuf(
     jegl_uniform_buffer* uniformbuf,
-    const void* buf,
+    /* OPTIONAL: If update_length == 0 */ const void* buf,
     size_t update_offset,
     size_t update_length)
 {
@@ -2270,9 +2270,9 @@ void jegl_draw_vertex(jegl_vertex* vert)
 }
 
 void jegl_rend_to_framebuffer(
-    jegl_frame_buffer* framebuffer,
-    const int32_t(*viewport_xywh)[4],
-    const jegl_frame_buffer_clear_operation* clear_operations)
+    /* OPTIONAL */ jegl_frame_buffer* framebuffer,
+    /* OPTIONAL */ const int32_t(*viewport_xywh)[4],
+    /* OPTIONAL */ const jegl_frame_buffer_clear_operation* clear_operations)
 {
     auto* thread_handle = jeecs::graphic::_current_graphic_thread;
     const auto* gapi = thread_handle->m_apis;

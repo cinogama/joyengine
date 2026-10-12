@@ -380,7 +380,7 @@ namespace jeecs_impl
         }
         je_TypeInfo* get_info_by_name(const char* name) noexcept
         {
-            if (name)
+            assert(name != nullptr);
             {
                 std::shared_lock sg1(_m_factory_mx);
                 auto fnd = _m_named_type_records.find(name);
@@ -457,21 +457,21 @@ void je_typing_reset(
         _move_constructor);
 }
 
-const je_TypeInfo* je_typing_get_info_by_id(
+/* OPTIONAL: If _id is invalid or unregistered */ const je_TypeInfo* je_typing_get_info_by_id(
     je_TypeId _id)
 {
     return jeecs_impl::global_factory_holder::holder()
         ->get_info_by_id(_id);
 }
 
-const je_TypeInfo* je_typing_get_info_by_hash(
+/* OPTIONAL: If _hash is not registered */ const je_TypeInfo* je_typing_get_info_by_hash(
     je_TypeHash _hash)
 {
     return jeecs_impl::global_factory_holder::holder()
         ->get_info_by_hash(_hash);
 }
 
-const je_TypeInfo* je_typing_get_info_by_name(
+/* OPTIONAL: If type_name is not found */ const je_TypeInfo* je_typing_get_info_by_name(
     const char* type_name)
 {
     return jeecs_impl::global_factory_holder::holder()->get_info_by_name(type_name);
@@ -487,7 +487,7 @@ void je_register_member(
     const je_TypeInfo* _classtype,
     const je_TypeInfo* _membertype,
     const char* _member_name,
-    const char* _woovalue_type_may_null,
+    /* OPTIONAL */ const char* _woovalue_type_may_null,
     woort_value _boxed_woovalue_init_may_ignored,
     ptrdiff_t _member_offset)
 {

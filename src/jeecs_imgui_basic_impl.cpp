@@ -60,8 +60,8 @@ struct _jegui_static_context
 _jegui_static_context _je_gui_static_ctx;
 
 void jegui_set_font(
-    const char* general_font_path,
-    const char* latin_font_path,
+    /* OPTIONAL */ const char* general_font_path,
+    /* OPTIONAL */ const char* latin_font_path,
     size_t size)
 {
     _je_gui_static_ctx._jegui_specify_font_path = general_font_path ? std::optional(general_font_path) : std::nullopt;
@@ -2978,7 +2978,7 @@ public func frag(vf: v2f)
 
 void jegui_update_basic(
     jegui_platform_draw_callback_t platform_draw_callback,
-    void* data)
+    /* OPTIONAL */ void* data)
 {
     jegl_bind_shader(_je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource());
 
