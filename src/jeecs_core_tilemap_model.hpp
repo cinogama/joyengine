@@ -27,8 +27,12 @@
 #include <cstring>
 #include <cmath>
 #include <cctype>
+#include <cstdlib>
+#include <cerrno>
 #include <algorithm>
 #include <mutex>
+#include <variant>
+#include <array>
 
 namespace jeecs
 {
@@ -58,6 +62,212 @@ namespace jeecs
             return true;
         }
 
+        // ==================== 属性值 ====================
+        // 属性值的类型化存储：variant 备选序与 je_PropertyType 枚举值
+        // 一一对应（见下方 static_assert），读写接口按枚举严格匹配，
+        // 类型不符即失败（不做隐式转换）。
+        using property_value = std::variant<
+            bool,                   // JE_PROPERTY_TYPE_BOOL
+            std::string,            // JE_PROPERTY_TYPE_STRING
+            int32_t,                // JE_PROPERTY_TYPE_INT
+            float,                  // JE_PROPERTY_TYPE_FLOAT
+            std::array<float, 2>,   // JE_PROPERTY_TYPE_VEC2
+            std::array<float, 3>,   // JE_PROPERTY_TYPE_VEC3
+            std::array<float, 4>>;  // JE_PROPERTY_TYPE_VEC4
+
+        static_assert((size_t)JE_PROPERTY_TYPE_BOOL == 0
+            && std::is_same_v<std::variant_alternative_t<0, property_value>, bool>);
+        static_assert((size_t)JE_PROPERTY_TYPE_STRING == 1
+            && std::is_same_v<std::variant_alternative_t<1, property_value>, std::string>);
+        static_assert((size_t)JE_PROPERTY_TYPE_INT == 2
+            && std::is_same_v<std::variant_alternative_t<2, property_value>, int32_t>);
+        static_assert((size_t)JE_PROPERTY_TYPE_FLOAT == 3
+            && std::is_same_v<std::variant_alternative_t<3, property_value>, float>);
+        static_assert((size_t)JE_PROPERTY_TYPE_VEC2 == 4
+            && std::is_same_v<std::variant_alternative_t<4, property_value>, std::array<float, 2>>);
+        static_assert((size_t)JE_PROPERTY_TYPE_VEC3 == 5
+            && std::is_same_v<std::variant_alternative_t<5, property_value>, std::array<float, 3>>);
+        static_assert((size_t)JE_PROPERTY_TYPE_VEC4 == 6
+            && std::is_same_v<std::variant_alternative_t<6, property_value>, std::array<float, 4>>);
+
+        inline bool property_type_valid(int32_t t)
+        {
+            return t >= (int32_t)JE_PROPERTY_TYPE_BOOL
+                && t <= (int32_t)JE_PROPERTY_TYPE_VEC4;
+        }
+        inline const char* property_type_name(je_PropertyType t)
+        {
+            switch (t)
+            {
+            case JE_PROPERTY_TYPE_BOOL: return "bool";
+            case JE_PROPERTY_TYPE_STRING: return "string";
+            case JE_PROPERTY_TYPE_INT: return "int";
+            case JE_PROPERTY_TYPE_FLOAT: return "float";
+            case JE_PROPERTY_TYPE_VEC2: return "vec2";
+            case JE_PROPERTY_TYPE_VEC3: return "vec3";
+            case JE_PROPERTY_TYPE_VEC4: return "vec4";
+            }
+            return "?";
+        }
+        inline bool property_type_from_name(const std::string& s, je_PropertyType* out)
+        {
+            for (int32_t t = (int32_t)JE_PROPERTY_TYPE_BOOL;
+                t <= (int32_t)JE_PROPERTY_TYPE_VEC4; ++t)
+            {
+                if (s == property_type_name((je_PropertyType)t))
+                {
+                    *out = (je_PropertyType)t;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // 按类型的零值（add_property 未给 default 时使用）
+        inline property_value property_zero_value(je_PropertyType t)
+        {
+            switch (t)
+            {
+            case JE_PROPERTY_TYPE_STRING:
+                return property_value{ std::in_place_type<std::string>, std::string() };
+            case JE_PROPERTY_TYPE_INT:
+                return property_value{ std::in_place_type<int32_t>, 0 };
+            case JE_PROPERTY_TYPE_FLOAT:
+                return property_value{ std::in_place_type<float>, 0.f };
+            case JE_PROPERTY_TYPE_VEC2:
+                return property_value{ std::in_place_type<std::array<float, 2>>,
+                    std::array<float, 2>{ 0.f, 0.f } };
+            case JE_PROPERTY_TYPE_VEC3:
+                return property_value{ std::in_place_type<std::array<float, 3>>,
+                    std::array<float, 3>{ 0.f, 0.f, 0.f } };
+            case JE_PROPERTY_TYPE_VEC4:
+                return property_value{ std::in_place_type<std::array<float, 4>>,
+                    std::array<float, 4>{ 0.f, 0.f, 0.f, 0.f } };
+            case JE_PROPERTY_TYPE_BOOL:
+            default:
+                return property_value{ std::in_place_type<bool>, false };
+            }
+        }
+
+        // ---- 字符串 -> 属性值（仅旧版字符串格式文件加载用）----
+        inline bool parse_i32_full(const std::string& s, int32_t* out)
+        {
+            if (s.empty())
+                return false;
+            char* end = nullptr;
+            errno = 0;
+            long v = std::strtol(s.c_str(), &end, 10);
+            if (errno != 0 || end != s.c_str() + s.size()
+                || v < INT32_MIN || v > INT32_MAX)
+                return false;
+            *out = (int32_t)v;
+            return true;
+        }
+        inline bool parse_f32_full(const std::string& s, float* out)
+        {
+            if (s.empty())
+                return false;
+            char* end = nullptr;
+            errno = 0;
+            float v = std::strtof(s.c_str(), &end);
+            if (errno != 0 || end != s.c_str() + s.size())
+                return false;
+            *out = v;
+            return true;
+        }
+        // 逗号分隔的恰好 n 个浮点（允许逗号前后空白，如 "0, 0"）
+        inline bool parse_vec_full(const std::string& s, size_t n, float* out)
+        {
+            size_t start = 0;
+            for (size_t i = 0; i < n; ++i)
+            {
+                size_t comma = s.find(',', start);
+                std::string part = s.substr(start,
+                    comma == std::string::npos ? std::string::npos : comma - start);
+                while (!part.empty() && std::isspace((unsigned char)part.front()))
+                    part.erase(part.begin());
+                while (!part.empty() && std::isspace((unsigned char)part.back()))
+                    part.pop_back();
+                if (!parse_f32_full(part, &out[i]))
+                    return false;
+                if (i + 1 < n)
+                {
+                    if (comma == std::string::npos)
+                        return false;
+                    start = comma + 1;
+                }
+                else if (comma != std::string::npos)
+                    return false;   // 分量多于 n
+            }
+            return true;
+        }
+        // 按类型解析字符串值；解析失败返回 false
+        inline bool property_value_from_string(
+            je_PropertyType t, const std::string& s, property_value* out)
+        {
+            switch (t)
+            {
+            case JE_PROPERTY_TYPE_BOOL:
+                if (s == "true") { *out = true; return true; }
+                if (s == "false") { *out = false; return true; }
+                return false;
+            case JE_PROPERTY_TYPE_STRING:
+                *out = s;
+                return true;
+            case JE_PROPERTY_TYPE_INT:
+            {
+                int32_t v;
+                if (!parse_i32_full(s, &v))
+                    return false;
+                *out = v;
+                return true;
+            }
+            case JE_PROPERTY_TYPE_FLOAT:
+            {
+                float v;
+                if (!parse_f32_full(s, &v))
+                    return false;
+                *out = v;
+                return true;
+            }
+            case JE_PROPERTY_TYPE_VEC2:
+            case JE_PROPERTY_TYPE_VEC3:
+            case JE_PROPERTY_TYPE_VEC4:
+            {
+                float f[4];
+                size_t n = t == JE_PROPERTY_TYPE_VEC2 ? 2
+                    : t == JE_PROPERTY_TYPE_VEC3 ? 3 : 4;
+                if (!parse_vec_full(s, n, f))
+                    return false;
+                if (n == 2) *out = std::array<float, 2>{ f[0], f[1] };
+                else if (n == 3) *out = std::array<float, 3>{ f[0], f[1], f[2] };
+                else *out = std::array<float, 4>{ f[0], f[1], f[2], f[3] };
+                return true;
+            }
+            }
+            return false;
+        }
+        // 无类型信息时按内容推断（旧地图文件逐格覆盖：属性 schema 在
+        // 图集文档里，地图加载时不可靠解析）。
+        inline property_value property_value_from_string_heuristic(const std::string& s)
+        {
+            property_value v;
+            if (property_value_from_string(JE_PROPERTY_TYPE_BOOL, s, &v))
+                return v;
+            if (property_value_from_string(JE_PROPERTY_TYPE_INT, s, &v))
+                return v;
+            if (property_value_from_string(JE_PROPERTY_TYPE_FLOAT, s, &v))
+                return v;
+            for (int32_t t = (int32_t)JE_PROPERTY_TYPE_VEC2;
+                t <= (int32_t)JE_PROPERTY_TYPE_VEC4; ++t)
+            {
+                if (property_value_from_string((je_PropertyType)t, s, &v))
+                    return v;
+            }
+            return property_value{ std::in_place_type<std::string>, s };
+        }
+
+
         // ==================== 文档数据模型 ====================
         struct SourceTexture
         {
@@ -80,13 +290,13 @@ namespace jeecs
             int32_t ix = 0, iy = 0; // 锚点图集网格坐标
             bool walkable = true;
             std::vector<int32_t> variant_tiles;             // blob47 显式变体表（普通瓦片 id）
-            std::map<std::string, std::string> properties;  // 地形默认属性
+            std::map<std::string, property_value> properties;   // 地形默认属性
         };
         struct PropertyDef
         {
             std::string name;
-            std::string type;           // "bool"/"int"/"float"/"string"/"vec2"/"vec3"/"vec4"
-            std::string default_value;
+            je_PropertyType type = JE_PROPERTY_TYPE_BOOL;
+            property_value default_value;    // 与 type 一致
         };
 
         struct TilesetDocument
@@ -97,7 +307,7 @@ namespace jeecs
             std::vector<TileDef> tiles;        // tiles[0] 占位，瓦片 id = 下标（1 起）
             std::vector<TerrainDef> terrains;   // terrains[0] 占位，地形 id = 下标（1 起）
             std::vector<PropertyDef> properties;
-            std::map<int32_t, std::map<std::string, std::string>> tile_properties;
+            std::map<int32_t, std::map<std::string, property_value>> tile_properties;
 
             uint64_t version = 1;
             // 引用计数（keep/unload）：open/create 的每个调用方各占 1，
@@ -177,7 +387,7 @@ namespace jeecs
             std::vector<TilesetDocument*> resolved_kept;
             std::vector<MapLayer> layers;
             // 逐格属性覆盖：(layer, x + y*width) -> (name -> value)
-            std::map<std::pair<int32_t, int32_t>, std::map<std::string, std::string>> cell_properties;
+            std::map<std::pair<int32_t, int32_t>, std::map<std::string, property_value>> cell_properties;
 
             uint64_t version = 1;
             // 引用计数语义同 TilesetDocument::keep_count（open/create 的
@@ -199,8 +409,13 @@ namespace jeecs
         // ==================== 二进制读写 ====================
         // 与 .je4animation 同风格的自有二进制格式（魔数 + 小端字段），
         // 由 C++ 侧统一读写，避免在内核引入 TOML 依赖。
-        constexpr uint32_t TILESET_MAGIC = 0x4A545331; // "JTS1"
-        constexpr uint32_t MAP_MAGIC = 0x4A544D31;     // "JTM1"
+        // JTS2/JTM2 起属性值为类型化数据（每值前有 1 字节类型标记）；
+        // 旧版 JTS1/JTM1 的字符串值在加载时按 schema 类型（图集）或按
+        // 内容推断（地图逐格覆盖）转换。
+        constexpr uint32_t TILESET_MAGIC = 0x4A545332;     // "JTS2"
+        constexpr uint32_t MAP_MAGIC = 0x4A544D32;         // "JTM2"
+        constexpr uint32_t LEGACY_TILESET_MAGIC = 0x4A545331;  // "JTS1"
+        constexpr uint32_t LEGACY_MAP_MAGIC = 0x4A544D31;      // "JTM1"
 
         struct bin_writer
         {
@@ -248,6 +463,85 @@ namespace jeecs
                 std::string s(p + o, len); o += len; return s;
             }
         };
+
+        // 属性值：1 字节类型标记 + 按类型载荷（bool→u8，int→i32，
+        // float→f32，string→str，vecN→N 个 f32）
+        inline void write_property_value(bin_writer& w, const property_value& v)
+        {
+            w.u8((uint8_t)v.index());
+            switch (v.index())
+            {
+            case JE_PROPERTY_TYPE_BOOL:
+                w.u8(std::get<bool>(v) ? 1 : 0);
+                break;
+            case JE_PROPERTY_TYPE_STRING:
+                w.str(std::get<std::string>(v));
+                break;
+            case JE_PROPERTY_TYPE_INT:
+                w.i32(std::get<int32_t>(v));
+                break;
+            case JE_PROPERTY_TYPE_FLOAT:
+                w.f32(std::get<float>(v));
+                break;
+            case JE_PROPERTY_TYPE_VEC2:
+                for (float c : std::get<std::array<float, 2>>(v)) w.f32(c);
+                break;
+            case JE_PROPERTY_TYPE_VEC3:
+                for (float c : std::get<std::array<float, 3>>(v)) w.f32(c);
+                break;
+            case JE_PROPERTY_TYPE_VEC4:
+                for (float c : std::get<std::array<float, 4>>(v)) w.f32(c);
+                break;
+            }
+        }
+        inline property_value read_property_value(bin_reader& r)
+        {
+            uint8_t tag = r.u8();
+            if (!r.ok || !property_type_valid(tag))
+            {
+                r.ok = false;
+                return property_value{};
+            }
+            switch (tag)
+            {
+            case JE_PROPERTY_TYPE_BOOL: return property_value{ r.u8() != 0 };
+            case JE_PROPERTY_TYPE_STRING: return property_value{ r.str() };
+            case JE_PROPERTY_TYPE_INT: return property_value{ r.i32() };
+            case JE_PROPERTY_TYPE_FLOAT: return property_value{ r.f32() };
+            case JE_PROPERTY_TYPE_VEC2:
+            {
+                std::array<float, 2> a{ r.f32(), r.f32() };
+                return property_value{ std::move(a) };
+            }
+            case JE_PROPERTY_TYPE_VEC3:
+            {
+                std::array<float, 3> a{ r.f32(), r.f32(), r.f32() };
+                return property_value{ std::move(a) };
+            }
+            case JE_PROPERTY_TYPE_VEC4:
+            {
+                std::array<float, 4> a{ r.f32(), r.f32(), r.f32(), r.f32() };
+                return property_value{ std::move(a) };
+            }
+            }
+            r.ok = false;
+            return property_value{};
+        }
+        // 旧版字符串值：按 schema 类型解析（图集侧，schema 已在文件内）
+        inline property_value legacy_property_value(
+            const std::string& s, const je_PropertyType* type)
+        {
+            property_value v;
+            if (type != nullptr && property_value_from_string(*type, s, &v))
+                return v;
+            if (type != nullptr)
+            {
+                debug::logerr("Tilemap: legacy property value '%s' does not fit "
+                    "its schema type, fallback to heuristic.",
+                    s.c_str());
+            }
+            return property_value_from_string_heuristic(s);
+        }
 
         // @/!/ 前缀 -> 本地文件系统路径（保存用；读取走 jeecs_file_open 支持 fimg 包）
         inline std::string resolve_runtime_prefix(const std::string& path)
@@ -301,7 +595,8 @@ namespace jeecs
             w.u32((uint32_t)ts.properties.size());
             for (const auto& pd : ts.properties)
             {
-                w.str(pd.name); w.str(pd.type); w.str(pd.default_value);
+                w.str(pd.name); w.u8((uint8_t)pd.type);
+                write_property_value(w, pd.default_value);
             }
             w.u32((uint32_t)(ts.terrains.size() - 1));
             for (size_t i = 1; i < ts.terrains.size(); ++i)
@@ -318,7 +613,7 @@ namespace jeecs
             for (const auto& [tid, kvs] : ts.tile_properties)
             {
                 w.i32(tid); w.u32((uint32_t)kvs.size());
-                for (const auto& [k, v] : kvs) { w.str(k); w.str(v); }
+                for (const auto& [k, v] : kvs) { w.str(k); write_property_value(w, v); }
             }
             // 尾块：地形默认属性（键为地形 id）。旧版读取器按计数读完即止，
             // 多余的尾块被忽略；旧文件无此块时加载侧保持为空（与地图
@@ -334,7 +629,7 @@ namespace jeecs
                 if (kvs.empty())
                     continue;
                 w.i32((int32_t)i); w.u32((uint32_t)kvs.size());
-                for (const auto& [k, v] : kvs) { w.str(k); w.str(v); }
+                for (const auto& [k, v] : kvs) { w.str(k); write_property_value(w, v); }
             }
             return write_buffer_to_file(w.b, path);
         }
@@ -348,7 +643,10 @@ namespace jeecs
             bin_reader r{ buf.data(), buf.size(), 0, true };
             auto ts = std::make_shared<TilesetDocument>();
             ts->path = path;
-            if (r.u32() != TILESET_MAGIC) return nullptr;
+            const uint32_t magic = r.u32();
+            if (magic != TILESET_MAGIC && magic != LEGACY_TILESET_MAGIC)
+                return nullptr;
+            const bool legacy = magic == LEGACY_TILESET_MAGIC;
             ts->name = r.str();
             uint32_t src_n = r.u32();
             for (uint32_t i = 0; i < src_n && r.ok; ++i)
@@ -371,9 +669,34 @@ namespace jeecs
             uint32_t prop_n = r.u32();
             for (uint32_t i = 0; i < prop_n && r.ok; ++i)
             {
-                PropertyDef pd;
-                pd.name = r.str(); pd.type = r.str(); pd.default_value = r.str();
-                ts->properties.push_back(std::move(pd));
+                if (legacy)
+                {
+                    // 旧格式：name/type/default 均为字符串。type 无法识别的
+                    // 属性条目跳过（数据继续对齐——三条 str 长度前缀读全）。
+                    PropertyDef pd;
+                    pd.name = r.str();
+                    std::string type_name = r.str();
+                    std::string def = r.str();
+                    if (property_type_from_name(type_name, &pd.type))
+                    {
+                        pd.default_value = legacy_property_value(def, &pd.type);
+                        ts->properties.push_back(std::move(pd));
+                    }
+                    else
+                        debug::logerr("Tilemap: legacy property '%s' has unknown "
+                            "type '%s', dropped.",
+                            pd.name.c_str(), type_name.c_str());
+                }
+                else
+                {
+                    PropertyDef pd;
+                    pd.name = r.str();
+                    pd.type = (je_PropertyType)r.u8();
+                    if (!property_type_valid((int32_t)pd.type))
+                    { r.ok = false; break; }
+                    pd.default_value = read_property_value(r);
+                    ts->properties.push_back(std::move(pd));
+                }
             }
             ts->terrains.push_back(TerrainDef{}); // id 0 占位
             uint32_t terr_n = r.u32();
@@ -387,16 +710,35 @@ namespace jeecs
                 for (uint32_t k = 0; k < vn && r.ok; ++k) t.variant_tiles.push_back(r.i32());
                 ts->terrains.push_back(std::move(t));
             }
+            // 旧格式的字符串值按 schema 里同名属性的类型转换；新属性名
+            // 不在 schema 时按内容推断
+            auto read_kv = [&](std::map<std::string, property_value>& kvs)
+            {
+                std::string key = r.str();
+                if (legacy)
+                {
+                    std::string val = r.str();
+                    const je_PropertyType* st = nullptr;
+                    for (const auto& pd : ts->properties)
+                        if (pd.name == key)
+                        {
+                            st = &pd.type;
+                            break;
+                        }
+                    kvs[std::move(key)] = legacy_property_value(val, st);
+                }
+                else
+                {
+                    kvs[std::move(key)] = read_property_value(r);
+                }
+            };
             uint32_t tp_n = r.u32();
             for (uint32_t i = 0; i < tp_n && r.ok; ++i)
             {
                 int32_t tid = r.i32();
                 uint32_t kv_n = r.u32();
                 for (uint32_t k = 0; k < kv_n && r.ok; ++k)
-                {
-                    std::string key = r.str(), val = r.str();
-                    ts->tile_properties[tid][key] = val;
-                }
+                    read_kv(ts->tile_properties[tid]);
             }
             if (!r.ok)
                 return nullptr;
@@ -414,10 +756,7 @@ namespace jeecs
                     if (tid <= 0 || tid >= (int32_t)ts->terrains.size())
                     { r.ok = false; break; }
                     for (uint32_t k = 0; k < kv_n && r.ok; ++k)
-                    {
-                        std::string key = r.str(), val = r.str();
-                        ts->terrains[tid].properties[std::move(key)] = std::move(val);
-                    }
+                        read_kv(ts->terrains[tid].properties);
                 }
                 if (!r.ok)
                     return nullptr;
@@ -607,7 +946,7 @@ namespace jeecs
             {
                 w.i32(key.first); w.i32(key.second);
                 w.u32((uint32_t)kvs.size());
-                for (const auto& [k, v] : kvs) { w.str(k); w.str(v); }
+                for (const auto& [k, v] : kvs) { w.str(k); write_property_value(w, v); }
             }
             // 尾块：每层 z 偏移（f32）。旧版读取器按计数读完即止，多余的
             // 尾块被忽略；旧文件无此块时加载侧按层下标补默认值。
@@ -667,7 +1006,10 @@ namespace jeecs
             bin_reader r{ buf.data(), buf.size(), 0, true };
             auto m = std::make_shared<MapDocument>();
             m->path = path;
-            if (r.u32() != MAP_MAGIC) return nullptr;
+            const uint32_t magic = r.u32();
+            if (magic != MAP_MAGIC && magic != LEGACY_MAP_MAGIC)
+                return nullptr;
+            const bool legacy = magic == LEGACY_MAP_MAGIC;
             m->width = r.i32(); m->height = r.i32(); m->tile_px = r.i32();
             if (m->width < 0 || m->height < 0 || m->tile_px <= 0
                 || m->width > 65536 || m->height > 65536)
@@ -694,8 +1036,24 @@ namespace jeecs
                 uint32_t kv_n = r.u32();
                 for (uint32_t k = 0; k < kv_n && r.ok; ++k)
                 {
-                    std::string key = r.str(), val = r.str();
-                    m->cell_properties[{ layer, cell }][key] = val;
+                    std::string key = r.str();
+                    if (legacy)
+                    {
+                        // 旧格式的字符串值：schema 类型在各图集文档里，此处
+                        // 按内容推断转换（下次保存即为类型化格式）
+                        std::string val = r.str();
+                        m->cell_properties[{ layer, cell }][std::move(key)] =
+                            property_value_from_string_heuristic(val);
+                        if (k == 0 && i == 0)
+                            debug::logerr("Tilemap: legacy map file '%s' uses "
+                                "string properties, converted heuristically.",
+                                path.c_str());
+                    }
+                    else
+                    {
+                        m->cell_properties[{ layer, cell }][std::move(key)] =
+                            read_property_value(r);
+                    }
                 }
             }
             if (!r.ok)
@@ -1398,7 +1756,7 @@ namespace jeecs
         }
 
         // ==================== 属性与通行性 ====================
-        inline const std::string* resolve_property(
+        inline const property_value* resolve_property(
             MapDocument* doc, int32_t layer, int32_t x, int32_t y, const std::string& name)
         {
             if (doc == nullptr || !doc->in_bounds(layer, x, y))
@@ -1423,7 +1781,7 @@ namespace jeecs
                     && doc->resolved[ts_idx] != nullptr)
                 {
                     const auto* ts = doc->resolved[ts_idx].get();
-                    const std::map<std::string, std::string>* defaults = nullptr;
+                    const std::map<std::string, property_value>* defaults = nullptr;
                     if (v < 0)
                     {
                         if (local < (int32_t)ts->terrains.size())

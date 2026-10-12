@@ -20,9 +20,11 @@
 //     v < 0        自动图块地形: -((图集下标 + 1) * 0x100000 + 地形 id)
 // 用 tile_value / terrain_value / decode_value 生成与解析。
 //
-// 属性为字符串值，取值链：逐格覆盖 -> 瓦片/地形默认 -> 图集 schema 默认。
-// 类型约定："bool"("true"/"false")、"int"、"float"、"string"、
-// "vec2"/"vec3"/"vec4"（逗号分隔），见 property_int/real/bool 等取值助手。
+// 属性为类型化值（property_type 枚举决定取值形态：bool/string/int/
+// real/(real,real)/(real,real,real)/(real,real,real,real)），取值链：
+// 逐格覆盖 -> 瓦片/地形默认 -> 图集 schema 默认。类型与实际存储不符时
+// 读取/写入返回失败（none/false），不做隐式转换；设置新值时以首个类型
+// 为准，后续不同类型的写入会被拒绝，先清除再设置方可改型。
 //
 // 坐标约定：地图根实体原点 = 瓦片 (0,0) 的左上角；地图向 +x 与 -y 展开
 //（世界 y 轴向下为地图行方向）。见 tile_center / tile_at_world。
@@ -192,19 +194,76 @@ namespace je
                 public func tileset_path(self: Tilemap, idx: int)=> string;
 
             // ==================== 属性与查询 ====================
-            // value 传 none 表示清除逐格覆盖
-            extern("libjoyecs", "wojeapi_tilemap_set_cell_property")
-                public func set_cell_property(self: Tilemap, layer: int,
-                    x: int, y: int, name: string, value: option<string>)=> void;
+            // 逐格覆盖设置/读取：按类型取对应后缀的函数（option 值，
+            // none = 清除覆盖/无覆盖）。类型与已有覆盖不符时写入返回
+            // false、读取返回 none。
+            extern("libjoyecs", "wojeapi_tilemap_set_cell_property_bool")
+                public func set_cell_property_bool(self: Tilemap, layer: int,
+                    x: int, y: int, name: string, value: option<bool>)=> bool;
+            extern("libjoyecs", "wojeapi_tilemap_set_cell_property_int")
+                public func set_cell_property_int(self: Tilemap, layer: int,
+                    x: int, y: int, name: string, value: option<int>)=> bool;
+            extern("libjoyecs", "wojeapi_tilemap_set_cell_property_real")
+                public func set_cell_property_real(self: Tilemap, layer: int,
+                    x: int, y: int, name: string, value: option<real>)=> bool;
+            extern("libjoyecs", "wojeapi_tilemap_set_cell_property_string")
+                public func set_cell_property_string(self: Tilemap, layer: int,
+                    x: int, y: int, name: string, value: option<string>)=> bool;
+            extern("libjoyecs", "wojeapi_tilemap_set_cell_property_vec2")
+                public func set_cell_property_vec2(self: Tilemap, layer: int,
+                    x: int, y: int, name: string, value: option<(real, real)>)=> bool;
+            extern("libjoyecs", "wojeapi_tilemap_set_cell_property_vec3")
+                public func set_cell_property_vec3(self: Tilemap, layer: int,
+                    x: int, y: int, name: string, value: option<(real, real, real)>)=> bool;
+            extern("libjoyecs", "wojeapi_tilemap_set_cell_property_vec4")
+                public func set_cell_property_vec4(self: Tilemap, layer: int,
+                    x: int, y: int, name: string,
+                    value: option<(real, real, real, real)>)=> bool;
 
-            extern("libjoyecs", "wojeapi_tilemap_get_cell_property")
-                public func get_cell_property(self: Tilemap, layer: int,
+            extern("libjoyecs", "wojeapi_tilemap_get_cell_property_bool")
+                public func get_cell_property_bool(self: Tilemap, layer: int,
+                    x: int, y: int, name: string)=> option<bool>;
+            extern("libjoyecs", "wojeapi_tilemap_get_cell_property_int")
+                public func get_cell_property_int(self: Tilemap, layer: int,
+                    x: int, y: int, name: string)=> option<int>;
+            extern("libjoyecs", "wojeapi_tilemap_get_cell_property_real")
+                public func get_cell_property_real(self: Tilemap, layer: int,
+                    x: int, y: int, name: string)=> option<real>;
+            extern("libjoyecs", "wojeapi_tilemap_get_cell_property_string")
+                public func get_cell_property_string(self: Tilemap, layer: int,
                     x: int, y: int, name: string)=> option<string>;
+            extern("libjoyecs", "wojeapi_tilemap_get_cell_property_vec2")
+                public func get_cell_property_vec2(self: Tilemap, layer: int,
+                    x: int, y: int, name: string)=> option<(real, real)>;
+            extern("libjoyecs", "wojeapi_tilemap_get_cell_property_vec3")
+                public func get_cell_property_vec3(self: Tilemap, layer: int,
+                    x: int, y: int, name: string)=> option<(real, real, real)>;
+            extern("libjoyecs", "wojeapi_tilemap_get_cell_property_vec4")
+                public func get_cell_property_vec4(self: Tilemap, layer: int,
+                    x: int, y: int, name: string)=> option<(real, real, real, real)>;
 
             // 按取值链解析：逐格覆盖 -> 瓦片/地形默认 -> schema 默认
-            extern("libjoyecs", "wojeapi_tilemap_get_property")
-                public func get_property(self: Tilemap, layer: int,
+            extern("libjoyecs", "wojeapi_tilemap_get_property_bool")
+                public func get_property_bool(self: Tilemap, layer: int,
+                    x: int, y: int, name: string)=> option<bool>;
+            extern("libjoyecs", "wojeapi_tilemap_get_property_int")
+                public func get_property_int(self: Tilemap, layer: int,
+                    x: int, y: int, name: string)=> option<int>;
+            extern("libjoyecs", "wojeapi_tilemap_get_property_real")
+                public func get_property_real(self: Tilemap, layer: int,
+                    x: int, y: int, name: string)=> option<real>;
+            extern("libjoyecs", "wojeapi_tilemap_get_property_string")
+                public func get_property_string(self: Tilemap, layer: int,
                     x: int, y: int, name: string)=> option<string>;
+            extern("libjoyecs", "wojeapi_tilemap_get_property_vec2")
+                public func get_property_vec2(self: Tilemap, layer: int,
+                    x: int, y: int, name: string)=> option<(real, real)>;
+            extern("libjoyecs", "wojeapi_tilemap_get_property_vec3")
+                public func get_property_vec3(self: Tilemap, layer: int,
+                    x: int, y: int, name: string)=> option<(real, real, real)>;
+            extern("libjoyecs", "wojeapi_tilemap_get_property_vec4")
+                public func get_property_vec4(self: Tilemap, layer: int,
+                    x: int, y: int, name: string)=> option<(real, real, real, real)>;
 
             extern("libjoyecs", "wojeapi_tilemap_is_walkable")
                 public func is_walkable(self: Tilemap, x: int, y: int)=> int;
@@ -213,11 +272,28 @@ namespace je
                 public func is_walkable_on(self: Tilemap, layer: int, x: int, y: int)=> int;
 
             // 按属性值查找：layer<0 搜索全部图层（按格去重）；name="walkable"
-            // 时按通行性匹配（value 为 "true"/"false"）。返回命中数量，随后用
-            // find_get 逐个取回。
-            extern("libjoyecs", "wojeapi_tilemap_find_cells")
-                public func find_cells(self: Tilemap, layer: int,
+            // 时用 _bool 版本按通行性匹配。返回命中数量，随后用 find_get 逐个取回。
+            extern("libjoyecs", "wojeapi_tilemap_find_cells_bool")
+                public func find_cells_bool(self: Tilemap, layer: int,
+                    name: string, value: bool)=> int;
+            extern("libjoyecs", "wojeapi_tilemap_find_cells_int")
+                public func find_cells_int(self: Tilemap, layer: int,
+                    name: string, value: int)=> int;
+            extern("libjoyecs", "wojeapi_tilemap_find_cells_real")
+                public func find_cells_real(self: Tilemap, layer: int,
+                    name: string, value: real)=> int;
+            extern("libjoyecs", "wojeapi_tilemap_find_cells_string")
+                public func find_cells_string(self: Tilemap, layer: int,
                     name: string, value: string)=> int;
+            extern("libjoyecs", "wojeapi_tilemap_find_cells_vec2")
+                public func find_cells_vec2(self: Tilemap, layer: int,
+                    name: string, value: (real, real))=> int;
+            extern("libjoyecs", "wojeapi_tilemap_find_cells_vec3")
+                public func find_cells_vec3(self: Tilemap, layer: int,
+                    name: string, value: (real, real, real))=> int;
+            extern("libjoyecs", "wojeapi_tilemap_find_cells_vec4")
+                public func find_cells_vec4(self: Tilemap, layer: int,
+                    name: string, value: (real, real, real, real))=> int;
 
             extern("libjoyecs", "wojeapi_tilemap_find_get")
                 public func find_get(self: Tilemap, index: int)=> (int, int);
@@ -244,37 +320,48 @@ namespace je
                 return is_walkable_on(self, layer, x, y) != 0;
             }
 
-            // 类型化属性读取（无值/解析失败返回 none）
+            // 类型化属性读取（无值或类型不符返回 none）
             public func property_int(self: Tilemap, layer: int, x: int, y: int, name: string)=> option<int>
             {
-                match (get_property(self, layer, x, y, name))
-                {
-                    value(s)? { return option::value(s as int); }
-                    none? { return option::none; }
-                }
+                return get_property_int(self, layer, x, y, name);
             }
             public func property_real(self: Tilemap, layer: int, x: int, y: int, name: string)=> option<real>
             {
-                match (get_property(self, layer, x, y, name))
-                {
-                    value(s)? { return option::value(s as real); }
-                    none? { return option::none; }
-                }
+                return get_property_real(self, layer, x, y, name);
             }
             public func property_bool(self: Tilemap, layer: int, x: int, y: int, name: string)=> option<bool>
             {
-                match (get_property(self, layer, x, y, name))
-                {
-                    value(s)? { return option::value(s == "true"); }
-                    none? { return option::none; }
-                }
+                return get_property_bool(self, layer, x, y, name);
             }
 
-            // 收集 find_cells 的全部命中（格子坐标列表）
-            public func collect_cells(self: Tilemap, layer: int, name: string, value: string)=> vec<(int, int)>
+            // 收集 find_cells 的全部命中（格子坐标列表）；value 类型须与
+            // 属性实际类型一致（按对应后缀的函数调用）
+            public func collect_cells<T>(self: Tilemap, layer: int, name: string, value: T)=> vec<(int, int)>
+                where value is bool
+                || value is int
+                || value is real
+                || value is string
+                || value is (real, real)
+                || value is (real, real, real)
+                || value is (real, real, real, real);
             {
+                let mut count = 0;
+                if (value is bool)
+                    count = find_cells_bool(self, layer, name, value);
+                else if (value is int)
+                    count = find_cells_int(self, layer, name, value);
+                else if (value is real)
+                    count = find_cells_real(self, layer, name, value);
+                else if (value is string)
+                    count = find_cells_string(self, layer, name, value);
+                else if (value is (real, real))
+                    count = find_cells_vec2(self, layer, name, value);
+                else if (value is (real, real, real))
+                    count = find_cells_vec3(self, layer, name, value);
+                else if (value is (real, real, real, real))
+                    count = find_cells_vec4(self, layer, name, value);
+
                 let mut result = []mut: vec<(int, int)>;
-                let count = find_cells(self, layer, name, value);
                 for (let mut i = 0; i < count; i += 1)
                 {
                     let (x, y) = find_get(self, i);
@@ -418,9 +505,30 @@ namespace je
                 public func terrain_add_variant(self: Tileset, terrain_id: int, tile_id: int)=> bool;
 
             // ==================== 属性 schema 与默认值 ====================
-            // 返回新增属性的下标（重名或参数不合法返回 none）
-            extern("libjoyecs", "wojeapi_tilemap_add_property")
-                public func add_property(self: Tileset, name: string, type: string, default_value: string)=> option<int>;
+            // 添加属性定义（类型由所用后缀决定）；默认值 none = 按类型零值。
+            // 返回新增属性的下标（重名返回 none）
+            extern("libjoyecs", "wojeapi_tilemap_add_property_bool")
+                public func add_property_bool(self: Tileset,
+                    name: string, default_value: option<bool>)=> option<int>;
+            extern("libjoyecs", "wojeapi_tilemap_add_property_int")
+                public func add_property_int(self: Tileset,
+                    name: string, default_value: option<int>)=> option<int>;
+            extern("libjoyecs", "wojeapi_tilemap_add_property_real")
+                public func add_property_real(self: Tileset,
+                    name: string, default_value: option<real>)=> option<int>;
+            extern("libjoyecs", "wojeapi_tilemap_add_property_string")
+                public func add_property_string(self: Tileset,
+                    name: string, default_value: option<string>)=> option<int>;
+            extern("libjoyecs", "wojeapi_tilemap_add_property_vec2")
+                public func add_property_vec2(self: Tileset,
+                    name: string, default_value: option<(real, real)>)=> option<int>;
+            extern("libjoyecs", "wojeapi_tilemap_add_property_vec3")
+                public func add_property_vec3(self: Tileset,
+                    name: string, default_value: option<(real, real, real)>)=> option<int>;
+            extern("libjoyecs", "wojeapi_tilemap_add_property_vec4")
+                public func add_property_vec4(self: Tileset,
+                    name: string,
+                    default_value: option<(real, real, real, real)>)=> option<int>;
 
             extern("libjoyecs", "wojeapi_tilemap_remove_property")
                 public func remove_property(self: Tileset, name: string)=> bool;
@@ -428,24 +536,122 @@ namespace je
             extern("libjoyecs", "wojeapi_tilemap_property_count")
                 public func property_count(self: Tileset)=> int;
 
-            // 返回 (名称, 类型, 默认值)
+            // 返回 (名称, 类型枚举值 property_type)
             extern("libjoyecs", "wojeapi_tilemap_property_info")
-                public func property_info(self: Tileset, index: int)=> (string, string, string);
+                public func property_info(self: Tileset, index: int)=> (string, int);
 
-            // value 传 none 表示清除默认值
-            extern("libjoyecs", "wojeapi_tilemap_set_tile_property")
-                public func set_tile_property(self: Tileset, tile_id: int,
-                    name: string, value: option<string>)=> void;
+            // 按 schema 类型读默认值（类型不符或无此属性返回 none）
+            extern("libjoyecs", "wojeapi_tilemap_property_default_bool")
+                public func property_default_bool(self: Tileset,
+                    name: string)=> option<bool>;
+            extern("libjoyecs", "wojeapi_tilemap_property_default_int")
+                public func property_default_int(self: Tileset,
+                    name: string)=> option<int>;
+            extern("libjoyecs", "wojeapi_tilemap_property_default_real")
+                public func property_default_real(self: Tileset,
+                    name: string)=> option<real>;
+            extern("libjoyecs", "wojeapi_tilemap_property_default_string")
+                public func property_default_string(self: Tileset,
+                    name: string)=> option<string>;
+            extern("libjoyecs", "wojeapi_tilemap_property_default_vec2")
+                public func property_default_vec2(self: Tileset,
+                    name: string)=> option<(real, real)>;
+            extern("libjoyecs", "wojeapi_tilemap_property_default_vec3")
+                public func property_default_vec3(self: Tileset,
+                    name: string)=> option<(real, real, real)>;
+            extern("libjoyecs", "wojeapi_tilemap_property_default_vec4")
+                public func property_default_vec4(self: Tileset,
+                    name: string)=> option<(real, real, real, real)>;
 
-            extern("libjoyecs", "wojeapi_tilemap_get_tile_property")
-                public func get_tile_property(self: Tileset, tile_id: int, name: string)=> option<string>;
+            // 瓦片默认值：value none = 清除；类型与已有默认值不符返回 false
+            extern("libjoyecs", "wojeapi_tilemap_set_tile_property_bool")
+                public func set_tile_property_bool(self: Tileset, tile_id: int,
+                    name: string, value: option<bool>)=> bool;
+            extern("libjoyecs", "wojeapi_tilemap_set_tile_property_int")
+                public func set_tile_property_int(self: Tileset, tile_id: int,
+                    name: string, value: option<int>)=> bool;
+            extern("libjoyecs", "wojeapi_tilemap_set_tile_property_real")
+                public func set_tile_property_real(self: Tileset, tile_id: int,
+                    name: string, value: option<real>)=> bool;
+            extern("libjoyecs", "wojeapi_tilemap_set_tile_property_string")
+                public func set_tile_property_string(self: Tileset, tile_id: int,
+                    name: string, value: option<string>)=> bool;
+            extern("libjoyecs", "wojeapi_tilemap_set_tile_property_vec2")
+                public func set_tile_property_vec2(self: Tileset, tile_id: int,
+                    name: string, value: option<(real, real)>)=> bool;
+            extern("libjoyecs", "wojeapi_tilemap_set_tile_property_vec3")
+                public func set_tile_property_vec3(self: Tileset, tile_id: int,
+                    name: string, value: option<(real, real, real)>)=> bool;
+            extern("libjoyecs", "wojeapi_tilemap_set_tile_property_vec4")
+                public func set_tile_property_vec4(self: Tileset, tile_id: int,
+                    name: string, value: option<(real, real, real, real)>)=> bool;
 
-            extern("libjoyecs", "wojeapi_tilemap_set_terrain_property")
-                public func set_terrain_property(self: Tileset, terrain_id: int,
-                    name: string, value: option<string>)=> void;
+            extern("libjoyecs", "wojeapi_tilemap_get_tile_property_bool")
+                public func get_tile_property_bool(self: Tileset, tile_id: int,
+                    name: string)=> option<bool>;
+            extern("libjoyecs", "wojeapi_tilemap_get_tile_property_int")
+                public func get_tile_property_int(self: Tileset, tile_id: int,
+                    name: string)=> option<int>;
+            extern("libjoyecs", "wojeapi_tilemap_get_tile_property_real")
+                public func get_tile_property_real(self: Tileset, tile_id: int,
+                    name: string)=> option<real>;
+            extern("libjoyecs", "wojeapi_tilemap_get_tile_property_string")
+                public func get_tile_property_string(self: Tileset, tile_id: int,
+                    name: string)=> option<string>;
+            extern("libjoyecs", "wojeapi_tilemap_get_tile_property_vec2")
+                public func get_tile_property_vec2(self: Tileset, tile_id: int,
+                    name: string)=> option<(real, real)>;
+            extern("libjoyecs", "wojeapi_tilemap_get_tile_property_vec3")
+                public func get_tile_property_vec3(self: Tileset, tile_id: int,
+                    name: string)=> option<(real, real, real)>;
+            extern("libjoyecs", "wojeapi_tilemap_get_tile_property_vec4")
+                public func get_tile_property_vec4(self: Tileset, tile_id: int,
+                    name: string)=> option<(real, real, real, real)>;
 
-            extern("libjoyecs", "wojeapi_tilemap_get_terrain_property")
-                public func get_terrain_property(self: Tileset, terrain_id: int, name: string)=> option<string>;
+            // 地形默认值：value none = 清除；类型与已有默认值不符返回 false
+            extern("libjoyecs", "wojeapi_tilemap_set_terrain_property_bool")
+                public func set_terrain_property_bool(self: Tileset, terrain_id: int,
+                    name: string, value: option<bool>)=> bool;
+            extern("libjoyecs", "wojeapi_tilemap_set_terrain_property_int")
+                public func set_terrain_property_int(self: Tileset, terrain_id: int,
+                    name: string, value: option<int>)=> bool;
+            extern("libjoyecs", "wojeapi_tilemap_set_terrain_property_real")
+                public func set_terrain_property_real(self: Tileset, terrain_id: int,
+                    name: string, value: option<real>)=> bool;
+            extern("libjoyecs", "wojeapi_tilemap_set_terrain_property_string")
+                public func set_terrain_property_string(self: Tileset, terrain_id: int,
+                    name: string, value: option<string>)=> bool;
+            extern("libjoyecs", "wojeapi_tilemap_set_terrain_property_vec2")
+                public func set_terrain_property_vec2(self: Tileset, terrain_id: int,
+                    name: string, value: option<(real, real)>)=> bool;
+            extern("libjoyecs", "wojeapi_tilemap_set_terrain_property_vec3")
+                public func set_terrain_property_vec3(self: Tileset, terrain_id: int,
+                    name: string, value: option<(real, real, real)>)=> bool;
+            extern("libjoyecs", "wojeapi_tilemap_set_terrain_property_vec4")
+                public func set_terrain_property_vec4(self: Tileset, terrain_id: int,
+                    name: string, value: option<(real, real, real, real)>)=> bool;
+
+            extern("libjoyecs", "wojeapi_tilemap_get_terrain_property_bool")
+                public func get_terrain_property_bool(self: Tileset, terrain_id: int,
+                    name: string)=> option<bool>;
+            extern("libjoyecs", "wojeapi_tilemap_get_terrain_property_int")
+                public func get_terrain_property_int(self: Tileset, terrain_id: int,
+                    name: string)=> option<int>;
+            extern("libjoyecs", "wojeapi_tilemap_get_terrain_property_real")
+                public func get_terrain_property_real(self: Tileset, terrain_id: int,
+                    name: string)=> option<real>;
+            extern("libjoyecs", "wojeapi_tilemap_get_terrain_property_string")
+                public func get_terrain_property_string(self: Tileset, terrain_id: int,
+                    name: string)=> option<string>;
+            extern("libjoyecs", "wojeapi_tilemap_get_terrain_property_vec2")
+                public func get_terrain_property_vec2(self: Tileset, terrain_id: int,
+                    name: string)=> option<(real, real)>;
+            extern("libjoyecs", "wojeapi_tilemap_get_terrain_property_vec3")
+                public func get_terrain_property_vec3(self: Tileset, terrain_id: int,
+                    name: string)=> option<(real, real, real)>;
+            extern("libjoyecs", "wojeapi_tilemap_get_terrain_property_vec4")
+                public func get_terrain_property_vec4(self: Tileset, terrain_id: int,
+                    name: string)=> option<(real, real, real, real)>;
         };
 
         // ==================== 自动图块地形种类 ====================
@@ -456,6 +662,22 @@ namespace je
             BLOB47 = 2,     // blob47：47 变体（显式变体表或锚点行优先扫描）
             RPGMAKER_VX = 3, // RPGMaker VX/VX Ace 式四象限：锚点起 2x3 格
                              // 块（右上 2x2 为内部填充，与 A2 表兼容）
+        }
+
+        // ==================== 属性值类型 ====================
+        // 与引擎侧 je_PropertyType 一一对应；Woolang 侧的取值形态：
+        //   BOOL→bool  STRING→string  INT→int  FLOAT→real
+        //   VEC2→(real, real)  VEC3→(real, real, real)  VEC4→(real, real, real, real)
+        // 属性接口按类型拆为对应后缀的函数（如 get_property_int）。
+        public enum property_type
+        {
+            BOOL = 0,
+            STRING = 1,
+            INT = 2,
+            FLOAT = 3,
+            VEC2 = 4,
+            VEC3 = 5,
+            VEC4 = 6,
         }
 
         // ==================== 瓦片值编解码 ====================

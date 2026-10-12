@@ -4795,7 +4795,9 @@ JE_API bool je_main_script_entry();
 //     0            空
 //     v > 0        普通瓦片: (tileset_idx + 1) * 0x100000 + tile_id
 //     v < 0        自动图块地形: -((tileset_idx + 1) * 0x100000 + terrain_id)
-// 属性取值链：逐格覆盖 -> 瓦片/地形默认值 -> 图集 schema 默认值，均为字符串。
+// 属性取值链：逐格覆盖 -> 瓦片/地形默认值 -> 图集 schema 默认值。属性值为
+// 类型化数据（je_PropertyType）：设置/读取都须传入类型枚举并给出对应的
+// 数据指针，与实际存储类型不符时返回 false。
 // =============================================================================
 
 namespace jeecs { namespace Tilemap
@@ -4890,6 +4892,33 @@ enum je_TerrainKind
     JE_TERRAIN_KIND_RPGMAKER_XP = 1,
     JE_TERRAIN_KIND_BLOB47 = 2,
     JE_TERRAIN_KIND_RPGMAKER_VX = 3,
+};
+
+/*
+je_PropertyType [枚举]
+瓦片地图属性值的类型，即属性接口 type 参数的取值。各类型经 void* 传递的
+数据形态：
+    * JE_PROPERTY_TYPE_BOOL   bool（1 字节）
+    * JE_PROPERTY_TYPE_STRING const char*（设置）/ const char**（读取，
+      指向文档内部存储，文档下次修改前有效）
+    * JE_PROPERTY_TYPE_INT    int32_t
+    * JE_PROPERTY_TYPE_FLOAT  float
+    * JE_PROPERTY_TYPE_VEC2   float[2]
+    * JE_PROPERTY_TYPE_VEC3   float[3]
+    * JE_PROPERTY_TYPE_VEC4   float[4]
+枚举值与内部 variant 存储的下标一一对应。
+请参见：
+    je_tilemap_set_cell_property
+*/
+enum je_PropertyType
+{
+    JE_PROPERTY_TYPE_BOOL = 0,
+    JE_PROPERTY_TYPE_STRING = 1,
+    JE_PROPERTY_TYPE_INT = 2,
+    JE_PROPERTY_TYPE_FLOAT = 3,
+    JE_PROPERTY_TYPE_VEC2 = 4,
+    JE_PROPERTY_TYPE_VEC3 = 5,
+    JE_PROPERTY_TYPE_VEC4 = 6,
 };
 
 // ---- 地图文档 ----
@@ -5191,29 +5220,41 @@ JE_API const char* je_tilemap_tileset_path(je_TilemapDocument* map, int32_t idx)
 
 /*
 je_tilemap_set_cell_property [基本接口]
-设置某格的属性逐格覆盖值
-    * value 传 nullptr 表示清除该格此属性的覆盖
+设置某格的属性逐格覆盖值（数据形态见 je_PropertyType）
+    * value 传 nullptr 表示清除该格此属性的覆盖（此时忽略 type）
+    * 该格已有不同类型的覆盖值时返回 false 且不修改
+    * 坐标越界返回 false
+请参见：
+    je_PropertyType
 */
-JE_API void je_tilemap_set_cell_property(je_TilemapDocument* map, je_LayerId layer,
-    int32_t x, int32_t y, const char* name, /* OPTIONAL */ const char* value);
+JE_API bool je_tilemap_set_cell_property(je_TilemapDocument* map, je_LayerId layer,
+    int32_t x, int32_t y, const char* name, je_PropertyType type,
+    /* OPTIONAL */ const void* value);
 
 /*
 je_tilemap_get_cell_property [基本接口]
-取某格的属性逐格覆盖值，不沿取值链解析
-    * 无覆盖返回 nullptr
+取某格的属性逐格覆盖值（不沿取值链解析），数据经 out_value 写回
+（形态见 je_PropertyType）
+    * 无覆盖或类型与实际存储不符返回 false
 请参见：
     je_tilemap_get_property
+    je_PropertyType
 */
-JE_API /* OPTIONAL: If no override value set */ const char* je_tilemap_get_cell_property(je_TilemapDocument* map, je_LayerId layer,
-    int32_t x, int32_t y, const char* name);
+JE_API bool je_tilemap_get_cell_property(je_TilemapDocument* map, je_LayerId layer,
+    int32_t x, int32_t y, const char* name, je_PropertyType type,
+    /* OPTIONAL */ void* out_value);
 
 /*
 je_tilemap_get_property [基本接口]
-按取值链（逐格覆盖 -> 瓦片/地形默认值 -> 图集 schema 默认值）解析某格属性
-    * 无值返回 nullptr
+按取值链（逐格覆盖 -> 瓦片/地形默认值 -> 图集 schema 默认值）解析某格属性，
+数据经 out_value 写回（形态见 je_PropertyType）
+    * 无值或类型与实际存储不符返回 false
+请参见：
+    je_PropertyType
 */
-JE_API /* OPTIONAL: If no value resolved */ const char* je_tilemap_get_property(je_TilemapDocument* map, je_LayerId layer,
-    int32_t x, int32_t y, const char* name);
+JE_API bool je_tilemap_get_property(je_TilemapDocument* map, je_LayerId layer,
+    int32_t x, int32_t y, const char* name, je_PropertyType type,
+    /* OPTIONAL */ void* out_value);
 
 /*
 je_tilemap_is_walkable [基本接口]
@@ -5236,12 +5277,13 @@ JE_API int32_t je_tilemap_is_walkable_on(je_TilemapDocument* map, je_LayerId lay
 je_tilemap_find_cells [基本接口]
 按属性值查找格子，返回命中数量；结果按文档缓存，经 je_tilemap_find_get 逐个取出
     * layer < 0 时搜索全部图层
-    * name 为 "walkable" 时按通行性匹配，value 取 "true"/"false"
+    * name 为 "walkable" 时按通行性匹配，type 须为 BOOL，value 指向 bool
 请参见：
     je_tilemap_find_get
+    je_PropertyType
 */
 JE_API int32_t je_tilemap_find_cells(je_TilemapDocument* map, je_LayerId layer,
-    const char* name, const char* value);
+    const char* name, je_PropertyType type, const void* value);
 
 /*
 je_tilemap_find_get [基本接口]
@@ -5479,12 +5521,16 @@ JE_API bool je_tilemap_terrain_add_variant(je_TilesetDocument* tileset,
 
 /*
 je_tilemap_add_property [基本接口]
-向图集 schema 添加属性定义，type 为类型名字符串
-（"bool"/"int"/"float"/"string"/"vec2"/"vec3"/"vec4"），属性下标经 out_index 返回
-    * 重名或参数不合法返回 false，不写出下标
+向图集 schema 添加属性定义（数据形态见 je_PropertyType），属性下标经
+out_index 返回
+    * 重名、类型非法返回 false，不写出下标
+    * default_value 传 nullptr 时按类型取零值（false/""/0/0.0/全 0 向量）
+请参见：
+    je_PropertyType
 */
 JE_API bool je_tilemap_add_property(je_TilesetDocument* tileset,
-    const char* name, const char* type, const char* default_value, int32_t* out_index);
+    const char* name, je_PropertyType type,
+    /* OPTIONAL */ const void* default_value, int32_t* out_index);
 
 /*
 je_tilemap_remove_property [基本接口]
@@ -5500,43 +5546,61 @@ JE_API int32_t je_tilemap_property_count(je_TilesetDocument* tileset);
 
 /*
 je_tilemap_property_info [基本接口]
-取指定下标属性定义的信息，经出参返回 (名称, 类型名, 默认值)
+取指定下标属性定义的信息，经出参返回 (名称, 类型)
     * 下标越界返回 false
+请参见：
+    je_PropertyType
 */
 JE_API bool je_tilemap_property_info(je_TilesetDocument* tileset, int32_t index,
-    /* OPTIONAL */ const char** name, /* OPTIONAL */ const char** type, /* OPTIONAL */ const char** default_value);
+    /* OPTIONAL */ const char** name, /* OPTIONAL */ je_PropertyType* type);
+
+/*
+je_tilemap_property_default [基本接口]
+按名称取图集 schema 中属性定义的默认值，数据经 out_value 写回
+（形态见 je_PropertyType）
+    * 无此属性或类型与定义不符返回 false
+请参见：
+    je_PropertyType
+*/
+JE_API bool je_tilemap_property_default(je_TilesetDocument* tileset,
+    const char* name, je_PropertyType type, /* OPTIONAL */ void* out_value);
 
 /*
 je_tilemap_set_tile_property [基本接口]
-设置指定 id 普通瓦片的属性默认值
-    * value 传 nullptr 表示清除该默认值
+设置指定 id 普通瓦片的属性默认值（数据形态见 je_PropertyType）
+    * value 传 nullptr 表示清除该默认值（此时忽略 type）
+    * 已有不同类型的默认值时返回 false 且不修改
 */
-JE_API void je_tilemap_set_tile_property(je_TilesetDocument* tileset, je_TileId tile_id,
-    const char* name, /* OPTIONAL */ const char* value);
+JE_API bool je_tilemap_set_tile_property(je_TilesetDocument* tileset, je_TileId tile_id,
+    const char* name, je_PropertyType type, /* OPTIONAL */ const void* value);
 
 /*
 je_tilemap_get_tile_property [基本接口]
-取指定 id 普通瓦片的属性默认值
-    * 无值返回 nullptr
+取指定 id 普通瓦片的属性默认值，数据经 out_value 写回（形态见 je_PropertyType）
+    * 无值或类型与实际存储不符返回 false
 */
-JE_API /* OPTIONAL: If no default value set */ const char* je_tilemap_get_tile_property(je_TilesetDocument* tileset,
-    je_TileId tile_id, const char* name);
+JE_API bool je_tilemap_get_tile_property(je_TilesetDocument* tileset,
+    je_TileId tile_id, const char* name, je_PropertyType type,
+    /* OPTIONAL */ void* out_value);
 
 /*
 je_tilemap_set_terrain_property [基本接口]
-设置指定 id 地形的属性默认值
-    * value 传 nullptr 表示清除该默认值
+设置指定 id 地形的属性默认值（数据形态见 je_PropertyType）
+    * value 传 nullptr 表示清除该默认值（此时忽略 type）
+    * 已有不同类型的默认值时返回 false 且不修改
 */
-JE_API void je_tilemap_set_terrain_property(je_TilesetDocument* tileset,
-    je_TerrainId terrain_id, const char* name, /* OPTIONAL */ const char* value);
+JE_API bool je_tilemap_set_terrain_property(je_TilesetDocument* tileset,
+    je_TerrainId terrain_id, const char* name, je_PropertyType type,
+    /* OPTIONAL */ const void* value);
 
 /*
 je_tilemap_get_terrain_property [基本接口]
-取指定 id 地形的属性默认值
-    * 无值返回 nullptr
+取指定 id 地形的属性默认值，数据经 out_value 写回（形态见 je_PropertyType）
+    * 无值或类型与实际存储不符返回 false
 */
-JE_API /* OPTIONAL: If no default value set */ const char* je_tilemap_get_terrain_property(je_TilesetDocument* tileset,
-    je_TerrainId terrain_id, const char* name);
+JE_API bool je_tilemap_get_terrain_property(je_TilesetDocument* tileset,
+    je_TerrainId terrain_id, const char* name, je_PropertyType type,
+    /* OPTIONAL */ void* out_value);
 
 // ---- 单元格渲染信息（编辑器预览用，与实际渲染一致） ----
 
