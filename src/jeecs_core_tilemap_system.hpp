@@ -1586,16 +1586,27 @@ WOORT_API woort_api wojeapi_tilemap_map_version(void)
 {
     return woort_ret_int((woort_Int)je_tilemap_map_version((int32_t)woort_int(0)));
 }
-WOORT_API woort_api wojeapi_tilemap_loaded_map_count(void)
+WOORT_API woort_api wojeapi_tilemap_loaded_maps(void)
 {
-    return woort_ret_int((woort_Int)je_tilemap_loaded_map_count());
-}
-WOORT_API woort_api wojeapi_tilemap_loaded_map(void)
-{
-    je_TilemapHandle map = je_tilemap_loaded_map((int32_t)woort_int(0));
-    if (map == 0)
-        return woort_ret_option_none();
-    return woort_ret_option_pointer((void*)(intptr_t)map);
+    woort_value s;
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
+
+    const woort_value out_array = s + 0;
+    const woort_value elem = s + 1;
+
+    woort_set_vec(out_array);
+
+    const int32_t count = je_tilemap_loaded_map_count();
+    for (int32_t i = 0; i < count; ++i)
+    {
+        je_TilemapHandle map = je_tilemap_loaded_map(i);
+        if (map == 0)
+            continue;
+        woort_set_box_pointer(elem, (void*)(intptr_t)map);
+        woort_vec_push(out_array, elem);
+    }
+    return woort_ret_value(out_array);
 }
 WOORT_API woort_api wojeapi_tilemap_resize_map(void)
 {

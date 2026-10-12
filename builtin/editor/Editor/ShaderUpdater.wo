@@ -170,16 +170,10 @@ namespace JEEditor::Editor::ShaderUpdater
         }
 
         // 4. 所有已加载的瓦片地图文档（含当前打开的）：注册表只增不删，
-        //    一次遍历覆盖编辑器画布与各世界的全部地图实例；遍历中不
-        //    打开/新建文档，枚举下标保持有效。
-        let map_count = tilemap::Tilemap::loaded_map_count();
-        for (let mut mi = 0; mi < map_count; mi += 1)
+        //    一次遍历覆盖编辑器画布与各世界的全部地图实例。
+        for (let tmap : tilemap::Tilemap::loaded_maps())
         {
-            match (tilemap::Tilemap::loaded_map(mi))
-            {
-                none?;
-                value(tmap)? do updateTilemapLayers(tmap, runtime_path);
-            }
+            do updateTilemapLayers(tmap, runtime_path);
         }
     }
 }
