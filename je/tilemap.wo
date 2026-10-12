@@ -82,9 +82,9 @@ namespace je
             extern("libjoyecs", "wojeapi_tilemap_map_size")
                 public func size(self: Tilemap)=> (int, int, int, int);
 
-            // 文档登记路径（新建未保存为空串）
+            // 文档登记路径（如果尚未被保存过，返回 option::none）
             extern("libjoyecs", "wojeapi_tilemap_map_path")
-                public func path(self: Tilemap)=> string;
+                public func path(self: Tilemap)=> option<string>;
 
             // 文档版本号（任何修改自增，可用于变更检测）
             extern("libjoyecs", "wojeapi_tilemap_map_version")

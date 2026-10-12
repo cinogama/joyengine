@@ -202,19 +202,19 @@ namespace jeecs
         static const std::vector<uint32_t>& shared_indices()
         {
             static std::vector<uint32_t> indices = []
-            {
-                std::vector<uint32_t> idx;
-                idx.reserve(CHUNK * CHUNK * 4 * 6);
-                for (size_t c = 0; c < CHUNK * CHUNK; ++c)
-                    for (size_t q = 0; q < 4; ++q)
-                    {
-                        const uint32_t base = (uint32_t)(c * VERTS_PER_CELL + q * 4);
-                        for (uint32_t i : { base + 0, base + 1, base + 2,
-                                            base + 2, base + 1, base + 3 })
-                            idx.push_back(i);
-                    }
-                return idx;
-            }();
+                {
+                    std::vector<uint32_t> idx;
+                    idx.reserve(CHUNK * CHUNK * 4 * 6);
+                    for (size_t c = 0; c < CHUNK * CHUNK; ++c)
+                        for (size_t q = 0; q < 4; ++q)
+                        {
+                            const uint32_t base = (uint32_t)(c * VERTS_PER_CELL + q * 4);
+                            for (uint32_t i : { base + 0, base + 1, base + 2,
+                                base + 2, base + 1, base + 3 })
+                                idx.push_back(i);
+                        }
+                    return idx;
+                }();
             return indices;
         }
 
@@ -643,16 +643,21 @@ void je_tilemap_reload_map(const char* path)
 }
 void je_tilemap_map_size(je_TilemapHandle map, int32_t* w, int32_t* h, int32_t* tile_px, int32_t* layer_count)
 {
-    auto* doc = je_tilemap_map_doc(map);
+    auto* const doc = je_tilemap_map_doc(map);
     if (w != nullptr) *w = doc ? doc->width : 0;
     if (h != nullptr) *h = doc ? doc->height : 0;
     if (tile_px != nullptr) *tile_px = doc ? doc->tile_px : 0;
     if (layer_count != nullptr) *layer_count = doc ? (int32_t)doc->layers.size() : 0;
 }
-const char* je_tilemap_map_path(je_TilemapHandle map)
+bool je_tilemap_map_path(je_TilemapHandle map, const char** out_path)
 {
-    auto* doc = je_tilemap_map_doc(map);
-    return doc ? doc->path.c_str() : "";
+    auto* const doc = je_tilemap_map_doc(map);
+    if (doc != nullptr)
+    {
+        *out_path = doc->path.c_str();
+        return true;
+    }
+    return false;
 }
 uint64_t je_tilemap_map_version(je_TilemapHandle map)
 {
@@ -884,7 +889,7 @@ bool je_tilemap_layer_get_texture(je_TilemapHandle map, je_LayerId layer,
     if (slot != nullptr) *slot = t.slot;
     if (texture != nullptr)
         *texture = (je_tilemap_texture_ref*)
-            new jeecs::basic::resource<jeecs::graphic::texture>(t.texture);
+        new jeecs::basic::resource<jeecs::graphic::texture>(t.texture);
     return true;
 }
 void je_tilemap_free_shader_ref(je_tilemap_shader_ref* shader)
@@ -1060,30 +1065,30 @@ int32_t je_tilemap_find_cells(je_TilemapHandle map, je_LayerId layer, const char
     result.clear();
     std::set<int32_t> matched;
     auto try_layer = [&](int32_t l)
-    {
-        for (int32_t y = 0; y < doc->height; ++y)
-            for (int32_t x = 0; x < doc->width; ++x)
-            {
-                if (matched.count(x + y * doc->width) != 0)
-                    continue;
-                bool hit = false;
-                if (strcmp(name, "walkable") == 0)
+        {
+            for (int32_t y = 0; y < doc->height; ++y)
+                for (int32_t x = 0; x < doc->width; ++x)
                 {
-                    bool w = jeecs::Tilemap::walkable_on(doc, l, x, y);
-                    hit = (strcmp(value, "true") == 0) == w;
+                    if (matched.count(x + y * doc->width) != 0)
+                        continue;
+                    bool hit = false;
+                    if (strcmp(name, "walkable") == 0)
+                    {
+                        bool w = jeecs::Tilemap::walkable_on(doc, l, x, y);
+                        hit = (strcmp(value, "true") == 0) == w;
+                    }
+                    else
+                    {
+                        const std::string* r = jeecs::Tilemap::resolve_property(doc, l, x, y, name);
+                        hit = r != nullptr && *r == value;
+                    }
+                    if (hit)
+                    {
+                        matched.insert(x + y * doc->width);
+                        result.push_back({ x, y });
+                    }
                 }
-                else
-                {
-                    const std::string* r = jeecs::Tilemap::resolve_property(doc, l, x, y, name);
-                    hit = r != nullptr && *r == value;
-                }
-                if (hit)
-                {
-                    matched.insert(x + y * doc->width);
-                    result.push_back({ x, y });
-                }
-            }
-    };
+        };
     if (layer < 0)
     {
         for (int32_t l = 0; l < (int32_t)doc->layers.size(); ++l)
@@ -1598,18 +1603,23 @@ bool je_tilemap_cell_quad(je_TilemapHandle map, je_LayerId layer, int32_t x, int
 // ======================================================================
 
 // 读取第 slot 个参数（文档 gchandle）的载荷句柄
-static inline int32_t woje_tilemap_doc(woort_StackValue slot)
+static inline je_TilemapHandle woje_tilemap_doc(woort_StackValue slot)
 {
-    return (int32_t)(intptr_t)woort_gcpointer(slot);
+    return static_cast<je_TilemapHandle>(
+        reinterpret_cast<intptr_t>(woort_gcpointer(slot)));
 }
 // 终结器：释放 gchandle 携带的文档引用（句柄已逐出/失效时为无操作）
 static void woje_tilemap_release_map(void* ptr)
 {
-    je_tilemap_unload_map((je_TilemapHandle)(intptr_t)ptr);
+    je_tilemap_unload_map(
+        static_cast<je_TilemapHandle>(
+            reinterpret_cast<intptr_t>(ptr)));
 }
 static void woje_tilemap_release_tileset(void* ptr)
 {
-    je_tilemap_unload_tileset((je_TilesetHandle)(intptr_t)ptr);
+    je_tilemap_unload_tileset(
+        static_cast<je_TilemapHandle>(
+            reinterpret_cast<intptr_t>(ptr)));
 }
 
 WOORT_API woort_api wojeapi_tilemap_open_map(void)
@@ -1655,7 +1665,11 @@ WOORT_API woort_api wojeapi_tilemap_map_size(void)
 }
 WOORT_API woort_api wojeapi_tilemap_map_path(void)
 {
-    return woort_ret_string(je_tilemap_map_path(woje_tilemap_doc(0)));
+    const char* path;
+    if (je_tilemap_map_path(woje_tilemap_doc(0), &path))
+        return woort_ret_option_string(path);
+
+    return woort_ret_option_none();
 }
 WOORT_API woort_api wojeapi_tilemap_map_version(void)
 {
@@ -2106,7 +2120,7 @@ WOORT_API woort_api wojeapi_tilemap_add_property(void)
 {
     int32_t index = 0;
     if (!je_tilemap_add_property(woje_tilemap_doc(0), woort_string(1),
-            woort_string(2), woort_string(3), &index))
+        woort_string(2), woort_string(3), &index))
         return woort_ret_option_none();
     return woort_ret_option_int(index);
 }

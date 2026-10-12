@@ -4922,9 +4922,9 @@ JE_API void je_tilemap_map_size(je_TilemapHandle map,
 
 /*
 je_tilemap_map_path [基本接口]
-取地图文档的登记路径，未保存（新建后未另存）时返回空串
+取地图文档的登记路径，未保存（新建后未另存）时返回false
 */
-JE_API const char* je_tilemap_map_path(je_TilemapHandle map);
+JE_API bool je_tilemap_map_path(je_TilemapHandle map, const char** out_path);
 
 /*
 je_tilemap_map_version [基本接口]
