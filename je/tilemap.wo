@@ -1,11 +1,16 @@
 // Joyengine 4.x
 // 瓦片地图运行时 API：je_tilemap_* C API 的 Woolang 绑定与友好封装。
 //
-// 文档句柄类型为 Tilemap / Tileset（基于 handle 声明的新类型，储存方式
-// 与 int 相同）。open / create 失败时返回 none，成功返回有效句柄。文档
-// 由引擎全局缓存并按路径共享：编辑器与世界共用同一份数据，任何修改
-//（未保存亦然）都会在下一帧同步到所有世界实例。相关方法声明在对应类型
-// 的命名空间中，可用接收者形式调用：map->save(path)、
+// 文档句柄类型为 Tilemap / Tileset（基于 gchandle 声明）：值本身持有
+// 文档 1 个引用，被 GC 回收（或 gchandle::close）时自动 unload 释放，
+// 只要句柄值仍被引用文档就不会被卸载。open / create 失败时返回 none，
+// 成功返回有效句柄。文档由引擎全局缓存并按路径共享：编辑器与世界共用
+// 同一份数据，任何修改（未保存亦然）都会在下一帧同步到所有世界实例。
+// 引用计数经 keep / unload 手动增减：keep +1（用于把文档的生命周期
+// 延长到句柄值之外，如跨场景常驻）；unload -1，归零且已保存时文档被
+// 逐出缓存（句柄失效、内存释放），未保存的文档保留驻留。使用地图的
+// 世界与地图引用的图集亦各占 1 个引用，不受脚本侧影响。相关方法声明
+// 在对应类型的命名空间中，可用接收者形式调用：map->save(path)、
 // tileset->add_source(...)。
 //
 // 瓦片值编码（网格与笔刷统一）：
@@ -29,16 +34,33 @@ namespace je
     namespace tilemap
     {
         // ==================== 地图文档 ====================
-        public using Tilemap = handle
+        public using Tilemap = gchandle
         {
+            // 句柄同一性（gchandle 不可直接比较，经引擎侧按载荷判断）
+            extern("libjoyecs", "wojeapi_tilemap_map_same")
+                public func same(self: Tilemap, another: Tilemap)=> bool;
+
             public func operator == (self: Tilemap, another: Tilemap)=> bool
             {
-                return (self as handle as int) == (another as handle as int);
+                return same(self, another);
             }
             public func operator != (self: Tilemap, another: Tilemap)=> bool
             {
                 return !(self == another);
             }
+
+            // ==================== 生命周期（引用计数）====================
+            // 引用计数 +1，返回新计数（句柄无效返回 -1）。句柄值本身已
+            // 占 1 个引用；keep 用于把文档生命周期延长到句柄值之外
+            //（如常驻到进程结束），对应的 unload 需手动调用。
+            extern("libjoyecs", "wojeapi_tilemap_keep_map")
+                public func keep(self: Tilemap)=> int;
+
+            // 引用计数 -1，返回剩余计数（句柄无效返回 -1）。归零且已
+            // 保存时文档被逐出缓存（内存释放，句柄随之失效，下次打开
+            // 自磁盘重读）；未保存的文档归零后仍驻留，避免数据丢失。
+            extern("libjoyecs", "wojeapi_tilemap_unload_map")
+                public func unload(self: Tilemap)=> int;
 
             // 打开 .je4tilemap 文件（无法解析时返回 none）
             extern("libjoyecs", "wojeapi_tilemap_open_map")
@@ -69,10 +91,12 @@ namespace je
                 public func version(self: Tilemap)=> int;
 
             // ==================== 已加载文档枚举 ====================
-            // 进程内全部已注册地图文档的快照（含未保存的新建文档；文档
-            // 只增不删，亦含被 reload 弃用的旧实例——路径已清空，不被
-            // 世界使用，遍历侧替换图层样式无害）。返回调用时刻的快照，
-            // 之后打开/新建文档不影响已取得的数组。
+            // 进程内全部已注册地图文档的快照（含未保存的新建文档与被
+            // reload 弃用的旧实例——后者路径已清空、不被世界使用，遍历
+            // 侧替换图层样式无害；被 unload 逐出的文档槽位已置空，不
+            // 出现）。返回调用时刻的快照，每个句柄值各携带 1 个引用
+            //（元素被 GC 回收时释放），之后打开/新建/逐出文档不影响
+            // 已取得的数组。
             extern("libjoyecs", "wojeapi_tilemap_loaded_maps")
                 public func loaded_maps()=> array<Tilemap>;
 
@@ -276,16 +300,32 @@ namespace je
         };
 
         // ==================== 图集文档 ====================
-        public using Tileset = handle
+        public using Tileset = gchandle
         {
+            // 句柄同一性（gchandle 不可直接比较，经引擎侧按载荷判断）
+            extern("libjoyecs", "wojeapi_tilemap_tileset_same")
+                public func same(self: Tileset, another: Tileset)=> bool;
+
             public func operator == (self: Tileset, another: Tileset)=> bool
             {
-                return (self as handle as int) == (another as handle as int);
+                return same(self, another);
             }
             public func operator != (self: Tileset, another: Tileset)=> bool
             {
                 return !(self == another);
             }
+
+            // ==================== 生命周期（引用计数）====================
+            // 引用计数 +1，返回新计数（句柄无效返回 -1）。句柄值本身已
+            // 占 1 个；引用该图集的地图亦各占 1 个（地图逐出时释放）。
+            extern("libjoyecs", "wojeapi_tilemap_keep_tileset")
+                public func keep(self: Tileset)=> int;
+
+            // 引用计数 -1，返回剩余计数（句柄无效返回 -1）。归零且已
+            // 保存时文档被逐出缓存（内存释放，句柄随之失效，下次打开
+            // 或地图解析自磁盘重读）；未保存的文档归零后仍驻留。
+            extern("libjoyecs", "wojeapi_tilemap_unload_tileset")
+                public func unload(self: Tileset)=> int;
 
             // 打开 .je4tileset 文件（无法解析时返回 none）
             extern("libjoyecs", "wojeapi_tilemap_open_tileset")

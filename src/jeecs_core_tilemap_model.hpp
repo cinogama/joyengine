@@ -99,6 +99,10 @@ namespace jeecs
             std::map<int32_t, std::map<std::string, std::string>> tile_properties;
 
             uint64_t version = 1;
+            // 引用计数（keep/unload）：open/create 的每个调用方各占 1，
+            // 引用它的地图文档亦各占 1。归零且已保存（路径非空）时文档被
+            // 注册表逐出；未保存文档永不逐出（逐出即数据丢失）。
+            int32_t keep_count = 0;
             // (source<<32|flat_pos) -> tile id 的反查表，懒构建
             std::unordered_map<int64_t, int32_t> flat_tile_index;
 
@@ -160,11 +164,18 @@ namespace jeecs
             int32_t width = 0, height = 0, tile_px = 32;
             std::vector<std::string> tilesets;  // 引用的图集路径
             std::vector<std::shared_ptr<TilesetDocument>> resolved;    // 与 tilesets 对应
+            // 与 resolved 平行：该槽位经注册表 keep 的图集句柄（0 = 未
+            // 持有）。地图文档为其解析到的每个图集各持有 1 个引用，换绑
+            // （重载/逐出）或自身被逐出时释放。
+            std::vector<int32_t> resolved_kept;
             std::vector<MapLayer> layers;
             // 逐格属性覆盖：(layer, x + y*width) -> (name -> value)
             std::map<std::pair<int32_t, int32_t>, std::map<std::string, std::string>> cell_properties;
 
             uint64_t version = 1;
+            // 引用计数语义同 TilesetDocument::keep_count（open/create 的
+            // 调用方各占 1；使用该地图的世界各占 1）。
+            int32_t keep_count = 0;
 
             bool in_bounds(int32_t layer, int32_t x, int32_t y) const
             {
@@ -739,10 +750,12 @@ namespace jeecs
 
         // ==================== 文档注册表 ====================
         // 进程内全局唯一：按路径共享文档实例，编辑器与世界经由同一份
-        // 数据实现"未保存修改实时同步"。文档只增不删（C API 句柄为
-        // 下标 + 1，须保持稳定）；路径 -> 句柄是派生索引，保存/重载
-        // 经 save_*/reload_* 集中维护。失败路径只尝试一次，避免逐帧
-        // 重试造成日志刷屏；保存/重载会清除失败记录。
+        // 数据实现"未保存修改实时同步"。句柄槽位只增不删（C API 句柄为
+        // 下标 + 1，须保持稳定）；文档引用计数（keep_count）归零且已保存
+        // 时被逐出——槽位置空但下标永不复用，句柄值不会指向新文档。
+        // 路径 -> 句柄是派生索引，保存/重载经 save_*/reload_* 集中维护。
+        // 失败路径只尝试一次，避免逐帧重试造成日志刷屏；保存/重载会清除
+        // 失败记录。
         class documents
         {
         public:
@@ -837,28 +850,155 @@ namespace jeecs
                 detach_tileset(canonical_key(path));
             }
 
+            // ---- 引用计数（keep/unload）----
+            // keep：引用计数 +1，返回新计数；句柄无效返回 -1。
+            int32_t keep_map(int32_t id)
+            {
+                MapDocument* doc = map(id);
+                if (doc == nullptr)
+                    return -1;
+                return ++doc->keep_count;
+            }
+            int32_t keep_tileset(int32_t id)
+            {
+                TilesetDocument* doc = tileset(id);
+                if (doc == nullptr)
+                    return -1;
+                return ++doc->keep_count;
+            }
+
+            // unload：引用计数 -1（下限 0）；归零且已保存（路径非空）时
+            // 文档被逐出（句柄随之失效），未保存文档保留驻留避免数据
+            // 丢失。返回剩余计数；句柄无效返回 -1。
+            int32_t unload_map(int32_t id)
+            {
+                MapDocument* doc = map(id);
+                if (doc == nullptr)
+                    return -1;
+                if (doc->keep_count > 0)
+                    --doc->keep_count;
+                int32_t remaining = doc->keep_count;
+                if (remaining == 0 && !doc->path.empty())
+                    evict_map(id);
+                return remaining;
+            }
+            int32_t unload_tileset(int32_t id)
+            {
+                TilesetDocument* doc = tileset(id);
+                if (doc == nullptr)
+                    return -1;
+                if (doc->keep_count > 0)
+                    --doc->keep_count;
+                int32_t remaining = doc->keep_count;
+                if (remaining == 0 && !doc->path.empty())
+                    evict_tileset(id);
+                return remaining;
+            }
+
+            // 逐出文档：释放内部持有（地图会级联释放其图集引用）、解除
+            // 路径绑定并置空槽位（下标不回收）。此后该句柄的一切访问
+            // 按无效处理；下次按路径 open 会从磁盘重新加载。
+            void evict_map(int32_t id)
+            {
+                MapDocument* doc = map(id);
+                if (doc == nullptr)
+                    return;
+                release_resolved(*doc);
+                if (!doc->path.empty())
+                {
+                    auto fnd = m_maps_by_path.find(canonical_key(doc->path));
+                    if (fnd != m_maps_by_path.end() && fnd->second == id)
+                        m_maps_by_path.erase(fnd);
+                }
+                m_find_results.erase(doc);
+                m_maps[id - 1] = nullptr;
+            }
+            void evict_tileset(int32_t id)
+            {
+                TilesetDocument* doc = tileset(id);
+                if (doc == nullptr)
+                    return;
+                if (!doc->path.empty())
+                {
+                    auto fnd = m_tilesets_by_path.find(canonical_key(doc->path));
+                    if (fnd != m_tilesets_by_path.end() && fnd->second == id)
+                        m_tilesets_by_path.erase(fnd);
+                }
+                m_tilesets[id - 1] = nullptr;
+            }
+
             // 保证地图文档的图集解析与注册表中的最新文档一致
-            // （处理图集被重载/替换的情况），并返回引用计数不变的共享指针。
+            // （处理图集被重载/替换/逐出的情况）。每个成功解析的槽位
+            // 经注册表持有该图集 1 个引用（resolved_kept 记录句柄），
+            // 实例变化时先释放旧持有再 keep 新实例；解析失败同样释放。
             void ensure_tilesets(MapDocument& m)
             {
-                if (m.resolved.size() != m.tilesets.size())
+                if (m.resolved.size() != m.tilesets.size()
+                    || m.resolved_kept.size() != m.tilesets.size())
+                {
+                    release_resolved(m);
                     m.resolved.assign(m.tilesets.size(), nullptr);
+                    m.resolved_kept.assign(m.tilesets.size(), 0);
+                }
                 for (size_t i = 0; i < m.tilesets.size(); ++i)
                 {
                     auto [id, live] = open_tileset(m.tilesets[i]);
                     if (live == nullptr)
                     {
+                        if (m.resolved_kept[i] != 0)
+                        {
+                            unload_tileset(m.resolved_kept[i]);
+                            m.resolved_kept[i] = 0;
+                        }
                         m.resolved[i].reset();
                         continue;
                     }
                     // 与注册表当前实例保持同一份（open 命中缓存即同指针）
+                    if (m.resolved_kept[i] == id
+                        && m.resolved[i] != nullptr && m.resolved[i].get() == live)
+                        continue;
+                    if (m.resolved_kept[i] != 0)
+                        unload_tileset(m.resolved_kept[i]);
+                    keep_tileset(id);
+                    m.resolved_kept[i] = id;
                     m.resolved[i] = m_tilesets[id - 1];
                 }
             }
 
-            // 地图 + 其图集的合并版本戳：任一变化（含图集实例被重载替换）
-            // 都会改变。文档实例进程内永不销毁，故指针身份是可靠的
-            // 实例标识；version 区分同实例内的编辑。
+            // 释放地图文档持有的全部图集引用（自身被逐出/引用表重建时）
+            void release_resolved(MapDocument& m)
+            {
+                for (int32_t kept : m.resolved_kept)
+                    if (kept != 0)
+                        unload_tileset(kept);
+                m.resolved_kept.clear();
+            }
+
+            // 地图引用表增删（保持 tilesets/resolved/resolved_kept 对齐；
+            // 删除项的图集引用随之释放）
+            void append_tileset_entry(MapDocument& m, const std::string& path)
+            {
+                m.tilesets.push_back(path);
+                m.resolved.push_back(nullptr);
+                m.resolved_kept.push_back(0);
+            }
+            void erase_tileset_entry(MapDocument& m, size_t idx)
+            {
+                if (idx >= m.tilesets.size())
+                    return;
+                if (idx < m.resolved_kept.size() && m.resolved_kept[idx] != 0)
+                    unload_tileset(m.resolved_kept[idx]);
+                m.tilesets.erase(m.tilesets.begin() + idx);
+                if (idx < m.resolved.size())
+                    m.resolved.erase(m.resolved.begin() + idx);
+                if (idx < m.resolved_kept.size())
+                    m.resolved_kept.erase(m.resolved_kept.begin() + idx);
+            }
+
+            // 地图 + 其图集的合并版本戳：任一变化（含图集实例被重载/
+            // 逐出后重载替换）都会改变。指针身份作实例标识（逐出后新
+            // 实例重用旧地址且版本恰好相同的概率可忽略）；version 区分
+            // 同实例内的编辑。
             uint64_t map_stamp(const MapDocument& m) const
             {
                 uint64_t stamp = mix(0x9E3779B97F4A7C15ull, (uintptr_t)&m, m.version);

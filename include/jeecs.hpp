@@ -4781,6 +4781,10 @@ JE_API bool je_main_script_entry();
 // 文档以 je_TilemapHandle / je_TilesetHandle 句柄（0 为无效值）标识，进程内
 // 全局缓存、按路径共享：编辑器经此修改文档后版本号自增，各世界的 TilemapSystem
 // 下一帧即重建渲染分片（未保存的修改也会实时同步到世界实例）。
+// 文档生命周期按引用计数管理：open/create 的调用方各持有 1 个引用，使用地图
+// 的世界与引用图集的地图亦各占 1 个；je_tilemap_keep_map/je_tilemap_unload_map
+//（图集侧同理）增减引用，归零且已保存的文档被逐出缓存、句柄失效，未保存的
+// 文档保留驻留（逐出即数据丢失）。
 // 瓦片值编码（网格/笔刷统一使用）：
 //     0            空
 //     v > 0        普通瓦片: (tileset_idx + 1) * 0x100000 + tile_id
@@ -4878,8 +4882,10 @@ enum je_TerrainKind
 je_tilemap_open_map [基本接口]
 打开（或取进程内缓存）指定路径的地图文档，句柄经 out_hdl 返回
     * 路径不存在或无法解析时返回 false，不写出句柄
+    * 每次成功调用为调用方持有 1 个文档引用（见 je_tilemap_unload_map）
 请参见：
     je_TilemapHandle
+    je_tilemap_keep_map
 */
 JE_API bool je_tilemap_open_map(const char* path, je_TilemapHandle* out_hdl);
 
@@ -4887,6 +4893,7 @@ JE_API bool je_tilemap_open_map(const char* path, je_TilemapHandle* out_hdl);
 je_tilemap_create_map [基本接口]
 新建一个未保存的地图文档（单图层），句柄经 out_hdl 返回
     * 尺寸不合法（<=0 或超过 65536）时返回 false，不写出句柄
+    * 调用方持有 1 个文档引用（见 je_tilemap_unload_map）
 请参见：
     je_TilemapHandle
 */
@@ -4926,10 +4933,36 @@ je_tilemap_map_version [基本接口]
 JE_API uint64_t je_tilemap_map_version(je_TilemapHandle map);
 
 /*
+je_tilemap_keep_map [基本接口]
+地图文档引用计数 +1（文档一经加载默认长期驻留，引用计数是唯一的
+卸载途径），返回增加后的计数
+    * 句柄无效返回 -1
+    * 引用来源：open/create 的调用方、使用该地图的各世界（各占 1）
+请参见：
+    je_tilemap_unload_map
+*/
+JE_API int32_t je_tilemap_keep_map(je_TilemapHandle map);
+
+/*
+je_tilemap_unload_map [基本接口]
+地图文档引用计数 -1（下限 0）；归零且文档已保存（登记路径非空）时
+文档被逐出缓存——句柄立即失效、内存释放，下次按路径打开自磁盘重读
+    * 未保存（路径为空）的文档归零后仍保留驻留，避免数据丢失
+    * 返回减少后的计数（0 表示文档已被逐出或不可再卸载）；句柄无效
+      返回 -1
+请参见：
+    je_tilemap_keep_map
+    je_tilemap_open_map
+*/
+JE_API int32_t je_tilemap_unload_map(je_TilemapHandle map);
+
+/*
 je_tilemap_loaded_map_count [基本接口]
 返回进程内已注册的地图文档数量（含未保存的新建文档）
-    * 文档只增不删：计数也含被 je_tilemap_reload_map 弃用的旧实例，
-      其路径已清空、不再被任何世界使用
+    * 文档被 je_tilemap_unload_map 逐出后其槽位置空，计数不变但
+      je_tilemap_loaded_map 在该下标返回 0（无效句柄）；计数也含被
+      je_tilemap_reload_map 弃用的旧实例，其路径已清空、不再被任何
+      世界使用
 请参见：
     je_tilemap_loaded_map
 */
@@ -5207,14 +5240,17 @@ JE_API bool je_tilemap_find_get(je_TilemapHandle map, int32_t index, int32_t* x,
 je_tilemap_open_tileset [基本接口]
 打开（或取进程内缓存）指定路径的图集文档，返回其句柄
     * 路径不存在或无法解析时返回 0
+    * 每次成功调用为调用方持有 1 个文档引用（见 je_tilemap_unload_tileset）
 请参见：
     je_TilesetHandle
+    je_tilemap_keep_tileset
 */
 JE_API je_TilesetHandle je_tilemap_open_tileset(const char* path);
 
 /*
 je_tilemap_create_tileset [基本接口]
 新建一个未保存的图集文档，返回其句柄
+    * 调用方持有 1 个文档引用（见 je_tilemap_unload_tileset）
 请参见：
     je_TilesetHandle
 */
@@ -5237,6 +5273,27 @@ je_tilemap_tileset_version [基本接口]
 取图集文档的修改版本号，任何经本组 API 的修改都会使其自增
 */
 JE_API uint64_t je_tilemap_tileset_version(je_TilesetHandle tileset);
+
+/*
+je_tilemap_keep_tileset [基本接口]
+图集文档引用计数 +1，返回增加后的计数；句柄无效返回 -1
+    * 引用来源：open/create 的调用方、引用该图集的各地图（各占 1）
+请参见：
+    je_tilemap_unload_tileset
+*/
+JE_API int32_t je_tilemap_keep_tileset(je_TilesetHandle tileset);
+
+/*
+je_tilemap_unload_tileset [基本接口]
+图集文档引用计数 -1（下限 0）；归零且文档已保存时被逐出缓存——句柄
+立即失效、内存释放，下次按路径打开（或地图解析）自磁盘重读
+    * 未保存的文档归零后仍保留驻留，避免数据丢失
+    * 返回减少后的计数（0 表示文档已被逐出或不可再卸载）；句柄无效
+      返回 -1
+请参见：
+    je_tilemap_keep_tileset
+*/
+JE_API int32_t je_tilemap_unload_tileset(je_TilesetHandle tileset);
 
 /*
 je_tilemap_tileset_doc_path [基本接口]
