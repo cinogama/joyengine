@@ -1,7 +1,8 @@
 // 瓦片地图编辑器 —— 图层面板。
-// 底部栏：图层自上而下列出（列表顶 = 最上层）。点击选择活动图层；
-// 显隐/锁定切换与 Z 偏移编辑在行尾；新建/删除/上移/下移/重命名在
-// 工具条，行内右键也有等价的快捷菜单。
+// 右列下段面板（与上方属性面板之间有可拖拽分隔条）：图层自上而下
+// 列出（列表顶 = 最上层）。点击选择活动图层；显隐/锁定切换与 Z 偏移
+// 编辑在行尾；新建/删除/上移/下移/重命名在工具条，行内右键也有等价
+// 的快捷菜单。
 // 注意：图层增删/移动不进入撤销栈（绘制类操作才可撤销）；
 // 删除层级前会弹窗确认。
 
@@ -130,14 +131,14 @@ namespace JEEditor::Editor::TilemapEditor
         if (IsItemHovered())
             do SetTooltip("左键选中为编辑层，右键打开图层菜单");
 
-        // 活动层左缘强调竖条（同系统列表分组标题的画法）
+        // 活动层左缘强调竖条（同系统列表分组标题的画法；
+        // GetItemRect 返回的是屏幕坐标 min/max，不是 min/size）
         if (is_active)
         {
-            let (rect_min, rect_size) = GetItemRect();
+            let (rect_min, rect_max) = GetItemRect();
             let (rect_x, rect_y) = rect_min;
-            let (_, rect_h) = rect_size;
             do GetWindowDrawList()->AddRectFilled((rect_x, rect_y),
-                (rect_x + 3., rect_y + rect_h),
+                (rect_x + 3., rect_max[1]),
                 mixStyleColor(text_c, ACTIVE_LAYER_ACCENT, 0.75, 220));
         }
 
@@ -169,10 +170,11 @@ namespace JEEditor::Editor::TilemapEditor
         let avail_w = GetContentRegionAvail().0;
 
         // 从行右缘向左排布：Z 输入框（右侧带 Z 标签）→ 锁定 → 显隐；
-        // 开关宽度按当前字体实算（2 字标签 + 分区样式的 FramePadding.x 6×2）
+        // 开关宽度按当前字体实算（2 字标签 + 分区样式的 FramePadding.x 6×2）。
+        // 面板现居右列（约 340px 宽），Z 输入框取窄档给图层名留空间
         let vis_w = CalcTextSize("可见").0 + 12.;
         let lock_w = CalcTextSize("未锁").0 + 12.;
-        let z_w = 96.;
+        let z_w = 80.;
         let z_label_w = CalcTextSize("Z").0 + 8.;
         let gap = 4.;
         let z_x = line_x + avail_w - z_label_w - z_w;
@@ -227,8 +229,10 @@ namespace JEEditor::Editor::TilemapEditor
         let map = ctx.m_map;
         let (_, _, _, layer_count) = map->size();
 
-        // 操作按钮行
-        if (Button("+ 新建图层"))
+        SeparatorText("图层");
+
+        // 操作按钮行（标签取短档，保证 340px 右列内单行放下）
+        if (Button("+ 新建"))
         {
             do InputBox::show("新建图层", "请输入图层名称：", F"图层 {layer_count + 1}")
                 ->then(func(name)

@@ -1,6 +1,7 @@
 // 瓦片地图编辑器 —— 工具栏与整体布局。
 // 两个独立窗口各一套布局：
-//   地图编辑器（render_main）：上工具栏 + 左调色板 + 中画布 + 右属性 + 底部图层；
+//   地图编辑器（render_main）：上工具栏 + 左调色板 + 中画布（整高）+
+//     右列上下分栏（上属性、下图层，中间可拖拽分隔条分配高度）；
 //   图集编辑器（render_tileset）：左调色板 + 右图集设置。
 
 import pkg::std;
@@ -11,6 +12,8 @@ import je::tilemap;
 
 import pkg::fsys;
 import pkg::math;
+
+import builtin::editor::GUI::Widgets;
 
 import DataModel;
 import EditorState;
@@ -26,10 +29,53 @@ using je::gui;
 using je::tilemap;
 using fsys;
 using math;
+using JEEditor::GUI::Widgets;
 using JEEditor::Editor::TilemapEditor;
 
 namespace JEEditor::Editor::TilemapEditor
 {
+    // ===== 右列属性/图层面板的分隔条状态 =====
+    // 图层面板高度（分隔条拖拽调整；模块级保存，切换文档/窗口重建间保留）
+    let mut s_layer_panel_h = 280.;
+    // 拖拽中的上一帧鼠标 y：je::gui 未暴露 IO.MouseDelta，用帧间差分
+    // 实现拖拽增量；none 表示当前未在拖拽
+    let mut s_splitter_last_y = option::none: option<real>;
+
+    // 水平分隔条：整宽 6px 命中区，拖动改变下方面板（图层）高度并
+    // 返回新值（调用方负责按面板上下限夹取）；悬停/拖拽时居中细线
+    // 染强调色提示可拖
+    func draw_hsplitter(id: string, cur_h: real)=> real
+    {
+        let mut new_h = cur_h;
+        do InvisibleButton(id, (GetContentRegionAvail()[0], 6.));
+
+        if (IsItemActive())
+        {
+            let (_, my) = GetMousePos();
+            match (s_splitter_last_y)
+            {
+                // 分隔条 y = col_y + right_h - layer_h - 12：图层高度增大
+                // 时分隔条上移，故增量与鼠标位移反号（鼠标上移 = 面板变高）
+                value(last_y)? new_h = cur_h + last_y - my;
+                none?;
+            }
+            s_splitter_last_y = option::value(my);
+        }
+        else
+            s_splitter_last_y = option::none;
+
+        let (rmin, rmax) = GetItemRect();
+        let mid_y = (rmin[1] + rmax[1]) * 0.5;
+        let text_c = GetStyleColor(ImGuiCol::ImGuiCol_Text);
+        let line_c = IsItemHovered() || IsItemActive()
+            ? mixStyleColor(text_c, ACTIVE_LAYER_ACCENT, 0.65, 220)
+            | mixStyleColor(text_c, text_c, 0., 80);
+        do GetWindowDrawList()->AddRectFilled(
+            (rmin[0], mid_y - 1.), (rmax[0], mid_y + 1.), line_c);
+
+        return new_h;
+    }
+
     func toolbar_button(state: EditorState, t: tool)=> void
     {
         let pressed = Button(F"{tool::name(t)}##tool{t as int}");
@@ -166,32 +212,54 @@ namespace JEEditor::Editor::TilemapEditor
         // 工具栏（整宽）
         do draw_toolbar(state, ctx);
 
-        let bottom_h = 128.;
         let left_w = 320.;
         let right_w = 340.;
         let mut center_w = avail[0] - left_w - right_w - 12.;
         if (center_w < 200.) center_w = 200.;
-        let body_h = GetContentRegionAvail()[1] - bottom_h;
+        let body_h = GetContentRegionAvail()[1];
 
-        // 左：调色板
+        // 左：调色板（整高）
         if (BeginChildSize("##tm_left", left_w, body_h))
             do draw_palette(state, option::value(ctx));
         EndChild();
         SameLine();
 
-        // 中：画布
+        // 中：画布（整高——不再被底部图层窄条挤占）
         if (BeginChildSize("##tm_center", center_w, body_h))
             do draw_canvas(state, ctx);
         EndChild();
         SameLine();
 
-        // 右：属性
-        if (BeginChildSize("##tm_right", right_w, body_h))
+        // 右列：上属性 + 拖拽分隔条 + 下图层。图层列表原在窗口底部整宽
+        // 窄条（仅约两三行高），移入右列后纵向空间充足、行内容也完整。
+        // 图层面板高度受上下限夹取：下限保住工具行 + 至少三行图层，
+        // 上限给属性面板留出最低可用高度。
+        let (right_x, col_y) = GetCursorPos();
+        let right_h = GetContentRegionAvail()[1];
+        let mut layer_h = s_layer_panel_h;
+        let mut layer_max = right_h - 280.;
+        if (layer_max < 160.) layer_max = 160.;
+        if (layer_h < 160.) layer_h = 160.;
+        if (layer_h > layer_max) layer_h = layer_max;
+        // 右列纵向分区（自上而下）：属性 prop_h → 6px 间隙 → 6px 分隔条
+        // → 6px 间隙 → 图层面板占满剩余（= layer_h）
+        let prop_h = right_h - layer_h - 18.;
+
+        if (BeginChildSize("##tm_right", right_w, prop_h))
             do draw_properties(state, ctx);
         EndChild();
 
-        // 底：图层
-        if (BeginChildSize("##tm_bottom", GetContentRegionAvail()[0], 0.))
+        // 分隔条与图层面板必须按右列几何显式定位：右列与更高的
+        // 调色板/画布同处一个 SameLine 布局行，ImGui 的行高取同行
+        // 最高项，EndChild 后光标 y 已被推到内容区底部，跟随光标
+        // 会让图层面板被挤到 0 高。
+        let split_y = col_y + prop_h + 6.;
+        SetCursorPos((right_x, split_y));
+        layer_h = draw_hsplitter("##tm_right_split", layer_h);
+        s_layer_panel_h = layer_h;
+
+        SetCursorPos((right_x, split_y + 12.));
+        if (BeginChildSize("##tm_layers", right_w, 0.))
             do draw_layers(state, ctx);
         EndChild();
     }
