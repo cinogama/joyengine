@@ -489,14 +489,19 @@ namespace jeecs
                 game_entity root{ r.raw };
 
                 // 世界占用：根实体存续期间持有地图 1 个引用；路径变更
-                //（另存/换绑）或首次解析时换手
+                //（另存/换绑）或首次解析时换手。open_map 返回自带 1 个
+                // 引用：换手时直接转交给 held_map，同实例时释放该多余
+                // 引用——引用在锁内与打开一并计得，GC 终结器无法在
+                // "打开成功"与"计引用"之间逐出文档。
                 if (state.held_map != r.doc)
                 {
                     if (state.held_map != nullptr)
                         docs.unload_map(state.held_map);
-                    if (r.doc != nullptr)
-                        docs.keep_map(r.doc);
                     state.held_map = r.doc;
+                }
+                else if (r.doc != nullptr)
+                {
+                    docs.unload_map(r.doc);
                 }
 
                 // 网格扫描只在版本戳变化时执行（map_stamp 已含图集实例身份，
@@ -593,13 +598,8 @@ namespace jeecs
 je_TilemapDocument* je_tilemap_open_map(const char* path)
 {
     assert(path != nullptr);
-    auto& docs = jeecs::Tilemap::documents::inst();
-    je_TilemapDocument* doc = docs.open_map(path);
-    if (doc == nullptr)
-        return nullptr;
-    // 调用方持有 1 个引用（unload/gchandle 回收时释放）
-    docs.keep_map(doc);
-    return doc;
+    // open_map 返回自带 1 个引用的实例（unload/gchandle 回收时释放）
+    return jeecs::Tilemap::documents::inst().open_map(path);
 }
 je_TilemapDocument* je_tilemap_create_map(int32_t w, int32_t h, int32_t tile_px)
 {
@@ -611,10 +611,8 @@ je_TilemapDocument* je_tilemap_create_map(int32_t w, int32_t h, int32_t tile_px)
     layer.name = "图层 1";
     layer.grid.assign((size_t)w * h, 0);
     doc->layers.push_back(std::move(layer));
-    auto& docs = jeecs::Tilemap::documents::inst();
-    je_TilemapDocument* raw = docs.register_map(std::move(doc));
-    docs.keep_map(raw);
-    return raw;
+    // register_map 返回自带 1 个引用的实例
+    return jeecs::Tilemap::documents::inst().register_map(std::move(doc));
 }
 int32_t je_tilemap_keep_map(je_TilemapDocument* map)
 {
@@ -1075,13 +1073,8 @@ bool je_tilemap_find_get(je_TilemapDocument* doc, int32_t index, int32_t* x, int
 je_TilesetDocument* je_tilemap_open_tileset(const char* path)
 {
     assert(path != nullptr);
-    auto& docs = jeecs::Tilemap::documents::inst();
-    je_TilesetDocument* doc = docs.open_tileset(path);
-    if (doc == nullptr)
-        return nullptr;
-    // 调用方持有 1 个引用（unload/gchandle 回收时释放）
-    docs.keep_tileset(doc);
-    return doc;
+    // open_tileset 返回自带 1 个引用的实例（unload/gchandle 回收时释放）
+    return jeecs::Tilemap::documents::inst().open_tileset(path);
 }
 je_TilesetDocument* je_tilemap_create_tileset(const char* name)
 {
@@ -1090,10 +1083,8 @@ je_TilesetDocument* je_tilemap_create_tileset(const char* name)
     doc->name = name;
     doc->tiles.push_back({});
     doc->terrains.push_back({});
-    auto& docs = jeecs::Tilemap::documents::inst();
-    je_TilesetDocument* raw = docs.register_tileset(std::move(doc));
-    docs.keep_tileset(raw);
-    return raw;
+    // register_tileset 返回自带 1 个引用的实例
+    return jeecs::Tilemap::documents::inst().register_tileset(std::move(doc));
 }
 int32_t je_tilemap_keep_tileset(je_TilesetDocument* tileset)
 {
@@ -1545,8 +1536,10 @@ static inline je_TilesetDocument* woje_ts_doc(woort_StackValue slot)
 {
     return (je_TilesetDocument*)woort_gcpointer(slot);
 }
-// 终结器：释放 gchandle 携带的文档引用（调用方 bug 导致的双重释放由
-// 引用计数下限 0 兜底）
+// 终结器：释放 gchandle 携带的文档引用。注意 Woolang 为并发 GC——
+// 终结器在 GC worker 线程上执行，可能与编辑器线程、世界更新线程同时
+// 调用 unload（注册表内部已用互斥锁串行化；调用方 bug 导致的双重释放
+// 由引用计数下限 0 与已逐出防护兜底）。
 static void woje_tilemap_release_map(void* ptr)
 {
     je_tilemap_unload_map((je_TilemapDocument*)ptr);
@@ -1620,14 +1613,11 @@ WOORT_API woort_api wojeapi_tilemap_loaded_maps(void)
 
     woort_set_vec(out_array);
 
-    const int32_t count = je_tilemap_loaded_map_count();
-    for (int32_t i = 0; i < count; ++i)
+    // 快照枚举：每个实例自带 1 个引用（收集与计引用同锁完成，不会被
+    // GC 终结器并发逐出），元素被 GC 回收时经终结器释放
+    for (je_TilemapDocument* doc :
+        jeecs::Tilemap::documents::inst().snapshot_maps())
     {
-        je_TilemapDocument* doc = je_tilemap_loaded_map(i);
-        if (doc == nullptr)
-            continue;
-        // 每个指针值携带 1 个引用，元素被 GC 回收时释放
-        je_tilemap_keep_map(doc);
         woort_set_gchandle(elem, doc, WOORT_IGNORE,
             woje_tilemap_release_map, nullptr);
         woort_vec_push(out_array, elem);

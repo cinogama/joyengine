@@ -28,6 +28,7 @@
 #include <cmath>
 #include <cctype>
 #include <algorithm>
+#include <mutex>
 
 namespace jeecs
 {
@@ -102,9 +103,12 @@ namespace jeecs
             // 引用计数（keep/unload）：open/create 的每个调用方各占 1，
             // 引用它的地图文档亦各占 1。归零且已保存（路径非空）时文档被
             // 注册表逐出；未保存文档永不逐出（逐出即数据丢失）。
+            // 仅在注册表互斥锁内读写（Woolang GC 终结器会在 GC worker
+            // 线程上并发调用 unload，不能依赖单线程递增递减）。
             int32_t keep_count = 0;
             // 注册表槽位回引（下标 + 1，0 = 未注册/已逐出）。文档实例
             // 地址即对外指针身份，此回引仅供注册表按指针定位槽位。
+            // 同上：仅在注册表互斥锁内读写。
             int32_t registry_slot = 0;
             // (source<<32|flat_pos) -> tile id 的反查表，懒构建
             std::unordered_map<int64_t, int32_t> flat_tile_index;
@@ -177,10 +181,12 @@ namespace jeecs
 
             uint64_t version = 1;
             // 引用计数语义同 TilesetDocument::keep_count（open/create 的
-            // 调用方各占 1；使用该地图的世界各占 1）。
+            // 调用方各占 1；使用该地图的世界各占 1）。仅在注册表互斥锁内
+            // 读写（GC 终结器可能并行 unload）。
             int32_t keep_count = 0;
             // 注册表槽位回引（下标 + 1，0 = 未注册/已逐出）。文档实例
             // 地址即对外指针身份，此回引仅供注册表按指针定位槽位。
+            // 仅在注册表互斥锁内读写。
             int32_t registry_slot = 0;
 
             bool in_bounds(int32_t layer, int32_t x, int32_t y) const
@@ -763,6 +769,18 @@ namespace jeecs
         // 路径 -> 槽位是派生索引，保存/重载经 save_*/reload_* 集中维护。
         // 失败路径只尝试一次，避免逐帧重试造成日志刷屏；保存/重载会清除
         // 失败记录。
+        //
+        // ---- 线程安全 ----
+        // 并发访问方至少有三类：编辑器所在线程（je_tilemap_* C API）、
+        // 各世界的更新线程（TilemapSystem，经 parallel_foreach 可并行）、
+        // Woolang GC worker 线程（gchandle 终结器并行调用 unload_*，见
+        // woje_tilemap_release_*）。所有注册表结构性状态（槽位表、路径
+        // 索引、keep_count/registry_slot）由 m_mutex 串行化；逐出（含
+        // 级联释放图集引用与文档析构）在持锁状态下原子完成，保证
+        // "归零逐出"与并发 keep/open 之间无竞态。锁为递归锁：unload ->
+        // evict -> release_resolved -> unload 的级联在锁内自然重入。
+        // 文档内容（网格/图层等）仍为设计上的共享可变数据，内容级读写
+        // 不经本锁（与"未保存修改实时同步"的既有语义一致）。
         class documents
         {
         public:
@@ -777,45 +795,79 @@ namespace jeecs
             // 已注册地图文档枚举（热更新等遍历用）：数量与按枚举下标
             //（0 起，非句柄）取实例。文档只增不删——计数含未保存的新建
             // 文档，也含被 reload 弃用的旧实例（其路径已清空，不再被世界
-            // 使用，遍历侧替换样式无害）。
+            // 使用，遍历侧替换样式无害）。count 与 at 两call之间注册表
+            // 可能变化（并发打开/逐出），at 返回裸指针且不带引用，须立即
+            // 使用；需要稳定集合时用 snapshot_maps。
             int32_t map_count() const
             {
+                std::lock_guard lock(m_mutex);
                 return (int32_t)m_maps.size();
             }
             MapDocument* map_at(int32_t index) const
             {
+                std::lock_guard lock(m_mutex);
                 if (index < 0 || index >= (int32_t)m_maps.size())
                     return nullptr;
                 return m_maps[index].get();
             }
 
-            // 打开（或复用缓存）文档；失败返回 nullptr
+            // 快照枚举：返回当前全部已注册地图文档，每个各带 1 个引用
+            //（调用方用毕须 unload，Woolang 侧即 gchandle 终结器路径）。
+            // 在一次持锁内完成"收集 + 计引用"，避免逐个 count/at + keep
+            // 之间文档被 GC 终结器逐出的竞态。
+            std::vector<MapDocument*> snapshot_maps()
+            {
+                std::lock_guard lock(m_mutex);
+                std::vector<MapDocument*> out;
+                out.reserve(m_maps.size());
+                for (auto& d : m_maps)
+                    if (d != nullptr)
+                    {
+                        ++d->keep_count;
+                        out.push_back(d.get());
+                    }
+                return out;
+            }
+
+            // 打开（或复用缓存）文档；失败返回 nullptr。成功返回的实例
+            // 已带 1 个引用（在锁内完成"定位/加载 + 计引用"），调用方
+            // 用毕 unload——这消除了"先返回指针、后 keep"窗口内被并发
+            // 终结器逐出的竞态。
             MapDocument* open_map(const std::string& path)
             {
+                std::lock_guard lock(m_mutex);
                 return open_doc<MapDocument>(
                     path, m_maps, m_maps_by_path, m_maps_failed,
                     &load_map_from, "map");
             }
             TilesetDocument* open_tileset(const std::string& path)
             {
+                std::lock_guard lock(m_mutex);
                 return open_doc<TilesetDocument>(
                     path, m_tilesets, m_tilesets_by_path, m_tilesets_failed,
                     &load_tileset_from, "tileset");
             }
 
-            // 注册新建（未落盘）文档，返回实例指针
+            // 注册新建（未落盘）文档，返回已带 1 个引用的实例指针
             MapDocument* register_map(std::shared_ptr<MapDocument> doc)
             {
-                return append_doc(m_maps, std::move(doc));
+                std::lock_guard lock(m_mutex);
+                MapDocument* raw = append_doc(m_maps, std::move(doc));
+                ++raw->keep_count;
+                return raw;
             }
             TilesetDocument* register_tileset(std::shared_ptr<TilesetDocument> doc)
             {
-                return append_doc(m_tilesets, std::move(doc));
+                std::lock_guard lock(m_mutex);
+                TilesetDocument* raw = append_doc(m_tilesets, std::move(doc));
+                ++raw->keep_count;
+                return raw;
             }
 
             // 保存并登记路径：旧路径绑定若仍指向本文档则解除，随后绑定
             // 新路径（另一文档对同路径的既有绑定被顶替 —— "最后一次
-            // 保存者获胜"，与编辑器另存语义一致）。
+            // 保存者获胜"，与编辑器另存语义一致）。序列化与写盘在锁外
+            //（内容属共享可变数据），路径索引重绑在锁内。
             bool save_map(MapDocument* doc, const std::string& path)
             {
                 assert(doc != nullptr);
@@ -823,6 +875,7 @@ namespace jeecs
                     return false;
                 if (!save_map_to(*doc, path))
                     return false;
+                std::lock_guard lock(m_mutex);
                 rebind_path(m_maps_by_path, doc->path, path, registered_slot(m_maps, doc));
                 doc->path = path;
                 return true;
@@ -834,6 +887,7 @@ namespace jeecs
                     return false;
                 if (!save_tileset_to(*doc, path))
                     return false;
+                std::lock_guard lock(m_mutex);
                 rebind_path(m_tilesets_by_path, doc->path, path, registered_slot(m_tilesets, doc));
                 doc->path = path;
                 return true;
@@ -842,33 +896,47 @@ namespace jeecs
             // 丢弃缓存中的未保存修改：解除路径绑定，下次访问从磁盘重读
             void reload_map(const std::string& path)
             {
+                std::lock_guard lock(m_mutex);
                 detach_map(canonical_key(path));
             }
             void reload_tileset(const std::string& path)
             {
+                std::lock_guard lock(m_mutex);
                 detach_tileset(canonical_key(path));
             }
 
             // ---- 引用计数（keep/unload）----
             // keep：引用计数 +1，返回新计数。调用方持有的指针必然注册
             // 在案（引用计数 >= 1 期间不会被逐出），槽位不自洽即调用方
-            // 传入了伪造/失效指针，按调用方 bug 断言。
+            // 传入了伪造/失效指针，按调用方 bug 断言。registry_slot 已
+            // 清零（曾逐出后的双重释放）时按无操作兜底，避免越界访问。
             int32_t keep_map(MapDocument* doc)
             {
+                std::lock_guard lock(m_mutex);
+                if (doc->registry_slot <= 0)
+                    return 0;
                 registered_slot(m_maps, doc);
                 return ++doc->keep_count;
             }
             int32_t keep_tileset(TilesetDocument* doc)
             {
+                std::lock_guard lock(m_mutex);
+                if (doc->registry_slot <= 0)
+                    return 0;
                 registered_slot(m_tilesets, doc);
                 return ++doc->keep_count;
             }
 
             // unload：引用计数 -1（下限 0）；归零且已保存（路径非空）时
             // 文档被逐出（实例销毁、指针失效），未保存文档保留驻留避免
-            // 数据丢失。返回剩余计数。
+            // 数据丢失。返回剩余计数。GC 终结器可能在任意线程并发调用：
+            // 减计数与逐出判定在同一持锁区间内完成，与并发 keep/open
+            // 互斥；对已逐出实例（双重释放）按无操作兜底。
             int32_t unload_map(MapDocument* doc)
             {
+                std::lock_guard lock(m_mutex);
+                if (doc->registry_slot <= 0)
+                    return 0;
                 registered_slot(m_maps, doc);
                 if (doc->keep_count > 0)
                     --doc->keep_count;
@@ -879,6 +947,9 @@ namespace jeecs
             }
             int32_t unload_tileset(TilesetDocument* doc)
             {
+                std::lock_guard lock(m_mutex);
+                if (doc->registry_slot <= 0)
+                    return 0;
                 registered_slot(m_tilesets, doc);
                 if (doc->keep_count > 0)
                     --doc->keep_count;
@@ -890,9 +961,12 @@ namespace jeecs
 
             // 逐出文档：释放内部持有（地图会级联释放其图集引用）、解除
             // 路径绑定并置空槽位（下标不回收）。此后该指针的一切访问均
-            // 无效；下次按路径 open 会从磁盘重新加载。
+            // 无效；下次按路径 open 会从磁盘重新加载。文档析构（含
+            // resolved 共享指针与图层样式资源）发生在持锁状态下——
+            // 这些析构不会再进入本注册表，无锁序倒置风险。
             void evict_map(MapDocument* doc)
             {
+                std::lock_guard lock(m_mutex);
                 const int32_t slot = registered_slot(m_maps, doc);
                 release_resolved(*doc);
                 if (!doc->path.empty())
@@ -907,6 +981,7 @@ namespace jeecs
             }
             void evict_tileset(TilesetDocument* doc)
             {
+                std::lock_guard lock(m_mutex);
                 const int32_t slot = registered_slot(m_tilesets, doc);
                 if (!doc->path.empty())
                 {
@@ -921,9 +996,12 @@ namespace jeecs
             // 保证地图文档的图集解析与注册表中的最新文档一致
             // （处理图集被重载/替换/逐出的情况）。每个成功解析的槽位
             // 经注册表持有该图集 1 个引用（resolved_kept 记录实例），
-            // 实例变化时先释放旧持有再 keep 新实例；解析失败同样释放。
+            // open_tileset 返回自带 1 个引用：实例未变时当即释放该多余
+            // 引用，实例变化时旧持有释放、新引用转为槽位持有；解析失败
+            // 同样释放。全程持锁（递归重入 open/unload）。
             void ensure_tilesets(MapDocument& m)
             {
+                std::lock_guard lock(m_mutex);
                 if (m.resolved.size() != m.tilesets.size()
                     || m.resolved_kept.size() != m.tilesets.size())
                 {
@@ -944,13 +1022,17 @@ namespace jeecs
                         m.resolved[i].reset();
                         continue;
                     }
-                    // 与注册表当前实例保持同一份（open 命中缓存即同指针）
+                    // 与注册表当前实例保持同一份（open 命中缓存即同指针）；
+                    // 未变则释放 open 带来的多余引用
                     if (m.resolved_kept[i] == live
                         && m.resolved[i] != nullptr && m.resolved[i].get() == live)
+                    {
+                        unload_tileset(live);
                         continue;
+                    }
                     if (m.resolved_kept[i] != nullptr)
                         unload_tileset(m.resolved_kept[i]);
-                    keep_tileset(live);
+                    // open 的引用转为该槽位的持有（不再额外 keep）
                     m.resolved_kept[i] = live;
                     m.resolved[i] = m_tilesets[live->registry_slot - 1];
                 }
@@ -959,6 +1041,7 @@ namespace jeecs
             // 释放地图文档持有的全部图集引用（自身被逐出/引用表重建时）
             void release_resolved(MapDocument& m)
             {
+                std::lock_guard lock(m_mutex);
                 for (TilesetDocument* kept : m.resolved_kept)
                     if (kept != nullptr)
                         unload_tileset(kept);
@@ -969,12 +1052,14 @@ namespace jeecs
             // 删除项的图集引用随之释放）
             void append_tileset_entry(MapDocument& m, const std::string& path)
             {
+                std::lock_guard lock(m_mutex);
                 m.tilesets.push_back(path);
                 m.resolved.push_back(nullptr);
                 m.resolved_kept.push_back(nullptr);
             }
             void erase_tileset_entry(MapDocument& m, size_t idx)
             {
+                std::lock_guard lock(m_mutex);
                 if (idx >= m.tilesets.size())
                     return;
                 if (idx < m.resolved_kept.size() && m.resolved_kept[idx] != nullptr)
@@ -989,9 +1074,11 @@ namespace jeecs
             // 地图 + 其图集的合并版本戳：任一变化（含图集实例被重载/
             // 逐出后重载替换）都会改变。指针身份作实例标识（逐出后新
             // 实例重用旧地址且版本恰好相同的概率可忽略）；version 区分
-            // 同实例内的编辑。
+            // 同实例内的编辑。持锁以避免与并发 ensure_tilesets 重排
+            // resolved（shared_ptr 写）竞争。
             uint64_t map_stamp(const MapDocument& m) const
             {
+                std::lock_guard lock(m_mutex);
                 uint64_t stamp = mix(0x9E3779B97F4A7C15ull, (uintptr_t)&m, m.version);
                 for (const auto& ts : m.resolved)
                     stamp = mix(stamp, ts ? (uintptr_t)ts.get() : 0, ts ? ts->version : 0);
@@ -999,9 +1086,11 @@ namespace jeecs
             }
 
             // find_cells 的结果槽（每地图文档一份；随文档实例走，重载后
-            // 新文档自然从空表开始）
+            // 新文档自然从空表开始）。返回引用后调用方在持文档引用期间
+            // 使用（keep_count >= 1 保证文档不被并发逐出，map 节点稳定）。
             std::vector<std::pair<int32_t, int32_t>>& find_result(const MapDocument* doc)
             {
+                std::lock_guard lock(m_mutex);
                 return m_find_results[doc];
             }
 
@@ -1017,6 +1106,7 @@ namespace jeecs
             // 校验指针确为注册表在案文档并返回其槽位（下标 + 1）。
             // 合法持有的指针在引用计数 >= 1 期间必然在案（逐出即销毁），
             // 不自洽说明调用方传入了伪造/已失效指针，按调用方 bug 断言。
+            // 调用方须持 m_mutex（读取槽位表）。
             template <typename T>
             static int32_t registered_slot(const std::vector<std::shared_ptr<T>>& docs, T* doc)
             {
@@ -1065,6 +1155,10 @@ namespace jeecs
             //      另存/顶替绑定而失联的文档，多份命中取 version 最新者
             //      —— 否则两份副本会互相覆盖丢数据）；
             //   3. 都没有 -> 从磁盘加载（失败记录，不重试）。
+            // 每条成功路径都在返回前 +1 引用（调用方须持 m_mutex，open_
+            // map/open_tileset 已加锁；ensure_tilesets 经递归锁重入）。
+            // 未命中时的磁盘加载在锁内执行（打开是低频路径，换取
+            // "加载 + 注册 + 计引用"的原子性）。
             template <typename T>
             T* open_doc(
                 const std::string& path,
@@ -1082,7 +1176,10 @@ namespace jeecs
                 {
                     T* d = doc_at(docs, fnd->second);
                     if (d != nullptr)
+                    {
+                        ++d->keep_count;
                         return d;
+                    }
                 }
                 int32_t healed = 0;
                 uint64_t healed_ver = 0;
@@ -1100,6 +1197,7 @@ namespace jeecs
                 {
                     by_path[key] = healed;
                     failed.erase(key);
+                    ++docs[healed - 1]->keep_count;
                     return docs[healed - 1].get();
                 }
                 if (failed.count(key) != 0)
@@ -1113,7 +1211,9 @@ namespace jeecs
                 }
                 by_path[key] = (int32_t)docs.size() + 1;
                 failed.erase(key);
-                return append_doc(docs, std::move(doc));
+                T* raw = append_doc(docs, std::move(doc));
+                ++raw->keep_count;
+                return raw;
             }
 
             template <typename T>
@@ -1171,6 +1271,11 @@ namespace jeecs
                 m_tilesets_by_path.erase(key);
                 m_tilesets_failed.erase(key);
             }
+
+            // 注册表全局互斥锁（递归：unload -> evict -> release_resolved
+            // -> unload 级联在锁内重入）。mutable：map_count/map_at/
+            // map_stamp 等只读接口亦须持锁（槽位表被并发打开/逐出改动）。
+            mutable std::recursive_mutex m_mutex;
 
             std::vector<std::shared_ptr<MapDocument>> m_maps;
             std::unordered_map<std::string, int32_t> m_maps_by_path;
