@@ -5480,6 +5480,7 @@ je_tilemap_terrain_info [基本接口]
 取指定 id 地形的信息，经出参返回 (名称, kind, 源下标, 锚点 ix/iy,
 是否可通行, 显式变体数)
     * id 越界返回 false；kind 类型为 je_TerrainKind
+    * 已删除的墓碑地形 source_idx 为 -1，kind 无意义
 */
 JE_API bool je_tilemap_terrain_info(je_TilesetDocument* tileset, je_TerrainId terrain_id,
     /* OPTIONAL */ const char** name, /* OPTIONAL */ je_TerrainKind* kind, /* OPTIONAL */ je_SourceId* source_idx, /* OPTIONAL */ int32_t* ix, /* OPTIONAL */ int32_t* iy,
@@ -13456,38 +13457,29 @@ namespace jeecs
 
         /*
         tilemap::cell [结构体]
-        解码后的格子瓦片值，由 tilemap::decode_cell 生成
+        解码后的格子瓦片值，由 tilemap::decode_cell 生成（空格经 nullopt 表达）
         */
         struct cell
         {
-            int32_t raw;            // 原始瓦片值（0 为空格）
-            int32_t tileset_index;  // 所属图集在地图中的下标（0 起），空格为 -1
+            int32_t tileset_index;  // 所属图集在地图中的下标（0 起）
             bool is_terrain;        // 是否自动图块地形
-            int32_t tile_id;        // 普通瓦片 id（je_TileId，从 1 起），空格/地形格为 0
-            int32_t terrain_id;     // 地形 id（je_TerrainId，从 1 起），空格/普通格为 0
-
-            constexpr explicit operator bool() const noexcept
-            {
-                return raw != 0;
-            }
+            int32_t tile_id;        // 普通瓦片 id（je_TileId，从 1 起）；is_terrain 时未用，为 0
+            int32_t terrain_id;     // 地形 id（je_TerrainId，从 1 起）；非地形格未用，为 0
         };
 
         /*
         tilemap::decode_cell [函数]
-        把 C API 的原始瓦片值（编码见 tilemap::TILE_VALUE_BASE）解码为 tilemap::cell
+        把 C API 的原始瓦片值（编码见 tilemap::TILE_VALUE_BASE）解码为
+        tilemap::cell；空格（raw_value == 0）返回 nullopt
         */
-        constexpr cell decode_cell(int32_t raw_value) noexcept
+        constexpr std::optional<cell> decode_cell(int32_t raw_value) noexcept
         {
-            cell result{};
-            result.raw = raw_value;
             if (raw_value == 0)
-            {
-                result.tileset_index = -1;
-                return result;
-            }
+                return std::nullopt;
 
             const uint32_t magnitude =
                 raw_value > 0 ? (uint32_t)raw_value : (uint32_t)(-(int64_t)raw_value);
+            cell result{};
             result.tileset_index = (int32_t)(magnitude / TILE_VALUE_BASE - 1);
             result.is_terrain = raw_value < 0;
             if (result.is_terrain)
@@ -13944,8 +13936,8 @@ namespace jeecs
 
             // ---- 格子查询 ----
 
-            // 取指定图层某格的瓦片值（越界与空格均为空 cell）
-            cell tile(je_LayerId layer_index, int32_t x, int32_t y) const noexcept
+            // 取指定图层某格的瓦片值（越界与空格均为 nullopt）
+            std::optional<cell> tile(je_LayerId layer_index, int32_t x, int32_t y) const noexcept
             {
                 assert(_m_doc != nullptr);
                 return decode_cell(je_tilemap_get_tile(_m_doc, layer_index, x, y));

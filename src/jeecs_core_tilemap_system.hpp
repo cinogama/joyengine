@@ -240,7 +240,7 @@ namespace jeecs
             for (int32_t i = 0; i < count; ++i)
             {
                 const auto& q = quads[i];
-                if (q.corner < 0)
+                if (!q.corner.has_value())
                 {
                     write_quad(dst, x0, ybot, x1, ytop, q.u0, q.v0, q.u1, q.v1);
                 }
@@ -248,14 +248,14 @@ namespace jeecs
                 {
                     // 四象限槽位：0=LU 1=RU 2=LD 3=RD
                     float cx0, cy0, cx1, cy1;
-                    switch (q.corner)
+                    switch (*q.corner)
                     {
                     case 0: cx0 = x0; cy0 = ym;  cx1 = xm; cy1 = ytop; break;
                     case 1: cx0 = xm;  cy0 = ym;  cx1 = x1; cy1 = ytop; break;
                     case 2: cx0 = x0;  cy0 = ybot; cx1 = xm; cy1 = ym;  break;
                     default: cx0 = xm;  cy0 = ybot; cx1 = x1; cy1 = ym;  break;
                     }
-                    write_quad(dst + (size_t)q.corner * 4 * FLOATS_PER_VERTEX,
+                    write_quad(dst + (size_t)*q.corner * 4 * FLOATS_PER_VERTEX,
                         cx0, cy0, cx1, cy1, q.u0, q.v0, q.u1, q.v1);
                 }
             }
@@ -397,25 +397,26 @@ namespace jeecs
                     {
                         int32_t v = grid[y * doc.width + x];
                         if (v == 0) continue;
-                        int32_t ts_idx = 0, local = 0;
-                        Tilemap::decode_tile_value(v, &ts_idx, &local);
-                        if (ts_idx < 0 || ts_idx >= (int32_t)doc.tilesets.size()
-                            || !doc.tilesets[ts_idx].resolved.has_value())
+                        auto cell = Tilemap::decode_tile_value(v);
+                        if (!cell.has_value()
+                            || cell->tileset_idx < 0
+                            || cell->tileset_idx >= (int32_t)doc.tilesets.size()
+                            || !doc.tilesets[cell->tileset_idx].resolved.has_value())
                             continue;
-                        const auto* ts = doc.tilesets[ts_idx].resolved->get();
-                        int32_t src_idx = -1;
-                        if (v > 0)
+                        const auto* ts = doc.tilesets[cell->tileset_idx].resolved->get();
+                        std::optional<int32_t> src_idx;
+                        if (!cell->is_terrain)
                         {
-                            if (local > 0 && local < (int32_t)ts->tiles.size())
-                                src_idx = ts->tiles[local].source;
+                            if (cell->local_id > 0 && cell->local_id < (int32_t)ts->tiles.size())
+                                src_idx = ts->tiles[cell->local_id].source;
                         }
-                        else if (local > 0 && local < (int32_t)ts->terrains.size())
-                            src_idx = ts->terrains[local].source;
-                        if (src_idx < 0 || src_idx >= (int32_t)ts->sources.size())
+                        else if (cell->local_id > 0 && cell->local_id < (int32_t)ts->terrains.size())
+                            src_idx = ts->terrains[cell->local_id].source;
+                        if (!src_idx.has_value() || *src_idx >= (int32_t)ts->sources.size())
                             continue;
                         needed.insert(part_key{
                             (int32_t)li, x / (int32_t)CHUNK, y / (int32_t)CHUNK,
-                            ts_idx, src_idx });
+                            cell->tileset_idx, *src_idx });
                     }
                 }
             }
@@ -926,13 +927,18 @@ bool je_tilemap_remove_tileset(je_TilemapDocument* doc, int32_t idx)
         for (auto& v : layer.grid)
         {
             if (v == 0) continue;
-            int32_t ts_idx = 0, local = 0;
-            jeecs::Tilemap::decode_tile_value(v, &ts_idx, &local);
-            if (ts_idx == idx) v = 0;
-            else if (ts_idx > idx)
-                v = v < 0
-                ? -jeecs::Tilemap::encode_terrain_value(ts_idx - 1, local)
-                : jeecs::Tilemap::encode_tile_value(ts_idx - 1, local);
+            auto cell = jeecs::Tilemap::decode_tile_value(v);
+            if (!cell.has_value())
+                continue;
+            if (cell->tileset_idx == idx)
+                v = 0;
+            else if (cell->tileset_idx > idx)
+            {
+                const int32_t moved = cell->tileset_idx - 1;
+                v = cell->is_terrain
+                    ? -jeecs::Tilemap::encode_terrain_value(moved, cell->local_id)
+                    : jeecs::Tilemap::encode_tile_value(moved, cell->local_id);
+            }
         }
     ++doc->version;
     return true;
@@ -1295,26 +1301,25 @@ bool je_tilemap_remove_source(je_TilesetDocument* doc, je_SourceId source_idx)
     if (source_idx < 0 || source_idx >= (int32_t)doc->sources.size())
         return false;
     doc->sources.erase(doc->sources.begin() + source_idx);
-    // 引用该源的瓦片/地形做墓碑（source=-1），其余重排 source 下标。
+    // 引用该源的瓦片/地形做墓碑（source 置空），其余重排 source 下标。
     // 与 remove_terrain 同理：不移动数组元素，地图按 id 引用永不漂移。
     for (auto& d : doc->tiles)
     {
-        if (d.source == source_idx) { d.source = -1; continue; }
-        if (d.source > source_idx) d.source -= 1;
+        if (d.source == source_idx) { d.source = std::nullopt; continue; }
+        if (d.source > source_idx) d.source = *d.source - 1;
     }
     for (auto& d : doc->terrains)
     {
         if (d.source == source_idx)
         {
-            d.source = -1;
-            d.kind = 255;
+            d.source = std::nullopt;
             d.name.clear();
             d.ix = 0; d.iy = 0;
             d.variant_tiles.clear();
             d.properties.clear();
             continue;
         }
-        if (d.source > source_idx) d.source -= 1;
+        if (d.source > source_idx) d.source = *d.source - 1;
     }
     doc->rebuild_flat_index();
     ++doc->version;
@@ -1370,9 +1375,9 @@ bool je_tilemap_remove_tile(je_TilesetDocument* doc, je_TileId tile_id)
     // 墓碑删除（同 remove_terrain）：地图按 id 引用瓦片，不移动数组，
     // id 永不漂移，跨会话安全。
     auto& t = doc->tiles[tile_id];
-    if (t.source < 0)
+    if (!t.source.has_value())
         return false;
-    t.source = -1;
+    t.source = std::nullopt;
     t.ix = 0; t.iy = 0;
     doc->tile_properties.erase(tile_id);
     doc->rebuild_flat_index();
@@ -1389,7 +1394,8 @@ bool je_tilemap_tile_info(je_TilesetDocument* doc, je_TileId tile_id,
     if (tile_id <= 0 || tile_id >= (int32_t)doc->tiles.size())
         return false;
     const auto& t = doc->tiles[tile_id];
-    if (source_idx != nullptr) *source_idx = t.source;
+    // 已删除（墓碑）的瓦片经 source_idx 出参报告为 -1（C ABI 边界约定）
+    if (source_idx != nullptr) *source_idx = t.source.value_or(-1);
     if (ix != nullptr) *ix = t.ix;
     if (iy != nullptr) *iy = t.iy;
     if (walkable != nullptr) *walkable = t.walkable ? 1 : 0;
@@ -1409,7 +1415,7 @@ bool je_tilemap_add_terrain(je_TilesetDocument* doc, const char* name, je_Terrai
 {
     assert(name != nullptr);
     assert(out_id != nullptr);
-    if (kind < 0 || kind > 3
+    if (kind < JE_TERRAIN_KIND_SINGLE || kind > JE_TERRAIN_KIND_RPGMAKER_VX
         || source_idx < 0 || source_idx >= (int32_t)doc->sources.size()
         || ix < 0 || iy < 0
         || ix >= doc->sources[source_idx].xcount || iy >= doc->sources[source_idx].ycount)
@@ -1431,12 +1437,11 @@ bool je_tilemap_remove_terrain(je_TilesetDocument* doc, je_TerrainId terrain_id)
         return false;
     // 墓碑删除：只标记不移动数组。地图格子按 id 引用地形，若抹除元素，
     // 其后所有地形 id 前移，已保存地图（可能在其他会话中绘制）将整体
-    // 错位。标记为 source=-1（渲染/查询自然失效），id 永不复用。
+    // 错位。标记为 source 置空（渲染/查询自然失效），id 永不复用。
     auto& t = doc->terrains[terrain_id];
-    if (t.source < 0)
+    if (!t.source.has_value())
         return false;
-    t.source = -1;
-    t.kind = 255; // 已删除标记（u8 序列化往返安全）
+    t.source = std::nullopt;
     t.name.clear();
     t.ix = 0; t.iy = 0;
     t.variant_tiles.clear();
@@ -1456,8 +1461,9 @@ bool je_tilemap_terrain_info(je_TilesetDocument* doc, je_TerrainId terrain_id,
         return false;
     const auto& t = doc->terrains[terrain_id];
     if (name != nullptr) *name = t.name.c_str();
-    if (kind != nullptr) *kind = (je_TerrainKind)t.kind;
-    if (source_idx != nullptr) *source_idx = t.source;
+    if (kind != nullptr) *kind = t.kind;
+    // 已删除（墓碑）的地形经 source_idx 出参报告为 -1（C ABI 边界约定）
+    if (source_idx != nullptr) *source_idx = t.source.value_or(-1);
     if (ix != nullptr) *ix = t.ix;
     if (iy != nullptr) *iy = t.iy;
     if (walkable != nullptr) *walkable = t.walkable ? 1 : 0;
@@ -1469,13 +1475,13 @@ bool je_tilemap_set_terrain(je_TilesetDocument* doc, je_TerrainId terrain_id,
     je_SourceId source_idx, int32_t ix, int32_t iy, int32_t walkable)
 {
     if (terrain_id <= 0 || terrain_id >= (int32_t)doc->terrains.size()
-        || kind < 0 || kind > 3
+        || kind < JE_TERRAIN_KIND_SINGLE || kind > JE_TERRAIN_KIND_RPGMAKER_VX
         || source_idx < 0 || source_idx >= (int32_t)doc->sources.size()
         || ix < 0 || iy < 0
         || ix >= doc->sources[source_idx].xcount || iy >= doc->sources[source_idx].ycount)
         return false;
     // 墓碑槽位不可编辑（防止复活已删除 id 造成旧引用错位）
-    if (doc->terrains[terrain_id].source < 0)
+    if (!doc->terrains[terrain_id].source.has_value())
         return false;
     auto& t = doc->terrains[terrain_id];
     if (name != nullptr) t.name = name;
@@ -1684,9 +1690,9 @@ bool je_tilemap_cell_quad(je_TilemapDocument* doc, je_LayerId layer, int32_t x, 
     if (u1 != nullptr) *u1 = q.u1;
     if (v1 != nullptr) *v1 = q.v1;
     // 象限自左上角起于 qcols×qcols 网格：corner 0..3 -> (0,0)(1,0)(0,1)(1,1)
-    if (qx != nullptr) *qx = q.corner < 0 ? 0 : (q.corner & 1);
-    if (qy != nullptr) *qy = q.corner < 0 ? 0 : (q.corner >> 1);
-    if (qcols != nullptr) *qcols = q.corner < 0 ? 1 : 2;
+    if (qx != nullptr) *qx = q.corner.value_or(0) & 1;
+    if (qy != nullptr) *qy = q.corner.value_or(0) >> 1;
+    if (qcols != nullptr) *qcols = q.corner.has_value() ? 2 : 1;
     return true;
 }
 

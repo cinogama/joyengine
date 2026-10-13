@@ -40,29 +40,35 @@ namespace JEEditor::Editor::TilemapEditor
         }
         state.m_paint = v;
         // 回填调色板：图集页签与地形/瓦片高亮
-        let (ts_idx, local, is_terrain) = tilemap::decode_value(v);
-        do ctx->sync_tilesets();
-        let ts_count = ctx.m_map->tileset_count();
-        if (ts_idx >= 0 && ts_idx < ts_count)
-            state.m_palette_tileset = ts_idx;
-        if (is_terrain)
+        match (tilemap::decode_value(v))
         {
-            state.m_palette_terrain = option::value(local);
-            state.m_palette_cell = option::none;
-        }
-        else
-        {
-            match (ctx->tileset_id(ts_idx))
+            value((ts_idx, local, is_terrain))?
             {
-                value(ts_id)?
+                do ctx->sync_tilesets();
+                let ts_count = ctx.m_map->tileset_count();
+                if (ts_idx >= 0 && ts_idx < ts_count)
+                    state.m_palette_tileset = ts_idx;
+                if (is_terrain)
                 {
-                    let (src, ix, iy, _) = ts_id->tile_info(local);
-                    state.m_palette_source = src;
-                    state.m_palette_cell = option::value((ix, iy));
-                    state.m_palette_terrain = option::none;
+                    state.m_palette_terrain = option::value(local);
+                    state.m_palette_cell = option::none;
                 }
-                none? { }
+                else
+                {
+                    match (ctx->tileset_id(ts_idx))
+                    {
+                        value(ts_id)?
+                        {
+                            let (src, ix, iy, _) = ts_id->tile_info(local);
+                            state.m_palette_source = src;
+                            state.m_palette_cell = option::value((ix, iy));
+                            state.m_palette_terrain = option::none;
+                        }
+                        none? { }
+                    }
+                }
             }
+            none? { }
         }
     }
 

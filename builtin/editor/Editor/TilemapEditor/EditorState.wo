@@ -126,8 +126,9 @@ namespace JEEditor::Editor::TilemapEditor
         // ===== 撤销与脏标记 =====
         protected m_undo: UndoStack,
         protected m_dirty: mut bool,
-        // 进行中的笔划：cellkey -> 修改前值（cellkey = x + y*width）
-        protected m_stroke_layer: mut int,
+        // 进行中的笔划：所在图层（none = 无进行中的笔划）
+        protected m_stroke_layer: mut option<int>,
+        // 笔划快照：cellkey -> 修改前值（cellkey = x + y*width）
         protected m_stroke_cells: map<int, int>,
         protected m_stroke_desc: mut string,
 
@@ -138,8 +139,8 @@ namespace JEEditor::Editor::TilemapEditor
         // ===== 地形连接预览（每个自动图块地形一张隐藏 3x3 预览地图） =====
         // 键 = "图集路径#地形id"，值 = 预览地图句柄（不可用时为 none）
         protected m_preview_maps: vec<(string, option<tilemap::Tilemap>)>,
-        // 调色板未注册格的双击计时（time, x, y）
-        protected m_last_cell_click: mut (real, int, int),
+        // 调色板未注册格的双击计时（时刻, x, y；none = 无记录）
+        protected m_last_cell_click: mut option<(real, int, int)>,
     }
     {
         // 地图编辑模式（编辑 context 指向的地图文档）
@@ -190,7 +191,7 @@ namespace JEEditor::Editor::TilemapEditor
 
                 m_undo = UndoStack::create(),
                 m_dirty = mut false,
-                m_stroke_layer = mut -1,
+                m_stroke_layer = mut option::none,
                 m_stroke_cells = {}mut: map<int, int>,
                 m_stroke_desc = mut "",
 
@@ -198,7 +199,7 @@ namespace JEEditor::Editor::TilemapEditor
                 m_textures_failed = []mut,
 
                 m_preview_maps = []mut,
-                m_last_cell_click = mut (0., -1, -1),
+                m_last_cell_click = mut option::none,
             };
         }
 
@@ -235,34 +236,36 @@ namespace JEEditor::Editor::TilemapEditor
         // ===== 笔划（一次按下到抬起的连续编辑 -> 一条撤销命令） =====
         public func begin_stroke(self: EditorState, layer: int, desc: string)=> void
         {
-            self.m_stroke_layer = layer;
+            self.m_stroke_layer = option::value(layer);
             self.m_stroke_desc = desc;
             self.m_stroke_cells->clear();
         }
         // 记录格子修改前值（首次触碰时快照）并写值
-        //（仅地图模式经画布工具调用，unwrap 不会触达 none）
+        //（仅地图模式经画布工具调用：touch 必在 begin 之后，unwrap 不会
+        // 触达 none）
         public func touch_cell(self: EditorState, x: int, y: int, value: int)=> void
         {
             let map = self.m_context->unwrap().m_map;
+            let layer = self.m_stroke_layer->unwrap();
             let (w, _, _, _) = map->size();
             let key = x + y * w;
             if (!self.m_stroke_cells->contains(key))
             {
                 self.m_stroke_cells->set(key,
-                    map->get_tile(self.m_stroke_layer, x, y));
+                    map->get_tile(layer, x, y));
             }
-            do map->set_tile(self.m_stroke_layer, x, y, value);
+            do map->set_tile(layer, x, y, value);
         }
         public func end_stroke(self: EditorState)=> void
         {
             if (self.m_stroke_cells->empty)
             {
-                self.m_stroke_layer = -1;
+                self.m_stroke_layer = option::none;
                 return;
             }
             let map = self.m_context->unwrap().m_map;
             let (w, _, _, _) = map->size();
-            let layer = self.m_stroke_layer;
+            let layer = self.m_stroke_layer->unwrap();
             // 捕获修改前/后值并注册撤销命令（闭包按 (key, value) 对恢复）
             let before = []mut: vec<(int, int)>;
             let mut after = []mut: vec<(int, int)>;
@@ -284,7 +287,7 @@ namespace JEEditor::Editor::TilemapEditor
                     m_desc = desc,
                 });
             self.m_stroke_cells->clear();
-            self.m_stroke_layer = -1;
+            self.m_stroke_layer = option::none;
             self.m_dirty = true;
         }
 

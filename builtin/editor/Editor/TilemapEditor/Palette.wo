@@ -47,6 +47,13 @@ namespace JEEditor::Editor::TilemapEditor
         return "?";
     }
 
+    // 是否四象限类地形（XP 条带 / VX 2x3 块，均按 2x3 块对齐与覆盖）
+    func is_quadrant_kind(kind: int)=> bool
+    {
+        return kind == tilemap::terrain_kind::RPGMAKER as int
+            || kind == tilemap::terrain_kind::RPGMAKER_VX as int;
+    }
+
     // 画笔值编码所用的"图集下标"：地图模式取当前调色板图集页签；
     // 图集编辑模式无地图（画笔不可用），固定 0
     func brush_tileset_index(state: EditorState)=> int
@@ -224,7 +231,7 @@ namespace JEEditor::Editor::TilemapEditor
             value(t)?
             {
                 let (_, k, _, _, _, _, _) = ts_id->terrain_info(t);
-                return k == 1 || k == 2 || k == 3;
+                return k != tilemap::terrain_kind::SINGLE as int;
             }
             none? { return false; }
         }
@@ -244,12 +251,12 @@ namespace JEEditor::Editor::TilemapEditor
             do TextDisabled("在图集编辑器中添加源纹理并创建地形。");
             return;
         }
-        // 过滤已删除地形（墓碑，kind>3 或 source<0）后按有效数排布
+        // 过滤已删除地形（墓碑：源下标为 -1）后按有效数排布
         let valid_ids = []mut: vec<int>;
         for (let mut t = 1; t <= total; t += 1)
         {
-            let (_, k, s, _, _, _, _) = ts_id->terrain_info(t);
-            if (k <= 3 && s >= 0)
+            let (_, _, s, _, _, _, _) = ts_id->terrain_info(t);
+            if (s >= 0)
                 do valid_ids->add(t);
         }
         let count = valid_ids->len;
@@ -272,11 +279,11 @@ namespace JEEditor::Editor::TilemapEditor
             let dl = GetWindowDrawList();
             let hovered = IsItemHovered();
             let clicked = IsItemClickedLeft();
-            let mut hover_cx = -1;
+            let mut hover_cx = option::none: option<int>;
             if (hovered)
             {
                 let mouse = GetMousePos();
-                hover_cx = ((mouse[0] - pos[0]) / cell) as int;
+                hover_cx = option::value(((mouse[0] - pos[0]) / cell) as int);
             }
             for (let mut c = 0; c < n; c += 1)
             {
@@ -311,13 +318,20 @@ namespace JEEditor::Editor::TilemapEditor
                 }
                 if (is_sel)
                     do dl->AddRect((x0, pos[1]), (x1, pos[1] + cell), (255, 255, 255, 255), 2.);
-                if (hovered && c == hover_cx)
+                match (hover_cx)
                 {
-                    do dl->AddRect((x0, pos[1]), (x1, pos[1] + cell), (255, 255, 255, 220), 1.5);
-                    do SetTooltip(F"{tname} [{terrain_kind_name(k)}]：点击选择绘制");
+                    value(hc)?
+                    {
+                        if (c == hc)
+                        {
+                            do dl->AddRect((x0, pos[1]), (x1, pos[1] + cell), (255, 255, 255, 220), 1.5);
+                            do SetTooltip(F"{tname} [{terrain_kind_name(k)}]：点击选择绘制");
+                            if (clicked)
+                                do select_terrain_brush(state, tid);
+                        }
+                    }
+                    none?;
                 }
-                if (clicked && c == hover_cx)
-                    do select_terrain_brush(state, tid);
             }
             slot += n;
         }
@@ -525,7 +539,7 @@ namespace JEEditor::Editor::TilemapEditor
         for (let mut t = 1; t <= total; t += 1)
         {
             let (_, k, s, bx, by, _, _) = ts_id->terrain_info(t);
-            if (s == state.m_palette_source && (k == 1 || k == 3))
+            if (s == state.m_palette_source && is_quadrant_kind(k))
             {
                 let x0 = rect_min[0] + bx as real * cell_px;
                 let y0 = rect_min[1] + by as real * cell_px;
@@ -538,17 +552,17 @@ namespace JEEditor::Editor::TilemapEditor
     }
 
     // 命中测试：某源纹理网格格是否落在已注册的四象限地形块（2x3）内。
-    // 返回地形 id（0 = 未命中）
-    func palette_terrain_at(ts_id: tilemap::Tileset, source: int, cx: int, cy: int)=> int
+    // 返回地形 id；未命中返回 none
+    func palette_terrain_at(ts_id: tilemap::Tileset, source: int, cx: int, cy: int)=> option<int>
     {
-        let mut hit = 0;
+        let mut hit = option::none: option<int>;
         let total = ts_id->terrain_count();
         for (let mut t = 1; t <= total; t += 1)
         {
             let (_, k, s, bx, by, _, _) = ts_id->terrain_info(t);
-            if (s == source && (k == 1 || k == 3)
+            if (s == source && is_quadrant_kind(k)
                 && cx >= bx && cx < bx + 2 && cy >= by && cy < by + 3)
-                hit = t;
+                hit = option::value(t);
         }
         return hit;
     }
@@ -565,18 +579,21 @@ namespace JEEditor::Editor::TilemapEditor
             return;
         let dl = GetWindowDrawList();
 
-        let hit_tid = palette_terrain_at(ts_id, state.m_palette_source, cx, cy);
-        if (hit_tid > 0)
+        match (palette_terrain_at(ts_id, state.m_palette_source, cx, cy))
         {
-            let (hit_name, hit_kind, _, bx, by, _, _) = ts_id->terrain_info(hit_tid);
-            let bx0 = rect_min[0] + bx as real * cell_px;
-            let by0 = rect_min[1] + by as real * cell_px;
-            do dl->AddRect((bx0, by0), (bx0 + 2. * cell_px, by0 + 3. * cell_px),
-                (110, 200, 255, 230), 2.);
-            do SetTooltip(F"{hit_name} [{terrain_kind_name(hit_kind)}]：点击选择绘制");
-            if (IsItemClickedLeft())
-                do select_terrain_brush(state, hit_tid);
-            return;
+            value(hit_tid)?
+            {
+                let (hit_name, hit_kind, _, bx, by, _, _) = ts_id->terrain_info(hit_tid);
+                let bx0 = rect_min[0] + bx as real * cell_px;
+                let by0 = rect_min[1] + by as real * cell_px;
+                do dl->AddRect((bx0, by0), (bx0 + 2. * cell_px, by0 + 3. * cell_px),
+                    (110, 200, 255, 230), 2.);
+                do SetTooltip(F"{hit_name} [{terrain_kind_name(hit_kind)}]：点击选择绘制");
+                if (IsItemClickedLeft())
+                    do select_terrain_brush(state, hit_tid);
+                return;
+            }
+            none? { }
         }
 
         do dl->AddRect(
@@ -593,41 +610,52 @@ namespace JEEditor::Editor::TilemapEditor
     func handle_palette_cell_click(state: EditorState, ts_id: tilemap::Tileset,
         cx: int, cy: int)=> void
     {
-        let mut single = 0;
+        // 优先选中该格已有的单块地形（早期图集曾按格自动创建），否则
+        // 注册普通瓦片并选为画笔
+        let mut single = option::none: option<int>;
         let total = ts_id->terrain_count();
         for (let mut t = 1; t <= total; t += 1)
         {
             let (_, k, s, ix, iy, _, _) = ts_id->terrain_info(t);
-            if (k == 0 && s == state.m_palette_source && ix == cx && iy == cy)
-                single = t;
+            if (k == tilemap::terrain_kind::SINGLE as int
+                && s == state.m_palette_source && ix == cx && iy == cy)
+                single = option::value(t);
         }
-        if (single > 0)
-            do select_terrain_brush(state, single);
-        else
+        match (single)
         {
-            match (ts_id->add_tile(state.m_palette_source, cx, cy, 1))
+            value(tid)? do select_terrain_brush(state, tid);
+            none?
             {
-                // 注册新瓦片写入了图集文档，须置脏（否则切换/关闭不询问保存）
-                value(tile_id)?
+                match (ts_id->add_tile(state.m_palette_source, cx, cy, 1))
                 {
-                    do select_tile_brush(state, tile_id);
-                    state.m_dirty = true;
+                    // 注册新瓦片写入了图集文档，须置脏（否则切换/关闭不询问保存）
+                    value(tile_id)?
+                    {
+                        do select_tile_brush(state, tile_id);
+                        state.m_dirty = true;
+                    }
+                    none?;
                 }
-                none?;
             }
         }
         state.m_palette_cell = option::value((cx, cy));
 
         // 双击检测：快速打开新建地形弹窗
         let now = GetTime();
-        let (t0, lx, ly) = state.m_last_cell_click;
-        if (now - t0 < 0.45 && lx == cx && ly == cy)
+        match (state.m_last_cell_click)
         {
-            state.m_last_cell_click = (0., -1, -1);
-            do OpenPopup("##new_terrain_popup");
+            value((t0, lx, ly))?
+            {
+                if (now - t0 < 0.45 && lx == cx && ly == cy)
+                {
+                    state.m_last_cell_click = option::none;
+                    do OpenPopup("##new_terrain_popup");
+                }
+                else
+                    state.m_last_cell_click = option::value((now, cx, cy));
+            }
+            none? state.m_last_cell_click = option::value((now, cx, cy));
         }
-        else
-            state.m_last_cell_click = (now, cx, cy);
     }
 
     // 选中态描边：选中格（蓝框）与选中四象限地形块（RM 式白框）
@@ -653,7 +681,7 @@ namespace JEEditor::Editor::TilemapEditor
             value(tid)?
             {
                 let (_, k, s, bx, by, _, _) = ts_id->terrain_info(tid);
-                if (s == state.m_palette_source && (k == 1 || k == 3))
+                if (s == state.m_palette_source && is_quadrant_kind(k))
                 {
                     do dl->AddRect(
                         (rect_min[0] + bx as real * cell_px,
@@ -683,7 +711,7 @@ namespace JEEditor::Editor::TilemapEditor
                 {
                     snap_x = ax;
                     snap_y = ay;
-                    if (state.m_new_terrain_kind == 1 || state.m_new_terrain_kind == 3)
+                    if (is_quadrant_kind(state.m_new_terrain_kind))
                     {
                         snap_x = ax - ax % 2;
                         snap_y = ay - ay % 3;

@@ -38,7 +38,8 @@ namespace jeecs
     namespace Tilemap
     {
         // ==================== 瓦片值编码 ====================
-        // 网格与笔刷统一编码：0 = 空；v>0 普通瓦片；v<0 自动图块地形。
+        // 网格与笔刷统一编码（对 C ABI 与编辑器的交换格式）：
+        // 0 = 空；v>0 普通瓦片；v<0 自动图块地形。
         // |v| = (tileset_idx + 1) * TILE_ID_BASE + local_id
         constexpr int32_t TILE_ID_BASE = 0x100000;
 
@@ -50,15 +51,21 @@ namespace jeecs
         {
             return -encode_tile_value(tileset_idx, local_id);
         }
-        // 解码出 (tileset_idx, |v| 里的 local id)；不关心正负时可先取 abs
-        inline bool decode_tile_value(int32_t v, int32_t* tileset_idx, int32_t* local_id)
+        // 解码结果：tileset_idx 为地图引用表下标，local_id 为图集内
+        // 瓦片/地形 id（1 起，0 为占位槽），is_terrain 区分符号位
+        struct decoded_cell
+        {
+            int32_t tileset_idx;
+            int32_t local_id;
+            bool is_terrain;
+        };
+        // 空（v == 0）返回 nullopt
+        inline std::optional<decoded_cell> decode_tile_value(int32_t v)
         {
             if (v == 0)
-                return false;
-            int32_t a = v < 0 ? -v : v;
-            *tileset_idx = a / TILE_ID_BASE - 1;
-            *local_id = a % TILE_ID_BASE;
-            return true;
+                return std::nullopt;
+            const int32_t a = v < 0 ? -v : v;
+            return decoded_cell{ a / TILE_ID_BASE - 1, a % TILE_ID_BASE, v < 0 };
         }
 
         // ==================== 属性值 ====================
@@ -126,19 +133,23 @@ namespace jeecs
             std::string path;   // 运行时路径（@/ 或 !/）
             int32_t tile_px = 32;
             int32_t xcount = 1, ycount = 1;
-            int32_t tex_w = 0, tex_h = 0;   // 纹理像素尺寸（UV 计算用）
+            // 纹理像素尺寸（UV 计算用）；nullopt = 未测量，按网格推算。
+            // 有值时恒为正
+            std::optional<int32_t> tex_w, tex_h;
         };
         struct TileDef
         {
-            int32_t source = 0; // 所属源纹理下标；-1 = 墓碑（已删除）
+            // 所属源纹理下标；nullopt = 墓碑（已删除，id 槽位保留防漂移）
+            std::optional<int32_t> source;
             int32_t ix = 0, iy = 0; // 图集网格坐标（自左上角）
             bool walkable = true;
         };
         struct TerrainDef
         {
             std::string name;
-            int32_t kind = 0;   // 0=单块 1=RPGMaker四象限(XP) 2=blob47 3=RPGMaker四象限(VX)
-            int32_t source = 0; // -1 = 墓碑（已删除）
+            je_TerrainKind kind = JE_TERRAIN_KIND_SINGLE;  // 拼接类型
+            // 所属源纹理下标；nullopt = 墓碑（已删除，id 槽位保留防漂移）
+            std::optional<int32_t> source;
             int32_t ix = 0, iy = 0; // 锚点图集网格坐标
             bool walkable = true;
             std::vector<int32_t> variant_tiles;             // blob47 显式变体表（普通瓦片 id）
@@ -165,10 +176,12 @@ namespace jeecs
             // (source<<32|flat_pos) -> tile id 的反查表，懒构建
             std::unordered_map<int64_t, int32_t> flat_tile_index;
 
-            int32_t tile_at_flat(int32_t source_idx, int32_t flat) const
+            std::optional<int32_t> tile_at_flat(int32_t source_idx, int32_t flat) const
             {
                 auto fnd = flat_tile_index.find(((int64_t)source_idx << 32) | (uint32_t)flat);
-                return fnd == flat_tile_index.end() ? 0 : fnd->second;
+                if (fnd == flat_tile_index.end())
+                    return std::nullopt;
+                return fnd->second;
             }
             void rebuild_flat_index()
             {
@@ -176,10 +189,10 @@ namespace jeecs
                 for (size_t i = 1; i < tiles.size(); ++i)
                 {
                     const auto& t = tiles[i];
-                    if (t.source < 0 || t.source >= (int32_t)sources.size())
+                    if (!t.source.has_value() || *t.source >= (int32_t)sources.size())
                         continue;
-                    flat_tile_index[((int64_t)t.source << 32)
-                        | (uint32_t)(t.iy * sources[t.source].xcount + t.ix)] = (int32_t)i;
+                    flat_tile_index[((int64_t)*t.source << 32)
+                        | (uint32_t)(t.iy * sources[*t.source].xcount + t.ix)] = (int32_t)i;
                 }
             }
         };
@@ -252,7 +265,11 @@ namespace jeecs
         // 与 .je4animation 同风格的自有二进制格式（魔数 + 小端字段），
         // 由 C++ 侧统一读写，避免在内核引入 TOML 依赖。
         // 属性值为类型化数据：每值前有 1 字节类型标记（je_PropertyType）。
-        constexpr uint32_t TILESET_MAGIC = 0x4A545332;     // "JTS2"
+        // 图集（JTS3）中瓦片/地形均带 1 字节存活标记（0 = 墓碑，1 = 在案，
+        // 其余视为损坏）：墓碑不写载荷——id 槽位仍占位以保持 id 稳定，
+        // 删除信息不依赖任何特殊字段值。地形的 kind 为 je_TerrainKind 的
+        // u8，越界视为损坏。源纹理的 tex_w/tex_h 写 0 表示未测量。
+        constexpr uint32_t TILESET_MAGIC = 0x4A545333;     // "JTS3"
         constexpr uint32_t MAP_MAGIC = 0x4A544D32;         // "JTM2"
 
         struct bin_writer
@@ -407,13 +424,19 @@ namespace jeecs
             for (const auto& s : ts.sources)
             {
                 w.str(s.path); w.i32(s.tile_px); w.i32(s.xcount); w.i32(s.ycount);
-                w.i32(s.tex_w); w.i32(s.tex_h);
+                w.i32(s.tex_w.value_or(0)); w.i32(s.tex_h.value_or(0));
             }
             w.u32((uint32_t)(ts.tiles.size() - 1));
             for (size_t i = 1; i < ts.tiles.size(); ++i)
             {
                 const auto& t = ts.tiles[i];
-                w.i32(t.source); w.i32(t.ix); w.i32(t.iy); w.u8(t.walkable ? 1 : 0);
+                const bool alive = t.source.has_value();
+                w.u8(alive ? 1 : 0);
+                if (alive)
+                {
+                    w.i32(*t.source); w.i32(t.ix); w.i32(t.iy);
+                    w.u8(t.walkable ? 1 : 0);
+                }
             }
             w.u32((uint32_t)ts.properties.size());
             for (const auto& pd : ts.properties)
@@ -425,8 +448,12 @@ namespace jeecs
             for (size_t i = 1; i < ts.terrains.size(); ++i)
             {
                 const auto& t = ts.terrains[i];
+                const bool alive = t.source.has_value();
+                w.u8(alive ? 1 : 0);
+                if (!alive)
+                    continue;
                 w.str(t.name); w.u8((uint8_t)t.kind);
-                w.i32(t.source); w.i32(t.ix); w.i32(t.iy); w.u8(t.walkable ? 1 : 0);
+                w.i32(*t.source); w.i32(t.ix); w.i32(t.iy); w.u8(t.walkable ? 1 : 0);
                 w.u32((uint32_t)t.variant_tiles.size());
                 for (int32_t v : t.variant_tiles) w.i32(v);
             }
@@ -456,18 +483,18 @@ namespace jeecs
             return write_buffer_to_file(w.b, path);
         }
 
-        inline std::shared_ptr<TilesetDocument> load_tileset_from(const std::string& path)
+        inline std::optional<std::shared_ptr<TilesetDocument>> load_tileset_from(const std::string& path)
         {
             std::vector<char> buf = read_buffer_from_file(path);
             if (buf.empty())
-                return nullptr;
+                return std::nullopt;
 
             bin_reader r{ buf.data(), buf.size(), 0, true };
             auto ts = std::make_shared<TilesetDocument>();
             ts->path = path;
             const uint32_t magic = r.u32();
             if (magic != TILESET_MAGIC)
-                return nullptr;
+                return std::nullopt;
             ts->name = r.str();
             uint32_t src_n = r.u32();
             for (uint32_t i = 0; i < src_n && r.ok; ++i)
@@ -475,7 +502,9 @@ namespace jeecs
                 SourceTexture s;
                 s.path = r.str();
                 s.tile_px = r.i32(); s.xcount = r.i32(); s.ycount = r.i32();
-                s.tex_w = r.i32(); s.tex_h = r.i32();
+                int32_t tw = r.i32(), th = r.i32();
+                if (tw > 0) s.tex_w = tw;
+                if (th > 0) s.tex_h = th;
                 ts->sources.push_back(std::move(s));
             }
             ts->tiles.push_back(TileDef{}); // id 0 占位
@@ -483,8 +512,15 @@ namespace jeecs
             for (uint32_t i = 0; i < tile_n && r.ok; ++i)
             {
                 TileDef t;
-                t.source = r.i32(); t.ix = r.i32(); t.iy = r.i32();
-                t.walkable = r.u8() != 0;
+                const uint8_t alive = r.u8();
+                if (alive > 1)
+                { r.ok = false; break; }
+                if (alive != 0)
+                {
+                    t.source = r.i32();
+                    t.ix = r.i32(); t.iy = r.i32();
+                    t.walkable = r.u8() != 0;
+                }
                 ts->tiles.push_back(t);
             }
             uint32_t prop_n = r.u32();
@@ -503,11 +539,22 @@ namespace jeecs
             for (uint32_t i = 0; i < terr_n && r.ok; ++i)
             {
                 TerrainDef t;
-                t.name = r.str(); t.kind = r.u8();
-                t.source = r.i32(); t.ix = r.i32(); t.iy = r.i32();
-                t.walkable = r.u8() != 0;
-                uint32_t vn = r.u32();
-                for (uint32_t k = 0; k < vn && r.ok; ++k) t.variant_tiles.push_back(r.i32());
+                const uint8_t alive = r.u8();
+                if (alive > 1)
+                { r.ok = false; break; }
+                if (alive != 0)
+                {
+                    t.name = r.str();
+                    uint8_t kind = r.u8();
+                    if (kind > (uint8_t)JE_TERRAIN_KIND_RPGMAKER_VX)
+                    { r.ok = false; break; }
+                    t.kind = (je_TerrainKind)kind;
+                    t.source = r.i32();
+                    t.ix = r.i32(); t.iy = r.i32();
+                    t.walkable = r.u8() != 0;
+                    uint32_t vn = r.u32();
+                    for (uint32_t k = 0; k < vn && r.ok; ++k) t.variant_tiles.push_back(r.i32());
+                }
                 ts->terrains.push_back(std::move(t));
             }
             auto read_kv = [&](std::map<std::string, property_value>& kvs)
@@ -524,14 +571,14 @@ namespace jeecs
                     read_kv(ts->tile_properties[tid]);
             }
             if (!r.ok)
-                return nullptr;
+                return std::nullopt;
             // 尾块（可选）：地形默认属性。条目至少 8 字节（地形 id + 键值
             // 数），总量越界视为损坏。
             if (r.o + 4 <= r.n)
             {
                 uint32_t tprop_n = r.u32();
                 if (tprop_n > ts->terrains.size() || r.o + (size_t)tprop_n * 8 > r.n)
-                    return nullptr;
+                    return std::nullopt;
                 for (uint32_t i = 0; i < tprop_n && r.ok; ++i)
                 {
                     int32_t tid = r.i32();
@@ -542,7 +589,7 @@ namespace jeecs
                         read_kv(ts->terrains[tid].properties);
                 }
                 if (!r.ok)
-                    return nullptr;
+                    return std::nullopt;
             }
             ts->rebuild_flat_index();
             return ts;
@@ -779,22 +826,22 @@ namespace jeecs
             return write_buffer_to_file(w.b, path);
         }
 
-        inline std::shared_ptr<MapDocument> load_map_from(const std::string& path)
+        inline std::optional<std::shared_ptr<MapDocument>> load_map_from(const std::string& path)
         {
             std::vector<char> buf = read_buffer_from_file(path);
             if (buf.empty())
-                return nullptr;
+                return std::nullopt;
 
             bin_reader r{ buf.data(), buf.size(), 0, true };
             auto m = std::make_shared<MapDocument>();
             m->path = path;
             const uint32_t magic = r.u32();
             if (magic != MAP_MAGIC)
-                return nullptr;
+                return std::nullopt;
             m->width = r.i32(); m->height = r.i32(); m->tile_px = r.i32();
             if (m->width < 0 || m->height < 0 || m->tile_px <= 0
                 || m->width > 65536 || m->height > 65536)
-                return nullptr;
+                return std::nullopt;
             uint32_t ts_n = r.u32();
             for (uint32_t i = 0; i < ts_n && r.ok; ++i)
                 m->tilesets.push_back(TilesetRef{ r.str(), std::nullopt });
@@ -824,7 +871,7 @@ namespace jeecs
                 }
             }
             if (!r.ok)
-                return nullptr;
+                return std::nullopt;
             // 尾块（可选）：每层 z 偏移。缺块时按层下标错开，保证多层
             // 默认不发生深度冲突。
             for (size_t i = 0; i < m->layers.size(); ++i)
@@ -833,7 +880,7 @@ namespace jeecs
             {
                 uint32_t zn = r.u32();
                 if (zn > (uint32_t)m->layers.size() || r.o + (size_t)zn * 4 > r.n)
-                    return nullptr;
+                    return std::nullopt;
                 for (uint32_t i = 0; i < zn && r.ok; ++i)
                     m->layers[i].z = r.f32();
             }
@@ -844,7 +891,7 @@ namespace jeecs
             {
                 uint32_t sn = r.u32();
                 if (sn > (uint32_t)m->layers.size())
-                    return nullptr;
+                    return std::nullopt;
                 for (uint32_t i = 0; i < sn && r.ok; ++i)
                 {
                     auto& st = m->layers[i].style;
@@ -880,7 +927,7 @@ namespace jeecs
                     read_style_uniforms(r, shad);
                 }
                 if (!r.ok)
-                    return nullptr;
+                    return std::nullopt;
             }
             return m;
         }
@@ -1255,7 +1302,8 @@ namespace jeecs
             template <typename T>
             std::optional<std::shared_ptr<T>> resolve(
                 doc_table<T>& table, const std::string& path,
-                std::shared_ptr<T> (*load)(const std::string&), const char* kind)
+                std::optional<std::shared_ptr<T>> (*load)(const std::string&),
+                const char* kind)
             {
                 if (path.empty())
                     return std::nullopt;
@@ -1290,15 +1338,15 @@ namespace jeecs
                 if (table.failed.count(key) != 0)
                     return std::nullopt;
                 auto doc = load(path);
-                if (doc == nullptr)
+                if (!doc.has_value())
                 {
                     table.failed.insert(key);
                     debug::logerr("Tilemap: unable to open %s file '%s'.", kind, path.c_str());
                     return std::nullopt;
                 }
                 table.failed.erase(key);
-                table.by_path[key] = doc;
-                table.all.push_back(doc);
+                table.by_path[key] = *doc;
+                table.all.push_back(*doc);
                 return doc;
             }
 
@@ -1475,14 +1523,16 @@ namespace jeecs
             int32_t v = doc->layers[layer].grid[y * doc->width + x];
             if (v != 0)
             {
-                int32_t ts_idx = 0, local = 0;
-                decode_tile_value(v, &ts_idx, &local);
-                if (ts_idx >= 0 && ts_idx < (int32_t)doc->tilesets.size()
-                    && doc->tilesets[ts_idx].resolved.has_value())
+                auto cell = decode_tile_value(v);
+                if (cell.has_value()
+                    && cell->tileset_idx >= 0
+                    && cell->tileset_idx < (int32_t)doc->tilesets.size()
+                    && doc->tilesets[cell->tileset_idx].resolved.has_value())
                 {
-                    const auto* ts = doc->tilesets[ts_idx].resolved->get();
+                    const auto* ts = doc->tilesets[cell->tileset_idx].resolved->get();
                     const std::map<std::string, property_value>* defaults = nullptr;
-                    if (v < 0)
+                    const int32_t local = cell->local_id;
+                    if (cell->is_terrain)
                     {
                         if (local < (int32_t)ts->terrains.size())
                             defaults = &ts->terrains[local].properties;
@@ -1515,15 +1565,19 @@ namespace jeecs
             int32_t v = doc->layers[layer].grid[y * doc->width + x];
             if (v == 0)
                 return true;
-            int32_t ts_idx = 0, local = 0;
-            decode_tile_value(v, &ts_idx, &local);
-            if (ts_idx < 0 || ts_idx >= (int32_t)doc->tilesets.size()
-                || !doc->tilesets[ts_idx].resolved.has_value())
+            auto cell = decode_tile_value(v);
+            if (!cell.has_value()
+                || cell->tileset_idx < 0
+                || cell->tileset_idx >= (int32_t)doc->tilesets.size()
+                || !doc->tilesets[cell->tileset_idx].resolved.has_value())
                 return true;
-            const auto* ts = doc->tilesets[ts_idx].resolved->get();
-            if (v < 0)
-                return local < (int32_t)ts->terrains.size() ? ts->terrains[local].walkable : true;
-            return local < (int32_t)ts->tiles.size() ? ts->tiles[local].walkable : true;
+            const auto* ts = doc->tilesets[cell->tileset_idx].resolved->get();
+            const int32_t local = cell->local_id;
+            if (cell->is_terrain)
+                return local < (int32_t)ts->terrains.size()
+                ? ts->terrains[local].walkable : true;
+            return local < (int32_t)ts->tiles.size()
+                ? ts->tiles[local].walkable : true;
         }
 
         // ==================== 单元格渲染解析（唯一权威实现） ====================
@@ -1535,8 +1589,8 @@ namespace jeecs
             int32_t tileset_idx = 0;        // 地图引用表中的图集下标
             int32_t source_idx = 0;         // 图集内源纹理下标
             float u0 = 0.f, v0 = 0.f, u1 = 0.f, v1 = 0.f; // 引擎空间 UV（v0 下 v1 上）
-            // 目标象限：-1 = 整格；0=LU 1=RU 2=LD 3=RD（四象限地形）
-            int32_t corner = -1;
+            // 目标象限：nullopt = 整格；0=LU 1=RU 2=LD 3=RD（四象限地形）
+            std::optional<int32_t> corner;
         };
 
         // UV 矩形（图集源纹理网格坐标 -> 引擎 UV；v0 下 v1 上）
@@ -1545,8 +1599,8 @@ namespace jeecs
         {
             float px = (float)(ix * src.tile_px), py = (float)(iy * src.tile_px);
             float sz = (float)src.tile_px;
-            float w = (float)(src.tex_w ? src.tex_w : src.xcount * src.tile_px);
-            float h = (float)(src.tex_h ? src.tex_h : src.ycount * src.tile_px);
+            float w = (float)src.tex_w.value_or(src.xcount * src.tile_px);
+            float h = (float)src.tex_h.value_or(src.ycount * src.tile_px);
             u0 = px / w;
             u1 = (px + sz) / w;
             v1_top = 1.f - py / h;
@@ -1565,56 +1619,59 @@ namespace jeecs
             int32_t v = doc.layers[layer].grid[y * doc.width + x];
             if (v == 0)
                 return 0;
-            int32_t ts_idx = 0, local = 0;
-            decode_tile_value(v, &ts_idx, &local);
-            if (ts_idx < 0 || ts_idx >= (int32_t)doc.tilesets.size()
-                || !doc.tilesets[ts_idx].resolved.has_value())
+            auto cell = decode_tile_value(v);
+            if (!cell.has_value()
+                || cell->tileset_idx < 0
+                || cell->tileset_idx >= (int32_t)doc.tilesets.size()
+                || !doc.tilesets[cell->tileset_idx].resolved.has_value())
                 return 0;
+            const int32_t ts_idx = cell->tileset_idx;
+            const int32_t local = cell->local_id;
             const auto* ts = doc.tilesets[ts_idx].resolved->get();
 
             // 整格取件：普通瓦片 / 单块地形 / blob47 变体
-            auto fill_full = [&](const SourceTexture& src, int32_t ix, int32_t iy)
+            auto fill_full = [&](const SourceTexture& src,
+                int32_t source_idx, int32_t ix, int32_t iy)
             {
                 out[0].tileset_idx = ts_idx;
-                out[0].source_idx = -1; // 由调用方按位置填
+                out[0].source_idx = source_idx;
                 tile_uv(src, ix, iy, out[0].u0, out[0].v0, out[0].u1, out[0].v1);
-                out[0].corner = -1;
+                out[0].corner = std::nullopt;
             };
 
-            if (v > 0)
+            if (!cell->is_terrain)
             {
                 if (local <= 0 || local >= (int32_t)ts->tiles.size())
                     return 0;
                 const auto& t = ts->tiles[local];
-                if (t.source < 0 || t.source >= (int32_t)ts->sources.size())
+                if (!t.source.has_value() || *t.source >= (int32_t)ts->sources.size())
                     return 0;
-                fill_full(ts->sources[t.source], t.ix, t.iy);
-                out[0].source_idx = t.source;
+                fill_full(ts->sources[*t.source], *t.source, t.ix, t.iy);
                 return 1;
             }
 
             if (local <= 0 || local >= (int32_t)ts->terrains.size())
                 return 0;
             const auto& terrain = ts->terrains[local];
-            if (terrain.source < 0 || terrain.source >= (int32_t)ts->sources.size())
+            if (!terrain.source.has_value() || *terrain.source >= (int32_t)ts->sources.size())
                 return 0;
-            const auto& src = ts->sources[terrain.source];
+            const auto& src = ts->sources[*terrain.source];
 
-            if (terrain.kind == 1 || terrain.kind == 3)
+            if (terrain.kind == JE_TERRAIN_KIND_RPGMAKER_XP
+                || terrain.kind == JE_TERRAIN_KIND_RPGMAKER_VX)
             {
                 // RPGMaker 四象限（XP 式条带 / VX 式 2x3 块）：
                 // 槽位序 [LU, RU, LD, RD]
                 int mask = compute_mask(doc, layer, x, y, v);
-                if (terrain.kind == 3 && mask == 0)
+                if (terrain.kind == JE_TERRAIN_KIND_RPGMAKER_VX && mask == 0)
                 {
                     // VX 孤块：mkxp 变体47 = 锚点整块
-                    fill_full(src, terrain.ix, terrain.iy);
-                    out[0].source_idx = terrain.source;
+                    fill_full(src, *terrain.source, terrain.ix, terrain.iy);
                     return 1;
                 }
                 const float shalf = src.tile_px * 0.5f;
-                float w = (float)(src.tex_w ? src.tex_w : src.xcount * src.tile_px);
-                float h = (float)(src.tex_h ? src.tex_h : src.ycount * src.tile_px);
+                float w = (float)src.tex_w.value_or(src.xcount * src.tile_px);
+                float h = (float)src.tex_h.value_or(src.ycount * src.tile_px);
                 struct corner_bits { int o1, o2, diag; };
                 const corner_bits cb[4] = {
                     { NB_U, NB_L, NB_UL }, { NB_U, NB_R, NB_RU },
@@ -1628,7 +1685,7 @@ namespace jeecs
                     float px = terrain.ix * src.tile_px + hc.col * shalf;
                     float py = terrain.iy * src.tile_px + hc.row * shalf;
                     out[c].tileset_idx = ts_idx;
-                    out[c].source_idx = terrain.source;
+                    out[c].source_idx = *terrain.source;
                     out[c].u0 = px / w;
                     out[c].u1 = (px + shalf) / w;
                     out[c].v1 = 1.f - py / h;
@@ -1639,32 +1696,31 @@ namespace jeecs
             }
 
             // 单块：直接取锚点整块（不依赖瓦片定义表）
-            if (terrain.kind == 0)
+            if (terrain.kind == JE_TERRAIN_KIND_SINGLE)
             {
-                fill_full(src, terrain.ix, terrain.iy);
-                out[0].source_idx = terrain.source;
+                fill_full(src, *terrain.source, terrain.ix, terrain.iy);
                 return 1;
             }
 
             // blob47：按邻接掩码解析为一个整块变体（显式变体表，或自
             // 锚点起行优先连续取 47 块的默认布局）
-            int32_t variant_tile = 0;
+            std::optional<int32_t> variant_tile;
             {
                 int mask = compute_mask(doc, layer, x, y, v);
                 uint8_t variant = blob47_table()[(uint8_t)(mask & 0xFF)];
                 if ((size_t)variant < terrain.variant_tiles.size())
                     variant_tile = terrain.variant_tiles[variant];
                 else
-                    variant_tile = ts->tile_at_flat(terrain.source,
+                    variant_tile = ts->tile_at_flat(*terrain.source,
                         terrain.iy * src.xcount + terrain.ix + variant);
             }
-            if (variant_tile > 0 && variant_tile < (int32_t)ts->tiles.size())
+            if (variant_tile.has_value()
+                && *variant_tile > 0 && *variant_tile < (int32_t)ts->tiles.size())
             {
-                const auto& t = ts->tiles[variant_tile];
-                if (t.source >= 0 && t.source < (int32_t)ts->sources.size())
+                const auto& t = ts->tiles[*variant_tile];
+                if (t.source.has_value() && *t.source < (int32_t)ts->sources.size())
                 {
-                    fill_full(ts->sources[t.source], t.ix, t.iy);
-                    out[0].source_idx = t.source;
+                    fill_full(ts->sources[*t.source], *t.source, t.ix, t.iy);
                     return 1;
                 }
             }

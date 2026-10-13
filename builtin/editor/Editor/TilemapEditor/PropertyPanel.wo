@@ -1346,8 +1346,8 @@ namespace JEEditor::Editor::TilemapEditor
                 }
                 let (tname, kind, src, ix, iy, wk, _) =
                     ts_id->terrain_info(tid);
-                // 已删除（墓碑）地形不可编辑
-                if (kind > 3 || src < 0)
+                // 已删除（墓碑，源下标为 -1）的地形不可编辑
+                if (src < 0)
                 {
                     state.m_palette_terrain = option::none;
                     return;
