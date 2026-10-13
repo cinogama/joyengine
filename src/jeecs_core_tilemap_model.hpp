@@ -375,16 +375,21 @@ namespace jeecs
             std::vector<int32_t> grid;  // w*h 稠密网格，行优先、y 自上而下
             LayerStyle style;           // 逐层着色器样式（可空）
         };
+        // 地图对单个图集的引用槽：引用路径与解析结果同槽存储，天然对齐
+        struct TilesetRef
+        {
+            std::string path;                           // 引用的图集路径
+            std::shared_ptr<TilesetDocument> resolved;  // 解析出的文档实例（可空）
+            // 该槽位经注册表 keep 的图集实例（nullptr = 未持有）。地图文档
+            // 为其解析到的每个图集各持有 1 个引用，换绑（重载/逐出）或
+            // 自身被逐出时释放。
+            TilesetDocument* kept = nullptr;
+        };
         struct MapDocument
         {
             std::string path;   // .je4tilemap 运行时路径；未保存为空
             int32_t width = 0, height = 0, tile_px = 32;
-            std::vector<std::string> tilesets;  // 引用的图集路径
-            std::vector<std::shared_ptr<TilesetDocument>> resolved;    // 与 tilesets 对应
-            // 与 resolved 平行：该槽位经注册表 keep 的图集实例（nullptr =
-            // 未持有）。地图文档为其解析到的每个图集各持有 1 个引用，换绑
-            //（重载/逐出）或自身被逐出时释放。
-            std::vector<TilesetDocument*> resolved_kept;
+            std::vector<TilesetRef> tilesets;   // 引用的图集（路径 + 解析结果）
             std::vector<MapLayer> layers;
             // 逐格属性覆盖：(layer, x + y*width) -> (name -> value)
             std::map<std::pair<int32_t, int32_t>, std::map<std::string, property_value>> cell_properties;
@@ -933,7 +938,7 @@ namespace jeecs
             w.u32(MAP_MAGIC);
             w.i32(m.width); w.i32(m.height); w.i32(m.tile_px);
             w.u32((uint32_t)m.tilesets.size());
-            for (const auto& p : m.tilesets) w.str(p);
+            for (const auto& ts : m.tilesets) w.str(ts.path);
             w.u32((uint32_t)m.layers.size());
             for (const auto& l : m.layers)
             {
@@ -1015,7 +1020,8 @@ namespace jeecs
                 || m->width > 65536 || m->height > 65536)
                 return nullptr;
             uint32_t ts_n = r.u32();
-            for (uint32_t i = 0; i < ts_n && r.ok; ++i) m->tilesets.push_back(r.str());
+            for (uint32_t i = 0; i < ts_n && r.ok; ++i)
+                m->tilesets.push_back(TilesetRef{r.str(), nullptr, nullptr});
             uint32_t layer_n = r.u32();
             for (uint32_t i = 0; i < layer_n && r.ok; ++i)
             {
@@ -1353,46 +1359,39 @@ namespace jeecs
 
             // 保证地图文档的图集解析与注册表中的最新文档一致
             // （处理图集被重载/替换/逐出的情况）。每个成功解析的槽位
-            // 经注册表持有该图集 1 个引用（resolved_kept 记录实例），
+            // 经注册表持有该图集 1 个引用（kept 记录实例），
             // open_tileset 返回自带 1 个引用：实例未变时当即释放该多余
             // 引用，实例变化时旧持有释放、新引用转为槽位持有；解析失败
             // 同样释放。全程持锁（递归重入 open/unload）。
             void ensure_tilesets(MapDocument& m)
             {
                 std::lock_guard lock(m_mutex);
-                if (m.resolved.size() != m.tilesets.size()
-                    || m.resolved_kept.size() != m.tilesets.size())
+                for (auto& ts : m.tilesets)
                 {
-                    release_resolved(m);
-                    m.resolved.assign(m.tilesets.size(), nullptr);
-                    m.resolved_kept.assign(m.tilesets.size(), nullptr);
-                }
-                for (size_t i = 0; i < m.tilesets.size(); ++i)
-                {
-                    TilesetDocument* live = open_tileset(m.tilesets[i]);
+                    TilesetDocument* live = open_tileset(ts.path);
                     if (live == nullptr)
                     {
-                        if (m.resolved_kept[i] != nullptr)
+                        if (ts.kept != nullptr)
                         {
-                            unload_tileset(m.resolved_kept[i]);
-                            m.resolved_kept[i] = nullptr;
+                            unload_tileset(ts.kept);
+                            ts.kept = nullptr;
                         }
-                        m.resolved[i].reset();
+                        ts.resolved.reset();
                         continue;
                     }
                     // 与注册表当前实例保持同一份（open 命中缓存即同指针）；
                     // 未变则释放 open 带来的多余引用
-                    if (m.resolved_kept[i] == live
-                        && m.resolved[i] != nullptr && m.resolved[i].get() == live)
+                    if (ts.kept == live
+                        && ts.resolved != nullptr && ts.resolved.get() == live)
                     {
                         unload_tileset(live);
                         continue;
                     }
-                    if (m.resolved_kept[i] != nullptr)
-                        unload_tileset(m.resolved_kept[i]);
+                    if (ts.kept != nullptr)
+                        unload_tileset(ts.kept);
                     // open 的引用转为该槽位的持有（不再额外 keep）
-                    m.resolved_kept[i] = live;
-                    m.resolved[i] = m_tilesets[live->registry_slot - 1];
+                    ts.kept = live;
+                    ts.resolved = m_tilesets[live->registry_slot - 1];
                 }
             }
 
@@ -1400,33 +1399,28 @@ namespace jeecs
             void release_resolved(MapDocument& m)
             {
                 std::lock_guard lock(m_mutex);
-                for (TilesetDocument* kept : m.resolved_kept)
-                    if (kept != nullptr)
-                        unload_tileset(kept);
-                m.resolved_kept.clear();
+                for (auto& ts : m.tilesets)
+                    if (ts.kept != nullptr)
+                    {
+                        unload_tileset(ts.kept);
+                        ts.kept = nullptr;
+                    }
             }
 
-            // 地图引用表增删（保持 tilesets/resolved/resolved_kept 对齐；
-            // 删除项的图集引用随之释放）
+            // 地图引用表增删（删除项的图集引用随之释放）
             void append_tileset_entry(MapDocument& m, const std::string& path)
             {
                 std::lock_guard lock(m_mutex);
-                m.tilesets.push_back(path);
-                m.resolved.push_back(nullptr);
-                m.resolved_kept.push_back(nullptr);
+                m.tilesets.push_back(TilesetRef{path, nullptr, nullptr});
             }
             void erase_tileset_entry(MapDocument& m, size_t idx)
             {
                 std::lock_guard lock(m_mutex);
                 if (idx >= m.tilesets.size())
                     return;
-                if (idx < m.resolved_kept.size() && m.resolved_kept[idx] != nullptr)
-                    unload_tileset(m.resolved_kept[idx]);
+                if (m.tilesets[idx].kept != nullptr)
+                    unload_tileset(m.tilesets[idx].kept);
                 m.tilesets.erase(m.tilesets.begin() + idx);
-                if (idx < m.resolved.size())
-                    m.resolved.erase(m.resolved.begin() + idx);
-                if (idx < m.resolved_kept.size())
-                    m.resolved_kept.erase(m.resolved_kept.begin() + idx);
             }
 
             // 地图 + 其图集的合并版本戳：任一变化（含图集实例被重载/
@@ -1438,8 +1432,10 @@ namespace jeecs
             {
                 std::lock_guard lock(m_mutex);
                 uint64_t stamp = mix(0x9E3779B97F4A7C15ull, (uintptr_t)&m, m.version);
-                for (const auto& ts : m.resolved)
-                    stamp = mix(stamp, ts ? (uintptr_t)ts.get() : 0, ts ? ts->version : 0);
+                for (const auto& ts : m.tilesets)
+                    stamp = mix(stamp,
+                        ts.resolved ? (uintptr_t)ts.resolved.get() : 0,
+                        ts.resolved ? ts.resolved->version : 0);
                 return stamp;
             }
 
@@ -1777,10 +1773,10 @@ namespace jeecs
             {
                 int32_t ts_idx = 0, local = 0;
                 decode_tile_value(v, &ts_idx, &local);
-                if (ts_idx >= 0 && ts_idx < (int32_t)doc->resolved.size()
-                    && doc->resolved[ts_idx] != nullptr)
+                if (ts_idx >= 0 && ts_idx < (int32_t)doc->tilesets.size()
+                    && doc->tilesets[ts_idx].resolved != nullptr)
                 {
-                    const auto* ts = doc->resolved[ts_idx].get();
+                    const auto* ts = doc->tilesets[ts_idx].resolved.get();
                     const std::map<std::string, property_value>* defaults = nullptr;
                     if (v < 0)
                     {
@@ -1817,10 +1813,10 @@ namespace jeecs
                 return true;
             int32_t ts_idx = 0, local = 0;
             decode_tile_value(v, &ts_idx, &local);
-            if (ts_idx < 0 || ts_idx >= (int32_t)doc->resolved.size()
-                || doc->resolved[ts_idx] == nullptr)
+            if (ts_idx < 0 || ts_idx >= (int32_t)doc->tilesets.size()
+                || doc->tilesets[ts_idx].resolved == nullptr)
                 return true;
-            const auto* ts = doc->resolved[ts_idx].get();
+            const auto* ts = doc->tilesets[ts_idx].resolved.get();
             if (v < 0)
                 return local < (int32_t)ts->terrains.size() ? ts->terrains[local].walkable : true;
             return local < (int32_t)ts->tiles.size() ? ts->tiles[local].walkable : true;
@@ -1867,10 +1863,10 @@ namespace jeecs
                 return 0;
             int32_t ts_idx = 0, local = 0;
             decode_tile_value(v, &ts_idx, &local);
-            if (ts_idx < 0 || ts_idx >= (int32_t)doc.resolved.size()
-                || doc.resolved[ts_idx] == nullptr)
+            if (ts_idx < 0 || ts_idx >= (int32_t)doc.tilesets.size()
+                || doc.tilesets[ts_idx].resolved == nullptr)
                 return 0;
-            const auto* ts = doc.resolved[ts_idx].get();
+            const auto* ts = doc.tilesets[ts_idx].resolved.get();
 
             // 整格取件：普通瓦片 / 单块地形 / blob47 变体
             auto fill_full = [&](const SourceTexture& src, int32_t ix, int32_t iy)

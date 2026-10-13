@@ -409,10 +409,10 @@ namespace jeecs
                         if (v == 0) continue;
                         int32_t ts_idx = 0, local = 0;
                         Tilemap::decode_tile_value(v, &ts_idx, &local);
-                        if (ts_idx < 0 || ts_idx >= (int32_t)doc.resolved.size()
-                            || doc.resolved[ts_idx] == nullptr)
+                        if (ts_idx < 0 || ts_idx >= (int32_t)doc.tilesets.size()
+                            || doc.tilesets[ts_idx].resolved == nullptr)
                             continue;
-                        const auto* ts = doc.resolved[ts_idx].get();
+                        const auto* ts = doc.tilesets[ts_idx].resolved.get();
                         int32_t src_idx = -1;
                         if (v > 0)
                         {
@@ -559,10 +559,10 @@ namespace jeecs
 
                     const Tilemap::SourceTexture* src_info = nullptr;
                     if (r.doc != nullptr
-                        && key.tileset < (int32_t)r.doc->resolved.size()
-                        && r.doc->resolved[key.tileset] != nullptr
-                        && key.source < (int32_t)r.doc->resolved[key.tileset]->sources.size())
-                        src_info = &r.doc->resolved[key.tileset]->sources[key.source];
+                        && key.tileset < (int32_t)r.doc->tilesets.size()
+                        && r.doc->tilesets[key.tileset].resolved != nullptr
+                        && key.source < (int32_t)r.doc->tilesets[key.tileset].resolved->sources.size())
+                        src_info = &r.doc->tilesets[key.tileset].resolved->sources[key.source];
                     if (src_info == nullptr)
                         continue;
 
@@ -923,7 +923,7 @@ bool je_tilemap_add_tileset(je_TilemapDocument* doc, const char* path, int32_t* 
         return false;
     // 不要求图集此刻可解析（可先引用后保存图集）
     for (size_t i = 0; i < doc->tilesets.size(); ++i)
-        if (doc->tilesets[i] == path)
+        if (doc->tilesets[i].path == path)
         {
             *out_index = (int32_t)i;
             return true;
@@ -958,7 +958,7 @@ const char* je_tilemap_tileset_path(je_TilemapDocument* doc, int32_t idx)
 {
     if (idx < 0 || idx >= (int32_t)doc->tilesets.size())
         return "";
-    return doc->tilesets[idx].c_str();
+    return doc->tilesets[idx].path.c_str();
 }
 
 // ---------------- 属性与查询 ----------------
@@ -1687,13 +1687,13 @@ bool je_tilemap_cell_quad(je_TilemapDocument* doc, je_LayerId layer, int32_t x, 
         return false;
 
     const auto& q = quads[idx];
-    if (q.tileset_idx < 0 || q.tileset_idx >= (int32_t)doc->resolved.size()
-        || doc->resolved[q.tileset_idx] == nullptr
-        || q.source_idx < 0 || q.source_idx >= (int32_t)doc->resolved[q.tileset_idx]->sources.size())
+    if (q.tileset_idx < 0 || q.tileset_idx >= (int32_t)doc->tilesets.size()
+        || doc->tilesets[q.tileset_idx].resolved == nullptr
+        || q.source_idx < 0 || q.source_idx >= (int32_t)doc->tilesets[q.tileset_idx].resolved->sources.size())
         return false;
 
     if (texture_path != nullptr)
-        *texture_path = doc->resolved[q.tileset_idx]->sources[q.source_idx].path.c_str();
+        *texture_path = doc->tilesets[q.tileset_idx].resolved->sources[q.source_idx].path.c_str();
     if (u0 != nullptr) *u0 = q.u0;
     if (v0 != nullptr) *v0 = q.v0;
     if (u1 != nullptr) *u1 = q.u1;
