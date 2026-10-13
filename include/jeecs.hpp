@@ -13434,6 +13434,605 @@ namespace jeecs
             }
         };
     }
+    /*
+    tilemap [命名空间]
+    瓦片地图/图集文档的只读查询封装，对应 je_tilemap_* C API 的读侧子集，
+    供游戏运行时获取地图与图集信息（文档写入仍走 C API / 编辑器）。
+    map_document / tileset_document 为按路径共享、引用计数管理的文档包装：
+    open 返回 std::optional<basic::resource<...>>，包装构造时取得 1 个文档
+    引用、析构时释放，resource 的各副本共享同一引用；句柄存活期间文档实例
+    不会被逐出缓存，可以安全持有，重复 open 同一路径只增加引用计数。引用
+    计数操作线程安全，但文档内容（网格/图层等）是共享可变数据——与编辑器
+    等并发写入方并行查询时需自行保证串行化。各名称/路径字符串指向文档内部
+    存储，在文档下次被修改前有效。
+    */
+    namespace tilemap
+    {
+        /*
+        tilemap::TILE_VALUE_BASE [常量]
+        瓦片值编码基数：0 为空；v > 0 为普通瓦片
+        (tileset_index + 1) * TILE_VALUE_BASE + tile_id；v < 0 为自动图块地形
+        -((tileset_index + 1) * TILE_VALUE_BASE + terrain_id)
+        */
+        constexpr int32_t TILE_VALUE_BASE = 0x100000;
+
+        /*
+        tilemap::cell [结构体]
+        解码后的格子瓦片值，由 tilemap::decode_cell 生成
+        */
+        struct cell
+        {
+            int32_t raw;            // 原始瓦片值（0 为空格）
+            int32_t tileset_index;  // 所属图集在地图中的下标（0 起），空格为 -1
+            bool is_terrain;        // 是否自动图块地形
+            int32_t tile_id;        // 普通瓦片 id（je_TileId，从 1 起），空格/地形格为 0
+            int32_t terrain_id;     // 地形 id（je_TerrainId，从 1 起），空格/普通格为 0
+
+            constexpr explicit operator bool() const noexcept
+            {
+                return raw != 0;
+            }
+        };
+
+        /*
+        tilemap::decode_cell [函数]
+        把 C API 的原始瓦片值（编码见 tilemap::TILE_VALUE_BASE）解码为 tilemap::cell
+        */
+        constexpr cell decode_cell(int32_t raw_value) noexcept
+        {
+            cell result{};
+            result.raw = raw_value;
+            if (raw_value == 0)
+            {
+                result.tileset_index = -1;
+                return result;
+            }
+
+            const uint32_t magnitude =
+                raw_value > 0 ? (uint32_t)raw_value : (uint32_t)(-(int64_t)raw_value);
+            result.tileset_index = (int32_t)(magnitude / TILE_VALUE_BASE - 1);
+            result.is_terrain = raw_value < 0;
+            if (result.is_terrain)
+                result.terrain_id = (int32_t)(magnitude % TILE_VALUE_BASE);
+            else
+                result.tile_id = (int32_t)(magnitude % TILE_VALUE_BASE);
+            return result;
+        }
+
+        /*
+        tilemap::map_size [结构体]
+        地图尺寸信息
+        */
+        struct map_size
+        {
+            int32_t w;       // 横向格数
+            int32_t h;       // 纵向格数
+            int32_t tile_px; // 瓦片边长（像素）
+        };
+
+        /*
+        tilemap::layer_info [结构体]
+        图层信息（name 指向文档内部存储，文档下次修改前有效）
+        */
+        struct layer_info
+        {
+            const char* name;
+            bool visible;
+            bool locked;
+            float z; // 相对地图根实体的世界 z 偏移
+        };
+
+        /*
+        tilemap::cell_coord [结构体]
+        格子坐标（find_cells 的查询单元）
+        */
+        struct cell_coord
+        {
+            int32_t x;
+            int32_t y;
+        };
+
+        /*
+        tilemap::source_info [结构体]
+        图集源纹理信息（texture_path 指向文档内部存储，文档下次修改前有效）
+        */
+        struct source_info
+        {
+            const char* texture_path;
+            int32_t tile_px; // 瓦片边长（像素）
+            int32_t xcount;  // 横向格数
+            int32_t ycount;  // 纵向格数
+        };
+
+        /*
+        tilemap::tile_info [结构体]
+        普通瓦片定义信息（图集侧）
+        */
+        struct tile_info
+        {
+            int32_t source_index; // 所属源纹理下标；已移除的墓碑瓦片为 -1（alive 为 false）
+            int32_t ix;           // 源纹理内格位（列）
+            int32_t iy;           // 源纹理内格位（行）
+            bool walkable;        // 默认通行性
+            bool alive;           // = source_index >= 0，false 表示瓦片已被移除
+        };
+
+        /*
+        tilemap::terrain_info [结构体]
+        自动图块地形定义信息（name 指向文档内部存储，文档下次修改前有效）
+        */
+        struct terrain_info
+        {
+            const char* name;
+            je_TerrainKind kind;
+            int32_t source_index;  // 所属源纹理下标
+            int32_t ix;            // 锚点格位（列）
+            int32_t iy;            // 锚点格位（行）
+            bool walkable;         // 默认通行性
+            int32_t variant_count; // blob47 显式变体数
+        };
+
+        /*
+        tilemap::property_def [结构体]
+        图集 schema 中的属性定义（name 指向文档内部存储，文档下次修改前有效）
+        */
+        struct property_def
+        {
+            const char* name;
+            je_PropertyType type;
+        };
+
+        /*
+        tilemap::detail [命名空间]
+        property_traits 的实现细节，不应被外部使用
+        */
+        namespace detail
+        {
+            // find_cells 的匹配值按值地址传参（字符串除外，见 const char* 特化）
+            template <typename T>
+            struct value_by_address
+            {
+                static const void* value_ptr(const T& value) noexcept
+                {
+                    return &value;
+                }
+            };
+        }
+
+        /*
+        tilemap::property_traits [类模板]
+        属性值 C++ 类型（bool / const char* / int32_t / float / math::vec2/3/4）
+        与 je_PropertyType 的映射。const char* 读取到的指针指向文档内部存储，
+        文档下次修改前有效
+        */
+        template <typename T>
+        struct property_traits
+        {
+            static_assert(sizeof(T) == 0,
+                "unsupported property value type, use one of: "
+                "bool / const char* / int32_t / float / math::vec2 / math::vec3 / math::vec4");
+        };
+
+        template <>
+        struct property_traits<bool> : detail::value_by_address<bool>
+        {
+            static constexpr je_PropertyType TYPE = JE_PROPERTY_TYPE_BOOL;
+            using buffer_t = bool;
+            static std::optional<bool> take(const buffer_t& buffer) noexcept
+            {
+                return buffer;
+            }
+        };
+
+        template <>
+        struct property_traits<const char*>
+        {
+            static constexpr je_PropertyType TYPE = JE_PROPERTY_TYPE_STRING;
+            using buffer_t = const char*;
+            static std::optional<const char*> take(const buffer_t& buffer) noexcept
+            {
+                return buffer != nullptr ? buffer : std::optional<const char*>{};
+            }
+            // 字符串匹配值按 const char* 直传
+            static const void* value_ptr(const char* const& value) noexcept
+            {
+                return value;
+            }
+        };
+
+        template <>
+        struct property_traits<int32_t> : detail::value_by_address<int32_t>
+        {
+            static constexpr je_PropertyType TYPE = JE_PROPERTY_TYPE_INT;
+            using buffer_t = int32_t;
+            static std::optional<int32_t> take(const buffer_t& buffer) noexcept
+            {
+                return buffer;
+            }
+        };
+
+        template <>
+        struct property_traits<float> : detail::value_by_address<float>
+        {
+            static constexpr je_PropertyType TYPE = JE_PROPERTY_TYPE_FLOAT;
+            using buffer_t = float;
+            static std::optional<float> take(const buffer_t& buffer) noexcept
+            {
+                return buffer;
+            }
+        };
+
+        template <>
+        struct property_traits<math::vec2> : detail::value_by_address<math::vec2>
+        {
+            static constexpr je_PropertyType TYPE = JE_PROPERTY_TYPE_VEC2;
+            using buffer_t = float[2];
+            static std::optional<math::vec2> take(const buffer_t& buffer) noexcept
+            {
+                return math::vec2(buffer[0], buffer[1]);
+            }
+        };
+
+        template <>
+        struct property_traits<math::vec3> : detail::value_by_address<math::vec3>
+        {
+            static constexpr je_PropertyType TYPE = JE_PROPERTY_TYPE_VEC3;
+            using buffer_t = float[3];
+            static std::optional<math::vec3> take(const buffer_t& buffer) noexcept
+            {
+                return math::vec3(buffer[0], buffer[1], buffer[2]);
+            }
+        };
+
+        template <>
+        struct property_traits<math::vec4> : detail::value_by_address<math::vec4>
+        {
+            static constexpr je_PropertyType TYPE = JE_PROPERTY_TYPE_VEC4;
+            using buffer_t = float[4];
+            static std::optional<math::vec4> take(const buffer_t& buffer) noexcept
+            {
+                return math::vec4(buffer[0], buffer[1], buffer[2], buffer[3]);
+            }
+        };
+
+        /*
+        tilemap::tileset_document [类]
+        图集文档(.je4tileset)的只读查询包装（经 basic::resource 共享持有）：
+        包装构造时取得 1 个文档引用，析构时释放，resource 的各副本共享同一
+        引用，最后一个副本释放时卸载文档
+        */
+        class tileset_document
+        {
+            JECS_DISABLE_MOVE_AND_COPY(tileset_document);
+
+            je_TilesetDocument* _m_doc;
+
+            tileset_document(je_TilesetDocument* doc)
+                : _m_doc(doc)
+            {
+                assert(_m_doc != nullptr);
+            }
+
+        public:
+            ~tileset_document()
+            {
+                je_tilemap_unload_tileset(_m_doc);
+            }
+
+            /*
+            tilemap::tileset_document::open [静态函数]
+            打开（或取进程内缓存）指定路径的图集文档，失败返回 std::nullopt
+            */
+            static std::optional<basic::resource<tileset_document>> open(const char* path)
+            {
+                je_TilesetDocument* doc = je_tilemap_open_tileset(path);
+                if (doc == nullptr)
+                    return std::nullopt;
+                return basic::resource<tileset_document>(new tileset_document(doc));
+            }
+
+            // 底层 C API 文档指针（逃生口）
+            je_TilesetDocument* handle() const noexcept
+            {
+                return _m_doc;
+            }
+
+            // 图集名称（文档内部存储，文档下次修改前有效）
+            const char* name() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_tileset_name(_m_doc);
+            }
+            // 登记路径，未保存（新建后未另存）时为空串
+            const char* path() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_tileset_doc_path(_m_doc);
+            }
+            // 修改版本号（任何经 je_tilemap_* 的修改都会自增，可用于变更检测）
+            uint64_t version() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_tileset_version(_m_doc);
+            }
+
+            // ---- 源纹理 ----
+
+            // 源纹理数量
+            int32_t source_count() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_source_count(_m_doc);
+            }
+            // 取指定下标源纹理信息；下标越界返回 std::nullopt
+            std::optional<source_info> source(je_SourceId index) const
+            {
+                assert(_m_doc != nullptr);
+                source_info info;
+                if (!je_tilemap_source_info(_m_doc, index,
+                        &info.texture_path, &info.tile_px, &info.xcount, &info.ycount))
+                    return std::nullopt;
+                return info;
+            }
+
+            // ---- 普通瓦片（id 见 tilemap::cell::tile_id，从 1 起）----
+
+            // 普通瓦片数量
+            int32_t tile_count() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_tile_count(_m_doc);
+            }
+            // 取指定 id 瓦片定义；id 越界返回 std::nullopt（已移除的墓碑瓦片
+            // 仍返回信息，其 alive 为 false）
+            std::optional<tile_info> tile(je_TileId id) const
+            {
+                assert(_m_doc != nullptr);
+                tile_info info;
+                int32_t walkable = 0;
+                if (!je_tilemap_tile_info(_m_doc, id,
+                        &info.source_index, &info.ix, &info.iy, &walkable))
+                    return std::nullopt;
+                info.walkable = walkable != 0;
+                info.alive = info.source_index >= 0;
+                return info;
+            }
+
+            // ---- 自动图块地形（id 见 tilemap::cell::terrain_id，从 1 起）----
+
+            // 地形数量
+            int32_t terrain_count() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_terrain_count(_m_doc);
+            }
+            // 取指定 id 地形定义；id 越界返回 std::nullopt
+            std::optional<terrain_info> terrain(je_TerrainId id) const
+            {
+                assert(_m_doc != nullptr);
+                terrain_info info;
+                int32_t walkable = 0;
+                if (!je_tilemap_terrain_info(_m_doc, id, &info.name, &info.kind,
+                        &info.source_index, &info.ix, &info.iy, &walkable, &info.variant_count))
+                    return std::nullopt;
+                info.walkable = walkable != 0;
+                return info;
+            }
+
+            // ---- 属性 schema ----
+
+            // schema 中属性定义的数量
+            int32_t property_count() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_property_count(_m_doc);
+            }
+            // 取 schema 中指定下标的属性定义；越界返回 std::nullopt
+            std::optional<property_def> property(int32_t index) const
+            {
+                assert(_m_doc != nullptr);
+                property_def def;
+                if (!je_tilemap_property_info(_m_doc, index, &def.name, &def.type))
+                    return std::nullopt;
+                return def;
+            }
+            /*
+            按名称取 schema 属性默认值；T 的取值见 tilemap::property_traits，
+            无此属性或类型与定义不符返回 std::nullopt
+            */
+            template <typename T>
+            std::optional<T> property_default(const char* name) const
+            {
+                assert(_m_doc != nullptr);
+                typename property_traits<T>::buffer_t buffer{};
+                if (!je_tilemap_property_default(_m_doc, name, property_traits<T>::TYPE, &buffer))
+                    return std::nullopt;
+                return property_traits<T>::take(buffer);
+            }
+        };
+
+        /*
+        tilemap::map_document [类]
+        地图文档(.je4tilemap)的只读查询包装（经 basic::resource 共享持有）：
+        包装构造时取得 1 个文档引用，析构时释放，resource 的各副本共享同一
+        引用，最后一个副本释放时卸载文档
+        */
+        class map_document
+        {
+            JECS_DISABLE_MOVE_AND_COPY(map_document);
+
+            je_TilemapDocument* _m_doc;
+
+            map_document(je_TilemapDocument* doc)
+                : _m_doc(doc)
+            {
+                assert(_m_doc != nullptr);
+            }
+
+        public:
+            ~map_document()
+            {
+                je_tilemap_unload_map(_m_doc);
+            }
+
+            /*
+            tilemap::map_document::open [静态函数]
+            打开（或取进程内缓存）指定路径的地图文档，失败返回 std::nullopt
+            */
+            static std::optional<basic::resource<map_document>> open(const char* path)
+            {
+                je_TilemapDocument* doc = je_tilemap_open_map(path);
+                if (doc == nullptr)
+                    return std::nullopt;
+                return basic::resource<map_document>(new map_document(doc));
+            }
+
+            // 底层 C API 文档指针（逃生口）
+            je_TilemapDocument* handle() const noexcept
+            {
+                return _m_doc;
+            }
+
+            // ---- 地图信息 ----
+
+            // 尺寸信息（宽/高格数与瓦片边长像素）
+            map_size size() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                map_size result;
+                je_tilemap_map_size(_m_doc, &result.w, &result.h, &result.tile_px, nullptr);
+                return result;
+            }
+            // 图层数量
+            int32_t layer_count() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                int32_t layer_count = 0;
+                je_tilemap_map_size(_m_doc, nullptr, nullptr, nullptr, &layer_count);
+                return layer_count;
+            }
+            // 登记路径，未保存（新建后未另存）时为空串
+            const char* path() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                const char* path = nullptr;
+                if (!je_tilemap_map_path(_m_doc, &path))
+                    return "";
+                return path != nullptr ? path : "";
+            }
+            // 修改版本号（任何经 je_tilemap_* 的修改都会自增，可用于变更检测）
+            uint64_t version() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_map_version(_m_doc);
+            }
+
+            // ---- 图层 ----
+
+            // 取指定下标图层信息；越界返回 std::nullopt
+            std::optional<layer_info> layer(je_LayerId index) const
+            {
+                assert(_m_doc != nullptr);
+                if (index < 0 || index >= layer_count())
+                    return std::nullopt;
+                layer_info info;
+                int32_t visible = 0, locked = 0;
+                je_tilemap_get_layer(_m_doc, index, &info.name, &visible, &locked);
+                info.visible = visible != 0;
+                info.locked = locked != 0;
+                info.z = je_tilemap_layer_z(_m_doc, index);
+                return info;
+            }
+
+            // ---- 格子查询 ----
+
+            // 取指定图层某格的瓦片值（越界与空格均为空 cell）
+            cell tile(je_LayerId layer_index, int32_t x, int32_t y) const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return decode_cell(je_tilemap_get_tile(_m_doc, layer_index, x, y));
+            }
+            // 某格全图层合并的通行性（任一图层不可通行即不可通行，出界视为不可通行）
+            bool walkable(int32_t x, int32_t y) const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_is_walkable(_m_doc, x, y) != 0;
+            }
+            // 某格在指定图层上的通行性
+            bool walkable(je_LayerId layer_index, int32_t x, int32_t y) const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_is_walkable_on(_m_doc, layer_index, x, y) != 0;
+            }
+            /*
+            按取值链（逐格覆盖 -> 瓦片/地形默认值 -> 图集 schema 默认值）解析
+            某格属性；T 的取值见 tilemap::property_traits，无值或类型与实际
+            存储不符返回 std::nullopt
+            */
+            template <typename T>
+            std::optional<T> get_property(je_LayerId layer_index, int32_t x, int32_t y,
+                const char* name) const
+            {
+                assert(_m_doc != nullptr);
+                typename property_traits<T>::buffer_t buffer{};
+                if (!je_tilemap_get_property(_m_doc, layer_index, x, y, name,
+                        property_traits<T>::TYPE, &buffer))
+                    return std::nullopt;
+                return property_traits<T>::take(buffer);
+            }
+            /*
+            按属性值查找格子，返回全部命中坐标；layer_index < 0 时搜索全部图层。
+            T 的取值同 get_property。name 为 "walkable" 时按通行性匹配，
+            此时 T 须为 bool
+            */
+            template <typename T>
+            std::vector<cell_coord> find_cells(je_LayerId layer_index, const char* name,
+                const T& value) const
+            {
+                assert(_m_doc != nullptr);
+                std::vector<cell_coord> result;
+                const int32_t count = je_tilemap_find_cells(_m_doc, layer_index, name,
+                    property_traits<T>::TYPE, property_traits<T>::value_ptr(value));
+                for (int32_t i = 0; i < count; ++i)
+                {
+                    cell_coord coord;
+                    if (je_tilemap_find_get(_m_doc, i, &coord.x, &coord.y))
+                        result.push_back(coord);
+                }
+                return result;
+            }
+            // find_cells 的字符串匹配重载（按 const char* 内容匹配）
+            std::vector<cell_coord> find_cells(je_LayerId layer_index, const char* name,
+                const char* value) const
+            {
+                return find_cells<const char*>(layer_index, name, value);
+            }
+
+            // ---- 地图引用的图集 ----
+
+            // 地图引用的图集数量
+            int32_t tileset_count() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_tileset_count(_m_doc);
+            }
+            // 取指定下标图集的路径（越界为空串；文档内部存储，文档下次修改前有效）
+            const char* tileset_path(int32_t index) const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_tileset_path(_m_doc, index);
+            }
+            // 打开指定下标引用的图集文档（路径为空或打开失败返回 std::nullopt）
+            std::optional<basic::resource<tileset_document>> open_tileset(int32_t index) const
+            {
+                assert(_m_doc != nullptr);
+                const char* path = je_tilemap_tileset_path(_m_doc, index);
+                if (path == nullptr || *path == '\0')
+                    return std::nullopt;
+                return tileset_document::open(path);
+            }
+        };
+    }
     namespace Tilemap
     {
         /*
@@ -13441,7 +14040,8 @@ namespace jeecs
         瓦片地图实例组件：挂在地图根实体上，map_path 指向 .je4tilemap 资源
         （运行时路径，@/ 或 !/ 前缀）。地图的分块渲染子实体由
         Tilemap::TilemapSystem 自动创建与回收，根实体本身的移动/缩放
-        会携带整张地图。文档读写与运行时查询见 je_tilemap_* C API。
+        会携带整张地图。文档读写与运行时查询见 je_tilemap_* C API，
+        只读查询亦可使用 jeecs::tilemap C++ 封装。
         */
         struct Map
         {
