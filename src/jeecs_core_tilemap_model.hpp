@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <mutex>
 #include <variant>
+#include <optional>
 #include <array>
 
 namespace jeecs
@@ -161,16 +162,6 @@ namespace jeecs
             std::map<int32_t, std::map<std::string, property_value>> tile_properties;
 
             uint64_t version = 1;
-            // 引用计数（keep/unload）：open/create 的每个调用方各占 1，
-            // 引用它的地图文档亦各占 1。归零且已保存（路径非空）时文档被
-            // 注册表逐出；未保存文档永不逐出（逐出即数据丢失）。
-            // 仅在注册表互斥锁内读写（Woolang GC 终结器会在 GC worker
-            // 线程上并发调用 unload，不能依赖单线程递增递减）。
-            int32_t keep_count = 0;
-            // 注册表槽位回引（下标 + 1，0 = 未注册/已逐出）。文档实例
-            // 地址即对外指针身份，此回引仅供注册表按指针定位槽位。
-            // 同上：仅在注册表互斥锁内读写。
-            int32_t registry_slot = 0;
             // (source<<32|flat_pos) -> tile id 的反查表，懒构建
             std::unordered_map<int64_t, int32_t> flat_tile_index;
 
@@ -226,15 +217,15 @@ namespace jeecs
             std::vector<int32_t> grid;  // w*h 稠密网格，行优先、y 自上而下
             LayerStyle style;           // 逐层着色器样式（可空）
         };
-        // 地图对单个图集的引用槽：引用路径与解析结果同槽存储，天然对齐
+        // 地图对单个图集的引用槽：引用路径与解析结果同槽存储，天然对齐。
+        // 生命周期即 resolved 本身：持有 shared_ptr 即保活图集实例，地图
+        // 文档析构或重新解析时随槽位释放——无任何需要手工归还的记账。
         struct TilesetRef
         {
-            std::string path;                           // 引用的图集路径
-            std::shared_ptr<TilesetDocument> resolved;  // 解析出的文档实例（可空）
-            // 该槽位经注册表 keep 的图集实例（nullptr = 未持有）。地图文档
-            // 为其解析到的每个图集各持有 1 个引用，换绑（重载/逐出）或
-            // 自身被逐出时释放。
-            TilesetDocument* kept = nullptr;
+            std::string path;   // 引用的图集路径
+            // 解析出的文档实例；nullopt = 未解析（引用未保存/加载失败）。
+            // 有值时内层 shared_ptr 恒非空（由解析侧保证）
+            std::optional<std::shared_ptr<TilesetDocument>> resolved;
         };
         struct MapDocument
         {
@@ -244,16 +235,11 @@ namespace jeecs
             std::vector<MapLayer> layers;
             // 逐格属性覆盖：(layer, x + y*width) -> (name -> value)
             std::map<std::pair<int32_t, int32_t>, std::map<std::string, property_value>> cell_properties;
+            // je_tilemap_find_cells 的结果缓存（find_get 逐个取回），随
+            // 文档实例生死，重载/销毁后自然从空表开始
+            std::vector<std::pair<int32_t, int32_t>> find_result;
 
             uint64_t version = 1;
-            // 引用计数语义同 TilesetDocument::keep_count（open/create 的
-            // 调用方各占 1；使用该地图的世界各占 1）。仅在注册表互斥锁内
-            // 读写（GC 终结器可能并行 unload）。
-            int32_t keep_count = 0;
-            // 注册表槽位回引（下标 + 1，0 = 未注册/已逐出）。文档实例
-            // 地址即对外指针身份，此回引仅供注册表按指针定位槽位。
-            // 仅在注册表互斥锁内读写。
-            int32_t registry_slot = 0;
 
             bool in_bounds(int32_t layer, int32_t x, int32_t y) const
             {
@@ -811,7 +797,7 @@ namespace jeecs
                 return nullptr;
             uint32_t ts_n = r.u32();
             for (uint32_t i = 0; i < ts_n && r.ok; ++i)
-                m->tilesets.push_back(TilesetRef{r.str(), nullptr, nullptr});
+                m->tilesets.push_back(TilesetRef{ r.str(), std::nullopt });
             uint32_t layer_n = r.u32();
             for (uint32_t i = 0; i < layer_n && r.ok; ++i)
             {
@@ -902,24 +888,31 @@ namespace jeecs
         // ==================== 文档注册表 ====================
         // 进程内全局唯一：按路径共享文档实例，编辑器与世界经由同一份
         // 数据实现"未保存修改实时同步"。对外以文档实例指针（je_Tilemap
-        // _Document*/je_TilesetDocument*）标识；内部槽位只增不删（路径
-        // 索引以槽位下标为值，须保持稳定）。文档引用计数（keep_count）
-        // 归零且已保存时被逐出——槽位置空、实例销毁，此后旧指针失效。
-        // 路径 -> 槽位是派生索引，保存/重载经 save_*/reload_* 集中维护。
-        // 失败路径只尝试一次，避免逐帧重试造成日志刷屏；保存/重载会清除
+        // _Document*/je_TilesetDocument*）标识，指针身份即文档身份。
+        //
+        // ---- 所有权模型 ----
+        // 文档实例的存活完全由 shared_ptr 决定：外部（C ABI）引用由
+        // 注册表条目代为强持有（refs > 0 期间）；引用方（地图的
+        // TilesetRef::resolved、TilemapSystem 经 observe 取得的句柄）
+        // 各自直接持有。注册表自身只经 weak_ptr 观察实例，不为自己
+        // 缓存目的保活任何文档。外部引用归零且无引用方时实例销毁
+        //（含未保存文档——unload 即丢弃），下次按路径 open 从磁盘重
+        // 读；地图销毁会级联释放其图集持有（RAII，无手工逐出）。
+        // 路径 -> 实例是派生索引：保存/重载经 save_*/reload_* 集中
+        // 维护，实例销毁后 weak 引用自然过期，解析时按需清除。失败
+        // 路径只尝试一次，避免逐帧重试造成日志刷屏；保存/重载会清除
         // 失败记录。
         //
         // ---- 线程安全 ----
         // 并发访问方至少有三类：编辑器所在线程（je_tilemap_* C API）、
         // 各世界的更新线程（TilemapSystem，经 parallel_foreach 可并行）、
         // Woolang GC worker 线程（gchandle 终结器并行调用 unload_*，见
-        // woje_tilemap_release_*）。所有注册表结构性状态（槽位表、路径
-        // 索引、keep_count/registry_slot）由 m_mutex 串行化；逐出（含
-        // 级联释放图集引用与文档析构）在持锁状态下原子完成，保证
-        // "归零逐出"与并发 keep/open 之间无竞态。锁为递归锁：unload ->
-        // evict -> release_resolved -> unload 的级联在锁内自然重入。
-        // 文档内容（网格/图层等）仍为设计上的共享可变数据，内容级读写
-        // 不经本锁（与"未保存修改实时同步"的既有语义一致）。
+        // woje_tilemap_release_*）。所有注册表结构性状态（引用账目、
+        // 路径索引、枚举表、失败集合）由 m_mutex 串行化；"解析 + 计
+        // 引用"在同一锁定区间内完成，与并发 unload 之间无竞态。文档
+        // 析构只触碰自身数据、不重入注册表，普通互斥锁即可。文档内容
+        //（网格/图层等）仍为设计上的共享可变数据，内容级读写不经本锁
+        //（与"未保存修改实时同步"的既有语义一致）。
         class documents
         {
         public:
@@ -932,81 +925,105 @@ namespace jeecs
             // ---- 地图文档 ----
 
             // 已注册地图文档枚举（热更新等遍历用）：数量与按枚举下标
-            //（0 起，非句柄）取实例。文档只增不删——计数含未保存的新建
-            // 文档，也含被 reload 弃用的旧实例（其路径已清空，不再被世界
-            // 使用，遍历侧替换样式无害）。count 与 at 两call之间注册表
-            // 可能变化（并发打开/逐出），at 返回裸指针且不带引用，须立即
-            // 使用；需要稳定集合时用 snapshot_maps。
+            //（0 起，非句柄）取实例。枚举表只增不删，实例销毁后该槽位
+            // 解析为 nullopt。count 与 at 两 call 之间注册表可能变化
+            //（并发打开/销毁）；at 返回的持有在调用期间保活实例，用毕
+            // 即弃、不占外部引用。需要稳定集合时用 snapshot_maps。
             int32_t map_count() const
             {
                 std::lock_guard lock(m_mutex);
-                return (int32_t)m_maps.size();
+                return (int32_t)m_maps.all.size();
             }
-            MapDocument* map_at(int32_t index) const
+            std::optional<std::shared_ptr<MapDocument>> map_at(int32_t index) const
             {
                 std::lock_guard lock(m_mutex);
-                if (index < 0 || index >= (int32_t)m_maps.size())
-                    return nullptr;
-                return m_maps[index].get();
+                if (index < 0 || index >= (int32_t)m_maps.all.size())
+                    return std::nullopt;
+                return live(m_maps.all[(size_t)index]);
             }
 
-            // 快照枚举：返回当前全部已注册地图文档，每个各带 1 个引用
-            //（调用方用毕须 unload，Woolang 侧即 gchandle 终结器路径）。
-            // 在一次持锁内完成"收集 + 计引用"，避免逐个 count/at + keep
-            // 之间文档被 GC 终结器逐出的竞态。
+            // 快照枚举：返回当前全部存活地图文档，每个各带 1 个外部
+            // 引用（调用方用毕须 unload，Woolang 侧即 gchandle 终结器
+            // 路径）。在一次持锁内完成"收集 + 计引用"，避免逐个
+            // count/at + keep 之间文档被并发释放的竞态。
             std::vector<MapDocument*> snapshot_maps()
             {
                 std::lock_guard lock(m_mutex);
                 std::vector<MapDocument*> out;
-                out.reserve(m_maps.size());
-                for (auto& d : m_maps)
-                    if (d != nullptr)
+                out.reserve(m_maps.all.size());
+                for (const auto& weak : m_maps.all)
+                    if (auto doc = live(weak))
                     {
-                        ++d->keep_count;
-                        out.push_back(d.get());
+                        acquire_ref(m_maps, *doc);
+                        out.push_back(doc->get());
                     }
                 return out;
             }
 
-            // 打开（或复用缓存）文档；失败返回 nullptr。成功返回的实例
-            // 已带 1 个引用（在锁内完成"定位/加载 + 计引用"），调用方
+            // 打开（或复用缓存）文档；失败返回 nullopt。成功返回的实例
+            // 已带 1 个外部引用（在锁内完成"解析 + 计引用"），调用方
             // 用毕 unload——这消除了"先返回指针、后 keep"窗口内被并发
-            // 终结器逐出的竞态。
-            MapDocument* open_map(const std::string& path)
+            // 终结器释放的竞态。
+            std::optional<std::shared_ptr<MapDocument>> open_map(const std::string& path)
             {
                 std::lock_guard lock(m_mutex);
-                return open_doc<MapDocument>(
-                    path, m_maps, m_maps_by_path, m_maps_failed,
-                    &load_map_from, "map");
+                auto doc = resolve(m_maps, path, &load_map_from, "map");
+                if (doc.has_value())
+                    acquire_ref(m_maps, *doc);
+                return doc;
             }
-            TilesetDocument* open_tileset(const std::string& path)
+            std::optional<std::shared_ptr<TilesetDocument>> open_tileset(const std::string& path)
             {
                 std::lock_guard lock(m_mutex);
-                return open_doc<TilesetDocument>(
-                    path, m_tilesets, m_tilesets_by_path, m_tilesets_failed,
-                    &load_tileset_from, "tileset");
+                auto doc = resolve(m_tilesets, path, &load_tileset_from, "tileset");
+                if (doc.has_value())
+                    acquire_ref(m_tilesets, *doc);
+                return doc;
             }
 
-            // 注册新建（未落盘）文档，返回已带 1 个引用的实例指针
-            MapDocument* register_map(std::shared_ptr<MapDocument> doc)
+            // 观察：与 open 同一解析逻辑，但返回的持有不占外部引用计数
+            //——供渲染系统等以 RAII 方式保活（析构自动让出），不参与
+            // C ABI 的 keep/unload 记账。
+            std::optional<std::shared_ptr<MapDocument>> observe_map(const std::string& path)
             {
                 std::lock_guard lock(m_mutex);
-                MapDocument* raw = append_doc(m_maps, std::move(doc));
-                ++raw->keep_count;
+                return resolve(m_maps, path, &load_map_from, "map");
+            }
+            std::optional<std::shared_ptr<TilesetDocument>> observe_tileset(const std::string& path)
+            {
+                std::lock_guard lock(m_mutex);
+                return resolve(m_tilesets, path, &load_tileset_from, "tileset");
+            }
+
+            // 注册新建（未落盘）文档，返回已带 1 个外部引用的实例指针
+            MapDocument* register_map(std::shared_ptr<MapDocument> doc)
+            {
+                assert(doc != nullptr);
+                std::lock_guard lock(m_mutex);
+                MapDocument* raw = doc.get();
+                m_maps.all.push_back(doc);
+                auto& entry = m_maps.held[raw];
+                entry.hold = std::move(doc);
+                entry.refs = 1;
                 return raw;
             }
             TilesetDocument* register_tileset(std::shared_ptr<TilesetDocument> doc)
             {
+                assert(doc != nullptr);
                 std::lock_guard lock(m_mutex);
-                TilesetDocument* raw = append_doc(m_tilesets, std::move(doc));
-                ++raw->keep_count;
+                TilesetDocument* raw = doc.get();
+                m_tilesets.all.push_back(doc);
+                auto& entry = m_tilesets.held[raw];
+                entry.hold = std::move(doc);
+                entry.refs = 1;
                 return raw;
             }
 
             // 保存并登记路径：旧路径绑定若仍指向本文档则解除，随后绑定
             // 新路径（另一文档对同路径的既有绑定被顶替 —— "最后一次
             // 保存者获胜"，与编辑器另存语义一致）。序列化与写盘在锁外
-            //（内容属共享可变数据），路径索引重绑在锁内。
+            //（内容属共享可变数据），路径索引重绑在锁内。调用方须持有
+            // 外部引用（无账目即契约外使用，按失败返回）。
             bool save_map(MapDocument* doc, const std::string& path)
             {
                 assert(doc != nullptr);
@@ -1015,7 +1032,10 @@ namespace jeecs
                 if (!save_map_to(*doc, path))
                     return false;
                 std::lock_guard lock(m_mutex);
-                rebind_path(m_maps_by_path, doc->path, path, registered_slot(m_maps, doc));
+                auto fnd = m_maps.held.find(doc);
+                if (fnd == m_maps.held.end())
+                    return false;
+                rebind_path(m_maps, doc->path, path, fnd->second.hold);
                 doc->path = path;
                 return true;
             }
@@ -1027,223 +1047,167 @@ namespace jeecs
                 if (!save_tileset_to(*doc, path))
                     return false;
                 std::lock_guard lock(m_mutex);
-                rebind_path(m_tilesets_by_path, doc->path, path, registered_slot(m_tilesets, doc));
+                auto fnd = m_tilesets.held.find(doc);
+                if (fnd == m_tilesets.held.end())
+                    return false;
+                rebind_path(m_tilesets, doc->path, path, fnd->second.hold);
                 doc->path = path;
                 return true;
             }
 
-            // 丢弃缓存中的未保存修改：解除路径绑定，下次访问从磁盘重读
+            // 丢弃缓存中的未保存修改：解除路径绑定，下次访问从磁盘重读。
+            // 仍被引用的既有实例不受影响（其路径被清空后不再能按路径
+            // 复活），随最后一个引用方销毁。
             void reload_map(const std::string& path)
             {
                 std::lock_guard lock(m_mutex);
-                detach_map(canonical_key(path));
+                detach(m_maps, canonical_key(path));
             }
             void reload_tileset(const std::string& path)
             {
                 std::lock_guard lock(m_mutex);
-                detach_tileset(canonical_key(path));
+                detach(m_tilesets, canonical_key(path));
             }
 
-            // ---- 引用计数（keep/unload）----
-            // keep：引用计数 +1，返回新计数。调用方持有的指针必然注册
-            // 在案（引用计数 >= 1 期间不会被逐出），槽位不自洽即调用方
-            // 传入了伪造/失效指针，按调用方 bug 断言。registry_slot 已
-            // 清零（曾逐出后的双重释放）时按无操作兜底，避免越界访问。
+            // ---- 外部引用计数（keep/unload）----
+            // keep：外部引用 +1，返回新计数。调用方持有的指针必然有
+            // 引用账目（refs >= 1 期间实例不会被销毁），无账目即调用方
+            // 传入了伪造/已失效指针，按无操作兜底返回 0。
             int32_t keep_map(MapDocument* doc)
             {
-                std::lock_guard lock(m_mutex);
-                if (doc->registry_slot <= 0)
+                if (doc == nullptr)
                     return 0;
-                registered_slot(m_maps, doc);
-                return ++doc->keep_count;
+                std::lock_guard lock(m_mutex);
+                auto fnd = m_maps.held.find(doc);
+                return fnd == m_maps.held.end() ? 0 : ++fnd->second.refs;
             }
             int32_t keep_tileset(TilesetDocument* doc)
             {
-                std::lock_guard lock(m_mutex);
-                if (doc->registry_slot <= 0)
+                if (doc == nullptr)
                     return 0;
-                registered_slot(m_tilesets, doc);
-                return ++doc->keep_count;
+                std::lock_guard lock(m_mutex);
+                auto fnd = m_tilesets.held.find(doc);
+                return fnd == m_tilesets.held.end() ? 0 : ++fnd->second.refs;
             }
 
-            // unload：引用计数 -1（下限 0）；归零且已保存（路径非空）时
-            // 文档被逐出（实例销毁、指针失效），未保存文档保留驻留避免
-            // 数据丢失。返回剩余计数。GC 终结器可能在任意线程并发调用：
-            // 减计数与逐出判定在同一持锁区间内完成，与并发 keep/open
-            // 互斥；对已逐出实例（双重释放）按无操作兜底。
+            // unload：外部引用 -1（下限 0）；归零即撤销注册表的强持有
+            //——已无引用方时实例就地销毁（此后指针失效），下次按路径
+            // open 从磁盘重读。返回剩余计数。GC 终结器可能在任意线程
+            // 并发调用：减计数与销毁在同一持锁区间内完成，与并发 keep/
+            // open 互斥；对已销毁实例（双重释放）按无操作兜底。
             int32_t unload_map(MapDocument* doc)
             {
-                std::lock_guard lock(m_mutex);
-                if (doc->registry_slot <= 0)
+                if (doc == nullptr)
                     return 0;
-                registered_slot(m_maps, doc);
-                if (doc->keep_count > 0)
-                    --doc->keep_count;
-                int32_t remaining = doc->keep_count;
-                if (remaining == 0 && !doc->path.empty())
-                    evict_map(doc);
-                return remaining;
+                std::lock_guard lock(m_mutex);
+                return release_ref(m_maps, doc);
             }
             int32_t unload_tileset(TilesetDocument* doc)
             {
-                std::lock_guard lock(m_mutex);
-                if (doc->registry_slot <= 0)
+                if (doc == nullptr)
                     return 0;
-                registered_slot(m_tilesets, doc);
-                if (doc->keep_count > 0)
-                    --doc->keep_count;
-                int32_t remaining = doc->keep_count;
-                if (remaining == 0 && !doc->path.empty())
-                    evict_tileset(doc);
-                return remaining;
+                std::lock_guard lock(m_mutex);
+                return release_ref(m_tilesets, doc);
             }
 
-            // 逐出文档：释放内部持有（地图会级联释放其图集引用）、解除
-            // 路径绑定并置空槽位（下标不回收）。此后该指针的一切访问均
-            // 无效；下次按路径 open 会从磁盘重新加载。文档析构（含
-            // resolved 共享指针与图层样式资源）发生在持锁状态下——
-            // 这些析构不会再进入本注册表，无锁序倒置风险。
-            void evict_map(MapDocument* doc)
-            {
-                std::lock_guard lock(m_mutex);
-                const int32_t slot = registered_slot(m_maps, doc);
-                release_resolved(*doc);
-                if (!doc->path.empty())
-                {
-                    auto fnd = m_maps_by_path.find(canonical_key(doc->path));
-                    if (fnd != m_maps_by_path.end() && fnd->second == slot)
-                        m_maps_by_path.erase(fnd);
-                }
-                m_find_results.erase(doc);
-                doc->registry_slot = 0;
-                m_maps[slot - 1] = nullptr;
-            }
-            void evict_tileset(TilesetDocument* doc)
-            {
-                std::lock_guard lock(m_mutex);
-                const int32_t slot = registered_slot(m_tilesets, doc);
-                if (!doc->path.empty())
-                {
-                    auto fnd = m_tilesets_by_path.find(canonical_key(doc->path));
-                    if (fnd != m_tilesets_by_path.end() && fnd->second == slot)
-                        m_tilesets_by_path.erase(fnd);
-                }
-                doc->registry_slot = 0;
-                m_tilesets[slot - 1] = nullptr;
-            }
-
-            // 保证地图文档的图集解析与注册表中的最新文档一致
-            // （处理图集被重载/替换/逐出的情况）。每个成功解析的槽位
-            // 经注册表持有该图集 1 个引用（kept 记录实例），
-            // open_tileset 返回自带 1 个引用：实例未变时当即释放该多余
-            // 引用，实例变化时旧持有释放、新引用转为槽位持有；解析失败
-            // 同样释放。全程持锁（递归重入 open/unload）。
+            // 保证地图文档的图集解析与注册表中的最新实例一致（处理图集
+            // 被重载/替换/销毁的情况）：逐槽把 resolved 重新指向当前解
+            // 析结果。持有即保活——同实例赋值为无操作，实例变化/解析
+            // 失败时旧实例随赋值自动释放，无任何手工换绑记账。
             void ensure_tilesets(MapDocument& m)
             {
                 std::lock_guard lock(m_mutex);
                 for (auto& ts : m.tilesets)
-                {
-                    TilesetDocument* live = open_tileset(ts.path);
-                    if (live == nullptr)
-                    {
-                        if (ts.kept != nullptr)
-                        {
-                            unload_tileset(ts.kept);
-                            ts.kept = nullptr;
-                        }
-                        ts.resolved.reset();
-                        continue;
-                    }
-                    // 与注册表当前实例保持同一份（open 命中缓存即同指针）；
-                    // 未变则释放 open 带来的多余引用
-                    if (ts.kept == live
-                        && ts.resolved != nullptr && ts.resolved.get() == live)
-                    {
-                        unload_tileset(live);
-                        continue;
-                    }
-                    if (ts.kept != nullptr)
-                        unload_tileset(ts.kept);
-                    // open 的引用转为该槽位的持有（不再额外 keep）
-                    ts.kept = live;
-                    ts.resolved = m_tilesets[live->registry_slot - 1];
-                }
+                    ts.resolved = resolve(m_tilesets, ts.path,
+                        &load_tileset_from, "tileset");
             }
 
-            // 释放地图文档持有的全部图集引用（自身被逐出/引用表重建时）
-            void release_resolved(MapDocument& m)
-            {
-                std::lock_guard lock(m_mutex);
-                for (auto& ts : m.tilesets)
-                    if (ts.kept != nullptr)
-                    {
-                        unload_tileset(ts.kept);
-                        ts.kept = nullptr;
-                    }
-            }
-
-            // 地图引用表增删（删除项的图集引用随之释放）
+            // 地图引用表增删（删除项的图集持有随之自动释放）
             void append_tileset_entry(MapDocument& m, const std::string& path)
             {
                 std::lock_guard lock(m_mutex);
-                m.tilesets.push_back(TilesetRef{path, nullptr, nullptr});
+                m.tilesets.push_back(TilesetRef{ path, std::nullopt });
             }
             void erase_tileset_entry(MapDocument& m, size_t idx)
             {
                 std::lock_guard lock(m_mutex);
                 if (idx >= m.tilesets.size())
                     return;
-                if (m.tilesets[idx].kept != nullptr)
-                    unload_tileset(m.tilesets[idx].kept);
                 m.tilesets.erase(m.tilesets.begin() + idx);
             }
 
             // 地图 + 其图集的合并版本戳：任一变化（含图集实例被重载/
-            // 逐出后重载替换）都会改变。指针身份作实例标识（逐出后新
-            // 实例重用旧地址且版本恰好相同的概率可忽略）；version 区分
-            // 同实例内的编辑。持锁以避免与并发 ensure_tilesets 重排
-            // resolved（shared_ptr 写）竞争。
+            // 销毁后重载替换）都会改变。指针身份作实例标识（新实例重用
+            // 旧地址且版本恰好相同的概率可忽略）；version 区分同实例内
+            // 的编辑。持锁以避免与并发 ensure_tilesets 重排 resolved
+            //（optional<shared_ptr> 写）竞争。
             uint64_t map_stamp(const MapDocument& m) const
             {
                 std::lock_guard lock(m_mutex);
                 uint64_t stamp = mix(0x9E3779B97F4A7C15ull, (uintptr_t)&m, m.version);
                 for (const auto& ts : m.tilesets)
                     stamp = mix(stamp,
-                        ts.resolved ? (uintptr_t)ts.resolved.get() : 0,
-                        ts.resolved ? ts.resolved->version : 0);
+                        ts.resolved ? (uintptr_t)ts.resolved->get() : 0,
+                        ts.resolved ? (*ts.resolved)->version : 0);
                 return stamp;
             }
 
-            // find_cells 的结果槽（每地图文档一份；随文档实例走，重载后
-            // 新文档自然从空表开始）。返回引用后调用方在持文档引用期间
-            // 使用（keep_count >= 1 保证文档不被并发逐出，map 节点稳定）。
-            std::vector<std::pair<int32_t, int32_t>>& find_result(const MapDocument* doc)
-            {
-                std::lock_guard lock(m_mutex);
-                return m_find_results[doc];
-            }
-
         private:
+            // 每类文档一张表：
+            //   held    —— 外部引用账目：refs > 0 期间强持有实例（代表
+            //             全部 C ABI 裸指针持有者），归零即移除条目，
+            //             实例是否销毁取决于是否仍有引用方持有；
+            //   by_path —— 规范路径 -> 实例的弱引用索引（自愈：实例
+            //             销毁后过期，解析时按需清除/重绑）；
+            //   failed  —— 打开失败的路径集合（只尝试一次）；
+            //   all     —— 枚举表（只增不删，保持稳定下标语义，实例
+            //             销毁后槽位过期）。
             template <typename T>
-            static T* doc_at(const std::vector<std::shared_ptr<T>>& docs, int32_t id)
+            struct doc_table
             {
-                if (id <= 0 || id > (int32_t)docs.size() || docs[id - 1] == nullptr)
-                    return nullptr;
-                return docs[id - 1].get();
+                struct entry
+                {
+                    std::shared_ptr<T> hold;  // 条目存在期间恒非空
+                    int32_t refs = 0;
+                };
+                std::unordered_map<T*, entry> held;
+                std::unordered_map<std::string, std::weak_ptr<T>> by_path;
+                std::set<std::string> failed;
+                std::vector<std::weak_ptr<T>> all;
+            };
+
+            // weak -> "存活实例或无"（过期的 weak 归一为 nullopt）
+            template <typename T>
+            static std::optional<std::shared_ptr<T>> live(const std::weak_ptr<T>& weak)
+            {
+                auto doc = weak.lock();
+                if (doc != nullptr)
+                    return doc;
+                return std::nullopt;
             }
 
-            // 校验指针确为注册表在案文档并返回其槽位（下标 + 1）。
-            // 合法持有的指针在引用计数 >= 1 期间必然在案（逐出即销毁），
-            // 不自洽说明调用方传入了伪造/已失效指针，按调用方 bug 断言。
-            // 调用方须持 m_mutex（读取槽位表）。
+            // 记 1 个外部引用（open/snapshot 的"解析 + 计引用"收尾）
             template <typename T>
-            static int32_t registered_slot(const std::vector<std::shared_ptr<T>>& docs, T* doc)
+            static void acquire_ref(doc_table<T>& table, const std::shared_ptr<T>& doc)
             {
-                assert(doc != nullptr);
-                assert(doc->registry_slot > 0
-                    && doc->registry_slot <= (int32_t)docs.size()
-                    && docs[doc->registry_slot - 1].get() == doc);
-                return doc->registry_slot;
+                auto& entry = table.held[doc.get()];
+                if (++entry.refs == 1)
+                    entry.hold = doc;
+            }
+
+            // 还 1 个外部引用；归零撤销强持有（可能就地销毁实例）
+            template <typename T>
+            static int32_t release_ref(doc_table<T>& table, T* doc)
+            {
+                auto fnd = table.held.find(doc);
+                if (fnd == table.held.end())
+                    return 0;
+                if (fnd->second.refs > 0)
+                    --fnd->second.refs;
+                const int32_t remaining = fnd->second.refs;
+                if (remaining == 0)
+                    table.held.erase(fnd);
+                return remaining;
             }
 
             static uint64_t mix(uint64_t h, uintptr_t identity, uint64_t version)
@@ -1278,143 +1242,108 @@ namespace jeecs
                 return key;
             }
 
-            // 打开（或复用）文档的通用流程：
-            //   1. 路径索引命中 -> 直接返回；
-            //   2. 未命中时按已注册文档的自身路径反查同一文件（修复因
-            //      另存/顶替绑定而失联的文档，多份命中取 version 最新者
-            //      —— 否则两份副本会互相覆盖丢数据）；
+            // 解析（或复用）文档的通用流程（调用方须持 m_mutex）：
+            //   1. 路径索引命中且实例存活 -> 直接返回；weak 引用已过期
+            //      则视为未命中并清除该条目（实例销毁后的自愈）；
+            //   2. 未命中时按存活文档的自身路径反查同一文件（修复因
+            //      另存/顶替绑定而失联的文档，多份命中取 version 最新
+            //      者——否则两份副本会互相覆盖丢数据）；
             //   3. 都没有 -> 从磁盘加载（失败记录，不重试）。
-            // 每条成功路径都在返回前 +1 引用（调用方须持 m_mutex，open_
-            // map/open_tileset 已加锁；ensure_tilesets 经递归锁重入）。
-            // 未命中时的磁盘加载在锁内执行（打开是低频路径，换取
-            // "加载 + 注册 + 计引用"的原子性）。
+            // 磁盘加载在锁内执行（解析是低频路径，换取"加载 + 入表 +
+            // 计引用"的原子性）。本函数不计外部引用（open 在返回前
+            // 另行计得，observe 则完全不计）。
             template <typename T>
-            T* open_doc(
-                const std::string& path,
-                std::vector<std::shared_ptr<T>>& docs,
-                std::unordered_map<std::string, int32_t>& by_path,
-                std::set<std::string>& failed,
-                std::shared_ptr<T> (*load)(const std::string&),
-                const char* kind)
+            std::optional<std::shared_ptr<T>> resolve(
+                doc_table<T>& table, const std::string& path,
+                std::shared_ptr<T> (*load)(const std::string&), const char* kind)
             {
                 if (path.empty())
-                    return nullptr;
-                std::string key = canonical_key(path);
-                auto fnd = by_path.find(key);
-                if (fnd != by_path.end())
+                    return std::nullopt;
+                const std::string key = canonical_key(path);
+                auto fnd = table.by_path.find(key);
+                if (fnd != table.by_path.end())
                 {
-                    T* d = doc_at(docs, fnd->second);
-                    if (d != nullptr)
-                    {
-                        ++d->keep_count;
-                        return d;
-                    }
+                    if (auto doc = live(fnd->second))
+                        return doc;
+                    table.by_path.erase(fnd);   // 实例已销毁，索引自愈
                 }
-                int32_t healed = 0;
+                std::optional<std::shared_ptr<T>> healed;
                 uint64_t healed_ver = 0;
-                for (size_t i = 0; i < docs.size(); ++i)
+                for (const auto& weak : table.all)
                 {
-                    const auto& d = docs[i];
-                    if (d != nullptr && !d->path.empty() && d->version >= healed_ver
-                        && canonical_key(d->path) == key)
+                    auto doc = live(weak);
+                    if (!doc.has_value() || (*doc)->path.empty())
+                        continue;
+                    if ((*doc)->version >= healed_ver
+                        && canonical_key((*doc)->path) == key)
                     {
-                        healed = (int32_t)i + 1;
-                        healed_ver = d->version;
+                        healed = std::move(doc);
+                        healed_ver = (*healed)->version;
                     }
                 }
-                if (healed > 0)
+                if (healed.has_value())
                 {
-                    by_path[key] = healed;
-                    failed.erase(key);
-                    ++docs[healed - 1]->keep_count;
-                    return docs[healed - 1].get();
+                    table.by_path[key] = *healed;
+                    table.failed.erase(key);
+                    return healed;
                 }
-                if (failed.count(key) != 0)
-                    return nullptr;
+                if (table.failed.count(key) != 0)
+                    return std::nullopt;
                 auto doc = load(path);
                 if (doc == nullptr)
                 {
-                    failed.insert(key);
+                    table.failed.insert(key);
                     debug::logerr("Tilemap: unable to open %s file '%s'.", kind, path.c_str());
-                    return nullptr;
+                    return std::nullopt;
                 }
-                by_path[key] = (int32_t)docs.size() + 1;
-                failed.erase(key);
-                T* raw = append_doc(docs, std::move(doc));
-                ++raw->keep_count;
-                return raw;
-            }
-
-            template <typename T>
-            static T* append_doc(std::vector<std::shared_ptr<T>>& docs,
-                std::shared_ptr<T> doc)
-            {
-                T* raw = doc.get();
-                docs.push_back(std::move(doc));
-                raw->registry_slot = (int32_t)docs.size();
-                return raw;
+                table.failed.erase(key);
+                table.by_path[key] = doc;
+                table.all.push_back(doc);
+                return doc;
             }
 
             // 保存后重绑路径：解除仍指向本文档的旧绑定，顶替新路径上的
             // 既有绑定，并清失败记录。
-            void rebind_path(std::unordered_map<std::string, int32_t>& by_path,
-                const std::string& old_path, const std::string& new_path, int32_t id)
+            template <typename T>
+            void rebind_path(doc_table<T>& table, const std::string& old_path,
+                const std::string& new_path, const std::shared_ptr<T>& self)
             {
                 if (!old_path.empty() && old_path != new_path)
                 {
-                    std::string old_key = canonical_key(old_path);
-                    auto fnd = by_path.find(old_key);
-                    if (fnd != by_path.end() && fnd->second == id)
-                        by_path.erase(fnd);
+                    const std::string old_key = canonical_key(old_path);
+                    auto fnd = table.by_path.find(old_key);
+                    if (fnd != table.by_path.end()
+                        && fnd->second.lock() == self)
+                        table.by_path.erase(fnd);
                 }
-                by_path[canonical_key(new_path)] = id;
+                const std::string new_key = canonical_key(new_path);
+                table.by_path[new_key] = self;
+                table.failed.erase(new_key);
             }
 
             // 重载除清空绑定/失败记录外，还须解除旧文档与路径的关联：
-            // open_* 的反查会按文档自身路径复活旧实例，若不解除，重载
+            // resolve 的反查会按文档自身路径复活旧实例，若不解除，重载
             // 语义（下次打开强制从磁盘重读）会被破坏。
-            void detach_map(const std::string& key)
+            template <typename T>
+            void detach(doc_table<T>& table, const std::string& key)
             {
-                auto fnd = m_maps_by_path.find(key);
-                if (fnd != m_maps_by_path.end())
+                auto fnd = table.by_path.find(key);
+                if (fnd != table.by_path.end())
                 {
-                    MapDocument* d = doc_at(m_maps, fnd->second);
-                    if (d != nullptr && canonical_key(d->path) == key)
-                    {
-                        m_find_results.erase(d);
-                        d->path.clear();
-                    }
+                    if (auto doc = live(fnd->second);
+                        doc.has_value() && canonical_key((*doc)->path) == key)
+                        (*doc)->path.clear();
                 }
-                m_maps_by_path.erase(key);
-                m_maps_failed.erase(key);
-            }
-            void detach_tileset(const std::string& key)
-            {
-                auto fnd = m_tilesets_by_path.find(key);
-                if (fnd != m_tilesets_by_path.end())
-                {
-                    TilesetDocument* d = doc_at(m_tilesets, fnd->second);
-                    if (d != nullptr && canonical_key(d->path) == key)
-                        d->path.clear();
-                }
-                m_tilesets_by_path.erase(key);
-                m_tilesets_failed.erase(key);
+                table.by_path.erase(key);
+                table.failed.erase(key);
             }
 
-            // 注册表全局互斥锁（递归：unload -> evict -> release_resolved
-            // -> unload 级联在锁内重入）。mutable：map_count/map_at/
-            // map_stamp 等只读接口亦须持锁（槽位表被并发打开/逐出改动）。
-            mutable std::recursive_mutex m_mutex;
+            // 注册表互斥锁。mutable：map_count/map_at/map_stamp 等只读
+            // 接口亦须持锁（表被并发解析/释放改动）。
+            mutable std::mutex m_mutex;
 
-            std::vector<std::shared_ptr<MapDocument>> m_maps;
-            std::unordered_map<std::string, int32_t> m_maps_by_path;
-            std::set<std::string> m_maps_failed;
-
-            std::vector<std::shared_ptr<TilesetDocument>> m_tilesets;
-            std::unordered_map<std::string, int32_t> m_tilesets_by_path;
-            std::set<std::string> m_tilesets_failed;
-
-            std::map<const MapDocument*, std::vector<std::pair<int32_t, int32_t>>> m_find_results;
+            doc_table<MapDocument> m_maps;
+            doc_table<TilesetDocument> m_tilesets;
         };
 
         // ==================== 自动图块 ====================
@@ -1549,9 +1478,9 @@ namespace jeecs
                 int32_t ts_idx = 0, local = 0;
                 decode_tile_value(v, &ts_idx, &local);
                 if (ts_idx >= 0 && ts_idx < (int32_t)doc->tilesets.size()
-                    && doc->tilesets[ts_idx].resolved != nullptr)
+                    && doc->tilesets[ts_idx].resolved.has_value())
                 {
-                    const auto* ts = doc->tilesets[ts_idx].resolved.get();
+                    const auto* ts = doc->tilesets[ts_idx].resolved->get();
                     const std::map<std::string, property_value>* defaults = nullptr;
                     if (v < 0)
                     {
@@ -1589,9 +1518,9 @@ namespace jeecs
             int32_t ts_idx = 0, local = 0;
             decode_tile_value(v, &ts_idx, &local);
             if (ts_idx < 0 || ts_idx >= (int32_t)doc->tilesets.size()
-                || doc->tilesets[ts_idx].resolved == nullptr)
+                || !doc->tilesets[ts_idx].resolved.has_value())
                 return true;
-            const auto* ts = doc->tilesets[ts_idx].resolved.get();
+            const auto* ts = doc->tilesets[ts_idx].resolved->get();
             if (v < 0)
                 return local < (int32_t)ts->terrains.size() ? ts->terrains[local].walkable : true;
             return local < (int32_t)ts->tiles.size() ? ts->tiles[local].walkable : true;
@@ -1639,9 +1568,9 @@ namespace jeecs
             int32_t ts_idx = 0, local = 0;
             decode_tile_value(v, &ts_idx, &local);
             if (ts_idx < 0 || ts_idx >= (int32_t)doc.tilesets.size()
-                || doc.tilesets[ts_idx].resolved == nullptr)
+                || !doc.tilesets[ts_idx].resolved.has_value())
                 return 0;
-            const auto* ts = doc.tilesets[ts_idx].resolved.get();
+            const auto* ts = doc.tilesets[ts_idx].resolved->get();
 
             // 整格取件：普通瓦片 / 单块地形 / blob47 变体
             auto fill_full = [&](const SourceTexture& src, int32_t ix, int32_t iy)

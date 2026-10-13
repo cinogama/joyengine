@@ -92,10 +92,10 @@ namespace jeecs
             std::set<part_key> needed;
             uint64_t needed_stamp = 0;
             bool needed_valid = false;
-            // 本根实体当前持有 1 个引用的地图文档（nullptr = 无）：根实体
-            // 存续即占用，路径变更/根销毁时释放；归零级联逐出后下次重开自
-            // 磁盘重读，避免"被世界使用却被卸载"的逐帧重载抖动
-            Tilemap::MapDocument* held_map = nullptr;
+            // 本根实体当前持有的地图文档（nullopt = 无）：observe 取得
+            // 的 shared_ptr 不占外部引用计数，根实体存续期间以其保活；
+            // 路径变更/失效时随赋值自动换手释放，根销毁随析构释放
+            std::optional<std::shared_ptr<Tilemap::MapDocument>> held_map;
         };
 
         std::unordered_map<uint32_t, root_state> _m_roots;
@@ -105,16 +105,6 @@ namespace jeecs
             : game_system(w)
         {
             _m_staging.assign(CHUNK * CHUNK * FLOATS_PER_CELL, 0.f);
-        }
-
-        ~TilemapSystem()
-        {
-            // 世界销毁：释放各根实体持有的地图引用（归零级联逐出地图
-            // 与其图集）。经 typing::destruct 类型化析构，此处必定执行
-            auto& docs = Tilemap::documents::inst();
-            for (auto& [id, state] : _m_roots)
-                if (state.held_map != nullptr)
-                    docs.unload_map(state.held_map);
         }
 
         // ---- 共享资源 ----
@@ -410,9 +400,9 @@ namespace jeecs
                         int32_t ts_idx = 0, local = 0;
                         Tilemap::decode_tile_value(v, &ts_idx, &local);
                         if (ts_idx < 0 || ts_idx >= (int32_t)doc.tilesets.size()
-                            || doc.tilesets[ts_idx].resolved == nullptr)
+                            || !doc.tilesets[ts_idx].resolved.has_value())
                             continue;
-                        const auto* ts = doc.tilesets[ts_idx].resolved.get();
+                        const auto* ts = doc.tilesets[ts_idx].resolved->get();
                         int32_t src_idx = -1;
                         if (v > 0)
                         {
@@ -441,7 +431,7 @@ namespace jeecs
             {
                 je_GameEntity raw{};
                 Tilemap::Map* comp = nullptr;
-                Tilemap::MapDocument* doc = nullptr;
+                std::optional<std::shared_ptr<Tilemap::MapDocument>> doc;
             };
             std::vector<root_info> roots;
             std::set<uint32_t> alive_root_ids;
@@ -449,13 +439,13 @@ namespace jeecs
                 query_entity<view typesof(Tilemap::Map&)>())
             {
                 alive_root_ids.insert(e._m_raw._m_id);
-                roots.push_back({ e._m_raw, &map_comp, nullptr });
+                roots.push_back({ e._m_raw, &map_comp, std::nullopt });
             }
             for (auto& r : roots)
             {
                 const std::string path =
                     r.comp != nullptr ? std::string(r.comp->map_path.c_str()) : std::string();
-                r.doc = docs.open_map(path);
+                r.doc = docs.observe_map(path);
             }
 
             // 2. 回收孤儿分片与根簿记（所有者不存在或不再持有 Map 组件）
@@ -472,9 +462,7 @@ namespace jeecs
             {
                 if (alive_root_ids.count(it->first) == 0)
                 {
-                    // 根实体消失：释放其占用的地图引用
-                    if (it->second.held_map != nullptr)
-                        docs.unload_map(it->second.held_map);
+                    // 根实体消失：地图持有随 root_state 析构自动释放
                     it = _m_roots.erase(it);
                 }
                 else
@@ -488,32 +476,23 @@ namespace jeecs
                 root_state& state = _m_roots[root_id];
                 game_entity root{ r.raw };
 
-                // 世界占用：根实体存续期间持有地图 1 个引用；路径变更
-                //（另存/换绑）或首次解析时换手。open_map 返回自带 1 个
-                // 引用：换手时直接转交给 held_map，同实例时释放该多余
-                // 引用——引用在锁内与打开一并计得，GC 终结器无法在
-                // "打开成功"与"计引用"之间逐出文档。
-                if (state.held_map != r.doc)
-                {
-                    if (state.held_map != nullptr)
-                        docs.unload_map(state.held_map);
-                    state.held_map = r.doc;
-                }
-                else if (r.doc != nullptr)
-                {
-                    docs.unload_map(r.doc);
-                }
+                // 世界占用：根实体存续期间以 observe 持有地图实例（不占
+                // 外部引用计数）；路径变更（另存/换绑）或首次解析时随
+                // 赋值自动换手，同实例赋值为无操作
+                state.held_map = r.doc;
+                Tilemap::MapDocument* const doc =
+                    r.doc.has_value() ? r.doc->get() : nullptr;
 
                 // 网格扫描只在版本戳变化时执行（map_stamp 已含图集实例身份，
                 // 图集被重载/替换同样会触发重扫）
                 uint64_t stamp = 0;
-                if (r.doc != nullptr)
-                    stamp = docs.map_stamp(*r.doc);
+                if (doc != nullptr)
+                    stamp = docs.map_stamp(*doc);
                 if (!state.needed_valid || state.needed_stamp != stamp)
                 {
                     state.needed.clear();
-                    if (r.doc != nullptr)
-                        scan_needed(*r.doc, state.needed);
+                    if (doc != nullptr)
+                        scan_needed(*doc, state.needed);
                     state.needed_stamp = stamp;
                     state.needed_valid = true;
                 }
@@ -536,16 +515,16 @@ namespace jeecs
                     // 图层样式直接取自文档（资源随文档加载就绪）；文档
                     // 不可用或层下标越界按无样式处理（清空分片着色器）
                     const Tilemap::LayerStyle* style =
-                        r.doc != nullptr
-                        && key.layer < (int32_t)r.doc->layers.size()
-                        ? &r.doc->layers[key.layer].style : nullptr;
+                        doc != nullptr
+                        && key.layer < (int32_t)doc->layers.size()
+                        ? &doc->layers[key.layer].style : nullptr;
 
                     auto fnd = state.parts.find(key);
                     if (fnd != state.parts.end())
                     {
-                        if (r.doc != nullptr && fnd->second.built_stamp != stamp)
+                        if (doc != nullptr && fnd->second.built_stamp != stamp)
                         {
-                            rebuild_part(*r.doc, root, key, fnd->second);
+                            rebuild_part(*doc, root, key, fnd->second);
                             fnd->second.built_stamp = stamp;
                         }
                         // 着色器/纹理跟随图层样式，比例尺跟随根实体（组件
@@ -558,16 +537,16 @@ namespace jeecs
                     }
 
                     const Tilemap::SourceTexture* src_info = nullptr;
-                    if (r.doc != nullptr
-                        && key.tileset < (int32_t)r.doc->tilesets.size()
-                        && r.doc->tilesets[key.tileset].resolved != nullptr
-                        && key.source < (int32_t)r.doc->tilesets[key.tileset].resolved->sources.size())
-                        src_info = &r.doc->tilesets[key.tileset].resolved->sources[key.source];
+                    if (doc != nullptr
+                        && key.tileset < (int32_t)doc->tilesets.size()
+                        && doc->tilesets[key.tileset].resolved.has_value()
+                        && key.source < (int32_t)doc->tilesets[key.tileset].resolved->get()->sources.size())
+                        src_info = &doc->tilesets[key.tileset].resolved->get()->sources[key.source];
                     if (src_info == nullptr)
                         continue;
 
                     game_entity part_entity = create_part_entity(
-                        root, key.layer, r.doc->layers[key.layer].z, *src_info,
+                        root, key.layer, doc->layers[key.layer].z, *src_info,
                         style != nullptr ? *style : Tilemap::LayerStyle{});
                     auto* tag = part_entity.get_component<Tilemap::RenderPart>();
                     tag->owner_id = root_id;
@@ -578,9 +557,9 @@ namespace jeecs
 
                     part_entry entry{};
                     entry.entity = part_entity._m_raw;
-                    if (r.doc != nullptr)
+                    if (doc != nullptr)
                     {
-                        rebuild_part(*r.doc, root, key, entry);
+                        rebuild_part(*doc, root, key, entry);
                         entry.built_stamp = stamp;
                     }
                     state.parts[key] = entry;
@@ -595,13 +574,15 @@ namespace jeecs
 // ======================================================================
 
 // ---------------- 地图文档 ----------------
-je_TilemapDocument* je_tilemap_open_map(const char* path)
+/* OPTIONAL: If path cannot be opened */ je_TilemapDocument* je_tilemap_open_map(const char* path)
 {
     assert(path != nullptr);
-    // open_map 返回自带 1 个引用的实例（unload/gchandle 回收时释放）
-    return jeecs::Tilemap::documents::inst().open_map(path);
+    // open_map 返回自带 1 个外部引用的实例（unload/gchandle 回收时
+    // 释放）；打开失败（文件缺失/损坏，含已标记失败不重试）为 nullptr
+    auto doc = jeecs::Tilemap::documents::inst().open_map(path);
+    return doc.has_value() ? doc->get() : nullptr;
 }
-je_TilemapDocument* je_tilemap_create_map(int32_t w, int32_t h, int32_t tile_px)
+/* OPTIONAL: If size is invalid */ je_TilemapDocument* je_tilemap_create_map(int32_t w, int32_t h, int32_t tile_px)
 {
     if (w <= 0 || h <= 0 || tile_px <= 0 || w > 65536 || h > 65536)
         return nullptr;
@@ -653,9 +634,11 @@ int32_t je_tilemap_loaded_map_count(void)
 {
     return jeecs::Tilemap::documents::inst().map_count();
 }
-je_TilemapDocument* je_tilemap_loaded_map(int32_t index)
+/* OPTIONAL: If index is out of range or the slot is empty */ je_TilemapDocument* je_tilemap_loaded_map(int32_t index)
 {
-    return jeecs::Tilemap::documents::inst().map_at(index);
+    // 调用期间由 map_at 锁内的持有保活，用毕即弃、不占外部引用
+    auto doc = jeecs::Tilemap::documents::inst().map_at(index);
+    return doc.has_value() ? doc->get() : nullptr;
 }
 void je_tilemap_resize_map(je_TilemapDocument* doc, int32_t new_w, int32_t new_h)
 {
@@ -1146,7 +1129,7 @@ int32_t je_tilemap_find_cells(je_TilemapDocument* doc, je_LayerId layer,
 {
     assert(name != nullptr);
     assert(value != nullptr);
-    auto& result = jeecs::Tilemap::documents::inst().find_result(doc);
+    auto& result = doc->find_result;
     result.clear();
     std::set<int32_t> matched;
     const bool walkable_query = strcmp(name, "walkable") == 0;
@@ -1201,7 +1184,7 @@ bool je_tilemap_find_get(je_TilemapDocument* doc, int32_t index, int32_t* x, int
 {
     assert(x != nullptr);
     assert(y != nullptr);
-    const auto& result = jeecs::Tilemap::documents::inst().find_result(doc);
+    const auto& result = doc->find_result;
     if (index < 0 || index >= (int32_t)result.size())
         return false;
     *x = result[index].first;
@@ -1210,11 +1193,13 @@ bool je_tilemap_find_get(je_TilemapDocument* doc, int32_t index, int32_t* x, int
 }
 
 // ---------------- 图集文档 ----------------
-je_TilesetDocument* je_tilemap_open_tileset(const char* path)
+/* OPTIONAL: If path cannot be opened */ je_TilesetDocument* je_tilemap_open_tileset(const char* path)
 {
     assert(path != nullptr);
-    // open_tileset 返回自带 1 个引用的实例（unload/gchandle 回收时释放）
-    return jeecs::Tilemap::documents::inst().open_tileset(path);
+    // open_tileset 返回自带 1 个外部引用的实例（unload/gchandle 回收时
+    // 释放）；打开失败（文件缺失/损坏，含已标记失败不重试）为 nullptr
+    auto doc = jeecs::Tilemap::documents::inst().open_tileset(path);
+    return doc.has_value() ? doc->get() : nullptr;
 }
 je_TilesetDocument* je_tilemap_create_tileset(const char* name)
 {
@@ -1688,12 +1673,12 @@ bool je_tilemap_cell_quad(je_TilemapDocument* doc, je_LayerId layer, int32_t x, 
 
     const auto& q = quads[idx];
     if (q.tileset_idx < 0 || q.tileset_idx >= (int32_t)doc->tilesets.size()
-        || doc->tilesets[q.tileset_idx].resolved == nullptr
-        || q.source_idx < 0 || q.source_idx >= (int32_t)doc->tilesets[q.tileset_idx].resolved->sources.size())
+        || !doc->tilesets[q.tileset_idx].resolved.has_value()
+        || q.source_idx < 0 || q.source_idx >= (int32_t)doc->tilesets[q.tileset_idx].resolved->get()->sources.size())
         return false;
 
     if (texture_path != nullptr)
-        *texture_path = doc->tilesets[q.tileset_idx].resolved->sources[q.source_idx].path.c_str();
+        *texture_path = doc->tilesets[q.tileset_idx].resolved->get()->sources[q.source_idx].path.c_str();
     if (u0 != nullptr) *u0 = q.u0;
     if (v0 != nullptr) *v0 = q.v0;
     if (u1 != nullptr) *u1 = q.u1;

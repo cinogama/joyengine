@@ -4784,12 +4784,12 @@ JE_API bool je_main_script_entry();
 // 世界实例）。
 // 文档生命周期按引用计数管理：open/create 的调用方各持有 1 个引用，使用地图
 // 的世界与引用图集的地图亦各占 1 个；je_tilemap_keep_map/je_tilemap_unload_map
-//（图集侧同理）增减引用，归零且已保存的文档被逐出缓存、实例销毁（此后一切
-// 指针失效），未保存的文档保留驻留（逐出即数据丢失）。
+//（图集侧同理）增减引用，归零即销毁实例（未保存的修改随之丢弃，此后一切
+// 指针失效），下次按路径 open 自磁盘重读。
 // 引用计数与缓存注册表是线程安全的：Woolang 为并发 GC，文档 gchandle 的
 // 终结器会在 GC worker 线程上并行调用 unload（与编辑器线程、世界更新线程
 // 并发），open/create 返回的引用与打开/注册在同一锁定区间内取得，不会在
-// 取得引用前被并发逐出。文档内容（网格/图层等）仍为设计上的共享可变数据，
+// 取得引用前被并发销毁。文档内容（网格/图层等）仍为设计上的共享可变数据，
 // 内容级并发读写不由此组 API 串行化。
 // 瓦片值编码（网格/笔刷统一使用）：
 //     0            空
@@ -4811,7 +4811,7 @@ je_TilemapDocument [类型别名]
 地图文档(.je4tilemap)的不透明实例指针，指向全局缓存、按路径共享的
 地图文档对象
     * nullptr 是无效值；open/create 成功返回的指针携带 1 个文档引用，
-      引用计数归零且文档被逐出后指针随之失效，不得继续使用
+      引用计数归零后实例销毁、指针随之失效，不得继续使用
 请参见：
     je_TilesetDocument
     je_tilemap_open_map
@@ -4823,7 +4823,7 @@ je_TilesetDocument [类型别名]
 图集文档(.je4tileset)的不透明实例指针，指向全局缓存、按路径共享的
 图集文档对象
     * nullptr 是无效值；open/create 成功返回的指针携带 1 个文档引用，
-      引用计数归零且文档被逐出后指针随之失效，不得继续使用
+      引用计数归零后实例销毁、指针随之失效，不得继续使用
 请参见：
     je_TilemapDocument
     je_tilemap_open_tileset
@@ -4990,10 +4990,9 @@ JE_API int32_t je_tilemap_keep_map(je_TilemapDocument* map);
 
 /*
 je_tilemap_unload_map [基本接口]
-地图文档引用计数 -1（下限 0）；归零且文档已保存（登记路径非空）时
-文档被逐出缓存——实例销毁、指针立即失效，下次按路径打开自磁盘重读
-    * 未保存（路径为空）的文档归零后仍保留驻留，避免数据丢失
-    * 返回减少后的计数（0 表示文档已被逐出或不可再卸载）
+地图文档引用计数 -1（下限 0）；归零即销毁文档实例——指针立即失效，下次
+按路径打开自磁盘重读（未保存的修改随之丢弃）
+    * 返回减少后的计数（0 表示文档已被销毁或不可再卸载）
     * 线程安全：可从任意线程调用；Woolang 文档 gchandle 被并发 GC
       回收时即经终结器在 GC worker 线程上调用本函数
 请参见：
@@ -5005,10 +5004,9 @@ JE_API int32_t je_tilemap_unload_map(je_TilemapDocument* map);
 /*
 je_tilemap_loaded_map_count [基本接口]
 返回进程内已注册的地图文档数量（含未保存的新建文档）
-    * 文档被 je_tilemap_unload_map 逐出后其槽位置空，计数不变但
-      je_tilemap_loaded_map 在该下标返回 nullptr（空槽位）；计数也含被
-      je_tilemap_reload_map 弃用的旧实例，其路径已清空、不再被任何
-      世界使用
+    * 文档实例销毁后其枚举槽位置空，计数不变但 je_tilemap_loaded_map
+      在该下标返回 nullptr；计数也含仍被引用、但已被 je_tilemap_reload_map
+      弃用的旧实例（其路径已清空、不再被任何世界使用）
 请参见：
     je_tilemap_loaded_map
 */
@@ -5017,8 +5015,8 @@ JE_API int32_t je_tilemap_loaded_map_count(void);
 /*
 je_tilemap_loaded_map [基本接口]
 按枚举下标取已注册地图文档的实例指针，与 je_tilemap_loaded_map_count 配套遍历
-    * 下标从 0 起、小于 je_tilemap_loaded_map_count；越界或槽位已空返回
-      nullptr
+    * 下标从 0 起、小于 je_tilemap_loaded_map_count；越界或该槽位实例
+      已销毁返回 nullptr
     * 枚举下标不是文档指针：文档指针稳定不变，而打开/新建文档会使后续
       枚举下标位移，遍历中不应再打开/新建文档
 请参见：
@@ -5345,10 +5343,10 @@ JE_API int32_t je_tilemap_keep_tileset(je_TilesetDocument* tileset);
 
 /*
 je_tilemap_unload_tileset [基本接口]
-图集文档引用计数 -1（下限 0）；归零且文档已保存时被逐出缓存——实例
-销毁、指针立即失效，下次按路径打开（或地图解析）自磁盘重读
-    * 未保存的文档归零后仍保留驻留，避免数据丢失
-    * 返回减少后的计数（0 表示文档已被逐出或不可再卸载）
+图集文档引用计数 -1（下限 0）；归零即撤销注册表对该实例的持有——已无
+引用方（引用它的地图等）时实例销毁、指针立即失效，下次按路径打开（或
+地图解析）自磁盘重读（未保存的修改随之丢弃）
+    * 返回减少后的计数（0 表示文档已被销毁或不可再卸载）
 请参见：
     je_tilemap_keep_tileset
 */
@@ -13441,7 +13439,7 @@ namespace jeecs
     map_document / tileset_document 为按路径共享、引用计数管理的文档包装：
     open 返回 std::optional<basic::resource<...>>，包装构造时取得 1 个文档
     引用、析构时释放，resource 的各副本共享同一引用；句柄存活期间文档实例
-    不会被逐出缓存，可以安全持有，重复 open 同一路径只增加引用计数。引用
+    不会被销毁，可以安全持有，重复 open 同一路径只增加引用计数。引用
     计数操作线程安全，但文档内容（网格/图层等）是共享可变数据——与编辑器
     等并发写入方并行查询时需自行保证串行化。各名称/路径字符串指向文档内部
     存储，在文档下次被修改前有效。
