@@ -27,8 +27,6 @@
 #include <cstring>
 #include <cmath>
 #include <cctype>
-#include <cstdlib>
-#include <cerrno>
 #include <algorithm>
 #include <mutex>
 #include <variant>
@@ -95,34 +93,6 @@ namespace jeecs
             return t >= (int32_t)JE_PROPERTY_TYPE_BOOL
                 && t <= (int32_t)JE_PROPERTY_TYPE_VEC4;
         }
-        inline const char* property_type_name(je_PropertyType t)
-        {
-            switch (t)
-            {
-            case JE_PROPERTY_TYPE_BOOL: return "bool";
-            case JE_PROPERTY_TYPE_STRING: return "string";
-            case JE_PROPERTY_TYPE_INT: return "int";
-            case JE_PROPERTY_TYPE_FLOAT: return "float";
-            case JE_PROPERTY_TYPE_VEC2: return "vec2";
-            case JE_PROPERTY_TYPE_VEC3: return "vec3";
-            case JE_PROPERTY_TYPE_VEC4: return "vec4";
-            }
-            return "?";
-        }
-        inline bool property_type_from_name(const std::string& s, je_PropertyType* out)
-        {
-            for (int32_t t = (int32_t)JE_PROPERTY_TYPE_BOOL;
-                t <= (int32_t)JE_PROPERTY_TYPE_VEC4; ++t)
-            {
-                if (s == property_type_name((je_PropertyType)t))
-                {
-                    *out = (je_PropertyType)t;
-                    return true;
-                }
-            }
-            return false;
-        }
-
         // 按类型的零值（add_property 未给 default 时使用）
         inline property_value property_zero_value(je_PropertyType t)
         {
@@ -148,125 +118,6 @@ namespace jeecs
                 return property_value{ std::in_place_type<bool>, false };
             }
         }
-
-        // ---- 字符串 -> 属性值（仅旧版字符串格式文件加载用）----
-        inline bool parse_i32_full(const std::string& s, int32_t* out)
-        {
-            if (s.empty())
-                return false;
-            char* end = nullptr;
-            errno = 0;
-            long v = std::strtol(s.c_str(), &end, 10);
-            if (errno != 0 || end != s.c_str() + s.size()
-                || v < INT32_MIN || v > INT32_MAX)
-                return false;
-            *out = (int32_t)v;
-            return true;
-        }
-        inline bool parse_f32_full(const std::string& s, float* out)
-        {
-            if (s.empty())
-                return false;
-            char* end = nullptr;
-            errno = 0;
-            float v = std::strtof(s.c_str(), &end);
-            if (errno != 0 || end != s.c_str() + s.size())
-                return false;
-            *out = v;
-            return true;
-        }
-        // 逗号分隔的恰好 n 个浮点（允许逗号前后空白，如 "0, 0"）
-        inline bool parse_vec_full(const std::string& s, size_t n, float* out)
-        {
-            size_t start = 0;
-            for (size_t i = 0; i < n; ++i)
-            {
-                size_t comma = s.find(',', start);
-                std::string part = s.substr(start,
-                    comma == std::string::npos ? std::string::npos : comma - start);
-                while (!part.empty() && std::isspace((unsigned char)part.front()))
-                    part.erase(part.begin());
-                while (!part.empty() && std::isspace((unsigned char)part.back()))
-                    part.pop_back();
-                if (!parse_f32_full(part, &out[i]))
-                    return false;
-                if (i + 1 < n)
-                {
-                    if (comma == std::string::npos)
-                        return false;
-                    start = comma + 1;
-                }
-                else if (comma != std::string::npos)
-                    return false;   // 分量多于 n
-            }
-            return true;
-        }
-        // 按类型解析字符串值；解析失败返回 false
-        inline bool property_value_from_string(
-            je_PropertyType t, const std::string& s, property_value* out)
-        {
-            switch (t)
-            {
-            case JE_PROPERTY_TYPE_BOOL:
-                if (s == "true") { *out = true; return true; }
-                if (s == "false") { *out = false; return true; }
-                return false;
-            case JE_PROPERTY_TYPE_STRING:
-                *out = s;
-                return true;
-            case JE_PROPERTY_TYPE_INT:
-            {
-                int32_t v;
-                if (!parse_i32_full(s, &v))
-                    return false;
-                *out = v;
-                return true;
-            }
-            case JE_PROPERTY_TYPE_FLOAT:
-            {
-                float v;
-                if (!parse_f32_full(s, &v))
-                    return false;
-                *out = v;
-                return true;
-            }
-            case JE_PROPERTY_TYPE_VEC2:
-            case JE_PROPERTY_TYPE_VEC3:
-            case JE_PROPERTY_TYPE_VEC4:
-            {
-                float f[4];
-                size_t n = t == JE_PROPERTY_TYPE_VEC2 ? 2
-                    : t == JE_PROPERTY_TYPE_VEC3 ? 3 : 4;
-                if (!parse_vec_full(s, n, f))
-                    return false;
-                if (n == 2) *out = std::array<float, 2>{ f[0], f[1] };
-                else if (n == 3) *out = std::array<float, 3>{ f[0], f[1], f[2] };
-                else *out = std::array<float, 4>{ f[0], f[1], f[2], f[3] };
-                return true;
-            }
-            }
-            return false;
-        }
-        // 无类型信息时按内容推断（旧地图文件逐格覆盖：属性 schema 在
-        // 图集文档里，地图加载时不可靠解析）。
-        inline property_value property_value_from_string_heuristic(const std::string& s)
-        {
-            property_value v;
-            if (property_value_from_string(JE_PROPERTY_TYPE_BOOL, s, &v))
-                return v;
-            if (property_value_from_string(JE_PROPERTY_TYPE_INT, s, &v))
-                return v;
-            if (property_value_from_string(JE_PROPERTY_TYPE_FLOAT, s, &v))
-                return v;
-            for (int32_t t = (int32_t)JE_PROPERTY_TYPE_VEC2;
-                t <= (int32_t)JE_PROPERTY_TYPE_VEC4; ++t)
-            {
-                if (property_value_from_string((je_PropertyType)t, s, &v))
-                    return v;
-            }
-            return property_value{ std::in_place_type<std::string>, s };
-        }
-
 
         // ==================== 文档数据模型 ====================
         struct SourceTexture
@@ -370,7 +221,7 @@ namespace jeecs
             bool visible = true;
             bool locked = false;    // 编辑器锁定标记（运行时忽略）
             // 该层在世界中的 z 偏移（相对地图根实体，世界单位）。
-            // 不同层须错开 z 以避免深度冲突；旧文件缺省为层下标。
+            // 不同层须错开 z 以避免深度冲突；缺省按层下标错开。
             float z = 0.f;
             std::vector<int32_t> grid;  // w*h 稠密网格，行优先、y 自上而下
             LayerStyle style;           // 逐层着色器样式（可空）
@@ -414,13 +265,9 @@ namespace jeecs
         // ==================== 二进制读写 ====================
         // 与 .je4animation 同风格的自有二进制格式（魔数 + 小端字段），
         // 由 C++ 侧统一读写，避免在内核引入 TOML 依赖。
-        // JTS2/JTM2 起属性值为类型化数据（每值前有 1 字节类型标记）；
-        // 旧版 JTS1/JTM1 的字符串值在加载时按 schema 类型（图集）或按
-        // 内容推断（地图逐格覆盖）转换。
+        // 属性值为类型化数据：每值前有 1 字节类型标记（je_PropertyType）。
         constexpr uint32_t TILESET_MAGIC = 0x4A545332;     // "JTS2"
         constexpr uint32_t MAP_MAGIC = 0x4A544D32;         // "JTM2"
-        constexpr uint32_t LEGACY_TILESET_MAGIC = 0x4A545331;  // "JTS1"
-        constexpr uint32_t LEGACY_MAP_MAGIC = 0x4A544D31;      // "JTM1"
 
         struct bin_writer
         {
@@ -532,21 +379,6 @@ namespace jeecs
             r.ok = false;
             return property_value{};
         }
-        // 旧版字符串值：按 schema 类型解析（图集侧，schema 已在文件内）
-        inline property_value legacy_property_value(
-            const std::string& s, const je_PropertyType* type)
-        {
-            property_value v;
-            if (type != nullptr && property_value_from_string(*type, s, &v))
-                return v;
-            if (type != nullptr)
-            {
-                debug::logerr("Tilemap: legacy property value '%s' does not fit "
-                    "its schema type, fallback to heuristic.",
-                    s.c_str());
-            }
-            return property_value_from_string_heuristic(s);
-        }
 
         // @/!/ 前缀 -> 本地文件系统路径（保存用；读取走 jeecs_file_open 支持 fimg 包）
         inline std::string resolve_runtime_prefix(const std::string& path)
@@ -620,8 +452,7 @@ namespace jeecs
                 w.i32(tid); w.u32((uint32_t)kvs.size());
                 for (const auto& [k, v] : kvs) { w.str(k); write_property_value(w, v); }
             }
-            // 尾块：地形默认属性（键为地形 id）。旧版读取器按计数读完即止，
-            // 多余的尾块被忽略；旧文件无此块时加载侧保持为空（与地图
+            // 尾块：地形默认属性（键为地形 id），置于计数数据之后（与地图
             // z 偏移尾块同款做法）。
             uint32_t terrprop_count = 0;
             for (size_t i = 1; i < ts.terrains.size(); ++i)
@@ -649,9 +480,8 @@ namespace jeecs
             auto ts = std::make_shared<TilesetDocument>();
             ts->path = path;
             const uint32_t magic = r.u32();
-            if (magic != TILESET_MAGIC && magic != LEGACY_TILESET_MAGIC)
+            if (magic != TILESET_MAGIC)
                 return nullptr;
-            const bool legacy = magic == LEGACY_TILESET_MAGIC;
             ts->name = r.str();
             uint32_t src_n = r.u32();
             for (uint32_t i = 0; i < src_n && r.ok; ++i)
@@ -674,34 +504,13 @@ namespace jeecs
             uint32_t prop_n = r.u32();
             for (uint32_t i = 0; i < prop_n && r.ok; ++i)
             {
-                if (legacy)
-                {
-                    // 旧格式：name/type/default 均为字符串。type 无法识别的
-                    // 属性条目跳过（数据继续对齐——三条 str 长度前缀读全）。
-                    PropertyDef pd;
-                    pd.name = r.str();
-                    std::string type_name = r.str();
-                    std::string def = r.str();
-                    if (property_type_from_name(type_name, &pd.type))
-                    {
-                        pd.default_value = legacy_property_value(def, &pd.type);
-                        ts->properties.push_back(std::move(pd));
-                    }
-                    else
-                        debug::logerr("Tilemap: legacy property '%s' has unknown "
-                            "type '%s', dropped.",
-                            pd.name.c_str(), type_name.c_str());
-                }
-                else
-                {
-                    PropertyDef pd;
-                    pd.name = r.str();
-                    pd.type = (je_PropertyType)r.u8();
-                    if (!property_type_valid((int32_t)pd.type))
-                    { r.ok = false; break; }
-                    pd.default_value = read_property_value(r);
-                    ts->properties.push_back(std::move(pd));
-                }
+                PropertyDef pd;
+                pd.name = r.str();
+                pd.type = (je_PropertyType)r.u8();
+                if (!property_type_valid((int32_t)pd.type))
+                { r.ok = false; break; }
+                pd.default_value = read_property_value(r);
+                ts->properties.push_back(std::move(pd));
             }
             ts->terrains.push_back(TerrainDef{}); // id 0 占位
             uint32_t terr_n = r.u32();
@@ -715,27 +524,10 @@ namespace jeecs
                 for (uint32_t k = 0; k < vn && r.ok; ++k) t.variant_tiles.push_back(r.i32());
                 ts->terrains.push_back(std::move(t));
             }
-            // 旧格式的字符串值按 schema 里同名属性的类型转换；新属性名
-            // 不在 schema 时按内容推断
             auto read_kv = [&](std::map<std::string, property_value>& kvs)
             {
                 std::string key = r.str();
-                if (legacy)
-                {
-                    std::string val = r.str();
-                    const je_PropertyType* st = nullptr;
-                    for (const auto& pd : ts->properties)
-                        if (pd.name == key)
-                        {
-                            st = &pd.type;
-                            break;
-                        }
-                    kvs[std::move(key)] = legacy_property_value(val, st);
-                }
-                else
-                {
-                    kvs[std::move(key)] = read_property_value(r);
-                }
+                kvs[std::move(key)] = read_property_value(r);
             };
             uint32_t tp_n = r.u32();
             for (uint32_t i = 0; i < tp_n && r.ok; ++i)
@@ -747,8 +539,8 @@ namespace jeecs
             }
             if (!r.ok)
                 return nullptr;
-            // 尾块（可选）：地形默认属性。旧文件无此块 → 跳过；条目至少
-            // 8 字节（地形 id + 键值数），总量越界视为损坏。
+            // 尾块（可选）：地形默认属性。条目至少 8 字节（地形 id + 键值
+            // 数），总量越界视为损坏。
             if (r.o + 4 <= r.n)
             {
                 uint32_t tprop_n = r.u32();
@@ -953,8 +745,7 @@ namespace jeecs
                 w.u32((uint32_t)kvs.size());
                 for (const auto& [k, v] : kvs) { w.str(k); write_property_value(w, v); }
             }
-            // 尾块：每层 z 偏移（f32）。旧版读取器按计数读完即止，多余的
-            // 尾块被忽略；旧文件无此块时加载侧按层下标补默认值。
+            // 尾块：每层 z 偏移（f32），置于计数数据之后。
             w.u32((uint32_t)m.layers.size());
             for (const auto& l : m.layers)
                 w.f32(l.z);
@@ -1012,9 +803,8 @@ namespace jeecs
             auto m = std::make_shared<MapDocument>();
             m->path = path;
             const uint32_t magic = r.u32();
-            if (magic != MAP_MAGIC && magic != LEGACY_MAP_MAGIC)
+            if (magic != MAP_MAGIC)
                 return nullptr;
-            const bool legacy = magic == LEGACY_MAP_MAGIC;
             m->width = r.i32(); m->height = r.i32(); m->tile_px = r.i32();
             if (m->width < 0 || m->height < 0 || m->tile_px <= 0
                 || m->width > 65536 || m->height > 65536)
@@ -1043,29 +833,14 @@ namespace jeecs
                 for (uint32_t k = 0; k < kv_n && r.ok; ++k)
                 {
                     std::string key = r.str();
-                    if (legacy)
-                    {
-                        // 旧格式的字符串值：schema 类型在各图集文档里，此处
-                        // 按内容推断转换（下次保存即为类型化格式）
-                        std::string val = r.str();
-                        m->cell_properties[{ layer, cell }][std::move(key)] =
-                            property_value_from_string_heuristic(val);
-                        if (k == 0 && i == 0)
-                            debug::logerr("Tilemap: legacy map file '%s' uses "
-                                "string properties, converted heuristically.",
-                                path.c_str());
-                    }
-                    else
-                    {
-                        m->cell_properties[{ layer, cell }][std::move(key)] =
-                            read_property_value(r);
-                    }
+                    m->cell_properties[{ layer, cell }][std::move(key)] =
+                        read_property_value(r);
                 }
             }
             if (!r.ok)
                 return nullptr;
-            // 尾块（可选）：每层 z 偏移。旧文件无此块 → 按层下标错开，
-            // 保证多层默认不发生深度冲突。
+            // 尾块（可选）：每层 z 偏移。缺块时按层下标错开，保证多层
+            // 默认不发生深度冲突。
             for (size_t i = 0; i < m->layers.size(); ++i)
                 m->layers[i].z = (float)i;
             if (r.o + 4 <= r.n)
