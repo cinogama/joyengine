@@ -88,7 +88,5 @@ void _jeecs_entry_register_core_systems(jeecs::typing::type_unregister_guard* gu
     jeecs::typing::register_type<jeecs::AudioUpdatingSystem>(guard, "Audio::AudioUpdatingSystem");
     jeecs::typing::register_type<jeecs::VirtualGamepadInputSystem>(guard, "Input::VirtualGamepadInputSystem");
 
-    jeecs::typing::register_type<jeecs::Tilemap::Map>(guard, "Tilemap::Map");
-    jeecs::typing::register_type<jeecs::Tilemap::RenderPart>(guard, "Tilemap::RenderPart");
     jeecs::typing::register_type<jeecs::TilemapSystem>(guard, "Tilemap::TilemapSystem");
 }

@@ -14512,6 +14512,20 @@ namespace jeecs
                 typing::register_member(guard, &Map::map_path, "map_path");
             }
         };
+
+        struct Wall
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Wall);
+            JECS_DEFAULT_CONSTRUCTOR(Wall);
+
+            size_t layerid = 0;
+
+            static void JERefRegsiter(typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &Wall::layerid, "layerid");
+            }
+        };
+
         /*
         Tilemap::RenderPart [组件]
         瓦片地图渲染分片：由 TilemapSystem 创建的“图层 × 分块 × 图集”
@@ -15119,6 +15133,10 @@ namespace jeecs
             jeecs::typing::register_type<Audio::Playing>(guard, "Audio::Playing");
 
             jeecs::typing::register_type<Input::VirtualGamepad>(guard, "Input::VirtualGamepad");
+
+            jeecs::typing::register_type<Tilemap::Map>(guard, "Tilemap::Map");
+            jeecs::typing::register_type<Tilemap::Wall>(guard, "Tilemap::Wall");
+            jeecs::typing::register_type<Tilemap::RenderPart>(guard, "Tilemap::RenderPart");
 
             // 1. register basic types
             jeecs::typing::register_type<basic::file_resource<>>(guard, nullptr);
