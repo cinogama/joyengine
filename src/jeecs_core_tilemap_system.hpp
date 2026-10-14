@@ -61,7 +61,7 @@ namespace jeecs
     struct TilemapSystem : public game_system
     {
         static constexpr size_t CHUNK = 32;         // 分块边长（格）
-        static constexpr size_t FLOATS_PER_VERTEX = 8;   // pos3 + uv2 + normal3
+        static constexpr size_t FLOATS_PER_VERTEX = 9;   // pos3 + uv3(u,v,layer) + normal3
         static constexpr size_t VERTS_PER_CELL = 16;     // 每格 4 个子四边形槽位
         static constexpr size_t FLOATS_PER_CELL = VERTS_PER_CELL * FLOATS_PER_VERTEX;
 
@@ -131,9 +131,10 @@ namespace jeecs
             comp->shaders.push_back(want);
         }
 
-        // 分片附加纹理对齐：槽 0 恒为图集源纹理（创建时绑定，保留），
-        // 其余槽按图层样式逐帧比对重绑。与着色器/比例尺对齐同理——
-        // 组件变化不计入地图版本戳，故每帧检查。
+        // 分片附加纹理对齐：Textures2D 只承载图层样式的 2D 附加纹理
+        //（槽 >= 1，槽 0 由 Textures2DArray 的数组图集占用）；逐帧与
+        // 样式比对重绑。与着色器/比例尺对齐同理——组件变化不计入地图
+        // 版本戳，故每帧检查。
         static void refresh_part_textures(const game_entity& part,
             const Tilemap::LayerStyle* style)
         {
@@ -143,12 +144,10 @@ namespace jeecs
 
             const size_t want_count = style != nullptr ? style->textures.size() : 0;
 
-            // 现状中的非 0 槽绑定与期望逐项比对，一致则不动
+            // 现状绑定与期望逐项比对，一致则不动
             size_t matched = 0;
             for (const auto& e : comp->textures)
             {
-                if (e.m_pass_id == 0)
-                    continue;
                 if (matched >= want_count
                     || e.m_pass_id != (size_t)style->textures[matched].slot
                     || e.m_texture.get() != style->textures[matched].texture.get())
@@ -161,12 +160,8 @@ namespace jeecs
             if (matched == want_count)
                 return;
 
-            // 重绑：保留槽 0（图集源纹理），其余按样式重建
-            basic::vector<Renderer::Textures2D::texture_with_passid> kept;
-            for (const auto& e : comp->textures)
-                if (e.m_pass_id == 0)
-                    kept.push_back(e);
-            comp->textures = kept;
+            // 重绑：按样式重建
+            comp->textures.clear();
             if (style != nullptr)
                 for (const auto& t : style->textures)
                     comp->bind_texture((size_t)t.slot, t.texture);
@@ -211,17 +206,18 @@ namespace jeecs
 
         // ---- 顶点写入 ----
 
-        // 写一个四边形（x0/y0 左下，x1/y1 右上；v 引擎空间向上增长）
+        // 写一个四边形（x0/y0 左下，x1/y1 右上；v 引擎空间向上增长；
+        // uv 为 tile-local [0,1]²，layer 为数组纹理层号）
         static void write_quad(float* v,
             float x0, float y0, float x1, float y1,
-            float u0, float v0, float u1, float v1)
+            float u0, float v0, float u1, float v1, float layer)
         {
             // 顶点序：0=左下 1=右下 2=左上 3=右上（索引 0,1,2 2,1,3）
             float* p = v;
-            *p++ = x0; *p++ = y0; *p++ = 0.f; *p++ = u0; *p++ = v0; *p++ = 0.f; *p++ = 0.f; *p++ = -1.f;
-            *p++ = x1; *p++ = y0; *p++ = 0.f; *p++ = u1; *p++ = v0; *p++ = 0.f; *p++ = 0.f; *p++ = -1.f;
-            *p++ = x0; *p++ = y1; *p++ = 0.f; *p++ = u0; *p++ = v1; *p++ = 0.f; *p++ = 0.f; *p++ = -1.f;
-            *p++ = x1; *p++ = y1; *p++ = 0.f; *p++ = u1; *p++ = v1; *p++ = 0.f; *p++ = 0.f; *p++ = -1.f;
+            *p++ = x0; *p++ = y0; *p++ = 0.f; *p++ = u0; *p++ = v0; *p++ = layer; *p++ = 0.f; *p++ = 0.f; *p++ = -1.f;
+            *p++ = x1; *p++ = y0; *p++ = 0.f; *p++ = u1; *p++ = v0; *p++ = layer; *p++ = 0.f; *p++ = 0.f; *p++ = -1.f;
+            *p++ = x0; *p++ = y1; *p++ = 0.f; *p++ = u0; *p++ = v1; *p++ = layer; *p++ = 0.f; *p++ = 0.f; *p++ = -1.f;
+            *p++ = x1; *p++ = y1; *p++ = 0.f; *p++ = u1; *p++ = v1; *p++ = layer; *p++ = 0.f; *p++ = 0.f; *p++ = -1.f;
         }
 
         // 把某格的解析结果写入 staging（16 顶点槽位：未用槽位写零面积
@@ -236,13 +232,13 @@ namespace jeecs
             const float xm = x0 + half, ym = ybot + half;
 
             for (size_t q = 0; q < 4; ++q)
-                write_quad(dst + q * 4 * FLOATS_PER_VERTEX, x0, ytop, x0, ytop, 0.f, 0.f, 0.f, 0.f);
+                write_quad(dst + q * 4 * FLOATS_PER_VERTEX, x0, ytop, x0, ytop, 0.f, 0.f, 0.f, 0.f, 0.f);
             for (int32_t i = 0; i < count; ++i)
             {
                 const auto& q = quads[i];
                 if (!q.corner.has_value())
                 {
-                    write_quad(dst, x0, ybot, x1, ytop, q.u0, q.v0, q.u1, q.v1);
+                    write_quad(dst, x0, ybot, x1, ytop, q.u0, q.v0, q.u1, q.v1, (float)q.layer);
                 }
                 else
                 {
@@ -256,7 +252,7 @@ namespace jeecs
                     default: cx0 = xm;  cy0 = ybot; cx1 = x1; cy1 = ym;  break;
                     }
                     write_quad(dst + (size_t)*q.corner * 4 * FLOATS_PER_VERTEX,
-                        cx0, cy0, cx1, cy1, q.u0, q.v0, q.u1, q.v1);
+                        cx0, cy0, cx1, cy1, q.u0, q.v0, q.u1, q.v1, (float)q.layer);
                 }
             }
         }
@@ -272,6 +268,7 @@ namespace jeecs
                 Transform::LocalPosition, Transform::LocalRotation, Transform::LocalScale,
                 Transform::LocalToParent, Transform::Translation,
                 Renderer::Shape, Renderer::Shaders, Renderer::Textures2D,
+                Renderer::Textures2DArray,
                 Renderer::Rendqueue, Editor::Invisible, Tilemap::RenderPart>();
 
             // 挂到地图根实体下（根实体需要 Anchor）
@@ -298,10 +295,18 @@ namespace jeecs
             if (style.shader.has_value())
                 shaders->shaders.push_back(style.shader.value());
 
+            // 数组图集（每层一个瓦片）绑到 pass 0：采样侧 tex2darray，
+            // 相邻瓦片渗色在结构上不可能发生（层内 CLAMP）
+            if (src.array.has_value())
+                part.get_component<Renderer::Textures2DArray>()
+                    ->bind_texture(0, *src.array);
+            else
+                debug::logerr(
+                    "Tilemap: source '%s' has no texture array built yet.",
+                    src.path.c_str());
+
+            // 图层样式的附加 2D 纹理占其余槽（槽 >= 1）
             auto* textures = part.get_component<Renderer::Textures2D>();
-            if (auto tex = graphic::texture2d::load(nullptr, src.path))
-                textures->bind_texture(0, tex.value());
-            // 图层样式的附加纹理占其余槽（槽 0 已是图集源纹理）
             for (const auto& t : style.textures)
                 textures->bind_texture((size_t)t.slot, t.texture);
 
@@ -313,7 +318,7 @@ namespace jeecs
                 shared_indices(),
                 {
                     { jegl_vertex::data_type::FLOAT32, 3 }, // pos
-                    { jegl_vertex::data_type::FLOAT32, 2 }, // uv
+                    { jegl_vertex::data_type::FLOAT32, 3 }, // uv (u, v, array layer)
                     { jegl_vertex::data_type::FLOAT32, 3 }, // normal
                 });
             if (created.has_value())
@@ -495,6 +500,16 @@ namespace jeecs
                     stamp = docs.map_stamp(*doc);
                 if (!state.needed_valid || state.needed_stamp != stamp)
                 {
+                    // 图集数组兜底：文档解析与 add_source 正常都会构建，
+                    // 此处对经由其他路径装载的文档在版本变化时幂等补建
+                    //（纹理未就绪时由分片创建分支再兜底）
+                    if (doc != nullptr)
+                        for (auto& ref : doc->tilesets)
+                            if (ref.resolved.has_value())
+                                for (auto& s : ref.resolved->get()->sources)
+                                    if (!s.array.has_value())
+                                        Tilemap::build_source_array(s);
+
                     state.needed.clear();
                     if (doc != nullptr)
                         scan_needed(*doc, state.needed);
@@ -541,7 +556,7 @@ namespace jeecs
                         continue;
                     }
 
-                    const Tilemap::SourceTexture* src_info = nullptr;
+                    Tilemap::SourceTexture* src_info = nullptr;
                     if (doc != nullptr
                         && key.tileset < (int32_t)doc->tilesets.size()
                         && doc->tilesets[key.tileset].resolved.has_value()
@@ -549,6 +564,11 @@ namespace jeecs
                         src_info = &doc->tilesets[key.tileset].resolved->get()->sources[key.source];
                     if (src_info == nullptr)
                         continue;
+
+                    // 数组图集就绪兜底（首次创建该分片时构建一次；
+                    // 纹理未就绪则本次留空，版本变化时重扫再试）
+                    if (!src_info->array.has_value())
+                        Tilemap::build_source_array(*src_info);
 
                     game_entity part_entity = create_part_entity(
                         root, key.layer, doc->layers[key.layer].z,
@@ -1315,6 +1335,11 @@ bool je_tilemap_add_source(je_TilesetDocument* doc, const char* texture_path,
     src.ycount = th / tile_px;
     src.tex_w = tw;
     src.tex_h = th;
+    // 展开为"每层一个瓦片"的数组纹理（分片采样用）
+    if (!jeecs::Tilemap::build_source_array(src))
+        jeecs::debug::logwarn(
+            "Tilemap: texture array for '%s' deferred (image not ready).",
+            texture_path);
     doc->sources.push_back(std::move(src));
     ++doc->version;
     *out_id = (je_SourceId)doc->sources.size() - 1;
@@ -1709,10 +1734,21 @@ bool je_tilemap_cell_quad(je_TilemapDocument* doc, je_LayerId layer, int32_t x, 
 
     if (texture_path != nullptr)
         *texture_path = doc->tilesets[q.tileset_idx].resolved->get()->sources[q.source_idx].path.c_str();
-    if (u0 != nullptr) *u0 = q.u0;
-    if (v0 != nullptr) *v0 = q.v0;
-    if (u1 != nullptr) *u1 = q.u1;
-    if (v1 != nullptr) *v1 = q.v1;
+
+    // 编辑器预览按 2D 图集绘制：把 tile-local UV 换算回图集绝对 UV
+    //（层号 -> 网格坐标：layer = iy * xcount + ix）
+    const auto& src = doc->tilesets[q.tileset_idx].resolved->get()->sources[q.source_idx];
+    const int32_t ix = q.layer % src.xcount;
+    const int32_t iy = q.layer / src.xcount;
+    const float w = (float)src.tex_w.value_or(src.xcount * src.tile_px);
+    const float h = (float)src.tex_h.value_or(src.ycount * src.tile_px);
+    const float px0 = (float)(ix * src.tile_px);
+    const float py0 = (float)(iy * src.tile_px);
+    const float tp = (float)src.tile_px;
+    if (u0 != nullptr) *u0 = (px0 + q.u0 * tp) / w;
+    if (v0 != nullptr) *v0 = 1.f - (py0 + (1.f - q.v0) * tp) / h;
+    if (u1 != nullptr) *u1 = (px0 + q.u1 * tp) / w;
+    if (v1 != nullptr) *v1 = 1.f - (py0 + (1.f - q.v1) * tp) / h;
     // 象限自左上角起于 qcols×qcols 网格：corner 0..3 -> (0,0)(1,0)(0,1)(1,1)
     if (qx != nullptr) *qx = q.corner.value_or(0) & 1;
     if (qy != nullptr) *qy = q.corner.value_or(0) >> 1;

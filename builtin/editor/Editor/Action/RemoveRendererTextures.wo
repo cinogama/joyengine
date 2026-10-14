@@ -31,7 +31,7 @@ namespace JEEditor::Editor::Action
         m_eid: entity::internal::euid_t,
         m_saved_tiling: vec2,
         m_saved_offset: vec2,
-        m_saved_textures: array<(int, texture)>,
+        m_saved_textures: array<(int, texture2d)>,
     }
     {
         public func try_create(e: entity)=> option<RemoveRendererTextures>
@@ -42,7 +42,7 @@ namespace JEEditor::Editor::Action
                 try! cinst = e->towoo::get_component:<Renderer::Textures2D>;
 
                 // 纹理通道没有强类型枚举接口，经实体级字典枚举快照
-                let mut saved_textures = []: array<(int, texture)>;
+                let mut saved_textures = []: array<(int, texture2d)>;
                 for (let (tpass, tinst) : e->get_textures)
                     saved_textures = saved_textures->append((tpass, tinst));
 

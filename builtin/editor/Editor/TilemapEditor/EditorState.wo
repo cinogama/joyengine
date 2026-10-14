@@ -133,7 +133,7 @@ namespace JEEditor::Editor::TilemapEditor
         protected m_stroke_desc: mut string,
 
         // ===== 图集纹理显示缓存（(路径, 纹理) / 失败路径；线性扫描） =====
-        protected m_textures: vec<(string, texture)>,
+        protected m_textures: vec<(string, texture2d)>,
         protected m_textures_failed: vec<string>,
 
         // ===== 地形连接预览（每个自动图块地形一张隐藏 3x3 预览地图） =====

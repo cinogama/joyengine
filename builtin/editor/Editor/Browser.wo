@@ -823,7 +823,8 @@ namespace JEEditor::Editor
         // 新建瓦片地图（右键菜单“新建→瓦片地图”）：.je4tilemap 为引擎内核
         // 的二进制格式，经 je::tilemap 文档 API 落盘（默认 32×32、32px 单图层）。
         // 渲染侧着色器只认图层样式（不回落根实体/内置默认），建图时即给
-        // 默认图层指配 UnlitBlend，图层后续可在瓦片地图编辑器里更换。
+        // 默认图层指配 TilemapUnlitBlend（数组图集采样），图层后续可在瓦片
+        // 地图编辑器里更换。
         func askToCreateNewTilemap(self: Browser)=> void
         {
             let target_dir = self.m_current;
@@ -835,7 +836,7 @@ namespace JEEditor::Editor
                 {
                     value(map)?
                     {
-                        // 建图时即加载 UnlitBlend 实例指配给默认图层
+                        // 建图时即加载默认层着色器实例指配给默认图层
                         //（加载失败保持未指定，渲染侧该层不可见）
                         match (shader::load(option::none,
                             TilemapEditor::DEFAULT_LAYER_SHADER))

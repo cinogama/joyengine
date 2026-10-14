@@ -276,9 +276,9 @@ namespace JEEditor::Editor::TilemapEditor
                         {
                             value(idx)?
                             {
-                                // 与建图同策略：新层默认指配 UnlitBlend
-                                //（渲染只认图层样式，不回落根实体/内置
-                                // 默认；加载失败保持未指定）
+                                // 与建图同策略：新层默认指配
+                                // TilemapUnlitBlend（渲染只认图层样式，
+                                // 不回落根实体/内置默认；加载失败保持未指定）
                                 match (shader::load(option::none,
                                     TilemapEditor::DEFAULT_LAYER_SHADER))
                                 {

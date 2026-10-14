@@ -149,6 +149,9 @@ public let frag =
             // 常规四边形路径（两者可并存：先四边形后文本，文字在背景板之上）。
             const UserInterface::Text* text = nullptr;
 
+            // 纹理数组通道绑定（瓦片地图分片等使用）；可空
+            const Textures2DArray* textures_array = nullptr;
+
             bool operator<(const renderer_arch& another) const noexcept
             {
                 int a_queue = rendqueue ? rendqueue->rend_queue : 0;
@@ -381,7 +384,8 @@ public let frag =
             math::vec2 tiling;
             math::vec2 offset;
         };
-        bound_textures_t bind_entity_textures(jegl_rendchain* chain, const Textures2D* textures)
+        bound_textures_t bind_entity_textures(jegl_rendchain* chain, const Textures2D* textures,
+            const Textures2DArray* textures_array)
         {
             bound_textures_t result;
             result.group = jegl_rchain_allocate_texture_group(chain);
@@ -399,6 +403,12 @@ public let frag =
                     jegl_rchain_bind_texture_2d(
                         chain, result.group, texture.m_pass_id, texture.m_texture->resource());
             }
+
+            // 数组纹理在 2D 绑定之后写入同通道（后写覆盖，各后端语义一致）
+            if (textures_array != nullptr)
+                for (auto& texture : textures_array->textures)
+                    jegl_rchain_bind_texture_array(
+                        chain, result.group, texture.m_pass_id, texture.m_texture->resource());
             return result;
         }
 
@@ -502,7 +512,7 @@ public let frag =
                 math::mat4xmat4(MAT4_MV, view, MAT4_MODEL);
                 math::mat4xmat4(MAT4_MVP, vp, MAT4_MODEL);
 
-                auto bound = bind_entity_textures(chain, rendentity.textures);
+                auto bound = bind_entity_textures(chain, rendentity.textures, rendentity.textures_array);
 
                 pass_uniforms_t u;
                 u.m = MAT4_MODEL;
@@ -796,7 +806,7 @@ public let frag =
                             ? rendentity.shaders->shaders
                             : m_default_resources.default_shaders_list;
 
-                        auto bound = bind_entity_textures(rend_chain, rendentity.textures);
+                        auto bound = bind_entity_textures(rend_chain, rendentity.textures, rendentity.textures_array);
 
                         pass_uniforms_t u;
                         u.m = MAT4_UI_MODEL;
@@ -1123,11 +1133,12 @@ public let frag =
                     });
             }
 
-            for (auto&& [trans, shads, texs, shape, rendqueue, color] : query<
+            for (auto&& [trans, shads, texs, texarr, shape, rendqueue, color] : query<
                 view typesof(
                     Translation&,
                     Shaders&,
                     Textures2D*,
+                    Textures2DArray*,
                     Shape&,
                     Rendqueue*,
                     Color*
@@ -1137,12 +1148,13 @@ public let frag =
                     Parallel,
                     Element
                 )
-            >())
+                >())
             {
                 // RendOb will be input to a chain and used for swap
                 m_renderer_list.emplace(
                     renderer_arch{
-                        color, rendqueue, &trans, &shape, &shads, texs
+                        color, rendqueue, &trans, &shape, &shads, texs,
+                        nullptr, nullptr, nullptr, nullptr, texarr
                     });
             }
 
@@ -2782,7 +2794,8 @@ public func frag(vf: v2f)
 
                         // bind_entity_textures allocates the group, binds default at slot 0,
                         // and binds user textures (which may override slot 0 or other slots).
-                        auto bound = bind_entity_textures(light2d_light_effect_rend_chain, light2d.textures);
+                        auto bound = bind_entity_textures(
+                            light2d_light_effect_rend_chain, light2d.textures, nullptr);
 
                         // 绑定 G-buffer 通道（漫反射 / 自发光 / 视空间坐标 / 视空间法线 / 阴影）到 4..8 槽
                         jegl_rchain_bind_texture_2d(light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 0, diffuse_attachment);

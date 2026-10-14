@@ -12224,6 +12224,63 @@ namespace jeecs
                 typing::register_member(guard, &Textures2D::offset, "offset");
             }
         };
+        // 纹理数组通道绑定（与 Textures2D 平行的强类型组件，只持有
+        // texture_array）：瓦片地图分片用它把"每层一个瓦片"的数组纹理
+        // 绑到 pass 0，采样侧用 tex2darray（shader DSL）
+        struct Textures2DArray
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Textures2DArray);
+            JECS_DEFAULT_CONSTRUCTOR(Textures2DArray);
+
+            // NOTE: textures should not be nullptr!
+            struct texture_with_passid
+            {
+                size_t m_pass_id;
+                basic::resource<graphic::texture_array> m_texture;
+
+                texture_with_passid(size_t pass, const basic::resource<graphic::texture_array>& tex)
+                    : m_pass_id(pass), m_texture(tex)
+                {
+                }
+            };
+            basic::vector<texture_with_passid> textures;
+
+            void bind_texture(size_t passid, const basic::resource<graphic::texture_array>& texture)
+            {
+                for (auto& pair : textures)
+                {
+                    if (pair.m_pass_id == passid)
+                    {
+                        pair.m_texture = texture;
+                        return;
+                    }
+                }
+                textures.push_back(texture_with_passid(passid, texture));
+            }
+            void remove_texture(size_t passid)
+            {
+                for (auto i = textures.begin(); i != textures.end(); ++i)
+                {
+                    if (i->m_pass_id == passid)
+                    {
+                        textures.erase(i);
+                        return;
+                    }
+                }
+            }
+            std::optional<basic::resource<graphic::texture_array>> get_texture(size_t passid) const
+            {
+                for (auto& [pass, tex] : textures)
+                    if (pass == passid)
+                        return tex;
+
+                return std::nullopt;
+            }
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                (void)guard;
+            }
+        };
         struct Color
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Color);
@@ -14999,6 +15056,7 @@ namespace jeecs
             jeecs::typing::register_type<Renderer::Shape>(guard, "Renderer::Shape");
             jeecs::typing::register_type<Renderer::Shaders>(guard, "Renderer::Shaders");
             jeecs::typing::register_type<Renderer::Textures2D>(guard, "Renderer::Textures2D");
+            jeecs::typing::register_type<Renderer::Textures2DArray>(guard, "Renderer::Textures2DArray");
             jeecs::typing::register_type<Renderer::Color>(guard, "Renderer::Color");
 
             jeecs::typing::register_type<Animation::FrameAnimation>(guard, "Animation::FrameAnimation");

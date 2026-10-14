@@ -136,6 +136,11 @@ namespace jeecs
             // 纹理像素尺寸（UV 计算用）；nullopt = 未测量，按网格推算。
             // 有值时恒为正
             std::optional<int32_t> tex_w, tex_h;
+
+            // 运行期：每层一个瓦片的数组纹理（build_source_array 构建，
+            // 分片网格经 tex2darray 采样；不参与序列化）。
+            // nullopt = 尚未构建（分片扫描会兜底重试）
+            std::optional<basic::resource<graphic::texture_array>> array;
         };
         struct TileDef
         {
@@ -1600,23 +1605,77 @@ namespace jeecs
         {
             int32_t tileset_idx = 0;        // 地图引用表中的图集下标
             int32_t source_idx = 0;         // 图集内源纹理下标
-            float u0 = 0.f, v0 = 0.f, u1 = 0.f, v1 = 0.f; // 引擎空间 UV（v0 下 v1 上）
+            float u0 = 0.f, v0 = 0.f, u1 = 0.f, v1 = 0.f; // tile-local UV（v0 下 v1 上，[0,1]²）
+            int32_t layer = 0;              // 数组纹理层号（每层一个瓦片）
             // 目标象限：nullopt = 整格；0=LU 1=RU 2=LD 3=RD（四象限地形）
             std::optional<int32_t> corner;
         };
 
-        // UV 矩形（图集源纹理网格坐标 -> 引擎 UV；v0 下 v1 上）
-        inline void tile_uv(const SourceTexture& src, int32_t ix, int32_t iy,
-            float& u0, float& v0_bot, float& u1, float& v1_top)
+        // 构建源图集的数组纹理（每层一个瓦片，层号 = iy*xcount + ix）：
+        // 从共享缓存的 2D 纹理读像素逐瓦片拷贝。图集展开为数组后，
+        // 分片采样天然不会越出瓦片自身（层内 CLAMP），相邻瓦片渗色
+        // 在结构上不可能发生。纹理未就绪/不可读返回 false，可稍后重试。
+        inline bool build_source_array(SourceTexture& src)
         {
-            float px = (float)(ix * src.tile_px), py = (float)(iy * src.tile_px);
-            float sz = (float)src.tile_px;
-            float w = (float)src.tex_w.value_or(src.xcount * src.tile_px);
-            float h = (float)src.tex_h.value_or(src.ycount * src.tile_px);
-            u0 = px / w;
-            u1 = (px + sz) / w;
-            v1_top = 1.f - py / h;
-            v0_bot = 1.f - (py + sz) / h;
+            auto tex = graphic::texture2d::load(nullptr, src.path);
+            if (!tex.has_value())
+                return false;
+            auto* raw = tex.value()->resource();
+            if (raw->m_pixels == nullptr || src.tile_px <= 0)
+                return false;
+
+            const size_t tp = (size_t)src.tile_px;
+            const int32_t tw = (int32_t)raw->m_width;
+            const int32_t th = (int32_t)raw->m_height;
+
+            // 图像与记录网格不符（图片被替换/裁剪）时按可用范围收敛构建，
+            // 超出部分的层保持黑色并告警
+            const int32_t xc = std::min(src.xcount, tw / src.tile_px);
+            const int32_t yc = std::min(src.ycount, th / src.tile_px);
+            if (xc <= 0 || yc <= 0)
+                return false;
+            if (xc != src.xcount || yc != src.ycount)
+                debug::logwarn(
+                    "Tilemap: source '%s' image smaller than recorded grid, "
+                    "array layers beyond image will be blank.",
+                    src.path.c_str());
+
+            auto arr = graphic::texture_array::create(
+                tp, tp, (size_t)(src.xcount * src.ycount),
+                jegl_texture_common::format::RGBA);
+            uint8_t* dst = arr->pixels();
+
+            for (int32_t ty = 0; ty < yc; ++ty)
+            {
+                for (int32_t tx = 0; tx < xc; ++tx)
+                {
+                    uint8_t* dst_layer =
+                        dst + (size_t)((ty * src.xcount + tx) * src.tile_px * src.tile_px) * 4;
+                    const uint8_t* src_row =
+                        raw->m_pixels
+                        + ((size_t)(ty * src.tile_px) * (size_t)tw
+                            + (size_t)(tx * src.tile_px)) * 4;
+                    for (size_t r = 0; r < tp; ++r)
+                        memcpy(
+                            dst_layer + r * tp * 4,
+                            src_row + (size_t)r * (size_t)tw * 4,
+                            tp * 4);
+                }
+            }
+            src.array = arr;
+            return true;
+        }
+
+        // UV 矩形（数组采样：tile-local [0,1]²，v0 下 v1 上）与数组层号
+        //（layer = iy * xcount + ix，每层一个瓦片）
+        inline void tile_uv(const SourceTexture& src, int32_t ix, int32_t iy,
+            float& u0, float& v0_bot, float& u1, float& v1_top, int32_t& layer)
+        {
+            u0 = 0.f;
+            u1 = 1.f;
+            v1_top = 1.f;
+            v0_bot = 0.f;
+            layer = iy * src.xcount + ix;
         }
 
         // 解析某格的子四边形到 out（至少 4 项）；返回数量
@@ -1647,7 +1706,7 @@ namespace jeecs
             {
                 out[0].tileset_idx = ts_idx;
                 out[0].source_idx = source_idx;
-                tile_uv(src, ix, iy, out[0].u0, out[0].v0, out[0].u1, out[0].v1);
+                tile_uv(src, ix, iy, out[0].u0, out[0].v0, out[0].u1, out[0].v1, out[0].layer);
                 out[0].corner = std::nullopt;
             };
 
@@ -1681,9 +1740,6 @@ namespace jeecs
                     fill_full(src, *terrain.source, terrain.ix, terrain.iy);
                     return 1;
                 }
-                const float shalf = src.tile_px * 0.5f;
-                float w = (float)src.tex_w.value_or(src.xcount * src.tile_px);
-                float h = (float)src.tex_h.value_or(src.ycount * src.tile_px);
                 struct corner_bits { int o1, o2, diag; };
                 const corner_bits cb[4] = {
                     { NB_U, NB_L, NB_UL }, { NB_U, NB_R, NB_RU },
@@ -1693,15 +1749,14 @@ namespace jeecs
                 {
                     half_cell hc = rpgmaker_quadrant(c,
                         corner_state(mask, cb[c].o1, cb[c].o2, cb[c].diag));
-                    // 半格 (col,row) 的 UV：row 自条带锚点顶部向下增长
-                    float px = terrain.ix * src.tile_px + hc.col * shalf;
-                    float py = terrain.iy * src.tile_px + hc.row * shalf;
+                    // 半格 (col,row) 的 tile-local UV：行自瓦片顶部向下增长
                     out[c].tileset_idx = ts_idx;
                     out[c].source_idx = *terrain.source;
-                    out[c].u0 = px / w;
-                    out[c].u1 = (px + shalf) / w;
-                    out[c].v1 = 1.f - py / h;
-                    out[c].v0 = 1.f - (py + shalf) / h;
+                    out[c].u0 = hc.col * 0.5f;
+                    out[c].u1 = hc.col * 0.5f + 0.5f;
+                    out[c].v1 = 1.f - hc.row * 0.5f;
+                    out[c].v0 = 1.f - hc.row * 0.5f - 0.5f;
+                    out[c].layer = terrain.iy * src.xcount + terrain.ix;
                     out[c].corner = c;
                 }
                 return 4;
