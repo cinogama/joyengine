@@ -1651,14 +1651,19 @@ namespace jeecs
                 {
                     uint8_t* dst_layer =
                         dst + (size_t)((ty * src.xcount + tx) * src.tile_px * src.tile_px) * 4;
-                    const uint8_t* src_row =
-                        raw->m_pixels
-                        + ((size_t)(ty * src.tile_px) * (size_t)tw
-                            + (size_t)(tx * src.tile_px)) * 4;
+                    // 2D 纹理经 stbi_set_flip_vertically_on_load 加载，
+                    // m_pixels 为自底向上行序（缓冲行 0 = 图像底行），
+                    // 瓦片 (tx,ty) 在缓冲中位于行 [th-(ty+1)*tp, th-ty*tp)。
+                    // 层行序沿用该翻转序（层行 0 = 瓦片底行，采样 v=1 =
+                    // 瓦片顶），与 tile-local UV 及编辑器换算的 v=1 为顶
+                    // 约定一致。
+                    const size_t buf_row0 = (size_t)(th - (ty + 1) * src.tile_px);
                     for (size_t r = 0; r < tp; ++r)
                         memcpy(
                             dst_layer + r * tp * 4,
-                            src_row + (size_t)r * (size_t)tw * 4,
+                            raw->m_pixels
+                            + ((buf_row0 + r) * (size_t)tw
+                                + (size_t)(tx * src.tile_px)) * 4,
                             tp * 4);
                 }
             }
@@ -1749,14 +1754,22 @@ namespace jeecs
                 {
                     half_cell hc = rpgmaker_quadrant(c,
                         corner_state(mask, cb[c].o1, cb[c].o2, cb[c].diag));
-                    // 半格 (col,row) 的 tile-local UV：行自瓦片顶部向下增长
+                    // 半格 (col,row) 跨锚点起的 2x3 图块区域（col∈[0,4)、
+                    // row∈[0,6)，即 4x6 个半格）：所在瓦片 = 锚点 +
+                    // (col/2, row/2)，层内半格 = (col%2, row%2)，行自瓦片
+                    // 顶部向下增长。块越出图集网格时钳到边界层（原像素
+                    // UV 实现同样越界采样，行为对齐且层号必须合法）。
+                    const int32_t layer = std::clamp(
+                        (terrain.iy + hc.row / 2) * src.xcount
+                        + (terrain.ix + hc.col / 2),
+                        0, src.xcount * src.ycount - 1);
                     out[c].tileset_idx = ts_idx;
                     out[c].source_idx = *terrain.source;
-                    out[c].u0 = hc.col * 0.5f;
-                    out[c].u1 = hc.col * 0.5f + 0.5f;
-                    out[c].v1 = 1.f - hc.row * 0.5f;
-                    out[c].v0 = 1.f - hc.row * 0.5f - 0.5f;
-                    out[c].layer = terrain.iy * src.xcount + terrain.ix;
+                    out[c].u0 = (hc.col % 2) * 0.5f;
+                    out[c].u1 = (hc.col % 2) * 0.5f + 0.5f;
+                    out[c].v1 = 1.f - (hc.row % 2) * 0.5f;
+                    out[c].v0 = 1.f - (hc.row % 2) * 0.5f - 0.5f;
+                    out[c].layer = layer;
                     out[c].corner = c;
                 }
                 return 4;
