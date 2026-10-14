@@ -1,8 +1,9 @@
 // 瓦片地图编辑器 —— 图层面板。
 // 右列下段面板（与上方属性面板之间有可拖拽分隔条）：图层自上而下
-// 列出（列表顶 = 最上层）。点击选择活动图层；显隐/锁定切换与 Z 偏移
-// /渲染队列编辑在行尾；新建/删除/上移/下移/重命名在工具条，行内右键
-// 也有等价的快捷菜单。
+// 列出（列表顶 = 最上层）。每行是检视面板组件块同款的分区折叠头：
+// 点击选中活动图层，点箭头展开属性编辑（显隐/锁定/Z 偏移/渲染次序
+// 在展开区里，不再挤行尾），收起时行尾以「隐藏/锁定」徽标提示状态；
+// 新建/删除/上移/下移/重命名在工具条，行内右键也有等价的快捷菜单。
 // 注意：图层增删/移动不进入撤销栈（绘制类操作才可撤销）；
 // 删除层级前会弹窗确认。
 
@@ -91,11 +92,13 @@ namespace JEEditor::Editor::TilemapEditor
                 });
     }
 
-    // 单行图层条目：与系统列表条目 / 检视面板组件块同款的分区标题栏
-    // 样式（见 Widgets::pushSectionHeaderStyle）整行绘制。
-    // ImGui 点击测试按提交顺序，先提交的行项会占据重叠区域的悬停，
-    // AllowItemOverlap 放行行尾的显隐/锁定开关与 Z 输入框抢占命中；
-    // 行自身仍在剩余空白处响应左键（选中活动层）与右键（快捷菜单）。
+    // 单行图层条目：检视面板组件块同款的分区折叠头（见 Widgets::
+    // pushSectionHeaderStyle 与 Inspector::showComponentBlock）整行绘制。
+    // 图层属性编辑（显隐/锁定/Z 偏移/渲染次序）在展开区里，不再挤在
+    // 行尾——旧布局的渲染次序输入框在 340px 右列里放不下。点箭头只切
+    // 展开，点标题空白处选中活动层，右键打开快捷菜单；收起时行尾的
+    // 「隐藏/锁定」徽标提示状态（默认收起，ImGui 按标题 ID 记住展开
+    // 状态）。
     func draw_layer_row(state: EditorState, ctx: TilemapContext, row: int)=> void
     {
         let map = ctx.m_map;
@@ -112,27 +115,26 @@ namespace JEEditor::Editor::TilemapEditor
             PushStyleColor(ImGuiCol::ImGuiCol_Header,
                 mixStyleColor(GetStyleColor(ImGuiCol::ImGuiCol_Header),
                     ACTIVE_LAYER_ACCENT, 0.30, 255));
-        // 隐藏层：整行文字弱化（行名、按钮文字、Z 输入框内容一并变淡）
+        // 隐藏层：标题文字弱化
         if (visible == 0)
             PushStyleColor(ImGuiCol::ImGuiCol_Text,
                 mixStyleColor(text_c, text_c, 0., 110));
 
-        do TreeNodeEx(row_label,
-            TreeNodeAttribute::ImGuiTreeNodeFlags_Leaf
-                + TreeNodeAttribute::ImGuiTreeNodeFlags_Framed
-                + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
-                + TreeNodeAttribute::ImGuiTreeNodeFlags_NoTreePushOnOpen
+        // OpenOnArrow 划分「点行选中 / 点箭头展开」；AllowItemOverlap
+        // 放行行尾状态徽标覆盖标题栏
+        let expanded = CollapsingHeaderFlags(row_label,
+            TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow
                 + TreeNodeAttribute::ImGuiTreeNodeFlags_AllowItemOverlap);
 
-        // 行的命中事件必须紧跟行项读取（此刻行项仍是最后绘制的 item，
-        // 随后提交的行尾控件会自然接管重叠区域的悬停与点击）
-        if (IsItemClickedLeft())
+        // 命中事件必须紧跟标题项读取（此刻标题项仍是最后绘制的 item，
+        // 随后提交的行尾徽标会接管重叠区域）；点箭头只切展开，不算选中
+        if (IsItemClickedLeft() && !IsItemToggledOpen())
             state.m_layer = row;
         if (IsItemHovered())
-            do SetTooltip("左键选中为编辑层，右键打开图层菜单");
+            do SetTooltip("左键选中为编辑层，点箭头展开图层属性，右键打开图层菜单");
 
-        // 活动层左缘强调竖条（同系统列表分组标题的画法；
-        // GetItemRect 返回的是屏幕坐标 min/max，不是 min/size）
+        // 活动层左缘强调竖条（同系统列表分组标题的画法；GetItemRect
+        // 返回的是屏幕坐标 min/max，不是 min/size）
         if (is_active)
         {
             let (rect_min, rect_max) = GetItemRect();
@@ -142,7 +144,30 @@ namespace JEEditor::Editor::TilemapEditor
                 mixStyleColor(text_c, ACTIVE_LAYER_ACCENT, 0.75, 220));
         }
 
-        // 右键快捷菜单：与工具条等价的图层操作
+        // 行尾状态徽标：属性编辑移入展开区后，收起的行以徽标提示显隐/
+        // 锁定；从行右缘向左排布，与标题文字垂直居中（同 beginMemberRow
+        // 标签的居中算法，标题栏样式此刻仍压着 FramePadding）
+        SameLine();
+        let (line_x, line_y) = GetCursorPos();
+        let avail_w = GetContentRegionAvail().0;
+        let badge_y = line_y + (GetFrameHeight() - CalcTextSize("隐藏").1) * 0.5;
+        let mut badge_x = line_x + avail_w;
+        if (locked != 0)
+        {
+            badge_x -= CalcTextSize("锁定").0;
+            SetCursorPos((badge_x, badge_y));
+            TextColored(mixStyleColor(text_c, LOCKED_ACCENT, 0.65, 255), "锁定");
+            badge_x -= 10.;
+        }
+        if (visible == 0)
+        {
+            badge_x -= CalcTextSize("隐藏").0;
+            SetCursorPos((badge_x, badge_y));
+            TextColored(mixStyleColor(text_c, text_c, 0., 130), "隐藏");
+        }
+
+        // 右键快捷菜单：与工具条等价的图层操作（显式传标题标签，
+        // 悬停检测绑回标题项）
         if (BeginPopupContextItemLabel(row_label))
         {
             if (MenuItem("重命名"))
@@ -157,91 +182,80 @@ namespace JEEditor::Editor::TilemapEditor
             defer EndPopup();
         }
 
-        // 行尾控件：透明底“薄片”开关（悬停浮出底色，保持标题栏安静），
-        // 锁定时开关文字染琥珀色；在标题栏样式内提交，与标题栏同高同圆角
-        PushStyleColor(ImGuiCol::ImGuiCol_Button, (0, 0, 0, 0));
-        PushStyleColor(ImGuiCol::ImGuiCol_ButtonHovered,
-            mixStyleColor(text_c, text_c, 0., 34));
-        PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive,
-            mixStyleColor(text_c, text_c, 0., 60));
-
-        SameLine();
-        let (line_x, line_y) = GetCursorPos();
-        let avail_w = GetContentRegionAvail().0;
-
-        // 从行右缘向左排布：Z 输入框（右侧带 Z 标签）→ 队列输入框（带 Q
-        // 标签）→ 锁定 → 显隐；开关宽度按当前字体实算（2 字标签 + 分区
-        // 样式的 FramePadding.x 6×2）。队列值缺省 10000+ 为 5~6 位数，
-        // 输入框取窄档（Z 与 Q 共 ~140px）给图层名留空间
-        let vis_w = CalcTextSize("可见").0 + 12.;
-        let lock_w = CalcTextSize("未锁").0 + 12.;
-        let z_w = 64.;
-        let q_w = 76.;
-        let z_label_w = CalcTextSize("Z").0 + 8.;
-        let q_label_w = CalcTextSize("Q").0 + 8.;
-        let gap = 4.;
-        let z_x = line_x + avail_w - z_label_w - z_w;
-        let q_x = z_x - gap - q_label_w - q_w;
-        let lock_x = q_x - gap - lock_w;
-        let vis_x = lock_x - gap - vis_w;
-
-        SetCursorPos((vis_x, line_y));
-        if (ButtonSize(visible != 0 ? F"可见##v{row}" | F"隐藏##v{row}", (vis_w, 0.)))
-        {
-            do map->set_layer(row, lname, visible != 0 ? 0 | 1, locked);
-            state.m_dirty = true;
-        }
-
-        SetCursorPos((lock_x, line_y));
-        if (locked != 0)
-            PushStyleColor(ImGuiCol::ImGuiCol_Text,
-                mixStyleColor(text_c, LOCKED_ACCENT, 0.65, 255));
-        if (ButtonSize(locked != 0 ? F"锁定##l{row}" | F"未锁##l{row}", (lock_w, 0.)))
-        {
-            do map->set_layer(row, lname, visible, locked != 0 ? 0 | 1);
-            state.m_dirty = true;
-        }
-        if (locked != 0)
-            PopStyleColor(1);
-        PopStyleColor(3);
-
-        // 世界 z 偏移（相对地图根实体；不同层错开避免深度冲突）
-        SetCursorPos((z_x, line_y));
-        SetNextItemWidth(z_w);
-        match (InputFloat(F"Z##z{row}", map->layer_z(row)))
-        {
-            value(z)?
-            {
-                do map->set_layer_z(row, z);
-                state.m_dirty = true;
-            }
-            none?;
-        }
-        if (IsItemHovered())
-            do SetTooltip("图层的世界 Z 偏移（相对地图根实体），不同层错开可避免深度冲突");
-
-        // 渲染队列值（同图各层按该值升序绘制，是层间叠放的权威顺序）
-        SetCursorPos((q_x, line_y));
-        SetNextItemWidth(q_w);
-        match (InputInt(F"Q##q{row}", map->layer_rend_queue(row)))
-        {
-            value(q)?
-            {
-                do map->set_layer_rend_queue(row, q);
-                state.m_dirty = true;
-            }
-            none?;
-        }
-        if (IsItemHovered())
-            do SetTooltip("图层的渲染队列值：同图各层按该值升序绘制（层间叠放的"
-                + "权威顺序）。新建图层缺省 10000 + 层下标，与场景实体常用的"
-                + "小队列值错开");
-
         if (visible == 0)
             PopStyleColor(1);
         if (is_active)
             PopStyleColor(1);
         popSectionHeaderStyle();
+
+        // 展开区：图层属性编辑。成员行布局与检视面板/样式属性面板
+        // 一致（beginMemberRow），渲染次序输入框不再受行宽挤压
+        if (expanded)
+        {
+            // 显隐/锁定：透明底“薄片”开关（悬停浮出底色），锁定时
+            // 开关文字染琥珀色
+            PushStyleColor(ImGuiCol::ImGuiCol_Button, (0, 0, 0, 0));
+            PushStyleColor(ImGuiCol::ImGuiCol_ButtonHovered,
+                mixStyleColor(text_c, text_c, 0., 34));
+            PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive,
+                mixStyleColor(text_c, text_c, 0., 60));
+            let vis_w = CalcTextSize("可见").0 + 12.;
+            let lock_w = CalcTextSize("未锁").0 + 12.;
+            if (ButtonSize(visible != 0 ? F"可见##v{row}" | F"隐藏##v{row}", (vis_w, 0.)))
+            {
+                do map->set_layer(row, lname, visible != 0 ? 0 | 1, locked);
+                state.m_dirty = true;
+            }
+            SameLine();
+            if (locked != 0)
+                PushStyleColor(ImGuiCol::ImGuiCol_Text,
+                    mixStyleColor(text_c, LOCKED_ACCENT, 0.65, 255));
+            if (ButtonSize(locked != 0 ? F"锁定##l{row}" | F"未锁##l{row}", (lock_w, 0.)))
+            {
+                do map->set_layer(row, lname, visible, locked != 0 ? 0 | 1);
+                state.m_dirty = true;
+            }
+            if (locked != 0)
+                PopStyleColor(1);
+            PopStyleColor(3);
+
+            memberSeparator();
+
+            // 世界 z 偏移（相对地图根实体；不同层错开避免深度冲突）
+            do beginMemberRow("Z 偏移",
+                option::none: option<Color32RGBA>, 0.);
+            match (InputFloat(F"##layer_z_{row}", map->layer_z(row)))
+            {
+                value(z)?
+                {
+                    do map->set_layer_z(row, z);
+                    state.m_dirty = true;
+                }
+                none?;
+            }
+            if (IsItemHovered())
+                do SetTooltip("图层的世界 Z 偏移（相对地图根实体），不同层错开可避免深度冲突");
+
+            memberSeparator();
+
+            // 渲染次序（同图各层按该值升序绘制，是层间叠放的权威顺序）；
+            // 整数输入的步进按钮绘制在框外，右侧预留空间（同属性面板）
+            do beginMemberRow("渲染次序",
+                option::none: option<Color32RGBA>, 56.);
+            match (InputInt(F"##layer_q_{row}", map->layer_rend_queue(row)))
+            {
+                value(q)?
+                {
+                    do map->set_layer_rend_queue(row, q);
+                    state.m_dirty = true;
+                }
+                none?;
+            }
+            if (IsItemHovered())
+                do SetTooltip("图层的渲染次序值：同图各层按该值升序绘制（层间叠放的"
+                    + "权威顺序）。新建图层缺省 10000 + 层下标，与场景实体常用的"
+                    + "小队列值错开");
+        }
         Spacing();
     }
 
