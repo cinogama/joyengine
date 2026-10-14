@@ -206,7 +206,7 @@ namespace jeecs
         struct LayerTexture
         {
             int32_t slot = 1;       // 槽 0 保留给图集源纹理
-            basic::resource<graphic::texture> texture;
+            basic::resource<graphic::texture2d> texture;
         };
         struct LayerStyle
         {
@@ -607,7 +607,7 @@ namespace jeecs
 
         // 资源实例的来源路径（落盘用）；内置/源码创建的资源无路径，返回空
         inline std::string graphic_resource_path(
-            const basic::resource<graphic::texture>& texture)
+            const basic::resource<graphic::texture2d>& texture)
         {
             const char* p = texture->resource()->m_handle.m_path_may_null_if_builtin;
             return p != nullptr ? std::string(p) : std::string();
@@ -928,7 +928,7 @@ namespace jeecs
                         int32_t slot = r.i32();
                         std::string path = r.str();
                         if (slot < 1) { r.ok = false; break; }
-                        if (auto tex = graphic::texture::load(nullptr, path))
+                        if (auto tex = graphic::texture2d::load(nullptr, path))
                             st.textures.push_back(LayerTexture{ slot, std::move(tex.value()) });
                         else
                             debug::logerr(

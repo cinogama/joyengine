@@ -6,7 +6,7 @@
 JE_API jegl_frame_buffer* jegl_create_framebuf(
     size_t width,
     size_t height,
-    const jegl_texture::format* color_attachment_formats,
+    const jegl_texture_common::format* color_attachment_formats,
     size_t color_attachment_count,
     bool contain_depth_attachment);
 ```
@@ -21,7 +21,7 @@ JE_API jegl_frame_buffer* jegl_create_framebuf(
 |--------|------|------|
 | `width` | `size_t` | 帧缓冲区宽度 |
 | `height` | `size_t` | 帧缓冲区高度 |
-| `color_attachment_formats` | `const jegl_texture::format*` | 颜色附件格式数组 |
+| `color_attachment_formats` | `const jegl_texture_common::format*` | 颜色附件格式数组 |
 | `color_attachment_count` | `size_t` | 颜色附件数量 |
 | `contain_depth_attachment` | `bool` | 是否包含深度附件 |
 
@@ -39,7 +39,7 @@ JE_API jegl_frame_buffer* jegl_create_framebuf(
 
 ```cpp
 // 创建一个带有两个颜色附件和一个深度附件的帧缓冲
-jegl_texture::format formats[] = {
+jegl_texture_common::format formats[] = {
     jegl_texture::RGBA,     // 颜色附件 0
     jegl_texture::RGBA16,   // 颜色附件 1 (高精度)
 };

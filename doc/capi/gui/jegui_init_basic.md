@@ -33,14 +33,14 @@ JE_API void jegui_init_basic(
 
 ```cpp
 typedef uint64_t jegui_user_image_handle_t;
-typedef jegui_user_image_handle_t(*jegui_user_image_loader_t)(jegl_context*, jegl_texture*);
+typedef jegui_user_image_handle_t(*jegui_user_image_loader_t)(jegl_context*, jegl_texture_2d*);
 typedef void (*jegui_user_sampler_loader_t)(jegl_context*, jegl_shader*);
 ```
 
 ### 示例
 
 ```cpp
-jegui_user_image_handle_t my_image_loader(jegl_context* ctx, jegl_texture* tex) {
+jegui_user_image_handle_t my_image_loader(jegl_context* ctx, jegl_texture_2d* tex) {
     // 返回纹理的底层图形库句柄
     return (jegui_user_image_handle_t)tex->m_resource_id;
 }

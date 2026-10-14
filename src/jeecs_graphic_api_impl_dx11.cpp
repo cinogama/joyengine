@@ -83,8 +83,19 @@ namespace jeecs::graphic::api::dx11
         ~jedx11_texture() = default;
 
         bool m_modifiable_texture_buffer;
+        // 二维/数组/立方体/MSAA 纹理使用 m_texture；三维纹理使用 m_texture_3d，
+        // 两者互斥（未使用的一者为空）
         jegl_dx11_context::MSWRLComPtr<ID3D11Texture2D> m_texture;
+        jegl_dx11_context::MSWRLComPtr<ID3D11Texture3D> m_texture_3d;
         jegl_dx11_context::MSWRLComPtr<ID3D11ShaderResourceView> m_texture_view;
+
+        // 当前持有的纹理资源（作为通用资源视图使用）
+        ID3D11Resource* texture_resource() const noexcept
+        {
+            return m_texture_3d.Get() != nullptr
+                ? static_cast<ID3D11Resource*>(m_texture_3d.Get())
+                : static_cast<ID3D11Resource*>(m_texture.Get());
+        }
     };
     struct jedx11_modifiable_texture : public jedx11_texture
     {
@@ -514,7 +525,7 @@ namespace jeecs::graphic::api::dx11
 
         jegui_init_dx11(
             gthread,
-            [](jegl_context*, jegl_texture* res)
+            [](jegl_context*, jegl_texture_2d* res)
             {
                 auto* resource = static_cast<jedx11_texture*>(res->m_handle.m_ptr);
                 return (uint64_t)resource->m_texture_view.Get();
@@ -1167,9 +1178,10 @@ namespace jeecs::graphic::api::dx11
         delete static_cast<dx11_resource_shader_blob*>(blob);
     }
 
+    template<typename TexT>
     jegl_resource_blob dx11_texture_create_blob(
         je_GraphicImplContext,
-        jegl_texture*)
+        TexT*)
     {
         return nullptr;
     }
@@ -1313,119 +1325,182 @@ namespace jeecs::graphic::api::dx11
         }
     }
 
-    jedx11_texture* dx11_create_texture_instance(jegl_dx11_context* context, jegl_texture* resource, bool is_dynamic)
+    template<typename TexT>
+    static DXGI_FORMAT _dx11_pick_texture_format(const TexT* resource)
     {
-        D3D11_TEXTURE2D_DESC texture_describe;
-        texture_describe.Width = (UINT)resource->m_width;
-        texture_describe.Height = (UINT)resource->m_height;
-        texture_describe.MipLevels = 1;
-        texture_describe.ArraySize = 1;
+        const bool float16 =
+            0 != (resource->m_format & jegl_texture_common::format::FLOAT16);
 
-        bool float16 = 0 != (resource->m_format & jegl_texture::format::FLOAT16);
-        bool is_cube = 0 != (resource->m_format & jegl_texture::format::CUBE);
-
-        switch (resource->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
+        switch (resource->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK)
         {
-        case jegl_texture::format::MONO:
-            texture_describe.Format = float16
-                ? DXGI_FORMAT_R16_FLOAT
-                : DXGI_FORMAT_R8_UNORM;
-            break;
-        case jegl_texture::format::RGBA:
-            texture_describe.Format = float16
+        case jegl_texture_common::format::MONO:
+            return float16 ? DXGI_FORMAT_R16_FLOAT : DXGI_FORMAT_R8_UNORM;
+        case jegl_texture_common::format::RGBA:
+            return float16
                 ? DXGI_FORMAT_R16G16B16A16_FLOAT
                 : DXGI_FORMAT_R8G8B8A8_UNORM;
-            break;
         default:
-            texture_describe.Format = DXGI_FORMAT_UNKNOWN;
+            return DXGI_FORMAT_UNKNOWN;
         }
+    }
 
-        // 不使用MSAA
-        texture_describe.SampleDesc.Count = 1;
-        texture_describe.SampleDesc.Quality = 0;
+    template<typename TexT>
+    jedx11_texture* dx11_create_texture_instance(jegl_dx11_context* context, TexT* resource, bool is_dynamic)
+    {
+        constexpr bool is_3d = std::is_same_v<TexT, jegl_texture_3d>;
+        constexpr bool is_array = std::is_same_v<TexT, jegl_texture_array>;
+        constexpr bool is_cube = std::is_same_v<TexT, jegl_texture_cube>;
+        constexpr bool is_msaa = std::is_same_v<TexT, jegl_texture_msaa>;
 
-        texture_describe.Usage = is_dynamic ? D3D11_USAGE_DYNAMIC : D3D11_USAGE_IMMUTABLE;
-        texture_describe.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-        texture_describe.CPUAccessFlags = is_dynamic ? D3D11_CPU_ACCESS_WRITE : 0;
-        texture_describe.MiscFlags = 0;
+        const bool is_framebuf =
+            0 != (resource->m_format & jegl_texture_common::format::FRAMEBUF);
+        const bool is_depth =
+            0 != (resource->m_format & jegl_texture_common::format::DEPTH);
 
-        jedx11_texture* jedx11_texture_res = is_dynamic ? new jedx11_modifiable_texture : new jedx11_texture;
+        DXGI_FORMAT texture_format = _dx11_pick_texture_format(resource);
+
+        // MSAA 纹理只存在于 GPU 侧，且 FRAMEBUF 纹理必须是 DEFAULT usage
+        // （不能是 DYNAMIC/IMMUTABLE），因为它们需要绑定为 render target 或
+        // depth stencil；同时 CPUAccessFlags 必须为 0，否则与 DEPTH_STENCIL
+        // 绑定标志冲突。
+        const bool default_usage = is_msaa || is_framebuf;
+        const D3D11_USAGE usage =
+            default_usage ? D3D11_USAGE_DEFAULT
+            : (is_dynamic ? D3D11_USAGE_DYNAMIC : D3D11_USAGE_IMMUTABLE);
+        const UINT cpu_access = default_usage ? 0 : (is_dynamic ? D3D11_CPU_ACCESS_WRITE : 0);
+
+        jedx11_texture* jedx11_texture_res =
+            (is_dynamic && !default_usage) ? new jedx11_modifiable_texture : new jedx11_texture;
 
         // All texture is unmodifiable as default.
-        jedx11_texture_res->m_modifiable_texture_buffer = is_dynamic;
+        jedx11_texture_res->m_modifiable_texture_buffer = (is_dynamic && !default_usage);
+
+        UINT bind_flags = D3D11_BIND_SHADER_RESOURCE;
+        UINT misc_flags = 0;
+        UINT sample_count = 1;
+
+        if constexpr (is_cube)
+            misc_flags |= D3D11_RESOURCE_MISC_TEXTURECUBE;
+        if constexpr (is_msaa)
+            sample_count = (UINT)resource->m_samples;
+
+        if (is_depth)
+        {
+            texture_format = DXGI_FORMAT_R24G8_TYPELESS;
+            bind_flags |= D3D11_BIND_DEPTH_STENCIL;
+        }
+        else if (is_framebuf)
+        {
+            bind_flags |= D3D11_BIND_RENDER_TARGET;
+        }
 
         D3D11_SUBRESOURCE_DATA texture_sub_data;
         D3D11_SUBRESOURCE_DATA* texture_sub_data_ptr = nullptr;
 
-        D3D11_SHADER_RESOURCE_VIEW_DESC texture_shader_view_describe;
-
-        texture_shader_view_describe.Format = texture_describe.Format;
-        texture_shader_view_describe.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-        texture_shader_view_describe.Texture2D.MipLevels = 1;
-        texture_shader_view_describe.Texture2D.MostDetailedMip = 0;
-
-        if ((resource->m_format & jegl_texture::format::FRAMEBUF) == jegl_texture::format::FRAMEBUF)
-        {
-            // FRAMEBUF 纹理必须是 DEFAULT usage（不能是 DYNAMIC/IMMUTABLE），
-            // 因为它们需要绑定为 render target 或 depth stencil。
-            // 同时 CPUAccessFlags 必须为 0，否则与 DEPTH_STENCIL 绑定标志冲突。
-            texture_describe.Usage = D3D11_USAGE_DEFAULT;
-            texture_describe.CPUAccessFlags = 0;
-
-            if (resource->m_format & jegl_texture::format::DEPTH)
-            {
-                texture_describe.Format = DXGI_FORMAT_R24G8_TYPELESS;
-
-                // 不使用MSAA
-                texture_describe.SampleDesc.Count = 1;
-                texture_describe.SampleDesc.Quality = 0;
-
-                texture_describe.BindFlags |= D3D11_BIND_DEPTH_STENCIL;
-
-                texture_shader_view_describe.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
-            }
-            else
-            {
-                texture_describe.BindFlags |= D3D11_BIND_RENDER_TARGET;
-            }
-
-            // FRAMEBUF 纹理不支持 Map 更新，标记为不可修改，
-            // 这样 dx11_texture_update 会通过重建整个纹理来更新。
-            jedx11_texture_res->m_modifiable_texture_buffer = false;
-        }
-        else
+        if (!default_usage && resource->m_pixels != nullptr)
         {
             const UINT bytes_per_pixel =
-                (UINT)resource->m_width *
-                ((UINT)resource->m_format &
-                    jegl_texture::format::COLOR_DEPTH_MASK)
-                * (float16 ? 2 : 1);
+                (UINT)resource->m_width
+                * ((UINT)resource->m_format
+                    & jegl_texture_common::format::COLOR_DEPTH_MASK)
+                * ((resource->m_format & jegl_texture_common::format::FLOAT16) ? 2 : 1);
 
             texture_sub_data.pSysMem = resource->m_pixels;
             texture_sub_data.SysMemPitch = bytes_per_pixel;
             texture_sub_data.SysMemSlicePitch =
                 bytes_per_pixel * (UINT)resource->m_height;
-
             texture_sub_data_ptr = &texture_sub_data;
         }
 
-        assert(DXGI_FORMAT_UNKNOWN != texture_describe.Format);
+        assert(DXGI_FORMAT_UNKNOWN != texture_format);
+
+        if constexpr (is_3d)
+        {
+            D3D11_TEXTURE3D_DESC texture_describe;
+            texture_describe.Width = (UINT)resource->m_width;
+            texture_describe.Height = (UINT)resource->m_height;
+            texture_describe.Depth = (UINT)resource->m_depth;
+            texture_describe.MipLevels = 1;
+            texture_describe.Format = texture_format;
+            texture_describe.Usage = usage;
+            texture_describe.BindFlags = bind_flags;
+            texture_describe.CPUAccessFlags = cpu_access;
+            texture_describe.MiscFlags = misc_flags;
+
+            JERCHECK(context->m_dx_device->CreateTexture3D(
+                &texture_describe, texture_sub_data_ptr,
+                jedx11_texture_res->m_texture_3d.GetAddressOf()));
+        }
+        else
+        {
+            D3D11_TEXTURE2D_DESC texture_describe;
+            texture_describe.Width = (UINT)resource->m_width;
+            texture_describe.Height = (UINT)resource->m_height;
+            texture_describe.MipLevels = 1;
+
+            if constexpr (is_array)
+                texture_describe.ArraySize = (UINT)resource->m_layers;
+            else if constexpr (is_cube)
+                texture_describe.ArraySize = 6;
+            else
+                texture_describe.ArraySize = 1;
+
+            texture_describe.Format = texture_format;
+            texture_describe.SampleDesc.Count = sample_count;
+            texture_describe.SampleDesc.Quality = 0;
+            texture_describe.Usage = usage;
+            texture_describe.BindFlags = bind_flags;
+            texture_describe.CPUAccessFlags = cpu_access;
+            texture_describe.MiscFlags = misc_flags;
+
+            JERCHECK(context->m_dx_device->CreateTexture2D(
+                &texture_describe, texture_sub_data_ptr,
+                jedx11_texture_res->m_texture.GetAddressOf()));
+        }
+
+        D3D11_SHADER_RESOURCE_VIEW_DESC texture_shader_view_describe;
+        texture_shader_view_describe.Format = is_depth
+            ? DXGI_FORMAT_R24_UNORM_X8_TYPELESS
+            : texture_format;
+
+        if constexpr (is_3d)
+        {
+            texture_shader_view_describe.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE3D;
+            texture_shader_view_describe.Texture3D.MostDetailedMip = 0;
+            texture_shader_view_describe.Texture3D.MipLevels = 1;
+        }
+        else if constexpr (is_array)
+        {
+            texture_shader_view_describe.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
+            texture_shader_view_describe.Texture2DArray.MostDetailedMip = 0;
+            texture_shader_view_describe.Texture2DArray.MipLevels = 1;
+            texture_shader_view_describe.Texture2DArray.FirstArraySlice = 0;
+            texture_shader_view_describe.Texture2DArray.ArraySize = (UINT)resource->m_layers;
+        }
+        else if constexpr (is_cube)
+        {
+            texture_shader_view_describe.ViewDimension = D3D11_SRV_DIMENSION_TEXTURECUBE;
+            texture_shader_view_describe.TextureCube.MostDetailedMip = 0;
+            texture_shader_view_describe.TextureCube.MipLevels = 1;
+        }
+        else if constexpr (is_msaa)
+        {
+            texture_shader_view_describe.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DMS;
+        }
+        else
+        {
+            texture_shader_view_describe.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+            texture_shader_view_describe.Texture2D.MipLevels = 1;
+            texture_shader_view_describe.Texture2D.MostDetailedMip = 0;
+        }
+
         assert(DXGI_FORMAT_UNKNOWN != texture_shader_view_describe.Format);
 
-        JERCHECK(context->m_dx_device->CreateTexture2D(
-            &texture_describe, texture_sub_data_ptr,
-            jedx11_texture_res->m_texture.GetAddressOf()));
-
         JERCHECK(context->m_dx_device->CreateShaderResourceView(
-            jedx11_texture_res->m_texture.Get(),
+            jedx11_texture_res->texture_resource(),
             &texture_shader_view_describe,
             jedx11_texture_res->m_texture_view.GetAddressOf()));
 
-        JEDX11_TRACE_DEBUG_NAME(jedx11_texture_res->m_texture,
-            std::string(
-                resource->m_handle.m_path_may_null_if_builtin != nullptr
-                ? resource->m_handle.m_path_may_null_if_builtin
-                : "_builtin_texture_") + "_Texture");
         JEDX11_TRACE_DEBUG_NAME(jedx11_texture_res->m_texture_view,
             std::string(
                 resource->m_handle.m_path_may_null_if_builtin != nullptr
@@ -1434,63 +1509,96 @@ namespace jeecs::graphic::api::dx11
 
         return jedx11_texture_res;
     }
+
+    template<typename TexT>
     void dx11_texture_init(
         je_GraphicImplContext ctx,
         jegl_resource_blob,
-        jegl_texture* resource)
+        TexT* resource)
     {
         jegl_dx11_context* context = static_cast<jegl_dx11_context*>(ctx);
         resource->m_handle.m_ptr = dx11_create_texture_instance(
             context, resource, false /* Immutable as default */);
     }
+
+    template<typename TexT>
     void dx11_texture_update(
         je_GraphicImplContext ctx,
-        jegl_texture* resource)
+        TexT* resource)
     {
-        jegl_dx11_context* context =
-            static_cast<jegl_dx11_context*>(ctx);
-        jedx11_texture* texture_instance =
-            static_cast<jedx11_texture*>(resource->m_handle.m_ptr);
-
-        if (texture_instance->m_modifiable_texture_buffer)
+        if constexpr (std::is_same_v<TexT, jegl_texture_msaa>)
         {
-            // We map the teure buffer to CPU memory, and copy the new data to it.
-            D3D11_MAPPED_SUBRESOURCE mappedData;
-
-            JERCHECK(context->m_dx_context->Map(
-                texture_instance->m_texture.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
-
-            // mappedData is not byte-aligned, we need to copy it byte by row
-            const bool is_float16 =
-                0 != (resource->m_format & jegl_texture::format::FLOAT16);
-            for (size_t i = 0; i < resource->m_height; ++i)
-            {
-                const size_t row_byte_size =
-                    resource->m_width
-                    * (resource->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
-                    * (is_float16 ? 2 : 1);
-                void* dst_row_data = (void*)((intptr_t)mappedData.pData + i * mappedData.RowPitch);
-                const void* src_row_data = resource->m_pixels + i * row_byte_size;
-
-                memcpy(dst_row_data, src_row_data, row_byte_size);
-            }
-            context->m_dx_context->Unmap(texture_instance->m_texture.Get(), 0);
+            (void)resource;
+            // NOTE: MSAA 纹理只存在于 GPU 侧，不支持 CPU 侧像素更新
+            jeecs::debug::logerr("MSAA texture update is not supported.");
         }
         else
         {
-            // This texture is immutable, we need to recreate it as dynamic
-            jedx11_modifiable_texture* modifiable_texture_instance =
-                static_cast<jedx11_modifiable_texture*>(
-                    dx11_create_texture_instance(
-                        context, resource, true /* Regenerate it as dynamic */));
+            jegl_dx11_context* context =
+                static_cast<jegl_dx11_context*>(ctx);
+            jedx11_texture* texture_instance =
+                static_cast<jedx11_texture*>(resource->m_handle.m_ptr);
 
-            modifiable_texture_instance->m_obsoluted_texture = texture_instance;
-            resource->m_handle.m_ptr = modifiable_texture_instance;
+            if (texture_instance->m_modifiable_texture_buffer)
+            {
+                // We map the texture buffer to CPU memory, and copy the new data to it.
+                D3D11_MAPPED_SUBRESOURCE mappedData;
+
+                JERCHECK(context->m_dx_context->Map(
+                    texture_instance->texture_resource(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
+
+                const bool is_float16 =
+                    0 != (resource->m_format & jegl_texture_common::format::FLOAT16);
+
+                const size_t row_byte_size =
+                    resource->m_width
+                    * (resource->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK)
+                    * (is_float16 ? 2 : 1);
+
+                size_t slice_count = 1;
+                if constexpr (std::is_same_v<TexT, jegl_texture_3d>)
+                    slice_count = resource->m_depth;
+                else if constexpr (std::is_same_v<TexT, jegl_texture_array>)
+                    slice_count = resource->m_layers;
+                else if constexpr (std::is_same_v<TexT, jegl_texture_cube>)
+                    slice_count = 6;
+
+                // mappedData is not byte-aligned, we need to copy it byte by row
+                for (size_t slice = 0; slice < slice_count; ++slice)
+                {
+                    for (size_t i = 0; i < resource->m_height; ++i)
+                    {
+                        void* dst_row_data = (void*)(
+                            (intptr_t)mappedData.pData
+                            + slice * mappedData.DepthPitch
+                            + i * mappedData.RowPitch);
+                        const void* src_row_data =
+                            resource->m_pixels
+                            + (slice * resource->m_height + i) * row_byte_size;
+
+                        memcpy(dst_row_data, src_row_data, row_byte_size);
+                    }
+                }
+                context->m_dx_context->Unmap(texture_instance->texture_resource(), 0);
+            }
+            else
+            {
+                // This texture is immutable, we need to recreate it as dynamic
+                jedx11_modifiable_texture* modifiable_texture_instance =
+                    static_cast<jedx11_modifiable_texture*>(
+                        dx11_create_texture_instance(
+                            context, resource, true /* Regenerate it as dynamic */));
+
+                modifiable_texture_instance->m_obsoluted_texture = texture_instance;
+                resource->m_handle.m_ptr = modifiable_texture_instance;
+            }
         }
     }
+
+    template<typename TexT>
     void dx11_texture_close(
         je_GraphicImplContext,
-        jegl_texture* resource)
+        TexT* resource)
     {
         jedx11_texture* texture_instance =
             static_cast<jedx11_texture*>(resource->m_handle.m_ptr);
@@ -1656,8 +1764,8 @@ namespace jeecs::graphic::api::dx11
                 resource->m_width,
                 resource->m_height);
 
-        jeecs::basic::resource<jeecs::graphic::texture>* attachments = 
-            reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
+        jeecs::basic::resource<jeecs::graphic::texture2d>* attachments =
+            reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture2d> *>(
                 resource->m_output_attachments);
 
         size_t color_attachment_count = 0;
@@ -1666,7 +1774,7 @@ namespace jeecs::graphic::api::dx11
             auto& attachment = attachments[i];
             if (0 == (
                 attachment->resource()->m_format
-                & jegl_texture::format::DEPTH))
+                & jegl_texture_common::format::DEPTH))
                 ++color_attachment_count;
         }
 
@@ -1676,11 +1784,11 @@ namespace jeecs::graphic::api::dx11
         for (size_t i = 0; i < resource->m_attachment_count; ++i)
         {
             auto& attachment = attachments[i];
-            jegl_bind_texture(attachment->resource(), 0);
+            jegl_bind_texture_2d(attachment->resource(), 0);
 
             if (0 != (
                 attachment->resource()->m_format
-                & jegl_texture::format::DEPTH))
+                & jegl_texture_common::format::DEPTH))
             {
                 if (jedx11_framebuffer_res->m_depth_view.Get() == nullptr)
                 {
@@ -1935,7 +2043,8 @@ namespace jeecs::graphic::api::dx11
             uniformbuf_instance->m_binding_place, 1, uniformbuf_instance->m_uniformbuf.GetAddressOf());
     }
 
-    void dx11_bind_texture(je_GraphicImplContext ctx, jegl_texture* texture, size_t pass)
+    template<typename TexT>
+    void dx11_bind_texture(je_GraphicImplContext ctx, TexT* texture, size_t pass)
     {
         jegl_dx11_context* context = static_cast<jegl_dx11_context*>(ctx);
 
@@ -2157,7 +2266,11 @@ void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->update_draw_commit = dx11_commit_update;
 
     write_to_apis->shader_create_blob = dx11_shader_create_blob;
-    write_to_apis->texture_create_blob = dx11_texture_create_blob;
+    write_to_apis->texture_2d_create_blob = dx11_texture_create_blob<jegl_texture_2d>;
+    write_to_apis->texture_3d_create_blob = dx11_texture_create_blob<jegl_texture_3d>;
+    write_to_apis->texture_array_create_blob = dx11_texture_create_blob<jegl_texture_array>;
+    write_to_apis->texture_cube_create_blob = dx11_texture_create_blob<jegl_texture_cube>;
+    write_to_apis->texture_msaa_create_blob = dx11_texture_create_blob<jegl_texture_msaa>;
     write_to_apis->vertex_create_blob = dx11_vertex_create_blob;
 
     write_to_apis->shader_close_blob = dx11_shader_close_blob;
@@ -2165,25 +2278,41 @@ void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->vertex_close_blob = dx11_vertex_close_blob;
 
     write_to_apis->shader_init = dx11_shader_init;
-    write_to_apis->texture_init = dx11_texture_init;
+    write_to_apis->texture_2d_init = dx11_texture_init<jegl_texture_2d>;
+    write_to_apis->texture_3d_init = dx11_texture_init<jegl_texture_3d>;
+    write_to_apis->texture_array_init = dx11_texture_init<jegl_texture_array>;
+    write_to_apis->texture_cube_init = dx11_texture_init<jegl_texture_cube>;
+    write_to_apis->texture_msaa_init = dx11_texture_init<jegl_texture_msaa>;
     write_to_apis->vertex_init = dx11_vertex_init;
     write_to_apis->framebuffer_init = dx11_framebuf_init;
     write_to_apis->ubuffer_init = dx11_ubuffer_init;
 
     write_to_apis->shader_update = dx11_shader_update;
-    write_to_apis->texture_update = dx11_texture_update;
+    write_to_apis->texture_2d_update = dx11_texture_update<jegl_texture_2d>;
+    write_to_apis->texture_3d_update = dx11_texture_update<jegl_texture_3d>;
+    write_to_apis->texture_array_update = dx11_texture_update<jegl_texture_array>;
+    write_to_apis->texture_cube_update = dx11_texture_update<jegl_texture_cube>;
+    write_to_apis->texture_msaa_update = dx11_texture_update<jegl_texture_msaa>;
     write_to_apis->vertex_update = dx11_vertex_update;
     write_to_apis->framebuffer_update = dx11_framebuf_update;
     write_to_apis->ubuffer_update = dx11_ubuffer_update;
 
     write_to_apis->shader_close = dx11_shader_close;
-    write_to_apis->texture_close = dx11_texture_close;
+    write_to_apis->texture_2d_close = dx11_texture_close<jegl_texture_2d>;
+    write_to_apis->texture_3d_close = dx11_texture_close<jegl_texture_3d>;
+    write_to_apis->texture_array_close = dx11_texture_close<jegl_texture_array>;
+    write_to_apis->texture_cube_close = dx11_texture_close<jegl_texture_cube>;
+    write_to_apis->texture_msaa_close = dx11_texture_close<jegl_texture_msaa>;
     write_to_apis->vertex_close = dx11_vertex_close;
     write_to_apis->framebuffer_close = dx11_framebuf_close;
     write_to_apis->ubuffer_close = dx11_ubuffer_close;
 
     write_to_apis->bind_uniform_buffer = dx11_bind_uniform_buffer;
-    write_to_apis->bind_texture = dx11_bind_texture;
+    write_to_apis->bind_texture_2d = dx11_bind_texture<jegl_texture_2d>;
+    write_to_apis->bind_texture_3d = dx11_bind_texture<jegl_texture_3d>;
+    write_to_apis->bind_texture_array = dx11_bind_texture<jegl_texture_array>;
+    write_to_apis->bind_texture_cube = dx11_bind_texture<jegl_texture_cube>;
+    write_to_apis->bind_texture_msaa = dx11_bind_texture<jegl_texture_msaa>;
     write_to_apis->bind_shader = dx11_bind_shader;
     write_to_apis->draw_vertex = dx11_draw_vertex_with_shader;
 

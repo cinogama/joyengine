@@ -46,4 +46,4 @@ jegl_mark_shared_resources_outdated(ctx, "@/shaders/pbr.shader");
 ## 相关接口
 
 - [jegl_load_shader](jegl_load_shader.md) - 加载着色器
-- [jegl_load_texture](jegl_load_texture.md) - 加载纹理
+- [jegl_load_texture](jegl_load_texture_2d.md) - 加载纹理

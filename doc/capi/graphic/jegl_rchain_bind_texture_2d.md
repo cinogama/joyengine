@@ -3,11 +3,11 @@
 ## 函数签名
 
 ```c
-JE_API void jegl_rchain_bind_texture(
+JE_API void jegl_rchain_bind_texture_2d(
     jegl_rendchain* chain,
     jegl_rchain_texture_group* texture_group,
     size_t binding_pass,
-    jegl_texture* texture);
+    jegl_texture_2d* texture);
 ```
 
 ## 描述
@@ -21,7 +21,7 @@ JE_API void jegl_rchain_bind_texture(
 | `chain` | `jegl_rendchain*` | 绘制链实例指针 |
 | `texture_group` | `jegl_rchain_texture_group*` | 纹理组句柄 |
 | `binding_pass` | `size_t` | 纹理绑定通道 |
-| `texture` | `jegl_texture*` | 纹理资源指针 |
+| `texture` | `jegl_texture_2d*` | 纹理资源指针 |
 
 ## 返回值
 
@@ -37,13 +37,13 @@ JE_API void jegl_rchain_bind_texture(
 jegl_rchain_texture_group* tex_group = jegl_rchain_allocate_texture_group(chain);
 
 // 绑定漫反射纹理到通道 0
-jegl_rchain_bind_texture(chain, tex_group, 0, diffuse_texture);
+jegl_rchain_bind_texture_2d(chain, tex_group, 0, diffuse_texture);
 
 // 绑定法线纹理到通道 1
-jegl_rchain_bind_texture(chain, tex_group, 1, normal_texture);
+jegl_rchain_bind_texture_2d(chain, tex_group, 1, normal_texture);
 
 // 绑定高光纹理到通道 2
-jegl_rchain_bind_texture(chain, tex_group, 2, specular_texture);
+jegl_rchain_bind_texture_2d(chain, tex_group, 2, specular_texture);
 ```
 
 ## 注意事项

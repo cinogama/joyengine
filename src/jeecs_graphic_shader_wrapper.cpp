@@ -1037,6 +1037,10 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
         Integer3,
         Integer4,
         Texture2D,
+        Texture2DArray,
+        Texture3D,
+        TextureCube,
+        Texture2DMS,
         Structure, // User defined structure.
     };
     enum WoshaderFilter

@@ -29,7 +29,7 @@ namespace jeecs
     {
         basic::resource<graphic::vertex> default_shape_quad;
         basic::resource<graphic::shader> default_shader;
-        basic::resource<graphic::texture> default_texture;
+        basic::resource<graphic::texture2d> default_texture;
         basic::vector<basic::resource<graphic::shader>> default_shaders_list;
 
         JECS_DISABLE_MOVE_AND_COPY(DefaultResources);
@@ -95,7 +95,7 @@ public let frag =
         ;
     ;
 )").value() }
-, default_texture{ graphic::texture::create(2, 2, jegl_texture::format::RGBA) }
+, default_texture{ graphic::texture2d::create(2, 2, jegl_texture_common::format::RGBA) }
 , default_shaders_list{ default_shader }
         {
             default_texture->pix(0, 0).set({ 1.f, 0.25f, 1.f, 1.f });
@@ -137,7 +137,7 @@ public let frag =
             const Translation* translation;
             const Shape* shape;
             const Shaders* shaders;
-            const Textures* textures;
+            const Textures2D* textures;
 
             // UI 布局量：父子层级（含祖先旋转链）已由布局阶段复合进
             // WorldLayout 的仿射系数通道，绘制端只按相机目标尺寸像素化。
@@ -381,14 +381,14 @@ public let frag =
             math::vec2 tiling;
             math::vec2 offset;
         };
-        bound_textures_t bind_entity_textures(jegl_rendchain* chain, const Textures* textures)
+        bound_textures_t bind_entity_textures(jegl_rendchain* chain, const Textures2D* textures)
         {
             bound_textures_t result;
             result.group = jegl_rchain_allocate_texture_group(chain);
             result.tiling = math::vec2(1.f, 1.f);
             result.offset = math::vec2(0.f, 0.f);
 
-            jegl_rchain_bind_texture(
+            jegl_rchain_bind_texture_2d(
                 chain, result.group, 0, m_default_resources.default_texture->resource());
 
             if (textures != nullptr)
@@ -396,7 +396,7 @@ public let frag =
                 result.tiling = textures->tiling;
                 result.offset = textures->offset;
                 for (auto& texture : textures->textures)
-                    jegl_rchain_bind_texture(
+                    jegl_rchain_bind_texture_2d(
                         chain, result.group, texture.m_pass_id, texture.m_texture->resource());
             }
             return result;
@@ -556,7 +556,7 @@ public let frag =
         // 当前批（连续同键运行段）状态；发射端逐字追加，键变化/缓冲满/相机
         // 切换时 flush 成一次 jegl_rchain_draw。
         std::vector<float> m_text_quad_data;
-        jegl_texture* m_text_batch_page = nullptr;
+        jegl_texture_2d* m_text_batch_page = nullptr;
         graphic::shader* m_text_batch_shader = nullptr;
         basic::resource<graphic::vertex>* m_text_batch_vb = nullptr;
         size_t m_text_batch_quads = 0;
@@ -616,7 +616,7 @@ public let frag =
                     WorldLayout&,
                     Rotation*,
                     Text*,
-                    Textures*,
+                    Textures2D*,
                     Shaders&,
                     Shape*,
                     Rendqueue*,
@@ -957,7 +957,7 @@ public let frag =
         void PrepareTextBatch(
             jegl_rendchain* chain,
             const float(&view)[4][4],
-            jegl_texture* page,
+            jegl_texture_2d* page,
             graphic::shader* shader_res)
         {
             if (m_text_batch_page == page && m_text_batch_shader == shader_res
@@ -1007,7 +1007,7 @@ public let frag =
                 m_text_batch_quads * 6);
 
             auto* texture_group = jegl_rchain_allocate_texture_group(chain);
-            jegl_rchain_bind_texture(
+            jegl_rchain_bind_texture_2d(
                 chain, texture_group, 0, m_text_batch_page);
 
             auto* draw_action = jegl_rchain_draw(
@@ -1127,7 +1127,7 @@ public let frag =
                 view typesof(
                     Translation&,
                     Shaders&,
-                    Textures*,
+                    Textures2D*,
                     Shape&,
                     Rendqueue*,
                     Color*
@@ -1204,7 +1204,7 @@ public let frag =
             JECS_DISABLE_MOVE_AND_COPY(DeferLight2DResource);
 
             // Used for move rend result to camera's render aim buffer.
-            jeecs::basic::resource<jeecs::graphic::texture> _no_shadow;
+            jeecs::basic::resource<jeecs::graphic::texture2d> _no_shadow;
             jeecs::basic::resource<jeecs::graphic::vertex> _screen_vertex;
 
             jeecs::basic::resource<jeecs::graphic::vertex> _sprite_shadow_vertex;
@@ -1270,7 +1270,7 @@ public let frag =
             };
             DeferLight2DResource()
                 : _no_shadow{
-                    jeecs::graphic::texture::create(1, 1, jegl_texture::format::RGBA)
+                    jeecs::graphic::texture2d::create(1, 1, jegl_texture_common::format::RGBA)
                 }
                 , _screen_vertex{
                     jeecs::graphic::vertex::create(
@@ -1892,7 +1892,7 @@ public func frag(vf: v2f)
             const RendToFramebuffer* rendToFramebuffer;
             const Light2D::CameraPostPass* light2DPostPass;
             const Shaders* shaders;
-            const Textures* textures;
+            const Textures2D* textures;
             const FrustumCulling* frustumCulling;
             const Camera::Clear* clear;
             const Renderer::Color* color;
@@ -1917,7 +1917,7 @@ public func frag(vf: v2f)
             const Renderer::Color* color;
             const Shape* shape;
             const Shaders* shaders;
-            const Textures* textures;
+            const Textures2D* textures;
         };
 
         struct block2d_arch
@@ -1929,7 +1929,7 @@ public func frag(vf: v2f)
             const Light2D::SpriteShadow* spriteshadow;
             const Light2D::SelfShadow* selfshadow;
 
-            const Textures* textures;
+            const Textures2D* textures;
             const Shape* shape;
         };
 
@@ -1984,7 +1984,7 @@ public func frag(vf: v2f)
                     RendToFramebuffer*,
                     CameraPostPass*,
                     Shaders*,
-                    Textures*,
+                    Textures2D*,
                     FrustumCulling*,
                     Clear*,
                     Color*
@@ -2052,13 +2052,13 @@ public func frag(vf: v2f)
                                 RENDAIMBUFFER_HEIGHT,
                                 {
                                     // 漫反射颜色
-                                    jegl_texture::format::RGBA,
+                                    jegl_texture_common::format::RGBA,
                                     // 自发光颜色，用于法线反射或者发光物体的颜色参数，最终混合shader会将此参数用于光照计算
-                                    jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::FLOAT16),
+                                    jegl_texture_common::format(jegl_texture_common::format::RGBA | jegl_texture_common::format::FLOAT16),
                                     // 视空间坐标(RGB) Alpha通道暂时留空
-                                    jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::FLOAT16),
+                                    jegl_texture_common::format(jegl_texture_common::format::RGBA | jegl_texture_common::format::FLOAT16),
                                     // 法线空间颜色
-                                    jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::FLOAT16),
+                                    jegl_texture_common::format(jegl_texture_common::format::RGBA | jegl_texture_common::format::FLOAT16),
                                 },
                                 true).value();
                         light2dpostpass->post_light_target
@@ -2067,7 +2067,7 @@ public func frag(vf: v2f)
                                 LIGHT_BUFFER_HEIGHT,
                                 {
                                     // 光渲染结果
-                                    (jegl_texture::format)(jegl_texture::format::RGBA | jegl_texture::format::FLOAT16),
+                                    (jegl_texture_common::format)(jegl_texture_common::format::RGBA | jegl_texture_common::format::FLOAT16),
                                 },
                                 false).value();
                     }
@@ -2078,7 +2078,7 @@ public func frag(vf: v2f)
                 view typesof(
                     Translation&,
                     Shaders&,
-                    Textures*,
+                    Textures2D*,
                     Shape&,
                     Rendqueue*,
                     Color*
@@ -2123,7 +2123,7 @@ public func frag(vf: v2f)
                     Color*,
                     Shape&,
                     Shaders&,
-                    Textures*
+                    Textures2D*
                 ),
                 anyof typesof(
                     Point,
@@ -2162,7 +2162,7 @@ public func frag(vf: v2f)
                             std::max((size_t)1, SHADOW_BUFFER_WIDTH),
                             std::max((size_t)1, SHADOW_BUFFER_HEIGHT),
                             {
-                                jegl_texture::format::RGBA,
+                                jegl_texture_common::format::RGBA,
                                 // Only store shadow value to R-pass
                             },
                             false).value();
@@ -2265,7 +2265,7 @@ public func frag(vf: v2f)
                     ShapeShadow*,
                     SpriteShadow*,
                     SelfShadow*,
-                    Textures*,
+                    Textures2D*,
                     Shape&
                 ),
                 anyof typesof(
@@ -2372,13 +2372,13 @@ public func frag(vf: v2f)
         }
 
         jegl_rchain_texture_group* alloc_shadow_texture_group(
-            jegl_rendchain* chain, /* OPTIONAL */ const Textures* textures)
+            jegl_rendchain* chain, /* OPTIONAL */ const Textures2D* textures)
         {
             auto* group = jegl_rchain_allocate_texture_group(chain);
             auto main_texture =
                 textures == nullptr ? std::nullopt : textures->get_texture(0);
 
-            jegl_rchain_bind_texture(
+            jegl_rchain_bind_texture_2d(
                 chain, group, 0,
                 main_texture.has_value()
                 ? main_texture.value()->resource()
@@ -2403,7 +2403,7 @@ public func frag(vf: v2f)
             math::vec3 local_scale,
             float color_w,
             const math::vec3& parallel_dir_ref,
-            const Textures* textures)
+            const Textures2D* textures)
         {
             auto* rchain_draw_action = jegl_rchain_draw(
                 shadow_chain, shadow_shader->resource(), shape_vertex->resource(), texture_group);
@@ -2785,11 +2785,11 @@ public func frag(vf: v2f)
                         auto bound = bind_entity_textures(light2d_light_effect_rend_chain, light2d.textures);
 
                         // 绑定 G-buffer 通道（漫反射 / 自发光 / 视空间坐标 / 视空间法线 / 阴影）到 4..8 槽
-                        jegl_rchain_bind_texture(light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 0, diffuse_attachment);
-                        jegl_rchain_bind_texture(light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 1, emissive_attachment);
-                        jegl_rchain_bind_texture(light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 2, viewpos_attachment);
-                        jegl_rchain_bind_texture(light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 3, viewnorm_attachment);
-                        jegl_rchain_bind_texture(
+                        jegl_rchain_bind_texture_2d(light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 0, diffuse_attachment);
+                        jegl_rchain_bind_texture_2d(light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 1, emissive_attachment);
+                        jegl_rchain_bind_texture_2d(light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 2, viewpos_attachment);
+                        jegl_rchain_bind_texture_2d(light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 3, viewnorm_attachment);
+                        jegl_rchain_bind_texture_2d(
                             light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 4,
                             light2d.shadowbuffer != nullptr
                             ? light2d.shadowbuffer->buffer.value()->get_attachment(0).value()->resource()
@@ -2871,15 +2871,15 @@ public func frag(vf: v2f)
                     auto texture_group = jegl_rchain_allocate_texture_group(final_target_rend_chain);
 
                     // 槽 0：光照合成结果；槽 4..7：G-buffer 通道
-                    jegl_rchain_bind_texture(final_target_rend_chain, texture_group, 0,
+                    jegl_rchain_bind_texture_2d(final_target_rend_chain, texture_group, 0,
                         current_camera.light2DPostPass->post_light_target.value()->get_attachment(0).value()->resource());
-                    jegl_rchain_bind_texture(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 0,
+                    jegl_rchain_bind_texture_2d(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 0,
                         post_rend_target_frame_buffer->get_attachment(0).value()->resource());
-                    jegl_rchain_bind_texture(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 1,
+                    jegl_rchain_bind_texture_2d(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 1,
                         post_rend_target_frame_buffer->get_attachment(1).value()->resource());
-                    jegl_rchain_bind_texture(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 2,
+                    jegl_rchain_bind_texture_2d(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 2,
                         post_rend_target_frame_buffer->get_attachment(2).value()->resource());
-                    jegl_rchain_bind_texture(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 3,
+                    jegl_rchain_bind_texture_2d(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 3,
                         post_rend_target_frame_buffer->get_attachment(3).value()->resource());
 
                     // 相机自带纹理（覆盖槽位由 m_pass_id 决定）
@@ -2889,7 +2889,7 @@ public func frag(vf: v2f)
                         final_tiling = current_camera.textures->tiling;
                         final_offset = current_camera.textures->offset;
                         for (auto& texture : current_camera.textures->textures)
-                            jegl_rchain_bind_texture(final_target_rend_chain, texture_group, texture.m_pass_id, texture.m_texture->resource());
+                            jegl_rchain_bind_texture_2d(final_target_rend_chain, texture_group, texture.m_pass_id, texture.m_texture->resource());
                     }
 
                     auto& drawing_shaders =

@@ -43,6 +43,7 @@
 #   include <optional>
 #   include <tuple>
 #   include <array>
+#   include <variant>
 #   include <concepts>
 
 #   include <execution>
@@ -2156,13 +2157,25 @@ struct jegl_resource_handle
 };
 
 /*
-jegl_texture [类型]
-纹理原始数据，储存有纹理的采样方式和像素数据等信息
+jegl_texture_kind [类型]
+纹理类别标签，用于在类型被擦除的边界（绘制链重放、脚本语言包装层）区分纹理的实际类别
 */
-struct jegl_texture
+enum class jegl_texture_kind : uint8_t
 {
-    jegl_resource_handle m_handle;
+    TEXTURE_2D,
+    TEXTURE_3D,
+    TEXTURE_ARRAY,
+    TEXTURE_CUBE,
+    TEXTURE_MSAA,
+};
 
+/*
+jegl_texture_common [类型]
+各类纹理的公共前缀布局，仅供其余纹理类型继承，不应被单独使用。
+所有纹理类型必须保证 m_handle 位于结构体偏移 0 处，以复用引擎的资源生命周期管理。
+*/
+struct jegl_texture_common
+{
     using pixel_data_t = uint8_t;
     enum format : uint16_t
     {
@@ -2173,7 +2186,6 @@ struct jegl_texture
         FLOAT16 = 0x0010,
         DEPTH = 0x0020,
         FRAMEBUF = 0x0040,
-        CUBE = 0x0080,
 
         FORMAT_MASK = 0xFFF0,
     };
@@ -2181,6 +2193,9 @@ struct jegl_texture
     // NOTE:
     // * Pixel data is storage from LEFT/BOTTOM to RIGHT/TOP
     // * If texture's m_pixels is nullptr, only create a texture in pipeline.
+    jegl_resource_handle m_handle;
+    jegl_texture_kind m_kind;
+
     pixel_data_t* m_pixels;
     size_t m_width;
     size_t m_height;
@@ -2192,8 +2207,69 @@ struct jegl_texture
     size_t m_modified_max_x;
     size_t m_modified_max_y;
 };
+
+/*
+jegl_texture_2d [类型]
+二维纹理原始数据，储存有纹理的采样方式和像素数据等信息
+*/
+struct jegl_texture_2d : public jegl_texture_common
+{
+    static constexpr jegl_texture_kind KIND = jegl_texture_kind::TEXTURE_2D;
+};
 static_assert(
-    std::is_trivial_v<jegl_texture> && 0 == offsetof(jegl_texture, m_handle));
+    std::is_trivial_v<jegl_texture_2d> && 0 == offsetof(jegl_texture_2d, m_handle));
+
+/*
+jegl_texture_3d [类型]
+三维纹理原始数据，m_depth 指示纹理在深度方向上的纹素数量，像素数据按
+宽度 x 高度 x 深度 连续排布
+*/
+struct jegl_texture_3d : public jegl_texture_common
+{
+    static constexpr jegl_texture_kind KIND = jegl_texture_kind::TEXTURE_3D;
+    size_t m_depth;
+};
+static_assert(
+    std::is_trivial_v<jegl_texture_3d> && 0 == offsetof(jegl_texture_3d, m_handle));
+
+/*
+jegl_texture_array [类型]
+纹理数组原始数据，m_layers 指示数组中二维纹理层的数量，像素数据按
+宽度 x 高度 x 层数 连续排布
+*/
+struct jegl_texture_array : public jegl_texture_common
+{
+    static constexpr jegl_texture_kind KIND = jegl_texture_kind::TEXTURE_ARRAY;
+    size_t m_layers;
+};
+static_assert(
+    std::is_trivial_v<jegl_texture_array> && 0 == offsetof(jegl_texture_array, m_handle));
+
+/*
+jegl_texture_cube [类型]
+立方体贴图纹理原始数据，固定包含 6 个宽度高度相同的正方形面，
+像素数据按 6 x 宽度 x 高度 连续排布（面的顺序与图形 API 的
++CUBE_MAP_POSITIVE_X .. -Z 顺序一致）
+*/
+struct jegl_texture_cube : public jegl_texture_common
+{
+    static constexpr jegl_texture_kind KIND = jegl_texture_kind::TEXTURE_CUBE;
+};
+static_assert(
+    std::is_trivial_v<jegl_texture_cube> && 0 == offsetof(jegl_texture_cube, m_handle));
+
+/*
+jegl_texture_msaa [类型]
+多重采样二维纹理原始数据，仅存在于 GPU 侧（渲染目标附件），不持有 CPU 像素数据，
+m_samples 指示每像素采样数
+*/
+struct jegl_texture_msaa : public jegl_texture_common
+{
+    static constexpr jegl_texture_kind KIND = jegl_texture_kind::TEXTURE_MSAA;
+    size_t m_samples;
+};
+static_assert(
+    std::is_trivial_v<jegl_texture_msaa> && 0 == offsetof(jegl_texture_msaa, m_handle));
 
 /*
 jegl_vertex [类型]
@@ -2473,7 +2549,7 @@ struct jegl_frame_buffer
 {
     jegl_resource_handle m_handle;
 
-    // In fact, attachment_t is jeecs::basic::resource<jeecs::graphic::texture>
+    // In fact, attachment_t is jeecs::basic::resource<jeecs::graphic::texture2d>
     typedef struct attachment_t attachment_t;
     attachment_t* m_output_attachments;
     size_t m_attachment_count;
@@ -2561,16 +2637,50 @@ struct jegl_graphic_api
     using shader_close_func_t =
         void (*)(je_GraphicImplContext, jegl_shader*);
 
-    using texture_create_blob_func_t =
-        jegl_resource_blob(*)(je_GraphicImplContext, jegl_texture*);
+    // 注意：本结构体位于 extern "C" 区域内，不允许使用模板别名，
+    // 因此各类纹理的函数指针类型均为显式展开
+    using texture_2d_create_blob_func_t =
+        jegl_resource_blob(*)(je_GraphicImplContext, jegl_texture_2d*);
+    using texture_3d_create_blob_func_t =
+        jegl_resource_blob(*)(je_GraphicImplContext, jegl_texture_3d*);
+    using texture_array_create_blob_func_t =
+        jegl_resource_blob(*)(je_GraphicImplContext, jegl_texture_array*);
+    using texture_cube_create_blob_func_t =
+        jegl_resource_blob(*)(je_GraphicImplContext, jegl_texture_cube*);
+    using texture_msaa_create_blob_func_t =
+        jegl_resource_blob(*)(je_GraphicImplContext, jegl_texture_msaa*);
     using texture_close_blob_func_t =
         void (*)(je_GraphicImplContext, jegl_resource_blob);
-    using texture_init_func_t =
-        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_texture*);
-    using texture_update_func_t =
-        void (*)(je_GraphicImplContext, jegl_texture*);
-    using texture_close_func_t =
-        void (*)(je_GraphicImplContext, jegl_texture*);
+    using texture_2d_init_func_t =
+        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_texture_2d*);
+    using texture_3d_init_func_t =
+        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_texture_3d*);
+    using texture_array_init_func_t =
+        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_texture_array*);
+    using texture_cube_init_func_t =
+        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_texture_cube*);
+    using texture_msaa_init_func_t =
+        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_texture_msaa*);
+    using texture_2d_update_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_2d*);
+    using texture_3d_update_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_3d*);
+    using texture_array_update_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_array*);
+    using texture_cube_update_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_cube*);
+    using texture_msaa_update_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_msaa*);
+    using texture_2d_close_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_2d*);
+    using texture_3d_close_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_3d*);
+    using texture_array_close_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_array*);
+    using texture_cube_close_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_cube*);
+    using texture_msaa_close_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_msaa*);
 
     using vertex_create_blob_func_t =
         jegl_resource_blob(*)(je_GraphicImplContext, jegl_vertex*);
@@ -2614,8 +2724,16 @@ struct jegl_graphic_api
         void (*)(je_GraphicImplContext, jegl_uniform_buffer*);
     using bind_shader_func_t =
         bool (*)(je_GraphicImplContext, jegl_shader*);
-    using bind_texture_func_t =
-        void (*)(je_GraphicImplContext, jegl_texture*, size_t);
+    using bind_texture_2d_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_2d*, size_t);
+    using bind_texture_3d_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_3d*, size_t);
+    using bind_texture_array_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_array*, size_t);
+    using bind_texture_cube_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_cube*, size_t);
+    using bind_texture_msaa_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_msaa*, size_t);
     using draw_vertex_func_t =
         void (*)(je_GraphicImplContext, jegl_vertex*);
 
@@ -2690,15 +2808,21 @@ struct jegl_graphic_api
     shader_create_blob_func_t shader_create_blob;
 
     /*
-    jegl_graphic_api::texture_create_blob [成员]
-    图形接口创建纹理资源的底层数据块，jegl_load_texture 在调用 texture_init 之前，会调用此接口创建 blob，
-    对于具有相同路径的纹理资源，在先前创建的 blob 失效之前，不会重复调用此接口。
-    图形实现可以利用 blob 加速纹理的创建流程。
+    jegl_graphic_api::texture_2d_create_blob / texture_3d_create_blob / texture_array_create_blob /
+    texture_cube_create_blob / texture_msaa_create_blob [成员]
+    图形接口创建对应类别纹理资源的底层数据块，jegl_load_texture_2d 和 jegl_create_texture_* 在调用对应的
+    texture_*_init 之前，会调用此接口创建 blob，对于具有相同路径的纹理资源，在先前创建的 blob 失效之前，
+    不会重复调用此接口。图形实现可以利用 blob 加速纹理的创建流程。
         * 可以返回 nullptr，即便如此，在对应资源失效之前，此接口依然只被调用一次。
-        * 如果接口返回 nullptr，texture_init 将收到一个 nullptr 作为 blob 参数。
+        * 如果接口返回 nullptr，对应的 texture_*_init 将收到一个 nullptr 作为 blob 参数。
         * 如果接口返回 nullptr，对应的 texture_close_blob 将不会被调用。
+        * 若图形实现不支持某一纹理类别，可以将对应的函数指针置空，引擎中间层将拒绝创建该类纹理并记录日志。
     */
-    texture_create_blob_func_t texture_create_blob;
+    texture_2d_create_blob_func_t texture_2d_create_blob;
+    texture_3d_create_blob_func_t texture_3d_create_blob;
+    texture_array_create_blob_func_t texture_array_create_blob;
+    texture_cube_create_blob_func_t texture_cube_create_blob;
+    texture_msaa_create_blob_func_t texture_msaa_create_blob;
 
     /*
     jegl_graphic_api::vertex_create_blob [成员]
@@ -2743,11 +2867,16 @@ struct jegl_graphic_api
     shader_init_func_t shader_init;
 
     /*
-    jegl_graphic_api::texture_init [成员]
-    初始化并创建纹理在图形层对应的资源，此接口将在资源被首次使用时（jegl_bind_texture）调用，图形实现
-    应当在此接口中完成所需的准备工作。
+    jegl_graphic_api::texture_2d_init / texture_3d_init / texture_array_init / texture_cube_init /
+    texture_msaa_init [成员]
+    初始化并创建对应类别纹理在图形层对应的资源，此接口将在资源被首次使用时（jegl_bind_texture_*）调用，
+    图形实现应当在此接口中完成所需的准备工作。
     */
-    texture_init_func_t texture_init;
+    texture_2d_init_func_t texture_2d_init;
+    texture_3d_init_func_t texture_3d_init;
+    texture_array_init_func_t texture_array_init;
+    texture_cube_init_func_t texture_cube_init;
+    texture_msaa_init_func_t texture_msaa_init;
 
     /*
     jegl_graphic_api::vertex_init [成员]
@@ -2762,7 +2891,7 @@ struct jegl_graphic_api
     应当在此接口中完成所需的准备工作。
 
     引擎的中间层在创建 frambuffer 实例时，已经创建了对应的附件纹理资源（m_output_attachments），图形实现应
-    当使用 jegl_bind_texture 或者其他适当的接口确保这些附件纹理资源已经被正确创建和初始化。
+    当使用 jegl_bind_texture_2d 或者其他适当的接口确保这些附件纹理资源已经被正确创建和初始化。
     */
     framebuffer_init_func_t framebuffer_init;
 
@@ -2781,11 +2910,16 @@ struct jegl_graphic_api
     shader_update_func_t shader_update;
 
     /*
-    jegl_graphic_api::texture_update [成员]
-    当一个 texture 资源的 m_modified 标记被设置为 true 时，引擎中间层将在此资源的下次使用时调用此接口。图形接口
-    负责准备好对应的更新工作。
+    jegl_graphic_api::texture_2d_update / texture_3d_update / texture_array_update / texture_cube_update /
+    texture_msaa_update [成员]
+    当一个对应类别纹理资源的 m_modified 标记被设置为 true 时，引擎中间层将在此资源的下次使用时调用此
+    接口。图形接口负责准备好对应的更新工作。
     */
-    texture_update_func_t texture_update;
+    texture_2d_update_func_t texture_2d_update;
+    texture_3d_update_func_t texture_3d_update;
+    texture_array_update_func_t texture_array_update;
+    texture_cube_update_func_t texture_cube_update;
+    texture_msaa_update_func_t texture_msaa_update;
 
     /*
     jegl_graphic_api::vertex_update [成员]
@@ -2816,11 +2950,16 @@ struct jegl_graphic_api
     shader_close_func_t shader_close;
 
     /*
-    jegl_graphic_api::texture_close [成员]
-    图形接口关闭纹理资源，当一个纹理资源被释放时，引擎中间层将调用此接口，图形实现
+    jegl_graphic_api::texture_2d_close / texture_3d_close / texture_array_close / texture_cube_close /
+    texture_msaa_close [成员]
+    图形接口关闭对应类别的纹理资源，当一个纹理资源被释放时，引擎中间层将调用此接口，图形实现
     应当在此接口中完成纹理资源的释放工作。
     */
-    texture_close_func_t texture_close;
+    texture_2d_close_func_t texture_2d_close;
+    texture_3d_close_func_t texture_3d_close;
+    texture_array_close_func_t texture_array_close;
+    texture_cube_close_func_t texture_cube_close;
+    texture_msaa_close_func_t texture_msaa_close;
 
     /*
     jegl_graphic_api::vertex_close [成员]
@@ -2870,10 +3009,15 @@ struct jegl_graphic_api
     */
     bind_shader_func_t bind_shader;
     /*
-    jegl_graphic_api::bind_texture [成员]
-    图形接口绑定纹理到指定通道
+    jegl_graphic_api::bind_texture_2d / bind_texture_3d / bind_texture_array / bind_texture_cube /
+    bind_texture_msaa [成员]
+    图形接口绑定对应类别的纹理到指定通道
     */
-    bind_texture_func_t bind_texture;
+    bind_texture_2d_func_t bind_texture_2d;
+    bind_texture_3d_func_t bind_texture_3d;
+    bind_texture_array_func_t bind_texture_array;
+    bind_texture_cube_func_t bind_texture_cube;
+    bind_texture_msaa_func_t bind_texture_msaa;
     /*
     jegl_graphic_api::draw_vertex [成员]
     由图形实现负责使用当前绑定的着色器和纹理绘制指定的顶点
@@ -3084,51 +3228,118 @@ jegl_close_shader [基本接口]
 JE_API void jegl_close_shader(jegl_shader* shader);
 ///////////////////////////// TEXTURE /////////////////////////////
 /*
-jegl_load_texture [基本接口]
-从指定路径加载一个纹理资源，加载的路径规则与 jeecs_file_open 相同
+jegl_load_texture_2d [基本接口]
+从指定路径加载一个二维纹理资源，加载的路径规则与 jeecs_file_open 相同
     * 若指定的文件不存在或不是一个合法的纹理，则返回nullptr
     * 图形资源被创建时，其自动获取一个引用计数；使用 jegl_share_resource可增加引
-        用计数，使用 jegl_close_texture 可减少引用计数；当资源的引用计数变为 0 时，
+        用计数，使用 jegl_close_texture_2d 可减少引用计数；当资源的引用计数变为 0 时，
         资源将被释放
 请参见：
     jeecs_file_open
     jegl_share_resource
-    jegl_close_texture
+    jegl_close_texture_2d
 */
-JE_API /* OPTIONAL */ jegl_texture* jegl_load_texture(
+JE_API /* OPTIONAL */ jegl_texture_2d* jegl_load_texture_2d(
     /* OPTIONAL */ jegl_context* context,
     const char* path);
 
 /*
-jegl_create_texture [基本接口]
-创建一个指定大小和格式的纹理资源
-    * 若指定的格式包含 COLOR16、DEPTH、FRAMEBUF、CUBE 或有 MSAA 支持，则不创建像素缓冲，
+jegl_create_texture_2d [基本接口]
+创建一个指定大小和格式的二维纹理资源
+    * 若指定的格式包含 FLOAT16、DEPTH 或 FRAMEBUF，则不创建像素缓冲，
         对应纹理原始数据的像素将被设置为 nullptr
     * 若创建像素缓冲，像素缓存的将按字节置为 0 填充初始化
-    * 考虑到部分图形库的实现，如果指定的宽度或高度为 0，jegl_create_texture将视其为 1
+    * 考虑到部分图形库的实现，如果指定的宽度或高度为 0，jegl_create_texture_2d将视其为 1
     * 图形资源被创建时，其自动获取一个引用计数；使用 jegl_share_resource可增加引
-        用计数，使用 jegl_close_texture 可减少引用计数；当资源的引用计数变为 0 时，
+        用计数，使用 jegl_close_texture_2d 可减少引用计数；当资源的引用计数变为 0 时，
         资源将被释放
     * 使用此接口创建的纹理，其对应的资源路径为 nullptr
 请参见：
     jegl_share_resource
-    jegl_close_texture
+    jegl_close_texture_2d
 */
-JE_API jegl_texture* /* NOT NULL */ jegl_create_texture(
+JE_API jegl_texture_2d* /* NOT NULL */ jegl_create_texture_2d(
     size_t width,
     size_t height,
-    jegl_texture::format format);
+    jegl_texture_common::format format);
 
 /*
-jegl_close_texture [基本接口]
-关闭一个纹理资源（使得其引用计数减少），如果资源被 jegl_share_resource 引用过多次，
+jegl_create_texture_3d [基本接口]
+创建一个指定大小、深度和格式的三维纹理资源
+    * 若指定的格式包含 FLOAT16，则不创建像素缓冲
+    * 若创建像素缓冲，像素数据按 宽度 x 高度 x 深度 连续排布并置为 0 填充初始化
+    * 若指定的宽度、高度或深度为 0，将视其为 1
+请参见：
+    jegl_share_resource
+    jegl_close_texture_3d
+*/
+JE_API jegl_texture_3d* /* NOT NULL */ jegl_create_texture_3d(
+    size_t width,
+    size_t height,
+    size_t depth,
+    jegl_texture_common::format format);
+
+/*
+jegl_create_texture_array [基本接口]
+创建一个指定大小、层数和格式的纹理数组资源
+    * 若指定的格式包含 FLOAT16，则不创建像素缓冲
+    * 若创建像素缓冲，像素数据按 宽度 x 高度 x 层数 连续排布并置为 0 填充初始化
+    * 若指定的宽度、高度或层数为 0，将视其为 1
+请参见：
+    jegl_share_resource
+    jegl_close_texture_array
+*/
+JE_API jegl_texture_array* /* NOT NULL */ jegl_create_texture_array(
+    size_t width,
+    size_t height,
+    size_t layers,
+    jegl_texture_common::format format);
+
+/*
+jegl_create_texture_cube [基本接口]
+创建一个指定大小和格式的立方体贴图纹理资源，固定包含 6 个面
+    * 若指定的格式包含 FLOAT16，则不创建像素缓冲
+    * 若创建像素缓冲，像素数据按 6 x 宽度 x 高度 连续排布并置为 0 填充初始化
+    * 若指定的宽度或高度为 0，将视其为 1
+请参见：
+    jegl_share_resource
+    jegl_close_texture_cube
+*/
+JE_API jegl_texture_cube* /* NOT NULL */ jegl_create_texture_cube(
+    size_t width,
+    size_t height,
+    jegl_texture_common::format format);
+
+/*
+jegl_create_texture_msaa [基本接口]
+创建一个指定大小、采样数和格式的多重采样二维纹理资源，此类纹理仅存在于 GPU 侧
+（用作渲染目标附件），不持有 CPU 像素数据
+    * 若指定的采样数为 0，将视其为 1
+请参见：
+    jegl_share_resource
+    jegl_close_texture_msaa
+*/
+JE_API jegl_texture_msaa* /* NOT NULL */ jegl_create_texture_msaa(
+    size_t width,
+    size_t height,
+    size_t samples,
+    jegl_texture_common::format format);
+
+/*
+jegl_close_texture_2d / jegl_close_texture_3d / jegl_close_texture_array /
+jegl_close_texture_cube / jegl_close_texture_msaa [基本接口]
+关闭一个对应类别的纹理资源（使得其引用计数减少），如果资源被 jegl_share_resource 引用过多次，
 那么需要对应调用多次才能真正释放资源；
     * 如果此操作使得资源的引用计数变为 0，资源应当被立即视为不可用；对应的底层图形资
         源将由资源对应的图形线程上下文在适当的时机释放。
 请参见：
     jegl_share_resource
 */
-JE_API void jegl_close_texture(jegl_texture* texture);
+JE_API void jegl_close_texture_2d(jegl_texture_2d* texture);
+JE_API void jegl_close_texture_3d(jegl_texture_3d* texture);
+JE_API void jegl_close_texture_array(jegl_texture_array* texture);
+JE_API void jegl_close_texture_cube(jegl_texture_cube* texture);
+JE_API void jegl_close_texture_msaa(jegl_texture_msaa* texture);
 
 ///////////////////////////// VERTEX /////////////////////////////
 /*
@@ -3224,7 +3435,7 @@ jegl_create_framebuf [基本接口]
 JE_API /* OPTIONAL: If size or color_attachment_count is zero */ jegl_frame_buffer* jegl_create_framebuf(
     size_t width,
     size_t height,
-    const jegl_texture::format* color_attachment_formats,
+    const jegl_texture_common::format* color_attachment_formats,
     size_t color_attachment_count,
     bool contain_depth_attachment);
 
@@ -3280,7 +3491,7 @@ JE_API void jegl_close_uniformbuf(jegl_uniform_buffer* uniformbuf);
 //////////////////////////////////////////////////////////
 
 struct je_stb_font_data;
-typedef void (*je_font_char_updater_t)(jegl_texture::pixel_data_t*, size_t, size_t);
+typedef void (*je_font_char_updater_t)(jegl_texture_common::pixel_data_t*, size_t, size_t);
 
 struct je_font
 {
@@ -3416,12 +3627,17 @@ jegl_using_dx11_apis [基本接口]
 JE_API void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis);
 
 /*
-jegl_bind_texture [基本接口]
-将指定的纹理绑定到指定的纹理通道
+jegl_bind_texture_2d / jegl_bind_texture_3d / jegl_bind_texture_array /
+jegl_bind_texture_cube / jegl_bind_texture_msaa [基本接口]
+将指定类别的纹理绑定到指定的纹理通道
     * 此函数只允许在图形线程内调用
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
 */
-JE_API void jegl_bind_texture(jegl_texture* texture, size_t pass);
+JE_API void jegl_bind_texture_2d(jegl_texture_2d* texture, size_t pass);
+JE_API void jegl_bind_texture_3d(jegl_texture_3d* texture, size_t pass);
+JE_API void jegl_bind_texture_array(jegl_texture_array* texture, size_t pass);
+JE_API void jegl_bind_texture_cube(jegl_texture_cube* texture, size_t pass);
+JE_API void jegl_bind_texture_msaa(jegl_texture_msaa* texture, size_t pass);
 
 /*
 jegl_bind_shader [基本接口]
@@ -3441,13 +3657,13 @@ JE_API void jegl_bind_uniform_buffer(jegl_uniform_buffer* uniformbuf);
 
 /*
 jegl_draw_vertex [基本接口]
-使用当前绑定着色器的（通过jegl_bind_shader绑定）和纹理（通过jegl_bind_texture绑定）,
+使用当前绑定着色器的（通过jegl_bind_shader绑定）和纹理（通过jegl_bind_texture_*绑定）,
 以指定方式绘制一个模型
     * 此函数只允许在图形线程内调用
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
 请参见：
     jegl_bind_shader
-    jegl_bind_texture
+    jegl_bind_texture_2d
 */
 JE_API void jegl_draw_vertex(jegl_vertex* vert);
 
@@ -3567,10 +3783,10 @@ typedef struct jegl_rchain_texture_group jegl_rchain_texture_group;
 /*
 jegl_rchain_allocate_texture_group [基本接口]
 创建纹理组，返回可用于绘制操作的纹理组句柄
-可通过 jegl_rchain_bind_texture 向纹理组中提交纹理
+可通过 jegl_rchain_bind_texture_2d 等接口向纹理组中提交纹理
 请参见：
     jegl_rchain_draw
-    jegl_rchain_bind_texture
+    jegl_rchain_bind_texture_2d
 */
 JE_API jegl_rchain_texture_group* jegl_rchain_allocate_texture_group(
     jegl_rendchain* chain);
@@ -3731,16 +3947,37 @@ JE_API void jegl_rchain_set_uniform_float4x4(
     const float (*mat)[4]);
 
 /*
-jegl_rchain_bind_texture [基本接口]
-为指定的纹理组，在指定的纹理通道绑定一个纹理
+jegl_rchain_bind_texture_2d / jegl_rchain_bind_texture_3d / jegl_rchain_bind_texture_array /
+jegl_rchain_bind_texture_cube / jegl_rchain_bind_texture_msaa [基本接口]
+为指定的纹理组，在指定的纹理通道绑定一个对应类别的纹理
 请参见：
     jegl_rchain_allocate_texture_group
 */
-JE_API void jegl_rchain_bind_texture(
+JE_API void jegl_rchain_bind_texture_2d(
     jegl_rendchain* chain,
     jegl_rchain_texture_group* texture_group,
     size_t binding_pass,
-    jegl_texture* texture);
+    jegl_texture_2d* texture);
+JE_API void jegl_rchain_bind_texture_3d(
+    jegl_rendchain* chain,
+    jegl_rchain_texture_group* texture_group,
+    size_t binding_pass,
+    jegl_texture_3d* texture);
+JE_API void jegl_rchain_bind_texture_array(
+    jegl_rendchain* chain,
+    jegl_rchain_texture_group* texture_group,
+    size_t binding_pass,
+    jegl_texture_array* texture);
+JE_API void jegl_rchain_bind_texture_cube(
+    jegl_rendchain* chain,
+    jegl_rchain_texture_group* texture_group,
+    size_t binding_pass,
+    jegl_texture_cube* texture);
+JE_API void jegl_rchain_bind_texture_msaa(
+    jegl_rendchain* chain,
+    jegl_rchain_texture_group* texture_group,
+    size_t binding_pass,
+    jegl_texture_msaa* texture);
 
 /*
 jegl_rchain_commit [基本接口]
@@ -3847,7 +4084,7 @@ JE_API void jegui_set_font(
     size_t size);
 
 typedef uint64_t jegui_user_image_handle_t;
-typedef jegui_user_image_handle_t(*jegui_user_image_loader_t)(jegl_context*, jegl_texture*);
+typedef jegui_user_image_handle_t(*jegui_user_image_loader_t)(jegl_context*, jegl_texture_2d*);
 typedef void  (*jegui_user_sampler_loader_t)(jegl_context*, jegl_shader*);
 
 /*
@@ -5118,7 +5355,7 @@ JE_API void je_tilemap_set_layer_rend_queue(je_TilemapDocument* map, je_LayerId 
 // 样式资源经下列不透明指针类型跨 C 边界传递（与 jegl_frame_buffer 的
 // attachment_t 同款姿势，C 侧不透明、实现侧按实际类型使用）：
 //     je_tilemap_shader_ref  实为 jeecs::basic::resource<jeecs::graphic::shader>
-//     je_tilemap_texture_ref 实为 jeecs::basic::resource<jeecs::graphic::texture>
+//     je_tilemap_texture_ref 实为 jeecs::basic::resource<jeecs::graphic::texture2d>
 typedef struct je_tilemap_shader_ref je_tilemap_shader_ref;
 typedef struct je_tilemap_texture_ref je_tilemap_texture_ref;
 
@@ -9821,7 +10058,11 @@ namespace jeecs
             template<typename T>
             concept basic_graphic_resource =
                 std::same_as<T, jegl_shader> ||
-                std::same_as<T, jegl_texture> ||
+                std::same_as<T, jegl_texture_2d> ||
+                std::same_as<T, jegl_texture_3d> ||
+                std::same_as<T, jegl_texture_array> ||
+                std::same_as<T, jegl_texture_cube> ||
+                std::same_as<T, jegl_texture_msaa> ||
                 std::same_as<T, jegl_vertex> ||
                 std::same_as<T, jegl_frame_buffer> ||
                 std::same_as<T, jegl_uniform_buffer>;
@@ -9844,8 +10085,16 @@ namespace jeecs
             {
                 if constexpr (std::is_same_v<T, jegl_shader>)
                     jegl_close_shader(_m_resource);
-                else if constexpr (std::is_same_v<T, jegl_texture>)
-                    jegl_close_texture(_m_resource);
+                else if constexpr (std::is_same_v<T, jegl_texture_2d>)
+                    jegl_close_texture_2d(_m_resource);
+                else if constexpr (std::is_same_v<T, jegl_texture_3d>)
+                    jegl_close_texture_3d(_m_resource);
+                else if constexpr (std::is_same_v<T, jegl_texture_array>)
+                    jegl_close_texture_array(_m_resource);
+                else if constexpr (std::is_same_v<T, jegl_texture_cube>)
+                    jegl_close_texture_cube(_m_resource);
+                else if constexpr (std::is_same_v<T, jegl_texture_msaa>)
+                    jegl_close_texture_msaa(_m_resource);
                 else if constexpr (std::is_same_v<T, jegl_vertex>)
                     jegl_close_vertex(_m_resource);
                 else if constexpr (std::is_same_v<T, jegl_frame_buffer>)
@@ -9865,44 +10114,44 @@ namespace jeecs
                 return _m_resource;
             }
         };
-        class texture : public resource_basic<jegl_texture>
+        class texture2d : public resource_basic<jegl_texture_2d>
         {
-            explicit texture(jegl_texture* res)
+            explicit texture2d(jegl_texture_2d* res)
                 : resource_basic(res)
             {
             }
 
         public:
-            static std::optional<basic::resource<texture>> load(jegl_context* context, const std::string& str)
+            static std::optional<basic::resource<texture2d>> load(jegl_context* context, const std::string& str)
             {
-                jegl_texture* res = jegl_load_texture(context, str.c_str());
+                jegl_texture_2d* res = jegl_load_texture_2d(context, str.c_str());
                 if (res != nullptr)
-                    return basic::resource<texture>(new texture(res));
+                    return basic::resource<texture2d>(new texture2d(res));
                 return std::nullopt;
             }
-            static basic::resource<texture> create(size_t width, size_t height, jegl_texture::format format)
+            static basic::resource<texture2d> create(size_t width, size_t height, jegl_texture_common::format format)
             {
-                jegl_texture* res = jegl_create_texture(width, height, format);
+                jegl_texture_2d* res = jegl_create_texture_2d(width, height, format);
 
                 // Create texture must be successfully.
                 assert(res != nullptr);
-                return basic::resource<texture>(new texture(res));
+                return basic::resource<texture2d>(new texture2d(res));
             }
-            static basic::resource<texture> clip(
-                const basic::resource<texture>& src, size_t x, size_t y, size_t w, size_t h)
+            static basic::resource<texture2d> clip(
+                const basic::resource<texture2d>& src, size_t x, size_t y, size_t w, size_t h)
             {
-                jegl_texture::format new_texture_format =
-                    (jegl_texture::format)(
+                jegl_texture_common::format new_texture_format =
+                    (jegl_texture_common::format)(
                         src->resource()->m_format
-                        & jegl_texture::format::COLOR_DEPTH_MASK);
+                        & jegl_texture_common::format::COLOR_DEPTH_MASK);
 
-                jegl_texture* res =
-                    jegl_create_texture(w, h, new_texture_format);
+                jegl_texture_2d* res =
+                    jegl_create_texture_2d(w, h, new_texture_format);
 
                 // Create texture must be successfully.
                 assert(res != nullptr);
 
-                auto* new_texture = new texture(res);
+                auto* new_texture = new texture2d(res);
 
 #if 0
                 for (size_t iy = 0; iy < h; ++iy)
@@ -9929,24 +10178,24 @@ namespace jeecs
                         src_w * color_depth);
                 }
 #endif
-                return basic::resource<texture>(new_texture);
+                return basic::resource<texture2d>(new_texture);
             }
 
             class pixel
             {
-                jegl_texture* _m_texture;
-                jegl_texture::pixel_data_t*
+                jegl_texture_2d* _m_texture;
+                jegl_texture_common::pixel_data_t*
                     _m_pixel;
                 size_t _m_x, _m_y;
 
             public:
-                pixel(jegl_texture* _texture, size_t x, size_t y) noexcept
+                pixel(jegl_texture_2d* _texture, size_t x, size_t y) noexcept
                     : _m_texture(_texture), _m_x(x), _m_y(y)
                 {
-                    assert(sizeof(jegl_texture::pixel_data_t) == 1);
+                    assert(sizeof(jegl_texture_common::pixel_data_t) == 1);
 
                     auto color_depth =
-                        _m_texture->m_format & jegl_texture::format::COLOR_DEPTH_MASK;
+                        _m_texture->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK;
 
                     if (x < _m_texture->m_width && y < _m_texture->m_height)
                         _m_pixel = _m_texture->m_pixels + y * _m_texture->m_width * color_depth + x * color_depth;
@@ -9959,13 +10208,13 @@ namespace jeecs
                         return {};
                     switch (_m_texture->m_format)
                     {
-                    case jegl_texture::format::MONO:
+                    case jegl_texture_common::format::MONO:
                         return math::vec4{
                             _m_pixel[0] / 255.0f,
                             _m_pixel[0] / 255.0f,
                             _m_pixel[0] / 255.0f,
                             _m_pixel[0] / 255.0f };
-                    case jegl_texture::format::RGBA:
+                    case jegl_texture_common::format::RGBA:
                         return math::vec4{
                             _m_pixel[0] / 255.0f,
                             _m_pixel[1] / 255.0f,
@@ -10010,14 +10259,14 @@ namespace jeecs
 
                     switch (raw_texture_data->m_format)
                     {
-                    case jegl_texture::format::MONO:
-                        _m_pixel[0] = (jegl_texture::pixel_data_t)round(math::clamp(value.x, 0.f, 1.f) * 255.0f);
+                    case jegl_texture_common::format::MONO:
+                        _m_pixel[0] = (jegl_texture_common::pixel_data_t)round(math::clamp(value.x, 0.f, 1.f) * 255.0f);
                         break;
-                    case jegl_texture::format::RGBA:
-                        _m_pixel[0] = (jegl_texture::pixel_data_t)round(math::clamp(value.x, 0.f, 1.f) * 255.0f);
-                        _m_pixel[1] = (jegl_texture::pixel_data_t)round(math::clamp(value.y, 0.f, 1.f) * 255.0f);
-                        _m_pixel[2] = (jegl_texture::pixel_data_t)round(math::clamp(value.z, 0.f, 1.f) * 255.0f);
-                        _m_pixel[3] = (jegl_texture::pixel_data_t)round(math::clamp(value.w, 0.f, 1.f) * 255.0f);
+                    case jegl_texture_common::format::RGBA:
+                        _m_pixel[0] = (jegl_texture_common::pixel_data_t)round(math::clamp(value.x, 0.f, 1.f) * 255.0f);
+                        _m_pixel[1] = (jegl_texture_common::pixel_data_t)round(math::clamp(value.y, 0.f, 1.f) * 255.0f);
+                        _m_pixel[2] = (jegl_texture_common::pixel_data_t)round(math::clamp(value.z, 0.f, 1.f) * 255.0f);
+                        _m_pixel[3] = (jegl_texture_common::pixel_data_t)round(math::clamp(value.w, 0.f, 1.f) * 255.0f);
                         break;
                     default:
                         assert(0);
@@ -10055,6 +10304,148 @@ namespace jeecs
                     (int)resource()->m_width,
                     (int)resource()->m_height);
             }
+        };
+
+        namespace detail
+        {
+            // 标记 CPU 侧像素被整体改写，供不含像素代理的类型在直接写
+            // m_pixels 之后触发重上传使用
+            inline void mark_texture_modified(jegl_texture_common* texture) noexcept
+            {
+                if (!texture->m_handle.m_modified)
+                {
+                    texture->m_modified_min_x = 0;
+                    texture->m_modified_min_y = 0;
+                    texture->m_modified_max_x = texture->m_width ? texture->m_width - 1 : 0;
+                    texture->m_modified_max_y = texture->m_height ? texture->m_height - 1 : 0;
+                    texture->m_handle.m_modified = true;
+                }
+            }
+        }
+
+        class texture3d : public resource_basic<jegl_texture_3d>
+        {
+            explicit texture3d(jegl_texture_3d* res)
+                : resource_basic(res)
+            {
+            }
+
+        public:
+            static basic::resource<texture3d> create(
+                size_t width, size_t height, size_t depth, jegl_texture_common::format format)
+            {
+                jegl_texture_3d* res = jegl_create_texture_3d(width, height, depth, format);
+
+                // Create texture must be successfully.
+                assert(res != nullptr);
+                return basic::resource<texture3d>(new texture3d(res));
+            }
+
+            // 直接写 m_pixels 之后调用以触发重上传
+            inline void mark_modified() noexcept
+            {
+                detail::mark_texture_modified(resource());
+            }
+            inline jegl_texture_common::pixel_data_t* pixels() const noexcept
+            {
+                return resource()->m_pixels;
+            }
+            inline size_t height() const noexcept { return resource()->m_height; }
+            inline size_t width() const noexcept { return resource()->m_width; }
+            inline size_t depth() const noexcept { return resource()->m_depth; }
+        };
+
+        class texture_array : public resource_basic<jegl_texture_array>
+        {
+            explicit texture_array(jegl_texture_array* res)
+                : resource_basic(res)
+            {
+            }
+
+        public:
+            static basic::resource<texture_array> create(
+                size_t width, size_t height, size_t layers, jegl_texture_common::format format)
+            {
+                jegl_texture_array* res = jegl_create_texture_array(width, height, layers, format);
+
+                // Create texture must be successfully.
+                assert(res != nullptr);
+                return basic::resource<texture_array>(new texture_array(res));
+            }
+
+            // 直接写 m_pixels 之后调用以触发重上传
+            inline void mark_modified() noexcept
+            {
+                detail::mark_texture_modified(resource());
+            }
+            inline jegl_texture_common::pixel_data_t* pixels() const noexcept
+            {
+                return resource()->m_pixels;
+            }
+            // 返回第 layer 层像素数据的起始指针
+            inline jegl_texture_common::pixel_data_t* layer_pixels(size_t layer) const noexcept
+            {
+                auto color_depth =
+                    resource()->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK;
+                return resource()->m_pixels
+                    + layer * resource()->m_width * resource()->m_height * color_depth;
+            }
+            inline size_t height() const noexcept { return resource()->m_height; }
+            inline size_t width() const noexcept { return resource()->m_width; }
+            inline size_t layers() const noexcept { return resource()->m_layers; }
+        };
+
+        class texture_cube : public resource_basic<jegl_texture_cube>
+        {
+            explicit texture_cube(jegl_texture_cube* res)
+                : resource_basic(res)
+            {
+            }
+
+        public:
+            static basic::resource<texture_cube> create(
+                size_t width, size_t height, jegl_texture_common::format format)
+            {
+                jegl_texture_cube* res = jegl_create_texture_cube(width, height, format);
+
+                // Create texture must be successfully.
+                assert(res != nullptr);
+                return basic::resource<texture_cube>(new texture_cube(res));
+            }
+
+            inline void mark_modified() noexcept
+            {
+                detail::mark_texture_modified(resource());
+            }
+            inline jegl_texture_common::pixel_data_t* pixels() const noexcept
+            {
+                return resource()->m_pixels;
+            }
+            inline size_t height() const noexcept { return resource()->m_height; }
+            inline size_t width() const noexcept { return resource()->m_width; }
+        };
+
+        class texture_msaa : public resource_basic<jegl_texture_msaa>
+        {
+            explicit texture_msaa(jegl_texture_msaa* res)
+                : resource_basic(res)
+            {
+            }
+
+        public:
+            static basic::resource<texture_msaa> create(
+                size_t width, size_t height, size_t samples, jegl_texture_common::format format)
+            {
+                jegl_texture_msaa* res = jegl_create_texture_msaa(width, height, samples, format);
+
+                // Create texture must be successfully.
+                assert(res != nullptr);
+                return basic::resource<texture_msaa>(new texture_msaa(res));
+            }
+
+            inline size_t height() const noexcept { return resource()->m_height; }
+            inline size_t width() const noexcept { return resource()->m_width; }
+            inline size_t samples() const noexcept { return resource()->m_samples; }
         };
         class shader : public resource_basic<jegl_shader>
         {
@@ -10373,7 +10764,7 @@ namespace jeecs
             static std::optional<basic::resource<framebuffer>> create(
                 size_t reso_w,
                 size_t reso_h,
-                const std::vector<jegl_texture::format>& color_attachment_formats,
+                const std::vector<jegl_texture_common::format>& color_attachment_formats,
                 bool contain_depth_attachment)
             {
                 auto* res = jegl_create_framebuf(
@@ -10387,12 +10778,12 @@ namespace jeecs
                     return basic::resource<framebuffer>(new framebuffer(res));
                 return std::nullopt;
             }
-            std::optional<basic::resource<texture>> get_attachment(size_t index) const
+            std::optional<basic::resource<texture2d>> get_attachment(size_t index) const
             {
                 if (index < resource()->m_attachment_count)
                 {
                     auto* attachments =
-                        reinterpret_cast<basic::resource<graphic::texture> *>(
+                        reinterpret_cast<basic::resource<graphic::texture2d> *>(
                             resource()->m_output_attachments);
                     return attachments[index];
                 }
@@ -10583,7 +10974,7 @@ namespace jeecs
         struct character
         {
             // 字符的纹理
-            basic::resource<texture> m_texture;
+            basic::resource<texture2d> m_texture;
 
             // 字符本身
             char32_t m_char = 0;
@@ -11776,18 +12167,18 @@ namespace jeecs
                     shad->set_uniform(name, val);
             }
         };
-        struct Textures
+        struct Textures2D
         {
-            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Textures);
-            JECS_DEFAULT_CONSTRUCTOR(Textures);
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Textures2D);
+            JECS_DEFAULT_CONSTRUCTOR(Textures2D);
 
             // NOTE: textures should not be nullptr!
             struct texture_with_passid
             {
                 size_t m_pass_id;
-                basic::resource<graphic::texture> m_texture;
+                basic::resource<graphic::texture2d> m_texture;
 
-                texture_with_passid(size_t pass, const basic::resource<graphic::texture>& tex)
+                texture_with_passid(size_t pass, const basic::resource<graphic::texture2d>& tex)
                     : m_pass_id(pass), m_texture(tex)
                 {
                 }
@@ -11796,7 +12187,7 @@ namespace jeecs
             math::vec2 offset = math::vec2(0.f, 0.f);
             basic::vector<texture_with_passid> textures;
 
-            void bind_texture(size_t passid, const basic::resource<graphic::texture>& texture)
+            void bind_texture(size_t passid, const basic::resource<graphic::texture2d>& texture)
             {
                 for (auto& pair : textures)
                 {
@@ -11819,7 +12210,7 @@ namespace jeecs
                     }
                 }
             }
-            std::optional<basic::resource<graphic::texture>> get_texture(size_t passid) const
+            std::optional<basic::resource<graphic::texture2d>> get_texture(size_t passid) const
             {
                 for (auto& [pass, tex] : textures)
                     if (pass == passid)
@@ -11829,8 +12220,8 @@ namespace jeecs
             }
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(guard, &Textures::tiling, "tiling");
-                typing::register_member(guard, &Textures::offset, "offset");
+                typing::register_member(guard, &Textures2D::tiling, "tiling");
+                typing::register_member(guard, &Textures2D::offset, "offset");
             }
         };
         struct Color
@@ -13106,9 +13497,9 @@ namespace jeecs
         Emitter [组件]
         粒子发射器：描述一类粒子的发射与生命周期行为，模拟与网格构建由
         Particle::ParticleSystem 完成（见 jeecs_core_particle_system.hpp）。
-        发射器实体同时需要 Renderer::Shape / Shaders / Textures 三件套参与
+        发射器实体同时需要 Renderer::Shape / Shaders / Textures2D 三件套参与
         常规渲染管线（系统会在缺失时自动补齐并挂上内置粒子着色器）；
-        粒子纹理绑定在 Renderer::Textures 的 pass 0，混合模式由所选着色器决定。
+        粒子纹理绑定在 Renderer::Textures2D 的 pass 0，混合模式由所选着色器决定。
         角度类成员（散布角/初始自转/自转速度）以度为单位。
         m_simulation_space 为 world 时粒子在世界空间模拟（发射器移动不携带
         已发射粒子），为 local 时在发射器局部空间模拟（整体随发射器刚体
@@ -14607,7 +14998,7 @@ namespace jeecs
             jeecs::typing::register_type<Renderer::Rendqueue>(guard, "Renderer::Rendqueue");
             jeecs::typing::register_type<Renderer::Shape>(guard, "Renderer::Shape");
             jeecs::typing::register_type<Renderer::Shaders>(guard, "Renderer::Shaders");
-            jeecs::typing::register_type<Renderer::Textures>(guard, "Renderer::Textures");
+            jeecs::typing::register_type<Renderer::Textures2D>(guard, "Renderer::Textures2D");
             jeecs::typing::register_type<Renderer::Color>(guard, "Renderer::Color");
 
             jeecs::typing::register_type<Animation::FrameAnimation>(guard, "Animation::FrameAnimation");

@@ -1489,7 +1489,7 @@ namespace JEEditor::Editor
         // 根据路径返回对应的图标：目录返回文件夹图标（*.je4module 拓展模块
         // 目录除外，使用 C++ 程序图标），文件按扩展名走 ext_icon_map 查询，
         // 未命中则返回默认 FILE 图标。
-        func iconForPath(path: fsys::path_t)=> option<texture>
+        func iconForPath(path: fsys::path_t)=> option<texture2d>
         {
             // 扩展名 -> 图标 的查找表；命中即用，未命中走默认 FILE 图标。
             static let ext_icon_map = {

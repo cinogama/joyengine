@@ -137,7 +137,7 @@ namespace jeecs
         static void refresh_part_textures(const game_entity& part,
             const Tilemap::LayerStyle* style)
         {
-            auto* comp = part.get_component<Renderer::Textures>();
+            auto* comp = part.get_component<Renderer::Textures2D>();
             if (comp == nullptr)
                 return;
 
@@ -162,7 +162,7 @@ namespace jeecs
                 return;
 
             // 重绑：保留槽 0（图集源纹理），其余按样式重建
-            basic::vector<Renderer::Textures::texture_with_passid> kept;
+            basic::vector<Renderer::Textures2D::texture_with_passid> kept;
             for (const auto& e : comp->textures)
                 if (e.m_pass_id == 0)
                     kept.push_back(e);
@@ -271,7 +271,7 @@ namespace jeecs
             auto part = world.add_entity<
                 Transform::LocalPosition, Transform::LocalRotation, Transform::LocalScale,
                 Transform::LocalToParent, Transform::Translation,
-                Renderer::Shape, Renderer::Shaders, Renderer::Textures,
+                Renderer::Shape, Renderer::Shaders, Renderer::Textures2D,
                 Renderer::Rendqueue, Editor::Invisible, Tilemap::RenderPart>();
 
             // 挂到地图根实体下（根实体需要 Anchor）
@@ -298,8 +298,8 @@ namespace jeecs
             if (style.shader.has_value())
                 shaders->shaders.push_back(style.shader.value());
 
-            auto* textures = part.get_component<Renderer::Textures>();
-            if (auto tex = graphic::texture::load(nullptr, src.path))
+            auto* textures = part.get_component<Renderer::Textures2D>();
+            if (auto tex = graphic::texture2d::load(nullptr, src.path))
                 textures->bind_texture(0, tex.value());
             // 图层样式的附加纹理占其余槽（槽 0 已是图集源纹理）
             for (const auto& t : style.textures)
@@ -846,7 +846,7 @@ bool je_tilemap_layer_set_texture(je_TilemapDocument* doc, je_LayerId layer,
         ++style.style_version;
         return true;
     }
-    auto* res = (jeecs::basic::resource<jeecs::graphic::texture>*)texture;
+    auto* res = (jeecs::basic::resource<jeecs::graphic::texture2d>*)texture;
     if (fnd != style.textures.end())
     {
         if (fnd->texture.get() == res->get())
@@ -868,7 +868,7 @@ bool je_tilemap_layer_get_texture(je_TilemapDocument* doc, je_LayerId layer,
     if (slot != nullptr) *slot = t.slot;
     if (texture != nullptr)
         *texture = (je_tilemap_texture_ref*)
-        new jeecs::basic::resource<jeecs::graphic::texture>(t.texture);
+        new jeecs::basic::resource<jeecs::graphic::texture2d>(t.texture);
     return true;
 }
 void je_tilemap_free_shader_ref(/* OPTIONAL */ je_tilemap_shader_ref* shader)
@@ -877,7 +877,7 @@ void je_tilemap_free_shader_ref(/* OPTIONAL */ je_tilemap_shader_ref* shader)
 }
 void je_tilemap_free_texture_ref(/* OPTIONAL */ je_tilemap_texture_ref* texture)
 {
-    delete (jeecs::basic::resource<jeecs::graphic::texture>*)texture;
+    delete (jeecs::basic::resource<jeecs::graphic::texture2d>*)texture;
 }
 
 // ---------------- 瓦片读写 ----------------
@@ -1296,7 +1296,7 @@ bool je_tilemap_add_source(je_TilesetDocument* doc, const char* texture_path,
         }
     // 读取纹理尺寸以推导网格数
     int32_t tw = 0, th = 0;
-    if (auto tex = jeecs::graphic::texture::load(nullptr, texture_path))
+    if (auto tex = jeecs::graphic::texture2d::load(nullptr, texture_path))
     {
         tw = (int32_t)tex->get()->resource()->m_width;
         th = (int32_t)tex->get()->resource()->m_height;
@@ -1946,7 +1946,7 @@ WOORT_API woort_api wojeapi_tilemap_layer_get_texture(void)
             s + 1, texture, WOORT_IGNORE,
             [](void* ptr)
             {
-                delete (jeecs::basic::resource<jeecs::graphic::texture> *)ptr;
+                delete (jeecs::basic::resource<jeecs::graphic::texture2d> *)ptr;
             },
             nullptr);
     else

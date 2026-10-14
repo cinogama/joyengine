@@ -144,7 +144,7 @@ namespace je
 
             // ==================== 图层着色器样式 ====================
             // 每层可指定专属着色器与附加纹理，直接传 graphic::shader /
-            // graphic::texture 资源句柄（与路径无关）；着色器是分片渲染
+            // graphic::texture2d 资源句柄（与路径无关）；着色器是分片渲染
             // 的唯一来源，未配置样式的层不回落根实体或内置默认。uniform
             // 值储存在着色器实例上，用 shader::set_uniform 直接设置（渲染
             // 侧下一帧生效），保存文档时随图层样式落盘（JE_ 内置变量与
@@ -168,13 +168,13 @@ namespace je
             // 保留给图集源纹理，slot<1 返回 false
             extern("libjoyecs", "wojeapi_tilemap_layer_set_texture")
                 public func set_layer_texture(self: Tilemap, layer: int,
-                    slot: int, texture: option<graphic::texture>)=> bool;
+                    slot: int, texture: option<graphic::texture2d>)=> bool;
 
             // 按序号（非槽位）取附加纹理，返回 (槽位, 纹理实例)；
             // 序号越界时纹理为 none
             extern("libjoyecs", "wojeapi_tilemap_layer_get_texture")
                 public func layer_texture(self: Tilemap, layer: int, index: int)
-                    => (int, option<graphic::texture>);
+                    => (int, option<graphic::texture2d>);
 
             // ==================== 瓦片读写 ====================
             extern("libjoyecs", "wojeapi_tilemap_get_tile")

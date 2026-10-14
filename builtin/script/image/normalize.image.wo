@@ -3,7 +3,7 @@ import je::editor::graphic;
 
 import pkg::math;
 
-public func entry(_: je::graphic::texture, _: (int, int), _: (int, int))
+public func entry(_: je::graphic::texture2d, _: (int, int), _: (int, int))
 {
     return true;
 }
@@ -14,7 +14,7 @@ func height(color: (real, real, real, real))
     return a + (0.22 * r + 0.707 * g + 0.071 * b);
 }
 
-public func pixel(t: je::graphic::texture, x: int, y: int)
+public func pixel(t: je::graphic::texture2d, x: int, y: int)
     => (real, real, real, real)
 {
     let (w, h) = t->size();

@@ -33,14 +33,14 @@ JE_API void jegl_share_resource_handle(jegl_resource_handle* resource_handle);
 ### 示例
 
 ```cpp
-jegl_texture* texture = jegl_load_texture(ctx, "@/textures/brick.png");
+jegl_texture_2d* texture = jegl_load_texture_2d(ctx, "@/textures/brick.png");
 
 // 共享纹理给另一个对象
 jegl_share_resource(texture);  // 引用计数 +1
 
 // 现在需要调用两次 jegl_close_texture 才能真正释放资源
-jegl_close_texture(texture);  // 引用计数 -1
-jegl_close_texture(texture);  // 引用计数 -1，资源被释放
+jegl_close_texture_2d(texture);  // 引用计数 -1
+jegl_close_texture_2d(texture);  // 引用计数 -1，资源被释放
 ```
 
 ## 注意事项
@@ -51,5 +51,5 @@ jegl_close_texture(texture);  // 引用计数 -1，资源被释放
 ## 相关接口
 
 - [jegl_close_shader](jegl_close_shader.md) - 关闭着色器
-- [jegl_close_texture](jegl_close_texture.md) - 关闭纹理
+- [jegl_close_texture](jegl_close_texture_2d.md) - 关闭纹理
 - [jegl_close_vertex](jegl_close_vertex.md) - 关闭顶点

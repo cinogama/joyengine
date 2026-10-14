@@ -131,10 +131,10 @@ namespace je
             public func set_shaders(self: entity, shaders: array<graphic::shader>)=> void;
             
         extern("libjoyecs", "wojeapi_textures_of_entity")
-            public func get_textures(self: entity)=> dict<int, graphic::texture>;
+            public func get_textures(self: entity)=> dict<int, graphic::texture2d>;
             
         extern("libjoyecs", "wojeapi_bind_texture_for_entity")
-            public func bind_texture(self: entity, id: int, tex: option<graphic::texture>)=> void;
+            public func bind_texture(self: entity, id: int, tex: option<graphic::texture2d>)=> void;
             
         extern("libjoyecs", "wojeapi_set_shape_for_entity")
             public func set_shape(self: entity, shape: option<graphic::vertex>)=> void;

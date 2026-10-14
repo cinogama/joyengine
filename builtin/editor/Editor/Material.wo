@@ -48,9 +48,9 @@ namespace JEEditor::Editor
 {
     // 材质面板：编辑选中实体的 Renderer::Shape（模型顶点资源）、
     // Renderer::Shaders（着色器列表与 uniform 变量）和
-    // Renderer::Textures（tiling/offset 与纹理通道）。
+    // Renderer::Textures2D（tiling/offset 与纹理通道）。
     // 模型、着色器列表与纹理通道不是反射成员（Renderer::Shape 与
-    // Renderer::Shaders 未注册任何成员，Renderer::Textures 也只反射了
+    // Renderer::Shaders 未注册任何成员，Renderer::Textures2D 也只反射了
     // tiling/offset），无法走检视面板的通用成员编辑与撤销管线，
     // 这里通过 entity 的模型/着色器/纹理 API 就地修改。
     using Material = struct{
@@ -177,7 +177,7 @@ namespace JEEditor::Editor
         // 将纹理通道变更发布为可撤销操作；无 EUID 的实体退化为直接修改
         func applyTextureChange(
             wctx: WorldEditorViewport, e: entity,
-            pass: int, new_texture: option<texture>)=> void
+            pass: int, new_texture: option<texture2d>)=> void
         {
             match (e->internal::get_entity_uid)
             {
@@ -807,7 +807,7 @@ namespace JEEditor::Editor
                 return;
             }
             
-            match (texture::load(univ, ResourcePath::toRuntimeResourcePath(path)))
+            match (texture2d::load(univ, ResourcePath::toRuntimeResourcePath(path)))
             {
                 none?
                     MsgBox::err("绑定纹理失败", F"无法加载纹理：`{path}`");
@@ -967,14 +967,14 @@ namespace JEEditor::Editor
             popSectionHeaderStyle();
             if (opened)
             {
-                if (!ensureComponentEditor(wctx, e, Renderer::Textures::type::typeinfo))
+                if (!ensureComponentEditor(wctx, e, Renderer::Textures2D::type::typeinfo))
                     return;
 
                 // tiling/offset 是反射成员，沿用与检视面板一致的通用值编辑器
                 let eid = e->internal::get_entity_uid;
 
                 let textures_component =
-                    e->get_component(Renderer::Textures::type::typeinfo)->unwrap;
+                    e->get_component(Renderer::Textures2D::type::typeinfo)->unwrap;
 
                 Indent(8.);
                 defer Unindent(8.);
@@ -1016,7 +1016,7 @@ namespace JEEditor::Editor
                                             value(before)?
                                                 EditSession::trackMember(
                                                     member_tag, PANEL_OWNER, wctx, eidv,
-                                                    Renderer::Textures::type::typeinfo->name, mname,
+                                                    Renderer::Textures2D::type::typeinfo->name, mname,
                                                     before,
                                                     unsafe::dynamic_parser::save(mtype, mhandle)
                                                         ->or(before));

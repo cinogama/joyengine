@@ -152,10 +152,10 @@ const jeecs::graphic::character* je_font_get_char(
         sized_char_set.emplace(
                 unicode32_char,
                 jeecs::graphic::character{
-                    jeecs::graphic::texture::create(
+                    jeecs::graphic::texture2d::create(
                         (size_t)texture_pixel_width,
                         (size_t)texture_pixel_height,
-                        jegl_texture::format::RGBA) }).first->second;
+                        jegl_texture_common::format::RGBA) }).first->second;
 
     ch.m_char = unicode32_char;
 

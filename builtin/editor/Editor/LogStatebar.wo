@@ -71,7 +71,7 @@ namespace JEEditor::Editor::LogStatebar
 
     // 在独立函数里创建闭包：闭包按创建时的值捕获图标、颜色与文本，
     // 之后每帧由 Statebar 调用绘制。
-    func showLogState(icon: option<graphic::texture>, color: Color32RGBA, text: string, keep_time: real)=> void
+    func showLogState(icon: option<graphic::texture2d>, color: Color32RGBA, text: string, keep_time: real)=> void
     {
         JEEditor::GUI::Statebar::showState(keep_time) <| func(){
             match (icon)

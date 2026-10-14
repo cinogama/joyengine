@@ -201,7 +201,11 @@ namespace jeecs::graphic
         {
             UNKNOWN,
             SHADER,
-            TEXTURE,
+            TEXTURE_2D,
+            TEXTURE_3D,
+            TEXTURE_ARRAY,
+            TEXTURE_CUBE,
+            TEXTURE_MSAA,
             VERTEX,
             UNIFORM_BUFFER,
             FRAME_BUFFER
@@ -211,7 +215,11 @@ namespace jeecs::graphic
             void* m_raw_ptr;
 
             jegl_shader* m_shader;
-            jegl_texture* m_texture;
+            jegl_texture_2d* m_texture_2d;
+            jegl_texture_3d* m_texture_3d;
+            jegl_texture_array* m_texture_array;
+            jegl_texture_cube* m_texture_cube;
+            jegl_texture_msaa* m_texture_msaa;
             jegl_vertex* m_vertex;
             jegl_uniform_buffer* m_uniform_buffer;
             jegl_frame_buffer* m_frame_buffer;
@@ -231,10 +239,30 @@ namespace jeecs::graphic
         {
             m_resource.m_shader = shader;
         }
-        constexpr created_resource(jegl_texture* texture)
-            : m_type(kind::TEXTURE)
+        constexpr created_resource(jegl_texture_2d* texture)
+            : m_type(kind::TEXTURE_2D)
         {
-            m_resource.m_texture = texture;
+            m_resource.m_texture_2d = texture;
+        }
+        constexpr created_resource(jegl_texture_3d* texture)
+            : m_type(kind::TEXTURE_3D)
+        {
+            m_resource.m_texture_3d = texture;
+        }
+        constexpr created_resource(jegl_texture_array* texture)
+            : m_type(kind::TEXTURE_ARRAY)
+        {
+            m_resource.m_texture_array = texture;
+        }
+        constexpr created_resource(jegl_texture_cube* texture)
+            : m_type(kind::TEXTURE_CUBE)
+        {
+            m_resource.m_texture_cube = texture;
+        }
+        constexpr created_resource(jegl_texture_msaa* texture)
+            : m_type(kind::TEXTURE_MSAA)
+        {
+            m_resource.m_texture_msaa = texture;
         }
         constexpr created_resource(jegl_vertex* vertex)
             : m_type(kind::VERTEX)
@@ -256,6 +284,15 @@ namespace jeecs::graphic
             return m_resource.m_raw_ptr == another.m_resource.m_raw_ptr;
         }
 
+        static constexpr bool is_texture_kind(kind k) noexcept
+        {
+            return k == kind::TEXTURE_2D
+                || k == kind::TEXTURE_3D
+                || k == kind::TEXTURE_ARRAY
+                || k == kind::TEXTURE_CUBE
+                || k == kind::TEXTURE_MSAA;
+        }
+
         template<requirements::basic_graphic_resource T>
         T* resource() const
         {
@@ -264,10 +301,30 @@ namespace jeecs::graphic
                 assert(m_type == kind::SHADER);
                 return m_resource.m_shader;
             }
-            else if constexpr (std::is_same_v<T, jegl_texture>)
+            else if constexpr (std::is_same_v<T, jegl_texture_2d>)
             {
-                assert(m_type == kind::TEXTURE);
-                return m_resource.m_texture;
+                assert(m_type == kind::TEXTURE_2D);
+                return m_resource.m_texture_2d;
+            }
+            else if constexpr (std::is_same_v<T, jegl_texture_3d>)
+            {
+                assert(m_type == kind::TEXTURE_3D);
+                return m_resource.m_texture_3d;
+            }
+            else if constexpr (std::is_same_v<T, jegl_texture_array>)
+            {
+                assert(m_type == kind::TEXTURE_ARRAY);
+                return m_resource.m_texture_array;
+            }
+            else if constexpr (std::is_same_v<T, jegl_texture_cube>)
+            {
+                assert(m_type == kind::TEXTURE_CUBE);
+                return m_resource.m_texture_cube;
+            }
+            else if constexpr (std::is_same_v<T, jegl_texture_msaa>)
+            {
+                assert(m_type == kind::TEXTURE_MSAA);
+                return m_resource.m_texture_msaa;
             }
             else if constexpr (std::is_same_v<T, jegl_vertex>)
             {
@@ -299,11 +356,35 @@ namespace jeecs::graphic
                     return nullptr;
                 return m_resource.m_shader;
             }
-            else if constexpr (std::is_same_v<T, jegl_texture>)
+            else if constexpr (std::is_same_v<T, jegl_texture_2d>)
             {
-                if (m_type != kind::TEXTURE)
+                if (m_type != kind::TEXTURE_2D)
                     return nullptr;
-                return m_resource.m_texture;
+                return m_resource.m_texture_2d;
+            }
+            else if constexpr (std::is_same_v<T, jegl_texture_3d>)
+            {
+                if (m_type != kind::TEXTURE_3D)
+                    return nullptr;
+                return m_resource.m_texture_3d;
+            }
+            else if constexpr (std::is_same_v<T, jegl_texture_array>)
+            {
+                if (m_type != kind::TEXTURE_ARRAY)
+                    return nullptr;
+                return m_resource.m_texture_array;
+            }
+            else if constexpr (std::is_same_v<T, jegl_texture_cube>)
+            {
+                if (m_type != kind::TEXTURE_CUBE)
+                    return nullptr;
+                return m_resource.m_texture_cube;
+            }
+            else if constexpr (std::is_same_v<T, jegl_texture_msaa>)
+            {
+                if (m_type != kind::TEXTURE_MSAA)
+                    return nullptr;
+                return m_resource.m_texture_msaa;
             }
             else if constexpr (std::is_same_v<T, jegl_vertex>)
             {
@@ -336,8 +417,20 @@ namespace jeecs::graphic
             case kind::SHADER:
                 jegl_close_shader(m_resource.m_shader);
                 break;
-            case kind::TEXTURE:
-                jegl_close_texture(m_resource.m_texture);
+            case kind::TEXTURE_2D:
+                jegl_close_texture_2d(m_resource.m_texture_2d);
+                break;
+            case kind::TEXTURE_3D:
+                jegl_close_texture_3d(m_resource.m_texture_3d);
+                break;
+            case kind::TEXTURE_ARRAY:
+                jegl_close_texture_array(m_resource.m_texture_array);
+                break;
+            case kind::TEXTURE_CUBE:
+                jegl_close_texture_cube(m_resource.m_texture_cube);
+                break;
+            case kind::TEXTURE_MSAA:
+                jegl_close_texture_msaa(m_resource.m_texture_msaa);
                 break;
             case kind::VERTEX:
                 jegl_close_vertex(m_resource.m_vertex);
@@ -363,8 +456,13 @@ namespace jeecs::graphic
             {
             case kind::SHADER:
                 return &m_resource.m_shader->m_handle;
-            case kind::TEXTURE:
-                return &m_resource.m_texture->m_handle;
+            case kind::TEXTURE_2D:
+            case kind::TEXTURE_3D:
+            case kind::TEXTURE_ARRAY:
+            case kind::TEXTURE_CUBE:
+            case kind::TEXTURE_MSAA:
+                // 所有纹理类别的 m_handle 都位于结构体偏移 0 处
+                return static_cast<jegl_resource_handle*>(m_resource.m_raw_ptr);
             case kind::VERTEX:
                 return &m_resource.m_vertex->m_handle;
             case kind::UNIFORM_BUFFER:
@@ -542,10 +640,30 @@ void _jegl_close_resouce_instance_by_api(
             thread->m_graphic_impl_context,
             res->resource<jegl_shader>());
         break;
-    case jeecs::graphic::created_resource::kind::TEXTURE:
-        thread->m_apis->texture_close(
+    case jeecs::graphic::created_resource::kind::TEXTURE_2D:
+        thread->m_apis->texture_2d_close(
             thread->m_graphic_impl_context,
-            res->resource<jegl_texture>());
+            res->resource<jegl_texture_2d>());
+        break;
+    case jeecs::graphic::created_resource::kind::TEXTURE_3D:
+        thread->m_apis->texture_3d_close(
+            thread->m_graphic_impl_context,
+            res->resource<jegl_texture_3d>());
+        break;
+    case jeecs::graphic::created_resource::kind::TEXTURE_ARRAY:
+        thread->m_apis->texture_array_close(
+            thread->m_graphic_impl_context,
+            res->resource<jegl_texture_array>());
+        break;
+    case jeecs::graphic::created_resource::kind::TEXTURE_CUBE:
+        thread->m_apis->texture_cube_close(
+            thread->m_graphic_impl_context,
+            res->resource<jegl_texture_cube>());
+        break;
+    case jeecs::graphic::created_resource::kind::TEXTURE_MSAA:
+        thread->m_apis->texture_msaa_close(
+            thread->m_graphic_impl_context,
+            res->resource<jegl_texture_msaa>());
         break;
     case jeecs::graphic::created_resource::kind::VERTEX:
         thread->m_apis->vertex_close(
@@ -583,7 +701,11 @@ void _jegl_close_resource_blob_by_api(
             thread->m_graphic_impl_context,
             blob->m_blob_may_null);
         break;
-    case jeecs::graphic::created_resource::kind::TEXTURE:
+    case jeecs::graphic::created_resource::kind::TEXTURE_2D:
+    case jeecs::graphic::created_resource::kind::TEXTURE_3D:
+    case jeecs::graphic::created_resource::kind::TEXTURE_ARRAY:
+    case jeecs::graphic::created_resource::kind::TEXTURE_CUBE:
+    case jeecs::graphic::created_resource::kind::TEXTURE_MSAA:
         thread->m_apis->texture_close_blob(
             thread->m_graphic_impl_context,
             blob->m_blob_may_null);
@@ -1287,20 +1409,42 @@ void jegl_close_shader(jegl_shader* shader)
     }
 }
 
-void jegl_close_texture(jegl_texture* texture)
+template<typename TexT>
+static void _jegl_close_texture_instance(TexT* texture)
 {
     if (_jegl_close_resource_handle(&texture->m_handle))
     {
         // close resource's raw data, then send this resource to closing-queue
         if (texture->m_pixels)
         {
-            assert(0 == (texture->m_format & jegl_texture::format::FORMAT_MASK));
+            assert(0 == (texture->m_format & jegl_texture_common::format::FORMAT_MASK));
             stbi_image_free(texture->m_pixels);
         }
         else
-            assert(0 != (texture->m_format & jegl_texture::format::FORMAT_MASK));
+            assert(0 != (texture->m_format & jegl_texture_common::format::FORMAT_MASK));
         _jegl_free_resource_instance(new jeecs::graphic::resource_to_destroy(texture));
     }
+}
+
+void jegl_close_texture_2d(jegl_texture_2d* texture)
+{
+    _jegl_close_texture_instance(texture);
+}
+void jegl_close_texture_3d(jegl_texture_3d* texture)
+{
+    _jegl_close_texture_instance(texture);
+}
+void jegl_close_texture_array(jegl_texture_array* texture)
+{
+    _jegl_close_texture_instance(texture);
+}
+void jegl_close_texture_cube(jegl_texture_cube* texture)
+{
+    _jegl_close_texture_instance(texture);
+}
+void jegl_close_texture_msaa(jegl_texture_msaa* texture)
+{
+    _jegl_close_texture_instance(texture);
 }
 
 void jegl_close_vertex(jegl_vertex* vertex)
@@ -1326,8 +1470,8 @@ void jegl_close_framebuf(jegl_frame_buffer* framebuf)
     {
         // Close all frame rend out texture
         assert(framebuf->m_attachment_count > 0);
-        jeecs::basic::resource<jeecs::graphic::texture>* attachments =
-            reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
+        jeecs::basic::resource<jeecs::graphic::texture2d>* attachments =
+            reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture2d> *>(
                 framebuf->m_output_attachments);
 
         for (size_t i = 0; i < framebuf->m_attachment_count; ++i)
@@ -1347,10 +1491,10 @@ void jegl_close_uniformbuf(jegl_uniform_buffer* ubuffer)
     }
 }
 
-jegl_texture* jegl_create_texture(size_t width, size_t height, jegl_texture::format format)
+jegl_texture_2d* jegl_create_texture_2d(size_t width, size_t height, jegl_texture_common::format format)
 {
-    jegl_texture* texture_instance =
-        static_cast<jegl_texture*>(malloc(sizeof(jegl_texture)));
+    jegl_texture_2d* texture_instance =
+        static_cast<jegl_texture_2d*>(malloc(sizeof(jegl_texture_2d)));
 
     assert(texture_instance != nullptr);
 
@@ -1359,10 +1503,10 @@ jegl_texture* jegl_create_texture(size_t width, size_t height, jegl_texture::for
     if (height == 0)
         height = 1;
 
-    if ((format & jegl_texture::format::FORMAT_MASK) == 0)
+    if ((format & jegl_texture_common::format::FORMAT_MASK) == 0)
     {
         texture_instance->m_pixels =
-            (jegl_texture::pixel_data_t*)malloc(width * height * format);
+            (jegl_texture_common::pixel_data_t*)malloc(width * height * format);
 
         assert(texture_instance->m_pixels != nullptr);
         memset(texture_instance->m_pixels, 0, width * height * format);
@@ -1371,9 +1515,149 @@ jegl_texture* jegl_create_texture(size_t width, size_t height, jegl_texture::for
         // For special format texture such as depth, do not alloc for pixel.
         texture_instance->m_pixels = nullptr;
 
+    texture_instance->m_kind = jegl_texture_kind::TEXTURE_2D;
     texture_instance->m_width = width;
     texture_instance->m_height = height;
     texture_instance->m_format = format;
+
+    _jegl_init_resource_handle(&texture_instance->m_handle, nullptr);
+    return texture_instance;
+}
+
+jegl_texture_3d* jegl_create_texture_3d(
+    size_t width, size_t height, size_t depth, jegl_texture_common::format format)
+{
+    jegl_texture_3d* texture_instance =
+        static_cast<jegl_texture_3d*>(malloc(sizeof(jegl_texture_3d)));
+
+    assert(texture_instance != nullptr);
+
+    if (width == 0)
+        width = 1;
+    if (height == 0)
+        height = 1;
+    if (depth == 0)
+        depth = 1;
+
+    if ((format & jegl_texture_common::format::FORMAT_MASK) == 0)
+    {
+        texture_instance->m_pixels =
+            (jegl_texture_common::pixel_data_t*)malloc(width * height * depth * format);
+
+        assert(texture_instance->m_pixels != nullptr);
+        memset(texture_instance->m_pixels, 0, width * height * depth * format);
+    }
+    else
+        texture_instance->m_pixels = nullptr;
+
+    texture_instance->m_kind = jegl_texture_kind::TEXTURE_3D;
+    texture_instance->m_width = width;
+    texture_instance->m_height = height;
+    texture_instance->m_depth = depth;
+    texture_instance->m_format = format;
+
+    _jegl_init_resource_handle(&texture_instance->m_handle, nullptr);
+    return texture_instance;
+}
+
+jegl_texture_array* jegl_create_texture_array(
+    size_t width, size_t height, size_t layers, jegl_texture_common::format format)
+{
+    jegl_texture_array* texture_instance =
+        static_cast<jegl_texture_array*>(malloc(sizeof(jegl_texture_array)));
+
+    assert(texture_instance != nullptr);
+
+    if (width == 0)
+        width = 1;
+    if (height == 0)
+        height = 1;
+    if (layers == 0)
+        layers = 1;
+
+    if ((format & jegl_texture_common::format::FORMAT_MASK) == 0)
+    {
+        texture_instance->m_pixels =
+            (jegl_texture_common::pixel_data_t*)malloc(width * height * layers * format);
+
+        assert(texture_instance->m_pixels != nullptr);
+        memset(texture_instance->m_pixels, 0, width * height * layers * format);
+    }
+    else
+        texture_instance->m_pixels = nullptr;
+
+    texture_instance->m_kind = jegl_texture_kind::TEXTURE_ARRAY;
+    texture_instance->m_width = width;
+    texture_instance->m_height = height;
+    texture_instance->m_layers = layers;
+    texture_instance->m_format = format;
+
+    _jegl_init_resource_handle(&texture_instance->m_handle, nullptr);
+    return texture_instance;
+}
+
+jegl_texture_cube* jegl_create_texture_cube(
+    size_t width, size_t height, jegl_texture_common::format format)
+{
+    jegl_texture_cube* texture_instance =
+        static_cast<jegl_texture_cube*>(malloc(sizeof(jegl_texture_cube)));
+
+    assert(texture_instance != nullptr);
+
+    if (width == 0)
+        width = 1;
+    if (height == 0)
+        height = 1;
+
+    constexpr size_t CUBE_FACE_COUNT = 6;
+
+    if ((format & jegl_texture_common::format::FORMAT_MASK) == 0)
+    {
+        texture_instance->m_pixels =
+            (jegl_texture_common::pixel_data_t*)malloc(
+                CUBE_FACE_COUNT * width * height * format);
+
+        assert(texture_instance->m_pixels != nullptr);
+        memset(
+            texture_instance->m_pixels, 0,
+            CUBE_FACE_COUNT * width * height * format);
+    }
+    else
+        texture_instance->m_pixels = nullptr;
+
+    texture_instance->m_kind = jegl_texture_kind::TEXTURE_CUBE;
+    texture_instance->m_width = width;
+    texture_instance->m_height = height;
+    texture_instance->m_format = format;
+
+    _jegl_init_resource_handle(&texture_instance->m_handle, nullptr);
+    return texture_instance;
+}
+
+jegl_texture_msaa* jegl_create_texture_msaa(
+    size_t width, size_t height, size_t samples, jegl_texture_common::format format)
+{
+    jegl_texture_msaa* texture_instance =
+        static_cast<jegl_texture_msaa*>(malloc(sizeof(jegl_texture_msaa)));
+
+    assert(texture_instance != nullptr);
+
+    if (width == 0)
+        width = 1;
+    if (height == 0)
+        height = 1;
+    if (samples == 0)
+        samples = 1;
+
+    // MSAA 纹理只存在于 GPU 侧，不持有 CPU 像素数据
+    texture_instance->m_pixels = nullptr;
+
+    texture_instance->m_kind = jegl_texture_kind::TEXTURE_MSAA;
+    texture_instance->m_width = width;
+    texture_instance->m_height = height;
+    texture_instance->m_samples = samples;
+    texture_instance->m_format =
+        (jegl_texture_common::format)(format | jegl_texture_common::format::FRAMEBUF);
 
     _jegl_init_resource_handle(&texture_instance->m_handle, nullptr);
     return texture_instance;
@@ -1522,10 +1806,10 @@ void jegl_share_resource_handle(jegl_resource_handle* resource_handle)
     ++resource_handle->m_raw_ref_count->m_binding_count;
 }
 
-/* OPTIONAL */ jegl_texture* jegl_load_texture(/* OPTIONAL */ jegl_context* context, const char* path)
+/* OPTIONAL */ jegl_texture_2d* jegl_load_texture_2d(/* OPTIONAL */ jegl_context* context, const char* path)
 {
     auto* shared_texture =
-        _jegl_try_load_shared_resource<jegl_texture>(
+        _jegl_try_load_shared_resource<jegl_texture_2d>(
             context, path);
 
     if (shared_texture != nullptr)
@@ -1533,8 +1817,8 @@ void jegl_share_resource_handle(jegl_resource_handle* resource_handle)
 
     if (jeecs_file* texfile = jeecs_file_open(path))
     {
-        jegl_texture* texture_instance =
-            static_cast<jegl_texture*>(malloc(sizeof(jegl_texture)));
+        jegl_texture_2d* texture_instance =
+            static_cast<jegl_texture_2d*>(malloc(sizeof(jegl_texture_2d)));
 
         int w, h, cdepth;
 
@@ -1560,9 +1844,10 @@ void jegl_share_resource_handle(jegl_resource_handle* resource_handle)
             return nullptr;
         }
 
+        texture_instance->m_kind = jegl_texture_kind::TEXTURE_2D;
         texture_instance->m_width = (size_t)w;
         texture_instance->m_height = (size_t)h;
-        texture_instance->m_format = jegl_texture::RGBA;
+        texture_instance->m_format = jegl_texture_common::RGBA;
 
         _jegl_init_resource_handle(&texture_instance->m_handle, path);
 
@@ -1982,7 +2267,7 @@ void jegl_update_vertex_buffer(
 /* OPTIONAL: If size or color_attachment_count is zero */ jegl_frame_buffer* jegl_create_framebuf(
     size_t width,
     size_t height,
-    const jegl_texture::format* color_attachment_formats,
+    const jegl_texture_common::format* color_attachment_formats,
     size_t color_attachment_count,
     bool contain_depth_attachment)
 {
@@ -2001,29 +2286,29 @@ void jegl_update_vertex_buffer(
     framebuf->m_width = width;
     framebuf->m_height = height;
 
-    jeecs::basic::resource<jeecs::graphic::texture>* attachments =
-        static_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
+    jeecs::basic::resource<jeecs::graphic::texture2d>* attachments =
+        static_cast<jeecs::basic::resource<jeecs::graphic::texture2d> *>(
             malloc(
                 framebuf->m_attachment_count
-                * sizeof(jeecs::basic::resource<jeecs::graphic::texture>)));
+                * sizeof(jeecs::basic::resource<jeecs::graphic::texture2d>)));
 
     for (size_t i = 0; i < color_attachment_count; ++i)
-        new (&attachments[i]) jeecs::basic::resource<jeecs::graphic::texture>(
-            jeecs::graphic::texture::create(
+        new (&attachments[i]) jeecs::basic::resource<jeecs::graphic::texture2d>(
+            jeecs::graphic::texture2d::create(
                 width,
                 height,
-                jegl_texture::format(
+                jegl_texture_common::format(
                     color_attachment_formats[i]
-                    | jegl_texture::format::FRAMEBUF)));
+                    | jegl_texture_common::format::FRAMEBUF)));
 
     if (contain_depth_attachment)
-        new (&attachments[color_attachment_count]) jeecs::basic::resource<jeecs::graphic::texture>(
-            jeecs::graphic::texture::create(
+        new (&attachments[color_attachment_count]) jeecs::basic::resource<jeecs::graphic::texture2d>(
+            jeecs::graphic::texture2d::create(
                 width,
                 height,
-                jegl_texture::format(
-                    jegl_texture::format::DEPTH
-                    | jegl_texture::format::FRAMEBUF)));
+                jegl_texture_common::format(
+                    jegl_texture_common::format::DEPTH
+                    | jegl_texture_common::format::FRAMEBUF)));
 
     framebuf->m_output_attachments =
         (jegl_frame_buffer::attachment_t*)attachments;
@@ -2306,17 +2591,94 @@ void jegl_rend_to_framebuffer(
         clear_operations);
 }
 
-void jegl_bind_texture(jegl_texture* texture, size_t pass)
+static constexpr jeecs::graphic::created_resource::kind
+_jegl_created_resource_kind_of(jegl_texture_kind kind)
+{
+    switch (kind)
+    {
+    case jegl_texture_kind::TEXTURE_2D:
+        return jeecs::graphic::created_resource::kind::TEXTURE_2D;
+    case jegl_texture_kind::TEXTURE_3D:
+        return jeecs::graphic::created_resource::kind::TEXTURE_3D;
+    case jegl_texture_kind::TEXTURE_ARRAY:
+        return jeecs::graphic::created_resource::kind::TEXTURE_ARRAY;
+    case jegl_texture_kind::TEXTURE_CUBE:
+        return jeecs::graphic::created_resource::kind::TEXTURE_CUBE;
+    case jegl_texture_kind::TEXTURE_MSAA:
+        return jeecs::graphic::created_resource::kind::TEXTURE_MSAA;
+    default:
+        abort();
+    }
+}
+
+template<typename TexT>
+void _jegl_bind_texture_impl(TexT* texture, size_t pass)
 {
     auto* thread_handle = jeecs::graphic::_current_graphic_thread;
     const auto* gapi = thread_handle->m_apis;
+
+    // 按纹理类别选取图形接口的 vtable 条目
+    jegl_resource_blob (*create_blob_fn)(je_GraphicImplContext, TexT*);
+    void (*init_fn)(je_GraphicImplContext, jegl_resource_blob, TexT*);
+    void (*update_fn)(je_GraphicImplContext, TexT*);
+    void (*bind_fn)(je_GraphicImplContext, TexT*, size_t);
+
+    if constexpr (std::is_same_v<TexT, jegl_texture_2d>)
+    {
+        create_blob_fn = gapi->texture_2d_create_blob;
+        init_fn = gapi->texture_2d_init;
+        update_fn = gapi->texture_2d_update;
+        bind_fn = gapi->bind_texture_2d;
+    }
+    else if constexpr (std::is_same_v<TexT, jegl_texture_3d>)
+    {
+        create_blob_fn = gapi->texture_3d_create_blob;
+        init_fn = gapi->texture_3d_init;
+        update_fn = gapi->texture_3d_update;
+        bind_fn = gapi->bind_texture_3d;
+    }
+    else if constexpr (std::is_same_v<TexT, jegl_texture_array>)
+    {
+        create_blob_fn = gapi->texture_array_create_blob;
+        init_fn = gapi->texture_array_init;
+        update_fn = gapi->texture_array_update;
+        bind_fn = gapi->bind_texture_array;
+    }
+    else if constexpr (std::is_same_v<TexT, jegl_texture_cube>)
+    {
+        create_blob_fn = gapi->texture_cube_create_blob;
+        init_fn = gapi->texture_cube_init;
+        update_fn = gapi->texture_cube_update;
+        bind_fn = gapi->bind_texture_cube;
+    }
+    else if constexpr (std::is_same_v<TexT, jegl_texture_msaa>)
+    {
+        create_blob_fn = gapi->texture_msaa_create_blob;
+        init_fn = gapi->texture_msaa_init;
+        update_fn = gapi->texture_msaa_update;
+        bind_fn = gapi->bind_texture_msaa;
+    }
+    else
+    {
+        static_assert(sizeof(TexT*) == 0, "Unsupported texture type.");
+    }
+
+    if (create_blob_fn == nullptr
+        || init_fn == nullptr
+        || update_fn == nullptr
+        || bind_fn == nullptr)
+    {
+        jeecs::debug::logerr(
+            "Current graphic api does not support binding this kind of texture.");
+        return;
+    }
 
     switch (_jegl_check_resource_state(texture))
     {
     case jeecs::graphic::jegl_resouce_state::READY:
         break;
     case jeecs::graphic::jegl_resouce_state::NEED_UPDATE:
-        gapi->texture_update(
+        update_fn(
             thread_handle->m_graphic_impl_context,
             texture);
         break;
@@ -2325,9 +2687,9 @@ void jegl_bind_texture(jegl_texture* texture, size_t pass)
         jegl_resource_blob texture_blob;
 
         auto found_blob_kind = _jegl_try_get_resource_blob(&texture->m_handle, &texture_blob);
-        if (found_blob_kind == jeecs::graphic::cached_resource_blob::kind::TEXTURE)
+        if (jeecs::graphic::created_resource::is_texture_kind(found_blob_kind))
         {
-            gapi->texture_init(
+            init_fn(
                 thread_handle->m_graphic_impl_context,
                 texture_blob,
                 texture);
@@ -2335,26 +2697,37 @@ void jegl_bind_texture(jegl_texture* texture, size_t pass)
         else
         {
             // Failed to get blob, need create it first.
-            texture_blob = gapi->texture_create_blob(
+            texture_blob = create_blob_fn(
                 thread_handle->m_graphic_impl_context,
                 texture);
 
-            gapi->texture_init(
+            init_fn(
                 thread_handle->m_graphic_impl_context,
                 texture_blob,
                 texture);
 
             // Count the taken GPU memory size.
+            size_t slice_count = 1;
+            if constexpr (std::is_same_v<TexT, jegl_texture_3d>)
+                slice_count = texture->m_depth;
+            else if constexpr (std::is_same_v<TexT, jegl_texture_array>)
+                slice_count = texture->m_layers;
+            else if constexpr (std::is_same_v<TexT, jegl_texture_cube>)
+                slice_count = 6;
+            else if constexpr (std::is_same_v<TexT, jegl_texture_msaa>)
+                slice_count = texture->m_samples;
+
             thread_handle->_m_thread_notifier->_m_increased_gpu_memory_size
                 += texture->m_width
                 * texture->m_height
-                * (texture->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
-                * ((texture->m_format & jegl_texture::format::FLOAT16) ? 2 : 1);
+                * slice_count
+                * (texture->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK)
+                * ((texture->m_format & jegl_texture_common::format::FLOAT16) ? 2 : 1);
 
             if (found_blob_kind != jeecs::graphic::cached_resource_blob::kind::UNKNOWN
                 || !_jegl_try_update_resource_blob(
                     &texture->m_handle,
-                    jeecs::graphic::cached_resource_blob::kind::TEXTURE,
+                    _jegl_created_resource_kind_of(TexT::KIND),
                     texture_blob))
             {
                 // Failed to update blob, need free it.
@@ -2370,10 +2743,31 @@ void jegl_bind_texture(jegl_texture* texture, size_t pass)
         // Donot bind invalid resource.
         return;
     }
-    gapi->bind_texture(
+    bind_fn(
         thread_handle->m_graphic_impl_context,
         texture,
         pass);
+}
+
+void jegl_bind_texture_2d(jegl_texture_2d* texture, size_t pass)
+{
+    _jegl_bind_texture_impl(texture, pass);
+}
+void jegl_bind_texture_3d(jegl_texture_3d* texture, size_t pass)
+{
+    _jegl_bind_texture_impl(texture, pass);
+}
+void jegl_bind_texture_array(jegl_texture_array* texture, size_t pass)
+{
+    _jegl_bind_texture_impl(texture, pass);
+}
+void jegl_bind_texture_cube(jegl_texture_cube* texture, size_t pass)
+{
+    _jegl_bind_texture_impl(texture, pass);
+}
+void jegl_bind_texture_msaa(jegl_texture_msaa* texture, size_t pass)
+{
+    _jegl_bind_texture_impl(texture, pass);
 }
 
 void jegl_uniform_int(uint32_t location, int value)

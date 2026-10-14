@@ -79,7 +79,7 @@ namespace JEEditor::Editor::TilemapEditor
     // 图集源纹理网格格的引擎空间 UV，供 AddImageUV 使用：
     // 返回 (左, 下, 右, 上)；引擎 v 向上增长而图像行向下增长，
     // 故 v = 1 - 图像行分数
-    func atlas_cell_uv(tex: texture, tile_px: int, ix: int, iy: int)
+    func atlas_cell_uv(tex: texture2d, tile_px: int, ix: int, iy: int)
         => (real, real, real, real)
     {
         let (tw, th) = tex->size();

@@ -6,7 +6,7 @@ import pkg::math;
 let mut center_y = 0.;
 let mut height = 0.;
 
-public func entry(_: je::graphic::texture, lbpos: (int, int), range: (int, int))
+public func entry(_: je::graphic::texture2d, lbpos: (int, int), range: (int, int))
 {    
     height = range.1 as real;
     center_y = lbpos.1 as real + height / 2.;
@@ -14,7 +14,7 @@ public func entry(_: je::graphic::texture, lbpos: (int, int), range: (int, int))
     return true;
 }
 
-public func pixel(_: je::graphic::texture, _: int, y: int)
+public func pixel(_: je::graphic::texture2d, _: int, y: int)
     => (real, real, real, real)
 {
     let yf = (y as real - center_y + 0.5) / height as real;

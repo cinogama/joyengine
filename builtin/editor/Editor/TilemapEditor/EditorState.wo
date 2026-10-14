@@ -206,7 +206,7 @@ namespace JEEditor::Editor::TilemapEditor
         public func mark_dirty(self: EditorState)=> void { self.m_dirty = true; }
 
         // 按路径取图集显示纹理（带缓存；失败记录避免重复加载）
-        public func atlas_texture(self: EditorState, path: string)=> option<texture>
+        public func atlas_texture(self: EditorState, path: string)=> option<texture2d>
         {
             for (let (cached_path, tex): self.m_textures)
             {
@@ -218,7 +218,7 @@ namespace JEEditor::Editor::TilemapEditor
                 if (failed == path)
                     return option::none;
             }
-            match (texture::load(option::none, path))
+            match (texture2d::load(option::none, path))
             {
                 value(tex)?
                 {

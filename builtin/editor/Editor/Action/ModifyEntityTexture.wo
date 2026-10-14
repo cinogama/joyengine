@@ -22,15 +22,15 @@ namespace JEEditor::Editor::Action
     protected using ModifyEntityTexture = struct{
         m_eid: entity::internal::euid_t,
         m_pass: int,
-        m_old_texture: option<texture>,
-        m_new_texture: option<texture>,
+        m_old_texture: option<texture2d>,
+        m_new_texture: option<texture2d>,
     }
     {
         public func create(
             eid: entity::internal::euid_t,
             pass: int,
-            old_texture: option<texture>,
-            new_texture: option<texture>)=> ModifyEntityTexture
+            old_texture: option<texture2d>,
+            new_texture: option<texture2d>)=> ModifyEntityTexture
             where require!(ModifyEntityTexture: IAction);
         {
             return ModifyEntityTexture{
@@ -45,7 +45,7 @@ namespace JEEditor::Editor::Action
             w: WorldEditorViewport,
             eid: entity::internal::euid_t,
             pass: int,
-            tex: option<texture>)=> bool
+            tex: option<texture2d>)=> bool
         {
             for (let e : w->getEntitySelector())
             {

@@ -1535,7 +1535,7 @@ namespace jeecs::graphic::api::vk120
                     VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT);
 
                 jevk12_texture* depth_attachment = create_framebuf_texture(
-                    (jegl_texture::format)(jegl_texture::format::DEPTH | jegl_texture::format::FRAMEBUF),
+                    (jegl_texture_common::format)(jegl_texture_common::format::DEPTH | jegl_texture_common::format::FRAMEBUF),
                     RESOLUTION_WIDTH,
                     RESOLUTION_HEIGHT);
 
@@ -2837,14 +2837,17 @@ namespace jeecs::graphic::api::vk120
             delete vertex;
         }
 
-        VkImageView create_image_view(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags)
+        VkImageView create_image_view(
+            VkImage image, VkFormat format, VkImageAspectFlags aspect_flags,
+            VkImageViewType view_type,
+            uint32_t layer_count)
         {
             VkImageViewCreateInfo image_view_create_info = {};
             image_view_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
             image_view_create_info.pNext = nullptr;
             image_view_create_info.flags = 0;
             image_view_create_info.image = image;
-            image_view_create_info.viewType = VkImageViewType::VK_IMAGE_VIEW_TYPE_2D;
+            image_view_create_info.viewType = view_type;
             image_view_create_info.format = format;
             image_view_create_info.components.r = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
             image_view_create_info.components.g = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -2854,7 +2857,7 @@ namespace jeecs::graphic::api::vk120
             image_view_create_info.subresourceRange.baseMipLevel = 0;
             image_view_create_info.subresourceRange.levelCount = 1;
             image_view_create_info.subresourceRange.baseArrayLayer = 0;
-            image_view_create_info.subresourceRange.layerCount = 1;
+            image_view_create_info.subresourceRange.layerCount = layer_count;
 
             VkImageView result;
             if (VK_SUCCESS != vkCreateImageView(
@@ -2877,20 +2880,26 @@ namespace jeecs::graphic::api::vk120
             VkImageAspectFlags aspect_flags,
             VkImage* out_image,
             VkImageView* out_image_view,
-            VkDeviceMemory* out_memory)
+            VkDeviceMemory* out_memory,
+            VkImageType image_type,
+            uint32_t image_depth,
+            uint32_t array_layers,
+            VkSampleCountFlagBits samples,
+            VkImageCreateFlags image_flags,
+            VkImageViewType view_type)
         {
             VkImageCreateInfo image_create_info = {};
             image_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
             image_create_info.pNext = nullptr;
-            image_create_info.flags = 0;
-            image_create_info.imageType = VkImageType::VK_IMAGE_TYPE_2D;
+            image_create_info.flags = image_flags;
+            image_create_info.imageType = image_type;
             image_create_info.format = format;
             image_create_info.extent.width = (uint32_t)width;
             image_create_info.extent.height = (uint32_t)height;
-            image_create_info.extent.depth = 1;
+            image_create_info.extent.depth = image_depth;
             image_create_info.mipLevels = 1;
-            image_create_info.arrayLayers = 1;
-            image_create_info.samples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT;
+            image_create_info.arrayLayers = array_layers;
+            image_create_info.samples = samples;
             image_create_info.tiling = tiling;
             image_create_info.usage = usage;
             image_create_info.sharingMode = VkSharingMode::VK_SHARING_MODE_EXCLUSIVE;
@@ -2921,26 +2930,30 @@ namespace jeecs::graphic::api::vk120
                 *out_memory,
                 0);
 
-            *out_image_view = create_image_view(*out_image, format, aspect_flags);
+            *out_image_view = create_image_view(
+                *out_image, format, aspect_flags,
+                view_type, array_layers);
         }
         jevk12_texture* create_framebuf_texture_with_swapchain_image(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags)
         {
             jevk12_texture* texture = new jevk12_texture{};
 
             texture->m_vk_texture_image = VK_NULL_HANDLE; // 不设置此项，不需要释放
-            texture->m_vk_texture_image_view = create_image_view(image, format, aspect_flags);
+            texture->m_vk_texture_image_view = create_image_view(
+                image, format, aspect_flags,
+                VkImageViewType::VK_IMAGE_VIEW_TYPE_2D, 1);
             texture->m_vk_texture_image_memory = VK_NULL_HANDLE;
             texture->m_vk_texture_format = format;
 
             return texture;
         }
-        jevk12_texture* create_framebuf_texture(jegl_texture::format format, size_t w, size_t h)
+        jevk12_texture* create_framebuf_texture(jegl_texture_common::format format, size_t w, size_t h)
         {
-            assert(format & jegl_texture::format::FRAMEBUF);
+            assert(format & jegl_texture_common::format::FRAMEBUF);
 
             jevk12_texture* texture = new jevk12_texture{};
 
-            if (format & jegl_texture::format::DEPTH)
+            if (format & jegl_texture_common::format::DEPTH)
             {
                 create_image(
                     w, h,
@@ -2951,7 +2964,11 @@ namespace jeecs::graphic::api::vk120
                     VkImageAspectFlagBits::VK_IMAGE_ASPECT_DEPTH_BIT,
                     &texture->m_vk_texture_image,
                     &texture->m_vk_texture_image_view,
-                    &texture->m_vk_texture_image_memory);
+                    &texture->m_vk_texture_image_memory,
+                    VkImageType::VK_IMAGE_TYPE_2D, 1, 1,
+                    VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT,
+                    0,
+                    VkImageViewType::VK_IMAGE_VIEW_TYPE_2D);
                 texture->m_vk_texture_format = _vk_depth_format;
 
                 transition_image_layout(
@@ -2962,9 +2979,9 @@ namespace jeecs::graphic::api::vk120
             }
             else
             {
-                bool is_float16 = 0 != (format & jegl_texture::format::FLOAT16);
+                bool is_float16 = 0 != (format & jegl_texture_common::format::FLOAT16);
                 VkFormat vk_attachment_format;
-                if (format & jegl_texture::format::RGBA)
+                if (format & jegl_texture_common::format::RGBA)
                 {
                     vk_attachment_format = is_float16
                         ? VkFormat::VK_FORMAT_R16G16B16A16_SFLOAT
@@ -2988,7 +3005,11 @@ namespace jeecs::graphic::api::vk120
                     VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT,
                     &texture->m_vk_texture_image,
                     &texture->m_vk_texture_image_view,
-                    &texture->m_vk_texture_image_memory);
+                    &texture->m_vk_texture_image_memory,
+                    VkImageType::VK_IMAGE_TYPE_2D, 1, 1,
+                    VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT,
+                    0,
+                    VkImageViewType::VK_IMAGE_VIEW_TYPE_2D);
                 texture->m_vk_texture_format = vk_attachment_format;
 
                 transition_image_layout(
@@ -3139,13 +3160,25 @@ namespace jeecs::graphic::api::vk120
             end_temp_command_buffer_record(command_buffer);
         }
 
-        void trans_and_update_texture_pixels(jevk12_texture* texture, jegl_texture* texture_raw_data)
+        template<typename TexT>
+        void trans_and_update_texture_pixels(jevk12_texture* texture, TexT* texture_raw_data)
         {
+            constexpr bool is_3d = std::is_same_v<TexT, jegl_texture_3d>;
+
+            uint32_t slice_count = 1;
+            if constexpr (std::is_same_v<TexT, jegl_texture_3d>)
+                slice_count = (uint32_t)texture_raw_data->m_depth;
+            else if constexpr (std::is_same_v<TexT, jegl_texture_array>)
+                slice_count = (uint32_t)texture_raw_data->m_layers;
+            else if constexpr (std::is_same_v<TexT, jegl_texture_cube>)
+                slice_count = 6;
+
             VkBuffer texture_data_buffer;
             VkDeviceMemory texture_data_buffer_memory;
 
-            size_t texture_buffer_size = texture_raw_data->m_width * texture_raw_data->m_height *
-                (texture_raw_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK);
+            size_t texture_buffer_size = texture_raw_data->m_width * texture_raw_data->m_height
+                * slice_count
+                * (texture_raw_data->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK);
 
             alloc_vk_device_buffer_memory(
                 texture_buffer_size,
@@ -3182,12 +3215,14 @@ namespace jeecs::graphic::api::vk120
                 region.imageSubresource.aspectMask = VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT;
                 region.imageSubresource.mipLevel = 0;
                 region.imageSubresource.baseArrayLayer = 0;
-                region.imageSubresource.layerCount = 1;
+                region.imageSubresource.layerCount = is_3d ? 1 : slice_count;
                 region.imageOffset = { 0, 0, 0 };
                 region.imageExtent = {
                     (uint32_t)texture_raw_data->m_width,
                     (uint32_t)texture_raw_data->m_height,
                     1 };
+                if constexpr (is_3d)
+                    region.imageExtent.depth = (uint32_t)texture_raw_data->m_depth;
 
                 vkCmdCopyBufferToImage(
                     command_buffer,
@@ -3209,33 +3244,190 @@ namespace jeecs::graphic::api::vk120
             vkFreeMemory(_vk_logic_device, texture_data_buffer_memory, nullptr);
         }
 
-        jevk12_texture* create_texture_instance(jegl_texture* resource)
+        template<typename TexT>
+        jevk12_texture* create_texture_instance(TexT* resource)
         {
-            bool is_cube = 0 != (resource->m_format & jegl_texture::format::CUBE);
+            constexpr bool is_3d = std::is_same_v<TexT, jegl_texture_3d>;
+            constexpr bool is_array = std::is_same_v<TexT, jegl_texture_array>;
+            constexpr bool is_cube = std::is_same_v<TexT, jegl_texture_cube>;
+            constexpr bool is_msaa = std::is_same_v<TexT, jegl_texture_msaa>;
 
-            // Support for cube textures is not implemented yet
-            (void)is_cube;
-
-            if (resource->m_format & jegl_texture::format::FRAMEBUF)
+            if constexpr (is_msaa)
             {
-                return create_framebuf_texture(
-                    resource->m_format,
-                    resource->m_width,
-                    resource->m_height);
+                // MSAA 纹理：仅 GPU 侧（渲染目标附件），不做 CPU 像素上传
+                jevk12_texture* texture = new jevk12_texture{};
+
+                const bool is_depth =
+                    0 != (resource->m_format & jegl_texture_common::format::DEPTH);
+
+                uint32_t clamped_samples =
+                    (uint32_t)(resource->m_samples == 0 ? 1 : resource->m_samples);
+                uint32_t sample_bits = 1;
+                while ((sample_bits << 1) <= clamped_samples)
+                    sample_bits <<= 1;
+
+                if (is_depth)
+                {
+                    create_image(
+                        resource->m_width, resource->m_height,
+                        _vk_depth_format,
+                        VkImageTiling::VK_IMAGE_TILING_OPTIMAL,
+                        VkImageUsageFlagBits::VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                        VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                        VkImageAspectFlagBits::VK_IMAGE_ASPECT_DEPTH_BIT,
+                        &texture->m_vk_texture_image,
+                        &texture->m_vk_texture_image_view,
+                        &texture->m_vk_texture_image_memory,
+                        VkImageType::VK_IMAGE_TYPE_2D, 1, 1,
+                        (VkSampleCountFlagBits)sample_bits,
+                        0,
+                        VkImageViewType::VK_IMAGE_VIEW_TYPE_2D);
+
+                    texture->m_vk_texture_format = _vk_depth_format;
+
+                    transition_image_layout(
+                        texture->m_vk_texture_image,
+                        _vk_depth_format,
+                        VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED,
+                        VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+                }
+                else
+                {
+                    VkFormat image_format;
+                    switch (resource->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK)
+                    {
+                    case jegl_texture_common::format::RGBA:
+                        image_format = VkFormat::VK_FORMAT_R8G8B8A8_UNORM;
+                        break;
+                    case jegl_texture_common::format::MONO:
+                        image_format = VkFormat::VK_FORMAT_R8_UNORM;
+                        break;
+                    default:
+                        image_format = VkFormat::VK_FORMAT_R8G8B8A8_UNORM;
+                        break;
+                    }
+
+                    create_image(
+                        resource->m_width, resource->m_height,
+                        image_format,
+                        VkImageTiling::VK_IMAGE_TILING_OPTIMAL,
+                        VkImageUsageFlagBits::VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                        VkImageUsageFlagBits::VK_IMAGE_USAGE_SAMPLED_BIT,
+                        VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                        VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT,
+                        &texture->m_vk_texture_image,
+                        &texture->m_vk_texture_image_view,
+                        &texture->m_vk_texture_image_memory,
+                        VkImageType::VK_IMAGE_TYPE_2D, 1, 1,
+                        (VkSampleCountFlagBits)sample_bits,
+                        0,
+                        VkImageViewType::VK_IMAGE_VIEW_TYPE_2D);
+
+                    texture->m_vk_texture_format = image_format;
+                    transition_image_layout(
+                        texture->m_vk_texture_image,
+                        image_format,
+                        VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED,
+                        VkImageLayout::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                }
+                return texture;
+            }
+            else if constexpr (!is_3d && !is_array && !is_cube)
+            {
+                // 二维纹理
+                if (resource->m_format & jegl_texture_common::format::FRAMEBUF)
+                {
+                    return create_framebuf_texture(
+                        resource->m_format,
+                        resource->m_width,
+                        resource->m_height);
+                }
+                else
+                {
+                    jevk12_texture* texture = new jevk12_texture{};
+
+                    VkFormat image_format;
+                    switch (resource->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK)
+                    {
+                    case jegl_texture_common::format::RGBA:
+                        image_format = VkFormat::VK_FORMAT_R8G8B8A8_UNORM;
+                        break;
+                    case jegl_texture_common::format::MONO:
+                        image_format = VkFormat::VK_FORMAT_R8_UNORM;
+                        break;
+                    default:
+                        image_format = VkFormat::VK_FORMAT_R8G8B8A8_UNORM;
+                        break;
+                    }
+
+                    create_image(
+                        resource->m_width,
+                        resource->m_height,
+                        image_format,
+                        VkImageTiling::VK_IMAGE_TILING_OPTIMAL,
+                        VkImageUsageFlagBits::VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                        VkImageUsageFlagBits::VK_IMAGE_USAGE_SAMPLED_BIT,
+                        VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                        VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT,
+                        &texture->m_vk_texture_image,
+                        &texture->m_vk_texture_image_view,
+                        &texture->m_vk_texture_image_memory,
+                        VkImageType::VK_IMAGE_TYPE_2D, 1, 1,
+                        VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT,
+                        0,
+                        VkImageViewType::VK_IMAGE_VIEW_TYPE_2D);
+
+                    texture->m_vk_texture_format = image_format;
+
+                    trans_and_update_texture_pixels(texture, resource);
+                    return texture;
+                }
             }
             else
             {
+                // 3D / 数组 / 立方体贴图纹理
                 jevk12_texture* texture = new jevk12_texture{};
 
                 VkFormat image_format;
-                switch (resource->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
+                switch (resource->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK)
                 {
-                case jegl_texture::format::RGBA:
+                case jegl_texture_common::format::RGBA:
                     image_format = VkFormat::VK_FORMAT_R8G8B8A8_UNORM;
                     break;
-                case jegl_texture::format::MONO:
+                case jegl_texture_common::format::MONO:
                     image_format = VkFormat::VK_FORMAT_R8_UNORM;
                     break;
+                default:
+                    image_format = VkFormat::VK_FORMAT_R8G8B8A8_UNORM;
+                    break;
+                }
+
+                // 按纹理类别计算图像维度与视图类型；
+                // 成员访问必须由 if constexpr 守卫（三目运算符会对两个
+                // 分支都做成员检查）
+                VkImageType vk_image_type = VkImageType::VK_IMAGE_TYPE_2D;
+                uint32_t vk_image_depth = 1;
+                uint32_t vk_array_layers = 1;
+                VkImageCreateFlags vk_image_flags = 0;
+                VkImageViewType vk_view_type = VkImageViewType::VK_IMAGE_VIEW_TYPE_2D;
+
+                if constexpr (is_3d)
+                {
+                    vk_image_type = VkImageType::VK_IMAGE_TYPE_3D;
+                    vk_image_depth = (uint32_t)resource->m_depth;
+                    vk_view_type = VkImageViewType::VK_IMAGE_VIEW_TYPE_3D;
+                }
+                else if constexpr (is_array)
+                {
+                    vk_array_layers = (uint32_t)resource->m_layers;
+                    vk_view_type = VkImageViewType::VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+                }
+                else if constexpr (is_cube)
+                {
+                    vk_array_layers = 6;
+                    vk_image_flags =
+                        VkImageCreateFlagBits::VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+                    vk_view_type = VkImageViewType::VK_IMAGE_VIEW_TYPE_CUBE;
                 }
 
                 create_image(
@@ -3249,7 +3441,13 @@ namespace jeecs::graphic::api::vk120
                     VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT,
                     &texture->m_vk_texture_image,
                     &texture->m_vk_texture_image_view,
-                    &texture->m_vk_texture_image_memory);
+                    &texture->m_vk_texture_image_memory,
+                    vk_image_type,
+                    vk_image_depth,
+                    vk_array_layers,
+                    VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT,
+                    vk_image_flags,
+                    vk_view_type);
 
                 texture->m_vk_texture_format = image_format;
 
@@ -3693,7 +3891,7 @@ namespace jeecs::graphic::api::vk120
 
             jegui_init_vk120(
                 _vk_jegl_context,
-                [](jegl_context* ctx, jegl_texture* res)
+                [](jegl_context* ctx, jegl_texture_2d* res)
                 {
                     auto* this_context =
                         static_cast<jegl_vk120_context*>(ctx->m_graphic_impl_context);
@@ -4092,8 +4290,9 @@ namespace jeecs::graphic::api::vk120
 
         context->destroy_shader_blob(static_cast<jevk12_shader_blob*>(blob));
     }
+    template<typename TexT>
     jegl_resource_blob texture_create_resource_blob(
-        je_GraphicImplContext, jegl_texture*)
+        je_GraphicImplContext, TexT*)
     {
         return nullptr;
     }
@@ -4145,7 +4344,8 @@ namespace jeecs::graphic::api::vk120
             }
         }
     }
-    void init_texture(je_GraphicImplContext ctx, jegl_resource_blob, jegl_texture* texture)
+    template<typename TexT>
+    void init_texture(je_GraphicImplContext ctx, jegl_resource_blob, TexT* texture)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
 
@@ -4164,18 +4364,18 @@ namespace jeecs::graphic::api::vk120
         std::vector<jevk12_texture*> color_attachments;
         jevk12_texture* depth_attachment = nullptr;
 
-        jeecs::basic::resource<jeecs::graphic::texture>* attachments =
-            reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
+        jeecs::basic::resource<jeecs::graphic::texture2d>* attachments =
+            reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture2d> *>(
                 fbuffer->m_output_attachments);
 
         for (size_t i = 0; i < fbuffer->m_attachment_count; ++i)
         {
             auto& attachment = attachments[i];
-            jegl_bind_texture(attachment->resource(), 0);
+            jegl_bind_texture_2d(attachment->resource(), 0);
 
             auto* attach_texture_instance =
                 static_cast<jevk12_texture*>(attachment->resource()->m_handle.m_ptr);
-            if (0 != (attachment->resource()->m_format & jegl_texture::format::DEPTH))
+            if (0 != (attachment->resource()->m_format & jegl_texture_common::format::DEPTH))
                 depth_attachment = attach_texture_instance;
             else
                 color_attachments.push_back(attach_texture_instance);
@@ -4202,14 +4402,25 @@ namespace jeecs::graphic::api::vk120
     void update_shader(je_GraphicImplContext ctx, jegl_shader* shader)
     {
     }
-    void update_texture(je_GraphicImplContext ctx, jegl_texture* texture)
+    template<typename TexT>
+    void update_texture(je_GraphicImplContext ctx, TexT* texture)
     {
-        jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
+        if constexpr (std::is_same_v<TexT, jegl_texture_msaa>)
+        {
+            (void)ctx;
+            (void)texture;
+            // NOTE: MSAA 纹理只存在于 GPU 侧，不支持 CPU 侧像素更新
+            jeecs::debug::logerr("MSAA texture update is not supported.");
+        }
+        else
+        {
+            jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
 
-        // Modified, free current resource id, reload one.
-        context->trans_and_update_texture_pixels(
-            static_cast<jevk12_texture*>(texture->m_handle.m_ptr), 
-            texture);
+            // Modified, free current resource id, reload one.
+            context->trans_and_update_texture_pixels(
+                static_cast<jevk12_texture*>(texture->m_handle.m_ptr),
+                texture);
+        }
     }
     void update_vertex(je_GraphicImplContext ctx, jegl_vertex* vertex)
     {
@@ -4254,7 +4465,8 @@ namespace jeecs::graphic::api::vk120
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
         context->destroy_shader(static_cast<jevk12_shader*>(shader->m_handle.m_ptr));
     }
-    void close_texture(je_GraphicImplContext ctx, jegl_texture* texture)
+    template<typename TexT>
+    void close_texture(je_GraphicImplContext ctx, TexT* texture)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
         context->destroy_texture_instance(static_cast<jevk12_texture*>(texture->m_handle.m_ptr));
@@ -4301,7 +4513,8 @@ namespace jeecs::graphic::api::vk120
             uniformbuf_instance->m_real_binding_place, uniformbuf_instance->m_uniform_buffer);
     }
 
-    void bind_texture(je_GraphicImplContext ctx, jegl_texture* texture, size_t pass)
+    template<typename TexT>
+    void bind_texture(je_GraphicImplContext ctx, TexT* texture, size_t pass)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
 
@@ -4454,7 +4667,11 @@ void jegl_using_vk120_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->update_draw_commit = commit_update;
 
     write_to_apis->shader_create_blob = shader_create_resource_blob;
-    write_to_apis->texture_create_blob = texture_create_resource_blob;
+    write_to_apis->texture_2d_create_blob = texture_create_resource_blob<jegl_texture_2d>;
+    write_to_apis->texture_3d_create_blob = texture_create_resource_blob<jegl_texture_3d>;
+    write_to_apis->texture_array_create_blob = texture_create_resource_blob<jegl_texture_array>;
+    write_to_apis->texture_cube_create_blob = texture_create_resource_blob<jegl_texture_cube>;
+    write_to_apis->texture_msaa_create_blob = texture_create_resource_blob<jegl_texture_msaa>;
     write_to_apis->vertex_create_blob = vertex_create_resource_blob;
 
     write_to_apis->shader_close_blob = shader_close_resource_blob;
@@ -4462,25 +4679,41 @@ void jegl_using_vk120_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->vertex_close_blob = vertex_close_resource_blob;
 
     write_to_apis->shader_init = init_shader;
-    write_to_apis->texture_init = init_texture;
+    write_to_apis->texture_2d_init = init_texture<jegl_texture_2d>;
+    write_to_apis->texture_3d_init = init_texture<jegl_texture_3d>;
+    write_to_apis->texture_array_init = init_texture<jegl_texture_array>;
+    write_to_apis->texture_cube_init = init_texture<jegl_texture_cube>;
+    write_to_apis->texture_msaa_init = init_texture<jegl_texture_msaa>;
     write_to_apis->vertex_init = init_vertex;
     write_to_apis->framebuffer_init = init_framebuffer;
     write_to_apis->ubuffer_init = init_ubuffer;
 
     write_to_apis->shader_update = update_shader;
-    write_to_apis->texture_update = update_texture;
+    write_to_apis->texture_2d_update = update_texture<jegl_texture_2d>;
+    write_to_apis->texture_3d_update = update_texture<jegl_texture_3d>;
+    write_to_apis->texture_array_update = update_texture<jegl_texture_array>;
+    write_to_apis->texture_cube_update = update_texture<jegl_texture_cube>;
+    write_to_apis->texture_msaa_update = update_texture<jegl_texture_msaa>;
     write_to_apis->vertex_update = update_vertex;
     write_to_apis->framebuffer_update = update_framebuffer;
     write_to_apis->ubuffer_update = update_ubuffer;
 
     write_to_apis->shader_close = close_shader;
-    write_to_apis->texture_close = close_texture;
+    write_to_apis->texture_2d_close = close_texture<jegl_texture_2d>;
+    write_to_apis->texture_3d_close = close_texture<jegl_texture_3d>;
+    write_to_apis->texture_array_close = close_texture<jegl_texture_array>;
+    write_to_apis->texture_cube_close = close_texture<jegl_texture_cube>;
+    write_to_apis->texture_msaa_close = close_texture<jegl_texture_msaa>;
     write_to_apis->vertex_close = close_vertex;
     write_to_apis->framebuffer_close = close_framebuffer;
     write_to_apis->ubuffer_close = close_ubuffer;
 
     write_to_apis->bind_uniform_buffer = bind_uniform_buffer;
-    write_to_apis->bind_texture = bind_texture;
+    write_to_apis->bind_texture_2d = bind_texture<jegl_texture_2d>;
+    write_to_apis->bind_texture_3d = bind_texture<jegl_texture_3d>;
+    write_to_apis->bind_texture_array = bind_texture<jegl_texture_array>;
+    write_to_apis->bind_texture_cube = bind_texture<jegl_texture_cube>;
+    write_to_apis->bind_texture_msaa = bind_texture<jegl_texture_msaa>;
     write_to_apis->bind_shader = bind_shader;
     write_to_apis->draw_vertex = draw_vertex_with_shader;
 

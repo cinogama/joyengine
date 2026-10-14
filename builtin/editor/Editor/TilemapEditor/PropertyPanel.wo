@@ -505,7 +505,7 @@ namespace JEEditor::Editor::TilemapEditor
             return;
         }
         let runtime_path = ResourcePath::toRuntimeResourcePath(path);
-        match (texture::load(option::none, runtime_path))
+        match (texture2d::load(option::none, runtime_path))
         {
             value(tex)?
             {
@@ -564,7 +564,7 @@ namespace JEEditor::Editor::TilemapEditor
         for (let pass : passes)
         {
             // 该通道当前绑定的纹理实例（未配置 → none）
-            let mut bound = option::none: option<texture>;
+            let mut bound = option::none: option<texture2d>;
             for (let mut ti = 0; ti < tcount; ti += 1)
             {
                 let (slot, tex) = tmap->layer_texture(layer, ti);

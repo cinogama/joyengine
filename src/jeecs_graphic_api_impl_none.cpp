@@ -13,11 +13,11 @@ namespace jeecs::graphic::api::none
 
         jegui_init_none(
             glthread,
-            [](jegl_context*, jegl_texture *)
+            [](jegl_context*, jegl_texture_2d *)
             {
                 return (uint64_t)nullptr;
             },
-            [](jegl_context*, jegl_shader*) 
+            [](jegl_context*, jegl_shader*)
             {
             });
 
@@ -52,7 +52,23 @@ namespace jeecs::graphic::api::none
     void close_shader_blob(je_GraphicImplContext, jegl_resource_blob)
     {
     }
-    jegl_resource_blob create_texture_blob(je_GraphicImplContext, jegl_texture*)
+    jegl_resource_blob create_texture_blob_2d(je_GraphicImplContext, jegl_texture_2d*)
+    {
+        return nullptr;
+    }
+    jegl_resource_blob create_texture_blob_3d(je_GraphicImplContext, jegl_texture_3d*)
+    {
+        return nullptr;
+    }
+    jegl_resource_blob create_texture_blob_array(je_GraphicImplContext, jegl_texture_array*)
+    {
+        return nullptr;
+    }
+    jegl_resource_blob create_texture_blob_cube(je_GraphicImplContext, jegl_texture_cube*)
+    {
+        return nullptr;
+    }
+    jegl_resource_blob create_texture_blob_msaa(je_GraphicImplContext, jegl_texture_msaa*)
     {
         return nullptr;
     }
@@ -70,7 +86,19 @@ namespace jeecs::graphic::api::none
     void init_shader(je_GraphicImplContext, jegl_resource_blob, jegl_shader*)
     {
     }
-    void init_texture(je_GraphicImplContext, jegl_resource_blob, jegl_texture*)
+    void init_texture_2d(je_GraphicImplContext, jegl_resource_blob, jegl_texture_2d*)
+    {
+    }
+    void init_texture_3d(je_GraphicImplContext, jegl_resource_blob, jegl_texture_3d*)
+    {
+    }
+    void init_texture_array(je_GraphicImplContext, jegl_resource_blob, jegl_texture_array*)
+    {
+    }
+    void init_texture_cube(je_GraphicImplContext, jegl_resource_blob, jegl_texture_cube*)
+    {
+    }
+    void init_texture_msaa(je_GraphicImplContext, jegl_resource_blob, jegl_texture_msaa*)
     {
     }
     void init_vertex(je_GraphicImplContext, jegl_resource_blob, jegl_vertex*)
@@ -86,7 +114,19 @@ namespace jeecs::graphic::api::none
     void update_shader(je_GraphicImplContext, jegl_shader*)
     {
     }
-    void update_texture(je_GraphicImplContext, jegl_texture*)
+    void update_texture_2d(je_GraphicImplContext, jegl_texture_2d*)
+    {
+    }
+    void update_texture_3d(je_GraphicImplContext, jegl_texture_3d*)
+    {
+    }
+    void update_texture_array(je_GraphicImplContext, jegl_texture_array*)
+    {
+    }
+    void update_texture_cube(je_GraphicImplContext, jegl_texture_cube*)
+    {
+    }
+    void update_texture_msaa(je_GraphicImplContext, jegl_texture_msaa*)
     {
     }
     void update_vertex(je_GraphicImplContext, jegl_vertex*)
@@ -102,7 +142,19 @@ namespace jeecs::graphic::api::none
     void close_shader(je_GraphicImplContext, jegl_shader*)
     {
     }
-    void close_texture(je_GraphicImplContext, jegl_texture*)
+    void close_texture_2d(je_GraphicImplContext, jegl_texture_2d*)
+    {
+    }
+    void close_texture_3d(je_GraphicImplContext, jegl_texture_3d*)
+    {
+    }
+    void close_texture_array(je_GraphicImplContext, jegl_texture_array*)
+    {
+    }
+    void close_texture_cube(je_GraphicImplContext, jegl_texture_cube*)
+    {
+    }
+    void close_texture_msaa(je_GraphicImplContext, jegl_texture_msaa*)
     {
     }
     void close_vertex(je_GraphicImplContext, jegl_vertex*)
@@ -122,7 +174,19 @@ namespace jeecs::graphic::api::none
     {
         return true;
     }
-    void bind_texture(je_GraphicImplContext, jegl_texture*, size_t)
+    void bind_texture_2d(je_GraphicImplContext, jegl_texture_2d*, size_t)
+    {
+    }
+    void bind_texture_3d(je_GraphicImplContext, jegl_texture_3d*, size_t)
+    {
+    }
+    void bind_texture_array(je_GraphicImplContext, jegl_texture_array*, size_t)
+    {
+    }
+    void bind_texture_cube(je_GraphicImplContext, jegl_texture_cube*, size_t)
+    {
+    }
+    void bind_texture_msaa(je_GraphicImplContext, jegl_texture_msaa*, size_t)
     {
     }
     void draw_vertex_with_shader(je_GraphicImplContext, jegl_vertex*)
@@ -154,7 +218,11 @@ void jegl_using_none_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->update_draw_commit = commit_update;
 
     write_to_apis->shader_create_blob = create_shader_blob;
-    write_to_apis->texture_create_blob = create_texture_blob;
+    write_to_apis->texture_2d_create_blob = create_texture_blob_2d;
+    write_to_apis->texture_3d_create_blob = create_texture_blob_3d;
+    write_to_apis->texture_array_create_blob = create_texture_blob_array;
+    write_to_apis->texture_cube_create_blob = create_texture_blob_cube;
+    write_to_apis->texture_msaa_create_blob = create_texture_blob_msaa;
     write_to_apis->vertex_create_blob = create_vertex_blob;
 
     write_to_apis->shader_close_blob = close_shader_blob;
@@ -162,19 +230,31 @@ void jegl_using_none_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->vertex_close_blob = close_vertex_blob;
 
     write_to_apis->shader_init = init_shader;
-    write_to_apis->texture_init = init_texture;
+    write_to_apis->texture_2d_init = init_texture_2d;
+    write_to_apis->texture_3d_init = init_texture_3d;
+    write_to_apis->texture_array_init = init_texture_array;
+    write_to_apis->texture_cube_init = init_texture_cube;
+    write_to_apis->texture_msaa_init = init_texture_msaa;
     write_to_apis->vertex_init = init_vertex;
     write_to_apis->framebuffer_init = init_framebuffer;
     write_to_apis->ubuffer_init = init_ubuffer;
 
     write_to_apis->shader_update = update_shader;
-    write_to_apis->texture_update = update_texture;
+    write_to_apis->texture_2d_update = update_texture_2d;
+    write_to_apis->texture_3d_update = update_texture_3d;
+    write_to_apis->texture_array_update = update_texture_array;
+    write_to_apis->texture_cube_update = update_texture_cube;
+    write_to_apis->texture_msaa_update = update_texture_msaa;
     write_to_apis->vertex_update = update_vertex;
     write_to_apis->framebuffer_update = update_framebuffer;
     write_to_apis->ubuffer_update = update_ubuffer;
 
     write_to_apis->shader_close = close_shader;
-    write_to_apis->texture_close = close_texture;
+    write_to_apis->texture_2d_close = close_texture_2d;
+    write_to_apis->texture_3d_close = close_texture_3d;
+    write_to_apis->texture_array_close = close_texture_array;
+    write_to_apis->texture_cube_close = close_texture_cube;
+    write_to_apis->texture_msaa_close = close_texture_msaa;
     write_to_apis->vertex_close = close_vertex;
     write_to_apis->framebuffer_close = close_framebuffer;
     write_to_apis->ubuffer_close = close_ubuffer;
@@ -184,7 +264,11 @@ void jegl_using_none_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->bind_framebuf = bind_framebuffer;
 
     write_to_apis->bind_uniform_buffer = bind_uniform_buffer;
-    write_to_apis->bind_texture = bind_texture;
+    write_to_apis->bind_texture_2d = bind_texture_2d;
+    write_to_apis->bind_texture_3d = bind_texture_3d;
+    write_to_apis->bind_texture_array = bind_texture_array;
+    write_to_apis->bind_texture_cube = bind_texture_cube;
+    write_to_apis->bind_texture_msaa = bind_texture_msaa;
     write_to_apis->bind_shader = bind_shader;
     write_to_apis->draw_vertex = draw_vertex_with_shader;
 }

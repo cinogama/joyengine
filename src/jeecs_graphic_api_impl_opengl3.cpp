@@ -172,12 +172,14 @@ namespace jeecs::graphic::api::gl3
         JECS_DISABLE_MOVE_AND_COPY(jegl_gl3_texture);
 
         GLuint m_texture_id;
-        jegl_texture::format m_texture_format;
+        GLenum m_target; // GL_TEXTURE_2D / _3D / _2D_ARRAY / _CUBE_MAP / _2D_MULTISAMPLE
+        jegl_texture_common::format m_texture_format;
         size_t m_width;
         size_t m_height;
 
-        jegl_gl3_texture(GLuint id, jegl_texture::format fmt, size_t w, size_t h)
+        jegl_gl3_texture(GLuint id, GLenum target, jegl_texture_common::format fmt, size_t w, size_t h)
             : m_texture_id(id)
+            , m_target(target)
             , m_texture_format(fmt)
             , m_width(w)
             , m_height(h)
@@ -430,7 +432,7 @@ namespace jeecs::graphic::api::gl3
         glEnable(GL_DEPTH_TEST);
         jegui_init_gl330(
             gthread,
-            [](jegl_context*, jegl_texture* res)
+            [](jegl_context*, jegl_texture_2d* res)
             {
                 jegl_gl3_texture* texture_instance =
                     static_cast<jegl_gl3_texture*>(res->m_handle.m_ptr);
@@ -956,8 +958,9 @@ namespace jeecs::graphic::api::gl3
         delete static_cast<jegl3_shader_blob*>(blob);
     }
 
+    template<typename TexT>
     jegl_resource_blob texture_create_resource_blob(
-        je_GraphicImplContext ctx, jegl_texture* resource)
+        je_GraphicImplContext ctx, TexT* resource)
     {
         return nullptr;
     }
@@ -1076,25 +1079,151 @@ namespace jeecs::graphic::api::gl3
             delete shader_instance;
     }
 
-    void texture_init(
+    // 根据纹理颜色格式选取 GL 的内部格式与源数据格式，
+    // 返回 false 表示无法识别的格式
+    static bool _gl3_pick_color_formats(
+        jegl_texture_common::format fmt, bool is_16bit,
+        GLint& texture_src_format, GLint& texture_aim_format)
+    {
+        switch (fmt & jegl_texture_common::format::COLOR_DEPTH_MASK)
+        {
+        case jegl_texture_common::format::MONO:
+            texture_src_format = GL_RED;
+            texture_aim_format = is_16bit ? GL_R16F : GL_R8;
+            return true;
+        case jegl_texture_common::format::RGBA:
+            texture_src_format = GL_RGBA;
+            texture_aim_format = is_16bit ? GL_RGBA16F : GL_RGBA;
+            return true;
+        default:
+            jeecs::debug::logerr("Unknown texture raw-data format.");
+            return false;
+        }
+    }
+
+    void texture_2d_init(
         je_GraphicImplContext,
         jegl_resource_blob,
-        jegl_texture* resource)
+        jegl_texture_2d* resource)
     {
         GLuint texture;
         glGenTextures(1, &texture);
+        glBindTexture(GL_TEXTURE_2D, texture);
 
+        const bool is_16bit = 0 != (resource->m_format & jegl_texture_common::format::FLOAT16);
+        const bool is_depth = 0 != (resource->m_format & jegl_texture_common::format::DEPTH);
+
+        if (is_depth)
+        {
+            if (is_16bit)
+                jeecs::debug::logerr("Depth texture cannot use 16bit.");
+
+            glTexImage2D(GL_TEXTURE_2D, 0,
+#if defined(JE_ENABLE_WEBGL20_GAPI)
+                GL_DEPTH_COMPONENT24,
+#else
+                GL_DEPTH_COMPONENT,
+#endif
+                (GLsizei)resource->m_width,
+                (GLsizei)resource->m_height,
+                0,
+                GL_DEPTH_COMPONENT,
+                GL_UNSIGNED_INT,
+                NULL);
+        }
+        else
+        {
+            GLint texture_aim_format = GL_RGBA;
+            GLint texture_src_format = GL_RGBA;
+            if (!_gl3_pick_color_formats(resource->m_format, is_16bit, texture_src_format, texture_aim_format))
+                return;
+
+            glTexImage2D(GL_TEXTURE_2D,
+                0, texture_aim_format,
+                (GLsizei)resource->m_width,
+                (GLsizei)resource->m_height,
+                0, texture_src_format,
+                is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
+                resource->m_pixels);
+        }
+
+        resource->m_handle.m_ptr = new jegl_gl3_texture(
+            texture, GL_TEXTURE_2D, resource->m_format, resource->m_width, resource->m_height);
+    }
+
+    void texture_3d_init(
+        je_GraphicImplContext,
+        jegl_resource_blob,
+        jegl_texture_3d* resource)
+    {
+        if (0 != (resource->m_format & jegl_texture_common::format::DEPTH))
+        {
+            jeecs::debug::logerr("3D depth texture is not supported.");
+            return;
+        }
+
+        const bool is_16bit = 0 != (resource->m_format & jegl_texture_common::format::FLOAT16);
         GLint texture_aim_format = GL_RGBA;
         GLint texture_src_format = GL_RGBA;
+        if (!_gl3_pick_color_formats(resource->m_format, is_16bit, texture_src_format, texture_aim_format))
+            return;
 
-        bool is_16bit = 0 != (resource->m_format & jegl_texture::format::FLOAT16);
-        bool is_depth = 0 != (resource->m_format & jegl_texture::format::DEPTH);
-        bool is_cube = 0 != (resource->m_format & jegl_texture::format::CUBE);
+        GLuint texture;
+        glGenTextures(1, &texture);
+        glBindTexture(GL_TEXTURE_3D, texture);
 
-        // 根据是否为 cube 纹理选择正确的纹理类型
-        GLenum gl_texture_type = is_cube ? GL_TEXTURE_CUBE_MAP : GL_TEXTURE_2D;
-        glBindTexture(gl_texture_type, texture);
+        glTexImage3D(GL_TEXTURE_3D,
+            0, texture_aim_format,
+            (GLsizei)resource->m_width,
+            (GLsizei)resource->m_height,
+            (GLsizei)resource->m_depth,
+            0, texture_src_format,
+            is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
+            resource->m_pixels);
 
+        resource->m_handle.m_ptr = new jegl_gl3_texture(
+            texture, GL_TEXTURE_3D, resource->m_format, resource->m_width, resource->m_height);
+    }
+
+    void texture_array_init(
+        je_GraphicImplContext,
+        jegl_resource_blob,
+        jegl_texture_array* resource)
+    {
+        if (0 != (resource->m_format & jegl_texture_common::format::DEPTH))
+        {
+            jeecs::debug::logerr("Texture array of depth format is not supported.");
+            return;
+        }
+
+        const bool is_16bit = 0 != (resource->m_format & jegl_texture_common::format::FLOAT16);
+        GLint texture_aim_format = GL_RGBA;
+        GLint texture_src_format = GL_RGBA;
+        if (!_gl3_pick_color_formats(resource->m_format, is_16bit, texture_src_format, texture_aim_format))
+            return;
+
+        GLuint texture;
+        glGenTextures(1, &texture);
+        glBindTexture(GL_TEXTURE_2D_ARRAY, texture);
+
+        glTexImage3D(GL_TEXTURE_2D_ARRAY,
+            0, texture_aim_format,
+            (GLsizei)resource->m_width,
+            (GLsizei)resource->m_height,
+            (GLsizei)resource->m_layers,
+            0, texture_src_format,
+            is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
+            resource->m_pixels);
+
+        resource->m_handle.m_ptr = new jegl_gl3_texture(
+            texture, GL_TEXTURE_2D_ARRAY, resource->m_format, resource->m_width, resource->m_height);
+    }
+
+    void texture_cube_init(
+        je_GraphicImplContext,
+        jegl_resource_blob,
+        jegl_texture_cube* resource)
+    {
         const GLenum jegl_texture_cube_map_ways[] = {
             GL_TEXTURE_CUBE_MAP_POSITIVE_X,
             GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
@@ -1103,31 +1232,28 @@ namespace jeecs::graphic::api::gl3
             GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
             GL_TEXTURE_CUBE_MAP_NEGATIVE_Z };
 
-        if (is_depth)
-        {
-            if (is_16bit)
-                jeecs::debug::logerr("Depth texture cannot use 16bit.");
+        const bool is_16bit = 0 != (resource->m_format & jegl_texture_common::format::FLOAT16);
+        const bool is_depth = 0 != (resource->m_format & jegl_texture_common::format::DEPTH);
+        const size_t face_pixels =
+            resource->m_width * resource->m_height
+            * (resource->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK);
 
-            if (is_cube)
+        GLuint texture;
+        glGenTextures(1, &texture);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, texture);
+
+        for (size_t face_idx = 0; face_idx < 6; ++face_idx)
+        {
+            const void* face_data = resource->m_pixels != nullptr
+                ? resource->m_pixels + face_idx * face_pixels
+                : nullptr;
+
+            if (is_depth)
             {
-                for (auto way : jegl_texture_cube_map_ways)
-                {
-                    glTexImage2D(way, 0,
-#if defined(JE_ENABLE_WEBGL20_GAPI)
-                        GL_DEPTH_COMPONENT24,
-#else
-                        GL_DEPTH_COMPONENT,
-#endif
-                        (GLsizei)resource->m_width,
-                        (GLsizei)resource->m_height,
-                        0,
-                        GL_DEPTH_COMPONENT,
-                        GL_UNSIGNED_INT,
-                        NULL);
-                }
-            }
-            else
-                glTexImage2D(gl_texture_type, 0,
+                if (is_16bit)
+                    jeecs::debug::logerr("Depth texture cannot use 16bit.");
+
+                glTexImage2D(jegl_texture_cube_map_ways[face_idx], 0,
 #if defined(JE_ENABLE_WEBGL20_GAPI)
                     GL_DEPTH_COMPONENT24,
 #else
@@ -1139,87 +1265,87 @@ namespace jeecs::graphic::api::gl3
                     GL_DEPTH_COMPONENT,
                     GL_UNSIGNED_INT,
                     NULL);
-        }
-        else
-        {
-            // Depth texture do not use color format
-            switch (resource->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
-            {
-            case jegl_texture::format::MONO:
-                texture_src_format = GL_RED;
-                texture_aim_format = is_16bit ? GL_R16F : GL_R8;
-                break;
-            case jegl_texture::format::RGBA:
-                texture_src_format = GL_RGBA;
-                texture_aim_format = is_16bit ? GL_RGBA16F : GL_RGBA;
-                break;
-            default:
-                jeecs::debug::logerr("Unknown texture raw-data format.");
-            }
-
-            if (is_cube)
-            {
-                for (auto way : jegl_texture_cube_map_ways)
-                {
-                    glTexImage2D(way, 0, texture_aim_format,
-                        (GLsizei)resource->m_width,
-                        (GLsizei)resource->m_height,
-                        0, texture_src_format,
-                        is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
-                        resource->m_pixels);
-                }
             }
             else
             {
-                glTexImage2D(gl_texture_type,
-                    0, texture_aim_format,
+                GLint texture_aim_format = GL_RGBA;
+                GLint texture_src_format = GL_RGBA;
+                if (!_gl3_pick_color_formats(resource->m_format, is_16bit, texture_src_format, texture_aim_format))
+                    return;
+
+                glTexImage2D(jegl_texture_cube_map_ways[face_idx], 0, texture_aim_format,
                     (GLsizei)resource->m_width,
                     (GLsizei)resource->m_height,
                     0, texture_src_format,
                     is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
-                    resource->m_pixels);
+                    const_cast<void*>(face_data));
             }
         }
 
-        resource->m_handle.m_ptr = new jegl_gl3_texture(texture, resource->m_format, resource->m_width, resource->m_height);
+        resource->m_handle.m_ptr = new jegl_gl3_texture(
+            texture, GL_TEXTURE_CUBE_MAP, resource->m_format, resource->m_width, resource->m_height);
     }
-    void texture_update(
+
+    void texture_msaa_init(
         je_GraphicImplContext,
-        jegl_texture* resource)
+        jegl_resource_blob,
+        jegl_texture_msaa* resource)
+    {
+#if defined(JE_ENABLE_GLES300_GAPI) || defined(JE_ENABLE_WEBGL20_GAPI)
+        (void)resource;
+        jeecs::debug::logerr("MSAA texture is not supported by OpenGLES3/WebGL2.");
+#else
+        const bool is_depth = 0 != (resource->m_format & jegl_texture_common::format::DEPTH);
+        const bool is_16bit = 0 != (resource->m_format & jegl_texture_common::format::FLOAT16);
+
+        GLint texture_aim_format = GL_RGBA;
+        GLint texture_src_format = GL_RGBA;
+
+        if (is_depth)
+            texture_aim_format = GL_DEPTH_COMPONENT;
+        else if (!_gl3_pick_color_formats(resource->m_format, is_16bit, texture_src_format, texture_aim_format))
+            return;
+
+        GLuint texture;
+        glGenTextures(1, &texture);
+        glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, texture);
+
+        glTexImage2DMultisample(
+            GL_TEXTURE_2D_MULTISAMPLE,
+            (GLsizei)resource->m_samples,
+            texture_aim_format,
+            (GLsizei)resource->m_width,
+            (GLsizei)resource->m_height,
+            GL_TRUE);
+
+        resource->m_handle.m_ptr = new jegl_gl3_texture(
+            texture, GL_TEXTURE_2D_MULTISAMPLE, resource->m_format, resource->m_width, resource->m_height);
+#endif
+    }
+
+    void texture_2d_update(
+        je_GraphicImplContext,
+        jegl_texture_2d* resource)
     {
         jegl_gl3_texture* texture_instance =
             static_cast<jegl_gl3_texture*>(resource->m_handle.m_ptr);
 
         // Update texture's pixels, only normal pixel data will be updated.
-        // NOTE: 深度纹理和 Cube 纹理不支持更新
-        if (0 != (resource->m_format & jegl_texture::format::DEPTH) ||
-            0 != (resource->m_format & jegl_texture::format::CUBE))
+        // NOTE: 深度纹理不支持更新
+        if (0 != (resource->m_format & jegl_texture_common::format::DEPTH))
         {
-            jeecs::debug::logerr("Depth or Cube texture update is not supported.");
+            jeecs::debug::logerr("Depth texture update is not supported.");
             return;
         }
 
         glBindTexture(GL_TEXTURE_2D, texture_instance->m_texture_id);
 
-        // 根据纹理格式确定正确的 OpenGL 格式
-        bool is_16bit = 0 != (resource->m_format & jegl_texture::format::FLOAT16);
+        const bool is_16bit = 0 != (resource->m_format & jegl_texture_common::format::FLOAT16);
         GLint texture_aim_format = GL_RGBA;
         GLint texture_src_format = GL_RGBA;
 
-        switch (resource->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
-        {
-        case jegl_texture::format::MONO:
-            texture_src_format = GL_RED;
-            texture_aim_format = is_16bit ? GL_R16F : GL_R8;
-            break;
-        case jegl_texture::format::RGBA:
-            texture_src_format = GL_RGBA;
-            texture_aim_format = is_16bit ? GL_RGBA16F : GL_RGBA;
-            break;
-        default:
-            jeecs::debug::logerr("Unknown texture raw-data format for update.");
+        if (!_gl3_pick_color_formats(resource->m_format, is_16bit, texture_src_format, texture_aim_format))
             return;
-        }
 
         const bool same_size =
             texture_instance->m_width == resource->m_width &&
@@ -1257,9 +1383,101 @@ namespace jeecs::graphic::api::gl3
             texture_instance->m_height = resource->m_height;
         }
     }
+
+    template<typename TexT>
+    static void _gl3_update_texture_3d_like(
+        TexT* resource, GLint target, GLsizei depth_or_layers)
+    {
+        jegl_gl3_texture* texture_instance =
+            static_cast<jegl_gl3_texture*>(resource->m_handle.m_ptr);
+
+        if (0 != (resource->m_format & jegl_texture_common::format::DEPTH))
+        {
+            jeecs::debug::logerr("Depth texture update is not supported.");
+            return;
+        }
+
+        glBindTexture(target, texture_instance->m_texture_id);
+
+        const bool is_16bit = 0 != (resource->m_format & jegl_texture_common::format::FLOAT16);
+        GLint texture_aim_format = GL_RGBA;
+        GLint texture_src_format = GL_RGBA;
+
+        if (!_gl3_pick_color_formats(resource->m_format, is_16bit, texture_src_format, texture_aim_format))
+            return;
+
+        const bool same_size =
+            texture_instance->m_width == resource->m_width &&
+            texture_instance->m_height == resource->m_height;
+
+        if (same_size)
+        {
+            glTexSubImage3D(
+                target,
+                0,
+                0, 0, 0,
+                (GLsizei)resource->m_width,
+                (GLsizei)resource->m_height,
+                depth_or_layers,
+                texture_src_format,
+                is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
+                resource->m_pixels);
+        }
+        else
+        {
+            glTexImage3D(
+                target,
+                0,
+                texture_aim_format,
+                (GLsizei)resource->m_width,
+                (GLsizei)resource->m_height,
+                depth_or_layers,
+                0,
+                texture_src_format,
+                is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
+                resource->m_pixels);
+
+            texture_instance->m_width = resource->m_width;
+            texture_instance->m_height = resource->m_height;
+        }
+    }
+
+    void texture_3d_update(
+        je_GraphicImplContext,
+        jegl_texture_3d* resource)
+    {
+        _gl3_update_texture_3d_like(resource, GL_TEXTURE_3D, (GLsizei)resource->m_depth);
+    }
+
+    void texture_array_update(
+        je_GraphicImplContext,
+        jegl_texture_array* resource)
+    {
+        _gl3_update_texture_3d_like(resource, GL_TEXTURE_2D_ARRAY, (GLsizei)resource->m_layers);
+    }
+
+    void texture_cube_update(
+        je_GraphicImplContext,
+        jegl_texture_cube* resource)
+    {
+        (void)resource;
+        // NOTE: Cube 纹理不支持更新
+        jeecs::debug::logerr("Cube texture update is not supported.");
+    }
+
+    void texture_msaa_update(
+        je_GraphicImplContext,
+        jegl_texture_msaa* resource)
+    {
+        (void)resource;
+        // NOTE: MSAA 纹理只存在于 GPU 侧，不支持 CPU 侧像素更新
+        jeecs::debug::logerr("MSAA texture update is not supported.");
+    }
+
+    template<typename TexT>
     void texture_close(
         je_GraphicImplContext,
-        jegl_texture* resource)
+        TexT* resource)
     {
         delete static_cast<jegl_gl3_texture*>(resource->m_handle.m_ptr);
     }
@@ -1405,22 +1623,22 @@ namespace jeecs::graphic::api::gl3
 
         GLenum attachment = GL_COLOR_ATTACHMENT0;
 
-        jeecs::basic::resource<jeecs::graphic::texture>* attachments =
-            reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
+        jeecs::basic::resource<jeecs::graphic::texture2d>* attachments =
+            reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture2d> *>(
                 resource->m_output_attachments);
 
         for (size_t i = 0; i < resource->m_attachment_count; ++i)
         {
-            jegl_texture* frame_texture = attachments[i]->resource();
+            jegl_texture_2d* frame_texture = attachments[i]->resource();
 
-            // jegl_bind_texture 会触发纹理的懒加载初始化（若尚未创建 GL 纹理对象），
+            // jegl_bind_texture_2d 会触发纹理的懒加载初始化（若尚未创建 GL 纹理对象），
             // 确保 frame_texture->m_handle.m_ptr 在下方 glFramebufferTexture2D 前有效。
-            jegl_bind_texture(frame_texture, 0);
+            jegl_bind_texture_2d(frame_texture, 0);
 
             GLenum using_attachment = attachment;
             GLenum buffer_texture_type = GL_TEXTURE_2D;
 
-            if (0 != (frame_texture->m_format & jegl_texture::format::DEPTH))
+            if (0 != (frame_texture->m_format & jegl_texture_common::format::DEPTH))
             {
                 if (already_has_attached_depth)
                     jeecs::debug::logerr("Framebuffer(%p) attach depth buffer repeatedly.", resource);
@@ -1585,7 +1803,8 @@ namespace jeecs::graphic::api::gl3
             ubuf->m_uniform_buffer_size);
     }
 
-    void gl_bind_texture(je_GraphicImplContext ctx, jegl_texture* texture, size_t pass)
+    template<typename TexT>
+    void gl_bind_texture(je_GraphicImplContext ctx, TexT* texture, size_t pass)
     {
         jegl_gl3_context* context = static_cast<jegl_gl3_context*>(ctx);
         jegl_gl3_texture* texture_instance =
@@ -1593,9 +1812,7 @@ namespace jeecs::graphic::api::gl3
 
         context->bind_texture_pass_impl(
             (GLint)pass,
-            (0 == (texture_instance->m_texture_format & jegl_texture::format::CUBE))
-            ? GL_TEXTURE_2D
-            : GL_TEXTURE_CUBE_MAP,
+            texture_instance->m_target,
             texture_instance->m_texture_id);
     }
 
@@ -1725,7 +1942,11 @@ void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->update_draw_commit = gl_commit_update;
 
     write_to_apis->shader_create_blob = shader_create_resource_blob;
-    write_to_apis->texture_create_blob = texture_create_resource_blob;
+    write_to_apis->texture_2d_create_blob = texture_create_resource_blob<jegl_texture_2d>;
+    write_to_apis->texture_3d_create_blob = texture_create_resource_blob<jegl_texture_3d>;
+    write_to_apis->texture_array_create_blob = texture_create_resource_blob<jegl_texture_array>;
+    write_to_apis->texture_cube_create_blob = texture_create_resource_blob<jegl_texture_cube>;
+    write_to_apis->texture_msaa_create_blob = texture_create_resource_blob<jegl_texture_msaa>;
     write_to_apis->vertex_create_blob = vertex_create_resource_blob;
 
     write_to_apis->shader_close_blob = shader_close_resource_blob;
@@ -1733,25 +1954,41 @@ void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->vertex_close_blob = vertex_close_resource_blob;
 
     write_to_apis->shader_init = shader_init;
-    write_to_apis->texture_init = texture_init;
+    write_to_apis->texture_2d_init = texture_2d_init;
+    write_to_apis->texture_3d_init = texture_3d_init;
+    write_to_apis->texture_array_init = texture_array_init;
+    write_to_apis->texture_cube_init = texture_cube_init;
+    write_to_apis->texture_msaa_init = texture_msaa_init;
     write_to_apis->vertex_init = vertex_init;
     write_to_apis->framebuffer_init = framebuffer_init;
     write_to_apis->ubuffer_init = ubuffer_init;
 
     write_to_apis->shader_update = shader_update;
-    write_to_apis->texture_update = texture_update;
+    write_to_apis->texture_2d_update = texture_2d_update;
+    write_to_apis->texture_3d_update = texture_3d_update;
+    write_to_apis->texture_array_update = texture_array_update;
+    write_to_apis->texture_cube_update = texture_cube_update;
+    write_to_apis->texture_msaa_update = texture_msaa_update;
     write_to_apis->vertex_update = vertex_update;
     write_to_apis->framebuffer_update = framebuffer_update;
     write_to_apis->ubuffer_update = ubuffer_update;
 
     write_to_apis->shader_close = shader_close;
-    write_to_apis->texture_close = texture_close;
+    write_to_apis->texture_2d_close = texture_close<jegl_texture_2d>;
+    write_to_apis->texture_3d_close = texture_close<jegl_texture_3d>;
+    write_to_apis->texture_array_close = texture_close<jegl_texture_array>;
+    write_to_apis->texture_cube_close = texture_close<jegl_texture_cube>;
+    write_to_apis->texture_msaa_close = texture_close<jegl_texture_msaa>;
     write_to_apis->vertex_close = vertex_close;
     write_to_apis->framebuffer_close = framebuffer_close;
     write_to_apis->ubuffer_close = ubuffer_close;
 
     write_to_apis->bind_uniform_buffer = gl_bind_uniform_buffer;
-    write_to_apis->bind_texture = gl_bind_texture;
+    write_to_apis->bind_texture_2d = gl_bind_texture<jegl_texture_2d>;
+    write_to_apis->bind_texture_3d = gl_bind_texture<jegl_texture_3d>;
+    write_to_apis->bind_texture_array = gl_bind_texture<jegl_texture_array>;
+    write_to_apis->bind_texture_cube = gl_bind_texture<jegl_texture_cube>;
+    write_to_apis->bind_texture_msaa = gl_bind_texture<jegl_texture_msaa>;
     write_to_apis->bind_shader = gl_bind_shader;
     write_to_apis->draw_vertex = gl_draw_vertex_with_shader;
 

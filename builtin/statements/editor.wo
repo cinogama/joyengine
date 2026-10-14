@@ -36,9 +36,9 @@ namespace jeapi
             query_flow_input_type_nodes: map<string, NodeTree>,
             query_flow_output_type_nodes: map<string, NodeTree>,
             
-            input_pin_image: option<je::graphic::texture>,
-            output_pin_image: option<je::graphic::texture>,
-            flow_pin_image: option<je::graphic::texture>,
+            input_pin_image: option<je::graphic::texture2d>,
+            output_pin_image: option<je::graphic::texture2d>,
+            flow_pin_image: option<je::graphic::texture2d>,
             
             // 接下来这些是编辑时的状态，一团乱麻~ 每帧更新
             try_linking_from_io_typename: mut option<string>,
@@ -215,9 +215,9 @@ namespace jeapi
                     query_flow_input_type_nodes = {}mut,
                     query_flow_output_type_nodes = {}mut,
                     
-                    input_pin_image = je::graphic::texture::load(option::none, "!/builtin/icon/InputPin.png"),
-                    output_pin_image = je::graphic::texture::load(option::none, "!/builtin/icon/OutputPin.png"),
-                    flow_pin_image = je::graphic::texture::load(option::none, "!/builtin/icon/FlowPin.png"),
+                    input_pin_image = je::graphic::texture2d::load(option::none, "!/builtin/icon/InputPin.png"),
+                    output_pin_image = je::graphic::texture2d::load(option::none, "!/builtin/icon/OutputPin.png"),
+                    flow_pin_image = je::graphic::texture2d::load(option::none, "!/builtin/icon/FlowPin.png"),
                     
                     try_linking_from_io_typename = mut option::none,
                     
@@ -315,7 +315,7 @@ namespace jeapi
             }
             func draw_pin(self: GraphEditor, iostate: node_editor::Graph::IOState)
             {
-                let mut shown_image = option::none as option<je::graphic::texture>;
+                let mut shown_image = option::none as option<je::graphic::texture2d>;
                 if (iostate.kind == node_editor::Graph::IOState::IOKind::Input)
                     shown_image = self.input_pin_image;
                 else if (iostate.kind == node_editor::Graph::IOState::IOKind::Output)

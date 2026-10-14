@@ -43,7 +43,7 @@ namespace JEEditor::Editor::ComponentPresets
     ];
 
     public let BASE_RENDERER_COMPONENTS = [
-        "Renderer::Shape", "Renderer::Shaders", "Renderer::Textures",
+        "Renderer::Shape", "Renderer::Shaders", "Renderer::Textures2D",
     ];
 
     public let LIGHT2D_POINT_COMPONENTS = [

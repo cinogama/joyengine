@@ -708,7 +708,7 @@ namespace JEEditor::Editor::Animation2D
     // ======================================================================
     // Section 5 — 精灵图：UV 解析
     // ======================================================================
-    // 解析一帧的 Renderer::Textures::offset/tiling，得到引擎 UV 空间的 uv0/uv1。
+    // 解析一帧的 Renderer::Textures2D::offset/tiling，得到引擎 UV 空间的 uv0/uv1。
     public func frame_uv(frame: Animation2dFrameData) => option<((real, real), (real, real))>
     {
         let mut offset = (0., 0.);
@@ -716,7 +716,7 @@ namespace JEEditor::Editor::Animation2D
         let mut found = false;
         for (let cd : frame.m_component_data)
         {
-            if (cd.m_component_name == "Renderer::Textures")
+            if (cd.m_component_name == "Renderer::Textures2D")
             {
                 if (cd.m_member_name == "offset")
                 {

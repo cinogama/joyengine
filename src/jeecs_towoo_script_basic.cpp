@@ -1612,11 +1612,21 @@ WOORT_API woort_api wojeapi_towoo_physics2d_rigidbody_get_body_id(void)
 WOORT_API woort_api wojeapi_towoo_renderer_textures_bind_texture(void)
 {
     auto& textures =
-        wo_component<jeecs::Renderer::Textures>(0, WOORT_RETURN_SLOT);
+        wo_component<jeecs::Renderer::Textures2D>(0, WOORT_RETURN_SLOT);
 
     const size_t pass = static_cast<size_t>(woort_int(1));
     auto* tex =
-        static_cast<jeecs::basic::resource<jeecs::graphic::texture>*>(woort_gcpointer(2));
+        static_cast<jeecs::basic::resource<jeecs::graphic::texture2d>*>(woort_gcpointer(2));
+
+    // 所有 resource<textureN> 的共享指针布局一致（首成员即包装对象指针），
+    // 因此可以安全地按 texture2d 视图读取其内部 jegl 纹理的 m_kind 字段。
+    // Textures2D 组件只接受二维纹理。
+    if ((*tex)->resource()->m_kind != jegl_texture_kind::TEXTURE_2D)
+    {
+        jeecs::debug::logerr(
+            "Renderer::Textures2D component only accepts 2d textures.");
+        return woort_ret_void();
+    }
 
     textures.bind_texture(pass, *tex);
     return woort_ret_void();
@@ -1625,7 +1635,7 @@ WOORT_API woort_api wojeapi_towoo_renderer_textures_bind_texture(void)
 WOORT_API woort_api wojeapi_towoo_renderer_textures_get_texture(void)
 {
     auto& textures =
-        wo_component<jeecs::Renderer::Textures>(0, WOORT_RETURN_SLOT);
+        wo_component<jeecs::Renderer::Textures2D>(0, WOORT_RETURN_SLOT);
     const size_t pass = static_cast<size_t>(woort_int(1));
 
     auto tex = textures.get_texture(pass);
@@ -1633,11 +1643,11 @@ WOORT_API woort_api wojeapi_towoo_renderer_textures_get_texture(void)
     if (tex.has_value())
     {
         return woort_ret_option_gchandle(
-            new jeecs::basic::resource<jeecs::graphic::texture>(tex.value()),
+            new jeecs::basic::resource<jeecs::graphic::texture2d>(tex.value()),
             WOORT_IGNORE,
             [](void* p)
             {
-                delete static_cast<jeecs::basic::resource<jeecs::graphic::texture>*>(p);
+                delete static_cast<jeecs::basic::resource<jeecs::graphic::texture2d>*>(p);
             },
             nullptr);
     }
