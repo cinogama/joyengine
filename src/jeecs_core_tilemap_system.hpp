@@ -51,6 +51,8 @@ jeecs_core_tilemap_model.hpp；本文件只做三件事：
     同一语义）贪心合并为矩形，每矩形一个静态 Physics2D::Collider::Box，
     Rigidbody::layerid 取自 Wall::layerid。掩码哈希未变化的版本戳
     （纯视觉/样式编辑）不重建碰撞体，避免物理世界无谓抖动。
+    Wall::block_empty 开启严格模式：无图块的空格与地图外缘（四周向外
+    一圈）一并并入墙体，只有可通行图块覆盖的格子可通过。
   * 自动图块在网格中只存地形 id，邻接掩码与具体变体在构建顶点时
     动态解析（resolve_cell_quads），因此相邻地形变化时无需改写
     网格数据。
@@ -104,6 +106,7 @@ namespace jeecs
             std::vector<je_GameEntity> walls;
             uint64_t wall_stamp = 0;   // 上次掩码扫描对应的版本戳
             uint64_t wall_mask = 0;    // 当前碰撞体实体对应的掩码哈希
+            bool wall_block_empty = false; // 当前实体按哪个 block_empty 开关构建
             bool wall_valid = false;   // wall_stamp / wall_mask 是否有效
             // 本根实体当前持有的地图文档（nullopt = 无）：observe 取得
             // 的 shared_ptr 不占外部引用计数，根实体存续期间以其保活；
@@ -447,43 +450,86 @@ namespace jeecs
 
         // ---- 碰撞体墙：不可通行掩码 → 静态 Box 碰撞体子实体 ----
 
-        // 扫描不可通行掩码：任一图层不可通行即墙（与 je_tilemap_is_walkable
-        // 同一语义；与 walkable_on 一致，空格/无法解析的格子视为可通行）。
-        // 逐格内联 walkable_on 的判定以避免每格经注册表锁解析图集。
+        // 扫描不可通行掩码，返回掩码哈希（FNV-1a，混入 block_empty 开关位）：
+        // 版本戳变化但通行性未变时免重建碰撞体。out_width/out_height 回报
+        // 掩码尺寸（严格模式含外扩圈）。
+        // 第一轮与 je_tilemap_is_walkable 同一语义：任一图层不可通行即墙，
+        // 空格/无法解析的格子视为可通行（逐格内联 walkable_on 的判定，
+        // 避免每格经注册表锁解析图集）。
+        // block_empty 严格模式：掩码全 1 起步并向四周外扩一圈（地图外缘
+        // 恒为墙），第一轮以标记 2 区分"判定墙"与初始填充，第二轮把
+        // "未被判定且有图块（任一图层非空）"的格子清 0 —— 完全没有图块
+        // 的空格保持墙，外扩圈与贴边墙体贪心合并成整块。
         static uint64_t scan_wall_mask(Tilemap::MapDocument& doc,
-            std::vector<uint8_t>& blocked)
+            std::vector<uint8_t>& blocked, bool block_empty,
+            int32_t& out_width, int32_t& out_height)
         {
             Tilemap::documents::inst().ensure_tilesets(doc);
-            blocked.assign((size_t)doc.width * doc.height, 0);
+            const int32_t mw = doc.width + (block_empty ? 2 : 0);
+            const int32_t mh = doc.height + (block_empty ? 2 : 0);
+            out_width = mw;
+            out_height = mh;
+            blocked.assign((size_t)mw * mh, block_empty ? 1 : 0);
             for (const auto& layer : doc.layers)
             {
                 const auto& grid = layer.grid;
-                for (size_t i = 0; i < blocked.size(); ++i)
+                for (int32_t y = 0; y < doc.height; ++y)
                 {
-                    if (blocked[i])
-                        continue;   // 已判定为墙，其他层无需再看
-                    const int32_t v = grid[i];
-                    if (v == 0)
-                        continue;
-                    auto cell = Tilemap::decode_tile_value(v);
-                    if (!cell.has_value()
-                        || cell->tileset_idx < 0
-                        || cell->tileset_idx >= (int32_t)doc.tilesets.size()
-                        || !doc.tilesets[cell->tileset_idx].resolved.has_value())
-                        continue;
-                    const auto* ts = doc.tilesets[cell->tileset_idx].resolved->get();
-                    const int32_t local = cell->local_id;
-                    const bool walkable = cell->is_terrain
-                        ? (local >= (int32_t)ts->terrains.size()
-                            || ts->terrains[local].walkable)
-                        : (local >= (int32_t)ts->tiles.size()
-                            || ts->tiles[local].walkable);
-                    if (!walkable)
-                        blocked[i] = 1;
+                    for (int32_t x = 0; x < doc.width; ++x)
+                    {
+                        const size_t di =
+                            (size_t)(y + (block_empty ? 1 : 0)) * mw
+                            + (size_t)(x + (block_empty ? 1 : 0));
+                        if (!block_empty && blocked[di])
+                            continue;   // 已判定为墙，其他层无需再看
+                        const int32_t v = grid[(size_t)y * doc.width + x];
+                        if (v == 0)
+                            continue;   // 空格：普通模式可通行；严格模式留待第二轮
+                        auto cell = Tilemap::decode_tile_value(v);
+                        if (!cell.has_value()
+                            || cell->tileset_idx < 0
+                            || cell->tileset_idx >= (int32_t)doc.tilesets.size()
+                            || !doc.tilesets[cell->tileset_idx].resolved.has_value())
+                            continue;
+                        const auto* ts = doc.tilesets[cell->tileset_idx].resolved->get();
+                        const int32_t local = cell->local_id;
+                        const bool walkable = cell->is_terrain
+                            ? (local >= (int32_t)ts->terrains.size()
+                                || ts->terrains[local].walkable)
+                            : (local >= (int32_t)ts->tiles.size()
+                                || ts->tiles[local].walkable);
+                        if (!walkable)
+                            blocked[di] = block_empty ? 2 : 1;
+                    }
                 }
             }
-            // 掩码哈希（FNV-1a）：版本戳变化但通行性未变时免重建碰撞体
+            if (block_empty)
+            {
+                for (int32_t y = 0; y < doc.height; ++y)
+                {
+                    for (int32_t x = 0; x < doc.width; ++x)
+                    {
+                        const size_t di = (size_t)(y + 1) * mw + (size_t)(x + 1);
+                        if (blocked[di] == 2)
+                        {
+                            blocked[di] = 1;     // 任一图层不可通行：判定墙
+                            continue;
+                        }
+                        // 初始填充（=1）：有图块才可通过，空格保持墙
+                        bool has_tile = false;
+                        for (const auto& layer : doc.layers)
+                            if (layer.grid[(size_t)y * doc.width + x] != 0)
+                            {
+                                has_tile = true;
+                                break;
+                            }
+                        if (has_tile)
+                            blocked[di] = 0;
+                    }
+                }
+            }
             uint64_t hash = 0x9E3779B97F4A7C15ull;
+            hash = (hash ^ (uint64_t)(block_empty ? 1 : 0)) * 0x100000001B3ull;
             for (uint8_t v : blocked)
                 hash = (hash ^ v) * 0x100000001B3ull;
             return hash;
@@ -592,10 +638,11 @@ namespace jeecs
         }
 
         // 掩码变化时整体重建：先回收全部旧碰撞体再按合并矩形新建。
-        // 墙体属静态数据、编辑频度低，整体重建远比逐矩形差分简单可靠
+        // 墙体属静态数据、编辑频度低，整体重建远比逐矩形差分简单可靠。
+        // 严格模式的掩码向外扩了一圈，掩码坐标需平移回地图格坐标
         void rebuild_walls(game_entity root, root_state& state,
             const Tilemap::Wall& wall, const std::vector<uint8_t>& blocked,
-            int32_t width, int32_t height)
+            int32_t mask_width, int32_t mask_height, bool block_empty)
         {
             auto world = get_world();
             for (auto& raw : state.walls)
@@ -604,16 +651,19 @@ namespace jeecs
 
             const auto* root_scale = root.get_component<Transform::LocalScale>();
             std::vector<int32_t> rects;
-            merge_wall_rects(blocked, width, height, rects);
+            merge_wall_rects(blocked, mask_width, mask_height, rects);
+            const int32_t off = block_empty ? 1 : 0;
             state.walls.reserve(rects.size() / 4);
             for (size_t r = 0; r + 3 < rects.size(); r += 4)
                 state.walls.push_back(create_wall_entity(
                     root, wall, root_scale,
-                    rects[r], rects[r + 1], rects[r + 2], rects[r + 3])._m_raw);
+                    rects[r] - off, rects[r + 1] - off,
+                    rects[r + 2] - off, rects[r + 3] - off)._m_raw);
         }
 
         // 逐根同步碰撞体墙：Wall 组件离位/文档失效即回收；版本戳变化时
-        // 重扫掩码，掩码哈希变化才重建实体；每帧对齐 layerid 与比例尺
+        // 重扫掩码，掩码哈希变化才重建实体；block_empty 开关不计入地图
+        // 版本戳，组件侧开关翻转时强制重扫重建；每帧对齐 layerid 与比例尺
         void sync_root_walls(game_entity root, root_state& state,
             Tilemap::Wall* wall_comp, Tilemap::MapDocument* doc, uint64_t stamp)
         {
@@ -629,14 +679,19 @@ namespace jeecs
                 state.wall_valid = false;
                 return;
             }
-            if (!state.wall_valid || state.wall_stamp != stamp)
+            const bool settings_changed = !state.wall_valid
+                || state.wall_block_empty != wall_comp->block_empty;
+            if (settings_changed || state.wall_stamp != stamp)
             {
-                const uint64_t mask_hash = scan_wall_mask(*doc, _m_wall_mask);
-                if (!state.wall_valid || mask_hash != state.wall_mask)
+                int32_t mw = 0, mh = 0;
+                const uint64_t mask_hash = scan_wall_mask(
+                    *doc, _m_wall_mask, wall_comp->block_empty, mw, mh);
+                if (settings_changed || mask_hash != state.wall_mask)
                 {
                     rebuild_walls(root, state, *wall_comp,
-                        _m_wall_mask, doc->width, doc->height);
+                        _m_wall_mask, mw, mh, wall_comp->block_empty);
                     state.wall_mask = mask_hash;
+                    state.wall_block_empty = wall_comp->block_empty;
                 }
                 state.wall_stamp = stamp;
                 state.wall_valid = true;

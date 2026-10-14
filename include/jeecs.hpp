@@ -14521,6 +14521,8 @@ namespace jeecs
         创建一个静态 Physics2D::Collider::Box 子实体（见 Tilemap::WallPart；
         地图版本变化时自动重建）。layerid 指定生成的碰撞体所属的物理世界
         层级，直接写入各 Rigidbody::layerid（见 Physics2D::Rigidbody）。
+        block_empty 开启严格模式：没有任何图块的空格与地图外缘（四周边界
+        向外一圈）同样视为不可通行，只有可通行图块/地形覆盖的格子可通过。
         */
         struct Wall
         {
@@ -14528,10 +14530,12 @@ namespace jeecs
             JECS_DEFAULT_CONSTRUCTOR(Wall);
 
             size_t layerid = 0;
+            bool block_empty = false;
 
             static void JERefRegsiter(typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Wall::layerid, "layerid");
+                typing::register_member(guard, &Wall::block_empty, "block_empty");
             }
         };
 
