@@ -1396,20 +1396,45 @@ namespace jeecs::graphic::api::dx11
 
         D3D11_SUBRESOURCE_DATA texture_sub_data;
         D3D11_SUBRESOURCE_DATA* texture_sub_data_ptr = nullptr;
+        // 2D 数组/立方体贴图的初始数据要求每个数组切片一个条目
+        //（子资源数 = MipLevels × ArraySize）；SysMemSlicePitch 仅适用
+        // 于 3D 纹理。漏配会让运行时越界读取条目数组导致崩溃。
+        std::vector<D3D11_SUBRESOURCE_DATA> texture_sub_data_array;
 
         if (!default_usage && resource->m_pixels != nullptr)
         {
-            const UINT bytes_per_pixel =
+            const UINT bytes_per_row =
                 (UINT)resource->m_width
                 * ((UINT)resource->m_format
                     & jegl_texture_common::format::COLOR_DEPTH_MASK)
                 * ((resource->m_format & jegl_texture_common::format::FLOAT16) ? 2 : 1);
+            const UINT bytes_per_slice = bytes_per_row * (UINT)resource->m_height;
 
-            texture_sub_data.pSysMem = resource->m_pixels;
-            texture_sub_data.SysMemPitch = bytes_per_pixel;
-            texture_sub_data.SysMemSlicePitch =
-                bytes_per_pixel * (UINT)resource->m_height;
-            texture_sub_data_ptr = &texture_sub_data;
+            if constexpr (is_array || is_cube)
+            {
+                UINT slice_count = 0;
+                if constexpr (is_array)
+                    slice_count = (UINT)resource->m_layers;
+                else
+                    slice_count = 6;
+                texture_sub_data_array.resize(slice_count);
+                for (UINT s = 0; s < slice_count; ++s)
+                {
+                    texture_sub_data_array[s].pSysMem =
+                        resource->m_pixels + (size_t)s * bytes_per_slice;
+                    texture_sub_data_array[s].SysMemPitch = bytes_per_row;
+                    texture_sub_data_array[s].SysMemSlicePitch = 0;
+                }
+                texture_sub_data_ptr = texture_sub_data_array.data();
+            }
+            else
+            {
+                texture_sub_data.pSysMem = resource->m_pixels;
+                texture_sub_data.SysMemPitch = bytes_per_row;
+                texture_sub_data.SysMemSlicePitch =
+                    is_3d ? bytes_per_slice : 0u;
+                texture_sub_data_ptr = &texture_sub_data;
+            }
         }
 
         assert(DXGI_FORMAT_UNKNOWN != texture_format);
@@ -1541,12 +1566,6 @@ namespace jeecs::graphic::api::dx11
 
             if (texture_instance->m_modifiable_texture_buffer)
             {
-                // We map the texture buffer to CPU memory, and copy the new data to it.
-                D3D11_MAPPED_SUBRESOURCE mappedData;
-
-                JERCHECK(context->m_dx_context->Map(
-                    texture_instance->texture_resource(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
-
                 const bool is_float16 =
                     0 != (resource->m_format & jegl_texture_common::format::FLOAT16);
 
@@ -1555,31 +1574,67 @@ namespace jeecs::graphic::api::dx11
                     * (resource->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK)
                     * (is_float16 ? 2 : 1);
 
-                size_t slice_count = 1;
-                if constexpr (std::is_same_v<TexT, jegl_texture_3d>)
-                    slice_count = resource->m_depth;
-                else if constexpr (std::is_same_v<TexT, jegl_texture_array>)
-                    slice_count = resource->m_layers;
-                else if constexpr (std::is_same_v<TexT, jegl_texture_cube>)
-                    slice_count = 6;
+                constexpr bool is_3d = std::is_same_v<TexT, jegl_texture_3d>;
 
-                // mappedData is not byte-aligned, we need to copy it byte by row
-                for (size_t slice = 0; slice < slice_count; ++slice)
+                if constexpr (is_3d)
                 {
-                    for (size_t i = 0; i < resource->m_height; ++i)
-                    {
-                        void* dst_row_data = (void*)(
-                            (intptr_t)mappedData.pData
-                            + slice * mappedData.DepthPitch
-                            + i * mappedData.RowPitch);
-                        const void* src_row_data =
-                            resource->m_pixels
-                            + (slice * resource->m_height + i) * row_byte_size;
+                    // 3D 纹理：单一子资源，映射后经 DepthPitch 寻址深度
+                    D3D11_MAPPED_SUBRESOURCE mappedData;
+                    JERCHECK(context->m_dx_context->Map(
+                        texture_instance->texture_resource(), 0,
+                        D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
 
-                        memcpy(dst_row_data, src_row_data, row_byte_size);
+                    for (size_t z = 0; z < resource->m_depth; ++z)
+                    {
+                        for (size_t i = 0; i < resource->m_height; ++i)
+                        {
+                            void* dst_row_data = (void*)(
+                                (intptr_t)mappedData.pData
+                                + z * mappedData.DepthPitch
+                                + i * mappedData.RowPitch);
+                            const void* src_row_data =
+                                resource->m_pixels
+                                + (z * resource->m_height + i) * row_byte_size;
+
+                            memcpy(dst_row_data, src_row_data, row_byte_size);
+                        }
+                    }
+                    context->m_dx_context->Unmap(
+                        texture_instance->texture_resource(), 0);
+                }
+                else
+                {
+                    // 2D 数组/立方体贴图：每个数组切片是独立子资源，
+                    // 需逐层 Map（与创建时逐切片初始数据同一子资源语义）
+                    size_t slice_count = 1;
+                    if constexpr (std::is_same_v<TexT, jegl_texture_array>)
+                        slice_count = resource->m_layers;
+                    else if constexpr (std::is_same_v<TexT, jegl_texture_cube>)
+                        slice_count = 6;
+
+                    // mappedData is not byte-aligned, we need to copy it byte by row
+                    for (size_t slice = 0; slice < slice_count; ++slice)
+                    {
+                        D3D11_MAPPED_SUBRESOURCE mappedData;
+                        JERCHECK(context->m_dx_context->Map(
+                            texture_instance->texture_resource(), (UINT)slice,
+                            D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
+
+                        for (size_t i = 0; i < resource->m_height; ++i)
+                        {
+                            void* dst_row_data = (void*)(
+                                (intptr_t)mappedData.pData
+                                + i * mappedData.RowPitch);
+                            const void* src_row_data =
+                                resource->m_pixels
+                                + (slice * resource->m_height + i) * row_byte_size;
+
+                            memcpy(dst_row_data, src_row_data, row_byte_size);
+                        }
+                        context->m_dx_context->Unmap(
+                            texture_instance->texture_resource(), (UINT)slice);
                     }
                 }
-                context->m_dx_context->Unmap(texture_instance->texture_resource(), 0);
             }
             else
             {
