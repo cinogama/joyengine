@@ -2086,11 +2086,12 @@ public func frag(vf: v2f)
                 }
             }
 
-            for (auto&& [trans, shads, texs, shape, rendqueue, color] : query<
+            for (auto&& [trans, shads, texs, texarr, shape, rendqueue, color] : query<
                 view typesof(
                     Translation&,
                     Shaders&,
                     Textures2D*,
+                    Textures2DArray*,
                     Shape&,
                     Rendqueue*,
                     Color*
@@ -2106,7 +2107,8 @@ public func frag(vf: v2f)
                 // RendOb will be input to a chain and used for swap
                 m_renderer_list.emplace(
                     renderer_arch{
-                        color, rendqueue, &trans, &shape, &shads, texs
+                        color, rendqueue, &trans, &shape, &shads, texs,
+                        nullptr, nullptr, nullptr, nullptr, texarr
                     });
             }
 
