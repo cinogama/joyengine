@@ -701,7 +701,7 @@ namespace jeecs
                 sync_wall_entity(game_entity{ raw }, *wall_comp, root_scale);
         }
 
-        void Update()
+        void StateUpdate()
         {
             auto world = get_world();
             auto& docs = Tilemap::documents::inst();
