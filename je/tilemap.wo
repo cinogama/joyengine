@@ -132,6 +132,16 @@ namespace je
             extern("libjoyecs", "wojeapi_tilemap_set_layer_z")
                 public func set_layer_z(self: Tilemap, layer: int, z: real)=> void;
 
+            // 图层的渲染队列值（Renderer::Rendqueue）：同图各层分片按
+            // 该值升序绘制（画家算法，层间叠放的权威顺序）。新建图层
+            // 缺省 10000 + 层下标（与场景实体常用的小队列值错开）。
+            extern("libjoyecs", "wojeapi_tilemap_layer_rend_queue")
+                public func layer_rend_queue(self: Tilemap, layer: int)=> int;
+
+            extern("libjoyecs", "wojeapi_tilemap_set_layer_rend_queue")
+                public func set_layer_rend_queue(self: Tilemap, layer: int,
+                    rend_queue: int)=> void;
+
             // ==================== 图层着色器样式 ====================
             // 每层可指定专属着色器与附加纹理，直接传 graphic::shader /
             // graphic::texture 资源句柄（与路径无关）；着色器是分片渲染

@@ -5088,6 +5088,23 @@ je_tilemap_set_layer_z [基本接口]
 */
 JE_API void je_tilemap_set_layer_z(je_TilemapDocument* map, je_LayerId layer, float z);
 
+/*
+je_tilemap_layer_rend_queue [基本接口]
+取图层的渲染队列值（Renderer::Rendqueue）：同图各层分片按该值升序
+绘制（画家算法，层间叠放的权威顺序）。新建图层缺省为 10000 + 层
+下标（与场景实体常用的小队列值错开）；z 只在该层与写深度的场景
+物体之间参与遮挡裁决
+*/
+JE_API int32_t je_tilemap_layer_rend_queue(je_TilemapDocument* map, je_LayerId layer);
+
+/*
+je_tilemap_set_layer_rend_queue [基本接口]
+设置图层的渲染队列值
+请参见：
+    je_tilemap_layer_rend_queue
+*/
+JE_API void je_tilemap_set_layer_rend_queue(je_TilemapDocument* map, je_LayerId layer, int32_t rend_queue);
+
 // ---- 图层着色器样式 ----
 // 每层可直接持有一个专属着色器实例与若干附加纹理槽；图层样式是该层
 // 分片渲染的唯一着色器来源（未配置样式的层分片着色器列表为空，不回落
@@ -13510,6 +13527,7 @@ namespace jeecs
             bool visible;
             bool locked;
             float z; // 相对地图根实体的世界 z 偏移
+            int32_t rend_queue; // 渲染队列值（同图各层按该值升序绘制）
         };
 
         /*
@@ -13931,6 +13949,7 @@ namespace jeecs
                 info.visible = visible != 0;
                 info.locked = locked != 0;
                 info.z = je_tilemap_layer_z(_m_doc, index);
+                info.rend_queue = je_tilemap_layer_rend_queue(_m_doc, index);
                 return info;
             }
 

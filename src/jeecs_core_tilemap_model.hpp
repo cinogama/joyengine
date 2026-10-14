@@ -219,6 +219,11 @@ namespace jeecs
             uint64_t style_version = 1;
         };
 
+        // 新建图层的缺省渲染队列基数：rend_queue = 基数 + 层下标。与场景
+        // 实体常用的 0..N 小队列值错开一个数量级，保证地图默认不被同值
+        // 队列的普通实体插入绘制序列
+        constexpr int32_t LAYER_REND_QUEUE_BASE = 10000;
+
         struct MapLayer
         {
             std::string name;
@@ -227,6 +232,10 @@ namespace jeecs
             // 该层在世界中的 z 偏移（相对地图根实体，世界单位）。
             // 不同层须错开 z 以避免深度冲突；缺省按层下标错开。
             float z = 0.f;
+            // 该层分片的渲染队列值（Renderer::Rendqueue）：同图各层按
+            // 此值升序绘制（画家算法，层间叠放的权威顺序）；z 只在与
+            // 写深度的场景物体之间参与裁决。缺省按基数 + 层下标错开。
+            int32_t rend_queue = LAYER_REND_QUEUE_BASE;
             std::vector<int32_t> grid;  // w*h 稠密网格，行优先、y 自上而下
             LayerStyle style;           // 逐层着色器样式（可空）
         };
@@ -269,8 +278,9 @@ namespace jeecs
         // 其余视为损坏）：墓碑不写载荷——id 槽位仍占位以保持 id 稳定，
         // 删除信息不依赖任何特殊字段值。地形的 kind 为 je_TerrainKind 的
         // u8，越界视为损坏。源纹理的 tex_w/tex_h 写 0 表示未测量。
+        // 地图（JTM3）图层记录内联 rend_queue（i32）；JTM2 及更早不兼容。
         constexpr uint32_t TILESET_MAGIC = 0x4A545333;     // "JTS3"
-        constexpr uint32_t MAP_MAGIC = 0x4A544D32;         // "JTM2"
+        constexpr uint32_t MAP_MAGIC = 0x4A544D33;         // "JTM3"
 
         struct bin_writer
         {
@@ -768,6 +778,7 @@ namespace jeecs
             for (const auto& l : m.layers)
             {
                 w.str(l.name); w.u8(l.visible ? 1 : 0); w.u8(l.locked ? 1 : 0);
+                w.i32(l.rend_queue);
                 w.u32((uint32_t)l.grid.size());
                 for (int32_t v : l.grid) w.i32(v);
             }
@@ -852,6 +863,7 @@ namespace jeecs
                 l.name = r.str();
                 l.visible = r.u8() != 0;
                 l.locked = r.u8() != 0;
+                l.rend_queue = r.i32();
                 uint32_t cells = r.u32();
                 if (cells != (uint32_t)(m->width * m->height)) { r.ok = false; break; }
                 l.grid.resize(cells);

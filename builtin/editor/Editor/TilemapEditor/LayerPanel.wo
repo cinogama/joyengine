@@ -1,8 +1,8 @@
 // 瓦片地图编辑器 —— 图层面板。
 // 右列下段面板（与上方属性面板之间有可拖拽分隔条）：图层自上而下
 // 列出（列表顶 = 最上层）。点击选择活动图层；显隐/锁定切换与 Z 偏移
-// 编辑在行尾；新建/删除/上移/下移/重命名在工具条，行内右键也有等价
-// 的快捷菜单。
+// /渲染队列编辑在行尾；新建/删除/上移/下移/重命名在工具条，行内右键
+// 也有等价的快捷菜单。
 // 注意：图层增删/移动不进入撤销栈（绘制类操作才可撤销）；
 // 删除层级前会弹窗确认。
 
@@ -169,16 +169,20 @@ namespace JEEditor::Editor::TilemapEditor
         let (line_x, line_y) = GetCursorPos();
         let avail_w = GetContentRegionAvail().0;
 
-        // 从行右缘向左排布：Z 输入框（右侧带 Z 标签）→ 锁定 → 显隐；
-        // 开关宽度按当前字体实算（2 字标签 + 分区样式的 FramePadding.x 6×2）。
-        // 面板现居右列（约 340px 宽），Z 输入框取窄档给图层名留空间
+        // 从行右缘向左排布：Z 输入框（右侧带 Z 标签）→ 队列输入框（带 Q
+        // 标签）→ 锁定 → 显隐；开关宽度按当前字体实算（2 字标签 + 分区
+        // 样式的 FramePadding.x 6×2）。队列值缺省 10000+ 为 5~6 位数，
+        // 输入框取窄档（Z 与 Q 共 ~140px）给图层名留空间
         let vis_w = CalcTextSize("可见").0 + 12.;
         let lock_w = CalcTextSize("未锁").0 + 12.;
-        let z_w = 80.;
+        let z_w = 64.;
+        let q_w = 76.;
         let z_label_w = CalcTextSize("Z").0 + 8.;
+        let q_label_w = CalcTextSize("Q").0 + 8.;
         let gap = 4.;
         let z_x = line_x + avail_w - z_label_w - z_w;
-        let lock_x = z_x - gap - lock_w;
+        let q_x = z_x - gap - q_label_w - q_w;
+        let lock_x = q_x - gap - lock_w;
         let vis_x = lock_x - gap - vis_w;
 
         SetCursorPos((vis_x, line_y));
@@ -215,6 +219,23 @@ namespace JEEditor::Editor::TilemapEditor
         }
         if (IsItemHovered())
             do SetTooltip("图层的世界 Z 偏移（相对地图根实体），不同层错开可避免深度冲突");
+
+        // 渲染队列值（同图各层按该值升序绘制，是层间叠放的权威顺序）
+        SetCursorPos((q_x, line_y));
+        SetNextItemWidth(q_w);
+        match (InputInt(F"Q##q{row}", map->layer_rend_queue(row)))
+        {
+            value(q)?
+            {
+                do map->set_layer_rend_queue(row, q);
+                state.m_dirty = true;
+            }
+            none?;
+        }
+        if (IsItemHovered())
+            do SetTooltip("图层的渲染队列值：同图各层按该值升序绘制（层间叠放的"
+                + "权威顺序）。新建图层缺省 10000 + 层下标，与场景实体常用的"
+                + "小队列值错开");
 
         if (visible == 0)
             PopStyleColor(1);

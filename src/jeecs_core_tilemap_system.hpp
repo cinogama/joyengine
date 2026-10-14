@@ -264,6 +264,7 @@ namespace jeecs
         // ---- 分片生命周期 ----
 
         game_entity create_part_entity(game_entity root, int32_t layer, float layer_z,
+            int32_t layer_rend_queue,
             const Tilemap::SourceTexture& src, const Tilemap::LayerStyle& style)
         {
             auto world = get_world();
@@ -283,7 +284,8 @@ namespace jeecs
             auto* pos = part.get_component<Transform::LocalPosition>();
             // 图层 z 由地图数据（图层属性）指定，可手动调整
             pos->pos = math::vec3(0.f, 0.f, layer_z);
-            part.get_component<Renderer::Rendqueue>()->rend_queue = layer;
+            // 渲染队列同取自图层属性：同图各层按 rend_queue 升序绘制
+            part.get_component<Renderer::Rendqueue>()->rend_queue = layer_rend_queue;
 
             // 比例尺：根实体的缩放即整图比例尺（变换系统的缩放为纯局部
             // 语义、不沿父链复合，故由本系统显式同步到各分片）
@@ -370,10 +372,12 @@ namespace jeecs
             raw->m_z_min = lz - 0.01f;
             raw->m_z_max = lz + 0.01f;
 
-            // 层 z 变化时同步分片位置；比例尺兜底写入
+            // 层 z / rend_queue 变化时同步分片；比例尺兜底写入
             //（常态由 sync_part_scale 每帧对齐，此处确保任何路径都不漏）
             if (auto* pos = e.get_component<Transform::LocalPosition>())
                 pos->pos = math::vec3(0.f, 0.f, lz);
+            if (auto* rendqueue = e.get_component<Renderer::Rendqueue>())
+                rendqueue->rend_queue = doc.layers[key.layer].rend_queue;
             if (auto* root_scale = root.get_component<Transform::LocalScale>())
             {
                 if (auto* sc = e.get_component<Transform::LocalScale>())
@@ -547,7 +551,8 @@ namespace jeecs
                         continue;
 
                     game_entity part_entity = create_part_entity(
-                        root, key.layer, doc->layers[key.layer].z, *src_info,
+                        root, key.layer, doc->layers[key.layer].z,
+                        doc->layers[key.layer].rend_queue, *src_info,
                         style != nullptr ? *style : Tilemap::LayerStyle{});
                     auto* tag = part_entity.get_component<Tilemap::RenderPart>();
                     tag->owner_id = root_id;
@@ -675,6 +680,8 @@ bool je_tilemap_add_layer(je_TilemapDocument* doc, const char* name, je_LayerId*
     jeecs::Tilemap::MapLayer layer;
     layer.name = name;
     layer.z = (float)doc->layers.size(); // 新层默认置于最上（沿 +z 错开）
+    layer.rend_queue = jeecs::Tilemap::LAYER_REND_QUEUE_BASE
+        + (int32_t)doc->layers.size();   // 渲染队列同样按下标错开（升序绘制）
     layer.grid.assign((size_t)doc->width * doc->height, 0);
     doc->layers.push_back(std::move(layer));
     ++doc->version;
@@ -760,6 +767,23 @@ void je_tilemap_set_layer_z(je_TilemapDocument* doc, je_LayerId layer, float z)
     if (doc->layers[layer].z != z)
     {
         doc->layers[layer].z = z;
+        ++doc->version;
+    }
+}
+
+// 图层的渲染队列值（同图各层按该值升序绘制；缺省 基数 + 层下标）
+int32_t je_tilemap_layer_rend_queue(je_TilemapDocument* doc, je_LayerId layer)
+{
+    return layer >= 0 && layer < (int32_t)doc->layers.size()
+        ? doc->layers[layer].rend_queue : 0;
+}
+void je_tilemap_set_layer_rend_queue(je_TilemapDocument* doc, je_LayerId layer, int32_t rend_queue)
+{
+    if (layer < 0 || layer >= (int32_t)doc->layers.size())
+        return;
+    if (doc->layers[layer].rend_queue != rend_queue)
+    {
+        doc->layers[layer].rend_queue = rend_queue;
         ++doc->version;
     }
 }
@@ -1851,6 +1875,17 @@ WOORT_API woort_api wojeapi_tilemap_set_layer_z(void)
 {
     je_tilemap_set_layer_z(woje_map_doc(0), (int32_t)woort_int(1),
         woort_float(2));
+    return woort_ret_void();
+}
+WOORT_API woort_api wojeapi_tilemap_layer_rend_queue(void)
+{
+    return woort_ret_int(je_tilemap_layer_rend_queue(
+        woje_map_doc(0), (int32_t)woort_int(1)));
+}
+WOORT_API woort_api wojeapi_tilemap_set_layer_rend_queue(void)
+{
+    je_tilemap_set_layer_rend_queue(woje_map_doc(0), (int32_t)woort_int(1),
+        (int32_t)woort_int(2));
     return woort_ret_void();
 }
 WOORT_API woort_api wojeapi_tilemap_layer_shader(void)
