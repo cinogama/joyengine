@@ -14523,6 +14523,9 @@ namespace jeecs
         层级，直接写入各 Rigidbody::layerid（见 Physics2D::Rigidbody）。
         block_empty 开启严格模式：没有任何图块的空格与地图外缘（四周边界
         向外一圈）同样视为不可通行，只有可通行图块/地形覆盖的格子可通过。
+        restitution / friction 为墙体物理材质（弹性/摩擦力系数），写入各
+        碰撞体实体的 Physics2D::Restitution / Physics2D::Friction，每帧
+        跟随组件同步，运行时修改即时生效。
         */
         struct Wall
         {
@@ -14531,11 +14534,15 @@ namespace jeecs
 
             size_t layerid = 0;
             bool block_empty = false;
+            float restitution = 0.f;
+            float friction = 0.2f;
 
             static void JERefRegsiter(typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Wall::layerid, "layerid");
                 typing::register_member(guard, &Wall::block_empty, "block_empty");
+                typing::register_member(guard, &Wall::restitution, "restitution");
+                typing::register_member(guard, &Wall::friction, "friction");
             }
         };
 

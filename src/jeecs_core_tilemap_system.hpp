@@ -53,6 +53,8 @@ jeecs_core_tilemap_model.hpp；本文件只做三件事：
     （纯视觉/样式编辑）不重建碰撞体，避免物理世界无谓抖动。
     Wall::block_empty 开启严格模式：无图块的空格与地图外缘（四周向外
     一圈）一并并入墙体，只有可通行图块覆盖的格子可通过。
+    Wall::restitution / Wall::friction 为墙体弹性/摩擦力系数，写入各
+    碰撞体实体的 Physics2D::Restitution / Friction 并每帧跟随同步。
   * 自动图块在网格中只存地形 id，邻接掩码与具体变体在构建顶点时
     动态解析（resolve_cell_quads），因此相邻地形变化时无需改写
     网格数据。
@@ -589,6 +591,12 @@ namespace jeecs
             const float sy = root_scale != nullptr ? std::abs(root_scale->scale.y) : 1.f;
             if (auto* rb = e.get_component<Physics2D::Rigidbody>())
                 rb->layerid = wall.layerid;
+            // 材质随动：物理系统按 Friction/Restitution 组件值重建 fixture，
+            // 这里对齐组件值即可让 Wall 侧的运行时修改即时生效
+            if (auto* fric = e.get_component<Physics2D::Friction>())
+                fric->value = wall.friction;
+            if (auto* rest = e.get_component<Physics2D::Restitution>())
+                rest->value = wall.restitution;
             auto* tag = e.get_component<Tilemap::WallPart>();
             if (tag == nullptr)
                 return;
@@ -616,6 +624,7 @@ namespace jeecs
                 Transform::LocalPosition, Transform::LocalRotation, Transform::LocalScale,
                 Transform::LocalToParent, Transform::Translation,
                 Physics2D::Rigidbody, Physics2D::Collider::Box,
+                Physics2D::Friction, Physics2D::Restitution,
                 Editor::Invisible, Tilemap::WallPart>();
 
             // 挂到地图根实体下，随根移动/旋转（根实体需要 Anchor）
