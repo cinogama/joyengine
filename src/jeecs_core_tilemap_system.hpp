@@ -27,7 +27,8 @@ TilemapSystem [系统] 与 je_tilemap_* C API 实现
 jeecs_core_tilemap_model.hpp；本文件只做三件事：
 
   * TilemapSystem —— Update 相位把文档变化翻译成渲染分片的增删与
-    顶点重写（渲染之前完成数据构建）；
+    顶点重写（渲染之前完成数据构建）；根实体持有 Tilemap::Wall 时，
+    另按不可通行掩码生成/回收静态 Physics2D 碰撞体子实体；
   * je_tilemap_* C API —— 文档读写与运行时查询的 C 边界
     （声明与 JE_API 导出标记统一见 include/jeecs.hpp）；
   * wojeapi_tilemap_* —— 上述 C API 的 Woolang 绑定胶水
@@ -45,6 +46,11 @@ jeecs_core_tilemap_model.hpp；本文件只做三件事：
     上限、静态角点索引，之后整体重写并收缩激活索引数，与粒子系统
     同款）。分片实体带 Editor::Invisible：不显示于实体列表、不参与
     世界保存，加载/重载后由本系统自动重建。
+  * 碰撞体墙（WallPart）同为根实体的子实体：根实体持有 Tilemap::Wall
+    时，把不可通行格（任一图层不可通行即墙，与 je_tilemap_is_walkable
+    同一语义）贪心合并为矩形，每矩形一个静态 Physics2D::Collider::Box，
+    Rigidbody::layerid 取自 Wall::layerid。掩码哈希未变化的版本戳
+    （纯视觉/样式编辑）不重建碰撞体，避免物理世界无谓抖动。
   * 自动图块在网格中只存地形 id，邻接掩码与具体变体在构建顶点时
     动态解析（resolve_cell_quads），因此相邻地形变化时无需改写
     网格数据。
@@ -92,6 +98,13 @@ namespace jeecs
             std::set<part_key> needed;
             uint64_t needed_stamp = 0;
             bool needed_valid = false;
+            // 碰撞体墙簿记：Wall 组件在位时按不可通行掩码合并出的
+            // 静态 Box 碰撞体实体。掩码哈希用于把"版本戳变化但通行性
+            // 未变"的编辑（纯视觉/样式）与真正的墙体重建区分开
+            std::vector<je_GameEntity> walls;
+            uint64_t wall_stamp = 0;   // 上次掩码扫描对应的版本戳
+            uint64_t wall_mask = 0;    // 当前碰撞体实体对应的掩码哈希
+            bool wall_valid = false;   // wall_stamp / wall_mask 是否有效
             // 本根实体当前持有的地图文档（nullopt = 无）：observe 取得
             // 的 shared_ptr 不占外部引用计数，根实体存续期间以其保活；
             // 路径变更/失效时随赋值自动换手释放，根销毁随析构释放
@@ -100,6 +113,7 @@ namespace jeecs
 
         std::unordered_map<uint32_t, root_state> _m_roots;
         std::vector<float> _m_staging;
+        std::vector<uint8_t> _m_wall_mask;   // 不可通行掩码（复用暂存）
 
         TilemapSystem(game_world w)
             : game_system(w)
@@ -431,25 +445,227 @@ namespace jeecs
             }
         }
 
+        // ---- 碰撞体墙：不可通行掩码 → 静态 Box 碰撞体子实体 ----
+
+        // 扫描不可通行掩码：任一图层不可通行即墙（与 je_tilemap_is_walkable
+        // 同一语义；与 walkable_on 一致，空格/无法解析的格子视为可通行）。
+        // 逐格内联 walkable_on 的判定以避免每格经注册表锁解析图集。
+        static uint64_t scan_wall_mask(Tilemap::MapDocument& doc,
+            std::vector<uint8_t>& blocked)
+        {
+            Tilemap::documents::inst().ensure_tilesets(doc);
+            blocked.assign((size_t)doc.width * doc.height, 0);
+            for (const auto& layer : doc.layers)
+            {
+                const auto& grid = layer.grid;
+                for (size_t i = 0; i < blocked.size(); ++i)
+                {
+                    if (blocked[i])
+                        continue;   // 已判定为墙，其他层无需再看
+                    const int32_t v = grid[i];
+                    if (v == 0)
+                        continue;
+                    auto cell = Tilemap::decode_tile_value(v);
+                    if (!cell.has_value()
+                        || cell->tileset_idx < 0
+                        || cell->tileset_idx >= (int32_t)doc.tilesets.size()
+                        || !doc.tilesets[cell->tileset_idx].resolved.has_value())
+                        continue;
+                    const auto* ts = doc.tilesets[cell->tileset_idx].resolved->get();
+                    const int32_t local = cell->local_id;
+                    const bool walkable = cell->is_terrain
+                        ? (local >= (int32_t)ts->terrains.size()
+                            || ts->terrains[local].walkable)
+                        : (local >= (int32_t)ts->tiles.size()
+                            || ts->tiles[local].walkable);
+                    if (!walkable)
+                        blocked[i] = 1;
+                }
+            }
+            // 掩码哈希（FNV-1a）：版本戳变化但通行性未变时免重建碰撞体
+            uint64_t hash = 0x9E3779B97F4A7C15ull;
+            for (uint8_t v : blocked)
+                hash = (hash ^ v) * 0x100000001B3ull;
+            return hash;
+        }
+
+        // 掩码贪心合并为互不重叠的最大矩形（x0/y0/x1/y1 为含端点的格坐标）：
+        // 从每个未占用的墙格向右取最长行段，再向下逐行整段扩展
+        static void merge_wall_rects(const std::vector<uint8_t>& blocked,
+            int32_t width, int32_t height, std::vector<int32_t>& rects)
+        {
+            std::vector<uint8_t> used((size_t)width * height, 0);
+            for (int32_t y = 0; y < height; ++y)
+            {
+                for (int32_t x = 0; x < width; ++x)
+                {
+                    const size_t i = (size_t)y * width + x;
+                    if (!blocked[i] || used[i])
+                        continue;
+                    int32_t x1 = x;
+                    while (x1 + 1 < width
+                        && blocked[i + (size_t)(x1 + 1 - x)]
+                        && !used[i + (size_t)(x1 + 1 - x)])
+                        ++x1;
+                    int32_t y1 = y;
+                    while (y1 + 1 < height)
+                    {
+                        bool ok = true;
+                        for (int32_t xx = x; xx <= x1; ++xx)
+                        {
+                            const size_t j = (size_t)(y1 + 1) * width + xx;
+                            if (!blocked[j] || used[j])
+                            {
+                                ok = false;
+                                break;
+                            }
+                        }
+                        if (!ok)
+                            break;
+                        ++y1;
+                    }
+                    for (int32_t yy = y; yy <= y1; ++yy)
+                        for (int32_t xx = x; xx <= x1; ++xx)
+                            used[(size_t)yy * width + xx] = 1;
+                    rects.insert(rects.end(), { x, y, x1, y1 });
+                }
+            }
+        }
+
+        // 碰撞体随动：layerid 跟随 Wall 组件；地图局部几何按根实体比例尺
+        // 预缩放——变换系统的缩放为纯局部语义（不沿父链复合，见
+        // sync_part_scale），物理位姿又只取 Translation 的世界平移/旋转，
+        // 故把缩放折进局部位置与 Box 尺寸，与渲染分片的视觉比例对齐
+        static void sync_wall_entity(const game_entity& e,
+            const Tilemap::Wall& wall, const Transform::LocalScale* root_scale)
+        {
+            const float sx = root_scale != nullptr ? std::abs(root_scale->scale.x) : 1.f;
+            const float sy = root_scale != nullptr ? std::abs(root_scale->scale.y) : 1.f;
+            if (auto* rb = e.get_component<Physics2D::Rigidbody>())
+                rb->layerid = wall.layerid;
+            auto* tag = e.get_component<Tilemap::WallPart>();
+            if (tag == nullptr)
+                return;
+            if (auto* pos = e.get_component<Transform::LocalPosition>())
+            {
+                const math::vec3 want(tag->center_x * sx, tag->center_y * sy, 0.f);
+                if (pos->pos.x != want.x || pos->pos.y != want.y)
+                    pos->pos = want;
+            }
+            if (auto* box = e.get_component<Physics2D::Collider::Box>())
+            {
+                const math::vec2 want(tag->size_x * sx, tag->size_y * sy);
+                if (box->size.x != want.x || box->size.y != want.y)
+                    box->size = want;
+            }
+        }
+
+        game_entity create_wall_entity(game_entity root, const Tilemap::Wall& wall,
+            const Transform::LocalScale* root_scale,
+            int32_t x0, int32_t y0, int32_t x1, int32_t y1)
+        {
+            auto world = get_world();
+            // 静态碰撞体：无 DynamicBody/KinematicBody 即 Static（墙不可推动）
+            auto e = world.add_entity<
+                Transform::LocalPosition, Transform::LocalRotation, Transform::LocalScale,
+                Transform::LocalToParent, Transform::Translation,
+                Physics2D::Rigidbody, Physics2D::Collider::Box,
+                Editor::Invisible, Tilemap::WallPart>();
+
+            // 挂到地图根实体下，随根移动/旋转（根实体需要 Anchor）
+            auto* anchor = root.get_component<Transform::Anchor>();
+            if (anchor == nullptr)
+                anchor = root.add_component<Transform::Anchor>();
+            e.get_component<Transform::LocalToParent>()->parent_uid = anchor->uid;
+
+            // 地图局部几何：1 格 = 1 单位、向 +x 与 -y 展开（write_cell
+            // 同款约定），格 (x,y) 占据 y ∈ [-(y+1), -y]
+            auto* tag = e.get_component<Tilemap::WallPart>();
+            tag->owner_id = root._m_raw._m_id;
+            tag->center_x = 0.5f * (float)(x0 + x1 + 1);
+            tag->center_y = -0.5f * (float)(y0 + y1 + 1);
+            tag->size_x = (float)(x1 - x0 + 1);
+            tag->size_y = (float)(y1 - y0 + 1);
+
+            sync_wall_entity(e, wall, root_scale);
+            return e;
+        }
+
+        // 掩码变化时整体重建：先回收全部旧碰撞体再按合并矩形新建。
+        // 墙体属静态数据、编辑频度低，整体重建远比逐矩形差分简单可靠
+        void rebuild_walls(game_entity root, root_state& state,
+            const Tilemap::Wall& wall, const std::vector<uint8_t>& blocked,
+            int32_t width, int32_t height)
+        {
+            auto world = get_world();
+            for (auto& raw : state.walls)
+                world.remove_entity(game_entity{ raw });
+            state.walls.clear();
+
+            const auto* root_scale = root.get_component<Transform::LocalScale>();
+            std::vector<int32_t> rects;
+            merge_wall_rects(blocked, width, height, rects);
+            state.walls.reserve(rects.size() / 4);
+            for (size_t r = 0; r + 3 < rects.size(); r += 4)
+                state.walls.push_back(create_wall_entity(
+                    root, wall, root_scale,
+                    rects[r], rects[r + 1], rects[r + 2], rects[r + 3])._m_raw);
+        }
+
+        // 逐根同步碰撞体墙：Wall 组件离位/文档失效即回收；版本戳变化时
+        // 重扫掩码，掩码哈希变化才重建实体；每帧对齐 layerid 与比例尺
+        void sync_root_walls(game_entity root, root_state& state,
+            Tilemap::Wall* wall_comp, Tilemap::MapDocument* doc, uint64_t stamp)
+        {
+            if (wall_comp == nullptr || doc == nullptr)
+            {
+                if (!state.walls.empty())
+                {
+                    auto world = get_world();
+                    for (auto& raw : state.walls)
+                        world.remove_entity(game_entity{ raw });
+                    state.walls.clear();
+                }
+                state.wall_valid = false;
+                return;
+            }
+            if (!state.wall_valid || state.wall_stamp != stamp)
+            {
+                const uint64_t mask_hash = scan_wall_mask(*doc, _m_wall_mask);
+                if (!state.wall_valid || mask_hash != state.wall_mask)
+                {
+                    rebuild_walls(root, state, *wall_comp,
+                        _m_wall_mask, doc->width, doc->height);
+                    state.wall_mask = mask_hash;
+                }
+                state.wall_stamp = stamp;
+                state.wall_valid = true;
+            }
+            const auto* root_scale = root.get_component<Transform::LocalScale>();
+            for (auto& raw : state.walls)
+                sync_wall_entity(game_entity{ raw }, *wall_comp, root_scale);
+        }
+
         void Update()
         {
             auto world = get_world();
             auto& docs = Tilemap::documents::inst();
 
-            // 1. 收集地图根实体并解析文档
+            // 1. 收集地图根实体并解析文档（Wall 为可选的碰撞体开关）
             struct root_info
             {
                 je_GameEntity raw{};
                 Tilemap::Map* comp = nullptr;
+                Tilemap::Wall* wall = nullptr;
                 std::optional<std::shared_ptr<Tilemap::MapDocument>> doc;
             };
             std::vector<root_info> roots;
             std::set<uint32_t> alive_root_ids;
-            for (auto&& [e, map_comp] :
-                query_entity<view typesof(Tilemap::Map&)>())
+            for (auto&& [e, map_comp, wall_comp] :
+                query_entity<view typesof(Tilemap::Map&, Tilemap::Wall*)>())
             {
                 alive_root_ids.insert(e._m_raw._m_id);
-                roots.push_back({ e._m_raw, &map_comp, std::nullopt });
+                roots.push_back({ e._m_raw, &map_comp, wall_comp, std::nullopt });
             }
             for (auto& r : roots)
             {
@@ -462,6 +678,12 @@ namespace jeecs
             std::vector<je_GameEntity> dead_parts;
             for (auto&& [e, part] :
                 query_entity<view typesof(Tilemap::RenderPart&)>())
+            {
+                if (alive_root_ids.count(part.owner_id) == 0)
+                    dead_parts.push_back(e._m_raw);
+            }
+            for (auto&& [e, part] :
+                query_entity<view typesof(Tilemap::WallPart&)>())
             {
                 if (alive_root_ids.count(part.owner_id) == 0)
                     dead_parts.push_back(e._m_raw);
@@ -590,6 +812,10 @@ namespace jeecs
                     }
                     state.parts[key] = entry;
                 }
+
+                // 4. 碰撞体墙同步：Wall 组件在位时按不可通行掩码
+                //    生成/回收静态 Physics2D 碰撞体子实体
+                sync_root_walls(root, state, r.wall, doc, stamp);
             }
         }
     };

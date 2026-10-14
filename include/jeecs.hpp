@@ -14513,6 +14513,15 @@ namespace jeecs
             }
         };
 
+        /*
+        Tilemap::Wall [组件]
+        瓦片地图碰撞体开关：挂在地图根实体上（与 Tilemap::Map 同实体）时，
+        TilemapSystem 会把整张地图的不可通行格（任一图层不可通行即墙，
+        与 je_tilemap_is_walkable 同一语义）贪心合并为矩形，并为每个矩形
+        创建一个静态 Physics2D::Collider::Box 子实体（见 Tilemap::WallPart；
+        地图版本变化时自动重建）。layerid 指定生成的碰撞体所属的物理世界
+        层级，直接写入各 Rigidbody::layerid（见 Physics2D::Rigidbody）。
+        */
         struct Wall
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Wall);
@@ -14524,6 +14533,25 @@ namespace jeecs
             {
                 typing::register_member(guard, &Wall::layerid, "layerid");
             }
+        };
+
+        /*
+        Tilemap::WallPart [组件]
+        瓦片地图碰撞体分片：由 TilemapSystem 按 Tilemap::Wall 生成的静态
+        Box 碰撞体子实体持有，配对 Editor::Invisible（不显示在编辑器实体
+        列表、不参与世界保存，加载后由系统重建）。字段仅作系统内部簿记
+        （含按根实体比例尺同步碰撞体所需的地图局部几何），不注册反射成员。
+        */
+        struct WallPart
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(WallPart);
+            JECS_DEFAULT_CONSTRUCTOR(WallPart);
+
+            uint32_t owner_id = 0;   // 所属地图根实体 id（je_GameEntity::_m_id）
+            float center_x = 0.f;    // 矩形中心（地图局部空间，1 格 = 1 单位）
+            float center_y = 0.f;
+            float size_x = 0.f;      // 矩形尺寸（格数）
+            float size_y = 0.f;
         };
 
         /*
@@ -15136,6 +15164,7 @@ namespace jeecs
 
             jeecs::typing::register_type<Tilemap::Map>(guard, "Tilemap::Map");
             jeecs::typing::register_type<Tilemap::Wall>(guard, "Tilemap::Wall");
+            jeecs::typing::register_type<Tilemap::WallPart>(guard, "Tilemap::WallPart");
             jeecs::typing::register_type<Tilemap::RenderPart>(guard, "Tilemap::RenderPart");
 
             // 1. register basic types
