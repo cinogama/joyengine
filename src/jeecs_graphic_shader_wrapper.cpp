@@ -354,6 +354,15 @@ void _jegl_regenerate_and_alloc_glsl_from_spir_v_combined(
         fragment_sampler_bindings[sampler.id] = binding;
     }
 
+    // 预备哑采样器：spirv-cross 要求在构建组合图像采样器之前调用，
+    // 否则遇到无采样器的 texelFetch（如 Texture2DMS.Load）会抛异常；
+    // 仅在确实存在此类 fetch 时才会实际创建（对现有 shader 无影响）
+    spvc_variable_id dummy_sampler_id = 0;
+    spvc_compiler_build_dummy_sampler_for_combined_images(
+        vertex_compiler, &dummy_sampler_id);
+    spvc_compiler_build_dummy_sampler_for_combined_images(
+        fragment_compiler, &dummy_sampler_id);
+
     // 构建组合图像采样器
     spvc_compiler_build_combined_image_samplers(vertex_compiler);
     spvc_compiler_build_combined_image_samplers(fragment_compiler);
