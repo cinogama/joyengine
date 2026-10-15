@@ -2,9 +2,9 @@
 // 右列下段面板（与上方属性面板之间有可拖拽分隔条）：图层自上而下
 // 列出（列表顶 = 最上层）。每行是检视面板组件块同款的分区折叠头：
 // 点击选中活动图层，点箭头展开属性编辑（显隐/锁定/Z 偏移/渲染次序/
-// 自阴影在展开区里，不再挤行尾），收起时行尾以「隐藏/锁定」徽标提示
-// 状态；新建/删除/上移/下移/重命名在工具条，行内右键也有等价的快捷
-// 菜单。
+// 自阴影/遮挡阴影在展开区里，不再挤行尾），收起时行尾以「隐藏/锁定」
+// 徽标提示状态；新建/删除/上移/下移/重命名在工具条，行内右键也有等价
+// 的快捷菜单。
 // 注意：图层增删/移动不进入撤销栈（绘制类操作才可撤销）；
 // 删除层级前会弹窗确认。
 
@@ -301,6 +301,52 @@ namespace JEEditor::Editor::TilemapEditor
                     do SetTooltip("自阴影覆盖强度（SelfShadow::factor，覆盖色乘子）："
                         + "仅自阴影模式为启用（常开/自动）时生效，"
                         + "0 = 覆盖近乎透明，1 = 全强度");
+            }
+
+            memberSeparator();
+
+            // 遮挡阴影（Light2D 延迟光照管线）：瓦片占据轮廓投射硬阴影
+            //（阴影体），轮廓由引擎按分块网格自动生成
+            do beginMemberRow("遮挡阴影",
+                option::none: option<Color32RGBA>, 0.);
+            match (ListBoxSelect(F"##layer_bs_{row}",
+                ["禁用", "启用（常开）", "启用（自动）"],
+                map->layer_blockshadow(row)))
+            {
+                value(mode)?
+                {
+                    do map->set_layer_blockshadow(row, mode);
+                    state.m_dirty = true;
+                }
+                none?;
+            }
+            if (IsItemHovered())
+                do SetTooltip("该层瓦片在 Light2D 光照管线中的遮挡阴影行为：\n"
+                    + "禁用 —— 分片不挂 BlockShadow 组件，瓦片不遮挡光线\n"
+                    + "常开 —— 瓦片占据轮廓（与空格的边界）投射硬阴影，与光源高度无关\n"
+                    + "自动 —— 光源不高于该层时不再投射遮挡阴影");
+
+            // 遮挡阴影浓度（写入分片 BlockShadow::factor）：禁用模式下
+            // 无效果，行随之隐藏
+            if (map->layer_blockshadow(row) != block_shadow::OFF as int)
+            {
+                memberSeparator();
+                do beginMemberRow("遮挡强度",
+                    option::none: option<Color32RGBA>, 0.);
+                match (SliderFloat(F"##layer_bsf_{row}",
+                    map->layer_blockshadow_factor(row), 0., 1.))
+                {
+                    value(f)?
+                    {
+                        do map->set_layer_blockshadow_factor(row, f);
+                        state.m_dirty = true;
+                    }
+                    none?;
+                }
+                if (IsItemHovered())
+                    do SetTooltip("遮挡阴影浓度（BlockShadow::factor，阴影体浓度）："
+                        + "仅遮挡阴影模式为启用（常开/自动）时生效，"
+                        + "0 = 近乎无阴影，1 = 全强度");
             }
         }
         Spacing();

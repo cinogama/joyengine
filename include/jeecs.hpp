@@ -5181,6 +5181,33 @@ enum je_LayerSelfShadow
     JE_LAYER_SELFSHADOW_AUTO = 2,
 };
 
+/*
+je_LayerBlockShadow [枚举]
+图层的 2D 光照遮挡阴影行为（Light2D::BlockShadow 组件的挂载策略），即
+je_tilemap_layer_blockshadow / je_tilemap_set_layer_blockshadow 的取值。
+渲染分片是运行时生成的隐藏实体，无法逐个挂组件，故由图层属性驱动：
+    * JE_LAYER_BLOCKSHADOW_OFF 禁用：该层分片不挂 BlockShadow 组件，
+      瓦片不遮挡光线（不投阴影体）
+    * JE_LAYER_BLOCKSHADOW_ON  启用（常开）：分片挂 BlockShadow 且
+      auto_disable = false，无论光源高度如何，瓦片占据轮廓始终按 factor
+      投射硬阴影（阴影体）
+    * JE_LAYER_BLOCKSHADOW_AUTO 启用（自动）：分片挂 BlockShadow 且
+      auto_disable = true，光源不高于该层时不投射遮挡阴影
+遮挡轮廓由引擎按分块网格自动生成：该层有有效瓦片的格子视为实心，实心
+与空心格的边界（跨分块判定，贪心合并共线段）构成遮挡轮廓，随网格编辑
+重建。（阴影浓度 factor 经 je_tilemap_set_layer_blockshadow_factor 按层
+设置）
+请参见：
+    je_tilemap_set_layer_blockshadow
+    je_tilemap_set_layer_blockshadow_factor
+*/
+enum je_LayerBlockShadow
+{
+    JE_LAYER_BLOCKSHADOW_OFF = 0,
+    JE_LAYER_BLOCKSHADOW_ON = 1,
+    JE_LAYER_BLOCKSHADOW_AUTO = 2,
+};
+
 // ---- 地图文档 ----
 
 /*
@@ -5409,6 +5436,51 @@ TilemapSystem 逐帧对齐到分片组件
     je_tilemap_set_layer_selfshadow
 */
 JE_API void je_tilemap_set_layer_selfshadow_factor(je_TilemapDocument* map, je_LayerId layer, float factor);
+
+/*
+je_tilemap_layer_blockshadow [基本接口]
+取图层的 2D 光照遮挡阴影行为（je_LayerBlockShadow），下标越界时返回
+JE_LAYER_BLOCKSHADOW_OFF
+请参见：
+    je_tilemap_set_layer_blockshadow
+*/
+JE_API je_LayerBlockShadow je_tilemap_layer_blockshadow(je_TilemapDocument* map, je_LayerId layer);
+
+/*
+je_tilemap_set_layer_blockshadow [基本接口]
+设置图层的 2D 光照遮挡阴影行为：OFF 时该层渲染分片移除 Light2D::BlockShadow
+组件（瓦片不遮挡光线），ON/AUTO 时挂载该组件并分别固定 auto_disable 为
+false / true；阴影浓度由 je_tilemap_set_layer_blockshadow_factor 设置
+（缺省 1）。遮挡轮廓（该层有效瓦片的占据边界，贪心合并共线段）由
+TilemapSystem 自动生成并随网格编辑重建；该设置随图层记录落盘
+    * 下标越界时不做任何修改
+请参见：
+    je_LayerBlockShadow
+    je_tilemap_layer_blockshadow
+    je_tilemap_set_layer_blockshadow_factor
+*/
+JE_API void je_tilemap_set_layer_blockshadow(je_TilemapDocument* map, je_LayerId layer, je_LayerBlockShadow blockshadow);
+
+/*
+je_tilemap_layer_blockshadow_factor [基本接口]
+取图层的遮挡阴影浓度（写入分片 Light2D::BlockShadow::factor，阴影体
+浓度；仅图层模式为 ON/AUTO 时生效），下标越界时返回 1
+请参见：
+    je_tilemap_set_layer_blockshadow_factor
+*/
+JE_API float je_tilemap_layer_blockshadow_factor(je_TilemapDocument* map, je_LayerId layer);
+
+/*
+je_tilemap_set_layer_blockshadow_factor [基本接口]
+设置图层的遮挡阴影浓度：不做范围钳制（与 Light2D::BlockShadow::factor
+组件本体同口径，常用 0..1）；浓度与模式一样随图层记录落盘、由
+TilemapSystem 逐帧对齐到分片组件
+    * 下标越界时不做任何修改
+请参见：
+    je_tilemap_layer_blockshadow_factor
+    je_tilemap_set_layer_blockshadow
+*/
+JE_API void je_tilemap_set_layer_blockshadow_factor(je_TilemapDocument* map, je_LayerId layer, float factor);
 
 // ---- 图层着色器样式 ----
 // 每层可直接持有一个专属着色器实例与若干附加纹理槽；图层样式是该层

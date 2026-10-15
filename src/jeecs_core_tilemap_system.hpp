@@ -46,11 +46,24 @@ jeecs_core_tilemap_model.hpp；本文件只做三件事：
     上限、静态角点索引，之后整体重写并收缩激活索引数，与粒子系统
     同款）。分片实体带 Editor::Invisible：不显示于实体列表、不参与
     世界保存，加载/重载后由本系统自动重建。
+  * 实体句柄不跨帧缓存（架构约束）：碎片整理与组件增删都会移动
+    实体，隔帧 je_GameEntity 的组件访问会静默返回空。跨帧簿记只存
+    纯数据（版本戳/掩码哈希）；分片与墙体实体每帧由 RenderPart/
+    WallPart 查询重新定位，当帧句柄当帧用。
   * 图层自阴影（je_LayerSelfShadow）：ON/AUTO 模式的层为其全部分片挂
     Light2D::SelfShadow（auto_disable 分别固定 false/true，factor 取
     图层强度 selfshadow_factor，缺省 1），OFF 模式的层不挂该组件。与
     着色器/纹理/比例尺同款每帧对齐（组件增删走命令缓冲，下一帧迁移
     生效）。
+  * 图层遮挡阴影（je_LayerBlockShadow）：ON/AUTO 模式的层为其全部分片
+    挂 Light2D::BlockShadow（auto_disable 分别固定 false/true，factor 取
+    图层强度 blockshadow_factor，缺省 1）。遮挡轮廓由本系统按分块生成：
+    该层有有效瓦片的格子视为实心，实心与空心格的边界（跨分块判定，
+    贪心合并共线段）以阴影体条带（TRIANGLESTRIP，逐顶点挤出因子）
+    直接写入组件的 m_block_mesh，随版本戳（网格编辑）重建；同分块的
+    多个分片各持相同轮廓，阴影缓冲 MAX 混合下重复绘制幂等。挂载由
+    sync_part_blockshadow 统一完成（add_component 走命令缓冲返回暂存
+    实例，创建当帧读不到池内组件，故不在 create_part_entity 挂载）。
   * 碰撞体墙（WallPart）同为根实体的子实体：根实体持有 Tilemap::Wall
     时，把不可通行格（任一图层不可通行即墙，与 je_tilemap_is_walkable
     同一语义）贪心合并为矩形，每矩形一个静态 Physics2D::Collider::Box，
@@ -91,26 +104,25 @@ namespace jeecs
                     < std::tie(o.layer, o.chunk_x, o.chunk_y, o.tileset, o.source);
             }
         };
-        struct part_entry
-        {
-            je_GameEntity entity{};
-            uint64_t built_stamp = 0;
-        };
         // 图层样式（着色器实例与附加纹理）直接储存在文档的 LayerStyle 里：
         // 资源随文档加载就绪、uniform 值设在着色器实例上，渲染侧逐帧
         // 与文档比对即可，无需渲染侧再维护样式状态。
 
-        // 每个地图根实体的分片表 + 上次网格扫描结果（版本戳命中时免扫）
+        // 每个地图根实体的跨帧簿记 + 上次网格扫描结果（版本戳命中时免扫）。
+        // 注意：此处不允许缓存任何 je_GameEntity——碎片整理与组件增删都
+        // 会移动实体，隔帧句柄一律失效；分片/墙体实体每帧由 RenderPart/
+        // WallPart 查询重新定位，跨帧只存纯数据（版本戳、掩码哈希等）
         struct root_state
         {
-            std::map<part_key, part_entry> parts;
+            // 分片表：part_key -> 上次顶点重建对应的版本戳（实体句柄
+            // 不落簿记，当帧由查询结果配对）
+            std::map<part_key, uint64_t> parts;
             std::set<part_key> needed;
             uint64_t needed_stamp = 0;
             bool needed_valid = false;
-            // 碰撞体墙簿记：Wall 组件在位时按不可通行掩码合并出的
-            // 静态 Box 碰撞体实体。掩码哈希用于把"版本戳变化但通行性
-            // 未变"的编辑（纯视觉/样式）与真正的墙体重建区分开
-            std::vector<je_GameEntity> walls;
+            // 碰撞体墙簿记（无实体句柄，墙体当帧由 WallPart 查询定位）：
+            // 掩码哈希用于把"版本戳变化但通行性未变"的编辑（纯视觉/
+            // 样式）与真正的墙体重建区分开
             uint64_t wall_stamp = 0;   // 上次掩码扫描对应的版本戳
             uint64_t wall_mask = 0;    // 当前碰撞体实体对应的掩码哈希
             bool wall_block_empty = false; // 当前实体按哪个 block_empty 开关构建
@@ -229,6 +241,198 @@ namespace jeecs
                 layer_selfshadow == JE_LAYER_SELFSHADOW_AUTO;
         }
 
+        // ---- 图层遮挡阴影：分块实心格边界 → 阴影体条带 ----
+
+        // 该格是否遮挡光线：有有效瓦片即实心（与 scan_needed 的格子
+        // 有效性同口径——空格/无法解析的格子不遮挡）
+        static bool cell_blocks_light(const Tilemap::MapDocument& doc,
+            const Tilemap::MapLayer& layer, int32_t x, int32_t y)
+        {
+            if (x < 0 || y < 0 || x >= doc.width || y >= doc.height)
+                return false;
+            const int32_t v = layer.grid[(size_t)y * doc.width + x];
+            if (v == 0)
+                return false;
+            auto cell = Tilemap::decode_tile_value(v);
+            if (!cell.has_value()
+                || cell->tileset_idx < 0
+                || cell->tileset_idx >= (int32_t)doc.tilesets.size()
+                || !doc.tilesets[cell->tileset_idx].resolved.has_value())
+                return false;
+            const auto* ts = doc.tilesets[cell->tileset_idx].resolved->get();
+            const int32_t local = cell->local_id;
+            if (cell->is_terrain)
+                return local > 0 && local < (int32_t)ts->terrains.size()
+                && ts->terrains[local].source < (int32_t)ts->sources.size();
+            return local > 0 && local < (int32_t)ts->tiles.size()
+                && ts->tiles[local].source < (int32_t)ts->sources.size();
+        }
+
+        // 生成分块的遮挡轮廓条带并写入组件的 m_block_mesh。局部空间与
+        // 分片渲染网格一致（1 格 = 1 单位，向 +x 与 -y 展开）。实心格
+        // 与空心格的边界按行/列贪心合并为轴线段；绕向与组件缺省方块
+        // 一致（实心区域逆时针），配合背面剔除只保留背光边。段与段以
+        // 零面积过渡四边形衔接（衔接点对全部取原位因子 0），单条
+        // TRIANGLESTRIP 即可承载任意多条不相邻线段。邻居判定取整层
+        // 网格（跨分块），分块接缝处的实心邻接不产生边界。m_block_points
+        // 留空：DeferLight2D 只在 m_block_mesh 缺失时才从 points 构建，
+        // 此处直接持有预生成网格
+        static void write_part_blockshadow_mesh(const Tilemap::MapDocument& doc,
+            const part_key& key, Light2D::BlockShadow* blockshadow)
+        {
+            const Tilemap::MapLayer& layer = doc.layers[key.layer];
+            const int32_t bx = key.chunk_x * (int32_t)CHUNK;
+            const int32_t by = key.chunk_y * (int32_t)CHUNK;
+            const int32_t x0 = std::max(bx, 0);
+            const int32_t x1 = std::min<int32_t>(bx + (int32_t)CHUNK, doc.width);
+            const int32_t y0 = std::max(by, 0);
+            const int32_t y1 = std::min<int32_t>(by + (int32_t)CHUNK, doc.height);
+
+            // (x, y, z=0, 挤出因子)：因子 0 = 原位，1 = 背光挤出
+            std::vector<float> verts;
+            auto push_point = [&verts](float px, float py, float f)
+            {
+                verts.push_back(px);
+                verts.push_back(py);
+                verts.push_back(0.f);
+                verts.push_back(f);
+            };
+            // 一条边界线段（8 顶点）：A 的过渡点对（全原位，衔接上一段）
+            // + A/B 实点对（原位/挤出，构成阴影四边形）+ B 的过渡点对
+            //（全原位，衔接下一段）。段间过渡四边形的两侧点对挤出因子
+            // 均为 0，两个三角形各有一对重合顶点 → 零面积不产生像素
+            auto push_segment = [&push_point](float ax, float ay, float ex, float ey)
+            {
+                push_point(ax, ay, 0.f); push_point(ax, ay, 0.f);
+                push_point(ax, ay, 0.f); push_point(ax, ay, 1.f);
+                push_point(ex, ey, 0.f); push_point(ex, ey, 1.f);
+                push_point(ex, ey, 0.f); push_point(ex, ey, 0.f);
+            };
+
+            // 上/下边界：行内贪心合并（局部 y：上边 = -y，下边 = -(y+1)；
+            // 上边方向 -x、下边方向 +x，实心保持在行进方向左侧）
+            for (int32_t y = y0; y < y1; ++y)
+            {
+                for (int32_t x = x0; x < x1;)
+                {
+                    if (cell_blocks_light(doc, layer, x, y))
+                    {
+                        if (!cell_blocks_light(doc, layer, x, y - 1))
+                        {
+                            int32_t e = x + 1;
+                            while (e < x1
+                                && cell_blocks_light(doc, layer, e, y)
+                                && !cell_blocks_light(doc, layer, e, y - 1))
+                                ++e;
+                            push_segment((float)e, -(float)y, (float)x, -(float)y);
+                            x = e;
+                            continue;
+                        }
+                        if (!cell_blocks_light(doc, layer, x, y + 1))
+                        {
+                            int32_t e = x + 1;
+                            while (e < x1
+                                && cell_blocks_light(doc, layer, e, y)
+                                && !cell_blocks_light(doc, layer, e, y + 1))
+                                ++e;
+                            push_segment((float)x, -(float)(y + 1),
+                                (float)e, -(float)(y + 1));
+                            x = e;
+                            continue;
+                        }
+                    }
+                    ++x;
+                }
+            }
+            // 左/右边界：列内贪心合并（左边方向 -y、右边方向 +y）
+            for (int32_t x = x0; x < x1; ++x)
+            {
+                for (int32_t y = y0; y < y1;)
+                {
+                    if (cell_blocks_light(doc, layer, x, y))
+                    {
+                        if (!cell_blocks_light(doc, layer, x - 1, y))
+                        {
+                            int32_t e = y + 1;
+                            while (e < y1
+                                && cell_blocks_light(doc, layer, x, e)
+                                && !cell_blocks_light(doc, layer, x - 1, e))
+                                ++e;
+                            push_segment((float)x, -(float)y, (float)x, -(float)e);
+                            y = e;
+                            continue;
+                        }
+                        if (!cell_blocks_light(doc, layer, x + 1, y))
+                        {
+                            int32_t e = y + 1;
+                            while (e < y1
+                                && cell_blocks_light(doc, layer, x, e)
+                                && !cell_blocks_light(doc, layer, x + 1, e))
+                                ++e;
+                            push_segment((float)(x + 1), -(float)e,
+                                (float)(x + 1), -(float)y);
+                            y = e;
+                            continue;
+                        }
+                    }
+                    ++y;
+                }
+            }
+
+            blockshadow->shape.m_block_points.clear();
+            if (verts.empty())
+            {
+                // 分块无边界（全空/内部被邻接实心包围）：无阴影可投
+                blockshadow->shape.m_block_mesh.reset();
+                return;
+            }
+
+            std::vector<uint32_t> indices(verts.size() / 4);
+            for (size_t i = 0; i < indices.size(); ++i)
+                indices[i] = (uint32_t)i;
+
+            auto created = graphic::vertex::create(
+                jegl_vertex::TRIANGLESTRIP,
+                verts.data(), verts.size() * sizeof(float),
+                indices,
+                {
+                    { jegl_vertex::data_type::FLOAT32, 3 }, // pos
+                    { jegl_vertex::data_type::FLOAT32, 1 }, // 挤出因子
+                });
+            if (created.has_value())
+                blockshadow->shape.m_block_mesh = created;
+        }
+
+        // 图层遮挡阴影对齐（唯一的挂载点，新建分片次帧起由此挂载）：
+        // OFF 移除分片上的 BlockShadow 组件，ON/AUTO 挂载并把 auto_disable
+        // 对齐到图层模式、factor 对齐到图层强度。add_component 走命令
+        // 缓冲、下一帧迁移进 arch 池，返回的是暂存实例——挂载分支写入
+        // 暂存实例的遮挡轮廓随迁移转移进池；新组件的缺省 points 是单位
+        // 方块，不清掉会被 DeferLight2D 当成轮廓。网格编辑经 rebuild_part
+        // 随版本戳重建轮廓（读池内组件）
+        static void sync_part_blockshadow(const Tilemap::MapDocument* doc,
+            const part_key& key, const game_entity& part,
+            je_LayerBlockShadow layer_blockshadow, float blockshadow_factor)
+        {
+            auto* blockshadow = part.get_component<Light2D::BlockShadow>();
+            if (layer_blockshadow == JE_LAYER_BLOCKSHADOW_OFF)
+            {
+                if (blockshadow != nullptr)
+                    part.remove_component<Light2D::BlockShadow>();
+                return;
+            }
+            if (blockshadow == nullptr)
+            {
+                blockshadow = part.add_component<Light2D::BlockShadow>();
+                if (doc != nullptr)
+                    write_part_blockshadow_mesh(*doc, key, blockshadow);
+            }
+            blockshadow->factor = blockshadow_factor;
+            blockshadow->reverse = false;
+            blockshadow->auto_disable =
+                layer_blockshadow == JE_LAYER_BLOCKSHADOW_AUTO;
+        }
+
         // 分块静态角点索引：每格 4 个四边形槽位，各 6 索引（0,1,2 2,1,3）
         static const std::vector<uint32_t>& shared_indices()
         {
@@ -340,6 +544,11 @@ namespace jeecs
                     layer_selfshadow == JE_LAYER_SELFSHADOW_AUTO;
             }
 
+            // 图层遮挡阴影（Light2D 管线）不在此挂载：add_component 走
+            // 命令缓冲、下一帧才迁移进 arch 池，本帧随后 rebuild_part 的
+            // get_component 读不到（轮廓 mesh 会漏写）。挂载与轮廓生成
+            // 统一由下一帧起的 sync_part_blockshadow 完成
+
             // 比例尺：根实体的缩放即整图比例尺（变换系统的缩放为纯局部
             // 语义、不沿父链复合，故由本系统显式同步到各分片）
             if (auto* root_scale = root.get_component<Transform::LocalScale>())
@@ -384,9 +593,8 @@ namespace jeecs
         }
 
         void rebuild_part(Tilemap::MapDocument& doc, game_entity root,
-            const part_key& key, part_entry& part)
+            const part_key& key, game_entity e)
         {
-            game_entity e{ part.entity };
             auto* shape = e.get_component<Renderer::Shape>();
             if (shape == nullptr || !shape->vertex.has_value())
                 return;
@@ -444,6 +652,11 @@ namespace jeecs
                 if (auto* sc = e.get_component<Transform::LocalScale>())
                     sc->scale = root_scale->scale;
             }
+
+            // 遮挡轮廓跟随网格内容：分片挂有 BlockShadow 时随版本戳
+            //（网格编辑/图层模式切换）重建轮廓条带
+            if (auto* blockshadow = e.get_component<Light2D::BlockShadow>())
+                write_part_blockshadow_mesh(doc, key, blockshadow);
         }
 
         // ---- 网格扫描：收集某文档当前需要的全部分片 ----
@@ -685,42 +898,45 @@ namespace jeecs
 
         // 掩码变化时整体重建：先回收全部旧碰撞体再按合并矩形新建。
         // 墙体属静态数据、编辑频度低，整体重建远比逐矩形差分简单可靠。
-        // 严格模式的掩码向外扩了一圈，掩码坐标需平移回地图格坐标
-        void rebuild_walls(game_entity root, root_state& state,
-            const Tilemap::Wall& wall, const std::vector<uint8_t>& blocked,
+        // 严格模式的掩码向外扩了一圈，掩码坐标需平移回地图格坐标。
+        // 旧墙体实体不落簿记：以当帧 WallPart 查询结果（stale_walls）
+        // 回收；新建实体也只在本帧内使用
+        void rebuild_walls(game_entity root,
+            const Tilemap::Wall& wall,
+            const std::vector<je_GameEntity>& stale_walls,
+            const std::vector<uint8_t>& blocked,
             int32_t mask_width, int32_t mask_height, bool block_empty)
         {
             auto world = get_world();
-            for (auto& raw : state.walls)
+            for (const auto& raw : stale_walls)
                 world.remove_entity(game_entity{ raw });
-            state.walls.clear();
 
             const auto* root_scale = root.get_component<Transform::LocalScale>();
             std::vector<int32_t> rects;
             merge_wall_rects(blocked, mask_width, mask_height, rects);
             const int32_t off = block_empty ? 1 : 0;
-            state.walls.reserve(rects.size() / 4);
             for (size_t r = 0; r + 3 < rects.size(); r += 4)
-                state.walls.push_back(create_wall_entity(
+                create_wall_entity(
                     root, wall, root_scale,
                     rects[r] - off, rects[r + 1] - off,
-                    rects[r + 2] - off, rects[r + 3] - off)._m_raw);
+                    rects[r + 2] - off, rects[r + 3] - off);
         }
 
         // 逐根同步碰撞体墙：Wall 组件离位/文档失效即回收；版本戳变化时
         // 重扫掩码，掩码哈希变化才重建实体；block_empty 开关不计入地图
-        // 版本戳，组件侧开关翻转时强制重扫重建；每帧对齐 layerid 与比例尺
+        // 版本戳，组件侧开关翻转时强制重扫重建；每帧对齐 layerid 与比例尺。
+        // live_walls 为当帧 WallPart 查询定位到的本根墙体实体（句柄当帧有效）
         void sync_root_walls(game_entity root, root_state& state,
-            Tilemap::Wall* wall_comp, Tilemap::MapDocument* doc, uint64_t stamp)
+            Tilemap::Wall* wall_comp, Tilemap::MapDocument* doc, uint64_t stamp,
+            const std::vector<je_GameEntity>& live_walls)
         {
             if (wall_comp == nullptr || doc == nullptr)
             {
-                if (!state.walls.empty())
+                if (!live_walls.empty())
                 {
                     auto world = get_world();
-                    for (auto& raw : state.walls)
+                    for (const auto& raw : live_walls)
                         world.remove_entity(game_entity{ raw });
-                    state.walls.clear();
                 }
                 state.wall_valid = false;
                 return;
@@ -734,7 +950,7 @@ namespace jeecs
                     *doc, _m_wall_mask, wall_comp->block_empty, mw, mh);
                 if (settings_changed || mask_hash != state.wall_mask)
                 {
-                    rebuild_walls(root, state, *wall_comp,
+                    rebuild_walls(root, *wall_comp, live_walls,
                         _m_wall_mask, mw, mh, wall_comp->block_empty);
                     state.wall_mask = mask_hash;
                     state.wall_block_empty = wall_comp->block_empty;
@@ -743,7 +959,7 @@ namespace jeecs
                 state.wall_valid = true;
             }
             const auto* root_scale = root.get_component<Transform::LocalScale>();
-            for (auto& raw : state.walls)
+            for (const auto& raw : live_walls)
                 sync_wall_entity(game_entity{ raw }, *wall_comp, root_scale);
         }
 
@@ -775,19 +991,36 @@ namespace jeecs
                 r.doc = docs.observe_map(path);
             }
 
-            // 2. 回收孤儿分片与根簿记（所有者不存在或不再持有 Map 组件）
+            // 2. 回收孤儿分片/墙体，并收割现役实体句柄。实体句柄禁止
+            //    跨帧缓存：碎片整理与组件增删（如自阴影/遮挡阴影挂载）
+            //    都会移动实体，隔帧句柄的 get_component 会静默返回空，
+            //    分片重建/对齐被悄悄跳过（表现为绘制不同步）——分片与
+            //    墙体一律以当帧查询结果定位，簿记只存纯数据
             std::vector<je_GameEntity> dead_parts;
+            std::map<std::tuple<uint32_t, int32_t, int32_t, int32_t, int32_t>,
+                je_GameEntity> live_parts;
+            std::map<uint32_t, std::vector<je_GameEntity>> live_walls;
             for (auto&& [e, part] :
                 query_entity<view typesof(Tilemap::RenderPart&)>())
             {
                 if (alive_root_ids.count(part.owner_id) == 0)
+                {
                     dead_parts.push_back(e._m_raw);
+                    continue;
+                }
+                live_parts[
+                {
+                    part.owner_id, part.layer,
+                    part.chunk_x, part.chunk_y, part.source
+                }] = e._m_raw;
             }
             for (auto&& [e, part] :
                 query_entity<view typesof(Tilemap::WallPart&)>())
             {
                 if (alive_root_ids.count(part.owner_id) == 0)
                     dead_parts.push_back(e._m_raw);
+                else
+                    live_walls[part.owner_id].push_back(e._m_raw);
             }
             for (auto& raw : dead_parts)
                 world.remove_entity(game_entity{ raw });
@@ -841,14 +1074,21 @@ namespace jeecs
                 }
                 const std::set<part_key>& needed = state.needed;
 
-                // 删除不再需要的分片
+                // 删除不再需要的分片（实体以当帧句柄回收；簿记里已无
+                // 实体的键一并清掉，走下方重建路径）
                 std::vector<part_key> removed;
-                for (auto& [key, entry] : state.parts)
+                for (auto& [key, stamp_built] : state.parts)
                     if (needed.count(key) == 0)
                         removed.push_back(key);
                 for (const auto& key : removed)
                 {
-                    world.remove_entity(game_entity{ state.parts.at(key).entity });
+                    auto live = live_parts.find(
+                    {
+                        root_id, key.layer, key.chunk_x, key.chunk_y,
+                        key.tileset * 1024 + key.source
+                    });
+                    if (live != live_parts.end())
+                        world.remove_entity(game_entity{ live->second });
                     state.parts.erase(key);
                 }
 
@@ -869,24 +1109,49 @@ namespace jeecs
                         doc != nullptr
                         && key.layer < (int32_t)doc->layers.size()
                         ? doc->layers[key.layer].selfshadow_factor : 1.f;
+                    const je_LayerBlockShadow layer_blockshadow =
+                        doc != nullptr
+                        && key.layer < (int32_t)doc->layers.size()
+                        ? doc->layers[key.layer].blockshadow : JE_LAYER_BLOCKSHADOW_OFF;
+                    const float layer_blockshadow_factor =
+                        doc != nullptr
+                        && key.layer < (int32_t)doc->layers.size()
+                        ? doc->layers[key.layer].blockshadow_factor : 1.f;
 
+                    // 当帧分片句柄：与簿记配对（簿记有而实体无 = 被外部
+                    // 销毁，丢弃簿记走重建；实体有而簿记无 = 异常路径，
+                    // 收编并强制重建一次；两者皆无 = 首建）
+                    auto live = live_parts.find(
+                    {
+                        root_id, key.layer, key.chunk_x, key.chunk_y,
+                        key.tileset * 1024 + key.source
+                    });
                     auto fnd = state.parts.find(key);
+                    if (live == live_parts.end() && fnd != state.parts.end())
+                    {
+                        state.parts.erase(fnd);
+                        fnd = state.parts.end();
+                    }
+                    if (live != live_parts.end() && fnd == state.parts.end())
+                        fnd = state.parts.emplace(key, 0).first;
                     if (fnd != state.parts.end())
                     {
-                        if (doc != nullptr && fnd->second.built_stamp != stamp)
+                        game_entity part{ live->second };
+                        if (doc != nullptr && fnd->second != stamp)
                         {
-                            rebuild_part(*doc, root, key, fnd->second);
-                            fnd->second.built_stamp = stamp;
+                            rebuild_part(*doc, root, key, part);
+                            fnd->second = stamp;
                         }
                         // 着色器/纹理跟随图层样式，比例尺跟随根实体，自阴影
-                        // 组件跟随图层模式（组件与样式变化均不计入地图版本
-                        // 戳，故每帧对齐）
-                        game_entity part{ fnd->second.entity };
+                        // 与遮挡阴影组件跟随图层模式（组件与样式变化均不计入
+                        // 地图版本戳，故每帧对齐）
                         refresh_part_shader(style, part);
                         refresh_part_textures(part, style);
                         sync_part_scale(root, part);
                         sync_part_selfshadow(part, layer_selfshadow,
                             layer_selfshadow_factor);
+                        sync_part_blockshadow(doc, key, part, layer_blockshadow,
+                            layer_blockshadow_factor);
                         continue;
                     }
 
@@ -917,19 +1182,26 @@ namespace jeecs
                     tag->chunk_y = key.chunk_y;
                     tag->source = key.tileset * 1024 + key.source;
 
-                    part_entry entry{};
-                    entry.entity = part_entity._m_raw;
+                    // 新实体句柄仅本帧内使用（创建是直写 arch，本帧即可
+                    // 读写组件；落簿记的只有版本戳）
+                    uint64_t built_stamp = 0;
                     if (doc != nullptr)
                     {
-                        rebuild_part(*doc, root, key, entry);
-                        entry.built_stamp = stamp;
+                        rebuild_part(*doc, root, key, part_entity);
+                        built_stamp = stamp;
                     }
-                    state.parts[key] = entry;
+                    state.parts[key] = built_stamp;
                 }
 
                 // 4. 碰撞体墙同步：Wall 组件在位时按不可通行掩码
-                //    生成/回收静态 Physics2D 碰撞体子实体
-                sync_root_walls(root, state, r.wall, doc, stamp);
+                //    生成/回收静态 Physics2D 碰撞体子实体（句柄取当帧
+                //    WallPart 查询结果）
+                {
+                    auto fnd_walls = live_walls.find(root_id);
+                    sync_root_walls(root, state, r.wall, doc, stamp,
+                        fnd_walls != live_walls.end()
+                        ? fnd_walls->second : std::vector<je_GameEntity>{});
+                }
             }
         }
     };
@@ -1184,6 +1456,46 @@ void je_tilemap_set_layer_selfshadow_factor(je_TilemapDocument* doc,
     if (doc->layers[layer].selfshadow_factor != factor)
     {
         doc->layers[layer].selfshadow_factor = factor;
+        ++doc->version;
+    }
+}
+
+// 图层的遮挡阴影行为：OFF/AUTO/ON 分别对应分片不挂
+// Light2D::BlockShadow、挂载且 auto_disable=true、挂载且 auto_disable=false
+je_LayerBlockShadow je_tilemap_layer_blockshadow(je_TilemapDocument* doc, je_LayerId layer)
+{
+    return layer >= 0 && layer < (int32_t)doc->layers.size()
+        ? doc->layers[layer].blockshadow : JE_LAYER_BLOCKSHADOW_OFF;
+}
+void je_tilemap_set_layer_blockshadow(je_TilemapDocument* doc, je_LayerId layer,
+    je_LayerBlockShadow blockshadow)
+{
+    if (layer < 0 || layer >= (int32_t)doc->layers.size()
+        || blockshadow < JE_LAYER_BLOCKSHADOW_OFF
+        || blockshadow > JE_LAYER_BLOCKSHADOW_AUTO)
+        return;
+    if (doc->layers[layer].blockshadow != blockshadow)
+    {
+        doc->layers[layer].blockshadow = blockshadow;
+        ++doc->version;
+    }
+}
+
+// 图层的遮挡阴影浓度（写入分片 BlockShadow::factor）：仅图层模式为
+// ON/AUTO 时生效；缺省 1，不做范围钳制（与组件本体的 factor 同口径）
+float je_tilemap_layer_blockshadow_factor(je_TilemapDocument* doc, je_LayerId layer)
+{
+    return layer >= 0 && layer < (int32_t)doc->layers.size()
+        ? doc->layers[layer].blockshadow_factor : 1.f;
+}
+void je_tilemap_set_layer_blockshadow_factor(je_TilemapDocument* doc,
+    je_LayerId layer, float factor)
+{
+    if (layer < 0 || layer >= (int32_t)doc->layers.size())
+        return;
+    if (doc->layers[layer].blockshadow_factor != factor)
+    {
+        doc->layers[layer].blockshadow_factor = factor;
         ++doc->version;
     }
 }
@@ -2323,6 +2635,28 @@ WOORT_API woort_api wojeapi_tilemap_layer_selfshadow_factor(void)
 WOORT_API woort_api wojeapi_tilemap_set_layer_selfshadow_factor(void)
 {
     je_tilemap_set_layer_selfshadow_factor(woje_map_doc(0),
+        (int32_t)woort_int(1), woort_float(2));
+    return woort_ret_void();
+}
+WOORT_API woort_api wojeapi_tilemap_layer_blockshadow(void)
+{
+    return woort_ret_int((woort_Int)je_tilemap_layer_blockshadow(
+        woje_map_doc(0), (int32_t)woort_int(1)));
+}
+WOORT_API woort_api wojeapi_tilemap_set_layer_blockshadow(void)
+{
+    je_tilemap_set_layer_blockshadow(woje_map_doc(0), (int32_t)woort_int(1),
+        (je_LayerBlockShadow)woort_int(2));
+    return woort_ret_void();
+}
+WOORT_API woort_api wojeapi_tilemap_layer_blockshadow_factor(void)
+{
+    return woort_ret_float(je_tilemap_layer_blockshadow_factor(
+        woje_map_doc(0), (int32_t)woort_int(1)));
+}
+WOORT_API woort_api wojeapi_tilemap_set_layer_blockshadow_factor(void)
+{
+    je_tilemap_set_layer_blockshadow_factor(woje_map_doc(0),
         (int32_t)woort_int(1), woort_float(2));
     return woort_ret_void();
 }
