@@ -142,6 +142,17 @@ namespace je
                 public func set_layer_rend_queue(self: Tilemap, layer: int,
                     rend_queue: int)=> void;
 
+            // 图层的自阴影行为（self_shadow 枚举值）。渲染分片是运行时
+            // 生成的隐藏实体，无法逐个挂组件——Light2D::SelfShadow 组件
+            // 由该图层属性驱动：OFF 不挂组件，ON/AUTO 挂载且 auto_disable
+            // 分别固定 false/true（factor 恒 1）。设置随图层落盘。
+            extern("libjoyecs", "wojeapi_tilemap_layer_selfshadow")
+                public func layer_selfshadow(self: Tilemap, layer: int)=> int;
+
+            extern("libjoyecs", "wojeapi_tilemap_set_layer_selfshadow")
+                public func set_layer_selfshadow(self: Tilemap, layer: int,
+                    mode: int)=> void;
+
             // ==================== 图层着色器样式 ====================
             // 每层可指定专属着色器与附加纹理，直接传 graphic::shader /
             // graphic::texture2d 资源句柄（与路径无关）；着色器是分片渲染
@@ -672,6 +683,18 @@ namespace je
             BLOB47 = 2,     // blob47：47 变体（显式变体表或锚点行优先扫描）
             RPGMAKER_VX = 3, // RPGMaker VX/VX Ace 式四象限：锚点起 2x3 格
                              // 块（右上 2x2 为内部填充，与 A2 表兼容）
+        }
+
+        // ==================== 图层自阴影行为 ====================
+        // 与引擎侧 je_LayerSelfShadow 一一对应（Light2D 延迟光照管线）：
+        public enum self_shadow
+        {
+            OFF = 0,    // 禁用：该层分片不挂 SelfShadow 组件，图块正常
+                        // 接收更高层遮挡体投下的阴影
+            ON = 1,     // 启用（常开）：无论光源高度，自阴影覆盖始终按
+                        // factor 生效（auto_disable = false）
+            AUTO = 2,   // 启用（自动）：光源不高于该层时自阴影覆盖被
+                        // 清除、图块受光（auto_disable = true）
         }
 
         // ==================== 属性值类型 ====================

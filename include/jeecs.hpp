@@ -5158,6 +5158,27 @@ enum je_PropertyType
     JE_PROPERTY_TYPE_VEC4 = 6,
 };
 
+/*
+je_LayerSelfShadow [枚举]
+图层的 2D 光照自阴影行为（Light2D::SelfShadow 组件的挂载策略），即
+je_tilemap_layer_selfshadow / je_tilemap_set_layer_selfshadow 的取值。
+渲染分片是运行时生成的隐藏实体，无法逐个挂组件，故由图层属性驱动：
+    * JE_LAYER_SELFSHADOW_OFF 禁用：该层分片不挂 SelfShadow 组件，
+      图块正常接收更高层遮挡体投下的阴影
+    * JE_LAYER_SELFSHADOW_ON  启用（常开）：分片挂 SelfShadow 且
+      auto_disable = false，无论光源高度如何，自阴影覆盖始终按 factor 生效
+    * JE_LAYER_SELFSHADOW_AUTO 启用（自动）：分片挂 SelfShadow 且
+      auto_disable = true，光源不高于该层时自阴影覆盖被清除（图块受光）
+请参见：
+    je_tilemap_set_layer_selfshadow
+*/
+enum je_LayerSelfShadow
+{
+    JE_LAYER_SELFSHADOW_OFF = 0,
+    JE_LAYER_SELFSHADOW_ON = 1,
+    JE_LAYER_SELFSHADOW_AUTO = 2,
+};
+
 // ---- 地图文档 ----
 
 /*
@@ -5341,6 +5362,29 @@ je_tilemap_set_layer_rend_queue [基本接口]
     je_tilemap_layer_rend_queue
 */
 JE_API void je_tilemap_set_layer_rend_queue(je_TilemapDocument* map, je_LayerId layer, int32_t rend_queue);
+
+/*
+je_tilemap_layer_selfshadow [基本接口]
+取图层的 2D 光照自阴影行为（je_LayerSelfShadow），下标越界时返回
+JE_LAYER_SELFSHADOW_OFF
+请参见：
+    je_tilemap_set_layer_selfshadow
+*/
+JE_API je_LayerSelfShadow je_tilemap_layer_selfshadow(je_TilemapDocument* map, je_LayerId layer);
+
+/*
+je_tilemap_set_layer_selfshadow [基本接口]
+设置图层的 2D 光照自阴影行为：OFF 时该层渲染分片移除 Light2D::SelfShadow
+组件（不参与自阴影覆盖），ON/AUTO 时挂载该组件并分别固定 auto_disable 为
+false / true（factor 恒为 1）。渲染分片由引擎生成，组件的挂载与摘除由
+TilemapSystem 逐帧对齐（走命令缓冲，下一帧迁移生效）；该设置随图层记录
+落盘
+    * 下标越界时不做任何修改
+请参见：
+    je_LayerSelfShadow
+    je_tilemap_layer_selfshadow
+*/
+JE_API void je_tilemap_set_layer_selfshadow(je_TilemapDocument* map, je_LayerId layer, je_LayerSelfShadow selfshadow);
 
 // ---- 图层着色器样式 ----
 // 每层可直接持有一个专属着色器实例与若干附加纹理槽；图层样式是该层

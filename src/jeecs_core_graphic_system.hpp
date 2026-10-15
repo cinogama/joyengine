@@ -1232,6 +1232,11 @@ public let frag =
 
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_pass;
 
+            // 数组纹理采样版 sub pass：瓦片地图分片把图集绑在
+            // Textures2DArray 槽 0（顶点 uv 为 (u, v, 数组层号) float3），
+            // 用本变体按层采样图集 alpha 做自阴影覆盖
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_array_pass;
+
             inline static const float _screen_vertex_data[] = {
                 -1.f,
                 1.f,
@@ -1877,7 +1882,71 @@ WOSHADER_UNIFORM!
 public func frag(vf: v2f)
 {
     let final_shadow = alphatest(vec4!(JE_COLOR->xyz, tex2d(Main, vf.uv)->w));
-    
+
+    let shadow_factor = final_shadow->x;
+    return fout{
+        shadow_factor = vec4!(
+            shadow_factor, shadow_factor, shadow_factor, 1.),
+    };
+}
+)").value()
+                }
+                , _defer_light2d_shadow_sub_array_pass{
+                    jeecs::graphic::shader::create(
+                        nullptr,
+                        "!/builtin/defer_light2d_shadow_sub_array.shader",
+                        R"(
+import pkg::std;
+
+import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+// MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
+CULL    (NONE);
+
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex: float3,
+        // 瓦片地图分片顶点：uv.z 为数组纹理层号
+        uv: float3,
+    };
+
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos: float4,
+        uv: float3,
+    };
+
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        shadow_factor: float4,
+    };
+
+public func vert(v: vin)
+{
+    // tiling/offset 只作用于 uv.xy，数组层号分量原样传递
+    return v2f{
+        pos = JE_MVP * vec4!(v.vertex, 1.),
+        uv = vec3!(
+            v.uv->x * JE_UV_TILING->x + JE_UV_OFFSET->x,
+            v.uv->y * JE_UV_TILING->y + JE_UV_OFFSET->y,
+            v.uv->z),
+    };
+}
+
+let nearest_clamp = Sampler2D::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+WOSHADER_UNIFORM!
+    let Main = texture2darray::uniform(0, nearest_clamp);
+
+public func frag(vf: v2f)
+{
+    let final_shadow = alphatest(vec4!(JE_COLOR->xyz, tex2darray(Main, vf.uv)->w));
+
     let shadow_factor = final_shadow->x;
     return fout{
         shadow_factor = vec4!(
@@ -1942,6 +2011,8 @@ public func frag(vf: v2f)
             const Light2D::SelfShadow* selfshadow;
 
             const Textures2D* textures;
+            // 数组图集（瓦片地图分片）：槽 0 为图集，sub pass 用它按层采样
+            const Textures2DArray* textures_array;
             const Shape* shape;
         };
 
@@ -2272,7 +2343,8 @@ public func frag(vf: v2f)
                 }
             }
 
-            for (auto&& [trans, blockshadow, shapeshadow, spriteshadow, selfshadow, texture, shape] : query<
+            for (auto&& [trans, blockshadow, shapeshadow, spriteshadow, selfshadow,
+                texture, texture_array, shape] : query<
                 view typesof(
                     Translation&,
                     BlockShadow*,
@@ -2280,6 +2352,7 @@ public func frag(vf: v2f)
                     SpriteShadow*,
                     SelfShadow*,
                     Textures2D*,
+                    Textures2DArray*,
                     Shape&
                 ),
                 anyof typesof(
@@ -2334,6 +2407,7 @@ public func frag(vf: v2f)
                         spriteshadow,
                         selfshadow,
                         texture,
+                        texture_array,
                         &shape
                     }
                 );
@@ -2658,8 +2732,24 @@ public func frag(vf: v2f)
                                         // 如果物体被指定为不需要cover，那么就不绘制
                                         if (block_in_layer->selfshadow != nullptr)
                                         {
+                                            // 瓦片地图分片的图集绑在数组纹理槽 0
+                                            //（顶点 uv.z 为数组层号），走数组采样版
+                                            // sub pass；其余实体按普通 2D 纹理采样。
+                                            // 数组绑定在 2D 绑定之后写入槽 0（后写覆盖）
+                                            std::optional<basic::resource<graphic::texture_array>> array_atlas;
+                                            if (block_in_layer->textures_array != nullptr)
+                                                array_atlas = block_in_layer->textures_array->get_texture(0);
+
                                             auto* texture_group = alloc_shadow_texture_group(
                                                 light2d_shadow_rend_chain, block_in_layer->textures);
+                                            if (array_atlas.has_value())
+                                                jegl_rchain_bind_texture_array(
+                                                    light2d_shadow_rend_chain, texture_group, 0,
+                                                    array_atlas.value()->resource());
+
+                                            auto& sub_pass_shader = array_atlas.has_value()
+                                                ? m_defer_light2d_host._defer_light2d_shadow_sub_array_pass
+                                                : shadow_passes.sub;
 
                                             assert(block_in_layer->shape != nullptr);
                                             const auto& using_shape =
@@ -2669,10 +2759,10 @@ public func frag(vf: v2f)
 
                                             auto* rchain_draw_action = jegl_rchain_draw(
                                                 light2d_shadow_rend_chain,
-                                                shadow_passes.sub->resource(),
+                                                sub_pass_shader->resource(),
                                                 using_shape->resource(),
                                                 texture_group);
-                                            auto* builtin_uniform = shadow_passes.sub->m_builtin;
+                                            auto* builtin_uniform = sub_pass_shader->m_builtin;
 
                                             const float(&MAT4_MODEL)[4][4] = block_in_layer->translation->object2world;
                                             float MAT4_MVP[4][4], MAT4_MV[4][4];
