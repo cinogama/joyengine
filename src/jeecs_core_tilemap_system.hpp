@@ -47,9 +47,10 @@ jeecs_core_tilemap_model.hpp；本文件只做三件事：
     同款）。分片实体带 Editor::Invisible：不显示于实体列表、不参与
     世界保存，加载/重载后由本系统自动重建。
   * 图层自阴影（je_LayerSelfShadow）：ON/AUTO 模式的层为其全部分片挂
-    Light2D::SelfShadow（auto_disable 分别固定 false/true，factor 恒 1），
-    OFF 模式的层不挂该组件。与着色器/纹理/比例尺同款每帧对齐（组件
-    增删走命令缓冲，下一帧迁移生效）。
+    Light2D::SelfShadow（auto_disable 分别固定 false/true，factor 取
+    图层强度 selfshadow_factor，缺省 1），OFF 模式的层不挂该组件。与
+    着色器/纹理/比例尺同款每帧对齐（组件增删走命令缓冲，下一帧迁移
+    生效）。
   * 碰撞体墙（WallPart）同为根实体的子实体：根实体持有 Tilemap::Wall
     时，把不可通行格（任一图层不可通行即墙，与 je_tilemap_is_walkable
     同一语义）贪心合并为矩形，每矩形一个静态 Physics2D::Collider::Box，
@@ -208,11 +209,11 @@ namespace jeecs
         }
 
         // 图层自阴影对齐：OFF 移除分片上的 SelfShadow 组件（不参与
-        // 自阴影覆盖），ON/AUTO 挂载并把 auto_disable 对齐到图层模式
-        //（factor 恒 1）。组件增删走命令缓冲、下一帧才迁移生效，与
-        // 着色器/纹理/比例尺同款每帧对齐
+        // 自阴影覆盖），ON/AUTO 挂载并把 auto_disable 对齐到图层模式、
+        // factor 对齐到图层强度。组件增删走命令缓冲、下一帧才迁移生效，
+        // 与着色器/纹理/比例尺同款每帧对齐
         static void sync_part_selfshadow(const game_entity& part,
-            je_LayerSelfShadow layer_selfshadow)
+            je_LayerSelfShadow layer_selfshadow, float selfshadow_factor)
         {
             auto* selfshadow = part.get_component<Light2D::SelfShadow>();
             if (layer_selfshadow == JE_LAYER_SELFSHADOW_OFF)
@@ -223,7 +224,7 @@ namespace jeecs
             }
             if (selfshadow == nullptr)
                 selfshadow = part.add_component<Light2D::SelfShadow>();
-            selfshadow->factor = 1.f;
+            selfshadow->factor = selfshadow_factor;
             selfshadow->auto_disable =
                 layer_selfshadow == JE_LAYER_SELFSHADOW_AUTO;
         }
@@ -305,6 +306,7 @@ namespace jeecs
 
         game_entity create_part_entity(game_entity root, int32_t layer, float layer_z,
             int32_t layer_rend_queue, je_LayerSelfShadow layer_selfshadow,
+            float selfshadow_factor,
             const Tilemap::SourceTexture& src, const Tilemap::LayerStyle& style)
         {
             auto world = get_world();
@@ -329,11 +331,11 @@ namespace jeecs
             part.get_component<Renderer::Rendqueue>()->rend_queue = layer_rend_queue;
 
             // 图层自阴影（Light2D 管线）：OFF 不挂组件；ON/AUTO 挂载且
-            // auto_disable 分别固定 false/true（factor 恒 1）
+            // auto_disable 分别固定 false/true，factor 取图层强度
             if (layer_selfshadow != JE_LAYER_SELFSHADOW_OFF)
             {
                 auto* selfshadow = part.add_component<Light2D::SelfShadow>();
-                selfshadow->factor = 1.f;
+                selfshadow->factor = selfshadow_factor;
                 selfshadow->auto_disable =
                     layer_selfshadow == JE_LAYER_SELFSHADOW_AUTO;
             }
@@ -863,6 +865,10 @@ namespace jeecs
                         doc != nullptr
                         && key.layer < (int32_t)doc->layers.size()
                         ? doc->layers[key.layer].selfshadow : JE_LAYER_SELFSHADOW_OFF;
+                    const float layer_selfshadow_factor =
+                        doc != nullptr
+                        && key.layer < (int32_t)doc->layers.size()
+                        ? doc->layers[key.layer].selfshadow_factor : 1.f;
 
                     auto fnd = state.parts.find(key);
                     if (fnd != state.parts.end())
@@ -879,7 +885,8 @@ namespace jeecs
                         refresh_part_shader(style, part);
                         refresh_part_textures(part, style);
                         sync_part_scale(root, part);
-                        sync_part_selfshadow(part, layer_selfshadow);
+                        sync_part_selfshadow(part, layer_selfshadow,
+                            layer_selfshadow_factor);
                         continue;
                     }
 
@@ -901,6 +908,7 @@ namespace jeecs
                         root, key.layer, doc->layers[key.layer].z,
                         doc->layers[key.layer].rend_queue,
                         doc->layers[key.layer].selfshadow,
+                        doc->layers[key.layer].selfshadow_factor,
                         *src_info, style != nullptr ? *style : Tilemap::LayerStyle{});
                     auto* tag = part_entity.get_component<Tilemap::RenderPart>();
                     tag->owner_id = root_id;
@@ -1157,6 +1165,25 @@ void je_tilemap_set_layer_selfshadow(je_TilemapDocument* doc, je_LayerId layer,
     if (doc->layers[layer].selfshadow != selfshadow)
     {
         doc->layers[layer].selfshadow = selfshadow;
+        ++doc->version;
+    }
+}
+
+// 图层的自阴影覆盖强度（写入分片 SelfShadow::factor）：仅图层模式为
+// ON/AUTO 时生效；缺省 1，不做范围钳制（与组件本体的 factor 同口径）
+float je_tilemap_layer_selfshadow_factor(je_TilemapDocument* doc, je_LayerId layer)
+{
+    return layer >= 0 && layer < (int32_t)doc->layers.size()
+        ? doc->layers[layer].selfshadow_factor : 1.f;
+}
+void je_tilemap_set_layer_selfshadow_factor(je_TilemapDocument* doc,
+    je_LayerId layer, float factor)
+{
+    if (layer < 0 || layer >= (int32_t)doc->layers.size())
+        return;
+    if (doc->layers[layer].selfshadow_factor != factor)
+    {
+        doc->layers[layer].selfshadow_factor = factor;
         ++doc->version;
     }
 }
@@ -2286,6 +2313,17 @@ WOORT_API woort_api wojeapi_tilemap_set_layer_selfshadow(void)
 {
     je_tilemap_set_layer_selfshadow(woje_map_doc(0), (int32_t)woort_int(1),
         (je_LayerSelfShadow)woort_int(2));
+    return woort_ret_void();
+}
+WOORT_API woort_api wojeapi_tilemap_layer_selfshadow_factor(void)
+{
+    return woort_ret_float(je_tilemap_layer_selfshadow_factor(
+        woje_map_doc(0), (int32_t)woort_int(1)));
+}
+WOORT_API woort_api wojeapi_tilemap_set_layer_selfshadow_factor(void)
+{
+    je_tilemap_set_layer_selfshadow_factor(woje_map_doc(0),
+        (int32_t)woort_int(1), woort_float(2));
     return woort_ret_void();
 }
 WOORT_API woort_api wojeapi_tilemap_layer_shader(void)

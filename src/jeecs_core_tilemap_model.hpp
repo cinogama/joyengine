@@ -243,9 +243,12 @@ namespace jeecs
             int32_t rend_queue = LAYER_REND_QUEUE_BASE;
             // 该层的 2D 光照自阴影行为（je_LayerSelfShadow）：OFF = 该层
             // 分片不挂 Light2D::SelfShadow 组件；ON/AUTO = 挂载且
-            // auto_disable 分别固定为 false/true（factor 恒 1）。分片组件
-            // 由 TilemapSystem 逐帧对齐（增删走命令缓冲）。
+            // auto_disable 分别固定为 false/true。分片组件由
+            // TilemapSystem 逐帧对齐（增删走命令缓冲）。
             je_LayerSelfShadow selfshadow = JE_LAYER_SELFSHADOW_OFF;
+            // 自阴影覆盖强度（写入分片 SelfShadow::factor，即覆盖色
+            // RGBA 乘子，0..1 常用）：仅 selfshadow != OFF 时生效
+            float selfshadow_factor = 1.f;
             std::vector<int32_t> grid;  // w*h 稠密网格，行优先、y 自上而下
             LayerStyle style;           // 逐层着色器样式（可空）
         };
@@ -288,10 +291,10 @@ namespace jeecs
         // 其余视为损坏）：墓碑不写载荷——id 槽位仍占位以保持 id 稳定，
         // 删除信息不依赖任何特殊字段值。地形的 kind 为 je_TerrainKind 的
         // u8，越界视为损坏。源纹理的 tex_w/tex_h 写 0 表示未测量。
-        // 地图（JTM3）图层记录内联 rend_queue（i32）与自阴影行为
-        //（je_LayerSelfShadow 的 u8，越界视为损坏）。
+        // 地图（JTM4）图层记录内联 rend_queue（i32）、自阴影行为
+        //（je_LayerSelfShadow 的 u8，越界视为损坏）与自阴影强度（f32）。
         constexpr uint32_t TILESET_MAGIC = 0x4A545333;     // "JTS3"
-        constexpr uint32_t MAP_MAGIC = 0x4A544D33;         // "JTM3"
+        constexpr uint32_t MAP_MAGIC = 0x4A544D34;         // "JTM4"
 
         struct bin_writer
         {
@@ -790,6 +793,7 @@ namespace jeecs
             {
                 w.str(l.name); w.u8(l.visible ? 1 : 0); w.u8(l.locked ? 1 : 0);
                 w.i32(l.rend_queue); w.u8((uint8_t)l.selfshadow);
+                w.f32(l.selfshadow_factor);
                 w.u32((uint32_t)l.grid.size());
                 for (int32_t v : l.grid) w.i32(v);
             }
@@ -879,6 +883,7 @@ namespace jeecs
                 if (selfshadow > (uint8_t)JE_LAYER_SELFSHADOW_AUTO)
                 { r.ok = false; break; }
                 l.selfshadow = (je_LayerSelfShadow)selfshadow;
+                l.selfshadow_factor = r.f32();
                 uint32_t cells = r.u32();
                 if (cells != (uint32_t)(m->width * m->height)) { r.ok = false; break; }
                 l.grid.resize(cells);

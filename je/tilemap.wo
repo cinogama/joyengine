@@ -145,13 +145,22 @@ namespace je
             // 图层的自阴影行为（self_shadow 枚举值）。渲染分片是运行时
             // 生成的隐藏实体，无法逐个挂组件——Light2D::SelfShadow 组件
             // 由该图层属性驱动：OFF 不挂组件，ON/AUTO 挂载且 auto_disable
-            // 分别固定 false/true（factor 恒 1）。设置随图层落盘。
+            // 分别固定 false/true。设置随图层落盘。
             extern("libjoyecs", "wojeapi_tilemap_layer_selfshadow")
                 public func layer_selfshadow(self: Tilemap, layer: int)=> int;
 
             extern("libjoyecs", "wojeapi_tilemap_set_layer_selfshadow")
                 public func set_layer_selfshadow(self: Tilemap, layer: int,
                     mode: int)=> void;
+
+            // 自阴影覆盖强度（写入分片 SelfShadow::factor，覆盖色乘子，
+            // 常用 0..1）：仅模式为 ON/AUTO 时生效，缺省 1。随图层落盘。
+            extern("libjoyecs", "wojeapi_tilemap_layer_selfshadow_factor")
+                public func layer_selfshadow_factor(self: Tilemap, layer: int)=> real;
+
+            extern("libjoyecs", "wojeapi_tilemap_set_layer_selfshadow_factor")
+                public func set_layer_selfshadow_factor(self: Tilemap,
+                    layer: int, factor: real)=> void;
 
             // ==================== 图层着色器样式 ====================
             // 每层可指定专属着色器与附加纹理，直接传 graphic::shader /
