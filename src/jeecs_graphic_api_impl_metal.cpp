@@ -1154,6 +1154,7 @@ namespace jeecs::graphic::api::metal
 
             if constexpr (is_3d)
             {
+                // 3D 纹理走 slice 重载：slice 固定为 0，bytesPerImage 为每个深度平面的字节数
                 texture_instance->replaceRegion(
                     MTL::Region(
                         0, 0, 0,
@@ -1161,13 +1162,14 @@ namespace jeecs::graphic::api::metal
                         (uint32_t)texture->m_height,
                         (uint32_t)texture->m_depth),
                     0,
+                    0,
                     texture->m_pixels,
                     bytes_per_row,
                     bytes_per_slice);
             }
             else
             {
-                // 2D / 数组 / 立方体贴图：逐层 replaceRegion
+                // 2D / 数组 / 立方体贴图：逐层 replaceRegion，level 恒为 0
                 for (uint32_t slice = 0; slice < slice_count; ++slice)
                 {
                     texture_instance->replaceRegion(
@@ -1176,9 +1178,11 @@ namespace jeecs::graphic::api::metal
                             (uint32_t)texture->m_width,
                             (uint32_t)texture->m_height,
                             1),
+                        0,
                         slice,
                         texture->m_pixels + (size_t)slice * bytes_per_slice,
-                        bytes_per_row);
+                        bytes_per_row,
+                        bytes_per_slice);
                 }
             }
         }
