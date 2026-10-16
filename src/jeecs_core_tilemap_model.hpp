@@ -968,10 +968,11 @@ namespace jeecs
             }
             if (!r.ok)
                 return std::nullopt;
-            // 尾块（可选）：每层 z 偏移。缺块时按层下标错开，保证多层
-            // 默认不发生深度冲突。
+            // 尾块（可选）：每层 z 偏移。缺块时按层下标沿 -z 错开（与
+            // 新建层默认一致，越上层 z 越小），保证多层默认不发生深度
+            // 冲突。
             for (size_t i = 0; i < m->layers.size(); ++i)
-                m->layers[i].z = (float)i;
+                m->layers[i].z = -(float)i;
             if (r.o + 4 <= r.n)
             {
                 uint32_t zn = r.u32();

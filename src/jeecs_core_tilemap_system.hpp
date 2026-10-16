@@ -1374,7 +1374,7 @@ bool je_tilemap_add_layer(je_TilemapDocument* doc, const char* name, je_LayerId*
     assert(out_id != nullptr);
     jeecs::Tilemap::MapLayer layer;
     layer.name = name;
-    layer.z = (float)doc->layers.size(); // 新层默认置于最上（沿 +z 错开）
+    layer.z = -(float)doc->layers.size(); // 新层默认置于最上（沿 -z 错开）
     layer.rend_queue = jeecs::Tilemap::LAYER_REND_QUEUE_BASE
         + (int32_t)doc->layers.size();   // 渲染队列同样按下标错开（升序绘制）
     layer.grid.assign((size_t)doc->width * doc->height, 0);
