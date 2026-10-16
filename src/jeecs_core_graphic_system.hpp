@@ -2439,6 +2439,7 @@ public func frag(vf: v2f)
             const basic::resource<graphic::shader>& shape;
             const basic::resource<graphic::shader>& sprite;
             const basic::resource<graphic::shader>& sub;
+            const basic::resource<graphic::shader>& sub_texarray;
         };
         defer_light2d_shadow_passes_t select_shadow_passes(bool is_parallel) const
         {
@@ -2449,6 +2450,7 @@ public func frag(vf: v2f)
                     m_defer_light2d_host._defer_light2d_shadow_shape_parallel_pass,
                     m_defer_light2d_host._defer_light2d_shadow_sprite_parallel_pass,
                     m_defer_light2d_host._defer_light2d_shadow_sub_pass,
+                    m_defer_light2d_host._defer_light2d_shadow_sub_array_pass,
             }
             : defer_light2d_shadow_passes_t{
                 m_defer_light2d_host._defer_light2d_shadow_point_pass,
@@ -2456,6 +2458,7 @@ public func frag(vf: v2f)
                 m_defer_light2d_host._defer_light2d_shadow_shape_point_pass,
                 m_defer_light2d_host._defer_light2d_shadow_sprite_point_pass,
                 m_defer_light2d_host._defer_light2d_shadow_sub_pass,
+                m_defer_light2d_host._defer_light2d_shadow_sub_array_pass,
             };
         }
 
@@ -2748,7 +2751,7 @@ public func frag(vf: v2f)
                                                     array_atlas.value()->resource());
 
                                             auto& sub_pass_shader = array_atlas.has_value()
-                                                ? m_defer_light2d_host._defer_light2d_shadow_sub_array_pass
+                                                ? shadow_passes.sub_texarray
                                                 : shadow_passes.sub;
 
                                             assert(block_in_layer->shape != nullptr);
