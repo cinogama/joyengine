@@ -1219,7 +1219,7 @@ public let frag =
             jeecs::basic::resource<jeecs::graphic::texture2d> _no_shadow;
             jeecs::basic::resource<jeecs::graphic::vertex> _screen_vertex;
 
-            jeecs::basic::resource<jeecs::graphic::vertex> _sprite_shadow_vertex;
+            jeecs::basic::resource<jeecs::graphic::vertex> _wall_shadow_vertex;
 
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_point_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_parallel_pass;
@@ -1229,6 +1229,8 @@ public let frag =
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_shape_parallel_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sprite_point_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sprite_parallel_pass;
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_wall_point_pass;
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_wall_parallel_pass;
 
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_pass;
 
@@ -1267,12 +1269,13 @@ public let frag =
                 1.f,
                 0.f,
             };
-            // SpriteShadow 全向阴影条带：底/顶/左/右四条锚边各一个四边形，
-            // 锚点对（factor=0）贴边，远端对（factor=1）由顶点着色器沿背光
-            // 方向挤出；向光边在顶点着色器里折叠回锚边（零面积，无片元）。
-            // 顶点格式 pos.xyz / uv.xy / factor / edge_normal.xy，
-            // uv 沿边方向 0→1、沿挤出方向从本边值跨到对边值（整图压扁观感）。
-            inline static const float _sprite_shadow_vertex_data[] = {
+            // WallShadow（墙状遮挡）全向阴影条带：底/顶/左/右四条锚边
+            // 各一个四边形，锚点对（factor=0）贴边，远端对（factor=1）由
+            // 顶点着色器沿背光方向挤出；向光边在顶点着色器里折叠回锚边
+            // （零面积，无片元）。顶点格式 pos.xyz / uv.xy / factor /
+            // edge_normal.xy，uv 沿边方向 0→1、沿挤出方向从本边值跨到
+            // 对边值（整图压扁观感）。
+            inline static const float _wall_shadow_vertex_data[] = {
                 /* bottom edge, normal (0,-1) */
                 -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f,
                 0.5f,  -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, -1.0f,
@@ -1310,11 +1313,11 @@ public let frag =
                         })
                         .value()
                 }
-                , _sprite_shadow_vertex{
+                , _wall_shadow_vertex{
                     jeecs::graphic::vertex::create(
                         jegl_vertex::type::TRIANGLES,
-                        _sprite_shadow_vertex_data,
-                        sizeof(_sprite_shadow_vertex_data),
+                        _wall_shadow_vertex_data,
+                        sizeof(_wall_shadow_vertex_data),
                         {0, 1, 2, 1, 3, 2,
                         4, 5, 6, 5, 7, 6,
                         8, 9, 10, 9, 11, 10,
@@ -1724,6 +1727,171 @@ WOSHADER_VERTEX_IN!
     using vin = struct {
         vertex: float3,
         uv: float2,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct{
+        pos: float4,
+        uv: float2,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct{
+        shadow_factor: float4,
+    };
+    
+public func vert(v: vin)
+{
+    // local_scale.yz 为 CPU 预计算的精灵局部空间背光方向（xy），
+    // 点光/平行光统一走该通道，着色器内不区分光源类型
+    let dir_raw = JE_LOCAL_SCALE->yz;
+    let shadow_dir_local = dir_raw / max(length(dir_raw), 0.000001);
+    let shadow_scale_factor = JE_COLOR->w;
+
+    let vpos = JE_MV * vec4!(v.vertex, 1.);
+    // 局部方向随模型旋转/翻转到视空间（w=0 跳过平移）
+    let shadow_dir_view = (JE_MV * vec4!(
+        shadow_dir_local->x, shadow_dir_local->y, 0., 0.))->xy;
+
+    // 锚定拉伸：迎光边（stretch=0）原位不动，背光边（stretch=1）沿
+    // 背光方向拉出 distance，贴图随四边形连续拉伸——角色剪影的
+    // 投影式阴影，任意光向都成立
+    let stretch = clamp(0.5 + dot(v.vertex->xy, shadow_dir_local), 0., 1.);
+
+    return v2f{
+        pos = JE_P * vec4!(
+            (vpos->xyz / vpos->w)
+                + vec3!(shadow_dir_view, 0.) * shadow_scale_factor * stretch,
+            1.),
+        uv = uvtrans(v.uv, JE_UV_TILING, JE_UV_OFFSET),
+    };
+}
+
+let linear_clamp = Sampler2D::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
+WOSHADER_UNIFORM!
+    let Main = texture2d::uniform(0, linear_clamp);
+    
+public func frag(vf: v2f)
+{
+
+    let final_shadow = alphatest(
+        vec4!(
+            JE_LOCAL_SCALE,     // NOTE: JE_LOCAL_SCALE->x is shadow factor here.
+            tex2d(Main, vf.uv)->w));
+            
+    let shadow_factor = final_shadow->x;
+    return fout{
+        shadow_factor = vec4!(
+            shadow_factor, shadow_factor, shadow_factor, shadow_factor),
+    };
+}
+)").value()
+                }
+                , _defer_light2d_shadow_sprite_parallel_pass{
+                jeecs::graphic::shader::create(
+                    nullptr,
+                    "!/builtin/defer_light2d_shadow_parallel_sprite.shader"
+                    , R"(
+import pkg::std;
+
+import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (MAX, ONE, ONE);
+// MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
+CULL    (NONE);
+
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex: float3,
+        uv: float2,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos: float4,
+        uv: float2,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        shadow_factor: float4,
+    };
+    
+public func vert(v: vin)
+{
+    // local_scale.yz 为 CPU 预计算的精灵局部空间背光方向（xy），
+    // 点光/平行光统一走该通道，着色器内不区分光源类型
+    let dir_raw = JE_LOCAL_SCALE->yz;
+    let shadow_dir_local = dir_raw / max(length(dir_raw), 0.000001);
+    let shadow_scale_factor = JE_COLOR->w;
+
+    let vpos = JE_MV * vec4!(v.vertex, 1.);
+    // 局部方向随模型旋转/翻转到视空间（w=0 跳过平移）
+    let shadow_dir_view = (JE_MV * vec4!(
+        shadow_dir_local->x, shadow_dir_local->y, 0., 0.))->xy;
+
+    // 锚定拉伸：迎光边（stretch=0）原位不动，背光边（stretch=1）沿
+    // 背光方向拉出 distance，贴图随四边形连续拉伸——角色剪影的
+    // 投影式阴影，任意光向都成立
+    let stretch = clamp(0.5 + dot(v.vertex->xy, shadow_dir_local), 0., 1.);
+
+    return v2f{
+        pos = JE_P * vec4!(
+            (vpos->xyz / vpos->w)
+                + vec3!(shadow_dir_view, 0.) * shadow_scale_factor * stretch,
+            1.),
+        uv = uvtrans(v.uv, JE_UV_TILING, JE_UV_OFFSET),
+    };
+}
+
+let linear_clamp = Sampler2D::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
+WOSHADER_UNIFORM!
+    let Main = texture2d::uniform(0, linear_clamp);
+    
+public func frag(vf: v2f)
+{
+    let final_shadow = alphatest(
+        vec4!(
+            JE_LOCAL_SCALE,     // NOTE: JE_LOCAL_SCALE->x is shadow factor here.
+            tex2d(Main, vf.uv)->w));
+            
+    let shadow_factor = final_shadow->x;
+    return fout{
+        shadow_factor = vec4!(
+            shadow_factor, shadow_factor, shadow_factor, shadow_factor),
+    };
+}
+)").value()
+                }
+                , _defer_light2d_shadow_wall_point_pass{
+                    jeecs::graphic::shader::create(
+                        nullptr,
+                        "!/builtin/defer_light2d_shadow_point_wall.shader",
+                        R"(
+import pkg::std;
+
+import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (MAX, ONE, ONE);
+// MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
+CULL    (NONE);
+
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex: float3,
+        uv: float2,
         factor: float,
         // 锚边外法线：顶点着色器用它判定本边是否背光
         normal: float2,
@@ -1785,10 +1953,10 @@ public func frag(vf: v2f)
 }
 )").value()
                 }
-                , _defer_light2d_shadow_sprite_parallel_pass{
+                , _defer_light2d_shadow_wall_parallel_pass{
                 jeecs::graphic::shader::create(
                     nullptr,
-                    "!/builtin/defer_light2d_shadow_parallel_sprite.shader"
+                    "!/builtin/defer_light2d_shadow_parallel_wall.shader"
                     , R"(
 import pkg::std;
 
@@ -2176,6 +2344,7 @@ public func frag(vf: v2f)
             const Light2D::BlockShadow* blockshadow;
             const Light2D::ShapeShadow* shapeshadow;
             const Light2D::SpriteShadow* spriteshadow;
+            const Light2D::WallShadow* wallshadow;
             const Light2D::SelfShadow* selfshadow;
             // 逐块自阴影修饰（与 SelfShadow 同挂）：TopDown 光源下 AUTO
             // 高度判定用网格顶点携带的块底边逐块比较，见 sub_topdown pass
@@ -2514,13 +2683,14 @@ public func frag(vf: v2f)
                 }
             }
 
-            for (auto&& [trans, blockshadow, shapeshadow, spriteshadow, selfshadow,
+            for (auto&& [trans, blockshadow, shapeshadow, spriteshadow, wallshadow, selfshadow,
                 perblock, texture, texture_array, shape] : query<
                 view typesof(
                     Translation&,
                     BlockShadow*,
                     ShapeShadow*,
                     SpriteShadow*,
+                    WallShadow*,
                     SelfShadow*,
                     PerBlockSelfShadow*,
                     Textures2D*,
@@ -2531,6 +2701,7 @@ public func frag(vf: v2f)
                     BlockShadow,
                     ShapeShadow,
                     SpriteShadow,
+                    WallShadow,
                     SelfShadow
                 )
             >())
@@ -2577,6 +2748,7 @@ public func frag(vf: v2f)
                         blockshadow,
                         shapeshadow,
                         spriteshadow,
+                        wallshadow,
                         selfshadow,
                         perblock,
                         texture,
@@ -2610,13 +2782,14 @@ public func frag(vf: v2f)
 
         /* ------- DeferLight2D-specific helpers (use the base helpers too) ------- */
 
-        // Pick the appropriate 5-tuple of shadow shaders based on light type (point/parallel).
+        // Pick the shadow shader set based on light type (point/parallel).
         struct defer_light2d_shadow_passes_t
         {
             const basic::resource<graphic::shader>& normal;
             const basic::resource<graphic::shader>& reverse_normal;
             const basic::resource<graphic::shader>& shape;
             const basic::resource<graphic::shader>& sprite;
+            const basic::resource<graphic::shader>& wall;
             const basic::resource<graphic::shader>& sub;
             const basic::resource<graphic::shader>& sub_texarray;
         };
@@ -2628,6 +2801,7 @@ public func frag(vf: v2f)
                     m_defer_light2d_host._defer_light2d_shadow_parallel_reverse_pass,
                     m_defer_light2d_host._defer_light2d_shadow_shape_parallel_pass,
                     m_defer_light2d_host._defer_light2d_shadow_sprite_parallel_pass,
+                    m_defer_light2d_host._defer_light2d_shadow_wall_parallel_pass,
                     m_defer_light2d_host._defer_light2d_shadow_sub_pass,
                     m_defer_light2d_host._defer_light2d_shadow_sub_array_pass,
             }
@@ -2636,6 +2810,7 @@ public func frag(vf: v2f)
                 m_defer_light2d_host._defer_light2d_shadow_point_reverse_pass,
                 m_defer_light2d_host._defer_light2d_shadow_shape_point_pass,
                 m_defer_light2d_host._defer_light2d_shadow_sprite_point_pass,
+                m_defer_light2d_host._defer_light2d_shadow_wall_point_pass,
                 m_defer_light2d_host._defer_light2d_shadow_sub_pass,
                 m_defer_light2d_host._defer_light2d_shadow_sub_array_pass,
             };
@@ -2880,22 +3055,62 @@ public func frag(vf: v2f)
                                             math::vec3(0.f, -1.f, 0.f),
                                             blockarch.textures);
                                     }
+                                    if (blockarch.wallshadow != nullptr && blockarch.wallshadow->factor > 0.f)
+                                    {
+                                        auto* texture_group = alloc_shadow_texture_group(
+                                            light2d_shadow_rend_chain, blockarch.textures);
+
+                                        // WallShadow（墙状遮挡）通过 local_scale.x 传权重，.yz 预留，
+                                        // color.w 传 distance，平行光方向参考 (0,-1,0)。
+                                        draw_shadow_occluder(
+                                            light2d_shadow_rend_chain,
+                                            shadow_passes.wall,
+                                            m_defer_light2d_host._wall_shadow_vertex,
+                                            texture_group,
+                                            blockarch.translation,
+                                            lightarch,
+                                            MAT4_VIEW, MAT4_VP,
+                                            math::vec3(blockarch.wallshadow->factor, 0.f, 0.f),
+                                            blockarch.wallshadow->distance,
+                                            math::vec3(0.f, -1.f, 0.f),
+                                            blockarch.textures);
+                                    }
                                     if (blockarch.spriteshadow != nullptr && blockarch.spriteshadow->factor > 0.f)
                                     {
                                         auto* texture_group = alloc_shadow_texture_group(
                                             light2d_shadow_rend_chain, blockarch.textures);
 
-                                        // SpriteShadow 通过 local_scale.x 传权重，.yz 预留，
-                                        // color.w 传 distance，平行光方向参考 (0,-1,0)。
+                                        // SpriteShadow（角色投影）通过 local_scale.x 传权重，
+                                        // .yz 传 CPU 预计算的精灵局部空间背光方向（点光取
+                                        // 实体中心背向光源，平行光取旋转后的参考方向，
+                                        // 均经 world_rotation 逆变换转入局部系），
+                                        // color.w 传 distance。着色器用它做迎光边锚定、
+                                        // 背光边拉伸的投影式阴影。
+                                        const math::vec3 shadow_dir_world =
+                                            (lightarch.parallel != nullptr
+                                                ? lightarch.translation->world_rotation * math::vec3(0.f, -1.f, 0.f)
+                                                : blockarch.translation->world_position
+                                                    - lightarch.translation->world_position).unit();
+                                        const math::vec3 shadow_dir_local =
+                                            blockarch.translation->world_rotation.inverse() * shadow_dir_world;
+
+                                        assert(blockarch.shape != nullptr);
+                                        const auto& using_shape = blockarch.shape->vertex.has_value()
+                                            ? blockarch.shape->vertex.value()
+                                            : m_default_resources.default_shape_quad;
+
                                         draw_shadow_occluder(
                                             light2d_shadow_rend_chain,
                                             shadow_passes.sprite,
-                                            m_defer_light2d_host._sprite_shadow_vertex,
+                                            using_shape,
                                             texture_group,
                                             blockarch.translation,
                                             lightarch,
                                             MAT4_VIEW, MAT4_VP,
-                                            math::vec3(blockarch.spriteshadow->factor, 0.f, 0.f),
+                                            math::vec3(
+                                                blockarch.spriteshadow->factor,
+                                                shadow_dir_local.x,
+                                                shadow_dir_local.y),
                                             blockarch.spriteshadow->distance,
                                             math::vec3(0.f, -1.f, 0.f),
                                             blockarch.textures);

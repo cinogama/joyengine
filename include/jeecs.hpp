@@ -13287,6 +13287,22 @@ namespace jeecs
                 typing::register_member(guard, &SpriteShadow::distance, "distance");
             }
         };
+        // 墙状遮挡阴影：把精灵四边形的背光锚边沿挤出方向抹出条带
+        // （贴图整图压扁观感），适合墙体/箱柜等实心矩形遮挡物
+        struct WallShadow
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(WallShadow);
+            JECS_DEFAULT_CONSTRUCTOR(WallShadow);
+
+            float factor = 1.0f;
+            float distance = 1.0f;
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &WallShadow::factor, "factor");
+                typing::register_member(guard, &WallShadow::distance, "distance");
+            }
+        };
         struct SelfShadow
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(SelfShadow);
@@ -15335,6 +15351,7 @@ namespace jeecs
             jeecs::typing::register_type<Light2D::BlockShadow>(guard, "Light2D::BlockShadow");
             jeecs::typing::register_type<Light2D::ShapeShadow>(guard, "Light2D::ShapeShadow");
             jeecs::typing::register_type<Light2D::SpriteShadow>(guard, "Light2D::SpriteShadow");
+            jeecs::typing::register_type<Light2D::WallShadow>(guard, "Light2D::WallShadow");
             jeecs::typing::register_type<Light2D::SelfShadow>(guard, "Light2D::SelfShadow");
             jeecs::typing::register_type<Light2D::PerBlockSelfShadow>(guard, "Light2D::PerBlockSelfShadow");
 

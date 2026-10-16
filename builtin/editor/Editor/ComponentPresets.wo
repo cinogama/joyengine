@@ -60,7 +60,7 @@ namespace JEEditor::Editor::ComponentPresets
 
     public let LIGHT2D_SHADOW_COMMON_COMPONENTS = [
         "Light2D::ShapeShadow", "Light2D::BlockShadow",
-        "Light2D::SelfShadow",
+        "Light2D::SelfShadow", "Light2D::WallShadow",
     ];
 
     public let CAMERA_PERSPECTIVE_COMPONENTS = [
