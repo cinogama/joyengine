@@ -1237,6 +1237,14 @@ public let frag =
             // 用本变体按层采样图集 alpha 做自阴影覆盖
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_array_pass;
 
+            // 逐块判定版 sub pass ×2（TopDown 光源 + Light2D::PerBlockSelfShadow
+            // 遮挡物专用）：AUTO 高度判定不在 CPU 按实体原点一刀切，而是用
+            // 网格顶点属性 3 携带的块底边（局部 Y）在顶点着色器逐块比较，
+            // 整块受光或整块自阴影。JE_COLOR 约定：x=factor，
+            // y=高度线（AUTO 为光源世界 Y；ON 恒暗时为 +1e30），z/w 备用
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_topdown_pass;
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_topdown_array_pass;
+
             inline static const float _screen_vertex_data[] = {
                 -1.f,
                 1.f,
@@ -1955,6 +1963,149 @@ public func frag(vf: v2f)
 }
 )").value()
                 }
+                , _defer_light2d_shadow_sub_topdown_pass{
+                    jeecs::graphic::shader::create(
+                        nullptr,
+                        "!/builtin/defer_light2d_shadow_sub_topdown.shader",
+                        R"(
+import pkg::std;
+
+import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+// MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
+CULL    (NONE);
+
+// 顶点属性按网格布局前缀绑定：位置 0/1/2 为 pos/uv/normal，
+// 位置 3 为 bottom（块底边局部 Y，PerBlockSelfShadow 契约）。
+// normal 声明未用，仅为占位到位置 3
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex: float3,
+        uv: float2,
+        normal: float3,
+        bottom: float,
+    };
+
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos: float4,
+        uv: float2,
+        cover: float,
+    };
+
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        shadow_factor: float4,
+    };
+
+public func vert(v: vin)
+{
+    // 块底边（局部）变换到世界取 Y，与高度线比较（JE_COLOR：x=factor，
+    // y=高度线——AUTO 为光源世界 Y，ON 恒暗时为 +1e30 使 lit 恒 0）
+    let wb = (JE_M * vec4!(v.vertex->x, v.bottom, v.vertex->z, 1.))->y;
+    let lit = step(wb, JE_COLOR->y);
+
+    return v2f{
+        pos = JE_MVP * vec4!(v.vertex, 1.),
+        uv = uvtrans(v.uv, JE_UV_TILING, JE_UV_OFFSET),
+        cover = JE_COLOR->x * (1. - lit),
+    };
+}
+
+let nearest_clamp = Sampler2D::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+WOSHADER_UNIFORM!
+    let Main = texture2d::uniform(0, nearest_clamp);
+
+public func frag(vf: v2f)
+{
+    let final_shadow = alphatest(vec4!(vf.cover, vf.cover, vf.cover, tex2d(Main, vf.uv)->w));
+
+    let shadow_factor = final_shadow->x;
+    return fout{
+        shadow_factor = vec4!(
+            shadow_factor, shadow_factor, shadow_factor, 1.),
+    };
+}
+)").value()
+                }
+                , _defer_light2d_shadow_sub_topdown_array_pass{
+                    jeecs::graphic::shader::create(
+                        nullptr,
+                        "!/builtin/defer_light2d_shadow_sub_topdown_array.shader",
+                        R"(
+import pkg::std;
+
+import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+// MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
+CULL    (NONE);
+
+// 同 sub_topdown：位置 3 为 bottom（块底边局部 Y），normal 仅占位；
+// uv.z 为数组纹理层号（瓦片地图分片图集）
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex: float3,
+        uv: float3,
+        normal: float3,
+        bottom: float,
+    };
+
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos: float4,
+        uv: float3,
+        cover: float,
+    };
+
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        shadow_factor: float4,
+    };
+
+public func vert(v: vin)
+{
+    let wb = (JE_M * vec4!(v.vertex->x, v.bottom, v.vertex->z, 1.))->y;
+    let lit = step(wb, JE_COLOR->y);
+
+    return v2f{
+        pos = JE_MVP * vec4!(v.vertex, 1.),
+        // tiling/offset 只作用于 uv.xy，数组层号分量原样传递
+        uv = vec3!(
+            v.uv->x * JE_UV_TILING->x + JE_UV_OFFSET->x,
+            v.uv->y * JE_UV_TILING->y + JE_UV_OFFSET->y,
+            v.uv->z),
+        cover = JE_COLOR->x * (1. - lit),
+    };
+}
+
+let nearest_clamp = Sampler2D::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+WOSHADER_UNIFORM!
+    let Main = texture2darray::uniform(0, nearest_clamp);
+
+public func frag(vf: v2f)
+{
+    let final_shadow = alphatest(vec4!(vf.cover, vf.cover, vf.cover, tex2darray(Main, vf.uv)->w));
+
+    let shadow_factor = final_shadow->x;
+    return fout{
+        shadow_factor = vec4!(
+            shadow_factor, shadow_factor, shadow_factor, 1.),
+    };
+}
+)").value()
+                }
             {
                 // Donothing...
             }
@@ -2009,6 +2160,9 @@ public func frag(vf: v2f)
             const Light2D::ShapeShadow* shapeshadow;
             const Light2D::SpriteShadow* spriteshadow;
             const Light2D::SelfShadow* selfshadow;
+            // 逐块自阴影修饰（与 SelfShadow 同挂）：TopDown 光源下 AUTO
+            // 高度判定用网格顶点携带的块底边逐块比较，见 sub_topdown pass
+            const Light2D::PerBlockSelfShadow* perblock;
 
             const Textures2D* textures;
             // 数组图集（瓦片地图分片）：槽 0 为图集，sub pass 用它按层采样
@@ -2344,13 +2498,14 @@ public func frag(vf: v2f)
             }
 
             for (auto&& [trans, blockshadow, shapeshadow, spriteshadow, selfshadow,
-                texture, texture_array, shape] : query<
+                perblock, texture, texture_array, shape] : query<
                 view typesof(
                     Translation&,
                     BlockShadow*,
                     ShapeShadow*,
                     SpriteShadow*,
                     SelfShadow*,
+                    PerBlockSelfShadow*,
                     Textures2D*,
                     Textures2DArray*,
                     Shape&
@@ -2406,6 +2561,7 @@ public func frag(vf: v2f)
                         shapeshadow,
                         spriteshadow,
                         selfshadow,
+                        perblock,
                         texture,
                         texture_array,
                         &shape
@@ -2419,10 +2575,16 @@ public func frag(vf: v2f)
                 {
                     return a.translation->world_position.z > b.translation->world_position.z;
                 });
+            // TopDown 光源遍历用：Y 相同（如瓦片地图全部分片/图层共享根
+            // 实体 Y）时按 z 降序平手——z 小者（默认沿 -z 叠放的视觉上层）
+            // 后 flush、其自阴影覆盖在共享像素生效，与普通光源按 z 降序
+            // 遍历的层级结果一致，避免不稳定排序导致覆盖胜负不确定
             std::sort(m_2dblock_y_list.begin(), m_2dblock_y_list.end(),
                 [](const block2d_arch& a, const block2d_arch& b)
                 {
-                    return a.translation->world_position.y > b.translation->world_position.y;
+                    const auto& ap = a.translation->world_position;
+                    const auto& bp = b.translation->world_position;
+                    return ap.y > bp.y || (ap.y == bp.y && ap.z > bp.z);
                 });
 
             this->branch_allocate_end();
@@ -2750,9 +2912,19 @@ public func frag(vf: v2f)
                                                     light2d_shadow_rend_chain, texture_group, 0,
                                                     array_atlas.value()->resource());
 
-                                            auto& sub_pass_shader = array_atlas.has_value()
-                                                ? shadow_passes.sub_texarray
-                                                : shadow_passes.sub;
+                                            // TopDown 光源 + PerBlockSelfShadow 修饰：
+                                            // 换用按块底边逐块判定的 topdown sub pass
+                                            const bool per_block_selfshadow =
+                                                lightarch.topdown != nullptr
+                                                && block_in_layer->perblock != nullptr;
+
+                                            auto& sub_pass_shader = per_block_selfshadow
+                                                ? (array_atlas.has_value()
+                                                    ? m_defer_light2d_host._defer_light2d_shadow_sub_topdown_array_pass
+                                                    : m_defer_light2d_host._defer_light2d_shadow_sub_topdown_pass)
+                                                : (array_atlas.has_value()
+                                                    ? shadow_passes.sub_texarray
+                                                    : shadow_passes.sub);
 
                                             assert(block_in_layer->shape != nullptr);
                                             const auto& using_shape =
@@ -2782,7 +2954,22 @@ public func frag(vf: v2f)
                                                 0.f,
                                                 0.f);*/
 
-                                            if (block_in_layer->selfshadow->auto_disable &&
+                                            if (per_block_selfshadow)
+                                            {
+                                                // 高度线打包进 JE_COLOR 供顶点着色器逐块比较：
+                                                // AUTO 用光源世界 Y；ON（auto_disable=false）
+                                                // 恒暗，高度线取 +1e30 使 lit 恒 0（整块写 factor）
+                                                const float height_line =
+                                                    block_in_layer->selfshadow->auto_disable
+                                                    ? lightarch.translation->world_position.y
+                                                    : 1e30f;
+                                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
+                                                    block_in_layer->selfshadow->factor,
+                                                    height_line,
+                                                    0.f,
+                                                    0.f);
+                                            }
+                                            else if (block_in_layer->selfshadow->auto_disable &&
                                                 (lightarch.topdown == nullptr
                                                     ? block_in_layer->translation->world_position.z >= lightarch.translation->world_position.z
                                                     : block_in_layer->translation->world_position.y >= lightarch.translation->world_position.y))

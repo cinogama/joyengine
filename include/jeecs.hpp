@@ -5170,6 +5170,10 @@ je_tilemap_layer_selfshadow / je_tilemap_set_layer_selfshadow 的取值。
     * JE_LAYER_SELFSHADOW_AUTO 启用（自动）：分片挂 SelfShadow 且
       auto_disable = true，光源不高于该层时自阴影覆盖被清除（图块受光）
 （覆盖强度 factor 经 je_tilemap_set_layer_selfshadow_factor 按层设置）
+TopDown 光源（Light2D::TopDown）下的 AUTO 判定按格进行：分片同挂
+Light2D::PerBlockSelfShadow（网格顶点携带块底边高度），格底边不低于光源
+高度线时该格受光、否则写 factor——整张地图不会被实体原点一刀切。
+（ON 模式与普通光源不受影响，仍为整实体判定）
 请参见：
     je_tilemap_set_layer_selfshadow
     je_tilemap_set_layer_selfshadow_factor
@@ -13297,6 +13301,17 @@ namespace jeecs
                 typing::register_member(guard, &SelfShadow::auto_disable, "auto_disable");
             }
         };
+        // 逐块自阴影修饰标记（与 Light2D::SelfShadow 同挂时生效，仅 TopDown 光源使用）：
+        // 遮挡物不再作为整体参与 AUTO 高度判定，而是逐"块"独立判定——
+        // 要求渲染网格在顶点属性位置 3 额外携带 float1 "bottom"（本块底边的
+        // 局部 Y，同一块的各顶点须写同值，图元内判定才一致）。块底边变换到
+        // 世界后的 Y >= 光源世界 Y 时该块受光（覆盖清零），否则写 factor。
+        // 面向分块式大网格内容（瓦片地图等）；非 TopDown 光源忽略此组件。
+        struct PerBlockSelfShadow
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(PerBlockSelfShadow);
+            JECS_DEFAULT_CONSTRUCTOR(PerBlockSelfShadow);
+        };
     }
     namespace Animation
     {
@@ -15321,6 +15336,7 @@ namespace jeecs
             jeecs::typing::register_type<Light2D::ShapeShadow>(guard, "Light2D::ShapeShadow");
             jeecs::typing::register_type<Light2D::SpriteShadow>(guard, "Light2D::SpriteShadow");
             jeecs::typing::register_type<Light2D::SelfShadow>(guard, "Light2D::SelfShadow");
+            jeecs::typing::register_type<Light2D::PerBlockSelfShadow>(guard, "Light2D::PerBlockSelfShadow");
 
             jeecs::typing::register_type<Physics2D::Scene>(guard, "Physics2D::Scene");
 

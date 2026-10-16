@@ -89,7 +89,11 @@ namespace jeecs
     struct TilemapSystem : public game_system
     {
         static constexpr size_t CHUNK = 32;         // 分块边长（格）
-        static constexpr size_t FLOATS_PER_VERTEX = 9;   // pos3 + uv3(u,v,layer) + normal3
+        // pos3 + uv3(u,v,layer) + normal3 + bottom1：
+        // bottom 为本块底边局部 Y（Light2D::PerBlockSelfShadow 契约，
+        // TopDown 光源的逐块自阴影高度判定用；尾部追加对 ≤3 属性的
+        // 着色器不可见——顶点属性按网格布局前缀绑定）
+        static constexpr size_t FLOATS_PER_VERTEX = 10;
         static constexpr size_t VERTS_PER_CELL = 16;     // 每格 4 个子四边形槽位
         static constexpr size_t FLOATS_PER_CELL = VERTS_PER_CELL * FLOATS_PER_VERTEX;
 
@@ -275,7 +279,9 @@ namespace jeecs
 
         // 图层自阴影对齐：OFF 移除分片上的 SelfShadow 组件（不参与
         // 自阴影覆盖），ON/AUTO 挂载并把 auto_disable 对齐到图层模式、
-        // factor 对齐到图层强度。组件增删走命令缓冲、下一帧才迁移生效，
+        // factor 对齐到图层强度。瓦片网格顶点携带块底边（bottom 属性），
+        // 故同挂 PerBlockSelfShadow——TopDown 光源下 AUTO 高度判定逐格
+        // 进行。组件增删走命令缓冲、下一帧才迁移生效，
         // 与着色器/纹理/比例尺同款每帧对齐
         static void sync_part_selfshadow(const game_entity& part,
             je_LayerSelfShadow layer_selfshadow, float selfshadow_factor)
@@ -285,10 +291,14 @@ namespace jeecs
             {
                 if (selfshadow != nullptr)
                     part.remove_component<Light2D::SelfShadow>();
+                if (part.get_component<Light2D::PerBlockSelfShadow>() != nullptr)
+                    part.remove_component<Light2D::PerBlockSelfShadow>();
                 return;
             }
             if (selfshadow == nullptr)
                 selfshadow = part.add_component<Light2D::SelfShadow>();
+            if (part.get_component<Light2D::PerBlockSelfShadow>() == nullptr)
+                part.add_component<Light2D::PerBlockSelfShadow>();
             selfshadow->factor = selfshadow_factor;
             selfshadow->auto_disable =
                 layer_selfshadow == JE_LAYER_SELFSHADOW_AUTO;
@@ -526,17 +536,18 @@ namespace jeecs
         // ---- 顶点写入 ----
 
         // 写一个四边形（x0/y0 左下，x1/y1 右上；v 引擎空间向上增长；
-        // uv 为 tile-local [0,1]²，layer 为数组纹理层号）
+        // uv 为 tile-local [0,1]²，layer 为数组纹理层号；
+        // bottom 为本块底边局部 Y，同块各顶点写同值）
         static void write_quad(float* v,
             float x0, float y0, float x1, float y1,
-            float u0, float v0, float u1, float v1, float layer)
+            float u0, float v0, float u1, float v1, float layer, float bottom)
         {
             // 顶点序：0=左下 1=右下 2=左上 3=右上（索引 0,1,2 2,1,3）
             float* p = v;
-            *p++ = x0; *p++ = y0; *p++ = 0.f; *p++ = u0; *p++ = v0; *p++ = layer; *p++ = 0.f; *p++ = 0.f; *p++ = -1.f;
-            *p++ = x1; *p++ = y0; *p++ = 0.f; *p++ = u1; *p++ = v0; *p++ = layer; *p++ = 0.f; *p++ = 0.f; *p++ = -1.f;
-            *p++ = x0; *p++ = y1; *p++ = 0.f; *p++ = u0; *p++ = v1; *p++ = layer; *p++ = 0.f; *p++ = 0.f; *p++ = -1.f;
-            *p++ = x1; *p++ = y1; *p++ = 0.f; *p++ = u1; *p++ = v1; *p++ = layer; *p++ = 0.f; *p++ = 0.f; *p++ = -1.f;
+            *p++ = x0; *p++ = y0; *p++ = 0.f; *p++ = u0; *p++ = v0; *p++ = layer; *p++ = 0.f; *p++ = 0.f; *p++ = -1.f; *p++ = bottom;
+            *p++ = x1; *p++ = y0; *p++ = 0.f; *p++ = u1; *p++ = v0; *p++ = layer; *p++ = 0.f; *p++ = 0.f; *p++ = -1.f; *p++ = bottom;
+            *p++ = x0; *p++ = y1; *p++ = 0.f; *p++ = u0; *p++ = v1; *p++ = layer; *p++ = 0.f; *p++ = 0.f; *p++ = -1.f; *p++ = bottom;
+            *p++ = x1; *p++ = y1; *p++ = 0.f; *p++ = u1; *p++ = v1; *p++ = layer; *p++ = 0.f; *p++ = 0.f; *p++ = -1.f; *p++ = bottom;
         }
 
         // 把某格的解析结果写入 staging（16 顶点槽位：未用槽位写零面积
@@ -551,13 +562,13 @@ namespace jeecs
             const float xm = x0 + half, ym = ybot + half;
 
             for (size_t q = 0; q < 4; ++q)
-                write_quad(dst + q * 4 * FLOATS_PER_VERTEX, x0, ytop, x0, ytop, 0.f, 0.f, 0.f, 0.f, 0.f);
+                write_quad(dst + q * 4 * FLOATS_PER_VERTEX, x0, ytop, x0, ytop, 0.f, 0.f, 0.f, 0.f, 0.f, ybot);
             for (int32_t i = 0; i < count; ++i)
             {
                 const auto& q = quads[i];
                 if (!q.corner.has_value())
                 {
-                    write_quad(dst, x0, ybot, x1, ytop, q.u0, q.v0, q.u1, q.v1, (float)q.layer);
+                    write_quad(dst, x0, ybot, x1, ytop, q.u0, q.v0, q.u1, q.v1, (float)q.layer, ybot);
                 }
                 else
                 {
@@ -567,11 +578,12 @@ namespace jeecs
                     {
                     case 0: cx0 = x0; cy0 = ym;  cx1 = xm; cy1 = ytop; break;
                     case 1: cx0 = xm;  cy0 = ym;  cx1 = x1; cy1 = ytop; break;
-                    case 2: cx0 = x0;  cy0 = ybot; cx1 = xm; cy1 = ym;  break;
-                    default: cx0 = xm;  cy0 = ybot; cx1 = x1; cy1 = ym;  break;
+                    case 2: cx0 = x0; cy0 = ybot; cx1 = xm; cy1 = ym;  break;
+                    default: cx0 = xm; cy0 = ybot; cx1 = x1; cy1 = ym;  break;
                     }
+                    // 子象限仍写整格的 ybot：同格判定必须一致，避免地形混合格内缝
                     write_quad(dst + (size_t)*q.corner * 4 * FLOATS_PER_VERTEX,
-                        cx0, cy0, cx1, cy1, q.u0, q.v0, q.u1, q.v1, (float)q.layer);
+                        cx0, cy0, cx1, cy1, q.u0, q.v0, q.u1, q.v1, (float)q.layer, ybot);
                 }
             }
         }
@@ -605,13 +617,16 @@ namespace jeecs
             part.get_component<Renderer::Rendqueue>()->rend_queue = layer_rend_queue;
 
             // 图层自阴影（Light2D 管线）：OFF 不挂组件；ON/AUTO 挂载且
-            // auto_disable 分别固定 false/true，factor 取图层强度
+            // auto_disable 分别固定 false/true，factor 取图层强度。
+            // 网格顶点带块底边属性，同挂 PerBlockSelfShadow 供 TopDown
+            // 光源逐格判定
             if (layer_selfshadow != JE_LAYER_SELFSHADOW_OFF)
             {
                 auto* selfshadow = part.add_component<Light2D::SelfShadow>();
                 selfshadow->factor = selfshadow_factor;
                 selfshadow->auto_disable =
                     layer_selfshadow == JE_LAYER_SELFSHADOW_AUTO;
+                part.add_component<Light2D::PerBlockSelfShadow>();
             }
 
             // 图层遮挡阴影（Light2D 管线）不在此挂载：add_component 走
@@ -660,6 +675,7 @@ namespace jeecs
                     { jegl_vertex::data_type::FLOAT32, 3 }, // pos
                     { jegl_vertex::data_type::FLOAT32, 3 }, // uv (u, v, array layer)
                     { jegl_vertex::data_type::FLOAT32, 3 }, // normal
+                    { jegl_vertex::data_type::FLOAT32, 1 }, // bottom（块底边局部 Y，PerBlockSelfShadow 用）
                 });
             if (created.has_value())
                 shape->vertex = created;

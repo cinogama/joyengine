@@ -752,7 +752,10 @@ namespace je
             ON = 1,     // 启用（常开）：无论光源高度，自阴影覆盖始终按
                         // factor 生效（auto_disable = false）
             AUTO = 2,   // 启用（自动）：光源不高于该层时自阴影覆盖被
-                        // 清除、图块受光（auto_disable = true）
+                        // 清除、图块受光（auto_disable = true）；
+                        // TopDown 光源下按格判定：格底边不低于光源高度线
+                        // 时该格受光，否则写 factor（分片同挂
+                        // PerBlockSelfShadow，网格顶点携带块底边高度）
         }
 
         // ==================== 图层遮挡阴影行为 ====================
