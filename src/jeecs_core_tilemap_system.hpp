@@ -321,9 +321,10 @@ namespace jeecs
 
         // 生成分块的遮挡轮廓条带并写入组件的 m_block_mesh。局部空间与
         // 分片渲染网格一致（1 格 = 1 单位，向 +x 与 -y 展开）。实心格
-        // 与空心格的边界按行/列贪心合并为轴线段；绕向与组件缺省方块
-        // 一致（实心区域逆时针），配合背面剔除只保留背光边。段与段以
-        // 零面积过渡四边形衔接（衔接点对全部取原位因子 0），单条
+        // 与空心格的边界按行/列贪心合并为轴线段，上/下/左/右四类各自
+        // 独立成趟，保证 1 格厚 run 的两侧边界都被发射；绕向与组件缺省
+        // 方块一致（实心区域逆时针），配合背面剔除只保留背光边。段与段
+        // 以零面积过渡四边形衔接（衔接点对全部取原位因子 0），单条
         // TRIANGLESTRIP 即可承载任意多条不相邻线段。邻居判定取整层
         // 网格（跨分块），分块接缝处的实心邻接不产生边界。m_block_points
         // 留空：DeferLight2D 只在 m_block_mesh 缺失时才从 points 构建，
@@ -360,71 +361,87 @@ namespace jeecs
                 push_point(ex, ey, 0.f); push_point(ex, ey, 0.f);
             };
 
-            // 上/下边界：行内贪心合并（局部 y：上边 = -y，下边 = -(y+1)；
-            // 上边方向 -x、下边方向 +x，实心保持在行进方向左侧）
+            // 四类边界各自独立成趟提取（上/下按行、左/右按列，各自贪心
+            // 合并同条件 run）。必须独立成趟：若在同一趟里对同一 run 先后
+            // 试探两类边界，1 格厚的 run 命中第一类后整段跳过，另一侧边界
+            // 不会发射，薄墙在部分光源方向上就没有背光边。迎光侧边界由
+            // 绕向配合 CULL(BACK) 剔除，四类全部发射对任意光源方向安全。
+            // 方向约定：上边 -x、下边 +x（局部 y：上边 = -y，下边 =
+            // -(y+1)）、左边 -y、右边 +y，实心保持在行进方向左侧
             for (int32_t y = y0; y < y1; ++y)
             {
                 for (int32_t x = x0; x < x1;)
                 {
-                    if (cell_blocks_light(doc, layer, x, y))
+                    if (cell_blocks_light(doc, layer, x, y)
+                        && !cell_blocks_light(doc, layer, x, y - 1))
                     {
-                        if (!cell_blocks_light(doc, layer, x, y - 1))
-                        {
-                            int32_t e = x + 1;
-                            while (e < x1
-                                && cell_blocks_light(doc, layer, e, y)
-                                && !cell_blocks_light(doc, layer, e, y - 1))
-                                ++e;
-                            push_segment((float)e, -(float)y, (float)x, -(float)y);
-                            x = e;
-                            continue;
-                        }
-                        if (!cell_blocks_light(doc, layer, x, y + 1))
-                        {
-                            int32_t e = x + 1;
-                            while (e < x1
-                                && cell_blocks_light(doc, layer, e, y)
-                                && !cell_blocks_light(doc, layer, e, y + 1))
-                                ++e;
-                            push_segment((float)x, -(float)(y + 1),
-                                (float)e, -(float)(y + 1));
-                            x = e;
-                            continue;
-                        }
+                        int32_t e = x + 1;
+                        while (e < x1
+                            && cell_blocks_light(doc, layer, e, y)
+                            && !cell_blocks_light(doc, layer, e, y - 1))
+                            ++e;
+                        push_segment((float)e, -(float)y, (float)x, -(float)y);
+                        x = e;
+                        continue;
                     }
                     ++x;
                 }
             }
-            // 左/右边界：列内贪心合并（左边方向 -y、右边方向 +y）
+            for (int32_t y = y0; y < y1; ++y)
+            {
+                for (int32_t x = x0; x < x1;)
+                {
+                    if (cell_blocks_light(doc, layer, x, y)
+                        && !cell_blocks_light(doc, layer, x, y + 1))
+                    {
+                        int32_t e = x + 1;
+                        while (e < x1
+                            && cell_blocks_light(doc, layer, e, y)
+                            && !cell_blocks_light(doc, layer, e, y + 1))
+                            ++e;
+                        push_segment((float)x, -(float)(y + 1),
+                            (float)e, -(float)(y + 1));
+                        x = e;
+                        continue;
+                    }
+                    ++x;
+                }
+            }
             for (int32_t x = x0; x < x1; ++x)
             {
                 for (int32_t y = y0; y < y1;)
                 {
-                    if (cell_blocks_light(doc, layer, x, y))
+                    if (cell_blocks_light(doc, layer, x, y)
+                        && !cell_blocks_light(doc, layer, x - 1, y))
                     {
-                        if (!cell_blocks_light(doc, layer, x - 1, y))
-                        {
-                            int32_t e = y + 1;
-                            while (e < y1
-                                && cell_blocks_light(doc, layer, x, e)
-                                && !cell_blocks_light(doc, layer, x - 1, e))
-                                ++e;
-                            push_segment((float)x, -(float)y, (float)x, -(float)e);
-                            y = e;
-                            continue;
-                        }
-                        if (!cell_blocks_light(doc, layer, x + 1, y))
-                        {
-                            int32_t e = y + 1;
-                            while (e < y1
-                                && cell_blocks_light(doc, layer, x, e)
-                                && !cell_blocks_light(doc, layer, x + 1, e))
-                                ++e;
-                            push_segment((float)(x + 1), -(float)e,
-                                (float)(x + 1), -(float)y);
-                            y = e;
-                            continue;
-                        }
+                        int32_t e = y + 1;
+                        while (e < y1
+                            && cell_blocks_light(doc, layer, x, e)
+                            && !cell_blocks_light(doc, layer, x - 1, e))
+                            ++e;
+                        push_segment((float)x, -(float)y, (float)x, -(float)e);
+                        y = e;
+                        continue;
+                    }
+                    ++y;
+                }
+            }
+            for (int32_t x = x0; x < x1; ++x)
+            {
+                for (int32_t y = y0; y < y1;)
+                {
+                    if (cell_blocks_light(doc, layer, x, y)
+                        && !cell_blocks_light(doc, layer, x + 1, y))
+                    {
+                        int32_t e = y + 1;
+                        while (e < y1
+                            && cell_blocks_light(doc, layer, x, e)
+                            && !cell_blocks_light(doc, layer, x + 1, e))
+                            ++e;
+                        push_segment((float)(x + 1), -(float)e,
+                            (float)(x + 1), -(float)y);
+                        y = e;
+                        continue;
                     }
                     ++y;
                 }
