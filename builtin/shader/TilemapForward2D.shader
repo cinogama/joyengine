@@ -56,8 +56,7 @@ public func vert(v: vin)
         vpos = vpos->xyz / vpos->w,
         vnorm = vnorm,
         uv = vec3!(
-            v.uv->x * JE_UV_TILING->x + JE_UV_OFFSET->x,
-            v.uv->y * JE_UV_TILING->y + JE_UV_OFFSET->y,
+            uvtrans(v.uv->xy, JE_UV_TILING, JE_UV_OFFSET),
             v.uv->z),
     };
 }
