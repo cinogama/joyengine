@@ -141,6 +141,27 @@ namespace jeecs
             // 分片网格经 tex2darray 采样；不参与序列化）。
             // nullopt = 尚未构建（分片扫描会兜底重试）
             std::optional<basic::resource<graphic::texture_array>> array;
+            // 运行期：构建失败标记（纹理不可读时只试一次，避免逐帧兜底
+            // 重试刷日志；图集重载后随新实例重置）
+            bool array_failed = false;
+
+            // 附加层级纹理（如法线图集）：与主纹理共用同一瓦片网格
+            //（xcount/ycount/tile 索引），按各自 pass 展开为独立数组纹理
+            std::vector<struct SourceExtra> extras;
+        };
+        // 图集源纹理的附加层级：pass 为绑定通道 id（>= 1；主纹理固定
+        // 占通道 0，与图层样式"槽 0 保留给图集源纹理"约定一致）
+        struct SourceExtra
+        {
+            int32_t pass = 1;
+            std::string path;   // 运行时路径（@/ 或 !/）
+            // 纹理像素尺寸（添加时测量，cell 尺寸由此与主纹理网格推得）
+            std::optional<int32_t> tex_w, tex_h;
+            // 运行期：与主纹理同层号对齐的数组纹理（build_extra_array
+            // 构建；不参与序列化）。nullopt = 尚未构建
+            std::optional<basic::resource<graphic::texture_array>> array;
+            // 运行期：构建失败标记（同 SourceTexture::array_failed）
+            bool array_failed = false;
         };
         struct TileDef
         {
@@ -293,14 +314,18 @@ namespace jeecs
         // 与 .je4animation 同风格的自有二进制格式（魔数 + 小端字段），
         // 由 C++ 侧统一读写，避免在内核引入 TOML 依赖。
         // 属性值为类型化数据：每值前有 1 字节类型标记（je_PropertyType）。
-        // 图集（JTS3）中瓦片/地形均带 1 字节存活标记（0 = 墓碑，1 = 在案，
+        // 图集（JTS4）中瓦片/地形均带 1 字节存活标记（0 = 墓碑，1 = 在案，
         // 其余视为损坏）：墓碑不写载荷——id 槽位仍占位以保持 id 稳定，
         // 删除信息不依赖任何特殊字段值。地形的 kind 为 je_TerrainKind 的
-        // u8，越界视为损坏。源纹理的 tex_w/tex_h 写 0 表示未测量。
+        // u8，越界视为损坏。源纹理的 tex_w/tex_h 写 0 表示未测量；JTS4
+        // 起每个源在 6 个基础字段后带附加层级纹理表（u32 计数 + 每条
+        // pass/path/tex_w/tex_h），pass < 1 视为损坏（与地图层样式槽位
+        // 同口径）。JTS3 为无层级表的旧版（读取兼容，保存升级为 JTS4）。
         // 地图（JTM6）图层记录内联 rend_queue（i32）、自阴影行为
         //（je_LayerSelfShadow 的 u8，越界视为损坏）、遮挡阴影行为
         //（je_LayerBlockShadow 的 u8，越界视为损坏）与遮挡阴影强度（f32）。
-        constexpr uint32_t TILESET_MAGIC = 0x4A545333;     // "JTS3"
+        constexpr uint32_t TILESET_MAGIC = 0x4A545334;     // "JTS4"
+        constexpr uint32_t TILESET_MAGIC_V3 = 0x4A545333;  // "JTS3"（旧版，只读兼容）
         constexpr uint32_t MAP_MAGIC = 0x4A544D36;         // "JTM6"
 
         struct bin_writer
@@ -456,6 +481,13 @@ namespace jeecs
             {
                 w.str(s.path); w.i32(s.tile_px); w.i32(s.xcount); w.i32(s.ycount);
                 w.i32(s.tex_w.value_or(0)); w.i32(s.tex_h.value_or(0));
+                // 附加层级纹理表（JTS4）：每条 pass/path/tex_w/tex_h
+                w.u32((uint32_t)s.extras.size());
+                for (const auto& e : s.extras)
+                {
+                    w.i32(e.pass); w.str(e.path);
+                    w.i32(e.tex_w.value_or(0)); w.i32(e.tex_h.value_or(0));
+                }
             }
             w.u32((uint32_t)(ts.tiles.size() - 1));
             for (size_t i = 1; i < ts.tiles.size(); ++i)
@@ -524,7 +556,7 @@ namespace jeecs
             auto ts = std::make_shared<TilesetDocument>();
             ts->path = path;
             const uint32_t magic = r.u32();
-            if (magic != TILESET_MAGIC)
+            if (magic != TILESET_MAGIC && magic != TILESET_MAGIC_V3)
                 return std::nullopt;
             ts->name = r.str();
             uint32_t src_n = r.u32();
@@ -536,6 +568,27 @@ namespace jeecs
                 int32_t tw = r.i32(), th = r.i32();
                 if (tw > 0) s.tex_w = tw;
                 if (th > 0) s.tex_h = th;
+                // 附加层级纹理表（JTS4 起有；pass 越界或同源重复视为损坏）
+                if (magic == TILESET_MAGIC)
+                {
+                    uint32_t ex_n = r.u32();
+                    for (uint32_t k = 0; k < ex_n && r.ok; ++k)
+                    {
+                        SourceExtra e;
+                        e.pass = r.i32();
+                        e.path = r.str();
+                        int32_t ew = r.i32(), eh = r.i32();
+                        if (ew > 0) e.tex_w = ew;
+                        if (eh > 0) e.tex_h = eh;
+                        if (e.pass < 1 || e.path.empty())
+                        { r.ok = false; break; }
+                        for (const auto& prev : s.extras)
+                            if (prev.pass == e.pass)
+                            { r.ok = false; break; }
+                        if (r.ok)
+                            s.extras.push_back(std::move(e));
+                    }
+                }
                 ts->sources.push_back(std::move(s));
             }
             ts->tiles.push_back(TileDef{}); // id 0 占位
@@ -1637,37 +1690,40 @@ namespace jeecs
             std::optional<int32_t> corner;
         };
 
-        // 构建源图集的数组纹理（每层一个瓦片，层号 = iy*xcount + ix）：
-        // 从共享缓存的 2D 纹理读像素逐瓦片拷贝。图集展开为数组后，
-        // 分片采样天然不会越出瓦片自身（层内 CLAMP），相邻瓦片渗色
-        // 在结构上不可能发生。纹理未就绪/不可读返回 false，可稍后重试。
-        inline bool build_source_array(SourceTexture& src)
+        // 通用网格数组构建：把 2D 纹理按 (xcount × ycount) 网格逐格拷贝
+        // 为"每层一个瓦片"的数组纹理，层号 = iy*xcount + ix，层尺寸为
+        // cell_w × cell_h。图集展开为数组后，分片采样天然不会越出瓦片
+        // 自身（层内 CLAMP），相邻瓦片渗色在结构上不可能发生。图像与
+        // 记录网格不符（图片被替换/裁剪）时按可用范围收敛构建，超出部分
+        // 的层保持黑色并告警。纹理未就绪/不可读返回 nullopt，可稍后重试。
+        inline std::optional<basic::resource<graphic::texture_array>>
+            build_grid_array(const std::string& path,
+                int32_t xcount, int32_t ycount, int32_t cell_w, int32_t cell_h)
         {
-            auto tex = graphic::texture2d::load(nullptr, src.path);
+            auto tex = graphic::texture2d::load(nullptr, path);
             if (!tex.has_value())
-                return false;
+                return std::nullopt;
             auto* raw = tex.value()->resource();
-            if (raw->m_pixels == nullptr || src.tile_px <= 0)
-                return false;
+            if (raw->m_pixels == nullptr
+                || cell_w <= 0 || cell_h <= 0 || xcount <= 0 || ycount <= 0)
+                return std::nullopt;
 
-            const size_t tp = (size_t)src.tile_px;
+            const size_t cw = (size_t)cell_w, ch = (size_t)cell_h;
             const int32_t tw = (int32_t)raw->m_width;
             const int32_t th = (int32_t)raw->m_height;
 
-            // 图像与记录网格不符（图片被替换/裁剪）时按可用范围收敛构建，
-            // 超出部分的层保持黑色并告警
-            const int32_t xc = std::min(src.xcount, tw / src.tile_px);
-            const int32_t yc = std::min(src.ycount, th / src.tile_px);
+            const int32_t xc = std::min(xcount, tw / cell_w);
+            const int32_t yc = std::min(ycount, th / cell_h);
             if (xc <= 0 || yc <= 0)
-                return false;
-            if (xc != src.xcount || yc != src.ycount)
+                return std::nullopt;
+            if (xc != xcount || yc != ycount)
                 debug::logwarn(
-                    "Tilemap: source '%s' image smaller than recorded grid, "
+                    "Tilemap: texture '%s' smaller than recorded grid, "
                     "array layers beyond image will be blank.",
-                    src.path.c_str());
+                    path.c_str());
 
             auto arr = graphic::texture_array::create(
-                tp, tp, (size_t)(src.xcount * src.ycount),
+                cw, ch, (size_t)(xcount * ycount),
                 jegl_texture_common::format::RGBA);
             uint8_t* dst = arr->pixels();
 
@@ -1676,24 +1732,58 @@ namespace jeecs
                 for (int32_t tx = 0; tx < xc; ++tx)
                 {
                     uint8_t* dst_layer =
-                        dst + (size_t)((ty * src.xcount + tx) * src.tile_px * src.tile_px) * 4;
+                        dst + (size_t)((ty * xcount + tx) * cell_w * cell_h) * 4;
                     // 2D 纹理经 stbi_set_flip_vertically_on_load 加载，
                     // m_pixels 为自底向上行序（缓冲行 0 = 图像底行），
-                    // 瓦片 (tx,ty) 在缓冲中位于行 [th-(ty+1)*tp, th-ty*tp)。
+                    // 瓦片 (tx,ty) 在缓冲中位于行 [th-(ty+1)*ch, th-ty*ch)。
                     // 层行序沿用该翻转序（层行 0 = 瓦片底行，采样 v=1 =
                     // 瓦片顶），与 tile-local UV 及编辑器换算的 v=1 为顶
                     // 约定一致。
-                    const size_t buf_row0 = (size_t)(th - (ty + 1) * src.tile_px);
-                    for (size_t r = 0; r < tp; ++r)
+                    const size_t buf_row0 = (size_t)(th - (ty + 1) * cell_h);
+                    for (size_t r = 0; r < ch; ++r)
                         memcpy(
-                            dst_layer + r * tp * 4,
+                            dst_layer + r * cw * 4,
                             raw->m_pixels
-                            + ((buf_row0 + r) * (size_t)tw
-                                + (size_t)(tx * src.tile_px)) * 4,
-                            tp * 4);
+                                + ((buf_row0 + r) * (size_t)tw
+                                    + (size_t)(tx * cell_w)) * 4,
+                            cw * 4);
                 }
             }
-            src.array = arr;
+            return arr;
+        }
+
+        // 构建主纹理（反照率）的数组纹理：层尺寸 = tile_px
+        inline bool build_source_array(SourceTexture& src)
+        {
+            if (src.tile_px <= 0)
+                return false;
+            auto arr = build_grid_array(src.path, src.xcount, src.ycount,
+                src.tile_px, src.tile_px);
+            if (!arr.has_value())
+                return false;
+            src.array = arr.value();
+            return true;
+        }
+
+        // 构建附加层级（如法线图集）的数组纹理：与主纹理同一网格与层号
+        //（iy*xcount + ix），cell 尺寸由该层级自身像素尺寸与主网格推得
+        //（tex_w/xcount × tex_h/ycount），支持与主纹理不同分辨率的对齐；
+        // 未测量尺寸时按主纹理 cell 尝试。
+        inline bool build_extra_array(SourceTexture& src, SourceExtra& extra)
+        {
+            int32_t cw = src.tile_px, ch = src.tile_px;
+            if (extra.tex_w.has_value() && extra.tex_h.has_value()
+                && src.xcount > 0 && src.ycount > 0)
+            {
+                cw = *extra.tex_w / src.xcount;
+                ch = *extra.tex_h / src.ycount;
+                if (cw <= 0 || ch <= 0)
+                    return false;
+            }
+            auto arr = build_grid_array(extra.path, src.xcount, src.ycount, cw, ch);
+            if (!arr.has_value())
+                return false;
+            extra.array = arr.value();
             return true;
         }
 

@@ -561,6 +561,36 @@ namespace JEEditor::Editor::TilemapEditor
             passes = passes->append(0);
         passes = passes |> sort(\l, r = l < r;);
 
+        // 图集层级占用的通道：地图引用的各图集源纹理附加层级（extras）
+        // 的 pass——分片会把它们的数组纹理绑到这些通道，后写覆盖同槽的
+        // 2D 绑定（与数组覆盖默认 pass 0 的语义一致）
+        let atlas_passes = []mut: vec<int>;
+        for (let ts_opt : ctx.m_tileset_ids)
+        {
+            match (ts_opt)
+            {
+                none?;
+                value(ts)?
+                {
+                    for (let mut si = 0; si < ts->source_count(); si += 1)
+                        for (let mut k = 0; k < ts->source_extra_count(si); k += 1)
+                        {
+                            let (epass, _) = ts->source_extra_info(si, k);
+                            let mut taken = false;
+                            for (let ap : atlas_passes)
+                            {
+                                if (ap == epass)
+                                    taken = true;
+                            }
+                            if (!taken)
+                                do atlas_passes->add(epass);
+                        }
+                }
+            }
+        }
+        // 收集完毕后不再改动，零拷贝视为 array 供下方遍历
+        let atlas_pass_arr = atlas_passes;
+
         for (let pass : passes)
         {
             // 该通道当前绑定的纹理实例（未配置 → none）
@@ -595,6 +625,11 @@ namespace JEEditor::Editor::TilemapEditor
                     for (let ref_name : refs |> sort(\l, r = l < r;))
                         tips = tips->append(F"采样于 {ref_name}");
                 }
+            }
+            for (let ap : atlas_pass_arr)
+            {
+                if (ap == pass)
+                    tips = tips->append("该通道被图集层级纹理占用（图集数组绑定优先生效）");
             }
 
             let card_h = 36.;
@@ -1278,9 +1313,13 @@ namespace JEEditor::Editor::TilemapEditor
         {
             let (path, _, xc, yc) = ts_id->source_info(i);
             do PushIDInt(i);
-            do Text(F"{path}（{xc}×{yc} 格）");
+            if (TreeNode(F"源 {i}：{filename(normalize(path))}（{xc}×{yc} 格）"))
+            {
+                defer TreePop();
+                do draw_source_extras(state, ts_id, i, path);
+            }
             SameLine();
-            if (Button("移除"))
+            if (Button("移除源"))
             {
                 do ts_id->remove_source(i);
                 state.m_dirty = true;
@@ -1323,6 +1362,98 @@ namespace JEEditor::Editor::TilemapEditor
 
         // 选中瓦片/地形的默认值
         do draw_defaults_editing(state, ts_id);
+    }
+
+    // 某源最小未占用的层级通道号（>= 1；新增层级的默认通道）
+    func suggest_extra_pass(ts_id: tilemap::Tileset, source_idx: int)=> int
+    {
+        for (let mut guess = 1; guess < 64; guess += 1)
+        {
+            let mut used = false;
+            for (let mut k = 0; k < ts_id->source_extra_count(source_idx); k += 1)
+            {
+                let (epass, _) = ts_id->source_extra_info(source_idx, k);
+                if (epass == guess)
+                    used = true;
+            }
+            if (!used)
+                return guess;
+        }
+        return 64;
+    }
+
+    // 源纹理的附加层级编辑：主纹理固定通道 0，层级各占一个 >= 1 的
+    // 通道（如法线图集常用通道 1），与主纹理共用瓦片网格
+    func draw_source_extras(state: EditorState, ts_id: tilemap::Tileset,
+        source_idx: int, main_path: string)=> void
+    {
+        do TextDisabled(F"主纹理（通道 0）：{main_path}");
+
+        let extra_count = ts_id->source_extra_count(source_idx);
+        if (extra_count == 0)
+            do TextDisabled("（无附加层级纹理，如法线图集可在下方添加）");
+        for (let mut k = 0; k < extra_count; k += 1)
+        {
+            let (epass, epath) = ts_id->source_extra_info(source_idx, k);
+            do PushIDInt(k);
+            match (InputInt("通道", epass))
+            {
+                value(v)?
+                {
+                    if (v < 1)
+                        do MsgBox::err("修改通道失败",
+                            "通道 0 保留给图集主纹理，层级通道须 >= 1");
+                    else if (!ts_id->set_source_extra_pass(source_idx, k, v))
+                        do MsgBox::err("修改通道失败",
+                            F"通道 {v} 已被该源的其他层级占用");
+                    else
+                        state.m_dirty = true;
+                }
+                none?;
+            }
+            SameLine();
+            do Text(epath);
+            SameLine();
+            if (Button("×"))
+            {
+                do ts_id->remove_source_extra(source_idx, k);
+                state.m_dirty = true;
+            }
+            if (IsItemHovered())
+                do SetTooltip("移除该层级纹理");
+            do PopID();
+        }
+
+        do Separator();
+        let sug_pass = suggest_extra_pass(ts_id, source_idx);
+        match (InputText("层级纹理路径(@/..)",
+            state.m_new_extra_path->get_or(source_idx, "")))
+        {
+            value(s)? do state.m_new_extra_path->set(source_idx, s);
+            none?;
+        }
+        match (InputInt("通道##extra_add_pass",
+            state.m_new_extra_pass->get_or(source_idx, sug_pass)))
+        {
+            value(v)? do state.m_new_extra_pass->set(source_idx, v < 1 ? 1 | v);
+            none?;
+        }
+        if (Button("添加层级纹理"))
+        {
+            if (!ts_id->add_source_extra(source_idx,
+                state.m_new_extra_path->get_or(source_idx, ""),
+                state.m_new_extra_pass->get_or(source_idx, sug_pass)))
+                do MsgBox::err("添加失败",
+                    "无法添加层级纹理：请检查路径、纹理可加载且尺寸与主纹理网格相符；同一源内通道须唯一");
+            else
+            {
+                state.m_dirty = true;
+                do state.m_new_extra_path->set(source_idx, "");
+            }
+        }
+        if (IsItemHovered())
+            do SetTooltip(
+                "层级与主纹理共用瓦片网格，按指定通道展开为数组纹理供着色器采样（采样声明如 texture2darray::uniform(通道)）");
     }
 
     func draw_terrain_editing(state: EditorState, ts_id: tilemap::Tileset)=> void

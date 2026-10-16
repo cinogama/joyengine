@@ -202,6 +202,59 @@ namespace jeecs
                     comp->bind_texture((size_t)t.slot, t.texture);
         }
 
+        // 分片数组纹理对齐：Textures2DArray 承载图集主数组（pass 0）与
+        // 源纹理各附加层级的数组（pass >= 1，如图集法线）。图集编辑
+        //（增删层级/改通道）与图集重载都不计入地图版本戳，故逐帧与
+        // 文档比对重绑（与 refresh_part_textures 同款轻量对齐）。数组
+        // 未就绪的层级暂缺，就绪后由比对差异触发重绑。
+        static void refresh_part_arrays(const game_entity& part,
+            const Tilemap::SourceTexture* src)
+        {
+            auto* comp = part.get_component<Renderer::Textures2DArray>();
+            if (comp == nullptr)
+                return;
+
+            // 期望绑定序：主数组在前，层级按声明序（与重绑序一致）
+            bool matched = true;
+            size_t idx = 0;
+            if (src != nullptr && src->array.has_value())
+            {
+                if (idx >= comp->textures.size()
+                    || comp->textures[idx].m_pass_id != 0
+                    || comp->textures[idx].m_texture.get() != src->array->get())
+                    matched = false;
+                else
+                    ++idx;
+            }
+            if (matched && src != nullptr)
+                for (const auto& e : src->extras)
+                {
+                    if (!e.array.has_value())
+                        continue;
+                    if (idx >= comp->textures.size()
+                        || comp->textures[idx].m_pass_id != (size_t)e.pass
+                        || comp->textures[idx].m_texture.get() != e.array->get())
+                    {
+                        matched = false;
+                        break;
+                    }
+                    ++idx;
+                }
+            if (matched && idx == comp->textures.size())
+                return;
+
+            // 重绑：按文档重建（未就绪的层级本次留空）
+            comp->textures.clear();
+            if (src != nullptr)
+            {
+                if (src->array.has_value())
+                    comp->bind_texture(0, *src->array);
+                for (const auto& e : src->extras)
+                    if (e.array.has_value())
+                        comp->bind_texture((size_t)e.pass, *e.array);
+            }
+        }
+
         // 比例尺同步：把根实体 LocalScale 复制到分片 LocalScale。
         // 变换系统的缩放为纯局部语义（不沿父链复合，设计如此），
         // 瓦片地图的比例尺因此由本系统显式维护。
@@ -558,13 +611,18 @@ namespace jeecs
 
             // 数组图集（每层一个瓦片）绑到 pass 0：采样侧 tex2darray，
             // 相邻瓦片渗色在结构上不可能发生（层内 CLAMP）
+            auto* arrays = part.get_component<Renderer::Textures2DArray>();
             if (src.array.has_value())
-                part.get_component<Renderer::Textures2DArray>()
-                    ->bind_texture(0, *src.array);
+                arrays->bind_texture(0, *src.array);
             else
                 debug::logerr(
                     "Tilemap: source '%s' has no texture array built yet.",
                     src.path.c_str());
+            // 附加层级（如法线图集）按各自 pass 绑入同一数组组件；
+            // 未就绪的层级留空（refresh_part_arrays 逐帧兜底对齐）
+            for (const auto& e : src.extras)
+                if (e.array.has_value())
+                    arrays->bind_texture((size_t)e.pass, *e.array);
 
             // 图层样式的附加 2D 纹理占其余槽（槽 >= 1）
             auto* textures = part.get_component<Renderer::Textures2D>();
@@ -1110,6 +1168,30 @@ namespace jeecs
                         && key.layer < (int32_t)doc->layers.size()
                         ? doc->layers[key.layer].blockshadow_factor : 1.f;
 
+                    // 源纹理（主数组与附加层级数组的唯一来源）：文档与
+                    // 层样式都就绪时解析，供已有分片对齐与新建分片共用
+                    Tilemap::SourceTexture* src_info = nullptr;
+                    if (doc != nullptr
+                        && key.tileset < (int32_t)doc->tilesets.size()
+                        && doc->tilesets[key.tileset].resolved.has_value()
+                        && key.source < (int32_t)doc->tilesets[key.tileset].resolved->get()->sources.size())
+                        src_info = &doc->tilesets[key.tileset].resolved->get()->sources[key.source];
+
+                    // 数组纹理就绪兜底（主数组与各附加层级）：未就绪则
+                    // 本次留空（分片该通道缺绑），后续帧重试；图集重载后
+                    // 数组随新实例重建亦走此路径。构建失败置 array_failed，
+                    // 只试一次（纹理加载失败会逐次告警，避免逐帧刷日志）
+                    if (src_info != nullptr)
+                    {
+                        if (!src_info->array.has_value() && !src_info->array_failed)
+                            if (!Tilemap::build_source_array(*src_info))
+                                src_info->array_failed = true;
+                        for (auto& ex : src_info->extras)
+                            if (!ex.array.has_value() && !ex.array_failed)
+                                if (!Tilemap::build_extra_array(*src_info, ex))
+                                    ex.array_failed = true;
+                    }
+
                     // 当帧分片句柄：与簿记配对（簿记有而实体无 = 被外部
                     // 销毁，丢弃簿记走重建；实体有而簿记无 = 异常路径，
                     // 收编并强制重建一次；两者皆无 = 首建）
@@ -1134,11 +1216,13 @@ namespace jeecs
                             rebuild_part(*doc, root, key, part);
                             fnd->second = stamp;
                         }
-                        // 着色器/纹理跟随图层样式，比例尺跟随根实体，自阴影
-                        // 与遮挡阴影组件跟随图层模式（组件与样式变化均不计入
-                        // 地图版本戳，故每帧对齐）
+                        // 着色器/2D 附加纹理跟随图层样式，数组纹理跟随
+                        // 图集源纹理（主数组 + 附加层级），比例尺跟随根
+                        // 实体，自阴影与遮挡阴影组件跟随图层模式（组件与
+                        // 样式/图集变化均不计入地图版本戳，故每帧对齐）
                         refresh_part_shader(style, part);
                         refresh_part_textures(part, style);
+                        refresh_part_arrays(part, src_info);
                         sync_part_scale(root, part);
                         sync_part_selfshadow(part, layer_selfshadow);
                         sync_part_blockshadow(doc, key, part, layer_blockshadow,
@@ -1146,19 +1230,8 @@ namespace jeecs
                         continue;
                     }
 
-                    Tilemap::SourceTexture* src_info = nullptr;
-                    if (doc != nullptr
-                        && key.tileset < (int32_t)doc->tilesets.size()
-                        && doc->tilesets[key.tileset].resolved.has_value()
-                        && key.source < (int32_t)doc->tilesets[key.tileset].resolved->get()->sources.size())
-                        src_info = &doc->tilesets[key.tileset].resolved->get()->sources[key.source];
                     if (src_info == nullptr)
                         continue;
-
-                    // 数组图集就绪兜底（首次创建该分片时构建一次；
-                    // 纹理未就绪则本次留空，版本变化时重扫再试）
-                    if (!src_info->array.has_value())
-                        Tilemap::build_source_array(*src_info);
 
                     game_entity part_entity = create_part_entity(
                         root, key.layer, doc->layers[key.layer].z,
@@ -2051,6 +2124,108 @@ bool je_tilemap_source_info(je_TilesetDocument* doc, je_SourceId source_idx,
     if (tile_px != nullptr) *tile_px = s.tile_px;
     if (xcount != nullptr) *xcount = s.xcount;
     if (ycount != nullptr) *ycount = s.ycount;
+    return true;
+}
+
+// ---------------- 图集源纹理附加层级 ----------------
+int32_t je_tilemap_source_extra_count(je_TilesetDocument* doc, je_SourceId source_idx)
+{
+    if (source_idx < 0 || source_idx >= (int32_t)doc->sources.size())
+        return 0;
+    return (int32_t)doc->sources[source_idx].extras.size();
+}
+bool je_tilemap_add_source_extra(je_TilesetDocument* doc, je_SourceId source_idx,
+    const char* texture_path, int32_t pass)
+{
+    assert(texture_path != nullptr);
+    if (source_idx < 0 || source_idx >= (int32_t)doc->sources.size())
+        return false;
+    auto& src = doc->sources[source_idx];
+    if (texture_path[0] == '\0' || pass < 1)
+        return false;
+    // 同源内通道唯一：同 (路径, 通道) 幂等返回 true；同通道不同路径或
+    // 同路径不同通道（换通道应走 set_source_extra_pass）均拒绝
+    for (const auto& e : src.extras)
+    {
+        if (e.pass == pass)
+            return e.path == texture_path;
+        if (e.path == texture_path)
+            return false;
+    }
+    // 读取纹理尺寸：层级 cell 尺寸由它与主纹理网格推得（网格必须容得下）
+    int32_t tw = 0, th = 0;
+    if (auto tex = jeecs::graphic::texture2d::load(nullptr, texture_path))
+    {
+        tw = (int32_t)tex->get()->resource()->m_width;
+        th = (int32_t)tex->get()->resource()->m_height;
+    }
+    else
+    {
+        jeecs::debug::logerr(
+            "Tilemap: unable to load source extra texture '%s'.", texture_path);
+        return false;
+    }
+    if (src.xcount <= 0 || src.ycount <= 0 || tw / src.xcount < 1 || th / src.ycount < 1)
+    {
+        jeecs::debug::logerr(
+            "Tilemap: extra texture '%s' (%dx%d) too small for grid %dx%d.",
+            texture_path, tw, th, src.xcount, src.ycount);
+        return false;
+    }
+    jeecs::Tilemap::SourceExtra extra;
+    extra.pass = pass;
+    extra.path = texture_path;
+    extra.tex_w = tw;
+    extra.tex_h = th;
+    // 展开为与主纹理层号对齐的数组纹理（分片按 pass 绑定采样）
+    if (!jeecs::Tilemap::build_extra_array(src, extra))
+        jeecs::debug::logwarn(
+            "Tilemap: texture array for extra '%s' deferred (image not ready).",
+            texture_path);
+    src.extras.push_back(std::move(extra));
+    ++doc->version;
+    return true;
+}
+bool je_tilemap_remove_source_extra(je_TilesetDocument* doc,
+    je_SourceId source_idx, int32_t extra_idx)
+{
+    if (source_idx < 0 || source_idx >= (int32_t)doc->sources.size())
+        return false;
+    auto& extras = doc->sources[source_idx].extras;
+    if (extra_idx < 0 || extra_idx >= (int32_t)extras.size())
+        return false;
+    extras.erase(extras.begin() + extra_idx);
+    ++doc->version;
+    return true;
+}
+bool je_tilemap_source_extra_info(je_TilesetDocument* doc, je_SourceId source_idx,
+    int32_t extra_idx, /* OPTIONAL */ int32_t* pass, /* OPTIONAL */ const char** texture_path)
+{
+    if (source_idx < 0 || source_idx >= (int32_t)doc->sources.size())
+        return false;
+    const auto& extras = doc->sources[source_idx].extras;
+    if (extra_idx < 0 || extra_idx >= (int32_t)extras.size())
+        return false;
+    if (pass != nullptr) *pass = extras[extra_idx].pass;
+    if (texture_path != nullptr) *texture_path = extras[extra_idx].path.c_str();
+    return true;
+}
+bool je_tilemap_set_source_extra_pass(je_TilesetDocument* doc,
+    je_SourceId source_idx, int32_t extra_idx, int32_t pass)
+{
+    if (source_idx < 0 || source_idx >= (int32_t)doc->sources.size())
+        return false;
+    auto& extras = doc->sources[source_idx].extras;
+    if (extra_idx < 0 || extra_idx >= (int32_t)extras.size() || pass < 1)
+        return false;
+    // 同源内通道唯一（与添加口径一致）
+    for (size_t i = 0; i < extras.size(); ++i)
+        if ((int32_t)i != extra_idx && extras[i].pass == pass)
+            return false;
+    if (extras[extra_idx].pass == pass)
+        return true;
+    extras[extra_idx].pass = pass;
+    ++doc->version;
     return true;
 }
 
@@ -3127,6 +3302,43 @@ WOORT_API woort_api wojeapi_tilemap_source_info(void)
     woort_struct_set_int(s + 0, 2, xc);
     woort_struct_set_int(s + 0, 3, yc);
     return woort_ret_value(s + 0);
+}
+WOORT_API woort_api wojeapi_tilemap_source_extra_count(void)
+{
+    return woort_ret_int(je_tilemap_source_extra_count(
+        woje_ts_doc(0), (int32_t)woort_int(1)));
+}
+WOORT_API woort_api wojeapi_tilemap_add_source_extra(void)
+{
+    return woort_ret_bool(je_tilemap_add_source_extra(
+        woje_ts_doc(0), (int32_t)woort_int(1),
+        woort_string(2), (int32_t)woort_int(3)) ? true : false);
+}
+WOORT_API woort_api wojeapi_tilemap_remove_source_extra(void)
+{
+    return woort_ret_bool(je_tilemap_remove_source_extra(
+        woje_ts_doc(0), (int32_t)woort_int(1), (int32_t)woort_int(2))
+        ? true : false);
+}
+WOORT_API woort_api wojeapi_tilemap_source_extra_info(void)
+{
+    woort_value s;
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
+    const char* path = "";
+    int32_t pass = 0;
+    je_tilemap_source_extra_info(woje_ts_doc(0), (int32_t)woort_int(1),
+        (int32_t)woort_int(2), &pass, &path);
+    woort_set_struct(s + 0, 2);
+    woort_struct_set_int(s + 0, 0, pass);
+    woort_struct_set_string(s + 0, 1, path);
+    return woort_ret_value(s + 0);
+}
+WOORT_API woort_api wojeapi_tilemap_set_source_extra_pass(void)
+{
+    return woort_ret_bool(je_tilemap_set_source_extra_pass(
+        woje_ts_doc(0), (int32_t)woort_int(1),
+        (int32_t)woort_int(2), (int32_t)woort_int(3)) ? true : false);
 }
 WOORT_API woort_api wojeapi_tilemap_add_tile(void)
 {

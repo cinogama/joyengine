@@ -153,10 +153,37 @@ namespace JEEditor::Editor::TilemapEditor
                             {
                                 state.m_palette_source = sel;
                                 state.m_palette_cell = option::none;
+                                state.m_palette_layer = 0;
                             }
                             none?;
                         }
                     }
+                    // 预览层级切换：主纹理之外可切到各附加层级（如法线）
+                    // 检查与主纹理的网格对齐；层级共用网格，仅贴图不同
+                    let extra_count =
+                        ts_id->source_extra_count(state.m_palette_source);
+                    if (extra_count > 0)
+                    {
+                        if (state.m_palette_layer > extra_count)
+                            state.m_palette_layer = 0;
+                        let mut layer_names = []mut: vec<string>;
+                        do layer_names->add("主纹理");
+                        for (let mut k = 0; k < extra_count; k += 1)
+                        {
+                            let (epass, epath) =
+                                ts_id->source_extra_info(state.m_palette_source, k);
+                            do layer_names->add(
+                                F"通道 {epass}：{filename(normalize(epath))}");
+                        }
+                        match (Combo("预览层级##palette_layer", layer_names->to_array,
+                            option::value(state.m_palette_layer)))
+                        {
+                            value(sel)? state.m_palette_layer = sel;
+                            none?;
+                        }
+                    }
+                    else
+                        state.m_palette_layer = 0;
                     if (BeginChildSize("##palette_grid", GetContentRegionAvail()[0], 0.))
                     {
                         do draw_palette_grid(state, ts_id);
@@ -478,12 +505,22 @@ namespace JEEditor::Editor::TilemapEditor
                 do MsgBox::err("缺少锚点", "请先在下方网格中点选一个格子（自动对齐 2x3 地形块）");
         }
         do draw_new_terrain_popup(state, ts_id);
-        let (tex_path, tile_px, xc, yc) =
+        let (tex_path, _, xc, yc) =
             ts_id->source_info(state.m_palette_source);
-
-        match (state->atlas_texture(tex_path))
+        // 预览层级贴图（0 = 主纹理；n = 第 n 条附加层级，共用网格）
+        let mut display_path = tex_path;
+        if (state.m_palette_layer > 0
+            && state.m_palette_layer
+                <= ts_id->source_extra_count(state.m_palette_source))
         {
-            none? { do TextDisabled(F"纹理加载失败：{tex_path}"); return; }
+            let (_, epath) = ts_id->source_extra_info(
+                state.m_palette_source, state.m_palette_layer - 1);
+            display_path = epath;
+        }
+
+        match (state->atlas_texture(display_path))
+        {
+            none? { do TextDisabled(F"纹理加载失败：{display_path}"); return; }
             value(tex)?
             {
                 let (tw, th) = tex->size();
@@ -493,7 +530,9 @@ namespace JEEditor::Editor::TilemapEditor
                 do ImageSize(tex, tw as real * scale, th as real * scale);
 
                 let (rect_min, rect_max) = GetItemRect();
-                let cell_px = tile_px as real * scale;
+                // 格子像素按显示贴图尺寸/网格数推导（层级贴图分辨率可与
+                // 主纹理不同，格子比例恒与网格一致）
+                let cell_px = tw as real / xc as real * scale;
                 if (cell_px < 3.)
                     return;
 

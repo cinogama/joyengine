@@ -102,6 +102,11 @@ namespace JEEditor::Editor::TilemapEditor
         // 添加源纹理弹窗
         protected m_new_source_path: mut string,
         protected m_new_source_tilepx: mut int,
+        // 添加层级纹理输入（按源下标保存：路径 / 通道号）
+        protected m_new_extra_path: map<int, string>,
+        protected m_new_extra_pass: map<int, int>,
+        // 调色板预览层级（0 = 主纹理；n = 第 n 条附加层级）
+        protected m_palette_layer: mut int,
         // 引用图集弹窗：手动路径输入 + 扫描到的图集缓存（@/ 运行时路径）
         protected m_add_ref_path: mut string,
         protected m_found_tilesets: vec<string>,
@@ -174,6 +179,9 @@ namespace JEEditor::Editor::TilemapEditor
                 m_new_terrain_walkable = mut true,
                 m_new_source_path = mut "",
                 m_new_source_tilepx = mut 32,
+                m_new_extra_path = {}mut: map<int, string>,
+                m_new_extra_pass = {}mut: map<int, int>,
+                m_palette_layer = mut 0,
                 m_add_ref_path = mut "",
                 m_found_tilesets = []mut,
                 m_new_prop_name = mut "",

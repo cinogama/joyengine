@@ -502,6 +502,33 @@ namespace je
             extern("libjoyecs", "wojeapi_tilemap_source_info")
                 public func source_info(self: Tileset, source_idx: int)=> (string, int, int, int);
 
+            // ==================== 图集源纹理附加层级 ====================
+            // 附加层级（如法线图集）与源纹理共用同一瓦片网格，按各自
+            // 通道（pass >= 1，通道 0 由主纹理/反照率固定占用）展开为
+            // 独立数组纹理供分片采样
+            extern("libjoyecs", "wojeapi_tilemap_source_extra_count")
+                public func source_extra_count(self: Tileset, source_idx: int)=> int;
+
+            // 添加层级纹理；同 (路径, 通道) 幂等返回 true；纹理无法加载、
+            // 尺寸与网格不符或通道冲突（同通道不同路径 / 同路径不同通道，
+            // 换通道用 set_source_extra_pass）返回 false
+            extern("libjoyecs", "wojeapi_tilemap_add_source_extra")
+                public func add_source_extra(self: Tileset, source_idx: int,
+                    texture_path: string, pass: int)=> bool;
+
+            extern("libjoyecs", "wojeapi_tilemap_remove_source_extra")
+                public func remove_source_extra(self: Tileset, source_idx: int,
+                    extra_idx: int)=> bool;
+
+            // 返回 (绑定通道 id, 纹理路径)
+            extern("libjoyecs", "wojeapi_tilemap_source_extra_info")
+                public func source_extra_info(self: Tileset, source_idx: int,
+                    extra_idx: int)=> (int, string);
+
+            extern("libjoyecs", "wojeapi_tilemap_set_source_extra_pass")
+                public func set_source_extra_pass(self: Tileset, source_idx: int,
+                    extra_idx: int, pass: int)=> bool;
+
             // ==================== 普通瓦片表 ====================
             // 返回新增瓦片的 id（>0，参数无效返回 none）
             extern("libjoyecs", "wojeapi_tilemap_add_tile")

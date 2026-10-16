@@ -5770,6 +5770,53 @@ je_tilemap_source_info [基本接口]
 JE_API bool je_tilemap_source_info(je_TilesetDocument* tileset, je_SourceId source_idx,
     /* OPTIONAL */ const char** texture_path, /* OPTIONAL */ int32_t* tile_px, /* OPTIONAL */ int32_t* xcount, /* OPTIONAL */ int32_t* ycount);
 
+// ---- 图集源纹理附加层级 ----
+
+/*
+je_tilemap_source_extra_count [基本接口]
+取指定源纹理的附加层级纹理（如法线图集）数量
+    * 下标越界返回 0
+*/
+JE_API int32_t je_tilemap_source_extra_count(je_TilesetDocument* tileset,
+    je_SourceId source_idx);
+
+/*
+je_tilemap_add_source_extra [基本接口]
+向源纹理添加附加层级纹理，pass 为其绑定通道 id（>= 1；通道 0 由主纹理/
+反照率固定占用）。层级与主纹理共用同一瓦片网格（层号 = iy*xcount + ix
+对齐，cell 尺寸由层级自身分辨率推得），渲染时按 pass 绑定为独立数组纹理
+    * 同 (纹理路径, 通道) 幂等返回 true；同通道不同路径或同路径不同通道
+      （换通道请用 je_tilemap_set_source_extra_pass）、纹理无法加载或
+      尺寸与网格不符返回 false
+请参见：
+    je_tilemap_source_info
+*/
+JE_API bool je_tilemap_add_source_extra(je_TilesetDocument* tileset,
+    je_SourceId source_idx, const char* texture_path, int32_t pass);
+
+/*
+je_tilemap_remove_source_extra [基本接口]
+移除源纹理的指定附加层级（按层级下标），其余层级下标前移
+*/
+JE_API bool je_tilemap_remove_source_extra(je_TilesetDocument* tileset,
+    je_SourceId source_idx, int32_t extra_idx);
+
+/*
+je_tilemap_source_extra_info [基本接口]
+取指定附加层级的信息，经出参返回 (绑定通道 id, 纹理路径)
+    * 下标越界返回 false
+*/
+JE_API bool je_tilemap_source_extra_info(je_TilesetDocument* tileset,
+    je_SourceId source_idx, int32_t extra_idx,
+    /* OPTIONAL */ int32_t* pass, /* OPTIONAL */ const char** texture_path);
+
+/*
+je_tilemap_set_source_extra_pass [基本接口]
+修改附加层级的绑定通道 id（>= 1，同源内通道唯一），渲染侧逐帧对齐自动重绑
+*/
+JE_API bool je_tilemap_set_source_extra_pass(je_TilesetDocument* tileset,
+    je_SourceId source_idx, int32_t extra_idx, int32_t pass);
+
 // ---- 普通瓦片表 ----
 
 /*
