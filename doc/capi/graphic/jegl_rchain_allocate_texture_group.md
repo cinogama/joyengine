@@ -37,8 +37,8 @@ jegl_rchain_begin(chain, nullptr, 0, 0, width, height);
 jegl_rchain_texture_group* tex_group = jegl_rchain_allocate_texture_group(chain);
 
 // 绑定纹理到纹理组
-jegl_rchain_bind_texture(chain, tex_group, 0, diffuse_texture);
-jegl_rchain_bind_texture(chain, tex_group, 1, normal_texture);
+jegl_rchain_bind_texture_2d(chain, tex_group, 0, diffuse_texture);
+jegl_rchain_bind_texture_2d(chain, tex_group, 1, normal_texture);
 
 // 使用纹理组进行绘制
 jegl_rchain_draw(chain, shader, mesh, tex_group);

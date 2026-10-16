@@ -59,13 +59,13 @@ namespace jeecs
         // 只使被删页失效，其余页（及指向它们的字形槽）地址稳定。
         struct page_t
         {
-            basic::resource<graphic::texture> m_texture;
+            basic::resource<graphic::texture2d> m_texture;
             size_t m_cursor_x = PAGE_GUTTER;
             size_t m_cursor_y = PAGE_GUTTER;
             size_t m_row_height = 0;
             uint64_t m_last_used_frame = 0;
 
-            explicit page_t(basic::resource<graphic::texture>&& tex) noexcept
+            explicit page_t(basic::resource<graphic::texture2d>&& tex) noexcept
                 : m_texture(std::move(tex))
             {
             }
@@ -459,7 +459,7 @@ namespace jeecs
         // 行式装箱：当前行放不下则换行，页满则开新页。页只增不减，
         // 因此无需重排、已有字形 UV 永不失效。
         void _pack_glyph(
-            font_atlas_t& entry, glyph_slot& slot, graphic::texture& src)
+            font_atlas_t& entry, glyph_slot& slot, graphic::texture2d& src)
         {
             for (;;)
             {
@@ -483,7 +483,7 @@ namespace jeecs
             }
         }
 
-        void _blit_glyph(page_t& page, glyph_slot& slot, graphic::texture& src)
+        void _blit_glyph(page_t& page, glyph_slot& slot, graphic::texture2d& src)
         {
             const size_t gw = (size_t)slot.w, gh = (size_t)slot.h;
             const size_t px = page.m_cursor_x, py = page.m_cursor_y;
@@ -530,8 +530,8 @@ namespace jeecs
                     break;
             }
 
-            auto texture = graphic::texture::create(
-                PAGE_SIZE, PAGE_SIZE, jegl_texture::format::RGBA);
+            auto texture = graphic::texture2d::create(
+                PAGE_SIZE, PAGE_SIZE, jegl_texture_common::format::RGBA);
             std::memset(
                 texture->resource()->m_pixels, 0, PAGE_SIZE * PAGE_SIZE * 4);
 

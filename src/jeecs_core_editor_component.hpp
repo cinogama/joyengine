@@ -103,7 +103,7 @@ je_DebugEid jedbg_get_entity_uid(const je_GameEntity* e)
     return eid->eid;
 }
 
-JE_API void jedbg_set_entity_uid(const je_GameEntity* e, je_DebugEid uid)
+void jedbg_set_entity_uid(const je_GameEntity* e, je_DebugEid uid)
 {
     auto* eid = static_cast<jeecs::Editor::EntityId*>(
         je_ecs_world_entity_get_component(

@@ -1577,7 +1577,7 @@ WOORT_API woort_api wojeapi_type_basic_type(void)
 
 ///////////////////////////////////////////////////////////////////////
 
-WOORT_API woort_api wojeapi_texture_open(void)
+WOORT_API woort_api wojeapi_texture2d_open(void)
 {
     const woort_value universe_ptr = WOORT_RETURN_SLOT;
 
@@ -1585,7 +1585,7 @@ WOORT_API woort_api wojeapi_texture_open(void)
     if (woort_option_get(universe_ptr, 0))
         universe_addr = static_cast<je_GameUniverse*>(woort_pointer(universe_ptr));
 
-    std::optional<jeecs::basic::resource<jeecs::graphic::texture>> loaded_texture;
+    std::optional<jeecs::basic::resource<jeecs::graphic::texture2d>> loaded_texture;
 
     const woort_U8CString path = woort_string(1);
 
@@ -1597,47 +1597,47 @@ WOORT_API woort_api wojeapi_texture_open(void)
             gcontext = jegl_uhost_get_context(
                 jegl_uhost_get_or_create_for_universe(universe_addr, nullptr));
         }
-        loaded_texture = jeecs::graphic::texture::load(gcontext, path);
+        loaded_texture = jeecs::graphic::texture2d::load(gcontext, path);
     }
     (void)woort_vm_swap(last);
 
     if (loaded_texture.has_value())
         return woort_ret_option_gchandle(
-            new jeecs::basic::resource<jeecs::graphic::texture>(loaded_texture.value()),
+            new jeecs::basic::resource<jeecs::graphic::texture2d>(loaded_texture.value()),
             WOORT_IGNORE,
             [](void* ptr)
             {
-                delete (jeecs::basic::resource<jeecs::graphic::texture> *)ptr;
+                delete (jeecs::basic::resource<jeecs::graphic::texture2d> *)ptr;
             },
             nullptr);
 
     return woort_ret_option_none();
 }
-WOORT_API woort_api wojeapi_texture_create(void)
+WOORT_API woort_api wojeapi_texture2d_create(void)
 {
     const size_t w = (size_t)woort_int(0);
     const size_t h = (size_t)woort_int(1);
 
-    auto loaded_texture = jeecs::graphic::texture::create(
-        w, h, jegl_texture::format::RGBA);
+    auto loaded_texture = jeecs::graphic::texture2d::create(
+        w, h, jegl_texture_common::format::RGBA);
 
     return woort_ret_gchandle(
-        new jeecs::basic::resource<jeecs::graphic::texture>(loaded_texture),
+        new jeecs::basic::resource<jeecs::graphic::texture2d>(loaded_texture),
         WOORT_IGNORE,
         [](void* ptr)
         {
-            delete (jeecs::basic::resource<jeecs::graphic::texture> *)ptr;
+            delete (jeecs::basic::resource<jeecs::graphic::texture2d> *)ptr;
         },
         nullptr);
 }
-WOORT_API woort_api wojeapi_texture_clip(void)
+WOORT_API woort_api wojeapi_texture2d_clip(void)
 {
     auto* loaded_texture =
-        (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(0);
+        (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(0);
 
     return woort_ret_gchandle(
-        new jeecs::basic::resource<jeecs::graphic::texture>(
-            jeecs::graphic::texture::clip(
+        new jeecs::basic::resource<jeecs::graphic::texture2d>(
+            jeecs::graphic::texture2d::clip(
                 *loaded_texture,
                 (size_t)woort_int(1),
                 (size_t)woort_int(2),
@@ -1646,15 +1646,15 @@ WOORT_API woort_api wojeapi_texture_clip(void)
         WOORT_IGNORE,
         [](void* ptr)
         {
-            delete (jeecs::basic::resource<jeecs::graphic::texture> *)ptr;
+            delete (jeecs::basic::resource<jeecs::graphic::texture2d> *)ptr;
         },
         nullptr);
 }
 
-WOORT_API woort_api wojeapi_texture_bind_path(void)
+WOORT_API woort_api wojeapi_texture2d_bind_path(void)
 {
     auto* loaded_texture =
-        (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(0);
+        (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(0);
 
     auto& path = (*loaded_texture)->resource()->m_handle.m_path_may_null_if_builtin;
     if (path != nullptr)
@@ -1664,34 +1664,34 @@ WOORT_API woort_api wojeapi_texture_bind_path(void)
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_texture_get_pixel(void)
+WOORT_API woort_api wojeapi_texture2d_pix(void)
 {
-    auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(0);
+    auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(0);
 
     const size_t x = woort_struct_get_int(1, 0);
     const size_t y = woort_struct_get_int(1, 1);
 
-    auto* pix = new jeecs::graphic::texture::pixel((*loaded_texture)->resource(), x, y);
+    auto* pix = new jeecs::graphic::texture2d::pixel((*loaded_texture)->resource(), x, y);
 
     return woort_ret_gchandle(
         pix,
         0,
         [](void* ptr)
         {
-            delete (jeecs::graphic::texture::pixel*)ptr;
+            delete (jeecs::graphic::texture2d::pixel*)ptr;
         },
         nullptr);
 }
 
-WOORT_API woort_api wojeapi_texture_take_snapshot(void)
+WOORT_API woort_api wojeapi_texture2d_take_snapshot(void)
 {
-    auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(0);
+    auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(0);
 
     auto tex_raw = loaded_texture->get()->resource();
     if (tex_raw->m_pixels)
     {
         auto memsz = tex_raw->m_width * tex_raw->m_height *
-            (tex_raw->m_format & jegl_texture::format::COLOR_DEPTH_MASK);
+            (tex_raw->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK);
         if (memsz > 0)
         {
             auto* membuf = malloc(memsz);
@@ -1709,16 +1709,16 @@ WOORT_API woort_api wojeapi_texture_take_snapshot(void)
     return woort_ret_option_none();
 }
 
-WOORT_API woort_api wojeapi_texture_restore_snapshot(void)
+WOORT_API woort_api wojeapi_texture2d_restore_snapshot(void)
 {
-    auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(0);
+    auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(0);
     auto* texture_buf = woort_gcpointer(1);
 
     auto tex_raw = loaded_texture->get()->resource();
     if (tex_raw->m_pixels)
     {
         auto memsz = tex_raw->m_width * tex_raw->m_height *
-            (tex_raw->m_format & jegl_texture::format::COLOR_DEPTH_MASK);
+            (tex_raw->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK);
         memcpy(tex_raw->m_pixels, texture_buf, memsz);
 
         return woort_ret_bool(true);
@@ -1726,9 +1726,126 @@ WOORT_API woort_api wojeapi_texture_restore_snapshot(void)
     return woort_ret_bool(false);
 }
 
+WOORT_API woort_api wojeapi_texture3d_create(void)
+{
+    const size_t w = (size_t)woort_int(0);
+    const size_t h = (size_t)woort_int(1);
+    const size_t d = (size_t)woort_int(2);
+
+    auto loaded_texture = jeecs::graphic::texture3d::create(
+        w, h, d, jegl_texture_common::format::RGBA);
+
+    return woort_ret_gchandle(
+        new jeecs::basic::resource<jeecs::graphic::texture3d>(loaded_texture),
+        WOORT_IGNORE,
+        [](void* ptr)
+        {
+            delete (jeecs::basic::resource<jeecs::graphic::texture3d> *)ptr;
+        },
+        nullptr);
+}
+
+WOORT_API woort_api wojeapi_texturearray_create(void)
+{
+    const size_t w = (size_t)woort_int(0);
+    const size_t h = (size_t)woort_int(1);
+    const size_t layers = (size_t)woort_int(2);
+
+    auto loaded_texture = jeecs::graphic::texture_array::create(
+        w, h, layers, jegl_texture_common::format::RGBA);
+
+    return woort_ret_gchandle(
+        new jeecs::basic::resource<jeecs::graphic::texture_array>(loaded_texture),
+        WOORT_IGNORE,
+        [](void* ptr)
+        {
+            delete (jeecs::basic::resource<jeecs::graphic::texture_array> *)ptr;
+        },
+        nullptr);
+}
+
+WOORT_API woort_api wojeapi_texturearray_layers(void)
+{
+    auto* texture =
+        (jeecs::basic::resource<jeecs::graphic::texture_array> *)woort_gcpointer(0);
+    return woort_ret_int((woort_Int)(*texture)->layers());
+}
+
+WOORT_API woort_api wojeapi_texturearray_mark_modified(void)
+{
+    auto* texture =
+        (jeecs::basic::resource<jeecs::graphic::texture_array> *)woort_gcpointer(0);
+    (*texture)->mark_modified();
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_texturecube_create(void)
+{
+    const size_t w = (size_t)woort_int(0);
+    const size_t h = (size_t)woort_int(1);
+
+    auto loaded_texture = jeecs::graphic::texture_cube::create(
+        w, h, jegl_texture_common::format::RGBA);
+
+    return woort_ret_gchandle(
+        new jeecs::basic::resource<jeecs::graphic::texture_cube>(loaded_texture),
+        WOORT_IGNORE,
+        [](void* ptr)
+        {
+            delete (jeecs::basic::resource<jeecs::graphic::texture_cube> *)ptr;
+        },
+        nullptr);
+}
+
+WOORT_API woort_api wojeapi_texturemsaa_create(void)
+{
+    const size_t w = (size_t)woort_int(0);
+    const size_t h = (size_t)woort_int(1);
+    const size_t samples = (size_t)woort_int(2);
+
+    auto loaded_texture = jeecs::graphic::texture_msaa::create(
+        w, h, samples, jegl_texture_common::format::RGBA);
+
+    return woort_ret_gchandle(
+        new jeecs::basic::resource<jeecs::graphic::texture_msaa>(loaded_texture),
+        WOORT_IGNORE,
+        [](void* ptr)
+        {
+            delete (jeecs::basic::resource<jeecs::graphic::texture_msaa> *)ptr;
+        },
+        nullptr);
+}
+
+// 读取任意纹理 gchandle 载荷的实际类别；所有 resource<textureN> 的
+// 共享指针布局一致（首成员即包装对象指针），因此可以安全地按 texture2d
+// 视图读取其内部 jegl 纹理的 m_kind 字段。
+static jegl_texture_kind woje_texture_kind_of(void* texture_gchandle_payload)
+{
+    auto* res = static_cast<
+        jeecs::basic::resource<jeecs::graphic::texture2d> *>(
+            texture_gchandle_payload);
+    return (*res)->resource()->m_kind;
+}
+
+// 将二维纹理绑定到 Renderer::Textures2D 组件的指定通道；
+// 组件只接受二维纹理，其他类别将记录错误并忽略
+static void woje_bind_texture_to_component(
+    jeecs::Renderer::Textures2D* textures, size_t pass, void* texture_gchandle_payload)
+{
+    if (woje_texture_kind_of(texture_gchandle_payload) != jegl_texture_kind::TEXTURE_2D)
+    {
+        jeecs::debug::logerr(
+            "Renderer::Textures2D component only accepts 2d textures.");
+        return;
+    }
+    textures->bind_texture(
+        pass,
+        *(jeecs::basic::resource<jeecs::graphic::texture2d> *)texture_gchandle_payload);
+}
+
 WOORT_API woort_api wojeapi_texture_pixel_color(void)
 {
-    auto* pix = (jeecs::graphic::texture::pixel*)woort_gcpointer(0);
+    auto* pix = (jeecs::graphic::texture2d::pixel*)woort_gcpointer(0);
     auto color = pix->get();
 
     woort_set_struct(WOORT_RETURN_SLOT, 4);
@@ -1742,7 +1859,7 @@ WOORT_API woort_api wojeapi_texture_pixel_color(void)
 }
 WOORT_API woort_api wojeapi_texture_set_pixel_color(void)
 {
-    auto* pix = (jeecs::graphic::texture::pixel*)woort_gcpointer(0);
+    auto* pix = (jeecs::graphic::texture2d::pixel*)woort_gcpointer(0);
     auto color = jeecs::math::vec4();
 
     color.x = woort_struct_get_float(1, 0);
@@ -1818,11 +1935,11 @@ WOORT_API woort_api wojeapi_font_load_char(void)
 
     woort_set_gchandle(
         elem,
-        new jeecs::basic::resource<jeecs::graphic::texture>(ch->m_texture),
+        new jeecs::basic::resource<jeecs::graphic::texture2d>(ch->m_texture),
         WOORT_IGNORE,
         [](void* ptr)
         {
-            delete (jeecs::basic::resource<jeecs::graphic::texture> *)ptr;
+            delete (jeecs::basic::resource<jeecs::graphic::texture2d> *)ptr;
         },
         nullptr);
 
@@ -1928,12 +2045,19 @@ WOORT_API woort_api wojeapi_textures_of_entity(void)
 
     woort_set_map(out_map);
 
-    if (jeecs::Renderer::Textures* textures = (jeecs::Renderer::Textures*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Renderer::Textures>()))
+    if (jeecs::Renderer::Textures2D* textures = (jeecs::Renderer::Textures2D*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Renderer::Textures2D>()))
     {
         for (auto& texture : textures->textures)
         {
-            woort_set_gchandle(val, new jeecs::basic::resource<jeecs::graphic::texture>(texture.m_texture), WOORT_IGNORE, [](void* ptr)
-                { delete (jeecs::basic::resource<jeecs::graphic::shader> *)ptr; }, nullptr);
+            woort_set_gchandle(
+                val,
+                new jeecs::basic::resource<jeecs::graphic::texture2d>(texture.m_texture),
+                WOORT_IGNORE,
+                [](void* ptr)
+                {
+                    delete (jeecs::basic::resource<jeecs::graphic::texture2d> *)ptr;
+                },
+                nullptr);
             (void)woort_map_set_by_int(out_map, (woort_Int)texture.m_pass_id, val);
         }
     }
@@ -1945,13 +2069,14 @@ WOORT_API woort_api wojeapi_bind_texture_for_entity(void)
 {
     je_GameEntity* entity = (je_GameEntity*)woort_gcpointer(0);
 
-    if (jeecs::Renderer::Textures* textures = (jeecs::Renderer::Textures*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Renderer::Textures>()))
+    if (jeecs::Renderer::Textures2D* textures = (jeecs::Renderer::Textures2D*)je_ecs_world_entity_get_component(entity, jeecs::typing::id<jeecs::Renderer::Textures2D>()))
     {
         if (woort_option_get(WOORT_RETURN_SLOT, 2))
         {
-            textures->bind_texture(
+            woje_bind_texture_to_component(
+                textures,
                 (size_t)woort_int(1),
-                *(jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(WOORT_RETURN_SLOT));
+                woort_gcpointer(WOORT_RETURN_SLOT));
         }
         else
         {
@@ -1959,7 +2084,7 @@ WOORT_API woort_api wojeapi_bind_texture_for_entity(void)
         }
     }
 
-    // TODO: 如果当前实体不包含jeecs::Renderer::Textures组件，在此panic?
+    // TODO: 如果当前实体不包含jeecs::Renderer::Textures2D组件，在此panic?
 
     return woort_ret_void();
 }
@@ -1976,7 +2101,7 @@ WOORT_API woort_api wojeapi_set_shape_for_entity(void)
             shape->vertex.reset();
     }
 
-    // TODO: 如果当前实体不包含jeecs::Renderer::Textures组件，在此panic?
+    // TODO: 如果当前实体不包含jeecs::Renderer::Textures2D组件，在此panic?
 
     return woort_ret_void();
 }
@@ -2361,9 +2486,9 @@ WOORT_API woort_api wojeapi_shader_path(void)
     return woort_ret_option_none();
 }
 
-WOORT_API woort_api wojeapi_texture_get_size(void)
+WOORT_API woort_api wojeapi_texture2d_size(void)
 {
-    auto* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(0);
+    auto* texture = (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(0);
     auto sz = texture->get()->size();
 
     woort_set_struct(WOORT_RETURN_SLOT, 2);
@@ -2374,9 +2499,9 @@ WOORT_API woort_api wojeapi_texture_get_size(void)
     return woort_ret();
 }
 
-WOORT_API woort_api wojeapi_texture_path(void)
+WOORT_API woort_api wojeapi_texture2d_path(void)
 {
-    auto* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(0);
+    auto* texture = (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(0);
 
     if (auto str = (*texture)->resource()->m_handle.m_path_may_null_if_builtin)
         return woort_ret_option_string(str);
@@ -2392,12 +2517,12 @@ WOORT_API woort_api wojeapi_framebuffer_create(void)
     const bool contain_depth = woort_bool(3);
 
     const size_t fmt_count = woort_vec_len(formats_arr);
-    std::vector<jegl_texture::format> formats(fmt_count);
+    std::vector<jegl_texture_common::format> formats(fmt_count);
 
     for (size_t i = 0; i < fmt_count; ++i)
     {
         (void)woort_vec_get(WOORT_RETURN_SLOT, formats_arr, i);
-        formats[i] = (jegl_texture::format)woort_unbox_int(WOORT_RETURN_SLOT);
+        formats[i] = (jegl_texture_common::format)woort_unbox_int(WOORT_RETURN_SLOT);
     }
 
     std::optional<jeecs::basic::resource<jeecs::graphic::framebuffer>> loaded_framebuffer;
@@ -2431,11 +2556,11 @@ WOORT_API woort_api wojeapi_framebuffer_get_attachment(void)
 
     if (attachment.has_value())
         return woort_ret_option_gchandle(
-            new jeecs::basic::resource<jeecs::graphic::texture>(attachment.value()),
+            new jeecs::basic::resource<jeecs::graphic::texture2d>(attachment.value()),
             WOORT_IGNORE,
             [](void* ptr)
             {
-                delete (jeecs::basic::resource<jeecs::graphic::texture> *)ptr;
+                delete (jeecs::basic::resource<jeecs::graphic::texture2d> *)ptr;
             },
             nullptr);
 
@@ -4259,9 +4384,39 @@ WOORT_API woort_api wojeapi_rchain_bind_texture(void)
     auto* tg = (jegl_rchain_texture_group*)woort_pointer(1);
     size_t binding_pass = (size_t)woort_int(2);
     auto* tex =
-        (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(3);
+        (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(3);
 
-    jegl_rchain_bind_texture(chain, tg, binding_pass, (*tex)->resource());
+    // 按 gchandle 载荷的实际纹理类别分发绑定
+    switch (woje_texture_kind_of(tex))
+    {
+    case jegl_texture_kind::TEXTURE_2D:
+        jegl_rchain_bind_texture_2d(
+            chain, tg, binding_pass, (*tex)->resource());
+        break;
+    case jegl_texture_kind::TEXTURE_3D:
+        jegl_rchain_bind_texture_3d(
+            chain, tg, binding_pass,
+            (*(jeecs::basic::resource<jeecs::graphic::texture3d> *)tex)->resource());
+        break;
+    case jegl_texture_kind::TEXTURE_ARRAY:
+        jegl_rchain_bind_texture_array(
+            chain, tg, binding_pass,
+            (*(jeecs::basic::resource<jeecs::graphic::texture_array> *)tex)->resource());
+        break;
+    case jegl_texture_kind::TEXTURE_CUBE:
+        jegl_rchain_bind_texture_cube(
+            chain, tg, binding_pass,
+            (*(jeecs::basic::resource<jeecs::graphic::texture_cube> *)tex)->resource());
+        break;
+    case jegl_texture_kind::TEXTURE_MSAA:
+        jegl_rchain_bind_texture_msaa(
+            chain, tg, binding_pass,
+            (*(jeecs::basic::resource<jeecs::graphic::texture_msaa> *)tex)->resource());
+        break;
+    default:
+        jeecs::debug::logerr("Unknown texture kind when binding texture to rendchain.");
+        break;
+    }
 
     return woort_ret_void();
 }

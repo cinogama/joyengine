@@ -445,7 +445,7 @@ namespace jeecs::graphic::api::metal
 
         jegui_init_metal(
             glthread,
-            [](jegl_context*, jegl_texture* res)
+            [](jegl_context*, jegl_texture_2d* res)
             {
                 metal_texture* tex =
                     static_cast<metal_texture*>(res->m_handle.m_ptr);
@@ -992,7 +992,8 @@ namespace jeecs::graphic::api::metal
     {
         delete static_cast<metal_resource_shader_blob*>(blob);
     }
-    jegl_resource_blob create_texture_blob(je_GraphicImplContext, jegl_texture*)
+    template<typename TexT>
+    jegl_resource_blob create_texture_blob(je_GraphicImplContext, TexT*)
     {
         return nullptr;
     }
@@ -1047,26 +1048,56 @@ namespace jeecs::graphic::api::metal
         else
             shader->m_handle.m_ptr = nullptr;
     }
-    void init_texture(je_GraphicImplContext ctx, jegl_resource_blob, jegl_texture* texture)
+    template<typename TexT>
+    void init_texture(je_GraphicImplContext ctx, jegl_resource_blob, TexT* texture)
     {
         jegl_metal_context* metal_context =
             static_cast<jegl_metal_context*>(ctx);
 
+        constexpr bool is_3d = std::is_same_v<TexT, jegl_texture_3d>;
+        constexpr bool is_array = std::is_same_v<TexT, jegl_texture_array>;
+        constexpr bool is_cube = std::is_same_v<TexT, jegl_texture_cube>;
+        constexpr bool is_msaa = std::is_same_v<TexT, jegl_texture_msaa>;
+
         MTL::TextureDescriptor* texture_desc = MTL::TextureDescriptor::alloc()->init();
 
-        bool float16 = 0 != (texture->m_format & jegl_texture::format::FLOAT16);
-        bool is_cube = 0 != (texture->m_format & jegl_texture::format::CUBE);
-        bool is_framebuf = 0 != (texture->m_format & jegl_texture::format::FRAMEBUF);
-        bool is_depth = 0 != (texture->m_format & jegl_texture::format::DEPTH);
-
-        (void)is_cube;
-        assert(!is_cube); // TODO;
+        bool float16 = 0 != (texture->m_format & jegl_texture_common::format::FLOAT16);
+        bool is_framebuf = 0 != (texture->m_format & jegl_texture_common::format::FRAMEBUF);
+        bool is_depth = 0 != (texture->m_format & jegl_texture_common::format::DEPTH);
 
         texture_desc->setWidth((uint32_t)texture->m_width);
         texture_desc->setHeight((uint32_t)texture->m_height);
-        texture_desc->setTextureType(MTL::TextureType2D);
 
-        if (is_framebuf)
+        uint32_t slice_count = 1;
+        if constexpr (is_3d)
+        {
+            texture_desc->setDepth((uint32_t)texture->m_depth);
+            texture_desc->setTextureType(MTL::TextureType3D);
+            slice_count = (uint32_t)texture->m_depth;
+        }
+        else if constexpr (is_array)
+        {
+            texture_desc->setArrayLength((uint32_t)texture->m_layers);
+            texture_desc->setTextureType(MTL::TextureType2DArray);
+            slice_count = (uint32_t)texture->m_layers;
+        }
+        else if constexpr (is_cube)
+        {
+            texture_desc->setTextureType(MTL::TextureTypeCube);
+            slice_count = 6;
+        }
+        else if constexpr (is_msaa)
+        {
+            texture_desc->setTextureType(MTL::TextureType2DMultisample);
+            texture_desc->setSampleCount(
+                (uint32_t)(texture->m_samples == 0 ? 1 : texture->m_samples));
+        }
+        else
+        {
+            texture_desc->setTextureType(MTL::TextureType2D);
+        }
+
+        if (is_framebuf || is_msaa)
         {
             texture_desc->setUsage(
                 MTL::TextureUsageRenderTarget | MTL::TextureUsageShaderRead);
@@ -1087,13 +1118,13 @@ namespace jeecs::graphic::api::metal
         }
         else
         {
-            switch (texture->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
+            switch (texture->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK)
             {
-            case jegl_texture::format::MONO:
+            case jegl_texture_common::format::MONO:
                 texture_format =
                     float16 ? MTL::PixelFormatR16Float : MTL::PixelFormatR8Unorm;
                 break;
-            case jegl_texture::format::RGBA:
+            case jegl_texture_common::format::RGBA:
                 texture_format =
                     float16 ? MTL::PixelFormatRGBA16Float : MTL::PixelFormatRGBA8Unorm;
                 break;
@@ -1109,25 +1140,51 @@ namespace jeecs::graphic::api::metal
         MTL::Texture* texture_instance =
             metal_context->m_metal_device->newTexture(texture_desc);
 
-        if (texture->m_format & jegl_texture::format::FRAMEBUF)
+        if (texture->m_format & jegl_texture_common::format::FRAMEBUF)
         {
             // No need to upload data.
         }
         else
         {
-            texture_instance->replaceRegion(
-                MTL::Region(
-                    0,
-                    0,
-                    0,
-                    (uint32_t)texture->m_width,
-                    (uint32_t)texture->m_height,
-                    1),
-                0,
-                texture->m_pixels,
+            const uint32_t bytes_per_row =
                 (uint32_t)texture->m_width
                 * (float16 ? 2 : 1)
-                * (texture->m_format & jegl_texture::format::COLOR_DEPTH_MASK));
+                * (texture->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK);
+            const uint32_t bytes_per_slice = bytes_per_row * (uint32_t)texture->m_height;
+
+            if constexpr (is_3d)
+            {
+                // 3D 纹理走 slice 重载：slice 固定为 0，bytesPerImage 为每个深度平面的字节数
+                texture_instance->replaceRegion(
+                    MTL::Region(
+                        0, 0, 0,
+                        (uint32_t)texture->m_width,
+                        (uint32_t)texture->m_height,
+                        (uint32_t)texture->m_depth),
+                    0,
+                    0,
+                    texture->m_pixels,
+                    bytes_per_row,
+                    bytes_per_slice);
+            }
+            else
+            {
+                // 2D / 数组 / 立方体贴图：逐层 replaceRegion，level 恒为 0
+                for (uint32_t slice = 0; slice < slice_count; ++slice)
+                {
+                    texture_instance->replaceRegion(
+                        MTL::Region(
+                            0, 0, 0,
+                            (uint32_t)texture->m_width,
+                            (uint32_t)texture->m_height,
+                            1),
+                        0,
+                        slice,
+                        texture->m_pixels + (size_t)slice * bytes_per_slice,
+                        bytes_per_row,
+                        bytes_per_slice);
+                }
+            }
         }
         texture->m_handle.m_ptr = new metal_texture(texture_instance, texture_format);
         texture_desc->release();
@@ -1184,8 +1241,8 @@ namespace jeecs::graphic::api::metal
             fbuffer->m_width,
             fbuffer->m_height);
 
-        jeecs::basic::resource<jeecs::graphic::texture>* attachments =
-            reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
+        jeecs::basic::resource<jeecs::graphic::texture2d>* attachments =
+            reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture2d> *>(
                 fbuffer->m_output_attachments);
 
         size_t color_attachment_count = 0;
@@ -1193,9 +1250,9 @@ namespace jeecs::graphic::api::metal
         for (size_t i = 0; i < fbuffer->m_attachment_count; ++i)
         {
             auto* attachment_resource = attachments[i]->resource();
-            jegl_bind_texture(attachment_resource, 0);
+            jegl_bind_texture_2d(attachment_resource, 0);
 
-            if (attachment_resource->m_format & jegl_texture::format::DEPTH)
+            if (attachment_resource->m_format & jegl_texture_common::format::DEPTH)
             {
                 // Is depth attachment.
                 framebuf->m_has_depth_attachment = true;
@@ -1248,7 +1305,8 @@ namespace jeecs::graphic::api::metal
     void update_shader(je_GraphicImplContext, jegl_shader*)
     {
     }
-    void update_texture(je_GraphicImplContext, jegl_texture*)
+    template<typename TexT>
+    void update_texture(je_GraphicImplContext, TexT*)
     {
         // TODO;
     }
@@ -1291,7 +1349,8 @@ namespace jeecs::graphic::api::metal
     {
         delete static_cast<metal_shader*>(shader->m_handle.m_ptr);
     }
-    void close_texture(je_GraphicImplContext, jegl_texture* texture)
+    template<typename TexT>
+    void close_texture(je_GraphicImplContext, TexT* texture)
     {
         delete static_cast<metal_texture*>(texture->m_handle.m_ptr);
     }
@@ -1458,7 +1517,8 @@ namespace jeecs::graphic::api::metal
 
         return true;
     }
-    void bind_texture(je_GraphicImplContext ctx, jegl_texture* res, size_t pass)
+    template<typename TexT>
+    void bind_texture(je_GraphicImplContext ctx, TexT* res, size_t pass)
     {
         auto* metal_context = static_cast<jegl_metal_context*>(ctx);
         auto* texture_instance = static_cast<metal_texture*>(res->m_handle.m_ptr);
@@ -1854,7 +1914,11 @@ void jegl_using_metal_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->update_draw_commit = commit_update;
 
     write_to_apis->shader_create_blob = create_shader_blob;
-    write_to_apis->texture_create_blob = create_texture_blob;
+    write_to_apis->texture_2d_create_blob = create_texture_blob<jegl_texture_2d>;
+    write_to_apis->texture_3d_create_blob = create_texture_blob<jegl_texture_3d>;
+    write_to_apis->texture_array_create_blob = create_texture_blob<jegl_texture_array>;
+    write_to_apis->texture_cube_create_blob = create_texture_blob<jegl_texture_cube>;
+    write_to_apis->texture_msaa_create_blob = create_texture_blob<jegl_texture_msaa>;
     write_to_apis->vertex_create_blob = create_vertex_blob;
 
     write_to_apis->shader_close_blob = close_shader_blob;
@@ -1862,25 +1926,41 @@ void jegl_using_metal_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->vertex_close_blob = close_vertex_blob;
 
     write_to_apis->shader_init = init_shader;
-    write_to_apis->texture_init = init_texture;
+    write_to_apis->texture_2d_init = init_texture<jegl_texture_2d>;
+    write_to_apis->texture_3d_init = init_texture<jegl_texture_3d>;
+    write_to_apis->texture_array_init = init_texture<jegl_texture_array>;
+    write_to_apis->texture_cube_init = init_texture<jegl_texture_cube>;
+    write_to_apis->texture_msaa_init = init_texture<jegl_texture_msaa>;
     write_to_apis->vertex_init = init_vertex;
     write_to_apis->framebuffer_init = init_framebuffer;
     write_to_apis->ubuffer_init = init_ubuffer;
 
     write_to_apis->shader_update = update_shader;
-    write_to_apis->texture_update = update_texture;
+    write_to_apis->texture_2d_update = update_texture<jegl_texture_2d>;
+    write_to_apis->texture_3d_update = update_texture<jegl_texture_3d>;
+    write_to_apis->texture_array_update = update_texture<jegl_texture_array>;
+    write_to_apis->texture_cube_update = update_texture<jegl_texture_cube>;
+    write_to_apis->texture_msaa_update = update_texture<jegl_texture_msaa>;
     write_to_apis->vertex_update = update_vertex;
     write_to_apis->framebuffer_update = update_framebuffer;
     write_to_apis->ubuffer_update = update_ubuffer;
 
     write_to_apis->shader_close = close_shader;
-    write_to_apis->texture_close = close_texture;
+    write_to_apis->texture_2d_close = close_texture<jegl_texture_2d>;
+    write_to_apis->texture_3d_close = close_texture<jegl_texture_3d>;
+    write_to_apis->texture_array_close = close_texture<jegl_texture_array>;
+    write_to_apis->texture_cube_close = close_texture<jegl_texture_cube>;
+    write_to_apis->texture_msaa_close = close_texture<jegl_texture_msaa>;
     write_to_apis->vertex_close = close_vertex;
     write_to_apis->framebuffer_close = close_framebuffer;
     write_to_apis->ubuffer_close = close_ubuffer;
 
     write_to_apis->bind_uniform_buffer = bind_uniform_buffer;
-    write_to_apis->bind_texture = bind_texture;
+    write_to_apis->bind_texture_2d = bind_texture<jegl_texture_2d>;
+    write_to_apis->bind_texture_3d = bind_texture<jegl_texture_3d>;
+    write_to_apis->bind_texture_array = bind_texture<jegl_texture_array>;
+    write_to_apis->bind_texture_cube = bind_texture<jegl_texture_cube>;
+    write_to_apis->bind_texture_msaa = bind_texture<jegl_texture_msaa>;
     write_to_apis->bind_shader = bind_shader;
     write_to_apis->draw_vertex = draw_vertex_with_shader;
 

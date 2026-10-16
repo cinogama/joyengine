@@ -2823,7 +2823,7 @@ void jeal_finish()
     delete jeecs::g_engine_audio_context;
     jeecs::g_engine_audio_context = nullptr;
 }
-const jeal_buffer* jeal_create_buffer(
+/* OPTIONAL: If format is invalid or buffer_data_len is not aligned to sample size */ const jeal_buffer* jeal_create_buffer(
     const void* data,
     size_t buffer_data_len,
     size_t sample_rate,
@@ -2834,7 +2834,7 @@ const jeal_buffer* jeal_create_buffer(
     return jeecs::g_engine_audio_context->create_buffer(
         data, buffer_data_len, sample_rate, format);
 }
-const jeal_buffer* jeal_load_buffer_wav(const char* path)
+/* OPTIONAL: If wav file failed to load */ const jeal_buffer* jeal_load_buffer_wav(const char* path)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
@@ -2873,8 +2873,8 @@ bool jeal_set_source_buffer(jeal_source* source, const jeal_buffer* buffer)
 void jeal_set_source_effect_slot_and_filter(
     jeal_source* source,
     size_t slot_idx,
-    jeal_effect_slot* slot_may_null,
-    jeal_filter* filter_may_null)
+    /* OPTIONAL */ jeal_effect_slot* slot_may_null,
+    /* OPTIONAL */ jeal_filter* filter_may_null)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
@@ -2882,7 +2882,7 @@ void jeal_set_source_effect_slot_and_filter(
         source, slot_idx, slot_may_null, filter_may_null);
 }
 
-void jeal_set_source_filter(jeal_source* source, jeal_filter* filter_may_null)
+void jeal_set_source_filter(jeal_source* source, /* OPTIONAL */ jeal_filter* filter_may_null)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
@@ -2965,7 +2965,7 @@ jeal_effect_slot* jeal_create_effect_slot()
 
     return jeecs::g_engine_audio_context->create_effect_slot();
 }
-void jeal_effect_slot_bind(jeal_effect_slot* slot, void* effect_may_null)
+void jeal_effect_slot_bind(jeal_effect_slot* slot, /* OPTIONAL */ void* effect_may_null)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
@@ -3077,7 +3077,7 @@ void jeal_update_effect(void* effect)
 }
 
 void jeal_enumerate_devices_and_do(
-    jeal_enumerate_device_callback_t callback, void* userdata)
+    jeal_enumerate_device_callback_t callback, /* OPTIONAL */ void* userdata)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
     jeecs::g_engine_audio_context->refetch_devices_and_do(

@@ -131,7 +131,7 @@ namespace JEEditor::Editor
         }
         
         // 窗口顶部的引擎吉祥物（像素画 Joy，256x256，按 1/4 缩放保持锐利）
-        let s_joy_logo = texture::load(option::none, "!/builtin/icon/Joy.png");
+        let s_joy_logo = texture2d::load(option::none, "!/builtin/icon/Joy.png");
         
         // 主题色（取自 Joy 的暖橙色系）
         let k_title_color = (242, 176, 109, 255);

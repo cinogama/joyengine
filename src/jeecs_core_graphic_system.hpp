@@ -29,7 +29,7 @@ namespace jeecs
     {
         basic::resource<graphic::vertex> default_shape_quad;
         basic::resource<graphic::shader> default_shader;
-        basic::resource<graphic::texture> default_texture;
+        basic::resource<graphic::texture2d> default_texture;
         basic::vector<basic::resource<graphic::shader>> default_shaders_list;
 
         JECS_DISABLE_MOVE_AND_COPY(DefaultResources);
@@ -95,7 +95,7 @@ public let frag =
         ;
     ;
 )").value() }
-, default_texture{ graphic::texture::create(2, 2, jegl_texture::format::RGBA) }
+, default_texture{ graphic::texture2d::create(2, 2, jegl_texture_common::format::RGBA) }
 , default_shaders_list{ default_shader }
         {
             default_texture->pix(0, 0).set({ 1.f, 0.25f, 1.f, 1.f });
@@ -137,7 +137,7 @@ public let frag =
             const Translation* translation;
             const Shape* shape;
             const Shaders* shaders;
-            const Textures* textures;
+            const Textures2D* textures;
 
             // UI 布局量：父子层级（含祖先旋转链）已由布局阶段复合进
             // WorldLayout 的仿射系数通道，绘制端只按相机目标尺寸像素化。
@@ -148,6 +148,9 @@ public let frag =
             // UI 文本（逐字渲染路径）；仅 UI 渲染路径使用，为空时该实体走
             // 常规四边形路径（两者可并存：先四边形后文本，文字在背景板之上）。
             const UserInterface::Text* text = nullptr;
+
+            // 纹理数组通道绑定（瓦片地图分片等使用）；可空
+            const Textures2DArray* textures_array = nullptr;
 
             bool operator<(const renderer_arch& another) const noexcept
             {
@@ -381,14 +384,15 @@ public let frag =
             math::vec2 tiling;
             math::vec2 offset;
         };
-        bound_textures_t bind_entity_textures(jegl_rendchain* chain, const Textures* textures)
+        bound_textures_t bind_entity_textures(jegl_rendchain* chain, const Textures2D* textures,
+            const Textures2DArray* textures_array)
         {
             bound_textures_t result;
             result.group = jegl_rchain_allocate_texture_group(chain);
             result.tiling = math::vec2(1.f, 1.f);
             result.offset = math::vec2(0.f, 0.f);
 
-            jegl_rchain_bind_texture(
+            jegl_rchain_bind_texture_2d(
                 chain, result.group, 0, m_default_resources.default_texture->resource());
 
             if (textures != nullptr)
@@ -396,9 +400,15 @@ public let frag =
                 result.tiling = textures->tiling;
                 result.offset = textures->offset;
                 for (auto& texture : textures->textures)
-                    jegl_rchain_bind_texture(
+                    jegl_rchain_bind_texture_2d(
                         chain, result.group, texture.m_pass_id, texture.m_texture->resource());
             }
+
+            // 数组纹理在 2D 绑定之后写入同通道（后写覆盖，各后端语义一致）
+            if (textures_array != nullptr)
+                for (auto& texture : textures_array->textures)
+                    jegl_rchain_bind_texture_array(
+                        chain, result.group, texture.m_pass_id, texture.m_texture->resource());
             return result;
         }
 
@@ -502,7 +512,7 @@ public let frag =
                 math::mat4xmat4(MAT4_MV, view, MAT4_MODEL);
                 math::mat4xmat4(MAT4_MVP, vp, MAT4_MODEL);
 
-                auto bound = bind_entity_textures(chain, rendentity.textures);
+                auto bound = bind_entity_textures(chain, rendentity.textures, rendentity.textures_array);
 
                 pass_uniforms_t u;
                 u.m = MAT4_MODEL;
@@ -556,7 +566,7 @@ public let frag =
         // 当前批（连续同键运行段）状态；发射端逐字追加，键变化/缓冲满/相机
         // 切换时 flush 成一次 jegl_rchain_draw。
         std::vector<float> m_text_quad_data;
-        jegl_texture* m_text_batch_page = nullptr;
+        jegl_texture_2d* m_text_batch_page = nullptr;
         graphic::shader* m_text_batch_shader = nullptr;
         basic::resource<graphic::vertex>* m_text_batch_vb = nullptr;
         size_t m_text_batch_quads = 0;
@@ -616,7 +626,7 @@ public let frag =
                     WorldLayout&,
                     Rotation*,
                     Text*,
-                    Textures*,
+                    Textures2D*,
                     Shaders&,
                     Shape*,
                     Rendqueue*,
@@ -796,7 +806,7 @@ public let frag =
                             ? rendentity.shaders->shaders
                             : m_default_resources.default_shaders_list;
 
-                        auto bound = bind_entity_textures(rend_chain, rendentity.textures);
+                        auto bound = bind_entity_textures(rend_chain, rendentity.textures, rendentity.textures_array);
 
                         pass_uniforms_t u;
                         u.m = MAT4_UI_MODEL;
@@ -957,7 +967,7 @@ public let frag =
         void PrepareTextBatch(
             jegl_rendchain* chain,
             const float(&view)[4][4],
-            jegl_texture* page,
+            jegl_texture_2d* page,
             graphic::shader* shader_res)
         {
             if (m_text_batch_page == page && m_text_batch_shader == shader_res
@@ -1007,7 +1017,7 @@ public let frag =
                 m_text_batch_quads * 6);
 
             auto* texture_group = jegl_rchain_allocate_texture_group(chain);
-            jegl_rchain_bind_texture(
+            jegl_rchain_bind_texture_2d(
                 chain, texture_group, 0, m_text_batch_page);
 
             auto* draw_action = jegl_rchain_draw(
@@ -1123,11 +1133,12 @@ public let frag =
                     });
             }
 
-            for (auto&& [trans, shads, texs, shape, rendqueue, color] : query<
+            for (auto&& [trans, shads, texs, texarr, shape, rendqueue, color] : query<
                 view typesof(
                     Translation&,
                     Shaders&,
-                    Textures*,
+                    Textures2D*,
+                    Textures2DArray*,
                     Shape&,
                     Rendqueue*,
                     Color*
@@ -1137,12 +1148,13 @@ public let frag =
                     Parallel,
                     Element
                 )
-            >())
+                >())
             {
                 // RendOb will be input to a chain and used for swap
                 m_renderer_list.emplace(
                     renderer_arch{
-                        color, rendqueue, &trans, &shape, &shads, texs
+                        color, rendqueue, &trans, &shape, &shads, texs,
+                        nullptr, nullptr, nullptr, nullptr, texarr
                     });
             }
 
@@ -1204,10 +1216,10 @@ public let frag =
             JECS_DISABLE_MOVE_AND_COPY(DeferLight2DResource);
 
             // Used for move rend result to camera's render aim buffer.
-            jeecs::basic::resource<jeecs::graphic::texture> _no_shadow;
+            jeecs::basic::resource<jeecs::graphic::texture2d> _no_shadow;
             jeecs::basic::resource<jeecs::graphic::vertex> _screen_vertex;
 
-            jeecs::basic::resource<jeecs::graphic::vertex> _sprite_shadow_vertex;
+            jeecs::basic::resource<jeecs::graphic::vertex> _wall_shadow_vertex;
 
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_point_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_parallel_pass;
@@ -1217,8 +1229,23 @@ public let frag =
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_shape_parallel_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sprite_point_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sprite_parallel_pass;
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_wall_point_pass;
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_wall_parallel_pass;
 
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_pass;
+
+            // 数组纹理采样版 sub pass：瓦片地图分片把图集绑在
+            // Textures2DArray 槽 0（顶点 uv 为 (u, v, 数组层号) float3），
+            // 用本变体按层采样图集 alpha 做自阴影覆盖
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_array_pass;
+
+            // 逐块判定版 sub pass ×2（TopDown 光源 + Light2D::PerBlockSelfShadow
+            // 遮挡物专用）：AUTO 高度判定不在 CPU 按实体原点一刀切，而是用
+            // 网格顶点属性 3 携带的块底边（局部 Y）在顶点着色器逐块比较，
+            // 整块受光或整块自阴影。JE_COLOR 约定：x=factor，
+            // y=高度线（AUTO 为光源世界 Y；ON 恒暗时为 +1e30），z/w 备用
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_topdown_pass;
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_topdown_array_pass;
 
             inline static const float _screen_vertex_data[] = {
                 -1.f,
@@ -1242,35 +1269,37 @@ public let frag =
                 1.f,
                 0.f,
             };
-            inline static const float _sprite_shadow_vertex_data[] = {
-                -0.5f,
-                -0.5f,
-                0.0f,
-                0.0f,
-                1.0f,
-                1.0f,
-                -0.5f,
-                -0.5f,
-                0.0f,
-                0.0f,
-                0.0f,
-                0.0f,
-                0.5f,
-                -0.5f,
-                0.0f,
-                1.0f,
-                1.0f,
-                1.0f,
-                0.5f,
-                -0.5f,
-                0.0f,
-                1.0f,
-                0.0f,
-                0.0f,
+            // WallShadow（墙状遮挡）全向阴影条带：底/顶/左/右四条锚边
+            // 各一个四边形，锚点对（factor=0）贴边，远端对（factor=1）由
+            // 顶点着色器沿背光方向挤出；向光边在顶点着色器里折叠回锚边
+            // （零面积，无片元）。顶点格式 pos.xyz / uv.xy / factor /
+            // edge_normal.xy，uv 沿边方向 0→1、沿挤出方向从本边值跨到
+            // 对边值（整图压扁观感）。
+            inline static const float _wall_shadow_vertex_data[] = {
+                /* bottom edge, normal (0,-1) */
+                -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f,
+                0.5f,  -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, -1.0f,
+                -0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, -1.0f,
+                0.5f,  -0.5f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f, -1.0f,
+                /* top edge, normal (0,1) */
+                -0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+                0.5f,  0.5f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+                -0.5f, 0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f,
+                0.5f,  0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f,
+                /* left edge, normal (-1,0) */
+                -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f,
+                -0.5f, 0.5f,  0.0f, 0.0f, 1.0f, 0.0f, -1.0f, 0.0f,
+                -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 1.0f, -1.0f, 0.0f,
+                -0.5f, 0.5f,  0.0f, 1.0f, 1.0f, 1.0f, -1.0f, 0.0f,
+                /* right edge, normal (1,0) */
+                0.5f,  -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+                0.5f,  0.5f,  0.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f,
+                0.5f,  -0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f,
+                0.5f,  0.5f,  0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f,
             };
             DeferLight2DResource()
                 : _no_shadow{
-                    jeecs::graphic::texture::create(1, 1, jegl_texture::format::RGBA)
+                    jeecs::graphic::texture2d::create(1, 1, jegl_texture_common::format::RGBA)
                 }
                 , _screen_vertex{
                     jeecs::graphic::vertex::create(
@@ -1284,16 +1313,20 @@ public let frag =
                         })
                         .value()
                 }
-                , _sprite_shadow_vertex{
+                , _wall_shadow_vertex{
                     jeecs::graphic::vertex::create(
-                        jegl_vertex::TRIANGLESTRIP,
-                        _sprite_shadow_vertex_data,
-                        sizeof(_sprite_shadow_vertex_data),
-                        {0, 1, 2, 3},
+                        jegl_vertex::type::TRIANGLES,
+                        _wall_shadow_vertex_data,
+                        sizeof(_wall_shadow_vertex_data),
+                        {0, 1, 2, 1, 3, 2,
+                        4, 5, 6, 5, 7, 6,
+                        8, 9, 10, 9, 11, 10,
+                        12, 13, 14, 13, 15, 14},
                         {
                             {jegl_vertex::data_type::FLOAT32, 3},
                             {jegl_vertex::data_type::FLOAT32, 2},
                             {jegl_vertex::data_type::FLOAT32, 1},
+                            {jegl_vertex::data_type::FLOAT32, 2},
                         })
                         .value()
                 }
@@ -1694,7 +1727,6 @@ WOSHADER_VERTEX_IN!
     using vin = struct {
         vertex: float3,
         uv: float2,
-        factor: float,
     };
     
 WOSHADER_VERTEX_TO_FRAGMENT!
@@ -1710,17 +1742,27 @@ WOSHADER_FRAGMENT_OUT!
     
 public func vert(v: vin)
 {
-    let light2d_vpos = JE_V * vec4!(JE_COLOR->xyz, 1.);
+    // local_scale.yz 为 CPU 预计算的精灵局部空间背光方向（xy），
+    // 点光/平行光统一走该通道，着色器内不区分光源类型
+    let dir_raw = JE_LOCAL_SCALE->yz;
+    let shadow_dir_local = dir_raw / max(length(dir_raw), 0.000001);
     let shadow_scale_factor = JE_COLOR->w;
-    
+
     let vpos = JE_MV * vec4!(v.vertex, 1.);
-    let centerpos = JE_MV * vec4!(0., 0., 0., 1.);
-    let shadow_vpos = normalize(
-        (centerpos->xyz / centerpos->w) - (light2d_vpos->xyz / light2d_vpos->w)
-        ) * shadow_scale_factor;
-        
+    // 局部方向随模型旋转/翻转到视空间（w=0 跳过平移）
+    let shadow_dir_view = (JE_MV * vec4!(
+        shadow_dir_local->x, shadow_dir_local->y, 0., 0.))->xy;
+
+    // 锚定拉伸：迎光边（stretch=0）原位不动，背光边（stretch=1）沿
+    // 背光方向拉出 distance，贴图随四边形连续拉伸——角色剪影的
+    // 投影式阴影，任意光向都成立
+    let stretch = clamp(0.5 + dot(v.vertex->xy, shadow_dir_local), 0., 1.);
+
     return v2f{
-        pos = JE_P * vec4!((vpos->xyz / vpos->w) + shadow_vpos * v.factor, 1.),
+        pos = JE_P * vec4!(
+            (vpos->xyz / vpos->w)
+                + vec3!(shadow_dir_view, 0.) * shadow_scale_factor * stretch,
+            1.),
         uv = uvtrans(v.uv, JE_UV_TILING, JE_UV_OFFSET),
     };
 }
@@ -1768,7 +1810,175 @@ WOSHADER_VERTEX_IN!
     using vin = struct {
         vertex: float3,
         uv: float2,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos: float4,
+        uv: float2,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        shadow_factor: float4,
+    };
+    
+public func vert(v: vin)
+{
+    // local_scale.yz 为 CPU 预计算的精灵局部空间背光方向（xy），
+    // 点光/平行光统一走该通道，着色器内不区分光源类型
+    let dir_raw = JE_LOCAL_SCALE->yz;
+    let shadow_dir_local = dir_raw / max(length(dir_raw), 0.000001);
+    let shadow_scale_factor = JE_COLOR->w;
+
+    let vpos = JE_MV * vec4!(v.vertex, 1.);
+    // 局部方向随模型旋转/翻转到视空间（w=0 跳过平移）
+    let shadow_dir_view = (JE_MV * vec4!(
+        shadow_dir_local->x, shadow_dir_local->y, 0., 0.))->xy;
+
+    // 锚定拉伸：迎光边（stretch=0）原位不动，背光边（stretch=1）沿
+    // 背光方向拉出 distance，贴图随四边形连续拉伸——角色剪影的
+    // 投影式阴影，任意光向都成立
+    let stretch = clamp(0.5 + dot(v.vertex->xy, shadow_dir_local), 0., 1.);
+
+    return v2f{
+        pos = JE_P * vec4!(
+            (vpos->xyz / vpos->w)
+                + vec3!(shadow_dir_view, 0.) * shadow_scale_factor * stretch,
+            1.),
+        uv = uvtrans(v.uv, JE_UV_TILING, JE_UV_OFFSET),
+    };
+}
+
+let linear_clamp = Sampler2D::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
+WOSHADER_UNIFORM!
+    let Main = texture2d::uniform(0, linear_clamp);
+    
+public func frag(vf: v2f)
+{
+    let final_shadow = alphatest(
+        vec4!(
+            JE_LOCAL_SCALE,     // NOTE: JE_LOCAL_SCALE->x is shadow factor here.
+            tex2d(Main, vf.uv)->w));
+            
+    let shadow_factor = final_shadow->x;
+    return fout{
+        shadow_factor = vec4!(
+            shadow_factor, shadow_factor, shadow_factor, shadow_factor),
+    };
+}
+)").value()
+                }
+                , _defer_light2d_shadow_wall_point_pass{
+                    jeecs::graphic::shader::create(
+                        nullptr,
+                        "!/builtin/defer_light2d_shadow_point_wall.shader",
+                        R"(
+import pkg::std;
+
+import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (MAX, ONE, ONE);
+// MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
+CULL    (NONE);
+
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex: float3,
+        uv: float2,
         factor: float,
+        // 锚边外法线：顶点着色器用它判定本边是否背光
+        normal: float2,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct{
+        pos: float4,
+        uv: float2,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct{
+        shadow_factor: float4,
+    };
+    
+public func vert(v: vin)
+{
+    let light2d_vpos = JE_V * vec4!(JE_COLOR->xyz, 1.);
+    let shadow_scale_factor = JE_COLOR->w;
+
+    let vpos = JE_MV * vec4!(v.vertex, 1.);
+    // 逐顶点径向：本顶点背向光源的方向（视空间，透视除后），
+    // 近光源时各边自然发散，远光源时退化为整体平移
+    let far_dir = (vpos->xyz / vpos->w) - (light2d_vpos->xyz / light2d_vpos->w);
+    let shadow_dir = far_dir / max(length(far_dir), 0.000001);
+
+    // 边法线随模型旋转/翻转到视空间（w=0 跳过平移），
+    // 向光边（dot<0）整体折叠回锚边成为零面积，不产生片元
+    let edge_normal = (JE_MV * vec4!(v.normal->x, v.normal->y, 0., 0.))->xy;
+    let keep_edge = step(dot(edge_normal, shadow_dir->xy), 0.);
+
+    return v2f{
+        pos = JE_P * vec4!(
+            (vpos->xyz / vpos->w)
+                + shadow_dir * shadow_scale_factor * v.factor * keep_edge,
+            1.),
+        uv = uvtrans(v.uv, JE_UV_TILING, JE_UV_OFFSET),
+    };
+}
+
+let linear_clamp = Sampler2D::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
+WOSHADER_UNIFORM!
+    let Main = texture2d::uniform(0, linear_clamp);
+    
+public func frag(vf: v2f)
+{
+
+    let final_shadow = alphatest(
+        vec4!(
+            JE_LOCAL_SCALE,     // NOTE: JE_LOCAL_SCALE->x is shadow factor here.
+            tex2d(Main, vf.uv)->w));
+            
+    let shadow_factor = final_shadow->x;
+    return fout{
+        shadow_factor = vec4!(
+            shadow_factor, shadow_factor, shadow_factor, shadow_factor),
+    };
+}
+)").value()
+                }
+                , _defer_light2d_shadow_wall_parallel_pass{
+                jeecs::graphic::shader::create(
+                    nullptr,
+                    "!/builtin/defer_light2d_shadow_parallel_wall.shader"
+                    , R"(
+import pkg::std;
+
+import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (MAX, ONE, ONE);
+// MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
+CULL    (NONE);
+
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex: float3,
+        uv: float2,
+        factor: float,
+        // 锚边外法线：顶点着色器用它判定本边是否背光
+        normal: float2,
     };
     
 WOSHADER_VERTEX_TO_FRAGMENT!
@@ -1786,12 +1996,18 @@ public func vert(v: vin)
 {
     let light2d_vdir = (JE_V * vec4!(JE_COLOR->xyz, 1.))->xyz - movement(JE_V);
     let shadow_scale_factor = JE_COLOR->w;
-    
+    let shadow_dir = normalize(light2d_vdir);
+
+    // 与点光版相同：边法线随模型旋转到视空间，向光边折叠回锚边（零面积）
+    let edge_normal = (JE_MV * vec4!(v.normal->x, v.normal->y, 0., 0.))->xy;
+    let keep_edge = step(dot(edge_normal, shadow_dir->xy), 0.);
+
     let vpos = JE_MV * vec4!(v.vertex, 1.);
-    let shadow_vpos = normalize(light2d_vdir) * shadow_scale_factor;
-    
     return v2f{
-        pos = JE_P * vec4!((vpos->xyz / vpos->w) + shadow_vpos * v.factor, 1.),
+        pos = JE_P * vec4!(
+            (vpos->xyz / vpos->w)
+                + shadow_dir * shadow_scale_factor * v.factor * keep_edge,
+            1.),
         uv = uvtrans(v.uv, JE_UV_TILING, JE_UV_OFFSET),
     };
 }
@@ -1865,7 +2081,208 @@ WOSHADER_UNIFORM!
 public func frag(vf: v2f)
 {
     let final_shadow = alphatest(vec4!(JE_COLOR->xyz, tex2d(Main, vf.uv)->w));
-    
+
+    let shadow_factor = final_shadow->x;
+    return fout{
+        shadow_factor = vec4!(
+            shadow_factor, shadow_factor, shadow_factor, 1.),
+    };
+}
+)").value()
+                }
+                , _defer_light2d_shadow_sub_array_pass{
+                    jeecs::graphic::shader::create(
+                        nullptr,
+                        "!/builtin/defer_light2d_shadow_sub_array.shader",
+                        R"(
+import pkg::std;
+
+import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+// MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
+CULL    (NONE);
+
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex: float3,
+        // 瓦片地图分片顶点：uv.z 为数组纹理层号
+        uv: float3,
+    };
+
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos: float4,
+        uv: float3,
+    };
+
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        shadow_factor: float4,
+    };
+
+public func vert(v: vin)
+{
+    // tiling/offset 只作用于 uv.xy，数组层号分量原样传递
+    return v2f{
+        pos = JE_MVP * vec4!(v.vertex, 1.),
+        uv = vec3!(uvtrans(v.uv->xy, JE_UV_TILING, JE_UV_OFFSET), v.uv->z),
+    };
+}
+
+let nearest_clamp = Sampler2D::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+WOSHADER_UNIFORM!
+    let Main = texture2darray::uniform(0, nearest_clamp);
+
+public func frag(vf: v2f)
+{
+    let final_shadow = alphatest(vec4!(JE_COLOR->xyz, tex2darray(Main, vf.uv)->w));
+
+    let shadow_factor = final_shadow->x;
+    return fout{
+        shadow_factor = vec4!(
+            shadow_factor, shadow_factor, shadow_factor, 1.),
+    };
+}
+)").value()
+                }
+                , _defer_light2d_shadow_sub_topdown_pass{
+                    jeecs::graphic::shader::create(
+                        nullptr,
+                        "!/builtin/defer_light2d_shadow_sub_topdown.shader",
+                        R"(
+import pkg::std;
+
+import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+// MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
+CULL    (NONE);
+
+// 顶点属性按网格布局前缀绑定：位置 0/1/2 为 pos/uv/normal，
+// 位置 3 为 bottom（块底边局部 Y，PerBlockSelfShadow 契约）。
+// normal 声明未用，仅为占位到位置 3
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex: float3,
+        uv: float2,
+        normal: float3,
+        bottom: float,
+    };
+
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos: float4,
+        uv: float2,
+        cover: float,
+    };
+
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        shadow_factor: float4,
+    };
+
+public func vert(v: vin)
+{
+    // 块底边（局部）变换到世界取 Y，与高度线比较（JE_COLOR：x=factor，
+    // y=高度线——AUTO 为光源世界 Y，ON 恒暗时为 +1e30 使 lit 恒 0）
+    let wb = (JE_M * vec4!(v.vertex->x, v.bottom, v.vertex->z, 1.))->y;
+    let lit = step(wb, JE_COLOR->y);
+
+    return v2f{
+        pos = JE_MVP * vec4!(v.vertex, 1.),
+        uv = uvtrans(v.uv, JE_UV_TILING, JE_UV_OFFSET),
+        cover = JE_COLOR->x * (1. - lit),
+    };
+}
+
+let nearest_clamp = Sampler2D::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+WOSHADER_UNIFORM!
+    let Main = texture2d::uniform(0, nearest_clamp);
+
+public func frag(vf: v2f)
+{
+    let final_shadow = alphatest(vec4!(vf.cover, vf.cover, vf.cover, tex2d(Main, vf.uv)->w));
+
+    let shadow_factor = final_shadow->x;
+    return fout{
+        shadow_factor = vec4!(
+            shadow_factor, shadow_factor, shadow_factor, 1.),
+    };
+}
+)").value()
+                }
+                , _defer_light2d_shadow_sub_topdown_array_pass{
+                    jeecs::graphic::shader::create(
+                        nullptr,
+                        "!/builtin/defer_light2d_shadow_sub_topdown_array.shader",
+                        R"(
+import pkg::std;
+
+import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+// MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
+CULL    (NONE);
+
+// 同 sub_topdown：位置 3 为 bottom（块底边局部 Y），normal 仅占位；
+// uv.z 为数组纹理层号（瓦片地图分片图集）
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex: float3,
+        uv: float3,
+        normal: float3,
+        bottom: float,
+    };
+
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos: float4,
+        uv: float3,
+        cover: float,
+    };
+
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        shadow_factor: float4,
+    };
+
+public func vert(v: vin)
+{
+    let wb = (JE_M * vec4!(v.vertex->x, v.bottom, v.vertex->z, 1.))->y;
+    let lit = step(wb, JE_COLOR->y);
+
+    return v2f{
+        pos = JE_MVP * vec4!(v.vertex, 1.),
+        // tiling/offset 只作用于 uv.xy，数组层号分量原样传递
+        uv = vec3!(uvtrans(v.uv->xy, JE_UV_TILING, JE_UV_OFFSET), v.uv->z),
+        cover = JE_COLOR->x * (1. - lit),
+    };
+}
+
+let nearest_clamp = Sampler2D::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+WOSHADER_UNIFORM!
+    let Main = texture2darray::uniform(0, nearest_clamp);
+
+public func frag(vf: v2f)
+{
+    let final_shadow = alphatest(vec4!(vf.cover, vf.cover, vf.cover, tex2darray(Main, vf.uv)->w));
+
     let shadow_factor = final_shadow->x;
     return fout{
         shadow_factor = vec4!(
@@ -1892,7 +2309,7 @@ public func frag(vf: v2f)
             const RendToFramebuffer* rendToFramebuffer;
             const Light2D::CameraPostPass* light2DPostPass;
             const Shaders* shaders;
-            const Textures* textures;
+            const Textures2D* textures;
             const FrustumCulling* frustumCulling;
             const Camera::Clear* clear;
             const Renderer::Color* color;
@@ -1917,7 +2334,7 @@ public func frag(vf: v2f)
             const Renderer::Color* color;
             const Shape* shape;
             const Shaders* shaders;
-            const Textures* textures;
+            const Textures2D* textures;
         };
 
         struct block2d_arch
@@ -1927,9 +2344,15 @@ public func frag(vf: v2f)
             const Light2D::BlockShadow* blockshadow;
             const Light2D::ShapeShadow* shapeshadow;
             const Light2D::SpriteShadow* spriteshadow;
+            const Light2D::WallShadow* wallshadow;
             const Light2D::SelfShadow* selfshadow;
+            // 逐块自阴影修饰（与 SelfShadow 同挂）：TopDown 光源下 AUTO
+            // 高度判定用网格顶点携带的块底边逐块比较，见 sub_topdown pass
+            const Light2D::PerBlockSelfShadow* perblock;
 
-            const Textures* textures;
+            const Textures2D* textures;
+            // 数组图集（瓦片地图分片）：槽 0 为图集，sub pass 用它按层采样
+            const Textures2DArray* textures_array;
             const Shape* shape;
         };
 
@@ -1984,7 +2407,7 @@ public func frag(vf: v2f)
                     RendToFramebuffer*,
                     CameraPostPass*,
                     Shaders*,
-                    Textures*,
+                    Textures2D*,
                     FrustumCulling*,
                     Clear*,
                     Color*
@@ -2052,13 +2475,13 @@ public func frag(vf: v2f)
                                 RENDAIMBUFFER_HEIGHT,
                                 {
                                     // 漫反射颜色
-                                    jegl_texture::format::RGBA,
+                                    jegl_texture_common::format::RGBA,
                                     // 自发光颜色，用于法线反射或者发光物体的颜色参数，最终混合shader会将此参数用于光照计算
-                                    jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::FLOAT16),
+                                    jegl_texture_common::format(jegl_texture_common::format::RGBA | jegl_texture_common::format::FLOAT16),
                                     // 视空间坐标(RGB) Alpha通道暂时留空
-                                    jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::FLOAT16),
+                                    jegl_texture_common::format(jegl_texture_common::format::RGBA | jegl_texture_common::format::FLOAT16),
                                     // 法线空间颜色
-                                    jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::FLOAT16),
+                                    jegl_texture_common::format(jegl_texture_common::format::RGBA | jegl_texture_common::format::FLOAT16),
                                 },
                                 true).value();
                         light2dpostpass->post_light_target
@@ -2067,18 +2490,19 @@ public func frag(vf: v2f)
                                 LIGHT_BUFFER_HEIGHT,
                                 {
                                     // 光渲染结果
-                                    (jegl_texture::format)(jegl_texture::format::RGBA | jegl_texture::format::FLOAT16),
+                                    (jegl_texture_common::format)(jegl_texture_common::format::RGBA | jegl_texture_common::format::FLOAT16),
                                 },
                                 false).value();
                     }
                 }
             }
 
-            for (auto&& [trans, shads, texs, shape, rendqueue, color] : query<
+            for (auto&& [trans, shads, texs, texarr, shape, rendqueue, color] : query<
                 view typesof(
                     Translation&,
                     Shaders&,
-                    Textures*,
+                    Textures2D*,
+                    Textures2DArray*,
                     Shape&,
                     Rendqueue*,
                     Color*
@@ -2094,7 +2518,8 @@ public func frag(vf: v2f)
                 // RendOb will be input to a chain and used for swap
                 m_renderer_list.emplace(
                     renderer_arch{
-                        color, rendqueue, &trans, &shape, &shads, texs
+                        color, rendqueue, &trans, &shape, &shads, texs,
+                        nullptr, nullptr, nullptr, nullptr, texarr
                     });
             }
 
@@ -2123,7 +2548,7 @@ public func frag(vf: v2f)
                     Color*,
                     Shape&,
                     Shaders&,
-                    Textures*
+                    Textures2D*
                 ),
                 anyof typesof(
                     Point,
@@ -2162,7 +2587,7 @@ public func frag(vf: v2f)
                             std::max((size_t)1, SHADOW_BUFFER_WIDTH),
                             std::max((size_t)1, SHADOW_BUFFER_HEIGHT),
                             {
-                                jegl_texture::format::RGBA,
+                                jegl_texture_common::format::RGBA,
                                 // Only store shadow value to R-pass
                             },
                             false).value();
@@ -2258,20 +2683,25 @@ public func frag(vf: v2f)
                 }
             }
 
-            for (auto&& [trans, blockshadow, shapeshadow, spriteshadow, selfshadow, texture, shape] : query<
+            for (auto&& [trans, blockshadow, shapeshadow, spriteshadow, wallshadow, selfshadow,
+                perblock, texture, texture_array, shape] : query<
                 view typesof(
                     Translation&,
                     BlockShadow*,
                     ShapeShadow*,
                     SpriteShadow*,
+                    WallShadow*,
                     SelfShadow*,
-                    Textures*,
+                    PerBlockSelfShadow*,
+                    Textures2D*,
+                    Textures2DArray*,
                     Shape&
                 ),
                 anyof typesof(
                     BlockShadow,
                     ShapeShadow,
                     SpriteShadow,
+                    WallShadow,
                     SelfShadow
                 )
             >())
@@ -2318,8 +2748,11 @@ public func frag(vf: v2f)
                         blockshadow,
                         shapeshadow,
                         spriteshadow,
+                        wallshadow,
                         selfshadow,
+                        perblock,
                         texture,
+                        texture_array,
                         &shape
                     }
                 );
@@ -2331,10 +2764,16 @@ public func frag(vf: v2f)
                 {
                     return a.translation->world_position.z > b.translation->world_position.z;
                 });
+            // TopDown 光源遍历用：Y 相同（如瓦片地图全部分片/图层共享根
+            // 实体 Y）时按 z 降序平手——z 小者（默认沿 -z 叠放的视觉上层）
+            // 后 flush、其自阴影覆盖在共享像素生效，与普通光源按 z 降序
+            // 遍历的层级结果一致，避免不稳定排序导致覆盖胜负不确定
             std::sort(m_2dblock_y_list.begin(), m_2dblock_y_list.end(),
                 [](const block2d_arch& a, const block2d_arch& b)
                 {
-                    return a.translation->world_position.y > b.translation->world_position.y;
+                    const auto& ap = a.translation->world_position;
+                    const auto& bp = b.translation->world_position;
+                    return ap.y > bp.y || (ap.y == bp.y && ap.z > bp.z);
                 });
 
             this->branch_allocate_end();
@@ -2343,14 +2782,16 @@ public func frag(vf: v2f)
 
         /* ------- DeferLight2D-specific helpers (use the base helpers too) ------- */
 
-        // Pick the appropriate 5-tuple of shadow shaders based on light type (point/parallel).
+        // Pick the shadow shader set based on light type (point/parallel).
         struct defer_light2d_shadow_passes_t
         {
             const basic::resource<graphic::shader>& normal;
             const basic::resource<graphic::shader>& reverse_normal;
             const basic::resource<graphic::shader>& shape;
             const basic::resource<graphic::shader>& sprite;
+            const basic::resource<graphic::shader>& wall;
             const basic::resource<graphic::shader>& sub;
+            const basic::resource<graphic::shader>& sub_texarray;
         };
         defer_light2d_shadow_passes_t select_shadow_passes(bool is_parallel) const
         {
@@ -2360,25 +2801,29 @@ public func frag(vf: v2f)
                     m_defer_light2d_host._defer_light2d_shadow_parallel_reverse_pass,
                     m_defer_light2d_host._defer_light2d_shadow_shape_parallel_pass,
                     m_defer_light2d_host._defer_light2d_shadow_sprite_parallel_pass,
+                    m_defer_light2d_host._defer_light2d_shadow_wall_parallel_pass,
                     m_defer_light2d_host._defer_light2d_shadow_sub_pass,
+                    m_defer_light2d_host._defer_light2d_shadow_sub_array_pass,
             }
             : defer_light2d_shadow_passes_t{
                 m_defer_light2d_host._defer_light2d_shadow_point_pass,
                 m_defer_light2d_host._defer_light2d_shadow_point_reverse_pass,
                 m_defer_light2d_host._defer_light2d_shadow_shape_point_pass,
                 m_defer_light2d_host._defer_light2d_shadow_sprite_point_pass,
+                m_defer_light2d_host._defer_light2d_shadow_wall_point_pass,
                 m_defer_light2d_host._defer_light2d_shadow_sub_pass,
+                m_defer_light2d_host._defer_light2d_shadow_sub_array_pass,
             };
         }
 
         jegl_rchain_texture_group* alloc_shadow_texture_group(
-            jegl_rendchain* chain, /* OPTIONAL */ const Textures* textures)
+            jegl_rendchain* chain, /* OPTIONAL */ const Textures2D* textures)
         {
             auto* group = jegl_rchain_allocate_texture_group(chain);
             auto main_texture =
                 textures == nullptr ? std::nullopt : textures->get_texture(0);
 
-            jegl_rchain_bind_texture(
+            jegl_rchain_bind_texture_2d(
                 chain, group, 0,
                 main_texture.has_value()
                 ? main_texture.value()->resource()
@@ -2403,7 +2848,7 @@ public func frag(vf: v2f)
             math::vec3 local_scale,
             float color_w,
             const math::vec3& parallel_dir_ref,
-            const Textures* textures)
+            const Textures2D* textures)
         {
             auto* rchain_draw_action = jegl_rchain_draw(
                 shadow_chain, shadow_shader->resource(), shape_vertex->resource(), texture_group);
@@ -2610,22 +3055,62 @@ public func frag(vf: v2f)
                                             math::vec3(0.f, -1.f, 0.f),
                                             blockarch.textures);
                                     }
+                                    if (blockarch.wallshadow != nullptr && blockarch.wallshadow->factor > 0.f)
+                                    {
+                                        auto* texture_group = alloc_shadow_texture_group(
+                                            light2d_shadow_rend_chain, blockarch.textures);
+
+                                        // WallShadow（墙状遮挡）通过 local_scale.x 传权重，.yz 预留，
+                                        // color.w 传 distance，平行光方向参考 (0,-1,0)。
+                                        draw_shadow_occluder(
+                                            light2d_shadow_rend_chain,
+                                            shadow_passes.wall,
+                                            m_defer_light2d_host._wall_shadow_vertex,
+                                            texture_group,
+                                            blockarch.translation,
+                                            lightarch,
+                                            MAT4_VIEW, MAT4_VP,
+                                            math::vec3(blockarch.wallshadow->factor, 0.f, 0.f),
+                                            blockarch.wallshadow->distance,
+                                            math::vec3(0.f, -1.f, 0.f),
+                                            blockarch.textures);
+                                    }
                                     if (blockarch.spriteshadow != nullptr && blockarch.spriteshadow->factor > 0.f)
                                     {
                                         auto* texture_group = alloc_shadow_texture_group(
                                             light2d_shadow_rend_chain, blockarch.textures);
 
-                                        // SpriteShadow 通过 local_scale.x 传权重，.yz 预留，
-                                        // color.w 传 distance，平行光方向参考 (0,-1,0)。
+                                        // SpriteShadow（角色投影）通过 local_scale.x 传权重，
+                                        // .yz 传 CPU 预计算的精灵局部空间背光方向（点光取
+                                        // 实体中心背向光源，平行光取旋转后的参考方向，
+                                        // 均经 world_rotation 逆变换转入局部系），
+                                        // color.w 传 distance。着色器用它做迎光边锚定、
+                                        // 背光边拉伸的投影式阴影。
+                                        const math::vec3 shadow_dir_world =
+                                            (lightarch.parallel != nullptr
+                                                ? lightarch.translation->world_rotation * math::vec3(0.f, -1.f, 0.f)
+                                                : blockarch.translation->world_position
+                                                    - lightarch.translation->world_position).unit();
+                                        const math::vec3 shadow_dir_local =
+                                            blockarch.translation->world_rotation.inverse() * shadow_dir_world;
+
+                                        assert(blockarch.shape != nullptr);
+                                        const auto& using_shape = blockarch.shape->vertex.has_value()
+                                            ? blockarch.shape->vertex.value()
+                                            : m_default_resources.default_shape_quad;
+
                                         draw_shadow_occluder(
                                             light2d_shadow_rend_chain,
                                             shadow_passes.sprite,
-                                            m_defer_light2d_host._sprite_shadow_vertex,
+                                            using_shape,
                                             texture_group,
                                             blockarch.translation,
                                             lightarch,
                                             MAT4_VIEW, MAT4_VP,
-                                            math::vec3(blockarch.spriteshadow->factor, 0.f, 0.f),
+                                            math::vec3(
+                                                blockarch.spriteshadow->factor,
+                                                shadow_dir_local.x,
+                                                shadow_dir_local.y),
                                             blockarch.spriteshadow->distance,
                                             math::vec3(0.f, -1.f, 0.f),
                                             blockarch.textures);
@@ -2644,8 +3129,34 @@ public func frag(vf: v2f)
                                         // 如果物体被指定为不需要cover，那么就不绘制
                                         if (block_in_layer->selfshadow != nullptr)
                                         {
+                                            // 瓦片地图分片的图集绑在数组纹理槽 0
+                                            //（顶点 uv.z 为数组层号），走数组采样版
+                                            // sub pass；其余实体按普通 2D 纹理采样。
+                                            // 数组绑定在 2D 绑定之后写入槽 0（后写覆盖）
+                                            std::optional<basic::resource<graphic::texture_array>> array_atlas;
+                                            if (block_in_layer->textures_array != nullptr)
+                                                array_atlas = block_in_layer->textures_array->get_texture(0);
+
                                             auto* texture_group = alloc_shadow_texture_group(
                                                 light2d_shadow_rend_chain, block_in_layer->textures);
+                                            if (array_atlas.has_value())
+                                                jegl_rchain_bind_texture_array(
+                                                    light2d_shadow_rend_chain, texture_group, 0,
+                                                    array_atlas.value()->resource());
+
+                                            // TopDown 光源 + PerBlockSelfShadow 修饰：
+                                            // 换用按块底边逐块判定的 topdown sub pass
+                                            const bool per_block_selfshadow =
+                                                lightarch.topdown != nullptr
+                                                && block_in_layer->perblock != nullptr;
+
+                                            auto& sub_pass_shader = per_block_selfshadow
+                                                ? (array_atlas.has_value()
+                                                    ? m_defer_light2d_host._defer_light2d_shadow_sub_topdown_array_pass
+                                                    : m_defer_light2d_host._defer_light2d_shadow_sub_topdown_pass)
+                                                : (array_atlas.has_value()
+                                                    ? shadow_passes.sub_texarray
+                                                    : shadow_passes.sub);
 
                                             assert(block_in_layer->shape != nullptr);
                                             const auto& using_shape =
@@ -2655,10 +3166,10 @@ public func frag(vf: v2f)
 
                                             auto* rchain_draw_action = jegl_rchain_draw(
                                                 light2d_shadow_rend_chain,
-                                                shadow_passes.sub->resource(),
+                                                sub_pass_shader->resource(),
                                                 using_shape->resource(),
                                                 texture_group);
-                                            auto* builtin_uniform = shadow_passes.sub->m_builtin;
+                                            auto* builtin_uniform = sub_pass_shader->m_builtin;
 
                                             const float(&MAT4_MODEL)[4][4] = block_in_layer->translation->object2world;
                                             float MAT4_MVP[4][4], MAT4_MV[4][4];
@@ -2675,7 +3186,22 @@ public func frag(vf: v2f)
                                                 0.f,
                                                 0.f);*/
 
-                                            if (block_in_layer->selfshadow->auto_disable &&
+                                            if (per_block_selfshadow)
+                                            {
+                                                // 高度线打包进 JE_COLOR 供顶点着色器逐块比较：
+                                                // AUTO 用光源世界 Y；ON（auto_disable=false）
+                                                // 恒暗，高度线取 +1e30 使 lit 恒 0（整块写 factor）
+                                                const float height_line =
+                                                    block_in_layer->selfshadow->auto_disable
+                                                    ? lightarch.translation->world_position.y
+                                                    : 1e30f;
+                                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
+                                                    block_in_layer->selfshadow->factor,
+                                                    height_line,
+                                                    0.f,
+                                                    0.f);
+                                            }
+                                            else if (block_in_layer->selfshadow->auto_disable &&
                                                 (lightarch.topdown == nullptr
                                                     ? block_in_layer->translation->world_position.z >= lightarch.translation->world_position.z
                                                     : block_in_layer->translation->world_position.y >= lightarch.translation->world_position.y))
@@ -2782,14 +3308,15 @@ public func frag(vf: v2f)
 
                         // bind_entity_textures allocates the group, binds default at slot 0,
                         // and binds user textures (which may override slot 0 or other slots).
-                        auto bound = bind_entity_textures(light2d_light_effect_rend_chain, light2d.textures);
+                        auto bound = bind_entity_textures(
+                            light2d_light_effect_rend_chain, light2d.textures, nullptr);
 
                         // 绑定 G-buffer 通道（漫反射 / 自发光 / 视空间坐标 / 视空间法线 / 阴影）到 4..8 槽
-                        jegl_rchain_bind_texture(light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 0, diffuse_attachment);
-                        jegl_rchain_bind_texture(light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 1, emissive_attachment);
-                        jegl_rchain_bind_texture(light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 2, viewpos_attachment);
-                        jegl_rchain_bind_texture(light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 3, viewnorm_attachment);
-                        jegl_rchain_bind_texture(
+                        jegl_rchain_bind_texture_2d(light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 0, diffuse_attachment);
+                        jegl_rchain_bind_texture_2d(light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 1, emissive_attachment);
+                        jegl_rchain_bind_texture_2d(light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 2, viewpos_attachment);
+                        jegl_rchain_bind_texture_2d(light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 3, viewnorm_attachment);
+                        jegl_rchain_bind_texture_2d(
                             light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 4,
                             light2d.shadowbuffer != nullptr
                             ? light2d.shadowbuffer->buffer.value()->get_attachment(0).value()->resource()
@@ -2871,15 +3398,15 @@ public func frag(vf: v2f)
                     auto texture_group = jegl_rchain_allocate_texture_group(final_target_rend_chain);
 
                     // 槽 0：光照合成结果；槽 4..7：G-buffer 通道
-                    jegl_rchain_bind_texture(final_target_rend_chain, texture_group, 0,
+                    jegl_rchain_bind_texture_2d(final_target_rend_chain, texture_group, 0,
                         current_camera.light2DPostPass->post_light_target.value()->get_attachment(0).value()->resource());
-                    jegl_rchain_bind_texture(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 0,
+                    jegl_rchain_bind_texture_2d(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 0,
                         post_rend_target_frame_buffer->get_attachment(0).value()->resource());
-                    jegl_rchain_bind_texture(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 1,
+                    jegl_rchain_bind_texture_2d(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 1,
                         post_rend_target_frame_buffer->get_attachment(1).value()->resource());
-                    jegl_rchain_bind_texture(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 2,
+                    jegl_rchain_bind_texture_2d(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 2,
                         post_rend_target_frame_buffer->get_attachment(2).value()->resource());
-                    jegl_rchain_bind_texture(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 3,
+                    jegl_rchain_bind_texture_2d(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 3,
                         post_rend_target_frame_buffer->get_attachment(3).value()->resource());
 
                     // 相机自带纹理（覆盖槽位由 m_pass_id 决定）
@@ -2889,7 +3416,7 @@ public func frag(vf: v2f)
                         final_tiling = current_camera.textures->tiling;
                         final_offset = current_camera.textures->offset;
                         for (auto& texture : current_camera.textures->textures)
-                            jegl_rchain_bind_texture(final_target_rend_chain, texture_group, texture.m_pass_id, texture.m_texture->resource());
+                            jegl_rchain_bind_texture_2d(final_target_rend_chain, texture_group, texture.m_pass_id, texture.m_texture->resource());
                     }
 
                     auto& drawing_shaders =

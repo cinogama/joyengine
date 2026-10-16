@@ -90,7 +90,7 @@ namespace JEEditor::Editor::Animation2D
         protected m_selected_frames: vec<int>,
 
         // 预览（源贴图路径为本地路径，载入时经 ResourcePath 转运行时路径）
-        protected m_source_texture: mut option<texture>,
+        protected m_source_texture: mut option<texture2d>,
         protected m_source_path: mut option<fsys::path_t>,
         protected m_preview_zoom: mut real,
         protected m_show_checker: mut bool,

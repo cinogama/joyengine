@@ -372,7 +372,7 @@ namespace JEEditor::Editor::Animation2D
             none?
                 state.m_source_texture = option::none;
             value(p)?
-                match (texture::load(state.m_universe, ResourcePath::toRuntimeResourcePath(p)))
+                match (texture2d::load(state.m_universe, ResourcePath::toRuntimeResourcePath(p)))
                 {
                     value(tex)? state.m_source_texture = option::value(tex);
                     none?
@@ -408,7 +408,7 @@ namespace JEEditor::Editor::Animation2D
     }
     
     // 把某一帧的精灵绘制到指定屏幕矩形（按贴图实际尺寸保持比例）
-    func _draw_frame_sprite(tex: texture, frame: Animation2dFrameData,
+    func _draw_frame_sprite(tex: texture2d, frame: Animation2dFrameData,
         cx: real, cy: real, avail_w: real, avail_h: real, zoom: real, tint: Color32RGBA) => void
     {
         let (tw, th) = tex->size();
@@ -789,13 +789,13 @@ namespace JEEditor::Editor::Animation2D
                                 m_time = mut state.m_ss_ftime,
                                 m_component_data = [
                                     FrameComponentData{
-                                        m_component_name = "Renderer::Textures",
+                                        m_component_name = "Renderer::Textures2D",
                                         m_member_name = "offset",
                                         m_value = mut DataValue::VEC2((col, row)),
                                         m_offset_mode = mut false,
                                     },
                                     FrameComponentData{
-                                        m_component_name = "Renderer::Textures",
+                                        m_component_name = "Renderer::Textures2D",
                                         m_member_name = "tiling",
                                         m_value = mut DataValue::VEC2((tx, ty)),
                                         m_offset_mode = mut false,

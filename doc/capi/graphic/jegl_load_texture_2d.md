@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API jegl_texture* jegl_load_texture(
+JE_API jegl_texture_2d* jegl_load_texture_2d(
     jegl_context* context,
     const char* path);
 ```
@@ -23,7 +23,7 @@ JE_API jegl_texture* jegl_load_texture(
 
 | 类型 | 描述 |
 |------|------|
-| `jegl_texture*` | 纹理资源指针；若加载失败返回 `nullptr` |
+| `jegl_texture_2d*` | 纹理资源指针；若加载失败返回 `nullptr` |
 
 ## 用法
 
@@ -32,14 +32,14 @@ JE_API jegl_texture* jegl_load_texture(
 ### 示例
 
 ```cpp
-jegl_texture* texture = jegl_load_texture(ctx, "@/textures/brick.png");
+jegl_texture_2d* texture = jegl_load_texture_2d(ctx, "@/textures/brick.png");
 
 if (texture != nullptr) {
     // 绑定纹理到着色器
-    jegl_bind_texture(texture, 0);
+    jegl_bind_texture_2d(texture, 0);
     
     // 使用完毕后释放
-    jegl_close_texture(texture);
+    jegl_close_texture_2d(texture);
 }
 ```
 
@@ -52,6 +52,6 @@ if (texture != nullptr) {
 
 ## 相关接口
 
-- [jegl_create_texture](jegl_create_texture.md) - 创建纹理
-- [jegl_close_texture](jegl_close_texture.md) - 关闭纹理
+- [jegl_create_texture](jegl_create_texture_2d.md) - 创建纹理
+- [jegl_close_texture](jegl_close_texture_2d.md) - 关闭纹理
 - [jeecs_file_open](../file/jeecs_file_open.md) - 打开文件

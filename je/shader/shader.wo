@@ -224,6 +224,14 @@ namespace je::shader
                 return "int4";
             else if (type == Type::Texture2D)
                 return "Texture2D";
+            else if (type == Type::Texture2DArray)
+                return "Texture2DArray";
+            else if (type == Type::Texture3D)
+                return "Texture3D";
+            else if (type == Type::TextureCube)
+                return "TextureCube";
+            else if (type == Type::Texture2DMS)
+                return "Texture2DMS";
             else if (type == Type::Structure)
                 return "struct";
             else
@@ -264,7 +272,7 @@ namespace je::shader
             // Declare uniform variables
             //if (uniforms.defined_uniforms->iter |> iterator::count_if(\(_, uniform_var) = uniform_var.used;) > 0)
             
-            let uniform_textures = []mut: vec<mut (texture2d::base, string)>;
+            let uniform_textures = []mut: vec<mut (int, woshader::Sampler2D, string, string)>;
             // append_spirv_attrib(c, "vk::binding(0, 0)");
             // c->append_line("cbuffer SHADER_UNIFORM: register(b0) {");
             for (let (name, uniform_var) : uniforms.defined_uniforms
@@ -281,9 +289,49 @@ namespace je::shader
                     match (uniform_var.default_value)
                     {
                         Texture2D(b)?
-                            uniform_textures->add(mut (b, name));
+                            uniform_textures->add(mut (b.0, b.1, name, "Texture2D"));
                         _?
                             std::panic("Texture2D uniform must have default value.");
+                    }
+                }
+                else if (uniform_var.type == Type::Texture2DArray)
+                {
+                    match (uniform_var.default_value)
+                    {
+                        Texture2DArray(b)?
+                            uniform_textures->add(mut (b.0, b.1, name, "Texture2DArray"));
+                        _?
+                            std::panic("Texture2DArray uniform must have default value.");
+                    }
+                }
+                else if (uniform_var.type == Type::Texture3D)
+                {
+                    match (uniform_var.default_value)
+                    {
+                        Texture3D(b)?
+                            uniform_textures->add(mut (b.0, b.1, name, "Texture3D"));
+                        _?
+                            std::panic("Texture3D uniform must have default value.");
+                    }
+                }
+                else if (uniform_var.type == Type::TextureCube)
+                {
+                    match (uniform_var.default_value)
+                    {
+                        TextureCube(b)?
+                            uniform_textures->add(mut (b.0, b.1, name, "TextureCube"));
+                        _?
+                            std::panic("TextureCube uniform must have default value.");
+                    }
+                }
+                else if (uniform_var.type == Type::Texture2DMS)
+                {
+                    match (uniform_var.default_value)
+                    {
+                        Texture2DMS(b)?
+                            uniform_textures->add(mut (b.0, b.1, name, "Texture2DMS"));
+                        _?
+                            std::panic("Texture2DMS uniform must have default value.");
                     }
                 }
                 else
@@ -292,22 +340,22 @@ namespace je::shader
                     assert_message(
                         hlsl_type_name != "struct",
                         F"Uniform variable `{name}` has unsupported type.");
-                        
+
                     // c->append_line(F"    {hlsl_type_name} {name};");
                     self.uniform_variables->add(
                         (name, uniform_var.type, uniform_var.default_value, F"{hlsl_type_name} {name};"));
                 }
             }
             // c->append_line("};");
-            
-            std::sort_in_place(uniform_textures, \a, b = a[0].0 < b[0].0;);
-            for (let ((pass, sampler), name): uniform_textures)
+
+            std::sort_in_place(uniform_textures, \a, b = a[0] < b[0];);
+            for (let (pass, sampler, name, hlsl_type_name): uniform_textures)
             {
                 let sampler_id = sorted_samplers->find_if(\(s, _) = std::is_same(s, sampler);)->unwrap;
                 self.texture_passes->add((name, pass, sampler_id));
-                
+
                 append_spirv_attrib(c, F"vk::binding({pass}, 2)");
-                c->append_line(F"Texture2D {name}: register(t{pass});");
+                c->append_line(F"{hlsl_type_name} {name}: register(t{pass});");
             }
         }
         public func generate_uniform_block_declare(
@@ -415,6 +463,26 @@ namespace je::shader
                 return ShaderGeneratorContext::EvalResult::Direct(
                     self->get_texture_info_by_pass(v.0)->unwrap.0);
             }
+            else if (v is texture2darray::base)
+            {
+                return ShaderGeneratorContext::EvalResult::Direct(
+                    self->get_texture_info_by_pass(v.0)->unwrap.0);
+            }
+            else if (v is texture3d::base)
+            {
+                return ShaderGeneratorContext::EvalResult::Direct(
+                    self->get_texture_info_by_pass(v.0)->unwrap.0);
+            }
+            else if (v is texturecube::base)
+            {
+                return ShaderGeneratorContext::EvalResult::Direct(
+                    self->get_texture_info_by_pass(v.0)->unwrap.0);
+            }
+            else if (v is texture2dms::base)
+            {
+                return ShaderGeneratorContext::EvalResult::Direct(
+                    self->get_texture_info_by_pass(v.0)->unwrap.0);
+            }
             else
                 return std::panic("Unsupported imm type");
         }
@@ -434,6 +502,62 @@ namespace je::shader
                             return_value! F"_s{self->get_texture_info_by_name(uname)->unwrap.2}";
                         _?
                             std::panic("Unacceptable texture2d formal.");
+                    }
+                }
+                Texture2DArray(tv)?
+                {
+                    match (tv)
+                    {
+                        Imm((_, sampler2d))?
+                            return_value! F"_s{self.samplers->find(sampler2d)->unwrap}";
+                        ShaderIn(inid)?
+                            return_value! F"_a{inid}_sampler";
+                        Uniform(uname)?
+                            return_value! F"_s{self->get_texture_info_by_name(uname)->unwrap.2}";
+                        _?
+                            std::panic("Unacceptable texture2darray formal.");
+                    }
+                }
+                Texture3D(tv)?
+                {
+                    match (tv)
+                    {
+                        Imm((_, sampler2d))?
+                            return_value! F"_s{self.samplers->find(sampler2d)->unwrap}";
+                        ShaderIn(inid)?
+                            return_value! F"_a{inid}_sampler";
+                        Uniform(uname)?
+                            return_value! F"_s{self->get_texture_info_by_name(uname)->unwrap.2}";
+                        _?
+                            std::panic("Unacceptable texture3d formal.");
+                    }
+                }
+                TextureCube(tv)?
+                {
+                    match (tv)
+                    {
+                        Imm((_, sampler2d))?
+                            return_value! F"_s{self.samplers->find(sampler2d)->unwrap}";
+                        ShaderIn(inid)?
+                            return_value! F"_a{inid}_sampler";
+                        Uniform(uname)?
+                            return_value! F"_s{self->get_texture_info_by_name(uname)->unwrap.2}";
+                        _?
+                            std::panic("Unacceptable texturecube formal.");
+                    }
+                }
+                Texture2DMS(tv)?
+                {
+                    match (tv)
+                    {
+                        Imm((_, sampler2d))?
+                            return_value! F"_s{self.samplers->find(sampler2d)->unwrap}";
+                        ShaderIn(inid)?
+                            return_value! F"_a{inid}_sampler";
+                        Uniform(uname)?
+                            return_value! F"_s{self->get_texture_info_by_name(uname)->unwrap.2}";
+                        _?
+                            std::panic("Unacceptable texture2dms formal.");
                     }
                 }
                 _?;
@@ -494,10 +618,48 @@ namespace je::shader
                     {
                         let tex = self->eval(c, args[0], ftype);
                         let uv = self->eval(c, args[1], ftype);
-                        
+
                         let sampler = self->get_texture_binded_sampler_expr(args[0])->unwrap;
                         return ShaderGeneratorContext::EvalResult::Decl(
                             F"{typename} {vname} = {tex}.Sample({sampler}, {uv});");
+                    }
+                    else if (builtin_func == BuiltinFunc::Operate_Tex2DArray)
+                    {
+                        let tex = self->eval(c, args[0], ftype);
+                        let coord = self->eval(c, args[1], ftype);
+
+                        let sampler = self->get_texture_binded_sampler_expr(args[0])->unwrap;
+                        return ShaderGeneratorContext::EvalResult::Decl(
+                            F"{typename} {vname} = {tex}.Sample({sampler}, {coord});");
+                    }
+                    else if (builtin_func == BuiltinFunc::Operate_Tex3D)
+                    {
+                        let tex = self->eval(c, args[0], ftype);
+                        let coord = self->eval(c, args[1], ftype);
+
+                        let sampler = self->get_texture_binded_sampler_expr(args[0])->unwrap;
+                        return ShaderGeneratorContext::EvalResult::Decl(
+                            F"{typename} {vname} = {tex}.Sample({sampler}, {coord});");
+                    }
+                    else if (builtin_func == BuiltinFunc::Operate_TexCube)
+                    {
+                        let tex = self->eval(c, args[0], ftype);
+                        let coord = self->eval(c, args[1], ftype);
+
+                        let sampler = self->get_texture_binded_sampler_expr(args[0])->unwrap;
+                        return ShaderGeneratorContext::EvalResult::Decl(
+                            F"{typename} {vname} = {tex}.Sample({sampler}, {coord});");
+                    }
+                    else if (builtin_func == BuiltinFunc::Operate_Tex2DMS)
+                    {
+                        // 多重采样纹理读取不经过采样器（无过滤），
+                        // HLSL 使用 Texture2DMS.Load(coord, sample_index)
+                        let tex = self->eval(c, args[0], ftype);
+                        let coord = self->eval(c, args[1], ftype);
+                        let sample_index = self->eval(c, args[2], ftype);
+
+                        return ShaderGeneratorContext::EvalResult::Decl(
+                            F"{typename} {vname} = {tex}.Load({coord}, {sample_index});");
                     }
                     else if (builtin_func == BuiltinFunc::Operate_Step)
                     {
@@ -647,6 +809,10 @@ namespace je::shader
                 Int3(i)? return self->apply_eval_typed_shader_value(c, "int3", vname, i, ftype);
                 Int4(i)? return self->apply_eval_typed_shader_value(c, "int4", vname, i, ftype);
                 Texture2D(t)? return self->apply_eval_typed_shader_value(c, "Texture2D", vname, t, ftype);
+                Texture2DArray(t)? return self->apply_eval_typed_shader_value(c, "Texture2DArray", vname, t, ftype);
+                Texture3D(t)? return self->apply_eval_typed_shader_value(c, "Texture3D", vname, t, ftype);
+                TextureCube(t)? return self->apply_eval_typed_shader_value(c, "TextureCube", vname, t, ftype);
+                Texture2DMS(t)? return self->apply_eval_typed_shader_value(c, "Texture2DMS", vname, t, ftype);
                 Struct(s)? return self->apply_eval_typed_shader_value(c, "struct", vname, s, ftype);
             }
         }
@@ -801,7 +967,11 @@ namespace je::shader
                         let t = sv->get_type;
                         let mut pdecl = get_type_name_with_type(t) + F" _a{idx}";
                         
-                        if (t == Type::Texture2D)
+                        if (t == Type::Texture2D
+                            || t == Type::Texture2DArray
+                            || t == Type::Texture3D
+                            || t == Type::TextureCube
+                            || t == Type::Texture2DMS)
                             pdecl += F", SamplerState _a{idx}_sampler";
                             
                         return pdecl;

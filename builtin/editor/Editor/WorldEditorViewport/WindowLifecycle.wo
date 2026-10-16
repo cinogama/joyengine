@@ -16,6 +16,7 @@ import je::typeinfo;
 import je::towoo;
 import je::towoo::types;
 import je::towoo::components;
+import je::tilemap;
 
 import pkg::fsys;
 import pkg::interface;
@@ -40,6 +41,7 @@ import builtin::editor::Editor::Practice;
 import builtin::editor::Editor::EntityClipboard;
 import builtin::editor::Editor::ResourcePath;
 import builtin::editor::Editor::Action::CreateEntity;
+import builtin::editor::Editor::Action::AddWorldSystem;
 
 import builtin::editor::Editor::Project;
 import builtin::editor::Singleton::Universe;
@@ -64,6 +66,7 @@ using toml;
 using je;
 using je::gui;
 using je::graphic;
+using je::tilemap;
 using fsys;
 using iterator;
 
@@ -738,11 +741,14 @@ namespace JEEditor::Editor::WorldEditorViewport
                     SetCursorScreenPos(rect_min);
                     do InvisibleButton("##viewport_mouse_guard", rect_size);
                     viewport_hovered = IsItemHovered();
-                    
+
                     // 拖 .je4entity 预设体文件到视口创建实例：以守卫
                     // 按钮为拖放目标（须紧随其后调用），仅视口图像
                     // 区域内接收
-                    self->acceptPrefabFileDrop(rect_min, rect_max);
+                    // 拖 .je4entity 预设体 / .je4tilemap 到视口创建实例。
+                    // 注意 ImGui 的 AcceptDrag 每帧对同一载荷只交付一次，
+                    // 必须统一接收后按扩展名分发，多个接收器会互相抢载荷。
+                    self->acceptWorldFileDrop(rect_min, rect_max);
                 }
             }
         }
@@ -887,11 +893,12 @@ namespace JEEditor::Editor::WorldEditorViewport
         return self.m_close == CloseRequest::NORMALLY;
     }
     
-    // 拖放接收：把资源管理器（Browser 的 FilePayload）拖来的
-    // .je4entity 预设体文件创建为实例。须在 run 中紧随视口交互守卫
-    // 按钮调用（以守卫按钮为拖放目标，仅视口图像区域内接收）；
-    // 非预设体文件留给未来的其他拖放用途，静默忽略。
-    protected func acceptPrefabFileDrop(
+    // 拖放接收：把资源管理器（Browser 的 FilePayload）拖来的文件按
+    // 扩展名分发创建：.je4entity 预设体 / .je4tilemap 瓦片地图。须在
+    // run 中紧随视口交互守卫按钮调用（以守卫按钮为拖放目标，仅视口
+    // 图像区域内接收）；其余类型静默忽略。ImGui 的 AcceptDrag 每帧对
+    // 同一载荷只交付一次，切勿按类型拆成多个接收器。
+    protected func acceptWorldFileDrop(
         self: WorldEditorViewport,
         rect_min: ImVec2,
         rect_max: ImVec2)=> void
@@ -900,9 +907,89 @@ namespace JEEditor::Editor::WorldEditorViewport
         {
             none?;
             value(payload)?
-                self->spawnPrefabInstanceFromFile(
-                    payload->path->to_string(), rect_min, rect_max);
+            {
+                let path_str = payload->path->to_string();
+                do self->spawnPrefabInstanceFromFile(path_str, rect_min, rect_max);
+                do self->spawnTilemapInstanceFromFile(path_str, rect_min, rect_max);
+            }
         }
+    }
+
+    // 由 .je4tilemap 文件创建地图实例：根实体带完整变换组件与
+    // Tilemap::Map（map_path 记 @/ 运行时路径），并确保世界挂有
+    // Tilemap::TilemapSystem。创建走 CreateEntity，可撤销/重做。
+    protected func spawnTilemapInstanceFromFile(
+        self: WorldEditorViewport,
+        path_str: string,
+        rect_min: ImVec2,
+        rect_max: ImVec2)=> void
+    {
+        let path = normalize(path_str);
+
+        // 只接收 .je4tilemap 文件（目录/其余类型忽略）
+        if (!isfile(path)
+            || string::lower(extension(path)) != ".je4tilemap")
+            return;
+
+        // 可解析性检查（内核文档缓存按路径共享，不产生额外开销）
+        match (tilemap::Tilemap::open(path->to_string))
+        {
+            none?
+            {
+                MsgBox::err("创建瓦片地图实例",
+                    F"无法解析瓦片地图文件 \"{path->to_string()}\"");
+                return;
+            }
+            value(_)? { }
+        }
+
+        let dat = new_table();
+        dat->set("name", F"瓦片地图 {filename(path)}");
+
+        let components_dat = new_table();
+        // 基础变换（成员留空 = 默认值；位置由生成点动作写入）
+        for (let comp_name : [
+            "Transform::LocalPosition", "Transform::LocalRotation",
+            "Transform::LocalScale", "Transform::LocalToWorld",
+            "Transform::Translation",
+        ])
+            components_dat->set(comp_name, new_table());
+
+        // 比例尺默认 (1,1,1)：瓦片地图几何按"1 格 = 1 单位长度"发射，
+        // 根 LocalScale 即比例尺，可随时在视口中手动调整。
+
+        let map_comp = new_table();
+        map_comp->set("map_path", ResourcePath::toRuntimeResourcePath(path));
+        components_dat->set("Tilemap::Map", map_comp);
+        dat->set("components", components_dat);
+
+        let mut spawn_pos = self->getSpawnPosInFrontOfCamera();
+        match (self->getSpawnPosAtScreenPos(
+                rect_min, rect_max, GetMousePos() as vec2))
+        {
+            none?;
+            value(pos)?
+                spawn_pos = option::value(pos);
+        }
+
+        self->doAction(CreateEntity::try_create_with_content_at(
+            dat, spawn_pos));
+
+        // 确保世界挂有瓦片地图系统（幂等；挂系统同样可撤销）
+        match (typeinfo::load("Tilemap::TilemapSystem"))
+        {
+            none?;
+            value(sys_type)?
+            {
+                if (!self->hasWorldSystem(sys_type))
+                    self->doAction(AddWorldSystem::create(sys_type));
+            }
+        }
+
+        let map_name = filename(path);
+        Statebar::showState(3.) <| func(){
+            Text(F"已创建瓦片地图 \"{map_name}\" 的实例");
+        };
     }
     
     // 由预设体文件创建实例：文件可能本身是其他预设体的变体（原始

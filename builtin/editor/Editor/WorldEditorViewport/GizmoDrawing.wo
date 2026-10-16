@@ -86,7 +86,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 rot: quat,
                 scale: vec3,
                 shader: option<shader>,
-                texture: option<(texture, vec2, vec2)>,
+                texture: option<(texture2d, vec2, vec2)>,
                 shape: option<vertex>)
             {
                 do try!{
@@ -135,7 +135,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 pos: vec3,
                 rot: quat,
                 icon_size: real,
-                icon: texture,
+                icon: texture2d,
                 tint: (real, real, real, real))
             {
                 do try!{
@@ -175,7 +175,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                     return_value!;
                     
                 let trans = selected_entity->towoo::get_component:<Transform::Translation>->unwrap;
-                let texture = selected_entity->towoo::get_component:<Renderer::Textures>;
+                let texture = selected_entity->towoo::get_component:<Renderer::Textures2D>;
                 
                 drawGizmo(
                     trans->get_global_pos,
@@ -396,7 +396,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 // 发光，图标不随旋转
                 func drawLight2DIcon(
                     e: entity,
-                    icon: option<texture>,
+                    icon: option<texture2d>,
                     follow_rotation: bool)=> void
                 {
                     do try!{
@@ -468,7 +468,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 // 不绘制），默认染色取发射器自身初始颜色区间的中点
                 //（color_min 与 color_max 的均值，逐分量钳制 0~1），
                 // 全向发射不随旋转，悬停提亮/选中染黄
-                func drawParticleEmitterIcon(e: entity, icon: option<texture>)=> void
+                func drawParticleEmitterIcon(e: entity, icon: option<texture2d>)=> void
                 {
                     do try!{
                         try! trans =

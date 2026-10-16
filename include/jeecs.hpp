@@ -43,6 +43,7 @@
 #   include <optional>
 #   include <tuple>
 #   include <array>
+#   include <variant>
 #   include <concepts>
 
 #   include <execution>
@@ -882,19 +883,19 @@ JE_FORCE_CAPI
 je_mem_alloc [基本接口]
 引擎的统一内存申请函数。
 */
-JE_API void* je_mem_alloc(size_t sz);
+JE_API /* OPTIONAL: If allocation fails */ void* je_mem_alloc(size_t sz);
 
 /*
 je_mem_realloc [基本接口]
 引擎的统一内存重申请函数。
 */
-JE_API void* je_mem_realloc(void* mem, size_t sz);
+JE_API /* OPTIONAL: If allocation fails */ void* je_mem_realloc(/* OPTIONAL */ void* mem, size_t sz);
 
 /*
 je_mem_free [基本接口]
 引擎的统一内存释放函数。
 */
-JE_API void je_mem_free(void* ptr);
+JE_API void je_mem_free(/* OPTIONAL */ void* ptr);
 
 /*
 je_init [基本接口]
@@ -904,7 +905,7 @@ je_init [基本接口]
 请参见：
     je_finish
 */
-JE_API void je_init(int argc, char** argv);
+JE_API void je_init(int argc, /* OPTIONAL: If argc == 0 */ char** argv);
 
 /*
 je_finish [基本接口]
@@ -965,13 +966,13 @@ typedef void (*je_log_callback_t)(int level, const char* msg, void* userdata);
 je_log_register_callback [基本接口]
 用于注册一个日志发生时的回调函数，返回注册句柄。
 */
-JE_API je_log_regid_t je_log_register_callback(je_log_callback_t callback, void* userdata);
+JE_API je_log_regid_t je_log_register_callback(je_log_callback_t callback, /* OPTIONAL */ void* userdata);
 
 /*
 je_log_unregister_callback [基本接口]
 用于释放（解除注册）一个之前注册的日志发生时回调函数。
 */
-JE_API void* je_log_unregister_callback(je_log_regid_t regid);
+JE_API /* OPTIONAL: If registered userdata was null */ void* je_log_unregister_callback(je_log_regid_t regid);
 
 /*
 je_log [基本接口]
@@ -1104,7 +1105,7 @@ je_typing_get_info_by_id [基本接口]
     je_TypeId
     je_TypeInfo
 */
-JE_API const je_TypeInfo* je_typing_get_info_by_id(
+JE_API /* OPTIONAL: If _id is invalid or unregistered */ const je_TypeInfo* je_typing_get_info_by_id(
     je_TypeId _id);
 
 /*
@@ -1114,7 +1115,7 @@ je_typing_get_info_by_hash [基本接口]
     je_TypeHash
     je_TypeInfo
 */
-JE_API const je_TypeInfo* je_typing_get_info_by_hash(
+JE_API /* OPTIONAL: If _hash is not registered */ const je_TypeInfo* je_typing_get_info_by_hash(
     je_TypeHash _hash);
 
 /*
@@ -1123,7 +1124,7 @@ je_typing_get_info_by_name [基本接口]
 请参见：
     je_TypeInfo
 */
-JE_API const je_TypeInfo* je_typing_get_info_by_name(
+JE_API /* OPTIONAL: If type_name is not found */ const je_TypeInfo* je_typing_get_info_by_name(
     const char* type_name);
 
 /*
@@ -1149,7 +1150,7 @@ JE_API void je_register_member(
     const je_TypeInfo* _classtype,
     const je_TypeInfo* _membertype,
     const char* _member_name,
-    const char* _woovalue_type_may_null,
+    /* OPTIONAL */ const char* _woovalue_type_may_null,
     woort_value _boxed_woovalue_init_may_ignored /* Use WOORT_IGNORE as none init */,
     ptrdiff_t _member_offset);
 
@@ -1196,11 +1197,11 @@ je_towoo_update_api [基本接口]
 */
 JE_API void je_towoo_update_api();
 
-JE_API const je_TypeInfo* je_towoo_register_system(
+JE_API /* OPTIONAL: If registration failed */ const je_TypeInfo* je_towoo_register_system(
     const char* system_name,
     const char* script_path);
 
-JE_API void je_towoo_unregister_system(const je_TypeInfo* tinfo);
+JE_API void je_towoo_unregister_system(/* OPTIONAL */ const je_TypeInfo* tinfo);
 
 ////////////////////// ARCH //////////////////////
 
@@ -1217,7 +1218,7 @@ je_arch_next_chunk [基本接口]
 通过给定的Chunk，获取其下一个Chunk，如果给定Chunk没有后继则返回nullptr
     * 此方法一般由 collection 调用，用于获取指定ArchType中的组件信息
 */
-JE_API je_Chunk* je_arch_next_chunk(je_Chunk* chunk);
+JE_API /* OPTIONAL: If no successor chunk */ je_Chunk* je_arch_next_chunk(je_Chunk* chunk);
 
 /*
 je_arch_entity_meta_addr_in_chunk [基本接口]
@@ -1296,7 +1297,7 @@ je_ecs_universe_register_exit_callback [基本接口]
 JE_API void je_ecs_universe_register_exit_callback(
     je_GameUniverse* universe,
     void (*callback)(void*),
-    void* arg);
+    /* OPTIONAL */ void* arg);
 
 typedef void (*je_job_for_worlds_t)(je_GameWorld* /*world*/, void* /*custom_data*/);
 typedef void (*je_job_call_once_t)(void* /*custom_data*/);
@@ -1308,8 +1309,8 @@ je_ecs_universe_register_pre_for_worlds_job [基本接口]
 JE_API void je_ecs_universe_register_pre_for_worlds_job(
     je_GameUniverse* universe,
     je_job_for_worlds_t job,
-    void* data,
-    void (*freefunc)(void*));
+    /* OPTIONAL */ void* data,
+    /* OPTIONAL */ void (*freefunc)(void*));
 
 /*
 je_ecs_universe_register_pre_for_worlds_job [基本接口]
@@ -1318,8 +1319,8 @@ je_ecs_universe_register_pre_for_worlds_job [基本接口]
 JE_API void je_ecs_universe_register_pre_call_once_job(
     je_GameUniverse* universe,
     je_job_call_once_t job,
-    void* data,
-    void (*freefunc)(void*));
+    /* OPTIONAL */ void* data,
+    /* OPTIONAL */ void (*freefunc)(void*));
 
 /*
 je_ecs_universe_register_for_worlds_job [基本接口]
@@ -1328,8 +1329,8 @@ je_ecs_universe_register_for_worlds_job [基本接口]
 JE_API void je_ecs_universe_register_for_worlds_job(
     je_GameUniverse* universe,
     je_job_for_worlds_t job,
-    void* data,
-    void (*freefunc)(void*));
+    /* OPTIONAL */ void* data,
+    /* OPTIONAL */ void (*freefunc)(void*));
 
 /*
 je_ecs_universe_register_call_once_job [基本接口]
@@ -1338,8 +1339,8 @@ je_ecs_universe_register_call_once_job [基本接口]
 JE_API void je_ecs_universe_register_call_once_job(
     je_GameUniverse* universe,
     je_job_call_once_t job,
-    void* data,
-    void (*freefunc)(void*));
+    /* OPTIONAL */ void* data,
+    /* OPTIONAL */ void (*freefunc)(void*));
 
 /*
 je_ecs_universe_register_after_for_worlds_job [基本接口]
@@ -1348,8 +1349,8 @@ je_ecs_universe_register_after_for_worlds_job [基本接口]
 JE_API void je_ecs_universe_register_after_for_worlds_job(
     je_GameUniverse* universe,
     je_job_for_worlds_t job,
-    void* data,
-    void (*freefunc)(void*));
+    /* OPTIONAL */ void* data,
+    /* OPTIONAL */ void (*freefunc)(void*));
 
 /*
 je_ecs_universe_register_after_call_once_job [基本接口]
@@ -1358,8 +1359,8 @@ je_ecs_universe_register_after_call_once_job [基本接口]
 JE_API void je_ecs_universe_register_after_call_once_job(
     je_GameUniverse* universe,
     je_job_call_once_t job,
-    void* data,
-    void (*freefunc)(void*));
+    /* OPTIONAL */ void* data,
+    /* OPTIONAL */ void (*freefunc)(void*));
 
 /*
 je_ecs_universe_unregister_pre_for_worlds_job [基本接口]
@@ -1534,7 +1535,7 @@ typedef struct je_RequirementCollection {
 }je_RequirementCollection;
 
 JE_API je_CollectedRequirements* je_ecs_collect_requirements(
-    const je_ComponentRequirement* requirements,
+    /* OPTIONAL: If total requirement count is 0 */ const je_ComponentRequirement* requirements,
     size_t view_requiremnt_count,
     size_t other_requiremnts_count);
 
@@ -1658,7 +1659,7 @@ je_ecs_world_entity_add_component [基本接口]
 请参见：
     je_GameEntity::add_component
 */
-JE_API void* je_ecs_world_entity_add_component(
+JE_API /* OPTIONAL: If entity is invalid */ void* je_ecs_world_entity_add_component(
     const je_GameEntity* entity,
     je_TypeId type);
 
@@ -1684,7 +1685,7 @@ je_ecs_world_entity_get_component [基本接口]
 请参见：
     je_GameEntity::get_component
 */
-JE_API void* je_ecs_world_entity_get_component(
+JE_API /* OPTIONAL: If entity is invalid or no such component */ void* je_ecs_world_entity_get_component(
     const je_GameEntity* entity,
     je_TypeId type);
 
@@ -1695,7 +1696,7 @@ je_ecs_world_of_entity [基本接口]
 请参见：
     je_GameEntity::game_world
 */
-JE_API je_GameWorld* je_ecs_world_of_entity(
+JE_API /* OPTIONAL: If entity is invalid */ je_GameWorld* je_ecs_world_of_entity(
     const je_GameEntity* entity);
 
 /*
@@ -1886,7 +1887,7 @@ JE_API void jeecs_file_set_runtime_path(const char* path);
     * 无论打开是否成功，之前打开的默认镜像都将被关闭
     * 若 path == nullptr，则仅关闭旧的镜像
 */
-JE_API void jeecs_file_update_default_fimg(const char* path);
+JE_API void jeecs_file_update_default_fimg(/* OPTIONAL: If path == nullptr, only close the old image */ const char* path);
 
 /*
 jeecs_file_get_host_path [基本接口]
@@ -1929,7 +1930,7 @@ jeecs_file_open [基本接口]
 请参见：
     jeecs_file_close
 */
-JE_API jeecs_file* jeecs_file_open(const char* path);
+JE_API /* OPTIONAL */ jeecs_file* jeecs_file_open(const char* path);
 
 /*
 jeecs_file_close [基本接口]
@@ -1987,7 +1988,7 @@ jeecs_file_image_pack_file [基本接口]
 */
 JE_API bool jeecs_file_image_pack_buffer(
     fimg_creating_context* context,
-    const void* buffer,
+    /* OPTIONAL: If len == 0 */ const void* buffer,
     size_t len,
     const char* packingpath);
 
@@ -2013,7 +2014,7 @@ jeecs_load_cache_file [基本接口]
     jeecs_file_read
     jeecs_file_close
 */
-JE_API jeecs_file* jeecs_load_cache_file(
+JE_API /* OPTIONAL */ jeecs_file* jeecs_load_cache_file(
     const char* filepath,
     uint32_t format_version,
     uint64_t virtual_crc64);
@@ -2032,7 +2033,7 @@ jeecs_create_cache_file [基本接口]
     jeecs_close_cache_file
     jeecs_write_cache_file
 */
-JE_API void* jeecs_create_cache_file(
+JE_API /* OPTIONAL */ void* jeecs_create_cache_file(
     const char* filepath,
     uint32_t format_version,
     uint64_t usecrc64);
@@ -2156,13 +2157,25 @@ struct jegl_resource_handle
 };
 
 /*
-jegl_texture [类型]
-纹理原始数据，储存有纹理的采样方式和像素数据等信息
+jegl_texture_kind [类型]
+纹理类别标签，用于在类型被擦除的边界（绘制链重放、脚本语言包装层）区分纹理的实际类别
 */
-struct jegl_texture
+enum class jegl_texture_kind : uint8_t
 {
-    jegl_resource_handle m_handle;
+    TEXTURE_2D,
+    TEXTURE_3D,
+    TEXTURE_ARRAY,
+    TEXTURE_CUBE,
+    TEXTURE_MSAA,
+};
 
+/*
+jegl_texture_common [类型]
+各类纹理的公共前缀布局，仅供其余纹理类型继承，不应被单独使用。
+所有纹理类型必须保证 m_handle 位于结构体偏移 0 处，以复用引擎的资源生命周期管理。
+*/
+struct jegl_texture_common
+{
     using pixel_data_t = uint8_t;
     enum format : uint16_t
     {
@@ -2173,7 +2186,6 @@ struct jegl_texture
         FLOAT16 = 0x0010,
         DEPTH = 0x0020,
         FRAMEBUF = 0x0040,
-        CUBE = 0x0080,
 
         FORMAT_MASK = 0xFFF0,
     };
@@ -2181,6 +2193,9 @@ struct jegl_texture
     // NOTE:
     // * Pixel data is storage from LEFT/BOTTOM to RIGHT/TOP
     // * If texture's m_pixels is nullptr, only create a texture in pipeline.
+    jegl_resource_handle m_handle;
+    jegl_texture_kind m_kind;
+
     pixel_data_t* m_pixels;
     size_t m_width;
     size_t m_height;
@@ -2192,8 +2207,69 @@ struct jegl_texture
     size_t m_modified_max_x;
     size_t m_modified_max_y;
 };
+
+/*
+jegl_texture_2d [类型]
+二维纹理原始数据，储存有纹理的采样方式和像素数据等信息
+*/
+struct jegl_texture_2d : public jegl_texture_common
+{
+    static constexpr jegl_texture_kind KIND = jegl_texture_kind::TEXTURE_2D;
+};
 static_assert(
-    std::is_trivial_v<jegl_texture> && 0 == offsetof(jegl_texture, m_handle));
+    std::is_trivial_v<jegl_texture_2d> && 0 == offsetof(jegl_texture_2d, m_handle));
+
+/*
+jegl_texture_3d [类型]
+三维纹理原始数据，m_depth 指示纹理在深度方向上的纹素数量，像素数据按
+宽度 x 高度 x 深度 连续排布
+*/
+struct jegl_texture_3d : public jegl_texture_common
+{
+    static constexpr jegl_texture_kind KIND = jegl_texture_kind::TEXTURE_3D;
+    size_t m_depth;
+};
+static_assert(
+    std::is_trivial_v<jegl_texture_3d> && 0 == offsetof(jegl_texture_3d, m_handle));
+
+/*
+jegl_texture_array [类型]
+纹理数组原始数据，m_layers 指示数组中二维纹理层的数量，像素数据按
+宽度 x 高度 x 层数 连续排布
+*/
+struct jegl_texture_array : public jegl_texture_common
+{
+    static constexpr jegl_texture_kind KIND = jegl_texture_kind::TEXTURE_ARRAY;
+    size_t m_layers;
+};
+static_assert(
+    std::is_trivial_v<jegl_texture_array> && 0 == offsetof(jegl_texture_array, m_handle));
+
+/*
+jegl_texture_cube [类型]
+立方体贴图纹理原始数据，固定包含 6 个宽度高度相同的正方形面，
+像素数据按 6 x 宽度 x 高度 连续排布（面的顺序与图形 API 的
++CUBE_MAP_POSITIVE_X .. -Z 顺序一致）
+*/
+struct jegl_texture_cube : public jegl_texture_common
+{
+    static constexpr jegl_texture_kind KIND = jegl_texture_kind::TEXTURE_CUBE;
+};
+static_assert(
+    std::is_trivial_v<jegl_texture_cube> && 0 == offsetof(jegl_texture_cube, m_handle));
+
+/*
+jegl_texture_msaa [类型]
+多重采样二维纹理原始数据，仅存在于 GPU 侧（渲染目标附件），不持有 CPU 像素数据，
+m_samples 指示每像素采样数
+*/
+struct jegl_texture_msaa : public jegl_texture_common
+{
+    static constexpr jegl_texture_kind KIND = jegl_texture_kind::TEXTURE_MSAA;
+    size_t m_samples;
+};
+static_assert(
+    std::is_trivial_v<jegl_texture_msaa> && 0 == offsetof(jegl_texture_msaa, m_handle));
 
 /*
 jegl_vertex [类型]
@@ -2473,7 +2549,7 @@ struct jegl_frame_buffer
 {
     jegl_resource_handle m_handle;
 
-    // In fact, attachment_t is jeecs::basic::resource<jeecs::graphic::texture>
+    // In fact, attachment_t is jeecs::basic::resource<jeecs::graphic::texture2d>
     typedef struct attachment_t attachment_t;
     attachment_t* m_output_attachments;
     size_t m_attachment_count;
@@ -2561,16 +2637,50 @@ struct jegl_graphic_api
     using shader_close_func_t =
         void (*)(je_GraphicImplContext, jegl_shader*);
 
-    using texture_create_blob_func_t =
-        jegl_resource_blob(*)(je_GraphicImplContext, jegl_texture*);
+    // 注意：本结构体位于 extern "C" 区域内，不允许使用模板别名，
+    // 因此各类纹理的函数指针类型均为显式展开
+    using texture_2d_create_blob_func_t =
+        jegl_resource_blob(*)(je_GraphicImplContext, jegl_texture_2d*);
+    using texture_3d_create_blob_func_t =
+        jegl_resource_blob(*)(je_GraphicImplContext, jegl_texture_3d*);
+    using texture_array_create_blob_func_t =
+        jegl_resource_blob(*)(je_GraphicImplContext, jegl_texture_array*);
+    using texture_cube_create_blob_func_t =
+        jegl_resource_blob(*)(je_GraphicImplContext, jegl_texture_cube*);
+    using texture_msaa_create_blob_func_t =
+        jegl_resource_blob(*)(je_GraphicImplContext, jegl_texture_msaa*);
     using texture_close_blob_func_t =
         void (*)(je_GraphicImplContext, jegl_resource_blob);
-    using texture_init_func_t =
-        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_texture*);
-    using texture_update_func_t =
-        void (*)(je_GraphicImplContext, jegl_texture*);
-    using texture_close_func_t =
-        void (*)(je_GraphicImplContext, jegl_texture*);
+    using texture_2d_init_func_t =
+        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_texture_2d*);
+    using texture_3d_init_func_t =
+        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_texture_3d*);
+    using texture_array_init_func_t =
+        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_texture_array*);
+    using texture_cube_init_func_t =
+        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_texture_cube*);
+    using texture_msaa_init_func_t =
+        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_texture_msaa*);
+    using texture_2d_update_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_2d*);
+    using texture_3d_update_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_3d*);
+    using texture_array_update_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_array*);
+    using texture_cube_update_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_cube*);
+    using texture_msaa_update_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_msaa*);
+    using texture_2d_close_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_2d*);
+    using texture_3d_close_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_3d*);
+    using texture_array_close_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_array*);
+    using texture_cube_close_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_cube*);
+    using texture_msaa_close_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_msaa*);
 
     using vertex_create_blob_func_t =
         jegl_resource_blob(*)(je_GraphicImplContext, jegl_vertex*);
@@ -2614,8 +2724,16 @@ struct jegl_graphic_api
         void (*)(je_GraphicImplContext, jegl_uniform_buffer*);
     using bind_shader_func_t =
         bool (*)(je_GraphicImplContext, jegl_shader*);
-    using bind_texture_func_t =
-        void (*)(je_GraphicImplContext, jegl_texture*, size_t);
+    using bind_texture_2d_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_2d*, size_t);
+    using bind_texture_3d_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_3d*, size_t);
+    using bind_texture_array_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_array*, size_t);
+    using bind_texture_cube_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_cube*, size_t);
+    using bind_texture_msaa_func_t =
+        void (*)(je_GraphicImplContext, jegl_texture_msaa*, size_t);
     using draw_vertex_func_t =
         void (*)(je_GraphicImplContext, jegl_vertex*);
 
@@ -2690,15 +2808,21 @@ struct jegl_graphic_api
     shader_create_blob_func_t shader_create_blob;
 
     /*
-    jegl_graphic_api::texture_create_blob [成员]
-    图形接口创建纹理资源的底层数据块，jegl_load_texture 在调用 texture_init 之前，会调用此接口创建 blob，
-    对于具有相同路径的纹理资源，在先前创建的 blob 失效之前，不会重复调用此接口。
-    图形实现可以利用 blob 加速纹理的创建流程。
+    jegl_graphic_api::texture_2d_create_blob / texture_3d_create_blob / texture_array_create_blob /
+    texture_cube_create_blob / texture_msaa_create_blob [成员]
+    图形接口创建对应类别纹理资源的底层数据块，jegl_load_texture_2d 和 jegl_create_texture_* 在调用对应的
+    texture_*_init 之前，会调用此接口创建 blob，对于具有相同路径的纹理资源，在先前创建的 blob 失效之前，
+    不会重复调用此接口。图形实现可以利用 blob 加速纹理的创建流程。
         * 可以返回 nullptr，即便如此，在对应资源失效之前，此接口依然只被调用一次。
-        * 如果接口返回 nullptr，texture_init 将收到一个 nullptr 作为 blob 参数。
+        * 如果接口返回 nullptr，对应的 texture_*_init 将收到一个 nullptr 作为 blob 参数。
         * 如果接口返回 nullptr，对应的 texture_close_blob 将不会被调用。
+        * 若图形实现不支持某一纹理类别，可以将对应的函数指针置空，引擎中间层将拒绝创建该类纹理并记录日志。
     */
-    texture_create_blob_func_t texture_create_blob;
+    texture_2d_create_blob_func_t texture_2d_create_blob;
+    texture_3d_create_blob_func_t texture_3d_create_blob;
+    texture_array_create_blob_func_t texture_array_create_blob;
+    texture_cube_create_blob_func_t texture_cube_create_blob;
+    texture_msaa_create_blob_func_t texture_msaa_create_blob;
 
     /*
     jegl_graphic_api::vertex_create_blob [成员]
@@ -2743,11 +2867,16 @@ struct jegl_graphic_api
     shader_init_func_t shader_init;
 
     /*
-    jegl_graphic_api::texture_init [成员]
-    初始化并创建纹理在图形层对应的资源，此接口将在资源被首次使用时（jegl_bind_texture）调用，图形实现
-    应当在此接口中完成所需的准备工作。
+    jegl_graphic_api::texture_2d_init / texture_3d_init / texture_array_init / texture_cube_init /
+    texture_msaa_init [成员]
+    初始化并创建对应类别纹理在图形层对应的资源，此接口将在资源被首次使用时（jegl_bind_texture_*）调用，
+    图形实现应当在此接口中完成所需的准备工作。
     */
-    texture_init_func_t texture_init;
+    texture_2d_init_func_t texture_2d_init;
+    texture_3d_init_func_t texture_3d_init;
+    texture_array_init_func_t texture_array_init;
+    texture_cube_init_func_t texture_cube_init;
+    texture_msaa_init_func_t texture_msaa_init;
 
     /*
     jegl_graphic_api::vertex_init [成员]
@@ -2762,7 +2891,7 @@ struct jegl_graphic_api
     应当在此接口中完成所需的准备工作。
 
     引擎的中间层在创建 frambuffer 实例时，已经创建了对应的附件纹理资源（m_output_attachments），图形实现应
-    当使用 jegl_bind_texture 或者其他适当的接口确保这些附件纹理资源已经被正确创建和初始化。
+    当使用 jegl_bind_texture_2d 或者其他适当的接口确保这些附件纹理资源已经被正确创建和初始化。
     */
     framebuffer_init_func_t framebuffer_init;
 
@@ -2781,11 +2910,16 @@ struct jegl_graphic_api
     shader_update_func_t shader_update;
 
     /*
-    jegl_graphic_api::texture_update [成员]
-    当一个 texture 资源的 m_modified 标记被设置为 true 时，引擎中间层将在此资源的下次使用时调用此接口。图形接口
-    负责准备好对应的更新工作。
+    jegl_graphic_api::texture_2d_update / texture_3d_update / texture_array_update / texture_cube_update /
+    texture_msaa_update [成员]
+    当一个对应类别纹理资源的 m_modified 标记被设置为 true 时，引擎中间层将在此资源的下次使用时调用此
+    接口。图形接口负责准备好对应的更新工作。
     */
-    texture_update_func_t texture_update;
+    texture_2d_update_func_t texture_2d_update;
+    texture_3d_update_func_t texture_3d_update;
+    texture_array_update_func_t texture_array_update;
+    texture_cube_update_func_t texture_cube_update;
+    texture_msaa_update_func_t texture_msaa_update;
 
     /*
     jegl_graphic_api::vertex_update [成员]
@@ -2816,11 +2950,16 @@ struct jegl_graphic_api
     shader_close_func_t shader_close;
 
     /*
-    jegl_graphic_api::texture_close [成员]
-    图形接口关闭纹理资源，当一个纹理资源被释放时，引擎中间层将调用此接口，图形实现
+    jegl_graphic_api::texture_2d_close / texture_3d_close / texture_array_close / texture_cube_close /
+    texture_msaa_close [成员]
+    图形接口关闭对应类别的纹理资源，当一个纹理资源被释放时，引擎中间层将调用此接口，图形实现
     应当在此接口中完成纹理资源的释放工作。
     */
-    texture_close_func_t texture_close;
+    texture_2d_close_func_t texture_2d_close;
+    texture_3d_close_func_t texture_3d_close;
+    texture_array_close_func_t texture_array_close;
+    texture_cube_close_func_t texture_cube_close;
+    texture_msaa_close_func_t texture_msaa_close;
 
     /*
     jegl_graphic_api::vertex_close [成员]
@@ -2870,10 +3009,15 @@ struct jegl_graphic_api
     */
     bind_shader_func_t bind_shader;
     /*
-    jegl_graphic_api::bind_texture [成员]
-    图形接口绑定纹理到指定通道
+    jegl_graphic_api::bind_texture_2d / bind_texture_3d / bind_texture_array / bind_texture_cube /
+    bind_texture_msaa [成员]
+    图形接口绑定对应类别的纹理到指定通道
     */
-    bind_texture_func_t bind_texture;
+    bind_texture_2d_func_t bind_texture_2d;
+    bind_texture_3d_func_t bind_texture_3d;
+    bind_texture_array_func_t bind_texture_array;
+    bind_texture_cube_func_t bind_texture_cube;
+    bind_texture_msaa_func_t bind_texture_msaa;
     /*
     jegl_graphic_api::draw_vertex [成员]
     由图形实现负责使用当前绑定的着色器和纹理绘制指定的顶点
@@ -2897,7 +3041,7 @@ jegl_register_sync_graphic_callback [基本接口]
 */
 JE_API void jegl_register_sync_thread_callback(
     jeecs_sync_callback_func_t callback,
-    void* arg);
+    /* OPTIONAL */ void* arg);
 
 enum jegl_sync_state
 {
@@ -2974,12 +3118,12 @@ jegl_start_graphic_thread [基本接口]
     jegl_update
     jegl_terminate_graphic_thread
 */
-JE_API jegl_context* jegl_start_graphic_thread(
+JE_API /* OPTIONAL: If failed to start up */ jegl_context* jegl_start_graphic_thread(
     jegl_interface_config config,
-    je_GameUniverse* universe_instance,
+    /* OPTIONAL: If no universe attached */ je_GameUniverse* universe_instance,
     jeecs_api_register_func_t register_func,
     jegl_context::frame_job_func_t frame_rend_work,
-    void* arg);
+    /* OPTIONAL */ void* arg);
 
 /*
 jegl_terminate_graphic_thread [基本接口]
@@ -3010,8 +3154,8 @@ jegl_update [基本接口]
 JE_API bool jegl_update(
     jegl_context* thread_handle,
     jegl_update_sync_mode mode,
-    jegl_update_sync_callback_t callback_after_wait_may_null,
-    void* callback_param);
+    /* OPTIONAL */ jegl_update_sync_callback_t callback_after_wait_may_null,
+    /* OPTIONAL */ void* callback_param);
 
 /*
 jegl_reboot_graphic_thread [基本接口]
@@ -3020,7 +3164,7 @@ jegl_reboot_graphic_thread [基本接口]
 */
 JE_API void jegl_reboot_graphic_thread(
     jegl_context* thread_handle,
-    const jegl_interface_config* config_may_null);
+    /* OPTIONAL: nullptr to keep current config */ const jegl_interface_config* config_may_null);
 
 /*
 jegl_share_resource_handle [基本接口]
@@ -3052,8 +3196,8 @@ jegl_load_shader_source [基本接口]
     jegl_share_resource
     jegl_close_shader
 */
-JE_API jegl_shader* jegl_load_shader_source(
-    jegl_context* context,
+JE_API /* OPTIONAL */ jegl_shader* jegl_load_shader_source(
+    /* OPTIONAL */ jegl_context* context,
     const char* path,
     const char* src,
     bool is_virtual_file);
@@ -3068,8 +3212,8 @@ jegl_load_shader [基本接口]
     jegl_share_resource
     jegl_close_shader
 */
-JE_API jegl_shader* jegl_load_shader(
-    jegl_context* context,
+JE_API /* OPTIONAL */ jegl_shader* jegl_load_shader(
+    /* OPTIONAL */ jegl_context* context,
     const char* path);
 
 /*
@@ -3084,51 +3228,118 @@ jegl_close_shader [基本接口]
 JE_API void jegl_close_shader(jegl_shader* shader);
 ///////////////////////////// TEXTURE /////////////////////////////
 /*
-jegl_load_texture [基本接口]
-从指定路径加载一个纹理资源，加载的路径规则与 jeecs_file_open 相同
+jegl_load_texture_2d [基本接口]
+从指定路径加载一个二维纹理资源，加载的路径规则与 jeecs_file_open 相同
     * 若指定的文件不存在或不是一个合法的纹理，则返回nullptr
     * 图形资源被创建时，其自动获取一个引用计数；使用 jegl_share_resource可增加引
-        用计数，使用 jegl_close_texture 可减少引用计数；当资源的引用计数变为 0 时，
+        用计数，使用 jegl_close_texture_2d 可减少引用计数；当资源的引用计数变为 0 时，
         资源将被释放
 请参见：
     jeecs_file_open
     jegl_share_resource
-    jegl_close_texture
+    jegl_close_texture_2d
 */
-JE_API jegl_texture* jegl_load_texture(
-    jegl_context* context,
+JE_API /* OPTIONAL */ jegl_texture_2d* jegl_load_texture_2d(
+    /* OPTIONAL */ jegl_context* context,
     const char* path);
 
 /*
-jegl_create_texture [基本接口]
-创建一个指定大小和格式的纹理资源
-    * 若指定的格式包含 COLOR16、DEPTH、FRAMEBUF、CUBE 或有 MSAA 支持，则不创建像素缓冲，
+jegl_create_texture_2d [基本接口]
+创建一个指定大小和格式的二维纹理资源
+    * 若指定的格式包含 FLOAT16、DEPTH 或 FRAMEBUF，则不创建像素缓冲，
         对应纹理原始数据的像素将被设置为 nullptr
     * 若创建像素缓冲，像素缓存的将按字节置为 0 填充初始化
-    * 考虑到部分图形库的实现，如果指定的宽度或高度为 0，jegl_create_texture将视其为 1
+    * 考虑到部分图形库的实现，如果指定的宽度或高度为 0，jegl_create_texture_2d将视其为 1
     * 图形资源被创建时，其自动获取一个引用计数；使用 jegl_share_resource可增加引
-        用计数，使用 jegl_close_texture 可减少引用计数；当资源的引用计数变为 0 时，
+        用计数，使用 jegl_close_texture_2d 可减少引用计数；当资源的引用计数变为 0 时，
         资源将被释放
     * 使用此接口创建的纹理，其对应的资源路径为 nullptr
 请参见：
     jegl_share_resource
-    jegl_close_texture
+    jegl_close_texture_2d
 */
-JE_API jegl_texture* /* NOT NULL */ jegl_create_texture(
+JE_API jegl_texture_2d* /* NOT NULL */ jegl_create_texture_2d(
     size_t width,
     size_t height,
-    jegl_texture::format format);
+    jegl_texture_common::format format);
 
 /*
-jegl_close_texture [基本接口]
-关闭一个纹理资源（使得其引用计数减少），如果资源被 jegl_share_resource 引用过多次，
+jegl_create_texture_3d [基本接口]
+创建一个指定大小、深度和格式的三维纹理资源
+    * 若指定的格式包含 FLOAT16，则不创建像素缓冲
+    * 若创建像素缓冲，像素数据按 宽度 x 高度 x 深度 连续排布并置为 0 填充初始化
+    * 若指定的宽度、高度或深度为 0，将视其为 1
+请参见：
+    jegl_share_resource
+    jegl_close_texture_3d
+*/
+JE_API jegl_texture_3d* /* NOT NULL */ jegl_create_texture_3d(
+    size_t width,
+    size_t height,
+    size_t depth,
+    jegl_texture_common::format format);
+
+/*
+jegl_create_texture_array [基本接口]
+创建一个指定大小、层数和格式的纹理数组资源
+    * 若指定的格式包含 FLOAT16，则不创建像素缓冲
+    * 若创建像素缓冲，像素数据按 宽度 x 高度 x 层数 连续排布并置为 0 填充初始化
+    * 若指定的宽度、高度或层数为 0，将视其为 1
+请参见：
+    jegl_share_resource
+    jegl_close_texture_array
+*/
+JE_API jegl_texture_array* /* NOT NULL */ jegl_create_texture_array(
+    size_t width,
+    size_t height,
+    size_t layers,
+    jegl_texture_common::format format);
+
+/*
+jegl_create_texture_cube [基本接口]
+创建一个指定大小和格式的立方体贴图纹理资源，固定包含 6 个面
+    * 若指定的格式包含 FLOAT16，则不创建像素缓冲
+    * 若创建像素缓冲，像素数据按 6 x 宽度 x 高度 连续排布并置为 0 填充初始化
+    * 若指定的宽度或高度为 0，将视其为 1
+请参见：
+    jegl_share_resource
+    jegl_close_texture_cube
+*/
+JE_API jegl_texture_cube* /* NOT NULL */ jegl_create_texture_cube(
+    size_t width,
+    size_t height,
+    jegl_texture_common::format format);
+
+/*
+jegl_create_texture_msaa [基本接口]
+创建一个指定大小、采样数和格式的多重采样二维纹理资源，此类纹理仅存在于 GPU 侧
+（用作渲染目标附件），不持有 CPU 像素数据
+    * 若指定的采样数为 0，将视其为 1
+请参见：
+    jegl_share_resource
+    jegl_close_texture_msaa
+*/
+JE_API jegl_texture_msaa* /* NOT NULL */ jegl_create_texture_msaa(
+    size_t width,
+    size_t height,
+    size_t samples,
+    jegl_texture_common::format format);
+
+/*
+jegl_close_texture_2d / jegl_close_texture_3d / jegl_close_texture_array /
+jegl_close_texture_cube / jegl_close_texture_msaa [基本接口]
+关闭一个对应类别的纹理资源（使得其引用计数减少），如果资源被 jegl_share_resource 引用过多次，
 那么需要对应调用多次才能真正释放资源；
     * 如果此操作使得资源的引用计数变为 0，资源应当被立即视为不可用；对应的底层图形资
         源将由资源对应的图形线程上下文在适当的时机释放。
 请参见：
     jegl_share_resource
 */
-JE_API void jegl_close_texture(jegl_texture* texture);
+JE_API void jegl_close_texture_2d(jegl_texture_2d* texture);
+JE_API void jegl_close_texture_3d(jegl_texture_3d* texture);
+JE_API void jegl_close_texture_array(jegl_texture_array* texture);
+JE_API void jegl_close_texture_cube(jegl_texture_cube* texture);
+JE_API void jegl_close_texture_msaa(jegl_texture_msaa* texture);
 
 ///////////////////////////// VERTEX /////////////////////////////
 /*
@@ -3150,8 +3361,8 @@ jegl_load_vertex [基本接口]
     jegl_share_resource
     jegl_close_vertex
 */
-JE_API jegl_vertex* jegl_load_vertex(
-    jegl_context* context,
+JE_API /* OPTIONAL */ jegl_vertex* jegl_load_vertex(
+    /* OPTIONAL */ jegl_context* context,
     const char* path);
 
 /*
@@ -3165,7 +3376,7 @@ jegl_create_vertex [基本接口]
     jegl_share_resource
     jegl_close_vertex
 */
-JE_API jegl_vertex* jegl_create_vertex(
+JE_API /* OPTIONAL: If bad format or no completed vertex point */ jegl_vertex* jegl_create_vertex(
     jegl_vertex::type type,
     const void* datas,
     size_t data_length,
@@ -3193,7 +3404,7 @@ jegl_update_vertex_buffer [基本接口]
 */
 JE_API void jegl_update_vertex_buffer(
     jegl_vertex* vertex,
-    const void* vertex_data,
+    /* OPTIONAL */ const void* vertex_data,
     size_t vertex_length,
     size_t active_index_count);
 
@@ -3221,10 +3432,10 @@ jegl_create_framebuf [基本接口]
     jegl_share_resource
     jegl_close_framebuf
 */
-JE_API jegl_frame_buffer* jegl_create_framebuf(
+JE_API /* OPTIONAL: If size or color_attachment_count is zero */ jegl_frame_buffer* jegl_create_framebuf(
     size_t width,
     size_t height,
-    const jegl_texture::format* color_attachment_formats,
+    const jegl_texture_common::format* color_attachment_formats,
     size_t color_attachment_count,
     bool contain_depth_attachment);
 
@@ -3262,7 +3473,7 @@ jegl_update_uniformbuf [基本接口]
 */
 JE_API void jegl_update_uniformbuf(
     jegl_uniform_buffer* uniformbuf,
-    const void* buf,
+    /* OPTIONAL: If update_length == 0 */ const void* buf,
     size_t update_offset,
     size_t update_length);
 
@@ -3280,7 +3491,7 @@ JE_API void jegl_close_uniformbuf(jegl_uniform_buffer* uniformbuf);
 //////////////////////////////////////////////////////////
 
 struct je_stb_font_data;
-typedef void (*je_font_char_updater_t)(jegl_texture::pixel_data_t*, size_t, size_t);
+typedef void (*je_font_char_updater_t)(jegl_texture_common::pixel_data_t*, size_t, size_t);
 
 struct je_font
 {
@@ -3310,11 +3521,11 @@ char_texture_updater 用于指示文字纹理创建后所需的预处理方法�
     je_font_free
     je_font_get_char
 */
-JE_API je_font* je_font_load(
+JE_API /* OPTIONAL */ je_font* je_font_load(
     const char* font_path,
     size_t board_blank_size_x,
     size_t board_blank_size_y,
-    je_font_char_updater_t char_texture_updater);
+    /* OPTIONAL */ je_font_char_updater_t char_texture_updater);
 
 /*
 je_font_free [基本接口]
@@ -3359,7 +3570,7 @@ jegl_set_host_graphic_api [基本接口]
     * 若不设置或设置为 nullptr，引擎将使用默认的图形接口、
     * 请在je_init之后设置，引擎的初始化操作将重置此设置
 */
-JE_API void jegl_set_host_graphic_api(jegl_graphic_api_entry api);
+JE_API void jegl_set_host_graphic_api(/* OPTIONAL: nullptr to use platform default */ jegl_graphic_api_entry api);
 
 /*
 jegl_get_host_graphic_api [基本接口]
@@ -3416,12 +3627,17 @@ jegl_using_dx11_apis [基本接口]
 JE_API void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis);
 
 /*
-jegl_bind_texture [基本接口]
-将指定的纹理绑定到指定的纹理通道
+jegl_bind_texture_2d / jegl_bind_texture_3d / jegl_bind_texture_array /
+jegl_bind_texture_cube / jegl_bind_texture_msaa [基本接口]
+将指定类别的纹理绑定到指定的纹理通道
     * 此函数只允许在图形线程内调用
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
 */
-JE_API void jegl_bind_texture(jegl_texture* texture, size_t pass);
+JE_API void jegl_bind_texture_2d(jegl_texture_2d* texture, size_t pass);
+JE_API void jegl_bind_texture_3d(jegl_texture_3d* texture, size_t pass);
+JE_API void jegl_bind_texture_array(jegl_texture_array* texture, size_t pass);
+JE_API void jegl_bind_texture_cube(jegl_texture_cube* texture, size_t pass);
+JE_API void jegl_bind_texture_msaa(jegl_texture_msaa* texture, size_t pass);
 
 /*
 jegl_bind_shader [基本接口]
@@ -3441,13 +3657,13 @@ JE_API void jegl_bind_uniform_buffer(jegl_uniform_buffer* uniformbuf);
 
 /*
 jegl_draw_vertex [基本接口]
-使用当前绑定着色器的（通过jegl_bind_shader绑定）和纹理（通过jegl_bind_texture绑定）,
+使用当前绑定着色器的（通过jegl_bind_shader绑定）和纹理（通过jegl_bind_texture_*绑定）,
 以指定方式绘制一个模型
     * 此函数只允许在图形线程内调用
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
 请参见：
     jegl_bind_shader
-    jegl_bind_texture
+    jegl_bind_texture_2d
 */
 JE_API void jegl_draw_vertex(jegl_vertex* vert);
 
@@ -3461,9 +3677,9 @@ clear_operations 用于指定颜色附件或深度附件清除值，若为 nullp
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
 */
 JE_API void jegl_rend_to_framebuffer(
-    jegl_frame_buffer* framebuffer,
-    const int32_t(*viewport_xywh)[4],
-    const jegl_frame_buffer_clear_operation* clear_operations);
+    /* OPTIONAL */ jegl_frame_buffer* framebuffer,
+    /* OPTIONAL */ const int32_t(*viewport_xywh)[4],
+    /* OPTIONAL */ const jegl_frame_buffer_clear_operation* clear_operations);
 
 /*
 jegl_set_uniform_value [基本接口]
@@ -3536,7 +3752,7 @@ jegl_rchain_begin [基本接口]
 */
 JE_API void jegl_rchain_begin(
     jegl_rendchain* chain,
-    jegl_frame_buffer* framebuffer,
+    /* OPTIONAL: nullptr to render to screen */ jegl_frame_buffer* framebuffer,
     int32_t x, int32_t y, uint32_t w, uint32_t h);
 
 /*
@@ -3567,10 +3783,10 @@ typedef struct jegl_rchain_texture_group jegl_rchain_texture_group;
 /*
 jegl_rchain_allocate_texture_group [基本接口]
 创建纹理组，返回可用于绘制操作的纹理组句柄
-可通过 jegl_rchain_bind_texture 向纹理组中提交纹理
+可通过 jegl_rchain_bind_texture_2d 等接口向纹理组中提交纹理
 请参见：
     jegl_rchain_draw
-    jegl_rchain_bind_texture
+    jegl_rchain_bind_texture_2d
 */
 JE_API jegl_rchain_texture_group* jegl_rchain_allocate_texture_group(
     jegl_rendchain* chain);
@@ -3585,7 +3801,7 @@ JE_API jegl_rendchain_rend_action* jegl_rchain_draw(
     jegl_rendchain* chain,
     jegl_shader* shader,
     jegl_vertex* vertex,
-    jegl_rchain_texture_group* texture_group_may_null);
+    /* OPTIONAL */ jegl_rchain_texture_group* texture_group_may_null);
 
 /*
 jegl_rchain_set_uniform_buffer [基本接口]
@@ -3605,7 +3821,7 @@ jegl_rchain_set_uniform_int [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_int(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place_may_null,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
     int val);
 
 /*
@@ -3616,7 +3832,7 @@ jegl_rchain_set_uniform_int2 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_int2(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place_may_null,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
     int x,
     int y);
 
@@ -3628,7 +3844,7 @@ jegl_rchain_set_uniform_int3 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_int3(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place_may_null,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
     int x,
     int y,
     int z);
@@ -3641,7 +3857,7 @@ jegl_rchain_set_uniform_int4 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_int4(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place_may_null,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
     int x,
     int y,
     int z,
@@ -3655,7 +3871,7 @@ jegl_rchain_set_uniform_float [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_float(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place_may_null,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
     float val);
 
 /*
@@ -3666,7 +3882,7 @@ jegl_rchain_set_uniform_float2 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_float2(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place_may_null,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
     float x,
     float y);
 
@@ -3678,7 +3894,7 @@ jegl_rchain_set_uniform_float3 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_float3(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place_may_null,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
     float x,
     float y,
     float z);
@@ -3691,7 +3907,7 @@ jegl_rchain_set_uniform_float4 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_float4(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place_may_null,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
     float x,
     float y,
     float z,
@@ -3705,7 +3921,7 @@ jegl_rchain_set_uniform_float2x2 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_float2x2(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place_may_null,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
     const float (*mat)[2]);
 
 /*
@@ -3716,7 +3932,7 @@ jegl_rchain_set_uniform_float3x3 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_float3x3(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place_may_null,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
     const float (*mat)[3]);
 
 /*
@@ -3727,20 +3943,41 @@ jegl_rchain_set_uniform_float4x4 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_float4x4(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place_may_null,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
     const float (*mat)[4]);
 
 /*
-jegl_rchain_bind_texture [基本接口]
-为指定的纹理组，在指定的纹理通道绑定一个纹理
+jegl_rchain_bind_texture_2d / jegl_rchain_bind_texture_3d / jegl_rchain_bind_texture_array /
+jegl_rchain_bind_texture_cube / jegl_rchain_bind_texture_msaa [基本接口]
+为指定的纹理组，在指定的纹理通道绑定一个对应类别的纹理
 请参见：
     jegl_rchain_allocate_texture_group
 */
-JE_API void jegl_rchain_bind_texture(
+JE_API void jegl_rchain_bind_texture_2d(
     jegl_rendchain* chain,
     jegl_rchain_texture_group* texture_group,
     size_t binding_pass,
-    jegl_texture* texture);
+    jegl_texture_2d* texture);
+JE_API void jegl_rchain_bind_texture_3d(
+    jegl_rendchain* chain,
+    jegl_rchain_texture_group* texture_group,
+    size_t binding_pass,
+    jegl_texture_3d* texture);
+JE_API void jegl_rchain_bind_texture_array(
+    jegl_rendchain* chain,
+    jegl_rchain_texture_group* texture_group,
+    size_t binding_pass,
+    jegl_texture_array* texture);
+JE_API void jegl_rchain_bind_texture_cube(
+    jegl_rendchain* chain,
+    jegl_rchain_texture_group* texture_group,
+    size_t binding_pass,
+    jegl_texture_cube* texture);
+JE_API void jegl_rchain_bind_texture_msaa(
+    jegl_rendchain* chain,
+    jegl_rchain_texture_group* texture_group,
+    size_t binding_pass,
+    jegl_texture_msaa* texture);
 
 /*
 jegl_rchain_commit [基本接口]
@@ -3756,7 +3993,7 @@ jegl_rchain_get_target_framebuf [基本接口]
 获取当前绘制链的目标帧缓冲区
     * 如果当前绘制链的目标帧缓冲区是屏幕缓冲区，则返回 nullptr
 */
-JE_API jegl_frame_buffer* /* MAY NULL */ jegl_rchain_get_target_framebuf(
+JE_API /* OPTIONAL: nullptr if target is screen */ jegl_frame_buffer* jegl_rchain_get_target_framebuf(
     jegl_rendchain* chain);
 
 /*
@@ -3773,13 +4010,13 @@ jegl_uhost_get_or_create_for_universe [基本接口]
 */
 JE_API je_GraphicUhost* jegl_uhost_get_or_create_for_universe(
     je_GameUniverse* universe,
-    const jegl_interface_config* config);
+    /* OPTIONAL: nullptr to use default config */ const jegl_interface_config* config);
 
 /*
 jegl_uhost_get_context [基本接口]
 从指定的可编程图形上下文接口获取图形线程的正式描述符
 */
-JE_API jegl_context* jegl_uhost_get_context(
+JE_API /* OPTIONAL: If graphic thread failed to start up */ jegl_context* jegl_uhost_get_context(
     je_GraphicUhost* host);
 
 /*
@@ -3825,7 +4062,7 @@ jegl_branch_new_chain [基本接口]
 */
 JE_API jegl_rendchain* jegl_branch_new_chain(
     je_RendchainBranch* branch,
-    jegl_frame_buffer* framebuffer,
+    /* OPTIONAL: nullptr means screen framebuffer */ jegl_frame_buffer* framebuffer,
     int32_t x,
     int32_t y,
     uint32_t w,
@@ -3842,12 +4079,12 @@ jegui_set_font [基本接口]
     jegui_init_basic
 */
 JE_API void jegui_set_font(
-    const char* general_font_path,
-    const char* latin_font_path,
+    /* OPTIONAL */ const char* general_font_path,
+    /* OPTIONAL */ const char* latin_font_path,
     size_t size);
 
 typedef uint64_t jegui_user_image_handle_t;
-typedef jegui_user_image_handle_t(*jegui_user_image_loader_t)(jegl_context*, jegl_texture*);
+typedef jegui_user_image_handle_t(*jegui_user_image_loader_t)(jegl_context*, jegl_texture_2d*);
 typedef void  (*jegui_user_sampler_loader_t)(jegl_context*, jegl_shader*);
 
 /*
@@ -3872,7 +4109,7 @@ jegui_update_basic [基本接口]
 */
 JE_API void jegui_update_basic(
     jegui_platform_draw_callback_t platform_draw_callback,
-    void* data);
+    /* OPTIONAL */ void* data);
 
 /*
 jegui_shutdown_basic [基本接口]
@@ -4013,7 +4250,7 @@ je_io_create_gamepad [基本接口]
     * guid 可用于区分不同的物理设备，如果为nullptr，则由引擎生成。
 */
 JE_API je_io_gamepad_handle_t je_io_create_gamepad(
-    const char* name_may_null, const char* guid_may_null);
+    /* OPTIONAL */ const char* name_may_null, /* OPTIONAL */ const char* guid_may_null);
 /*
 je_io_close_gamepad [基本接口]
 关闭一个虚拟手柄实例
@@ -4043,7 +4280,7 @@ je_io_gamepad_get [基本接口]
         则只返回前count个句柄；如果实际手柄数量小于count，则返回实际数量。
     * 作为特例，当 count 为 0 时，out_gamepads 可以为 nullptr，此时函数返回实际手柄数量。
 */
-JE_API size_t je_io_gamepad_get(size_t count, je_io_gamepad_handle_t* out_gamepads);
+JE_API size_t je_io_gamepad_get(size_t count, /* OPTIONAL: If count == 0 */ je_io_gamepad_handle_t* out_gamepads);
 
 /*
 je_io_gamepad_is_active [基本接口]
@@ -4060,7 +4297,7 @@ je_io_gamepad_is_active [基本接口]
 */
 JE_API bool je_io_gamepad_is_active(
     je_io_gamepad_handle_t gamepad,
-    je_TimestampMs* out_last_pushed_time_may_null);
+    /* OPTIONAL */ je_TimestampMs* out_last_pushed_time_may_null);
 /*
 je_io_gamepad_get_button_down [基本接口]
 获取指定虚拟手柄的指定按键是否被按下
@@ -4127,13 +4364,13 @@ JE_API void je_io_gamepad_stick_set_deadzone(
 je_module_load [基本接口]
 以name为名字，加载指定路径的动态库（遵循woolang规则）加载失败返回nullptr
 */
-JE_API woort_Dylib* je_module_load(const char* name, const char* path);
+JE_API /* OPTIONAL: If load failed */ woort_Dylib* je_module_load(const char* name, const char* path);
 
 /*
 je_module_func [基本接口]
 从动态库中加载某个函数，返回函数的地址
 */
-JE_API void* je_module_func(woort_Dylib* lib, const char* funcname);
+JE_API /* OPTIONAL: If symbol not found */ void* je_module_func(woort_Dylib* lib, const char* funcname);
 
 /*
 je_module_unload [基本接口]
@@ -4508,7 +4745,7 @@ jeal_create_buffer [基本接口]
 参见：
     jeal_close_buffer
 */
-JE_API const jeal_buffer* jeal_create_buffer(
+JE_API /* OPTIONAL: If format is invalid or buffer_data_len is not aligned to sample size */ const jeal_buffer* jeal_create_buffer(
     const void* data,
     size_t buffer_data_len,
     size_t sample_rate,
@@ -4524,7 +4761,7 @@ jeal_load_buffer_wav [基本接口]
 参见：
     jeal_close_buffer
 */
-JE_API const jeal_buffer* jeal_load_buffer_wav(const char* path);
+JE_API /* OPTIONAL: If wav file failed to load */ const jeal_buffer* jeal_load_buffer_wav(const char* path);
 
 /*
 jeal_close_buffer [基本接口]
@@ -4613,14 +4850,14 @@ jeal_set_source_effect_slot_and_filter [基本接口]
 JE_API void jeal_set_source_effect_slot_and_filter(
     jeal_source* source,
     size_t slot_idx,
-    jeal_effect_slot* slot_may_null,
-    jeal_filter* filter_may_null);
+    /* OPTIONAL */ jeal_effect_slot* slot_may_null,
+    /* OPTIONAL */ jeal_filter* filter_may_null);
 
 /*
 jeal_set_source_filter [基本接口]
 设置音频源的滤波器
 */
-JE_API void jeal_set_source_filter(jeal_source* source, jeal_filter* filter_may_null);
+JE_API void jeal_set_source_filter(jeal_source* source, /* OPTIONAL */ jeal_filter* filter_may_null);
 
 /*
 jeal_play_source [基本接口]
@@ -4689,7 +4926,7 @@ jeal_effect_slot_bind [基本接口]
 绑定一个效果到效果槽
     * 效果传入 nullptr 表示解除绑定
 */
-JE_API void jeal_effect_slot_bind(jeal_effect_slot* slot, void* effect_may_null);
+JE_API void jeal_effect_slot_bind(jeal_effect_slot* slot, /* OPTIONAL */ void* effect_may_null);
 
 /*
 jeal_effect_slot_close [基本接口]
@@ -4752,7 +4989,7 @@ jeal_enumerate_devices_and_do [基本接口]
         返回 nullptr 表示不改变当前使用的设备
 */
 JE_API void jeal_enumerate_devices_and_do(
-    jeal_enumerate_device_callback_t callback, void* userdata);
+    jeal_enumerate_device_callback_t callback, /* OPTIONAL */ void* userdata);
 
 /*
 jeal_disconnect_all_devices [基本接口]
@@ -4774,6 +5011,1065 @@ je_main_script_entry [基本接口]
     * 如果未能加载 @/builtin/editor/main.wo，则尝试 @/builtin/main.wo
 */
 JE_API bool je_main_script_entry();
+
+// =============================================================================
+// je_tilemap_* —— 瓦片地图 C API
+// 地图(.je4tilemap)与图集(.je4tileset)文档的读写、瓦片/属性查询与自动图块支持。
+// 文档以 je_TilemapDocument* / je_TilesetDocument* 不透明实例指针（nullptr 为
+// 无效值）标识，进程内全局缓存、按路径共享：编辑器经此修改文档后版本号自增，
+// 各世界的 TilemapSystem 下一帧即重建渲染分片（未保存的修改也会实时同步到
+// 世界实例）。
+// 文档生命周期按引用计数管理：open/create 的调用方各持有 1 个引用，使用地图
+// 的世界与引用图集的地图亦各占 1 个；je_tilemap_keep_map/je_tilemap_unload_map
+//（图集侧同理）增减引用，归零即销毁实例（未保存的修改随之丢弃，此后一切
+// 指针失效），下次按路径 open 自磁盘重读。
+// 引用计数与缓存注册表是线程安全的：Woolang 为并发 GC，文档 gchandle 的
+// 终结器会在 GC worker 线程上并行调用 unload（与编辑器线程、世界更新线程
+// 并发），open/create 返回的引用与打开/注册在同一锁定区间内取得，不会在
+// 取得引用前被并发销毁。文档内容（网格/图层等）仍为设计上的共享可变数据，
+// 内容级并发读写不由此组 API 串行化。
+// 瓦片值编码（网格/笔刷统一使用）：
+//     0            空
+//     v > 0        普通瓦片: (tileset_idx + 1) * 0x100000 + tile_id
+//     v < 0        自动图块地形: -((tileset_idx + 1) * 0x100000 + terrain_id)
+// 属性取值链：逐格覆盖 -> 瓦片/地形默认值 -> 图集 schema 默认值。属性值为
+// 类型化数据（je_PropertyType）：设置/读取都须传入类型枚举并给出对应的
+// 数据指针，与实际存储类型不符时返回 false。
+// =============================================================================
+
+namespace jeecs { namespace Tilemap
+{
+    struct MapDocument;
+    struct TilesetDocument;
+}}
+
+/*
+je_TilemapDocument [类型别名]
+地图文档(.je4tilemap)的不透明实例指针，指向全局缓存、按路径共享的
+地图文档对象
+    * nullptr 是无效值；open/create 成功返回的指针携带 1 个文档引用，
+      引用计数归零后实例销毁、指针随之失效，不得继续使用
+请参见：
+    je_TilesetDocument
+    je_tilemap_open_map
+*/
+typedef jeecs::Tilemap::MapDocument je_TilemapDocument;
+
+/*
+je_TilesetDocument [类型别名]
+图集文档(.je4tileset)的不透明实例指针，指向全局缓存、按路径共享的
+图集文档对象
+    * nullptr 是无效值；open/create 成功返回的指针携带 1 个文档引用，
+      引用计数归零后实例销毁、指针随之失效，不得继续使用
+请参见：
+    je_TilemapDocument
+    je_tilemap_open_tileset
+*/
+typedef jeecs::Tilemap::TilesetDocument je_TilesetDocument;
+
+/*
+je_LayerId [类型别名]
+图层在地图文档内的下标，由 je_tilemap_add_layer 经 out_id 返回
+    * 从 0 开始；remove/move 后其余图层下标会前移/重排，跨操作持有的
+      下标需按 layer_count 重新校验
+请参见：
+    je_TilemapDocument
+    je_tilemap_add_layer
+*/
+typedef int32_t je_LayerId;
+
+/*
+je_SourceId [类型别名]
+源纹理在图集文档内的下标，由 je_tilemap_add_source 经 out_id 返回
+    * 从 0 开始；remove 后其余源下标前移，跨操作持有的下标需按
+      source_count 重新校验
+请参见：
+    je_TilesetDocument
+    je_tilemap_add_source
+*/
+typedef int32_t je_SourceId;
+
+/*
+je_TileId [类型别名]
+普通瓦片在图集文档内的 id，由 je_tilemap_add_tile 经 out_id 返回
+    * 从 1 开始，0 是无效值（亦为文档内占位槽的下标）
+    * 按文档内槽位下标分配；墓碑删除后永不复用，跨保存/重载稳定
+请参见：
+    je_TilesetDocument
+    je_tilemap_add_tile
+*/
+typedef int32_t je_TileId;
+
+/*
+je_TerrainId [类型别名]
+自动图块地形在图集文档内的 id，由 je_tilemap_add_terrain 经 out_id 返回
+    * 从 1 开始，0 是无效值（亦为文档内占位槽的下标）
+    * 按文档内槽位下标分配；墓碑删除后永不复用，跨保存/重载稳定
+请参见：
+    je_TilesetDocument
+    je_tilemap_add_terrain
+*/
+typedef int32_t je_TerrainId;
+
+/*
+je_TerrainKind [枚举]
+自动图块地形的拼接类型，即 je_tilemap_add_terrain / je_tilemap_set_terrain
+的 kind 参数与 je_tilemap_terrain_info 的 kind 出参的取值
+    * JE_TERRAIN_KIND_SINGLE      单块：取锚点整块
+    * JE_TERRAIN_KIND_RPGMAKER_XP RPGMaker XP 式四象限（2x3 条带）
+    * JE_TERRAIN_KIND_BLOB47      blob47（47 变体）
+    * JE_TERRAIN_KIND_RPGMAKER_VX RPGMaker VX 式四象限（2x3 块，中央十字为
+      内部填充；孤块取锚点整块；与 RPG Maker VX Ace 渲染逐像素一致）
+请参见：
+    je_tilemap_add_terrain
+*/
+enum je_TerrainKind
+{
+    JE_TERRAIN_KIND_SINGLE = 0,
+    JE_TERRAIN_KIND_RPGMAKER_XP = 1,
+    JE_TERRAIN_KIND_BLOB47 = 2,
+    JE_TERRAIN_KIND_RPGMAKER_VX = 3,
+};
+
+/*
+je_PropertyType [枚举]
+瓦片地图属性值的类型，即属性接口 type 参数的取值。各类型经 void* 传递的
+数据形态：
+    * JE_PROPERTY_TYPE_BOOL   bool（1 字节）
+    * JE_PROPERTY_TYPE_STRING const char*（设置）/ const char**（读取，
+      指向文档内部存储，文档下次修改前有效）
+    * JE_PROPERTY_TYPE_INT    int32_t
+    * JE_PROPERTY_TYPE_FLOAT  float
+    * JE_PROPERTY_TYPE_VEC2   float[2]
+    * JE_PROPERTY_TYPE_VEC3   float[3]
+    * JE_PROPERTY_TYPE_VEC4   float[4]
+枚举值与内部 variant 存储的下标一一对应。
+请参见：
+    je_tilemap_set_cell_property
+*/
+enum je_PropertyType
+{
+    JE_PROPERTY_TYPE_BOOL = 0,
+    JE_PROPERTY_TYPE_STRING = 1,
+    JE_PROPERTY_TYPE_INT = 2,
+    JE_PROPERTY_TYPE_FLOAT = 3,
+    JE_PROPERTY_TYPE_VEC2 = 4,
+    JE_PROPERTY_TYPE_VEC3 = 5,
+    JE_PROPERTY_TYPE_VEC4 = 6,
+};
+
+/*
+je_LayerSelfShadow [枚举]
+图层的 2D 光照自阴影行为（Light2D::SelfShadow 组件的挂载策略），即
+je_tilemap_layer_selfshadow / je_tilemap_set_layer_selfshadow 的取值。
+渲染分片是运行时生成的隐藏实体，无法逐个挂组件，故由图层属性驱动：
+    * JE_LAYER_SELFSHADOW_OFF 禁用：该层分片不挂 SelfShadow 组件，
+      图块正常接收更高层遮挡体投下的阴影
+    * JE_LAYER_SELFSHADOW_ON  启用（常开）：分片挂 SelfShadow 且
+      auto_disable = false，无论光源高度如何，自阴影覆盖始终按 factor 生效
+    * JE_LAYER_SELFSHADOW_AUTO 启用（自动）：分片挂 SelfShadow 且
+      auto_disable = true，光源不高于该层时自阴影覆盖被清除（图块受光）
+（覆盖强度 factor 经 je_tilemap_set_layer_selfshadow_factor 按层设置）
+TopDown 光源（Light2D::TopDown）下的 AUTO 判定按格进行：分片同挂
+Light2D::PerBlockSelfShadow（网格顶点携带块底边高度），格底边不低于光源
+高度线时该格受光、否则写 factor——整张地图不会被实体原点一刀切。
+（ON 模式与普通光源不受影响，仍为整实体判定）
+请参见：
+    je_tilemap_set_layer_selfshadow
+    je_tilemap_set_layer_selfshadow_factor
+*/
+enum je_LayerSelfShadow
+{
+    JE_LAYER_SELFSHADOW_OFF = 0,
+    JE_LAYER_SELFSHADOW_ON = 1,
+    JE_LAYER_SELFSHADOW_AUTO = 2,
+};
+
+/*
+je_LayerBlockShadow [枚举]
+图层的 2D 光照遮挡阴影行为（Light2D::BlockShadow 组件的挂载策略），即
+je_tilemap_layer_blockshadow / je_tilemap_set_layer_blockshadow 的取值。
+渲染分片是运行时生成的隐藏实体，无法逐个挂组件，故由图层属性驱动：
+    * JE_LAYER_BLOCKSHADOW_OFF 禁用：该层分片不挂 BlockShadow 组件，
+      瓦片不遮挡光线（不投阴影体）
+    * JE_LAYER_BLOCKSHADOW_ON  启用（常开）：分片挂 BlockShadow 且
+      auto_disable = false，无论光源高度如何，瓦片占据轮廓始终按 factor
+      投射硬阴影（阴影体）
+    * JE_LAYER_BLOCKSHADOW_AUTO 启用（自动）：分片挂 BlockShadow 且
+      auto_disable = true，光源不高于该层时不投射遮挡阴影
+遮挡轮廓由引擎按分块网格自动生成：该层有有效瓦片的格子视为实心，实心
+与空心格的边界（跨分块判定，贪心合并共线段）构成遮挡轮廓，随网格编辑
+重建。（阴影浓度 factor 经 je_tilemap_set_layer_blockshadow_factor 按层
+设置）
+请参见：
+    je_tilemap_set_layer_blockshadow
+    je_tilemap_set_layer_blockshadow_factor
+*/
+enum je_LayerBlockShadow
+{
+    JE_LAYER_BLOCKSHADOW_OFF = 0,
+    JE_LAYER_BLOCKSHADOW_ON = 1,
+    JE_LAYER_BLOCKSHADOW_AUTO = 2,
+};
+
+// ---- 地图文档 ----
+
+/*
+je_tilemap_open_map [基本接口]
+打开（或取进程内缓存）指定路径的地图文档，返回文档实例指针
+    * 路径不存在或无法解析时返回 nullptr
+    * 每次成功调用为调用方持有 1 个文档引用（见 je_tilemap_unload_map）
+请参见：
+    je_TilemapDocument
+    je_tilemap_keep_map
+*/
+JE_API /* OPTIONAL: If path cannot be opened */ je_TilemapDocument* je_tilemap_open_map(const char* path);
+
+/*
+je_tilemap_create_map [基本接口]
+新建一个未保存的地图文档（单图层），返回文档实例指针
+    * 尺寸不合法（<=0 或超过 65536）时返回 nullptr
+    * 调用方持有 1 个文档引用（见 je_tilemap_unload_map）
+请参见：
+    je_TilemapDocument
+*/
+JE_API /* OPTIONAL: If size is invalid */ je_TilemapDocument* je_tilemap_create_map(int32_t w, int32_t h, int32_t tile_px);
+
+/*
+je_tilemap_save_map [基本接口]
+将地图文档保存为 .je4tilemap，并把该路径登记为文档路径
+    * 写出失败返回 false
+*/
+JE_API bool je_tilemap_save_map(je_TilemapDocument* map, const char* path);
+
+/*
+je_tilemap_reload_map [基本接口]
+丢弃指定路径地图文档在缓存中的未保存修改，下次访问时从磁盘重读
+*/
+JE_API void je_tilemap_reload_map(const char* path);
+
+/*
+je_tilemap_map_size [基本接口]
+取地图文档的尺寸信息，经出参返回 (宽, 高, 瓦片边长像素, 图层数)
+    * 各出参均可传 nullptr 跳过
+*/
+JE_API void je_tilemap_map_size(je_TilemapDocument* map,
+    /* OPTIONAL */ int32_t* w, /* OPTIONAL */ int32_t* h, /* OPTIONAL */ int32_t* tile_px, /* OPTIONAL */ int32_t* layer_count);
+
+/*
+je_tilemap_map_path [基本接口]
+取地图文档的登记路径，未保存（新建后未另存）时返回false
+*/
+JE_API bool je_tilemap_map_path(je_TilemapDocument* map, const char** out_path);
+
+/*
+je_tilemap_map_version [基本接口]
+取地图文档的修改版本号，任何经本组 API 的修改都会使其自增
+*/
+JE_API uint64_t je_tilemap_map_version(je_TilemapDocument* map);
+
+/*
+je_tilemap_keep_map [基本接口]
+地图文档引用计数 +1（文档一经加载默认长期驻留，引用计数是唯一的
+卸载途径），返回增加后的计数
+    * 引用来源：open/create 的调用方、使用该地图的各世界（各占 1）
+    * 线程安全：可从任意线程（含 Woolang GC 终结器线程）调用
+请参见：
+    je_tilemap_unload_map
+*/
+JE_API int32_t je_tilemap_keep_map(je_TilemapDocument* map);
+
+/*
+je_tilemap_unload_map [基本接口]
+地图文档引用计数 -1（下限 0）；归零即销毁文档实例——指针立即失效，下次
+按路径打开自磁盘重读（未保存的修改随之丢弃）
+    * 返回减少后的计数（0 表示文档已被销毁或不可再卸载）
+    * 线程安全：可从任意线程调用；Woolang 文档 gchandle 被并发 GC
+      回收时即经终结器在 GC worker 线程上调用本函数
+请参见：
+    je_tilemap_keep_map
+    je_tilemap_open_map
+*/
+JE_API int32_t je_tilemap_unload_map(je_TilemapDocument* map);
+
+/*
+je_tilemap_loaded_map_count [基本接口]
+返回进程内已注册的地图文档数量（含未保存的新建文档）
+    * 文档实例销毁后其枚举槽位置空，计数不变但 je_tilemap_loaded_map
+      在该下标返回 nullptr；计数也含仍被引用、但已被 je_tilemap_reload_map
+      弃用的旧实例（其路径已清空、不再被任何世界使用）
+请参见：
+    je_tilemap_loaded_map
+*/
+JE_API int32_t je_tilemap_loaded_map_count(void);
+
+/*
+je_tilemap_loaded_map [基本接口]
+按枚举下标取已注册地图文档的实例指针，与 je_tilemap_loaded_map_count 配套遍历
+    * 下标从 0 起、小于 je_tilemap_loaded_map_count；越界或该槽位实例
+      已销毁返回 nullptr
+    * 枚举下标不是文档指针：文档指针稳定不变，而打开/新建文档会使后续
+      枚举下标位移，遍历中不应再打开/新建文档
+请参见：
+    je_tilemap_loaded_map_count
+*/
+JE_API /* OPTIONAL: If index is out of range or the slot is empty */ je_TilemapDocument* je_tilemap_loaded_map(int32_t index);
+
+/*
+je_tilemap_resize_map [基本接口]
+调整地图文档的网格尺寸，越界格子的逐格属性覆盖将被丢弃
+    * 新尺寸不合法（<=0 或超过 65536）时不做任何修改
+*/
+JE_API void je_tilemap_resize_map(je_TilemapDocument* map, int32_t new_w, int32_t new_h);
+
+// ---- 图层 ----
+
+/*
+je_tilemap_add_layer [基本接口]
+向地图文档末尾追加一个图层，新图层下标（je_LayerId）经 out_id 返回
+    * 失败时不写出下标并返回 false
+请参见：
+    je_LayerId
+*/
+JE_API bool je_tilemap_add_layer(je_TilemapDocument* map, const char* name,
+    je_LayerId* out_id);
+
+/*
+je_tilemap_remove_layer [基本接口]
+移除指定下标的图层，并重排逐格属性键
+    * 下标越界返回 false
+*/
+JE_API bool je_tilemap_remove_layer(je_TilemapDocument* map, je_LayerId layer);
+
+/*
+je_tilemap_move_layer [基本接口]
+把图层移动到新下标（自动钳制到 [0, 图层数-1]），并重排逐格属性键
+*/
+JE_API bool je_tilemap_move_layer(je_TilemapDocument* map, je_LayerId layer, je_LayerId new_pos);
+
+/*
+je_tilemap_get_layer [基本接口]
+取指定下标图层的信息，经出参返回 (名称, 是否可见, 是否锁定)
+    * 各出参均可传 nullptr 跳过；下标越界时名称写出空串、其余写出 0
+*/
+JE_API void je_tilemap_get_layer(je_TilemapDocument* map, je_LayerId layer,
+    /* OPTIONAL */ const char** name, /* OPTIONAL */ int32_t* visible, /* OPTIONAL */ int32_t* locked);
+
+/*
+je_tilemap_set_layer [基本接口]
+修改指定下标图层的名称、可见性与锁定状态
+    * name 传 nullptr 表示保持名称不变
+    * 下标越界时不做任何修改
+*/
+JE_API void je_tilemap_set_layer(je_TilemapDocument* map, je_LayerId layer,
+    /* OPTIONAL */ const char* name, int32_t visible, int32_t locked);
+
+/*
+je_tilemap_layer_z [基本接口]
+取图层的世界 z 偏移（相对地图根实体；不同层须错开以避免深度冲突，
+旧格式文件缺省为层下标 0,1,2...）
+*/
+JE_API float je_tilemap_layer_z(je_TilemapDocument* map, je_LayerId layer);
+
+/*
+je_tilemap_set_layer_z [基本接口]
+设置图层的世界 z 偏移
+请参见：
+    je_tilemap_layer_z
+*/
+JE_API void je_tilemap_set_layer_z(je_TilemapDocument* map, je_LayerId layer, float z);
+
+/*
+je_tilemap_layer_rend_queue [基本接口]
+取图层的渲染队列值（Renderer::Rendqueue）：同图各层分片按该值升序
+绘制（画家算法，层间叠放的权威顺序）。新建图层缺省为 10000 + 层
+下标（与场景实体常用的小队列值错开）；z 只在该层与写深度的场景
+物体之间参与遮挡裁决
+*/
+JE_API int32_t je_tilemap_layer_rend_queue(je_TilemapDocument* map, je_LayerId layer);
+
+/*
+je_tilemap_set_layer_rend_queue [基本接口]
+设置图层的渲染队列值
+请参见：
+    je_tilemap_layer_rend_queue
+*/
+JE_API void je_tilemap_set_layer_rend_queue(je_TilemapDocument* map, je_LayerId layer, int32_t rend_queue);
+
+/*
+je_tilemap_layer_selfshadow [基本接口]
+取图层的 2D 光照自阴影行为（je_LayerSelfShadow），下标越界时返回
+JE_LAYER_SELFSHADOW_OFF
+请参见：
+    je_tilemap_set_layer_selfshadow
+*/
+JE_API je_LayerSelfShadow je_tilemap_layer_selfshadow(je_TilemapDocument* map, je_LayerId layer);
+
+/*
+je_tilemap_set_layer_selfshadow [基本接口]
+设置图层的 2D 光照自阴影行为：OFF 时该层渲染分片移除 Light2D::SelfShadow
+组件（不参与自阴影覆盖），ON/AUTO 时挂载该组件并分别固定 auto_disable 为
+false / true；覆盖强度由 je_tilemap_set_layer_selfshadow_factor 设置
+（缺省 1）。渲染分片由引擎生成，组件的挂载与摘除由 TilemapSystem 逐帧
+对齐（走命令缓冲，下一帧迁移生效）；该设置随图层记录落盘
+    * 下标越界时不做任何修改
+请参见：
+    je_LayerSelfShadow
+    je_tilemap_layer_selfshadow
+    je_tilemap_set_layer_selfshadow_factor
+*/
+JE_API void je_tilemap_set_layer_selfshadow(je_TilemapDocument* map, je_LayerId layer, je_LayerSelfShadow selfshadow);
+
+/*
+je_tilemap_layer_selfshadow_factor [基本接口]
+取图层的自阴影覆盖强度（写入分片 Light2D::SelfShadow::factor，即覆盖色
+RGBA 乘子；仅图层模式为 ON/AUTO 时生效），下标越界时返回 1
+请参见：
+    je_tilemap_set_layer_selfshadow_factor
+*/
+JE_API float je_tilemap_layer_selfshadow_factor(je_TilemapDocument* map, je_LayerId layer);
+
+/*
+je_tilemap_set_layer_selfshadow_factor [基本接口]
+设置图层的自阴影覆盖强度：不做范围钳制（与 Light2D::SelfShadow::factor
+组件本体同口径，常用 0..1）；强度与模式一样随图层记录落盘、由
+TilemapSystem 逐帧对齐到分片组件
+    * 下标越界时不做任何修改
+请参见：
+    je_tilemap_layer_selfshadow_factor
+    je_tilemap_set_layer_selfshadow
+*/
+JE_API void je_tilemap_set_layer_selfshadow_factor(je_TilemapDocument* map, je_LayerId layer, float factor);
+
+/*
+je_tilemap_layer_blockshadow [基本接口]
+取图层的 2D 光照遮挡阴影行为（je_LayerBlockShadow），下标越界时返回
+JE_LAYER_BLOCKSHADOW_OFF
+请参见：
+    je_tilemap_set_layer_blockshadow
+*/
+JE_API je_LayerBlockShadow je_tilemap_layer_blockshadow(je_TilemapDocument* map, je_LayerId layer);
+
+/*
+je_tilemap_set_layer_blockshadow [基本接口]
+设置图层的 2D 光照遮挡阴影行为：OFF 时该层渲染分片移除 Light2D::BlockShadow
+组件（瓦片不遮挡光线），ON/AUTO 时挂载该组件并分别固定 auto_disable 为
+false / true；阴影浓度由 je_tilemap_set_layer_blockshadow_factor 设置
+（缺省 1）。遮挡轮廓（该层有效瓦片的占据边界，贪心合并共线段）由
+TilemapSystem 自动生成并随网格编辑重建；该设置随图层记录落盘
+    * 下标越界时不做任何修改
+请参见：
+    je_LayerBlockShadow
+    je_tilemap_layer_blockshadow
+    je_tilemap_set_layer_blockshadow_factor
+*/
+JE_API void je_tilemap_set_layer_blockshadow(je_TilemapDocument* map, je_LayerId layer, je_LayerBlockShadow blockshadow);
+
+/*
+je_tilemap_layer_blockshadow_factor [基本接口]
+取图层的遮挡阴影浓度（写入分片 Light2D::BlockShadow::factor，阴影体
+浓度；仅图层模式为 ON/AUTO 时生效），下标越界时返回 1
+请参见：
+    je_tilemap_set_layer_blockshadow_factor
+*/
+JE_API float je_tilemap_layer_blockshadow_factor(je_TilemapDocument* map, je_LayerId layer);
+
+/*
+je_tilemap_set_layer_blockshadow_factor [基本接口]
+设置图层的遮挡阴影浓度：不做范围钳制（与 Light2D::BlockShadow::factor
+组件本体同口径，常用 0..1）；浓度与模式一样随图层记录落盘、由
+TilemapSystem 逐帧对齐到分片组件
+    * 下标越界时不做任何修改
+请参见：
+    je_tilemap_layer_blockshadow_factor
+    je_tilemap_set_layer_blockshadow
+*/
+JE_API void je_tilemap_set_layer_blockshadow_factor(je_TilemapDocument* map, je_LayerId layer, float factor);
+
+// ---- 图层着色器样式 ----
+// 每层可直接持有一个专属着色器实例与若干附加纹理槽；图层样式是该层
+// 分片渲染的唯一着色器来源（未配置样式的层分片着色器列表为空，不回落
+// 地图根实体或内置默认）。uniform 值不经过瓦片地图——它们储存在着色器
+// 实例本身，由实例的持有方直接设置与读取（graphic::shader::set_uniform），
+// 渲染侧直接使用图层样式持有的实例，改动即时生效；保存文档时实例上的
+// uniform 当前值随图层样式落盘（JE_ 引擎内置变量与 TEXTURE/矩阵类除外，
+// 与 .je4entity 保存 Shaders 的口径一致），加载后写回新实例。
+// 样式修改只自增图层样式版本（不走地图版本号），渲染侧做轻量对齐，
+// 不触发网格重扫与顶点重建。
+// 样式资源经下列不透明指针类型跨 C 边界传递（与 jegl_frame_buffer 的
+// attachment_t 同款姿势，C 侧不透明、实现侧按实际类型使用）：
+//     je_tilemap_shader_ref  实为 jeecs::basic::resource<jeecs::graphic::shader>
+//     je_tilemap_texture_ref 实为 jeecs::basic::resource<jeecs::graphic::texture2d>
+typedef struct je_tilemap_shader_ref je_tilemap_shader_ref;
+typedef struct je_tilemap_texture_ref je_tilemap_texture_ref;
+
+/*
+je_tilemap_layer_shader [基本接口]
+取图层样式的着色器实例，返回新建引用副本（用 je_tilemap_free_shader_ref 释放）
+    * 未指定样式时返回 nullptr
+*/
+JE_API /* OPTIONAL: If layer has no shader style */ je_tilemap_shader_ref* je_tilemap_layer_shader(je_TilemapDocument* map,
+    je_LayerId layer);
+
+/*
+je_tilemap_set_layer_shader [基本接口]
+设置图层样式的着色器实例
+    * shader 传 nullptr 表示清除样式（该层分片着色器列表被清空）
+    * 样式共享持有传入实例：uniform 值设在实例上，改动下一帧生效
+    * 下标越界时不做任何修改
+*/
+JE_API void je_tilemap_set_layer_shader(je_TilemapDocument* map, je_LayerId layer,
+    /* OPTIONAL */ je_tilemap_shader_ref* shader);
+
+/*
+je_tilemap_layer_texture_count [基本接口]
+取图层样式配置的附加纹理数量
+*/
+JE_API int32_t je_tilemap_layer_texture_count(je_TilemapDocument* map, je_LayerId layer);
+
+/*
+je_tilemap_layer_set_texture [基本接口]
+设置（或替换/删除）图层样式某槽位的附加纹理
+    * 槽 0 保留给图集源纹理，slot < 1 时返回 false
+    * texture 传 nullptr 表示删除该槽位的绑定
+    * 同槽位重复设置时替换旧值
+*/
+JE_API bool je_tilemap_layer_set_texture(je_TilemapDocument* map, je_LayerId layer,
+    int32_t slot, /* OPTIONAL */ je_tilemap_texture_ref* texture);
+
+/*
+je_tilemap_layer_get_texture [基本接口]
+按序号（非槽位）取图层样式的附加纹理，经出参返回 (槽位, 纹理实例)
+    * 纹理实例为新建引用副本（用 je_tilemap_free_texture_ref 释放）
+    * 各出参均可传 nullptr 跳过；序号越界返回 false
+*/
+JE_API bool je_tilemap_layer_get_texture(je_TilemapDocument* map, je_LayerId layer,
+    int32_t index, /* OPTIONAL */ int32_t* slot, /* OPTIONAL */ je_tilemap_texture_ref** texture);
+
+/*
+je_tilemap_free_shader_ref [基本接口]
+释放 je_tilemap_layer_shader 返回的着色器引用副本（传 nullptr 安全）
+*/
+JE_API void je_tilemap_free_shader_ref(/* OPTIONAL */ je_tilemap_shader_ref* shader);
+
+/*
+je_tilemap_free_texture_ref [基本接口]
+释放 je_tilemap_layer_get_texture 出参返回的纹理引用副本（传 nullptr 安全）
+*/
+JE_API void je_tilemap_free_texture_ref(/* OPTIONAL */ je_tilemap_texture_ref* texture);
+
+// ---- 瓦片读写 ----
+
+/*
+je_tilemap_get_tile [基本接口]
+取指定图层某格的瓦片值（编码见本段说明），越界返回 0（空格值亦为 0）
+*/
+JE_API int32_t je_tilemap_get_tile(je_TilemapDocument* map, je_LayerId layer,
+    int32_t x, int32_t y);
+
+/*
+je_tilemap_set_tile [基本接口]
+设置指定图层某格的瓦片值（编码见本段说明）
+*/
+JE_API void je_tilemap_set_tile(je_TilemapDocument* map, je_LayerId layer,
+    int32_t x, int32_t y, int32_t value);
+
+/*
+je_tilemap_fill_tiles [基本接口]
+把矩形区域内的格子批量设为同一瓦片值，供矩形/填充工具使用
+    * 自动跳过越界格子；无实际变化时不自增版本号
+*/
+JE_API void je_tilemap_fill_tiles(je_TilemapDocument* map, je_LayerId layer,
+    int32_t x, int32_t y, int32_t w, int32_t h, int32_t value);
+
+// ---- 地图引用的图集 ----
+
+/*
+je_tilemap_tileset_count [基本接口]
+取地图文档引用的图集数量
+*/
+JE_API int32_t je_tilemap_tileset_count(je_TilemapDocument* map);
+
+/*
+je_tilemap_add_tileset [基本接口]
+向地图文档登记一个图集引用，图集下标经 out_index 返回
+    * 已引用同一路径时返回 true 且写出其下标；失败（路径为空）
+      返回 false，不写出下标
+    * 不要求图集此刻可解析，可先引用后保存图集
+*/
+JE_API bool je_tilemap_add_tileset(je_TilemapDocument* map, const char* path,
+    int32_t* out_index);
+
+/*
+je_tilemap_remove_tileset [基本接口]
+移除地图文档对指定下标图集的引用，并清除引用该图集的所有格子
+*/
+JE_API bool je_tilemap_remove_tileset(je_TilemapDocument* map, int32_t idx);
+
+/*
+je_tilemap_tileset_path [基本接口]
+取地图文档引用的指定下标图集的路径，下标越界返回空串
+*/
+JE_API const char* je_tilemap_tileset_path(je_TilemapDocument* map, int32_t idx);
+
+// ---- 属性与查询 ----
+
+/*
+je_tilemap_set_cell_property [基本接口]
+设置某格的属性逐格覆盖值（数据形态见 je_PropertyType）
+    * value 传 nullptr 表示清除该格此属性的覆盖（此时忽略 type）
+    * 该格已有不同类型的覆盖值时返回 false 且不修改
+    * 坐标越界返回 false
+请参见：
+    je_PropertyType
+*/
+JE_API bool je_tilemap_set_cell_property(je_TilemapDocument* map, je_LayerId layer,
+    int32_t x, int32_t y, const char* name, je_PropertyType type,
+    /* OPTIONAL */ const void* value);
+
+/*
+je_tilemap_get_cell_property [基本接口]
+取某格的属性逐格覆盖值（不沿取值链解析），数据经 out_value 写回
+（形态见 je_PropertyType）
+    * 无覆盖或类型与实际存储不符返回 false
+请参见：
+    je_tilemap_get_property
+    je_PropertyType
+*/
+JE_API bool je_tilemap_get_cell_property(je_TilemapDocument* map, je_LayerId layer,
+    int32_t x, int32_t y, const char* name, je_PropertyType type,
+    /* OPTIONAL */ void* out_value);
+
+/*
+je_tilemap_get_property [基本接口]
+按取值链（逐格覆盖 -> 瓦片/地形默认值 -> 图集 schema 默认值）解析某格属性，
+数据经 out_value 写回（形态见 je_PropertyType）
+    * 无值或类型与实际存储不符返回 false
+请参见：
+    je_PropertyType
+*/
+JE_API bool je_tilemap_get_property(je_TilemapDocument* map, je_LayerId layer,
+    int32_t x, int32_t y, const char* name, je_PropertyType type,
+    /* OPTIONAL */ void* out_value);
+
+/*
+je_tilemap_is_walkable [基本接口]
+取某格全图层合并的通行性（任一图层不可通行即不可通行），出界视为不可通行
+    * 返回 1/0
+*/
+JE_API int32_t je_tilemap_is_walkable(je_TilemapDocument* map, int32_t x, int32_t y);
+
+/*
+je_tilemap_is_walkable_on [基本接口]
+取某格在指定图层上的通行性
+    * 返回 1/0
+请参见：
+    je_tilemap_is_walkable
+*/
+JE_API int32_t je_tilemap_is_walkable_on(je_TilemapDocument* map, je_LayerId layer,
+    int32_t x, int32_t y);
+
+/*
+je_tilemap_find_cells [基本接口]
+按属性值查找格子，返回命中数量；结果按文档缓存，经 je_tilemap_find_get 逐个取出
+    * layer < 0 时搜索全部图层
+    * name 为 "walkable" 时按通行性匹配，type 须为 BOOL，value 指向 bool
+请参见：
+    je_tilemap_find_get
+    je_PropertyType
+*/
+JE_API int32_t je_tilemap_find_cells(je_TilemapDocument* map, je_LayerId layer,
+    const char* name, je_PropertyType type, const void* value);
+
+/*
+je_tilemap_find_get [基本接口]
+取出 je_tilemap_find_cells 结果中第 index 个格子，经出参返回其 (x, y)
+    * 越界返回 false
+请参见：
+    je_tilemap_find_cells
+*/
+JE_API bool je_tilemap_find_get(je_TilemapDocument* map, int32_t index, int32_t* x, int32_t* y);
+
+// ---- 图集文档(.je4tileset) ----
+
+/*
+je_tilemap_open_tileset [基本接口]
+打开（或取进程内缓存）指定路径的图集文档，返回文档实例指针
+    * 路径不存在或无法解析时返回 nullptr
+    * 每次成功调用为调用方持有 1 个文档引用（见 je_tilemap_unload_tileset）
+请参见：
+    je_TilesetDocument
+    je_tilemap_keep_tileset
+*/
+JE_API /* OPTIONAL: If path cannot be opened */ je_TilesetDocument* je_tilemap_open_tileset(const char* path);
+
+/*
+je_tilemap_create_tileset [基本接口]
+新建一个未保存的图集文档，返回文档实例指针
+    * 调用方持有 1 个文档引用（见 je_tilemap_unload_tileset）
+请参见：
+    je_TilesetDocument
+*/
+JE_API je_TilesetDocument* je_tilemap_create_tileset(const char* name);
+
+/*
+je_tilemap_save_tileset [基本接口]
+将图集文档保存为 .je4tileset，并把该路径登记为文档路径
+*/
+JE_API bool je_tilemap_save_tileset(je_TilesetDocument* tileset, const char* path);
+
+/*
+je_tilemap_reload_tileset [基本接口]
+丢弃指定路径图集文档在缓存中的未保存修改，下次访问时从磁盘重读
+*/
+JE_API void je_tilemap_reload_tileset(const char* path);
+
+/*
+je_tilemap_tileset_version [基本接口]
+取图集文档的修改版本号，任何经本组 API 的修改都会使其自增
+*/
+JE_API uint64_t je_tilemap_tileset_version(je_TilesetDocument* tileset);
+
+/*
+je_tilemap_keep_tileset [基本接口]
+图集文档引用计数 +1，返回增加后的计数
+    * 引用来源：open/create 的调用方、引用该图集的各地图（各占 1）
+请参见：
+    je_tilemap_unload_tileset
+*/
+JE_API int32_t je_tilemap_keep_tileset(je_TilesetDocument* tileset);
+
+/*
+je_tilemap_unload_tileset [基本接口]
+图集文档引用计数 -1（下限 0）；归零即撤销注册表对该实例的持有——已无
+引用方（引用它的地图等）时实例销毁、指针立即失效，下次按路径打开（或
+地图解析）自磁盘重读（未保存的修改随之丢弃）
+    * 返回减少后的计数（0 表示文档已被销毁或不可再卸载）
+请参见：
+    je_tilemap_keep_tileset
+*/
+JE_API int32_t je_tilemap_unload_tileset(je_TilesetDocument* tileset);
+
+/*
+je_tilemap_tileset_doc_path [基本接口]
+取图集文档的登记路径，未保存时返回空串
+*/
+JE_API const char* je_tilemap_tileset_doc_path(je_TilesetDocument* tileset);
+
+/*
+je_tilemap_tileset_set_name [基本接口]
+设置图集文档的名称
+*/
+JE_API void je_tilemap_tileset_set_name(je_TilesetDocument* tileset, const char* name);
+
+/*
+je_tilemap_tileset_name [基本接口]
+取图集文档的名称
+*/
+JE_API const char* je_tilemap_tileset_name(je_TilesetDocument* tileset);
+
+// ---- 图集源纹理 ----
+
+/*
+je_tilemap_add_source [基本接口]
+向图集文档添加源纹理，tile_px 为瓦片边长（像素），网格数由纹理尺寸推得，
+源下标（je_SourceId）经 out_id 返回
+    * 已有同路径源时返回 true 且写出其下标；失败（纹理无法加载或参数不合法）
+      返回 false，不写出下标
+请参见：
+    je_SourceId
+*/
+JE_API bool je_tilemap_add_source(je_TilesetDocument* tileset,
+    const char* texture_path, int32_t tile_px, je_SourceId* out_id);
+
+/*
+je_tilemap_remove_source [基本接口]
+移除指定下标的源纹理：引用该源的瓦片/地形被标记失效，其余源下标前移
+*/
+JE_API bool je_tilemap_remove_source(je_TilesetDocument* tileset, je_SourceId source_idx);
+
+/*
+je_tilemap_source_count [基本接口]
+取图集文档的源纹理数量
+*/
+JE_API int32_t je_tilemap_source_count(je_TilesetDocument* tileset);
+
+/*
+je_tilemap_source_info [基本接口]
+取指定下标源纹理的信息，经出参返回 (纹理路径, 瓦片边长, 横向格数, 纵向格数)
+    * 下标越界返回 false
+*/
+JE_API bool je_tilemap_source_info(je_TilesetDocument* tileset, je_SourceId source_idx,
+    /* OPTIONAL */ const char** texture_path, /* OPTIONAL */ int32_t* tile_px, /* OPTIONAL */ int32_t* xcount, /* OPTIONAL */ int32_t* ycount);
+
+// ---- 图集源纹理附加层级 ----
+
+/*
+je_tilemap_source_extra_count [基本接口]
+取指定源纹理的附加层级纹理（如法线图集）数量
+    * 下标越界返回 0
+*/
+JE_API int32_t je_tilemap_source_extra_count(je_TilesetDocument* tileset,
+    je_SourceId source_idx);
+
+/*
+je_tilemap_add_source_extra [基本接口]
+向源纹理添加附加层级纹理，pass 为其绑定通道 id（>= 1；通道 0 由主纹理/
+反照率固定占用）。层级与主纹理共用同一瓦片网格（层号 = iy*xcount + ix
+对齐，cell 尺寸由层级自身分辨率推得），渲染时按 pass 绑定为独立数组纹理
+    * 同 (纹理路径, 通道) 幂等返回 true；同通道不同路径或同路径不同通道
+      （换通道请用 je_tilemap_set_source_extra_pass）、纹理无法加载或
+      尺寸与网格不符返回 false
+请参见：
+    je_tilemap_source_info
+*/
+JE_API bool je_tilemap_add_source_extra(je_TilesetDocument* tileset,
+    je_SourceId source_idx, const char* texture_path, int32_t pass);
+
+/*
+je_tilemap_remove_source_extra [基本接口]
+移除源纹理的指定附加层级（按层级下标），其余层级下标前移
+*/
+JE_API bool je_tilemap_remove_source_extra(je_TilesetDocument* tileset,
+    je_SourceId source_idx, int32_t extra_idx);
+
+/*
+je_tilemap_source_extra_info [基本接口]
+取指定附加层级的信息，经出参返回 (绑定通道 id, 纹理路径)
+    * 下标越界返回 false
+*/
+JE_API bool je_tilemap_source_extra_info(je_TilesetDocument* tileset,
+    je_SourceId source_idx, int32_t extra_idx,
+    /* OPTIONAL */ int32_t* pass, /* OPTIONAL */ const char** texture_path);
+
+/*
+je_tilemap_set_source_extra_pass [基本接口]
+修改附加层级的绑定通道 id（>= 1，同源内通道唯一），渲染侧逐帧对齐自动重绑
+*/
+JE_API bool je_tilemap_set_source_extra_pass(je_TilesetDocument* tileset,
+    je_SourceId source_idx, int32_t extra_idx, int32_t pass);
+
+// ---- 普通瓦片表 ----
+
+/*
+je_tilemap_add_tile [基本接口]
+在指定源纹理的 (ix, iy) 格位定义一个普通瓦片，瓦片 id（je_TileId，从 1 开始）
+经 out_id 返回
+    * 已有同位置瓦片时返回 true 且写出其 id；参数不合法返回 false，不写出 id
+请参见：
+    je_TileId
+*/
+JE_API bool je_tilemap_add_tile(je_TilesetDocument* tileset,
+    je_SourceId source_idx, int32_t ix, int32_t iy, int32_t walkable,
+    je_TileId* out_id);
+
+/*
+je_tilemap_remove_tile [基本接口]
+按 id 移除普通瓦片：墓碑标记、id 永不复用（地图按 id 引用，不漂移），
+并清除其属性默认值
+    * id 越界或已移除返回 false
+*/
+JE_API bool je_tilemap_remove_tile(je_TilesetDocument* tileset, je_TileId tile_id);
+
+/*
+je_tilemap_tile_count [基本接口]
+取图集文档中普通瓦片的数量（不含 0 号占位槽）
+*/
+JE_API int32_t je_tilemap_tile_count(je_TilesetDocument* tileset);
+
+/*
+je_tilemap_tile_info [基本接口]
+取指定 id 普通瓦片的信息，经出参返回 (源下标, 源内格位 ix/iy, 是否可通行)
+    * id 越界返回 false；已移除的瓦片源下标为 -1
+*/
+JE_API bool je_tilemap_tile_info(je_TilesetDocument* tileset, je_TileId tile_id,
+    /* OPTIONAL */ je_SourceId* source_idx, /* OPTIONAL */ int32_t* ix, /* OPTIONAL */ int32_t* iy, /* OPTIONAL */ int32_t* walkable);
+
+/*
+je_tilemap_set_tile_walkable [基本接口]
+设置指定 id 普通瓦片的默认通行性
+*/
+JE_API void je_tilemap_set_tile_walkable(je_TilesetDocument* tileset,
+    je_TileId tile_id, int32_t walkable);
+
+// ---- 自动图块地形 ----
+
+/*
+je_tilemap_add_terrain [基本接口]
+定义一个自动图块地形，地形 id（je_TerrainId，从 1 开始）经 out_id 返回
+    * kind：地形拼接类型，取值见 je_TerrainKind
+    * 参数不合法（含 kind 非法）返回 false，不写出 id
+请参见：
+    je_TerrainId
+    je_TerrainKind
+*/
+JE_API bool je_tilemap_add_terrain(je_TilesetDocument* tileset, const char* name,
+    je_TerrainKind kind, je_SourceId source_idx, int32_t ix, int32_t iy, int32_t walkable,
+    je_TerrainId* out_id);
+
+/*
+je_tilemap_remove_terrain [基本接口]
+按 id 移除地形：墓碑标记、id 永不复用（地图按 id 引用，不漂移）
+    * id 越界或已移除返回 false
+*/
+JE_API bool je_tilemap_remove_terrain(je_TilesetDocument* tileset, je_TerrainId terrain_id);
+
+/*
+je_tilemap_terrain_count [基本接口]
+取图集文档中地形的数量（不含 0 号占位槽）
+*/
+JE_API int32_t je_tilemap_terrain_count(je_TilesetDocument* tileset);
+
+/*
+je_tilemap_terrain_info [基本接口]
+取指定 id 地形的信息，经出参返回 (名称, kind, 源下标, 锚点 ix/iy,
+是否可通行, 显式变体数)
+    * id 越界返回 false；kind 类型为 je_TerrainKind
+    * 已删除的墓碑地形 source_idx 为 -1，kind 无意义
+*/
+JE_API bool je_tilemap_terrain_info(je_TilesetDocument* tileset, je_TerrainId terrain_id,
+    /* OPTIONAL */ const char** name, /* OPTIONAL */ je_TerrainKind* kind, /* OPTIONAL */ je_SourceId* source_idx, /* OPTIONAL */ int32_t* ix, /* OPTIONAL */ int32_t* iy,
+    /* OPTIONAL */ int32_t* walkable, /* OPTIONAL */ int32_t* variant_count);
+
+/*
+je_tilemap_set_terrain [基本接口]
+修改指定 id 地形的定义，kind 语义与参数约束同 je_tilemap_add_terrain
+    * name 传 nullptr 表示保持名称不变
+    * 墓碑槽位不可编辑（防止复活已删除 id 造成旧引用错位），返回 false
+请参见：
+    je_tilemap_add_terrain
+*/
+JE_API bool je_tilemap_set_terrain(je_TilesetDocument* tileset, je_TerrainId terrain_id,
+    /* OPTIONAL */ const char* name, je_TerrainKind kind,
+    je_SourceId source_idx, int32_t ix, int32_t iy, int32_t walkable);
+
+/*
+je_tilemap_terrain_clear_variants [基本接口]
+清空指定地形的 blob47 显式变体表（普通瓦片 id 列表，按 47 变体序）；
+空表时按锚点行优先扫描 47 块
+请参见：
+    je_tilemap_terrain_add_variant
+*/
+JE_API void je_tilemap_terrain_clear_variants(je_TilesetDocument* tileset, je_TerrainId terrain_id);
+
+/*
+je_tilemap_terrain_add_variant [基本接口]
+向指定地形的 blob47 显式变体表追加一个普通瓦片 id（按 47 变体序）
+请参见：
+    je_tilemap_terrain_clear_variants
+*/
+JE_API bool je_tilemap_terrain_add_variant(je_TilesetDocument* tileset,
+    je_TerrainId terrain_id, je_TileId tile_id);
+
+// ---- 属性 schema 与默认值 ----
+
+/*
+je_tilemap_add_property [基本接口]
+向图集 schema 添加属性定义（数据形态见 je_PropertyType），属性下标经
+out_index 返回
+    * 重名、类型非法返回 false，不写出下标
+    * default_value 传 nullptr 时按类型取零值（false/""/0/0.0/全 0 向量）
+请参见：
+    je_PropertyType
+*/
+JE_API bool je_tilemap_add_property(je_TilesetDocument* tileset,
+    const char* name, je_PropertyType type,
+    /* OPTIONAL */ const void* default_value, int32_t* out_index);
+
+/*
+je_tilemap_remove_property [基本接口]
+按名称移除图集 schema 中的属性定义
+*/
+JE_API bool je_tilemap_remove_property(je_TilesetDocument* tileset, const char* name);
+
+/*
+je_tilemap_property_count [基本接口]
+取图集 schema 中属性定义的数量
+*/
+JE_API int32_t je_tilemap_property_count(je_TilesetDocument* tileset);
+
+/*
+je_tilemap_property_info [基本接口]
+取指定下标属性定义的信息，经出参返回 (名称, 类型)
+    * 下标越界返回 false
+请参见：
+    je_PropertyType
+*/
+JE_API bool je_tilemap_property_info(je_TilesetDocument* tileset, int32_t index,
+    /* OPTIONAL */ const char** name, /* OPTIONAL */ je_PropertyType* type);
+
+/*
+je_tilemap_property_default [基本接口]
+按名称取图集 schema 中属性定义的默认值，数据经 out_value 写回
+（形态见 je_PropertyType）
+    * 无此属性或类型与定义不符返回 false
+请参见：
+    je_PropertyType
+*/
+JE_API bool je_tilemap_property_default(je_TilesetDocument* tileset,
+    const char* name, je_PropertyType type, /* OPTIONAL */ void* out_value);
+
+/*
+je_tilemap_set_tile_property [基本接口]
+设置指定 id 普通瓦片的属性默认值（数据形态见 je_PropertyType）
+    * value 传 nullptr 表示清除该默认值（此时忽略 type）
+    * 已有不同类型的默认值时返回 false 且不修改
+*/
+JE_API bool je_tilemap_set_tile_property(je_TilesetDocument* tileset, je_TileId tile_id,
+    const char* name, je_PropertyType type, /* OPTIONAL */ const void* value);
+
+/*
+je_tilemap_get_tile_property [基本接口]
+取指定 id 普通瓦片的属性默认值，数据经 out_value 写回（形态见 je_PropertyType）
+    * 无值或类型与实际存储不符返回 false
+*/
+JE_API bool je_tilemap_get_tile_property(je_TilesetDocument* tileset,
+    je_TileId tile_id, const char* name, je_PropertyType type,
+    /* OPTIONAL */ void* out_value);
+
+/*
+je_tilemap_set_terrain_property [基本接口]
+设置指定 id 地形的属性默认值（数据形态见 je_PropertyType）
+    * value 传 nullptr 表示清除该默认值（此时忽略 type）
+    * 已有不同类型的默认值时返回 false 且不修改
+*/
+JE_API bool je_tilemap_set_terrain_property(je_TilesetDocument* tileset,
+    je_TerrainId terrain_id, const char* name, je_PropertyType type,
+    /* OPTIONAL */ const void* value);
+
+/*
+je_tilemap_get_terrain_property [基本接口]
+取指定 id 地形的属性默认值，数据经 out_value 写回（形态见 je_PropertyType）
+    * 无值或类型与实际存储不符返回 false
+*/
+JE_API bool je_tilemap_get_terrain_property(je_TilesetDocument* tileset,
+    je_TerrainId terrain_id, const char* name, je_PropertyType type,
+    /* OPTIONAL */ void* out_value);
+
+// ---- 单元格渲染信息（编辑器预览用，与实际渲染一致） ----
+
+/*
+je_tilemap_cell_quad_count [基本接口]
+取某格渲染子四边形的数量：普通瓦片/整块地形为 1，四象限地形为 4，空格为 0
+请参见：
+    je_tilemap_cell_quad
+*/
+JE_API int32_t je_tilemap_cell_quad_count(je_TilemapDocument* map,
+    je_LayerId layer, int32_t x, int32_t y);
+
+/*
+je_tilemap_cell_quad [基本接口]
+取某格第 idx 个渲染子四边形，经出参返回 (源纹理路径, UV 矩形 u0/v0/u1/v1
+引擎空间, 目标象限 qx/qy 于 qcols×qcols 网格、自左上角起)
+    * idx 越界或格子为空返回 false
+请参见：
+    je_tilemap_cell_quad_count
+*/
+JE_API bool je_tilemap_cell_quad(je_TilemapDocument* map, je_LayerId layer,
+    int32_t x, int32_t y, int32_t idx,
+    /* OPTIONAL */ const char** texture_path,
+    /* OPTIONAL */ float* u0, /* OPTIONAL */ float* v0, /* OPTIONAL */ float* u1, /* OPTIONAL */ float* v1,
+    /* OPTIONAL */ int32_t* qx, /* OPTIONAL */ int32_t* qy, /* OPTIONAL */ int32_t* qcols);
 
 // DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR
 #ifdef JE_ENABLE_DEBUG_API
@@ -8953,7 +10249,11 @@ namespace jeecs
             template<typename T>
             concept basic_graphic_resource =
                 std::same_as<T, jegl_shader> ||
-                std::same_as<T, jegl_texture> ||
+                std::same_as<T, jegl_texture_2d> ||
+                std::same_as<T, jegl_texture_3d> ||
+                std::same_as<T, jegl_texture_array> ||
+                std::same_as<T, jegl_texture_cube> ||
+                std::same_as<T, jegl_texture_msaa> ||
                 std::same_as<T, jegl_vertex> ||
                 std::same_as<T, jegl_frame_buffer> ||
                 std::same_as<T, jegl_uniform_buffer>;
@@ -8976,8 +10276,16 @@ namespace jeecs
             {
                 if constexpr (std::is_same_v<T, jegl_shader>)
                     jegl_close_shader(_m_resource);
-                else if constexpr (std::is_same_v<T, jegl_texture>)
-                    jegl_close_texture(_m_resource);
+                else if constexpr (std::is_same_v<T, jegl_texture_2d>)
+                    jegl_close_texture_2d(_m_resource);
+                else if constexpr (std::is_same_v<T, jegl_texture_3d>)
+                    jegl_close_texture_3d(_m_resource);
+                else if constexpr (std::is_same_v<T, jegl_texture_array>)
+                    jegl_close_texture_array(_m_resource);
+                else if constexpr (std::is_same_v<T, jegl_texture_cube>)
+                    jegl_close_texture_cube(_m_resource);
+                else if constexpr (std::is_same_v<T, jegl_texture_msaa>)
+                    jegl_close_texture_msaa(_m_resource);
                 else if constexpr (std::is_same_v<T, jegl_vertex>)
                     jegl_close_vertex(_m_resource);
                 else if constexpr (std::is_same_v<T, jegl_frame_buffer>)
@@ -8997,44 +10305,44 @@ namespace jeecs
                 return _m_resource;
             }
         };
-        class texture : public resource_basic<jegl_texture>
+        class texture2d : public resource_basic<jegl_texture_2d>
         {
-            explicit texture(jegl_texture* res)
+            explicit texture2d(jegl_texture_2d* res)
                 : resource_basic(res)
             {
             }
 
         public:
-            static std::optional<basic::resource<texture>> load(jegl_context* context, const std::string& str)
+            static std::optional<basic::resource<texture2d>> load(jegl_context* context, const std::string& str)
             {
-                jegl_texture* res = jegl_load_texture(context, str.c_str());
+                jegl_texture_2d* res = jegl_load_texture_2d(context, str.c_str());
                 if (res != nullptr)
-                    return basic::resource<texture>(new texture(res));
+                    return basic::resource<texture2d>(new texture2d(res));
                 return std::nullopt;
             }
-            static basic::resource<texture> create(size_t width, size_t height, jegl_texture::format format)
+            static basic::resource<texture2d> create(size_t width, size_t height, jegl_texture_common::format format)
             {
-                jegl_texture* res = jegl_create_texture(width, height, format);
+                jegl_texture_2d* res = jegl_create_texture_2d(width, height, format);
 
                 // Create texture must be successfully.
                 assert(res != nullptr);
-                return basic::resource<texture>(new texture(res));
+                return basic::resource<texture2d>(new texture2d(res));
             }
-            static basic::resource<texture> clip(
-                const basic::resource<texture>& src, size_t x, size_t y, size_t w, size_t h)
+            static basic::resource<texture2d> clip(
+                const basic::resource<texture2d>& src, size_t x, size_t y, size_t w, size_t h)
             {
-                jegl_texture::format new_texture_format =
-                    (jegl_texture::format)(
+                jegl_texture_common::format new_texture_format =
+                    (jegl_texture_common::format)(
                         src->resource()->m_format
-                        & jegl_texture::format::COLOR_DEPTH_MASK);
+                        & jegl_texture_common::format::COLOR_DEPTH_MASK);
 
-                jegl_texture* res =
-                    jegl_create_texture(w, h, new_texture_format);
+                jegl_texture_2d* res =
+                    jegl_create_texture_2d(w, h, new_texture_format);
 
                 // Create texture must be successfully.
                 assert(res != nullptr);
 
-                auto* new_texture = new texture(res);
+                auto* new_texture = new texture2d(res);
 
 #if 0
                 for (size_t iy = 0; iy < h; ++iy)
@@ -9061,24 +10369,24 @@ namespace jeecs
                         src_w * color_depth);
                 }
 #endif
-                return basic::resource<texture>(new_texture);
+                return basic::resource<texture2d>(new_texture);
             }
 
             class pixel
             {
-                jegl_texture* _m_texture;
-                jegl_texture::pixel_data_t*
+                jegl_texture_2d* _m_texture;
+                jegl_texture_common::pixel_data_t*
                     _m_pixel;
                 size_t _m_x, _m_y;
 
             public:
-                pixel(jegl_texture* _texture, size_t x, size_t y) noexcept
+                pixel(jegl_texture_2d* _texture, size_t x, size_t y) noexcept
                     : _m_texture(_texture), _m_x(x), _m_y(y)
                 {
-                    assert(sizeof(jegl_texture::pixel_data_t) == 1);
+                    assert(sizeof(jegl_texture_common::pixel_data_t) == 1);
 
                     auto color_depth =
-                        _m_texture->m_format & jegl_texture::format::COLOR_DEPTH_MASK;
+                        _m_texture->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK;
 
                     if (x < _m_texture->m_width && y < _m_texture->m_height)
                         _m_pixel = _m_texture->m_pixels + y * _m_texture->m_width * color_depth + x * color_depth;
@@ -9091,13 +10399,13 @@ namespace jeecs
                         return {};
                     switch (_m_texture->m_format)
                     {
-                    case jegl_texture::format::MONO:
+                    case jegl_texture_common::format::MONO:
                         return math::vec4{
                             _m_pixel[0] / 255.0f,
                             _m_pixel[0] / 255.0f,
                             _m_pixel[0] / 255.0f,
                             _m_pixel[0] / 255.0f };
-                    case jegl_texture::format::RGBA:
+                    case jegl_texture_common::format::RGBA:
                         return math::vec4{
                             _m_pixel[0] / 255.0f,
                             _m_pixel[1] / 255.0f,
@@ -9142,14 +10450,14 @@ namespace jeecs
 
                     switch (raw_texture_data->m_format)
                     {
-                    case jegl_texture::format::MONO:
-                        _m_pixel[0] = (jegl_texture::pixel_data_t)round(math::clamp(value.x, 0.f, 1.f) * 255.0f);
+                    case jegl_texture_common::format::MONO:
+                        _m_pixel[0] = (jegl_texture_common::pixel_data_t)round(math::clamp(value.x, 0.f, 1.f) * 255.0f);
                         break;
-                    case jegl_texture::format::RGBA:
-                        _m_pixel[0] = (jegl_texture::pixel_data_t)round(math::clamp(value.x, 0.f, 1.f) * 255.0f);
-                        _m_pixel[1] = (jegl_texture::pixel_data_t)round(math::clamp(value.y, 0.f, 1.f) * 255.0f);
-                        _m_pixel[2] = (jegl_texture::pixel_data_t)round(math::clamp(value.z, 0.f, 1.f) * 255.0f);
-                        _m_pixel[3] = (jegl_texture::pixel_data_t)round(math::clamp(value.w, 0.f, 1.f) * 255.0f);
+                    case jegl_texture_common::format::RGBA:
+                        _m_pixel[0] = (jegl_texture_common::pixel_data_t)round(math::clamp(value.x, 0.f, 1.f) * 255.0f);
+                        _m_pixel[1] = (jegl_texture_common::pixel_data_t)round(math::clamp(value.y, 0.f, 1.f) * 255.0f);
+                        _m_pixel[2] = (jegl_texture_common::pixel_data_t)round(math::clamp(value.z, 0.f, 1.f) * 255.0f);
+                        _m_pixel[3] = (jegl_texture_common::pixel_data_t)round(math::clamp(value.w, 0.f, 1.f) * 255.0f);
                         break;
                     default:
                         assert(0);
@@ -9187,6 +10495,148 @@ namespace jeecs
                     (int)resource()->m_width,
                     (int)resource()->m_height);
             }
+        };
+
+        namespace detail
+        {
+            // 标记 CPU 侧像素被整体改写，供不含像素代理的类型在直接写
+            // m_pixels 之后触发重上传使用
+            inline void mark_texture_modified(jegl_texture_common* texture) noexcept
+            {
+                if (!texture->m_handle.m_modified)
+                {
+                    texture->m_modified_min_x = 0;
+                    texture->m_modified_min_y = 0;
+                    texture->m_modified_max_x = texture->m_width ? texture->m_width - 1 : 0;
+                    texture->m_modified_max_y = texture->m_height ? texture->m_height - 1 : 0;
+                    texture->m_handle.m_modified = true;
+                }
+            }
+        }
+
+        class texture3d : public resource_basic<jegl_texture_3d>
+        {
+            explicit texture3d(jegl_texture_3d* res)
+                : resource_basic(res)
+            {
+            }
+
+        public:
+            static basic::resource<texture3d> create(
+                size_t width, size_t height, size_t depth, jegl_texture_common::format format)
+            {
+                jegl_texture_3d* res = jegl_create_texture_3d(width, height, depth, format);
+
+                // Create texture must be successfully.
+                assert(res != nullptr);
+                return basic::resource<texture3d>(new texture3d(res));
+            }
+
+            // 直接写 m_pixels 之后调用以触发重上传
+            inline void mark_modified() noexcept
+            {
+                detail::mark_texture_modified(resource());
+            }
+            inline jegl_texture_common::pixel_data_t* pixels() const noexcept
+            {
+                return resource()->m_pixels;
+            }
+            inline size_t height() const noexcept { return resource()->m_height; }
+            inline size_t width() const noexcept { return resource()->m_width; }
+            inline size_t depth() const noexcept { return resource()->m_depth; }
+        };
+
+        class texture_array : public resource_basic<jegl_texture_array>
+        {
+            explicit texture_array(jegl_texture_array* res)
+                : resource_basic(res)
+            {
+            }
+
+        public:
+            static basic::resource<texture_array> create(
+                size_t width, size_t height, size_t layers, jegl_texture_common::format format)
+            {
+                jegl_texture_array* res = jegl_create_texture_array(width, height, layers, format);
+
+                // Create texture must be successfully.
+                assert(res != nullptr);
+                return basic::resource<texture_array>(new texture_array(res));
+            }
+
+            // 直接写 m_pixels 之后调用以触发重上传
+            inline void mark_modified() noexcept
+            {
+                detail::mark_texture_modified(resource());
+            }
+            inline jegl_texture_common::pixel_data_t* pixels() const noexcept
+            {
+                return resource()->m_pixels;
+            }
+            // 返回第 layer 层像素数据的起始指针
+            inline jegl_texture_common::pixel_data_t* layer_pixels(size_t layer) const noexcept
+            {
+                auto color_depth =
+                    resource()->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK;
+                return resource()->m_pixels
+                    + layer * resource()->m_width * resource()->m_height * color_depth;
+            }
+            inline size_t height() const noexcept { return resource()->m_height; }
+            inline size_t width() const noexcept { return resource()->m_width; }
+            inline size_t layers() const noexcept { return resource()->m_layers; }
+        };
+
+        class texture_cube : public resource_basic<jegl_texture_cube>
+        {
+            explicit texture_cube(jegl_texture_cube* res)
+                : resource_basic(res)
+            {
+            }
+
+        public:
+            static basic::resource<texture_cube> create(
+                size_t width, size_t height, jegl_texture_common::format format)
+            {
+                jegl_texture_cube* res = jegl_create_texture_cube(width, height, format);
+
+                // Create texture must be successfully.
+                assert(res != nullptr);
+                return basic::resource<texture_cube>(new texture_cube(res));
+            }
+
+            inline void mark_modified() noexcept
+            {
+                detail::mark_texture_modified(resource());
+            }
+            inline jegl_texture_common::pixel_data_t* pixels() const noexcept
+            {
+                return resource()->m_pixels;
+            }
+            inline size_t height() const noexcept { return resource()->m_height; }
+            inline size_t width() const noexcept { return resource()->m_width; }
+        };
+
+        class texture_msaa : public resource_basic<jegl_texture_msaa>
+        {
+            explicit texture_msaa(jegl_texture_msaa* res)
+                : resource_basic(res)
+            {
+            }
+
+        public:
+            static basic::resource<texture_msaa> create(
+                size_t width, size_t height, size_t samples, jegl_texture_common::format format)
+            {
+                jegl_texture_msaa* res = jegl_create_texture_msaa(width, height, samples, format);
+
+                // Create texture must be successfully.
+                assert(res != nullptr);
+                return basic::resource<texture_msaa>(new texture_msaa(res));
+            }
+
+            inline size_t height() const noexcept { return resource()->m_height; }
+            inline size_t width() const noexcept { return resource()->m_width; }
+            inline size_t samples() const noexcept { return resource()->m_samples; }
         };
         class shader : public resource_basic<jegl_shader>
         {
@@ -9505,7 +10955,7 @@ namespace jeecs
             static std::optional<basic::resource<framebuffer>> create(
                 size_t reso_w,
                 size_t reso_h,
-                const std::vector<jegl_texture::format>& color_attachment_formats,
+                const std::vector<jegl_texture_common::format>& color_attachment_formats,
                 bool contain_depth_attachment)
             {
                 auto* res = jegl_create_framebuf(
@@ -9519,12 +10969,12 @@ namespace jeecs
                     return basic::resource<framebuffer>(new framebuffer(res));
                 return std::nullopt;
             }
-            std::optional<basic::resource<texture>> get_attachment(size_t index) const
+            std::optional<basic::resource<texture2d>> get_attachment(size_t index) const
             {
                 if (index < resource()->m_attachment_count)
                 {
                     auto* attachments =
-                        reinterpret_cast<basic::resource<graphic::texture> *>(
+                        reinterpret_cast<basic::resource<graphic::texture2d> *>(
                             resource()->m_output_attachments);
                     return attachments[index];
                 }
@@ -9715,7 +11165,7 @@ namespace jeecs
         struct character
         {
             // 字符的纹理
-            basic::resource<texture> m_texture;
+            basic::resource<texture2d> m_texture;
 
             // 字符本身
             char32_t m_char = 0;
@@ -10908,18 +12358,18 @@ namespace jeecs
                     shad->set_uniform(name, val);
             }
         };
-        struct Textures
+        struct Textures2D
         {
-            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Textures);
-            JECS_DEFAULT_CONSTRUCTOR(Textures);
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Textures2D);
+            JECS_DEFAULT_CONSTRUCTOR(Textures2D);
 
             // NOTE: textures should not be nullptr!
             struct texture_with_passid
             {
                 size_t m_pass_id;
-                basic::resource<graphic::texture> m_texture;
+                basic::resource<graphic::texture2d> m_texture;
 
-                texture_with_passid(size_t pass, const basic::resource<graphic::texture>& tex)
+                texture_with_passid(size_t pass, const basic::resource<graphic::texture2d>& tex)
                     : m_pass_id(pass), m_texture(tex)
                 {
                 }
@@ -10928,7 +12378,7 @@ namespace jeecs
             math::vec2 offset = math::vec2(0.f, 0.f);
             basic::vector<texture_with_passid> textures;
 
-            void bind_texture(size_t passid, const basic::resource<graphic::texture>& texture)
+            void bind_texture(size_t passid, const basic::resource<graphic::texture2d>& texture)
             {
                 for (auto& pair : textures)
                 {
@@ -10951,7 +12401,7 @@ namespace jeecs
                     }
                 }
             }
-            std::optional<basic::resource<graphic::texture>> get_texture(size_t passid) const
+            std::optional<basic::resource<graphic::texture2d>> get_texture(size_t passid) const
             {
                 for (auto& [pass, tex] : textures)
                     if (pass == passid)
@@ -10961,8 +12411,65 @@ namespace jeecs
             }
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(guard, &Textures::tiling, "tiling");
-                typing::register_member(guard, &Textures::offset, "offset");
+                typing::register_member(guard, &Textures2D::tiling, "tiling");
+                typing::register_member(guard, &Textures2D::offset, "offset");
+            }
+        };
+        // 纹理数组通道绑定（与 Textures2D 平行的强类型组件，只持有
+        // texture_array）：瓦片地图分片用它把"每层一个瓦片"的数组纹理
+        // 绑到 pass 0，采样侧用 tex2darray（shader DSL）
+        struct Textures2DArray
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Textures2DArray);
+            JECS_DEFAULT_CONSTRUCTOR(Textures2DArray);
+
+            // NOTE: textures should not be nullptr!
+            struct texture_with_passid
+            {
+                size_t m_pass_id;
+                basic::resource<graphic::texture_array> m_texture;
+
+                texture_with_passid(size_t pass, const basic::resource<graphic::texture_array>& tex)
+                    : m_pass_id(pass), m_texture(tex)
+                {
+                }
+            };
+            basic::vector<texture_with_passid> textures;
+
+            void bind_texture(size_t passid, const basic::resource<graphic::texture_array>& texture)
+            {
+                for (auto& pair : textures)
+                {
+                    if (pair.m_pass_id == passid)
+                    {
+                        pair.m_texture = texture;
+                        return;
+                    }
+                }
+                textures.push_back(texture_with_passid(passid, texture));
+            }
+            void remove_texture(size_t passid)
+            {
+                for (auto i = textures.begin(); i != textures.end(); ++i)
+                {
+                    if (i->m_pass_id == passid)
+                    {
+                        textures.erase(i);
+                        return;
+                    }
+                }
+            }
+            std::optional<basic::resource<graphic::texture_array>> get_texture(size_t passid) const
+            {
+                for (auto& [pass, tex] : textures)
+                    if (pass == passid)
+                        return tex;
+
+                return std::nullopt;
+            }
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                (void)guard;
             }
         };
         struct Color
@@ -11780,6 +13287,22 @@ namespace jeecs
                 typing::register_member(guard, &SpriteShadow::distance, "distance");
             }
         };
+        // 墙状遮挡阴影：把精灵四边形的背光锚边沿挤出方向抹出条带
+        // （贴图整图压扁观感），适合墙体/箱柜等实心矩形遮挡物
+        struct WallShadow
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(WallShadow);
+            JECS_DEFAULT_CONSTRUCTOR(WallShadow);
+
+            float factor = 1.0f;
+            float distance = 1.0f;
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &WallShadow::factor, "factor");
+                typing::register_member(guard, &WallShadow::distance, "distance");
+            }
+        };
         struct SelfShadow
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(SelfShadow);
@@ -11793,6 +13316,17 @@ namespace jeecs
                 typing::register_member(guard, &SelfShadow::factor, "factor");
                 typing::register_member(guard, &SelfShadow::auto_disable, "auto_disable");
             }
+        };
+        // 逐块自阴影修饰标记（与 Light2D::SelfShadow 同挂时生效，仅 TopDown 光源使用）：
+        // 遮挡物不再作为整体参与 AUTO 高度判定，而是逐"块"独立判定——
+        // 要求渲染网格在顶点属性位置 3 额外携带 float1 "bottom"（本块底边的
+        // 局部 Y，同一块的各顶点须写同值，图元内判定才一致）。块底边变换到
+        // 世界后的 Y >= 光源世界 Y 时该块受光（覆盖清零），否则写 factor。
+        // 面向分块式大网格内容（瓦片地图等）；非 TopDown 光源忽略此组件。
+        struct PerBlockSelfShadow
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(PerBlockSelfShadow);
+            JECS_DEFAULT_CONSTRUCTOR(PerBlockSelfShadow);
         };
     }
     namespace Animation
@@ -12238,9 +13772,9 @@ namespace jeecs
         Emitter [组件]
         粒子发射器：描述一类粒子的发射与生命周期行为，模拟与网格构建由
         Particle::ParticleSystem 完成（见 jeecs_core_particle_system.hpp）。
-        发射器实体同时需要 Renderer::Shape / Shaders / Textures 三件套参与
+        发射器实体同时需要 Renderer::Shape / Shaders / Textures2D 三件套参与
         常规渲染管线（系统会在缺失时自动补齐并挂上内置粒子着色器）；
-        粒子纹理绑定在 Renderer::Textures 的 pass 0，混合模式由所选着色器决定。
+        粒子纹理绑定在 Renderer::Textures2D 的 pass 0，混合模式由所选着色器决定。
         角度类成员（散布角/初始自转/自转速度）以度为单位。
         m_simulation_space 为 world 时粒子在世界空间模拟（发射器移动不携带
         已发射粒子），为 local 时在发射器局部空间模拟（整体随发射器刚体
@@ -12580,6 +14114,692 @@ namespace jeecs
                 typing::register_member(guard, &Emitter::m_playing, "playing");
                 typing::register_member(guard, &Emitter::m_clear_particles, "clear_particles");
             }
+        };
+    }
+    /*
+    tilemap [命名空间]
+    瓦片地图/图集文档的只读查询封装，对应 je_tilemap_* C API 的读侧子集，
+    供游戏运行时获取地图与图集信息（文档写入仍走 C API / 编辑器）。
+    map_document / tileset_document 为按路径共享、引用计数管理的文档包装：
+    open 返回 std::optional<basic::resource<...>>，包装构造时取得 1 个文档
+    引用、析构时释放，resource 的各副本共享同一引用；句柄存活期间文档实例
+    不会被销毁，可以安全持有，重复 open 同一路径只增加引用计数。引用
+    计数操作线程安全，但文档内容（网格/图层等）是共享可变数据——与编辑器
+    等并发写入方并行查询时需自行保证串行化。各名称/路径字符串指向文档内部
+    存储，在文档下次被修改前有效。
+    */
+    namespace tilemap
+    {
+        /*
+        tilemap::TILE_VALUE_BASE [常量]
+        瓦片值编码基数：0 为空；v > 0 为普通瓦片
+        (tileset_index + 1) * TILE_VALUE_BASE + tile_id；v < 0 为自动图块地形
+        -((tileset_index + 1) * TILE_VALUE_BASE + terrain_id)
+        */
+        constexpr int32_t TILE_VALUE_BASE = 0x100000;
+
+        /*
+        tilemap::cell [结构体]
+        解码后的格子瓦片值，由 tilemap::decode_cell 生成（空格经 nullopt 表达）
+        */
+        struct cell
+        {
+            int32_t tileset_index;  // 所属图集在地图中的下标（0 起）
+            bool is_terrain;        // 是否自动图块地形
+            int32_t tile_id;        // 普通瓦片 id（je_TileId，从 1 起）；is_terrain 时未用，为 0
+            int32_t terrain_id;     // 地形 id（je_TerrainId，从 1 起）；非地形格未用，为 0
+        };
+
+        /*
+        tilemap::decode_cell [函数]
+        把 C API 的原始瓦片值（编码见 tilemap::TILE_VALUE_BASE）解码为
+        tilemap::cell；空格（raw_value == 0）返回 nullopt
+        */
+        constexpr std::optional<cell> decode_cell(int32_t raw_value) noexcept
+        {
+            if (raw_value == 0)
+                return std::nullopt;
+
+            const uint32_t magnitude =
+                raw_value > 0 ? (uint32_t)raw_value : (uint32_t)(-(int64_t)raw_value);
+            cell result{};
+            result.tileset_index = (int32_t)(magnitude / TILE_VALUE_BASE - 1);
+            result.is_terrain = raw_value < 0;
+            if (result.is_terrain)
+                result.terrain_id = (int32_t)(magnitude % TILE_VALUE_BASE);
+            else
+                result.tile_id = (int32_t)(magnitude % TILE_VALUE_BASE);
+            return result;
+        }
+
+        /*
+        tilemap::map_size [结构体]
+        地图尺寸信息
+        */
+        struct map_size
+        {
+            int32_t w;       // 横向格数
+            int32_t h;       // 纵向格数
+            int32_t tile_px; // 瓦片边长（像素）
+        };
+
+        /*
+        tilemap::layer_info [结构体]
+        图层信息（name 指向文档内部存储，文档下次修改前有效）
+        */
+        struct layer_info
+        {
+            const char* name;
+            bool visible;
+            bool locked;
+            float z; // 相对地图根实体的世界 z 偏移
+            int32_t rend_queue; // 渲染队列值（同图各层按该值升序绘制）
+        };
+
+        /*
+        tilemap::cell_coord [结构体]
+        格子坐标（find_cells 的查询单元）
+        */
+        struct cell_coord
+        {
+            int32_t x;
+            int32_t y;
+        };
+
+        /*
+        tilemap::source_info [结构体]
+        图集源纹理信息（texture_path 指向文档内部存储，文档下次修改前有效）
+        */
+        struct source_info
+        {
+            const char* texture_path;
+            int32_t tile_px; // 瓦片边长（像素）
+            int32_t xcount;  // 横向格数
+            int32_t ycount;  // 纵向格数
+        };
+
+        /*
+        tilemap::tile_info [结构体]
+        普通瓦片定义信息（图集侧）
+        */
+        struct tile_info
+        {
+            int32_t source_index; // 所属源纹理下标；已移除的墓碑瓦片为 -1（alive 为 false）
+            int32_t ix;           // 源纹理内格位（列）
+            int32_t iy;           // 源纹理内格位（行）
+            bool walkable;        // 默认通行性
+            bool alive;           // = source_index >= 0，false 表示瓦片已被移除
+        };
+
+        /*
+        tilemap::terrain_info [结构体]
+        自动图块地形定义信息（name 指向文档内部存储，文档下次修改前有效）
+        */
+        struct terrain_info
+        {
+            const char* name;
+            je_TerrainKind kind;
+            int32_t source_index;  // 所属源纹理下标
+            int32_t ix;            // 锚点格位（列）
+            int32_t iy;            // 锚点格位（行）
+            bool walkable;         // 默认通行性
+            int32_t variant_count; // blob47 显式变体数
+        };
+
+        /*
+        tilemap::property_def [结构体]
+        图集 schema 中的属性定义（name 指向文档内部存储，文档下次修改前有效）
+        */
+        struct property_def
+        {
+            const char* name;
+            je_PropertyType type;
+        };
+
+        /*
+        tilemap::detail [命名空间]
+        property_traits 的实现细节，不应被外部使用
+        */
+        namespace detail
+        {
+            // find_cells 的匹配值按值地址传参（字符串除外，见 const char* 特化）
+            template <typename T>
+            struct value_by_address
+            {
+                static const void* value_ptr(const T& value) noexcept
+                {
+                    return &value;
+                }
+            };
+        }
+
+        /*
+        tilemap::property_traits [类模板]
+        属性值 C++ 类型（bool / const char* / int32_t / float / math::vec2/3/4）
+        与 je_PropertyType 的映射。const char* 读取到的指针指向文档内部存储，
+        文档下次修改前有效
+        */
+        template <typename T>
+        struct property_traits
+        {
+            static_assert(sizeof(T) == 0,
+                "unsupported property value type, use one of: "
+                "bool / const char* / int32_t / float / math::vec2 / math::vec3 / math::vec4");
+        };
+
+        template <>
+        struct property_traits<bool> : detail::value_by_address<bool>
+        {
+            static constexpr je_PropertyType TYPE = JE_PROPERTY_TYPE_BOOL;
+            using buffer_t = bool;
+            static std::optional<bool> take(const buffer_t& buffer) noexcept
+            {
+                return buffer;
+            }
+        };
+
+        template <>
+        struct property_traits<const char*>
+        {
+            static constexpr je_PropertyType TYPE = JE_PROPERTY_TYPE_STRING;
+            using buffer_t = const char*;
+            static std::optional<const char*> take(const buffer_t& buffer) noexcept
+            {
+                return buffer != nullptr ? buffer : std::optional<const char*>{};
+            }
+            // 字符串匹配值按 const char* 直传
+            static const void* value_ptr(const char* const& value) noexcept
+            {
+                return value;
+            }
+        };
+
+        template <>
+        struct property_traits<int32_t> : detail::value_by_address<int32_t>
+        {
+            static constexpr je_PropertyType TYPE = JE_PROPERTY_TYPE_INT;
+            using buffer_t = int32_t;
+            static std::optional<int32_t> take(const buffer_t& buffer) noexcept
+            {
+                return buffer;
+            }
+        };
+
+        template <>
+        struct property_traits<float> : detail::value_by_address<float>
+        {
+            static constexpr je_PropertyType TYPE = JE_PROPERTY_TYPE_FLOAT;
+            using buffer_t = float;
+            static std::optional<float> take(const buffer_t& buffer) noexcept
+            {
+                return buffer;
+            }
+        };
+
+        template <>
+        struct property_traits<math::vec2> : detail::value_by_address<math::vec2>
+        {
+            static constexpr je_PropertyType TYPE = JE_PROPERTY_TYPE_VEC2;
+            using buffer_t = float[2];
+            static std::optional<math::vec2> take(const buffer_t& buffer) noexcept
+            {
+                return math::vec2(buffer[0], buffer[1]);
+            }
+        };
+
+        template <>
+        struct property_traits<math::vec3> : detail::value_by_address<math::vec3>
+        {
+            static constexpr je_PropertyType TYPE = JE_PROPERTY_TYPE_VEC3;
+            using buffer_t = float[3];
+            static std::optional<math::vec3> take(const buffer_t& buffer) noexcept
+            {
+                return math::vec3(buffer[0], buffer[1], buffer[2]);
+            }
+        };
+
+        template <>
+        struct property_traits<math::vec4> : detail::value_by_address<math::vec4>
+        {
+            static constexpr je_PropertyType TYPE = JE_PROPERTY_TYPE_VEC4;
+            using buffer_t = float[4];
+            static std::optional<math::vec4> take(const buffer_t& buffer) noexcept
+            {
+                return math::vec4(buffer[0], buffer[1], buffer[2], buffer[3]);
+            }
+        };
+
+        /*
+        tilemap::tileset_document [类]
+        图集文档(.je4tileset)的只读查询包装（经 basic::resource 共享持有）：
+        包装构造时取得 1 个文档引用，析构时释放，resource 的各副本共享同一
+        引用，最后一个副本释放时卸载文档
+        */
+        class tileset_document
+        {
+            JECS_DISABLE_MOVE_AND_COPY(tileset_document);
+
+            je_TilesetDocument* _m_doc;
+
+            tileset_document(je_TilesetDocument* doc)
+                : _m_doc(doc)
+            {
+                assert(_m_doc != nullptr);
+            }
+
+        public:
+            ~tileset_document()
+            {
+                je_tilemap_unload_tileset(_m_doc);
+            }
+
+            /*
+            tilemap::tileset_document::open [静态函数]
+            打开（或取进程内缓存）指定路径的图集文档，失败返回 std::nullopt
+            */
+            static std::optional<basic::resource<tileset_document>> open(const char* path)
+            {
+                je_TilesetDocument* doc = je_tilemap_open_tileset(path);
+                if (doc == nullptr)
+                    return std::nullopt;
+                return basic::resource<tileset_document>(new tileset_document(doc));
+            }
+
+            // 底层 C API 文档指针（逃生口）
+            je_TilesetDocument* handle() const noexcept
+            {
+                return _m_doc;
+            }
+
+            // 图集名称（文档内部存储，文档下次修改前有效）
+            const char* name() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_tileset_name(_m_doc);
+            }
+            // 登记路径，未保存（新建后未另存）时为空串
+            const char* path() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_tileset_doc_path(_m_doc);
+            }
+            // 修改版本号（任何经 je_tilemap_* 的修改都会自增，可用于变更检测）
+            uint64_t version() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_tileset_version(_m_doc);
+            }
+
+            // ---- 源纹理 ----
+
+            // 源纹理数量
+            int32_t source_count() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_source_count(_m_doc);
+            }
+            // 取指定下标源纹理信息；下标越界返回 std::nullopt
+            std::optional<source_info> source(je_SourceId index) const
+            {
+                assert(_m_doc != nullptr);
+                source_info info;
+                if (!je_tilemap_source_info(_m_doc, index,
+                        &info.texture_path, &info.tile_px, &info.xcount, &info.ycount))
+                    return std::nullopt;
+                return info;
+            }
+
+            // ---- 普通瓦片（id 见 tilemap::cell::tile_id，从 1 起）----
+
+            // 普通瓦片数量
+            int32_t tile_count() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_tile_count(_m_doc);
+            }
+            // 取指定 id 瓦片定义；id 越界返回 std::nullopt（已移除的墓碑瓦片
+            // 仍返回信息，其 alive 为 false）
+            std::optional<tile_info> tile(je_TileId id) const
+            {
+                assert(_m_doc != nullptr);
+                tile_info info;
+                int32_t walkable = 0;
+                if (!je_tilemap_tile_info(_m_doc, id,
+                        &info.source_index, &info.ix, &info.iy, &walkable))
+                    return std::nullopt;
+                info.walkable = walkable != 0;
+                info.alive = info.source_index >= 0;
+                return info;
+            }
+
+            // ---- 自动图块地形（id 见 tilemap::cell::terrain_id，从 1 起）----
+
+            // 地形数量
+            int32_t terrain_count() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_terrain_count(_m_doc);
+            }
+            // 取指定 id 地形定义；id 越界返回 std::nullopt
+            std::optional<terrain_info> terrain(je_TerrainId id) const
+            {
+                assert(_m_doc != nullptr);
+                terrain_info info;
+                int32_t walkable = 0;
+                if (!je_tilemap_terrain_info(_m_doc, id, &info.name, &info.kind,
+                        &info.source_index, &info.ix, &info.iy, &walkable, &info.variant_count))
+                    return std::nullopt;
+                info.walkable = walkable != 0;
+                return info;
+            }
+
+            // ---- 属性 schema ----
+
+            // schema 中属性定义的数量
+            int32_t property_count() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_property_count(_m_doc);
+            }
+            // 取 schema 中指定下标的属性定义；越界返回 std::nullopt
+            std::optional<property_def> property(int32_t index) const
+            {
+                assert(_m_doc != nullptr);
+                property_def def;
+                if (!je_tilemap_property_info(_m_doc, index, &def.name, &def.type))
+                    return std::nullopt;
+                return def;
+            }
+            /*
+            按名称取 schema 属性默认值；T 的取值见 tilemap::property_traits，
+            无此属性或类型与定义不符返回 std::nullopt
+            */
+            template <typename T>
+            std::optional<T> property_default(const char* name) const
+            {
+                assert(_m_doc != nullptr);
+                typename property_traits<T>::buffer_t buffer{};
+                if (!je_tilemap_property_default(_m_doc, name, property_traits<T>::TYPE, &buffer))
+                    return std::nullopt;
+                return property_traits<T>::take(buffer);
+            }
+        };
+
+        /*
+        tilemap::map_document [类]
+        地图文档(.je4tilemap)的只读查询包装（经 basic::resource 共享持有）：
+        包装构造时取得 1 个文档引用，析构时释放，resource 的各副本共享同一
+        引用，最后一个副本释放时卸载文档
+        */
+        class map_document
+        {
+            JECS_DISABLE_MOVE_AND_COPY(map_document);
+
+            je_TilemapDocument* _m_doc;
+
+            map_document(je_TilemapDocument* doc)
+                : _m_doc(doc)
+            {
+                assert(_m_doc != nullptr);
+            }
+
+        public:
+            ~map_document()
+            {
+                je_tilemap_unload_map(_m_doc);
+            }
+
+            /*
+            tilemap::map_document::open [静态函数]
+            打开（或取进程内缓存）指定路径的地图文档，失败返回 std::nullopt
+            */
+            static std::optional<basic::resource<map_document>> open(const char* path)
+            {
+                je_TilemapDocument* doc = je_tilemap_open_map(path);
+                if (doc == nullptr)
+                    return std::nullopt;
+                return basic::resource<map_document>(new map_document(doc));
+            }
+
+            // 底层 C API 文档指针（逃生口）
+            je_TilemapDocument* handle() const noexcept
+            {
+                return _m_doc;
+            }
+
+            // ---- 地图信息 ----
+
+            // 尺寸信息（宽/高格数与瓦片边长像素）
+            map_size size() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                map_size result;
+                je_tilemap_map_size(_m_doc, &result.w, &result.h, &result.tile_px, nullptr);
+                return result;
+            }
+            // 图层数量
+            int32_t layer_count() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                int32_t layer_count = 0;
+                je_tilemap_map_size(_m_doc, nullptr, nullptr, nullptr, &layer_count);
+                return layer_count;
+            }
+            // 登记路径，未保存（新建后未另存）时为空串
+            const char* path() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                const char* path = nullptr;
+                if (!je_tilemap_map_path(_m_doc, &path))
+                    return "";
+                return path != nullptr ? path : "";
+            }
+            // 修改版本号（任何经 je_tilemap_* 的修改都会自增，可用于变更检测）
+            uint64_t version() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_map_version(_m_doc);
+            }
+
+            // ---- 图层 ----
+
+            // 取指定下标图层信息；越界返回 std::nullopt
+            std::optional<layer_info> layer(je_LayerId index) const
+            {
+                assert(_m_doc != nullptr);
+                if (index < 0 || index >= layer_count())
+                    return std::nullopt;
+                layer_info info;
+                int32_t visible = 0, locked = 0;
+                je_tilemap_get_layer(_m_doc, index, &info.name, &visible, &locked);
+                info.visible = visible != 0;
+                info.locked = locked != 0;
+                info.z = je_tilemap_layer_z(_m_doc, index);
+                info.rend_queue = je_tilemap_layer_rend_queue(_m_doc, index);
+                return info;
+            }
+
+            // ---- 格子查询 ----
+
+            // 取指定图层某格的瓦片值（越界与空格均为 nullopt）
+            std::optional<cell> tile(je_LayerId layer_index, int32_t x, int32_t y) const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return decode_cell(je_tilemap_get_tile(_m_doc, layer_index, x, y));
+            }
+            // 某格全图层合并的通行性（任一图层不可通行即不可通行，出界视为不可通行）
+            bool walkable(int32_t x, int32_t y) const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_is_walkable(_m_doc, x, y) != 0;
+            }
+            // 某格在指定图层上的通行性
+            bool walkable(je_LayerId layer_index, int32_t x, int32_t y) const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_is_walkable_on(_m_doc, layer_index, x, y) != 0;
+            }
+            /*
+            按取值链（逐格覆盖 -> 瓦片/地形默认值 -> 图集 schema 默认值）解析
+            某格属性；T 的取值见 tilemap::property_traits，无值或类型与实际
+            存储不符返回 std::nullopt
+            */
+            template <typename T>
+            std::optional<T> get_property(je_LayerId layer_index, int32_t x, int32_t y,
+                const char* name) const
+            {
+                assert(_m_doc != nullptr);
+                typename property_traits<T>::buffer_t buffer{};
+                if (!je_tilemap_get_property(_m_doc, layer_index, x, y, name,
+                        property_traits<T>::TYPE, &buffer))
+                    return std::nullopt;
+                return property_traits<T>::take(buffer);
+            }
+            /*
+            按属性值查找格子，返回全部命中坐标；layer_index < 0 时搜索全部图层。
+            T 的取值同 get_property。name 为 "walkable" 时按通行性匹配，
+            此时 T 须为 bool
+            */
+            template <typename T>
+            std::vector<cell_coord> find_cells(je_LayerId layer_index, const char* name,
+                const T& value) const
+            {
+                assert(_m_doc != nullptr);
+                std::vector<cell_coord> result;
+                const int32_t count = je_tilemap_find_cells(_m_doc, layer_index, name,
+                    property_traits<T>::TYPE, property_traits<T>::value_ptr(value));
+                for (int32_t i = 0; i < count; ++i)
+                {
+                    cell_coord coord;
+                    if (je_tilemap_find_get(_m_doc, i, &coord.x, &coord.y))
+                        result.push_back(coord);
+                }
+                return result;
+            }
+            // find_cells 的字符串匹配重载（按 const char* 内容匹配）
+            std::vector<cell_coord> find_cells(je_LayerId layer_index, const char* name,
+                const char* value) const
+            {
+                return find_cells<const char*>(layer_index, name, value);
+            }
+
+            // ---- 地图引用的图集 ----
+
+            // 地图引用的图集数量
+            int32_t tileset_count() const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_tileset_count(_m_doc);
+            }
+            // 取指定下标图集的路径（越界为空串；文档内部存储，文档下次修改前有效）
+            const char* tileset_path(int32_t index) const noexcept
+            {
+                assert(_m_doc != nullptr);
+                return je_tilemap_tileset_path(_m_doc, index);
+            }
+            // 打开指定下标引用的图集文档（路径为空或打开失败返回 std::nullopt）
+            std::optional<basic::resource<tileset_document>> open_tileset(int32_t index) const
+            {
+                assert(_m_doc != nullptr);
+                const char* path = je_tilemap_tileset_path(_m_doc, index);
+                if (path == nullptr || *path == '\0')
+                    return std::nullopt;
+                return tileset_document::open(path);
+            }
+        };
+    }
+    namespace Tilemap
+    {
+        /*
+        Tilemap::Map [组件]
+        瓦片地图实例组件：挂在地图根实体上，map_path 指向 .je4tilemap 资源
+        （运行时路径，@/ 或 !/ 前缀）。地图的分块渲染子实体由
+        Tilemap::TilemapSystem 自动创建与回收，根实体本身的移动/缩放
+        会携带整张地图。文档读写与运行时查询见 je_tilemap_* C API，
+        只读查询亦可使用 jeecs::tilemap C++ 封装。
+        */
+        struct Map
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Map);
+            JECS_DEFAULT_CONSTRUCTOR(Map);
+
+            basic::string map_path;
+
+            static void JERefRegsiter(typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &Map::map_path, "map_path");
+            }
+        };
+
+        /*
+        Tilemap::Wall [组件]
+        瓦片地图碰撞体开关：挂在地图根实体上（与 Tilemap::Map 同实体）时，
+        TilemapSystem 会把整张地图的不可通行格（任一图层不可通行即墙，
+        与 je_tilemap_is_walkable 同一语义）贪心合并为矩形，并为每个矩形
+        创建一个静态 Physics2D::Collider::Box 子实体（见 Tilemap::WallPart；
+        地图版本变化时自动重建）。layerid 指定生成的碰撞体所属的物理世界
+        层级，直接写入各 Rigidbody::layerid（见 Physics2D::Rigidbody）。
+        block_empty 开启严格模式：没有任何图块的空格与地图外缘（四周边界
+        向外一圈）同样视为不可通行，只有可通行图块/地形覆盖的格子可通过。
+        restitution / friction 为墙体物理材质（弹性/摩擦力系数），写入各
+        碰撞体实体的 Physics2D::Restitution / Physics2D::Friction，每帧
+        跟随组件同步，运行时修改即时生效。
+        */
+        struct Wall
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Wall);
+            JECS_DEFAULT_CONSTRUCTOR(Wall);
+
+            size_t layerid = 0;
+            bool block_empty = false;
+            float restitution = 0.f;
+            float friction = 0.2f;
+
+            static void JERefRegsiter(typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &Wall::layerid, "layerid");
+                typing::register_member(guard, &Wall::block_empty, "block_empty");
+                typing::register_member(guard, &Wall::restitution, "restitution");
+                typing::register_member(guard, &Wall::friction, "friction");
+            }
+        };
+
+        /*
+        Tilemap::WallPart [组件]
+        瓦片地图碰撞体分片：由 TilemapSystem 按 Tilemap::Wall 生成的静态
+        Box 碰撞体子实体持有，配对 Editor::Invisible（不显示在编辑器实体
+        列表、不参与世界保存，加载后由系统重建）。字段仅作系统内部簿记
+        （含按根实体比例尺同步碰撞体所需的地图局部几何），不注册反射成员。
+        */
+        struct WallPart
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(WallPart);
+            JECS_DEFAULT_CONSTRUCTOR(WallPart);
+
+            uint32_t owner_id = 0;   // 所属地图根实体 id（je_GameEntity::_m_id）
+            float center_x = 0.f;    // 矩形中心（地图局部空间，1 格 = 1 单位）
+            float center_y = 0.f;
+            float size_x = 0.f;      // 矩形尺寸（格数）
+            float size_y = 0.f;
+        };
+
+        /*
+        Tilemap::RenderPart [组件]
+        瓦片地图渲染分片：由 TilemapSystem 创建的“图层 × 分块 × 图集”
+        渲染子实体持有，配对 Editor::Invisible（不显示在编辑器实体列表、
+        不参与世界保存，加载后由系统重建）。字段仅作系统内部簿记，
+        不注册反射成员。
+        */
+        struct RenderPart
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(RenderPart);
+            JECS_DEFAULT_CONSTRUCTOR(RenderPart);
+
+            uint32_t owner_id = 0;   // 所属地图根实体 id（je_GameEntity::_m_id）
+            int32_t layer = 0;       // 图层下标
+            int32_t chunk_x = 0;     // 分块列
+            int32_t chunk_y = 0;     // 分块行
+            int32_t source = 0;      // 图集纹理下标（Tileset 源）
         };
     }
     namespace Audio
@@ -13106,7 +15326,8 @@ namespace jeecs
             jeecs::typing::register_type<Renderer::Rendqueue>(guard, "Renderer::Rendqueue");
             jeecs::typing::register_type<Renderer::Shape>(guard, "Renderer::Shape");
             jeecs::typing::register_type<Renderer::Shaders>(guard, "Renderer::Shaders");
-            jeecs::typing::register_type<Renderer::Textures>(guard, "Renderer::Textures");
+            jeecs::typing::register_type<Renderer::Textures2D>(guard, "Renderer::Textures2D");
+            jeecs::typing::register_type<Renderer::Textures2DArray>(guard, "Renderer::Textures2DArray");
             jeecs::typing::register_type<Renderer::Color>(guard, "Renderer::Color");
 
             jeecs::typing::register_type<Animation::FrameAnimation>(guard, "Animation::FrameAnimation");
@@ -13130,7 +15351,9 @@ namespace jeecs
             jeecs::typing::register_type<Light2D::BlockShadow>(guard, "Light2D::BlockShadow");
             jeecs::typing::register_type<Light2D::ShapeShadow>(guard, "Light2D::ShapeShadow");
             jeecs::typing::register_type<Light2D::SpriteShadow>(guard, "Light2D::SpriteShadow");
+            jeecs::typing::register_type<Light2D::WallShadow>(guard, "Light2D::WallShadow");
             jeecs::typing::register_type<Light2D::SelfShadow>(guard, "Light2D::SelfShadow");
+            jeecs::typing::register_type<Light2D::PerBlockSelfShadow>(guard, "Light2D::PerBlockSelfShadow");
 
             jeecs::typing::register_type<Physics2D::Scene>(guard, "Physics2D::Scene");
 
@@ -13169,6 +15392,11 @@ namespace jeecs
             jeecs::typing::register_type<Audio::Playing>(guard, "Audio::Playing");
 
             jeecs::typing::register_type<Input::VirtualGamepad>(guard, "Input::VirtualGamepad");
+
+            jeecs::typing::register_type<Tilemap::Map>(guard, "Tilemap::Map");
+            jeecs::typing::register_type<Tilemap::Wall>(guard, "Tilemap::Wall");
+            jeecs::typing::register_type<Tilemap::WallPart>(guard, "Tilemap::WallPart");
+            jeecs::typing::register_type<Tilemap::RenderPart>(guard, "Tilemap::RenderPart");
 
             // 1. register basic types
             jeecs::typing::register_type<basic::file_resource<>>(guard, nullptr);

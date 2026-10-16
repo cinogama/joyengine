@@ -12,11 +12,11 @@ struct je_stb_font_data
     std::map<float, std::map<char32_t, jeecs::graphic::character>> m_character_set;
 };
 
-je_font* je_font_load(
+/* OPTIONAL */ je_font* je_font_load(
     const char* font_path,
     size_t board_blank_size_x,
     size_t board_blank_size_y,
-    je_font_char_updater_t char_texture_updater)
+    /* OPTIONAL */ je_font_char_updater_t char_texture_updater)
 {
     je_font* font = new je_font;
     font->m_stb_font_data = new je_stb_font_data;
@@ -75,15 +75,14 @@ je_font* je_font_load(
 
 void je_font_free(je_font* font)
 {
-    if (font)
-    {
-        assert(font->m_font_file_buf);
-        free(font->m_font_file_buf);
-        free(const_cast<char*>(font->m_path));
+    assert(font != nullptr);
 
-        delete font->m_stb_font_data;
-        delete font;
-    }
+    assert(font->m_font_file_buf);
+    free(font->m_font_file_buf);
+    free(const_cast<char*>(font->m_path));
+
+    delete font->m_stb_font_data;
+    delete font;
 }
 
 const jeecs::graphic::character* je_font_get_char(
@@ -153,10 +152,10 @@ const jeecs::graphic::character* je_font_get_char(
         sized_char_set.emplace(
                 unicode32_char,
                 jeecs::graphic::character{
-                    jeecs::graphic::texture::create(
+                    jeecs::graphic::texture2d::create(
                         (size_t)texture_pixel_width,
                         (size_t)texture_pixel_height,
-                        jegl_texture::format::RGBA) }).first->second;
+                        jegl_texture_common::format::RGBA) }).first->second;
 
     ch.m_char = unicode32_char;
 

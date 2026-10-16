@@ -1,0 +1,413 @@
+// 瓦片地图编辑器 —— 图层面板。
+// 右列下段面板（与上方属性面板之间有可拖拽分隔条）：图层自上而下
+// 列出（列表顶 = 最上层）。每行是检视面板组件块同款的分区折叠头：
+// 点击选中活动图层，点箭头展开属性编辑（显隐/锁定/Z 偏移/渲染次序/
+// 自阴影/遮挡阴影在展开区里，不再挤行尾），收起时行尾以「隐藏/锁定」
+// 徽标提示状态；新建/删除/上移/下移/重命名在工具条，行内右键也有等价
+// 的快捷菜单。
+// 注意：图层增删/移动不进入撤销栈（绘制类操作才可撤销）；
+// 删除层级前会弹窗确认。
+
+import pkg::std;
+
+import je;
+import je::graphic;
+import je::gui;
+import je::tilemap;
+
+import pkg::fsys;
+
+import builtin::editor::GUI::Forms::AskBox;
+import builtin::editor::GUI::Forms::InputBox;
+import builtin::editor::GUI::Forms::MsgBox;
+import builtin::editor::GUI::Widgets;
+
+import DataModel;
+import EditorState;
+
+using std;
+using je;
+using je::graphic;
+using je::gui;
+using je::tilemap;
+using fsys;
+using JEEditor::GUI::Forms;
+using JEEditor::GUI::Widgets;
+using JEEditor::Editor::TilemapEditor;
+
+namespace JEEditor::Editor::TilemapEditor
+{
+    // 活动层高亮与锁定提示的强调色：与系统列表分组标题同族的
+    // 强调蓝 / 强调琥珀（0..1 浮点 RGBA，与主题文字色混合使用，
+    // 明暗主题都保持可读）
+    public let ACTIVE_LAYER_ACCENT = (0.42, 0.62, 0.95, 1.);
+    public let LOCKED_ACCENT = (0.90, 0.75, 0.31, 1.);
+
+    // 重命名 row 号图层（输入框确认后写回显隐/锁定状态并标记脏）
+    func rename_layer(state: EditorState, ctx: TilemapContext, row: int)=> void
+    {
+        let (cur_name, _, _) = ctx.m_map->get_layer(row);
+        do InputBox::show("重命名图层", "请输入新名称：", cur_name)
+            ->then(func(name)
+                {
+                    let (_, visible, locked) = ctx.m_map->get_layer(row);
+                    do ctx.m_map->set_layer(row, name, visible, locked);
+                    state.m_dirty = true;
+                });
+    }
+
+    // 将 row 号图层上移（delta > 0，朝列表顶）或下移（delta < 0）；
+    // 被移动的是活动层时活动层下标跟随
+    func shift_layer(state: EditorState, ctx: TilemapContext, row: int, delta: int)=> void
+    {
+        if (ctx.m_map->move_layer(row, row + delta))
+        {
+            if (state.m_layer == row)
+                state.m_layer = row + delta;
+            state.m_dirty = true;
+        }
+    }
+
+    // 删除 row 号图层：删除不可撤销，先弹窗确认；确认后其后图层
+    // 下标前移，活动层跟随调整；至少保留一个图层。
+    // 弹窗为模态，确认回调里的 row/layer_count 不会过期
+    func delete_layer(state: EditorState, ctx: TilemapContext, row: int)=> void
+    {
+        let (_, _, _, layer_count) = ctx.m_map->size();
+        if (layer_count <= 1)
+        {
+            do MsgBox::err("无法删除", "至少保留一个图层");
+            return;
+        }
+        let (lname, _, _) = ctx.m_map->get_layer(row);
+        do AskBox::show("删除图层",
+                F"确定删除图层「{lname}」吗？删除后无法撤销。")
+            ->onYes(func()
+                {
+                    do ctx.m_map->remove_layer(row);
+                    if (state.m_layer > row)
+                        state.m_layer -= 1;
+                    if (state.m_layer >= layer_count - 1)
+                        state.m_layer = layer_count - 2;
+                    state.m_dirty = true;
+                });
+    }
+
+    // 单行图层条目：检视面板组件块同款的分区折叠头（见 Widgets::
+    // pushSectionHeaderStyle 与 Inspector::showComponentBlock）整行绘制。
+    // 图层属性编辑（显隐/锁定/Z 偏移/渲染次序）在展开区里，不再挤在
+    // 行尾——旧布局的渲染次序输入框在 340px 右列里放不下。点箭头只切
+    // 展开，点标题空白处选中活动层，右键打开快捷菜单；收起时行尾的
+    // 「隐藏/锁定」徽标提示状态（默认收起，ImGui 按标题 ID 记住展开
+    // 状态）。
+    func draw_layer_row(state: EditorState, ctx: TilemapContext, row: int)=> void
+    {
+        let map = ctx.m_map;
+        let (lname, visible, locked) = map->get_layer(row);
+        let is_active = row == state.m_layer;
+        let row_label = F"{lname}##layer{row}";
+
+        let text_c = GetStyleColor(ImGuiCol::ImGuiCol_Text);
+
+        pushSectionHeaderStyle();
+        // 活动层：标题栏填充向强调蓝偏移（此刻 GetStyleColor 取到的
+        // 已是 pushSectionHeaderStyle 混出的底色）
+        if (is_active)
+            PushStyleColor(ImGuiCol::ImGuiCol_Header,
+                mixStyleColor(GetStyleColor(ImGuiCol::ImGuiCol_Header),
+                    ACTIVE_LAYER_ACCENT, 0.30, 255));
+        // 隐藏层：标题文字弱化
+        if (visible == 0)
+            PushStyleColor(ImGuiCol::ImGuiCol_Text,
+                mixStyleColor(text_c, text_c, 0., 110));
+
+        // OpenOnArrow 划分「点行选中 / 点箭头展开」；AllowItemOverlap
+        // 放行行尾状态徽标覆盖标题栏
+        let expanded = CollapsingHeaderFlags(row_label,
+            TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_AllowItemOverlap);
+
+        // 命中事件必须紧跟标题项读取（此刻标题项仍是最后绘制的 item，
+        // 随后提交的行尾徽标会接管重叠区域）；点箭头只切展开，不算选中
+        if (IsItemClickedLeft() && !IsItemToggledOpen())
+            state.m_layer = row;
+        if (IsItemHovered())
+            do SetTooltip("左键选中为编辑层，点箭头展开图层属性，右键打开图层菜单");
+
+        // 活动层左缘强调竖条（同系统列表分组标题的画法；GetItemRect
+        // 返回的是屏幕坐标 min/max，不是 min/size）
+        if (is_active)
+        {
+            let (rect_min, rect_max) = GetItemRect();
+            let (rect_x, rect_y) = rect_min;
+            do GetWindowDrawList()->AddRectFilled((rect_x, rect_y),
+                (rect_x + 3., rect_max[1]),
+                mixStyleColor(text_c, ACTIVE_LAYER_ACCENT, 0.75, 220));
+        }
+
+        // 行尾状态徽标：属性编辑移入展开区后，收起的行以徽标提示显隐/
+        // 锁定；从行右缘向左排布，与标题文字垂直居中（同 beginMemberRow
+        // 标签的居中算法，标题栏样式此刻仍压着 FramePadding）
+        SameLine();
+        let (line_x, line_y) = GetCursorPos();
+        let avail_w = GetContentRegionAvail().0;
+        let badge_y = line_y + (GetFrameHeight() - CalcTextSize("隐藏").1) * 0.5;
+        let mut badge_x = line_x + avail_w;
+        if (locked != 0)
+        {
+            badge_x -= CalcTextSize("锁定").0;
+            SetCursorPos((badge_x, badge_y));
+            TextColored(mixStyleColor(text_c, LOCKED_ACCENT, 0.65, 255), "锁定");
+            badge_x -= 10.;
+        }
+        if (visible == 0)
+        {
+            badge_x -= CalcTextSize("隐藏").0;
+            SetCursorPos((badge_x, badge_y));
+            TextColored(mixStyleColor(text_c, text_c, 0., 130), "隐藏");
+        }
+
+        // 右键快捷菜单：与工具条等价的图层操作（显式传标题标签，
+        // 悬停检测绑回标题项）
+        if (BeginPopupContextItemLabel(row_label))
+        {
+            if (MenuItem("重命名"))
+                do rename_layer(state, ctx, row);
+            if (MenuItem("上移"))
+                do shift_layer(state, ctx, row, 1);
+            if (MenuItem("下移"))
+                do shift_layer(state, ctx, row, -1);
+            Separator();
+            if (MenuItem("删除"))
+                do delete_layer(state, ctx, row);
+            defer EndPopup();
+        }
+
+        if (visible == 0)
+            PopStyleColor(1);
+        if (is_active)
+            PopStyleColor(1);
+        popSectionHeaderStyle();
+
+        // 展开区：图层属性编辑。成员行布局与检视面板/样式属性面板
+        // 一致（beginMemberRow），渲染次序输入框不再受行宽挤压
+        if (expanded)
+        {
+            // 显隐/锁定：透明底“薄片”开关（悬停浮出底色），锁定时
+            // 开关文字染琥珀色
+            PushStyleColor(ImGuiCol::ImGuiCol_Button, (0, 0, 0, 0));
+            PushStyleColor(ImGuiCol::ImGuiCol_ButtonHovered,
+                mixStyleColor(text_c, text_c, 0., 34));
+            PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive,
+                mixStyleColor(text_c, text_c, 0., 60));
+            let vis_w = CalcTextSize("可见").0 + 12.;
+            let lock_w = CalcTextSize("未锁").0 + 12.;
+            if (ButtonSize(visible != 0 ? F"可见##v{row}" | F"隐藏##v{row}", (vis_w, 0.)))
+            {
+                do map->set_layer(row, lname, visible != 0 ? 0 | 1, locked);
+                state.m_dirty = true;
+            }
+            SameLine();
+            if (locked != 0)
+                PushStyleColor(ImGuiCol::ImGuiCol_Text,
+                    mixStyleColor(text_c, LOCKED_ACCENT, 0.65, 255));
+            if (ButtonSize(locked != 0 ? F"锁定##l{row}" | F"未锁##l{row}", (lock_w, 0.)))
+            {
+                do map->set_layer(row, lname, visible, locked != 0 ? 0 | 1);
+                state.m_dirty = true;
+            }
+            if (locked != 0)
+                PopStyleColor(1);
+            PopStyleColor(3);
+
+            memberSeparator();
+
+            // 世界 z 偏移（相对地图根实体；不同层错开避免深度冲突）
+            do beginMemberRow("Z 偏移",
+                option::none: option<Color32RGBA>, 0.);
+            match (InputFloat(F"##layer_z_{row}", map->layer_z(row)))
+            {
+                value(z)?
+                {
+                    do map->set_layer_z(row, z);
+                    state.m_dirty = true;
+                }
+                none?;
+            }
+            if (IsItemHovered())
+                do SetTooltip("图层的世界 Z 偏移（相对地图根实体），不同层错开可避免深度冲突");
+
+            memberSeparator();
+
+            // 渲染次序（同图各层按该值升序绘制，是层间叠放的权威顺序）；
+            // 整数输入的步进按钮绘制在框外，右侧预留空间（同属性面板）
+            do beginMemberRow("渲染次序",
+                option::none: option<Color32RGBA>, 56.);
+            match (InputInt(F"##layer_q_{row}", map->layer_rend_queue(row)))
+            {
+                value(q)?
+                {
+                    do map->set_layer_rend_queue(row, q);
+                    state.m_dirty = true;
+                }
+                none?;
+            }
+            if (IsItemHovered())
+                do SetTooltip("图层的渲染次序值：同图各层按该值升序绘制（层间叠放的"
+                    + "权威顺序）。新建图层缺省 10000 + 层下标，与场景实体常用的"
+                    + "小队列值错开");
+
+            memberSeparator();
+
+            // 自阴影（Light2D 延迟光照管线）：渲染分片是运行时生成的隐藏
+            // 实体，SelfShadow 组件由此属性驱动挂载/摘除
+            do beginMemberRow("自阴影",
+                option::none: option<Color32RGBA>, 0.);
+            match (ListBoxSelect(F"##layer_ss_{row}",
+                ["禁用", "启用（常开）", "启用（自动）"],
+                map->layer_selfshadow(row)))
+            {
+                value(mode)?
+                {
+                    do map->set_layer_selfshadow(row, mode);
+                    state.m_dirty = true;
+                }
+                none?;
+            }
+            if (IsItemHovered())
+                do SetTooltip("该层瓦片在 Light2D 光照管线中的自阴影行为：\n"
+                    + "禁用 —— 分片不挂 SelfShadow 组件，图块正常接收更高层遮挡体的阴影\n"
+                    + "常开 —— 自阴影覆盖始终生效，与光源高度无关\n"
+                    + "自动 —— 光源不高于该层时清除自阴影覆盖（图块受光）；\n"
+                    + "　　TopDown 光源下按格判定：格底边不低于光源高度线时\n"
+                    + "　　该格受光，否则写阴影强度");
+
+            // 自阴影覆盖强度（写入分片 SelfShadow::factor，覆盖色乘子
+            // 0..1）：禁用模式下无效果，行随之隐藏
+            if (map->layer_selfshadow(row) != self_shadow::OFF as int)
+            {
+                memberSeparator();
+                do beginMemberRow("阴影强度",
+                    option::none: option<Color32RGBA>, 0.);
+                match (SliderFloat(F"##layer_ssf_{row}",
+                    map->layer_selfshadow_factor(row), 0., 1.))
+                {
+                    value(f)?
+                    {
+                        do map->set_layer_selfshadow_factor(row, f);
+                        state.m_dirty = true;
+                    }
+                    none?;
+                }
+                if (IsItemHovered())
+                    do SetTooltip("自阴影覆盖强度（SelfShadow::factor，覆盖色乘子）："
+                        + "仅自阴影模式为启用（常开/自动）时生效，"
+                        + "0 = 覆盖近乎透明，1 = 全强度");
+            }
+
+            memberSeparator();
+
+            // 遮挡阴影（Light2D 延迟光照管线）：瓦片占据轮廓投射硬阴影
+            //（阴影体），轮廓由引擎按分块网格自动生成
+            do beginMemberRow("遮挡阴影",
+                option::none: option<Color32RGBA>, 0.);
+            match (ListBoxSelect(F"##layer_bs_{row}",
+                ["禁用", "启用（常开）", "启用（自动）"],
+                map->layer_blockshadow(row)))
+            {
+                value(mode)?
+                {
+                    do map->set_layer_blockshadow(row, mode);
+                    state.m_dirty = true;
+                }
+                none?;
+            }
+            if (IsItemHovered())
+                do SetTooltip("该层瓦片在 Light2D 光照管线中的遮挡阴影行为：\n"
+                    + "禁用 —— 分片不挂 BlockShadow 组件，瓦片不遮挡光线\n"
+                    + "常开 —— 瓦片占据轮廓（与空格的边界）投射硬阴影，与光源高度无关\n"
+                    + "自动 —— 光源不高于该层时不再投射遮挡阴影");
+
+            // 遮挡阴影浓度（写入分片 BlockShadow::factor）：禁用模式下
+            // 无效果，行随之隐藏
+            if (map->layer_blockshadow(row) != block_shadow::OFF as int)
+            {
+                memberSeparator();
+                do beginMemberRow("遮挡强度",
+                    option::none: option<Color32RGBA>, 0.);
+                match (SliderFloat(F"##layer_bsf_{row}",
+                    map->layer_blockshadow_factor(row), 0., 1.))
+                {
+                    value(f)?
+                    {
+                        do map->set_layer_blockshadow_factor(row, f);
+                        state.m_dirty = true;
+                    }
+                    none?;
+                }
+                if (IsItemHovered())
+                    do SetTooltip("遮挡阴影浓度（BlockShadow::factor，阴影体浓度）："
+                        + "仅遮挡阴影模式为启用（常开/自动）时生效，"
+                        + "0 = 近乎无阴影，1 = 全强度");
+            }
+        }
+        Spacing();
+    }
+
+    public func draw_layers(state: EditorState, ctx: TilemapContext)=> void
+    {
+        let map = ctx.m_map;
+        let (_, _, _, layer_count) = map->size();
+
+        SeparatorText("图层");
+
+        // 操作按钮行（标签取短档，保证 340px 右列内单行放下）
+        if (Button("+ 新建"))
+        {
+            do InputBox::show("新建图层", "请输入图层名称：", F"图层 {layer_count + 1}")
+                ->then(func(name)
+                    {
+                        match (ctx.m_map->add_layer(name))
+                        {
+                            value(idx)?
+                            {
+                                // 与建图同策略：新层默认指配
+                                // TilemapUnlitBlend（渲染只认图层样式，
+                                // 不回落根实体/内置默认；加载失败保持未指定）
+                                match (shader::load(option::none,
+                                    TilemapEditor::DEFAULT_LAYER_SHADER))
+                                {
+                                    value(sh)?
+                                        do ctx.m_map->set_layer_shader(idx,
+                                            option::value(sh));
+                                    none?;
+                                }
+                                state.m_layer = idx;
+                                state.m_dirty = true;
+                            }
+                            none?;
+                        }
+                    });
+        }
+        SameLine();
+        if (Button("- 删除"))
+            do delete_layer(state, ctx, state.m_layer);
+        SameLine();
+        if (Button("上移"))
+            do shift_layer(state, ctx, state.m_layer, 1);
+        SameLine();
+        if (Button("下移"))
+            do shift_layer(state, ctx, state.m_layer, -1);
+        SameLine();
+        if (Button("重命名"))
+            do rename_layer(state, ctx, state.m_layer);
+
+        // 图层列表（顶 = 最上层，与渲染顺序一致）
+        if (BeginChildSize("##layer_list", GetContentRegionAvail()[0], 0.))
+        {
+            for (let mut row = layer_count - 1; row >= 0; row -= 1)
+                do draw_layer_row(state, ctx, row);
+        }
+        EndChild();
+    }
+}

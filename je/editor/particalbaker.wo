@@ -18,13 +18,13 @@ using ParticalContext = struct{
     m_frame_size : mut (int, int),
     m_frame_rate : mut real,    // Sec per frame
     m_repeat_round : mut int,
-    m_frames_caches : mut array<je::graphic::texture>,
+    m_frames_caches : mut array<je::graphic::texture2d>,
     m_script : void, // Not used
     m_path : void, // Not used
 };
 
 let mut partical_context = nil->unsafe::cast:<ParticalContext>();
-let mut baking_cache = []: array<je::graphic::texture>;
+let mut baking_cache = []: array<je::graphic::texture2d>;
 let baking_launch_record = []mut: vec<(int, int)>;
 
 public func u2p(upos: (real, real))=> (real, real)
@@ -116,8 +116,8 @@ func _start_baking_impl<VoidT>(context: ParticalContext, econtext: _EditorContex
     {
         using je::graphic;
         
-        let new_tex_cache = texture::create(partical_context.m_frame_size...);
-        baking_cache->unsafe::cast:<vec<texture>>->add(new_tex_cache);
+        let new_tex_cache = texture2d::create(partical_context.m_frame_size...);
+        baking_cache->unsafe::cast:<vec<texture2d>>->add(new_tex_cache);
     }
     
     assert(baking_cache->len == partical_context.m_frame_count);

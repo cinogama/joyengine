@@ -1,7 +1,7 @@
 // Joyengine 4.x
 import je;
 
-public func tex(t: je::graphic::texture, x: int, y: int)
+public func tex(t: je::graphic::texture2d, x: int, y: int)
 {
     return t->pix((x, y))->get_color();
 }
@@ -10,7 +10,7 @@ public func tex(t: je::graphic::texture, x: int, y: int)
 // pixel: (tex, int, int)=> (real, real, real, real)
 // entry: (tex)=> bool
 
-func main_impl<VoidT>(target_texture: je::graphic::texture, (lx, ly): (int, int), (rw, rh): (int, int))
+func main_impl<VoidT>(target_texture: je::graphic::texture2d, (lx, ly): (int, int), (rw, rh): (int, int))
 {
     if (!entry(target_texture, (lx, ly), (rw, rh)))
         return;
@@ -25,7 +25,7 @@ func main_impl<VoidT>(target_texture: je::graphic::texture, (lx, ly): (int, int)
         for (let mut x = 0; x < rw; x += 1)
             target_texture->pix((x + lx, y + ly))->set_color(result_pixels[y * rw + x]);
 }
-extern func main(target_texture: je::graphic::texture, lbpos: (int, int), range: (int, int))
+extern func main(target_texture: je::graphic::texture2d, lbpos: (int, int), range: (int, int))
 {
     main_impl:<void>(target_texture, lbpos, range);
 }

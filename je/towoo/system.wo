@@ -188,10 +188,10 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
     system! JobName(
     localpos: Transform::LocalPosition
     color: Renderer::Color?
-    textures: Renderer::Textures?
+    textures: Renderer::Textures2D?
     )
     except Transform::LocalToParent, Transform::LocalToParent;
-    anyof Renderer::Color, Renderer::Textures;
+    anyof Renderer::Color, Renderer::Textures2D;
     {
     // BODY
     }

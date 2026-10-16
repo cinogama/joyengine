@@ -10,17 +10,17 @@ namespace je
 {
     namespace graphic
     {
-        namespace texture
+        namespace texture2d
         {
             namespace internal
             {
                 public using snapshot_t = gchandle;
-                
-                extern("libjoyecs", "wojeapi_texture_take_snapshot")
-                    public func snapshot(self: texture)=> option<snapshot_t>;
-                    
-                extern("libjoyecs", "wojeapi_texture_restore_snapshot")
-                    public func restore_snapshot(self: texture, snapshot: snapshot_t)=> bool;
+
+                extern("libjoyecs", "wojeapi_texture2d_take_snapshot")
+                    public func snapshot(self: texture2d)=> option<snapshot_t>;
+
+                extern("libjoyecs", "wojeapi_texture2d_restore_snapshot")
+                    public func restore_snapshot(self: texture2d, snapshot: snapshot_t)=> bool;
             }
         }
     }

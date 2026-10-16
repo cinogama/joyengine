@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void jegl_close_texture(jegl_texture* texture);
+JE_API void jegl_close_texture_2d(jegl_texture_2d* texture);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void jegl_close_texture(jegl_texture* texture);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `texture` | `jegl_texture*` | 纹理资源指针 |
+| `texture` | `jegl_texture_2d*` | 纹理资源指针 |
 
 ## 返回值
 
@@ -27,12 +27,12 @@ JE_API void jegl_close_texture(jegl_texture* texture);
 ### 示例
 
 ```cpp
-jegl_texture* texture = jegl_load_texture(ctx, "@/textures/diffuse.png");
+jegl_texture_2d* texture = jegl_load_texture_2d(ctx, "@/textures/diffuse.png");
 
 // 使用纹理...
 
 // 释放资源
-jegl_close_texture(texture);
+jegl_close_texture_2d(texture);
 ```
 
 ## 注意事项
@@ -43,6 +43,6 @@ jegl_close_texture(texture);
 
 ## 相关接口
 
-- [jegl_load_texture](jegl_load_texture.md) - 加载纹理
-- [jegl_create_texture](jegl_create_texture.md) - 创建纹理
+- [jegl_load_texture](jegl_load_texture_2d.md) - 加载纹理
+- [jegl_create_texture](jegl_create_texture_2d.md) - 创建纹理
 - [jegl_share_resource_handle](jegl_share_resource_handle.md) - 增加资源引用计数

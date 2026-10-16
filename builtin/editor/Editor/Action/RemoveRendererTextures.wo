@@ -21,7 +21,7 @@ using je::graphic;
 
 namespace JEEditor::Editor::Action
 {
-    // 移除 Renderer::Textures 组件的专用 Action。
+    // 移除 Renderer::Textures2D 组件的专用 Action。
     // 纹理通道、tiling/offset 不走反射成员，而是存放在组件实例里，移除即
     // 销毁、重加得到空实例；因此移除前做快照（纹理句柄由引擎资源系统持有，
     // Action 引用期间不失效），undo 时用 towoo::add_component 重加——它返回
@@ -31,7 +31,7 @@ namespace JEEditor::Editor::Action
         m_eid: entity::internal::euid_t,
         m_saved_tiling: vec2,
         m_saved_offset: vec2,
-        m_saved_textures: array<(int, texture)>,
+        m_saved_textures: array<(int, texture2d)>,
     }
     {
         public func try_create(e: entity)=> option<RemoveRendererTextures>
@@ -39,10 +39,10 @@ namespace JEEditor::Editor::Action
         {
             return try!{
                 try! eid = e->internal::get_entity_uid;
-                try! cinst = e->towoo::get_component:<Renderer::Textures>;
+                try! cinst = e->towoo::get_component:<Renderer::Textures2D>;
 
                 // 纹理通道没有强类型枚举接口，经实体级字典枚举快照
-                let mut saved_textures = []: array<(int, texture)>;
+                let mut saved_textures = []: array<(int, texture2d)>;
                 for (let (tpass, tinst) : e->get_textures)
                     saved_textures = saved_textures->append((tpass, tinst));
 
@@ -53,7 +53,7 @@ namespace JEEditor::Editor::Action
                     m_saved_textures = saved_textures,
                 };
             } catch! {
-                logerr("传入的实体应当有对应的 EUID 与 Renderer::Textures 组件");
+                logerr("传入的实体应当有对应的 EUID 与 Renderer::Textures2D 组件");
             };
         }
 
@@ -80,8 +80,8 @@ namespace JEEditor::Editor::Action
                     value(ueid)?
                         if (ueid == self.m_eid)
                         {
-                            if (e->towoo::get_component:<Renderer::Textures>->is_value)
-                                do e->towoo::remove_component:<Renderer::Textures>();
+                            if (e->towoo::get_component:<Renderer::Textures2D>->is_value)
+                                do e->towoo::remove_component:<Renderer::Textures2D>();
                             return true;
                         }
                 }
@@ -107,13 +107,13 @@ namespace JEEditor::Editor::Action
 
         func restoreTo(self: RemoveRendererTextures, e: entity)=> bool
         {
-            match (e->towoo::get_component:<Renderer::Textures>)
+            match (e->towoo::get_component:<Renderer::Textures2D>)
             {
                 value(cinst)?
                     self->restoreToInstance(cinst);
                 none?
                 {
-                    let textures = e->towoo::add_component:<Renderer::Textures>();
+                    let textures = e->towoo::add_component:<Renderer::Textures2D>();
                     self->restoreToInstance(textures);
                 }
             }
@@ -121,7 +121,7 @@ namespace JEEditor::Editor::Action
         }
 
         func restoreToInstance(
-            self: RemoveRendererTextures, cinst: Renderer::Textures)=> void
+            self: RemoveRendererTextures, cinst: Renderer::Textures2D)=> void
         {
             do cinst.tiling->set(self.m_saved_tiling);
             do cinst.offset->set(self.m_saved_offset);
@@ -131,7 +131,7 @@ namespace JEEditor::Editor::Action
 
         public func describe(_: RemoveRendererTextures)=> string
         {
-            return "移除组件 Renderer::Textures";
+            return "移除组件 Renderer::Textures2D";
         }
     }
 }

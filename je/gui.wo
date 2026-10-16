@@ -612,25 +612,25 @@ namespace je::gui
         public func LabelText(label: string, msg: string)=> void;
 
     extern("libjoyecs", "je_gui_image")
-        public func Image(tex: je::graphic::texture)=> void;
+        public func Image(tex: je::graphic::texture2d)=> void;
     extern("libjoyecs", "je_gui_image_scale")
-        public func ImageScale(tex: je::graphic::texture, scale: real)=> void;
+        public func ImageScale(tex: je::graphic::texture2d, scale: real)=> void;
     extern("libjoyecs", "je_gui_image_size")
-        public func ImageSize(tex: je::graphic::texture, width: real, height: real)=> void;
+        public func ImageSize(tex: je::graphic::texture2d, width: real, height: real)=> void;
     extern("libjoyecs", "je_gui_image_size_color")
-        public func ImageSizeColor(tex: je::graphic::texture, width: real, height: real, color: Color32RGBA)=> void;
+        public func ImageSizeColor(tex: je::graphic::texture2d, width: real, height: real, color: Color32RGBA)=> void;
         
     // Image with custom UVs. UVs use engine/OpenGL convention (V points up):
     // pass uv0 as the min corner and uv1 as the max corner; V is flipped internally
     // so the region displays upright (consistent with Image/ImageSize).
     // This lets you display an arbitrary sub-region of a sprite-sheet, matching
-    // the Renderer::Textures offset/tiling convention used by FrameAnimation.
+    // the Renderer::Textures2D offset/tiling convention used by FrameAnimation.
     extern("libjoyecs", "je_gui_image_uv")
-        public func ImageUV(tex: je::graphic::texture, width: real, height: real, uv0: ImVec2, uv1: ImVec2)=> void;
+        public func ImageUV(tex: je::graphic::texture2d, width: real, height: real, uv0: ImVec2, uv1: ImVec2)=> void;
     extern("libjoyecs", "je_gui_image_uv_color")
-        public func ImageUVColor(tex: je::graphic::texture, width: real, height: real, uv0: ImVec2, uv1: ImVec2, tint: Color32RGBA)=> void;
+        public func ImageUVColor(tex: je::graphic::texture2d, width: real, height: real, uv0: ImVec2, uv1: ImVec2, tint: Color32RGBA)=> void;
     extern("libjoyecs", "je_gui_imagebutton_uv")
-        public func ImageButtonUV(label: string, tex: je::graphic::texture, width: real, height: real, uv0: ImVec2, uv1: ImVec2)=> bool;
+        public func ImageButtonUV(label: string, tex: je::graphic::texture2d, width: real, height: real, uv0: ImVec2, uv1: ImVec2)=> bool;
         
     extern("libjoyecs", "je_gui_push_item_width")
         public func PushItemWidth(width: real)=> void;
@@ -716,11 +716,11 @@ namespace je::gui
             public func AddText(self: DrawListT, pos: ImVec2, color: Color32RGBA, text: string)=> void;
             
         extern("libjoyecs", "je_gui_draw_list_add_image")
-            public func AddImage(self: DrawListT, from: ImVec2, to: ImVec2, tex: graphic::texture, color: Color32RGBA)=> void;
+            public func AddImage(self: DrawListT, from: ImVec2, to: ImVec2, tex: graphic::texture2d, color: Color32RGBA)=> void;
             
         // Same as AddImage but with explicit UVs (engine convention, V up).
         extern("libjoyecs", "je_gui_draw_list_add_image_uv")
-            public func AddImageUV(self: DrawListT, from: ImVec2, to: ImVec2, uv0: ImVec2, uv1: ImVec2, tex: graphic::texture, tint: Color32RGBA)=> void;
+            public func AddImageUV(self: DrawListT, from: ImVec2, to: ImVec2, uv0: ImVec2, uv1: ImVec2, tex: graphic::texture2d, tint: Color32RGBA)=> void;
             
         extern("libjoyecs", "je_gui_draw_list_add_line")
             public func AddLine(self: DrawListT, from: ImVec2, to: ImVec2, color: Color32RGBA, board: real)=> void;
@@ -753,18 +753,23 @@ namespace je::gui
         public func GetWindowDrawList()=> DrawListT;
         
     extern("libjoyecs", "je_gui_imagebutton")
-        public func ImageButton(label: string, tex: je::graphic::texture)=> bool;
+        public func ImageButton(label: string, tex: je::graphic::texture2d)=> bool;
     extern("libjoyecs", "je_gui_imagebutton_scale")
-        public func ImageButtonScale(label: string, tex: je::graphic::texture, scale: real)=> bool;
+        public func ImageButtonScale(label: string, tex: je::graphic::texture2d, scale: real)=> bool;
     extern("libjoyecs", "je_gui_imagebutton_size")
-        public func ImageButtonSize(label: string, tex: je::graphic::texture, width: real, height: real)=> bool;
+        public func ImageButtonSize(label: string, tex: je::graphic::texture2d, width: real, height: real)=> bool;
         
     extern("libjoyecs", "je_gui_content_region_avail")
         public func GetContentRegionAvail()=> ImVec2;
         
     extern("libjoyecs", "je_gui_set_next_item_width")
         public func SetNextItemWidth(w: real)=> void;
-        
+
+    // 允许下一个控件被随后提交的重叠控件抢占悬停/点击
+    //（先提交的整行区域控件 + 后绘制的行内按钮的固定搭配）
+    extern("libjoyecs", "je_gui_set_next_item_allow_overlap")
+        public func SetNextItemAllowOverlap()=> void;
+
     extern("libjoyecs", "je_gui_set_next_window_size_constraints")
         public func SetNextWindowSizeConstraints(minsz: ImVec2, maxsz: ImVec2)=> void;
     extern("libjoyecs", "je_gui_set_next_window_size")

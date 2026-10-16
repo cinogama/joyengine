@@ -3,10 +3,10 @@
 ## 函数签名
 
 ```c
-JE_API jegl_texture* jegl_create_texture(
+JE_API jegl_texture_2d* jegl_create_texture_2d(
     size_t width,
     size_t height,
-    jegl_texture::format format);
+    jegl_texture_common::format format);
 ```
 
 ## 描述
@@ -19,13 +19,13 @@ JE_API jegl_texture* jegl_create_texture(
 |--------|------|------|
 | `width` | `size_t` | 纹理宽度 |
 | `height` | `size_t` | 纹理高度 |
-| `format` | `jegl_texture::format` | 纹理格式 |
+| `format` | `jegl_texture_common::format` | 纹理格式 |
 
 ## 返回值
 
 | 类型 | 描述 |
 |------|------|
-| `jegl_texture*` | 纹理资源指针（不会返回 `nullptr`） |
+| `jegl_texture_2d*` | 纹理资源指针（不会返回 `nullptr`） |
 
 ## 用法
 
@@ -45,11 +45,11 @@ JE_API jegl_texture* jegl_create_texture(
 
 ```cpp
 // 创建 1024x1024 的 RGBA 纹理
-jegl_texture* texture = jegl_create_texture(1024, 1024, jegl_texture::RGBA);
+jegl_texture_2d* texture = jegl_create_texture_2d(1024, 1024, jegl_texture::RGBA);
 
 // 使用纹理...
 
-jegl_close_texture(texture);
+jegl_close_texture_2d(texture);
 ```
 
 ## 注意事项
@@ -61,5 +61,5 @@ jegl_close_texture(texture);
 
 ## 相关接口
 
-- [jegl_load_texture](jegl_load_texture.md) - 从文件加载纹理
-- [jegl_close_texture](jegl_close_texture.md) - 关闭纹理
+- [jegl_load_texture](jegl_load_texture_2d.md) - 从文件加载纹理
+- [jegl_close_texture](jegl_close_texture_2d.md) - 关闭纹理

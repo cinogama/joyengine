@@ -1,0 +1,266 @@
+// 瓦片地图编辑器 —— 工具栏与整体布局。
+// 两个独立窗口各一套布局：
+//   地图编辑器（render_main）：上工具栏 + 左调色板 + 中画布（整高）+
+//     右列上下分栏（上属性、下图层，中间可拖拽分隔条分配高度）；
+//   图集编辑器（render_tileset）：左调色板 + 右图集设置。
+
+import pkg::std;
+
+import je;
+import je::gui;
+import je::tilemap;
+
+import pkg::fsys;
+import pkg::math;
+
+import builtin::editor::GUI::Widgets;
+
+import DataModel;
+import EditorState;
+import Palette;
+import Canvas;
+import Tools;
+import LayerPanel;
+import PropertyPanel;
+
+using std;
+using je;
+using je::gui;
+using je::tilemap;
+using fsys;
+using math;
+using JEEditor::GUI::Widgets;
+using JEEditor::Editor::TilemapEditor;
+
+namespace JEEditor::Editor::TilemapEditor
+{
+    // ===== 右列属性/图层面板的分隔条状态 =====
+    // 图层面板高度（分隔条拖拽调整；模块级保存，切换文档/窗口重建间保留）
+    let mut s_layer_panel_h = 280.;
+    // 拖拽中的上一帧鼠标 y：je::gui 未暴露 IO.MouseDelta，用帧间差分
+    // 实现拖拽增量；none 表示当前未在拖拽
+    let mut s_splitter_last_y = option::none: option<real>;
+
+    // 水平分隔条：整宽 6px 命中区，拖动改变下方面板（图层）高度并
+    // 返回新值（调用方负责按面板上下限夹取）；悬停/拖拽时居中细线
+    // 染强调色提示可拖
+    func draw_hsplitter(id: string, cur_h: real)=> real
+    {
+        let mut new_h = cur_h;
+        do InvisibleButton(id, (GetContentRegionAvail()[0], 6.));
+
+        if (IsItemActive())
+        {
+            let (_, my) = GetMousePos();
+            match (s_splitter_last_y)
+            {
+                // 分隔条 y = col_y + right_h - layer_h - 12：图层高度增大
+                // 时分隔条上移，故增量与鼠标位移反号（鼠标上移 = 面板变高）
+                value(last_y)? new_h = cur_h + last_y - my;
+                none?;
+            }
+            s_splitter_last_y = option::value(my);
+        }
+        else
+            s_splitter_last_y = option::none;
+
+        let (rmin, rmax) = GetItemRect();
+        let mid_y = (rmin[1] + rmax[1]) * 0.5;
+        let text_c = GetStyleColor(ImGuiCol::ImGuiCol_Text);
+        let line_c = IsItemHovered() || IsItemActive()
+            ? mixStyleColor(text_c, ACTIVE_LAYER_ACCENT, 0.65, 220)
+            | mixStyleColor(text_c, text_c, 0., 80);
+        do GetWindowDrawList()->AddRectFilled(
+            (rmin[0], mid_y - 1.), (rmax[0], mid_y + 1.), line_c);
+
+        return new_h;
+    }
+
+    func toolbar_button(state: EditorState, t: tool)=> void
+    {
+        let pressed = Button(F"{tool::name(t)}##tool{t as int}");
+        if (state.m_tool == t)
+        {
+            // 当前工具：画个下划线指示
+            let (rmin, rmax) = GetItemRect();
+            do GetWindowDrawList()->AddRect(
+                rmin, (rmax[0], rmax[1] + 2.), (110, 200, 255, 255), 2.);
+        }
+        if (pressed)
+            state.m_tool = t;
+        SameLine();
+    }
+
+    public func draw_toolbar(state: EditorState, ctx: TilemapContext)=> void
+    {
+        do toolbar_button(state, tool::PENCIL);
+        do toolbar_button(state, tool::ERASER);
+        do toolbar_button(state, tool::RECT);
+        do toolbar_button(state, tool::FILL);
+        do toolbar_button(state, tool::EYEDROPPER);
+
+        if (Button("撤销"))
+            do state->undo();
+        SameLine();
+        if (Button("重做"))
+            do state->redo();
+        SameLine();
+        if (Button("适应窗口"))
+            do reset_view(state);
+        SameLine();
+        if (Button(state.m_dim_other_layers ? "突出选中层：开" | "突出选中层：关"))
+            state.m_dim_other_layers = !state.m_dim_other_layers;
+        if (IsItemHovered())
+            do SetTooltip("开启后其余图层在画布上半透明绘制，突出当前编辑的图层");
+
+        // 状态文本
+        SameLine();
+        let (w, h, tile_px, layer_count) = ctx.m_map->size();
+        let (lname, _, _) = ctx.m_map->get_layer(state.m_layer);
+        if (Button("调整尺寸"))
+        {
+            // 打开弹窗时以当前尺寸初始化输入框
+            state.m_resize_w = w;
+            state.m_resize_h = h;
+            do OpenPopup("##resize_map_popup");
+        }
+        SameLine();
+        do Text(F"{w}×{h} @ {tile_px}px | 图层{state.m_layer + 1}/{layer_count}「{lname}」"
+            + (state.m_dirty ? " | 未保存" | ""));
+        do draw_resize_map_popup(state, ctx);
+    }
+
+    // 地图尺寸输入钳制（与引擎上限一致：1..65536）
+    func clamp_map_dim(v: int)=> int
+    {
+        if (v < 1)
+            return 1;
+        if (v > 65536)
+            return 65536;
+        return v;
+    }
+
+    // 调整地图尺寸弹窗：左上角对齐保留原格子，缩小尺寸时越界格内容
+    // 与逐格属性覆盖被丢弃。属结构性操作不进撤销栈；且旧撤销命令的
+    // cellkey（x + y*宽）随宽度失效，应用时须清空撤销栈。
+    func draw_resize_map_popup(state: EditorState, ctx: TilemapContext)=> void
+    {
+        if (BeginPopup("##resize_map_popup"))
+        {
+            let (_, _, tile_px, _) = ctx.m_map->size();
+            do Text("调整地图尺寸");
+            match (InputInt("宽（格）", state.m_resize_w))
+            {
+                value(v)? state.m_resize_w = clamp_map_dim(v);
+                none?;
+            }
+            match (InputInt("高（格）", state.m_resize_h))
+            {
+                value(v)? state.m_resize_h = clamp_map_dim(v);
+                none?;
+            }
+            do TextDisabled(F"瓦片像素 {tile_px} 创建后不可修改；"
+                + "缩小尺寸时越界格内容与逐格属性将被丢弃，且无法撤销");
+            if (Button("应用"))
+            {
+                let (w, h, _, _) = ctx.m_map->size();
+                if (state.m_resize_w != w || state.m_resize_h != h)
+                {
+                    do ctx.m_map->resize(state.m_resize_w, state.m_resize_h);
+                    state.m_undo->clear();
+                    state.m_dirty = true;
+                }
+                do CloseCurrentPopup();
+            }
+            SameLine();
+            if (Button("取消"))
+                do CloseCurrentPopup();
+            do EndPopup();
+        }
+    }
+
+    // 地图编辑器窗口布局（上下文必在；图集编辑器走 render_tileset）
+    public func render_main(state: EditorState)=> void
+    {
+        match (state.m_context)
+        {
+            none? { }
+            value(ctx)?
+            {
+                do render_map_layout(state, ctx);
+            }
+        }
+    }
+
+    // 图集编辑器窗口布局：左调色板 + 右图集设置（无地图上下文）
+    public func render_tileset(state: EditorState)=> void
+    {
+        let avail = GetContentRegionAvail();
+        if (BeginChildSize("##ts_left", 380., avail[1]))
+            do draw_palette(state, option::none);
+        EndChild();
+        SameLine();
+        if (BeginChildSize("##ts_right", GetContentRegionAvail()[0], 0.))
+            do draw_tileset_settings(state, option::none);
+        EndChild();
+    }
+
+    func render_map_layout(state: EditorState, ctx: TilemapContext)=> void
+    {
+        let avail = GetContentRegionAvail();
+
+        // 工具栏（整宽）
+        do draw_toolbar(state, ctx);
+
+        let left_w = 320.;
+        let right_w = 340.;
+        let mut center_w = avail[0] - left_w - right_w - 12.;
+        if (center_w < 200.) center_w = 200.;
+        let body_h = GetContentRegionAvail()[1];
+
+        // 左：调色板（整高）
+        if (BeginChildSize("##tm_left", left_w, body_h))
+            do draw_palette(state, option::value(ctx));
+        EndChild();
+        SameLine();
+
+        // 中：画布（整高——不再被底部图层窄条挤占）
+        if (BeginChildSize("##tm_center", center_w, body_h))
+            do draw_canvas(state, ctx);
+        EndChild();
+        SameLine();
+
+        // 右列：上属性 + 拖拽分隔条 + 下图层。图层列表原在窗口底部整宽
+        // 窄条（仅约两三行高），移入右列后纵向空间充足、行内容也完整。
+        // 图层面板高度受上下限夹取：下限保住工具行 + 至少三行图层，
+        // 上限给属性面板留出最低可用高度。
+        let (right_x, col_y) = GetCursorPos();
+        let right_h = GetContentRegionAvail()[1];
+        let mut layer_h = s_layer_panel_h;
+        let mut layer_max = right_h - 280.;
+        if (layer_max < 160.) layer_max = 160.;
+        if (layer_h < 160.) layer_h = 160.;
+        if (layer_h > layer_max) layer_h = layer_max;
+        // 右列纵向分区（自上而下）：属性 prop_h → 6px 间隙 → 6px 分隔条
+        // → 6px 间隙 → 图层面板占满剩余（= layer_h）
+        let prop_h = right_h - layer_h - 18.;
+
+        if (BeginChildSize("##tm_right", right_w, prop_h))
+            do draw_properties(state, ctx);
+        EndChild();
+
+        // 分隔条与图层面板必须按右列几何显式定位：右列与更高的
+        // 调色板/画布同处一个 SameLine 布局行，ImGui 的行高取同行
+        // 最高项，EndChild 后光标 y 已被推到内容区底部，跟随光标
+        // 会让图层面板被挤到 0 高。
+        let split_y = col_y + prop_h + 6.;
+        SetCursorPos((right_x, split_y));
+        layer_h = draw_hsplitter("##tm_right_split", layer_h);
+        s_layer_panel_h = layer_h;
+
+        SetCursorPos((right_x, split_y + 12.));
+        if (BeginChildSize("##tm_layers", right_w, 0.))
+            do draw_layers(state, ctx);
+        EndChild();
+    }
+}

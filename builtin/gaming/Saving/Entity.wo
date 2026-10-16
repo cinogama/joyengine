@@ -818,7 +818,7 @@ namespace JEGaming::Saving::Entity
                     if (_texture_paths_contains(old_textures, path)
                         && !_texture_paths_contains(new_textures, path))
                         e->bind_texture(
-                            tpass, option::none: option<texture>);
+                            tpass, option::none: option<texture2d>);
             }
         }
         for (let (tpass, tpath) : new_textures)
@@ -826,7 +826,7 @@ namespace JEGaming::Saving::Entity
             do try!{
                 try! texture_path = tpath->as_string;
                 
-                match (texture::load(universe, texture_path))
+                match (texture2d::load(universe, texture_path))
                 {
                     // 加载失败保持旧绑定
                     none?;
@@ -906,7 +906,7 @@ namespace JEGaming::Saving::Entity
                 
                 e->bind_texture(
                     tpass as int,
-                    texture::load(universe, texture_path));
+                    texture2d::load(universe, texture_path));
                     
                 return_value!;
             };

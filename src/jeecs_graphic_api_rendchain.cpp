@@ -28,9 +28,15 @@ struct jegl_uniform_data_node
 // 纹理组：一组 (texture_pass, texture) 绑定。
 // 槽位数量通常 <8，使用扁平 vector + 线性查找，
 // 比 unordered_map 更快且无 per-entry 堆分配。
+struct jegl_rchain_bound_texture
+{
+    size_t m_pass;
+    jegl_texture_kind m_kind;
+    jegl_texture_common* m_texture;
+};
 struct jegl_rchain_texture_group
 {
-    std::vector<std::pair<size_t, jegl_texture*>> m_binding_textures;
+    std::vector<jegl_rchain_bound_texture> m_binding_textures;
 };
 
 // 单次绘制操作。
@@ -69,7 +75,27 @@ struct jegl_rendchain
             }
             static void release_texture(void* texture_ptr)
             {
-                jegl_close_texture(static_cast<jegl_texture*>(texture_ptr));
+                auto* texture = static_cast<jegl_texture_common*>(texture_ptr);
+                switch (texture->m_kind)
+                {
+                case jegl_texture_kind::TEXTURE_2D:
+                    jegl_close_texture_2d(static_cast<jegl_texture_2d*>(texture));
+                    break;
+                case jegl_texture_kind::TEXTURE_3D:
+                    jegl_close_texture_3d(static_cast<jegl_texture_3d*>(texture));
+                    break;
+                case jegl_texture_kind::TEXTURE_ARRAY:
+                    jegl_close_texture_array(static_cast<jegl_texture_array*>(texture));
+                    break;
+                case jegl_texture_kind::TEXTURE_CUBE:
+                    jegl_close_texture_cube(static_cast<jegl_texture_cube*>(texture));
+                    break;
+                case jegl_texture_kind::TEXTURE_MSAA:
+                    jegl_close_texture_msaa(static_cast<jegl_texture_msaa*>(texture));
+                    break;
+                default:
+                    abort();
+                }
             }
             static void release_vertex(void* vertex_ptr)
             {
@@ -98,7 +124,12 @@ struct jegl_rendchain
             {
                 if constexpr (std::is_same_v<T, jegl_shader>)
                     m_release_method = &release_shader;
-                else if constexpr (std::is_same_v<T, jegl_texture>)
+                else if constexpr (
+                    std::is_same_v<T, jegl_texture_2d>
+                    || std::is_same_v<T, jegl_texture_3d>
+                    || std::is_same_v<T, jegl_texture_array>
+                    || std::is_same_v<T, jegl_texture_cube>
+                    || std::is_same_v<T, jegl_texture_msaa>)
                     m_release_method = &release_texture;
                 else if constexpr (std::is_same_v<T, jegl_vertex>)
                     m_release_method = &release_vertex;
@@ -230,7 +261,7 @@ void jegl_rchain_close(jegl_rendchain* chain)
 }
 void jegl_rchain_begin(
     jegl_rendchain* chain,
-    jegl_frame_buffer* framebuffer,
+    /* OPTIONAL: nullptr to render to screen */ jegl_frame_buffer* framebuffer,
     int32_t x, int32_t y, uint32_t w, uint32_t h)
 {
     assert(chain != nullptr);
@@ -321,7 +352,7 @@ jegl_rchain_texture_group* jegl_rchain_allocate_texture_group(jegl_rendchain* ch
     return &texture_group;
 }
 jegl_rendchain_rend_action* jegl_rchain_draw(
-    jegl_rendchain* chain, jegl_shader* shader, jegl_vertex* vertex, jegl_rchain_texture_group* texture_group)
+    jegl_rendchain* chain, jegl_shader* shader, jegl_vertex* vertex, /* OPTIONAL */ jegl_rchain_texture_group* texture_group)
 {
     assert(chain != nullptr);
     chain->m_used_resource.use_resource(shader);
@@ -354,7 +385,7 @@ void jegl_rchain_set_uniform_buffer(
 
 void jegl_rchain_set_uniform_int(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place,
     int val)
 {
     assert(act != nullptr);
@@ -369,7 +400,7 @@ void jegl_rchain_set_uniform_int(
 }
 void jegl_rchain_set_uniform_int2(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place,
     int x,
     int y)
 {
@@ -386,7 +417,7 @@ void jegl_rchain_set_uniform_int2(
 }
 void jegl_rchain_set_uniform_int3(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place,
     int x,
     int y,
     int z)
@@ -405,7 +436,7 @@ void jegl_rchain_set_uniform_int3(
 }
 void jegl_rchain_set_uniform_int4(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place,
     int x,
     int y,
     int z,
@@ -426,7 +457,7 @@ void jegl_rchain_set_uniform_int4(
 }
 void jegl_rchain_set_uniform_float(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place,
     float val)
 {
     assert(act != nullptr);
@@ -441,7 +472,7 @@ void jegl_rchain_set_uniform_float(
 }
 void jegl_rchain_set_uniform_float2(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place,
     float x,
     float y)
 {
@@ -458,7 +489,7 @@ void jegl_rchain_set_uniform_float2(
 }
 void jegl_rchain_set_uniform_float3(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place,
     float x,
     float y,
     float z)
@@ -477,7 +508,7 @@ void jegl_rchain_set_uniform_float3(
 }
 void jegl_rchain_set_uniform_float4(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place,
     float x,
     float y,
     float z,
@@ -498,7 +529,7 @@ void jegl_rchain_set_uniform_float4(
 }
 void jegl_rchain_set_uniform_float2x2(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place,
     const float (*mat)[2])
 {
     assert(act != nullptr);
@@ -515,7 +546,7 @@ void jegl_rchain_set_uniform_float2x2(
 }
 void jegl_rchain_set_uniform_float3x3(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place,
     const float (*mat)[3])
 {
     assert(act != nullptr);
@@ -532,7 +563,7 @@ void jegl_rchain_set_uniform_float3x3(
 }
 void jegl_rchain_set_uniform_float4x4(
     jegl_rendchain_rend_action* act,
-    const uint32_t* binding_place,
+    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place,
     const float (*mat)[4])
 {
     assert(act != nullptr);
@@ -548,33 +579,77 @@ void jegl_rchain_set_uniform_float4x4(
     memcpy(uniform.m_value.m_float4x4, mat, sizeof(uniform.m_value.m_float4x4));
 }
 
-void jegl_rchain_bind_texture(
+template<typename TexT>
+static void jegl_rchain_bind_texture_impl(
     jegl_rendchain* chain,
     jegl_rchain_texture_group* texture_group,
     size_t binding_pass,
-    jegl_texture* texture)
+    TexT* texture)
 {
     assert(chain != nullptr);
     assert(texture_group != nullptr);
 
     // 替换已存在 pass 的绑定；否则追加。槽位通常 <8，线性查找即可。
     bool updated = false;
-    for (auto& [pass, tex] : texture_group->m_binding_textures)
+    for (auto& bound : texture_group->m_binding_textures)
     {
-        if (pass == binding_pass)
+        if (bound.m_pass == binding_pass)
         {
-            tex = texture;
+            bound.m_kind = TexT::KIND;
+            bound.m_texture = texture;
             updated = true;
             break;
         }
     }
     if (!updated)
-        texture_group->m_binding_textures.push_back({ binding_pass, texture });
+        texture_group->m_binding_textures.push_back(
+            { binding_pass, TexT::KIND, texture });
 
     chain->m_used_resource.use_resource(texture);
 }
 
-jegl_frame_buffer* /* MAY NULL */ jegl_rchain_get_target_framebuf(jegl_rendchain* chain)
+void jegl_rchain_bind_texture_2d(
+    jegl_rendchain* chain,
+    jegl_rchain_texture_group* texture_group,
+    size_t binding_pass,
+    jegl_texture_2d* texture)
+{
+    jegl_rchain_bind_texture_impl(chain, texture_group, binding_pass, texture);
+}
+void jegl_rchain_bind_texture_3d(
+    jegl_rendchain* chain,
+    jegl_rchain_texture_group* texture_group,
+    size_t binding_pass,
+    jegl_texture_3d* texture)
+{
+    jegl_rchain_bind_texture_impl(chain, texture_group, binding_pass, texture);
+}
+void jegl_rchain_bind_texture_array(
+    jegl_rendchain* chain,
+    jegl_rchain_texture_group* texture_group,
+    size_t binding_pass,
+    jegl_texture_array* texture)
+{
+    jegl_rchain_bind_texture_impl(chain, texture_group, binding_pass, texture);
+}
+void jegl_rchain_bind_texture_cube(
+    jegl_rendchain* chain,
+    jegl_rchain_texture_group* texture_group,
+    size_t binding_pass,
+    jegl_texture_cube* texture)
+{
+    jegl_rchain_bind_texture_impl(chain, texture_group, binding_pass, texture);
+}
+void jegl_rchain_bind_texture_msaa(
+    jegl_rendchain* chain,
+    jegl_rchain_texture_group* texture_group,
+    size_t binding_pass,
+    jegl_texture_msaa* texture)
+{
+    jegl_rchain_bind_texture_impl(chain, texture_group, binding_pass, texture);
+}
+
+/* OPTIONAL: nullptr if target is screen */ jegl_frame_buffer* jegl_rchain_get_target_framebuf(jegl_rendchain* chain)
 {
     assert(chain != nullptr);
     return chain->m_target_frame_buffer;
@@ -602,10 +677,34 @@ void jegl_rchain_commit(jegl_rendchain* chain, jegl_context* glthread)
         if (last_used_texture_group != action.m_binding_texture_group
             && action.m_binding_texture_group != nullptr)
         {
-            for (auto& [pass, texture] :
+            for (auto& bound :
                 action.m_binding_texture_group->m_binding_textures)
             {
-                jegl_bind_texture(texture, pass);
+                switch (bound.m_kind)
+                {
+                case jegl_texture_kind::TEXTURE_2D:
+                    jegl_bind_texture_2d(
+                        static_cast<jegl_texture_2d*>(bound.m_texture), bound.m_pass);
+                    break;
+                case jegl_texture_kind::TEXTURE_3D:
+                    jegl_bind_texture_3d(
+                        static_cast<jegl_texture_3d*>(bound.m_texture), bound.m_pass);
+                    break;
+                case jegl_texture_kind::TEXTURE_ARRAY:
+                    jegl_bind_texture_array(
+                        static_cast<jegl_texture_array*>(bound.m_texture), bound.m_pass);
+                    break;
+                case jegl_texture_kind::TEXTURE_CUBE:
+                    jegl_bind_texture_cube(
+                        static_cast<jegl_texture_cube*>(bound.m_texture), bound.m_pass);
+                    break;
+                case jegl_texture_kind::TEXTURE_MSAA:
+                    jegl_bind_texture_msaa(
+                        static_cast<jegl_texture_msaa*>(bound.m_texture), bound.m_pass);
+                    break;
+                default:
+                    abort();
+                }
             }
         }
         last_used_texture_group = action.m_binding_texture_group;

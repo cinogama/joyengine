@@ -1,0 +1,145 @@
+// 瓦片地图编辑器 —— 文档模型。
+// TilemapContext 包装 je::tilemap 的地图文档句柄与文件路径，并维护
+// "地图引用的图集 -> 已打开图集文档句柄"的解析缓存（图集文档同样由
+// 引擎按路径全局缓存，多地图共享同一实例；打开失败以 none 占位）。
+
+import pkg::std;
+
+import je;
+import je::tilemap;
+
+import pkg::fsys;
+
+using std;
+using je;
+using fsys;
+using je::tilemap;
+
+namespace JEEditor::Editor::TilemapEditor
+{
+    // 新建地图/图层默认指配的图层着色器：渲染侧着色器唯一来源是图层
+    // 样式（不回落地图根实体或内置默认）。项目 resource/shader 在建项
+    // 目时由内置着色器整体拷贝而来（见 ProjectOpen::initProjectResources）。
+    public let DEFAULT_LAYER_SHADER = "@/resource/shader/TilemapUnlitBlend.shader";
+
+    // 两个图集句柄 option 的相等性（均为 none 视为相等；均有句柄时比较句柄）
+    func same_tileset(a: option<tilemap::Tileset>, b: option<tilemap::Tileset>)=> bool
+    {
+        if (a->is_none != b->is_none)
+            return false;
+        if (a->is_none)
+            return true;
+        return a->unwrap() == b->unwrap();
+    }
+
+    public using TilemapContext = struct{
+        // .je4tilemap 文件路径（未保存的新地图为空串）
+        protected m_path: mut fsys::path_t,
+        // 地图文档句柄（构造起恒有效）
+        protected m_map: mut tilemap::Tilemap,
+
+        // 图集解析缓存：与地图 tilesets 引用表平行的图集文档句柄
+        //（打开失败的引用以 none 占位）
+        protected m_tileset_ids: vec<option<tilemap::Tileset>>,
+        protected m_tileset_paths: vec<string>,
+    }
+    {
+        // 从 .je4tilemap 文件打开；文件无法解析时返回 err(原因)
+        public func open(path: fsys::path_t)=> result<TilemapContext, string>
+        {
+            let path_str = path->to_string;
+            match (tilemap::Tilemap::open(path_str))
+            {
+                none? { return result::err(F"无法解析瓦片地图文件：{path_str}"); }
+                value(map)?
+                {
+                    return result::ok(TilemapContext{
+                            m_path = mut path,
+                            m_map = mut map,
+                            m_tileset_ids = []mut,
+                            m_tileset_paths = []mut,
+                        });
+                }
+            }
+        }
+
+        // 新建地图文档（未保存，路径为空）
+        public func create_new(w: int, h: int, tile_px: int)=> result<TilemapContext, string>
+        {
+            match (tilemap::Tilemap::create(w, h, tile_px))
+            {
+                none? { return result::err("创建地图文档失败"); }
+                value(map)?
+                {
+                    return result::ok(TilemapContext{
+                            m_path = mut fsys::normalize(""),
+                            m_map = mut map,
+                            m_tileset_ids = []mut,
+                            m_tileset_paths = []mut,
+                        });
+                }
+            }
+        }
+
+        // 保存到指定路径并更新文档登记（保存后各世界按新路径共享）
+        public func save_to(self: TilemapContext, path: fsys::path_t)=> bool
+        {
+            let path_str = path->to_string;
+            if (!self.m_map->save(path_str))
+                return false;
+            self.m_path = path;
+            return true;
+        }
+
+        // 同步图集解析缓存：与地图当前引用表对齐（增删/重开后刷新）。
+        // 除路径变化外还须检测文档句柄漂移：图集被另存/覆盖保存后注册
+        // 表会把路径重绑到新文档实例，缓存若不跟随，地图调色板与图集
+        // 编辑器会各持一份副本，一边的修改被另一边的保存覆盖丢失。
+        public func sync_tilesets(self: TilemapContext)=> void
+        {
+            let count = self.m_map->tileset_count();
+            // 数量、任一路径或任一句柄变化时重建缓存（就地清空重填，保持下标对齐）
+            let mut need_rebuild = self.m_tileset_paths->len != count;
+            if (!need_rebuild)
+            {
+                for (let mut i = 0; i < count; i += 1)
+                {
+                    let cur_path = self.m_map->tileset_path(i);
+                    match (self.m_tileset_paths->get(i))
+                    {
+                        value(cached)?
+                        {
+                            if (cur_path != cached
+                                || !same_tileset(tilemap::Tileset::open(cur_path),
+                                    self.m_tileset_ids[i]))
+                            {
+                                need_rebuild = true;
+                                break;
+                            }
+                        }
+                        none? { need_rebuild = true; break; }
+                    }
+                }
+            }
+            if (need_rebuild)
+            {
+                self.m_tileset_ids->clear();
+                self.m_tileset_paths->clear();
+                for (let mut i = 0; i < count; i += 1)
+                {
+                    let p = self.m_map->tileset_path(i);
+                    do self.m_tileset_paths->add(p);
+                    do self.m_tileset_ids->add(tilemap::Tileset::open(p));
+                }
+            }
+        }
+
+        // 第 idx 个图集的文档句柄（须先 sync_tilesets；越界或打开失败返回 none）
+        public func tileset_id(self: TilemapContext, idx: int)=> option<tilemap::Tileset>
+        {
+            if (idx < 0 || idx >= self.m_tileset_ids->len)
+                return option::none;
+            return self.m_tileset_ids[idx];
+        }
+    }
+}

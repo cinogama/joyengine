@@ -18,12 +18,12 @@ namespace JEEditor::GUI::Forms
     using MsgBox = struct{
         m_title: string,
         m_text: string,
-        m_icon: option<texture>,
+        m_icon: option<texture2d>,
         
         m_closed: mut bool,
     }
     {
-        public func create(title: string, text: string, icon: option<texture>)=> MsgBox
+        public func create(title: string, text: string, icon: option<texture2d>)=> MsgBox
             where require!(MsgBox: Windows::IWindows);
         {
             return MsgBox{

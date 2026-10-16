@@ -481,13 +481,13 @@ namespace Renderer
         extern("libjoyecs", "wojeapi_towoo_renderer_shape_set_vertex")
             public func set_vertex(self: Shape, vertex: option<je::graphic::vertex>)=> void;
     }
-    namespace Textures
+    namespace Textures2D
     {
         extern("libjoyecs", "wojeapi_towoo_renderer_textures_bind_texture")
-            public func bind_texture(self: Textures, pass: int, text: je::graphic::texture)=> void;
-            
+            public func bind_texture(self: Textures2D, pass: int, text: je::graphic::texture2d)=> void;
+
         extern("libjoyecs", "wojeapi_towoo_renderer_textures_get_texture")
-            public func get_texture(self: Textures, pass: int)=> option<je::graphic::texture>;
+            public func get_texture(self: Textures2D, pass: int)=> option<je::graphic::texture2d>;
     }
     namespace Shaders
     {
