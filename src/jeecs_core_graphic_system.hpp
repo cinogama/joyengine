@@ -1940,10 +1940,7 @@ public func vert(v: vin)
     // tiling/offset 只作用于 uv.xy，数组层号分量原样传递
     return v2f{
         pos = JE_MVP * vec4!(v.vertex, 1.),
-        uv = vec3!(
-            v.uv->x * JE_UV_TILING->x + JE_UV_OFFSET->x,
-            v.uv->y * JE_UV_TILING->y + JE_UV_OFFSET->y,
-            v.uv->z),
+        uv = vec3!(uvtrans(v.uv->xy, JE_UV_TILING, JE_UV_OFFSET), v.uv->z),
     };
 }
 
@@ -2082,10 +2079,7 @@ public func vert(v: vin)
     return v2f{
         pos = JE_MVP * vec4!(v.vertex, 1.),
         // tiling/offset 只作用于 uv.xy，数组层号分量原样传递
-        uv = vec3!(
-            v.uv->x * JE_UV_TILING->x + JE_UV_OFFSET->x,
-            v.uv->y * JE_UV_TILING->y + JE_UV_OFFSET->y,
-            v.uv->z),
+        uv = vec3!(uvtrans(v.uv->xy, JE_UV_TILING, JE_UV_OFFSET), v.uv->z),
         cover = JE_COLOR->x * (1. - lit),
     };
 }
