@@ -5165,15 +5165,20 @@ je_tilemap_layer_selfshadow / je_tilemap_set_layer_selfshadow 的取值。
 渲染分片是运行时生成的隐藏实体，无法逐个挂组件，故由图层属性驱动：
     * JE_LAYER_SELFSHADOW_OFF 禁用：该层分片不挂 SelfShadow 组件，
       图块正常接收更高层遮挡体投下的阴影
-    * JE_LAYER_SELFSHADOW_ON  启用：分片挂 SelfShadow 且固定
-      auto_disable = false、factor = 0
+    * JE_LAYER_SELFSHADOW_ON  启用（常开）：分片挂 SelfShadow 且
+      auto_disable = false，无论光源高度如何，自阴影覆盖始终按 factor 生效
+    * JE_LAYER_SELFSHADOW_AUTO 启用（自动）：分片挂 SelfShadow 且
+      auto_disable = true，光源不高于该层时自阴影覆盖被清除（图块受光）
+（覆盖强度 factor 经 je_tilemap_set_layer_selfshadow_factor 按层设置）
 请参见：
     je_tilemap_set_layer_selfshadow
+    je_tilemap_set_layer_selfshadow_factor
 */
 enum je_LayerSelfShadow
 {
     JE_LAYER_SELFSHADOW_OFF = 0,
     JE_LAYER_SELFSHADOW_ON = 1,
+    JE_LAYER_SELFSHADOW_AUTO = 2,
 };
 
 /*
@@ -5399,15 +5404,38 @@ JE_API je_LayerSelfShadow je_tilemap_layer_selfshadow(je_TilemapDocument* map, j
 /*
 je_tilemap_set_layer_selfshadow [基本接口]
 设置图层的 2D 光照自阴影行为：OFF 时该层渲染分片移除 Light2D::SelfShadow
-组件（不参与自阴影覆盖），ON 时挂载该组件并固定 auto_disable = false、
-factor = 0。渲染分片由引擎生成，组件的挂载与摘除由 TilemapSystem 逐帧
+组件（不参与自阴影覆盖），ON/AUTO 时挂载该组件并分别固定 auto_disable 为
+false / true；覆盖强度由 je_tilemap_set_layer_selfshadow_factor 设置
+（缺省 1）。渲染分片由引擎生成，组件的挂载与摘除由 TilemapSystem 逐帧
 对齐（走命令缓冲，下一帧迁移生效）；该设置随图层记录落盘
     * 下标越界时不做任何修改
 请参见：
     je_LayerSelfShadow
     je_tilemap_layer_selfshadow
+    je_tilemap_set_layer_selfshadow_factor
 */
 JE_API void je_tilemap_set_layer_selfshadow(je_TilemapDocument* map, je_LayerId layer, je_LayerSelfShadow selfshadow);
+
+/*
+je_tilemap_layer_selfshadow_factor [基本接口]
+取图层的自阴影覆盖强度（写入分片 Light2D::SelfShadow::factor，即覆盖色
+RGBA 乘子；仅图层模式为 ON/AUTO 时生效），下标越界时返回 1
+请参见：
+    je_tilemap_set_layer_selfshadow_factor
+*/
+JE_API float je_tilemap_layer_selfshadow_factor(je_TilemapDocument* map, je_LayerId layer);
+
+/*
+je_tilemap_set_layer_selfshadow_factor [基本接口]
+设置图层的自阴影覆盖强度：不做范围钳制（与 Light2D::SelfShadow::factor
+组件本体同口径，常用 0..1）；强度与模式一样随图层记录落盘、由
+TilemapSystem 逐帧对齐到分片组件
+    * 下标越界时不做任何修改
+请参见：
+    je_tilemap_layer_selfshadow_factor
+    je_tilemap_set_layer_selfshadow
+*/
+JE_API void je_tilemap_set_layer_selfshadow_factor(je_TilemapDocument* map, je_LayerId layer, float factor);
 
 /*
 je_tilemap_layer_blockshadow [基本接口]

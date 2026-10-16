@@ -263,10 +263,13 @@ namespace jeecs
             // 写深度的场景物体之间参与裁决。缺省按基数 + 层下标错开。
             int32_t rend_queue = LAYER_REND_QUEUE_BASE;
             // 该层的 2D 光照自阴影行为（je_LayerSelfShadow）：OFF = 该层
-            // 分片不挂 Light2D::SelfShadow 组件；ON = 挂载且固定
-            // auto_disable = false、factor = 0。分片组件由
+            // 分片不挂 Light2D::SelfShadow 组件；ON/AUTO = 挂载且
+            // auto_disable 分别固定为 false/true。分片组件由
             // TilemapSystem 逐帧对齐（增删走命令缓冲）。
             je_LayerSelfShadow selfshadow = JE_LAYER_SELFSHADOW_OFF;
+            // 自阴影覆盖强度（写入分片 SelfShadow::factor，即覆盖色
+            // RGBA 乘子，0..1 常用）：仅 selfshadow != OFF 时生效
+            float selfshadow_factor = 1.f;
             // 该层的 2D 光照遮挡阴影行为（je_LayerBlockShadow）：OFF =
             // 该层分片不挂 Light2D::BlockShadow 组件；ON/AUTO = 挂载且
             // auto_disable 分别固定 false/true，factor 取 blockshadow_factor。
@@ -321,12 +324,13 @@ namespace jeecs
         // 起每个源在 6 个基础字段后带附加层级纹理表（u32 计数 + 每条
         // pass/path/tex_w/tex_h），pass < 1 视为损坏（与地图层样式槽位
         // 同口径）。JTS3 为无层级表的旧版（读取兼容，保存升级为 JTS4）。
-        // 地图（JTM6）图层记录内联 rend_queue（i32）、自阴影行为
-        //（je_LayerSelfShadow 的 u8，越界视为损坏）、遮挡阴影行为
-        //（je_LayerBlockShadow 的 u8，越界视为损坏）与遮挡阴影强度（f32）。
+        // 地图（JTM5）图层记录内联 rend_queue（i32）、自阴影行为
+        //（je_LayerSelfShadow 的 u8，越界视为损坏）、自阴影强度（f32）、
+        // 遮挡阴影行为（je_LayerBlockShadow 的 u8，越界视为损坏）与
+        // 遮挡阴影强度（f32）。
         constexpr uint32_t TILESET_MAGIC = 0x4A545334;     // "JTS4"
         constexpr uint32_t TILESET_MAGIC_V3 = 0x4A545333;  // "JTS3"（旧版，只读兼容）
-        constexpr uint32_t MAP_MAGIC = 0x4A544D36;         // "JTM6"
+        constexpr uint32_t MAP_MAGIC = 0x4A544D35;         // "JTM5"
 
         struct bin_writer
         {
@@ -853,6 +857,7 @@ namespace jeecs
             {
                 w.str(l.name); w.u8(l.visible ? 1 : 0); w.u8(l.locked ? 1 : 0);
                 w.i32(l.rend_queue); w.u8((uint8_t)l.selfshadow);
+                w.f32(l.selfshadow_factor);
                 w.u8((uint8_t)l.blockshadow); w.f32(l.blockshadow_factor);
                 w.u32((uint32_t)l.grid.size());
                 for (int32_t v : l.grid) w.i32(v);
@@ -940,9 +945,10 @@ namespace jeecs
                 l.locked = r.u8() != 0;
                 l.rend_queue = r.i32();
                 uint8_t selfshadow = r.u8();
-                if (selfshadow > (uint8_t)JE_LAYER_SELFSHADOW_ON)
+                if (selfshadow > (uint8_t)JE_LAYER_SELFSHADOW_AUTO)
                 { r.ok = false; break; }
                 l.selfshadow = (je_LayerSelfShadow)selfshadow;
+                l.selfshadow_factor = r.f32();
                 uint8_t blockshadow = r.u8();
                 if (blockshadow > (uint8_t)JE_LAYER_BLOCKSHADOW_AUTO)
                 { r.ok = false; break; }
