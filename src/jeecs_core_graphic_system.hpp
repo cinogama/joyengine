@@ -1267,31 +1267,32 @@ public let frag =
                 1.f,
                 0.f,
             };
+            // SpriteShadow 全向阴影条带：底/顶/左/右四条锚边各一个四边形，
+            // 锚点对（factor=0）贴边，远端对（factor=1）由顶点着色器沿背光
+            // 方向挤出；向光边在顶点着色器里折叠回锚边（零面积，无片元）。
+            // 顶点格式 pos.xyz / uv.xy / factor / edge_normal.xy，
+            // uv 沿边方向 0→1、沿挤出方向从本边值跨到对边值（整图压扁观感）。
             inline static const float _sprite_shadow_vertex_data[] = {
-                -0.5f,
-                -0.5f,
-                0.0f,
-                0.0f,
-                1.0f,
-                1.0f,
-                -0.5f,
-                -0.5f,
-                0.0f,
-                0.0f,
-                0.0f,
-                0.0f,
-                0.5f,
-                -0.5f,
-                0.0f,
-                1.0f,
-                1.0f,
-                1.0f,
-                0.5f,
-                -0.5f,
-                0.0f,
-                1.0f,
-                0.0f,
-                0.0f,
+                /* bottom edge, normal (0,-1) */
+                -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f,
+                0.5f,  -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, -1.0f,
+                -0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, -1.0f,
+                0.5f,  -0.5f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f, -1.0f,
+                /* top edge, normal (0,1) */
+                -0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+                0.5f,  0.5f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+                -0.5f, 0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f,
+                0.5f,  0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f,
+                /* left edge, normal (-1,0) */
+                -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f,
+                -0.5f, 0.5f,  0.0f, 0.0f, 1.0f, 0.0f, -1.0f, 0.0f,
+                -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 1.0f, -1.0f, 0.0f,
+                -0.5f, 0.5f,  0.0f, 1.0f, 1.0f, 1.0f, -1.0f, 0.0f,
+                /* right edge, normal (1,0) */
+                0.5f,  -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+                0.5f,  0.5f,  0.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f,
+                0.5f,  -0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f,
+                0.5f,  0.5f,  0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f,
             };
             DeferLight2DResource()
                 : _no_shadow{
@@ -1311,14 +1312,18 @@ public let frag =
                 }
                 , _sprite_shadow_vertex{
                     jeecs::graphic::vertex::create(
-                        jegl_vertex::TRIANGLESTRIP,
+                        jegl_vertex::type::TRIANGLES,
                         _sprite_shadow_vertex_data,
                         sizeof(_sprite_shadow_vertex_data),
-                        {0, 1, 2, 3},
+                        {0, 1, 2, 1, 3, 2,
+                        4, 5, 6, 5, 7, 6,
+                        8, 9, 10, 9, 11, 10,
+                        12, 13, 14, 13, 15, 14},
                         {
                             {jegl_vertex::data_type::FLOAT32, 3},
                             {jegl_vertex::data_type::FLOAT32, 2},
                             {jegl_vertex::data_type::FLOAT32, 1},
+                            {jegl_vertex::data_type::FLOAT32, 2},
                         })
                         .value()
                 }
@@ -1720,6 +1725,8 @@ WOSHADER_VERTEX_IN!
         vertex: float3,
         uv: float2,
         factor: float,
+        // 锚边外法线：顶点着色器用它判定本边是否背光
+        normal: float2,
     };
     
 WOSHADER_VERTEX_TO_FRAGMENT!
@@ -1737,15 +1744,23 @@ public func vert(v: vin)
 {
     let light2d_vpos = JE_V * vec4!(JE_COLOR->xyz, 1.);
     let shadow_scale_factor = JE_COLOR->w;
-    
+
     let vpos = JE_MV * vec4!(v.vertex, 1.);
-    let centerpos = JE_MV * vec4!(0., 0., 0., 1.);
-    let shadow_vpos = normalize(
-        (centerpos->xyz / centerpos->w) - (light2d_vpos->xyz / light2d_vpos->w)
-        ) * shadow_scale_factor;
-        
+    // 逐顶点径向：本顶点背向光源的方向（视空间，透视除后），
+    // 近光源时各边自然发散，远光源时退化为整体平移
+    let far_dir = (vpos->xyz / vpos->w) - (light2d_vpos->xyz / light2d_vpos->w);
+    let shadow_dir = far_dir / max(length(far_dir), 0.000001);
+
+    // 边法线随模型旋转/翻转到视空间（w=0 跳过平移），
+    // 向光边（dot<0）整体折叠回锚边成为零面积，不产生片元
+    let edge_normal = (JE_MV * vec4!(v.normal->x, v.normal->y, 0., 0.))->xy;
+    let keep_edge = step(dot(edge_normal, shadow_dir->xy), 0.);
+
     return v2f{
-        pos = JE_P * vec4!((vpos->xyz / vpos->w) + shadow_vpos * v.factor, 1.),
+        pos = JE_P * vec4!(
+            (vpos->xyz / vpos->w)
+                + shadow_dir * shadow_scale_factor * v.factor * keep_edge,
+            1.),
         uv = uvtrans(v.uv, JE_UV_TILING, JE_UV_OFFSET),
     };
 }
@@ -1794,6 +1809,8 @@ WOSHADER_VERTEX_IN!
         vertex: float3,
         uv: float2,
         factor: float,
+        // 锚边外法线：顶点着色器用它判定本边是否背光
+        normal: float2,
     };
     
 WOSHADER_VERTEX_TO_FRAGMENT!
@@ -1811,12 +1828,18 @@ public func vert(v: vin)
 {
     let light2d_vdir = (JE_V * vec4!(JE_COLOR->xyz, 1.))->xyz - movement(JE_V);
     let shadow_scale_factor = JE_COLOR->w;
-    
+    let shadow_dir = normalize(light2d_vdir);
+
+    // 与点光版相同：边法线随模型旋转到视空间，向光边折叠回锚边（零面积）
+    let edge_normal = (JE_MV * vec4!(v.normal->x, v.normal->y, 0., 0.))->xy;
+    let keep_edge = step(dot(edge_normal, shadow_dir->xy), 0.);
+
     let vpos = JE_MV * vec4!(v.vertex, 1.);
-    let shadow_vpos = normalize(light2d_vdir) * shadow_scale_factor;
-    
     return v2f{
-        pos = JE_P * vec4!((vpos->xyz / vpos->w) + shadow_vpos * v.factor, 1.),
+        pos = JE_P * vec4!(
+            (vpos->xyz / vpos->w)
+                + shadow_dir * shadow_scale_factor * v.factor * keep_edge,
+            1.),
         uv = uvtrans(v.uv, JE_UV_TILING, JE_UV_OFFSET),
     };
 }
