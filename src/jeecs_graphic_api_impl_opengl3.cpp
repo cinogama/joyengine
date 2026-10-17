@@ -1016,6 +1016,8 @@ namespace jeecs::graphic::api::gl3
                 shared_blob_data->get_built_in_location("JE_LIGHT2D_RESOLUTION");
             builtin_uniforms.m_builtin_uniform_light2d_decay =
                 shared_blob_data->get_built_in_location("JE_LIGHT2D_DECAY");
+            builtin_uniforms.m_builtin_uniform_shadow_ellipse =
+                shared_blob_data->get_built_in_location("JE_SHADOW_ELLIPSE");
 
             // ATTENTION: 注意，以下参数特殊shader可能挪作他用
             builtin_uniforms.m_builtin_uniform_local_scale = shared_blob_data->get_built_in_location("JE_LOCAL_SCALE");

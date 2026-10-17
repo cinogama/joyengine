@@ -733,7 +733,7 @@ jegl_shader* _jegl_create_shader_instance_and_init(void)
 
     assert(shader_instance != nullptr);
     static_assert(
-        sizeof(shader_instance->m_builtin_uniforms) == 10 * sizeof(uint32_t));
+        sizeof(shader_instance->m_builtin_uniforms) == 11 * sizeof(uint32_t));
 
     shader_instance->m_builtin_uniforms.m_builtin_uniform_ndc_scale =
         shader_instance->m_builtin_uniforms.m_builtin_uniform_m =
@@ -745,6 +745,7 @@ jegl_shader* _jegl_create_shader_instance_and_init(void)
         shader_instance->m_builtin_uniforms.m_builtin_uniform_color =
         shader_instance->m_builtin_uniforms.m_builtin_uniform_light2d_resolution =
         shader_instance->m_builtin_uniforms.m_builtin_uniform_light2d_decay =
+        shader_instance->m_builtin_uniforms.m_builtin_uniform_shadow_ellipse =
     {
         jeecs::graphic::PENDING_UNIFORM_LOCATION
     };

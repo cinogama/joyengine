@@ -1030,6 +1030,8 @@ namespace jeecs::graphic::api::metal
                 shader_blob->get_built_in_location("JE_LIGHT2D_RESOLUTION");
             builtin_uniforms.m_builtin_uniform_light2d_decay =
                 shader_blob->get_built_in_location("JE_LIGHT2D_DECAY");
+            builtin_uniforms.m_builtin_uniform_shadow_ellipse =
+                shader_blob->get_built_in_location("JE_SHADOW_ELLIPSE");
 
             metal_shader_instance->m_ndc_scale_uniform_id =
                 builtin_uniforms.m_builtin_uniform_ndc_scale;

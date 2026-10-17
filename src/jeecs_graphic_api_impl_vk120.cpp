@@ -4331,6 +4331,8 @@ namespace jeecs::graphic::api::vk120
                 shader_blob->get_built_in_location("JE_LIGHT2D_RESOLUTION");
             builtin_uniforms.m_builtin_uniform_light2d_decay =
                 shader_blob->get_built_in_location("JE_LIGHT2D_DECAY");
+            builtin_uniforms.m_builtin_uniform_shadow_ellipse =
+                shader_blob->get_built_in_location("JE_SHADOW_ELLIPSE");
 
             // ATTENTION: 注意，以下参数特殊shader可能挪作他用
             builtin_uniforms.m_builtin_uniform_local_scale = shader_blob->get_built_in_location("JE_LOCAL_SCALE");
