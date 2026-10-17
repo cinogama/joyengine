@@ -2391,6 +2391,10 @@ struct jegl_shader
 
         uint32_t m_builtin_uniform_light2d_resolution;
         uint32_t m_builtin_uniform_light2d_decay;
+
+        // SpriteShadow 接触椭圆参数：x=长轴全长，y=短轴全长，
+        // z=背光尾迹延伸长度，w=有效消隐距离（视图空间长度）
+        uint32_t m_builtin_uniform_shadow_ellipse;
     };
 
     struct unifrom_variables
@@ -13273,18 +13277,30 @@ namespace jeecs
                 typing::register_member(guard, &ShapeShadow::auto_disable, "auto_disable");
             }
         };
+        // 角色接触阴影：在实体网格包围盒底边中点（脚下）生成一个椭圆，
+        // 并从椭圆沿背离光源的方向拉出尾迹，尾迹随消隐距离渐隐；
+        // 点光下尾迹按光源切锥自然张开，平行光下保持等宽。
+        // 椭圆轴固定在视空间（长轴水平、短轴垂直，不随光向旋转），
+        // 只有尾迹朝背光方向延伸；各长度均为视图空间单位
+        //（正交 2D 相机下等同世界单位），与 distance 同口径。
         struct SpriteShadow
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(SpriteShadow);
             JECS_DEFAULT_CONSTRUCTOR(SpriteShadow);
 
-            float factor = 1.0f;
-            float distance = 1.0f;
+            float factor = 1.0f;         // 阴影强度
+            float distance = 1.0f;       // 尾迹延伸长度；<=0 时只画椭圆
+            float ellipse_major = 0.5f;  // 椭圆长轴全长（视空间 X，水平）
+            float ellipse_minor = 0.3f;  // 椭圆短轴全长（视空间 Y，垂直）
+            float fade_distance = 1.0f;  // 尾迹消隐距离；<=0 时取 distance
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &SpriteShadow::factor, "factor");
                 typing::register_member(guard, &SpriteShadow::distance, "distance");
+                typing::register_member(guard, &SpriteShadow::ellipse_major, "ellipse_major");
+                typing::register_member(guard, &SpriteShadow::ellipse_minor, "ellipse_minor");
+                typing::register_member(guard, &SpriteShadow::fade_distance, "fade_distance");
             }
         };
         // 墙状遮挡阴影：把精灵四边形的背光锚边沿挤出方向抹出条带

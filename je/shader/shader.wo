@@ -1170,6 +1170,10 @@ namespace je::shader
         public let JE_COLOR = woshader::vec4!(1., 1., 1., 1.);
     WOSHADER_UNIFORM!
         public let JE_NDC_SCALE = woshader::vec4!(1., 1., 1., 1.);
+    // SpriteShadow 接触椭圆参数：x=长轴全长，y=短轴全长，
+    // z=背光尾迹延伸长度，w=有效消隐距离；全 0 表示禁用
+    WOSHADER_UNIFORM!
+        public let JE_SHADOW_ELLIPSE = woshader::vec4!(0., 0., 0., 0.);
         
     WOSHADER_FUNCTION!
         public func uvtrans(

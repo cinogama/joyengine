@@ -1221,6 +1221,10 @@ public let frag =
 
             jeecs::basic::resource<jeecs::graphic::vertex> _wall_shadow_vertex;
 
+            // SpriteShadow（角色接触阴影）用单位四边形：顶点 ±1，
+            // 顶点着色器把它映射到脚底椭圆 + 背光尾迹的包围框
+            jeecs::basic::resource<jeecs::graphic::vertex> _sprite_shadow_quad;
+
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_point_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_parallel_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_point_reverse_pass;
@@ -1297,6 +1301,13 @@ public let frag =
                 0.5f,  -0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f,
                 0.5f,  0.5f,  0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f,
             };
+            // SpriteShadow 单位四边形 [-1,1]²，仅位置属性
+            inline static const float _sprite_shadow_quad_data[] = {
+                -1.f, -1.f, 0.f,
+                1.f, -1.f, 0.f,
+                -1.f, 1.f, 0.f,
+                1.f, 1.f, 0.f,
+            };
             DeferLight2DResource()
                 : _no_shadow{
                     jeecs::graphic::texture2d::create(1, 1, jegl_texture_common::format::RGBA)
@@ -1327,6 +1338,17 @@ public let frag =
                             {jegl_vertex::data_type::FLOAT32, 2},
                             {jegl_vertex::data_type::FLOAT32, 1},
                             {jegl_vertex::data_type::FLOAT32, 2},
+                        })
+                        .value()
+                }
+                , _sprite_shadow_quad{
+                    jeecs::graphic::vertex::create(
+                        jegl_vertex::type::TRIANGLESTRIP,
+                        _sprite_shadow_quad_data,
+                        sizeof(_sprite_shadow_quad_data),
+                        {0, 1, 2, 3},
+                        {
+                            {jegl_vertex::data_type::FLOAT32, 3},
                         })
                         .value()
                 }
@@ -1708,8 +1730,7 @@ public func frag(vf: v2f)
                     jeecs::graphic::shader::create(
                         nullptr,
                         "!/builtin/defer_light2d_shadow_point_sprite.shader",
-                        R"(
-import pkg::std;
+                        R"(import pkg::std;
 
 import je::shader;
 import pkg::woshader;
@@ -1723,16 +1744,18 @@ BLEND   (MAX, ONE, ONE);
 // MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
 CULL    (NONE);
 
+// 单位四边形 [-1,1]²：顶点着色器把它映射到
+// 「椭圆 + 背光切线锥」的视空间包围盒
 WOSHADER_VERTEX_IN!
     using vin = struct {
         vertex: float3,
-        uv: float2,
     };
     
 WOSHADER_VERTEX_TO_FRAGMENT!
     using v2f = struct{
         pos: float4,
-        uv: float2,
+        off: float2,
+        dir: float2,
     };
     
 WOSHADER_FRAGMENT_OUT!
@@ -1742,44 +1765,157 @@ WOSHADER_FRAGMENT_OUT!
     
 public func vert(v: vin)
 {
-    // local_scale.yz 为 CPU 预计算的精灵局部空间背光方向（xy），
-    // 点光/平行光统一走该通道，着色器内不区分光源类型
+    // JE_LOCAL_SCALE.yz：CPU 预计算的世界空间背光方向（xy）
     let dir_raw = JE_LOCAL_SCALE->yz;
-    let shadow_dir_local = dir_raw / max(length(dir_raw), 0.000001);
-    let shadow_scale_factor = JE_COLOR->w;
+    let shadow_dir_world = dir_raw / max(length(dir_raw), 0.000001);
 
-    let vpos = JE_MV * vec4!(v.vertex, 1.);
-    // 局部方向随模型旋转/翻转到视空间（w=0 跳过平移）
-    let shadow_dir_view = (JE_MV * vec4!(
-        shadow_dir_local->x, shadow_dir_local->y, 0., 0.))->xy;
+    // JE_COLOR.xy：脚底椭圆中心（局部），.z：光源到椭圆的平面距离；
+    // JE_SHADOW_ELLIPSE：x=长轴全长（视空间 X），y=短轴全长
+    //（视空间 Y），z=尾迹延伸长度，w=有效消隐距离
+    let center_local = JE_COLOR->xy;
+    let half_a = max(JE_SHADOW_ELLIPSE->x, 0.) * 0.5;
+    let half_b = max(JE_SHADOW_ELLIPSE->y, 0.) * 0.5;
 
-    // 锚定拉伸：迎光边（stretch=0）原位不动，背光边（stretch=1）沿
-    // 背光方向拉出 distance，贴图随四边形连续拉伸——角色剪影的
-    // 投影式阴影，任意光向都成立
-    let stretch = clamp(0.5 + dot(v.vertex->xy, shadow_dir_local), 0., 1.);
+    // 椭圆中心与阴影方向变换到视空间
+    let center_v4 = JE_MV * vec4!(center_local->x, center_local->y, 0., 1.);
+    let center_view = center_v4->xyz / center_v4->w;
+    let dir_view_raw = (JE_V * vec4!(
+        shadow_dir_world->x, shadow_dir_world->y, 0., 0.))->xy;
+    let dir_view = dir_view_raw / max(length(dir_view_raw), 0.000001);
+    let perp_view = vec2!(dir_view->y, 0. - dir_view->x);
+
+    // 椭圆在阴影局部系（s 沿光向、t 垂直光向）中的二次型
+    // A s² + 2 B s t + C t² = 1
+    let A = dir_view->x * dir_view->x / (half_a * half_a)
+        + dir_view->y * dir_view->y / (half_b * half_b);
+    let B = dir_view->x * dir_view->y
+        * (1. / (half_a * half_a) - 1. / (half_b * half_b));
+    let C = dir_view->y * dir_view->y / (half_a * half_a)
+        + dir_view->x * dir_view->x / (half_b * half_b);
+
+    let along = sqrt(
+        half_a * half_a * dir_view->x * dir_view->x
+            + half_b * half_b * dir_view->y * dir_view->y);
+    let perp_support = sqrt(
+        half_a * half_a * dir_view->y * dir_view->y
+            + half_b * half_b * dir_view->x * dir_view->x);
+
+    // 尾迹延伸范围与光源距离
+    let tail = max(JE_SHADOW_ELLIPSE->z, 0.);
+    let s_end = along + tail;
+    let light_dist = max(JE_COLOR->z, 0.0001);
+
+    // 四边形横向包围：取光源到椭圆的切线斜率（阴影锥边界），
+    // 法向锥退化时回退到支撑半宽 + 估算张开
+    let det = A * C - B * B;
+    let K = C - light_dist * light_dist * det;
+    let slope_disc = B * B - K * A;
+    let has_k = step(abs(K), 0.000001);
+    let slope_ok = step(slope_disc, 0.);
+    let valid = has_k * slope_ok;
+    let denom = K + (1. - has_k);
+    let sqm = sqrt(max(slope_disc, 0.));
+    let m_hi = max(
+        abs((0. - B + sqm) / denom),
+        abs((0. - B - sqm) / denom));
+    let t_slope = m_hi * max(s_end + light_dist, 0.);
+
+    let spread_fallback = min(
+        perp_support / max(
+            sqrt(max(light_dist * light_dist - perp_support * perp_support, 0.000001)),
+            0.000001),
+        8.);
+    let t_fallback = perp_support + max(s_end - along, 0.) * spread_fallback;
+    let t_bound = clamp(
+        lerp(t_fallback, t_slope, valid),
+        perp_support,
+        perp_support * 64. + tail * 4. + 0.001);
+
+    // 四边形覆盖 s∈[-along, s_end]，t∈[-t_bound, t_bound]
+    let frame_s = lerp(0. - along, s_end, (v.vertex->y + 1.) * 0.5);
+    let frame_t = v.vertex->x * max(t_bound, 0.0001);
+
+    let off_x = perp_view->x * frame_t + dir_view->x * frame_s;
+    let off_y = perp_view->y * frame_t + dir_view->y * frame_s;
+
+    let view_pos = vec3!(
+        center_view->x + off_x,
+        center_view->y + off_y,
+        center_view->z);
 
     return v2f{
-        pos = JE_P * vec4!(
-            (vpos->xyz / vpos->w)
-                + vec3!(shadow_dir_view, 0.) * shadow_scale_factor * stretch,
-            1.),
-        uv = uvtrans(v.uv, JE_UV_TILING, JE_UV_OFFSET),
+        pos = JE_P * vec4!(view_pos, 1.),
+        off = vec2!(off_x, off_y),
+        dir = dir_view,
     };
 }
-
-let linear_clamp = Sampler2D::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
-WOSHADER_UNIFORM!
-    let Main = texture2d::uniform(0, linear_clamp);
     
 public func frag(vf: v2f)
 {
+    let half_a = max(max(JE_SHADOW_ELLIPSE->x, 0.) * 0.5, 0.0001);
+    let half_b = max(max(JE_SHADOW_ELLIPSE->y, 0.) * 0.5, 0.0001);
+    let dir_view = vf.dir;
+    let perp_view = vec2!(dir_view->y, 0. - dir_view->x);
+    let tail = max(JE_SHADOW_ELLIPSE->z, 0.);
+    let fade_len = max(JE_SHADOW_ELLIPSE->w, 0.0001);
+    let light_dist = max(JE_COLOR->z, 0.0001);
 
-    let final_shadow = alphatest(
-        vec4!(
-            JE_LOCAL_SCALE,     // NOTE: JE_LOCAL_SCALE->x is shadow factor here.
-            tex2d(Main, vf.uv)->w));
-            
-    let shadow_factor = final_shadow->x;
+    // 椭圆（固定在视空间 X/Y，不随光向旋转）
+    let ex = vf.off->x / half_a;
+    let ey = vf.off->y / half_b;
+    let ellipse_enabled =
+        step(max(JE_SHADOW_ELLIPSE->x, 0.), 0.0001)
+            * step(max(JE_SHADOW_ELLIPSE->y, 0.), 0.0001);
+    let ellipse_cover =
+        clamp((1. - (ex * ex + ey * ey)) * 4., 0., 1.) * ellipse_enabled;
+
+    // 阴影局部坐标
+    let s = dot(vf.off, dir_view);
+    let t = dot(vf.off, perp_view);
+
+    // 椭圆二次型
+    let A = dir_view->x * dir_view->x / (half_a * half_a)
+        + dir_view->y * dir_view->y / (half_b * half_b);
+    let B = dir_view->x * dir_view->y
+        * (1. / (half_a * half_a) - 1. / (half_b * half_b));
+    let C = dir_view->y * dir_view->y / (half_a * half_a)
+        + dir_view->x * dir_view->x / (half_b * half_b);
+
+    // 从光源 P=(-L,0) 沿 (s+L,t) 看，光线与椭圆相切即阴影锥边界。
+    // 解 Q(μ)=0：Q= A ws²+2B ws wt+C wt²，ws=s+L，wt=t
+    let ws = s + light_dist;
+    let wt = t;
+    let Qw = A * ws * ws + 2. * B * ws * wt + C * wt * wt;
+    let b = (0. - light_dist) * (A * ws + B * wt);
+    let c0 = A * light_dist * light_dist - 1.;
+    let disc = b * b - Qw * c0;
+    let sq = sqrt(max(disc, 0.));
+
+    // 片段在椭圆外且光线在到达片段前穿过椭圆 => 处于本影中
+    let outside = step(Qw, 0.000001);
+    let mu = (0. - b - sq) / max(Qw, 0.000001);
+    let hit =
+        step(disc, 0.)
+            * step(mu, 0.)
+            * step(1., mu)
+            * outside;
+
+    // 片段到椭圆命中点的背光距离（沿 s），用于长度截断与渐隐
+    let s_b = 0. - light_dist + mu * ws;
+    let d_behind = s - s_b;
+
+    // 距离渐隐：椭圆背光侧之后按 smoothstep 消隐
+    let u = clamp(d_behind / fade_len, 0., 1.);
+    let fade = 1. - u * u * (3. - 2. * u);
+
+    let in_tail =
+        hit
+            * step(d_behind, 0.)
+            * step(tail, d_behind)
+            * step(tail, 0.0001);
+
+    let cover = max(ellipse_cover, in_tail * fade);
+    let shadow_factor = JE_LOCAL_SCALE->x * cover;
     return fout{
         shadow_factor = vec4!(
             shadow_factor, shadow_factor, shadow_factor, shadow_factor),
@@ -1791,8 +1927,7 @@ public func frag(vf: v2f)
                 jeecs::graphic::shader::create(
                     nullptr,
                     "!/builtin/defer_light2d_shadow_parallel_sprite.shader"
-                    , R"(
-import pkg::std;
+                    , R"(import pkg::std;
 
 import je::shader;
 import pkg::woshader;
@@ -1806,16 +1941,18 @@ BLEND   (MAX, ONE, ONE);
 // MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
 CULL    (NONE);
 
+// 单位四边形 [-1,1]²：顶点着色器把它映射到
+// 「椭圆 + 背光扫掠条带」的视空间包围盒
 WOSHADER_VERTEX_IN!
     using vin = struct {
         vertex: float3,
-        uv: float2,
     };
     
 WOSHADER_VERTEX_TO_FRAGMENT!
     using v2f = struct {
         pos: float4,
-        uv: float2,
+        off: float2,
+        dir: float2,
     };
     
 WOSHADER_FRAGMENT_OUT!
@@ -1825,43 +1962,107 @@ WOSHADER_FRAGMENT_OUT!
     
 public func vert(v: vin)
 {
-    // local_scale.yz 为 CPU 预计算的精灵局部空间背光方向（xy），
-    // 点光/平行光统一走该通道，着色器内不区分光源类型
+    // JE_LOCAL_SCALE.yz：CPU 预计算的世界空间背光方向（xy）
     let dir_raw = JE_LOCAL_SCALE->yz;
-    let shadow_dir_local = dir_raw / max(length(dir_raw), 0.000001);
-    let shadow_scale_factor = JE_COLOR->w;
+    let shadow_dir_world = dir_raw / max(length(dir_raw), 0.000001);
 
-    let vpos = JE_MV * vec4!(v.vertex, 1.);
-    // 局部方向随模型旋转/翻转到视空间（w=0 跳过平移）
-    let shadow_dir_view = (JE_MV * vec4!(
-        shadow_dir_local->x, shadow_dir_local->y, 0., 0.))->xy;
+    // JE_COLOR.xy：脚底椭圆中心（局部）；JE_SHADOW_ELLIPSE：
+    // x=长轴全长（视空间 X），y=短轴全长（视空间 Y），
+    // z=尾迹延伸长度，w=有效消隐距离
+    let center_local = JE_COLOR->xy;
+    let half_a = max(JE_SHADOW_ELLIPSE->x, 0.) * 0.5;
+    let half_b = max(JE_SHADOW_ELLIPSE->y, 0.) * 0.5;
 
-    // 锚定拉伸：迎光边（stretch=0）原位不动，背光边（stretch=1）沿
-    // 背光方向拉出 distance，贴图随四边形连续拉伸——角色剪影的
-    // 投影式阴影，任意光向都成立
-    let stretch = clamp(0.5 + dot(v.vertex->xy, shadow_dir_local), 0., 1.);
+    // 椭圆中心与阴影方向变换到视空间
+    let center_v4 = JE_MV * vec4!(center_local->x, center_local->y, 0., 1.);
+    let center_view = center_v4->xyz / center_v4->w;
+    let dir_view_raw = (JE_V * vec4!(
+        shadow_dir_world->x, shadow_dir_world->y, 0., 0.))->xy;
+    let dir_view = dir_view_raw / max(length(dir_view_raw), 0.000001);
+    let perp_view = vec2!(dir_view->y, 0. - dir_view->x);
+
+    // 椭圆沿光向、垂直光向的支撑半宽
+    let along = sqrt(
+        half_a * half_a * dir_view->x * dir_view->x
+            + half_b * half_b * dir_view->y * dir_view->y);
+    let perp_support = sqrt(
+        half_a * half_a * dir_view->y * dir_view->y
+            + half_b * half_b * dir_view->x * dir_view->x);
+
+    // 平行光阴影 = 椭圆沿光向平移扫过的条带：
+    // 4 边形覆盖 s∈[-along, along+tail]，t∈[-perp_support, perp_support]
+    let tail = max(JE_SHADOW_ELLIPSE->z, 0.);
+    let s_end = along + tail;
+    let frame_s = lerp(0. - along, s_end, (v.vertex->y + 1.) * 0.5);
+    let frame_t = v.vertex->x * max(perp_support, 0.0001);
+
+    let off_x = perp_view->x * frame_t + dir_view->x * frame_s;
+    let off_y = perp_view->y * frame_t + dir_view->y * frame_s;
+
+    let view_pos = vec3!(
+        center_view->x + off_x,
+        center_view->y + off_y,
+        center_view->z);
 
     return v2f{
-        pos = JE_P * vec4!(
-            (vpos->xyz / vpos->w)
-                + vec3!(shadow_dir_view, 0.) * shadow_scale_factor * stretch,
-            1.),
-        uv = uvtrans(v.uv, JE_UV_TILING, JE_UV_OFFSET),
+        pos = JE_P * vec4!(view_pos, 1.),
+        off = vec2!(off_x, off_y),
+        dir = dir_view,
     };
 }
-
-let linear_clamp = Sampler2D::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
-WOSHADER_UNIFORM!
-    let Main = texture2d::uniform(0, linear_clamp);
     
 public func frag(vf: v2f)
 {
-    let final_shadow = alphatest(
-        vec4!(
-            JE_LOCAL_SCALE,     // NOTE: JE_LOCAL_SCALE->x is shadow factor here.
-            tex2d(Main, vf.uv)->w));
-            
-    let shadow_factor = final_shadow->x;
+    let half_a = max(max(JE_SHADOW_ELLIPSE->x, 0.) * 0.5, 0.0001);
+    let half_b = max(max(JE_SHADOW_ELLIPSE->y, 0.) * 0.5, 0.0001);
+    let dir_view = vf.dir;
+    let perp_view = vec2!(dir_view->y, 0. - dir_view->x);
+    let tail = max(JE_SHADOW_ELLIPSE->z, 0.);
+    let fade_len = max(JE_SHADOW_ELLIPSE->w, 0.0001);
+
+    // 椭圆（固定在视空间 X/Y，不随光向旋转）
+    let ex = vf.off->x / half_a;
+    let ey = vf.off->y / half_b;
+    let ellipse_enabled =
+        step(max(JE_SHADOW_ELLIPSE->x, 0.), 0.0001)
+            * step(max(JE_SHADOW_ELLIPSE->y, 0.), 0.0001);
+    let ellipse_cover =
+        clamp((1. - (ex * ex + ey * ey)) * 4., 0., 1.) * ellipse_enabled;
+
+    // 阴影局部坐标
+    let s = dot(vf.off, dir_view);
+    let t = dot(vf.off, perp_view);
+
+    // 椭圆二次型 A s² + 2 B s t + C t² = 1
+    let A = dir_view->x * dir_view->x / (half_a * half_a)
+        + dir_view->y * dir_view->y / (half_b * half_b);
+    let B = dir_view->x * dir_view->y
+        * (1. / (half_a * half_a) - 1. / (half_b * half_b));
+    let C = dir_view->y * dir_view->y / (half_a * half_a)
+        + dir_view->x * dir_view->x / (half_b * half_b);
+
+    let perp_support = sqrt(
+        half_a * half_a * dir_view->y * dir_view->y
+            + half_b * half_b * dir_view->x * dir_view->x);
+
+    // 背光扫掠：|t| 在椭圆支撑范围内时，从椭圆背光侧边界
+    //（大根 s_plus）起沿光向延伸；边界与椭圆严格相切，无接缝
+    let disc_t = B * B * t * t - A * (C * t * t - 1.);
+    let s_plus = (0. - B * t + sqrt(max(disc_t, 0.))) / max(A, 0.0001);
+    let inside_t = step(perp_support, abs(t));
+
+    let d_behind = s - s_plus;
+    let u = clamp(d_behind / fade_len, 0., 1.);
+    let fade = 1. - u * u * (3. - 2. * u);
+
+    let in_tail =
+        inside_t
+            * step(d_behind, 0.)
+            * step(tail, d_behind)
+            * step(tail, 0.0001);
+
+    let cover = max(ellipse_cover, in_tail * fade);
+    let shadow_factor = JE_LOCAL_SCALE->x * cover;
     return fout{
         shadow_factor = vec4!(
             shadow_factor, shadow_factor, shadow_factor, shadow_factor),
@@ -2848,7 +3049,9 @@ public func frag(vf: v2f)
             math::vec3 local_scale,
             float color_w,
             const math::vec3& parallel_dir_ref,
-            const Textures2D* textures)
+            const Textures2D* textures,
+            /* OPTIONAL */ const math::vec4* color_override = nullptr,
+            /* OPTIONAL */ const math::vec4* ellipse_params = nullptr)
         {
             auto* rchain_draw_action = jegl_rchain_draw(
                 shadow_chain, shadow_shader->resource(), shape_vertex->resource(), texture_group);
@@ -2873,8 +3076,17 @@ public func frag(vf: v2f)
                     textures->offset.x, textures->offset.y);
             }
 
-            // 通过 je_color 变量传递光源位置（点光）或方向（平行光）
-            if (light.parallel != nullptr)
+            // 通过 je_color 变量传递光源位置（点光）或方向（平行光）；
+            // SpriteShadow 用 color_override 改为传脚底椭圆中心（局部）
+            if (color_override != nullptr)
+            {
+                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
+                    color_override->x,
+                    color_override->y,
+                    color_override->z,
+                    color_override->w);
+            }
+            else if (light.parallel != nullptr)
             {
                 math::vec3 rotated_light_dir = light.translation->world_rotation * parallel_dir_ref;
                 JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
@@ -2887,6 +3099,16 @@ public func frag(vf: v2f)
                     light.translation->world_position.y,
                     light.translation->world_position.z,
                     color_w);
+            }
+
+            // SpriteShadow 接触椭圆参数（其余遮挡物不使用）
+            if (ellipse_params != nullptr)
+            {
+                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, shadow_ellipse, float4,
+                    ellipse_params->x,
+                    ellipse_params->y,
+                    ellipse_params->z,
+                    ellipse_params->w);
             }
         }
 
@@ -3077,43 +3299,96 @@ public func frag(vf: v2f)
                                     }
                                     if (blockarch.spriteshadow != nullptr && blockarch.spriteshadow->factor > 0.f)
                                     {
-                                        auto* texture_group = alloc_shadow_texture_group(
-                                            light2d_shadow_rend_chain, blockarch.textures);
-
-                                        // SpriteShadow（角色投影）通过 local_scale.x 传权重，
-                                        // .yz 传 CPU 预计算的精灵局部空间背光方向（点光取
-                                        // 实体中心背向光源，平行光取旋转后的参考方向，
-                                        // 均经 world_rotation 逆变换转入局部系），
-                                        // color.w 传 distance。着色器用它做迎光边锚定、
-                                        // 背光边拉伸的投影式阴影。
-                                        const math::vec3 shadow_dir_world =
+                                        // SpriteShadow（角色接触阴影）：在实体网格包围盒
+                                        // 底边中点（脚下）画椭圆，并沿背光方向拉出尾迹。
+                                        // local_scale.x 传强度，.yz 传 CPU 预计算的世界
+                                        // 空间背光方向（着色器用 JE_V 转到视空间，避免
+                                        // 实体非等比缩放扭曲方向）；JE_COLOR.xy 传椭圆
+                                        // 中心，.z 传光源到实体的平面距离（点光用于
+                                        // 切线张开率，平行光不用）；JE_SHADOW_ELLIPSE
+                                        // 传轴长/延伸/消隐距离。
+                                        const math::vec3 shadow_dir_world_raw =
                                             (lightarch.parallel != nullptr
                                                 ? lightarch.translation->world_rotation * math::vec3(0.f, -1.f, 0.f)
                                                 : blockarch.translation->world_position
-                                                    - lightarch.translation->world_position).unit();
-                                        const math::vec3 shadow_dir_local =
-                                            blockarch.translation->world_rotation.inverse() * shadow_dir_world;
+                                                    - lightarch.translation->world_position);
+                                        // 阴影只在 XY 平面内延伸（2D 画面），Z 分量不参与
+                                        // 方向计算，避免光源与实体的高度差稀释方向
+                                        const float shadow_dir_world_len = std::sqrt(
+                                            shadow_dir_world_raw.x * shadow_dir_world_raw.x
+                                            + shadow_dir_world_raw.y * shadow_dir_world_raw.y);
+                                        const math::vec3 shadow_dir_world =
+                                            shadow_dir_world_len > 0.000001f
+                                            ? math::vec3(
+                                                shadow_dir_world_raw.x / shadow_dir_world_len,
+                                                shadow_dir_world_raw.y / shadow_dir_world_len,
+                                                0.f)
+                                            : math::vec3(0.f, -1.f, 0.f);
 
                                         assert(blockarch.shape != nullptr);
-                                        const auto& using_shape = blockarch.shape->vertex.has_value()
-                                            ? blockarch.shape->vertex.value()
-                                            : m_default_resources.default_shape_quad;
+                                        const auto* using_shape = blockarch.shape->vertex.has_value()
+                                            ? blockarch.shape->vertex.value().get()
+                                            : m_default_resources.default_shape_quad.get();
+                                        const auto* shape_vertex_data = using_shape->resource();
+
+                                        const float ellipse_local_x =
+                                            (shape_vertex_data->m_x_min + shape_vertex_data->m_x_max) * 0.5f;
+                                        const float ellipse_local_y = shape_vertex_data->m_y_min;
+
+                                        // 点光阴影由着色器从光源位置向椭圆作切线锥，
+                                        // 需要椭圆中心到光源的平面距离（JE_COLOR.z）；
+                                        // 平行光不用，写 0。距离取世界空间椭圆中心
+                                        // 到光源的 XY 距离。
+                                        float light_plane_distance = 0.f;
+                                        if (lightarch.parallel == nullptr)
+                                        {
+                                            float center_world[4];
+                                            const float center_local[4] = {
+                                                ellipse_local_x, ellipse_local_y, 0.f, 1.f };
+                                            math::mat4xvec4(center_world,
+                                                blockarch.translation->object2world, center_local);
+
+                                            const math::vec3& light_pos =
+                                                lightarch.translation->world_position;
+                                            light_plane_distance = std::sqrt(
+                                                (center_world[0] - light_pos.x) * (center_world[0] - light_pos.x)
+                                                + (center_world[1] - light_pos.y) * (center_world[1] - light_pos.y));
+                                        }
+
+                                        const math::vec4 ellipse_center(
+                                            ellipse_local_x,
+                                            ellipse_local_y,
+                                            light_plane_distance,
+                                            0.f);
+
+                                        const float shadow_distance = std::max(
+                                            blockarch.spriteshadow->distance, 0.f);
+                                        const float shadow_fade = blockarch.spriteshadow->fade_distance > 0.f
+                                            ? std::min(blockarch.spriteshadow->fade_distance, shadow_distance)
+                                            : shadow_distance;
+                                        const math::vec4 ellipse_params(
+                                            blockarch.spriteshadow->ellipse_major,
+                                            blockarch.spriteshadow->ellipse_minor,
+                                            shadow_distance,
+                                            shadow_fade);
 
                                         draw_shadow_occluder(
                                             light2d_shadow_rend_chain,
                                             shadow_passes.sprite,
-                                            using_shape,
-                                            texture_group,
+                                            m_defer_light2d_host._sprite_shadow_quad,
+                                            nullptr,
                                             blockarch.translation,
                                             lightarch,
                                             MAT4_VIEW, MAT4_VP,
                                             math::vec3(
                                                 blockarch.spriteshadow->factor,
-                                                shadow_dir_local.x,
-                                                shadow_dir_local.y),
-                                            blockarch.spriteshadow->distance,
+                                                shadow_dir_world.x,
+                                                shadow_dir_world.y),
+                                            0.f,
                                             math::vec3(0.f, -1.f, 0.f),
-                                            blockarch.textures);
+                                            nullptr,
+                                            &ellipse_center,
+                                            &ellipse_params);
                                     }
                                 }
 
