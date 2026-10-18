@@ -13177,6 +13177,9 @@ namespace jeecs
                 typing::register_member(guard, &CameraPostPass::light_rend_ratio, "light_rend_ratio");
             }
         };
+        // 遮挡阴影：auto_disable = true 时按光源高度决定是否投射。
+        // 普通 2D 光源按实体原点 Z 与光源 Z 比较；TopDown 光源下按实体
+        // 世界包围盒底边 Y（而不是原点中心 Y）与光源 Y 比较。
         struct BlockShadow
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(BlockShadow);
@@ -13264,6 +13267,8 @@ namespace jeecs
                 typing::register_member(guard, &BlockShadow::auto_disable, "auto_disable");
             }
         };
+        // 轮廓遮挡阴影：auto_disable 判定规则与 BlockShadow 相同（TopDown
+        // 光源下以实体世界包围盒底边 Y 为准）
         struct ShapeShadow
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(ShapeShadow);

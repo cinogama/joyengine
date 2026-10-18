@@ -2681,6 +2681,10 @@ public func frag(vf: v2f)
         struct block2d_arch
         {
             const Translation* translation;
+            // 实体世界包围盒底边中点（.y 即底部 Y）：构建列表时按形状局部
+            // AABB 八角点变换计算一次，供 TopDown 排序 / 分层、各阴影的
+            // auto_disable 判定与 SpriteShadow 椭圆中心复用
+            math::vec3 bottom_world_center;
 
             const Light2D::BlockShadow* blockshadow;
             const Light2D::ShapeShadow* shapeshadow;
@@ -3086,6 +3090,7 @@ public func frag(vf: v2f)
                 m_2dblock_z_list.push_back(
                     block2d_arch{
                         &trans,
+                        get_block_bottom_world_center(trans, shape),
                         blockshadow,
                         shapeshadow,
                         spriteshadow,
@@ -3105,16 +3110,18 @@ public func frag(vf: v2f)
                 {
                     return a.translation->world_position.z > b.translation->world_position.z;
                 });
-            // TopDown 光源遍历用：Y 相同（如瓦片地图全部分片/图层共享根
-            // 实体 Y）时按 z 降序平手——z 小者（默认沿 -z 叠放的视觉上层）
-            // 后 flush、其自阴影覆盖在共享像素生效，与普通光源按 z 降序
-            // 遍历的层级结果一致，避免不稳定排序导致覆盖胜负不确定
+            // TopDown 光源遍历用：按实体底部 Y 降序（高大实体也以脚下位置
+            // 参与层级排序，而不是原点中心）。底部 Y 相同时按 z 降序平手——
+            // z 小者（默认沿 -z 叠放的视觉上层）后 flush、其自阴影覆盖在
+            // 共享像素生效，与普通光源按 z 降序遍历的层级结果一致，避免
+            // 不稳定排序导致覆盖胜负不确定
             std::sort(m_2dblock_y_list.begin(), m_2dblock_y_list.end(),
                 [](const block2d_arch& a, const block2d_arch& b)
                 {
-                    const auto& ap = a.translation->world_position;
-                    const auto& bp = b.translation->world_position;
-                    return ap.y > bp.y || (ap.y == bp.y && ap.z > bp.z);
+                    const float ay = a.bottom_world_center.y;
+                    const float by = b.bottom_world_center.y;
+                    return ay > by || (ay == by
+                        && a.translation->world_position.z > b.translation->world_position.z);
                 });
 
             this->branch_allocate_end();
@@ -3184,16 +3191,18 @@ public func frag(vf: v2f)
         // 实体世界包围盒底边中点：取形状局部 AABB 的 8 个角点经
         // object2world 变换后，X/Z 取中值、Y 取最小值。兼容旋转与非居中
         // 轴心——实体旋转后该点仍在世界空间底部（脚下）。
-        // SelfShadow 的 TopDown AUTO 高度判定取 .y；SpriteShadow 取整个点
-        // 作为接触椭圆中心。挂 PerBlockSelfShadow 的分块大网格走顶点属性
-        // 逐块判定（见 sub_topdown pass），不经过这里。
-        math::vec3 get_block_bottom_world_center(const block2d_arch& blockarch) const
+        // 结果缓存进 block2d_arch::bottom_world_center；TopDown 排序/分层、
+        // 各阴影的 auto_disable 与 SpriteShadow 椭圆中心均复用它。
+        // 挂 PerBlockSelfShadow 的分块大网格走顶点属性逐块判定
+        //（见 sub_topdown pass），不经过这里。
+        math::vec3 get_block_bottom_world_center(
+            const Translation& translation, const Shape& shape) const
         {
-            const auto& using_shape = blockarch.shape->vertex.has_value()
-                ? blockarch.shape->vertex.value()
+            const auto& using_shape = shape.vertex.has_value()
+                ? shape.vertex.value()
                 : m_default_resources.default_shape_quad;
             const auto* vertex_data = using_shape->resource();
-            const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
+            const float(&MAT4_MODEL)[4][4] = translation.object2world;
 
             math::vec3 min_point;
             math::vec3 max_point;
@@ -3403,7 +3412,7 @@ public func frag(vf: v2f)
 
                                 int64_t current_layer = lightarch.topdown == nullptr
                                     ? (int64_t)(blockarch.translation->world_position.z * 100.f)
-                                    : (int64_t)(blockarch.translation->world_position.y * 100.f);
+                                    : (int64_t)(blockarch.bottom_world_center.y * 100.f);
 
                                 const float block_range = 0.5f *
                                     get_entity_size(*blockarch.translation, blockarch.shape->vertex).length();
@@ -3418,7 +3427,7 @@ public func frag(vf: v2f)
 
                                     bool light_is_above_block = lightarch.topdown == nullptr
                                         ? blockarch.translation->world_position.z >= lightarch.translation->world_position.z
-                                        : blockarch.translation->world_position.y >= lightarch.translation->world_position.y;
+                                        : blockarch.bottom_world_center.y >= lightarch.translation->world_position.y;
 
                                     if (blockarch.blockshadow != nullptr
                                         && blockarch.blockshadow->factor > 0.f
@@ -3525,7 +3534,7 @@ public func frag(vf: v2f)
 
                                         assert(blockarch.shape != nullptr);
                                         const math::vec3 ellipse_center_world =
-                                            get_block_bottom_world_center(blockarch);
+                                            blockarch.bottom_world_center;
 
                                         // 点光阴影由着色器从光源位置向椭圆作切线锥，
                                         // 需要椭圆中心到光源的平面距离（JE_COLOR.z）；
@@ -3582,7 +3591,7 @@ public func frag(vf: v2f)
                                 auto next_block2d_iter = block2d_iter + 1;
                                 if (next_block2d_iter == block2d_end || current_layer != (int64_t)((lightarch.topdown == nullptr
                                     ? next_block2d_iter->translation->world_position.z
-                                    : next_block2d_iter->translation->world_position.y) *
+                                    : next_block2d_iter->bottom_world_center.y) *
                                     100.f))
                                 {
                                     for (auto* block_in_layer : block_in_current_layer)
@@ -3680,7 +3689,7 @@ public func frag(vf: v2f)
                                             else if (block_in_layer->selfshadow->auto_disable &&
                                                 (lightarch.topdown == nullptr
                                                     ? block_in_layer->translation->world_position.z >= lightarch.translation->world_position.z
-                                                    : get_block_bottom_world_center(*block_in_layer).y >= lightarch.translation->world_position.y))
+                                                    : block_in_layer->bottom_world_center.y >= lightarch.translation->world_position.y))
                                                 JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4, 0.f, 0.f, 0.f, 0.f);
                                             else
                                                 JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
