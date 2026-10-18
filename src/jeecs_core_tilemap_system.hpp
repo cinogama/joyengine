@@ -52,9 +52,11 @@ jeecs_core_tilemap_model.hpp；本文件只做三件事：
     WallPart 查询重新定位，当帧句柄当帧用。
   * 图层自阴影（je_LayerSelfShadow）：ON/AUTO 模式的层为其全部分片挂
     Light2D::SelfShadow（auto_disable 分别固定 false/true，factor 取
-    图层强度 selfshadow_factor，缺省 1），OFF 模式的层不挂该组件。与
-    着色器/纹理/比例尺同款每帧对齐（组件增删走命令缓冲，下一帧迁移
-    生效）。
+    图层强度 selfshadow_factor，缺省 1），OFF 模式的层不挂该组件；同挂
+    Light2D::PerBlockSelfShadow，自阴影按 MAX 合并进光照阴影缓冲——只
+    加深阴影，不清除本层 BlockShadow / 其它图层写入的遮挡阴影，且
+    TopDown 光源下按网格顶点携带的块底边逐格判高。与着色器/纹理/
+    比例尺同款每帧对齐（组件增删走命令缓冲，下一帧迁移生效）。
   * 图层遮挡阴影（je_LayerBlockShadow）：ON/AUTO 模式的层为其全部分片
     挂 Light2D::BlockShadow（auto_disable 分别固定 false/true，factor 取
     图层强度 blockshadow_factor，缺省 1）。遮挡轮廓由本系统按分块生成：

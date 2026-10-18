@@ -1243,11 +1243,21 @@ public let frag =
             // 用本变体按层采样图集 alpha 做自阴影覆盖
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_array_pass;
 
+            // MAX 合并版 sub pass ×2：分块式大网格（瓦片地图等，带
+            // Light2D::PerBlockSelfShadow）专用。普通 sub pass 不启用混合，
+            // 自阴影覆盖会直接改写阴影缓冲——对单一精灵是"自阴影状态优先于
+            // 遮挡阴影"的预期语义，但整张地面覆盖时会把瓦片自身/其它图层的
+            // 遮挡阴影一并擦除。本变体按 MAX 叠加：只加深阴影，不清除既有
+            // 遮挡结果（cover=0 的受光格等同不写入）
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_max_pass;
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_array_max_pass;
+
             // 逐块判定版 sub pass ×2（TopDown 光源 + Light2D::PerBlockSelfShadow
             // 遮挡物专用）：AUTO 高度判定不在 CPU 按实体原点一刀切，而是用
             // 网格顶点属性 3 携带的块底边（局部 Y）在顶点着色器逐块比较，
             // 整块受光或整块自阴影。JE_COLOR 约定：x=factor，
-            // y=高度线（AUTO 为光源世界 Y；ON 恒暗时为 +1e30），z/w 备用
+            // y=高度线（AUTO 为光源世界 Y；ON 恒暗时为 +1e30），z/w 备用。
+            // 仅分块大网格使用，同样按 MAX 合并（受光格不擦除遮挡阴影）
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_topdown_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_topdown_array_pass;
 
@@ -2352,6 +2362,130 @@ public func frag(vf: v2f)
 }
 )").value()
                 }
+                , _defer_light2d_shadow_sub_max_pass{
+                    jeecs::graphic::shader::create(
+                        nullptr,
+                        "!/builtin/defer_light2d_shadow_sub_max.shader",
+                        R"(
+import pkg::std;
+
+import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+// MAX 合并：自阴影只加深阴影缓冲，不清除遮挡体已写入的阴影
+BLEND   (MAX, ONE, ONE);
+// MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
+CULL    (NONE);
+
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex: float3,
+        uv: float2,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos: float4,
+        uv: float2,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        shadow_factor: float4,
+    };
+    
+public func vert(v: vin)
+{
+    return v2f{
+        pos = JE_MVP * vec4!(v.vertex, 1.),
+        uv = uvtrans(v.uv, JE_UV_TILING, JE_UV_OFFSET),
+    };
+}
+
+let nearest_clamp = Sampler2D::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+WOSHADER_UNIFORM!
+    let Main = texture2d::uniform(0, nearest_clamp);
+    
+public func frag(vf: v2f)
+{
+    let final_shadow = alphatest(vec4!(JE_COLOR->xyz, tex2d(Main, vf.uv)->w));
+
+    let shadow_factor = final_shadow->x;
+    return fout{
+        shadow_factor = vec4!(
+            shadow_factor, shadow_factor, shadow_factor, 1.),
+    };
+}
+)").value()
+                }
+                , _defer_light2d_shadow_sub_array_max_pass{
+                    jeecs::graphic::shader::create(
+                        nullptr,
+                        "!/builtin/defer_light2d_shadow_sub_array_max.shader",
+                        R"(
+import pkg::std;
+
+import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+// MAX 合并：自阴影只加深阴影缓冲，不清除遮挡体已写入的阴影
+BLEND   (MAX, ONE, ONE);
+// MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
+CULL    (NONE);
+
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex: float3,
+        // 瓦片地图分片顶点：uv.z 为数组纹理层号
+        uv: float3,
+    };
+
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos: float4,
+        uv: float3,
+    };
+
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        shadow_factor: float4,
+    };
+
+public func vert(v: vin)
+{
+    // tiling/offset 只作用于 uv.xy，数组层号分量原样传递
+    return v2f{
+        pos = JE_MVP * vec4!(v.vertex, 1.),
+        uv = vec3!(uvtrans(v.uv->xy, JE_UV_TILING, JE_UV_OFFSET), v.uv->z),
+    };
+}
+
+let nearest_clamp = Sampler2D::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+WOSHADER_UNIFORM!
+    let Main = texture2darray::uniform(0, nearest_clamp);
+
+public func frag(vf: v2f)
+{
+    let final_shadow = alphatest(vec4!(JE_COLOR->xyz, tex2darray(Main, vf.uv)->w));
+
+    let shadow_factor = final_shadow->x;
+    return fout{
+        shadow_factor = vec4!(
+            shadow_factor, shadow_factor, shadow_factor, 1.),
+    };
+}
+)").value()
+                }
                 , _defer_light2d_shadow_sub_topdown_pass{
                     jeecs::graphic::shader::create(
                         nullptr,
@@ -2367,6 +2501,8 @@ using je::shader;
 
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
+// MAX 合并：受光格 cover=0 不写入，避免擦除遮挡体已写入的阴影
+BLEND   (MAX, ONE, ONE);
 // MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
 CULL    (NONE);
 
@@ -2438,6 +2574,8 @@ using je::shader;
 
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
+// MAX 合并：受光格 cover=0 不写入，避免擦除遮挡体已写入的阴影
+BLEND   (MAX, ONE, ONE);
 // MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
 CULL    (NONE);
 
@@ -2993,6 +3131,10 @@ public func frag(vf: v2f)
             const basic::resource<graphic::shader>& wall;
             const basic::resource<graphic::shader>& sub;
             const basic::resource<graphic::shader>& sub_texarray;
+            // MAX 合并版自阴影：分块式大网格（Light2D::PerBlockSelfShadow）
+            // 专用，只加深阴影，不擦除遮挡体写入的阴影
+            const basic::resource<graphic::shader>& sub_max;
+            const basic::resource<graphic::shader>& sub_texarray_max;
         };
         defer_light2d_shadow_passes_t select_shadow_passes(bool is_parallel) const
         {
@@ -3005,6 +3147,8 @@ public func frag(vf: v2f)
                     m_defer_light2d_host._defer_light2d_shadow_wall_parallel_pass,
                     m_defer_light2d_host._defer_light2d_shadow_sub_pass,
                     m_defer_light2d_host._defer_light2d_shadow_sub_array_pass,
+                    m_defer_light2d_host._defer_light2d_shadow_sub_max_pass,
+                    m_defer_light2d_host._defer_light2d_shadow_sub_array_max_pass,
             }
             : defer_light2d_shadow_passes_t{
                 m_defer_light2d_host._defer_light2d_shadow_point_pass,
@@ -3014,6 +3158,8 @@ public func frag(vf: v2f)
                 m_defer_light2d_host._defer_light2d_shadow_wall_point_pass,
                 m_defer_light2d_host._defer_light2d_shadow_sub_pass,
                 m_defer_light2d_host._defer_light2d_shadow_sub_array_pass,
+                m_defer_light2d_host._defer_light2d_shadow_sub_max_pass,
+                m_defer_light2d_host._defer_light2d_shadow_sub_array_max_pass,
             };
         }
 
@@ -3425,13 +3571,25 @@ public func frag(vf: v2f)
                                                 lightarch.topdown != nullptr
                                                 && block_in_layer->perblock != nullptr;
 
+                                            // PerBlockSelfShadow 标记分块式大网格
+                                            //（瓦片地图等）：自阴影按 MAX 合并，只加深
+                                            // 阴影缓冲，保留同层 BlockShadow / 其它图层
+                                            // 已写入的遮挡阴影；普通精灵维持原有的覆盖
+                                            // 语义（auto_disable 的受光态会清除覆盖）
+                                            const bool max_combine_selfshadow =
+                                                block_in_layer->perblock != nullptr;
+
                                             auto& sub_pass_shader = per_block_selfshadow
                                                 ? (array_atlas.has_value()
                                                     ? m_defer_light2d_host._defer_light2d_shadow_sub_topdown_array_pass
                                                     : m_defer_light2d_host._defer_light2d_shadow_sub_topdown_pass)
-                                                : (array_atlas.has_value()
-                                                    ? shadow_passes.sub_texarray
-                                                    : shadow_passes.sub);
+                                                : (max_combine_selfshadow
+                                                    ? (array_atlas.has_value()
+                                                        ? shadow_passes.sub_texarray_max
+                                                        : shadow_passes.sub_max)
+                                                    : (array_atlas.has_value()
+                                                        ? shadow_passes.sub_texarray
+                                                        : shadow_passes.sub));
 
                                             assert(block_in_layer->shape != nullptr);
                                             const auto& using_shape =

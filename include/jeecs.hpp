@@ -5172,12 +5172,16 @@ je_tilemap_layer_selfshadow / je_tilemap_set_layer_selfshadow 的取值。
     * JE_LAYER_SELFSHADOW_ON  启用（常开）：分片挂 SelfShadow 且
       auto_disable = false，无论光源高度如何，自阴影覆盖始终按 factor 生效
     * JE_LAYER_SELFSHADOW_AUTO 启用（自动）：分片挂 SelfShadow 且
-      auto_disable = true，光源不高于该层时自阴影覆盖被清除（图块受光）
+      auto_disable = true，光源不高于该层时不追加自阴影覆盖（图块受光；
+      仍会被遮挡体投下的阴影遮挡）
 （覆盖强度 factor 经 je_tilemap_set_layer_selfshadow_factor 按层设置）
 TopDown 光源（Light2D::TopDown）下的 AUTO 判定按格进行：分片同挂
 Light2D::PerBlockSelfShadow（网格顶点携带块底边高度），格底边不低于光源
 高度线时该格受光、否则写 factor——整张地图不会被实体原点一刀切。
 （ON 模式与普通光源不受影响，仍为整实体判定）
+瓦片分片带 PerBlockSelfShadow 标记，其自阴影按 MAX 合并到光照阴影缓冲：
+只加深阴影，不会清除本层 BlockShadow 或其它图层已写入的遮挡阴影
+（普通精灵实体的 SelfShadow 仍为覆盖语义，受光态会清除覆盖）。
 请参见：
     je_tilemap_set_layer_selfshadow
     je_tilemap_set_layer_selfshadow_factor
@@ -5414,7 +5418,8 @@ je_tilemap_set_layer_selfshadow [基本接口]
 设置图层的 2D 光照自阴影行为：OFF 时该层渲染分片移除 Light2D::SelfShadow
 组件（不参与自阴影覆盖），ON/AUTO 时挂载该组件并分别固定 auto_disable 为
 false / true；覆盖强度由 je_tilemap_set_layer_selfshadow_factor 设置
-（缺省 1）。渲染分片由引擎生成，组件的挂载与摘除由 TilemapSystem 逐帧
+（缺省 1）。渲染分片自阴影按 MAX 合并进光照阴影缓冲：只加深阴影，不会
+清除遮挡阴影。渲染分片由引擎生成，组件的挂载与摘除由 TilemapSystem 逐帧
 对齐（走命令缓冲，下一帧迁移生效）；该设置随图层记录落盘
     * 下标越界时不做任何修改
 请参见：
@@ -13333,12 +13338,17 @@ namespace jeecs
                 typing::register_member(guard, &SelfShadow::auto_disable, "auto_disable");
             }
         };
-        // 逐块自阴影修饰标记（与 Light2D::SelfShadow 同挂时生效，仅 TopDown 光源使用）：
-        // 遮挡物不再作为整体参与 AUTO 高度判定，而是逐"块"独立判定——
-        // 要求渲染网格在顶点属性位置 3 额外携带 float1 "bottom"（本块底边的
-        // 局部 Y，同一块的各顶点须写同值，图元内判定才一致）。块底边变换到
-        // 世界后的 Y >= 光源世界 Y 时该块受光（覆盖清零），否则写 factor。
-        // 面向分块式大网格内容（瓦片地图等）；非 TopDown 光源忽略此组件。
+        // 逐块自阴影修饰标记（与 Light2D::SelfShadow 同挂时生效）：
+        // 标记遮挡物为分块式大网格内容（瓦片地图等）。两个作用：
+        //  * 所有光源下，自阴影按 MAX 合并进阴影缓冲——只加深阴影，不清除
+        //    同层 BlockShadow / 其它图层已写入的遮挡阴影（普通精灵实体不带
+        //    本组件，仍为覆盖语义）；
+        //  * TopDown 光源下，遮挡物不再作为整体参与 AUTO 高度判定，而是
+        //    逐"块"独立判定——要求渲染网格在顶点属性位置 3 额外携带
+        //    float1 "bottom"（本块底边的局部 Y，同一块的各顶点须写同值，
+        //    图元内判定才一致）。块底边变换到世界后的 Y >= 光源世界 Y 时
+        //    该块受光（cover=0，MAX 下等同不写入），否则写 factor。
+        //    非 TopDown 光源忽略逐块高度判定，仅保留上面的 MAX 合并。
         struct PerBlockSelfShadow
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(PerBlockSelfShadow);

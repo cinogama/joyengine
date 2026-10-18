@@ -745,17 +745,20 @@ namespace je
 
         // ==================== 图层自阴影行为 ====================
         // 与引擎侧 je_LayerSelfShadow 一一对应（Light2D 延迟光照管线）：
+        // 分片同挂 PerBlockSelfShadow，自阴影按 MAX 合并：只加深阴影，
+        // 不清除本层 BlockShadow / 其它图层已写入的遮挡阴影。
         public enum self_shadow
         {
             OFF = 0,    // 禁用：该层分片不挂 SelfShadow 组件，图块正常
                         // 接收更高层遮挡体投下的阴影
             ON = 1,     // 启用（常开）：无论光源高度，自阴影覆盖始终按
                         // factor 生效（auto_disable = false）
-            AUTO = 2,   // 启用（自动）：光源不高于该层时自阴影覆盖被
-                        // 清除、图块受光（auto_disable = true）；
-                        // TopDown 光源下按格判定：格底边不低于光源高度线
-                        // 时该格受光，否则写 factor（分片同挂
-                        // PerBlockSelfShadow，网格顶点携带块底边高度）
+            AUTO = 2,   // 启用（自动）：光源不高于该层时不追加自阴影
+                        // 覆盖、图块受光（auto_disable = true；仍会被
+                        // 遮挡阴影遮挡）；TopDown 光源下按格判定：格底边
+                        // 不低于光源高度线时该格受光，否则写 factor
+                        //（分片同挂 PerBlockSelfShadow，网格顶点携带
+                        // 块底边高度）
         }
 
         // ==================== 图层遮挡阴影行为 ====================

@@ -1753,11 +1753,14 @@ namespace jeecs::graphic::api::vk120
             vkEnumerateInstanceExtensionProperties(nullptr, &vk_extension_count, nullptr);
 
             std::vector<VkExtensionProperties> vk_available_extensions((size_t)vk_extension_count);
-            vkEnumerateInstanceExtensionProperties(nullptr, &vk_extension_count, vk_available_extensions.data());
+            vkEnumerateInstanceExtensionProperties(
+                nullptr, &vk_extension_count, vk_available_extensions.data());
 
             bool vk_validation_layer_supported = false;
 #ifndef NDEBUG
-            if (vk_available_layers.end() == std::find_if(vk_available_layers.begin(), vk_available_layers.end(),
+            if (vk_available_layers.end() == std::find_if(
+                vk_available_layers.begin(), 
+                vk_available_layers.end(),
                 [](const VkLayerProperties& prop)
                 {
                     return strcmp("VK_LAYER_KHRONOS_validation", prop.layerName) == 0;
@@ -1829,7 +1832,9 @@ namespace jeecs::graphic::api::vk120
 
             for (const char* required_layer : required_layers)
             {
-                if (vk_available_layers.end() == std::find_if(vk_available_layers.begin(), vk_available_layers.end(),
+                if (vk_available_layers.end() == std::find_if(
+                    vk_available_layers.begin(),
+                    vk_available_layers.end(),
                     [required_layer](const VkLayerProperties& prop)
                     {
                         return strcmp(required_layer, prop.layerName) == 0;
