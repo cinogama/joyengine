@@ -13324,6 +13324,15 @@ namespace jeecs
                 typing::register_member(guard, &WallShadow::distance, "distance");
             }
         };
+        // 自阴影覆盖：把实体自身覆盖为阴影色（factor 为覆盖强度）。
+        // auto_disable = true 时按高度自动受光：
+        //  * 普通 2D 光源（沿 Z 分层）下，实体原点世界 Z 不低于光源世界 Z
+        //    时不追加覆盖；
+        //  * TopDown 光源下，改为比较实体包围盒底边的世界 Y（取形状局部
+        //    AABB 八角点变换后的最小 Y，兼容旋转），底边不低于光源高度时
+        //    受光——高大实体仍以脚下位置判断，而不是以原点中心判断；
+        //  * 同挂 PerBlockSelfShadow 时，TopDown 下进一步改为按网格顶点
+        //    携带的块底边逐块判定（见下文 PerBlockSelfShadow）。
         struct SelfShadow
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(SelfShadow);

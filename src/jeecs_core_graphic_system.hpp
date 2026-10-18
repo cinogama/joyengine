@@ -3179,6 +3179,36 @@ public func frag(vf: v2f)
             return group;
         }
 
+        // TopDown 光源下普通 SelfShadow 的 AUTO 高度判定基准：实体包围盒
+        // 底边的世界 Y。取形状局部 AABB 的 8 个角点经 object2world 变换后
+        // 的最小 Y，兼容旋转与非居中轴心；无自定义网格时按默认四边形计算。
+        // 挂 PerBlockSelfShadow 的分块大网格不走这里（由顶点属性逐块携带
+        // 块底边，见 sub_topdown pass）。
+        float get_block_bottom_world_y(const block2d_arch& blockarch) const
+        {
+            const auto& using_shape = blockarch.shape->vertex.has_value()
+                ? blockarch.shape->vertex.value()
+                : m_default_resources.default_shape_quad;
+            const auto* vertex_data = using_shape->resource();
+            const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
+
+            float bottom_world_y = 0.f;
+            for (int corner = 0; corner < 8; ++corner)
+            {
+                const float local_point[4] = {
+                    (corner & 1) ? vertex_data->m_x_max : vertex_data->m_x_min,
+                    (corner & 2) ? vertex_data->m_y_max : vertex_data->m_y_min,
+                    (corner & 4) ? vertex_data->m_z_max : vertex_data->m_z_min,
+                    1.f };
+                float world_point[4];
+                math::mat4xvec4(world_point, MAT4_MODEL, local_point);
+
+                if (corner == 0 || world_point[1] < bottom_world_y)
+                    bottom_world_y = world_point[1];
+            }
+            return bottom_world_y;
+        }
+
         // Unified draw call for the 3 Light2D shadow occluder types (block / shape / sprite).
         // They all compute MV/MVP from the occluder's object2world and pack shadow params
         // into local_scale + color. Block uses (0,-1,1).unit() as parallel light dir ref;
@@ -3634,10 +3664,13 @@ public func frag(vf: v2f)
                                                     0.f,
                                                     0.f);
                                             }
+                                            // TopDown 光源下 AUTO 以实体底边（包围盒
+                                            // 世界 Y 最小值）判定，避免高大实体以原点
+                                            // 高于光源时被整块点亮；普通光源仍按原点 Z。
                                             else if (block_in_layer->selfshadow->auto_disable &&
                                                 (lightarch.topdown == nullptr
                                                     ? block_in_layer->translation->world_position.z >= lightarch.translation->world_position.z
-                                                    : block_in_layer->translation->world_position.y >= lightarch.translation->world_position.y))
+                                                    : get_block_bottom_world_y(*block_in_layer) >= lightarch.translation->world_position.y))
                                                 JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4, 0.f, 0.f, 0.f, 0.f);
                                             else
                                                 JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
