@@ -3514,10 +3514,13 @@ public func frag(vf: v2f)
                                         // 中心（世界空间），.z 传光源到实体的平面距离
                                         //（点光用于切线张开率，平行光不用），.w 传中心
                                         // 世界 Z；JE_SHADOW_ELLIPSE 传轴长/延伸/消隐距离。
+                                        // 点光方向取"光源→脚底"（而非光源→实体
+                                        // 中心），尾迹从接触点向外延伸；平行光方向
+                                        // 由光源自身朝向决定，与实体位置无关
                                         const math::vec3 shadow_dir_world_raw =
                                             (lightarch.parallel != nullptr
                                                 ? lightarch.translation->world_rotation * math::vec3(0.f, -1.f, 0.f)
-                                                : blockarch.translation->world_position
+                                                : blockarch.bottom_world_center
                                                     - lightarch.translation->world_position);
                                         // 阴影只在 XY 平面内延伸（2D 画面），Z 分量不参与
                                         // 方向计算，避免光源与实体的高度差稀释方向
