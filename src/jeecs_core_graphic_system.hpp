@@ -1779,15 +1779,16 @@ public func vert(v: vin)
     let dir_raw = JE_LOCAL_SCALE->yz;
     let shadow_dir_world = dir_raw / max(length(dir_raw), 0.000001);
 
-    // JE_COLOR.xy：脚底椭圆中心（局部），.z：光源到椭圆的平面距离；
-    // JE_SHADOW_ELLIPSE：x=长轴全长（视空间 X），y=短轴全长
-    //（视空间 Y），z=尾迹延伸长度，w=有效消隐距离
-    let center_local = JE_COLOR->xy;
+    // JE_COLOR.xy：脚底椭圆中心（世界空间），.z：光源到椭圆的平面距离，
+    // .w：中心世界 Z；JE_SHADOW_ELLIPSE：x=长轴全长（视空间 X），
+    // y=短轴全长（视空间 Y），z=尾迹延伸长度，w=有效消隐距离
     let half_a = max(JE_SHADOW_ELLIPSE->x, 0.) * 0.5;
     let half_b = max(JE_SHADOW_ELLIPSE->y, 0.) * 0.5;
 
-    // 椭圆中心与阴影方向变换到视空间
-    let center_v4 = JE_MV * vec4!(center_local->x, center_local->y, 0., 1.);
+    // 椭圆中心（世界空间）与阴影方向变换到视空间；中心不走 JE_MV，
+    // 避免实体旋转把脚下椭圆带离世界空间底部
+    let center_v4 = JE_V * vec4!(
+        JE_COLOR->x, JE_COLOR->y, JE_COLOR->w, 1.);
     let center_view = center_v4->xyz / center_v4->w;
     let dir_view_raw = (JE_V * vec4!(
         shadow_dir_world->x, shadow_dir_world->y, 0., 0.))->xy;
@@ -1976,15 +1977,16 @@ public func vert(v: vin)
     let dir_raw = JE_LOCAL_SCALE->yz;
     let shadow_dir_world = dir_raw / max(length(dir_raw), 0.000001);
 
-    // JE_COLOR.xy：脚底椭圆中心（局部）；JE_SHADOW_ELLIPSE：
-    // x=长轴全长（视空间 X），y=短轴全长（视空间 Y），
-    // z=尾迹延伸长度，w=有效消隐距离
-    let center_local = JE_COLOR->xy;
+    // JE_COLOR.xy：脚底椭圆中心（世界空间），.w：中心世界 Z；
+    // JE_SHADOW_ELLIPSE：x=长轴全长（视空间 X），y=短轴全长
+    //（视空间 Y），z=尾迹延伸长度，w=有效消隐距离
     let half_a = max(JE_SHADOW_ELLIPSE->x, 0.) * 0.5;
     let half_b = max(JE_SHADOW_ELLIPSE->y, 0.) * 0.5;
 
-    // 椭圆中心与阴影方向变换到视空间
-    let center_v4 = JE_MV * vec4!(center_local->x, center_local->y, 0., 1.);
+    // 椭圆中心（世界空间）与阴影方向变换到视空间；中心不走 JE_MV，
+    // 避免实体旋转把脚下椭圆带离世界空间底部
+    let center_v4 = JE_V * vec4!(
+        JE_COLOR->x, JE_COLOR->y, JE_COLOR->w, 1.);
     let center_view = center_v4->xyz / center_v4->w;
     let dir_view_raw = (JE_V * vec4!(
         shadow_dir_world->x, shadow_dir_world->y, 0., 0.))->xy;
@@ -3179,12 +3181,13 @@ public func frag(vf: v2f)
             return group;
         }
 
-        // TopDown 光源下普通 SelfShadow 的 AUTO 高度判定基准：实体包围盒
-        // 底边的世界 Y。取形状局部 AABB 的 8 个角点经 object2world 变换后
-        // 的最小 Y，兼容旋转与非居中轴心；无自定义网格时按默认四边形计算。
-        // 挂 PerBlockSelfShadow 的分块大网格不走这里（由顶点属性逐块携带
-        // 块底边，见 sub_topdown pass）。
-        float get_block_bottom_world_y(const block2d_arch& blockarch) const
+        // 实体世界包围盒底边中点：取形状局部 AABB 的 8 个角点经
+        // object2world 变换后，X/Z 取中值、Y 取最小值。兼容旋转与非居中
+        // 轴心——实体旋转后该点仍在世界空间底部（脚下）。
+        // SelfShadow 的 TopDown AUTO 高度判定取 .y；SpriteShadow 取整个点
+        // 作为接触椭圆中心。挂 PerBlockSelfShadow 的分块大网格走顶点属性
+        // 逐块判定（见 sub_topdown pass），不经过这里。
+        math::vec3 get_block_bottom_world_center(const block2d_arch& blockarch) const
         {
             const auto& using_shape = blockarch.shape->vertex.has_value()
                 ? blockarch.shape->vertex.value()
@@ -3192,7 +3195,8 @@ public func frag(vf: v2f)
             const auto* vertex_data = using_shape->resource();
             const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
 
-            float bottom_world_y = 0.f;
+            math::vec3 min_point;
+            math::vec3 max_point;
             for (int corner = 0; corner < 8; ++corner)
             {
                 const float local_point[4] = {
@@ -3203,10 +3207,25 @@ public func frag(vf: v2f)
                 float world_point[4];
                 math::mat4xvec4(world_point, MAT4_MODEL, local_point);
 
-                if (corner == 0 || world_point[1] < bottom_world_y)
-                    bottom_world_y = world_point[1];
+                if (corner == 0)
+                {
+                    min_point = math::vec3(world_point[0], world_point[1], world_point[2]);
+                    max_point = min_point;
+                }
+                else
+                {
+                    min_point.x = std::min(min_point.x, world_point[0]);
+                    min_point.y = std::min(min_point.y, world_point[1]);
+                    min_point.z = std::min(min_point.z, world_point[2]);
+                    max_point.x = std::max(max_point.x, world_point[0]);
+                    max_point.y = std::max(max_point.y, world_point[1]);
+                    max_point.z = std::max(max_point.z, world_point[2]);
+                }
             }
-            return bottom_world_y;
+            return math::vec3(
+                (min_point.x + max_point.x) * 0.5f,
+                min_point.y,
+                (min_point.z + max_point.z) * 0.5f);
         }
 
         // Unified draw call for the 3 Light2D shadow occluder types (block / shape / sprite).
@@ -3253,7 +3272,8 @@ public func frag(vf: v2f)
             }
 
             // 通过 je_color 变量传递光源位置（点光）或方向（平行光）；
-            // SpriteShadow 用 color_override 改为传脚底椭圆中心（局部）
+            // SpriteShadow 用 color_override 改为传脚底椭圆中心（世界空间
+            // XY + 中心世界 Z 在 .w）
             if (color_override != nullptr)
             {
                 JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
@@ -3475,14 +3495,16 @@ public func frag(vf: v2f)
                                     }
                                     if (blockarch.spriteshadow != nullptr && blockarch.spriteshadow->factor > 0.f)
                                     {
-                                        // SpriteShadow（角色接触阴影）：在实体网格包围盒
+                                        // SpriteShadow（角色接触阴影）：在实体世界包围盒
                                         // 底边中点（脚下）画椭圆，并沿背光方向拉出尾迹。
+                                        // 中心取世界空间底部，旋转实体不会带着椭圆一起
+                                        // 转离地面。
                                         // local_scale.x 传强度，.yz 传 CPU 预计算的世界
                                         // 空间背光方向（着色器用 JE_V 转到视空间，避免
                                         // 实体非等比缩放扭曲方向）；JE_COLOR.xy 传椭圆
-                                        // 中心，.z 传光源到实体的平面距离（点光用于
-                                        // 切线张开率，平行光不用）；JE_SHADOW_ELLIPSE
-                                        // 传轴长/延伸/消隐距离。
+                                        // 中心（世界空间），.z 传光源到实体的平面距离
+                                        //（点光用于切线张开率，平行光不用），.w 传中心
+                                        // 世界 Z；JE_SHADOW_ELLIPSE 传轴长/延伸/消隐距离。
                                         const math::vec3 shadow_dir_world_raw =
                                             (lightarch.parallel != nullptr
                                                 ? lightarch.translation->world_rotation * math::vec3(0.f, -1.f, 0.f)
@@ -3502,14 +3524,8 @@ public func frag(vf: v2f)
                                             : math::vec3(0.f, -1.f, 0.f);
 
                                         assert(blockarch.shape != nullptr);
-                                        const auto* using_shape = blockarch.shape->vertex.has_value()
-                                            ? blockarch.shape->vertex.value().get()
-                                            : m_default_resources.default_shape_quad.get();
-                                        const auto* shape_vertex_data = using_shape->resource();
-
-                                        const float ellipse_local_x =
-                                            (shape_vertex_data->m_x_min + shape_vertex_data->m_x_max) * 0.5f;
-                                        const float ellipse_local_y = shape_vertex_data->m_y_min;
+                                        const math::vec3 ellipse_center_world =
+                                            get_block_bottom_world_center(blockarch);
 
                                         // 点光阴影由着色器从光源位置向椭圆作切线锥，
                                         // 需要椭圆中心到光源的平面距离（JE_COLOR.z）；
@@ -3518,24 +3534,18 @@ public func frag(vf: v2f)
                                         float light_plane_distance = 0.f;
                                         if (lightarch.parallel == nullptr)
                                         {
-                                            float center_world[4];
-                                            const float center_local[4] = {
-                                                ellipse_local_x, ellipse_local_y, 0.f, 1.f };
-                                            math::mat4xvec4(center_world,
-                                                blockarch.translation->object2world, center_local);
-
                                             const math::vec3& light_pos =
                                                 lightarch.translation->world_position;
                                             light_plane_distance = std::sqrt(
-                                                (center_world[0] - light_pos.x) * (center_world[0] - light_pos.x)
-                                                + (center_world[1] - light_pos.y) * (center_world[1] - light_pos.y));
+                                                (ellipse_center_world.x - light_pos.x) * (ellipse_center_world.x - light_pos.x)
+                                                + (ellipse_center_world.y - light_pos.y) * (ellipse_center_world.y - light_pos.y));
                                         }
 
                                         const math::vec4 ellipse_center(
-                                            ellipse_local_x,
-                                            ellipse_local_y,
+                                            ellipse_center_world.x,
+                                            ellipse_center_world.y,
                                             light_plane_distance,
-                                            0.f);
+                                            ellipse_center_world.z);
 
                                         const float shadow_distance = std::max(
                                             blockarch.spriteshadow->distance, 0.f);
@@ -3670,7 +3680,7 @@ public func frag(vf: v2f)
                                             else if (block_in_layer->selfshadow->auto_disable &&
                                                 (lightarch.topdown == nullptr
                                                     ? block_in_layer->translation->world_position.z >= lightarch.translation->world_position.z
-                                                    : get_block_bottom_world_y(*block_in_layer) >= lightarch.translation->world_position.y))
+                                                    : get_block_bottom_world_center(*block_in_layer).y >= lightarch.translation->world_position.y))
                                                 JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4, 0.f, 0.f, 0.f, 0.f);
                                             else
                                                 JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
