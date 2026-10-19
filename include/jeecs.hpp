@@ -2747,6 +2747,53 @@ struct jegl_graphic_api
     using ubuffer_close_func_t =
         void (*)(je_GraphicImplContext, jegl_uniform_buffer*);
 
+    // 渲染接口（pipeline / sampler / render pass / draw）相关接口
+    using pipeline_init_func_t =
+        void (*)(je_GraphicImplContext, jegl_pipeline*);
+    using pipeline_close_func_t =
+        void (*)(je_GraphicImplContext, jegl_pipeline*);
+    using pipeline_bind_func_t =
+        void (*)(je_GraphicImplContext, jegl_pipeline*);
+
+    using sampler_init_func_t =
+        void (*)(je_GraphicImplContext, jegl_sampler*);
+    using sampler_close_func_t =
+        void (*)(je_GraphicImplContext, jegl_sampler*);
+    using sampler_bind_func_t =
+        void (*)(je_GraphicImplContext, uint32_t, jegl_sampler*);
+
+    using begin_pass_func_t =
+        void (*)(je_GraphicImplContext, jegl_frame_buffer*, const jegl_viewport*);
+    using clear_color_func_t =
+        void (*)(je_GraphicImplContext, uint32_t, const float*);
+    using clear_depth_func_t =
+        void (*)(je_GraphicImplContext, float);
+    using end_pass_func_t =
+        void (*)(je_GraphicImplContext);
+
+    using bind_vertex_func_t =
+        void (*)(je_GraphicImplContext, jegl_vertex*);
+    using bind_uniform_buffer_func_t =
+        void (*)(je_GraphicImplContext, jegl_uniform_buffer*);
+    using bind_texture_2d_func_t =
+        void (*)(je_GraphicImplContext, uint32_t, jegl_texture_2d*);
+    using bind_texture_3d_func_t =
+        void (*)(je_GraphicImplContext, uint32_t, jegl_texture_3d*);
+    using bind_texture_array_func_t =
+        void (*)(je_GraphicImplContext, uint32_t, jegl_texture_array*);
+    using bind_texture_cube_func_t =
+        void (*)(je_GraphicImplContext, uint32_t, jegl_texture_cube*);
+
+    using draw_indexed_func_t =
+        void (*)(je_GraphicImplContext, uint32_t, uint32_t, uint32_t, const void*, uint32_t);
+    using draw_func_t =
+        void (*)(je_GraphicImplContext, uint32_t, uint32_t, uint32_t, const void*, uint32_t);
+
+    using commit_begin_func_t =
+        void (*)(je_GraphicImplContext);
+    using commit_end_func_t =
+        void (*)(je_GraphicImplContext);
+
     /*
     jegl_graphic_api::interface_startup [成员]
     图形接口在初始化或者被请求重新启动时调用，按照JoyEngine的约定，图形实现应当在此处创建窗口，并完成渲染所需
@@ -2992,57 +3039,161 @@ struct jegl_graphic_api
     ubuffer_close_func_t ubuffer_close;
 
     /*
-    jegl_graphic_api 的渲染接口（pipeline / sampler / render pass / command buffer）
+    jegl_graphic_api 的渲染接口（pipeline / sampler / render pass / draw / commit）
         * 与资源接口共用同一张函数表；所有内置后端都必须提供
         * 参数约定与 jegl_cmd_* / jegl_pipeline_* 公共接口一致
+        * 下列接口只在图形线程内、由命令缓冲区的提交过程驱动调用；在进入对应调用前，引擎中间层已经
+            完成了相关资源的初始化 / 更新，图形实现无需再次检查资源状态
     */
-    void (*pipeline_init)(je_GraphicImplContext context, jegl_pipeline* pipeline);
-    void (*pipeline_close)(je_GraphicImplContext context, jegl_pipeline* pipeline);
-    void (*pipeline_bind)(je_GraphicImplContext context, jegl_pipeline* pipeline);
 
-    void (*sampler_init)(je_GraphicImplContext context, jegl_sampler* sampler);
-    void (*sampler_close)(je_GraphicImplContext context, jegl_sampler* sampler);
-    void (*sampler_bind)(
-        je_GraphicImplContext context, uint32_t sampler_id, jegl_sampler* sampler);
+    /*
+    jegl_graphic_api::pipeline_init [成员]
+    创建 pipeline 在图形层对应的后端对象（深度 / 混合等固定功能状态，或 PSO），图形实现应当将创建结果
+    保存到 pipeline 的 m_backend_ptr 中。此接口在 pipeline 首次参与提交，或图形线程重启导致后端状态失效
+    后，于 pipeline_bind 之前调用。
+        * 调用前引擎已确保 pipeline 对应的 shader 已经初始化 / 更新完成。
+        * 返回后引擎会将 pipeline 标记为已初始化，并在 pipeline 释放时调用 pipeline_close。
+    */
+    pipeline_init_func_t pipeline_init;
 
-    void (*begin_pass)(
-        je_GraphicImplContext context,
-        /* OPTIONAL: nullptr means the screen back buffer */ jegl_frame_buffer* target,
-        const jegl_viewport* viewport);
-    void (*clear_color)(
-        je_GraphicImplContext context, uint32_t attachment, const float rgba[4]);
-    void (*clear_depth)(je_GraphicImplContext context, float depth);
-    void (*end_pass)(je_GraphicImplContext context);
+    /*
+    jegl_graphic_api::pipeline_close [成员]
+    释放 pipeline 在图形层对应的后端对象，即 pipeline_init 中创建的内容。pipeline 被释放时由引擎中间层
+    在图形线程中调用此接口。
+        * 即使 pipeline 从未参与提交（pipeline_init 未被调用、后端指针为空），此接口也可能被调用，
+            实现必须能够安全处理这种情况。
+    */
+    pipeline_close_func_t pipeline_close;
 
-    void (*bind_vertex)(je_GraphicImplContext context, jegl_vertex* vertex);
-    void (*bind_uniform_buffer)(
-        je_GraphicImplContext context, jegl_uniform_buffer* uniform_buffer);
-    void (*bind_texture_2d)(
-        je_GraphicImplContext context, uint32_t pass, jegl_texture_2d* texture);
-    void (*bind_texture_3d)(
-        je_GraphicImplContext context, uint32_t pass, jegl_texture_3d* texture);
-    void (*bind_texture_array)(
-        je_GraphicImplContext context, uint32_t pass, jegl_texture_array* texture);
-    void (*bind_texture_cube)(
-        je_GraphicImplContext context, uint32_t pass, jegl_texture_cube* texture);
+    /*
+    jegl_graphic_api::pipeline_bind [成员]
+    将 pipeline 绑定为当前绘制状态：绑定其 shader，并应用固定功能状态（顶点输入布局、深度测试 / 写入、
+    混合、剔除、绕序、颜色写掩码等）。图元拓扑由顶点资源携带，在 draw 时生效。引擎在提交过程中遇到
+    绑定 pipeline 的命令时调用此接口，并保证：
+        * 若 pipeline 尚未初始化，会先调用 pipeline_init；
+        * 连续的重复绑定会被去重，不会重复调用。
+    */
+    pipeline_bind_func_t pipeline_bind;
 
-    void (*draw_indexed)(
-        je_GraphicImplContext context,
-        uint32_t index_count,
-        uint32_t first_index,
-        uint32_t instance_count,
-        const void* uniform_data,
-        uint32_t uniform_size);
-    void (*draw)(
-        je_GraphicImplContext context,
-        uint32_t vertex_count,
-        uint32_t first_vertex,
-        uint32_t instance_count,
-        const void* uniform_data,
-        uint32_t uniform_size);
+    /*
+    jegl_graphic_api::sampler_init [成员]
+    根据 sampler 的描述（jegl_sampler_desc）创建图形层对应的采样器对象，并保存到 sampler 的后端指针中。
+    此接口在 sampler 首次参与提交，或图形线程重启导致后端状态失效后，于 sampler_bind 之前调用。
+    */
+    sampler_init_func_t sampler_init;
 
-    void (*commit_begin)(je_GraphicImplContext context);
-    void (*commit_end)(je_GraphicImplContext context);
+    /*
+    jegl_graphic_api::sampler_close [成员]
+    释放 sampler 在图形层对应的采样器对象，即 sampler_init 中创建的内容。sampler 被释放时由引擎中间层
+    在图形线程中调用此接口。
+        * 即使 sampler 从未参与提交（sampler_init 未被调用、后端指针为空），此接口也可能被调用，
+            实现必须能够安全处理这种情况。
+    */
+    sampler_close_func_t sampler_close;
+
+    /*
+    jegl_graphic_api::sampler_bind [成员]
+    为 shader 声明的采样器 sampler_id 绑定独立采样器，覆盖 shader 声明的默认采样器。
+        * sampler_id 取自 shader 反射（jegl_shader::m_sampler_methods），对该采样器声明覆盖的全部
+            纹理 pass 生效，图形实现应当将采样器绑定到这些 pass 对应的纹理单元 / 描述符槽位。
+        * 引擎保证 sampler 已经初始化，并会对同一 sampler_id 上连续的重复绑定去重。
+    */
+    sampler_bind_func_t sampler_bind;
+
+    /*
+    jegl_graphic_api::begin_pass [成员]
+    开始一个渲染 pass：将后续绘制定向到 target 对应的渲染目标，并应用 viewport。
+        * target 为空表示屏幕后备缓冲区。
+        * viewport 不得为空，且 width / height 必须大于 0。
+        * 不允许嵌套：上一个 pass 必须以 end_pass 结束，引擎保证调用顺序。
+        * 图形实现应当在此重置 pass 级的状态缓存（当前 shader、顶点、纹理等绑定），
+            引擎侧的绑定去重缓存也会在 begin_pass 时重置。
+    */
+    begin_pass_func_t begin_pass;
+
+    /*
+    jegl_graphic_api::clear_color [成员]
+    将当前 pass 的第 attachment 个颜色附件清除为 rgba 指定的颜色。
+        * attachment 是颜色附件索引，从 0 开始；屏幕后备缓冲区只有 0 号附件。
+        * 只能在 begin_pass 之后、当前 pass 的第一次 draw 之前调用。
+    */
+    clear_color_func_t clear_color;
+
+    /*
+    jegl_graphic_api::clear_depth [成员]
+    将当前 pass 的深度附件清除为 depth。
+        * 只能在 begin_pass 之后、当前 pass 的第一次 draw 之前调用。
+        * 若当前渲染目标没有深度附件，图形实现可以忽略此调用。
+    */
+    clear_depth_func_t clear_depth;
+
+    /*
+    jegl_graphic_api::end_pass [成员]
+    结束当前 pass。图形实现应当在此完成该 pass 的收尾工作（例如结束渲染编码、解析附件、结束命令录制段）；
+    屏幕后备缓冲区的呈现仍由 update_draw_commit 负责。
+        * 每个 begin_pass 都有且仅有一个配对的 end_pass；若提交时 pass 尚未显式结束，引擎会在
+            commit_begin 之前自动补发 end_pass。
+    */
+    end_pass_func_t end_pass;
+
+    /*
+    jegl_graphic_api::bind_vertex [成员]
+    绑定顶点资源（顶点 / 索引缓冲区与顶点格式），作为后续 draw 的数据来源。
+        * 顶点拓扑包含在顶点资源中，实际在 draw 时使用。
+        * 引擎保证顶点资源在调用前已经初始化 / 更新完成，并会对连续的重复绑定去重。
+    */
+    bind_vertex_func_t bind_vertex;
+
+    /*
+    jegl_graphic_api::bind_uniform_buffer [成员]
+    绑定 uniform buffer 资源，绑定点使用 uniform buffer 创建时指定的位置，
+    避免绘制方与 shader 对 binding 编号的理解不一致。
+        * 引擎保证 uniform buffer 在调用前已经初始化 / 更新完成，并会对连续的重复绑定去重。
+    */
+    bind_uniform_buffer_func_t bind_uniform_buffer;
+
+    /*
+    jegl_graphic_api::bind_texture_2d / bind_texture_3d / bind_texture_array / bind_texture_cube [成员]
+    将对应类别的纹理绑定到纹理 pass（即 shader 中声明的纹理槽位）。
+        * pass 是 shader 声明的纹理 pass 索引（见 shader 反射的 m_pass_ids），不同类别纹理共用同一套
+            pass 编号。
+        * 引擎保证纹理资源在调用前已经初始化 / 更新完成，并会按 (pass, 纹理对象) 对连续重复绑定去重。
+    */
+    bind_texture_2d_func_t bind_texture_2d;
+    bind_texture_3d_func_t bind_texture_3d;
+    bind_texture_array_func_t bind_texture_array;
+    bind_texture_cube_func_t bind_texture_cube;
+
+    /*
+    jegl_graphic_api::draw_indexed [成员]
+    使用当前绑定的 pipeline / 顶点 / 纹理执行一次索引绘制。
+        * index_count、instance_count 均大于 0；索引类型固定为 uint32_t，first_index 是索引元素的
+            偏移（不是字节偏移）。
+        * uniform_data 是本 draw 的 per-draw uniform 数据块快照，uniform_size 等于当前 shader 的
+            m_uniform_block_size；shader 未声明 uniform 块时，二者分别为 nullptr 和 0。图形实现应当
+            在绘制前将该数据上传到设备（例如写入每帧 UBO ring）并绑定。
+        * 调用前引擎保证 pipeline 与顶点资源已经绑定，且均已初始化。
+    */
+    draw_indexed_func_t draw_indexed;
+
+    /*
+    jegl_graphic_api::draw [成员]
+    使用当前绑定的 pipeline / 顶点 / 纹理执行一次非索引绘制。
+        * vertex_count、instance_count 均大于 0；first_vertex 是顶点偏移。
+        * uniform_data / uniform_size 的约定与 draw_indexed 相同。
+    */
+    draw_func_t draw;
+
+    /*
+    jegl_graphic_api::commit_begin / commit_end [成员]
+    提交单个命令缓冲区时，引擎在回放其全部命令的前后各调用一次：
+    commit_begin -> [begin_pass / clear / bind / draw ...] -> commit_end。
+        * 图形实现可以用它开启 / 结束一次命令录制或提交作用域（例如获取交换链图像、开始 / 结束命令
+            列表）；当前内置后端均为空实现。
+        * 二者都只在图形线程中调用，且与同一次提交中的其它渲染接口串行执行。
+    */
+    commit_begin_func_t commit_begin;
+    commit_end_func_t commit_end;
 };
 static_assert(sizeof(jegl_graphic_api) % sizeof(void*) == 0);
 

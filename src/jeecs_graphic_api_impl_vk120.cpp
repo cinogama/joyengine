@@ -1763,7 +1763,7 @@ namespace jeecs::graphic::api::vk120
             bool vk_validation_layer_supported = false;
 #ifndef NDEBUG
             if (vk_available_layers.end() == std::find_if(
-                vk_available_layers.begin(), 
+                vk_available_layers.begin(),
                 vk_available_layers.end(),
                 [](const VkLayerProperties& prop)
                 {
@@ -3826,7 +3826,7 @@ namespace jeecs::graphic::api::vk120
             }
             return true;
         }
-                //////////////////////////////////////////////////////////////////////////////////
+        //////////////////////////////////////////////////////////////////////////////////
         void cmd_draw_indexed_ex(
             jevk12_vertex* vertex,
             uint32_t index_count,
@@ -4503,12 +4503,12 @@ namespace jeecs::graphic::api::vk120
         // 并同步激活索引数量
         void* vertex_memory_ptr = nullptr;
         if (VK_SUCCESS == context->vkMapMemory(
-                context->_vk_logic_device,
-                vertex_instance->m_vk_vertex_buffer_memory,
-                0,
-                vertex->m_vertex_length,
-                0,
-                &vertex_memory_ptr))
+            context->_vk_logic_device,
+            vertex_instance->m_vk_vertex_buffer_memory,
+            0,
+            vertex->m_vertex_length,
+            0,
+            &vertex_memory_ptr))
         {
             memcpy(
                 vertex_memory_ptr,
@@ -4558,7 +4558,7 @@ namespace jeecs::graphic::api::vk120
         context->destroy_uniform_buffer(static_cast<jevk12_uniformbuf*>(ubuffer->m_handle.m_ptr));
     }
 
-            void bind_uniform_buffer(je_GraphicImplContext ctx, jegl_uniform_buffer* uniformbuf)
+    void bind_uniform_buffer(je_GraphicImplContext ctx, jegl_uniform_buffer* uniformbuf)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
         jevk12_uniformbuf* uniformbuf_instance =
@@ -4579,9 +4579,9 @@ namespace jeecs::graphic::api::vk120
             texture_instance->m_vk_texture_image_view);
     }
 
-            /////////////////////////////////////////////////////////////////////////
-    // Render API (v2)
     /////////////////////////////////////////////////////////////////////////
+// Render API (v2)
+/////////////////////////////////////////////////////////////////////////
 
     struct jegl_vk120_render_sampler
     {
@@ -4589,10 +4589,12 @@ namespace jeecs::graphic::api::vk120
     };
 
     void render_pipeline_init(je_GraphicImplContext, jegl_pipeline*)
-    {}
+    {
+    }
 
     void render_pipeline_close(je_GraphicImplContext, jegl_pipeline*)
-    {}
+    {
+    }
 
     void render_pipeline_bind(
         je_GraphicImplContext ctx, jegl_pipeline* pipeline)
@@ -4613,31 +4615,31 @@ namespace jeecs::graphic::api::vk120
         auto* native = new jegl_vk120_render_sampler();
 
         auto cvt_filter = [](jegl_filter filter) -> jegl_shader::fliter_mode
-        {
-            return filter == jegl_filter::LINEAR
-                ? jegl_shader::fliter_mode::LINEAR
-                : jegl_shader::fliter_mode::NEAREST;
-        };
-        auto cvt_mip = [](jegl_mip_filter filter) -> jegl_shader::fliter_mode
-        {
-            return filter == jegl_mip_filter::LINEAR
-                ? jegl_shader::fliter_mode::LINEAR
-                : jegl_shader::fliter_mode::NEAREST;
-        };
-        auto cvt_wrap = [](jegl_wrap_mode wrap) -> jegl_shader::wrap_mode
-        {
-            switch (wrap)
             {
-            case jegl_wrap_mode::CLAMP_TO_EDGE:
-                return jegl_shader::wrap_mode::CLAMP;
-            case jegl_wrap_mode::REPEAT:
-            case jegl_wrap_mode::MIRRORED_REPEAT:
-                return jegl_shader::wrap_mode::REPEAT;
-            default:
-                assert(false);
-                return jegl_shader::wrap_mode::CLAMP;
-            }
-        };
+                return filter == jegl_filter::LINEAR
+                    ? jegl_shader::fliter_mode::LINEAR
+                    : jegl_shader::fliter_mode::NEAREST;
+            };
+        auto cvt_mip = [](jegl_mip_filter filter) -> jegl_shader::fliter_mode
+            {
+                return filter == jegl_mip_filter::LINEAR
+                    ? jegl_shader::fliter_mode::LINEAR
+                    : jegl_shader::fliter_mode::NEAREST;
+            };
+        auto cvt_wrap = [](jegl_wrap_mode wrap) -> jegl_shader::wrap_mode
+            {
+                switch (wrap)
+                {
+                case jegl_wrap_mode::CLAMP_TO_EDGE:
+                    return jegl_shader::wrap_mode::CLAMP;
+                case jegl_wrap_mode::REPEAT:
+                case jegl_wrap_mode::MIRRORED_REPEAT:
+                    return jegl_shader::wrap_mode::REPEAT;
+                default:
+                    assert(false);
+                    return jegl_shader::wrap_mode::CLAMP;
+                }
+            };
 
         native->m_sampler = context->create_sampler(
             cvt_filter(sampler->m_desc.m_mag_filter),
@@ -4786,7 +4788,7 @@ namespace jeecs::graphic::api::vk120
         {
             const uint32_t ndc_offset =
                 context->_vk_current_shader_resource
-                    ->m_builtin_uniforms.m_builtin_uniform_ndc_scale;
+                ->m_builtin_uniforms.m_builtin_uniform_ndc_scale;
 
             if (ndc_offset != jeecs::graphic::INVALID_UNIFORM_LOCATION
                 && ndc_offset + sizeof(float) * 4 <= uniform_size)
@@ -4853,10 +4855,12 @@ namespace jeecs::graphic::api::vk120
     }
 
     void render_commit_begin(je_GraphicImplContext)
-    {}
+    {
+    }
 
     void render_commit_end(je_GraphicImplContext)
-    {}
+    {
+    }
 }
 
 // 导出图形接口！
