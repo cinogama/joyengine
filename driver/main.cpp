@@ -133,15 +133,19 @@ namespace
         jegl_sampler* sampler =
             jegl_sampler_create(&fake_context, &sampler_desc);
 
+        // The Unlit shader declares float3 + float2; the vertex carries two
+        // extra attributes that the shader must be allowed to ignore.
         const float vertices[] = {
-            -1.f, -1.f, 0.f, 0.f, 0.f,
-             1.f, -1.f, 0.f, 1.f, 0.f,
-             0.f,  1.f, 0.f, 0.5f, 1.f,
+            -1.f, -1.f, 0.f, 0.f, 0.f, 0.f, 0.f, -1.f, 1.f, 0.f, 0.f,
+             1.f, -1.f, 0.f, 1.f, 0.f, 0.f, 0.f, -1.f, 1.f, 0.f, 0.f,
+             0.f,  1.f, 0.f, 0.5f, 1.f, 0.f, 0.f, -1.f, 1.f, 0.f, 0.f,
         };
         const uint32_t indices[] = { 0, 1, 2 };
         const jegl_vertex::data_layout layouts[] = {
             { jegl_vertex::data_type::FLOAT32, 3 },
             { jegl_vertex::data_type::FLOAT32, 2 },
+            { jegl_vertex::data_type::FLOAT32, 3 },
+            { jegl_vertex::data_type::FLOAT32, 3 },
         };
         jegl_vertex* vertex = jegl_create_vertex(
             jegl_vertex::type::TRIANGLES,
@@ -150,7 +154,7 @@ namespace
             indices,
             3,
             layouts,
-            2);
+            4);
         if (vertex == nullptr)
             fail("failed to create the test vertex");
 

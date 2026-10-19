@@ -114,10 +114,14 @@ namespace
     bool _jegl_vertex_layout_matches(
         const jegl_vertex* vertex, const jegl_shader* shader)
     {
-        if (vertex->m_format_count != shader->m_vertex_in_count)
+        // A shader consumes a prefix of the vertex attributes. Models may
+        // carry extra attributes (normal/tangent/...) that the shader ignores;
+        // the pipeline input layout is built from the shader's vin, so only
+        // that prefix has to match.
+        if (shader->m_vertex_in_count > vertex->m_format_count)
             return false;
 
-        for (size_t i = 0; i < vertex->m_format_count; ++i)
+        for (size_t i = 0; i < shader->m_vertex_in_count; ++i)
         {
             const auto type = shader->m_vertex_in[i];
             size_t count = 0;
