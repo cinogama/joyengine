@@ -149,8 +149,31 @@ persistent mapping、无绑定纹理、顶点阶段纹理采样（v1 与 Metal �
 | OpenGL 3.3 / GLES 3.0 / WebGL 2.0 | 已实现（pass/pipeline/sampler/UBO ring/instanced draw） |
 | none（`-gapi none`） | 已实现（全部 no-op） |
 | DirectX 11 | 已实现（pass/pipeline/sampler/uniform/draw） |
-| Vulkan 1.2 | 已实现（复用现有 PSO/descriptor 机制） |
+| Vulkan 1.2 | 已实现（frame-in-flight、每帧 UBO ring、PSO/pipeline 状态缓存、内存子分配、屏幕 MSAA resolve） |
 | Metal | 已实现（延迟编码器；Windows 构建不编译 Metal 代码，待 macOS 构建验证） |
+
+## Vulkan 1.2 后端说明
+
+- 帧模型：`FRAMES_IN_FLIGHT = 2`，每帧独立的命令缓冲、fence、信号量和 descriptor pool；
+  同一帧的所有 pass 录制进一个命令缓冲，在 `update_draw_commit` 阶段一次提交。
+  `begin_pass` / `end_pass` 不再触发 queue submit。
+- per-draw uniform：每帧一个持久映射的 HOST_VISIBLE|HOST_COHERENT ring，set 0 使用
+  `VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC` 和 dynamic offset；不再按 draw 分配 UBO。
+- 固定功能状态：PSO 按 `(pipeline, framebuffer, topology, stride, sample count)` 缓存，
+  状态来自 `jegl_pipeline::m_state`（深度/混合/剔除/绕序/颜色写掩码），并受
+  `VK_EXT_`/设备 feature 支持情况约束。
+- 内存：buffer/image 使用大块 `VkDeviceMemory` 子分配；资源销毁时归还范围。
+- MSAA：屏幕目标按 `jegl_interface_config::m_msaa` 选择设备支持的 sample count，
+  通过 render pass 的 resolve attachment 输出到交换链；`jegl_texture_msaa` 仅作为
+  render target 附件使用，不能通过普通纹理路径采样。
+- 交换链重建时复用 render pass 缓存；render pass 兼容时保留 ImGui 上下文，只更新
+  `MinImageCount`。
+- 已知限制：`texture_msaa` 不支持 CPU 像素更新；ImGui 的 `apply_shader_sampler`
+  回调当前为空（自定义 sampler 合并在纹理描述符中创建）；`shader_update` /
+  `framebuffer_update` 与 DX11 现状一致，热重载依赖资源重新创建。
+- 验证层只在 Debug 构建启用；Release/RelWithDebInfo 不加载 `VK_LAYER_KHRONOS_validation`。
+- 设备选择优先独显；示例版本从 loader 报告的版本开始，遇到
+  `VK_ERROR_INCOMPATIBLE_DRIVER` 会回退到 Vulkan 1.0。
 
 所有内置后端都实现了 render API；自定义后端缺少该表时会在图形线程启动阶段报错。
 
