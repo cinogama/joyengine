@@ -1,5 +1,7 @@
 #define JE_IMPL
 #include "jeecs.hpp"
+#include <algorithm>
+#include <cstring>
 #include <functional>
 #include <variant>
 #include <string>
@@ -13,6 +15,122 @@
 void _jegl_init_resource_handle(
     jegl_resource_handle* resource_handle,
     const char* path_may_null_if_builtin);
+
+namespace
+{
+    void _jegl_get_uniform_layout(
+        jegl_shader::uniform_type type, uint32_t* out_size, uint32_t* out_align)
+    {
+        switch (type)
+        {
+        case jegl_shader::uniform_type::INT:
+        case jegl_shader::uniform_type::FLOAT:
+            *out_size = 4;
+            *out_align = 4;
+            break;
+        case jegl_shader::uniform_type::INT2:
+        case jegl_shader::uniform_type::FLOAT2:
+            *out_size = 8;
+            *out_align = 8;
+            break;
+        case jegl_shader::uniform_type::INT3:
+        case jegl_shader::uniform_type::FLOAT3:
+            *out_size = 12;
+            *out_align = 16;
+            break;
+        case jegl_shader::uniform_type::INT4:
+        case jegl_shader::uniform_type::FLOAT4:
+            *out_size = 16;
+            *out_align = 16;
+            break;
+        case jegl_shader::uniform_type::FLOAT2X2:
+            *out_size = 16;
+            *out_align = 8;
+            break;
+        case jegl_shader::uniform_type::FLOAT3X3:
+            *out_size = 48;
+            *out_align = 16;
+            break;
+        case jegl_shader::uniform_type::FLOAT4X4:
+            *out_size = 64;
+            *out_align = 16;
+            break;
+        case jegl_shader::uniform_type::TEXTURE:
+            *out_size = 0;
+            *out_align = 1;
+            break;
+        default:
+            assert(false);
+            *out_size = 0;
+            *out_align = 1;
+            break;
+        }
+    }
+
+    uint32_t _jegl_align_up(uint32_t value, uint32_t alignment)
+    {
+        return (value + alignment - 1) / alignment * alignment;
+    }
+
+    // Computes the canonical std140 layout of the shader's per-draw uniform
+    // block. Every backend and the command-buffer recorder use these offsets,
+    // so the layout must stay stable across backends; the shader generator
+    // sorts uniforms by packing rank to keep HLSL cbuffer packing identical to
+    // std140 (see je/shader/shader.wo).
+    void _jegl_resolve_canonical_uniform_layout(jegl_shader* shader)
+    {
+        uint32_t offset = 0;
+        uint32_t max_align = 4;
+
+        for (auto* uniform = shader->m_custom_uniforms;
+            uniform != nullptr;
+            uniform = uniform->m_next)
+        {
+            uint32_t size, align;
+            _jegl_get_uniform_layout(uniform->m_uniform_type, &size, &align);
+
+            if (size == 0)
+            {
+                uniform->m_offset = jeecs::graphic::INVALID_UNIFORM_LOCATION;
+                uniform->m_size = 0;
+                continue;
+            }
+
+            offset = _jegl_align_up(offset, align);
+            uniform->m_offset = offset;
+            uniform->m_size = size;
+            offset += size;
+            max_align = std::max(max_align, align);
+        }
+
+        shader->m_uniform_block_size = _jegl_align_up(offset, max_align);
+
+        auto resolve = [shader](const char* name) -> uint32_t
+        {
+            for (auto* uniform = shader->m_custom_uniforms;
+                uniform != nullptr;
+                uniform = uniform->m_next)
+            {
+                if (uniform->m_uniform_type != jegl_shader::uniform_type::TEXTURE
+                    && std::strcmp(uniform->m_name, name) == 0)
+                    return uniform->m_offset;
+            }
+            return jeecs::graphic::INVALID_UNIFORM_LOCATION;
+        };
+
+        shader->m_builtin_uniforms.m_builtin_uniform_ndc_scale = resolve("JE_NDC_SCALE");
+        shader->m_builtin_uniforms.m_builtin_uniform_m = resolve("JE_M");
+        shader->m_builtin_uniforms.m_builtin_uniform_mv = resolve("JE_MV");
+        shader->m_builtin_uniforms.m_builtin_uniform_mvp = resolve("JE_MVP");
+        shader->m_builtin_uniforms.m_builtin_uniform_local_scale = resolve("JE_LOCAL_SCALE");
+        shader->m_builtin_uniforms.m_builtin_uniform_tiling = resolve("JE_UV_TILING");
+        shader->m_builtin_uniforms.m_builtin_uniform_offset = resolve("JE_UV_OFFSET");
+        shader->m_builtin_uniforms.m_builtin_uniform_color = resolve("JE_COLOR");
+        shader->m_builtin_uniforms.m_builtin_uniform_light2d_resolution = resolve("JE_LIGHT2D_RESOLUTION");
+        shader->m_builtin_uniforms.m_builtin_uniform_light2d_decay = resolve("JE_LIGHT2D_DECAY");
+        shader->m_builtin_uniforms.m_builtin_uniform_shadow_ellipse = resolve("JE_SHADOW_ELLIPSE");
+    }
+}
 
 #ifdef JE4_ENABLE_SHADER_WRAP_GENERATOR
 
@@ -171,6 +289,22 @@ void _jegl_create_shader_cache(jegl_shader* shader_resource, uint64_t virtual_fi
             jeecs_write_cache_file(&sampler.m_sampler_id, sizeof(uint32_t), 1, cachefile);
             jeecs_write_cache_file(&sampler.m_pass_id_count, sizeof(uint64_t), 1, cachefile);
             jeecs_write_cache_file(sampler.m_pass_ids, sizeof(uint32_t), (size_t)sampler.m_pass_id_count, cachefile);
+        }
+
+        // 4.5 write texture binding reflection
+        uint64_t texture_count = (uint64_t)shader_resource->m_texture_count;
+        jeecs_write_cache_file(&texture_count, sizeof(uint64_t), 1, cachefile);
+        for (uint64_t i = 0; i < texture_count; ++i)
+        {
+            auto& texture = shader_resource->m_textures[i];
+
+            uint64_t texture_name_len = (uint64_t)strlen(texture.m_name);
+            jeecs_write_cache_file(&texture_name_len, sizeof(uint64_t), 1, cachefile);
+            jeecs_write_cache_file(texture.m_name, sizeof(char), (size_t)texture_name_len, cachefile);
+
+            jeecs_write_cache_file(&texture.m_pass, sizeof(uint32_t), 1, cachefile);
+            jeecs_write_cache_file(&texture.m_sampler_id, sizeof(uint32_t), 1, cachefile);
+            jeecs_write_cache_file(&texture.m_kind, sizeof(jegl_texture_kind), 1, cachefile);
         }
 
         jeecs_close_cache_file(cachefile);
@@ -641,6 +775,8 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
             variable->m_name = jeecs::basic::make_new_string(uniform_info.m_name);
             variable->m_uniform_type = uniform_info.m_type;
             variable->m_index = jeecs::graphic::INVALID_UNIFORM_LOCATION;
+            variable->m_offset = 0;
+            variable->m_size = 0;
             variable->m_value = uniform_info.m_init_value;
             variable->m_updated = true;
 
@@ -657,12 +793,30 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
             variable->m_name = jeecs::basic::make_new_string(texture.m_name);
             variable->m_uniform_type = jegl_shader::uniform_type::TEXTURE;
             variable->m_index = jeecs::graphic::INVALID_UNIFORM_LOCATION;
-            variable->m_value.m_int = texture.m_pass;
+            variable->m_offset = jeecs::graphic::INVALID_UNIFORM_LOCATION;
+            variable->m_size = 0;
+            variable->m_value.m_int = (int)texture.m_pass;
             variable->m_updated = true;
             *last = variable;
             last = &variable->m_next;
         }
     } while (false);
+
+    // Canonical layout of the per-draw uniform block, shared by all backends.
+    _jegl_resolve_canonical_uniform_layout(write_to_shader);
+
+    // Texture binding reflection used by the render API.
+    write_to_shader->m_texture_count = shader_wrapper_ptr->m_textures.size();
+    write_to_shader->m_textures = new jegl_shader::texture_decl[write_to_shader->m_texture_count];
+    for (size_t i = 0; i < write_to_shader->m_texture_count; ++i)
+    {
+        const auto& texture = shader_wrapper_ptr->m_textures.at(i);
+        auto& decl = write_to_shader->m_textures[i];
+        decl.m_name = jeecs::basic::make_new_string(texture.m_name);
+        decl.m_pass = (uint32_t)texture.m_pass;
+        decl.m_sampler_id = (uint32_t)texture.m_sampler_id;
+        decl.m_kind = texture.m_kind;
+    }
 
     do
     {
@@ -750,6 +904,9 @@ jegl_shader* _jegl_create_shader_instance_and_init(void)
         jeecs::graphic::PENDING_UNIFORM_LOCATION
     };
 
+    shader_instance->m_uniform_block_size = 0;
+    shader_instance->m_textures = nullptr;
+    shader_instance->m_texture_count = 0;
 
     return shader_instance;
 }
@@ -894,6 +1051,10 @@ jegl_shader* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
         current_variable->m_next = nullptr;
     }
 
+    // The uniform list is stored in canonical packing order; recompute the
+    // shared std140 offsets for this shader instance.
+    _jegl_resolve_canonical_uniform_layout(shader_instance);
+
     // 4.2 read uniform block informs
     uint64_t custom_uniform_block_count;
     jeecs_file_read(&custom_uniform_block_count, sizeof(uint64_t), 1, cache_file);
@@ -960,6 +1121,26 @@ jegl_shader* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
         jeecs_file_read(sampler.m_pass_ids, sizeof(uint32_t), (size_t)sampler.m_pass_id_count, cache_file);
     }
 
+    // 4.5 read texture binding reflection
+    uint64_t texture_count;
+    jeecs_file_read(&texture_count, sizeof(uint64_t), 1, cache_file);
+    shader_instance->m_texture_count = (size_t)texture_count;
+    shader_instance->m_textures = new jegl_shader::texture_decl[shader_instance->m_texture_count];
+    for (uint64_t i = 0; i < texture_count; ++i)
+    {
+        auto& texture = shader_instance->m_textures[i];
+
+        uint64_t texture_name_len;
+        jeecs_file_read(&texture_name_len, sizeof(uint64_t), 1, cache_file);
+        texture.m_name = (const char*)je_mem_alloc((size_t)texture_name_len + 1);
+        jeecs_file_read(const_cast<char*>(texture.m_name), sizeof(char), (size_t)texture_name_len, cache_file);
+        const_cast<char*>(texture.m_name)[(size_t)texture_name_len] = 0;
+
+        jeecs_file_read(&texture.m_pass, sizeof(uint32_t), 1, cache_file);
+        jeecs_file_read(&texture.m_sampler_id, sizeof(uint32_t), 1, cache_file);
+        jeecs_file_read(&texture.m_kind, sizeof(jegl_texture_kind), 1, cache_file);
+    }
+
     jeecs_file_close(cache_file);
 
     _jegl_init_resource_handle(&shader_instance->m_handle, path);
@@ -1008,6 +1189,10 @@ void jegl_shader_free_generated_shader_source(jegl_shader* write_to_shader)
     for (size_t i = 0; i < write_to_shader->m_sampler_count; ++i)
         delete[] write_to_shader->m_sampler_methods[i].m_pass_ids;
     delete[] write_to_shader->m_sampler_methods;
+
+    for (size_t i = 0; i < write_to_shader->m_texture_count; ++i)
+        je_mem_free((void*)write_to_shader->m_textures[i].m_name);
+    delete[] write_to_shader->m_textures;
 }
 
 WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
@@ -1019,7 +1204,7 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
                 vertex_in_layout: array<woshader::Type>,
                 fragment_out_layout: array<woshader::Type>,
                 samplers: array<woshader::Sampler2D>,
-                texture_passes: array<(string, int, int)>,
+                texture_passes: array<(string, int, int, int)>,
                 uniform_variables: array<(string, woshader::Type, woshader::ShaderValueImm)>,
                 uniform_blocks: array<(string, int)>,
                 config: ShaderConfig)=> gchandle;
@@ -1113,6 +1298,26 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
                 return jegl_shader::wrap_mode::CLAMP;
             }
         };
+    auto parse_woshader_texture_type_to_je_kind =
+        [](WoshaderType t) -> jegl_texture_kind
+        {
+            switch (t)
+            {
+            case WoshaderType::Texture2D:
+                return jegl_texture_kind::TEXTURE_2D;
+            case WoshaderType::Texture2DArray:
+                return jegl_texture_kind::TEXTURE_ARRAY;
+            case WoshaderType::Texture3D:
+                return jegl_texture_kind::TEXTURE_3D;
+            case WoshaderType::TextureCube:
+                return jegl_texture_kind::TEXTURE_CUBE;
+            case WoshaderType::Texture2DMS:
+                return jegl_texture_kind::TEXTURE_MSAA;
+            default:
+                jeecs::debug::logfatal("Unsupport woshader texture type: %d.", (int)t);
+                return jegl_texture_kind::TEXTURE_2D;
+            }
+        };
 
     woort_value s;
     if (!woort_push_reserve(3, &s))
@@ -1191,6 +1396,9 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
         texture_pass.m_pass = (uint32_t)woort_int(tmp2);
         woort_struct_get(tmp2, tmp, 2);
         texture_pass.m_sampler_id = (uint32_t)woort_int(tmp2);
+        woort_struct_get(tmp2, tmp, 3);
+        texture_pass.m_kind =
+            parse_woshader_texture_type_to_je_kind((WoshaderType)woort_int(tmp2));
     }
 
     const auto uniform_variables_count = woort_vec_len(uniform_variables);

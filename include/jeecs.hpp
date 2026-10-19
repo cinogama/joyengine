@@ -403,7 +403,7 @@ typedef enum je_Joystickcode {
 // 注：je_GameUniverse/je_GameWorld/je_Archtype/je_Chunk 的前向声明位于文件更上方（实体类型段之前），
 // 因为 je_GameEntity 等早期定义的类型需要引用 je_Chunk。
 typedef struct je_GraphicUhost    je_GraphicUhost;      // 图形渲染宿主上下文
-typedef struct je_RendchainBranch je_RendchainBranch;   // 可编程绘制分支
+typedef struct je_RenderBranch je_RenderBranch;   // 可编程绘制分支
 
 #ifdef __cplusplus
 /*
@@ -431,8 +431,8 @@ namespace jeecs
 #endif
     }
 
-    // 注：je_RendchainBranch / je_GraphicUhost 不再在此提供 C++ 别名。
-    // C++ 代码直接使用 C ABI 类型 je_RendchainBranch / je_GraphicUhost（见文件顶部 C ABI 段）。
+    // 注：je_RenderBranch / je_GraphicUhost 不再在此提供 C++ 别名。
+    // C++ 代码直接使用 C ABI 类型 je_RenderBranch / je_GraphicUhost（见文件顶部 C ABI 段）。
 
     /*
     jeecs::typing [命名空间]
@@ -2400,7 +2400,14 @@ struct jegl_shader
     struct unifrom_variables
     {
         const char* m_name;
+        // Backend-resolved location, kept for the legacy immediate API.
+        // PENDING_UNIFORM_LOCATION until the shader blob is initialized.
         uint32_t m_index;
+        // Canonical std140 byte offset/size inside the shader uniform block.
+        // Computed once when the shader source is generated (or loaded from
+        // cache) and shared by every backend and the command-buffer recorder.
+        uint32_t m_offset;
+        uint32_t m_size;
         uniform_type m_uniform_type;
         bool m_updated;
         union value
@@ -2530,6 +2537,21 @@ struct jegl_shader
 
     unifrom_variables* m_custom_uniforms;
     uniform_blocks* m_custom_uniform_blocks;
+
+    // Canonical std140-aligned size of the shader's per-draw uniform block.
+    uint32_t m_uniform_block_size;
+
+    // Texture bindings declared by the shader (reflection for the render API).
+    struct texture_decl
+    {
+        const char* m_name;
+        uint32_t m_pass;
+        uint32_t m_sampler_id;
+        jegl_texture_kind m_kind;
+    };
+    texture_decl* m_textures;
+    size_t m_texture_count;
+
     builtin_uniform_location m_builtin_uniforms;
 
     bool m_enable_to_shared;
@@ -2610,6 +2632,83 @@ struct jegl_frame_buffer_clear_operation
         clear_depth_attachment m_depth;
     };
     const jegl_frame_buffer_clear_operation* m_next;
+};
+
+// Render API (v2) objects. The definitions are private to the engine; the
+// public boundary only exposes these distinct opaque handle types.
+struct jegl_pipeline;
+struct jegl_sampler;
+struct jegl_command_buffer;
+
+struct jegl_viewport
+{
+    int32_t x;
+    int32_t y;
+    uint32_t width;
+    uint32_t height;
+};
+
+/*
+jegl_graphic_api_render [类型]
+版本化的渲染接口函数表，由支持新渲染 API 的后端填充。
+    * m_abi_version 必须等于 JEGL_RENDER_API_ABI_VERSION
+    * m_struct_size 必须等于 sizeof(jegl_graphic_api_render)
+    * 迁移期间 jegl_graphic_api::m_render_apis 可以为空；新 API 入口会断言其非空
+*/
+#define JEGL_RENDER_API_ABI_VERSION 1u
+
+struct jegl_graphic_api_render
+{
+    uint32_t m_abi_version;
+    uint32_t m_struct_size;
+
+    void (*pipeline_init)(je_GraphicImplContext context, jegl_pipeline* pipeline);
+    void (*pipeline_close)(je_GraphicImplContext context, jegl_pipeline* pipeline);
+    void (*pipeline_bind)(je_GraphicImplContext context, jegl_pipeline* pipeline);
+
+    void (*sampler_init)(je_GraphicImplContext context, jegl_sampler* sampler);
+    void (*sampler_close)(je_GraphicImplContext context, jegl_sampler* sampler);
+    void (*sampler_bind)(
+        je_GraphicImplContext context, uint32_t sampler_id, jegl_sampler* sampler);
+
+    void (*begin_pass)(
+        je_GraphicImplContext context,
+        /* OPTIONAL: nullptr means the screen back buffer */ jegl_frame_buffer* target,
+        const jegl_viewport* viewport);
+    void (*clear_color)(
+        je_GraphicImplContext context, uint32_t attachment, const float rgba[4]);
+    void (*clear_depth)(je_GraphicImplContext context, float depth);
+    void (*end_pass)(je_GraphicImplContext context);
+
+    void (*bind_vertex)(je_GraphicImplContext context, jegl_vertex* vertex);
+    void (*bind_uniform_buffer)(
+        je_GraphicImplContext context, jegl_uniform_buffer* uniform_buffer);
+    void (*bind_texture_2d)(
+        je_GraphicImplContext context, uint32_t pass, jegl_texture_2d* texture);
+    void (*bind_texture_3d)(
+        je_GraphicImplContext context, uint32_t pass, jegl_texture_3d* texture);
+    void (*bind_texture_array)(
+        je_GraphicImplContext context, uint32_t pass, jegl_texture_array* texture);
+    void (*bind_texture_cube)(
+        je_GraphicImplContext context, uint32_t pass, jegl_texture_cube* texture);
+
+    void (*draw_indexed)(
+        je_GraphicImplContext context,
+        uint32_t index_count,
+        uint32_t first_index,
+        uint32_t instance_count,
+        const void* uniform_data,
+        uint32_t uniform_size);
+    void (*draw)(
+        je_GraphicImplContext context,
+        uint32_t vertex_count,
+        uint32_t first_vertex,
+        uint32_t instance_count,
+        const void* uniform_data,
+        uint32_t uniform_size);
+
+    void (*commit_begin)(je_GraphicImplContext context);
+    void (*commit_end)(je_GraphicImplContext context);
 };
 
 /*
@@ -3027,6 +3126,14 @@ struct jegl_graphic_api
     由图形实现负责使用当前绑定的着色器和纹理绘制指定的顶点
     */
     draw_vertex_func_t draw_vertex;
+
+    /*
+    jegl_graphic_api::m_render_apis [成员]
+    版本化的渲染接口（pipeline / command buffer）。
+        * 迁移期间允许为空，此时新渲染 API 的入口会以断言终止
+        * 后端在注册时填写，通常指向一个静态的 jegl_graphic_api_render 实例
+    */
+    const jegl_graphic_api_render* m_render_apis;
 };
 static_assert(sizeof(jegl_graphic_api) % sizeof(void*) == 0);
 
@@ -3630,375 +3737,301 @@ jegl_using_dx11_apis [基本接口]
 */
 JE_API void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis);
 
-/*
-jegl_bind_texture_2d / jegl_bind_texture_3d / jegl_bind_texture_array /
-jegl_bind_texture_cube / jegl_bind_texture_msaa [基本接口]
-将指定类别的纹理绑定到指定的纹理通道
-    * 此函数只允许在图形线程内调用
-    * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
-*/
-JE_API void jegl_bind_texture_2d(jegl_texture_2d* texture, size_t pass);
-JE_API void jegl_bind_texture_3d(jegl_texture_3d* texture, size_t pass);
-JE_API void jegl_bind_texture_array(jegl_texture_array* texture, size_t pass);
-JE_API void jegl_bind_texture_cube(jegl_texture_cube* texture, size_t pass);
-JE_API void jegl_bind_texture_msaa(jegl_texture_msaa* texture, size_t pass);
+///////////////////////////// RENDER API (V2) /////////////////////////////
 
 /*
-jegl_bind_shader [基本接口]
-    * 此函数只允许在图形线程内调用
-    * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
-    * 当着色器发生内部错误（通常是引擎生成的shader代码无法被图形库正常编译）时，
-        绑定失败，返回false
+新渲染 API 的设计约定：
+    * 强类型：pipeline/sampler/command_buffer 都是独立的 opaque 类型
+    * 空安全：必填参数在实现中以断言约束；确实可为空的参数在类型前标注 OPTIONAL
+    * 不做防御式回退：违反前置条件属于未定义行为（Debug 构建断言终止），
+      不会静默跳过或自动钳制
+    * 可移植地板：OpenGL 3.3 / OpenGL ES 3.0 / WebGL 2.0
+      （不使用 SSBO、compute、geometry、indirect/multi-draw、base-vertex、
+       persistent mapping、无绑定纹理）
 */
-JE_API bool jegl_bind_shader(jegl_shader* shader);
 
 /*
-jegl_bind_uniform_buffer [基本接口]
-    * 此函数只允许在图形线程内调用
-    * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
+jegl_topology [类型]
+图元拓扑；与 pipeline 绑定，绘制时使用 pipeline 的拓扑
 */
-JE_API void jegl_bind_uniform_buffer(jegl_uniform_buffer* uniformbuf);
+enum class jegl_topology : uint8_t
+{
+    POINTS,
+    LINES,
+    LINE_STRIP,
+    TRIANGLES,
+    TRIANGLE_STRIP,
+};
 
 /*
-jegl_draw_vertex [基本接口]
-使用当前绑定着色器的（通过jegl_bind_shader绑定）和纹理（通过jegl_bind_texture_*绑定）,
-以指定方式绘制一个模型
-    * 此函数只允许在图形线程内调用
-    * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
-请参见：
-    jegl_bind_shader
-    jegl_bind_texture_2d
+jegl_front_face [类型]
+正面绕序。后端会根据渲染目标（屏幕/离屏）自行处理 NDC 翻转。
 */
-JE_API void jegl_draw_vertex(jegl_vertex* vert);
+enum class jegl_front_face : uint8_t
+{
+    COUNTER_CLOCKWISE,
+    CLOCKWISE,
+};
 
 /*
-jegl_rend_to_framebuffer [基本接口]
-指定接下来的绘制操作作用于指定缓冲区，
-framebuffer 用于指定渲染目标，若为 nullptr 则渲染目标为屏幕空间
-viewport_xywh 用于指定视口位置和大小，若为 nullptr 则视口设置为 (0, 0, 0, 0)
-clear_operations 用于指定颜色附件或深度附件清除值，若为 nullptr 则不进行任何清除
-    * 此函数只允许在图形线程内调用
-    * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
+jegl_pipeline_state [类型]
+pipeline 的固定功能状态。所有字段都必须显式初始化；
+如需基于 shader 的 ZTEST/ZWRITE/BLEND/CULL 配置，请使用
+jegl_pipeline_state_from_shader 或向 jegl_pipeline_create 传入空的 state。
 */
-JE_API void jegl_rend_to_framebuffer(
-    /* OPTIONAL */ jegl_frame_buffer* framebuffer,
-    /* OPTIONAL */ const int32_t(*viewport_xywh)[4],
-    /* OPTIONAL */ const jegl_frame_buffer_clear_operation* clear_operations);
+struct jegl_pipeline_state
+{
+    jegl_topology m_topology;
+
+    bool m_depth_test;
+    jegl_shader::depth_test_method m_depth_func;
+    bool m_depth_write;
+
+    bool m_blend;
+    jegl_shader::blend_equation m_blend_equation;
+    jegl_shader::blend_method m_blend_src_color;
+    jegl_shader::blend_method m_blend_dst_color;
+    jegl_shader::blend_method m_blend_src_alpha;
+    jegl_shader::blend_method m_blend_dst_alpha;
+
+    jegl_shader::cull_mode m_cull;
+    jegl_front_face m_front_face;
+
+    // bit0..3 = R,G,B,A；0xF 表示全部写入
+    uint8_t m_color_write_mask;
+};
+
+struct jegl_pipeline_desc
+{
+    jegl_shader* m_shader;
+    /* OPTIONAL: nullptr 表示使用 shader 的 ZTEST/ZWRITE/BLEND/CULL 配置 */
+    const jegl_pipeline_state* m_state;
+};
 
 /*
-jegl_set_uniform_value [基本接口]
-向当前绑定着色器的指定位置的一致变量设置一个指定类型的数值
-    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
-    * 此函数只允许在图形线程内调用
-    * type 指定 data 指向的数据的类型，data 指向的数据必须至少包含 type 所指定的类型所需的字节数
-    * 请确保 type 和 data 指向的数据类型一致，否则结果未定义
+jegl_uniform_slot [类型]
+单次绘制的 uniform 在 shader uniform block 内的规范化位置。
+    * m_offset == JEGL_UNIFORM_SLOT_NONE 表示 shader 未声明该 uniform
+    * 通过 jegl_pipeline_uniform_slot / jegl_pipeline_builtin_uniform_slots 获取一次后缓存
 */
-JE_API void jegl_set_uniform_value(
-    uint32_t location, jegl_shader::uniform_type type, const void* data);
+#define JEGL_UNIFORM_SLOT_NONE ((uint32_t)0xFFFFFFFFu)
 
-// jegl rendchain api
+struct jegl_uniform_slot
+{
+    uint32_t m_offset;
+    uint32_t m_size;
+};
+
+struct jegl_builtin_uniform_slots
+{
+    jegl_uniform_slot m_model;
+    jegl_uniform_slot m_model_view;
+    jegl_uniform_slot m_model_view_projection;
+
+    jegl_uniform_slot m_local_scale;
+    jegl_uniform_slot m_uv_tiling;
+    jegl_uniform_slot m_uv_offset;
+    jegl_uniform_slot m_color;
+
+    jegl_uniform_slot m_light2d_resolution;
+    jegl_uniform_slot m_light2d_decay;
+    jegl_uniform_slot m_shadow_ellipse;
+};
 
 /*
-jegl_rendchain [类型]
-绘制链对象
-RendChain是引擎提供的一致绘制操作接口，支持不同线程提交不同的渲染链，并最终完成渲染
-一个RendChain是对一个缓冲区的渲染操作，包括以下流程：
-    * 第0步：创建
-    * 第1步：调用jegl_rchain_begin绑定缓冲区
-    * 第2步：根据需要，调用jegl_rchain_clear_color_buffer或jegl_rchain_clear_depth_buffer
-            用于清除指定缓冲区的状态
-    * 第3步：根据需要，调用jegl_rchain_bind_uniform_buffer绑定所需的一致变量缓冲区
-    * 第4步：进行若干次绘制
-    * 第5步：在图形线程中调用jegl_rchain_commit提交绘制链
-    * 第6步：如果需要复用此链，可以保留链实例，从第1步重新开始绘制，否则：
-    * 第7步：调用jegl_rchain_close销毁当前链
-请参见：
-    jegl_rchain_begin
-    jegl_rchain_close
-    jegl_rchain_bind_uniform_buffer
-    jegl_rchain_clear_color_buffer
-    jegl_rchain_clear_depth_buffer
-    jegl_rchain_close
+jegl_pipeline_create [基本接口]
+创建一个 pipeline：shader + 固定功能状态 + 顶点布局兼容性。
+    * 返回的 pipeline 持有 shader 的引用
+    * 必须在对应图形线程的 context 生命周期内使用
 */
-struct jegl_rendchain;
+JE_API jegl_pipeline* /* NOT NULL */ jegl_pipeline_create(
+    jegl_context* context, const jegl_pipeline_desc* desc);
+
+JE_API void jegl_close_pipeline(jegl_pipeline* pipeline);
 
 /*
-jegl_rendchain_rend_action [类型]
-绘制操作对象，调用jegl_rchain_draw执行绘制操作时返回此对象地址用于
-后续指定一致变量操作使用
-请参见：
-    jegl_rchain_draw
+jegl_pipeline_state_from_shader [基本接口]
+用 shader 的 ZTEST/ZWRITE/BLEND/CULL 配置填充一份 pipeline 状态。
 */
-struct jegl_rendchain_rend_action;
+JE_API jegl_pipeline_state jegl_pipeline_state_from_shader(
+    jegl_shader* shader);
 
 /*
-jegl_rchain_create [基本接口]
-创建绘制链实例
-请参见：
-    jegl_rendchain
+jegl_pipeline_uniform_slot [基本接口]
+按名字查询 per-draw uniform 的规范化位置。
+    * 返回值的 m_offset == JEGL_UNIFORM_SLOT_NONE 表示未声明
+    * name 不得为空
 */
-JE_API jegl_rendchain* jegl_rchain_create();
+JE_API /* OPTIONAL: m_offset == JEGL_UNIFORM_SLOT_NONE if absent */
+jegl_uniform_slot jegl_pipeline_uniform_slot(
+    jegl_pipeline* pipeline, const char* name);
 
 /*
-jegl_rchain_close [基本接口]
-销毁绘制链实例
-请参见：
-    jegl_rendchain
+jegl_pipeline_builtin_uniform_slots [基本接口]
+返回 pipeline 缓存的内建 uniform 位置表；指针由 pipeline 持有，生命周期同 pipeline。
 */
-JE_API void jegl_rchain_close(jegl_rendchain* chain);
+JE_API const jegl_builtin_uniform_slots* /* NOT NULL */
+jegl_pipeline_builtin_uniform_slots(jegl_pipeline* pipeline);
 
 /*
-jegl_rchain_begin [基本接口]
-绑定绘制链的绘制目标，此操作是绘制周期的开始，若指定的framebuffer == nullptr，
-指示绘制目标为屏幕缓冲区，xywh为绘制剪裁空间左下角的位置和宽高，单位是像素
-请参见：
-    jegl_rendchain
+jegl_sampler / jegl_sampler_desc [类型]
+独立采样器对象；未显式绑定时使用 shader 声明的默认采样器。
 */
-JE_API void jegl_rchain_begin(
-    jegl_rendchain* chain,
-    /* OPTIONAL: nullptr to render to screen */ jegl_frame_buffer* framebuffer,
-    int32_t x, int32_t y, uint32_t w, uint32_t h);
+enum class jegl_filter : uint8_t
+{
+    NEAREST,
+    LINEAR,
+};
+
+enum class jegl_mip_filter : uint8_t
+{
+    NEAREST,
+    LINEAR,
+};
+
+enum class jegl_wrap_mode : uint8_t
+{
+    CLAMP_TO_EDGE,
+    REPEAT,
+    MIRRORED_REPEAT,
+};
+
+struct jegl_sampler_desc
+{
+    jegl_filter m_min_filter;
+    jegl_filter m_mag_filter;
+    jegl_mip_filter m_mip_filter;
+    jegl_wrap_mode m_u_wrap;
+    jegl_wrap_mode m_v_wrap;
+    jegl_wrap_mode m_w_wrap;
+};
+
+JE_API jegl_sampler* /* NOT NULL */ jegl_sampler_create(
+    jegl_context* context, const jegl_sampler_desc* desc);
+
+JE_API void jegl_close_sampler(jegl_sampler* sampler);
 
 /*
-jegl_rchain_bind_uniform_buffer [基本接口]
-绑定绘制链的一致变量缓冲区
+jegl_command_buffer [类型]
+在任意线程录制、在图形线程提交的绘制命令缓冲区。
+    * reset 后可以重复使用；begin_pass 之前不需要额外的 begin
+    * commit 只允许在创建时指定的图形线程中调用
 */
-JE_API void jegl_rchain_bind_uniform_buffer(
-    jegl_rendchain* chain, jegl_uniform_buffer* uniformbuffer);
+JE_API jegl_command_buffer* /* NOT NULL */ jegl_cmd_create(
+    jegl_context* context);
+JE_API void jegl_cmd_close(jegl_command_buffer* cmd);
+JE_API void jegl_cmd_reset(jegl_command_buffer* cmd);
+
+/* 返回创建命令缓冲区时绑定的图形上下文 */
+JE_API jegl_context* /* NOT NULL */ jegl_cmd_get_context(
+    jegl_command_buffer* cmd);
 
 /*
-jegl_rchain_clear_color_buffer [基本接口]
-指示此链绘制开始时需要清除目标缓冲区的颜色缓存
+jegl_cmd_begin_pass [基本接口]
+开始一个渲染 pass。target 为空表示屏幕后备缓冲区。
+    * 不允许嵌套 pass
+    * viewport 的 width/height 必须大于 0
 */
-JE_API void jegl_rchain_clear_color_buffer(
-    jegl_rendchain* chain,
-    size_t attachment_index,
-    const float clear_color_rgba[4]);
+JE_API void jegl_cmd_begin_pass(
+    jegl_command_buffer* cmd,
+    /* OPTIONAL: nullptr 表示屏幕后备缓冲区 */ jegl_frame_buffer* target,
+    const jegl_viewport* viewport);
 
 /*
-jegl_rchain_clear_depth_buffer [基本接口]
-指示此链绘制开始时需要清除目标缓冲区的深度缓存
+jegl_cmd_clear_color / jegl_cmd_clear_depth [基本接口]
+只能在 begin_pass 之后、该 pass 的第一次 draw 之前调用。
 */
-JE_API void jegl_rchain_clear_depth_buffer(
-    jegl_rendchain* chain, float clear_depth);
+JE_API void jegl_cmd_clear_color(
+    jegl_command_buffer* cmd, uint32_t attachment, const float rgba[4]);
+JE_API void jegl_cmd_clear_depth(
+    jegl_command_buffer* cmd, float depth);
+JE_API void jegl_cmd_end_pass(jegl_command_buffer* cmd);
 
-typedef struct jegl_rchain_texture_group jegl_rchain_texture_group;
+JE_API void jegl_cmd_bind_pipeline(
+    jegl_command_buffer* cmd, jegl_pipeline* pipeline);
+JE_API void jegl_cmd_bind_vertex(
+    jegl_command_buffer* cmd, jegl_vertex* vertex);
 
-/*
-jegl_rchain_allocate_texture_group [基本接口]
-创建纹理组，返回可用于绘制操作的纹理组句柄
-可通过 jegl_rchain_bind_texture_2d 等接口向纹理组中提交纹理
-请参见：
-    jegl_rchain_draw
-    jegl_rchain_bind_texture_2d
-*/
-JE_API jegl_rchain_texture_group* jegl_rchain_allocate_texture_group(
-    jegl_rendchain* chain);
+/* 使用 uniform buffer 自带的 binding place，避免绑定位置不一致 */
+JE_API void jegl_cmd_bind_uniform_buffer(
+    jegl_command_buffer* cmd, jegl_uniform_buffer* buffer);
 
-/*
-jegl_rchain_draw [基本接口]
-将指定的顶点，使用指定的着色器和纹理将绘制操作作用到绘制链上
-    * 若绘制的物体不需要使用纹理，可以使用不绑定纹理的纹理组或传入 nullptr
-    * 返回的对象仅限在同一个渲染链的下一次绘制命令开始之前使用。
-*/
-JE_API jegl_rendchain_rend_action* jegl_rchain_draw(
-    jegl_rendchain* chain,
-    jegl_shader* shader,
-    jegl_vertex* vertex,
-    /* OPTIONAL */ jegl_rchain_texture_group* texture_group_may_null);
+JE_API void jegl_cmd_bind_texture_2d(
+    jegl_command_buffer* cmd, uint32_t pass, jegl_texture_2d* texture);
+JE_API void jegl_cmd_bind_texture_3d(
+    jegl_command_buffer* cmd, uint32_t pass, jegl_texture_3d* texture);
+JE_API void jegl_cmd_bind_texture_array(
+    jegl_command_buffer* cmd, uint32_t pass, jegl_texture_array* texture);
+JE_API void jegl_cmd_bind_texture_cube(
+    jegl_command_buffer* cmd, uint32_t pass, jegl_texture_cube* texture);
+JE_API void jegl_cmd_bind_sampler(
+    jegl_command_buffer* cmd, uint32_t sampler_id, jegl_sampler* sampler);
 
 /*
-jegl_rchain_set_uniform_buffer [基本接口]
-为 act 指定的绘制操作应用一致变量缓冲区
-请参见：
-    jegl_rendchain_rend_action
+jegl_cmd_set_uniform [基本接口]
+设置当前 pipeline 的 per-draw uniform。
+    * 必须先绑定 pipeline
+    * slot.m_offset 不得为 JEGL_UNIFORM_SLOT_NONE
+    * size 必须等于 slot.m_size；原始接口要求 data 非空
 */
-JE_API void jegl_rchain_set_uniform_buffer(
-    jegl_rendchain_rend_action* act,
-    jegl_uniform_buffer* uniform_buffer);
+JE_API void jegl_cmd_set_uniform(
+    jegl_command_buffer* cmd, jegl_uniform_slot slot,
+    const void* data, uint32_t size);
+
+JE_API void jegl_cmd_set_uniform_float(
+    jegl_command_buffer* cmd, jegl_uniform_slot slot, float value);
+JE_API void jegl_cmd_set_uniform_float2(
+    jegl_command_buffer* cmd, jegl_uniform_slot slot, float x, float y);
+JE_API void jegl_cmd_set_uniform_float3(
+    jegl_command_buffer* cmd, jegl_uniform_slot slot, float x, float y, float z);
+JE_API void jegl_cmd_set_uniform_float4(
+    jegl_command_buffer* cmd, jegl_uniform_slot slot, float x, float y, float z, float w);
+
+JE_API void jegl_cmd_set_uniform_int(
+    jegl_command_buffer* cmd, jegl_uniform_slot slot, int value);
+JE_API void jegl_cmd_set_uniform_int2(
+    jegl_command_buffer* cmd, jegl_uniform_slot slot, int x, int y);
+JE_API void jegl_cmd_set_uniform_int3(
+    jegl_command_buffer* cmd, jegl_uniform_slot slot, int x, int y, int z);
+JE_API void jegl_cmd_set_uniform_int4(
+    jegl_command_buffer* cmd, jegl_uniform_slot slot, int x, int y, int z, int w);
+
+JE_API void jegl_cmd_set_uniform_float2x2(
+    jegl_command_buffer* cmd, jegl_uniform_slot slot, const float (*mat)[2]);
+JE_API void jegl_cmd_set_uniform_float3x3(
+    jegl_command_buffer* cmd, jegl_uniform_slot slot, const float (*mat)[3]);
+JE_API void jegl_cmd_set_uniform_float4x4(
+    jegl_command_buffer* cmd, jegl_uniform_slot slot, const float (*mat)[4]);
 
 /*
-jegl_rchain_set_uniform_int [基本接口]
-为 act 指定的绘制操作应用整型一致变量
-请参见：
-    jegl_rendchain_rend_action
+jegl_cmd_draw_indexed / jegl_cmd_draw [基本接口]
+在当前 pipeline/vertex/绑定状态下发出绘制。
+    * index_count/vertex_count/instance_count 必须大于 0
+    * 索引类型固定为 uint32_t
 */
-JE_API void jegl_rchain_set_uniform_int(
-    jegl_rendchain_rend_action* act,
-    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
-    int val);
+JE_API void jegl_cmd_draw_indexed(
+    jegl_command_buffer* cmd,
+    uint32_t index_count, uint32_t first_index, uint32_t instance_count);
+JE_API void jegl_cmd_draw(
+    jegl_command_buffer* cmd,
+    uint32_t vertex_count, uint32_t first_vertex, uint32_t instance_count);
 
 /*
-jegl_rchain_set_uniform_int2 [基本接口]
-为 act 指定的绘制操作应用二维整型一致变量
-请参见：
-    jegl_rendchain_rend_action
+jegl_cmd_commit [基本接口]
+在图形线程提交命令缓冲区。
+    * 若仍有未结束的 pass，commit 会自动结束它
+    * 提交完成后命令缓冲区保留已录制的命令，需要复用请先调用 jegl_cmd_reset
 */
-JE_API void jegl_rchain_set_uniform_int2(
-    jegl_rendchain_rend_action* act,
-    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
-    int x,
-    int y);
+JE_API void jegl_cmd_commit(jegl_command_buffer* cmd);
 
 /*
-jegl_rchain_set_uniform_int3 [基本接口]
-为 act 指定的绘制操作应用三维整型一致变量
-请参见：
-    jegl_rendchain_rend_action
+jegl_branch_new_command_buffer [基本接口]
+从绘制组申请一个已经 reset 的命令缓冲区；屏幕目标传 nullptr。
 */
-JE_API void jegl_rchain_set_uniform_int3(
-    jegl_rendchain_rend_action* act,
-    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
-    int x,
-    int y,
-    int z);
-
-/*
-jegl_rchain_set_uniform_int4 [基本接口]
-为 act 指定的绘制操作应用四维整型一致变量
-请参见：
-    jegl_rendchain_rend_action
-*/
-JE_API void jegl_rchain_set_uniform_int4(
-    jegl_rendchain_rend_action* act,
-    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
-    int x,
-    int y,
-    int z,
-    int w);
-
-/*
-jegl_rchain_set_uniform_float [基本接口]
-为 act 指定的绘制操作应用单精度浮点数一致变量
-请参见：
-    jegl_rendchain_rend_action
-*/
-JE_API void jegl_rchain_set_uniform_float(
-    jegl_rendchain_rend_action* act,
-    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
-    float val);
-
-/*
-jegl_rchain_set_uniform_float2 [基本接口]
-为 act 指定的绘制操作应用二维单精度浮点数矢量一致变量
-请参见：
-    jegl_rendchain_rend_action
-*/
-JE_API void jegl_rchain_set_uniform_float2(
-    jegl_rendchain_rend_action* act,
-    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
-    float x,
-    float y);
-
-/*
-jegl_rchain_set_uniform_float3 [基本接口]
-为 act 指定的绘制操作应用三维单精度浮点数矢量一致变量
-请参见：
-    jegl_rendchain_rend_action
-*/
-JE_API void jegl_rchain_set_uniform_float3(
-    jegl_rendchain_rend_action* act,
-    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
-    float x,
-    float y,
-    float z);
-
-/*
-jegl_rchain_set_uniform_float4 [基本接口]
-为 act 指定的绘制操作应用四维单精度浮点数矢量一致变量
-请参见：
-    jegl_rendchain_rend_action
-*/
-JE_API void jegl_rchain_set_uniform_float4(
-    jegl_rendchain_rend_action* act,
-    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
-    float x,
-    float y,
-    float z,
-    float w);
-
-/*
-jegl_rchain_set_uniform_float2x2 [基本接口]
-为 act 指定的绘制操作应用2x2单精度浮点数矩阵一致变量
-请参见：
-    jegl_rendchain_rend_action
-*/
-JE_API void jegl_rchain_set_uniform_float2x2(
-    jegl_rendchain_rend_action* act,
-    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
-    const float (*mat)[2]);
-
-/*
-jegl_rchain_set_uniform_float3x3 [基本接口]
-为 act 指定的绘制操作应用3x3单精度浮点数矩阵一致变量
-请参见：
-    jegl_rendchain_rend_action
-*/
-JE_API void jegl_rchain_set_uniform_float3x3(
-    jegl_rendchain_rend_action* act,
-    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
-    const float (*mat)[3]);
-
-/*
-jegl_rchain_set_uniform_float4x4 [基本接口]
-为 act 指定的绘制操作应用4x4单精度浮点数矩阵一致变量
-请参见：
-    jegl_rendchain_rend_action
-*/
-JE_API void jegl_rchain_set_uniform_float4x4(
-    jegl_rendchain_rend_action* act,
-    /* OPTIONAL: nullptr to skip this uniform */ const uint32_t* binding_place_may_null,
-    const float (*mat)[4]);
-
-/*
-jegl_rchain_bind_texture_2d / jegl_rchain_bind_texture_3d / jegl_rchain_bind_texture_array /
-jegl_rchain_bind_texture_cube / jegl_rchain_bind_texture_msaa [基本接口]
-为指定的纹理组，在指定的纹理通道绑定一个对应类别的纹理
-请参见：
-    jegl_rchain_allocate_texture_group
-*/
-JE_API void jegl_rchain_bind_texture_2d(
-    jegl_rendchain* chain,
-    jegl_rchain_texture_group* texture_group,
-    size_t binding_pass,
-    jegl_texture_2d* texture);
-JE_API void jegl_rchain_bind_texture_3d(
-    jegl_rendchain* chain,
-    jegl_rchain_texture_group* texture_group,
-    size_t binding_pass,
-    jegl_texture_3d* texture);
-JE_API void jegl_rchain_bind_texture_array(
-    jegl_rendchain* chain,
-    jegl_rchain_texture_group* texture_group,
-    size_t binding_pass,
-    jegl_texture_array* texture);
-JE_API void jegl_rchain_bind_texture_cube(
-    jegl_rendchain* chain,
-    jegl_rchain_texture_group* texture_group,
-    size_t binding_pass,
-    jegl_texture_cube* texture);
-JE_API void jegl_rchain_bind_texture_msaa(
-    jegl_rendchain* chain,
-    jegl_rchain_texture_group* texture_group,
-    size_t binding_pass,
-    jegl_texture_msaa* texture);
-
-/*
-jegl_rchain_commit [基本接口]
-将指定的绘制链在图形线程中进行提交
-    * 此函数只允许在图形线程内调用
-*/
-JE_API void jegl_rchain_commit(
-    jegl_rendchain* chain,
-    jegl_context* glthread);
-
-/*
-jegl_rchain_get_target_framebuf [基本接口]
-获取当前绘制链的目标帧缓冲区
-    * 如果当前绘制链的目标帧缓冲区是屏幕缓冲区，则返回 nullptr
-*/
-JE_API /* OPTIONAL: nullptr if target is screen */ jegl_frame_buffer* jegl_rchain_get_target_framebuf(
-    jegl_rendchain* chain);
+JE_API jegl_command_buffer* /* NOT NULL */ jegl_branch_new_command_buffer(
+    je_RenderBranch* branch,
+    /* OPTIONAL: nullptr 表示屏幕 */ jegl_frame_buffer* framebuffer,
+    const jegl_viewport* viewport);
 
 /*
 jegl_uhost_get_or_create_for_universe [基本接口]
@@ -4039,7 +4072,7 @@ jegl_uhost_alloc_branch [基本接口]
 请参见：
     jegl_uhost_free_branch
 */
-JE_API je_RendchainBranch* jegl_uhost_alloc_branch(
+JE_API je_RenderBranch* jegl_uhost_alloc_branch(
     je_GraphicUhost* host);
 
 /*
@@ -4048,29 +4081,17 @@ jegl_uhost_free_branch [基本接口]
 */
 JE_API void jegl_uhost_free_branch(
     je_GraphicUhost* host,
-    je_RendchainBranch* free_branch);
+    je_RenderBranch* free_branch);
 
 /*
 jegl_branch_new_frame [基本接口]
 在绘制开始之前，指示绘制组开始新的一帧，并指定优先级
 */
 JE_API void jegl_branch_new_frame(
-    je_RendchainBranch* branch,
+    je_RenderBranch* branch,
     int priority);
 
-/*
-jegl_branch_new_chain [基本接口]
-从绘制组中获取一个新的RendChain
-请参见：
-    jegl_rendchain
-*/
-JE_API jegl_rendchain* jegl_branch_new_chain(
-    je_RendchainBranch* branch,
-    /* OPTIONAL: nullptr means screen framebuffer */ jegl_frame_buffer* framebuffer,
-    int32_t x,
-    int32_t y,
-    uint32_t w,
-    uint32_t h);
+
 
 /*
 jegui_set_font [基本接口]
@@ -10265,7 +10286,9 @@ namespace jeecs
                 std::same_as<T, jegl_texture_msaa> ||
                 std::same_as<T, jegl_vertex> ||
                 std::same_as<T, jegl_frame_buffer> ||
-                std::same_as<T, jegl_uniform_buffer>;
+                std::same_as<T, jegl_uniform_buffer> ||
+                std::same_as<T, jegl_pipeline> ||
+                std::same_as<T, jegl_sampler>;
         }
 
         template<requirements::basic_graphic_resource T>
@@ -10301,6 +10324,10 @@ namespace jeecs
                     jegl_close_framebuf(_m_resource);
                 else if constexpr (std::is_same_v<T, jegl_uniform_buffer>)
                     jegl_close_uniformbuf(_m_resource);
+                else if constexpr (std::is_same_v<T, jegl_pipeline>)
+                    jegl_close_pipeline(_m_resource);
+                else if constexpr (std::is_same_v<T, jegl_sampler>)
+                    jegl_close_sampler(_m_resource);
                 else
                 {
                     static_assert(sizeof(T) == 0,
@@ -11256,13 +11283,13 @@ namespace jeecs
             };
 
             je_GraphicUhost* _m_graphic_host;
-            std::vector<je_RendchainBranch*> _m_rchain_pipeline;
-            size_t _m_this_frame_allocate_rchain_pipeline_count;
+            std::vector<je_RenderBranch*> _m_render_branches;
+            size_t _m_this_frame_allocate_render_branch_count;
 
             BasePipelineInterface(game_world w, const jegl_interface_config* config)
                 : game_system(w)
                 , _m_graphic_host(jegl_uhost_get_or_create_for_universe(w.get_universe().handle(), config))
-                , _m_this_frame_allocate_rchain_pipeline_count(0)
+                , _m_this_frame_allocate_render_branch_count(0)
             {
             }
             ~BasePipelineInterface()
@@ -11273,34 +11300,34 @@ namespace jeecs
             void OnDisable()
             {
                 // Free all branch if disabled.
-                for (auto* branch : _m_rchain_pipeline)
+                for (auto* branch : _m_render_branches)
                     jegl_uhost_free_branch(_m_graphic_host, branch);
 
-                _m_rchain_pipeline.clear();
-                _m_this_frame_allocate_rchain_pipeline_count = 0;
+                _m_render_branches.clear();
+                _m_this_frame_allocate_render_branch_count = 0;
             }
 
             void branch_allocate_begin()
             {
-                _m_this_frame_allocate_rchain_pipeline_count = 0;
+                _m_this_frame_allocate_render_branch_count = 0;
             }
-            je_RendchainBranch* allocate_branch(int priority)
+            je_RenderBranch* allocate_branch(int priority)
             {
-                if (_m_this_frame_allocate_rchain_pipeline_count >= _m_rchain_pipeline.size())
+                if (_m_this_frame_allocate_render_branch_count >= _m_render_branches.size())
                 {
-                    assert(_m_this_frame_allocate_rchain_pipeline_count == _m_rchain_pipeline.size());
-                    _m_rchain_pipeline.push_back(jegl_uhost_alloc_branch(_m_graphic_host));
+                    assert(_m_this_frame_allocate_render_branch_count == _m_render_branches.size());
+                    _m_render_branches.push_back(jegl_uhost_alloc_branch(_m_graphic_host));
                 }
-                auto* result = _m_rchain_pipeline[_m_this_frame_allocate_rchain_pipeline_count++];
+                auto* result = _m_render_branches[_m_this_frame_allocate_render_branch_count++];
                 jegl_branch_new_frame(result, priority);
                 return result;
             }
             void branch_allocate_end()
             {
-                for (size_t i = _m_this_frame_allocate_rchain_pipeline_count; i < _m_rchain_pipeline.size(); ++i)
-                    jegl_uhost_free_branch(_m_graphic_host, _m_rchain_pipeline[i]);
+                for (size_t i = _m_this_frame_allocate_render_branch_count; i < _m_render_branches.size(); ++i)
+                    jegl_uhost_free_branch(_m_graphic_host, _m_render_branches[i]);
 
-                _m_rchain_pipeline.resize(_m_this_frame_allocate_rchain_pipeline_count);
+                _m_render_branches.resize(_m_this_frame_allocate_render_branch_count);
             }
         };
 

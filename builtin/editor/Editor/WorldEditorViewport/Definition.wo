@@ -124,7 +124,7 @@ namespace JEEditor::Editor
         protected m_rotation_y: mut quat,
         
         // Gizmo
-        protected m_gizmo_draw_branch: rendchain_branch,
+        protected m_gizmo_draw_branch: render_branch,
         
         // ---- 变换游标（操作手柄）状态 ----
         protected m_gizmo_mode: mut GizmoMode,

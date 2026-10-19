@@ -204,6 +204,106 @@ namespace jeecs::graphic::api::none
     void set_uniform(je_GraphicImplContext, uint32_t, jegl_shader::uniform_type, const void*)
     {
     }
+
+    // Render API (v2) no-ops.
+    void render_pipeline_init(je_GraphicImplContext, jegl_pipeline*)
+    {
+    }
+    void render_pipeline_close(je_GraphicImplContext, jegl_pipeline*)
+    {
+    }
+    void render_pipeline_bind(je_GraphicImplContext, jegl_pipeline*)
+    {
+    }
+    void render_sampler_init(je_GraphicImplContext, jegl_sampler*)
+    {
+    }
+    void render_sampler_close(je_GraphicImplContext, jegl_sampler*)
+    {
+    }
+    void render_sampler_bind(je_GraphicImplContext, uint32_t, jegl_sampler*)
+    {
+    }
+    void render_begin_pass(
+        je_GraphicImplContext, jegl_frame_buffer*, const jegl_viewport*)
+    {
+    }
+    void render_clear_color(je_GraphicImplContext, uint32_t, const float[4])
+    {
+    }
+    void render_clear_depth(je_GraphicImplContext, float)
+    {
+    }
+    void render_end_pass(je_GraphicImplContext)
+    {
+    }
+    void render_bind_vertex(je_GraphicImplContext, jegl_vertex*)
+    {
+    }
+    void render_bind_uniform_buffer(je_GraphicImplContext, jegl_uniform_buffer*)
+    {
+    }
+    void render_bind_texture_2d(je_GraphicImplContext, uint32_t, jegl_texture_2d*)
+    {
+    }
+    void render_bind_texture_3d(je_GraphicImplContext, uint32_t, jegl_texture_3d*)
+    {
+    }
+    void render_bind_texture_array(je_GraphicImplContext, uint32_t, jegl_texture_array*)
+    {
+    }
+    void render_bind_texture_cube(je_GraphicImplContext, uint32_t, jegl_texture_cube*)
+    {
+    }
+    void render_draw_indexed(
+        je_GraphicImplContext,
+        uint32_t, uint32_t, uint32_t,
+        const void*, uint32_t)
+    {
+    }
+    void render_draw(
+        je_GraphicImplContext,
+        uint32_t, uint32_t, uint32_t,
+        const void*, uint32_t)
+    {
+    }
+    void render_commit_begin(je_GraphicImplContext)
+    {
+    }
+    void render_commit_end(je_GraphicImplContext)
+    {
+    }
+
+    static const jegl_graphic_api_render _none_render_apis = {
+        JEGL_RENDER_API_ABI_VERSION,
+        (uint32_t)sizeof(jegl_graphic_api_render),
+
+        render_pipeline_init,
+        render_pipeline_close,
+        render_pipeline_bind,
+
+        render_sampler_init,
+        render_sampler_close,
+        render_sampler_bind,
+
+        render_begin_pass,
+        render_clear_color,
+        render_clear_depth,
+        render_end_pass,
+
+        render_bind_vertex,
+        render_bind_uniform_buffer,
+        render_bind_texture_2d,
+        render_bind_texture_3d,
+        render_bind_texture_array,
+        render_bind_texture_cube,
+
+        render_draw_indexed,
+        render_draw,
+
+        render_commit_begin,
+        render_commit_end,
+    };
 }
 
 void jegl_using_none_apis(jegl_graphic_api* write_to_apis)
@@ -271,4 +371,6 @@ void jegl_using_none_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->bind_texture_msaa = bind_texture_msaa;
     write_to_apis->bind_shader = bind_shader;
     write_to_apis->draw_vertex = draw_vertex_with_shader;
+
+    write_to_apis->m_render_apis = &_none_render_apis;
 }

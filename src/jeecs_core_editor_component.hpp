@@ -7,7 +7,7 @@
 #error JE_ENABLE_DEBUG_API must be defined, please check `jeecs_core_systems_and_components.cpp`
 #endif
 #include "jeecs.hpp"
-#include "jeecs_core_rendchain_helpers.hpp"
+#include "jeecs_core_render_helpers.hpp"
 
 #include <optional>
 #include <variant>

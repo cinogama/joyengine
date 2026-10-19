@@ -1,6 +1,8 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
+#include "jeecs_graphic_render_internal.hpp"
+
 #if defined(JE_ENABLE_GL330_GAPI)       \
     || defined(JE_ENABLE_GLES300_GAPI)  \
     || defined(JE_ENABLE_WEBGL20_GAPI)
@@ -229,6 +231,15 @@ namespace jeecs::graphic::api::gl3
         GLenum ACTIVE_BLEND_SRC_MODE = GL_INVALID_ENUM;
         GLenum ACTIVE_BLEND_DST_MODE = GL_INVALID_ENUM;
         GLenum ACTIVE_CULL_MODE = GL_INVALID_ENUM;
+
+        // Render API (v2) state.
+        GLuint m_render_uniform_ring = 0;
+        GLsizeiptr m_render_uniform_ring_size = 4 * 1024 * 1024;
+        GLintptr m_render_uniform_ring_offset = 0;
+        GLint m_render_uniform_alignment = 256;
+
+        jegl_shader* m_render_current_shader_resource = nullptr;
+        jegl3_vertex_data* m_render_current_vertex = nullptr;
 
         JECS_DISABLE_MOVE_AND_COPY(jegl_gl3_context);
 
@@ -990,6 +1001,13 @@ namespace jeecs::graphic::api::gl3
             auto shader_program = shader_blob->m_shared_blob_data->m_shader_program_instance;
             glUseProgram(shader_program);
 
+            // The engine reserves UBO binding 0 for the per-draw uniform block.
+            // Bind it explicitly instead of relying on the linker-assigned slot.
+            const GLuint shader_uniform_block =
+                glGetUniformBlockIndex(shader_program, "SHADER_UNIFORM");
+            if (GL_INVALID_INDEX != shader_uniform_block)
+                glUniformBlockBinding(shader_program, shader_uniform_block, 0);
+
             // NOTE: JoyEngine 约定 ubo 0 为着色器自定义的 uniform 变量
             //  之前 OpenGL 版本的实现中，直接储存在着色器本身的 uniform 变量里，但是现在因为旧的着色器代码的
             //  生成被弃用，不再这么做，而是模拟 DX 和 Vulkan 的储存方式
@@ -1633,9 +1651,9 @@ namespace jeecs::graphic::api::gl3
         {
             jegl_texture_2d* frame_texture = attachments[i]->resource();
 
-            // jegl_bind_texture_2d 会触发纹理的懒加载初始化（若尚未创建 GL 纹理对象），
-            // 确保 frame_texture->m_handle.m_ptr 在下方 glFramebufferTexture2D 前有效。
-            jegl_bind_texture_2d(frame_texture, 0);
+            // Ensure the attachment texture has a lazy-initialized GL object
+            // before glFramebufferTexture2D.
+            (void)_jegl_prepare_texture_2d_resource(frame_texture);
 
             GLenum using_attachment = attachment;
             GLenum buffer_texture_type = GL_TEXTURE_2D;
@@ -1930,6 +1948,538 @@ namespace jeecs::graphic::api::gl3
             clear_operations = clear_operations->m_next;
         }
     }
+
+    /////////////////////////////////////////////////////////////////////////
+    // Render API (v2)
+    /////////////////////////////////////////////////////////////////////////
+
+    struct jegl_gl3_render_sampler
+    {
+        GLuint m_sampler;
+    };
+
+    GLenum gl_render_depth_func(jegl_shader::depth_test_method method)
+    {
+        switch (method)
+        {
+        case jegl_shader::depth_test_method::NEVER: return GL_NEVER;
+        case jegl_shader::depth_test_method::LESS: return GL_LESS;
+        case jegl_shader::depth_test_method::EQUAL: return GL_EQUAL;
+        case jegl_shader::depth_test_method::LESS_EQUAL: return GL_LEQUAL;
+        case jegl_shader::depth_test_method::GREATER: return GL_GREATER;
+        case jegl_shader::depth_test_method::NOT_EQUAL: return GL_NOTEQUAL;
+        case jegl_shader::depth_test_method::GREATER_EQUAL: return GL_GEQUAL;
+        case jegl_shader::depth_test_method::ALWAYS: return GL_ALWAYS;
+        default:
+            assert(false);
+            return GL_LESS;
+        }
+    }
+
+    GLenum gl_render_blend_equation(jegl_shader::blend_equation equation)
+    {
+        switch (equation)
+        {
+        case jegl_shader::blend_equation::ADD: return GL_FUNC_ADD;
+        case jegl_shader::blend_equation::SUBTRACT: return GL_FUNC_SUBTRACT;
+        case jegl_shader::blend_equation::REVERSE_SUBTRACT: return GL_FUNC_REVERSE_SUBTRACT;
+        case jegl_shader::blend_equation::MIN: return GL_MIN;
+        case jegl_shader::blend_equation::MAX: return GL_MAX;
+        default:
+            assert(false);
+            return GL_FUNC_ADD;
+        }
+    }
+
+    GLenum gl_render_blend_factor(jegl_shader::blend_method method)
+    {
+        switch (method)
+        {
+        case jegl_shader::blend_method::ZERO: return GL_ZERO;
+        case jegl_shader::blend_method::ONE: return GL_ONE;
+        case jegl_shader::blend_method::SRC_COLOR: return GL_SRC_COLOR;
+        case jegl_shader::blend_method::SRC_ALPHA: return GL_SRC_ALPHA;
+        case jegl_shader::blend_method::ONE_MINUS_SRC_ALPHA: return GL_ONE_MINUS_SRC_ALPHA;
+        case jegl_shader::blend_method::ONE_MINUS_SRC_COLOR: return GL_ONE_MINUS_SRC_COLOR;
+        case jegl_shader::blend_method::DST_COLOR: return GL_DST_COLOR;
+        case jegl_shader::blend_method::DST_ALPHA: return GL_DST_ALPHA;
+        case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA: return GL_ONE_MINUS_DST_ALPHA;
+        case jegl_shader::blend_method::ONE_MINUS_DST_COLOR: return GL_ONE_MINUS_DST_COLOR;
+        default:
+            assert(false);
+            return GL_ONE;
+        }
+    }
+
+    GLenum gl_render_cull_mode(jegl_shader::cull_mode mode)
+    {
+        switch (mode)
+        {
+        case jegl_shader::cull_mode::NONE: return GL_NONE;
+        case jegl_shader::cull_mode::FRONT: return GL_FRONT;
+        case jegl_shader::cull_mode::BACK: return GL_BACK;
+        default:
+            assert(false);
+            return GL_NONE;
+        }
+    }
+
+    void gl_render_pipeline_init(je_GraphicImplContext, jegl_pipeline*)
+    {}
+
+    void gl_render_pipeline_close(je_GraphicImplContext, jegl_pipeline*)
+    {}
+
+    void gl_render_pipeline_bind(
+        je_GraphicImplContext ctx, jegl_pipeline* pipeline)
+    {
+        auto* context = static_cast<jegl_gl3_context*>(ctx);
+        auto* shader_instance = static_cast<jegl_gl3_shader*>(
+            pipeline->m_shader->m_handle.m_ptr);
+
+        assert(shader_instance != nullptr);
+
+#ifndef NDEBUG
+        // The canonical layout must agree with the layout computed by the GL
+        // backend from the same uniform list.
+        auto check_builtin_offset =
+            [](jegl_uniform_slot slot, uint32_t backend_offset)
+            {
+                if (slot.m_offset != JEGL_UNIFORM_SLOT_NONE
+                    && backend_offset != jeecs::graphic::INVALID_UNIFORM_LOCATION)
+                    assert(slot.m_offset == backend_offset);
+            };
+
+        const auto& builtin = pipeline->m_shader->m_builtin_uniforms;
+        check_builtin_offset(pipeline->m_builtin_slots.m_model, builtin.m_builtin_uniform_m);
+        check_builtin_offset(pipeline->m_builtin_slots.m_model_view, builtin.m_builtin_uniform_mv);
+        check_builtin_offset(pipeline->m_builtin_slots.m_model_view_projection, builtin.m_builtin_uniform_mvp);
+        check_builtin_offset(pipeline->m_builtin_slots.m_local_scale, builtin.m_builtin_uniform_local_scale);
+        check_builtin_offset(pipeline->m_builtin_slots.m_uv_tiling, builtin.m_builtin_uniform_tiling);
+        check_builtin_offset(pipeline->m_builtin_slots.m_uv_offset, builtin.m_builtin_uniform_offset);
+        check_builtin_offset(pipeline->m_builtin_slots.m_color, builtin.m_builtin_uniform_color);
+        check_builtin_offset(pipeline->m_builtin_slots.m_light2d_resolution, builtin.m_builtin_uniform_light2d_resolution);
+        check_builtin_offset(pipeline->m_builtin_slots.m_light2d_decay, builtin.m_builtin_uniform_light2d_decay);
+        check_builtin_offset(pipeline->m_builtin_slots.m_shadow_ellipse, builtin.m_builtin_uniform_shadow_ellipse);
+#endif
+
+        context->m_render_current_shader_resource = pipeline->m_shader;
+
+        if (context->current_active_shader_may_null != shader_instance)
+        {
+            context->current_active_shader_may_null = shader_instance;
+            glUseProgram(
+                shader_instance->m_shared_blob_data->m_shader_program_instance);
+        }
+
+        _gl_bind_shader_samplers(context, shader_instance);
+
+        const auto& state = pipeline->m_state;
+
+        if (state.m_depth_test)
+            glEnable(GL_DEPTH_TEST);
+        else
+            glDisable(GL_DEPTH_TEST);
+
+        _gl_update_depth_test_method(
+            context, gl_render_depth_func(state.m_depth_func));
+        _gl_update_depth_mask_method(
+            context, state.m_depth_write ? GL_TRUE : GL_FALSE);
+
+        if (state.m_blend)
+        {
+            glEnable(GL_BLEND);
+            _gl_update_blend_equation_method(
+                context,
+                gl_render_blend_equation(state.m_blend_equation));
+            _gl_update_blend_mode_method(
+                context,
+                gl_render_blend_factor(state.m_blend_src_color),
+                gl_render_blend_factor(state.m_blend_dst_color));
+            glBlendFuncSeparate(
+                gl_render_blend_factor(state.m_blend_src_color),
+                gl_render_blend_factor(state.m_blend_dst_color),
+                gl_render_blend_factor(state.m_blend_src_alpha),
+                gl_render_blend_factor(state.m_blend_dst_alpha));
+        }
+        else
+            _gl_update_blend_equation_method(context, GL_INVALID_ENUM);
+
+        _gl_update_cull_mode_method(
+            context, gl_render_cull_mode(state.m_cull));
+
+        glFrontFace(
+            state.m_front_face == jegl_front_face::CLOCKWISE
+            ? GL_CW
+            : GL_CCW);
+        glColorMask(
+            (state.m_color_write_mask & 0x1) != 0,
+            (state.m_color_write_mask & 0x2) != 0,
+            (state.m_color_write_mask & 0x4) != 0,
+            (state.m_color_write_mask & 0x8) != 0);
+    }
+
+    void gl_render_sampler_init(
+        je_GraphicImplContext, jegl_sampler* sampler)
+    {
+        auto* native = new jegl_gl3_render_sampler{ 0 };
+        glGenSamplers(1, &native->m_sampler);
+
+        auto cvt_filter = [](jegl_filter filter) -> GLint
+        {
+            return filter == jegl_filter::LINEAR ? GL_LINEAR : GL_NEAREST;
+        };
+        auto cvt_wrap = [](jegl_wrap_mode wrap) -> GLint
+        {
+            switch (wrap)
+            {
+            case jegl_wrap_mode::CLAMP_TO_EDGE: return GL_CLAMP_TO_EDGE;
+            case jegl_wrap_mode::REPEAT: return GL_REPEAT;
+            case jegl_wrap_mode::MIRRORED_REPEAT: return GL_MIRRORED_REPEAT;
+            default:
+                assert(false);
+                return GL_CLAMP_TO_EDGE;
+            }
+        };
+
+        const auto& desc = sampler->m_desc;
+        glSamplerParameteri(
+            native->m_sampler, GL_TEXTURE_MIN_FILTER, cvt_filter(desc.m_min_filter));
+        glSamplerParameteri(
+            native->m_sampler, GL_TEXTURE_MAG_FILTER, cvt_filter(desc.m_mag_filter));
+        glSamplerParameteri(
+            native->m_sampler, GL_TEXTURE_WRAP_S, cvt_wrap(desc.m_u_wrap));
+        glSamplerParameteri(
+            native->m_sampler, GL_TEXTURE_WRAP_T, cvt_wrap(desc.m_v_wrap));
+        glSamplerParameteri(
+            native->m_sampler, GL_TEXTURE_WRAP_R, cvt_wrap(desc.m_w_wrap));
+
+        sampler->m_backend_ptr = native;
+    }
+
+    void gl_render_sampler_close(
+        je_GraphicImplContext, jegl_sampler* sampler)
+    {
+        auto* native = static_cast<jegl_gl3_render_sampler*>(
+            sampler->m_backend_ptr);
+
+        if (native != nullptr)
+        {
+            glDeleteSamplers(1, &native->m_sampler);
+            delete native;
+            sampler->m_backend_ptr = nullptr;
+        }
+    }
+
+    void gl_render_sampler_bind(
+        je_GraphicImplContext ctx, uint32_t sampler_id, jegl_sampler* sampler)
+    {
+        auto* context = static_cast<jegl_gl3_context*>(ctx);
+        auto* native = static_cast<jegl_gl3_render_sampler*>(
+            sampler->m_backend_ptr);
+
+        assert(native != nullptr);
+        assert(context->m_render_current_shader_resource != nullptr);
+
+        auto* shader = context->m_render_current_shader_resource;
+        bool found = false;
+
+        for (size_t i = 0; i < shader->m_sampler_count; ++i)
+        {
+            const auto& method = shader->m_sampler_methods[i];
+            if (method.m_sampler_id != sampler_id)
+                continue;
+
+            found = true;
+            for (uint64_t pass = 0; pass < method.m_pass_id_count; ++pass)
+                glBindSampler(method.m_pass_ids[pass], native->m_sampler);
+        }
+
+        assert(found);
+        (void)found;
+    }
+
+    void gl_render_begin_pass(
+        je_GraphicImplContext ctx,
+        /* OPTIONAL */ jegl_frame_buffer* target,
+        const jegl_viewport* viewport)
+    {
+        auto* context = static_cast<jegl_gl3_context*>(ctx);
+
+        context->current_active_shader_may_null = nullptr;
+        context->m_render_current_shader_resource = nullptr;
+        context->m_render_current_vertex = nullptr;
+        context->m_current_shader_ubo = 0;
+
+        if (target != nullptr)
+        {
+            auto* framebuffer = static_cast<jegl_gl3_framebuf*>(
+                target->m_handle.m_ptr);
+            assert(framebuffer != nullptr);
+            glBindFramebuffer(GL_FRAMEBUFFER, framebuffer->m_fbo);
+        }
+        else
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        glViewport(
+            (GLint)viewport->x,
+            (GLint)viewport->y,
+            (GLsizei)viewport->width,
+            (GLsizei)viewport->height);
+    }
+
+    void gl_render_clear_color(
+        je_GraphicImplContext, uint32_t attachment, const float rgba[4])
+    {
+        glClearBufferfv(GL_COLOR, (GLint)attachment, rgba);
+    }
+
+    void gl_render_clear_depth(
+        je_GraphicImplContext ctx, float depth)
+    {
+        auto* context = static_cast<jegl_gl3_context*>(ctx);
+        _gl_update_depth_mask_method(context, GL_TRUE);
+        glClearBufferfv(GL_DEPTH, 0, &depth);
+    }
+
+    void gl_render_end_pass(je_GraphicImplContext)
+    {}
+
+    void gl_render_bind_vertex(
+        je_GraphicImplContext ctx, jegl_vertex* vertex)
+    {
+        auto* context = static_cast<jegl_gl3_context*>(ctx);
+        auto* vertex_data = static_cast<jegl3_vertex_data*>(
+            vertex->m_handle.m_ptr);
+
+        assert(vertex_data != nullptr);
+        context->m_render_current_vertex = vertex_data;
+        glBindVertexArray(vertex_data->m_vao);
+    }
+
+    void gl_render_bind_uniform_buffer(
+        je_GraphicImplContext ctx, jegl_uniform_buffer* uniform_buffer)
+    {
+        gl_bind_uniform_buffer(ctx, uniform_buffer);
+    }
+
+    void gl_render_bind_texture_2d(
+        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_2d* texture)
+    {
+        gl_bind_texture<jegl_texture_2d>(ctx, texture, pass);
+    }
+
+    void gl_render_bind_texture_3d(
+        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_3d* texture)
+    {
+        gl_bind_texture<jegl_texture_3d>(ctx, texture, pass);
+    }
+
+    void gl_render_bind_texture_array(
+        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_array* texture)
+    {
+        gl_bind_texture<jegl_texture_array>(ctx, texture, pass);
+    }
+
+    void gl_render_bind_texture_cube(
+        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_cube* texture)
+    {
+        gl_bind_texture<jegl_texture_cube>(ctx, texture, pass);
+    }
+
+    void gl_render_upload_uniform_block(
+        jegl_gl3_context* context,
+        const void* uniform_data,
+        uint32_t uniform_size)
+    {
+        assert(uniform_data != nullptr);
+        assert(uniform_size != 0);
+        assert(context->m_render_uniform_ring != 0);
+
+        const GLint alignment = context->m_render_uniform_alignment;
+        GLintptr offset =
+            (context->m_render_uniform_ring_offset + alignment - 1)
+            / alignment * alignment;
+
+        if (offset + uniform_size > context->m_render_uniform_ring_size)
+        {
+            glBindBuffer(GL_UNIFORM_BUFFER, context->m_render_uniform_ring);
+            glBufferData(
+                GL_UNIFORM_BUFFER,
+                context->m_render_uniform_ring_size,
+                nullptr,
+                GL_STREAM_DRAW);
+            offset = 0;
+        }
+
+        glBindBuffer(GL_UNIFORM_BUFFER, context->m_render_uniform_ring);
+        glBufferSubData(
+            GL_UNIFORM_BUFFER, offset, uniform_size, uniform_data);
+        glBindBufferRange(
+            GL_UNIFORM_BUFFER,
+            0,
+            context->m_render_uniform_ring,
+            offset,
+            uniform_size);
+
+        context->m_render_uniform_ring_offset = offset + uniform_size;
+    }
+
+    void gl_render_draw_indexed(
+        je_GraphicImplContext ctx,
+        uint32_t index_count,
+        uint32_t first_index,
+        uint32_t instance_count,
+        const void* uniform_data,
+        uint32_t uniform_size)
+    {
+        auto* context = static_cast<jegl_gl3_context*>(ctx);
+        auto* vertex_data = context->m_render_current_vertex;
+
+        assert(vertex_data != nullptr);
+        assert(index_count > 0);
+        assert(instance_count > 0);
+
+        auto* current_shader = context->current_active_shader_may_null;
+        assert(current_shader != nullptr);
+        assert(current_shader->uniform_buffer_size == uniform_size);
+
+        if (uniform_size != 0)
+            gl_render_upload_uniform_block(context, uniform_data, uniform_size);
+
+        const void* index_offset = reinterpret_cast<const void*>(
+            static_cast<uintptr_t>(first_index) * sizeof(uint32_t));
+
+        if (instance_count > 1)
+        {
+            glDrawElementsInstanced(
+                vertex_data->m_method,
+                (GLsizei)index_count,
+                GL_UNSIGNED_INT,
+                index_offset,
+                (GLsizei)instance_count);
+        }
+        else
+        {
+            glDrawElements(
+                vertex_data->m_method,
+                (GLsizei)index_count,
+                GL_UNSIGNED_INT,
+                index_offset);
+        }
+    }
+
+    void gl_render_draw(
+        je_GraphicImplContext ctx,
+        uint32_t vertex_count,
+        uint32_t first_vertex,
+        uint32_t instance_count,
+        const void* uniform_data,
+        uint32_t uniform_size)
+    {
+        auto* context = static_cast<jegl_gl3_context*>(ctx);
+        auto* vertex_data = context->m_render_current_vertex;
+
+        assert(vertex_data != nullptr);
+        assert(vertex_count > 0);
+        assert(instance_count > 0);
+
+        auto* current_shader = context->current_active_shader_may_null;
+        assert(current_shader != nullptr);
+        assert(current_shader->uniform_buffer_size == uniform_size);
+
+        if (uniform_size != 0)
+            gl_render_upload_uniform_block(context, uniform_data, uniform_size);
+
+        if (instance_count > 1)
+        {
+            glDrawArraysInstanced(
+                vertex_data->m_method,
+                (GLint)first_vertex,
+                (GLsizei)vertex_count,
+                (GLsizei)instance_count);
+        }
+        else
+        {
+            glDrawArrays(
+                vertex_data->m_method,
+                (GLint)first_vertex,
+                (GLsizei)vertex_count);
+        }
+    }
+
+    void gl_render_commit_begin(je_GraphicImplContext ctx)
+    {
+        auto* context = static_cast<jegl_gl3_context*>(ctx);
+
+        if (context->m_render_uniform_ring == 0)
+        {
+            glGenBuffers(1, &context->m_render_uniform_ring);
+            glBindBuffer(GL_UNIFORM_BUFFER, context->m_render_uniform_ring);
+            glBufferData(
+                GL_UNIFORM_BUFFER,
+                context->m_render_uniform_ring_size,
+                nullptr,
+                GL_STREAM_DRAW);
+
+            glGetIntegerv(
+                GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT,
+                &context->m_render_uniform_alignment);
+            if (context->m_render_uniform_alignment <= 0)
+                context->m_render_uniform_alignment = 256;
+        }
+        else
+        {
+            glBindBuffer(GL_UNIFORM_BUFFER, context->m_render_uniform_ring);
+            glBufferData(
+                GL_UNIFORM_BUFFER,
+                context->m_render_uniform_ring_size,
+                nullptr,
+                GL_STREAM_DRAW);
+        }
+
+        context->m_render_uniform_ring_offset = 0;
+    }
+
+    void gl_render_commit_end(je_GraphicImplContext)
+    {
+        // Restore the assumptions of the legacy immediate path.
+        glEnable(GL_DEPTH_TEST);
+        glFrontFace(GL_CCW);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        glBindBuffer(GL_UNIFORM_BUFFER, 0);
+    }
+
+    static const jegl_graphic_api_render _jegl_gl3_render_apis = {
+        JEGL_RENDER_API_ABI_VERSION,
+        (uint32_t)sizeof(jegl_graphic_api_render),
+
+        gl_render_pipeline_init,
+        gl_render_pipeline_close,
+        gl_render_pipeline_bind,
+
+        gl_render_sampler_init,
+        gl_render_sampler_close,
+        gl_render_sampler_bind,
+
+        gl_render_begin_pass,
+        gl_render_clear_color,
+        gl_render_clear_depth,
+        gl_render_end_pass,
+
+        gl_render_bind_vertex,
+        gl_render_bind_uniform_buffer,
+        gl_render_bind_texture_2d,
+        gl_render_bind_texture_3d,
+        gl_render_bind_texture_array,
+        gl_render_bind_texture_cube,
+
+        gl_render_draw_indexed,
+        gl_render_draw,
+
+        gl_render_commit_begin,
+        gl_render_commit_end,
+    };
 }
 
 void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
@@ -1997,6 +2547,8 @@ void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->bind_framebuf = gl_set_rend_to_framebuffer;
 
     write_to_apis->set_uniform = gl_set_uniform;
+
+    write_to_apis->m_render_apis = &_jegl_gl3_render_apis;
 }
 #else
 void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)

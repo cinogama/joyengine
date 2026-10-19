@@ -139,6 +139,27 @@ namespace je::shader
         shader::configs.cull = cull;
     }
     
+    // Pack uniform variables by alignment rank so the HLSL cbuffer layout
+    // matches the canonical std140 layout computed by the engine. Mixing
+    // scalar/vec2 before vec3/vec4 can make HLSL and std140 disagree.
+    func uniform_pack_rank(type: woshader::Type) => int
+    {
+        if (type == woshader::Type::Float4x4
+            || type == woshader::Type::Float3x3
+            || type == woshader::Type::Float4
+            || type == woshader::Type::Integer4)
+            return 4;
+        else if (type == woshader::Type::Float3
+            || type == woshader::Type::Integer3)
+            return 3;
+        else if (type == woshader::Type::Float2
+            || type == woshader::Type::Integer2
+            || type == woshader::Type::Float2x2)
+            return 2;
+        else
+            return 1;
+    }
+
     using HLSLForGlslang = struct{
         generated_vertex_src: mut option<string>,
         generated_fragment_src: mut option<string>,
@@ -146,8 +167,8 @@ namespace je::shader
         vertex_in_layout: vec<woshader::Type>,
         fragment_out_layout: vec<woshader::Type>,
         samplers: vec<woshader::Sampler2D>,
-        texture_passes: vec<(string, int /* pass */, int /* sampler id */)>,
-        uniform_variables: vec<(string, woshader::Type, woshader::ShaderValueImm, string /* declare */)>,
+        texture_passes: vec<(string, int /* pass */, int /* sampler id */, int /* texture kind */)>,
+        uniform_variables: vec<mut (string, woshader::Type, woshader::ShaderValueImm, string /* declare */)>,
         uniform_blocks: vec<(string, int)>,
         
         alphatest: mut bool,
@@ -178,12 +199,12 @@ namespace je::shader
         }
         public func get_texture_info_by_pass(self: HLSLForGlslang, pass: int)
         {
-            let fnd = self.texture_passes->find_if(\(_, p, _) = p == pass;);
+            let fnd = self.texture_passes->find_if(\(_, p, _, _) = p == pass;);
             return fnd->>\idx = self.texture_passes[idx];;
         }
         public func get_texture_info_by_name(self: HLSLForGlslang, uname: string)
         {
-            let fnd = self.texture_passes->find_if(\(n, _, _) = n == uname;);
+            let fnd = self.texture_passes->find_if(\(n, _, _, _) = n == uname;);
             return fnd->>\idx = self.texture_passes[idx];;
         }
         public func pre_generate(
@@ -272,7 +293,7 @@ namespace je::shader
             // Declare uniform variables
             //if (uniforms.defined_uniforms->iter |> iterator::count_if(\(_, uniform_var) = uniform_var.used;) > 0)
             
-            let uniform_textures = []mut: vec<mut (int, woshader::Sampler2D, string, string)>;
+            let uniform_textures = []mut: vec<mut (int, woshader::Sampler2D, string, string, int)>;
             // append_spirv_attrib(c, "vk::binding(0, 0)");
             // c->append_line("cbuffer SHADER_UNIFORM: register(b0) {");
             for (let (name, uniform_var) : uniforms.defined_uniforms
@@ -289,7 +310,7 @@ namespace je::shader
                     match (uniform_var.default_value)
                     {
                         Texture2D(b)?
-                            uniform_textures->add(mut (b.0, b.1, name, "Texture2D"));
+                            uniform_textures->add(mut (b.0, b.1, name, "Texture2D", Type::Texture2D as int));
                         _?
                             std::panic("Texture2D uniform must have default value.");
                     }
@@ -299,7 +320,7 @@ namespace je::shader
                     match (uniform_var.default_value)
                     {
                         Texture2DArray(b)?
-                            uniform_textures->add(mut (b.0, b.1, name, "Texture2DArray"));
+                            uniform_textures->add(mut (b.0, b.1, name, "Texture2DArray", Type::Texture2DArray as int));
                         _?
                             std::panic("Texture2DArray uniform must have default value.");
                     }
@@ -309,7 +330,7 @@ namespace je::shader
                     match (uniform_var.default_value)
                     {
                         Texture3D(b)?
-                            uniform_textures->add(mut (b.0, b.1, name, "Texture3D"));
+                            uniform_textures->add(mut (b.0, b.1, name, "Texture3D", Type::Texture3D as int));
                         _?
                             std::panic("Texture3D uniform must have default value.");
                     }
@@ -319,7 +340,7 @@ namespace je::shader
                     match (uniform_var.default_value)
                     {
                         TextureCube(b)?
-                            uniform_textures->add(mut (b.0, b.1, name, "TextureCube"));
+                            uniform_textures->add(mut (b.0, b.1, name, "TextureCube", Type::TextureCube as int));
                         _?
                             std::panic("TextureCube uniform must have default value.");
                     }
@@ -329,7 +350,7 @@ namespace je::shader
                     match (uniform_var.default_value)
                     {
                         Texture2DMS(b)?
-                            uniform_textures->add(mut (b.0, b.1, name, "Texture2DMS"));
+                            uniform_textures->add(mut (b.0, b.1, name, "Texture2DMS", Type::Texture2DMS as int));
                         _?
                             std::panic("Texture2DMS uniform must have default value.");
                     }
@@ -343,16 +364,16 @@ namespace je::shader
 
                     // c->append_line(F"    {hlsl_type_name} {name};");
                     self.uniform_variables->add(
-                        (name, uniform_var.type, uniform_var.default_value, F"{hlsl_type_name} {name};"));
+                        mut (name, uniform_var.type, uniform_var.default_value, F"{hlsl_type_name} {name};"));
                 }
             }
             // c->append_line("};");
 
             std::sort_in_place(uniform_textures, \a, b = a[0] < b[0];);
-            for (let (pass, sampler, name, hlsl_type_name): uniform_textures)
+            for (let (pass, sampler, name, hlsl_type_name, texture_kind): uniform_textures)
             {
                 let sampler_id = sorted_samplers->find_if(\(s, _) = std::is_same(s, sampler);)->unwrap;
-                self.texture_passes->add((name, pass, sampler_id));
+                self.texture_passes->add((name, pass, sampler_id, texture_kind));
 
                 append_spirv_attrib(c, F"vk::binding({pass}, 2)");
                 c->append_line(F"{hlsl_type_name} {name}: register(t{pass});");
@@ -1027,6 +1048,14 @@ namespace je::shader
             vertex: ShaderGeneratorContext,
             fragment: ShaderGeneratorContext)=> void
         {
+            // Keep HLSL cbuffer packing identical to the engine's canonical
+            // std140 layout: pack by alignment rank, then name for stability.
+            std::sort_in_place(
+                self.uniform_variables,
+                \a, b =
+                    uniform_pack_rank(a[1]) > uniform_pack_rank(b[1])
+                    || (uniform_pack_rank(a[1]) == uniform_pack_rank(b[1]) && a[0] < b[0]););
+
             let vertex_src = buffer::builder::create();
             let fragment_src = buffer::builder::create();
             
@@ -1112,7 +1141,7 @@ namespace je::shader
                 vertex_in_layout: array<woshader::Type>,
                 fragment_out_layout: array<woshader::Type>,
                 samplers: array<woshader::Sampler2D>,
-                texture_passes: array<(string, int /* pass */, int /* sampler id */)>,
+                texture_passes: array<(string, int /* pass */, int /* sampler id */, int /* texture kind */)>,
                 uniform_variables: array<(string, woshader::Type, woshader::ShaderValueImm)>,
                 uniform_blocks: array<(string, int)>,
                 config: ShaderConfig)=> gchandle;

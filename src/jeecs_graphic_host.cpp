@@ -7,9 +7,9 @@
 
 // 以下类型原位于 namespace jeecs 内，现作为 C ABI 不透明句柄 je_* 定义于全局作用域。
 
-    struct je_RendchainBranch
+    struct je_RenderBranch
     {
-        JECS_DISABLE_MOVE_AND_COPY(je_RendchainBranch);
+        JECS_DISABLE_MOVE_AND_COPY(je_RenderBranch);
         
         /* 
         NOTE: 尽管 branch 本身支持双缓冲，但是 branch 中的 ubuffer 只有一份实例，
@@ -23,54 +23,81 @@
 
             allocated_chain_t() = default;
 
-            std::vector<jegl_rendchain*> m_allocated_chains;
-            size_t m_allocated_chains_count;
+            struct allocated_command_buffer_t
+            {
+                jegl_command_buffer* m_command_buffer;
+                jegl_frame_buffer* m_target;
+            };
+            std::vector<allocated_command_buffer_t> m_allocated_command_buffers;
+            size_t m_allocated_command_buffers_count;
+
             int m_priority;
         };
+
+        jegl_context* m_context;
 
         allocated_chain_t m_chain_buffers[BRANCH_CHAIN_POOL_SIZE];
         uint8_t m_writing_chain_buffer_index;
         allocated_chain_t* m_writing_chain_buffer_p;
         allocated_chain_t* m_rendering_chain_buffer_p;
 
-        je_RendchainBranch()
-            : m_writing_chain_buffer_index(0)
+        je_RenderBranch()
+            : m_context(nullptr)
+            , m_writing_chain_buffer_index(0)
             , m_writing_chain_buffer_p(&m_chain_buffers[0])
             , m_rendering_chain_buffer_p(
                 &m_chain_buffers[(BRANCH_CHAIN_POOL_SIZE - 1) % BRANCH_CHAIN_POOL_SIZE])
         {
             for (auto& chain_buffer : m_chain_buffers)
             {
-                chain_buffer.m_allocated_chains_count = 0;
+                chain_buffer.m_allocated_command_buffers_count = 0;
                 chain_buffer.m_priority = 0;
             }
         }
-        ~je_RendchainBranch()
+        ~je_RenderBranch()
         {
             for (auto& chain_buffer : m_chain_buffers)
-                for (auto* chain : chain_buffer.m_allocated_chains)
-                    jegl_rchain_close(chain);
+            {
+                for (auto& command_buffer : chain_buffer.m_allocated_command_buffers)
+                    jegl_cmd_close(command_buffer.m_command_buffer);
+            }
         }
 
         void new_frame(int priority)
         {
             auto& chain_buffer = get_commiting_chain_buffer();
-            chain_buffer.m_allocated_chains_count = 0;
+            chain_buffer.m_allocated_command_buffers_count = 0;
             chain_buffer.m_priority = priority;
         }
-        jegl_rendchain* allocate_new_chain(
-            jegl_frame_buffer* framebuffer, int32_t x, int32_t y, uint32_t w, uint32_t h)
+        jegl_command_buffer* allocate_new_command_buffer(
+            /* OPTIONAL */ jegl_frame_buffer* framebuffer,
+            const jegl_viewport* viewport)
         {
+            assert(m_context != nullptr);
+            assert(viewport != nullptr);
+
             auto& chain_buffer = get_commiting_chain_buffer();
 
-            if (chain_buffer.m_allocated_chains_count >= chain_buffer.m_allocated_chains.size())
+            if (chain_buffer.m_allocated_command_buffers_count
+                >= chain_buffer.m_allocated_command_buffers.size())
             {
-                assert(chain_buffer.m_allocated_chains_count == chain_buffer.m_allocated_chains.size());
-                chain_buffer.m_allocated_chains.push_back(jegl_rchain_create());
+                assert(chain_buffer.m_allocated_command_buffers_count
+                    == chain_buffer.m_allocated_command_buffers.size());
+
+                chain_buffer.m_allocated_command_buffers.push_back(
+                    allocated_chain_t::allocated_command_buffer_t{
+                        jegl_cmd_create(m_context), nullptr });
             }
-            auto* rchain = chain_buffer.m_allocated_chains[chain_buffer.m_allocated_chains_count++];
-            jegl_rchain_begin(rchain, framebuffer, x, y, w, h);
-            return rchain;
+
+            auto& entry =
+                chain_buffer.m_allocated_command_buffers[
+                    chain_buffer.m_allocated_command_buffers_count++];
+
+            jegl_cmd_reset(entry.m_command_buffer);
+            jegl_cmd_begin_pass(entry.m_command_buffer, framebuffer, viewport);
+            entry.m_target = framebuffer;
+
+            return entry.m_command_buffer;
         }
 
         allocated_chain_t& get_commiting_chain_buffer()
@@ -91,20 +118,15 @@
         {
             auto& chain_buffer = get_rendering_chain_buffer();
 
-            assert(chain_buffer.m_allocated_chains_count <= chain_buffer.m_allocated_chains.size());
-
-            auto chain_iter = chain_buffer.m_allocated_chains.begin();
-            const auto chain_iter_end =
-                chain_buffer.m_allocated_chains.begin() + chain_buffer.m_allocated_chains_count;
-
-            while (chain_iter != chain_iter_end)
+            for (size_t i = 0; i < chain_buffer.m_allocated_command_buffers_count; ++i)
             {
-                auto* rend_job_chain = *(chain_iter++);
-                if (action != jegl_update_action::JEGL_UPDATE_CONTINUE 
-                    && jegl_rchain_get_target_framebuf(rend_job_chain) == nullptr)
+                auto& entry = chain_buffer.m_allocated_command_buffers[i];
+
+                if (action != jegl_update_action::JEGL_UPDATE_CONTINUE
+                    && entry.m_target == nullptr)
                     continue;
 
-                jegl_rchain_commit(rend_job_chain, thread);
+                jegl_cmd_commit(entry.m_command_buffer);
             }
         }
     };
@@ -119,9 +141,10 @@
         // * 如果为true，则跳过全部的绘制流程，反之，则仍然绘制以非屏幕缓冲区的绘制操作
         bool m_skip_all_draw;
         bool m_graphic_frame_update;
+        jegl_command_buffer* m_screen_clear_command_buffer;
 
-        std::mutex m_je_RendchainBranchs_mx;
-        std::vector<je_RendchainBranch*> m_je_RendchainBranchs;
+        std::mutex m_je_RenderBranchs_mx;
+        std::vector<je_RenderBranch*> m_je_RenderBranchs;
 
         static void _update_frame_universe_job(void* host)
         {
@@ -130,7 +153,7 @@
             if (graphic_host->m_graphic_frame_update)
             {
                 constexpr jegl_update_sync_mode SYNC_MODE =
-                    je_RendchainBranch::BRANCH_CHAIN_POOL_SIZE > 1
+                    je_RenderBranch::BRANCH_CHAIN_POOL_SIZE > 1
                     ? jegl_update_sync_mode::JEGL_WAIT_LAST_FRAME_END
                     : jegl_update_sync_mode::JEGL_WAIT_THIS_FRAME_END;
 
@@ -140,7 +163,7 @@
                 if (!jegl_update(graphic_host->glthread, SYNC_MODE, [](void* p)
                     {
                         auto* graphic_host = static_cast<je_GraphicUhost*>(p);
-                        for (auto& branch : graphic_host->m_je_RendchainBranchs)
+                        for (auto& branch : graphic_host->m_je_RenderBranchs)
                             branch->flip_chain_buffer();
                     },
                     host))
@@ -152,23 +175,24 @@
                 }
             }
         }
-        je_RendchainBranch* alloc_pipeline()
+        je_RenderBranch* alloc_pipeline()
         {
-            je_RendchainBranch* pipe = new je_RendchainBranch();
+            je_RenderBranch* pipe = new je_RenderBranch();
+            pipe->m_context = glthread;
 
-            std::lock_guard g1(m_je_RendchainBranchs_mx);
-            m_je_RendchainBranchs.push_back(pipe);
+            std::lock_guard g1(m_je_RenderBranchs_mx);
+            m_je_RenderBranchs.push_back(pipe);
 
             return pipe;
         }
-        void free_pipeline(je_RendchainBranch* pipe)
+        void free_pipeline(je_RenderBranch* pipe)
         {
-            std::lock_guard g1(m_je_RendchainBranchs_mx);
+            std::lock_guard g1(m_je_RenderBranchs_mx);
 
-            auto fnd = std::find(m_je_RendchainBranchs.begin(), m_je_RendchainBranchs.end(), pipe);
-            assert(fnd != m_je_RendchainBranchs.end());
+            auto fnd = std::find(m_je_RenderBranchs.begin(), m_je_RenderBranchs.end(), pipe);
+            assert(fnd != m_je_RenderBranchs.end());
 
-            m_je_RendchainBranchs.erase(fnd);
+            m_je_RenderBranchs.erase(fnd);
 
             delete pipe;
         }
@@ -177,36 +201,50 @@
         {
             if (action == jegl_update_action::JEGL_UPDATE_CONTINUE)
             {
-                // Clear main frame buffer
-                jegl_frame_buffer_clear_operation color, depth;
+                assert(glthread->m_apis->m_render_apis != nullptr);
 
-                color.m_type = jegl_frame_buffer_clear_operation::clear_type::COLOR;
-                color.m_color = jegl_frame_buffer_clear_operation::clear_color_attachment{ 0, {} };
-                color.m_next = &depth;
+                int window_w = 0, window_h = 0;
+                je_io_get_window_size(&window_w, &window_h);
 
-                depth.m_type = jegl_frame_buffer_clear_operation::clear_type::DEPTH;
-                depth.m_depth = jegl_frame_buffer_clear_operation::clear_depth_attachment{ 1.0f };
-                depth.m_next = nullptr;
+                if (window_w > 0 && window_h > 0)
+                {
+                    if (m_screen_clear_command_buffer == nullptr)
+                        m_screen_clear_command_buffer =
+                            jegl_cmd_create(glthread);
+                    else
+                        jegl_cmd_reset(m_screen_clear_command_buffer);
 
-                jegl_rend_to_framebuffer(nullptr, nullptr, &color);
+                    const jegl_viewport viewport{
+                        0, 0,
+                        (uint32_t)window_w, (uint32_t)window_h };
+                    const float clear_color[4] = { 0.f, 0.f, 0.f, 0.f };
+
+                    jegl_cmd_begin_pass(
+                        m_screen_clear_command_buffer, nullptr, &viewport);
+                    jegl_cmd_clear_color(
+                        m_screen_clear_command_buffer, 0, clear_color);
+                    jegl_cmd_clear_depth(
+                        m_screen_clear_command_buffer, 1.0f);
+                    jegl_cmd_commit(m_screen_clear_command_buffer);
+                }
             }
             else if (m_skip_all_draw)
                 return;
 
             do
             {
-                std::lock_guard g1(m_je_RendchainBranchs_mx);
+                std::lock_guard g1(m_je_RenderBranchs_mx);
 
                 std::stable_sort(
-                    m_je_RendchainBranchs.begin(),
-                    m_je_RendchainBranchs.end(),
-                    [](je_RendchainBranch* a, je_RendchainBranch* b)
+                    m_je_RenderBranchs.begin(),
+                    m_je_RenderBranchs.end(),
+                    [](je_RenderBranch* a, je_RenderBranch* b)
                     {
                         return a->get_rendering_chain_buffer().m_priority <
                             b->get_rendering_chain_buffer().m_priority;
                     });
 
-                for (auto* gpipe : m_je_RendchainBranchs)
+                for (auto* gpipe : m_je_RenderBranchs)
                     gpipe->_commit_frame(glthread, action);
 
             } while (0);
@@ -218,6 +256,7 @@
             , universe(_universe)
             , m_skip_all_draw(true)
             , m_graphic_frame_update(true)
+            , m_screen_clear_command_buffer(nullptr)
         {
             auto host_graphic_api = jegl_get_host_graphic_api();
 
@@ -283,11 +322,17 @@
 
         ~je_GraphicUhost()
         {
+            if (m_screen_clear_command_buffer != nullptr)
+            {
+                jegl_cmd_close(m_screen_clear_command_buffer);
+                m_screen_clear_command_buffer = nullptr;
+            }
+
             if (glthread)
                 jegl_terminate_graphic_thread(glthread);
 
             // All branches should be freed before graphic-uhost closed.
-            assert(m_je_RendchainBranchs.empty());
+            assert(m_je_RenderBranchs.empty());
 
             je_ecs_universe_unregister_after_call_once_job(
                 universe.handle(), _update_frame_universe_job);
@@ -355,20 +400,22 @@ void jegl_uhost_set_skip_behavior(je_GraphicUhost* host, bool skip_all_draw)
 {
     return host->glthread;
 }
-je_RendchainBranch* jegl_uhost_alloc_branch(je_GraphicUhost* host)
+je_RenderBranch* jegl_uhost_alloc_branch(je_GraphicUhost* host)
 {
     return host->alloc_pipeline();
 }
-void jegl_uhost_free_branch(je_GraphicUhost* host, je_RendchainBranch* free_branch)
+void jegl_uhost_free_branch(je_GraphicUhost* host, je_RenderBranch* free_branch)
 {
     return host->free_pipeline(free_branch);
 }
-jegl_rendchain* jegl_branch_new_chain(
-    je_RendchainBranch* branch, /* OPTIONAL: nullptr means screen framebuffer */ jegl_frame_buffer* framebuffer, int32_t x, int32_t y, uint32_t w, uint32_t h)
+jegl_command_buffer* jegl_branch_new_command_buffer(
+    je_RenderBranch* branch,
+    /* OPTIONAL: nullptr means screen framebuffer */ jegl_frame_buffer* framebuffer,
+    const jegl_viewport* viewport)
 {
-    return branch->allocate_new_chain(framebuffer, x, y, w, h);
+    return branch->allocate_new_command_buffer(framebuffer, viewport);
 }
-void jegl_branch_new_frame(je_RendchainBranch* branch, int priority)
+void jegl_branch_new_frame(je_RenderBranch* branch, int priority)
 {
     branch->new_frame(priority);
 }

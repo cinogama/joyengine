@@ -1,6 +1,8 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
+#include "jeecs_graphic_render_internal.hpp"
+
 #ifdef JE_ENABLE_VK120_GAPI
 
 #include "jeecs_imgui_backend_api.hpp"
@@ -1059,6 +1061,8 @@ namespace jeecs::graphic::api::vk120
         jevk12_framebuffer* _vk_current_target_framebuffer;
         VkCommandBuffer _vk_current_command_buffer;
         jevk12_shader* _vk_current_binded_shader;
+        jevk12_vertex* _vk_current_vertex = nullptr;
+        jegl_shader* _vk_current_shader_resource = nullptr;
         size_t _vk_command_commit_round;
 
         VkSemaphore _vk_last_command_buffer_semaphore;
@@ -3877,6 +3881,120 @@ namespace jeecs::graphic::api::vk120
                 0);
         }
         //////////////////////////////////////////////////////////////////////////////////
+        void cmd_draw_indexed_ex(
+            jevk12_vertex* vertex,
+            uint32_t index_count,
+            uint32_t first_index,
+            uint32_t instance_count)
+        {
+            assert(_vk_current_target_framebuffer != nullptr);
+            assert(_vk_current_binded_shader != nullptr);
+
+            VkDeviceSize offsets = 0;
+
+            vkCmdBindPipeline(
+                _vk_current_command_buffer,
+                VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
+                _vk_current_binded_shader->prepare_pipeline(
+                    this, vertex->m_topology, vertex->m_stride));
+
+            _vk_descriptor_set_allocator->bind_pipeline_layout(
+                _vk_current_binded_shader->m_blob_data->m_pipeline_layout);
+
+            if (_vk_current_binded_shader->m_uniform_cpu_buffer_size != 0)
+            {
+                if (_vk_current_binded_shader->m_uniform_cpu_buffer_updated)
+                {
+                    _vk_current_binded_shader->m_uniform_cpu_buffer_updated = false;
+
+                    auto* new_ubo = _vk_current_binded_shader->allocate_ubo_for_vars(this);
+
+                    update_uniform_buffer_with_range(
+                        new_ubo,
+                        _vk_current_binded_shader->m_uniform_cpu_buffer,
+                        0,
+                        _vk_current_binded_shader->m_uniform_cpu_buffer_size);
+                }
+
+                _vk_descriptor_set_allocator->bind_uniform_vars(
+                    _vk_current_binded_shader->get_last_usable_variable(this)->m_uniform_buffer);
+            }
+
+            _vk_descriptor_set_allocator->apply_binding_work(
+                _vk_current_swapchain_image_content);
+
+            vkCmdBindVertexBuffers(
+                _vk_current_command_buffer, 0, 1, &vertex->m_vk_vertex_buffer, &offsets);
+
+            vkCmdBindIndexBuffer(
+                _vk_current_command_buffer,
+                vertex->m_vk_index_buffer,
+                0,
+                VK_INDEX_TYPE_UINT32);
+
+            vkCmdDrawIndexed(
+                _vk_current_command_buffer,
+                index_count,
+                instance_count,
+                first_index,
+                0,
+                0);
+        }
+
+        void cmd_draw_ex(
+            jevk12_vertex* vertex,
+            uint32_t vertex_count,
+            uint32_t first_vertex,
+            uint32_t instance_count)
+        {
+            assert(_vk_current_target_framebuffer != nullptr);
+            assert(_vk_current_binded_shader != nullptr);
+
+            VkDeviceSize offsets = 0;
+
+            vkCmdBindPipeline(
+                _vk_current_command_buffer,
+                VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
+                _vk_current_binded_shader->prepare_pipeline(
+                    this, vertex->m_topology, vertex->m_stride));
+
+            _vk_descriptor_set_allocator->bind_pipeline_layout(
+                _vk_current_binded_shader->m_blob_data->m_pipeline_layout);
+
+            if (_vk_current_binded_shader->m_uniform_cpu_buffer_size != 0)
+            {
+                if (_vk_current_binded_shader->m_uniform_cpu_buffer_updated)
+                {
+                    _vk_current_binded_shader->m_uniform_cpu_buffer_updated = false;
+
+                    auto* new_ubo = _vk_current_binded_shader->allocate_ubo_for_vars(this);
+
+                    update_uniform_buffer_with_range(
+                        new_ubo,
+                        _vk_current_binded_shader->m_uniform_cpu_buffer,
+                        0,
+                        _vk_current_binded_shader->m_uniform_cpu_buffer_size);
+                }
+
+                _vk_descriptor_set_allocator->bind_uniform_vars(
+                    _vk_current_binded_shader->get_last_usable_variable(this)->m_uniform_buffer);
+            }
+
+            _vk_descriptor_set_allocator->apply_binding_work(
+                _vk_current_swapchain_image_content);
+
+            vkCmdBindVertexBuffers(
+                _vk_current_command_buffer, 0, 1, &vertex->m_vk_vertex_buffer, &offsets);
+
+            vkCmdDraw(
+                _vk_current_command_buffer,
+                vertex_count,
+                instance_count,
+                first_vertex,
+                0);
+        }
+
+        //////////////////////////////////////////////////////////////////////////////////
         void imgui_init()
         {
             ImGui_ImplVulkan_InitInfo init_info = {};
@@ -4378,7 +4496,7 @@ namespace jeecs::graphic::api::vk120
         for (size_t i = 0; i < fbuffer->m_attachment_count; ++i)
         {
             auto& attachment = attachments[i];
-            jegl_bind_texture_2d(attachment->resource(), 0);
+            (void)_jegl_prepare_texture_2d_resource(attachment->resource());
 
             auto* attach_texture_instance =
                 static_cast<jevk12_texture*>(attachment->resource()->m_handle.m_ptr);
@@ -4659,6 +4777,316 @@ namespace jeecs::graphic::api::vk120
         memcpy(target_buffer, val, data_size_byte_length);
         current_shader->m_uniform_cpu_buffer_updated = true;
     }
+
+    /////////////////////////////////////////////////////////////////////////
+    // Render API (v2)
+    /////////////////////////////////////////////////////////////////////////
+
+    struct jegl_vk120_render_sampler
+    {
+        VkSampler m_sampler;
+    };
+
+    void render_pipeline_init(je_GraphicImplContext, jegl_pipeline*)
+    {}
+
+    void render_pipeline_close(je_GraphicImplContext, jegl_pipeline*)
+    {}
+
+    void render_pipeline_bind(
+        je_GraphicImplContext ctx, jegl_pipeline* pipeline)
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+        auto* shader_instance = static_cast<jevk12_shader*>(
+            pipeline->m_shader->m_handle.m_ptr);
+
+        assert(shader_instance != nullptr);
+
+        context->_vk_current_shader_resource = pipeline->m_shader;
+        context->cmd_bind_shader_pipeline(shader_instance);
+    }
+
+    void render_sampler_init(je_GraphicImplContext ctx, jegl_sampler* sampler)
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+        auto* native = new jegl_vk120_render_sampler();
+
+        auto cvt_filter = [](jegl_filter filter) -> jegl_shader::fliter_mode
+        {
+            return filter == jegl_filter::LINEAR
+                ? jegl_shader::fliter_mode::LINEAR
+                : jegl_shader::fliter_mode::NEAREST;
+        };
+        auto cvt_mip = [](jegl_mip_filter filter) -> jegl_shader::fliter_mode
+        {
+            return filter == jegl_mip_filter::LINEAR
+                ? jegl_shader::fliter_mode::LINEAR
+                : jegl_shader::fliter_mode::NEAREST;
+        };
+        auto cvt_wrap = [](jegl_wrap_mode wrap) -> jegl_shader::wrap_mode
+        {
+            switch (wrap)
+            {
+            case jegl_wrap_mode::CLAMP_TO_EDGE:
+                return jegl_shader::wrap_mode::CLAMP;
+            case jegl_wrap_mode::REPEAT:
+            case jegl_wrap_mode::MIRRORED_REPEAT:
+                return jegl_shader::wrap_mode::REPEAT;
+            default:
+                assert(false);
+                return jegl_shader::wrap_mode::CLAMP;
+            }
+        };
+
+        native->m_sampler = context->create_sampler(
+            cvt_filter(sampler->m_desc.m_mag_filter),
+            cvt_filter(sampler->m_desc.m_min_filter),
+            cvt_mip(sampler->m_desc.m_mip_filter),
+            cvt_wrap(sampler->m_desc.m_u_wrap),
+            cvt_wrap(sampler->m_desc.m_v_wrap));
+
+        sampler->m_backend_ptr = native;
+    }
+
+    void render_sampler_close(je_GraphicImplContext ctx, jegl_sampler* sampler)
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+        auto* native = static_cast<jegl_vk120_render_sampler*>(
+            sampler->m_backend_ptr);
+
+        if (native != nullptr)
+        {
+            context->vkDestroySampler(
+                context->_vk_logic_device, native->m_sampler, nullptr);
+            delete native;
+            sampler->m_backend_ptr = nullptr;
+        }
+    }
+
+    void render_sampler_bind(
+        je_GraphicImplContext ctx, uint32_t sampler_id, jegl_sampler* sampler)
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+        auto* native = static_cast<jegl_vk120_render_sampler*>(
+            sampler->m_backend_ptr);
+
+        assert(native != nullptr);
+        context->_vk_descriptor_set_allocator->bind_sampler(
+            sampler_id, native->m_sampler);
+    }
+
+    void render_begin_pass(
+        je_GraphicImplContext ctx,
+        /* OPTIONAL */ jegl_frame_buffer* target,
+        const jegl_viewport* viewport)
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+
+        context->_vk_current_binded_shader = nullptr;
+        context->_vk_current_shader_resource = nullptr;
+        context->_vk_current_vertex = nullptr;
+
+        auto* target_framebuffer = target != nullptr
+            ? static_cast<jevk12_framebuffer*>(target->m_handle.m_ptr)
+            : nullptr;
+
+        context->cmd_begin_frame_buffer(
+            target_framebuffer,
+            viewport->x,
+            viewport->y,
+            (int32_t)viewport->width,
+            (int32_t)viewport->height);
+    }
+
+    void render_clear_color(
+        je_GraphicImplContext ctx, uint32_t attachment, const float rgba[4])
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+        context->cmd_clear_frame_buffer_color(attachment, rgba);
+    }
+
+    void render_clear_depth(je_GraphicImplContext ctx, float depth)
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+
+        if (context->_vk_current_target_framebuffer != nullptr
+            && context->_vk_current_target_framebuffer->m_depth_attachment == nullptr)
+            return;
+
+        context->cmd_clear_frame_buffer_depth(depth);
+    }
+
+    void render_end_pass(je_GraphicImplContext ctx)
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+        context->finish_frame_buffer();
+    }
+
+    void render_bind_vertex(je_GraphicImplContext ctx, jegl_vertex* vertex)
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+        context->_vk_current_vertex =
+            static_cast<jevk12_vertex*>(vertex->m_handle.m_ptr);
+    }
+
+    void render_bind_uniform_buffer(
+        je_GraphicImplContext ctx, jegl_uniform_buffer* uniform_buffer)
+    {
+        bind_uniform_buffer(ctx, uniform_buffer);
+    }
+
+    void render_bind_texture_2d(
+        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_2d* texture)
+    {
+        bind_texture<jegl_texture_2d>(ctx, texture, pass);
+    }
+
+    void render_bind_texture_3d(
+        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_3d* texture)
+    {
+        bind_texture<jegl_texture_3d>(ctx, texture, pass);
+    }
+
+    void render_bind_texture_array(
+        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_array* texture)
+    {
+        bind_texture<jegl_texture_array>(ctx, texture, pass);
+    }
+
+    void render_bind_texture_cube(
+        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_cube* texture)
+    {
+        bind_texture<jegl_texture_cube>(ctx, texture, pass);
+    }
+
+    void render_prepare_uniform_block(
+        jegl_vk120_context* context,
+        const void* uniform_data,
+        uint32_t uniform_size)
+    {
+        auto* shader_instance = context->_vk_current_binded_shader;
+        assert(shader_instance != nullptr);
+
+        if (shader_instance->m_uniform_cpu_buffer_size == 0)
+        {
+            assert(uniform_size == 0);
+            return;
+        }
+
+        assert(uniform_data != nullptr);
+        assert(uniform_size == shader_instance->m_uniform_cpu_buffer_size);
+
+        memcpy(
+            shader_instance->m_uniform_cpu_buffer,
+            uniform_data,
+            uniform_size);
+
+        if (context->_vk_current_shader_resource != nullptr)
+        {
+            const uint32_t ndc_offset =
+                context->_vk_current_shader_resource
+                    ->m_builtin_uniforms.m_builtin_uniform_ndc_scale;
+
+            if (ndc_offset != jeecs::graphic::INVALID_UNIFORM_LOCATION
+                && ndc_offset + sizeof(float) * 4 <= uniform_size)
+            {
+                const float ndc_scale[4] = {
+                    1.f,
+                    context->_vk_current_target_framebuffer
+                        == context->_vk_current_swapchain_image_content->m_framebuffer
+                        ? 1.f : -1.f,
+                    1.f,
+                    1.f };
+                memcpy(
+                    shader_instance->m_uniform_cpu_buffer + ndc_offset,
+                    ndc_scale,
+                    sizeof(ndc_scale));
+            }
+        }
+
+        shader_instance->m_uniform_cpu_buffer_updated = true;
+    }
+
+    void render_draw_indexed(
+        je_GraphicImplContext ctx,
+        uint32_t index_count,
+        uint32_t first_index,
+        uint32_t instance_count,
+        const void* uniform_data,
+        uint32_t uniform_size)
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+
+        assert(context->_vk_current_vertex != nullptr);
+        assert(index_count > 0);
+        assert(instance_count > 0);
+
+        render_prepare_uniform_block(context, uniform_data, uniform_size);
+        context->cmd_draw_indexed_ex(
+            context->_vk_current_vertex,
+            index_count,
+            first_index,
+            instance_count);
+    }
+
+    void render_draw(
+        je_GraphicImplContext ctx,
+        uint32_t vertex_count,
+        uint32_t first_vertex,
+        uint32_t instance_count,
+        const void* uniform_data,
+        uint32_t uniform_size)
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+
+        assert(context->_vk_current_vertex != nullptr);
+        assert(vertex_count > 0);
+        assert(instance_count > 0);
+
+        render_prepare_uniform_block(context, uniform_data, uniform_size);
+        context->cmd_draw_ex(
+            context->_vk_current_vertex,
+            vertex_count,
+            first_vertex,
+            instance_count);
+    }
+
+    void render_commit_begin(je_GraphicImplContext)
+    {}
+
+    void render_commit_end(je_GraphicImplContext)
+    {}
+
+    static const jegl_graphic_api_render _jegl_vk120_render_apis = {
+        JEGL_RENDER_API_ABI_VERSION,
+        (uint32_t)sizeof(jegl_graphic_api_render),
+
+        render_pipeline_init,
+        render_pipeline_close,
+        render_pipeline_bind,
+
+        render_sampler_init,
+        render_sampler_close,
+        render_sampler_bind,
+
+        render_begin_pass,
+        render_clear_color,
+        render_clear_depth,
+        render_end_pass,
+
+        render_bind_vertex,
+        render_bind_uniform_buffer,
+        render_bind_texture_2d,
+        render_bind_texture_3d,
+        render_bind_texture_array,
+        render_bind_texture_cube,
+
+        render_draw_indexed,
+        render_draw,
+
+        render_commit_begin,
+        render_commit_end,
+    };
 }
 
 // 导出图形接口！
@@ -4727,6 +5155,8 @@ void jegl_using_vk120_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->bind_framebuf = set_rend_to_framebuffer;
 
     write_to_apis->set_uniform = set_uniform;
+
+    write_to_apis->m_render_apis = &_jegl_vk120_render_apis;
 }
 #else
 void jegl_using_vk120_apis(jegl_graphic_api* write_to_apis)
