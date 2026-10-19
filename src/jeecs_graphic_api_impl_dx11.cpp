@@ -2483,37 +2483,6 @@ namespace jeecs::graphic::api::dx11
 
     void dx11_render_commit_end(je_GraphicImplContext)
     {}
-
-    static const jegl_graphic_api_render _jegl_dx11_render_apis = {
-        JEGL_RENDER_API_ABI_VERSION,
-        (uint32_t)sizeof(jegl_graphic_api_render),
-
-        dx11_render_pipeline_init,
-        dx11_render_pipeline_close,
-        dx11_render_pipeline_bind,
-
-        dx11_render_sampler_init,
-        dx11_render_sampler_close,
-        dx11_render_sampler_bind,
-
-        dx11_render_begin_pass,
-        dx11_render_clear_color,
-        dx11_render_clear_depth,
-        dx11_render_end_pass,
-
-        dx11_render_bind_vertex,
-        dx11_render_bind_uniform_buffer,
-        dx11_render_bind_texture_2d,
-        dx11_render_bind_texture_3d,
-        dx11_render_bind_texture_array,
-        dx11_render_bind_texture_cube,
-
-        dx11_render_draw_indexed,
-        dx11_render_draw,
-
-        dx11_render_commit_begin,
-        dx11_render_commit_end,
-    };
 }
 
 void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis)
@@ -2569,10 +2538,31 @@ void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->framebuffer_close = dx11_framebuf_close;
     write_to_apis->ubuffer_close = dx11_ubuffer_close;
 
+    write_to_apis->pipeline_init = dx11_render_pipeline_init;
+    write_to_apis->pipeline_close = dx11_render_pipeline_close;
+    write_to_apis->pipeline_bind = dx11_render_pipeline_bind;
 
+    write_to_apis->sampler_init = dx11_render_sampler_init;
+    write_to_apis->sampler_close = dx11_render_sampler_close;
+    write_to_apis->sampler_bind = dx11_render_sampler_bind;
 
+    write_to_apis->begin_pass = dx11_render_begin_pass;
+    write_to_apis->clear_color = dx11_render_clear_color;
+    write_to_apis->clear_depth = dx11_render_clear_depth;
+    write_to_apis->end_pass = dx11_render_end_pass;
 
-    write_to_apis->m_render_apis = &_jegl_dx11_render_apis;
+    write_to_apis->bind_vertex = dx11_render_bind_vertex;
+    write_to_apis->bind_uniform_buffer = dx11_render_bind_uniform_buffer;
+    write_to_apis->bind_texture_2d = dx11_render_bind_texture_2d;
+    write_to_apis->bind_texture_3d = dx11_render_bind_texture_3d;
+    write_to_apis->bind_texture_array = dx11_render_bind_texture_array;
+    write_to_apis->bind_texture_cube = dx11_render_bind_texture_cube;
+
+    write_to_apis->draw_indexed = dx11_render_draw_indexed;
+    write_to_apis->draw = dx11_render_draw;
+
+    write_to_apis->commit_begin = dx11_render_commit_begin;
+    write_to_apis->commit_end = dx11_render_commit_end;
 }
 
 #else

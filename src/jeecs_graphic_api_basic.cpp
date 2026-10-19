@@ -730,14 +730,12 @@ void _jegl_close_resouce_instance_by_api(
             res->resource<jegl_frame_buffer>());
         break;
     case jeecs::graphic::created_resource::kind::PIPELINE:
-        assert(thread->m_apis->m_render_apis != nullptr);
-        thread->m_apis->m_render_apis->pipeline_close(
+        thread->m_apis->pipeline_close(
             thread->m_graphic_impl_context,
             res->resource<jegl_pipeline>());
         break;
     case jeecs::graphic::created_resource::kind::SAMPLER:
-        assert(thread->m_apis->m_render_apis != nullptr);
-        thread->m_apis->m_render_apis->sampler_close(
+        thread->m_apis->sampler_close(
             thread->m_graphic_impl_context,
             res->resource<jegl_sampler>());
         break;
@@ -995,34 +993,17 @@ void jegl_register_sync_thread_callback(
         register_func(thread_handle->m_apis);
 
         size_t err_api_no = 0;
-        // Legacy function pointers are still validated during the internal
-        // cleanup; the render API is the only public rendering path.
-        const size_t legacy_api_count =
-            offsetof(jegl_graphic_api, m_render_apis) / sizeof(void*);
-        for (size_t i = 0; i < legacy_api_count; ++i)
+        // Every entry in the table must be provided, including the render
+        // entry points (pipeline/sampler/pass/bind/draw/commit).
+        const size_t api_count =
+            sizeof(jegl_graphic_api) / sizeof(void*);
+        for (size_t i = 0; i < api_count; ++i)
         {
             if (!((void**)thread_handle->m_apis)[i])
             {
                 err_api_no++;
                 jeecs::debug::logerr("GraphicAPI function: %zu is invalid.", i);
             }
-        }
-
-        if (thread_handle->m_apis->m_render_apis == nullptr)
-        {
-            err_api_no++;
-            jeecs::debug::logerr("GraphicAPI render api is missing.");
-        }
-        else if (thread_handle->m_apis->m_render_apis->m_abi_version
-                != JEGL_RENDER_API_ABI_VERSION
-            || thread_handle->m_apis->m_render_apis->m_struct_size
-                != sizeof(jegl_graphic_api_render))
-        {
-            err_api_no++;
-            jeecs::debug::logerr(
-                "GraphicAPI render api ABI mismatch (version %u, size %u).",
-                thread_handle->m_apis->m_render_apis->m_abi_version,
-                thread_handle->m_apis->m_render_apis->m_struct_size);
         }
 
         if (err_api_no)

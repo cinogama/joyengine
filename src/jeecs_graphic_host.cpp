@@ -201,8 +201,6 @@
         {
             if (action == jegl_update_action::JEGL_UPDATE_CONTINUE)
             {
-                assert(glthread->m_apis->m_render_apis != nullptr);
-
                 int window_w = 0, window_h = 0;
                 je_io_get_window_size(&window_w, &window_h);
 

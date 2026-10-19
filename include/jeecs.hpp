@@ -2649,69 +2649,6 @@ struct jegl_viewport
 };
 
 /*
-jegl_graphic_api_render [类型]
-版本化的渲染接口函数表，由支持新渲染 API 的后端填充。
-    * m_abi_version 必须等于 JEGL_RENDER_API_ABI_VERSION
-    * m_struct_size 必须等于 sizeof(jegl_graphic_api_render)
-    * 迁移期间 jegl_graphic_api::m_render_apis 可以为空；新 API 入口会断言其非空
-*/
-#define JEGL_RENDER_API_ABI_VERSION 1u
-
-struct jegl_graphic_api_render
-{
-    uint32_t m_abi_version;
-    uint32_t m_struct_size;
-
-    void (*pipeline_init)(je_GraphicImplContext context, jegl_pipeline* pipeline);
-    void (*pipeline_close)(je_GraphicImplContext context, jegl_pipeline* pipeline);
-    void (*pipeline_bind)(je_GraphicImplContext context, jegl_pipeline* pipeline);
-
-    void (*sampler_init)(je_GraphicImplContext context, jegl_sampler* sampler);
-    void (*sampler_close)(je_GraphicImplContext context, jegl_sampler* sampler);
-    void (*sampler_bind)(
-        je_GraphicImplContext context, uint32_t sampler_id, jegl_sampler* sampler);
-
-    void (*begin_pass)(
-        je_GraphicImplContext context,
-        /* OPTIONAL: nullptr means the screen back buffer */ jegl_frame_buffer* target,
-        const jegl_viewport* viewport);
-    void (*clear_color)(
-        je_GraphicImplContext context, uint32_t attachment, const float rgba[4]);
-    void (*clear_depth)(je_GraphicImplContext context, float depth);
-    void (*end_pass)(je_GraphicImplContext context);
-
-    void (*bind_vertex)(je_GraphicImplContext context, jegl_vertex* vertex);
-    void (*bind_uniform_buffer)(
-        je_GraphicImplContext context, jegl_uniform_buffer* uniform_buffer);
-    void (*bind_texture_2d)(
-        je_GraphicImplContext context, uint32_t pass, jegl_texture_2d* texture);
-    void (*bind_texture_3d)(
-        je_GraphicImplContext context, uint32_t pass, jegl_texture_3d* texture);
-    void (*bind_texture_array)(
-        je_GraphicImplContext context, uint32_t pass, jegl_texture_array* texture);
-    void (*bind_texture_cube)(
-        je_GraphicImplContext context, uint32_t pass, jegl_texture_cube* texture);
-
-    void (*draw_indexed)(
-        je_GraphicImplContext context,
-        uint32_t index_count,
-        uint32_t first_index,
-        uint32_t instance_count,
-        const void* uniform_data,
-        uint32_t uniform_size);
-    void (*draw)(
-        je_GraphicImplContext context,
-        uint32_t vertex_count,
-        uint32_t first_vertex,
-        uint32_t instance_count,
-        const void* uniform_data,
-        uint32_t uniform_size);
-
-    void (*commit_begin)(je_GraphicImplContext context);
-    void (*commit_end)(je_GraphicImplContext context);
-};
-
-/*
 jegl_graphic_api [类型]
 图形接口，包含底层使用的各项基本函数
 */
@@ -3055,12 +2992,57 @@ struct jegl_graphic_api
     ubuffer_close_func_t ubuffer_close;
 
     /*
-    jegl_graphic_api::m_render_apis [成员]
-    版本化的渲染接口（pipeline / command buffer）。
-        * 所有内置后端都必须提供；缺失时图形线程启动失败
-        * 后端在注册时填写，通常指向一个静态的 jegl_graphic_api_render 实例
+    jegl_graphic_api 的渲染接口（pipeline / sampler / render pass / command buffer）
+        * 与资源接口共用同一张函数表；所有内置后端都必须提供
+        * 参数约定与 jegl_cmd_* / jegl_pipeline_* 公共接口一致
     */
-    const jegl_graphic_api_render* m_render_apis;
+    void (*pipeline_init)(je_GraphicImplContext context, jegl_pipeline* pipeline);
+    void (*pipeline_close)(je_GraphicImplContext context, jegl_pipeline* pipeline);
+    void (*pipeline_bind)(je_GraphicImplContext context, jegl_pipeline* pipeline);
+
+    void (*sampler_init)(je_GraphicImplContext context, jegl_sampler* sampler);
+    void (*sampler_close)(je_GraphicImplContext context, jegl_sampler* sampler);
+    void (*sampler_bind)(
+        je_GraphicImplContext context, uint32_t sampler_id, jegl_sampler* sampler);
+
+    void (*begin_pass)(
+        je_GraphicImplContext context,
+        /* OPTIONAL: nullptr means the screen back buffer */ jegl_frame_buffer* target,
+        const jegl_viewport* viewport);
+    void (*clear_color)(
+        je_GraphicImplContext context, uint32_t attachment, const float rgba[4]);
+    void (*clear_depth)(je_GraphicImplContext context, float depth);
+    void (*end_pass)(je_GraphicImplContext context);
+
+    void (*bind_vertex)(je_GraphicImplContext context, jegl_vertex* vertex);
+    void (*bind_uniform_buffer)(
+        je_GraphicImplContext context, jegl_uniform_buffer* uniform_buffer);
+    void (*bind_texture_2d)(
+        je_GraphicImplContext context, uint32_t pass, jegl_texture_2d* texture);
+    void (*bind_texture_3d)(
+        je_GraphicImplContext context, uint32_t pass, jegl_texture_3d* texture);
+    void (*bind_texture_array)(
+        je_GraphicImplContext context, uint32_t pass, jegl_texture_array* texture);
+    void (*bind_texture_cube)(
+        je_GraphicImplContext context, uint32_t pass, jegl_texture_cube* texture);
+
+    void (*draw_indexed)(
+        je_GraphicImplContext context,
+        uint32_t index_count,
+        uint32_t first_index,
+        uint32_t instance_count,
+        const void* uniform_data,
+        uint32_t uniform_size);
+    void (*draw)(
+        je_GraphicImplContext context,
+        uint32_t vertex_count,
+        uint32_t first_vertex,
+        uint32_t instance_count,
+        const void* uniform_data,
+        uint32_t uniform_size);
+
+    void (*commit_begin)(je_GraphicImplContext context);
+    void (*commit_end)(je_GraphicImplContext context);
 };
 static_assert(sizeof(jegl_graphic_api) % sizeof(void*) == 0);
 

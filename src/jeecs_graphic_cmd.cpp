@@ -1040,10 +1040,7 @@ void jegl_cmd_commit(jegl_command_buffer* cmd)
         cmd->m_target = nullptr;
     }
 
-    const auto* render = cmd->m_context->m_apis->m_render_apis;
-    assert(render != nullptr);
-    assert(render->m_abi_version == JEGL_RENDER_API_ABI_VERSION);
-    assert(render->m_struct_size == sizeof(jegl_graphic_api_render));
+    const auto* render = cmd->m_context->m_apis;
 
     jegl_context* const graphic_context = cmd->m_context;
     const auto impl_context = graphic_context->m_graphic_impl_context;

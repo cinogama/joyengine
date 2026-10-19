@@ -2164,37 +2164,6 @@ namespace jeecs::graphic::api::gl3
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
         glBindBuffer(GL_UNIFORM_BUFFER, 0);
     }
-
-    static const jegl_graphic_api_render _jegl_gl3_render_apis = {
-        JEGL_RENDER_API_ABI_VERSION,
-        (uint32_t)sizeof(jegl_graphic_api_render),
-
-        gl_render_pipeline_init,
-        gl_render_pipeline_close,
-        gl_render_pipeline_bind,
-
-        gl_render_sampler_init,
-        gl_render_sampler_close,
-        gl_render_sampler_bind,
-
-        gl_render_begin_pass,
-        gl_render_clear_color,
-        gl_render_clear_depth,
-        gl_render_end_pass,
-
-        gl_render_bind_vertex,
-        gl_render_bind_uniform_buffer,
-        gl_render_bind_texture_2d,
-        gl_render_bind_texture_3d,
-        gl_render_bind_texture_array,
-        gl_render_bind_texture_cube,
-
-        gl_render_draw_indexed,
-        gl_render_draw,
-
-        gl_render_commit_begin,
-        gl_render_commit_end,
-    };
 }
 
 void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
@@ -2250,10 +2219,31 @@ void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->framebuffer_close = framebuffer_close;
     write_to_apis->ubuffer_close = ubuffer_close;
 
+    write_to_apis->pipeline_init = gl_render_pipeline_init;
+    write_to_apis->pipeline_close = gl_render_pipeline_close;
+    write_to_apis->pipeline_bind = gl_render_pipeline_bind;
 
+    write_to_apis->sampler_init = gl_render_sampler_init;
+    write_to_apis->sampler_close = gl_render_sampler_close;
+    write_to_apis->sampler_bind = gl_render_sampler_bind;
 
+    write_to_apis->begin_pass = gl_render_begin_pass;
+    write_to_apis->clear_color = gl_render_clear_color;
+    write_to_apis->clear_depth = gl_render_clear_depth;
+    write_to_apis->end_pass = gl_render_end_pass;
 
-    write_to_apis->m_render_apis = &_jegl_gl3_render_apis;
+    write_to_apis->bind_vertex = gl_render_bind_vertex;
+    write_to_apis->bind_uniform_buffer = gl_render_bind_uniform_buffer;
+    write_to_apis->bind_texture_2d = gl_render_bind_texture_2d;
+    write_to_apis->bind_texture_3d = gl_render_bind_texture_3d;
+    write_to_apis->bind_texture_array = gl_render_bind_texture_array;
+    write_to_apis->bind_texture_cube = gl_render_bind_texture_cube;
+
+    write_to_apis->draw_indexed = gl_render_draw_indexed;
+    write_to_apis->draw = gl_render_draw;
+
+    write_to_apis->commit_begin = gl_render_commit_begin;
+    write_to_apis->commit_end = gl_render_commit_end;
 }
 #else
 void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)

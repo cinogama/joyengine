@@ -4857,37 +4857,6 @@ namespace jeecs::graphic::api::vk120
 
     void render_commit_end(je_GraphicImplContext)
     {}
-
-    static const jegl_graphic_api_render _jegl_vk120_render_apis = {
-        JEGL_RENDER_API_ABI_VERSION,
-        (uint32_t)sizeof(jegl_graphic_api_render),
-
-        render_pipeline_init,
-        render_pipeline_close,
-        render_pipeline_bind,
-
-        render_sampler_init,
-        render_sampler_close,
-        render_sampler_bind,
-
-        render_begin_pass,
-        render_clear_color,
-        render_clear_depth,
-        render_end_pass,
-
-        render_bind_vertex,
-        render_bind_uniform_buffer,
-        render_bind_texture_2d,
-        render_bind_texture_3d,
-        render_bind_texture_array,
-        render_bind_texture_cube,
-
-        render_draw_indexed,
-        render_draw,
-
-        render_commit_begin,
-        render_commit_end,
-    };
 }
 
 // 导出图形接口！
@@ -4944,10 +4913,31 @@ void jegl_using_vk120_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->framebuffer_close = close_framebuffer;
     write_to_apis->ubuffer_close = close_ubuffer;
 
+    write_to_apis->pipeline_init = render_pipeline_init;
+    write_to_apis->pipeline_close = render_pipeline_close;
+    write_to_apis->pipeline_bind = render_pipeline_bind;
 
+    write_to_apis->sampler_init = render_sampler_init;
+    write_to_apis->sampler_close = render_sampler_close;
+    write_to_apis->sampler_bind = render_sampler_bind;
 
+    write_to_apis->begin_pass = render_begin_pass;
+    write_to_apis->clear_color = render_clear_color;
+    write_to_apis->clear_depth = render_clear_depth;
+    write_to_apis->end_pass = render_end_pass;
 
-    write_to_apis->m_render_apis = &_jegl_vk120_render_apis;
+    write_to_apis->bind_vertex = render_bind_vertex;
+    write_to_apis->bind_uniform_buffer = render_bind_uniform_buffer;
+    write_to_apis->bind_texture_2d = render_bind_texture_2d;
+    write_to_apis->bind_texture_3d = render_bind_texture_3d;
+    write_to_apis->bind_texture_array = render_bind_texture_array;
+    write_to_apis->bind_texture_cube = render_bind_texture_cube;
+
+    write_to_apis->draw_indexed = render_draw_indexed;
+    write_to_apis->draw = render_draw;
+
+    write_to_apis->commit_begin = render_commit_begin;
+    write_to_apis->commit_end = render_commit_end;
 }
 #else
 void jegl_using_vk120_apis(jegl_graphic_api* write_to_apis)
