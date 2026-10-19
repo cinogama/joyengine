@@ -2810,37 +2810,6 @@ struct jegl_graphic_api
     using ubuffer_close_func_t =
         void (*)(je_GraphicImplContext, jegl_uniform_buffer*);
 
-    // Shader uniform 设置相关接口
-    using set_uniform_func_t =
-        void (*)(je_GraphicImplContext, uint32_t, jegl_shader::uniform_type, const void*);
-
-    // 绘制相关接口
-    using viewport_xyzw_t = int32_t[4];
-    using bind_framebuf_func_t =
-        void (*)(
-            je_GraphicImplContext,
-            jegl_frame_buffer* /* MAY NULL */,
-            const viewport_xyzw_t*,
-            const jegl_frame_buffer_clear_operation*);
-
-    using bind_ubuffer_func_t =
-        void (*)(je_GraphicImplContext, jegl_uniform_buffer*);
-    using bind_shader_func_t =
-        bool (*)(je_GraphicImplContext, jegl_shader*);
-    using bind_texture_2d_func_t =
-        void (*)(je_GraphicImplContext, jegl_texture_2d*, size_t);
-    using bind_texture_3d_func_t =
-        void (*)(je_GraphicImplContext, jegl_texture_3d*, size_t);
-    using bind_texture_array_func_t =
-        void (*)(je_GraphicImplContext, jegl_texture_array*, size_t);
-    using bind_texture_cube_func_t =
-        void (*)(je_GraphicImplContext, jegl_texture_cube*, size_t);
-    using bind_texture_msaa_func_t =
-        void (*)(je_GraphicImplContext, jegl_texture_msaa*, size_t);
-    using draw_vertex_func_t =
-        void (*)(je_GraphicImplContext, jegl_vertex*);
-
-
     /*
     jegl_graphic_api::interface_startup [成员]
     图形接口在初始化或者被请求重新启动时调用，按照JoyEngine的约定，图形实现应当在此处创建窗口，并完成渲染所需
@@ -2964,16 +2933,16 @@ struct jegl_graphic_api
 
     /*
     jegl_graphic_api::shader_init [成员]
-    初始化并创建着色器在图形层对应的资源，此接口将在资源被首次使用时（jegl_bind_shader）调用，图形实现
-    应当在此接口中完成所需的准备工作。
+    初始化并创建着色器在图形层对应的资源，此接口将在资源被首次使用时由渲染 API 的
+    pipeline 准备阶段调用，图形实现应当在此接口中完成所需的准备工作。
     */
     shader_init_func_t shader_init;
 
     /*
     jegl_graphic_api::texture_2d_init / texture_3d_init / texture_array_init / texture_cube_init /
     texture_msaa_init [成员]
-    初始化并创建对应类别纹理在图形层对应的资源，此接口将在资源被首次使用时（jegl_bind_texture_*）调用，
-    图形实现应当在此接口中完成所需的准备工作。
+    初始化并创建对应类别纹理在图形层对应的资源，此接口将在资源被首次使用时由渲染 API 的
+    纹理绑定准备阶段调用，图形实现应当在此接口中完成所需的准备工作。
     */
     texture_2d_init_func_t texture_2d_init;
     texture_3d_init_func_t texture_3d_init;
@@ -2983,25 +2952,25 @@ struct jegl_graphic_api
 
     /*
     jegl_graphic_api::vertex_init [成员]
-    初始化并创建顶点在图形层对应的资源，此接口将在资源被首次使用时（jegl_draw_vertex）调用，图形实现
-    应当在此接口中完成所需的准备工作。
+    初始化并创建顶点在图形层对应的资源，此接口将在资源被首次使用时由渲染 API 的
+    绘制准备阶段调用，图形实现应当在此接口中完成所需的准备工作。
     */
     vertex_init_func_t vertex_init;
 
     /*
     jegl_graphic_api::framebuffer_init [成员]
-    初始化并创建帧缓冲区在图形层对应的资源，此接口将在资源被首次使用时（jegl_bind_framebuf）调用，图形实现
-    应当在此接口中完成所需的准备工作。
+    初始化并创建帧缓冲区在图形层对应的资源，此接口将在资源被首次使用时由渲染 API 的
+    pass 准备阶段调用，图形实现应当在此接口中完成所需的准备工作。
 
     引擎的中间层在创建 frambuffer 实例时，已经创建了对应的附件纹理资源（m_output_attachments），图形实现应
-    当使用 jegl_bind_texture_2d 或者其他适当的接口确保这些附件纹理资源已经被正确创建和初始化。
+    当通过内部资源准备接口确保这些附件纹理资源已经被正确创建和初始化。
     */
     framebuffer_init_func_t framebuffer_init;
 
     /*
     jegl_graphic_api::ubuffer_init [成员]
-    初始化并创建一致变量缓冲区在图形层对应的资源，此接口将在资源被首次使用时（jegl_bind_uniform_buffer）调用，图形实现
-    应当在此接口中完成所需的准备工作。
+    初始化并创建一致变量缓冲区在图形层对应的资源，此接口将在资源被首次使用时由渲染 API 的
+    UBO 绑定准备阶段调用，图形实现应当在此接口中完成所需的准备工作。
     */
     ubuffer_init_func_t  ubuffer_init;
 
@@ -3086,51 +3055,9 @@ struct jegl_graphic_api
     ubuffer_close_func_t ubuffer_close;
 
     /*
-    jegl_graphic_api::set_uniform [成员]
-    图形接口设置当前绑定着色器的一致变量值，图形实现应当保证：如果传入的位置参数 location 无效
-    （即值为 INVALID_UNIFORM_LOCATION）时，函数不会执行任何操作。
-
-    除此之外，出于性能考虑，图形实现不负责检查指定位置的变量类型、位置和大小是否合法。也不检查
-    当前是否绑定有有效的着色器。
-    */
-    set_uniform_func_t set_uniform;
-
-    /*
-    jegl_graphic_api::bind_framebuf [成员]
-    图形接口绑定帧缓冲区，若指定的帧缓冲区为 nullptr，则绑定到屏幕缓冲区
-    */
-    bind_framebuf_func_t bind_framebuf;
-
-    /*
-    jegl_graphic_api::bind_uniform_buffer [成员]
-    图形接口绑定一致变量缓冲区
-    */
-    bind_ubuffer_func_t bind_uniform_buffer;
-    /*
-    jegl_graphic_api::bind_shader [成员]
-    图形接口绑定着色器
-    */
-    bind_shader_func_t bind_shader;
-    /*
-    jegl_graphic_api::bind_texture_2d / bind_texture_3d / bind_texture_array / bind_texture_cube /
-    bind_texture_msaa [成员]
-    图形接口绑定对应类别的纹理到指定通道
-    */
-    bind_texture_2d_func_t bind_texture_2d;
-    bind_texture_3d_func_t bind_texture_3d;
-    bind_texture_array_func_t bind_texture_array;
-    bind_texture_cube_func_t bind_texture_cube;
-    bind_texture_msaa_func_t bind_texture_msaa;
-    /*
-    jegl_graphic_api::draw_vertex [成员]
-    由图形实现负责使用当前绑定的着色器和纹理绘制指定的顶点
-    */
-    draw_vertex_func_t draw_vertex;
-
-    /*
     jegl_graphic_api::m_render_apis [成员]
     版本化的渲染接口（pipeline / command buffer）。
-        * 迁移期间允许为空，此时新渲染 API 的入口会以断言终止
+        * 所有内置后端都必须提供；缺失时图形线程启动失败
         * 后端在注册时填写，通常指向一个静态的 jegl_graphic_api_render 实例
     */
     const jegl_graphic_api_render* m_render_apis;

@@ -167,45 +167,7 @@ namespace jeecs::graphic::api::none
     {
     }
 
-    void bind_uniform_buffer(je_GraphicImplContext, jegl_uniform_buffer*)
-    {
-    }
-    bool bind_shader(je_GraphicImplContext, jegl_shader*)
-    {
-        return true;
-    }
-    void bind_texture_2d(je_GraphicImplContext, jegl_texture_2d*, size_t)
-    {
-    }
-    void bind_texture_3d(je_GraphicImplContext, jegl_texture_3d*, size_t)
-    {
-    }
-    void bind_texture_array(je_GraphicImplContext, jegl_texture_array*, size_t)
-    {
-    }
-    void bind_texture_cube(je_GraphicImplContext, jegl_texture_cube*, size_t)
-    {
-    }
-    void bind_texture_msaa(je_GraphicImplContext, jegl_texture_msaa*, size_t)
-    {
-    }
-    void draw_vertex_with_shader(je_GraphicImplContext, jegl_vertex*)
-    {
-    }
-
-    void bind_framebuffer(
-        je_GraphicImplContext,
-        jegl_frame_buffer*,
-        const int32_t(*)[4],
-        const jegl_frame_buffer_clear_operation*)
-    {
-    }
-
-    void set_uniform(je_GraphicImplContext, uint32_t, jegl_shader::uniform_type, const void*)
-    {
-    }
-
-    // Render API (v2) no-ops.
+                                            // Render API (v2) no-ops.
     void render_pipeline_init(je_GraphicImplContext, jegl_pipeline*)
     {
     }
@@ -359,18 +321,8 @@ void jegl_using_none_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->framebuffer_close = close_framebuffer;
     write_to_apis->ubuffer_close = close_ubuffer;
 
-    write_to_apis->set_uniform = set_uniform;
 
-    write_to_apis->bind_framebuf = bind_framebuffer;
 
-    write_to_apis->bind_uniform_buffer = bind_uniform_buffer;
-    write_to_apis->bind_texture_2d = bind_texture_2d;
-    write_to_apis->bind_texture_3d = bind_texture_3d;
-    write_to_apis->bind_texture_array = bind_texture_array;
-    write_to_apis->bind_texture_cube = bind_texture_cube;
-    write_to_apis->bind_texture_msaa = bind_texture_msaa;
-    write_to_apis->bind_shader = bind_shader;
-    write_to_apis->draw_vertex = draw_vertex_with_shader;
 
     write_to_apis->m_render_apis = &_none_render_apis;
 }

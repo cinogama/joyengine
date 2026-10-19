@@ -3826,61 +3826,7 @@ namespace jeecs::graphic::api::vk120
             }
             return true;
         }
-        void cmd_draw_vertex(jevk12_vertex* vertex)
-        {
-            assert(_vk_current_target_framebuffer != nullptr);
-            assert(_vk_current_binded_shader != nullptr);
-
-            VkDeviceSize offsets = 0;
-
-            vkCmdBindPipeline(
-                _vk_current_command_buffer,
-                VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
-                _vk_current_binded_shader->prepare_pipeline(this, vertex->m_topology, vertex->m_stride));
-
-            _vk_descriptor_set_allocator->bind_pipeline_layout(
-                _vk_current_binded_shader->m_blob_data->m_pipeline_layout);
-
-            if (_vk_current_binded_shader->m_uniform_cpu_buffer_size != 0)
-            {
-                if (_vk_current_binded_shader->m_uniform_cpu_buffer_updated)
-                {
-                    _vk_current_binded_shader->m_uniform_cpu_buffer_updated = false;
-
-                    auto* new_ubo = _vk_current_binded_shader->allocate_ubo_for_vars(this);
-
-                    update_uniform_buffer_with_range(
-                        new_ubo,
-                        _vk_current_binded_shader->m_uniform_cpu_buffer,
-                        0,
-                        _vk_current_binded_shader->m_uniform_cpu_buffer_size);
-                }
-
-                _vk_descriptor_set_allocator->bind_uniform_vars(
-                    _vk_current_binded_shader->get_last_usable_variable(this)->m_uniform_buffer);
-            }
-
-            _vk_descriptor_set_allocator->apply_binding_work(
-                _vk_current_swapchain_image_content);
-
-            vkCmdBindVertexBuffers(
-                _vk_current_command_buffer, 0, 1, &vertex->m_vk_vertex_buffer, &offsets);
-
-            vkCmdBindIndexBuffer(
-                _vk_current_command_buffer,
-                vertex->m_vk_index_buffer,
-                0,
-                VK_INDEX_TYPE_UINT32);
-
-            vkCmdDrawIndexed(
-                _vk_current_command_buffer,
-                (uint32_t)vertex->m_vertex_point_count,
-                1,
-                0,
-                0,
-                0);
-        }
-        //////////////////////////////////////////////////////////////////////////////////
+                //////////////////////////////////////////////////////////////////////////////////
         void cmd_draw_indexed_ex(
             jevk12_vertex* vertex,
             uint32_t index_count,
@@ -4612,23 +4558,7 @@ namespace jeecs::graphic::api::vk120
         context->destroy_uniform_buffer(static_cast<jevk12_uniformbuf*>(ubuffer->m_handle.m_ptr));
     }
 
-    void draw_vertex_with_shader(je_GraphicImplContext ctx, jegl_vertex* vertex)
-    {
-        jegl_vk120_context* context =
-            static_cast<jegl_vk120_context*>(ctx);
-
-        context->cmd_draw_vertex(
-            static_cast<jevk12_vertex*>(vertex->m_handle.m_ptr));
-    }
-
-    bool bind_shader(je_GraphicImplContext ctx, jegl_shader* shader)
-    {
-        jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
-
-        auto* shader_instance = static_cast<jevk12_shader*>(shader->m_handle.m_ptr);
-        return context->cmd_bind_shader_pipeline(shader_instance);
-    }
-    void bind_uniform_buffer(je_GraphicImplContext ctx, jegl_uniform_buffer* uniformbuf)
+            void bind_uniform_buffer(je_GraphicImplContext ctx, jegl_uniform_buffer* uniformbuf)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
         jevk12_uniformbuf* uniformbuf_instance =
@@ -4649,136 +4579,7 @@ namespace jeecs::graphic::api::vk120
             texture_instance->m_vk_texture_image_view);
     }
 
-    void set_rend_to_framebuffer(
-        je_GraphicImplContext ctx,
-        jegl_frame_buffer* framebuf,
-        const int32_t(*viewport_xywh)[4],
-        const jegl_frame_buffer_clear_operation* clear_operations)
-    {
-        jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
-
-        jevk12_framebuffer* target_framebuf = nullptr;
-
-        // Reset current binded shader.
-        context->_vk_current_binded_shader = nullptr;
-
-        if (framebuf != nullptr)
-            target_framebuf = static_cast<jevk12_framebuffer*>(
-                framebuf->m_handle.m_ptr);
-
-        int32_t x = 0, y = 0, w = 0, h = 0;
-        if (viewport_xywh != nullptr)
-        {
-            auto& vp = *viewport_xywh;
-            x = vp[0];
-            y = vp[1];
-            w = vp[2];
-            h = vp[3];
-        }
-        context->cmd_begin_frame_buffer(target_framebuf, x, y, w, h);
-
-        while (clear_operations != nullptr)
-        {
-            switch (clear_operations->m_type)
-            {
-            case jegl_frame_buffer_clear_operation::clear_type::COLOR:
-                context->cmd_clear_frame_buffer_color(
-                    clear_operations->m_color.m_color_attachment_idx,
-                    clear_operations->m_color.m_clear_color_rgba);
-                break;
-            case jegl_frame_buffer_clear_operation::clear_type::DEPTH:
-                if (target_framebuf == nullptr || target_framebuf->m_depth_attachment != nullptr)
-                    context->cmd_clear_frame_buffer_depth(
-                        clear_operations->m_depth.m_clear_depth);
-                break;
-            default:
-                jeecs::debug::logfatal("Unknown framebuffer clear operation.");
-                abort();
-                break;
-            }
-            clear_operations = clear_operations->m_next;
-        }
-    }
-
-    void set_uniform(
-        je_GraphicImplContext ctx,
-        uint32_t location,
-        jegl_shader::uniform_type type,
-        const void* val)
-    {
-        jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
-
-        auto* current_shader = context->_vk_current_binded_shader;
-
-        if (location == jeecs::graphic::INVALID_UNIFORM_LOCATION)
-            return;
-
-        assert(current_shader->m_uniform_cpu_buffer_size != 0);
-        assert(current_shader->m_uniform_cpu_buffer != nullptr);
-
-        size_t data_size_byte_length = 0;
-
-        void* target_buffer = current_shader->m_uniform_cpu_buffer + location;
-        switch (type)
-        {
-        case jegl_shader::INT:
-        case jegl_shader::FLOAT:
-            data_size_byte_length = 4;
-            break;
-        case jegl_shader::INT2:
-        case jegl_shader::FLOAT2:
-            data_size_byte_length = 8;
-            break;
-        case jegl_shader::INT3:
-        case jegl_shader::FLOAT3:
-            data_size_byte_length = 12;
-            break;
-        case jegl_shader::INT4:
-        case jegl_shader::FLOAT4:
-            data_size_byte_length = 16;
-            break;
-        case jegl_shader::FLOAT2X2:
-            data_size_byte_length = 16;
-            break;
-        case jegl_shader::FLOAT3X3:
-        {
-            // 3x3 矩阵需要特殊处理，每行按 16 字节对齐
-            float* target_storage = static_cast<float*>(target_buffer);
-            const float* source_storage = static_cast<const float*>(val);
-
-            // 检查数据是否已经相同，避免不必要的更新
-            bool needs_update = 
-                memcmp(target_storage, source_storage, 12) != 0 ||
-                memcmp(target_storage + 4, source_storage + 3, 12) != 0 ||
-                memcmp(target_storage + 8, source_storage + 6, 12) != 0;
-
-            if (!needs_update)
-                return;
-
-            memcpy(target_storage, source_storage, 12);
-            memcpy(target_storage + 4, source_storage + 3, 12);
-            memcpy(target_storage + 8, source_storage + 6, 12);
-
-            current_shader->m_uniform_cpu_buffer_updated = true;
-            return;
-        }
-        case jegl_shader::FLOAT4X4:
-            data_size_byte_length = 64;
-            break;
-        default:
-            jeecs::debug::logerr("Unknown uniform variable type to set.");
-            return;
-        }
-
-        // 检查数据是否已经相同，避免不必要的更新
-        if (memcmp(target_buffer, val, data_size_byte_length) == 0)
-            return;
-
-        memcpy(target_buffer, val, data_size_byte_length);
-        current_shader->m_uniform_cpu_buffer_updated = true;
-    }
-
-    /////////////////////////////////////////////////////////////////////////
+            /////////////////////////////////////////////////////////////////////////
     // Render API (v2)
     /////////////////////////////////////////////////////////////////////////
 
@@ -5143,18 +4944,8 @@ void jegl_using_vk120_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->framebuffer_close = close_framebuffer;
     write_to_apis->ubuffer_close = close_ubuffer;
 
-    write_to_apis->bind_uniform_buffer = bind_uniform_buffer;
-    write_to_apis->bind_texture_2d = bind_texture<jegl_texture_2d>;
-    write_to_apis->bind_texture_3d = bind_texture<jegl_texture_3d>;
-    write_to_apis->bind_texture_array = bind_texture<jegl_texture_array>;
-    write_to_apis->bind_texture_cube = bind_texture<jegl_texture_cube>;
-    write_to_apis->bind_texture_msaa = bind_texture<jegl_texture_msaa>;
-    write_to_apis->bind_shader = bind_shader;
-    write_to_apis->draw_vertex = draw_vertex_with_shader;
 
-    write_to_apis->bind_framebuf = set_rend_to_framebuffer;
 
-    write_to_apis->set_uniform = set_uniform;
 
     write_to_apis->m_render_apis = &_jegl_vk120_render_apis;
 }

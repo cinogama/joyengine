@@ -229,8 +229,6 @@ namespace jeecs::graphic::api::metal
         bool m_uniform_buffer_updated;
         void* m_uniform_cpu_buffer;
 
-        bool m_draw_for_r2b;
-
         size_t m_command_commit_round;
         size_t m_next_allocate_uniform_buffer_index;
         std::vector<MTL::Buffer*> m_allocated_uniform_buffers;
@@ -281,7 +279,6 @@ namespace jeecs::graphic::api::metal
             : m_shared_state(blob->m_shared_state)
             , m_uniform_cpu_buffer_size(blob->m_uniform_size)
             , m_uniform_buffer_updated(false)
-            , m_draw_for_r2b(false)
             , m_command_commit_round(0)
             , m_next_allocate_uniform_buffer_index(0)
         {
@@ -1542,162 +1539,7 @@ namespace jeecs::graphic::api::metal
         metal_context->m_render_states.m_current_command_encoder->setFragmentTexture(
             texture_instance->m_texture, (uint32_t)pass);
     }
-    void set_uniform(
-        je_GraphicImplContext ctx,
-        uint32_t location,
-        jegl_shader::uniform_type type,
-        const void* val)
-    {
-        auto* metal_context = static_cast<jegl_metal_context*>(ctx);
-        auto* current_shader = metal_context->m_render_states.m_current_target_shader;
-
-        if (location == jeecs::graphic::INVALID_UNIFORM_LOCATION)
-            return;
-
-        void* target_buffer = static_cast<void*>(
-            static_cast<char*>(
-                current_shader->m_uniform_cpu_buffer) + location);
-
-        size_t data_size_byte_length = 0;
-        switch (type)
-        {
-        case jegl_shader::INT:
-        case jegl_shader::FLOAT:
-            data_size_byte_length = 4;
-            break;
-        case jegl_shader::INT2:
-        case jegl_shader::FLOAT2:
-            data_size_byte_length = 8;
-            break;
-        case jegl_shader::INT3:
-        case jegl_shader::FLOAT3:
-            data_size_byte_length = 12;
-            break;
-        case jegl_shader::INT4:
-        case jegl_shader::FLOAT4:
-            data_size_byte_length = 16;
-            break;
-        case jegl_shader::FLOAT2X2:
-            data_size_byte_length = 16;
-            break;
-        case jegl_shader::FLOAT3X3:
-        {
-            // 3x3 矩阵需要特殊处理，每行按 16 字节对齐
-            float* target_storage = static_cast<float*>(target_buffer);
-            const float* source_storage = static_cast<const float*>(val);
-
-            // 检查数据是否已经相同，避免不必要的更新
-            bool needs_update = 
-                memcmp(target_storage, source_storage, 12) != 0 ||
-                memcmp(target_storage + 4, source_storage + 3, 12) != 0 ||
-                memcmp(target_storage + 8, source_storage + 6, 12) != 0;
-
-            if (!needs_update)
-                return;
-
-            memcpy(target_storage, source_storage, 12);
-            memcpy(target_storage + 4, source_storage + 3, 12);
-            memcpy(target_storage + 8, source_storage + 6, 12);
-
-            current_shader->m_uniform_buffer_updated = true;
-            return;
-        }
-        case jegl_shader::FLOAT4X4:
-            data_size_byte_length = 64;
-            break;
-        default:
-            jeecs::debug::logerr("Unknown uniform variable type to set.");
-            return;
-        }
-
-        // 检查数据是否已经相同，避免不必要的更新
-        if (memcmp(target_buffer, val, data_size_byte_length) == 0)
-            return;
-
-        memcpy(target_buffer, val, data_size_byte_length);
-        current_shader->m_uniform_buffer_updated = true;
-    }
-
-    void draw_vertex_with_shader(je_GraphicImplContext ctx, jegl_vertex* res)
-    {
-        auto* metal_context = static_cast<jegl_metal_context*>(ctx);
-        auto* vertex_instance =
-            static_cast<metal_vertex*>(res->m_handle.m_ptr);
-
-        auto* current_shader = metal_context->m_render_states.m_current_target_shader;
-        assert(current_shader != nullptr);
-
-        if (current_shader->m_uniform_cpu_buffer_size != 0)
-        {
-            if (metal_context->m_render_states.m_current_target_framebuffer_may_null == nullptr)
-            {
-                if (current_shader->m_draw_for_r2b)
-                {
-                    // 正准备渲染到屏幕，但是此前shader被用于渲染到缓冲区，重置 NDC 矫正
-                    const float ndc_scale[4] = { 1.f, 1.f, 1.f, 1.f };
-
-                    current_shader->m_draw_for_r2b = false;
-                    set_uniform(
-                        ctx,
-                        current_shader->m_ndc_scale_uniform_id,
-                        jegl_shader::uniform_type::FLOAT4,
-                        ndc_scale);
-                }
-            }
-            else
-            {
-                if (!current_shader->m_draw_for_r2b)
-                {
-                    // 和上面的情况相反，准备渲染到缓冲区，准备 NDC 矫正
-                    const float ndc_scale_r2b[4] = { 1.f, -1.f, 1.f, 1.f };
-                    current_shader->m_draw_for_r2b = true;
-                    set_uniform(
-                        ctx,
-                        current_shader->m_ndc_scale_uniform_id,
-                        jegl_shader::uniform_type::FLOAT4,
-                        ndc_scale_r2b);
-                }
-            }
-        }
-
-        metal_context->m_render_states.m_current_command_encoder->setVertexBuffer(
-            vertex_instance->m_vertex_buffer, 0, vertex_instance->m_vertex_stride, 0);
-
-        // Binding shader uniform. 仅当 shader 存在 uniform 时才分配/绑定 UBO，
-        // 避免为无 uniform 的 shader 分配 0 字节 buffer。
-        if (current_shader->m_uniform_cpu_buffer_size != 0)
-        {
-            MTL::Buffer* current_shader_uniform_buffer;
-            if (current_shader->m_uniform_buffer_updated)
-            {
-                current_shader->m_uniform_buffer_updated = false;
-                current_shader_uniform_buffer = current_shader->allocate_buffer_to_update(metal_context);
-
-                // 将CPU端的uniform数据更新到GPU缓冲区
-                void* buffer_contents = current_shader_uniform_buffer->contents();
-                memcpy(
-                    buffer_contents,
-                    current_shader->m_uniform_cpu_buffer,
-                    current_shader->m_uniform_cpu_buffer_size);
-            }
-            else
-                current_shader_uniform_buffer = current_shader->get_last_usable_buffer(metal_context);
-
-            metal_context->m_render_states.m_current_command_encoder->setVertexBuffer(
-                current_shader_uniform_buffer, 0, 0 + 1);
-            metal_context->m_render_states.m_current_command_encoder->setFragmentBuffer(
-                current_shader_uniform_buffer, 0, 0 + 1);
-        }
-
-        metal_context->m_render_states.m_current_command_encoder->drawIndexedPrimitives(
-            vertex_instance->m_primitive_type,
-            vertex_instance->m_index_count,
-            MTL::IndexType::IndexTypeUInt32,
-            vertex_instance->m_index_buffer,
-            0);
-    }
-
-    void set_framebuffer_clear(
+            void set_framebuffer_clear(
         jegl_metal_context* metal_context,
         metal_framebuffer* fb_maynull,
         const jegl_frame_buffer_clear_operation* clear_operations)
@@ -2421,18 +2263,8 @@ void jegl_using_metal_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->framebuffer_close = close_framebuffer;
     write_to_apis->ubuffer_close = close_ubuffer;
 
-    write_to_apis->bind_uniform_buffer = bind_uniform_buffer;
-    write_to_apis->bind_texture_2d = bind_texture<jegl_texture_2d>;
-    write_to_apis->bind_texture_3d = bind_texture<jegl_texture_3d>;
-    write_to_apis->bind_texture_array = bind_texture<jegl_texture_array>;
-    write_to_apis->bind_texture_cube = bind_texture<jegl_texture_cube>;
-    write_to_apis->bind_texture_msaa = bind_texture<jegl_texture_msaa>;
-    write_to_apis->bind_shader = bind_shader;
-    write_to_apis->draw_vertex = draw_vertex_with_shader;
 
-    write_to_apis->bind_framebuf = bind_framebuffer;
 
-    write_to_apis->set_uniform = set_uniform;
 
     write_to_apis->m_render_apis = &_jegl_metal_render_apis;
 }
