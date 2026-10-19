@@ -4311,11 +4311,10 @@ namespace
     jegl_uniform_slot _woje_action_uniform_slot(
         woje_draw_action* action, const char* name)
     {
-        auto slot = jegl_pipeline_uniform_slot(action->m_pipeline, name);
-        if (slot.m_offset == JEGL_UNIFORM_SLOT_NONE)
-            jeecs::debug::logerr(
-                "Uniform `%s` is not declared by the current shader.", name);
-        return slot;
+        // Editor shaders do not necessarily consume every builtin uniform
+        // (e.g. a gizmo shader may use only JE_MVP). Absent uniforms are a
+        // normal optional case here; the typed setters below skip them.
+        return jegl_pipeline_uniform_slot(action->m_pipeline, name);
     }
 }
 
