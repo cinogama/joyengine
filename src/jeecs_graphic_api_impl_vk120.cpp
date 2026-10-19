@@ -2398,42 +2398,11 @@ namespace jeecs::graphic::api::vk120
             if (vk_validation_layer_supported)
                 required_extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS
-            // MoltenVK 需要显式启用 portability 扩展。
-            required_extensions.push_back("VK_KHR_portability_enumeration");
-            instance_create_info.flags |= 0x00000001; // VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR
-#endif
-
             instance_create_info.enabledExtensionCount = (uint32_t)required_extensions.size();
             instance_create_info.ppEnabledExtensionNames = required_extensions.data();
 
-            uint32_t loader_api_version = VK_API_VERSION_1_0;
-            if (vkEnumerateInstanceVersion != nullptr)
-            {
-                if (vkEnumerateInstanceVersion(&loader_api_version) != VK_SUCCESS)
-                    loader_api_version = VK_API_VERSION_1_0;
-            }
-            if (loader_api_version < VK_API_VERSION_1_0)
-                loader_api_version = VK_API_VERSION_1_0;
-
-            application_info.apiVersion =
-                loader_api_version < VK_API_VERSION_1_2
-                ? loader_api_version
-                : VK_API_VERSION_1_2;
-
             VkResult create_instance_result = vkCreateInstance(
                 &instance_create_info, nullptr, &_vk_instance);
-
-            if (create_instance_result == VK_ERROR_INCOMPATIBLE_DRIVER
-                && application_info.apiVersion > VK_API_VERSION_1_0)
-            {
-                jeecs::debug::logwarn(
-                    "VK120: instance creation failed for API version %u, retrying with 1.0.",
-                    application_info.apiVersion);
-                application_info.apiVersion = VK_API_VERSION_1_0;
-                create_instance_result = vkCreateInstance(
-                    &instance_create_info, nullptr, &_vk_instance);
-            }
 
             if (create_instance_result != VK_SUCCESS)
             {
@@ -2518,9 +2487,6 @@ namespace jeecs::graphic::api::vk120
             std::vector<const char*> required_device_extensions = {
                 VK_KHR_SWAPCHAIN_EXTENSION_NAME,
             };
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS
-            required_device_extensions.push_back("VK_KHR_portability_subset");
-#endif
 
             _vk_device = nullptr;
             int best_device_score = -1;
