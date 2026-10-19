@@ -1304,7 +1304,10 @@ void _jegl_cmd_begin_deferred_draw(
     assert(pipeline != nullptr);
     assert(vertex != nullptr);
     assert(cmd->m_in_pass);
-    assert(!cmd->m_pending_draw);
+    // Flush the previous deferred draw before starting a new one. Callers
+    // such as the Woolang bindings may rely on "draw, set uniforms, draw"
+    // without explicitly ending the previous action.
+    cmd->flush_pending_draw();
     assert(index_count > 0);
     assert(instance_count > 0);
 
