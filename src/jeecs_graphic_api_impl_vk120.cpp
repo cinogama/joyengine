@@ -360,6 +360,7 @@ namespace jeecs::graphic::api::vk120
         VkDeviceMemory m_vk_vertex_buffer_memory = VK_NULL_HANDLE;
         VkDeviceSize m_vertex_memory_offset = 0;
         VkDeviceSize m_vertex_memory_size = 0;
+        void* m_mapped = nullptr;
 
         VkBuffer m_vk_index_buffer = VK_NULL_HANDLE;
         VkDeviceMemory m_vk_index_buffer_memory = VK_NULL_HANDLE;
@@ -925,6 +926,7 @@ namespace jeecs::graphic::api::vk120
                 VkDeviceMemory m_memory = VK_NULL_HANDLE;
                 VkDeviceSize m_size = 0;
                 uint32_t m_memory_type = 0;
+                void* m_mapped = nullptr;
                 std::vector<std::pair<VkDeviceSize, VkDeviceSize>> m_free_ranges;
             };
             struct allocation
@@ -932,6 +934,7 @@ namespace jeecs::graphic::api::vk120
                 VkDeviceMemory m_memory = VK_NULL_HANDLE;
                 VkDeviceSize m_offset = 0;
                 VkDeviceSize m_size = 0;
+                void* m_mapped = nullptr;
             };
 
             jegl_vk120_context* m_context = nullptr;
@@ -949,10 +952,32 @@ namespace jeecs::graphic::api::vk120
             {
                 for (auto& block : m_blocks)
                 {
+                    if (block.m_mapped != nullptr)
+                    {
+                        m_context->vkUnmapMemory(
+                            m_context->_vk_logic_device, block.m_memory);
+                        block.m_mapped = nullptr;
+                    }
                     if (block.m_memory != VK_NULL_HANDLE)
                         m_context->vkFreeMemory(
                             m_context->_vk_logic_device, block.m_memory, nullptr);
                 }
+            }
+
+            // 一个 VkDeviceMemory 同一时间只能被 map 一次。host-visible block
+            // 在创建/首次使用时整体持久映射，子分配只使用 mapped + offset。
+            void ensure_block_mapped(block& target, bool host_visible)
+            {
+                if (!host_visible || target.m_mapped != nullptr)
+                    return;
+
+                JE_VK_CHECK(m_context->vkMapMemory(
+                    m_context->_vk_logic_device,
+                    target.m_memory,
+                    0,
+                    target.m_size,
+                    0,
+                    &target.m_mapped));
             }
 
             static VkDeviceSize align_up(VkDeviceSize value, VkDeviceSize alignment)
@@ -1008,6 +1033,9 @@ namespace jeecs::graphic::api::vk120
                     out.m_memory = target.m_memory;
                     out.m_offset = aligned;
                     out.m_size = size;
+                    out.m_mapped = target.m_mapped != nullptr
+                        ? (uint8_t*)target.m_mapped + aligned
+                        : nullptr;
                     return true;
                 }
                 return false;
@@ -1022,11 +1050,15 @@ namespace jeecs::graphic::api::vk120
                     std::max(requirements.alignment, extra_alignment);
                 const uint32_t memory_type = m_context->find_memory_type(
                     requirements.memoryTypeBits, properties);
+                const bool host_visible =
+                    0 != (properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
                 for (auto& block : m_blocks)
                 {
                     if (block.m_memory_type != memory_type)
                         continue;
+
+                    ensure_block_mapped(block, host_visible);
 
                     allocation result;
                     if (try_allocate_from_block(
@@ -1036,10 +1068,9 @@ namespace jeecs::graphic::api::vk120
                     }
                 }
 
-                const VkDeviceSize default_block_size =
-                    (0 != (properties & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))
-                    ? m_default_device_block_size
-                    : m_default_host_block_size;
+                const VkDeviceSize default_block_size = host_visible
+                    ? m_default_host_block_size
+                    : m_default_device_block_size;
                 VkDeviceSize block_size = std::max<VkDeviceSize>(
                     default_block_size, requirements.size + alignment);
                 block_size = align_up(block_size, 4096);
@@ -1063,6 +1094,8 @@ namespace jeecs::graphic::api::vk120
                 new_block.m_memory_type = memory_type;
                 new_block.m_free_ranges.push_back({ 0, block_size });
                 m_blocks.push_back(std::move(new_block));
+
+                ensure_block_mapped(m_blocks.back(), host_visible);
 
                 allocation result;
                 if (!try_allocate_from_block(
@@ -1305,15 +1338,8 @@ namespace jeecs::graphic::api::vk120
                 &frame.m_ubo_ring_buffer,
                 &frame.m_ubo_ring_memory,
                 &frame.m_ubo_ring_memory_offset,
-                &frame.m_ubo_ring_memory_size);
-
-            JE_VK_CHECK(vkMapMemory(
-                _vk_logic_device,
-                frame.m_ubo_ring_memory,
-                frame.m_ubo_ring_memory_offset,
-                UBO_RING_SIZE,
-                0,
-                &frame.m_ubo_ring_mapped));
+                &frame.m_ubo_ring_memory_size,
+                &frame.m_ubo_ring_mapped);
 
             frame.m_ubo_ring_size = UBO_RING_SIZE;
             frame.m_ubo_ring_offset = 0;
@@ -1368,8 +1394,6 @@ namespace jeecs::graphic::api::vk120
         {
             for (auto& frame : _vk_frames)
             {
-                if (frame.m_ubo_ring_mapped != nullptr)
-                    vkUnmapMemory(_vk_logic_device, frame.m_ubo_ring_memory);
                 if (frame.m_ubo_ring_buffer != VK_NULL_HANDLE)
                     vkDestroyBuffer(_vk_logic_device, frame.m_ubo_ring_buffer, nullptr);
                 if (frame.m_ubo_ring_memory != VK_NULL_HANDLE)
@@ -2856,7 +2880,8 @@ namespace jeecs::graphic::api::vk120
             VkBuffer* out_device_buffer,
             VkDeviceMemory* out_device_memory,
             VkDeviceSize* out_memory_offset = nullptr,
-            VkDeviceSize* out_memory_size = nullptr)
+            VkDeviceSize* out_memory_size = nullptr,
+            void** out_mapped = nullptr)
         {
             VkBufferCreateInfo buffer_create_info = {};
             buffer_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -2888,6 +2913,8 @@ namespace jeecs::graphic::api::vk120
                 *out_memory_offset = allocation.m_offset;
             if (out_memory_size != nullptr)
                 *out_memory_size = allocation.m_size;
+            if (out_mapped != nullptr)
+                *out_mapped = allocation.m_mapped;
 
             JE_VK_CHECK(vkBindBufferMemory(
                 _vk_logic_device,
@@ -3248,30 +3275,27 @@ namespace jeecs::graphic::api::vk120
                 &vertex->m_vk_vertex_buffer,
                 &vertex->m_vk_vertex_buffer_memory,
                 &vertex->m_vertex_memory_offset,
-                &vertex->m_vertex_memory_size);
+                &vertex->m_vertex_memory_size,
+                &vertex->m_mapped);
 
             if (vertex_data_size != 0 && resource->m_vertexs != nullptr)
             {
-                void* vertex_buffer_memory_ptr = nullptr;
-                JE_VK_CHECK(vkMapMemory(
-                    _vk_logic_device,
-                    vertex->m_vk_vertex_buffer_memory,
-                    vertex->m_vertex_memory_offset,
-                    vertex_buffer_size,
-                    0,
-                    &vertex_buffer_memory_ptr));
+                if (vertex->m_mapped == nullptr)
+                {
+                    jeecs::debug::logfatal(
+                        "VK120: vertex buffer memory is not host-visible.");
+                }
+
                 memcpy(
-                    vertex_buffer_memory_ptr,
+                    vertex->m_mapped,
                     resource->m_vertexs,
                     vertex_data_size);
-                vkUnmapMemory(
-                    _vk_logic_device,
-                    vertex->m_vk_vertex_buffer_memory);
             }
 
             // 创建索引缓冲区：按分配容量上传（m_index_count 可能已被
             // jegl_update_vertex_buffer 收缩为激活数量，绘制数量另存于
             // m_vertex_point_count）
+            void* index_mapped = nullptr;
             alloc_vk_device_buffer_memory(
                 index_buffer_size,
                 VkBufferUsageFlagBits::VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
@@ -3280,25 +3304,21 @@ namespace jeecs::graphic::api::vk120
                 &vertex->m_vk_index_buffer,
                 &vertex->m_vk_index_buffer_memory,
                 &vertex->m_index_memory_offset,
-                &vertex->m_index_memory_size);
+                &vertex->m_index_memory_size,
+                &index_mapped);
 
             if (index_data_size != 0 && resource->m_indices != nullptr)
             {
-                void* index_buffer_memory_ptr = nullptr;
-                JE_VK_CHECK(vkMapMemory(
-                    _vk_logic_device,
-                    vertex->m_vk_index_buffer_memory,
-                    vertex->m_index_memory_offset,
-                    index_buffer_size,
-                    0,
-                    &index_buffer_memory_ptr));
+                if (index_mapped == nullptr)
+                {
+                    jeecs::debug::logfatal(
+                        "VK120: index buffer memory is not host-visible.");
+                }
+
                 memcpy(
-                    index_buffer_memory_ptr,
+                    index_mapped,
                     resource->m_indices,
                     index_data_size);
-                vkUnmapMemory(
-                    _vk_logic_device,
-                    vertex->m_vk_index_buffer_memory);
             }
 
             vertex->m_vertex_point_count = (uint32_t)resource->m_index_count;
@@ -3769,6 +3789,7 @@ namespace jeecs::graphic::api::vk120
             VkDeviceMemory texture_data_buffer_memory = VK_NULL_HANDLE;
             VkDeviceSize texture_data_memory_offset = 0;
             VkDeviceSize texture_data_memory_size = 0;
+            void* data = nullptr;
 
             alloc_vk_device_buffer_memory(
                 staging_size,
@@ -3778,16 +3799,14 @@ namespace jeecs::graphic::api::vk120
                 &texture_data_buffer,
                 &texture_data_buffer_memory,
                 &texture_data_memory_offset,
-                &texture_data_memory_size);
+                &texture_data_memory_size,
+                &data);
 
-            void* data = nullptr;
-            JE_VK_CHECK(vkMapMemory(
-                _vk_logic_device,
-                texture_data_buffer_memory,
-                texture_data_memory_offset,
-                staging_size,
-                0,
-                &data));
+            if (data == nullptr)
+            {
+                jeecs::debug::logfatal(
+                    "VK120: staging buffer memory is not host-visible.");
+            }
 
             if (full_upload)
             {
@@ -3810,7 +3829,6 @@ namespace jeecs::graphic::api::vk120
                         sub_row_size);
                 }
             }
-            vkUnmapMemory(_vk_logic_device, texture_data_buffer_memory);
 
             transition_image_layout(texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
@@ -4081,7 +4099,8 @@ namespace jeecs::graphic::api::vk120
                 &uniformbuf->m_uniform_buffer,
                 &uniformbuf->m_uniform_buffer_memory,
                 &uniformbuf->m_memory_offset,
-                &uniformbuf->m_memory_size);
+                &uniformbuf->m_memory_size,
+                &uniformbuf->m_mapped);
 
             return uniformbuf;
         }
@@ -4117,16 +4136,17 @@ namespace jeecs::graphic::api::vk120
                 return;
             }
 
-            void* mdata = nullptr;
-            JE_VK_CHECK(vkMapMemory(
-                _vk_logic_device,
-                ubuf->m_uniform_buffer_memory,
-                ubuf->m_memory_offset + (VkDeviceSize)offset,
-                (VkDeviceSize)size,
-                0,
-                &mdata));
-            memcpy(mdata, data, size);
-            vkUnmapMemory(_vk_logic_device, ubuf->m_uniform_buffer_memory);
+            if (ubuf->m_mapped == nullptr)
+            {
+                jeecs::debug::logerr(
+                    "VK120: uniform buffer memory is not persistently mapped.");
+                return;
+            }
+
+            memcpy(
+                (uint8_t*)ubuf->m_mapped + offset,
+                data,
+                size);
         }
         void update_uniform_buffer(jegl_uniform_buffer* resource)
         {
@@ -5402,7 +5422,7 @@ namespace jeecs::graphic::api::vk120
     }
     void update_vertex(je_GraphicImplContext ctx, jegl_vertex* vertex)
     {
-        jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
+        (void)ctx;
         jevk12_vertex* vertex_instance =
             static_cast<jevk12_vertex*>(vertex->m_handle.m_ptr);
 
@@ -5414,29 +5434,17 @@ namespace jeecs::graphic::api::vk120
                     "VK120: vertex update exceeds the allocated buffer size.");
                 return;
             }
-
-            void* vertex_memory_ptr = nullptr;
-            VkResult map_result = context->vkMapMemory(
-                context->_vk_logic_device,
-                vertex_instance->m_vk_vertex_buffer_memory,
-                vertex_instance->m_vertex_memory_offset,
-                vertex->m_vertex_length,
-                0,
-                &vertex_memory_ptr);
-
-            if (map_result != VK_SUCCESS || vertex_memory_ptr == nullptr)
+            if (vertex_instance->m_mapped == nullptr)
             {
-                jeecs::debug::logerr("VK120: failed to map the vertex buffer for update.");
+                jeecs::debug::logerr(
+                    "VK120: vertex buffer memory is not persistently mapped.");
                 return;
             }
 
             memcpy(
-                vertex_memory_ptr,
+                vertex_instance->m_mapped,
                 vertex->m_vertexs,
                 vertex->m_vertex_length);
-            context->vkUnmapMemory(
-                context->_vk_logic_device,
-                vertex_instance->m_vk_vertex_buffer_memory);
         }
 
         vertex_instance->m_vertex_point_count =
