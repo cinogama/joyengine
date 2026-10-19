@@ -2819,59 +2819,11 @@ void jegui_init_basic(
     _je_gui_tls_ctx._jegl_get_native_texture = get_img_res;
     _je_gui_tls_ctx._jegl_bind_shader_sampler_state = apply_shader_sampler;
 
-    _je_gui_tls_ctx._jegl_rend_texture_shader = jeecs::graphic::shader::create(
-        gl_context,
-        "!/builtin/imgui_image_displayer.shader",
-        R"(
-import je::shader;
-import pkg::woshader;
-
-using woshader;
-using je::shader;
-
-ZTEST   (NEVER);
-ZWRITE  (DISABLE);
-CULL    (NONE);
-
-WOSHADER_VERTEX_IN!
-    using vin = struct
-    {
-        vertex: float3,
-        uv: float2,
-    };
-    
-WOSHADER_VERTEX_TO_FRAGMENT!
-    using v2f = struct{
-        pos: float4,
-        uv: float2,
-    };
-    
-WOSHADER_FRAGMENT_OUT!
-    using fout = struct{
-        color: float4,
-    };
-    
-public func vert(v: vin)
-{
-    return v2f{
-        pos = vec4!(v.vertex, 1.),
-        uv = v.uv,
-    };
-}
-
-let nearest_clamp = 
-    Sampler2D::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
-
-WOSHADER_UNIFORM!
-    let Main = texture2d::uniform(0, nearest_clamp);
-    
-public func frag(vf: v2f)
-{
-    return fout{
-        color = tex2d(Main, vf.uv),
-    };
-}
-)").value();
+    _je_gui_tls_ctx._jegl_rend_texture_shader =
+        jeecs::graphic::shader::load(
+            gl_context,
+            "!/builtin/shader/internal/imgui_image_displayer.shader")
+            .value();
 
     _je_gui_tls_ctx._jegui_imgui_config_path =
         jeecs_file_get_host_path() + std::string("/builtin/imgui.ini.je4cache");

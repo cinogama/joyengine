@@ -253,9 +253,10 @@ namespace JEEditor::Editor
         }
         
         // 为新项目准备资源目录：在项目根目录下创建 resource/，再把宿主
-        // builtin/shader 下的内置着色器整体拷贝成 resource/shader，便于项目
-        // 直接引用或改造；最后按 project.gitignore / project.gitattribute
-        // 模板在项目根写入 .gitignore 与 .gitattributes。
+        // builtin/shader 下的公开着色器拷贝成 resource/shader，便于项目
+        // 直接引用或改造；internal/ 是引擎内部管线私有着色器，不随项目
+        // 拷贝。最后按 project.gitignore / project.gitattribute 模板在项目
+        // 根写入 .gitignore 与 .gitattributes。
         // 任一步失败都返回错误描述，调用方据此提示，
         // 此时尚未写入项目文件，目录不会被当作有效项目打开。
         func initProjectResources(project_dir: path_t)=> result<void, string>
@@ -265,11 +266,19 @@ namespace JEEditor::Editor
                 -> or_map(\e = F"创建资源目录 \"{resource_dir->to_string}\" 失败：{e}";);
                 
             let bulitin_path = normalize(host_path()) / "builtin";
+            let shader_src_dir = bulitin_path / "shader";
             let shader_dst = resource_dir / "shader";
             let font_dst = resource_dir / "font";
             
-            try! _ = copy(bulitin_path / "shader", shader_dst)
-                -> or_map(\e = F"拷贝内置着色器到 \"{shader_dst->to_string}\" 失败：{e}";);
+            try! _ = mkdir(shader_dst)
+                -> or_map(\e = F"创建着色器目录 \"{shader_dst->to_string}\" 失败：{e}";);
+                
+            for (let shader_file : walk(shader_src_dir) |> iterator::iter_result
+                    |> iterator::filter(\p = isfile(p);))
+            {
+                try! _ = copy(shader_file, shader_dst / filename(shader_file))
+                    -> or_map(\e = F"拷贝内置着色器 \"{shader_file->to_string}\" 失败：{e}";);
+            }
                 
             try! _ = copy(bulitin_path / "font", font_dst)
                 -> or_map(\e = F"拷贝内置字体到 \"{font_dst->to_string}\" 失败：{e}";);
