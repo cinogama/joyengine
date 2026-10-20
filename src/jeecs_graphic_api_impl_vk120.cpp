@@ -563,7 +563,6 @@ namespace jeecs::graphic::api::vk120
             VkCommandBuffer m_command_buffer = VK_NULL_HANDLE;
             VkFence m_fence = VK_NULL_HANDLE;
             VkSemaphore m_image_available = VK_NULL_HANDLE;
-            VkSemaphore m_render_finished = VK_NULL_HANDLE;
             VkDescriptorPool m_descriptor_pool = VK_NULL_HANDLE;
 
             VkBuffer m_ubo_ring_buffer = VK_NULL_HANDLE;
@@ -1169,6 +1168,12 @@ namespace jeecs::graphic::api::vk120
         VkSwapchainKHR _vk_swapchain = VK_NULL_HANDLE;
         std::vector<swapchain_image_content*> _vk_swapchain_images;
 
+        // 每个交换链图像一个 render-finished 信号量。按帧槽复用会让信号量
+        // 在 present 仍等待它时被下一次提交再次 signal（VUID-vkQueueSubmit-
+        // pSignalSemaphores-00067）。重新 acquire 同一张图即可保证其 present
+        // 已完成，此时复用对应信号量是安全的。
+        std::vector<VkSemaphore> _vk_image_render_finished_semaphores;
+
         VkSampler _vk_dear_imgui_sampler = VK_NULL_HANDLE;
         VkDescriptorPool _vk_dear_imgui_descriptor_pool = VK_NULL_HANDLE;
 
@@ -1193,7 +1198,6 @@ namespace jeecs::graphic::api::vk120
         bool _vk_frame_has_swapchain_image = false;
 
         bool _vk_pending_present = false;
-        uint32_t _vk_pending_present_frame = 0;
         uint32_t _vk_pending_present_image_index = UINT32_MAX;
         bool _vk_swapchain_out_of_date = false;
         bool _vk_imgui_initialized = false;
@@ -1376,7 +1380,6 @@ namespace jeecs::graphic::api::vk120
 
                 frame.m_fence = create_fence(true);
                 frame.m_image_available = create_semaphore();
-                frame.m_render_finished = create_semaphore();
                 frame.m_recording = false;
                 frame.m_has_swapchain_image = false;
                 frame.m_submitted = false;
@@ -1406,7 +1409,6 @@ namespace jeecs::graphic::api::vk120
 
                 destroy_fence(frame.m_fence);
                 destroy_semaphore(frame.m_image_available);
-                destroy_semaphore(frame.m_render_finished);
 
                 if (frame.m_descriptor_pool != VK_NULL_HANDLE)
                 {
@@ -1442,8 +1444,11 @@ namespace jeecs::graphic::api::vk120
             const std::vector<jevk12_texture*>& color_attachments,
             jevk12_texture* resolve_attachment,
             jevk12_texture* depth_attachment,
+            VkImageLayout color_initial_layout,
             VkImageLayout color_final_layout,
+            VkImageLayout resolve_initial_layout,
             VkImageLayout resolve_final_layout,
+            VkImageLayout depth_initial_layout,
             VkImageLayout depth_final_layout,
             VkSampleCountFlagBits sample_count)
         {
@@ -1462,13 +1467,6 @@ namespace jeecs::graphic::api::vk120
                 depth_attachment != nullptr ? depth_attachment->m_vk_texture_format : VK_FORMAT_UNDEFINED;
             const VkFormat resolve_format =
                 resolve_attachment != nullptr ? resolve_attachment->m_vk_texture_format : VK_FORMAT_UNDEFINED;
-
-            const VkImageLayout color_initial_layout =
-                color_attachments.empty() ? color_final_layout : color_attachments.front()->m_current_layout;
-            const VkImageLayout depth_initial_layout =
-                depth_attachment != nullptr ? depth_attachment->m_current_layout : depth_final_layout;
-            const VkImageLayout resolve_initial_layout =
-                resolve_attachment != nullptr ? resolve_attachment->m_current_layout : resolve_final_layout;
 
             render_pass_key_t key{
                 color_formats,
@@ -1713,11 +1711,18 @@ namespace jeecs::graphic::api::vk120
                     attachment_depth, result->m_depth_final_layout);
             }
 
+            // 屏幕 framebuffer 的交换链图像在 acquire 前不能 transition，
+            // 首帧会在自己的命令缓冲里从 UNDEFINED 迁到 PRESENT_SRC；
+            // render pass 的 canonical initial layout 仍按 PRESENT_SRC 记录。
             result->m_color_initial_layout = attachment_colors.empty()
                 ? result->m_color_final_layout
-                : attachment_colors.front()->m_current_layout;
+                : (is_screen_framebuffer && sample_count == VK_SAMPLE_COUNT_1_BIT
+                    ? final_layout
+                    : attachment_colors.front()->m_current_layout);
             result->m_resolve_initial_layout = resolve_attachment != nullptr
-                ? resolve_attachment->m_current_layout
+                ? (is_screen_framebuffer
+                    ? final_layout
+                    : resolve_attachment->m_current_layout)
                 : result->m_resolve_final_layout;
             result->m_depth_initial_layout = attachment_depth != nullptr
                 ? attachment_depth->m_current_layout
@@ -1727,8 +1732,11 @@ namespace jeecs::graphic::api::vk120
                 attachment_colors,
                 resolve_attachment,
                 attachment_depth,
+                result->m_color_initial_layout,
                 result->m_color_final_layout,
+                result->m_resolve_initial_layout,
                 result->m_resolve_final_layout,
+                result->m_depth_initial_layout,
                 result->m_depth_final_layout,
                 sample_count);
 
@@ -1793,6 +1801,11 @@ namespace jeecs::graphic::api::vk120
                 delete image;
 
             _vk_swapchain_images.clear();
+
+            for (auto semaphore : _vk_image_render_finished_semaphores)
+                destroy_semaphore(semaphore);
+            _vk_image_render_finished_semaphores.clear();
+
             _vk_current_swapchain_image_content = nullptr;
             _vk_presenting_swapchain_image_index = UINT32_MAX;
 
@@ -2102,6 +2115,11 @@ namespace jeecs::graphic::api::vk120
                 swapchain_images.data()));
 
             _vk_swapchain_images.resize(swapchain_real_image_count);
+
+            _vk_image_render_finished_semaphores.reserve(swapchain_real_image_count);
+            for (uint32_t i = 0; i < swapchain_real_image_count; ++i)
+                _vk_image_render_finished_semaphores.push_back(create_semaphore());
+
             for (uint32_t i = 0; i < swapchain_real_image_count; ++i)
             {
                 jevk12_texture* color_attachment =
@@ -2112,8 +2130,9 @@ namespace jeecs::graphic::api::vk120
                         used_extent.width,
                         used_extent.height);
 
-                transition_image_layout(
-                    color_attachment, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+                // 交换链图像在 acquire 之前不能做布局转换；首帧会在
+                // begin_frame 后（acquire 之后）把它从 UNDEFINED 迁到
+                // render pass 期望的 PRESENT_SRC。
 
                 jevk12_texture* msaa_attachment = nullptr;
                 jevk12_texture* framebuffer_color = color_attachment;
@@ -2338,7 +2357,6 @@ namespace jeecs::graphic::api::vk120
             _vk_frame_recording = false;
             _vk_frame_has_swapchain_image = false;
             _vk_pending_present = false;
-            _vk_pending_present_frame = 0;
             _vk_pending_present_image_index = UINT32_MAX;
             _vk_presenting_swapchain_image_index = UINT32_MAX;
 
@@ -2643,8 +2661,9 @@ namespace jeecs::graphic::api::vk120
             device_create_info.queueCreateInfoCount = (uint32_t)queue_create_infos.size();
             device_create_info.pQueueCreateInfos = queue_create_infos.data();
 
-            device_create_info.enabledLayerCount = (uint32_t)required_device_layers.size();
-            device_create_info.ppEnabledLayerNames = required_device_layers.data();
+            // 设备层从 Vulkan 1.0 起就不再生效，校验层只应通过 instance 层启用。
+            device_create_info.enabledLayerCount = 0;
+            device_create_info.ppEnabledLayerNames = nullptr;
 
             device_create_info.enabledExtensionCount = (uint32_t)required_device_extensions.size();
             device_create_info.ppEnabledExtensionNames = required_device_extensions.data();
@@ -4255,12 +4274,16 @@ namespace jeecs::graphic::api::vk120
             submit_info.pNext = nullptr;
 
             VkSemaphore wait_semaphore = frame.m_image_available;
-            VkSemaphore signal_semaphore = frame.m_render_finished;
+            VkSemaphore signal_semaphore = VK_NULL_HANDLE;
             VkPipelineStageFlags wait_stage =
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
             if (frame.m_has_swapchain_image)
             {
+                signal_semaphore =
+                    _vk_image_render_finished_semaphores[
+                        _vk_presenting_swapchain_image_index];
+
                 submit_info.waitSemaphoreCount = 1;
                 submit_info.pWaitSemaphores = &wait_semaphore;
                 submit_info.pWaitDstStageMask = &wait_stage;
@@ -4282,7 +4305,6 @@ namespace jeecs::graphic::api::vk120
             if (frame.m_has_swapchain_image)
             {
                 _vk_pending_present = true;
-                _vk_pending_present_frame = _vk_current_frame_index;
                 _vk_pending_present_image_index = _vk_presenting_swapchain_image_index;
             }
 
@@ -4347,14 +4369,15 @@ namespace jeecs::graphic::api::vk120
                 return;
             }
 
-            auto& frame = _vk_frames[_vk_pending_present_frame];
+            VkSemaphore render_finished =
+                _vk_image_render_finished_semaphores[_vk_pending_present_image_index];
 
             VkSwapchainKHR swapchains[] = { _vk_swapchain };
             VkPresentInfoKHR present_info = {};
             present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
             present_info.pNext = nullptr;
             present_info.waitSemaphoreCount = 1;
-            present_info.pWaitSemaphores = &frame.m_render_finished;
+            present_info.pWaitSemaphores = &render_finished;
             present_info.swapchainCount = 1;
             present_info.pSwapchains = swapchains;
             present_info.pImageIndices = &_vk_pending_present_image_index;
