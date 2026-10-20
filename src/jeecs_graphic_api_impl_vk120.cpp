@@ -5762,30 +5762,11 @@ namespace jeecs::graphic::api::vk120
             uniform_data,
             uniform_size);
 
-        if (context->_vk_current_shader_resource != nullptr)
-        {
-            const uint32_t ndc_offset =
-                context->_vk_current_shader_resource
-                ->m_builtin_uniforms.m_builtin_uniform_ndc_scale;
-
-            if (ndc_offset != jeecs::graphic::INVALID_UNIFORM_LOCATION
-                && ndc_offset + sizeof(float) * 4 <= uniform_size)
-            {
-                const bool is_screen_target =
-                    context->_vk_current_swapchain_image_content != nullptr
-                    && context->_vk_current_target_framebuffer
-                    == context->_vk_current_swapchain_image_content->m_framebuffer;
-                const float ndc_scale[4] = {
-                    1.f,
-                    is_screen_target ? 1.f : -1.f,
-                    1.f,
-                    1.f };
-                memcpy(
-                    shader_instance->m_uniform_cpu_buffer + ndc_offset,
-                    ndc_scale,
-                    sizeof(ndc_scale));
-            }
-        }
+        // Vulkan 的 NDC y 轴向下：屏幕目标已经用负高度 viewport 翻转，
+        // 离屏目标用正 viewport 渲染时行序与 opengl3 一致（世界“上”落在
+        // 图像末行，即引擎 V=1 的一侧），两者都不需要改 JE_NDC_SCALE。
+        // 与 dx11/metal 不同，这里不能对离屏目标做 y 取反，否则 RT 内容
+        // 在采样时会上下颠倒。
     }
     void render_draw_indexed(
         je_GraphicImplContext ctx,
