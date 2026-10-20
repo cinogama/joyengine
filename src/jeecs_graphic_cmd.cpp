@@ -345,8 +345,10 @@ struct jegl_command_buffer
 
     void reset()
     {
-        assert(!m_in_pass);
-        assert(!m_pending_draw);
+        // 帧可能因图形实现请求 SKIP/STOP（窗口最小化/关闭）而从未提交，
+        // 此时缓冲区仍停留在 pass 内、可能还有挂起的 draw。录制只发生在本侧
+        // CPU 内存，尚未提交到后端，直接丢弃即可，复用前不应因此报错。
+        m_in_pass = false;
 
         release_all_resources();
         m_commands.clear();
