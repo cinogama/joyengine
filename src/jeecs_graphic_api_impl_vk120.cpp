@@ -4937,6 +4937,22 @@ namespace jeecs::graphic::api::vk120
 
                 attachment_state.blendEnable =
                     state.m_blend ? VK_TRUE : VK_FALSE;
+
+                if (!state.m_blend)
+                {
+                    // 混合关闭时混合方程/因子不参与运算，DISABLED/未配置的
+                    // shader 不应被当成非法枚举解析（与 dx11 行为一致）。
+                    attachment_state.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+                    attachment_state.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+                    attachment_state.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+                    attachment_state.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+                    attachment_state.colorBlendOp = VK_BLEND_OP_ADD;
+                    attachment_state.alphaBlendOp = VK_BLEND_OP_ADD;
+                    attachment_state.colorWriteMask =
+                        vk_color_write_mask(state.m_color_write_mask);
+                    continue;
+                }
+
                 attachment_state.srcColorBlendFactor =
                     vk_blend_factor(state.m_blend_src_color);
                 attachment_state.dstColorBlendFactor =
