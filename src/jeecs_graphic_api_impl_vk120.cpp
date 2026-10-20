@@ -1,6 +1,8 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
+#include "jeecs_graphic_render_internal.hpp"
+
 #ifdef JE_ENABLE_VK120_GAPI
 
 #include "jeecs_imgui_backend_api.hpp"
@@ -33,12 +35,30 @@
 #include <optional>
 #include <array>
 #include <list>
+#include <map>
+#include <set>
+#include <tuple>
+#include <unordered_map>
+#include <cstdio>
+#include <cstdlib>
 
 #undef max
 #undef min
 
 namespace jeecs::graphic::api::vk120
 {
+#define JE_VK_CHECK(expr)                                                        \
+    do                                                                           \
+    {                                                                            \
+        VkResult je_vk_check_result = (expr);                                    \
+        if (je_vk_check_result != VK_SUCCESS)                                    \
+        {                                                                        \
+            jeecs::debug::logfatal("Vulkan call failed: %s (VkResult=%d).",      \
+                #expr, (int)je_vk_check_result);                                 \
+            std::abort();                                                        \
+        }                                                                        \
+    } while (0)
+
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
 #   define VK_API_PLATFORM_API_LIST \
     VK_API_DECL(vkCreateWin32SurfaceKHR)
@@ -58,10 +78,12 @@ namespace jeecs::graphic::api::vk120
 #define VK_API_LIST                                         \
     VK_API_DECL(vkEnumeratePhysicalDevices);                \
     VK_API_DECL(vkGetPhysicalDeviceProperties);             \
+    VK_API_DECL(vkGetPhysicalDeviceFeatures);               \
     VK_API_DECL(vkEnumerateDeviceExtensionProperties);      \
                                                             \
     VK_API_DECL(vkGetPhysicalDeviceQueueFamilyProperties);  \
     VK_API_DECL(vkGetPhysicalDeviceFormatProperties);       \
+    VK_API_DECL(vkGetPhysicalDeviceImageFormatProperties);  \
     VK_API_DECL(vkCreateDevice);                            \
     VK_API_DECL(vkDestroyDevice);                           \
     VK_API_DECL(vkGetDeviceQueue);                          \
@@ -107,6 +129,8 @@ namespace jeecs::graphic::api::vk120
                                                             \
     VK_API_DECL(vkCreateGraphicsPipelines);                 \
     VK_API_DECL(vkDestroyPipeline);                         \
+    VK_API_DECL(vkCreatePipelineCache);                     \
+    VK_API_DECL(vkDestroyPipelineCache);                    \
                                                             \
     VK_API_DECL(vkCreateFramebuffer);                       \
     VK_API_DECL(vkDestroyFramebuffer);                      \
@@ -150,6 +174,7 @@ namespace jeecs::graphic::api::vk120
                                                             \
     VK_API_DECL(vkCreateDescriptorPool);                    \
     VK_API_DECL(vkDestroyDescriptorPool);                   \
+    VK_API_DECL(vkResetDescriptorPool);                     \
     VK_API_DECL(vkAllocateDescriptorSets);                  \
     VK_API_DECL(vkFreeDescriptorSets);                      \
     VK_API_DECL(vkUpdateDescriptorSets);                    \
@@ -187,71 +212,36 @@ namespace jeecs::graphic::api::vk120
                 VkDynamicState::VK_DYNAMIC_STATE_SCISSOR,
             };
 
-            jegl_vk120_context* m_context;
+            jegl_vk120_context* m_context = nullptr;
+            jegl_shader* m_shader_resource = nullptr;
 
-            VkShaderModule m_vertex_shader_module;
-            VkShaderModule m_fragment_shader_module;
-            VkPipelineShaderStageCreateInfo m_shader_stage_infos[2];
+            VkShaderModule m_vertex_shader_module = VK_NULL_HANDLE;
+            VkShaderModule m_fragment_shader_module = VK_NULL_HANDLE;
+            VkPipelineShaderStageCreateInfo m_shader_stage_infos[2] = {};
 
             std::vector<VkVertexInputAttributeDescription> m_vertex_input_attribute_descriptions;
-            size_t m_shader_output_color_attachment_count;
+            size_t m_shader_output_color_attachment_count = 0;
 
-            struct blend_statement
-            {
-                VkBlendOp m_blend_equation;
-                VkBlendFactor m_blend_src_factor;
-                VkBlendFactor m_blend_dst_factor;
-            };
-            std::optional<blend_statement> m_blend_statement;
-
-            VkViewport m_viewport;
-            VkRect2D m_scissor;
-            VkPipelineViewportStateCreateInfo m_viewport_state_create_info;
-
-            // NOTE: 因为目标缓冲区的情况不一致，光栅化配置中对于正面的认定方式可能对不同管线的
-            //  设置不同，这项设置仍然可能会在 blob 创建完成之后被改变
-            VkPipelineRasterizationStateCreateInfo m_rasterization_state_create_info;
-
-            VkPipelineDepthStencilStateCreateInfo m_depth_stencil_state_create_info;
-            VkPipelineMultisampleStateCreateInfo m_multi_sample_state_create_info;
-            VkPipelineDynamicStateCreateInfo m_dynamic_state_create_info;
-            VkPipelineLayout m_pipeline_layout;
+            VkViewport m_viewport = {};
+            VkRect2D m_scissor = {};
+            VkPipelineViewportStateCreateInfo m_viewport_state_create_info = {};
+            VkPipelineDynamicStateCreateInfo m_dynamic_state_create_info = {};
+            VkPipelineLayout m_pipeline_layout = VK_NULL_HANDLE;
 
             struct sampler_data
             {
-                VkSampler m_vk_sampler;
-                uint32_t m_sampler_id;
+                VkSampler m_vk_sampler = VK_NULL_HANDLE;
+                uint32_t m_sampler_id = 0;
             };
             std::vector<sampler_data> m_samplers;
-            std::unordered_map<std::string, uint32_t> m_uniform_locations;
-            size_t m_uniform_size;
-
-            // Vulkan的这个设计真的让人很想吐槽，因为Pipeline和Shader与Pass/Rendbuffer
-            // 捆绑在一起了，想尽办法最后就得靠目标渲染缓冲区的格式作为索引，根据shader
-            // 的不同渲染目标(格式)创建不同的渲染管线
-            //
-            // NOTE: DBQ, Metal 也干了！
-            struct vk_topology_pipeline_group
+            struct texture_sampler_binding
             {
-                using stride_pipelines_t = std::unordered_map<uint32_t, VkPipeline>;
-                stride_pipelines_t m_topology_pipelines[jegl_vertex::type::VERTEX_TYPE_COUNT];
-
-                VkPipeline& get_or_emplace_pipeline(
-                    jegl_vertex::type topo,
-                    uint32_t stride)
-                {
-                    auto& stride_pipes = m_topology_pipelines[topo];
-                    auto fnd = stride_pipes.find(stride);
-                    if (fnd != stride_pipes.end())
-                        return fnd->second;
-                    auto [it, ok] = stride_pipes.emplace(stride, VK_NULL_HANDLE);
-                    (void)ok;
-
-                    return it->second;
-                }
+                uint32_t m_pass = 0;
+                uint32_t m_sampler_id = 0;
             };
-            std::unordered_map<jevk12_framebuffer*, vk_topology_pipeline_group>
-                m_target_pass_pipelines;
+            std::vector<texture_sampler_binding> m_texture_sampler_bindings;
+            std::unordered_map<std::string, uint32_t> m_uniform_locations;
+            size_t m_uniform_size = 0;
         };
 
         jeecs::basic::resource<blob_data> m_blob_data;
@@ -274,11 +264,23 @@ namespace jeecs::graphic::api::vk120
     {
         JECS_DISABLE_MOVE_AND_COPY(jevk12_texture);
 
-        VkImage m_vk_texture_image;
-        VkDeviceMemory m_vk_texture_image_memory;
+        VkImage m_vk_texture_image = VK_NULL_HANDLE;
+        VkDeviceMemory m_vk_texture_image_memory = VK_NULL_HANDLE;
+        VkDeviceSize m_vk_texture_memory_offset = 0;
+        VkDeviceSize m_vk_texture_memory_size = 0;
 
-        VkImageView m_vk_texture_image_view;
-        VkFormat m_vk_texture_format;
+        VkImageView m_vk_texture_image_view = VK_NULL_HANDLE;
+        VkFormat m_vk_texture_format = VK_FORMAT_UNDEFINED;
+        VkImageLayout m_current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+        VkImageAspectFlags m_aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+
+        uint32_t m_width = 0;
+        uint32_t m_height = 0;
+        uint32_t m_depth = 1;
+        uint32_t m_layers = 1;
+        uint32_t m_samples = 1;
+
+        bool m_owns_image = true;
 
         jevk12_texture() = default;
     };
@@ -286,10 +288,14 @@ namespace jeecs::graphic::api::vk120
     {
         JECS_DISABLE_MOVE_AND_COPY(jevk12_uniformbuf);
 
-        VkBuffer m_uniform_buffer;
-        VkDeviceMemory m_uniform_buffer_memory;
+        VkBuffer m_uniform_buffer = VK_NULL_HANDLE;
+        VkDeviceMemory m_uniform_buffer_memory = VK_NULL_HANDLE;
+        VkDeviceSize m_memory_offset = 0;
+        VkDeviceSize m_memory_size = 0;
+        VkDeviceSize m_buffer_size = 0;
+        void* m_mapped = nullptr;
 
-        uint32_t m_real_binding_place;
+        uint32_t m_real_binding_place = 0;
 
         jevk12_uniformbuf() = default;
     };
@@ -299,25 +305,12 @@ namespace jeecs::graphic::api::vk120
 
         jeecs::basic::resource<jevk12_shader_blob::blob_data> m_blob_data;
 
-        size_t m_uniform_cpu_buffer_size;
-        bool m_uniform_cpu_buffer_updated;
-        uint8_t* m_uniform_cpu_buffer;
-
-        std::vector<jevk12_uniformbuf*> m_uniform_variables;
-
-        size_t m_next_allocate_ubos_for_uniform_variable;
-        size_t m_command_commit_round;
-
-        VkPipeline prepare_pipeline(jegl_vk120_context* context, jegl_vertex::type kind, uint32_t stride);
-        jevk12_uniformbuf* allocate_ubo_for_vars(jegl_vk120_context* context);
-        jevk12_uniformbuf* get_last_usable_variable(jegl_vk120_context* context);
+        size_t m_uniform_cpu_buffer_size = 0;
+        uint8_t* m_uniform_cpu_buffer = nullptr;
 
         jevk12_shader(jevk12_shader_blob* blob)
             : m_blob_data(blob->m_blob_data)
             , m_uniform_cpu_buffer_size(blob->m_blob_data->m_uniform_size)
-            , m_uniform_cpu_buffer_updated(false)
-            , m_next_allocate_ubos_for_uniform_variable(0)
-            , m_command_commit_round(0)
         {
             if (m_uniform_cpu_buffer_size != 0)
             {
@@ -335,21 +328,25 @@ namespace jeecs::graphic::api::vk120
     {
         JECS_DISABLE_MOVE_AND_COPY(jevk12_framebuffer);
 
-        VkRenderPass m_rendpass;
-
-        std::unordered_set<jevk12_shader_blob::blob_data*>
-            m_shaders_generate_pipeline_for_this_frame;
+        // 由 context 的 render pass 缓存持有，本结构不负责销毁。
+        VkRenderPass m_rendpass = VK_NULL_HANDLE;
 
         std::vector<jevk12_texture*> m_color_attachments;
+        jevk12_texture* m_resolve_attachment = nullptr;
+        jevk12_texture* m_depth_attachment = nullptr;
+        VkFramebuffer m_framebuffer = VK_NULL_HANDLE;
 
-        jevk12_texture* m_depth_attachment;
-        VkFramebuffer m_framebuffer;
+        size_t m_width = 0;
+        size_t m_height = 0;
 
-        size_t m_width;
-        size_t m_height;
-
-        size_t m_rend_rounds;
-        bool m_is_screen_framebuffer;
+        VkSampleCountFlagBits m_sample_count = VK_SAMPLE_COUNT_1_BIT;
+        VkImageLayout m_color_initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+        VkImageLayout m_resolve_initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+        VkImageLayout m_depth_initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+        VkImageLayout m_color_final_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        VkImageLayout m_resolve_final_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        VkImageLayout m_depth_final_layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        bool m_is_screen_framebuffer = false;
 
         jevk12_framebuffer() = default;
     };
@@ -359,17 +356,22 @@ namespace jeecs::graphic::api::vk120
 
         jevk12_vertex() = default;
 
-        VkBuffer m_vk_vertex_buffer;
-        VkDeviceMemory m_vk_vertex_buffer_memory;
+        VkBuffer m_vk_vertex_buffer = VK_NULL_HANDLE;
+        VkDeviceMemory m_vk_vertex_buffer_memory = VK_NULL_HANDLE;
+        VkDeviceSize m_vertex_memory_offset = 0;
+        VkDeviceSize m_vertex_memory_size = 0;
+        void* m_mapped = nullptr;
 
-        VkBuffer m_vk_index_buffer;
-        VkDeviceMemory m_vk_index_buffer_memory;
+        VkBuffer m_vk_index_buffer = VK_NULL_HANDLE;
+        VkDeviceMemory m_vk_index_buffer_memory = VK_NULL_HANDLE;
+        VkDeviceSize m_index_memory_offset = 0;
+        VkDeviceSize m_index_memory_size = 0;
 
-        uint32_t m_vertex_point_count;
-        VkDeviceSize m_size;
-        VkDeviceSize m_stride;
+        uint32_t m_vertex_point_count = 0;
+        VkDeviceSize m_size = 0;
+        VkDeviceSize m_stride = 0;
 
-        jegl_vertex::type m_topology;
+        jegl_vertex::type m_topology = jegl_vertex::type::TRIANGLES;
     };
 
     struct jegl_vk120_context
@@ -440,6 +442,7 @@ namespace jeecs::graphic::api::vk120
 
         // 一些配置项
         size_t _vk_msaa_config;
+        VkSampleCountFlagBits _vk_active_msaa_samples = VK_SAMPLE_COUNT_1_BIT;
         bool _vk_vsync_config;
 
         // Vk的全局实例
@@ -475,7 +478,7 @@ namespace jeecs::graphic::api::vk120
             DEAR_IMGUI_TEXTURE = COUNT,
             BEGIN = UNIFORM_VARIABLES,
         };
-        VkDescriptorSetLayout _vk_global_descriptor_set_layouts[descriptor_set_type::COUNT + 1];
+        VkDescriptorSetLayout _vk_global_descriptor_set_layouts[descriptor_set_type::COUNT + 1] = {};
 
         template <VkDescriptorType DESC_SET_TYPE, VkShaderStageFlags STAGE, size_t MAX_BINDING>
         VkDescriptorSetLayout create_descriptor_set_layout()
@@ -517,150 +520,82 @@ namespace jeecs::graphic::api::vk120
 
         struct swapchain_image_content
         {
-            jegl_vk120_context* m_main_context;
+            jegl_vk120_context* m_main_context = nullptr;
 
-            jevk12_framebuffer* m_framebuffer;
-            jevk12_texture* m_textures_only_for_free[2];
+            jevk12_framebuffer* m_framebuffer = nullptr;
+            jevk12_texture* m_color_attachment = nullptr;
+            jevk12_texture* m_depth_attachment = nullptr;
+            jevk12_texture* m_msaa_attachment = nullptr;
 
-            std::list<VkCommandBuffer> m_using_command_buffers;
-            std::list<VkSemaphore> m_using_semaphores;
-            std::list<VkDescriptorSet> m_using_descriptor_sets[descriptor_set_type::COUNT + 1];
-
-            void use_command_buffer(VkCommandBuffer cmd_buffer)
-            {
-                m_using_command_buffers.push_back(cmd_buffer);
-            }
-            void use_semaphore(VkSemaphore semaphore)
-            {
-                m_using_semaphores.push_back(semaphore);
-            }
-            template <descriptor_set_type DESC_SET_TYPE>
-            void use_descriptor_set(VkDescriptorSet set)
-            {
-                m_using_descriptor_sets[DESC_SET_TYPE].push_back(set);
-            }
-            void release_using_resources()
-            {
-                m_main_context->_vk_command_buffer_allocator->flush_command_buffer_allocator(this);
-                m_main_context->_vk_descriptor_set_allocator->flush_descriptor_set_allocator(this);
-                m_main_context->_vk_dear_imgui_descriptor_set_allocator->flush_descriptor_set_allocator(this);
-            }
-            void release_using_resources_with_sync_queue_free()
-            {
-                m_main_context->vkQueueWaitIdle(m_main_context->_vk_logic_device_present_queue);
-                release_using_resources();
-            }
             swapchain_image_content(
                 jegl_vk120_context* main_contant,
                 jevk12_framebuffer* framebuffer,
                 jevk12_texture* color_attachment,
-                jevk12_texture* depth_attachment)
+                jevk12_texture* depth_attachment,
+                jevk12_texture* msaa_attachment = nullptr)
                 : m_main_context(main_contant)
                 , m_framebuffer(framebuffer)
-                , m_textures_only_for_free{ color_attachment, depth_attachment }
+                , m_color_attachment(color_attachment)
+                , m_depth_attachment(depth_attachment)
+                , m_msaa_attachment(msaa_attachment)
             {
             }
             ~swapchain_image_content()
             {
                 m_main_context->destroy_frame_buffer(m_framebuffer);
 
-                for (auto* tex : m_textures_only_for_free)
-                    m_main_context->destroy_texture_instance(tex);
-
-                // Release using resources
-                release_using_resources();
+                if (m_color_attachment != nullptr)
+                    m_main_context->destroy_texture_instance(m_color_attachment);
+                if (m_depth_attachment != nullptr)
+                    m_main_context->destroy_texture_instance(m_depth_attachment);
+                if (m_msaa_attachment != nullptr)
+                    m_main_context->destroy_texture_instance(m_msaa_attachment);
             }
         };
 
-        template <descriptor_set_type DESC_SET_TYPE>
-        struct single_descriptor_set_allocator
+        static constexpr uint32_t FRAMES_IN_FLIGHT = 2;
+
+        struct frame_resources
         {
-            JECS_DISABLE_MOVE_AND_COPY(single_descriptor_set_allocator);
+            JECS_DISABLE_MOVE_AND_COPY(frame_resources);
+            frame_resources() = default;
 
-            inline const static VkDescriptorType _desc_set_types[descriptor_set_type::COUNT + 1] = {
-                VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                VkDescriptorType::VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                VkDescriptorType::VK_DESCRIPTOR_TYPE_SAMPLER,
-                VkDescriptorType::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER };
+            VkCommandBuffer m_command_buffer = VK_NULL_HANDLE;
+            VkFence m_fence = VK_NULL_HANDLE;
+            VkSemaphore m_image_available = VK_NULL_HANDLE;
+            VkDescriptorPool m_descriptor_pool = VK_NULL_HANDLE;
 
-            jegl_vk120_context* m_context;
+            VkBuffer m_ubo_ring_buffer = VK_NULL_HANDLE;
+            VkDeviceMemory m_ubo_ring_memory = VK_NULL_HANDLE;
+            VkDeviceSize m_ubo_ring_memory_offset = 0;
+            VkDeviceSize m_ubo_ring_memory_size = 0;
+            void* m_ubo_ring_mapped = nullptr;
+            VkDeviceSize m_ubo_ring_size = 0;
+            VkDeviceSize m_ubo_ring_offset = 0;
 
-            VkDescriptorSetLayout m_layout;
-            std::list<VkDescriptorPool> m_pools;
-            std::list<VkDescriptorSet> m_free_sets;
+            bool m_recording = false;
+            bool m_has_swapchain_image = false;
+            bool m_submitted = false;
 
-            single_descriptor_set_allocator(jegl_vk120_context* ctx, VkDescriptorSetLayout layout)
-                : m_context(ctx), m_layout(layout)
+            VkDeviceSize allocate_uniform_block(VkDeviceSize size, VkDeviceSize alignment)
             {
-            }
-            ~single_descriptor_set_allocator()
-            {
-                for (auto& pool : m_pools)
-                    m_context->vkDestroyDescriptorPool(m_context->_vk_logic_device, pool, nullptr);
-            }
+                if (size == 0)
+                    size = 1;
+                if (alignment == 0)
+                    alignment = 1;
 
-            void flush_descriptor_set_allocator(swapchain_image_content* swapchain_image)
-            {
-                for (VkDescriptorSet used_set : swapchain_image->m_using_descriptor_sets[DESC_SET_TYPE])
-                    m_free_sets.push_back(used_set);
-
-                swapchain_image->m_using_descriptor_sets[DESC_SET_TYPE].clear();
-            }
-            VkDescriptorSet allocate_descriptor_set(swapchain_image_content* swapchain_image)
-            {
-                if (!m_free_sets.empty())
+                VkDeviceSize aligned = (m_ubo_ring_offset + alignment - 1) & ~(alignment - 1);
+                if (aligned + size > m_ubo_ring_size)
                 {
-                    VkDescriptorSet result = m_free_sets.back();
-                    m_free_sets.pop_back();
-
-                    swapchain_image->use_descriptor_set<DESC_SET_TYPE>(result);
-                    return result;
+                    jeecs::debug::logfatal(
+                        "VK120: per-frame uniform ring exhausted (need %llu bytes, %llu available). "
+                        "Consider increasing the ring size.",
+                        (unsigned long long)size,
+                        (unsigned long long)(m_ubo_ring_size > aligned ? m_ubo_ring_size - aligned : 0));
                 }
 
-                VkDescriptorSet result;
-                for (;;)
-                {
-                    if (!m_pools.empty())
-                    {
-                        VkDescriptorSetAllocateInfo ubo_set_alloc_info = {};
-                        ubo_set_alloc_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-                        ubo_set_alloc_info.pNext = nullptr;
-                        ubo_set_alloc_info.descriptorPool = m_pools.back();
-                        ubo_set_alloc_info.descriptorSetCount = 1;
-                        ubo_set_alloc_info.pSetLayouts = &m_layout;
-
-                        auto alloc_result = m_context->vkAllocateDescriptorSets(
-                            m_context->_vk_logic_device, &ubo_set_alloc_info, &result);
-
-                        if (VK_SUCCESS == alloc_result)
-                        {
-                            swapchain_image->use_descriptor_set<DESC_SET_TYPE>(result);
-                            return result;
-                        }
-                    }
-
-                    VkDescriptorPool new_created_pool;
-
-                    VkDescriptorPoolSize pool_sizes[1] = {};
-                    pool_sizes[0].type = _desc_set_types[DESC_SET_TYPE];
-                    pool_sizes[0].descriptorCount = 128;
-
-                    VkDescriptorPoolCreateInfo pool_create_info = {};
-                    pool_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-                    pool_create_info.pNext = nullptr;
-                    pool_create_info.flags = 0;
-                    pool_create_info.maxSets = 128;
-                    pool_create_info.poolSizeCount = 1;
-                    pool_create_info.pPoolSizes = pool_sizes;
-
-                    if (VK_SUCCESS != m_context->vkCreateDescriptorPool(
-                        m_context->_vk_logic_device, &pool_create_info, nullptr, &new_created_pool))
-                    {
-                        jeecs::debug::logfatal("Failed to create vk120 descriptor pool.");
-                    }
-                    m_pools.push_back(new_created_pool);
-                }
+                m_ubo_ring_offset = aligned + size;
+                return aligned;
             }
         };
 
@@ -673,437 +608,661 @@ namespace jeecs::graphic::api::vk120
             constexpr static size_t MAX_TEXTURE_LAYOUT = MAX_LAYOUT_COUNT;
             constexpr static size_t MAX_SAMPLER_LAYOUT = MAX_LAYOUT_COUNT;
 
-            jegl_vk120_context* m_context;
+            jegl_vk120_context* m_context = nullptr;
 
-            single_descriptor_set_allocator<descriptor_set_type::UNIFORM_VARIABLES>
-                m_vk_shader_uniform_variable_sets;
-            single_descriptor_set_allocator<descriptor_set_type::UNIFORM_BUFFER>
-                m_vk_shader_uniform_block_sets;
-            single_descriptor_set_allocator<descriptor_set_type::TEXTURE>
-                m_vk_shader_uniform_texture_sets;
-            single_descriptor_set_allocator<descriptor_set_type::SAMPLER>
-                m_vk_shader_uniform_sampler_sets;
+            VkDescriptorBufferInfo m_binded_ubos[MAX_UBO_LAYOUT] = {};
+            VkDescriptorImageInfo m_binded_textures[MAX_TEXTURE_LAYOUT] = {};
+            VkDescriptorImageInfo m_binded_samplers[MAX_SAMPLER_LAYOUT] = {};
+            VkPipelineLayout m_binded_pipeline_layout = VK_NULL_HANDLE;
 
-            // Binding update context;
-            VkDescriptorBufferInfo m_binded_uvar;
-            VkDescriptorBufferInfo m_binded_ubos[MAX_UBO_LAYOUT];
-            VkDescriptorImageInfo m_binded_textures[MAX_TEXTURE_LAYOUT];
-            VkDescriptorImageInfo m_binded_samplers[MAX_SAMPLER_LAYOUT];
-            VkPipelineLayout m_binded_pipeline_layout;
+            bool m_ubo_dirty = true;
+            bool m_texture_dirty = true;
+            bool m_sampler_dirty = true;
 
-            VkWriteDescriptorSet m_updated_writes_reusing[MAX_LAYOUT_COUNT];
-            VkDescriptorSet m_updated_sets[descriptor_set_type::COUNT];
+            VkDescriptorSet m_ubo_set = VK_NULL_HANDLE;
+            VkDescriptorSet m_texture_set = VK_NULL_HANDLE;
+            VkDescriptorSet m_sampler_set = VK_NULL_HANDLE;
 
-            void flush_descriptor_set_allocator(swapchain_image_content* swapchain_image)
+            std::unordered_map<jevk12_shader*, VkDescriptorSet> m_uniform_vars_sets;
+
+            explicit descriptor_set_allocator(jegl_vk120_context* context)
+                : m_context(context)
             {
-                m_binded_pipeline_layout = VK_NULL_HANDLE;
+                assert(m_context != nullptr);
 
-                m_vk_shader_uniform_variable_sets.flush_descriptor_set_allocator(swapchain_image);
-                m_vk_shader_uniform_block_sets.flush_descriptor_set_allocator(swapchain_image);
-                m_vk_shader_uniform_texture_sets.flush_descriptor_set_allocator(swapchain_image);
-                m_vk_shader_uniform_sampler_sets.flush_descriptor_set_allocator(swapchain_image);
-
-                m_binded_uvar.buffer = VK_NULL_HANDLE;
-                for (auto& ubos : m_binded_ubos)
-                    ubos.buffer = VK_NULL_HANDLE;
-                for (auto& textures : m_binded_textures)
-                    textures.imageView = VK_NULL_HANDLE;
-                for (auto& samplers : m_binded_samplers)
-                    samplers.sampler = VK_NULL_HANDLE;
-
-                for (auto& set : m_updated_sets)
-                    set = VK_NULL_HANDLE;
-            }
-            void bind_uniform_vars(VkBuffer buffer)
-            {
-                if (m_binded_uvar.buffer != buffer)
+                for (auto& ubo : m_binded_ubos)
                 {
-                    m_binded_uvar.buffer = buffer;
-                    m_updated_sets[descriptor_set_type::UNIFORM_VARIABLES] = VK_NULL_HANDLE;
+                    ubo.buffer = VK_NULL_HANDLE;
+                    ubo.offset = 0;
+                    ubo.range = VK_WHOLE_SIZE;
+                }
+                for (auto& texture : m_binded_textures)
+                {
+                    texture.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                    texture.imageView = VK_NULL_HANDLE;
+                    texture.sampler = VK_NULL_HANDLE;
+                }
+                for (auto& sampler : m_binded_samplers)
+                {
+                    sampler.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+                    sampler.imageView = VK_NULL_HANDLE;
+                    sampler.sampler = VK_NULL_HANDLE;
                 }
             }
+
+            void begin_frame()
+            {
+                m_binded_pipeline_layout = VK_NULL_HANDLE;
+                m_ubo_dirty = true;
+                m_texture_dirty = true;
+                m_sampler_dirty = true;
+                m_ubo_set = VK_NULL_HANDLE;
+                m_texture_set = VK_NULL_HANDLE;
+                m_sampler_set = VK_NULL_HANDLE;
+                m_uniform_vars_sets.clear();
+
+                for (auto& ubo : m_binded_ubos)
+                    ubo.buffer = VK_NULL_HANDLE;
+                for (auto& texture : m_binded_textures)
+                    texture.imageView = VK_NULL_HANDLE;
+                for (auto& sampler : m_binded_samplers)
+                    sampler.sampler = VK_NULL_HANDLE;
+            }
+
+            void begin_pass()
+            {
+                m_binded_pipeline_layout = VK_NULL_HANDLE;
+                m_ubo_dirty = true;
+                m_texture_dirty = true;
+                m_sampler_dirty = true;
+                m_ubo_set = VK_NULL_HANDLE;
+                m_texture_set = VK_NULL_HANDLE;
+                m_sampler_set = VK_NULL_HANDLE;
+
+                for (auto& ubo : m_binded_ubos)
+                    ubo.buffer = VK_NULL_HANDLE;
+                for (auto& texture : m_binded_textures)
+                    texture.imageView = VK_NULL_HANDLE;
+                for (auto& sampler : m_binded_samplers)
+                    sampler.sampler = VK_NULL_HANDLE;
+            }
+
             void bind_uniform_buffer(uint32_t binding, VkBuffer buffer)
             {
                 if (binding >= MAX_UBO_LAYOUT)
                 {
-                    jeecs::debug::logwarn("Uniform buffer binding %u exceeds max layout count %zu, ignored.",
+                    jeecs::debug::logwarn(
+                        "Uniform buffer binding %u exceeds max layout count %zu, ignored.",
                         binding, MAX_UBO_LAYOUT);
                     return;
                 }
                 if (m_binded_ubos[binding].buffer != buffer)
                 {
                     m_binded_ubos[binding].buffer = buffer;
-                    m_updated_sets[descriptor_set_type::UNIFORM_BUFFER] = VK_NULL_HANDLE;
+                    m_binded_ubos[binding].offset = 0;
+                    m_binded_ubos[binding].range = VK_WHOLE_SIZE;
+                    m_ubo_dirty = true;
                 }
             }
+
             void bind_texture(uint32_t binding, VkImageView image_view)
             {
                 if (binding >= MAX_TEXTURE_LAYOUT)
                 {
-                    jeecs::debug::logwarn("Texture binding %u exceeds max layout count %zu, ignored.",
+                    jeecs::debug::logwarn(
+                        "Texture binding %u exceeds max layout count %zu, ignored.",
                         binding, MAX_TEXTURE_LAYOUT);
                     return;
                 }
                 if (m_binded_textures[binding].imageView != image_view)
                 {
                     m_binded_textures[binding].imageView = image_view;
-                    m_updated_sets[descriptor_set_type::TEXTURE] = VK_NULL_HANDLE;
+                    m_texture_dirty = true;
                 }
             }
+
             void bind_sampler(uint32_t binding, VkSampler sampler)
             {
                 if (binding >= MAX_SAMPLER_LAYOUT)
                 {
-                    jeecs::debug::logwarn("Sampler binding %u exceeds max layout count %zu, ignored.",
+                    jeecs::debug::logwarn(
+                        "Sampler binding %u exceeds max layout count %zu, ignored.",
                         binding, MAX_SAMPLER_LAYOUT);
                     return;
                 }
                 if (m_binded_samplers[binding].sampler != sampler)
                 {
                     m_binded_samplers[binding].sampler = sampler;
-                    m_updated_sets[descriptor_set_type::SAMPLER] = VK_NULL_HANDLE;
+                    m_sampler_dirty = true;
                 }
             }
+
             void bind_pipeline_layout(VkPipelineLayout pipeline_layout)
             {
                 m_binded_pipeline_layout = pipeline_layout;
             }
-            void apply_binding_work(swapchain_image_content* swapchain_image)
+
+            VkDescriptorSet allocate_descriptor_set(VkDescriptorSetLayout layout)
+            {
+                VkDescriptorSetAllocateInfo alloc_info = {};
+                alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+                alloc_info.pNext = nullptr;
+                alloc_info.descriptorPool = m_context->current_frame().m_descriptor_pool;
+                alloc_info.descriptorSetCount = 1;
+                alloc_info.pSetLayouts = &layout;
+
+                VkDescriptorSet result = VK_NULL_HANDLE;
+                JE_VK_CHECK(m_context->vkAllocateDescriptorSets(
+                    m_context->_vk_logic_device, &alloc_info, &result));
+                return result;
+            }
+
+            VkDescriptorSet uniform_vars_set(jevk12_shader* shader)
+            {
+                assert(shader != nullptr);
+
+                auto found = m_uniform_vars_sets.find(shader);
+                if (found != m_uniform_vars_sets.end())
+                    return found->second;
+
+                VkDescriptorSet set = allocate_descriptor_set(
+                    m_context->_vk_global_descriptor_set_layouts[
+                        descriptor_set_type::UNIFORM_VARIABLES]);
+
+                VkDescriptorBufferInfo buffer_info = {};
+                buffer_info.buffer = m_context->current_frame().m_ubo_ring_buffer;
+                buffer_info.offset = 0;
+                buffer_info.range = std::max<VkDeviceSize>(
+                    (VkDeviceSize)shader->m_uniform_cpu_buffer_size, 16);
+
+                VkWriteDescriptorSet write = {};
+                write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                write.pNext = nullptr;
+                write.dstSet = set;
+                write.dstBinding = 0;
+                write.dstArrayElement = 0;
+                write.descriptorCount = 1;
+                write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+                write.pBufferInfo = &buffer_info;
+
+                m_context->vkUpdateDescriptorSets(
+                    m_context->_vk_logic_device, 1, &write, 0, nullptr);
+
+                m_uniform_vars_sets.emplace(shader, set);
+                return set;
+            }
+
+            VkDescriptorSet ensure_ubo_set()
+            {
+                if (!m_ubo_dirty && m_ubo_set != VK_NULL_HANDLE)
+                    return m_ubo_set;
+
+                m_ubo_set = allocate_descriptor_set(
+                    m_context->_vk_global_descriptor_set_layouts[
+                        descriptor_set_type::UNIFORM_BUFFER]);
+
+                VkWriteDescriptorSet writes[MAX_UBO_LAYOUT] = {};
+                uint32_t write_count = 0;
+                for (uint32_t i = 0; i < MAX_UBO_LAYOUT; ++i)
+                {
+                    if (m_binded_ubos[i].buffer == VK_NULL_HANDLE)
+                        continue;
+
+                    auto& write = writes[write_count++];
+                    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                    write.dstSet = m_ubo_set;
+                    write.dstBinding = i;
+                    write.descriptorCount = 1;
+                    write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                    write.pBufferInfo = &m_binded_ubos[i];
+                }
+                if (write_count != 0)
+                {
+                    m_context->vkUpdateDescriptorSets(
+                        m_context->_vk_logic_device, write_count, writes, 0, nullptr);
+                }
+                m_ubo_dirty = false;
+                return m_ubo_set;
+            }
+
+            VkDescriptorSet ensure_texture_set()
+            {
+                if (!m_texture_dirty && m_texture_set != VK_NULL_HANDLE)
+                    return m_texture_set;
+
+                m_texture_set = allocate_descriptor_set(
+                    m_context->_vk_global_descriptor_set_layouts[
+                        descriptor_set_type::TEXTURE]);
+
+                VkWriteDescriptorSet writes[MAX_TEXTURE_LAYOUT] = {};
+                uint32_t write_count = 0;
+                for (uint32_t i = 0; i < MAX_TEXTURE_LAYOUT; ++i)
+                {
+                    if (m_binded_textures[i].imageView == VK_NULL_HANDLE)
+                        continue;
+
+                    auto& write = writes[write_count++];
+                    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                    write.dstSet = m_texture_set;
+                    write.dstBinding = i;
+                    write.descriptorCount = 1;
+                    write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+                    write.pImageInfo = &m_binded_textures[i];
+                }
+                if (write_count != 0)
+                {
+                    m_context->vkUpdateDescriptorSets(
+                        m_context->_vk_logic_device, write_count, writes, 0, nullptr);
+                }
+                m_texture_dirty = false;
+                return m_texture_set;
+            }
+
+            VkDescriptorSet ensure_sampler_set()
+            {
+                if (!m_sampler_dirty && m_sampler_set != VK_NULL_HANDLE)
+                    return m_sampler_set;
+
+                m_sampler_set = allocate_descriptor_set(
+                    m_context->_vk_global_descriptor_set_layouts[
+                        descriptor_set_type::SAMPLER]);
+
+                VkWriteDescriptorSet writes[MAX_SAMPLER_LAYOUT] = {};
+                uint32_t write_count = 0;
+                for (uint32_t i = 0; i < MAX_SAMPLER_LAYOUT; ++i)
+                {
+                    if (m_binded_samplers[i].sampler == VK_NULL_HANDLE)
+                        continue;
+
+                    auto& write = writes[write_count++];
+                    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                    write.dstSet = m_sampler_set;
+                    write.dstBinding = i;
+                    write.descriptorCount = 1;
+                    write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+                    write.pImageInfo = &m_binded_samplers[i];
+                }
+                if (write_count != 0)
+                {
+                    m_context->vkUpdateDescriptorSets(
+                        m_context->_vk_logic_device, write_count, writes, 0, nullptr);
+                }
+                m_sampler_dirty = false;
+                return m_sampler_set;
+            }
+
+            void bind_all(
+                VkCommandBuffer command_buffer,
+                VkDescriptorSet uniform_vars,
+                uint32_t dynamic_offset)
             {
                 assert(m_binded_pipeline_layout != VK_NULL_HANDLE);
 
-                // 更新Uniform variables
-                if (VK_NULL_HANDLE == m_updated_sets[descriptor_set_type::UNIFORM_VARIABLES])
-                {
-                    auto set = m_vk_shader_uniform_variable_sets.allocate_descriptor_set(swapchain_image);
-                    m_updated_sets[descriptor_set_type::UNIFORM_VARIABLES] = set;
+                VkDescriptorSet sets[descriptor_set_type::COUNT] = {
+                    uniform_vars,
+                    ensure_ubo_set(),
+                    ensure_texture_set(),
+                    ensure_sampler_set() };
 
-                    // Update layouts
-                    m_updated_writes_reusing[0].dstBinding = 0;
-                    m_updated_writes_reusing[0].dstSet = set;
-                    m_updated_writes_reusing[0].descriptorType = VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-                    m_updated_writes_reusing[0].pBufferInfo = &m_binded_uvar;
-
-                    m_context->vkUpdateDescriptorSets(
-                        m_context->_vk_logic_device,
-                        1,
-                        &m_updated_writes_reusing[0],
-                        0,
-                        nullptr);
-                }
-                // 更新Uniform buffer
-                if (VK_NULL_HANDLE == m_updated_sets[descriptor_set_type::UNIFORM_BUFFER])
-                {
-                    auto set = m_vk_shader_uniform_block_sets.allocate_descriptor_set(swapchain_image);
-                    m_updated_sets[descriptor_set_type::UNIFORM_BUFFER] = set;
-
-                    // Update layouts
-                    size_t update_count = 0;
-                    for (size_t i = 0; i < MAX_UBO_LAYOUT; ++i)
-                    {
-                        if (m_binded_ubos[i].buffer != VK_NULL_HANDLE)
-                        {
-                            auto& write = m_updated_writes_reusing[update_count++];
-                            write.dstBinding = (uint32_t)i;
-                            write.dstSet = set;
-                            write.descriptorType = VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-                            write.pBufferInfo = &m_binded_ubos[i];
-                        }
-                    }
-                    m_context->vkUpdateDescriptorSets(
-                        m_context->_vk_logic_device,
-                        update_count,
-                        m_updated_writes_reusing,
-                        0,
-                        nullptr);
-                }
-                // 更新Texture
-                if (VK_NULL_HANDLE == m_updated_sets[descriptor_set_type::TEXTURE])
-                {
-                    auto set = m_vk_shader_uniform_texture_sets.allocate_descriptor_set(swapchain_image);
-                    m_updated_sets[descriptor_set_type::TEXTURE] = set;
-
-                    // Update layouts
-                    size_t update_count = 0;
-                    for (size_t i = 0; i < MAX_TEXTURE_LAYOUT; ++i)
-                    {
-                        if (m_binded_textures[i].imageView != VK_NULL_HANDLE)
-                        {
-                            auto& write = m_updated_writes_reusing[update_count++];
-                            write.dstBinding = (uint32_t)i;
-                            write.dstSet = set;
-                            write.descriptorType = VkDescriptorType::VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-                            write.pImageInfo = &m_binded_textures[i];
-                        }
-                    }
-                    m_context->vkUpdateDescriptorSets(
-                        m_context->_vk_logic_device,
-                        update_count,
-                        m_updated_writes_reusing,
-                        0,
-                        nullptr);
-                }
-                // 更新Sampler
-                if (VK_NULL_HANDLE == m_updated_sets[descriptor_set_type::SAMPLER])
-                {
-                    auto set = m_vk_shader_uniform_sampler_sets.allocate_descriptor_set(swapchain_image);
-                    m_updated_sets[descriptor_set_type::SAMPLER] = set;
-
-                    // Update layouts
-                    size_t update_count = 0;
-                    for (size_t i = 0; i < MAX_SAMPLER_LAYOUT; ++i)
-                    {
-                        if (m_binded_samplers[i].sampler != VK_NULL_HANDLE)
-                        {
-                            auto& write = m_updated_writes_reusing[update_count++];
-                            write.dstBinding = (uint32_t)i;
-                            write.dstSet = set;
-                            write.descriptorType = VkDescriptorType::VK_DESCRIPTOR_TYPE_SAMPLER;
-                            write.pImageInfo = &m_binded_samplers[i];
-                        }
-                    }
-                    m_context->vkUpdateDescriptorSets(
-                        m_context->_vk_logic_device,
-                        update_count,
-                        m_updated_writes_reusing,
-                        0,
-                        nullptr);
-                }
                 m_context->vkCmdBindDescriptorSets(
-                    m_context->_vk_current_command_buffer,
-                    VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    command_buffer,
+                    VK_PIPELINE_BIND_POINT_GRAPHICS,
                     m_binded_pipeline_layout,
                     0,
                     descriptor_set_type::COUNT,
-                    m_updated_sets,
-                    0,
-                    nullptr);
-            }
-
-            descriptor_set_allocator(jegl_vk120_context* context)
-                : m_context(context), m_vk_shader_uniform_variable_sets(
-                    context, context->_vk_global_descriptor_set_layouts[descriptor_set_type::UNIFORM_VARIABLES]),
-                m_vk_shader_uniform_block_sets(
-                    context, context->_vk_global_descriptor_set_layouts[descriptor_set_type::UNIFORM_BUFFER]),
-                m_vk_shader_uniform_texture_sets(
-                    context, context->_vk_global_descriptor_set_layouts[descriptor_set_type::TEXTURE]),
-                m_vk_shader_uniform_sampler_sets(
-                    context, context->_vk_global_descriptor_set_layouts[descriptor_set_type::SAMPLER])
-            {
-                static_assert(MAX_LAYOUT_COUNT >= MAX_SAMPLER_LAYOUT);
-                static_assert(MAX_LAYOUT_COUNT >= MAX_TEXTURE_LAYOUT);
-                static_assert(MAX_LAYOUT_COUNT >= MAX_UBO_LAYOUT);
-
-                assert(m_context != nullptr);
-
-                for (uint32_t i = 0; i < MAX_LAYOUT_COUNT; ++i)
-                {
-                    auto& write = m_updated_writes_reusing[i];
-
-                    write.sType = VkStructureType::VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                    write.pNext = nullptr;
-                    write.dstBinding = i;
-                    write.dstArrayElement = 0;
-                    write.descriptorCount = 1;
-
-                    write.dstSet = VK_NULL_HANDLE;
-                    write.descriptorType = VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-                    write.pImageInfo = nullptr;
-                    write.pBufferInfo = nullptr;
-                    write.pTexelBufferView = nullptr;
-                }
-
-                m_binded_uvar.buffer = VK_NULL_HANDLE;
-                m_binded_uvar.offset = 0;
-                m_binded_uvar.range = VK_WHOLE_SIZE;
-                for (auto& ubos : m_binded_ubos)
-                {
-                    ubos.buffer = VK_NULL_HANDLE;
-                    ubos.offset = 0;
-                    ubos.range = VK_WHOLE_SIZE;
-                }
-                for (auto& textures : m_binded_textures)
-                {
-                    textures.imageLayout = VkImageLayout::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                    textures.imageView = VK_NULL_HANDLE;
-                    textures.sampler = VK_NULL_HANDLE;
-                }
-                for (auto& samplers : m_binded_samplers)
-                {
-                    samplers.imageLayout = VkImageLayout::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                    samplers.imageView = VK_NULL_HANDLE;
-                    samplers.sampler = VK_NULL_HANDLE;
-                }
+                    sets,
+                    1,
+                    &dynamic_offset);
             }
         };
-        struct command_buffer_allocator
+
+        struct memory_allocator
         {
-            JECS_DISABLE_MOVE_AND_COPY(command_buffer_allocator);
+            JECS_DISABLE_MOVE_AND_COPY(memory_allocator);
 
-            jegl_vk120_context* m_context;
-
-            VkCommandPool m_command_pool;
-
-            std::list<VkCommandBuffer> m_free_cmd_buffers;
-            std::list<VkSemaphore> m_free_cmd_semaphores;
-
-            VkSemaphore allocate_semaphore(swapchain_image_content* swapchain_image_maynull)
+            struct block
             {
-                VkSemaphore result;
-                if (!m_free_cmd_semaphores.empty())
-                {
-                    result = m_free_cmd_semaphores.back();
-                    m_free_cmd_semaphores.pop_back();
-                }
-                else
-                    result = m_context->create_semaphore();
+                VkDeviceMemory m_memory = VK_NULL_HANDLE;
+                VkDeviceSize m_size = 0;
+                uint32_t m_memory_type = 0;
+                void* m_mapped = nullptr;
+                std::vector<std::pair<VkDeviceSize, VkDeviceSize>> m_free_ranges;
+            };
+            struct allocation
+            {
+                VkDeviceMemory m_memory = VK_NULL_HANDLE;
+                VkDeviceSize m_offset = 0;
+                VkDeviceSize m_size = 0;
+                void* m_mapped = nullptr;
+            };
 
-                if (swapchain_image_maynull != nullptr)
-                    swapchain_image_maynull->use_semaphore(result);
+            jegl_vk120_context* m_context = nullptr;
+            VkDeviceSize m_buffer_image_granularity = 1;
+            VkDeviceSize m_default_device_block_size = 64ull * 1024 * 1024;
+            VkDeviceSize m_default_host_block_size = 16ull * 1024 * 1024;
+            std::vector<block> m_blocks;
 
-                return result;
+            explicit memory_allocator(jegl_vk120_context* context)
+                : m_context(context)
+            {
+                assert(m_context != nullptr);
             }
-            VkCommandBuffer allocate_command_buffer(swapchain_image_content* swapchain_image_maynull)
+            ~memory_allocator()
             {
-                VkCommandBuffer result;
-                if (!m_free_cmd_buffers.empty())
+                for (auto& block : m_blocks)
                 {
-                    result = m_free_cmd_buffers.back();
-                    m_free_cmd_buffers.pop_back();
-
-                    m_context->vkResetCommandBuffer(result, 0);
-                }
-                else
-                {
-                    VkCommandBufferAllocateInfo command_buffer_alloc_info = {};
-                    command_buffer_alloc_info.sType = VkStructureType::VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-                    command_buffer_alloc_info.pNext = nullptr;
-                    command_buffer_alloc_info.commandPool = m_command_pool;
-                    command_buffer_alloc_info.level = VkCommandBufferLevel::VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-                    command_buffer_alloc_info.commandBufferCount = 1;
-
-                    result = nullptr;
-                    if (m_context->vkAllocateCommandBuffers(
-                        m_context->_vk_logic_device, &command_buffer_alloc_info, &result) != VK_SUCCESS)
+                    if (block.m_mapped != nullptr)
                     {
-                        jeecs::debug::logfatal("Failed to allocate command buffers!");
+                        m_context->vkUnmapMemory(
+                            m_context->_vk_logic_device, block.m_memory);
+                        block.m_mapped = nullptr;
+                    }
+                    if (block.m_memory != VK_NULL_HANDLE)
+                        m_context->vkFreeMemory(
+                            m_context->_vk_logic_device, block.m_memory, nullptr);
+                }
+            }
+
+            // 一个 VkDeviceMemory 同一时间只能被 map 一次。host-visible block
+            // 在创建/首次使用时整体持久映射，子分配只使用 mapped + offset。
+            void ensure_block_mapped(block& target, bool host_visible)
+            {
+                if (!host_visible || target.m_mapped != nullptr)
+                    return;
+
+                JE_VK_CHECK(m_context->vkMapMemory(
+                    m_context->_vk_logic_device,
+                    target.m_memory,
+                    0,
+                    target.m_size,
+                    0,
+                    &target.m_mapped));
+            }
+
+            static VkDeviceSize align_up(VkDeviceSize value, VkDeviceSize alignment)
+            {
+                if (alignment <= 1)
+                    return value;
+                return (value + alignment - 1) & ~(alignment - 1);
+            }
+
+            bool try_allocate_from_block(
+                block& target,
+                VkDeviceSize size,
+                VkDeviceSize alignment,
+                allocation& out)
+            {
+                for (size_t i = 0; i < target.m_free_ranges.size(); ++i)
+                {
+                    const VkDeviceSize range_begin = target.m_free_ranges[i].first;
+                    const VkDeviceSize range_end =
+                        range_begin + target.m_free_ranges[i].second;
+                    const VkDeviceSize aligned =
+                        align_up(range_begin, alignment);
+
+                    if (aligned + size > range_end)
+                        continue;
+
+                    const VkDeviceSize front_size = aligned - range_begin;
+                    const VkDeviceSize back_begin = aligned + size;
+                    const VkDeviceSize back_size = range_end - back_begin;
+
+                    std::vector<std::pair<VkDeviceSize, VkDeviceSize>> replacement;
+                    if (front_size != 0)
+                        replacement.push_back({ range_begin, front_size });
+                    if (back_size != 0)
+                        replacement.push_back({ back_begin, back_size });
+
+                    if (replacement.empty())
+                    {
+                        target.m_free_ranges.erase(
+                            target.m_free_ranges.begin() + (std::ptrdiff_t)i);
+                    }
+                    else
+                    {
+                        target.m_free_ranges[i] = replacement[0];
+                        if (replacement.size() == 2)
+                        {
+                            target.m_free_ranges.insert(
+                                target.m_free_ranges.begin() + (std::ptrdiff_t)i + 1,
+                                replacement[1]);
+                        }
+                    }
+
+                    out.m_memory = target.m_memory;
+                    out.m_offset = aligned;
+                    out.m_size = size;
+                    out.m_mapped = target.m_mapped != nullptr
+                        ? (uint8_t*)target.m_mapped + aligned
+                        : nullptr;
+                    return true;
+                }
+                return false;
+            }
+
+            allocation allocate(
+                const VkMemoryRequirements& requirements,
+                VkMemoryPropertyFlags properties,
+                VkDeviceSize extra_alignment)
+            {
+                const VkDeviceSize alignment =
+                    std::max(requirements.alignment, extra_alignment);
+                const uint32_t memory_type = m_context->find_memory_type(
+                    requirements.memoryTypeBits, properties);
+                const bool host_visible =
+                    0 != (properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+
+                for (auto& block : m_blocks)
+                {
+                    if (block.m_memory_type != memory_type)
+                        continue;
+
+                    ensure_block_mapped(block, host_visible);
+
+                    allocation result;
+                    if (try_allocate_from_block(
+                        block, requirements.size, alignment, result))
+                    {
+                        return result;
                     }
                 }
 
-                if (swapchain_image_maynull != nullptr)
-                    swapchain_image_maynull->use_command_buffer(result);
+                const VkDeviceSize default_block_size = host_visible
+                    ? m_default_host_block_size
+                    : m_default_device_block_size;
+                VkDeviceSize block_size = std::max<VkDeviceSize>(
+                    default_block_size, requirements.size + alignment);
+                block_size = align_up(block_size, 4096);
+
+                VkMemoryAllocateInfo allocate_info = {};
+                allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+                allocate_info.pNext = nullptr;
+                allocate_info.allocationSize = block_size;
+                allocate_info.memoryTypeIndex = memory_type;
+
+                VkDeviceMemory memory = VK_NULL_HANDLE;
+                JE_VK_CHECK(m_context->vkAllocateMemory(
+                    m_context->_vk_logic_device,
+                    &allocate_info,
+                    nullptr,
+                    &memory));
+
+                block new_block;
+                new_block.m_memory = memory;
+                new_block.m_size = block_size;
+                new_block.m_memory_type = memory_type;
+                new_block.m_free_ranges.push_back({ 0, block_size });
+                m_blocks.push_back(std::move(new_block));
+
+                ensure_block_mapped(m_blocks.back(), host_visible);
+
+                allocation result;
+                if (!try_allocate_from_block(
+                    m_blocks.back(), requirements.size, alignment, result))
+                {
+                    jeecs::debug::logfatal(
+                        "VK120: failed to suballocate from a freshly created memory block.");
+                }
                 return result;
             }
 
-            void flush_command_buffer_allocator(swapchain_image_content* swapchain_image)
+            void free(const allocation& allocation)
             {
-                for (auto& cmd_buffer : swapchain_image->m_using_command_buffers)
-                    m_free_cmd_buffers.push_back(cmd_buffer);
+                if (allocation.m_memory == VK_NULL_HANDLE || allocation.m_size == 0)
+                    return;
 
-                for (auto& semaphore : swapchain_image->m_using_semaphores)
-                    m_free_cmd_semaphores.push_back(semaphore);
-
-                swapchain_image->m_using_command_buffers.clear();
-                swapchain_image->m_using_semaphores.clear();
-            }
-
-            command_buffer_allocator(jegl_vk120_context* context)
-            {
-                m_context = context;
-                assert(m_context != nullptr);
-
-                VkCommandPoolCreateInfo default_command_pool_create_info = {};
-                default_command_pool_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-                default_command_pool_create_info.pNext = nullptr;
-                default_command_pool_create_info.flags =
-                    VkCommandPoolCreateFlagBits::VK_COMMAND_POOL_CREATE_TRANSIENT_BIT |
-                    VkCommandPoolCreateFlagBits::VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-                default_command_pool_create_info.queueFamilyIndex = m_context->_vk_device_queue_graphic_family_index;
-
-                if (VK_SUCCESS != m_context->vkCreateCommandPool(
-                    m_context->_vk_logic_device,
-                    &default_command_pool_create_info,
-                    nullptr,
-                    &m_command_pool))
+                for (auto& block : m_blocks)
                 {
-                    jeecs::debug::logfatal("Failed to create vk120 default command pool.");
+                    if (block.m_memory != allocation.m_memory)
+                        continue;
+
+                    if (allocation.m_offset + allocation.m_size > block.m_size)
+                    {
+                        jeecs::debug::logfatal(
+                            "VK120: freeing a range outside its memory block.");
+                    }
+
+                    for (const auto& range : block.m_free_ranges)
+                    {
+                        const bool overlaps =
+                            allocation.m_offset < range.first + range.second
+                            && range.first < allocation.m_offset + allocation.m_size;
+                        if (overlaps)
+                        {
+                            jeecs::debug::logfatal(
+                                "VK120: double free or overlapping memory range detected.");
+                        }
+                    }
+
+                    block.m_free_ranges.push_back(
+                        { allocation.m_offset, allocation.m_size });
+                    std::sort(
+                        block.m_free_ranges.begin(), block.m_free_ranges.end());
+
+                    std::vector<std::pair<VkDeviceSize, VkDeviceSize>> merged;
+                    for (const auto& range : block.m_free_ranges)
+                    {
+                        if (!merged.empty()
+                            && merged.back().first + merged.back().second
+                            == range.first)
+                        {
+                            merged.back().second += range.second;
+                        }
+                        else
+                        {
+                            merged.push_back(range);
+                        }
+                    }
+                    block.m_free_ranges = std::move(merged);
+                    return;
                 }
-            }
-            ~command_buffer_allocator()
-            {
-                for (auto& cmd_buffer : m_free_cmd_buffers)
-                    m_context->vkFreeCommandBuffers(m_context->_vk_logic_device, m_command_pool, 1, &cmd_buffer);
 
-                for (auto& semaphore : m_free_cmd_semaphores)
-                    m_context->destroy_semaphore(semaphore);
-
-                m_context->vkDestroyCommandPool(m_context->_vk_logic_device, m_command_pool, nullptr);
+                jeecs::debug::logfatal(
+                    "VK120: freeing an allocation from an unknown memory block.");
             }
         };
 
-        descriptor_set_allocator* _vk_descriptor_set_allocator;
-        single_descriptor_set_allocator<descriptor_set_type::DEAR_IMGUI_TEXTURE>*
-            _vk_dear_imgui_descriptor_set_allocator;
-        command_buffer_allocator* _vk_command_buffer_allocator;
+        descriptor_set_allocator* _vk_descriptor_set_allocator = nullptr;
+        memory_allocator* _vk_memory_allocator = nullptr;
 
-        VkSwapchainKHR _vk_swapchain;
+        VkSwapchainKHR _vk_swapchain = VK_NULL_HANDLE;
         std::vector<swapchain_image_content*> _vk_swapchain_images;
 
-        VkSampler _vk_dear_imgui_sampler;
-        VkDescriptorPool _vk_dear_imgui_descriptor_pool;
+        // 每个交换链图像一个 render-finished 信号量。按帧槽复用会让信号量
+        // 在 present 仍等待它时被下一次提交再次 signal（VUID-vkQueueSubmit-
+        // pSignalSemaphores-00067）。重新 acquire 同一张图即可保证其 present
+        // 已完成，此时复用对应信号量是安全的。
+        std::vector<VkSemaphore> _vk_image_render_finished_semaphores;
+
+        VkSampler _vk_dear_imgui_sampler = VK_NULL_HANDLE;
+        VkDescriptorPool _vk_dear_imgui_descriptor_pool = VK_NULL_HANDLE;
+
+        VkCommandPool _vk_frame_command_pool = VK_NULL_HANDLE;
+        VkCommandPool _vk_temp_command_pool = VK_NULL_HANDLE;
+
+        std::array<frame_resources, FRAMES_IN_FLIGHT> _vk_frames = {};
+        uint32_t _vk_current_frame_index = 0;
 
         // Following is runtime vk states.
-        uint32_t _vk_presenting_swapchain_image_index;
-        swapchain_image_content* _vk_current_swapchain_image_content;
+        uint32_t _vk_presenting_swapchain_image_index = UINT32_MAX;
+        swapchain_image_content* _vk_current_swapchain_image_content = nullptr;
 
-        jevk12_framebuffer* _vk_current_target_framebuffer;
-        VkCommandBuffer _vk_current_command_buffer;
-        jevk12_shader* _vk_current_binded_shader;
-        size_t _vk_command_commit_round;
+        jevk12_framebuffer* _vk_current_target_framebuffer = nullptr;
+        VkCommandBuffer _vk_current_command_buffer = VK_NULL_HANDLE;
+        jevk12_shader* _vk_current_binded_shader = nullptr;
+        jegl_pipeline* _vk_current_pipeline = nullptr;
+        jevk12_vertex* _vk_current_vertex = nullptr;
+        jegl_shader* _vk_current_shader_resource = nullptr;
 
-        VkSemaphore _vk_last_command_buffer_semaphore;
-        VkPipelineStageFlags _vk_wait_for_last_command_buffer_stage;
+        bool _vk_frame_recording = false;
+        bool _vk_frame_has_swapchain_image = false;
+
+        bool _vk_pending_present = false;
+        uint32_t _vk_pending_present_image_index = UINT32_MAX;
+        bool _vk_swapchain_out_of_date = false;
+        bool _vk_imgui_initialized = false;
+
+        VkPipelineCache _vk_pipeline_cache = VK_NULL_HANDLE;
+        VkDeviceSize _vk_min_uniform_buffer_offset_alignment = 1;
+
+        using pso_key_t =
+            std::tuple<jegl_pipeline*, jevk12_framebuffer*, uint32_t, uint32_t, uint32_t>;
+        std::map<pso_key_t, VkPipeline> _vk_pso_cache;
+
+        using render_pass_key_t =
+            std::tuple<std::vector<VkFormat>, VkFormat, VkFormat, uint32_t,
+                int, int, int, int, int, int>;
+        std::map<render_pass_key_t, VkRenderPass> _vk_render_pass_cache;
+
+        std::unordered_map<VkImageView, VkDescriptorSet> _vk_imgui_texture_cache;
+
+        frame_resources& current_frame()
+        {
+            assert(_vk_current_frame_index < FRAMES_IN_FLIGHT);
+            return _vk_frames[_vk_current_frame_index];
+        }
 
         /////////////////////////////////////////////////////////////////////
         VkCommandBuffer begin_temp_command_buffer_records()
         {
-            VkCommandBuffer result = _vk_command_buffer_allocator->allocate_command_buffer(nullptr);
+            VkCommandBufferAllocateInfo allocate_info = {};
+            allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            allocate_info.pNext = nullptr;
+            allocate_info.commandPool = _vk_temp_command_pool;
+            allocate_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            allocate_info.commandBufferCount = 1;
+
+            VkCommandBuffer result = VK_NULL_HANDLE;
+            JE_VK_CHECK(vkAllocateCommandBuffers(
+                _vk_logic_device, &allocate_info, &result));
 
             VkCommandBufferBeginInfo command_buffer_begin_info = {};
-            command_buffer_begin_info.sType = VkStructureType::VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
             command_buffer_begin_info.pNext = nullptr;
-            command_buffer_begin_info.flags = 0;
+            command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
             command_buffer_begin_info.pInheritanceInfo = nullptr;
 
-            if (vkBeginCommandBuffer(result, &command_buffer_begin_info) != VK_SUCCESS)
-            {
-                jeecs::debug::logfatal("Failed to begin recording command buffer!");
-            }
-
+            JE_VK_CHECK(vkBeginCommandBuffer(result, &command_buffer_begin_info));
             return result;
         }
         void end_temp_command_buffer_record(VkCommandBuffer cmd_buffer)
         {
-            if (vkEndCommandBuffer(cmd_buffer) != VK_SUCCESS)
-            {
-                jeecs::debug::logfatal("Failed to record command buffer!");
-            }
+            JE_VK_CHECK(vkEndCommandBuffer(cmd_buffer));
 
             VkSubmitInfo submit_info = {};
-            submit_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
             submit_info.pNext = nullptr;
             submit_info.commandBufferCount = 1;
             submit_info.pCommandBuffers = &cmd_buffer;
 
-            // Fix: Use fence for better synchronization instead of blocking queue wait
-            if (vkQueueSubmit(_vk_logic_device_graphic_queue, 1, &submit_info, _vk_queue_commit_fence) != VK_SUCCESS)
-                jeecs::debug::logfatal("Failed to submit temporary command buffer!");
-            // Wait for the specific operation to complete
-            else if (vkWaitForFences(_vk_logic_device, 1, &_vk_queue_commit_fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
-                jeecs::debug::logfatal("Failed to wait for temporary command buffer fence!");
+            JE_VK_CHECK(vkQueueSubmit(
+                _vk_logic_device_graphic_queue, 1, &submit_info, _vk_queue_commit_fence));
+            JE_VK_CHECK(vkWaitForFences(
+                _vk_logic_device, 1, &_vk_queue_commit_fence, VK_TRUE, UINT64_MAX));
+            JE_VK_CHECK(vkResetFences(_vk_logic_device, 1, &_vk_queue_commit_fence));
 
-            vkResetFences(_vk_logic_device, 1, &_vk_queue_commit_fence);
-            _vk_command_buffer_allocator->m_free_cmd_buffers.push_back(cmd_buffer);
+            vkFreeCommandBuffers(
+                _vk_logic_device, _vk_temp_command_pool, 1, &cmd_buffer);
         }
 
         VkSemaphore create_semaphore()
@@ -1129,157 +1288,473 @@ namespace jeecs::graphic::api::vk120
             vkDestroySemaphore(_vk_logic_device, semaphore, nullptr);
         }
 
-        VkFence create_fence()
+        VkFence create_fence(bool signaled = false)
         {
             VkFenceCreateInfo fence_create_info = {};
             fence_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
             fence_create_info.pNext = nullptr;
-            fence_create_info.flags = 0; // 创建时必须被设置为空就绪状态
+            fence_create_info.flags =
+                signaled ? VK_FENCE_CREATE_SIGNALED_BIT : 0;
 
             VkFence result = VK_NULL_HANDLE;
-            if (VK_SUCCESS != vkCreateFence(_vk_logic_device, &fence_create_info, nullptr, &result))
-            {
-                jeecs::debug::logfatal("Failed to create vk120 fence.");
-            }
+            JE_VK_CHECK(vkCreateFence(
+                _vk_logic_device, &fence_create_info, nullptr, &result));
             return result;
         }
         void destroy_fence(VkFence fence)
         {
-            vkDestroyFence(_vk_logic_device, fence, nullptr);
+            if (fence != VK_NULL_HANDLE)
+                vkDestroyFence(_vk_logic_device, fence, nullptr);
         }
 
-        // TODO: 这里的参数应该还包含fb的附件配置信息
+        void create_frame_descriptor_pool(frame_resources& frame)
+        {
+            constexpr uint32_t MAX_FRAME_DESCRIPTOR_SETS = 2048;
+
+            VkDescriptorPoolSize pool_sizes[] = {
+                { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, MAX_FRAME_DESCRIPTOR_SETS },
+                { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, MAX_FRAME_DESCRIPTOR_SETS * 16 },
+                { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, MAX_FRAME_DESCRIPTOR_SETS * 16 },
+                { VK_DESCRIPTOR_TYPE_SAMPLER, MAX_FRAME_DESCRIPTOR_SETS * 16 } };
+
+            VkDescriptorPoolCreateInfo create_info = {};
+            create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+            create_info.pNext = nullptr;
+            create_info.flags = 0;
+            create_info.maxSets = MAX_FRAME_DESCRIPTOR_SETS;
+            create_info.poolSizeCount =
+                (uint32_t)(sizeof(pool_sizes) / sizeof(VkDescriptorPoolSize));
+            create_info.pPoolSizes = pool_sizes;
+
+            JE_VK_CHECK(vkCreateDescriptorPool(
+                _vk_logic_device, &create_info, nullptr, &frame.m_descriptor_pool));
+        }
+
+        void create_frame_uniform_ring(frame_resources& frame)
+        {
+            constexpr VkDeviceSize UBO_RING_SIZE = 8 * 1024 * 1024;
+
+            alloc_vk_device_buffer_memory(
+                (size_t)UBO_RING_SIZE,
+                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                &frame.m_ubo_ring_buffer,
+                &frame.m_ubo_ring_memory,
+                &frame.m_ubo_ring_memory_offset,
+                &frame.m_ubo_ring_memory_size,
+                &frame.m_ubo_ring_mapped);
+
+            frame.m_ubo_ring_size = UBO_RING_SIZE;
+            frame.m_ubo_ring_offset = 0;
+        }
+
+        void create_frame_resources()
+        {
+            VkCommandPoolCreateInfo pool_info = {};
+            pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+            pool_info.pNext = nullptr;
+            pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+            pool_info.queueFamilyIndex = _vk_device_queue_graphic_family_index;
+
+            JE_VK_CHECK(vkCreateCommandPool(
+                _vk_logic_device, &pool_info, nullptr, &_vk_frame_command_pool));
+
+            pool_info.flags =
+                VK_COMMAND_POOL_CREATE_TRANSIENT_BIT
+                | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+            JE_VK_CHECK(vkCreateCommandPool(
+                _vk_logic_device, &pool_info, nullptr, &_vk_temp_command_pool));
+
+            for (auto& frame : _vk_frames)
+            {
+                VkCommandBufferAllocateInfo allocate_info = {};
+                allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+                allocate_info.pNext = nullptr;
+                allocate_info.commandPool = _vk_frame_command_pool;
+                allocate_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+                allocate_info.commandBufferCount = 1;
+
+                JE_VK_CHECK(vkAllocateCommandBuffers(
+                    _vk_logic_device, &allocate_info, &frame.m_command_buffer));
+
+                frame.m_fence = create_fence(true);
+                frame.m_image_available = create_semaphore();
+                frame.m_recording = false;
+                frame.m_has_swapchain_image = false;
+                frame.m_submitted = false;
+
+                create_frame_descriptor_pool(frame);
+                create_frame_uniform_ring(frame);
+            }
+
+            _vk_current_frame_index = 0;
+            _vk_frame_recording = false;
+            _vk_frame_has_swapchain_image = false;
+        }
+
+        void destroy_frame_resources()
+        {
+            for (auto& frame : _vk_frames)
+            {
+                if (frame.m_ubo_ring_buffer != VK_NULL_HANDLE)
+                    vkDestroyBuffer(_vk_logic_device, frame.m_ubo_ring_buffer, nullptr);
+                if (frame.m_ubo_ring_memory != VK_NULL_HANDLE)
+                {
+                    free_vk_memory(
+                        frame.m_ubo_ring_memory,
+                        frame.m_ubo_ring_memory_offset,
+                        frame.m_ubo_ring_memory_size);
+                }
+
+                destroy_fence(frame.m_fence);
+                destroy_semaphore(frame.m_image_available);
+
+                if (frame.m_descriptor_pool != VK_NULL_HANDLE)
+                {
+                    vkDestroyDescriptorPool(
+                        _vk_logic_device, frame.m_descriptor_pool, nullptr);
+                }
+
+                if (frame.m_command_buffer != VK_NULL_HANDLE)
+                {
+                    vkFreeCommandBuffers(
+                        _vk_logic_device,
+                        _vk_frame_command_pool,
+                        1,
+                        &frame.m_command_buffer);
+                }
+            }
+
+            if (_vk_temp_command_pool != VK_NULL_HANDLE)
+            {
+                vkDestroyCommandPool(
+                    _vk_logic_device, _vk_temp_command_pool, nullptr);
+                _vk_temp_command_pool = VK_NULL_HANDLE;
+            }
+            if (_vk_frame_command_pool != VK_NULL_HANDLE)
+            {
+                vkDestroyCommandPool(
+                    _vk_logic_device, _vk_frame_command_pool, nullptr);
+                _vk_frame_command_pool = VK_NULL_HANDLE;
+            }
+        }
+
+        VkRenderPass get_or_create_render_pass(
+            const std::vector<jevk12_texture*>& color_attachments,
+            jevk12_texture* resolve_attachment,
+            jevk12_texture* depth_attachment,
+            VkImageLayout color_initial_layout,
+            VkImageLayout color_final_layout,
+            VkImageLayout resolve_initial_layout,
+            VkImageLayout resolve_final_layout,
+            VkImageLayout depth_initial_layout,
+            VkImageLayout depth_final_layout,
+            VkSampleCountFlagBits sample_count)
+        {
+            if (resolve_attachment != nullptr && color_attachments.size() != 1)
+            {
+                jeecs::debug::logfatal(
+                    "VK120: multisample resolve is only supported with a single color attachment.");
+            }
+
+            std::vector<VkFormat> color_formats;
+            color_formats.reserve(color_attachments.size());
+            for (auto* color : color_attachments)
+                color_formats.push_back(color->m_vk_texture_format);
+
+            const VkFormat depth_format =
+                depth_attachment != nullptr ? depth_attachment->m_vk_texture_format : VK_FORMAT_UNDEFINED;
+            const VkFormat resolve_format =
+                resolve_attachment != nullptr ? resolve_attachment->m_vk_texture_format : VK_FORMAT_UNDEFINED;
+
+            render_pass_key_t key{
+                color_formats,
+                depth_format,
+                resolve_format,
+                (uint32_t)sample_count,
+                (int)color_initial_layout,
+                (int)color_final_layout,
+                (int)depth_initial_layout,
+                (int)depth_final_layout,
+                (int)resolve_initial_layout,
+                (int)resolve_final_layout };
+
+            auto found = _vk_render_pass_cache.find(key);
+            if (found != _vk_render_pass_cache.end())
+                return found->second;
+
+            const size_t resolve_index = color_attachments.size();
+            const size_t depth_index =
+                color_attachments.size() + (resolve_attachment == nullptr ? 0 : 1);
+
+            std::vector<VkAttachmentDescription> attachments(
+                color_attachments.size()
+                + (resolve_attachment == nullptr ? 0 : 1)
+                + (depth_attachment == nullptr ? 0 : 1));
+            std::vector<VkAttachmentReference> color_refs(color_attachments.size());
+            VkAttachmentReference resolve_ref = {};
+            VkAttachmentReference depth_ref = {};
+
+            for (size_t i = 0; i < color_attachments.size(); ++i)
+            {
+                auto& attachment = attachments[i];
+                attachment.flags = 0;
+                attachment.format = color_attachments[i]->m_vk_texture_format;
+                attachment.samples = sample_count;
+                attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+                attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+                attachment.initialLayout = color_initial_layout;
+                attachment.finalLayout = color_final_layout;
+
+                color_refs[i].attachment = (uint32_t)i;
+                color_refs[i].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            }
+
+            if (resolve_attachment != nullptr)
+            {
+                auto& attachment = attachments[resolve_index];
+                attachment.flags = 0;
+                attachment.format = resolve_attachment->m_vk_texture_format;
+                attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+                attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+                attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+                attachment.initialLayout = resolve_initial_layout;
+                attachment.finalLayout = resolve_final_layout;
+
+                resolve_ref.attachment = (uint32_t)resolve_index;
+                resolve_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            }
+
+            if (depth_attachment != nullptr)
+            {
+                auto& attachment = attachments[depth_index];
+                attachment.flags = 0;
+                attachment.format = depth_attachment->m_vk_texture_format;
+                attachment.samples = sample_count;
+                attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+                attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+                attachment.initialLayout = depth_initial_layout;
+                attachment.finalLayout = depth_final_layout;
+
+                depth_ref.attachment = (uint32_t)depth_index;
+                depth_ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            }
+
+            VkSubpassDescription subpass = {};
+            subpass.flags = 0;
+            subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+            subpass.inputAttachmentCount = 0;
+            subpass.pInputAttachments = nullptr;
+            subpass.colorAttachmentCount = (uint32_t)color_refs.size();
+            subpass.pColorAttachments = color_refs.empty() ? nullptr : color_refs.data();
+            subpass.pResolveAttachments =
+                resolve_attachment != nullptr ? &resolve_ref : nullptr;
+            subpass.pDepthStencilAttachment =
+                depth_attachment != nullptr ? &depth_ref : nullptr;
+            subpass.preserveAttachmentCount = 0;
+            subpass.pPreserveAttachments = nullptr;
+
+            VkSubpassDependency dependencies[2] = {};
+
+            auto& entry_dependency = dependencies[0];
+            entry_dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+            entry_dependency.dstSubpass = 0;
+            entry_dependency.srcStageMask =
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+                | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+                | VK_PIPELINE_STAGE_TRANSFER_BIT;
+            entry_dependency.srcAccessMask =
+                VK_ACCESS_SHADER_READ_BIT
+                | VK_ACCESS_TRANSFER_WRITE_BIT
+                | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            entry_dependency.dstStageMask =
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            entry_dependency.dstAccessMask =
+                VK_ACCESS_COLOR_ATTACHMENT_READ_BIT
+                | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+            if (depth_attachment != nullptr)
+            {
+                entry_dependency.srcStageMask |=
+                    VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+                    | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+                entry_dependency.srcAccessMask |=
+                    VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+                entry_dependency.dstStageMask |=
+                    VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+                    | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+                entry_dependency.dstAccessMask |=
+                    VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
+                    | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            }
+
+            auto& exit_dependency = dependencies[1];
+            exit_dependency.srcSubpass = 0;
+            exit_dependency.dstSubpass = VK_SUBPASS_EXTERNAL;
+            exit_dependency.srcStageMask =
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            exit_dependency.srcAccessMask =
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            exit_dependency.dstStageMask =
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+                | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+                | VK_PIPELINE_STAGE_TRANSFER_BIT;
+            exit_dependency.dstAccessMask =
+                VK_ACCESS_SHADER_READ_BIT
+                | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT
+                | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+            if (depth_attachment != nullptr)
+            {
+                exit_dependency.srcStageMask |=
+                    VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+                    | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+                exit_dependency.srcAccessMask |=
+                    VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+                exit_dependency.dstStageMask |=
+                    VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+                    | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+                exit_dependency.dstAccessMask |=
+                    VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
+                    | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            }
+
+            VkRenderPassCreateInfo create_info = {};
+            create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+            create_info.pNext = nullptr;
+            create_info.flags = 0;
+            create_info.attachmentCount = (uint32_t)attachments.size();
+            create_info.pAttachments = attachments.empty() ? nullptr : attachments.data();
+            create_info.subpassCount = 1;
+            create_info.pSubpasses = &subpass;
+            create_info.dependencyCount = 2;
+            create_info.pDependencies = dependencies;
+
+            VkRenderPass render_pass = VK_NULL_HANDLE;
+            JE_VK_CHECK(vkCreateRenderPass(
+                _vk_logic_device, &create_info, nullptr, &render_pass));
+
+            _vk_render_pass_cache.emplace(std::move(key), render_pass);
+            return render_pass;
+        }
+
         jevk12_framebuffer* create_frame_buffer(
             size_t w,
             size_t h,
             const std::vector<jevk12_texture*>& attachment_colors,
+            jevk12_texture* resolve_attachment,
             jevk12_texture* attachment_depth,
-            VkImageLayout final_layout)
+            VkImageLayout final_layout,
+            bool is_screen_framebuffer)
         {
             jevk12_framebuffer* result = new jevk12_framebuffer{};
-
-            result->m_rend_rounds = 0;
-            result->m_is_screen_framebuffer = true;
             result->m_width = w;
             result->m_height = h;
-
-            std::vector<VkAttachmentDescription> color_and_depth_attachments(
-                attachment_colors.size() + (attachment_depth == nullptr ? 0 : 1));
-            std::vector<VkAttachmentReference> color_attachment_refs(attachment_colors.size());
-
-            VkAttachmentReference depth_attachment_ref = {};
-
-            for (size_t attachment_i = 0; attachment_i < attachment_colors.size(); ++attachment_i)
-            {
-                // TODO: 这边的目标格式暂时没动，之后真正的framebuffer是需要调整的
-                auto& attachment = color_and_depth_attachments[attachment_i];
-                attachment.flags = 0;
-                attachment.format = attachment_colors[attachment_i]->m_vk_texture_format;
-                attachment.samples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT;
-                attachment.loadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_LOAD;
-                attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-                attachment.stencilLoadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-                attachment.stencilStoreOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_DONT_CARE;
-                attachment.initialLayout = final_layout;
-                attachment.finalLayout = final_layout;
-
-                VkAttachmentReference& attachment_ref = color_attachment_refs[attachment_i];
-                attachment_ref.attachment = (uint32_t)attachment_i;
-                attachment_ref.layout = VkImageLayout::VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            }
-
-            if (attachment_depth != nullptr)
-            {
-                assert(!color_and_depth_attachments.empty());
-                VkAttachmentDescription& depth_attachment = color_and_depth_attachments.back();
-
-                depth_attachment.flags = 0;
-                depth_attachment.format = attachment_depth->m_vk_texture_format;
-                depth_attachment.samples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT;
-                depth_attachment.loadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_LOAD;
-                depth_attachment.storeOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_STORE;
-                depth_attachment.stencilLoadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-                depth_attachment.stencilStoreOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_DONT_CARE;
-                depth_attachment.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-                depth_attachment.finalLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-                depth_attachment_ref.attachment = (uint32_t)color_and_depth_attachments.size() - 1;
-                depth_attachment_ref.layout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-            }
-
-            VkSubpassDescription default_render_subpass = {};
-            default_render_subpass.flags = 0;
-            default_render_subpass.pipelineBindPoint = VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS;
-            default_render_subpass.inputAttachmentCount = 0;
-            default_render_subpass.pInputAttachments = nullptr;
-            default_render_subpass.colorAttachmentCount = (uint32_t)color_attachment_refs.size();
-            default_render_subpass.pColorAttachments = color_attachment_refs.data();
-            default_render_subpass.pResolveAttachments = nullptr;
-            default_render_subpass.pDepthStencilAttachment =
-                attachment_depth != nullptr ? &depth_attachment_ref : nullptr;
-            default_render_subpass.preserveAttachmentCount = 0;
-            default_render_subpass.pPreserveAttachments = nullptr;
-
-            VkSubpassDependency default_render_subpass_dependency = {};
-            default_render_subpass_dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-            default_render_subpass_dependency.dstSubpass = 0;
-            default_render_subpass_dependency.srcStageMask =
-                VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            default_render_subpass_dependency.srcAccessMask = 0;
-            default_render_subpass_dependency.dstStageMask =
-                VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            default_render_subpass_dependency.dstAccessMask =
-                VkAccessFlagBits::VK_ACCESS_COLOR_ATTACHMENT_READ_BIT
-                | VkAccessFlagBits::VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-            // 当存在深度/模板附件时，外部依赖必须同时覆盖深度阶段，否则验证层会报错且存在同步缺口
-            if (attachment_depth != nullptr)
-            {
-                default_render_subpass_dependency.srcStageMask |=
-                    VkPipelineStageFlagBits::VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
-                    | VkPipelineStageFlagBits::VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-                default_render_subpass_dependency.dstStageMask |=
-                    VkPipelineStageFlagBits::VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
-                    | VkPipelineStageFlagBits::VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-                default_render_subpass_dependency.dstAccessMask |=
-                    VkAccessFlagBits::VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
-                    | VkAccessFlagBits::VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-            }
-
-            VkRenderPassCreateInfo default_render_pass_create_info = {};
-            default_render_pass_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-            default_render_pass_create_info.flags = 0;
-            default_render_pass_create_info.pNext = nullptr;
-            default_render_pass_create_info.attachmentCount = (uint32_t)color_and_depth_attachments.size();
-            default_render_pass_create_info.pAttachments = color_and_depth_attachments.data();
-            default_render_pass_create_info.subpassCount = 1;
-            default_render_pass_create_info.pSubpasses = &default_render_subpass;
-            default_render_pass_create_info.dependencyCount = 1;
-            default_render_pass_create_info.pDependencies = &default_render_subpass_dependency;
-
-            if (VK_SUCCESS != vkCreateRenderPass(
-                _vk_logic_device,
-                &default_render_pass_create_info,
-                nullptr,
-                &result->m_rendpass))
-            {
-                jeecs::debug::logfatal("Failed to create vk120 default render pass.");
-            }
-
+            result->m_is_screen_framebuffer = is_screen_framebuffer;
             result->m_color_attachments = attachment_colors;
+            result->m_resolve_attachment = resolve_attachment;
             result->m_depth_attachment = attachment_depth;
 
-            std::vector<VkImageView> attachment_image_views(
-                result->m_color_attachments.size() + (attachment_depth == nullptr ? 0 : 1));
-            for (size_t i = 0; i < result->m_color_attachments.size(); ++i)
+            VkSampleCountFlagBits sample_count = VK_SAMPLE_COUNT_1_BIT;
+            if (!attachment_colors.empty())
+                sample_count = (VkSampleCountFlagBits)attachment_colors.front()->m_samples;
+            else if (attachment_depth != nullptr)
+                sample_count = (VkSampleCountFlagBits)attachment_depth->m_samples;
+
+            for (auto* color : attachment_colors)
             {
-                attachment_image_views[i] = result->m_color_attachments[i]->m_vk_texture_image_view;
+                if ((VkSampleCountFlagBits)color->m_samples != sample_count)
+                {
+                    jeecs::debug::logfatal(
+                        "VK120: framebuffer color attachments have mismatched sample counts.");
+                }
             }
-            if (result->m_depth_attachment != nullptr)
-                attachment_image_views.back() = result->m_depth_attachment->m_vk_texture_image_view;
+            if (attachment_depth != nullptr
+                && (VkSampleCountFlagBits)attachment_depth->m_samples != sample_count)
+            {
+                jeecs::debug::logfatal(
+                    "VK120: framebuffer depth attachment sample count does not match color attachments.");
+            }
+            if (resolve_attachment != nullptr && resolve_attachment->m_samples != 1)
+            {
+                jeecs::debug::logfatal(
+                    "VK120: the resolve target must be a single-sample image.");
+            }
+            result->m_sample_count = sample_count;
+
+            // 多重采样颜色附件不能作为普通纹理采样，因此固定在 COLOR_ATTACHMENT 布局。
+            result->m_color_final_layout =
+                sample_count != VK_SAMPLE_COUNT_1_BIT
+                ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+                : final_layout;
+            result->m_resolve_final_layout = final_layout;
+            result->m_depth_final_layout =
+                (final_layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+                    || sample_count != VK_SAMPLE_COUNT_1_BIT)
+                ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+                : final_layout;
+
+            // 离屏深度附件需要能在后续 pass 中作为纹理采样；在创建 framebuffer 时
+            // 把它迁到 render pass 的 canonical initial/final layout。
+            if (!is_screen_framebuffer
+                && attachment_depth != nullptr
+                && attachment_depth->m_current_layout != result->m_depth_final_layout)
+            {
+                transition_image_layout(
+                    attachment_depth, result->m_depth_final_layout);
+            }
+
+            // 屏幕 framebuffer 的交换链图像在 acquire 前不能 transition，
+            // 首帧会在自己的命令缓冲里从 UNDEFINED 迁到 PRESENT_SRC；
+            // render pass 的 canonical initial layout 仍按 PRESENT_SRC 记录。
+            result->m_color_initial_layout = attachment_colors.empty()
+                ? result->m_color_final_layout
+                : (is_screen_framebuffer && sample_count == VK_SAMPLE_COUNT_1_BIT
+                    ? final_layout
+                    : attachment_colors.front()->m_current_layout);
+            result->m_resolve_initial_layout = resolve_attachment != nullptr
+                ? (is_screen_framebuffer
+                    ? final_layout
+                    : resolve_attachment->m_current_layout)
+                : result->m_resolve_final_layout;
+            result->m_depth_initial_layout = attachment_depth != nullptr
+                ? attachment_depth->m_current_layout
+                : result->m_depth_final_layout;
+
+            result->m_rendpass = get_or_create_render_pass(
+                attachment_colors,
+                resolve_attachment,
+                attachment_depth,
+                result->m_color_initial_layout,
+                result->m_color_final_layout,
+                result->m_resolve_initial_layout,
+                result->m_resolve_final_layout,
+                result->m_depth_initial_layout,
+                result->m_depth_final_layout,
+                sample_count);
+
+            std::vector<VkImageView> attachment_image_views;
+            attachment_image_views.reserve(
+                result->m_color_attachments.size()
+                + (resolve_attachment == nullptr ? 0 : 1)
+                + (attachment_depth == nullptr ? 0 : 1));
+
+            for (auto* color : result->m_color_attachments)
+                attachment_image_views.push_back(color->m_vk_texture_image_view);
+            if (resolve_attachment != nullptr)
+                attachment_image_views.push_back(resolve_attachment->m_vk_texture_image_view);
+            if (attachment_depth != nullptr)
+                attachment_image_views.push_back(attachment_depth->m_vk_texture_image_view);
 
             VkFramebufferCreateInfo framebuffer_create_info = {};
-            framebuffer_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            framebuffer_create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
             framebuffer_create_info.pNext = nullptr;
             framebuffer_create_info.flags = 0;
             framebuffer_create_info.renderPass = result->m_rendpass;
@@ -1289,34 +1764,35 @@ namespace jeecs::graphic::api::vk120
             framebuffer_create_info.height = (uint32_t)h;
             framebuffer_create_info.layers = 1;
 
-            if (VK_SUCCESS != vkCreateFramebuffer(
-                _vk_logic_device, &framebuffer_create_info, nullptr, &result->m_framebuffer))
-            {
-                jeecs::debug::logfatal("Failed to create vk120 swapchain framebuffer.");
-            }
+            JE_VK_CHECK(vkCreateFramebuffer(
+                _vk_logic_device, &framebuffer_create_info, nullptr, &result->m_framebuffer));
+
             return result;
+        }
+        void destroy_pipelines_for_framebuffer(jevk12_framebuffer* fb)
+        {
+            for (auto it = _vk_pso_cache.begin(); it != _vk_pso_cache.end();)
+            {
+                if (std::get<1>(it->first) == fb)
+                {
+                    vkDestroyPipeline(_vk_logic_device, it->second, nullptr);
+                    it = _vk_pso_cache.erase(it);
+                }
+                else
+                    ++it;
+            }
         }
         void destroy_frame_buffer(jevk12_framebuffer* fb)
         {
-            for (auto& shader : fb->m_shaders_generate_pipeline_for_this_frame)
-            {
-                auto fnd = shader->m_target_pass_pipelines.find(fb);
-                assert(fnd != shader->m_target_pass_pipelines.end());
+            if (fb == nullptr)
+                return;
 
-                for (const auto& pipelines : fnd->second.m_topology_pipelines)
-                {
-                    for (auto [stride, pipeline] : pipelines)
-                    {
-                        (void)stride;
-                        vkDestroyPipeline(_vk_logic_device, pipeline, nullptr);
-                    }
-                }
+            destroy_pipelines_for_framebuffer(fb);
 
-                shader->m_target_pass_pipelines.erase(fnd);
-            }
+            if (fb->m_framebuffer != VK_NULL_HANDLE)
+                vkDestroyFramebuffer(_vk_logic_device, fb->m_framebuffer, nullptr);
 
-            vkDestroyRenderPass(_vk_logic_device, fb->m_rendpass, nullptr);
-            vkDestroyFramebuffer(_vk_logic_device, fb->m_framebuffer, nullptr);
+            // m_rendpass 由 render pass 缓存持有，不能在这里销毁。
             delete fb;
         }
         void destroy_swap_chain()
@@ -1326,7 +1802,18 @@ namespace jeecs::graphic::api::vk120
 
             _vk_swapchain_images.clear();
 
-            vkDestroySwapchainKHR(_vk_logic_device, _vk_swapchain, nullptr);
+            for (auto semaphore : _vk_image_render_finished_semaphores)
+                destroy_semaphore(semaphore);
+            _vk_image_render_finished_semaphores.clear();
+
+            _vk_current_swapchain_image_content = nullptr;
+            _vk_presenting_swapchain_image_index = UINT32_MAX;
+
+            if (_vk_swapchain != VK_NULL_HANDLE)
+            {
+                vkDestroySwapchainKHR(_vk_logic_device, _vk_swapchain, nullptr);
+                _vk_swapchain = VK_NULL_HANDLE;
+            }
         }
 
         void recreate_swap_chain_for_current_surface()
@@ -1338,7 +1825,8 @@ namespace jeecs::graphic::api::vk120
             RESOLUTION_HEIGHT = (size_t)_h;
 
             // 在此处开始创建交换链
-            vkGetPhysicalDeviceSurfaceCapabilitiesKHR(_vk_device, _vk_surface, &_vk_surface_capabilities);
+            JE_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+                _vk_device, _vk_surface, &_vk_surface_capabilities));
 
             VkExtent2D used_extent = { (uint32_t)RESOLUTION_WIDTH, (uint32_t)RESOLUTION_HEIGHT };
             if (_vk_surface_capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
@@ -1366,7 +1854,8 @@ namespace jeecs::graphic::api::vk120
 
             std::vector<VkSurfaceFormatKHR> vk_surface_formats(vk_surface_format_count);
             vkGetPhysicalDeviceSurfaceFormatsKHR(_vk_device, _vk_surface, &vk_surface_format_count, vk_surface_formats.data());
-            assert(!vk_surface_formats.empty());
+            if (vk_surface_formats.empty())
+                jeecs::debug::logfatal("VK120: the surface reports no supported formats.");
 
             // 获取交换链支持的呈现模式
             uint32_t vk_present_mode_count = 0;
@@ -1374,7 +1863,8 @@ namespace jeecs::graphic::api::vk120
 
             std::vector<VkPresentModeKHR> vk_present_modes(vk_present_mode_count);
             vkGetPhysicalDeviceSurfacePresentModesKHR(_vk_device, _vk_surface, &vk_present_mode_count, vk_present_modes.data());
-            assert(!vk_present_modes.empty());
+            if (vk_present_modes.empty())
+                jeecs::debug::logfatal("VK120: the surface reports no supported present modes.");
 
             // 获取受支持的颜色格式，优先选择VK_FORMAT_B8G8R8A8_UNORM 和 VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
             _vk_surface_format = {};
@@ -1425,6 +1915,77 @@ namespace jeecs::graphic::api::vk120
             if (_vk_depth_format == VK_FORMAT_UNDEFINED)
             {
                 jeecs::debug::logfatal("Failed to find suitable depth format.");
+            }
+
+            // 选择当前设备和表面格式实际支持的多重采样数量。
+            _vk_active_msaa_samples = VK_SAMPLE_COUNT_1_BIT;
+            if (_vk_msaa_config > 1)
+            {
+                VkPhysicalDeviceProperties device_properties = {};
+                vkGetPhysicalDeviceProperties(_vk_device, &device_properties);
+
+                VkSampleCountFlags supported_samples =
+                    device_properties.limits.framebufferColorSampleCounts
+                    & device_properties.limits.framebufferDepthSampleCounts;
+
+                VkImageFormatProperties format_properties = {};
+                if (vkGetPhysicalDeviceImageFormatProperties(
+                    _vk_device,
+                    _vk_surface_format.format,
+                    VK_IMAGE_TYPE_2D,
+                    VK_IMAGE_TILING_OPTIMAL,
+                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                    0,
+                    &format_properties) == VK_SUCCESS)
+                {
+                    supported_samples &= format_properties.sampleCounts;
+                }
+                else
+                {
+                    supported_samples = 0;
+                }
+
+                VkSampleCountFlagBits requested =
+                    clamp_sample_count((uint32_t)_vk_msaa_config);
+                while (requested != VK_SAMPLE_COUNT_1_BIT
+                    && 0 == (supported_samples & requested))
+                {
+                    requested = (VkSampleCountFlagBits)((uint32_t)requested >> 1);
+                }
+
+                if (requested != VK_SAMPLE_COUNT_1_BIT)
+                {
+                    VkImageFormatProperties depth_format_properties = {};
+                    if (vkGetPhysicalDeviceImageFormatProperties(
+                        _vk_device,
+                        _vk_depth_format,
+                        VK_IMAGE_TYPE_2D,
+                        VK_IMAGE_TILING_OPTIMAL,
+                        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                        0,
+                        &depth_format_properties) == VK_SUCCESS)
+                    {
+                        while (requested != VK_SAMPLE_COUNT_1_BIT
+                            && 0 == (depth_format_properties.sampleCounts & requested))
+                        {
+                            requested =
+                                (VkSampleCountFlagBits)((uint32_t)requested >> 1);
+                        }
+                    }
+                    else
+                    {
+                        requested = VK_SAMPLE_COUNT_1_BIT;
+                    }
+                }
+
+                _vk_active_msaa_samples = requested;
+                if (requested == VK_SAMPLE_COUNT_1_BIT)
+                {
+                    jeecs::debug::logwarn(
+                        "VK120: MSAA x%zu is not supported by this device/format, "
+                        "rendering will run at 1x.",
+                        _vk_msaa_config);
+                }
             }
 
             // 选择呈现模式。注意:MAILBOX 与 FIFO 都是"无撕裂、受刷新率限制"的同步模式，
@@ -1498,69 +2059,128 @@ namespace jeecs::graphic::api::vk120
             }
 
             swapchain_create_info.preTransform = _vk_surface_capabilities.currentTransform;
-            swapchain_create_info.compositeAlpha = VkCompositeAlphaFlagBitsKHR::VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+
+            VkCompositeAlphaFlagBitsKHR composite_alpha =
+                VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+            if (0 == (_vk_surface_capabilities.supportedCompositeAlpha
+                & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR))
+            {
+                const VkCompositeAlphaFlagBitsKHR candidates[] = {
+                    VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
+                    VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR,
+                    VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR };
+                composite_alpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
+                for (auto candidate : candidates)
+                {
+                    if (0 != (_vk_surface_capabilities.supportedCompositeAlpha & candidate))
+                    {
+                        composite_alpha = candidate;
+                        break;
+                    }
+                }
+            }
+            swapchain_create_info.compositeAlpha = composite_alpha;
             swapchain_create_info.presentMode = _vk_surface_present_mode;
             swapchain_create_info.clipped = VK_TRUE;
 
             swapchain_create_info.oldSwapchain = VK_NULL_HANDLE;
 
+            // 调用方必须保证没有在途的帧；这里再等待一次，避免在录制/提交期间销毁交换链。
+            JE_VK_CHECK(vkDeviceWaitIdle(_vk_logic_device));
+
             if (_vk_swapchain != VK_NULL_HANDLE)
                 destroy_swap_chain();
 
-            if (VK_SUCCESS != vkCreateSwapchainKHR(_vk_logic_device, &swapchain_create_info, nullptr, &_vk_swapchain))
-            {
-                jeecs::debug::logfatal("Failed to create vk120 swapchain.");
-            }
+            _vk_presenting_swapchain_image_index = UINT32_MAX;
+            _vk_current_swapchain_image_content = nullptr;
+            _vk_pending_present = false;
+            _vk_pending_present_image_index = UINT32_MAX;
+            _vk_swapchain_out_of_date = false;
+
+            JE_VK_CHECK(vkCreateSwapchainKHR(
+                _vk_logic_device, &swapchain_create_info, nullptr, &_vk_swapchain));
 
             uint32_t swapchain_real_image_count = 0;
-            vkGetSwapchainImagesKHR(_vk_logic_device, _vk_swapchain, &swapchain_real_image_count, nullptr);
+            JE_VK_CHECK(vkGetSwapchainImagesKHR(
+                _vk_logic_device, _vk_swapchain, &swapchain_real_image_count, nullptr));
 
-            assert(swapchain_real_image_count == swapchain_image_count);
+            if (swapchain_real_image_count == 0)
+                jeecs::debug::logfatal("VK120: swapchain returned no images.");
 
             std::vector<VkImage> swapchain_images(swapchain_real_image_count);
-            vkGetSwapchainImagesKHR(_vk_logic_device, _vk_swapchain, &swapchain_real_image_count, swapchain_images.data());
+            JE_VK_CHECK(vkGetSwapchainImagesKHR(
+                _vk_logic_device,
+                _vk_swapchain,
+                &swapchain_real_image_count,
+                swapchain_images.data()));
 
             _vk_swapchain_images.resize(swapchain_real_image_count);
+
+            _vk_image_render_finished_semaphores.reserve(swapchain_real_image_count);
+            for (uint32_t i = 0; i < swapchain_real_image_count; ++i)
+                _vk_image_render_finished_semaphores.push_back(create_semaphore());
+
             for (uint32_t i = 0; i < swapchain_real_image_count; ++i)
             {
-                transition_image_layout(
-                    swapchain_images[i],
-                    _vk_surface_format.format,
-                    VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED,
-                    VkImageLayout::VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+                jevk12_texture* color_attachment =
+                    create_framebuf_texture_with_swapchain_image(
+                        swapchain_images[i],
+                        _vk_surface_format.format,
+                        VK_IMAGE_ASPECT_COLOR_BIT,
+                        used_extent.width,
+                        used_extent.height);
 
-                jevk12_texture* color_attachment = create_framebuf_texture_with_swapchain_image(
-                    swapchain_images[i],
-                    _vk_surface_format.format,
-                    VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT);
+                // 交换链图像在 acquire 之前不能做布局转换；首帧会在
+                // begin_frame 后（acquire 之后）把它从 UNDEFINED 迁到
+                // render pass 期望的 PRESENT_SRC。
+
+                jevk12_texture* msaa_attachment = nullptr;
+                jevk12_texture* framebuffer_color = color_attachment;
+
+                if (_vk_active_msaa_samples != VK_SAMPLE_COUNT_1_BIT)
+                {
+                    msaa_attachment = new jevk12_texture{};
+                    msaa_attachment->m_width = used_extent.width;
+                    msaa_attachment->m_height = used_extent.height;
+
+                    create_image(
+                        msaa_attachment,
+                        _vk_surface_format.format,
+                        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                        VK_IMAGE_TYPE_2D, 1, 1,
+                        _vk_active_msaa_samples,
+                        0,
+                        VK_IMAGE_VIEW_TYPE_2D);
+                    transition_image_layout(
+                        msaa_attachment,
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+                    framebuffer_color = msaa_attachment;
+                }
 
                 jevk12_texture* depth_attachment = create_framebuf_texture(
-                    (jegl_texture_common::format)(jegl_texture_common::format::DEPTH | jegl_texture_common::format::FRAMEBUF),
-                    RESOLUTION_WIDTH,
-                    RESOLUTION_HEIGHT);
+                    (jegl_texture_common::format)(
+                        jegl_texture_common::format::DEPTH
+                        | jegl_texture_common::format::FRAMEBUF),
+                    used_extent.width,
+                    used_extent.height,
+                    _vk_active_msaa_samples);
 
                 auto* framebuffer = create_frame_buffer(
                     (size_t)used_extent.width,
                     (size_t)used_extent.height,
-                    { color_attachment },
+                    { framebuffer_color },
+                    _vk_active_msaa_samples != VK_SAMPLE_COUNT_1_BIT
+                    ? color_attachment
+                    : nullptr,
                     depth_attachment,
-                    VkImageLayout::VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+                    VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                    true);
 
                 _vk_swapchain_images.at(i) =
                     new swapchain_image_content(
-                        this, framebuffer, color_attachment, depth_attachment);
-            }
-
-            // 交换链重建，需要等待上一帧的命令缓冲区信号量完成。
-            if (_vk_last_command_buffer_semaphore != VK_NULL_HANDLE)
-            {
-                // Fix: Proper synchronization during swapchain recreation
-                // Wait for all pending operations to complete before recreating swapchain
-                vkDeviceWaitIdle(_vk_logic_device);
-
-                // Reset the semaphore state since we've waited for everything to complete
-                _vk_last_command_buffer_semaphore = VK_NULL_HANDLE;
-                _vk_wait_for_last_command_buffer_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+                        this, framebuffer, color_attachment, depth_attachment,
+                        msaa_attachment);
             }
         }
 
@@ -1572,15 +2192,26 @@ namespace jeecs::graphic::api::vk120
         VkDebugUtilsMessengerEXT _vk_debug_manager;
 
         static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
-            VkDebugUtilsMessageSeverityFlagBitsEXT _0,
+            VkDebugUtilsMessageSeverityFlagBitsEXT severity,
             VkDebugUtilsMessageTypeFlagsEXT _1,
             const VkDebugUtilsMessengerCallbackDataEXT* info,
             void* userdata)
         {
-            debug::logwarn("[Vulkan] %s", info->pMessage);
+            // 同时写到 stderr，保证无控制台的 GUI 进程也能立即看到验证层输出。
+            std::fprintf(stderr, "[Vulkan] %s\n", info->pMessage);
+            std::fflush(stderr);
+
+            if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+                debug::logerr("[Vulkan] %s", info->pMessage);
+            else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+                debug::logwarn("[Vulkan] %s", info->pMessage);
+            else
+                debug::log("[Vulkan] %s", info->pMessage);
+
             return VK_FALSE;
         }
 #endif
+
         struct physics_device_info
         {
             uint32_t queue_graphic_family_index;
@@ -1684,9 +2315,8 @@ namespace jeecs::graphic::api::vk120
                     result.queue_graphic_family_index = queue_graphic_family_index;
                     result.queue_present_family_index = queue_present_family_index;
 
-                    jeecs::debug::logwarn("Use the first suitable device: '%s' enumerated by Vulkan, consider to "
-                        "choose the most appropriate device, todo.",
-                        prop.deviceName);
+                    jeecs::debug::loginfo(
+                        "VK120: suitable device '%s'.", prop.deviceName);
 
                     return std::optional(result);
                 }
@@ -1717,25 +2347,22 @@ namespace jeecs::graphic::api::vk120
 
             _vk_jegl_context = ctx;
 
-            _vk_last_command_buffer_semaphore = VK_NULL_HANDLE;
-            _vk_wait_for_last_command_buffer_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
-
             _vk_current_target_framebuffer = nullptr;
-            _vk_current_command_buffer = nullptr;
+            _vk_current_command_buffer = VK_NULL_HANDLE;
             _vk_current_binded_shader = nullptr;
-            _vk_command_commit_round = 1;
+            _vk_current_pipeline = nullptr;
+            _vk_current_vertex = nullptr;
+            _vk_current_shader_resource = nullptr;
+            _vk_current_swapchain_image_content = nullptr;
+            _vk_frame_recording = false;
+            _vk_frame_has_swapchain_image = false;
+            _vk_pending_present = false;
+            _vk_pending_present_image_index = UINT32_MAX;
+            _vk_presenting_swapchain_image_index = UINT32_MAX;
 
             _vk_msaa_config = config->m_msaa;
             if (_vk_msaa_config == 0)
                 _vk_msaa_config = 1;
-            // NOTE: 当前 vk120 后端的多重采样尚未实现(管线固定为 VK_SAMPLE_COUNT_1_BIT)，
-            // 这里仅记录配置并以 1x 运行，避免静默忽略用户设置。
-            if (_vk_msaa_config > 1)
-            {
-                jeecs::debug::logwarn("VK120: MSAA x%zu is requested but not implemented yet, "
-                    "rendering will run at 1x (no anti-aliasing).", _vk_msaa_config);
-                _vk_msaa_config = 1;
-            }
 
             _vk_vsync_config = config->m_fps == 0;
 
@@ -1759,7 +2386,7 @@ namespace jeecs::graphic::api::vk120
             bool vk_validation_layer_supported = false;
 #ifndef NDEBUG
             if (vk_available_layers.end() == std::find_if(
-                vk_available_layers.begin(), 
+                vk_available_layers.begin(),
                 vk_available_layers.end(),
                 [](const VkLayerProperties& prop)
                 {
@@ -1816,9 +2443,15 @@ namespace jeecs::graphic::api::vk120
             instance_create_info.enabledExtensionCount = (uint32_t)required_extensions.size();
             instance_create_info.ppEnabledExtensionNames = required_extensions.data();
 
-            if (VK_SUCCESS != vkCreateInstance(&instance_create_info, nullptr, &_vk_instance))
+            VkResult create_instance_result = vkCreateInstance(
+                &instance_create_info, nullptr, &_vk_instance);
+
+            if (create_instance_result != VK_SUCCESS)
             {
-                jeecs::debug::logfatal("Failed to create vk120 instance.");
+                jeecs::debug::logfatal(
+                    "Failed to create vk120 instance (VkResult=%d).",
+                    (int)create_instance_result);
+                std::abort();
             }
 
             // 在此初始化vkAPI
@@ -1868,8 +2501,9 @@ namespace jeecs::graphic::api::vk120
 #       error "Unsupported platform for EGL."
 #   endif
 #else
-            if (VK_SUCCESS != glfwCreateWindowSurface(
-                _vk_instance, (GLFWwindow*)_vk_jegl_interface->interface_handle(), nullptr, &_vk_surface))
+            VkResult surface_result = glfwCreateWindowSurface(
+                _vk_instance, (GLFWwindow*)_vk_jegl_interface->interface_handle(), nullptr, &_vk_surface);
+            if (VK_SUCCESS != surface_result)
             {
                 const char* error_message = nullptr;
                 auto eno = glfwGetError(&error_message);
@@ -1896,31 +2530,58 @@ namespace jeecs::graphic::api::vk120
                 VK_KHR_SWAPCHAIN_EXTENSION_NAME,
             };
 
-            size_t SKIP_DEVICE = 0;
-
             _vk_device = nullptr;
+            int best_device_score = -1;
+            physics_device_info best_device_info = {};
+
             for (auto& device : all_physics_devices)
             {
-                if (SKIP_DEVICE)
-                {
-                    --SKIP_DEVICE;
-                    continue;
-                }
-
                 auto info = check_physics_device_is_suatable(
                     device,
                     vk_validation_layer_supported,
                     required_device_layers,
                     required_device_extensions);
 
-                if (info)
-                {
-                    _vk_device = device;
-                    _vk_device_queue_graphic_family_index = info->queue_graphic_family_index;
-                    _vk_device_queue_present_family_index = info->queue_present_family_index;
+                if (!info)
+                    continue;
 
+                VkPhysicalDeviceProperties device_properties = {};
+                vkGetPhysicalDeviceProperties(device, &device_properties);
+
+                int device_score = 1;
+                switch (device_properties.deviceType)
+                {
+                case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+                    device_score = 4;
+                    break;
+                case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+                    device_score = 3;
+                    break;
+                case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
+                    device_score = 2;
+                    break;
+                case VK_PHYSICAL_DEVICE_TYPE_CPU:
+                    device_score = 0;
+                    break;
+                default:
+                    device_score = 1;
                     break;
                 }
+
+                if (device_score > best_device_score)
+                {
+                    best_device_score = device_score;
+                    _vk_device = device;
+                    best_device_info = *info;
+                }
+            }
+
+            if (_vk_device != nullptr)
+            {
+                _vk_device_queue_graphic_family_index =
+                    best_device_info.queue_graphic_family_index;
+                _vk_device_queue_present_family_index =
+                    best_device_info.queue_present_family_index;
             }
 
             if (_vk_device == nullptr)
@@ -1980,8 +2641,18 @@ namespace jeecs::graphic::api::vk120
                 queue_create_infos.push_back(queue_create_info);
             }
 
+            VkPhysicalDeviceFeatures supported_features = {};
+            vkGetPhysicalDeviceFeatures(_vk_device, &supported_features);
+
             VkPhysicalDeviceFeatures device_features = {};
-            device_features.independentBlend = VK_TRUE;
+            if (supported_features.independentBlend)
+                device_features.independentBlend = VK_TRUE;
+            else
+            {
+                jeecs::debug::logwarn(
+                    "VK120: independentBlend is not supported by this device; "
+                    "per-render-target blend state will be limited.");
+            }
 
             VkDeviceCreateInfo device_create_info = {};
             device_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -1990,17 +2661,16 @@ namespace jeecs::graphic::api::vk120
             device_create_info.queueCreateInfoCount = (uint32_t)queue_create_infos.size();
             device_create_info.pQueueCreateInfos = queue_create_infos.data();
 
-            device_create_info.enabledLayerCount = (uint32_t)required_device_layers.size();
-            device_create_info.ppEnabledLayerNames = required_device_layers.data();
+            // 设备层从 Vulkan 1.0 起就不再生效，校验层只应通过 instance 层启用。
+            device_create_info.enabledLayerCount = 0;
+            device_create_info.ppEnabledLayerNames = nullptr;
 
             device_create_info.enabledExtensionCount = (uint32_t)required_device_extensions.size();
             device_create_info.ppEnabledExtensionNames = required_device_extensions.data();
             device_create_info.pEnabledFeatures = &device_features;
 
-            if (VK_SUCCESS != vkCreateDevice(_vk_device, &device_create_info, nullptr, &_vk_logic_device))
-            {
-                jeecs::debug::logfatal("Failed to create vk120 logic device.");
-            }
+            JE_VK_CHECK(vkCreateDevice(
+                _vk_device, &device_create_info, nullptr, &_vk_logic_device));
 
             vkGetDeviceQueue(
                 _vk_logic_device,
@@ -2013,42 +2683,48 @@ namespace jeecs::graphic::api::vk120
                 0,
                 &_vk_logic_device_present_queue);
 
-            assert(_vk_logic_device_graphic_queue != VK_NULL_HANDLE);
-            assert(_vk_logic_device_present_queue != VK_NULL_HANDLE);
+            if (_vk_logic_device_graphic_queue == VK_NULL_HANDLE
+                || _vk_logic_device_present_queue == VK_NULL_HANDLE)
+            {
+                jeecs::debug::logfatal("VK120: failed to get device queues.");
+            }
+
+            VkPhysicalDeviceProperties device_properties = {};
+            vkGetPhysicalDeviceProperties(_vk_device, &device_properties);
+            _vk_min_uniform_buffer_offset_alignment = std::max<VkDeviceSize>(
+                1, device_properties.limits.minUniformBufferOffsetAlignment);
+
+            _vk_memory_allocator = new memory_allocator(this);
+            _vk_memory_allocator->m_buffer_image_granularity = std::max<VkDeviceSize>(
+                1, device_properties.limits.bufferImageGranularity);
 
             _vk_queue_commit_fence = create_fence();
 
             // 创建描述符集的布局信息
             _vk_global_descriptor_set_layouts[descriptor_set_type::UNIFORM_VARIABLES] =
                 create_descriptor_set_layout<
-                VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
                 VkShaderStageFlagBits::VK_SHADER_STAGE_ALL, 1>();
 
             _vk_global_descriptor_set_layouts[descriptor_set_type::UNIFORM_BUFFER] =
                 create_descriptor_set_layout<
                 VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                VkShaderStageFlagBits::VK_SHADER_STAGE_ALL, descriptor_set_allocator::MAX_UBO_LAYOUT>();
+                VkShaderStageFlagBits::VK_SHADER_STAGE_ALL,
+                descriptor_set_allocator::MAX_UBO_LAYOUT>();
 
             _vk_global_descriptor_set_layouts[descriptor_set_type::TEXTURE] =
                 create_descriptor_set_layout<
                 VkDescriptorType::VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                VkShaderStageFlagBits::VK_SHADER_STAGE_ALL, descriptor_set_allocator::MAX_TEXTURE_LAYOUT>();
+                VkShaderStageFlagBits::VK_SHADER_STAGE_ALL,
+                descriptor_set_allocator::MAX_TEXTURE_LAYOUT>();
 
             _vk_global_descriptor_set_layouts[descriptor_set_type::SAMPLER] =
                 create_descriptor_set_layout<
                 VkDescriptorType::VK_DESCRIPTOR_TYPE_SAMPLER,
-                VkShaderStageFlagBits::VK_SHADER_STAGE_ALL, descriptor_set_allocator::MAX_SAMPLER_LAYOUT>();
-
-            _vk_global_descriptor_set_layouts[descriptor_set_type::DEAR_IMGUI_TEXTURE] =
-                create_descriptor_set_layout<
-                VkDescriptorType::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                VkShaderStageFlagBits::VK_SHADER_STAGE_FRAGMENT_BIT, 1>();
+                VkShaderStageFlagBits::VK_SHADER_STAGE_ALL,
+                descriptor_set_allocator::MAX_SAMPLER_LAYOUT>();
 
             _vk_descriptor_set_allocator = new descriptor_set_allocator(this);
-            _vk_command_buffer_allocator = new command_buffer_allocator(this);
-            _vk_dear_imgui_descriptor_set_allocator =
-                new single_descriptor_set_allocator<descriptor_set_type::DEAR_IMGUI_TEXTURE>(
-                    this, _vk_global_descriptor_set_layouts[descriptor_set_type::DEAR_IMGUI_TEXTURE]);
 
             // 为imgui创建描述符集池
             VkDescriptorPoolSize pool_sizes[] =
@@ -2069,22 +2745,39 @@ namespace jeecs::graphic::api::vk120
             imgui_descriptor_pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
             imgui_descriptor_pool_info.pNext = nullptr;
             imgui_descriptor_pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-            imgui_descriptor_pool_info.maxSets = (uint32_t)(sizeof(pool_sizes) / sizeof(VkDescriptorPoolSize) * 1000);
-            imgui_descriptor_pool_info.poolSizeCount = (uint32_t)(sizeof(pool_sizes) / sizeof(VkDescriptorPoolSize));
+            imgui_descriptor_pool_info.maxSets =
+                (uint32_t)(sizeof(pool_sizes) / sizeof(VkDescriptorPoolSize) * 1000);
+            imgui_descriptor_pool_info.poolSizeCount =
+                (uint32_t)(sizeof(pool_sizes) / sizeof(VkDescriptorPoolSize));
             imgui_descriptor_pool_info.pPoolSizes = pool_sizes;
 
-            if (VK_SUCCESS != vkCreateDescriptorPool(
-                _vk_logic_device, &imgui_descriptor_pool_info, nullptr, &_vk_dear_imgui_descriptor_pool))
-            {
-                jeecs::debug::logfatal("Failed to create vk120 imgui descriptor pool.");
-            }
+            JE_VK_CHECK(vkCreateDescriptorPool(
+                _vk_logic_device,
+                &imgui_descriptor_pool_info,
+                nullptr,
+                &_vk_dear_imgui_descriptor_pool));
+
+            VkPipelineCacheCreateInfo pipeline_cache_create_info = {};
+            pipeline_cache_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+            pipeline_cache_create_info.pNext = nullptr;
+            pipeline_cache_create_info.flags = 0;
+            pipeline_cache_create_info.initialDataSize = 0;
+            pipeline_cache_create_info.pInitialData = nullptr;
+
+            JE_VK_CHECK(vkCreatePipelineCache(
+                _vk_logic_device,
+                &pipeline_cache_create_info,
+                nullptr,
+                &_vk_pipeline_cache));
+
+            create_frame_resources();
 
             recreate_swap_chain_for_current_surface();
 
             _vk_dear_imgui_sampler = create_sampler(
-                jegl_shader::fliter_mode::NEAREST,
-                jegl_shader::fliter_mode::NEAREST,
-                jegl_shader::fliter_mode::NEAREST,
+                jegl_shader::fliter_mode::LINEAR,
+                jegl_shader::fliter_mode::LINEAR,
+                jegl_shader::fliter_mode::LINEAR,
                 jegl_shader::wrap_mode::CLAMP,
                 jegl_shader::wrap_mode::CLAMP);
 
@@ -2097,53 +2790,71 @@ namespace jeecs::graphic::api::vk120
         void shutdown(bool reboot)
         {
             jegui_shutdown_vk120(reboot);
+            _vk_imgui_initialized = false;
 
             destroy_swap_chain();
+            destroy_frame_resources();
+
+            for (auto& [key, pipeline] : _vk_pso_cache)
+            {
+                (void)key;
+                vkDestroyPipeline(_vk_logic_device, pipeline, nullptr);
+            }
+            _vk_pso_cache.clear();
+
+            if (_vk_pipeline_cache != VK_NULL_HANDLE)
+            {
+                vkDestroyPipelineCache(_vk_logic_device, _vk_pipeline_cache, nullptr);
+                _vk_pipeline_cache = VK_NULL_HANDLE;
+            }
+
+            for (auto& [key, render_pass] : _vk_render_pass_cache)
+            {
+                (void)key;
+                vkDestroyRenderPass(_vk_logic_device, render_pass, nullptr);
+            }
+            _vk_render_pass_cache.clear();
 
             destroy_fence(_vk_queue_commit_fence);
-            delete _vk_dear_imgui_descriptor_set_allocator;
+            _vk_queue_commit_fence = VK_NULL_HANDLE;
+
             delete _vk_descriptor_set_allocator;
-            delete _vk_command_buffer_allocator;
+            _vk_descriptor_set_allocator = nullptr;
 
             for (auto layout : _vk_global_descriptor_set_layouts)
-                destroy_descriptor_set_layout(layout);
+            {
+                if (layout != VK_NULL_HANDLE)
+                    destroy_descriptor_set_layout(layout);
+            }
 
-            vkDestroySampler(_vk_logic_device, _vk_dear_imgui_sampler, nullptr);
-            vkDestroyDescriptorPool(_vk_logic_device, _vk_dear_imgui_descriptor_pool, nullptr);
+            if (_vk_dear_imgui_sampler != VK_NULL_HANDLE)
+            {
+                vkDestroySampler(_vk_logic_device, _vk_dear_imgui_sampler, nullptr);
+                _vk_dear_imgui_sampler = VK_NULL_HANDLE;
+            }
+            if (_vk_dear_imgui_descriptor_pool != VK_NULL_HANDLE)
+            {
+                vkDestroyDescriptorPool(
+                    _vk_logic_device, _vk_dear_imgui_descriptor_pool, nullptr);
+                _vk_dear_imgui_descriptor_pool = VK_NULL_HANDLE;
+            }
+
+            delete _vk_memory_allocator;
+            _vk_memory_allocator = nullptr;
+
             vkDestroyDevice(_vk_logic_device, nullptr);
 #ifndef NDEBUG
             if (_vk_debug_manager != VK_NULL_HANDLE)
             {
                 assert(vkDestroyDebugUtilsMessengerEXT != nullptr);
                 vkDestroyDebugUtilsMessengerEXT(_vk_instance, _vk_debug_manager, nullptr);
+                _vk_debug_manager = VK_NULL_HANDLE;
             }
 #endif
             vkDestroySurfaceKHR(_vk_instance, _vk_surface, nullptr);
             vkDestroyInstance(_vk_instance, nullptr);
         }
         /////////////////////////////////////////////////////
-        void begin_command_buffer_record(VkCommandBuffer cmdbuf)
-        {
-            VkCommandBufferBeginInfo command_buffer_begin_info = {};
-            command_buffer_begin_info.sType = VkStructureType::VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-            command_buffer_begin_info.pNext = nullptr;
-            // TODO: 我们的命令缓冲区稍后会设置为执行完毕后重用
-            command_buffer_begin_info.flags =
-                VkCommandBufferUsageFlagBits::VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
-            command_buffer_begin_info.pInheritanceInfo = nullptr;
-
-            if (VK_SUCCESS != vkBeginCommandBuffer(cmdbuf, &command_buffer_begin_info))
-            {
-                jeecs::debug::logfatal("Failed to begin vk120 command buffer record.");
-            }
-        }
-        void end_command_buffer_record(VkCommandBuffer cmdbuf)
-        {
-            if (VK_SUCCESS != vkEndCommandBuffer(cmdbuf))
-            {
-                jeecs::debug::logfatal("Failed to end vk120 command buffer record.");
-            }
-        }
         /////////////////////////////////////////////////////
         uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties)
         {
@@ -2162,28 +2873,23 @@ namespace jeecs::graphic::api::vk120
             abort();
         };
 
-        VkDeviceMemory alloc_vk_device_memory(
-            const VkMemoryRequirements& requirement, VkMemoryPropertyFlags properties)
+        memory_allocator::allocation allocate_vk_memory(
+            const VkMemoryRequirements& requirement,
+            VkMemoryPropertyFlags properties,
+            VkDeviceSize extra_alignment = 0)
         {
-            VkDeviceMemory result;
+            return _vk_memory_allocator->allocate(
+                requirement, properties, extra_alignment);
+        }
 
-            VkMemoryAllocateInfo vertex_buffer_memory_allocate_info = {};
-            vertex_buffer_memory_allocate_info.sType = VkStructureType::VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-            vertex_buffer_memory_allocate_info.pNext = nullptr;
-            vertex_buffer_memory_allocate_info.allocationSize = requirement.size;
-            vertex_buffer_memory_allocate_info.memoryTypeIndex = find_memory_type(
-                requirement.memoryTypeBits, properties);
-
-            if (VK_SUCCESS != vkAllocateMemory(
-                _vk_logic_device,
-                &vertex_buffer_memory_allocate_info,
-                nullptr,
-                &result))
-            {
-                jeecs::debug::logfatal("Failed to allocate vk120 device buffer memory.");
-            }
-
-            return result;
+        void free_vk_memory(
+            VkDeviceMemory memory, VkDeviceSize offset, VkDeviceSize size)
+        {
+            memory_allocator::allocation allocation;
+            allocation.m_memory = memory;
+            allocation.m_offset = offset;
+            allocation.m_size = size;
+            _vk_memory_allocator->free(allocation);
         }
 
         void alloc_vk_device_buffer_memory(
@@ -2191,34 +2897,49 @@ namespace jeecs::graphic::api::vk120
             VkBufferUsageFlagBits buffer_usage,
             VkMemoryPropertyFlags properties,
             VkBuffer* out_device_buffer,
-            VkDeviceMemory* out_device_memory)
+            VkDeviceMemory* out_device_memory,
+            VkDeviceSize* out_memory_offset = nullptr,
+            VkDeviceSize* out_memory_size = nullptr,
+            void** out_mapped = nullptr)
         {
-            VkBufferCreateInfo vertex_buffer_create_info = {};
-            vertex_buffer_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-            vertex_buffer_create_info.pNext = nullptr;
-            vertex_buffer_create_info.flags = 0;
-            vertex_buffer_create_info.size = (VkDeviceSize)buffer_size;
-            vertex_buffer_create_info.usage = buffer_usage;
-            vertex_buffer_create_info.sharingMode = VkSharingMode::VK_SHARING_MODE_EXCLUSIVE;
+            VkBufferCreateInfo buffer_create_info = {};
+            buffer_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+            buffer_create_info.pNext = nullptr;
+            buffer_create_info.flags = 0;
+            buffer_create_info.size = (VkDeviceSize)std::max<size_t>(buffer_size, 1);
+            buffer_create_info.usage = buffer_usage;
+            buffer_create_info.sharingMode = VkSharingMode::VK_SHARING_MODE_EXCLUSIVE;
 
-            if (VK_SUCCESS != vkCreateBuffer(
+            JE_VK_CHECK(vkCreateBuffer(
                 _vk_logic_device,
-                &vertex_buffer_create_info,
+                &buffer_create_info,
                 nullptr,
-                out_device_buffer))
-            {
-                jeecs::debug::logfatal("Failed to create vk120 device buffer.");
-            }
+                out_device_buffer));
 
-            VkMemoryRequirements vertex_buffer_memory_requirements;
+            VkMemoryRequirements buffer_memory_requirements;
             vkGetBufferMemoryRequirements(
                 _vk_logic_device,
                 *out_device_buffer,
-                &vertex_buffer_memory_requirements);
+                &buffer_memory_requirements);
 
-            *out_device_memory = alloc_vk_device_memory(vertex_buffer_memory_requirements, properties);
+            auto allocation = allocate_vk_memory(
+                buffer_memory_requirements,
+                properties,
+                _vk_memory_allocator->m_buffer_image_granularity);
 
-            vkBindBufferMemory(_vk_logic_device, *out_device_buffer, *out_device_memory, 0);
+            *out_device_memory = allocation.m_memory;
+            if (out_memory_offset != nullptr)
+                *out_memory_offset = allocation.m_offset;
+            if (out_memory_size != nullptr)
+                *out_memory_size = allocation.m_size;
+            if (out_mapped != nullptr)
+                *out_mapped = allocation.m_mapped;
+
+            JE_VK_CHECK(vkBindBufferMemory(
+                _vk_logic_device,
+                *out_device_buffer,
+                allocation.m_memory,
+                allocation.m_offset));
         }
         /////////////////////////////////////////////////////
         VkSampler create_sampler(
@@ -2297,7 +3018,7 @@ namespace jeecs::graphic::api::vk120
             sampler_create_info.compareEnable = VK_FALSE;
             sampler_create_info.compareOp = VkCompareOp::VK_COMPARE_OP_ALWAYS;
             sampler_create_info.minLod = 0.0f;
-            sampler_create_info.maxLod = 0.0f;
+            sampler_create_info.maxLod = VK_LOD_CLAMP_NONE;
 
             VkSampler result;
             if (VK_SUCCESS != vkCreateSampler(
@@ -2316,6 +3037,7 @@ namespace jeecs::graphic::api::vk120
             assert(resource != nullptr);
 
             shader_blob->m_context = this;
+            shader_blob->m_shader_resource = resource;
 
             // 此处创建采样器
             shader_blob->m_samplers.resize(resource->m_sampler_count);
@@ -2331,6 +3053,15 @@ namespace jeecs::graphic::api::vk120
                         method.m_uwrap,
                         method.m_vwrap);
                 shader_blob->m_samplers[i].m_sampler_id = method.m_sampler_id;
+            }
+
+            shader_blob->m_texture_sampler_bindings.resize(resource->m_texture_count);
+            for (size_t i = 0; i < resource->m_texture_count; ++i)
+            {
+                shader_blob->m_texture_sampler_bindings[i].m_pass =
+                    resource->m_textures[i].m_pass;
+                shader_blob->m_texture_sampler_bindings[i].m_sampler_id =
+                    resource->m_textures[i].m_sampler_id;
             }
 
             VkShaderModuleCreateInfo vertex_shader_module_create_info = {};
@@ -2449,69 +3180,6 @@ namespace jeecs::graphic::api::vk120
             shader_blob->m_shader_output_color_attachment_count =
                 resource->m_fragment_out_count;
 
-            const auto parse_vk_enum_blend_method = [](jegl_shader::blend_method method)
-                {
-                    switch (method)
-                    {
-                    case jegl_shader::blend_method::ZERO:
-                        return VkBlendFactor::VK_BLEND_FACTOR_ZERO;
-                    case jegl_shader::blend_method::ONE:
-                        return VkBlendFactor::VK_BLEND_FACTOR_ONE;
-                    case jegl_shader::blend_method::SRC_COLOR:
-                        return VkBlendFactor::VK_BLEND_FACTOR_SRC_COLOR;
-                    case jegl_shader::blend_method::SRC_ALPHA:
-                        return VkBlendFactor::VK_BLEND_FACTOR_SRC_ALPHA;
-                    case jegl_shader::blend_method::ONE_MINUS_SRC_ALPHA:
-                        return VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-                    case jegl_shader::blend_method::ONE_MINUS_SRC_COLOR:
-                        return VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
-                    case jegl_shader::blend_method::DST_COLOR:
-                        return VkBlendFactor::VK_BLEND_FACTOR_DST_COLOR;
-                    case jegl_shader::blend_method::DST_ALPHA:
-                        return VkBlendFactor::VK_BLEND_FACTOR_DST_ALPHA;
-                    case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA:
-                        return VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
-                    case jegl_shader::blend_method::ONE_MINUS_DST_COLOR:
-                        return VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
-                    default:
-                        jeecs::debug::logerr("Invalid blend src method.");
-                        return VkBlendFactor::VK_BLEND_FACTOR_ONE;
-                    }
-                };
-            const auto parse_vk_enum_blend_equation = [](jegl_shader::blend_equation equation)
-                {
-                    switch (equation)
-                    {
-                    case jegl_shader::blend_equation::ADD:
-                        return VkBlendOp::VK_BLEND_OP_ADD;
-                    case jegl_shader::blend_equation::SUBTRACT:
-                        return VkBlendOp::VK_BLEND_OP_SUBTRACT;
-                    case jegl_shader::blend_equation::REVERSE_SUBTRACT:
-                        return VkBlendOp::VK_BLEND_OP_REVERSE_SUBTRACT;
-                    case jegl_shader::blend_equation::MIN:
-                        return VkBlendOp::VK_BLEND_OP_MIN;
-                    case jegl_shader::blend_equation::MAX:
-                        return VkBlendOp::VK_BLEND_OP_MAX;
-                    default:
-                        jeecs::debug::logerr("Invalid blend equation.");
-                        return VkBlendOp::VK_BLEND_OP_ADD;
-                    }
-                };
-
-            if (resource->m_blend_equation == jegl_shader::blend_equation::DISABLED)
-            {
-                assert(shader_blob->m_blend_statement.has_value() == false);
-            }
-            else
-            {
-                auto& blend_state = shader_blob->m_blend_statement.emplace();
-                blend_state.m_blend_equation =
-                    parse_vk_enum_blend_equation(resource->m_blend_equation);
-                blend_state.m_blend_src_factor =
-                    parse_vk_enum_blend_method(resource->m_blend_src_mode);
-                blend_state.m_blend_dst_factor =
-                    parse_vk_enum_blend_method(resource->m_blend_dst_mode);
-            }
 
             shader_blob->m_viewport = {};
             shader_blob->m_viewport.x = 0;
@@ -2535,183 +3203,21 @@ namespace jeecs::graphic::api::vk120
             shader_blob->m_viewport_state_create_info.scissorCount = 1;
             shader_blob->m_viewport_state_create_info.pScissors = &shader_blob->m_scissor;
 
-            shader_blob->m_rasterization_state_create_info = {};
-            shader_blob->m_rasterization_state_create_info.sType =
-                VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-            shader_blob->m_rasterization_state_create_info.pNext = nullptr;
-            shader_blob->m_rasterization_state_create_info.flags = 0;
-            shader_blob->m_rasterization_state_create_info.depthClampEnable = VK_FALSE;
-            shader_blob->m_rasterization_state_create_info.rasterizerDiscardEnable = VK_FALSE;
-            shader_blob->m_rasterization_state_create_info.polygonMode =
-                VkPolygonMode::VK_POLYGON_MODE_FILL;
 
-            switch (resource->m_cull_mode)
+            // 使用引擎在 shader 包装层计算的规范 std140 布局，避免后端重复推导
+            // 导致偏移漂移（GL 后端在 Debug 下也会做同样的交叉校验）。
+            shader_blob->m_uniform_size = resource->m_uniform_block_size;
+            for (auto* uniforms = resource->m_custom_uniforms;
+                uniforms != nullptr;
+                uniforms = uniforms->m_next)
             {
-            case jegl_shader::cull_mode::FRONT:
-                shader_blob->m_rasterization_state_create_info.cullMode = VkCullModeFlagBits::VK_CULL_MODE_FRONT_BIT;
-                break;
-            case jegl_shader::cull_mode::BACK:
-                shader_blob->m_rasterization_state_create_info.cullMode = VkCullModeFlagBits::VK_CULL_MODE_BACK_BIT;
-                break;
-            case jegl_shader::cull_mode::NONE:
-                shader_blob->m_rasterization_state_create_info.cullMode = VkCullModeFlagBits::VK_CULL_MODE_NONE;
-                break;
-            default:
-                jeecs::debug::logfatal(
-                    "Unsupported cull mode '%d' in shader '%s'.",
-                    (int)resource->m_cull_mode,
-                    resource->m_handle.m_path_may_null_if_builtin != nullptr
-                    ? resource->m_handle.m_path_may_null_if_builtin
-                    : "<builtin>");
-                break;
-            }
-
-            // NOTE: 针对不同输出的缓冲区，这个设置实际上需要根据渲染目标的情况决定
-            shader_blob->m_rasterization_state_create_info.frontFace =
-                VkFrontFace::VK_FRONT_FACE_COUNTER_CLOCKWISE;
-
-            shader_blob->m_rasterization_state_create_info.lineWidth = 1;
-
-            // TODO: 配置多重采样，不过JoyEngine的多重采样应该是配置在渲染目标上的，这里暂时不知道怎么处理比较合适
-            //      先挂个默认的，并且也应该允许动态调整
-            shader_blob->m_multi_sample_state_create_info = {};
-            shader_blob->m_multi_sample_state_create_info.sType =
-                VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-            shader_blob->m_multi_sample_state_create_info.pNext = nullptr;
-            shader_blob->m_multi_sample_state_create_info.flags = 0;
-            shader_blob->m_multi_sample_state_create_info.rasterizationSamples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT;
-            shader_blob->m_multi_sample_state_create_info.sampleShadingEnable = VK_FALSE;
-            shader_blob->m_multi_sample_state_create_info.minSampleShading = 1.0f;
-            shader_blob->m_multi_sample_state_create_info.pSampleMask = nullptr;
-            shader_blob->m_multi_sample_state_create_info.alphaToCoverageEnable = VK_FALSE;
-            shader_blob->m_multi_sample_state_create_info.alphaToOneEnable = VK_FALSE;
-
-            // 深度缓冲区配置
-            shader_blob->m_depth_stencil_state_create_info = {};
-            shader_blob->m_depth_stencil_state_create_info.sType =
-                VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-            shader_blob->m_depth_stencil_state_create_info.pNext = nullptr;
-            shader_blob->m_depth_stencil_state_create_info.flags = 0;
-
-            switch (resource->m_depth_mask)
-            {
-            case jegl_shader::depth_mask_method::DISABLE:
-                shader_blob->m_depth_stencil_state_create_info.depthWriteEnable = VK_FALSE;
-                break;
-            case jegl_shader::depth_mask_method::ENABLE:
-                shader_blob->m_depth_stencil_state_create_info.depthWriteEnable = VK_TRUE;
-                break;
-            default:
-                jeecs::debug::logfatal(
-                    "Unsupported depth mask method '%d' in shader '%s'.",
-                    (int)resource->m_depth_mask,
-                    resource->m_handle.m_path_may_null_if_builtin != nullptr
-                    ? resource->m_handle.m_path_may_null_if_builtin
-                    : "<builtin>");
-                break;
-            }
-
-            shader_blob->m_depth_stencil_state_create_info.depthTestEnable = VK_TRUE;
-            switch (resource->m_depth_test)
-            {
-            case jegl_shader::depth_test_method::NEVER:
-                shader_blob->m_depth_stencil_state_create_info.depthCompareOp = VkCompareOp::VK_COMPARE_OP_NEVER;
-                break;
-            case jegl_shader::depth_test_method::LESS: /* DEFAULT */
-                shader_blob->m_depth_stencil_state_create_info.depthCompareOp = VkCompareOp::VK_COMPARE_OP_LESS;
-                break;
-            case jegl_shader::depth_test_method::EQUAL:
-                shader_blob->m_depth_stencil_state_create_info.depthCompareOp = VkCompareOp::VK_COMPARE_OP_EQUAL;
-                break;
-            case jegl_shader::depth_test_method::LESS_EQUAL:
-                shader_blob->m_depth_stencil_state_create_info.depthCompareOp = VkCompareOp::VK_COMPARE_OP_LESS_OR_EQUAL;
-                break;
-            case jegl_shader::depth_test_method::GREATER:
-                shader_blob->m_depth_stencil_state_create_info.depthCompareOp = VkCompareOp::VK_COMPARE_OP_GREATER;
-                break;
-            case jegl_shader::depth_test_method::NOT_EQUAL:
-                shader_blob->m_depth_stencil_state_create_info.depthCompareOp = VkCompareOp::VK_COMPARE_OP_NOT_EQUAL;
-                break;
-            case jegl_shader::depth_test_method::GREATER_EQUAL:
-                shader_blob->m_depth_stencil_state_create_info.depthCompareOp = VkCompareOp::VK_COMPARE_OP_GREATER_OR_EQUAL;
-                break;
-            case jegl_shader::depth_test_method::ALWAYS:
-                shader_blob->m_depth_stencil_state_create_info.depthCompareOp = VkCompareOp::VK_COMPARE_OP_ALWAYS;
-                break;
-            default:
-                jeecs::debug::logfatal(
-                    "Unsupported depth test method '%d' in shader '%s'.",
-                    (int)resource->m_depth_test,
-                    resource->m_handle.m_path_may_null_if_builtin != nullptr
-                    ? resource->m_handle.m_path_may_null_if_builtin
-                    : "<builtin>");
-                break;
-            }
-            shader_blob->m_depth_stencil_state_create_info.depthBoundsTestEnable = VK_FALSE;
-            shader_blob->m_depth_stencil_state_create_info.stencilTestEnable = VK_FALSE;
-            shader_blob->m_depth_stencil_state_create_info.front = {};
-            shader_blob->m_depth_stencil_state_create_info.back = {};
-            shader_blob->m_depth_stencil_state_create_info.minDepthBounds = 0;
-            shader_blob->m_depth_stencil_state_create_info.maxDepthBounds = 1;
-
-            // 此处处理UBO布局，类似DX11，我们的Uniform变量实际上是放在 location = 0 的UBO中的
-            // 遍历Uniform，按照vulkan对于ubo的大小和对齐规则，计算实际偏移量；最后得到整个uniform的大小
-            uint32_t last_elem_end_place = 0;
-            size_t max_allign = 4;
-            auto* uniforms = resource->m_custom_uniforms;
-            while (uniforms != nullptr)
-            {
-                size_t unit_size = 0;
-                size_t allign_base = 0;
-                switch (uniforms->m_uniform_type)
+                if (uniforms->m_uniform_type != jegl_shader::uniform_type::TEXTURE
+                    && uniforms->m_offset != jeecs::graphic::INVALID_UNIFORM_LOCATION)
                 {
-                case jegl_shader::uniform_type::INT:
-                case jegl_shader::uniform_type::FLOAT:
-                    unit_size = 4;
-                    allign_base = 4;
-                    break;
-                case jegl_shader::uniform_type::INT2:
-                case jegl_shader::uniform_type::FLOAT2:
-                    unit_size = 8;
-                    allign_base = 8;
-                    break;
-                case jegl_shader::uniform_type::INT3:
-                case jegl_shader::uniform_type::FLOAT3:
-                    unit_size = 12;
-                    allign_base = 16;
-                    break;
-                case jegl_shader::uniform_type::INT4:
-                case jegl_shader::uniform_type::FLOAT4:
-                    unit_size = 16;
-                    allign_base = 16;
-                    break;
-                case jegl_shader::uniform_type::FLOAT2X2:
-                    unit_size = 16;
-                    allign_base = 8;
-                    break;
-                case jegl_shader::uniform_type::FLOAT3X3:
-                    unit_size = 48;
-                    allign_base = 16;
-                    break;
-                case jegl_shader::uniform_type::FLOAT4X4:
-                    unit_size = 64;
-                    allign_base = 16;
-                    break;
-                case jegl_shader::uniform_type::TEXTURE:
-                    break;
+                    shader_blob->m_uniform_locations[uniforms->m_name] =
+                        uniforms->m_offset;
                 }
-
-                if (unit_size != 0)
-                {
-                    max_allign = std::max(max_allign, allign_base);
-
-                    last_elem_end_place = jeecs::basic::allign_size(last_elem_end_place, allign_base);
-                    shader_blob->m_uniform_locations[uniforms->m_name] = last_elem_end_place;
-                    last_elem_end_place += unit_size;
-                }
-                uniforms = uniforms->m_next;
             }
-            shader_blob->m_uniform_size = jeecs::basic::allign_size(last_elem_end_place, max_allign);
 
             // 动态配置~！
             // InputAssemblyState 和 Viewport 都应当允许动态配置
@@ -2771,7 +3277,13 @@ namespace jeecs::graphic::api::vk120
 
             vertex->m_topology = resource->m_type;
 
-            size_t vertex_buffer_size = resource->m_vertex_length;
+            const size_t vertex_data_size = resource->m_vertex_length;
+            const size_t index_data_size =
+                resource->m_index_capacity * sizeof(uint32_t);
+
+            // Vulkan 不允许 size 为 0 的 buffer；空顶点资源使用 1 字节占位。
+            const size_t vertex_buffer_size = std::max<size_t>(vertex_data_size, 1);
+            const size_t index_buffer_size = std::max<size_t>(index_data_size, 1);
 
             // 获取所需分配的内存类型
             alloc_vk_device_buffer_memory(
@@ -2780,64 +3292,84 @@ namespace jeecs::graphic::api::vk120
                 VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                 VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                 &vertex->m_vk_vertex_buffer,
-                &vertex->m_vk_vertex_buffer_memory);
+                &vertex->m_vk_vertex_buffer_memory,
+                &vertex->m_vertex_memory_offset,
+                &vertex->m_vertex_memory_size,
+                &vertex->m_mapped);
 
-            void* vertex_buffer_memory_ptr = nullptr;
-            vkMapMemory(
-                _vk_logic_device,
-                vertex->m_vk_vertex_buffer_memory,
-                0,
-                vertex_buffer_size,
-                0,
-                &vertex_buffer_memory_ptr);
-            memcpy(
-                vertex_buffer_memory_ptr,
-                resource->m_vertexs,
-                vertex_buffer_size);
-            vkUnmapMemory(
-                _vk_logic_device,
-                vertex->m_vk_vertex_buffer_memory);
+            if (vertex_data_size != 0 && resource->m_vertexs != nullptr)
+            {
+                if (vertex->m_mapped == nullptr)
+                {
+                    jeecs::debug::logfatal(
+                        "VK120: vertex buffer memory is not host-visible.");
+                }
+
+                memcpy(
+                    vertex->m_mapped,
+                    resource->m_vertexs,
+                    vertex_data_size);
+            }
 
             // 创建索引缓冲区：按分配容量上传（m_index_count 可能已被
             // jegl_update_vertex_buffer 收缩为激活数量，绘制数量另存于
             // m_vertex_point_count）
+            void* index_mapped = nullptr;
             alloc_vk_device_buffer_memory(
-                resource->m_index_capacity * sizeof(uint32_t),
+                index_buffer_size,
                 VkBufferUsageFlagBits::VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
                 VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                 VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                 &vertex->m_vk_index_buffer,
-                &vertex->m_vk_index_buffer_memory);
+                &vertex->m_vk_index_buffer_memory,
+                &vertex->m_index_memory_offset,
+                &vertex->m_index_memory_size,
+                &index_mapped);
 
-            void* index_buffer_memory_ptr = nullptr;
-            vkMapMemory(
-                _vk_logic_device,
-                vertex->m_vk_index_buffer_memory,
-                0,
-                resource->m_index_capacity * sizeof(uint32_t),
-                0,
-                &index_buffer_memory_ptr);
-            memcpy(
-                index_buffer_memory_ptr,
-                resource->m_indices,
-                resource->m_index_capacity * sizeof(uint32_t));
-            vkUnmapMemory(
-                _vk_logic_device,
-                vertex->m_vk_index_buffer_memory);
+            if (index_data_size != 0 && resource->m_indices != nullptr)
+            {
+                if (index_mapped == nullptr)
+                {
+                    jeecs::debug::logfatal(
+                        "VK120: index buffer memory is not host-visible.");
+                }
+
+                memcpy(
+                    index_mapped,
+                    resource->m_indices,
+                    index_data_size);
+            }
 
             vertex->m_vertex_point_count = (uint32_t)resource->m_index_count;
-            vertex->m_size = (VkDeviceSize)vertex_buffer_size;
+            vertex->m_size = (VkDeviceSize)vertex_data_size;
             vertex->m_stride = (VkDeviceSize)resource->m_data_size_per_point;
 
             return vertex;
         }
         void destroy_vertex_instance(jevk12_vertex* vertex)
         {
-            vkDestroyBuffer(_vk_logic_device, vertex->m_vk_vertex_buffer, nullptr);
-            vkFreeMemory(_vk_logic_device, vertex->m_vk_vertex_buffer_memory, nullptr);
+            if (vertex == nullptr)
+                return;
 
-            vkDestroyBuffer(_vk_logic_device, vertex->m_vk_index_buffer, nullptr);
-            vkFreeMemory(_vk_logic_device, vertex->m_vk_index_buffer_memory, nullptr);
+            if (vertex->m_vk_vertex_buffer != VK_NULL_HANDLE)
+                vkDestroyBuffer(_vk_logic_device, vertex->m_vk_vertex_buffer, nullptr);
+            if (vertex->m_vk_vertex_buffer_memory != VK_NULL_HANDLE)
+            {
+                free_vk_memory(
+                    vertex->m_vk_vertex_buffer_memory,
+                    vertex->m_vertex_memory_offset,
+                    vertex->m_vertex_memory_size);
+            }
+
+            if (vertex->m_vk_index_buffer != VK_NULL_HANDLE)
+                vkDestroyBuffer(_vk_logic_device, vertex->m_vk_index_buffer, nullptr);
+            if (vertex->m_vk_index_buffer_memory != VK_NULL_HANDLE)
+            {
+                free_vk_memory(
+                    vertex->m_vk_index_buffer_memory,
+                    vertex->m_index_memory_offset,
+                    vertex->m_index_memory_size);
+            }
 
             delete vertex;
         }
@@ -2848,44 +3380,64 @@ namespace jeecs::graphic::api::vk120
             uint32_t layer_count)
         {
             VkImageViewCreateInfo image_view_create_info = {};
-            image_view_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            image_view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
             image_view_create_info.pNext = nullptr;
             image_view_create_info.flags = 0;
             image_view_create_info.image = image;
             image_view_create_info.viewType = view_type;
             image_view_create_info.format = format;
-            image_view_create_info.components.r = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
-            image_view_create_info.components.g = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
-            image_view_create_info.components.b = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
-            image_view_create_info.components.a = VkComponentSwizzle::VK_COMPONENT_SWIZZLE_IDENTITY;
+            image_view_create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+            image_view_create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+            image_view_create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+            image_view_create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
             image_view_create_info.subresourceRange.aspectMask = aspect_flags;
             image_view_create_info.subresourceRange.baseMipLevel = 0;
             image_view_create_info.subresourceRange.levelCount = 1;
             image_view_create_info.subresourceRange.baseArrayLayer = 0;
             image_view_create_info.subresourceRange.layerCount = layer_count;
 
-            VkImageView result;
-            if (VK_SUCCESS != vkCreateImageView(
-                _vk_logic_device,
-                &image_view_create_info,
-                nullptr,
-                &result))
-            {
-                jeecs::debug::logfatal("Failed to create vk120 image view.");
-            }
-
+            VkImageView result = VK_NULL_HANDLE;
+            JE_VK_CHECK(vkCreateImageView(
+                _vk_logic_device, &image_view_create_info, nullptr, &result));
             return result;
         }
+
+        static VkImageAspectFlags vk_aspect_for_format(VkFormat format)
+        {
+            switch (format)
+            {
+            case VK_FORMAT_D32_SFLOAT_S8_UINT:
+            case VK_FORMAT_D24_UNORM_S8_UINT:
+            case VK_FORMAT_D16_UNORM_S8_UINT:
+                return VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+            case VK_FORMAT_D32_SFLOAT:
+            case VK_FORMAT_D16_UNORM:
+                return VK_IMAGE_ASPECT_DEPTH_BIT;
+            default:
+                return VK_IMAGE_ASPECT_COLOR_BIT;
+            }
+        }
+
+        VkFormat vk_format_for_texture(jegl_texture_common::format format)
+        {
+            if (0 != (format & jegl_texture_common::format::DEPTH))
+                return _vk_depth_format;
+
+            const bool is_float16 =
+                0 != (format & jegl_texture_common::format::FLOAT16);
+            if (0 != (format & jegl_texture_common::format::RGBA))
+            {
+                return is_float16
+                    ? VK_FORMAT_R16G16B16A16_SFLOAT
+                    : VK_FORMAT_R8G8B8A8_UNORM;
+            }
+            return is_float16 ? VK_FORMAT_R16_SFLOAT : VK_FORMAT_R8_UNORM;
+        }
+
         void create_image(
-            size_t width, size_t height,
+            jevk12_texture* texture,
             VkFormat format,
-            VkImageTiling tiling,
             VkImageUsageFlags usage,
-            VkMemoryPropertyFlags properties,
-            VkImageAspectFlags aspect_flags,
-            VkImage* out_image,
-            VkImageView* out_image_view,
-            VkDeviceMemory* out_memory,
             VkImageType image_type,
             uint32_t image_depth,
             uint32_t array_layers,
@@ -2893,360 +3445,480 @@ namespace jeecs::graphic::api::vk120
             VkImageCreateFlags image_flags,
             VkImageViewType view_type)
         {
+            assert(texture != nullptr);
+
             VkImageCreateInfo image_create_info = {};
-            image_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+            image_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
             image_create_info.pNext = nullptr;
             image_create_info.flags = image_flags;
             image_create_info.imageType = image_type;
             image_create_info.format = format;
-            image_create_info.extent.width = (uint32_t)width;
-            image_create_info.extent.height = (uint32_t)height;
+            image_create_info.extent.width = texture->m_width;
+            image_create_info.extent.height = texture->m_height;
             image_create_info.extent.depth = image_depth;
             image_create_info.mipLevels = 1;
             image_create_info.arrayLayers = array_layers;
             image_create_info.samples = samples;
-            image_create_info.tiling = tiling;
+            image_create_info.tiling = VK_IMAGE_TILING_OPTIMAL;
             image_create_info.usage = usage;
-            image_create_info.sharingMode = VkSharingMode::VK_SHARING_MODE_EXCLUSIVE;
+            image_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
             image_create_info.queueFamilyIndexCount = 0;
             image_create_info.pQueueFamilyIndices = nullptr;
-            image_create_info.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED;
+            image_create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-            if (VK_SUCCESS != vkCreateImage(
-                _vk_logic_device,
-                &image_create_info,
-                nullptr,
-                out_image))
-            {
-                jeecs::debug::logfatal("Failed to create vk120 image.");
-            }
+            JE_VK_CHECK(vkCreateImage(
+                _vk_logic_device, &image_create_info, nullptr, &texture->m_vk_texture_image));
 
             VkMemoryRequirements image_memory_requirements;
             vkGetImageMemoryRequirements(
+                _vk_logic_device, texture->m_vk_texture_image, &image_memory_requirements);
+
+            auto image_allocation = allocate_vk_memory(
+                image_memory_requirements,
+                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                _vk_memory_allocator->m_buffer_image_granularity);
+            texture->m_vk_texture_image_memory = image_allocation.m_memory;
+            texture->m_vk_texture_memory_offset = image_allocation.m_offset;
+            texture->m_vk_texture_memory_size = image_allocation.m_size;
+
+            JE_VK_CHECK(vkBindImageMemory(
                 _vk_logic_device,
-                *out_image,
-                &image_memory_requirements);
+                texture->m_vk_texture_image,
+                texture->m_vk_texture_image_memory,
+                texture->m_vk_texture_memory_offset));
 
-            *out_memory = alloc_vk_device_memory(image_memory_requirements, properties);
+            texture->m_vk_texture_format = format;
+            texture->m_aspect = vk_aspect_for_format(format);
+            texture->m_current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+            texture->m_depth = image_depth;
+            texture->m_layers = array_layers;
+            texture->m_samples = (uint32_t)samples;
+            texture->m_owns_image = true;
 
-            vkBindImageMemory(
-                _vk_logic_device,
-                *out_image,
-                *out_memory,
-                0);
-
-            *out_image_view = create_image_view(
-                *out_image, format, aspect_flags,
+            texture->m_vk_texture_image_view = create_image_view(
+                texture->m_vk_texture_image, format,
+                (0 != (texture->m_aspect & VK_IMAGE_ASPECT_DEPTH_BIT))
+                ? VK_IMAGE_ASPECT_DEPTH_BIT
+                : texture->m_aspect,
                 view_type, array_layers);
         }
-        jevk12_texture* create_framebuf_texture_with_swapchain_image(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags)
+
+        jevk12_texture* create_framebuf_texture_with_swapchain_image(
+            VkImage image, VkFormat format, VkImageAspectFlags aspect_flags,
+            uint32_t width, uint32_t height)
         {
             jevk12_texture* texture = new jevk12_texture{};
 
-            texture->m_vk_texture_image = VK_NULL_HANDLE; // 不设置此项，不需要释放
+            texture->m_vk_texture_image = image;
+            texture->m_vk_texture_image_memory = VK_NULL_HANDLE;
             texture->m_vk_texture_image_view = create_image_view(
                 image, format, aspect_flags,
-                VkImageViewType::VK_IMAGE_VIEW_TYPE_2D, 1);
-            texture->m_vk_texture_image_memory = VK_NULL_HANDLE;
+                VK_IMAGE_VIEW_TYPE_2D, 1);
             texture->m_vk_texture_format = format;
+            texture->m_aspect = aspect_flags;
+            texture->m_current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+            texture->m_width = width;
+            texture->m_height = height;
+            texture->m_samples = 1;
+            texture->m_owns_image = false;
 
             return texture;
         }
-        jevk12_texture* create_framebuf_texture(jegl_texture_common::format format, size_t w, size_t h)
+
+        jevk12_texture* create_framebuf_texture(
+            jegl_texture_common::format format, size_t w, size_t h,
+            VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT)
         {
-            assert(format & jegl_texture_common::format::FRAMEBUF);
+            assert(0 != (format & jegl_texture_common::format::FRAMEBUF));
 
             jevk12_texture* texture = new jevk12_texture{};
+            texture->m_width = (uint32_t)w;
+            texture->m_height = (uint32_t)h;
 
-            if (format & jegl_texture_common::format::DEPTH)
+            if (0 != (format & jegl_texture_common::format::DEPTH))
             {
                 create_image(
-                    w, h,
+                    texture,
                     _vk_depth_format,
-                    VkImageTiling::VK_IMAGE_TILING_OPTIMAL,
-                    VkImageUsageFlagBits::VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                    VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                    VkImageAspectFlagBits::VK_IMAGE_ASPECT_DEPTH_BIT,
-                    &texture->m_vk_texture_image,
-                    &texture->m_vk_texture_image_view,
-                    &texture->m_vk_texture_image_memory,
-                    VkImageType::VK_IMAGE_TYPE_2D, 1, 1,
-                    VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT,
+                    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
+                    | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+                    | (samples == VK_SAMPLE_COUNT_1_BIT
+                        ? VK_IMAGE_USAGE_SAMPLED_BIT
+                        : 0),
+                    VK_IMAGE_TYPE_2D, 1, 1,
+                    samples,
                     0,
-                    VkImageViewType::VK_IMAGE_VIEW_TYPE_2D);
-                texture->m_vk_texture_format = _vk_depth_format;
-
+                    VK_IMAGE_VIEW_TYPE_2D);
                 transition_image_layout(
-                    texture->m_vk_texture_image,
-                    _vk_depth_format,
-                    VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED,
-                    VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+                    texture, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
             }
             else
             {
-                bool is_float16 = 0 != (format & jegl_texture_common::format::FLOAT16);
-                VkFormat vk_attachment_format;
-                if (format & jegl_texture_common::format::RGBA)
-                {
-                    vk_attachment_format = is_float16
-                        ? VkFormat::VK_FORMAT_R16G16B16A16_SFLOAT
-                        : VkFormat::VK_FORMAT_R8G8B8A8_UNORM;
-                }
-                else
-                {
-                    vk_attachment_format = is_float16
-                        ? VkFormat::VK_FORMAT_R16_SFLOAT
-                        : VkFormat::VK_FORMAT_R8_UNORM;
-                }
-
                 create_image(
-                    w, h,
-                    vk_attachment_format,
-                    VkImageTiling::VK_IMAGE_TILING_OPTIMAL,
-                    VkImageUsageFlagBits::VK_IMAGE_USAGE_TRANSFER_DST_BIT
-                    | VkImageUsageFlagBits::VK_IMAGE_USAGE_SAMPLED_BIT
-                    | VkImageUsageFlagBits::VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                    VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                    VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT,
-                    &texture->m_vk_texture_image,
-                    &texture->m_vk_texture_image_view,
-                    &texture->m_vk_texture_image_memory,
-                    VkImageType::VK_IMAGE_TYPE_2D, 1, 1,
-                    VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT,
+                    texture,
+                    vk_format_for_texture(format),
+                    VK_IMAGE_USAGE_TRANSFER_DST_BIT
+                    | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                    | (samples == VK_SAMPLE_COUNT_1_BIT
+                        ? VK_IMAGE_USAGE_SAMPLED_BIT
+                        : 0),
+                    VK_IMAGE_TYPE_2D, 1, 1,
+                    samples,
                     0,
-                    VkImageViewType::VK_IMAGE_VIEW_TYPE_2D);
-                texture->m_vk_texture_format = vk_attachment_format;
-
+                    VK_IMAGE_VIEW_TYPE_2D);
                 transition_image_layout(
-                    texture->m_vk_texture_image,
-                    vk_attachment_format,
-                    VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED,
-                    VkImageLayout::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                    texture,
+                    samples == VK_SAMPLE_COUNT_1_BIT
+                    ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                    : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
             }
 
             return texture;
         }
 
-        void transition_image_layout(
-            VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout)
+        void record_transition_barrier(
+            VkCommandBuffer command_buffer,
+            jevk12_texture* texture,
+            VkImageLayout new_layout)
         {
+            assert(texture != nullptr);
+            assert(texture->m_vk_texture_image != VK_NULL_HANDLE);
+
+            VkImageLayout old_layout = texture->m_current_layout;
+
+            VkImageMemoryBarrier barrier = {};
+            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrier.pNext = nullptr;
+            barrier.oldLayout = old_layout;
+            barrier.newLayout = new_layout;
+            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.image = texture->m_vk_texture_image;
+            barrier.subresourceRange.aspectMask = texture->m_aspect;
+            barrier.subresourceRange.baseMipLevel = 0;
+            barrier.subresourceRange.levelCount = 1;
+            barrier.subresourceRange.baseArrayLayer = 0;
+            barrier.subresourceRange.layerCount = texture->m_layers;
+
+            auto stage_and_access = [](VkImageLayout layout, bool is_source,
+                VkPipelineStageFlags& stage, VkAccessFlags& access)
+                {
+                    access = 0;
+                    switch (layout)
+                    {
+                    case VK_IMAGE_LAYOUT_UNDEFINED:
+                        stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+                        break;
+                    case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+                    case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+                        stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+                        access = is_source
+                            ? VK_ACCESS_TRANSFER_WRITE_BIT
+                            : VK_ACCESS_TRANSFER_READ_BIT;
+                        break;
+                    case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+                        stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+                        access = VK_ACCESS_SHADER_READ_BIT;
+                        break;
+                    case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+                        stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+                        access = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT
+                            | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+                        break;
+                    case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+                        stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+                            | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+                        access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
+                            | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+                        break;
+                    case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
+                        stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+                        break;
+                    default:
+                        stage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+                        break;
+                    }
+                };
+
+            VkPipelineStageFlags source_stage;
+            VkPipelineStageFlags destination_stage;
+            stage_and_access(old_layout, true, source_stage, barrier.srcAccessMask);
+            stage_and_access(new_layout, false, destination_stage, barrier.dstAccessMask);
+
+            vkCmdPipelineBarrier(
+                command_buffer,
+                source_stage, destination_stage,
+                0,
+                0, nullptr,
+                0, nullptr,
+                1,
+                &barrier);
+        }
+
+        void transition_image_layout(
+            jevk12_texture* texture, VkImageLayout new_layout)
+        {
+            if (texture == nullptr || texture->m_vk_texture_image == VK_NULL_HANDLE)
+                return;
+            if (texture->m_current_layout == new_layout)
+                return;
+
             VkCommandBuffer command_buffer = begin_temp_command_buffer_records();
-            {
-                VkImageMemoryBarrier barrier = {};
-                barrier.sType = VkStructureType::VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-                barrier.pNext = nullptr;
-                barrier.srcAccessMask = 0;
-                barrier.dstAccessMask = 0;
-                barrier.oldLayout = old_layout;
-                barrier.newLayout = new_layout;
-                barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                barrier.image = image;
-                if (new_layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-                {
-                    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-
-                    if (format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT)
-                        barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-                }
-                else
-                {
-                    barrier.subresourceRange.aspectMask = VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT;
-                }
-
-                barrier.subresourceRange.baseMipLevel = 0;
-                barrier.subresourceRange.levelCount = 1;
-                barrier.subresourceRange.baseArrayLayer = 0;
-                barrier.subresourceRange.layerCount = 1;
-
-                VkPipelineStageFlags source_stage;
-                VkPipelineStageFlags destination_stage;
-
-                if (old_layout == VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED &&
-                    new_layout == VkImageLayout::VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-                {
-                    barrier.srcAccessMask = 0;
-                    barrier.dstAccessMask = VkAccessFlagBits::VK_ACCESS_TRANSFER_WRITE_BIT;
-
-                    source_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-                    destination_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_TRANSFER_BIT;
-                }
-                else if (old_layout == VkImageLayout::VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
-                    new_layout == VkImageLayout::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-                {
-                    barrier.srcAccessMask = VkAccessFlagBits::VK_ACCESS_TRANSFER_WRITE_BIT;
-                    barrier.dstAccessMask = VkAccessFlagBits::VK_ACCESS_SHADER_READ_BIT;
-
-                    source_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_TRANSFER_BIT;
-                    destination_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-                }
-                else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED
-                    && new_layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-                {
-                    barrier.srcAccessMask = 0;
-                    barrier.dstAccessMask =
-                        VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-                    source_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-                    destination_stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-                }
-                else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED
-                    && new_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
-                {
-                    barrier.srcAccessMask = 0;
-                    barrier.dstAccessMask =
-                        VK_ACCESS_COLOR_ATTACHMENT_READ_BIT
-                        | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-                    source_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-                    destination_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-                }
-                else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED
-                    && new_layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-                {
-                    barrier.srcAccessMask = 0;
-                    barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-
-                    source_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-                    destination_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-                }
-                else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-                {
-                    barrier.srcAccessMask = 0;
-                    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-                    source_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-                    destination_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-                }
-                else if (old_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-                {
-                    barrier.srcAccessMask =
-                        VK_ACCESS_COLOR_ATTACHMENT_READ_BIT
-                        | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-                    barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-
-                    source_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-                    destination_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-                }
-                else if (old_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-                    && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-                {
-                    barrier.srcAccessMask =
-                        VK_ACCESS_COLOR_ATTACHMENT_READ_BIT
-                        | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-                    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-                    source_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-                    destination_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-                }
-                else
-                {
-                    assert(old_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-                        && new_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-                    barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-                    barrier.dstAccessMask =
-                        VK_ACCESS_COLOR_ATTACHMENT_READ_BIT
-                        | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-                    source_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-                    destination_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-                }
-
-                vkCmdPipelineBarrier(
-                    command_buffer,
-                    source_stage, destination_stage,
-                    0,
-                    0, nullptr,
-                    0, nullptr,
-                    1,
-                    &barrier);
-            }
+            record_transition_barrier(command_buffer, texture, new_layout);
             end_temp_command_buffer_record(command_buffer);
+
+            texture->m_current_layout = new_layout;
+        }
+
+        void record_image_layout_transition(
+            jevk12_texture* texture, VkImageLayout new_layout)
+        {
+            if (texture == nullptr || texture->m_vk_texture_image == VK_NULL_HANDLE)
+                return;
+            if (texture->m_current_layout == new_layout)
+                return;
+
+            if (_vk_frame_recording && _vk_current_command_buffer != VK_NULL_HANDLE)
+            {
+                record_transition_barrier(
+                    _vk_current_command_buffer, texture, new_layout);
+                texture->m_current_layout = new_layout;
+            }
+            else
+            {
+                transition_image_layout(texture, new_layout);
+            }
         }
 
         template<typename TexT>
-        void trans_and_update_texture_pixels(jevk12_texture* texture, TexT* texture_raw_data)
+        void trans_and_update_texture_pixels(
+            jevk12_texture* texture, TexT* texture_raw_data,
+            bool use_modified_rect = false)
         {
+            assert(texture != nullptr);
+            assert(texture_raw_data != nullptr);
+
+            if (texture_raw_data->m_pixels == nullptr)
+            {
+                // 合法用法：仅在 GPU 侧创建纹理，没有 CPU 像素需要上传。
+                if (texture->m_current_layout != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                    && texture->m_current_layout != VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                {
+                    transition_image_layout(
+                        texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                }
+                return;
+            }
+
             constexpr bool is_3d = std::is_same_v<TexT, jegl_texture_3d>;
+            constexpr bool is_array = std::is_same_v<TexT, jegl_texture_array>;
+            constexpr bool is_cube = std::is_same_v<TexT, jegl_texture_cube>;
 
             uint32_t slice_count = 1;
-            if constexpr (std::is_same_v<TexT, jegl_texture_3d>)
+            if constexpr (is_3d)
                 slice_count = (uint32_t)texture_raw_data->m_depth;
-            else if constexpr (std::is_same_v<TexT, jegl_texture_array>)
+            else if constexpr (is_array)
                 slice_count = (uint32_t)texture_raw_data->m_layers;
-            else if constexpr (std::is_same_v<TexT, jegl_texture_cube>)
+            else if constexpr (is_cube)
                 slice_count = 6;
 
-            VkBuffer texture_data_buffer;
-            VkDeviceMemory texture_data_buffer_memory;
+            size_t pixel_size =
+                (size_t)(texture_raw_data->m_format
+                    & jegl_texture_common::format::COLOR_DEPTH_MASK);
+            if (0 != (texture_raw_data->m_format
+                & jegl_texture_common::format::FLOAT16))
+            {
+                // RGBA16F / R16F 每个通道占 2 字节。
+                pixel_size *= 2;
+            }
 
-            size_t texture_buffer_size = texture_raw_data->m_width * texture_raw_data->m_height
-                * slice_count
-                * (texture_raw_data->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK);
+            size_t upload_min_x = 0;
+            size_t upload_min_y = 0;
+            size_t upload_max_x = texture_raw_data->m_width;
+            size_t upload_max_y = texture_raw_data->m_height;
+            bool full_upload = true;
+
+            if constexpr (!is_3d && !is_array && !is_cube)
+            {
+                if (use_modified_rect
+                    && texture_raw_data->m_width != 0
+                    && texture_raw_data->m_height != 0)
+                {
+                    upload_min_x = texture_raw_data->m_modified_min_x;
+                    upload_min_y = texture_raw_data->m_modified_min_y;
+                    upload_max_x = texture_raw_data->m_modified_max_x;
+                    upload_max_y = texture_raw_data->m_modified_max_y;
+
+                    if (upload_min_x <= upload_max_x
+                        && upload_min_y <= upload_max_y
+                        && upload_max_x < texture_raw_data->m_width
+                        && upload_max_y < texture_raw_data->m_height)
+                    {
+                        full_upload = false;
+                    }
+                }
+            }
+
+            size_t staging_size;
+            size_t buffer_offset;
+            uint32_t row_length;
+            uint32_t image_height;
+            VkOffset3D image_offset;
+            VkExtent3D image_extent;
+
+            if (full_upload)
+            {
+                staging_size = texture_raw_data->m_width * texture_raw_data->m_height
+                    * slice_count * pixel_size;
+                buffer_offset = 0;
+                row_length = 0;
+                image_height = 0;
+                image_offset = { 0, 0, 0 };
+                uint32_t extent_depth = 1;
+                if constexpr (is_3d)
+                    extent_depth = (uint32_t)texture_raw_data->m_depth;
+
+                image_extent = {
+                    (uint32_t)texture_raw_data->m_width,
+                    (uint32_t)texture_raw_data->m_height,
+                    extent_depth };
+            }
+            else
+            {
+                const size_t sub_width = upload_max_x - upload_min_x + 1;
+                const size_t sub_height = upload_max_y - upload_min_y + 1;
+                staging_size = sub_width * sub_height * pixel_size;
+                buffer_offset = 0;
+                row_length = (uint32_t)sub_width;
+                image_height = (uint32_t)sub_height;
+                image_offset = {
+                    (int32_t)upload_min_x,
+                    (int32_t)upload_min_y,
+                    0 };
+                image_extent = {
+                    (uint32_t)sub_width,
+                    (uint32_t)sub_height,
+                    1 };
+            }
+
+            if (staging_size == 0)
+                return;
+
+            VkBuffer texture_data_buffer = VK_NULL_HANDLE;
+            VkDeviceMemory texture_data_buffer_memory = VK_NULL_HANDLE;
+            VkDeviceSize texture_data_memory_offset = 0;
+            VkDeviceSize texture_data_memory_size = 0;
+            void* data = nullptr;
 
             alloc_vk_device_buffer_memory(
-                texture_buffer_size,
-                VkBufferUsageFlagBits::VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                staging_size,
+                VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                 &texture_data_buffer,
-                &texture_data_buffer_memory);
-
-            void* data;
-            vkMapMemory(
-                _vk_logic_device,
-                texture_data_buffer_memory,
-                0,
-                texture_buffer_size,
-                0,
+                &texture_data_buffer_memory,
+                &texture_data_memory_offset,
+                &texture_data_memory_size,
                 &data);
-            memcpy(data, texture_raw_data->m_pixels, texture_buffer_size);
-            vkUnmapMemory(_vk_logic_device, texture_data_buffer_memory);
 
-            // 开始传输纹理数据
-            transition_image_layout(
-                texture->m_vk_texture_image,
-                texture->m_vk_texture_format,
-                VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED,
-                VkImageLayout::VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            if (data == nullptr)
+            {
+                jeecs::debug::logfatal(
+                    "VK120: staging buffer memory is not host-visible.");
+            }
+
+            if (full_upload)
+            {
+                memcpy(data,
+                    texture_raw_data->m_pixels,
+                    staging_size);
+            }
+            else
+            {
+                const size_t source_row_size =
+                    texture_raw_data->m_width * pixel_size;
+                const size_t sub_row_size =
+                    (upload_max_x - upload_min_x + 1) * pixel_size;
+                for (size_t y = upload_min_y; y <= upload_max_y; ++y)
+                {
+                    memcpy(
+                        (uint8_t*)data + (y - upload_min_y) * sub_row_size,
+                        (uint8_t*)texture_raw_data->m_pixels + y * source_row_size
+                            + upload_min_x * pixel_size,
+                        sub_row_size);
+                }
+            }
+
+            transition_image_layout(texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
             VkCommandBuffer command_buffer = begin_temp_command_buffer_records();
             {
                 VkBufferImageCopy region = {};
+                // bufferOffset 是相对于缓冲起点的字节偏移；局部上传时缓冲只含有效子矩形。
                 region.bufferOffset = 0;
-                region.bufferRowLength = 0;
-                region.bufferImageHeight = 0;
-                region.imageSubresource.aspectMask = VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT;
+                region.bufferRowLength = row_length;
+                region.bufferImageHeight = image_height;
+                region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
                 region.imageSubresource.mipLevel = 0;
                 region.imageSubresource.baseArrayLayer = 0;
-                region.imageSubresource.layerCount = is_3d ? 1 : slice_count;
-                region.imageOffset = { 0, 0, 0 };
-                region.imageExtent = {
-                    (uint32_t)texture_raw_data->m_width,
-                    (uint32_t)texture_raw_data->m_height,
-                    1 };
-                if constexpr (is_3d)
-                    region.imageExtent.depth = (uint32_t)texture_raw_data->m_depth;
+                region.imageSubresource.layerCount = is_3d ? 1 : (uint32_t)slice_count;
+                region.imageOffset = image_offset;
+                region.imageExtent = image_extent;
 
                 vkCmdCopyBufferToImage(
                     command_buffer,
                     texture_data_buffer,
                     texture->m_vk_texture_image,
-                    VkImageLayout::VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                     1,
                     &region);
             }
             end_temp_command_buffer_record(command_buffer);
-            transition_image_layout(
-                texture->m_vk_texture_image,
-                texture->m_vk_texture_format,
-                VkImageLayout::VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                VkImageLayout::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            transition_image_layout(texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-            // 释放临时缓冲区
             vkDestroyBuffer(_vk_logic_device, texture_data_buffer, nullptr);
-            vkFreeMemory(_vk_logic_device, texture_data_buffer_memory, nullptr);
+            free_vk_memory(
+                texture_data_buffer_memory,
+                texture_data_memory_offset,
+                texture_data_memory_size);
+        }
+
+        VkSampleCountFlagBits clamp_sample_count(uint32_t samples)
+        {
+            uint32_t clamped = samples == 0 ? 1 : samples;
+            uint32_t result = 1;
+            while ((result << 1) <= clamped)
+                result <<= 1;
+            return (VkSampleCountFlagBits)result;
+        }
+
+        VkSampleCountFlagBits clamp_supported_sample_count(
+            VkFormat format,
+            VkImageUsageFlags usage,
+            VkSampleCountFlagBits requested)
+        {
+            if (requested == VK_SAMPLE_COUNT_1_BIT)
+                return requested;
+
+            VkImageFormatProperties format_properties = {};
+            if (vkGetPhysicalDeviceImageFormatProperties(
+                _vk_device,
+                format,
+                VK_IMAGE_TYPE_2D,
+                VK_IMAGE_TILING_OPTIMAL,
+                usage,
+                0,
+                &format_properties) != VK_SUCCESS)
+            {
+                return VK_SAMPLE_COUNT_1_BIT;
+            }
+
+            while (requested != VK_SAMPLE_COUNT_1_BIT
+                && 0 == (format_properties.sampleCounts & requested))
+            {
+                requested = (VkSampleCountFlagBits)((uint32_t)requested >> 1);
+            }
+            return requested;
         }
 
         template<typename TexT>
@@ -3259,215 +3931,173 @@ namespace jeecs::graphic::api::vk120
 
             if constexpr (is_msaa)
             {
-                // MSAA 纹理：仅 GPU 侧（渲染目标附件），不做 CPU 像素上传
                 jevk12_texture* texture = new jevk12_texture{};
+                texture->m_width = resource->m_width;
+                texture->m_height = resource->m_height;
 
                 const bool is_depth =
                     0 != (resource->m_format & jegl_texture_common::format::DEPTH);
+                const VkFormat format = vk_format_for_texture(resource->m_format);
+                const VkImageUsageFlags attachment_usage = is_depth
+                    ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
+                    : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-                uint32_t clamped_samples =
-                    (uint32_t)(resource->m_samples == 0 ? 1 : resource->m_samples);
-                uint32_t sample_bits = 1;
-                while ((sample_bits << 1) <= clamped_samples)
-                    sample_bits <<= 1;
+                const VkSampleCountFlagBits requested_samples =
+                    clamp_sample_count((uint32_t)resource->m_samples);
+                const VkSampleCountFlagBits supported_samples =
+                    clamp_supported_sample_count(format, attachment_usage, requested_samples);
 
-                if (is_depth)
+                if (supported_samples != requested_samples)
                 {
-                    create_image(
-                        resource->m_width, resource->m_height,
-                        _vk_depth_format,
-                        VkImageTiling::VK_IMAGE_TILING_OPTIMAL,
-                        VkImageUsageFlagBits::VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                        VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                        VkImageAspectFlagBits::VK_IMAGE_ASPECT_DEPTH_BIT,
-                        &texture->m_vk_texture_image,
-                        &texture->m_vk_texture_image_view,
-                        &texture->m_vk_texture_image_memory,
-                        VkImageType::VK_IMAGE_TYPE_2D, 1, 1,
-                        (VkSampleCountFlagBits)sample_bits,
-                        0,
-                        VkImageViewType::VK_IMAGE_VIEW_TYPE_2D);
-
-                    texture->m_vk_texture_format = _vk_depth_format;
-
-                    transition_image_layout(
-                        texture->m_vk_texture_image,
-                        _vk_depth_format,
-                        VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED,
-                        VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+                    jeecs::debug::logwarn(
+                        "VK120: MSAA texture x%u is not supported for this format, using x%u.",
+                        (uint32_t)requested_samples, (uint32_t)supported_samples);
                 }
-                else
-                {
-                    VkFormat image_format;
-                    switch (resource->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK)
-                    {
-                    case jegl_texture_common::format::RGBA:
-                        image_format = VkFormat::VK_FORMAT_R8G8B8A8_UNORM;
-                        break;
-                    case jegl_texture_common::format::MONO:
-                        image_format = VkFormat::VK_FORMAT_R8_UNORM;
-                        break;
-                    default:
-                        image_format = VkFormat::VK_FORMAT_R8G8B8A8_UNORM;
-                        break;
-                    }
+                texture->m_samples = (uint32_t)supported_samples;
 
-                    create_image(
-                        resource->m_width, resource->m_height,
-                        image_format,
-                        VkImageTiling::VK_IMAGE_TILING_OPTIMAL,
-                        VkImageUsageFlagBits::VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-                        VkImageUsageFlagBits::VK_IMAGE_USAGE_SAMPLED_BIT,
-                        VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                        VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT,
-                        &texture->m_vk_texture_image,
-                        &texture->m_vk_texture_image_view,
-                        &texture->m_vk_texture_image_memory,
-                        VkImageType::VK_IMAGE_TYPE_2D, 1, 1,
-                        (VkSampleCountFlagBits)sample_bits,
-                        0,
-                        VkImageViewType::VK_IMAGE_VIEW_TYPE_2D);
+                create_image(
+                    texture,
+                    format,
+                    attachment_usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                    VK_IMAGE_TYPE_2D, 1, 1,
+                    supported_samples,
+                    0,
+                    VK_IMAGE_VIEW_TYPE_2D);
 
-                    texture->m_vk_texture_format = image_format;
-                    transition_image_layout(
-                        texture->m_vk_texture_image,
-                        image_format,
-                        VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED,
-                        VkImageLayout::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-                }
+                transition_image_layout(
+                    texture,
+                    is_depth
+                    ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+                    : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
                 return texture;
             }
             else if constexpr (!is_3d && !is_array && !is_cube)
             {
-                // 二维纹理
-                if (resource->m_format & jegl_texture_common::format::FRAMEBUF)
+                if (0 != (resource->m_format & jegl_texture_common::format::FRAMEBUF))
                 {
-                    return create_framebuf_texture(
-                        resource->m_format,
-                        resource->m_width,
-                        resource->m_height);
+                    auto* texture = create_framebuf_texture(
+                        resource->m_format, resource->m_width, resource->m_height);
+                    return texture;
+                }
+
+                jevk12_texture* texture = new jevk12_texture{};
+                texture->m_width = resource->m_width;
+                texture->m_height = resource->m_height;
+
+                const VkFormat image_format = vk_format_for_texture(resource->m_format);
+                const bool is_depth =
+                    0 != (resource->m_format & jegl_texture_common::format::DEPTH);
+
+                create_image(
+                    texture,
+                    image_format,
+                    VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                    VK_IMAGE_TYPE_2D, 1, 1,
+                    VK_SAMPLE_COUNT_1_BIT,
+                    0,
+                    VK_IMAGE_VIEW_TYPE_2D);
+
+                if (is_depth)
+                {
+                    // 深度纹理没有 CPU 像素数据，直接进入可采样布局。
+                    transition_image_layout(
+                        texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
                 }
                 else
                 {
-                    jevk12_texture* texture = new jevk12_texture{};
-
-                    VkFormat image_format;
-                    switch (resource->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK)
-                    {
-                    case jegl_texture_common::format::RGBA:
-                        image_format = VkFormat::VK_FORMAT_R8G8B8A8_UNORM;
-                        break;
-                    case jegl_texture_common::format::MONO:
-                        image_format = VkFormat::VK_FORMAT_R8_UNORM;
-                        break;
-                    default:
-                        image_format = VkFormat::VK_FORMAT_R8G8B8A8_UNORM;
-                        break;
-                    }
-
-                    create_image(
-                        resource->m_width,
-                        resource->m_height,
-                        image_format,
-                        VkImageTiling::VK_IMAGE_TILING_OPTIMAL,
-                        VkImageUsageFlagBits::VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-                        VkImageUsageFlagBits::VK_IMAGE_USAGE_SAMPLED_BIT,
-                        VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                        VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT,
-                        &texture->m_vk_texture_image,
-                        &texture->m_vk_texture_image_view,
-                        &texture->m_vk_texture_image_memory,
-                        VkImageType::VK_IMAGE_TYPE_2D, 1, 1,
-                        VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT,
-                        0,
-                        VkImageViewType::VK_IMAGE_VIEW_TYPE_2D);
-
-                    texture->m_vk_texture_format = image_format;
-
                     trans_and_update_texture_pixels(texture, resource);
-                    return texture;
                 }
+                return texture;
             }
             else
             {
-                // 3D / 数组 / 立方体贴图纹理
                 jevk12_texture* texture = new jevk12_texture{};
+                texture->m_width = resource->m_width;
+                texture->m_height = resource->m_height;
 
-                VkFormat image_format;
-                switch (resource->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK)
-                {
-                case jegl_texture_common::format::RGBA:
-                    image_format = VkFormat::VK_FORMAT_R8G8B8A8_UNORM;
-                    break;
-                case jegl_texture_common::format::MONO:
-                    image_format = VkFormat::VK_FORMAT_R8_UNORM;
-                    break;
-                default:
-                    image_format = VkFormat::VK_FORMAT_R8G8B8A8_UNORM;
-                    break;
-                }
+                const VkFormat image_format = vk_format_for_texture(resource->m_format);
+                const bool is_depth =
+                    0 != (resource->m_format & jegl_texture_common::format::DEPTH);
 
-                // 按纹理类别计算图像维度与视图类型；
-                // 成员访问必须由 if constexpr 守卫（三目运算符会对两个
-                // 分支都做成员检查）
-                VkImageType vk_image_type = VkImageType::VK_IMAGE_TYPE_2D;
+                VkImageType vk_image_type = VK_IMAGE_TYPE_2D;
                 uint32_t vk_image_depth = 1;
                 uint32_t vk_array_layers = 1;
                 VkImageCreateFlags vk_image_flags = 0;
-                VkImageViewType vk_view_type = VkImageViewType::VK_IMAGE_VIEW_TYPE_2D;
+                VkImageViewType vk_view_type = VK_IMAGE_VIEW_TYPE_2D;
 
                 if constexpr (is_3d)
                 {
-                    vk_image_type = VkImageType::VK_IMAGE_TYPE_3D;
+                    vk_image_type = VK_IMAGE_TYPE_3D;
                     vk_image_depth = (uint32_t)resource->m_depth;
-                    vk_view_type = VkImageViewType::VK_IMAGE_VIEW_TYPE_3D;
+                    vk_view_type = VK_IMAGE_VIEW_TYPE_3D;
                 }
                 else if constexpr (is_array)
                 {
                     vk_array_layers = (uint32_t)resource->m_layers;
-                    vk_view_type = VkImageViewType::VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+                    vk_view_type = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
                 }
                 else if constexpr (is_cube)
                 {
                     vk_array_layers = 6;
-                    vk_image_flags =
-                        VkImageCreateFlagBits::VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-                    vk_view_type = VkImageViewType::VK_IMAGE_VIEW_TYPE_CUBE;
+                    vk_image_flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+                    vk_view_type = VK_IMAGE_VIEW_TYPE_CUBE;
                 }
 
                 create_image(
-                    resource->m_width,
-                    resource->m_height,
+                    texture,
                     image_format,
-                    VkImageTiling::VK_IMAGE_TILING_OPTIMAL,
-                    VkImageUsageFlagBits::VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-                    VkImageUsageFlagBits::VK_IMAGE_USAGE_SAMPLED_BIT,
-                    VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                    VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT,
-                    &texture->m_vk_texture_image,
-                    &texture->m_vk_texture_image_view,
-                    &texture->m_vk_texture_image_memory,
+                    VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                     vk_image_type,
                     vk_image_depth,
                     vk_array_layers,
-                    VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT,
+                    VK_SAMPLE_COUNT_1_BIT,
                     vk_image_flags,
                     vk_view_type);
 
-                texture->m_vk_texture_format = image_format;
-
-                trans_and_update_texture_pixels(texture, resource);
+                if (is_depth)
+                {
+                    transition_image_layout(
+                        texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                }
+                else
+                {
+                    trans_and_update_texture_pixels(texture, resource);
+                }
                 return texture;
             }
         }
         void destroy_texture_instance(jevk12_texture* texture)
         {
-            vkDestroyImageView(_vk_logic_device, texture->m_vk_texture_image_view, nullptr);
+            if (texture == nullptr)
+                return;
 
-            if (texture->m_vk_texture_image != VK_NULL_HANDLE)
+            if (_vk_imgui_initialized && texture->m_vk_texture_image_view != VK_NULL_HANDLE)
+            {
+                auto found = _vk_imgui_texture_cache.find(
+                    texture->m_vk_texture_image_view);
+                if (found != _vk_imgui_texture_cache.end())
+                {
+                    ImGui_ImplVulkan_RemoveTexture(found->second);
+                    _vk_imgui_texture_cache.erase(found);
+                }
+            }
+
+            if (texture->m_vk_texture_image_view != VK_NULL_HANDLE)
+                vkDestroyImageView(_vk_logic_device, texture->m_vk_texture_image_view, nullptr);
+
+            if (texture->m_owns_image
+                && texture->m_vk_texture_image != VK_NULL_HANDLE)
+            {
                 vkDestroyImage(_vk_logic_device, texture->m_vk_texture_image, nullptr);
+            }
             if (texture->m_vk_texture_image_memory != VK_NULL_HANDLE)
-                vkFreeMemory(_vk_logic_device, texture->m_vk_texture_image_memory, nullptr);
+            {
+                free_vk_memory(
+                    texture->m_vk_texture_image_memory,
+                    texture->m_vk_texture_memory_offset,
+                    texture->m_vk_texture_memory_size);
+            }
 
             delete texture;
         }
@@ -3477,15 +4107,19 @@ namespace jeecs::graphic::api::vk120
             jevk12_uniformbuf* uniformbuf = new jevk12_uniformbuf{};
 
             uniformbuf->m_real_binding_place = real_binding_place;
+            uniformbuf->m_buffer_size = std::max<size_t>(size, 1);
 
             // 获取所需分配的内存类型
             alloc_vk_device_buffer_memory(
-                size,
+                uniformbuf->m_buffer_size,
                 VkBufferUsageFlagBits::VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                 VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                 VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                 &uniformbuf->m_uniform_buffer,
-                &uniformbuf->m_uniform_buffer_memory);
+                &uniformbuf->m_uniform_buffer_memory,
+                &uniformbuf->m_memory_offset,
+                &uniformbuf->m_memory_size,
+                &uniformbuf->m_mapped);
 
             return uniformbuf;
         }
@@ -3497,23 +4131,41 @@ namespace jeecs::graphic::api::vk120
         }
         void destroy_uniform_buffer(jevk12_uniformbuf* uniformbuf)
         {
-            vkDestroyBuffer(_vk_logic_device, uniformbuf->m_uniform_buffer, nullptr);
-            vkFreeMemory(_vk_logic_device, uniformbuf->m_uniform_buffer_memory, nullptr);
+            if (uniformbuf == nullptr)
+                return;
+            if (uniformbuf->m_uniform_buffer != VK_NULL_HANDLE)
+                vkDestroyBuffer(_vk_logic_device, uniformbuf->m_uniform_buffer, nullptr);
+            if (uniformbuf->m_uniform_buffer_memory != VK_NULL_HANDLE)
+            {
+                free_vk_memory(
+                    uniformbuf->m_uniform_buffer_memory,
+                    uniformbuf->m_memory_offset,
+                    uniformbuf->m_memory_size);
+            }
             delete uniformbuf;
         }
         void update_uniform_buffer_with_range(jevk12_uniformbuf* ubuf, void* data, size_t offset, size_t size)
         {
-            void* mdata;
+            if (ubuf == nullptr || data == nullptr || size == 0)
+                return;
+            if (offset + size > ubuf->m_buffer_size)
+            {
+                jeecs::debug::logerr(
+                    "VK120: uniform buffer update exceeds the allocated buffer size.");
+                return;
+            }
 
-            vkMapMemory(
-                _vk_logic_device,
-                ubuf->m_uniform_buffer_memory,
-                (VkDeviceSize)offset,
-                (VkDeviceSize)size,
-                0,
-                &mdata);
-            memcpy(mdata, data, size);
-            vkUnmapMemory(_vk_logic_device, ubuf->m_uniform_buffer_memory);
+            if (ubuf->m_mapped == nullptr)
+            {
+                jeecs::debug::logerr(
+                    "VK120: uniform buffer memory is not persistently mapped.");
+                return;
+            }
+
+            memcpy(
+                (uint8_t*)ubuf->m_mapped + offset,
+                data,
+                size);
         }
         void update_uniform_buffer(jegl_uniform_buffer* resource)
         {
@@ -3529,195 +4181,369 @@ namespace jeecs::graphic::api::vk120
         }
 
         /////////////////////////////////////////////////////
-        void finish_frame_buffer()
+        void end_render_pass()
         {
+            if (_vk_current_target_framebuffer == nullptr)
+                return;
+
             vkCmdEndRenderPass(_vk_current_command_buffer);
-            end_command_buffer_record(_vk_current_command_buffer);
 
-            // OK 提交页面
-            assert(_vk_last_command_buffer_semaphore != VK_NULL_HANDLE);
-
-            VkSubmitInfo submit_info = {};
-            submit_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            submit_info.pNext = nullptr;
-            // TODO: 未来应当支持等待多个信号量，例如延迟管线
-            submit_info.waitSemaphoreCount = 1;
-            submit_info.pWaitSemaphores = &_vk_last_command_buffer_semaphore;
-            submit_info.pWaitDstStageMask = &_vk_wait_for_last_command_buffer_stage;
-            submit_info.commandBufferCount = 1;
-            submit_info.pCommandBuffers = &_vk_current_command_buffer;
-
-            auto new_semphore = _vk_command_buffer_allocator->allocate_semaphore(
-                _vk_current_swapchain_image_content);
-
-            submit_info.signalSemaphoreCount = 1;
-            submit_info.pSignalSemaphores = &new_semphore;
-
-            // NOTE: 这里使用 vkQueueWaitIdle 而非 per-image fence 是有意为之。
-            // jevk12_shader 的 UBO 池(m_uniform_variables)按 commit round 回收，且通过
-            // vkMapMemory+memcpy 直接写入 HOST_COHERENT 显存，其生命周期并未绑定到 swapchain
-            // 镜像。只有等 GPU 完成本帧后，下一帧 CPU 才能安全覆写这些 UBO。若要改用 per-image
-            // fence 提升并行度，必须先把 UBO 池改造成 frame-in-flight 感知(按镜像索引)。
-            if (vkQueueSubmit(
-                _vk_logic_device_graphic_queue, 1, &submit_info, VK_NULL_HANDLE) != VK_SUCCESS)
+            // render pass 会在结束时把附件迁移到 finalLayout，这里同步跟踪状态。
+            for (auto* color : _vk_current_target_framebuffer->m_color_attachments)
             {
-                jeecs::debug::logfatal("Failed to submit draw command buffer!");
+                if (color != nullptr)
+                    color->m_current_layout = _vk_current_target_framebuffer->m_color_final_layout;
             }
-
-            if (_vk_current_target_framebuffer == _vk_current_swapchain_image_content->m_framebuffer)
+            if (_vk_current_target_framebuffer->m_depth_attachment != nullptr)
             {
-                vkQueueWaitIdle(_vk_logic_device_graphic_queue);
+                _vk_current_target_framebuffer->m_depth_attachment->m_current_layout =
+                    _vk_current_target_framebuffer->m_depth_final_layout;
             }
-
-            // Release old semaphore through proper allocator mechanism
-            // The old semaphore will be reused by the allocator
-            _vk_last_command_buffer_semaphore = new_semphore;
-            if (_vk_current_target_framebuffer == _vk_current_swapchain_image_content->m_framebuffer)
-                _vk_wait_for_last_command_buffer_stage =
-                VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            else
-                _vk_wait_for_last_command_buffer_stage =
-                VkPipelineStageFlagBits::VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            if (_vk_current_target_framebuffer->m_resolve_attachment != nullptr)
+            {
+                _vk_current_target_framebuffer->m_resolve_attachment->m_current_layout =
+                    _vk_current_target_framebuffer->m_resolve_final_layout;
+            }
 
             _vk_current_target_framebuffer = nullptr;
-            _vk_current_command_buffer = nullptr;
+        }
+
+        void wait_current_frame_slot()
+        {
+            auto& frame = current_frame();
+            if (frame.m_submitted)
+            {
+                JE_VK_CHECK(vkWaitForFences(
+                    _vk_logic_device, 1, &frame.m_fence, VK_TRUE, UINT64_MAX));
+                frame.m_submitted = false;
+            }
+        }
+
+        void begin_frame_recording(bool has_swapchain_image)
+        {
+            if (_vk_frame_recording)
+            {
+                if (_vk_frame_has_swapchain_image != has_swapchain_image)
+                {
+                    jeecs::debug::logfatal(
+                        "VK120: frame recording mode changed while the frame is being recorded.");
+                }
+                return;
+            }
+
+            wait_current_frame_slot();
+
+            auto& frame = current_frame();
+            assert(frame.m_command_buffer != VK_NULL_HANDLE);
+
+            JE_VK_CHECK(vkResetCommandBuffer(frame.m_command_buffer, 0));
+
+            frame.m_ubo_ring_offset = 0;
+            JE_VK_CHECK(vkResetDescriptorPool(
+                _vk_logic_device, frame.m_descriptor_pool, 0));
+            _vk_descriptor_set_allocator->begin_frame();
+
+            VkCommandBufferBeginInfo begin_info = {};
+            begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            begin_info.pNext = nullptr;
+            begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+            begin_info.pInheritanceInfo = nullptr;
+            JE_VK_CHECK(vkBeginCommandBuffer(frame.m_command_buffer, &begin_info));
+
+            frame.m_recording = true;
+            frame.m_has_swapchain_image = has_swapchain_image;
+
+            _vk_frame_recording = true;
+            _vk_frame_has_swapchain_image = has_swapchain_image;
+            _vk_current_command_buffer = frame.m_command_buffer;
+            _vk_current_target_framebuffer = nullptr;
+        }
+
+        void submit_frame()
+        {
+            if (!_vk_frame_recording)
+                return;
+
+            end_render_pass();
+
+            auto& frame = current_frame();
+            JE_VK_CHECK(vkEndCommandBuffer(frame.m_command_buffer));
+
+            VkSubmitInfo submit_info = {};
+            submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submit_info.pNext = nullptr;
+
+            VkSemaphore wait_semaphore = frame.m_image_available;
+            VkSemaphore signal_semaphore = VK_NULL_HANDLE;
+            VkPipelineStageFlags wait_stage =
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+            if (frame.m_has_swapchain_image)
+            {
+                signal_semaphore =
+                    _vk_image_render_finished_semaphores[
+                        _vk_presenting_swapchain_image_index];
+
+                submit_info.waitSemaphoreCount = 1;
+                submit_info.pWaitSemaphores = &wait_semaphore;
+                submit_info.pWaitDstStageMask = &wait_stage;
+                submit_info.signalSemaphoreCount = 1;
+                submit_info.pSignalSemaphores = &signal_semaphore;
+            }
+
+            submit_info.commandBufferCount = 1;
+            submit_info.pCommandBuffers = &frame.m_command_buffer;
+
+            JE_VK_CHECK(vkResetFences(
+                _vk_logic_device, 1, &frame.m_fence));
+            JE_VK_CHECK(vkQueueSubmit(
+                _vk_logic_device_graphic_queue, 1, &submit_info, frame.m_fence));
+
+            frame.m_submitted = true;
+            frame.m_recording = false;
+
+            if (frame.m_has_swapchain_image)
+            {
+                _vk_pending_present = true;
+                _vk_pending_present_image_index = _vk_presenting_swapchain_image_index;
+            }
+
+            _vk_frame_recording = false;
+            _vk_frame_has_swapchain_image = false;
+            _vk_current_command_buffer = VK_NULL_HANDLE;
+            _vk_current_target_framebuffer = nullptr;
+
+            _vk_current_frame_index =
+                (_vk_current_frame_index + 1) % FRAMES_IN_FLIGHT;
         }
 
         void recreate_swapchain_and_reinit_imgui()
         {
             vkDeviceWaitIdle(_vk_logic_device);
-            jegui_shutdown_vk120(true);
+
+            _vk_frame_recording = false;
+            _vk_frame_has_swapchain_image = false;
+            _vk_current_target_framebuffer = nullptr;
+            _vk_current_command_buffer = VK_NULL_HANDLE;
+            _vk_pending_present = false;
+            _vk_pending_present_image_index = UINT32_MAX;
+
+            const VkRenderPass previous_render_pass =
+                _vk_imgui_initialized && !_vk_swapchain_images.empty()
+                ? _vk_swapchain_images.front()->m_framebuffer->m_rendpass
+                : VK_NULL_HANDLE;
+            const size_t previous_image_count = _vk_swapchain_images.size();
+
             recreate_swap_chain_for_current_surface();
-            imgui_init();
+
+            const VkRenderPass current_render_pass =
+                _vk_swapchain_images.empty()
+                ? VK_NULL_HANDLE
+                : _vk_swapchain_images.front()->m_framebuffer->m_rendpass;
+
+            if (_vk_imgui_initialized
+                && previous_render_pass == current_render_pass
+                && previous_image_count == _vk_swapchain_images.size()
+                && current_render_pass != VK_NULL_HANDLE)
+            {
+                ImGui_ImplVulkan_SetMinImageCount(std::max<uint32_t>(
+                    2, _vk_surface_capabilities.minImageCount));
+            }
+            else
+            {
+                if (_vk_imgui_initialized)
+                {
+                    jegui_shutdown_vk120(true);
+                    _vk_imgui_initialized = false;
+                    _vk_imgui_texture_cache.clear();
+                }
+                imgui_init();
+            }
         }
 
         void present()
         {
-            // Present last drawed frame.
-            if (_vk_presenting_swapchain_image_index != UINT32_MAX)
+            if (!_vk_pending_present
+                || _vk_pending_present_image_index == UINT32_MAX)
             {
-                assert(_vk_current_swapchain_image_content
-                    == _vk_swapchain_images[_vk_presenting_swapchain_image_index]);
+                return;
+            }
 
-                VkSwapchainKHR swapchains[] = { _vk_swapchain };
-                VkPresentInfoKHR present_info = {};
-                present_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-                present_info.pNext = nullptr;
-                present_info.waitSemaphoreCount = 1;
-                present_info.pWaitSemaphores = &_vk_last_command_buffer_semaphore;
-                present_info.swapchainCount = 1;
-                present_info.pSwapchains = swapchains;
-                present_info.pImageIndices = &_vk_presenting_swapchain_image_index;
-                present_info.pResults = nullptr;
+            VkSemaphore render_finished =
+                _vk_image_render_finished_semaphores[_vk_pending_present_image_index];
 
-                VkResult present_result =
-                    vkQueuePresentKHR(_vk_logic_device_present_queue, &present_info);
-                // VK_ERROR_OUT_OF_DATE_KHR / VK_SUBOPTIMAL_KHR 不是致命错误：
-                // 下一帧的 interface update 或 update() 内的 acquire 会触发交换链重建。
-                if (present_result != VK_SUCCESS
-                    && present_result != VK_SUBOPTIMAL_KHR
-                    && present_result != VK_ERROR_OUT_OF_DATE_KHR)
-                {
-                    jeecs::debug::logwarn("Failed to present swap chain image (vkResult=%d).",
-                        (int)present_result);
-                }
+            VkSwapchainKHR swapchains[] = { _vk_swapchain };
+            VkPresentInfoKHR present_info = {};
+            present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+            present_info.pNext = nullptr;
+            present_info.waitSemaphoreCount = 1;
+            present_info.pWaitSemaphores = &render_finished;
+            present_info.swapchainCount = 1;
+            present_info.pSwapchains = swapchains;
+            present_info.pImageIndices = &_vk_pending_present_image_index;
+            present_info.pResults = nullptr;
+
+            VkResult present_result =
+                vkQueuePresentKHR(_vk_logic_device_present_queue, &present_info);
+
+            _vk_pending_present = false;
+            _vk_pending_present_image_index = UINT32_MAX;
+
+            if (present_result == VK_ERROR_OUT_OF_DATE_KHR
+                || present_result == VK_SUBOPTIMAL_KHR)
+            {
+                _vk_swapchain_out_of_date = true;
+            }
+            else if (present_result != VK_SUCCESS)
+            {
+                jeecs::debug::logwarn(
+                    "Failed to present swap chain image (vkResult=%d).",
+                    (int)present_result);
             }
         }
 
-        void update()
+        bool acquire_swapchain_image()
         {
-            _vk_last_command_buffer_semaphore =
-                _vk_command_buffer_allocator->allocate_semaphore(nullptr);
-            _vk_wait_for_last_command_buffer_stage =
-                VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            auto& frame = current_frame();
 
-            VkResult acquire_result = vkAcquireNextImageKHR(
-                _vk_logic_device,
-                _vk_swapchain,
-                UINT64_MAX,
-                _vk_last_command_buffer_semaphore,
-                VK_NULL_HANDLE,
-                &_vk_presenting_swapchain_image_index);
-
-            // VK_SUBOPTIMAL_KHR 是成功码（图像可用，只是呈现模式非最优），应当继续；
-            // VK_ERROR_OUT_OF_DATE_KHR 表示交换链已失效，重建后用同一个 semaphore 重试。
-            if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR)
+            for (;;)
             {
-                recreate_swapchain_and_reinit_imgui();
-                // 失败的 acquire 不会 signal semaphore，可安全复用于重试
-                acquire_result = vkAcquireNextImageKHR(
+                VkResult acquire_result = vkAcquireNextImageKHR(
                     _vk_logic_device,
                     _vk_swapchain,
                     UINT64_MAX,
-                    _vk_last_command_buffer_semaphore,
+                    frame.m_image_available,
                     VK_NULL_HANDLE,
                     &_vk_presenting_swapchain_image_index);
-            }
 
-            if (acquire_result != VK_SUCCESS && acquire_result != VK_SUBOPTIMAL_KHR)
-            {
-                jeecs::debug::logfatal("Failed to acquire swap chain image (vkResult=%d).",
+                if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR)
+                {
+                    recreate_swapchain_and_reinit_imgui();
+                    continue;
+                }
+                if (acquire_result == VK_SUCCESS
+                    || acquire_result == VK_SUBOPTIMAL_KHR)
+                {
+                    break;
+                }
+
+                jeecs::debug::logfatal(
+                    "Failed to acquire swap chain image (vkResult=%d).",
                     (int)acquire_result);
             }
 
             _vk_current_swapchain_image_content =
                 _vk_swapchain_images[_vk_presenting_swapchain_image_index];
-
-            _vk_current_swapchain_image_content->release_using_resources();
-            _vk_current_swapchain_image_content->use_semaphore(_vk_last_command_buffer_semaphore);
-
-            assert(_vk_current_target_framebuffer == nullptr);
-            assert(_vk_current_command_buffer == nullptr);
-
-            // cmd_begin_frame_buffer(nullptr, 0, 0, 0, 0);
+            return true;
         }
+
         void late_update()
         {
-            assert(_vk_current_swapchain_image_content ==
-                _vk_swapchain_images[_vk_presenting_swapchain_image_index]);
+            if (!_vk_frame_recording)
+                return;
 
-            // 结束录制！回到默认帧缓冲
-            cmd_begin_frame_buffer(nullptr, 0, 0, 0, 0);
-            jegui_update_vk120(_vk_current_command_buffer);
-            finish_frame_buffer();
+            if (_vk_frame_has_swapchain_image)
+            {
+                cmd_begin_frame_buffer(nullptr, 0, 0, 0, 0);
+                jegui_update_vk120(_vk_current_command_buffer);
+                end_render_pass();
+            }
+
+            submit_frame();
         }
-        /////////////////////////////////////////////////////
-        void cmd_begin_frame_buffer(jevk12_framebuffer* framebuf, int32_t x, int32_t y, int32_t w, int32_t h)
-        {
-            if (_vk_current_target_framebuffer != nullptr)
-                finish_frame_buffer();
 
-            assert(_vk_current_target_framebuffer == nullptr);
-            assert(_vk_current_command_buffer == nullptr);
+        /////////////////////////////////////////////////////
+        void cmd_begin_frame_buffer(
+            jevk12_framebuffer* framebuf, int32_t x, int32_t y, int32_t w, int32_t h)
+        {
+            end_render_pass();
+
+            if (!_vk_frame_recording)
+            {
+                if (framebuf == nullptr)
+                {
+                    if (!_vk_frame_has_swapchain_image
+                        || _vk_current_swapchain_image_content == nullptr)
+                    {
+                        jeecs::debug::logerr(
+                            "VK120: begin_pass(nullptr) called without an acquired swapchain image.");
+                        return;
+                    }
+                    begin_frame_recording(true);
+                }
+                else
+                {
+                    begin_frame_recording(false);
+                }
+            }
 
             if (framebuf == nullptr)
-                _vk_current_target_framebuffer = _vk_current_swapchain_image_content->m_framebuffer;
+            {
+                if (!_vk_frame_has_swapchain_image
+                    || _vk_current_swapchain_image_content == nullptr)
+                {
+                    jeecs::debug::logerr(
+                        "VK120: cannot render to the screen without an acquired swapchain image.");
+                    return;
+                }
+                _vk_current_target_framebuffer =
+                    _vk_current_swapchain_image_content->m_framebuffer;
+            }
             else
+            {
                 _vk_current_target_framebuffer = framebuf;
+            }
 
-            _vk_current_command_buffer = _vk_command_buffer_allocator->allocate_command_buffer(
-                _vk_current_swapchain_image_content);
+            // 确保附件处于 render pass 期望的 initial layout。离屏/MSAA 附件可能在
+            // 上一个 pass 结束后处于 SHADER_READ_ONLY，而 render pass 期望别的布局。
+            for (auto* color : _vk_current_target_framebuffer->m_color_attachments)
+            {
+                if (color != nullptr
+                    && color->m_current_layout
+                    != _vk_current_target_framebuffer->m_color_initial_layout)
+                {
+                    record_image_layout_transition(
+                        color, _vk_current_target_framebuffer->m_color_initial_layout);
+                }
+            }
+            if (auto* depth = _vk_current_target_framebuffer->m_depth_attachment;
+                depth != nullptr
+                && depth->m_current_layout
+                != _vk_current_target_framebuffer->m_depth_initial_layout)
+            {
+                record_image_layout_transition(
+                    depth, _vk_current_target_framebuffer->m_depth_initial_layout);
+            }
+            if (auto* resolve = _vk_current_target_framebuffer->m_resolve_attachment;
+                resolve != nullptr
+                && resolve->m_current_layout
+                != _vk_current_target_framebuffer->m_resolve_initial_layout)
+            {
+                record_image_layout_transition(
+                    resolve, _vk_current_target_framebuffer->m_resolve_initial_layout);
+            }
 
-            begin_command_buffer_record(_vk_current_command_buffer);
+            _vk_descriptor_set_allocator->begin_pass();
 
             VkRenderPassBeginInfo render_pass_begin_info = {};
-            render_pass_begin_info.sType = VkStructureType::VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            render_pass_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
             render_pass_begin_info.pNext = nullptr;
             render_pass_begin_info.renderPass = _vk_current_target_framebuffer->m_rendpass;
             render_pass_begin_info.framebuffer = _vk_current_target_framebuffer->m_framebuffer;
             render_pass_begin_info.renderArea.offset = { 0, 0 };
-            render_pass_begin_info.renderArea.extent.width = (uint32_t)_vk_current_target_framebuffer->m_width;
-            render_pass_begin_info.renderArea.extent.height = (uint32_t)_vk_current_target_framebuffer->m_height;
-
+            render_pass_begin_info.renderArea.extent.width =
+                (uint32_t)_vk_current_target_framebuffer->m_width;
+            render_pass_begin_info.renderArea.extent.height =
+                (uint32_t)_vk_current_target_framebuffer->m_height;
             render_pass_begin_info.clearValueCount = 0;
             render_pass_begin_info.pClearValues = nullptr;
 
             vkCmdBeginRenderPass(
                 _vk_current_command_buffer,
                 &render_pass_begin_info,
-                VkSubpassContents::VK_SUBPASS_CONTENTS_INLINE);
+                VK_SUBPASS_CONTENTS_INLINE);
 
-            // NOTE: Pipeline的viewport的纵向坐标应当翻转以兼容opengl3和dx11实现
+            // NOTE: 屏幕目标的 viewport 纵向坐标需要翻转，以兼容 opengl3 / dx11 的约定。
             if (w == 0)
                 w = static_cast<int32_t>(_vk_current_target_framebuffer->m_width);
             if (h == 0)
@@ -3729,7 +4555,8 @@ namespace jeecs::graphic::api::vk120
 
             if (framebuf == nullptr)
             {
-                viewport.y = (float)_vk_current_target_framebuffer->m_height - (float)y;
+                viewport.y =
+                    (float)_vk_current_target_framebuffer->m_height - (float)y;
                 viewport.height = -(float)h;
             }
             else
@@ -3740,14 +4567,16 @@ namespace jeecs::graphic::api::vk120
 
             viewport.minDepth = 0.0f;
             viewport.maxDepth = 1.0f;
-            vkCmdSetViewport(_vk_current_command_buffer, 0, 1, &viewport);
+            vkCmdSetViewport(
+                _vk_current_command_buffer, 0, 1, &viewport);
 
             VkRect2D scissor = {};
             scissor.offset = VkOffset2D{ (int32_t)0, (int32_t)0 };
             scissor.extent = VkExtent2D{
                 (uint32_t)_vk_current_target_framebuffer->m_width,
                 (uint32_t)_vk_current_target_framebuffer->m_height };
-            vkCmdSetScissor(_vk_current_command_buffer, 0, 1, &scissor);
+            vkCmdSetScissor(
+                _vk_current_command_buffer, 0, 1, &scissor);
         }
         void cmd_clear_frame_buffer_color(size_t attachment_id, const float color[4])
         {
@@ -3817,50 +4646,438 @@ namespace jeecs::graphic::api::vk120
 
             for (auto& sampler : shader_may_null->m_blob_data->m_samplers)
             {
-                _vk_descriptor_set_allocator->bind_sampler(
-                    (size_t)sampler.m_sampler_id, sampler.m_vk_sampler);
+                for (auto& binding :
+                    shader_may_null->m_blob_data->m_texture_sampler_bindings)
+                {
+                    if (binding.m_sampler_id == sampler.m_sampler_id)
+                    {
+                        _vk_descriptor_set_allocator->bind_sampler(
+                            binding.m_pass, sampler.m_vk_sampler);
+                    }
+                }
             }
             return true;
         }
-        void cmd_draw_vertex(jevk12_vertex* vertex)
+
+        static VkCompareOp vk_compare_op(jegl_shader::depth_test_method method)
         {
+            switch (method)
+            {
+            case jegl_shader::depth_test_method::NEVER:
+                return VK_COMPARE_OP_NEVER;
+            case jegl_shader::depth_test_method::LESS:
+                return VK_COMPARE_OP_LESS;
+            case jegl_shader::depth_test_method::EQUAL:
+                return VK_COMPARE_OP_EQUAL;
+            case jegl_shader::depth_test_method::LESS_EQUAL:
+                return VK_COMPARE_OP_LESS_OR_EQUAL;
+            case jegl_shader::depth_test_method::GREATER:
+                return VK_COMPARE_OP_GREATER;
+            case jegl_shader::depth_test_method::NOT_EQUAL:
+                return VK_COMPARE_OP_NOT_EQUAL;
+            case jegl_shader::depth_test_method::GREATER_EQUAL:
+                return VK_COMPARE_OP_GREATER_OR_EQUAL;
+            case jegl_shader::depth_test_method::ALWAYS:
+                return VK_COMPARE_OP_ALWAYS;
+            default:
+                jeecs::debug::logerr("Invalid depth test method, using LESS.");
+                return VK_COMPARE_OP_LESS;
+            }
+        }
+
+        static VkBlendFactor vk_blend_factor(jegl_shader::blend_method method)
+        {
+            switch (method)
+            {
+            case jegl_shader::blend_method::ZERO:
+                return VK_BLEND_FACTOR_ZERO;
+            case jegl_shader::blend_method::ONE:
+                return VK_BLEND_FACTOR_ONE;
+            case jegl_shader::blend_method::SRC_COLOR:
+                return VK_BLEND_FACTOR_SRC_COLOR;
+            case jegl_shader::blend_method::SRC_ALPHA:
+                return VK_BLEND_FACTOR_SRC_ALPHA;
+            case jegl_shader::blend_method::ONE_MINUS_SRC_ALPHA:
+                return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+            case jegl_shader::blend_method::ONE_MINUS_SRC_COLOR:
+                return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+            case jegl_shader::blend_method::DST_COLOR:
+                return VK_BLEND_FACTOR_DST_COLOR;
+            case jegl_shader::blend_method::DST_ALPHA:
+                return VK_BLEND_FACTOR_DST_ALPHA;
+            case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA:
+                return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+            case jegl_shader::blend_method::ONE_MINUS_DST_COLOR:
+                return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+            default:
+                jeecs::debug::logerr("Invalid blend method, using ONE.");
+                return VK_BLEND_FACTOR_ONE;
+            }
+        }
+
+        static VkBlendOp vk_blend_op(jegl_shader::blend_equation equation)
+        {
+            switch (equation)
+            {
+            case jegl_shader::blend_equation::ADD:
+                return VK_BLEND_OP_ADD;
+            case jegl_shader::blend_equation::SUBTRACT:
+                return VK_BLEND_OP_SUBTRACT;
+            case jegl_shader::blend_equation::REVERSE_SUBTRACT:
+                return VK_BLEND_OP_REVERSE_SUBTRACT;
+            case jegl_shader::blend_equation::MIN:
+                return VK_BLEND_OP_MIN;
+            case jegl_shader::blend_equation::MAX:
+                return VK_BLEND_OP_MAX;
+            default:
+                jeecs::debug::logerr("Invalid blend equation, using ADD.");
+                return VK_BLEND_OP_ADD;
+            }
+        }
+
+        static VkColorComponentFlags vk_color_write_mask(uint8_t mask)
+        {
+            VkColorComponentFlags result = 0;
+            if (0 != (mask & 0x1))
+                result |= VK_COLOR_COMPONENT_R_BIT;
+            if (0 != (mask & 0x2))
+                result |= VK_COLOR_COMPONENT_G_BIT;
+            if (0 != (mask & 0x4))
+                result |= VK_COLOR_COMPONENT_B_BIT;
+            if (0 != (mask & 0x8))
+                result |= VK_COLOR_COMPONENT_A_BIT;
+            return result;
+        }
+
+        void destroy_pipelines_for_pipeline(jegl_pipeline* pipeline)
+        {
+            for (auto it = _vk_pso_cache.begin(); it != _vk_pso_cache.end();)
+            {
+                if (std::get<0>(it->first) == pipeline)
+                {
+                    vkDestroyPipeline(_vk_logic_device, it->second, nullptr);
+                    it = _vk_pso_cache.erase(it);
+                }
+                else
+                    ++it;
+            }
+        }
+
+        void destroy_pipelines_for_shader(jegl_shader* shader)
+        {
+            for (auto it = _vk_pso_cache.begin(); it != _vk_pso_cache.end();)
+            {
+                jegl_pipeline* pipeline = std::get<0>(it->first);
+                if (pipeline != nullptr && pipeline->m_shader == shader)
+                {
+                    vkDestroyPipeline(_vk_logic_device, it->second, nullptr);
+                    it = _vk_pso_cache.erase(it);
+                }
+                else
+                    ++it;
+            }
+        }
+
+        VkPipeline get_or_create_pipeline(
+            jegl_pipeline* pipeline, jevk12_vertex* vertex)
+        {
+            assert(pipeline != nullptr);
+            assert(pipeline->m_shader != nullptr);
+            assert(vertex != nullptr);
             assert(_vk_current_target_framebuffer != nullptr);
             assert(_vk_current_binded_shader != nullptr);
 
-            VkDeviceSize offsets = 0;
+            auto* target_framebuffer = _vk_current_target_framebuffer;
+            auto* shader_instance = static_cast<jevk12_shader*>(
+                pipeline->m_shader->m_handle.m_ptr);
+            assert(shader_instance != nullptr);
+            auto* shader_blob = shader_instance->m_blob_data.get();
+            assert(shader_blob != nullptr);
+
+            const pso_key_t key{
+                pipeline,
+                target_framebuffer,
+                (uint32_t)vertex->m_topology,
+                (uint32_t)vertex->m_stride,
+                (uint32_t)target_framebuffer->m_sample_count };
+
+            auto found = _vk_pso_cache.find(key);
+            if (found != _vk_pso_cache.end())
+                return found->second;
+
+            VkPrimitiveTopology vk_topology;
+            switch (vertex->m_topology)
+            {
+            case jegl_vertex::type::LINESTRIP:
+                vk_topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
+                break;
+            case jegl_vertex::type::TRIANGLES:
+                vk_topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+                break;
+            case jegl_vertex::type::TRIANGLESTRIP:
+                vk_topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+                break;
+            default:
+                jeecs::debug::logfatal("Unsupported vertex type.");
+            }
+
+            const auto& state = pipeline->m_state;
+
+            VkVertexInputBindingDescription vertex_input_binding_description = {};
+            vertex_input_binding_description.binding = 0;
+            vertex_input_binding_description.stride = (uint32_t)vertex->m_stride;
+            vertex_input_binding_description.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+            VkPipelineVertexInputStateCreateInfo vertex_input_state = {};
+            vertex_input_state.sType =
+                VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+            vertex_input_state.pNext = nullptr;
+            vertex_input_state.flags = 0;
+            vertex_input_state.vertexBindingDescriptionCount = 1;
+            vertex_input_state.pVertexBindingDescriptions =
+                &vertex_input_binding_description;
+            vertex_input_state.vertexAttributeDescriptionCount =
+                (uint32_t)shader_blob->m_vertex_input_attribute_descriptions.size();
+            vertex_input_state.pVertexAttributeDescriptions =
+                shader_blob->m_vertex_input_attribute_descriptions.data();
+
+            VkPipelineInputAssemblyStateCreateInfo input_assembly_state = {};
+            input_assembly_state.sType =
+                VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+            input_assembly_state.pNext = nullptr;
+            input_assembly_state.flags = 0;
+            input_assembly_state.topology = vk_topology;
+            input_assembly_state.primitiveRestartEnable = VK_FALSE;
+
+            VkPipelineRasterizationStateCreateInfo rasterization_state = {};
+            rasterization_state.sType =
+                VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+            rasterization_state.pNext = nullptr;
+            rasterization_state.flags = 0;
+            rasterization_state.depthClampEnable = VK_FALSE;
+            rasterization_state.rasterizerDiscardEnable = VK_FALSE;
+            rasterization_state.polygonMode = VK_POLYGON_MODE_FILL;
+
+            switch (state.m_cull)
+            {
+            case jegl_shader::cull_mode::FRONT:
+                rasterization_state.cullMode = VK_CULL_MODE_FRONT_BIT;
+                break;
+            case jegl_shader::cull_mode::BACK:
+                rasterization_state.cullMode = VK_CULL_MODE_BACK_BIT;
+                break;
+            case jegl_shader::cull_mode::NONE:
+            default:
+                rasterization_state.cullMode = VK_CULL_MODE_NONE;
+                break;
+            }
+
+            // 屏幕目标的 viewport 做了 Y 翻转；为了保持与 GL/DX11 相同的绕序语义，
+            // 正面方向在屏幕/离屏目标之间取反。
+            const bool state_ccw =
+                state.m_front_face == jegl_front_face::COUNTER_CLOCKWISE;
+            const bool is_screen = target_framebuffer->m_is_screen_framebuffer;
+            rasterization_state.frontFace =
+                (state_ccw == is_screen)
+                ? VK_FRONT_FACE_COUNTER_CLOCKWISE
+                : VK_FRONT_FACE_CLOCKWISE;
+            rasterization_state.depthBiasEnable = VK_FALSE;
+            rasterization_state.lineWidth = 1.0f;
+
+            VkPipelineMultisampleStateCreateInfo multisample_state = {};
+            multisample_state.sType =
+                VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+            multisample_state.pNext = nullptr;
+            multisample_state.flags = 0;
+            multisample_state.rasterizationSamples = target_framebuffer->m_sample_count;
+            multisample_state.sampleShadingEnable = VK_FALSE;
+            multisample_state.minSampleShading = 1.0f;
+            multisample_state.pSampleMask = nullptr;
+            multisample_state.alphaToCoverageEnable = VK_FALSE;
+            multisample_state.alphaToOneEnable = VK_FALSE;
+
+            VkPipelineDepthStencilStateCreateInfo depth_stencil_state = {};
+            depth_stencil_state.sType =
+                VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+            depth_stencil_state.pNext = nullptr;
+            depth_stencil_state.flags = 0;
+            depth_stencil_state.depthTestEnable =
+                state.m_depth_test ? VK_TRUE : VK_FALSE;
+            depth_stencil_state.depthWriteEnable =
+                state.m_depth_write ? VK_TRUE : VK_FALSE;
+            depth_stencil_state.depthCompareOp =
+                vk_compare_op(state.m_depth_func);
+            depth_stencil_state.depthBoundsTestEnable = VK_FALSE;
+            depth_stencil_state.stencilTestEnable = VK_FALSE;
+            depth_stencil_state.front = {};
+            depth_stencil_state.back = {};
+            depth_stencil_state.minDepthBounds = 0.0f;
+            depth_stencil_state.maxDepthBounds = 1.0f;
+
+            const size_t framebuffer_color_attachment_count =
+                target_framebuffer->m_color_attachments.size();
+            const size_t enabled_color_attachment_count =
+                std::min(
+                    framebuffer_color_attachment_count,
+                    shader_blob->m_shader_output_color_attachment_count);
+
+            std::vector<VkPipelineColorBlendAttachmentState> attachment_states(
+                framebuffer_color_attachment_count,
+                VkPipelineColorBlendAttachmentState{});
+
+            for (size_t i = 0; i < attachment_states.size(); ++i)
+            {
+                auto& attachment_state = attachment_states[i];
+                if (i >= enabled_color_attachment_count)
+                {
+                    attachment_state.blendEnable = VK_FALSE;
+                    attachment_state.colorWriteMask = 0;
+                    continue;
+                }
+
+                attachment_state.blendEnable =
+                    state.m_blend ? VK_TRUE : VK_FALSE;
+
+                if (!state.m_blend)
+                {
+                    // 混合关闭时混合方程/因子不参与运算，DISABLED/未配置的
+                    // shader 不应被当成非法枚举解析（与 dx11 行为一致）。
+                    attachment_state.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+                    attachment_state.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+                    attachment_state.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+                    attachment_state.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+                    attachment_state.colorBlendOp = VK_BLEND_OP_ADD;
+                    attachment_state.alphaBlendOp = VK_BLEND_OP_ADD;
+                    attachment_state.colorWriteMask =
+                        vk_color_write_mask(state.m_color_write_mask);
+                    continue;
+                }
+
+                attachment_state.srcColorBlendFactor =
+                    vk_blend_factor(state.m_blend_src_color);
+                attachment_state.dstColorBlendFactor =
+                    vk_blend_factor(state.m_blend_dst_color);
+                attachment_state.srcAlphaBlendFactor =
+                    vk_blend_factor(state.m_blend_src_alpha);
+                attachment_state.dstAlphaBlendFactor =
+                    vk_blend_factor(state.m_blend_dst_alpha);
+                attachment_state.colorBlendOp =
+                    vk_blend_op(state.m_blend_equation);
+                attachment_state.alphaBlendOp =
+                    vk_blend_op(state.m_blend_equation);
+                attachment_state.colorWriteMask =
+                    vk_color_write_mask(state.m_color_write_mask);
+            }
+
+            VkPipelineColorBlendStateCreateInfo color_blend_state = {};
+            color_blend_state.sType =
+                VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+            color_blend_state.pNext = nullptr;
+            color_blend_state.flags = 0;
+            color_blend_state.logicOpEnable = VK_FALSE;
+            color_blend_state.logicOp = VK_LOGIC_OP_COPY;
+            color_blend_state.attachmentCount =
+                (uint32_t)attachment_states.size();
+            color_blend_state.pAttachments =
+                attachment_states.empty() ? nullptr : attachment_states.data();
+            color_blend_state.blendConstants[0] = 0.0f;
+            color_blend_state.blendConstants[1] = 0.0f;
+            color_blend_state.blendConstants[2] = 0.0f;
+            color_blend_state.blendConstants[3] = 0.0f;
+
+            VkGraphicsPipelineCreateInfo pipeline_create_info = {};
+            pipeline_create_info.sType =
+                VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+            pipeline_create_info.pNext = nullptr;
+            pipeline_create_info.flags = 0;
+            pipeline_create_info.stageCount = 2;
+            pipeline_create_info.pStages = shader_blob->m_shader_stage_infos;
+            pipeline_create_info.pVertexInputState = &vertex_input_state;
+            pipeline_create_info.pInputAssemblyState = &input_assembly_state;
+            pipeline_create_info.pViewportState =
+                &shader_blob->m_viewport_state_create_info;
+            pipeline_create_info.pRasterizationState = &rasterization_state;
+            pipeline_create_info.pMultisampleState = &multisample_state;
+            pipeline_create_info.pDepthStencilState = &depth_stencil_state;
+            pipeline_create_info.pColorBlendState = &color_blend_state;
+            pipeline_create_info.pDynamicState =
+                &shader_blob->m_dynamic_state_create_info;
+            pipeline_create_info.layout = shader_blob->m_pipeline_layout;
+            pipeline_create_info.renderPass = target_framebuffer->m_rendpass;
+            pipeline_create_info.subpass = 0;
+            pipeline_create_info.basePipelineHandle = VK_NULL_HANDLE;
+            pipeline_create_info.basePipelineIndex = -1;
+
+            VkPipeline new_pipeline = VK_NULL_HANDLE;
+            JE_VK_CHECK(vkCreateGraphicsPipelines(
+                _vk_logic_device,
+                _vk_pipeline_cache,
+                1,
+                &pipeline_create_info,
+                nullptr,
+                &new_pipeline));
+
+            _vk_pso_cache.emplace(key, new_pipeline);
+            return new_pipeline;
+        }
+
+        //////////////////////////////////////////////////////////////////////////////////
+        uint32_t prepare_draw_uniforms()
+        {
+            auto* shader = _vk_current_binded_shader;
+            assert(shader != nullptr);
+
+            if (shader->m_uniform_cpu_buffer_size == 0)
+                return 0;
+
+            auto& frame = current_frame();
+            const VkDeviceSize offset = frame.allocate_uniform_block(
+                shader->m_uniform_cpu_buffer_size,
+                _vk_min_uniform_buffer_offset_alignment);
+
+            memcpy(
+                (uint8_t*)frame.m_ubo_ring_mapped + offset,
+                shader->m_uniform_cpu_buffer,
+                shader->m_uniform_cpu_buffer_size);
+
+            return (uint32_t)offset;
+        }
+
+        void bind_draw_state(jevk12_vertex* vertex, uint32_t dynamic_uniform_offset)
+        {
+            auto* shader = _vk_current_binded_shader;
+            assert(shader != nullptr);
 
             vkCmdBindPipeline(
                 _vk_current_command_buffer,
-                VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
-                _vk_current_binded_shader->prepare_pipeline(this, vertex->m_topology, vertex->m_stride));
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                get_or_create_pipeline(_vk_current_pipeline, vertex));
 
-            _vk_descriptor_set_allocator->bind_pipeline_layout(
-                _vk_current_binded_shader->m_blob_data->m_pipeline_layout);
+            auto* pipeline_layout = shader->m_blob_data->m_pipeline_layout;
+            _vk_descriptor_set_allocator->bind_pipeline_layout(pipeline_layout);
 
-            if (_vk_current_binded_shader->m_uniform_cpu_buffer_size != 0)
-            {
-                if (_vk_current_binded_shader->m_uniform_cpu_buffer_updated)
-                {
-                    _vk_current_binded_shader->m_uniform_cpu_buffer_updated = false;
+            VkDescriptorSet uniform_vars =
+                _vk_descriptor_set_allocator->uniform_vars_set(shader);
+            _vk_descriptor_set_allocator->bind_all(
+                _vk_current_command_buffer, uniform_vars, dynamic_uniform_offset);
 
-                    auto* new_ubo = _vk_current_binded_shader->allocate_ubo_for_vars(this);
-
-                    update_uniform_buffer_with_range(
-                        new_ubo,
-                        _vk_current_binded_shader->m_uniform_cpu_buffer,
-                        0,
-                        _vk_current_binded_shader->m_uniform_cpu_buffer_size);
-                }
-
-                _vk_descriptor_set_allocator->bind_uniform_vars(
-                    _vk_current_binded_shader->get_last_usable_variable(this)->m_uniform_buffer);
-            }
-
-            _vk_descriptor_set_allocator->apply_binding_work(
-                _vk_current_swapchain_image_content);
-
+            VkDeviceSize offsets = 0;
             vkCmdBindVertexBuffers(
                 _vk_current_command_buffer, 0, 1, &vertex->m_vk_vertex_buffer, &offsets);
+        }
+
+        void cmd_draw_indexed_ex(
+            jevk12_vertex* vertex,
+            uint32_t index_count,
+            uint32_t first_index,
+            uint32_t instance_count)
+        {
+            assert(_vk_current_target_framebuffer != nullptr);
+            assert(_vk_current_binded_shader != nullptr);
+            assert(_vk_current_pipeline != nullptr);
+
+            const uint32_t dynamic_uniform_offset = prepare_draw_uniforms();
+            bind_draw_state(vertex, dynamic_uniform_offset);
 
             vkCmdBindIndexBuffer(
                 _vk_current_command_buffer,
@@ -3870,69 +5087,86 @@ namespace jeecs::graphic::api::vk120
 
             vkCmdDrawIndexed(
                 _vk_current_command_buffer,
-                (uint32_t)vertex->m_vertex_point_count,
-                1,
-                0,
+                index_count,
+                instance_count,
+                first_index,
                 0,
                 0);
         }
-        //////////////////////////////////////////////////////////////////////////////////
+
+        void cmd_draw_ex(
+            jevk12_vertex* vertex,
+            uint32_t vertex_count,
+            uint32_t first_vertex,
+            uint32_t instance_count)
+        {
+            assert(_vk_current_target_framebuffer != nullptr);
+            assert(_vk_current_binded_shader != nullptr);
+            assert(_vk_current_pipeline != nullptr);
+
+            const uint32_t dynamic_uniform_offset = prepare_draw_uniforms();
+            bind_draw_state(vertex, dynamic_uniform_offset);
+
+            vkCmdDraw(
+                _vk_current_command_buffer,
+                vertex_count,
+                instance_count,
+                first_vertex,
+                0);
+        }
         void imgui_init()
         {
+            assert(!_vk_swapchain_images.empty());
+
             ImGui_ImplVulkan_InitInfo init_info = {};
             init_info.Instance = _vk_instance;
             init_info.PhysicalDevice = _vk_device;
             init_info.Device = _vk_logic_device;
-            init_info.QueueFamily = _vk_device_queue_graphic_family_index;
-            init_info.Queue = _vk_logic_device_graphic_queue;
-            init_info.PipelineCache = VK_NULL_HANDLE;
+            // ImGui 主视口由引擎的帧命令缓冲渲染；这里提供的队列用于多视口的 present。
+            init_info.QueueFamily = _vk_device_queue_present_family_index;
+            init_info.Queue = _vk_logic_device_present_queue;
+            if (_vk_device_queue_graphic_family_index
+                != _vk_device_queue_present_family_index)
+            {
+                jeecs::debug::logwarn(
+                    "VK120: graphics and present queue families differ; "
+                    "ImGui multi-viewport may be limited.");
+            }
+            init_info.PipelineCache = _vk_pipeline_cache;
             init_info.DescriptorPool = _vk_dear_imgui_descriptor_pool;
             init_info.Allocator = nullptr;
-            init_info.MinImageCount = (uint32_t)_vk_swapchain_images.size();
+            init_info.MinImageCount = std::max<uint32_t>(
+                2, _vk_surface_capabilities.minImageCount);
             init_info.ImageCount = (uint32_t)_vk_swapchain_images.size();
+            init_info.MSAASamples = _vk_active_msaa_samples;
             init_info.CheckVkResultFn = nullptr;
 
             auto cmdbuf = begin_temp_command_buffer_records();
 
             jegui_init_vk120(
                 _vk_jegl_context,
-                [](jegl_context* ctx, jegl_texture_2d* res)
+                [](jegl_context* ctx, jegl_texture_2d* res) -> uint64_t
                 {
                     auto* this_context =
                         static_cast<jegl_vk120_context*>(ctx->m_graphic_impl_context);
 
-                    auto vk12_texture = static_cast<jevk12_texture*>(res->m_handle.m_ptr);
-                    auto desc_set = this_context
-                        ->_vk_dear_imgui_descriptor_set_allocator
-                        ->allocate_descriptor_set(
-                            this_context->_vk_current_swapchain_image_content);
+                    auto* vk12_texture =
+                        static_cast<jevk12_texture*>(res->m_handle.m_ptr);
+                    if (vk12_texture == nullptr)
+                        return 0;
 
-                    // 更新set
-                    VkWriteDescriptorSet write_desc_set = {};
-                    write_desc_set.sType = VkStructureType::VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                    write_desc_set.pNext = nullptr;
-                    write_desc_set.dstSet = desc_set;
-                    write_desc_set.dstBinding = 0;
-                    write_desc_set.dstArrayElement = 0;
-                    write_desc_set.descriptorCount = 1;
-                    write_desc_set.descriptorType = VkDescriptorType::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                    auto found = this_context->_vk_imgui_texture_cache.find(
+                        vk12_texture->m_vk_texture_image_view);
+                    if (found != this_context->_vk_imgui_texture_cache.end())
+                        return (uint64_t)found->second;
 
-                    VkDescriptorImageInfo image_info = {};
-                    image_info.sampler = this_context->_vk_dear_imgui_sampler;
-                    image_info.imageView = vk12_texture->m_vk_texture_image_view;
-                    image_info.imageLayout = VkImageLayout::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                    VkDescriptorSet desc_set = ImGui_ImplVulkan_AddTexture(
+                        this_context->_vk_dear_imgui_sampler,
+                        vk12_texture->m_vk_texture_image_view,
+                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-                    write_desc_set.pImageInfo = &image_info;
-                    write_desc_set.pBufferInfo = nullptr;
-                    write_desc_set.pTexelBufferView = nullptr;
-
-                    this_context->vkUpdateDescriptorSets(
-                        this_context->_vk_logic_device,
-                        1,
-                        &write_desc_set,
-                        0,
-                        nullptr);
-
+                    this_context->_vk_imgui_texture_cache.emplace(
+                        vk12_texture->m_vk_texture_image_view, desc_set);
                     return (uint64_t)desc_set;
                 },
                 [](jegl_context*, jegl_shader*) {},
@@ -3952,259 +5186,47 @@ namespace jeecs::graphic::api::vk120
                 this);
 
             end_temp_command_buffer_record(cmdbuf);
+            _vk_imgui_initialized = true;
         }
     };
 
     jevk12_shader_blob::blob_data::~blob_data()
     {
-        for (auto& [framebuf, pipelines] : m_target_pass_pipelines)
-        {
-            framebuf->m_shaders_generate_pipeline_for_this_frame.erase(this);
+        if (m_context == nullptr)
+            return;
 
-            for (const auto& pipelines : pipelines.m_topology_pipelines)
-            {
-                for (auto [stride, pipeline] : pipelines)
-                {
-                    (void)stride;
-                    m_context->vkDestroyPipeline(m_context->_vk_logic_device, pipeline, nullptr);
-                }
-            }
+        if (m_shader_resource != nullptr)
+            m_context->destroy_pipelines_for_shader(m_shader_resource);
+
+        if (m_pipeline_layout != VK_NULL_HANDLE)
+        {
+            m_context->vkDestroyPipelineLayout(
+                m_context->_vk_logic_device, m_pipeline_layout, nullptr);
+        }
+        if (m_vertex_shader_module != VK_NULL_HANDLE)
+        {
+            m_context->vkDestroyShaderModule(
+                m_context->_vk_logic_device, m_vertex_shader_module, nullptr);
+        }
+        if (m_fragment_shader_module != VK_NULL_HANDLE)
+        {
+            m_context->vkDestroyShaderModule(
+                m_context->_vk_logic_device, m_fragment_shader_module, nullptr);
         }
 
-        m_context->vkDestroyPipelineLayout(m_context->_vk_logic_device, m_pipeline_layout, nullptr);
-        m_context->vkDestroyShaderModule(m_context->_vk_logic_device, m_vertex_shader_module, nullptr);
-        m_context->vkDestroyShaderModule(m_context->_vk_logic_device, m_fragment_shader_module, nullptr);
-
         for (auto& sampler : m_samplers)
-            m_context->vkDestroySampler(m_context->_vk_logic_device, sampler.m_vk_sampler, nullptr);
+        {
+            if (sampler.m_vk_sampler != VK_NULL_HANDLE)
+            {
+                m_context->vkDestroySampler(
+                    m_context->_vk_logic_device, sampler.m_vk_sampler, nullptr);
+            }
+        }
     }
     jevk12_shader::~jevk12_shader()
     {
-        if (m_uniform_cpu_buffer != nullptr)
-        {
-            auto* je_vk_context = m_blob_data->m_context;
-
-            for (auto* ubo : m_uniform_variables)
-                je_vk_context->destroy_uniform_buffer(ubo);
-
-            free(m_uniform_cpu_buffer);
-        }
+        free(m_uniform_cpu_buffer);
     }
-
-    VkPipeline jevk12_shader::prepare_pipeline(
-        jegl_vk120_context* context, jegl_vertex::type kind, uint32_t stride)
-    {
-        assert(context->_vk_current_target_framebuffer != nullptr);
-
-        auto* target_framebuffer_instance = context->_vk_current_target_framebuffer;
-        VkRenderPass target_pass = target_framebuffer_instance->m_rendpass;
-        assert(target_pass != VK_NULL_HANDLE);
-
-        auto* shader_blob = m_blob_data.get();
-
-        VkPrimitiveTopology vk_topology;
-        switch (kind)
-        {
-        case jegl_vertex::type::LINESTRIP:
-            vk_topology = VkPrimitiveTopology::VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
-            break;
-        case jegl_vertex::type::TRIANGLES:
-            vk_topology = VkPrimitiveTopology::VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-            break;
-        case jegl_vertex::type::TRIANGLESTRIP:
-            vk_topology = VkPrimitiveTopology::VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
-            break;
-        default:
-            jeecs::debug::logfatal("Unsupported vertex type.");
-            abort();
-        }
-
-        auto& topology_pipeline =
-            shader_blob->m_target_pass_pipelines[target_framebuffer_instance].get_or_emplace_pipeline(
-                kind, stride);
-
-        if (topology_pipeline != VK_NULL_HANDLE)
-            return topology_pipeline;
-
-        (void)target_framebuffer_instance->
-            m_shaders_generate_pipeline_for_this_frame.emplace(shader_blob);
-
-        m_blob_data->m_rasterization_state_create_info.frontFace =
-            target_framebuffer_instance->m_is_screen_framebuffer
-            ? VkFrontFace::VK_FRONT_FACE_COUNTER_CLOCKWISE
-            : VkFrontFace::VK_FRONT_FACE_CLOCKWISE;
-
-        VkVertexInputBindingDescription vertex_input_binding_description = {};
-        vertex_input_binding_description.binding = 0;
-        vertex_input_binding_description.stride = stride;
-        vertex_input_binding_description.inputRate =
-            VkVertexInputRate::VK_VERTEX_INPUT_RATE_VERTEX;
-
-        VkPipelineVertexInputStateCreateInfo vertex_input_state_create_info = {};
-        vertex_input_state_create_info.sType =
-            VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        vertex_input_state_create_info.pNext = nullptr;
-        vertex_input_state_create_info.flags = 0;
-        vertex_input_state_create_info.vertexBindingDescriptionCount = 1;
-        vertex_input_state_create_info.pVertexBindingDescriptions =
-            &vertex_input_binding_description;
-        vertex_input_state_create_info.vertexAttributeDescriptionCount =
-            (uint32_t)shader_blob->m_vertex_input_attribute_descriptions.size();
-        vertex_input_state_create_info.pVertexAttributeDescriptions =
-            shader_blob->m_vertex_input_attribute_descriptions.data();
-
-        VkGraphicsPipelineCreateInfo pipeline_create_info = {};
-        pipeline_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        pipeline_create_info.pNext = nullptr;
-        pipeline_create_info.flags = 0;
-        pipeline_create_info.stageCount = 2;
-        pipeline_create_info.pStages = m_blob_data->m_shader_stage_infos;
-        pipeline_create_info.pVertexInputState = &vertex_input_state_create_info;
-
-        VkPipelineInputAssemblyStateCreateInfo input_assembly_state_create_info = {};
-        input_assembly_state_create_info.sType =
-            VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-        input_assembly_state_create_info.pNext = nullptr;
-        input_assembly_state_create_info.flags = 0;
-        input_assembly_state_create_info.topology = vk_topology;
-        input_assembly_state_create_info.primitiveRestartEnable =
-            VK_FALSE;
-
-        pipeline_create_info.pInputAssemblyState = &input_assembly_state_create_info;
-        pipeline_create_info.pViewportState = &m_blob_data->m_viewport_state_create_info;
-        pipeline_create_info.pRasterizationState = &m_blob_data->m_rasterization_state_create_info;
-        pipeline_create_info.pMultisampleState = &m_blob_data->m_multi_sample_state_create_info;
-        pipeline_create_info.pDepthStencilState = &m_blob_data->m_depth_stencil_state_create_info;
-
-        const size_t framebuffer_color_attachment_count =
-            target_framebuffer_instance->m_color_attachments.size();
-        const size_t enabled_color_attachment_count =
-            std::min(
-                framebuffer_color_attachment_count,
-                shader_blob->m_shader_output_color_attachment_count);
-
-        std::vector<VkPipelineColorBlendAttachmentState> attachment_states(
-            framebuffer_color_attachment_count,
-            VkPipelineColorBlendAttachmentState{});
-
-        size_t shader_output_color_attachment = 0;
-        for (auto& state : attachment_states)
-        {
-            if (shader_output_color_attachment > enabled_color_attachment_count)
-            {
-                state.blendEnable = VK_FALSE;
-                state.colorWriteMask = 0;
-            }
-            else
-            {
-                if (shader_blob->m_blend_statement.has_value())
-                {
-                    const auto& beldn_state = shader_blob->m_blend_statement.value();
-
-                    state.blendEnable = VK_TRUE;
-
-                    state.srcAlphaBlendFactor
-                        = state.srcColorBlendFactor
-                        = beldn_state.m_blend_src_factor;
-                    state.dstAlphaBlendFactor
-                        = state.dstColorBlendFactor
-                        = beldn_state.m_blend_dst_factor;
-
-                    state.colorBlendOp
-                        = state.alphaBlendOp
-                        = beldn_state.m_blend_equation;
-                }
-                else
-                {
-                    state.blendEnable = VK_FALSE;
-                }
-
-                state.colorWriteMask =
-                    VkColorComponentFlagBits::VK_COLOR_COMPONENT_R_BIT |
-                    VkColorComponentFlagBits::VK_COLOR_COMPONENT_G_BIT |
-                    VkColorComponentFlagBits::VK_COLOR_COMPONENT_B_BIT |
-                    VkColorComponentFlagBits::VK_COLOR_COMPONENT_A_BIT;
-            }
-
-            ++shader_output_color_attachment;
-        }
-
-        VkPipelineColorBlendStateCreateInfo color_blend_state_create_info = {};
-        color_blend_state_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-        color_blend_state_create_info.pNext = nullptr;
-        color_blend_state_create_info.flags = 0;
-        color_blend_state_create_info.logicOpEnable = VK_FALSE;
-        color_blend_state_create_info.logicOp = VkLogicOp::VK_LOGIC_OP_COPY;
-        color_blend_state_create_info.attachmentCount = (uint32_t)attachment_states.size();
-        color_blend_state_create_info.pAttachments = attachment_states.data();
-        color_blend_state_create_info.blendConstants[0] = 0.0f;
-        color_blend_state_create_info.blendConstants[1] = 0.0f;
-        color_blend_state_create_info.blendConstants[2] = 0.0f;
-        color_blend_state_create_info.blendConstants[3] = 0.0f;
-
-        pipeline_create_info.pColorBlendState = &color_blend_state_create_info;
-        pipeline_create_info.pDynamicState = &m_blob_data->m_dynamic_state_create_info;
-        pipeline_create_info.layout = m_blob_data->m_pipeline_layout;
-        pipeline_create_info.renderPass = target_pass;
-        pipeline_create_info.subpass = 0;
-        pipeline_create_info.basePipelineHandle = VK_NULL_HANDLE; // TODO: 看着我们可以使用子渲染管线？稍后考虑
-        pipeline_create_info.basePipelineIndex = -1;
-
-        VkPipeline new_pipeline;
-        if (VK_SUCCESS != context->vkCreateGraphicsPipelines(
-            context->_vk_logic_device,
-            VK_NULL_HANDLE,
-            1,
-            &pipeline_create_info,
-            nullptr,
-            &new_pipeline))
-        {
-            jeecs::debug::logfatal("Failed to create vk120 graphics pipeline.");
-            abort();
-        }
-
-        return (topology_pipeline = new_pipeline);
-    }
-    jevk12_uniformbuf* jevk12_shader::allocate_ubo_for_vars(jegl_vk120_context* context)
-    {
-        if (m_next_allocate_ubos_for_uniform_variable >= m_uniform_variables.size())
-        {
-            if (m_command_commit_round != context->_vk_command_commit_round)
-            {
-                m_command_commit_round = context->_vk_command_commit_round;
-                m_next_allocate_ubos_for_uniform_variable = 0;
-            }
-
-            auto* ubo = context->create_uniform_buffer_with_size(
-                0, m_uniform_cpu_buffer_size);
-
-            m_uniform_variables.push_back(ubo);
-            ++m_next_allocate_ubos_for_uniform_variable;
-            return ubo;
-        }
-        return m_uniform_variables[m_next_allocate_ubos_for_uniform_variable++];
-    }
-
-    jevk12_uniformbuf* jevk12_shader::get_last_usable_variable(jegl_vk120_context* context)
-    {
-        if (m_next_allocate_ubos_for_uniform_variable == 0)
-        {
-            return allocate_ubo_for_vars(context);
-        }
-        else if (m_command_commit_round != context->_vk_command_commit_round)
-        {
-            if (m_next_allocate_ubos_for_uniform_variable != 0)
-                // Make sure use the newest UBO first.
-                std::swap(
-                    m_uniform_variables[0],
-                    m_uniform_variables[m_next_allocate_ubos_for_uniform_variable - 1]);
-
-            m_command_commit_round = context->_vk_command_commit_round;
-            m_next_allocate_ubos_for_uniform_variable = 1;
-        }
-        return m_uniform_variables[m_next_allocate_ubos_for_uniform_variable - 1];
-    }
-
     je_GraphicImplContext
         startup(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
     {
@@ -4239,37 +5261,44 @@ namespace jeecs::graphic::api::vk120
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
 
         context->_vk_current_binded_shader = nullptr;
-        ++context->_vk_command_commit_round;
+        context->_vk_current_pipeline = nullptr;
+        context->_vk_current_vertex = nullptr;
+        context->_vk_current_shader_resource = nullptr;
+
+        // 复用当前帧槽之前，必须先等待它上一次提交完成。
+        context->wait_current_frame_slot();
 
         switch (context->_vk_jegl_interface->update())
         {
         case basic_interface::update_result::PAUSE:
-            // Very ugly!
-            if (context->_vk_presenting_swapchain_image_index != UINT32_MAX)
-            {
-                assert(
-                    context->_vk_current_swapchain_image_content
-                    == context->_vk_swapchain_images[context->_vk_presenting_swapchain_image_index]);
-                context->_vk_current_swapchain_image_content->release_using_resources_with_sync_queue_free();
-            }
+            // 暂停帧不 acquire、不提交、不复用信号量；上一帧的 pending present
+            // 留到恢复后的第一次 NORMAL 帧再处理。
+            context->_vk_frame_recording = false;
+            context->_vk_frame_has_swapchain_image = false;
             return jegl_update_action::JEGL_UPDATE_SKIP;
         case basic_interface::update_result::RESIZE:
-            // Make present before swap chain recreation.
             context->present();
             context->recreate_swapchain_and_reinit_imgui();
-            context->update();
-            return jegl_update_action::JEGL_UPDATE_CONTINUE;
+            break;
         case basic_interface::update_result::CLOSE:
             if (jegui_shutdown_callback())
                 return jegl_update_action::JEGL_UPDATE_STOP;
             [[fallthrough]];
         case basic_interface::update_result::NORMAL:
             context->present();
-            context->update();
-            return jegl_update_action::JEGL_UPDATE_CONTINUE;
+            if (context->_vk_swapchain_out_of_date)
+            {
+                context->_vk_swapchain_out_of_date = false;
+                context->recreate_swapchain_and_reinit_imgui();
+            }
+            break;
         default:
             abort();
         }
+
+        context->acquire_swapchain_image();
+        context->begin_frame_recording(true);
+        return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
     jegl_update_action commit_update(
         je_GraphicImplContext ctx, jegl_update_action)
@@ -4378,7 +5407,7 @@ namespace jeecs::graphic::api::vk120
         for (size_t i = 0; i < fbuffer->m_attachment_count; ++i)
         {
             auto& attachment = attachments[i];
-            jegl_bind_texture_2d(attachment->resource(), 0);
+            (void)_jegl_prepare_texture_2d_resource(attachment->resource());
 
             auto* attach_texture_instance =
                 static_cast<jevk12_texture*>(attachment->resource()->m_handle.m_ptr);
@@ -4392,10 +5421,10 @@ namespace jeecs::graphic::api::vk120
             fbuffer->m_width,
             fbuffer->m_height,
             color_attachments,
+            nullptr,
             depth_attachment,
-            VkImageLayout::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-        frame_buffer_instance->m_is_screen_framebuffer = false;
+            VkImageLayout::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            false);
 
         fbuffer->m_handle.m_ptr = frame_buffer_instance;
     }
@@ -4426,37 +5455,39 @@ namespace jeecs::graphic::api::vk120
             // Modified, free current resource id, reload one.
             context->trans_and_update_texture_pixels(
                 static_cast<jevk12_texture*>(texture->m_handle.m_ptr),
-                texture);
+                texture,
+                true);
         }
     }
     void update_vertex(je_GraphicImplContext ctx, jegl_vertex* vertex)
     {
-        jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
+        (void)ctx;
         jevk12_vertex* vertex_instance =
             static_cast<jevk12_vertex*>(vertex->m_handle.m_ptr);
 
-        // 宿主可见内存：整体重映射重写顶点数据（索引缓冲内容不变），
-        // 并同步激活索引数量
-        void* vertex_memory_ptr = nullptr;
-        if (VK_SUCCESS == context->vkMapMemory(
-                context->_vk_logic_device,
-                vertex_instance->m_vk_vertex_buffer_memory,
-                0,
-                vertex->m_vertex_length,
-                0,
-                &vertex_memory_ptr))
+        if (vertex->m_vertex_length != 0 && vertex->m_vertexs != nullptr)
         {
+            if (vertex->m_vertex_length > vertex_instance->m_size)
+            {
+                jeecs::debug::logerr(
+                    "VK120: vertex update exceeds the allocated buffer size.");
+                return;
+            }
+            if (vertex_instance->m_mapped == nullptr)
+            {
+                jeecs::debug::logerr(
+                    "VK120: vertex buffer memory is not persistently mapped.");
+                return;
+            }
+
             memcpy(
-                vertex_memory_ptr,
+                vertex_instance->m_mapped,
                 vertex->m_vertexs,
                 vertex->m_vertex_length);
-            context->vkUnmapMemory(
-                context->_vk_logic_device,
-                vertex_instance->m_vk_vertex_buffer_memory);
-
-            vertex_instance->m_vertex_point_count =
-                (uint32_t)vertex->m_index_count;
         }
+
+        vertex_instance->m_vertex_point_count =
+            (uint32_t)vertex->m_index_count;
     }
     void update_framebuffer(je_GraphicImplContext ctx, jegl_frame_buffer* fbuffer)
     {
@@ -4494,22 +5525,6 @@ namespace jeecs::graphic::api::vk120
         context->destroy_uniform_buffer(static_cast<jevk12_uniformbuf*>(ubuffer->m_handle.m_ptr));
     }
 
-    void draw_vertex_with_shader(je_GraphicImplContext ctx, jegl_vertex* vertex)
-    {
-        jegl_vk120_context* context =
-            static_cast<jegl_vk120_context*>(ctx);
-
-        context->cmd_draw_vertex(
-            static_cast<jevk12_vertex*>(vertex->m_handle.m_ptr));
-    }
-
-    bool bind_shader(je_GraphicImplContext ctx, jegl_shader* shader)
-    {
-        jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
-
-        auto* shader_instance = static_cast<jevk12_shader*>(shader->m_handle.m_ptr);
-        return context->cmd_bind_shader_pipeline(shader_instance);
-    }
     void bind_uniform_buffer(je_GraphicImplContext ctx, jegl_uniform_buffer* uniformbuf)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
@@ -4526,138 +5541,329 @@ namespace jeecs::graphic::api::vk120
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
 
         auto* texture_instance = static_cast<jevk12_texture*>(texture->m_handle.m_ptr);
+        assert(texture_instance != nullptr);
+
+        if (texture_instance->m_current_layout
+            != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+        {
+            if (texture_instance->m_samples > 1)
+            {
+                jeecs::debug::logerr(
+                    "VK120: cannot bind a multisampled texture as a sampled image.");
+                return;
+            }
+            context->record_image_layout_transition(
+                texture_instance, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        }
+
         context->_vk_descriptor_set_allocator->bind_texture(
             (uint32_t)pass,
             texture_instance->m_vk_texture_image_view);
     }
 
-    void set_rend_to_framebuffer(
-        je_GraphicImplContext ctx,
-        jegl_frame_buffer* framebuf,
-        const int32_t(*viewport_xywh)[4],
-        const jegl_frame_buffer_clear_operation* clear_operations)
+    /////////////////////////////////////////////////////////////////////////
+// Render API (v2)
+/////////////////////////////////////////////////////////////////////////
+
+    struct jegl_vk120_render_sampler
     {
-        jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
+        VkSampler m_sampler;
+    };
 
-        jevk12_framebuffer* target_framebuf = nullptr;
+    void render_pipeline_init(je_GraphicImplContext ctx, jegl_pipeline* pipeline)
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+        assert(pipeline != nullptr);
 
-        // Reset current binded shader.
-        context->_vk_current_binded_shader = nullptr;
+        // shader 热重载或图形线程重启后，旧的 PSO 可能引用了失效的模块/布局。
+        context->destroy_pipelines_for_pipeline(pipeline);
+    }
 
-        if (framebuf != nullptr)
-            target_framebuf = static_cast<jevk12_framebuffer*>(
-                framebuf->m_handle.m_ptr);
+    void render_pipeline_close(je_GraphicImplContext ctx, jegl_pipeline* pipeline)
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+        if (pipeline != nullptr)
+            context->destroy_pipelines_for_pipeline(pipeline);
+    }
 
-        int32_t x = 0, y = 0, w = 0, h = 0;
-        if (viewport_xywh != nullptr)
-        {
-            auto& vp = *viewport_xywh;
-            x = vp[0];
-            y = vp[1];
-            w = vp[2];
-            h = vp[3];
-        }
-        context->cmd_begin_frame_buffer(target_framebuf, x, y, w, h);
+    void render_pipeline_bind(
+        je_GraphicImplContext ctx, jegl_pipeline* pipeline)
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+        auto* shader_instance = static_cast<jevk12_shader*>(
+            pipeline->m_shader->m_handle.m_ptr);
 
-        while (clear_operations != nullptr)
-        {
-            switch (clear_operations->m_type)
+        assert(shader_instance != nullptr);
+
+        context->_vk_current_pipeline = pipeline;
+        context->_vk_current_shader_resource = pipeline->m_shader;
+        context->cmd_bind_shader_pipeline(shader_instance);
+    }
+
+    void render_sampler_init(je_GraphicImplContext ctx, jegl_sampler* sampler)
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+        auto* native = new jegl_vk120_render_sampler();
+
+        auto cvt_filter = [](jegl_filter filter) -> jegl_shader::fliter_mode
             {
-            case jegl_frame_buffer_clear_operation::clear_type::COLOR:
-                context->cmd_clear_frame_buffer_color(
-                    clear_operations->m_color.m_color_attachment_idx,
-                    clear_operations->m_color.m_clear_color_rgba);
-                break;
-            case jegl_frame_buffer_clear_operation::clear_type::DEPTH:
-                if (target_framebuf == nullptr || target_framebuf->m_depth_attachment != nullptr)
-                    context->cmd_clear_frame_buffer_depth(
-                        clear_operations->m_depth.m_clear_depth);
-                break;
-            default:
-                jeecs::debug::logfatal("Unknown framebuffer clear operation.");
-                abort();
-                break;
-            }
-            clear_operations = clear_operations->m_next;
+                return filter == jegl_filter::LINEAR
+                    ? jegl_shader::fliter_mode::LINEAR
+                    : jegl_shader::fliter_mode::NEAREST;
+            };
+        auto cvt_mip = [](jegl_mip_filter filter) -> jegl_shader::fliter_mode
+            {
+                return filter == jegl_mip_filter::LINEAR
+                    ? jegl_shader::fliter_mode::LINEAR
+                    : jegl_shader::fliter_mode::NEAREST;
+            };
+        auto cvt_wrap = [](jegl_wrap_mode wrap) -> jegl_shader::wrap_mode
+            {
+                switch (wrap)
+                {
+                case jegl_wrap_mode::CLAMP_TO_EDGE:
+                    return jegl_shader::wrap_mode::CLAMP;
+                case jegl_wrap_mode::REPEAT:
+                case jegl_wrap_mode::MIRRORED_REPEAT:
+                    return jegl_shader::wrap_mode::REPEAT;
+                default:
+                    assert(false);
+                    return jegl_shader::wrap_mode::CLAMP;
+                }
+            };
+
+        native->m_sampler = context->create_sampler(
+            cvt_filter(sampler->m_desc.m_mag_filter),
+            cvt_filter(sampler->m_desc.m_min_filter),
+            cvt_mip(sampler->m_desc.m_mip_filter),
+            cvt_wrap(sampler->m_desc.m_u_wrap),
+            cvt_wrap(sampler->m_desc.m_v_wrap));
+
+        sampler->m_backend_ptr = native;
+    }
+
+    void render_sampler_close(je_GraphicImplContext ctx, jegl_sampler* sampler)
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+        auto* native = static_cast<jegl_vk120_render_sampler*>(
+            sampler->m_backend_ptr);
+
+        if (native != nullptr)
+        {
+            context->vkDestroySampler(
+                context->_vk_logic_device, native->m_sampler, nullptr);
+            delete native;
+            sampler->m_backend_ptr = nullptr;
         }
     }
 
-    void set_uniform(
-        je_GraphicImplContext ctx,
-        uint32_t location,
-        jegl_shader::uniform_type type,
-        const void* val)
+    void render_sampler_bind(
+        je_GraphicImplContext ctx, uint32_t sampler_id, jegl_sampler* sampler)
     {
-        jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+        auto* native = static_cast<jegl_vk120_render_sampler*>(
+            sampler->m_backend_ptr);
 
-        auto* current_shader = context->_vk_current_binded_shader;
+        assert(native != nullptr);
 
-        if (location == jeecs::graphic::INVALID_UNIFORM_LOCATION)
-            return;
-
-        assert(current_shader->m_uniform_cpu_buffer_size != 0);
-        assert(current_shader->m_uniform_cpu_buffer != nullptr);
-
-        size_t data_size_byte_length = 0;
-
-        void* target_buffer = current_shader->m_uniform_cpu_buffer + location;
-        switch (type)
+        auto* shader = context->_vk_current_binded_shader;
+        if (shader == nullptr)
         {
-        case jegl_shader::INT:
-        case jegl_shader::FLOAT:
-            data_size_byte_length = 4;
-            break;
-        case jegl_shader::INT2:
-        case jegl_shader::FLOAT2:
-            data_size_byte_length = 8;
-            break;
-        case jegl_shader::INT3:
-        case jegl_shader::FLOAT3:
-            data_size_byte_length = 12;
-            break;
-        case jegl_shader::INT4:
-        case jegl_shader::FLOAT4:
-            data_size_byte_length = 16;
-            break;
-        case jegl_shader::FLOAT2X2:
-            data_size_byte_length = 16;
-            break;
-        case jegl_shader::FLOAT3X3:
-        {
-            // 3x3 矩阵需要特殊处理，每行按 16 字节对齐
-            float* target_storage = static_cast<float*>(target_buffer);
-            const float* source_storage = static_cast<const float*>(val);
-
-            // 检查数据是否已经相同，避免不必要的更新
-            bool needs_update = 
-                memcmp(target_storage, source_storage, 12) != 0 ||
-                memcmp(target_storage + 4, source_storage + 3, 12) != 0 ||
-                memcmp(target_storage + 8, source_storage + 6, 12) != 0;
-
-            if (!needs_update)
-                return;
-
-            memcpy(target_storage, source_storage, 12);
-            memcpy(target_storage + 4, source_storage + 3, 12);
-            memcpy(target_storage + 8, source_storage + 6, 12);
-
-            current_shader->m_uniform_cpu_buffer_updated = true;
-            return;
-        }
-        case jegl_shader::FLOAT4X4:
-            data_size_byte_length = 64;
-            break;
-        default:
-            jeecs::debug::logerr("Unknown uniform variable type to set.");
+            jeecs::debug::logerr(
+                "VK120: sampler_bind called before a pipeline was bound.");
             return;
         }
 
-        // 检查数据是否已经相同，避免不必要的更新
-        if (memcmp(target_buffer, val, data_size_byte_length) == 0)
+        bool bound = false;
+        for (auto& binding : shader->m_blob_data->m_texture_sampler_bindings)
+        {
+            if (binding.m_sampler_id == sampler_id)
+            {
+                context->_vk_descriptor_set_allocator->bind_sampler(
+                    binding.m_pass, native->m_sampler);
+                bound = true;
+            }
+        }
+
+        if (!bound)
+        {
+            jeecs::debug::logwarn(
+                "VK120: sampler id %u is not declared by the current shader.",
+                sampler_id);
+        }
+    }
+
+    void render_begin_pass(
+        je_GraphicImplContext ctx,
+        /* OPTIONAL */ jegl_frame_buffer* target,
+        const jegl_viewport* viewport)
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+
+        context->_vk_current_binded_shader = nullptr;
+        context->_vk_current_pipeline = nullptr;
+        context->_vk_current_shader_resource = nullptr;
+        context->_vk_current_vertex = nullptr;
+
+        auto* target_framebuffer = target != nullptr
+            ? static_cast<jevk12_framebuffer*>(target->m_handle.m_ptr)
+            : nullptr;
+
+        context->cmd_begin_frame_buffer(
+            target_framebuffer,
+            viewport->x,
+            viewport->y,
+            (int32_t)viewport->width,
+            (int32_t)viewport->height);
+    }
+
+    void render_clear_color(
+        je_GraphicImplContext ctx, uint32_t attachment, const float rgba[4])
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+        context->cmd_clear_frame_buffer_color(attachment, rgba);
+    }
+
+    void render_clear_depth(je_GraphicImplContext ctx, float depth)
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+
+        if (context->_vk_current_target_framebuffer == nullptr)
+            return;
+        if (context->_vk_current_target_framebuffer->m_depth_attachment == nullptr)
             return;
 
-        memcpy(target_buffer, val, data_size_byte_length);
-        current_shader->m_uniform_cpu_buffer_updated = true;
+        context->cmd_clear_frame_buffer_depth(depth);
+    }
+
+    void render_end_pass(je_GraphicImplContext ctx)
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+        context->end_render_pass();
+    }
+
+    void render_bind_vertex(je_GraphicImplContext ctx, jegl_vertex* vertex)
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+        context->_vk_current_vertex =
+            static_cast<jevk12_vertex*>(vertex->m_handle.m_ptr);
+    }
+
+    void render_bind_uniform_buffer(
+        je_GraphicImplContext ctx, jegl_uniform_buffer* uniform_buffer)
+    {
+        bind_uniform_buffer(ctx, uniform_buffer);
+    }
+
+    void render_bind_texture_2d(
+        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_2d* texture)
+    {
+        bind_texture<jegl_texture_2d>(ctx, texture, pass);
+    }
+
+    void render_bind_texture_3d(
+        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_3d* texture)
+    {
+        bind_texture<jegl_texture_3d>(ctx, texture, pass);
+    }
+
+    void render_bind_texture_array(
+        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_array* texture)
+    {
+        bind_texture<jegl_texture_array>(ctx, texture, pass);
+    }
+
+    void render_bind_texture_cube(
+        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_cube* texture)
+    {
+        bind_texture<jegl_texture_cube>(ctx, texture, pass);
+    }
+
+    void render_prepare_uniform_block(
+        jegl_vk120_context* context,
+        const void* uniform_data,
+        uint32_t uniform_size)
+    {
+        auto* shader_instance = context->_vk_current_binded_shader;
+        assert(shader_instance != nullptr);
+
+        if (shader_instance->m_uniform_cpu_buffer_size == 0)
+        {
+            assert(uniform_size == 0);
+            return;
+        }
+
+        assert(uniform_data != nullptr);
+        assert(uniform_size == shader_instance->m_uniform_cpu_buffer_size);
+
+        memcpy(
+            shader_instance->m_uniform_cpu_buffer,
+            uniform_data,
+            uniform_size);
+
+        // Vulkan 的 NDC y 轴向下：屏幕目标已经用负高度 viewport 翻转，
+        // 离屏目标用正 viewport 渲染时行序与 opengl3 一致（世界“上”落在
+        // 图像末行，即引擎 V=1 的一侧），两者都不需要改 JE_NDC_SCALE。
+        // 与 dx11/metal 不同，这里不能对离屏目标做 y 取反，否则 RT 内容
+        // 在采样时会上下颠倒。
+    }
+    void render_draw_indexed(
+        je_GraphicImplContext ctx,
+        uint32_t index_count,
+        uint32_t first_index,
+        uint32_t instance_count,
+        const void* uniform_data,
+        uint32_t uniform_size)
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+
+        assert(context->_vk_current_vertex != nullptr);
+        assert(index_count > 0);
+        assert(instance_count > 0);
+
+        render_prepare_uniform_block(context, uniform_data, uniform_size);
+        context->cmd_draw_indexed_ex(
+            context->_vk_current_vertex,
+            index_count,
+            first_index,
+            instance_count);
+    }
+
+    void render_draw(
+        je_GraphicImplContext ctx,
+        uint32_t vertex_count,
+        uint32_t first_vertex,
+        uint32_t instance_count,
+        const void* uniform_data,
+        uint32_t uniform_size)
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+
+        assert(context->_vk_current_vertex != nullptr);
+        assert(vertex_count > 0);
+        assert(instance_count > 0);
+
+        render_prepare_uniform_block(context, uniform_data, uniform_size);
+        context->cmd_draw_ex(
+            context->_vk_current_vertex,
+            vertex_count,
+            first_vertex,
+            instance_count);
+    }
+
+    void render_commit_begin(je_GraphicImplContext ctx)
+    {
+        auto* context = static_cast<jegl_vk120_context*>(ctx);
+
+        // 正常帧已经在 pre_update 中开始录制；暂停帧如果仍然提交了离屏命令，
+        // 这里惰性开启一个不参与 present 的帧命令缓冲。
+        if (!context->_vk_frame_recording)
+            context->begin_frame_recording(false);
+    }
+
+    void render_commit_end(je_GraphicImplContext)
+    {
+        // 提交统一延迟到 update_draw_commit -> late_update，以合并同一帧的所有 pass。
     }
 }
 
@@ -4715,18 +5921,31 @@ void jegl_using_vk120_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->framebuffer_close = close_framebuffer;
     write_to_apis->ubuffer_close = close_ubuffer;
 
-    write_to_apis->bind_uniform_buffer = bind_uniform_buffer;
-    write_to_apis->bind_texture_2d = bind_texture<jegl_texture_2d>;
-    write_to_apis->bind_texture_3d = bind_texture<jegl_texture_3d>;
-    write_to_apis->bind_texture_array = bind_texture<jegl_texture_array>;
-    write_to_apis->bind_texture_cube = bind_texture<jegl_texture_cube>;
-    write_to_apis->bind_texture_msaa = bind_texture<jegl_texture_msaa>;
-    write_to_apis->bind_shader = bind_shader;
-    write_to_apis->draw_vertex = draw_vertex_with_shader;
+    write_to_apis->pipeline_init = render_pipeline_init;
+    write_to_apis->pipeline_close = render_pipeline_close;
+    write_to_apis->pipeline_bind = render_pipeline_bind;
 
-    write_to_apis->bind_framebuf = set_rend_to_framebuffer;
+    write_to_apis->sampler_init = render_sampler_init;
+    write_to_apis->sampler_close = render_sampler_close;
+    write_to_apis->sampler_bind = render_sampler_bind;
 
-    write_to_apis->set_uniform = set_uniform;
+    write_to_apis->begin_pass = render_begin_pass;
+    write_to_apis->clear_color = render_clear_color;
+    write_to_apis->clear_depth = render_clear_depth;
+    write_to_apis->end_pass = render_end_pass;
+
+    write_to_apis->bind_vertex = render_bind_vertex;
+    write_to_apis->bind_uniform_buffer = render_bind_uniform_buffer;
+    write_to_apis->bind_texture_2d = render_bind_texture_2d;
+    write_to_apis->bind_texture_3d = render_bind_texture_3d;
+    write_to_apis->bind_texture_array = render_bind_texture_array;
+    write_to_apis->bind_texture_cube = render_bind_texture_cube;
+
+    write_to_apis->draw_indexed = render_draw_indexed;
+    write_to_apis->draw = render_draw;
+
+    write_to_apis->commit_begin = render_commit_begin;
+    write_to_apis->commit_end = render_commit_end;
 }
 #else
 void jegl_using_vk120_apis(jegl_graphic_api* write_to_apis)

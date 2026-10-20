@@ -167,41 +167,72 @@ namespace jeecs::graphic::api::none
     {
     }
 
-    void bind_uniform_buffer(je_GraphicImplContext, jegl_uniform_buffer*)
+                                            // Render API (v2) no-ops.
+    void render_pipeline_init(je_GraphicImplContext, jegl_pipeline*)
     {
     }
-    bool bind_shader(je_GraphicImplContext, jegl_shader*)
-    {
-        return true;
-    }
-    void bind_texture_2d(je_GraphicImplContext, jegl_texture_2d*, size_t)
+    void render_pipeline_close(je_GraphicImplContext, jegl_pipeline*)
     {
     }
-    void bind_texture_3d(je_GraphicImplContext, jegl_texture_3d*, size_t)
+    void render_pipeline_bind(je_GraphicImplContext, jegl_pipeline*)
     {
     }
-    void bind_texture_array(je_GraphicImplContext, jegl_texture_array*, size_t)
+    void render_sampler_init(je_GraphicImplContext, jegl_sampler*)
     {
     }
-    void bind_texture_cube(je_GraphicImplContext, jegl_texture_cube*, size_t)
+    void render_sampler_close(je_GraphicImplContext, jegl_sampler*)
     {
     }
-    void bind_texture_msaa(je_GraphicImplContext, jegl_texture_msaa*, size_t)
+    void render_sampler_bind(je_GraphicImplContext, uint32_t, jegl_sampler*)
     {
     }
-    void draw_vertex_with_shader(je_GraphicImplContext, jegl_vertex*)
+    void render_begin_pass(
+        je_GraphicImplContext, jegl_frame_buffer*, const jegl_viewport*)
     {
     }
-
-    void bind_framebuffer(
+    void render_clear_color(je_GraphicImplContext, uint32_t, const float[4])
+    {
+    }
+    void render_clear_depth(je_GraphicImplContext, float)
+    {
+    }
+    void render_end_pass(je_GraphicImplContext)
+    {
+    }
+    void render_bind_vertex(je_GraphicImplContext, jegl_vertex*)
+    {
+    }
+    void render_bind_uniform_buffer(je_GraphicImplContext, jegl_uniform_buffer*)
+    {
+    }
+    void render_bind_texture_2d(je_GraphicImplContext, uint32_t, jegl_texture_2d*)
+    {
+    }
+    void render_bind_texture_3d(je_GraphicImplContext, uint32_t, jegl_texture_3d*)
+    {
+    }
+    void render_bind_texture_array(je_GraphicImplContext, uint32_t, jegl_texture_array*)
+    {
+    }
+    void render_bind_texture_cube(je_GraphicImplContext, uint32_t, jegl_texture_cube*)
+    {
+    }
+    void render_draw_indexed(
         je_GraphicImplContext,
-        jegl_frame_buffer*,
-        const int32_t(*)[4],
-        const jegl_frame_buffer_clear_operation*)
+        uint32_t, uint32_t, uint32_t,
+        const void*, uint32_t)
     {
     }
-
-    void set_uniform(je_GraphicImplContext, uint32_t, jegl_shader::uniform_type, const void*)
+    void render_draw(
+        je_GraphicImplContext,
+        uint32_t, uint32_t, uint32_t,
+        const void*, uint32_t)
+    {
+    }
+    void render_commit_begin(je_GraphicImplContext)
+    {
+    }
+    void render_commit_end(je_GraphicImplContext)
     {
     }
 }
@@ -259,16 +290,29 @@ void jegl_using_none_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->framebuffer_close = close_framebuffer;
     write_to_apis->ubuffer_close = close_ubuffer;
 
-    write_to_apis->set_uniform = set_uniform;
+    write_to_apis->pipeline_init = render_pipeline_init;
+    write_to_apis->pipeline_close = render_pipeline_close;
+    write_to_apis->pipeline_bind = render_pipeline_bind;
 
-    write_to_apis->bind_framebuf = bind_framebuffer;
+    write_to_apis->sampler_init = render_sampler_init;
+    write_to_apis->sampler_close = render_sampler_close;
+    write_to_apis->sampler_bind = render_sampler_bind;
 
-    write_to_apis->bind_uniform_buffer = bind_uniform_buffer;
-    write_to_apis->bind_texture_2d = bind_texture_2d;
-    write_to_apis->bind_texture_3d = bind_texture_3d;
-    write_to_apis->bind_texture_array = bind_texture_array;
-    write_to_apis->bind_texture_cube = bind_texture_cube;
-    write_to_apis->bind_texture_msaa = bind_texture_msaa;
-    write_to_apis->bind_shader = bind_shader;
-    write_to_apis->draw_vertex = draw_vertex_with_shader;
+    write_to_apis->begin_pass = render_begin_pass;
+    write_to_apis->clear_color = render_clear_color;
+    write_to_apis->clear_depth = render_clear_depth;
+    write_to_apis->end_pass = render_end_pass;
+
+    write_to_apis->bind_vertex = render_bind_vertex;
+    write_to_apis->bind_uniform_buffer = render_bind_uniform_buffer;
+    write_to_apis->bind_texture_2d = render_bind_texture_2d;
+    write_to_apis->bind_texture_3d = render_bind_texture_3d;
+    write_to_apis->bind_texture_array = render_bind_texture_array;
+    write_to_apis->bind_texture_cube = render_bind_texture_cube;
+
+    write_to_apis->draw_indexed = render_draw_indexed;
+    write_to_apis->draw = render_draw;
+
+    write_to_apis->commit_begin = render_commit_begin;
+    write_to_apis->commit_end = render_commit_end;
 }

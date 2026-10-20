@@ -7,11 +7,13 @@
 #   error JE_ENABLE_DEBUG_API must be defined, please check `jeecs_core_systems_and_components.cpp`
 #endif
 #include "jeecs.hpp"
-#include "jeecs_core_rendchain_helpers.hpp"
+#include "jeecs_core_render_helpers.hpp"
 #include "jeecs_ui_text_renderer.hpp"
 
 #include <queue>
 #include <list>
+#include <map>
+#include <utility>
 
 #define JE_LIGHT2D_DEFER_0 4
 
@@ -79,7 +81,7 @@ namespace jeecs
 
         struct camera_arch
         {
-            je_RendchainBranch* branchPipeline;
+            je_RenderBranch* branchPipeline;
 
             const Rendqueue* rendqueue;
             const Projection* projection;
@@ -313,67 +315,143 @@ namespace jeecs
                 sizeof(shader_time), &shader_time);
         }
 
-        // Allocate a rend_chain for a camera; honors optional sub-viewport (normalized rect).
-        jegl_rendchain* new_rend_chain_for_camera(
-            je_RendchainBranch* branch,
+        // Pipeline cache keyed by (shader, topology). The engine shaders carry
+        // their fixed state; topology comes from the vertex resource.
+        std::map<std::pair<jegl_shader*, uint8_t>, jegl_pipeline*> m_pipeline_cache;
+
+        ~BaseImpledGraphicPipeline()
+        {
+            for (auto& [key, pipeline] : m_pipeline_cache)
+                jegl_close_pipeline(pipeline);
+            m_pipeline_cache.clear();
+        }
+
+        jegl_context* graphic_context() const
+        {
+            jegl_context* context = jegl_uhost_get_context(_m_graphic_host);
+            assert(context != nullptr);
+            return context;
+        }
+
+        static jegl_topology topology_of(const jegl_vertex* vertex)
+        {
+            switch (vertex->m_type)
+            {
+            case jegl_vertex::type::LINESTRIP:
+                return jegl_topology::LINE_STRIP;
+            case jegl_vertex::type::TRIANGLES:
+                return jegl_topology::TRIANGLES;
+            case jegl_vertex::type::TRIANGLESTRIP:
+                return jegl_topology::TRIANGLE_STRIP;
+            default:
+                assert(false);
+                return jegl_topology::TRIANGLES;
+            }
+        }
+
+        jegl_pipeline* pipeline_for(
+            graphic::shader* shader, jegl_vertex* vertex)
+        {
+            assert(shader != nullptr);
+            assert(vertex != nullptr);
+
+            const auto topology = topology_of(vertex);
+            const auto key = std::make_pair(
+                shader->resource(), (uint8_t)topology);
+
+            auto found = m_pipeline_cache.find(key);
+            if (found != m_pipeline_cache.end())
+                return found->second;
+
+            jegl_pipeline_state state =
+                jegl_pipeline_state_from_shader(shader->resource());
+            state.m_topology = topology;
+
+            jegl_pipeline_desc desc{};
+            desc.m_shader = shader->resource();
+            desc.m_state = &state;
+
+            jegl_pipeline* pipeline =
+                jegl_pipeline_create(graphic_context(), &desc);
+            m_pipeline_cache.emplace(key, pipeline);
+            return pipeline;
+        }
+
+        // Allocate a command buffer/pass for a camera; honors optional
+        // sub-viewport (normalized rect).
+        jegl_command_buffer* new_rend_chain_for_camera(
+            je_RenderBranch* branch,
             const Viewport* viewport,
             graphic::framebuffer* rend_aim_buffer,
             size_t buffer_w, size_t buffer_h)
         {
-            jegl_frame_buffer* fb = rend_aim_buffer ? rend_aim_buffer->resource() : nullptr;
-            if (viewport)
-                return jegl_branch_new_chain(branch, fb,
-                    (int32_t)(viewport->viewport.x * (float)buffer_w),
-                    (int32_t)(viewport->viewport.y * (float)buffer_h),
-                    (uint32_t)(viewport->viewport.z * (float)buffer_w),
-                    (uint32_t)(viewport->viewport.w * (float)buffer_h));
-            return jegl_branch_new_chain(branch, fb, 0, 0, 0, 0);
+            assert(buffer_w > 0 && buffer_h > 0);
+
+            jegl_frame_buffer* fb =
+                rend_aim_buffer ? rend_aim_buffer->resource() : nullptr;
+
+            jegl_viewport vp{};
+            if (viewport != nullptr)
+            {
+                vp.x = (int32_t)(viewport->viewport.x * (float)buffer_w);
+                vp.y = (int32_t)(viewport->viewport.y * (float)buffer_h);
+                vp.width = (uint32_t)(viewport->viewport.z * (float)buffer_w);
+                vp.height = (uint32_t)(viewport->viewport.w * (float)buffer_h);
+            }
+            else
+            {
+                vp.x = 0;
+                vp.y = 0;
+                vp.width = (uint32_t)buffer_w;
+                vp.height = (uint32_t)buffer_h;
+            }
+
+            assert(vp.width > 0 && vp.height > 0);
+            return jegl_branch_new_command_buffer(branch, fb, &vp);
         }
 
         // Clear attachment 0 if the camera requested a clear color.
-        void clear_color_if_any(jegl_rendchain* chain, const Camera::Clear* clear)
+        void clear_color_if_any(
+            jegl_command_buffer* cmd, const Camera::Clear* clear)
         {
             if (clear != nullptr)
             {
                 const float clear_buffer_color[] = {
                     clear->color.x, clear->color.y, clear->color.z, clear->color.w };
-                jegl_rchain_clear_color_buffer(chain, 0, clear_buffer_color);
+                jegl_cmd_clear_color(cmd, 0, clear_buffer_color);
             }
         }
 
         // Bind default texture at slot 0, then any user-supplied textures.
-        // Returns the texture group plus resolved tiling/offset.
+        // Returns the resolved tiling/offset.
         struct bound_textures_t
         {
-            jegl_rchain_texture_group* group;
             math::vec2 tiling;
             math::vec2 offset;
         };
-        bound_textures_t bind_entity_textures(jegl_rendchain* chain, const Textures2D* textures,
+        bound_textures_t bind_entity_textures(jegl_command_buffer* cmd, const Textures2D* textures,
             const Textures2DArray* textures_array)
         {
-            bound_textures_t result;
-            result.group = jegl_rchain_allocate_texture_group(chain);
-            result.tiling = math::vec2(1.f, 1.f);
-            result.offset = math::vec2(0.f, 0.f);
+            bound_textures_t result{
+                math::vec2(1.f, 1.f), math::vec2(0.f, 0.f) };
 
-            jegl_rchain_bind_texture_2d(
-                chain, result.group, 0, m_default_resources.default_texture->resource());
+            jegl_cmd_bind_texture_2d(
+                cmd, 0, m_default_resources.default_texture->resource());
 
             if (textures != nullptr)
             {
                 result.tiling = textures->tiling;
                 result.offset = textures->offset;
                 for (auto& texture : textures->textures)
-                    jegl_rchain_bind_texture_2d(
-                        chain, result.group, texture.m_pass_id, texture.m_texture->resource());
+                    jegl_cmd_bind_texture_2d(
+                        cmd, texture.m_pass_id, texture.m_texture->resource());
             }
 
             // 数组纹理在 2D 绑定之后写入同通道（后写覆盖，各后端语义一致）
             if (textures_array != nullptr)
                 for (auto& texture : textures_array->textures)
-                    jegl_rchain_bind_texture_array(
-                        chain, result.group, texture.m_pass_id, texture.m_texture->resource());
+                    jegl_cmd_bind_texture_array(
+                        cmd, texture.m_pass_id, texture.m_texture->resource());
             return result;
         }
 
@@ -396,43 +474,50 @@ namespace jeecs
         // Iterate shader passes of `shaders`, falling back to default shader if a pass is not builtin,
         // and upload the standard set of builtin uniforms.
         void draw_shader_passes(
-            jegl_rendchain* chain,
+            jegl_command_buffer* cmd,
             const basic::resource<graphic::vertex>& shape,
             const basic::vector<basic::resource<graphic::shader>>& shaders,
-            jegl_rchain_texture_group* texture_group,
             const pass_uniforms_t& u)
         {
+            auto* vertex_resource = shape->resource();
+
             for (auto& shader_pass : shaders)
             {
                 auto* using_shader = &shader_pass;
                 if (!shader_pass->m_builtin)
                     using_shader = &m_default_resources.default_shader;
 
-                auto* rchain_draw_action = jegl_rchain_draw(
-                    chain, (*using_shader)->resource(), shape->resource(), texture_group);
-                auto* builtin_uniform = (*using_shader)->m_builtin;
+                auto* pipeline = pipeline_for(
+                    (*using_shader).get(), vertex_resource);
+
+                render_draw_action draw_action(
+                    cmd,
+                    pipeline,
+                    vertex_resource,
+                    (uint32_t)vertex_resource->m_index_count,
+                    1);
 
                 if (u.m != nullptr)
-                    JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, u.m);
+                    JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model, float4x4, u.m);
                 if (u.mv != nullptr)
-                    JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, u.mv);
+                    JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view, float4x4, u.mv);
                 if (u.mvp != nullptr)
-                    JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, u.mvp);
+                    JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view_projection, float4x4, u.mvp);
 
-                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, local_scale, float3,
+                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_local_scale, float3,
                     u.local_scale.x, u.local_scale.y, u.local_scale.z);
 
-                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2, u.tiling.x, u.tiling.y);
-                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2, u.offset.x, u.offset.y);
+                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_uv_tiling, float2, u.tiling.x, u.tiling.y);
+                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_uv_offset, float2, u.offset.x, u.offset.y);
 
-                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
+                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4,
                     u.color.x, u.color.y, u.color.z, u.color.w);
 
                 if (u.light2d_resolution != nullptr)
-                    JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_resolution, float2,
+                    JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_light2d_resolution, float2,
                         u.light2d_resolution->x, u.light2d_resolution->y);
                 if (u.light2d_decay != nullptr)
-                    JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_decay, float, *u.light2d_decay);
+                    JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_light2d_decay, float, *u.light2d_decay);
             }
         }
 
@@ -442,7 +527,7 @@ namespace jeecs
         // Takes the frustum-culling handle directly so it works with any camera archetype
         // (camera_arch / l2dcamera_arch / ...) that exposes a `frustumCulling` field.
         void draw_world_renderers(
-            jegl_rendchain* chain,
+            jegl_command_buffer* cmd,
             const FrustumCulling* frustum_culling,
             const float(&view)[4][4],
             const float(&vp)[4][4])
@@ -477,7 +562,7 @@ namespace jeecs
                 math::mat4xmat4(MAT4_MV, view, MAT4_MODEL);
                 math::mat4xmat4(MAT4_MVP, vp, MAT4_MODEL);
 
-                auto bound = bind_entity_textures(chain, rendentity.textures, rendentity.textures_array);
+                auto bound = bind_entity_textures(cmd, rendentity.textures, rendentity.textures_array);
 
                 pass_uniforms_t u;
                 u.m = MAT4_MODEL;
@@ -489,7 +574,7 @@ namespace jeecs
                 if (rendentity.color != nullptr)
                     u.color = rendentity.color->color;
 
-                draw_shader_passes(chain, drawing_shape, drawing_shaders, bound.group, u);
+                draw_shader_passes(cmd, drawing_shape, drawing_shaders, u);
             }
         }
     };
@@ -523,13 +608,13 @@ namespace jeecs
         // 字形图集 + 行网格布局引擎（LRU、脏检查细节见 jeecs_ui_text_renderer.hpp）。
         ui_text_renderer m_text_renderer;
 
-        // 动态顶点缓冲池：跨帧复用；同一帧内每个运行段独占一块（rendchain
+        // 动态顶点缓冲池：跨帧复用；同一帧内每个运行段独占一块（command buffer
         // 记录绘制动作后图形线程滞后消费，同帧内重复更新同一缓冲会互相覆盖）。
         std::vector<basic::resource<graphic::vertex>> m_text_vb_pool;
         size_t m_text_vb_used = 0;
         bool m_warned_text_vb_exhausted = false;
         // 当前批（连续同键运行段）状态；发射端逐字追加，键变化/缓冲满/相机
-        // 切换时 flush 成一次 jegl_rchain_draw。
+        // 切换时 flush 成一次 command-buffer draw。
         std::vector<float> m_text_quad_data;
         jegl_texture_2d* m_text_batch_page = nullptr;
         graphic::shader* m_text_batch_shader = nullptr;
@@ -671,13 +756,13 @@ namespace jeecs
                 update_default_uniform_buffer(
                     *current_camera.projection, MAT4_UI_VIEW, MAT4_UI_UNIT, MAT4_UI_VIEW, shader_time);
 
-                jegl_rendchain* rend_chain = new_rend_chain_for_camera(
+                jegl_command_buffer* rend_chain = new_rend_chain_for_camera(
                     current_camera.branchPipeline, current_camera.viewport,
                     rend_aim_buffer, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
                 clear_color_if_any(rend_chain, current_camera.clear);
-                jegl_rchain_clear_depth_buffer(rend_chain, 1.0f);
-                jegl_rchain_bind_uniform_buffer(rend_chain,
+                jegl_cmd_clear_depth(rend_chain, 1.0f);
+                jegl_cmd_bind_uniform_buffer(rend_chain,
                     current_camera.projection->default_uniform_buffer->resource());
 
                 for (auto& rendentity : m_renderer_list)
@@ -783,7 +868,7 @@ namespace jeecs
                         if (rendentity.color != nullptr)
                             u.color = rendentity.color->color;
 
-                        draw_shader_passes(rend_chain, drawing_shape, drawing_shaders, bound.group, u);
+                        draw_shader_passes(rend_chain, drawing_shape, drawing_shaders, u);
                     }
 
                     // 逐字文本路径：字形四边形按（图集页, 着色器）合并成连续
@@ -813,7 +898,7 @@ namespace jeecs
         // 再经与四边形路径完全相同的元素矩阵烘焙成相机像素空间顶点；
         // 颜色 = 逐字标记颜色 × 节点 Renderer::Color 色调。
         void EmitTextGlyphs(
-            jegl_rendchain* chain,
+            jegl_command_buffer* chain,
             const float(&view)[4][4],
             const float(&model)[4][4],
             const UserInterface::Text& text,
@@ -930,7 +1015,7 @@ namespace jeecs
         // 批维护：键（图集页, 着色器）变化或当前缓冲写满时冲刷旧批、
         // 从池中取下一块顶点缓冲。
         void PrepareTextBatch(
-            jegl_rendchain* chain,
+            jegl_command_buffer* chain,
             const float(&view)[4][4],
             jegl_texture_2d* page,
             graphic::shader* shader_res)
@@ -965,9 +1050,9 @@ namespace jeecs
             m_text_batch_vb = &m_text_vb_pool[m_text_vb_used++];
         }
 
-        // 冲刷当前批：一次 jegl_update_vertex_buffer + 一次 jegl_rchain_draw。
+        // 冲刷当前批：一次 jegl_update_vertex_buffer + 一次 command-buffer draw。
         // 顶点已烘焙至相机像素空间，M=I、MVP/MV=UI 视图矩阵。
-        void FlushTextBatch(jegl_rendchain* chain, const float(&view)[4][4])
+        void FlushTextBatch(jegl_command_buffer* chain, const float(&view)[4][4])
         {
             if (m_text_batch_quads == 0 || m_text_batch_vb == nullptr)
             {
@@ -981,13 +1066,16 @@ namespace jeecs
                 m_text_batch_quads * 4 * TEXT_VERTEX_FLOATS * sizeof(float),
                 m_text_batch_quads * 6);
 
-            auto* texture_group = jegl_rchain_allocate_texture_group(chain);
-            jegl_rchain_bind_texture_2d(
-                chain, texture_group, 0, m_text_batch_page);
+            jegl_cmd_bind_texture_2d(chain, 0, m_text_batch_page);
 
-            auto* draw_action = jegl_rchain_draw(
-                chain, m_text_batch_shader->resource(), vb->resource(), texture_group);
-            auto* builtin_uniform = m_text_batch_shader->m_builtin;
+            auto* pipeline = pipeline_for(
+                m_text_batch_shader, vb->resource());
+            render_draw_action draw_action(
+                chain,
+                pipeline,
+                vb->resource(),
+                (uint32_t)(m_text_batch_quads * 6),
+                1);
 
             static const float MAT4_IDENTITY[4][4] = {
                 {1.f, 0.f, 0.f, 0.f},
@@ -996,14 +1084,14 @@ namespace jeecs
                 {0.f, 0.f, 0.f, 1.f},
             };
 
-            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, m, float4x4, MAT4_IDENTITY);
-            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, mv, float4x4, view);
-            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, mvp, float4x4, view);
+            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model, float4x4, MAT4_IDENTITY);
+            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view, float4x4, view);
+            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view_projection, float4x4, view);
 
-            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, local_scale, float3, 1.f, 1.f, 1.f);
-            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, tiling, float2, 1.f, 1.f);
-            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, offset, float2, 0.f, 0.f);
-            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, color, float4, 1.f, 1.f, 1.f, 1.f);
+            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_local_scale, float3, 1.f, 1.f, 1.f);
+            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_uv_tiling, float2, 1.f, 1.f);
+            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_uv_offset, float2, 0.f, 0.f);
+            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4, 1.f, 1.f, 1.f, 1.f);
 
             m_text_batch_quads = 0;
         }
@@ -1160,13 +1248,13 @@ namespace jeecs
                 update_default_uniform_buffer(
                     *current_camera.projection, MAT4_VIEW, MAT4_PROJECTION, MAT4_VP, shader_time);
 
-                jegl_rendchain* rend_chain = new_rend_chain_for_camera(
+                jegl_command_buffer* rend_chain = new_rend_chain_for_camera(
                     current_camera.branchPipeline, current_camera.viewport,
                     rend_aim_buffer, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
                 clear_color_if_any(rend_chain, current_camera.clear);
-                jegl_rchain_clear_depth_buffer(rend_chain, 1.0);
-                jegl_rchain_bind_uniform_buffer(rend_chain,
+                jegl_cmd_clear_depth(rend_chain, 1.0);
+                jegl_cmd_bind_uniform_buffer(rend_chain,
                     current_camera.projection->default_uniform_buffer->resource());
 
                 draw_world_renderers(rend_chain, current_camera.frustumCulling, MAT4_VIEW, MAT4_VP);
@@ -1384,7 +1472,7 @@ namespace jeecs
 
         struct l2dcamera_arch
         {
-            je_RendchainBranch* branchPipeline;
+            je_RenderBranch* branchPipeline;
 
             const Rendqueue* rendqueue;
             const Translation* translation;
@@ -1915,20 +2003,17 @@ namespace jeecs
             };
         }
 
-        jegl_rchain_texture_group* alloc_shadow_texture_group(
-            jegl_rendchain* chain, /* OPTIONAL */ const Textures2D* textures)
+        void bind_shadow_texture(
+            jegl_command_buffer* chain, /* OPTIONAL */ const Textures2D* textures)
         {
-            auto* group = jegl_rchain_allocate_texture_group(chain);
             auto main_texture =
                 textures == nullptr ? std::nullopt : textures->get_texture(0);
 
-            jegl_rchain_bind_texture_2d(
-                chain, group, 0,
+            jegl_cmd_bind_texture_2d(
+                chain, 0,
                 main_texture.has_value()
                 ? main_texture.value()->resource()
                 : m_default_resources.default_texture->resource());
-
-            return group;
         }
 
         // 实体世界包围盒底边中点：取形状局部 AABB 的 8 个角点经
@@ -1985,10 +2070,9 @@ namespace jeecs
         // into local_scale + color. Block uses (0,-1,1).unit() as parallel light dir ref;
         // shape/sprite use (0,-1,0).
         void draw_shadow_occluder(
-            jegl_rendchain* shadow_chain,
+            jegl_command_buffer* shadow_chain,
             const basic::resource<graphic::shader>& shadow_shader,
             const basic::resource<graphic::vertex>& shape_vertex,
-            jegl_rchain_texture_group* texture_group,
             const Translation* occluder_translation,
             const light2d_arch& light,
             const float(&view)[4][4],
@@ -2000,26 +2084,33 @@ namespace jeecs
             /* OPTIONAL */ const math::vec4* color_override = nullptr,
             /* OPTIONAL */ const math::vec4* ellipse_params = nullptr)
         {
-            auto* rchain_draw_action = jegl_rchain_draw(
-                shadow_chain, shadow_shader->resource(), shape_vertex->resource(), texture_group);
-            auto* builtin_uniform = shadow_shader->m_builtin;
+            auto* vertex_resource = shape_vertex->resource();
+            auto* pipeline = pipeline_for(
+                shadow_shader.get(), vertex_resource);
+
+            render_draw_action draw_action(
+                shadow_chain,
+                pipeline,
+                vertex_resource,
+                (uint32_t)vertex_resource->m_index_count,
+                1);
 
             const float(&MAT4_MODEL)[4][4] = occluder_translation->object2world;
             float MAT4_MVP[4][4], MAT4_MV[4][4];
             math::mat4xmat4(MAT4_MVP, vp, MAT4_MODEL);
             math::mat4xmat4(MAT4_MV, view, MAT4_MODEL);
 
-            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_MODEL);
-            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_MV);
-            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_MVP);
-            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, local_scale, float3,
+            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model, float4x4, MAT4_MODEL);
+            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view, float4x4, MAT4_MV);
+            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view_projection, float4x4, MAT4_MVP);
+            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_local_scale, float3,
                 local_scale.x, local_scale.y, local_scale.z);
 
             if (textures != nullptr)
             {
-                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2,
+                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_uv_tiling, float2,
                     textures->tiling.x, textures->tiling.y);
-                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2,
+                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_uv_offset, float2,
                     textures->offset.x, textures->offset.y);
             }
 
@@ -2028,7 +2119,7 @@ namespace jeecs
             // XY + 中心世界 Z 在 .w）
             if (color_override != nullptr)
             {
-                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
+                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4,
                     color_override->x,
                     color_override->y,
                     color_override->z,
@@ -2037,12 +2128,12 @@ namespace jeecs
             else if (light.parallel != nullptr)
             {
                 math::vec3 rotated_light_dir = light.translation->world_rotation * parallel_dir_ref;
-                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
+                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4,
                     rotated_light_dir.x, rotated_light_dir.y, rotated_light_dir.z, color_w);
             }
             else
             {
-                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
+                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4,
                     light.translation->world_position.x,
                     light.translation->world_position.y,
                     light.translation->world_position.z,
@@ -2052,7 +2143,7 @@ namespace jeecs
             // SpriteShadow 接触椭圆参数（其余遮挡物不使用）
             if (ellipse_params != nullptr)
             {
-                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, shadow_ellipse, float4,
+                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_shadow_ellipse, float4,
                     ellipse_params->x,
                     ellipse_params->y,
                     ellipse_params->z,
@@ -2093,7 +2184,7 @@ namespace jeecs
                 update_default_uniform_buffer(
                     *current_camera.projection, MAT4_VIEW, MAT4_PROJECTION, MAT4_VP, shader_time);
 
-                jegl_rendchain* rend_chain = nullptr;
+                jegl_command_buffer* rend_chain = nullptr;
 
                 std::vector<light2d_arch*> _2dlight_after_culling;
                 _2dlight_after_culling.reserve(m_2dlight_list.size());
@@ -2129,7 +2220,7 @@ namespace jeecs
                             assert(lightarch.shadowbuffer->buffer.has_value());
 
                             auto& light2d_shadow_aim_buffer = lightarch.shadowbuffer->buffer.value();
-                            jegl_rendchain* light2d_shadow_rend_chain = new_rend_chain_for_camera(
+                            jegl_command_buffer* light2d_shadow_rend_chain = new_rend_chain_for_camera(
                                 current_camera.branchPipeline,
                                 /*viewport=*/nullptr,
                                 light2d_shadow_aim_buffer.get(),
@@ -2137,9 +2228,9 @@ namespace jeecs
                                 light2d_shadow_aim_buffer->height());
 
                             const float clear_color[4] = { 0.f, 0.f, 0.f, 0.f };
-                            jegl_rchain_clear_color_buffer(light2d_shadow_rend_chain, 0, clear_color);
+                            jegl_cmd_clear_color(light2d_shadow_rend_chain, 0, clear_color);
 
-                            jegl_rchain_bind_uniform_buffer(light2d_shadow_rend_chain,
+                            jegl_cmd_bind_uniform_buffer(light2d_shadow_rend_chain,
                                 current_camera.projection->default_uniform_buffer->resource());
 
                             const auto shadow_passes = select_shadow_passes(lightarch.parallel != nullptr);
@@ -2187,7 +2278,6 @@ namespace jeecs
                                             light2d_shadow_rend_chain,
                                             pass,
                                             blockarch.blockshadow->shape.m_block_mesh.value(),
-                                            /*texture_group=*/nullptr,
                                             blockarch.translation,
                                             lightarch,
                                             MAT4_VIEW, MAT4_VP,
@@ -2204,7 +2294,7 @@ namespace jeecs
                                         const auto& using_shape = blockarch.shape->vertex.has_value()
                                             ? blockarch.shape->vertex.value()
                                             : m_default_resources.default_shape_quad;
-                                        auto* texture_group = alloc_shadow_texture_group(
+                                        bind_shadow_texture(
                                             light2d_shadow_rend_chain, blockarch.textures);
 
                                         // ShapeShadow 通过 local_scale.x 传权重，.yz 传 tiling_scale，
@@ -2213,7 +2303,6 @@ namespace jeecs
                                             light2d_shadow_rend_chain,
                                             shadow_passes.shape,
                                             using_shape,
-                                            texture_group,
                                             blockarch.translation,
                                             lightarch,
                                             MAT4_VIEW, MAT4_VP,
@@ -2227,7 +2316,7 @@ namespace jeecs
                                     }
                                     if (blockarch.wallshadow != nullptr && blockarch.wallshadow->factor > 0.f)
                                     {
-                                        auto* texture_group = alloc_shadow_texture_group(
+                                        bind_shadow_texture(
                                             light2d_shadow_rend_chain, blockarch.textures);
 
                                         // WallShadow（墙状遮挡）通过 local_scale.x 传权重，.yz 预留，
@@ -2236,7 +2325,6 @@ namespace jeecs
                                             light2d_shadow_rend_chain,
                                             shadow_passes.wall,
                                             m_defer_light2d_host._wall_shadow_vertex,
-                                            texture_group,
                                             blockarch.translation,
                                             lightarch,
                                             MAT4_VIEW, MAT4_VP,
@@ -2317,7 +2405,6 @@ namespace jeecs
                                             light2d_shadow_rend_chain,
                                             shadow_passes.sprite,
                                             m_defer_light2d_host._sprite_shadow_quad,
-                                            nullptr,
                                             blockarch.translation,
                                             lightarch,
                                             MAT4_VIEW, MAT4_VP,
@@ -2353,11 +2440,11 @@ namespace jeecs
                                             if (block_in_layer->textures_array != nullptr)
                                                 array_atlas = block_in_layer->textures_array->get_texture(0);
 
-                                            auto* texture_group = alloc_shadow_texture_group(
+                                            bind_shadow_texture(
                                                 light2d_shadow_rend_chain, block_in_layer->textures);
                                             if (array_atlas.has_value())
-                                                jegl_rchain_bind_texture_array(
-                                                    light2d_shadow_rend_chain, texture_group, 0,
+                                                jegl_cmd_bind_texture_array(
+                                                    light2d_shadow_rend_chain, 0,
                                                     array_atlas.value()->resource());
 
                                             // TopDown 光源 + PerBlockSelfShadow 修饰：
@@ -2392,21 +2479,25 @@ namespace jeecs
                                                 ? block_in_layer->shape->vertex.value()
                                                 : m_default_resources.default_shape_quad;
 
-                                            auto* rchain_draw_action = jegl_rchain_draw(
+                                            auto* vertex_resource = using_shape->resource();
+                                            auto* pipeline = pipeline_for(
+                                                sub_pass_shader.get(), vertex_resource);
+
+                                            render_draw_action draw_action(
                                                 light2d_shadow_rend_chain,
-                                                sub_pass_shader->resource(),
-                                                using_shape->resource(),
-                                                texture_group);
-                                            auto* builtin_uniform = sub_pass_shader->m_builtin;
+                                                pipeline,
+                                                vertex_resource,
+                                                (uint32_t)vertex_resource->m_index_count,
+                                                1);
 
                                             const float(&MAT4_MODEL)[4][4] = block_in_layer->translation->object2world;
                                             float MAT4_MVP[4][4], MAT4_MV[4][4];
                                             math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                                             math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
-                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_MODEL);
-                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_MV);
-                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_MVP);
+                                            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model, float4x4, MAT4_MODEL);
+                                            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view, float4x4, MAT4_MV);
+                                            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view_projection, float4x4, MAT4_MVP);
 
                                             // local_scale.x .y .z 通道预留
                                             /*NEED_AND_SET_UNIFORM(local_scale, float3,
@@ -2423,7 +2514,7 @@ namespace jeecs
                                                     block_in_layer->selfshadow->auto_disable
                                                     ? lightarch.translation->world_position.y
                                                     : 1e30f;
-                                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
+                                                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4,
                                                     block_in_layer->selfshadow->factor,
                                                     height_line,
                                                     0.f,
@@ -2436,9 +2527,9 @@ namespace jeecs
                                                 (lightarch.topdown == nullptr
                                                     ? block_in_layer->translation->world_position.z >= lightarch.translation->world_position.z
                                                     : block_in_layer->bottom_world_center.y >= lightarch.translation->world_position.y))
-                                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4, 0.f, 0.f, 0.f, 0.f);
+                                                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4, 0.f, 0.f, 0.f, 0.f);
                                             else
-                                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
+                                                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4,
                                                     block_in_layer->selfshadow->factor,
                                                     block_in_layer->selfshadow->factor,
                                                     block_in_layer->selfshadow->factor,
@@ -2447,16 +2538,14 @@ namespace jeecs
                                             if (block_in_layer->textures != nullptr)
                                             {
                                                 JE_CHECK_NEED_AND_SET_UNIFORM(
-                                                    rchain_draw_action,
-                                                    builtin_uniform,
-                                                    tiling,
+                                                    draw_action,
+                                                    m_uv_tiling,
                                                     float2,
                                                     block_in_layer->textures->tiling.x,
                                                     block_in_layer->textures->tiling.y);
                                                 JE_CHECK_NEED_AND_SET_UNIFORM(
-                                                    rchain_draw_action,
-                                                    builtin_uniform,
-                                                    offset,
+                                                    draw_action,
+                                                    m_uv_offset,
                                                     float2,
                                                     block_in_layer->textures->offset.x,
                                                     block_in_layer->textures->offset.y);
@@ -2483,11 +2572,11 @@ namespace jeecs
                     const float clear_norm[4] = { 0.f, 0.f, 1.f, 1.f };
 
                     // 用 zero 清空自发光通道
-                    jegl_rchain_clear_color_buffer(rend_chain, 1, clear_zero);
+                    jegl_cmd_clear_color(rend_chain, 1, clear_zero);
                     // 用 infi 清空距离通道
-                    jegl_rchain_clear_color_buffer(rend_chain, 2, clear_infi);
+                    jegl_cmd_clear_color(rend_chain, 2, clear_infi);
                     // 用 norm 清空法线通道
-                    jegl_rchain_clear_color_buffer(rend_chain, 3, clear_norm);
+                    jegl_cmd_clear_color(rend_chain, 3, clear_norm);
                 }
                 else
                 {
@@ -2497,9 +2586,9 @@ namespace jeecs
                     clear_color_if_any(rend_chain, current_camera.clear);
                 }
                 // Clear depth buffer to overwrite pixels.
-                jegl_rchain_clear_depth_buffer(rend_chain, 1.0);
+                jegl_cmd_clear_depth(rend_chain, 1.0);
 
-                jegl_rchain_bind_uniform_buffer(rend_chain,
+                jegl_cmd_bind_uniform_buffer(rend_chain,
                     current_camera.projection->default_uniform_buffer->resource());
 
                 // Walk through all entities, rend them to target buffer(include L2DCamera/R2Buf/Screen).
@@ -2513,14 +2602,14 @@ namespace jeecs
                     // Rend Light result to target buffer.
                     graphic::framebuffer* post_light_target_fb =
                         current_camera.light2DPostPass->post_light_target.value().get();
-                    jegl_rendchain* light2d_light_effect_rend_chain = new_rend_chain_for_camera(
+                    jegl_command_buffer* light2d_light_effect_rend_chain = new_rend_chain_for_camera(
                         current_camera.branchPipeline, /*viewport=*/nullptr,
                         post_light_target_fb,
                         post_light_target_fb->width(), post_light_target_fb->height());
 
                     const float clear_color[] = { 0.f, 0.f, 0.f, 0.f };
-                    jegl_rchain_clear_color_buffer(light2d_light_effect_rend_chain, 0, clear_color);
-                    jegl_rchain_bind_uniform_buffer(light2d_light_effect_rend_chain,
+                    jegl_cmd_clear_color(light2d_light_effect_rend_chain, 0, clear_color);
+                    jegl_cmd_bind_uniform_buffer(light2d_light_effect_rend_chain,
                         current_camera.projection->default_uniform_buffer->resource());
 
                     auto* post_rend_target_frame_buffer = current_camera.light2DPostPass->post_rend_target.value().get();
@@ -2543,12 +2632,12 @@ namespace jeecs
                             light2d_light_effect_rend_chain, light2d.textures, nullptr);
 
                         // 绑定 G-buffer 通道（漫反射 / 自发光 / 视空间坐标 / 视空间法线 / 阴影）到 4..8 槽
-                        jegl_rchain_bind_texture_2d(light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 0, diffuse_attachment);
-                        jegl_rchain_bind_texture_2d(light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 1, emissive_attachment);
-                        jegl_rchain_bind_texture_2d(light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 2, viewpos_attachment);
-                        jegl_rchain_bind_texture_2d(light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 3, viewnorm_attachment);
-                        jegl_rchain_bind_texture_2d(
-                            light2d_light_effect_rend_chain, bound.group, JE_LIGHT2D_DEFER_0 + 4,
+                        jegl_cmd_bind_texture_2d(light2d_light_effect_rend_chain, JE_LIGHT2D_DEFER_0 + 0, diffuse_attachment);
+                        jegl_cmd_bind_texture_2d(light2d_light_effect_rend_chain, JE_LIGHT2D_DEFER_0 + 1, emissive_attachment);
+                        jegl_cmd_bind_texture_2d(light2d_light_effect_rend_chain, JE_LIGHT2D_DEFER_0 + 2, viewpos_attachment);
+                        jegl_cmd_bind_texture_2d(light2d_light_effect_rend_chain, JE_LIGHT2D_DEFER_0 + 3, viewnorm_attachment);
+                        jegl_cmd_bind_texture_2d(
+                            light2d_light_effect_rend_chain, JE_LIGHT2D_DEFER_0 + 4,
                             light2d.shadowbuffer != nullptr
                             ? light2d.shadowbuffer->buffer.value()->get_attachment(0).value()->resource()
                             : m_defer_light2d_host._no_shadow->resource());
@@ -2613,31 +2702,29 @@ namespace jeecs
                         u.light2d_decay = light2d_decay_ptr;
 
                         draw_shader_passes(
-                            light2d_light_effect_rend_chain, drawing_shape, drawing_shaders, bound.group, u);
+                            light2d_light_effect_rend_chain, drawing_shape, drawing_shaders, u);
                     }
 
                     // Rend final result color to screen.
-                    jegl_rendchain* final_target_rend_chain = new_rend_chain_for_camera(
+                    jegl_command_buffer* final_target_rend_chain = new_rend_chain_for_camera(
                         current_camera.branchPipeline, current_camera.viewport,
                         rend_aim_buffer, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
                     clear_color_if_any(final_target_rend_chain, current_camera.clear);
-                    jegl_rchain_clear_depth_buffer(final_target_rend_chain, 1.0);
-                    jegl_rchain_bind_uniform_buffer(final_target_rend_chain,
+                    jegl_cmd_clear_depth(final_target_rend_chain, 1.0);
+                    jegl_cmd_bind_uniform_buffer(final_target_rend_chain,
                         current_camera.projection->default_uniform_buffer->resource());
 
-                    auto texture_group = jegl_rchain_allocate_texture_group(final_target_rend_chain);
-
                     // 槽 0：光照合成结果；槽 4..7：G-buffer 通道
-                    jegl_rchain_bind_texture_2d(final_target_rend_chain, texture_group, 0,
+                    jegl_cmd_bind_texture_2d(final_target_rend_chain, 0,
                         current_camera.light2DPostPass->post_light_target.value()->get_attachment(0).value()->resource());
-                    jegl_rchain_bind_texture_2d(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 0,
+                    jegl_cmd_bind_texture_2d(final_target_rend_chain, JE_LIGHT2D_DEFER_0 + 0,
                         post_rend_target_frame_buffer->get_attachment(0).value()->resource());
-                    jegl_rchain_bind_texture_2d(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 1,
+                    jegl_cmd_bind_texture_2d(final_target_rend_chain, JE_LIGHT2D_DEFER_0 + 1,
                         post_rend_target_frame_buffer->get_attachment(1).value()->resource());
-                    jegl_rchain_bind_texture_2d(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 2,
+                    jegl_cmd_bind_texture_2d(final_target_rend_chain, JE_LIGHT2D_DEFER_0 + 2,
                         post_rend_target_frame_buffer->get_attachment(2).value()->resource());
-                    jegl_rchain_bind_texture_2d(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 3,
+                    jegl_cmd_bind_texture_2d(final_target_rend_chain, JE_LIGHT2D_DEFER_0 + 3,
                         post_rend_target_frame_buffer->get_attachment(3).value()->resource());
 
                     // 相机自带纹理（覆盖槽位由 m_pass_id 决定）
@@ -2647,7 +2734,7 @@ namespace jeecs
                         final_tiling = current_camera.textures->tiling;
                         final_offset = current_camera.textures->offset;
                         for (auto& texture : current_camera.textures->textures)
-                            jegl_rchain_bind_texture_2d(final_target_rend_chain, texture_group, texture.m_pass_id, texture.m_texture->resource());
+                            jegl_cmd_bind_texture_2d(final_target_rend_chain, texture.m_pass_id, texture.m_texture->resource());
                     }
 
                     auto& drawing_shaders =
@@ -2670,16 +2757,23 @@ namespace jeecs
                         if (!shader_pass->m_builtin)
                             using_shader = &m_default_resources.default_shader;
 
-                        auto* rchain_draw_action = jegl_rchain_draw(final_target_rend_chain,
-                            (*using_shader)->resource(), m_defer_light2d_host._screen_vertex->resource(), texture_group);
+                        auto* vertex_resource =
+                            m_defer_light2d_host._screen_vertex->resource();
+                        auto* pipeline = pipeline_for(
+                            (*using_shader).get(), vertex_resource);
 
-                        auto* builtin_uniform = (*using_shader)->m_builtin;
+                        render_draw_action draw_action(
+                            final_target_rend_chain,
+                            pipeline,
+                            vertex_resource,
+                            (uint32_t)vertex_resource->m_index_count,
+                            1);
 
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_resolution, float2,
+                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_light2d_resolution, float2,
                             post_light_resolution.x, post_light_resolution.y);
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2, final_tiling.x, final_tiling.y);
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2, final_offset.x, final_offset.y);
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
+                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_uv_tiling, float2, final_tiling.x, final_tiling.y);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_uv_offset, float2, final_offset.x, final_offset.y);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4,
                             final_color.x, final_color.y, final_color.z, final_color.w);
                     }
                 } // Finish for Light2d effect.

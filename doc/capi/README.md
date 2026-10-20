@@ -52,7 +52,7 @@ C-API 是 JoyEngine 的外部实现与引擎核心的交互接口。出于规避
 
 - `jegl_start_graphic_thread` / `jegl_terminate_graphic_thread` - 图形线程
 - `jegl_load_*` / `jegl_create_*` / `jegl_close_*` - 资源管理
-- `jegl_rchain_*` - 渲染链操作
+- `jegl_cmd_*` / `jegl_pipeline_*` / `jegl_sampler_*` - 新渲染 API（命令缓冲区/pipeline/采样器），见 [render_api_v2.md](graphic/render_api_v2.md)
 - `jegl_uhost_*` - 图形上下文管理
 - `jegl_using_*_apis` - 图形 API 选择
 - `je_font_*` - 字体管理

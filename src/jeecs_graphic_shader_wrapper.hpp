@@ -44,6 +44,7 @@ struct shader_texture
     std::string m_name;
     size_t m_pass;
     size_t m_sampler_id;
+    jegl_texture_kind m_kind;
 };
 
 struct shader_uniform_block_info

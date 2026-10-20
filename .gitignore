@@ -373,3 +373,5 @@ _deps
 
 # ZCode agent local data
 .zcode/
+
+*.dmp

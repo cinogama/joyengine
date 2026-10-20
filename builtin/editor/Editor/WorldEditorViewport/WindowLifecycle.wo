@@ -875,7 +875,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         self->drawGizmos(debug_camera);
 
         // UI 元素 gizmo 覆盖层（ImGui DrawList，屏幕空间；在视口图像
-        // 之后提交，天然盖在画面与 rendchain gizmo 之上）
+        // 之后提交，天然盖在画面与 render gizmo 之上）
         match (viewport_rect)
         {
             none?;

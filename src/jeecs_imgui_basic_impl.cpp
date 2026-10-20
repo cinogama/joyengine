@@ -1,5 +1,6 @@
 #define JE_IMPL
 #include "jeecs.hpp"
+#include "jeecs_graphic_render_internal.hpp"
 
 #include "jeecs_imgui_backend_api.hpp"
 
@@ -463,7 +464,7 @@ WOORT_API woort_api je_gui_draw_list_add_image(void)
     ImDrawList* dlist = (ImDrawList*)woort_pointer(0);
 
     jeecs::basic::resource<jeecs::graphic::texture2d>* texture = (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(3);
-    jegl_bind_texture_2d((*texture)->resource(), 0);
+    (void)_jegl_prepare_texture_2d_resource((*texture)->resource());
 
     const ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
 
@@ -1043,7 +1044,7 @@ WOORT_API woort_api je_gui_image(void)
 {
     jeecs::basic::resource<jeecs::graphic::texture2d>* texture = (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(0);
 
-    jegl_bind_texture_2d((*texture)->resource(), 0);
+    (void)_jegl_prepare_texture_2d_resource((*texture)->resource());
 
     const ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
 
@@ -1071,7 +1072,7 @@ WOORT_API woort_api je_gui_image_scale(void)
 {
     jeecs::basic::resource<jeecs::graphic::texture2d>* texture = (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(0);
 
-    jegl_bind_texture_2d((*texture)->resource(), 0);
+    (void)_jegl_prepare_texture_2d_resource((*texture)->resource());
 
     const ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
 
@@ -1098,7 +1099,7 @@ WOORT_API woort_api je_gui_image_size(void)
 {
     jeecs::basic::resource<jeecs::graphic::texture2d>* texture = (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(0);
 
-    jegl_bind_texture_2d((*texture)->resource(), 0);
+    (void)_jegl_prepare_texture_2d_resource((*texture)->resource());
 
     const ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
 
@@ -1127,7 +1128,7 @@ WOORT_API woort_api je_gui_image_size_color(void)
     jeecs::basic::resource<jeecs::graphic::texture2d>* texture =
         (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(0);
 
-    jegl_bind_texture_2d((*texture)->resource(), 0);
+    (void)_jegl_prepare_texture_2d_resource((*texture)->resource());
 
     const ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
 
@@ -1157,7 +1158,7 @@ WOORT_API woort_api je_gui_imagebutton(void)
     woort_U8CString label = woort_string(0);
     jeecs::basic::resource<jeecs::graphic::texture2d>* texture = (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(1);
 
-    jegl_bind_texture_2d((*texture)->resource(), 0);
+    (void)_jegl_prepare_texture_2d_resource((*texture)->resource());
 
     const ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
 
@@ -1189,7 +1190,7 @@ WOORT_API woort_api je_gui_imagebutton_scale(void)
     woort_U8CString label = woort_string(0);
     jeecs::basic::resource<jeecs::graphic::texture2d>* texture = (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(1);
 
-    jegl_bind_texture_2d((*texture)->resource(), 0);
+    (void)_jegl_prepare_texture_2d_resource((*texture)->resource());
 
     const ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
 
@@ -1220,7 +1221,7 @@ WOORT_API woort_api je_gui_imagebutton_size(void)
     woort_U8CString label = woort_string(0);
     jeecs::basic::resource<jeecs::graphic::texture2d>* texture = (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(1);
 
-    jegl_bind_texture_2d((*texture)->resource(), 0);
+    (void)_jegl_prepare_texture_2d_resource((*texture)->resource());
 
     const ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
 
@@ -2707,7 +2708,7 @@ static inline void je_gui_image_uv_impl(
     jeecs::basic::resource<jeecs::graphic::texture2d>* texture,
     float w, float h, woort_value uv0v, woort_value uv1v, ImVec4 tint, bool use_tint)
 {
-    jegl_bind_texture_2d((*texture)->resource(), 0);
+    (void)_jegl_prepare_texture_2d_resource((*texture)->resource());
 
     ImVec2 uv0 = val2vec2(uv0v);
     ImVec2 uv1 = val2vec2(uv1v);
@@ -2748,7 +2749,7 @@ WOORT_API woort_api je_gui_imagebutton_uv(void)
 {
     woort_U8CString label = woort_string(0);
     auto* texture = (jeecs::basic::resource<jeecs::graphic::texture2d>*)woort_gcpointer(1);
-    jegl_bind_texture_2d((*texture)->resource(), 0);
+    (void)_jegl_prepare_texture_2d_resource((*texture)->resource());
 
     ImVec2 uv0 = val2vec2(4);
     ImVec2 uv1 = val2vec2(5);
@@ -2773,7 +2774,7 @@ WOORT_API woort_api je_gui_draw_list_add_image_uv(void)
 {
     ImDrawList* dlist = (ImDrawList*)woort_pointer(0);
     auto* texture = (jeecs::basic::resource<jeecs::graphic::texture2d>*)woort_gcpointer(5);
-    jegl_bind_texture_2d((*texture)->resource(), 0);
+    (void)_jegl_prepare_texture_2d_resource((*texture)->resource());
 
     ImVec2 uv0 = val2vec2(3);
     ImVec2 uv1 = val2vec2(4);
@@ -2932,7 +2933,11 @@ void jegui_update_basic(
     jegui_platform_draw_callback_t platform_draw_callback,
     /* OPTIONAL */ void* data)
 {
-    jegl_bind_shader(_je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource());
+    jegl_shader* imgui_shader =
+        _je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource();
+    const auto prepare_result = _jegl_prepare_shader_resource(imgui_shader);
+    assert(prepare_result != jegl_resource_prepare_result::INVALID);
+    (void)prepare_result;
 
     ImGui::NewFrame();
     auto* viewport = ImGui::GetMainViewport();

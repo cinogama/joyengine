@@ -8,6 +8,13 @@
 #include <optional>
 #include <unordered_map>
 
+void _jegl_cmd_begin_deferred_draw(
+    jegl_command_buffer* cmd,
+    jegl_pipeline* pipeline,
+    jegl_vertex* vertex,
+    uint32_t index_count,
+    uint32_t instance_count);
+
 struct _jewo_log_channel
 {
     std::atomic_flag                        m_mx;
@@ -4148,40 +4155,6 @@ WOORT_API woort_api wojeapi_input_update_key_state(void)
 
 /////////////////////////// RENDCHAIN API ///////////////////////////
 
-static const uint32_t* _wojeapi_lookup_uniform_location(
-    jeecs::basic::resource<jeecs::graphic::shader>* shader_res, const char* name)
-{
-    auto* builtin = (*shader_res)->m_builtin;
-
-    if (strcmp(name, "JE_M") == 0)
-        return &builtin->m_builtin_uniform_m;
-    if (strcmp(name, "JE_MV") == 0)
-        return &builtin->m_builtin_uniform_mv;
-    if (strcmp(name, "JE_MVP") == 0)
-        return &builtin->m_builtin_uniform_mvp;
-    if (strcmp(name, "JE_LOCAL_SCALE") == 0)
-        return &builtin->m_builtin_uniform_local_scale;
-    if (strcmp(name, "JE_UV_TILING") == 0)
-        return &builtin->m_builtin_uniform_tiling;
-    if (strcmp(name, "JE_UV_OFFSET") == 0)
-        return &builtin->m_builtin_uniform_offset;
-    if (strcmp(name, "JE_COLOR") == 0)
-        return &builtin->m_builtin_uniform_color;
-    if (strcmp(name, "JE_LIGHT2D_RESOLUTION") == 0)
-        return &builtin->m_builtin_uniform_light2d_resolution;
-    if (strcmp(name, "JE_LIGHT2D_DECAY") == 0)
-        return &builtin->m_builtin_uniform_light2d_decay;
-
-    auto* custom = (*shader_res)->resource()->m_custom_uniforms;
-    while (custom != nullptr)
-    {
-        if (strcmp(custom->m_name, name) == 0)
-            return &custom->m_index;
-        custom = custom->m_next;
-    }
-    return nullptr;
-}
-
 WOORT_API woort_api wojeapi_uniformbuffer_create(void)
 {
     const size_t binding_place = (size_t)woort_int(0);
@@ -4262,7 +4235,7 @@ WOORT_API woort_api wojeapi_uhost_alloc_branch(void)
 WOORT_API woort_api wojeapi_uhost_free_branch(void)
 {
     auto* host = (je_GraphicUhost*)woort_pointer(0);
-    auto* branch = (je_RendchainBranch*)woort_pointer(1);
+    auto* branch = (je_RenderBranch*)woort_pointer(1);
 
     jegl_uhost_free_branch(host, branch);
 
@@ -4271,7 +4244,7 @@ WOORT_API woort_api wojeapi_uhost_free_branch(void)
 
 WOORT_API woort_api wojeapi_branch_new_frame(void)
 {
-    auto* branch = (je_RendchainBranch*)woort_pointer(0);
+    auto* branch = (je_RenderBranch*)woort_pointer(0);
     int priority = (int)woort_int(1);
 
     jegl_branch_new_frame(branch, priority);
@@ -4279,15 +4252,84 @@ WOORT_API woort_api wojeapi_branch_new_frame(void)
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_branch_new_chain(void)
+/////////////////////////////////////////////////////////////////////////////
+// Render API (v2) bindings
+/////////////////////////////////////////////////////////////////////////////
+
+namespace
 {
-    auto* branch = (je_RendchainBranch*)woort_pointer(0);
+    struct woje_draw_action
+    {
+        jegl_command_buffer* m_command;
+        jegl_pipeline* m_pipeline;
+    };
+
+    std::unordered_map<uint64_t, jegl_pipeline*> _woje_pipeline_cache;
+
+    jegl_topology _woje_topology_of(const jegl_vertex* vertex)
+    {
+        switch (vertex->m_type)
+        {
+        case jegl_vertex::type::LINESTRIP:
+            return jegl_topology::LINE_STRIP;
+        case jegl_vertex::type::TRIANGLES:
+            return jegl_topology::TRIANGLES;
+        case jegl_vertex::type::TRIANGLESTRIP:
+            return jegl_topology::TRIANGLE_STRIP;
+        default:
+            assert(false);
+            return jegl_topology::TRIANGLES;
+        }
+    }
+
+    jegl_pipeline* _woje_get_pipeline(
+        jegl_context* context, jegl_shader* shader, const jegl_vertex* vertex)
+    {
+        const auto topology = _woje_topology_of(vertex);
+        const uint64_t key =
+            (uint64_t)(uintptr_t)shader ^ ((uint64_t)topology << 48);
+
+        auto found = _woje_pipeline_cache.find(key);
+        if (found != _woje_pipeline_cache.end())
+            return found->second;
+
+        jegl_pipeline_state state = jegl_pipeline_state_from_shader(shader);
+        state.m_topology = topology;
+
+        jegl_pipeline_desc desc{};
+        desc.m_shader = shader;
+        desc.m_state = &state;
+
+        jegl_pipeline* pipeline = jegl_pipeline_create(context, &desc);
+        _woje_pipeline_cache.emplace(key, pipeline);
+        return pipeline;
+    }
+
+    thread_local woje_draw_action _woje_draw_actions[64];
+    thread_local size_t _woje_draw_action_index = 0;
+
+    jegl_uniform_slot _woje_action_uniform_slot(
+        woje_draw_action* action, const char* name)
+    {
+        // Editor shaders do not necessarily consume every builtin uniform
+        // (e.g. a gizmo shader may use only JE_MVP). Absent uniforms are a
+        // normal optional case here; the typed setters below skip them.
+        return jegl_pipeline_uniform_slot(action->m_pipeline, name);
+    }
+}
+
+WOORT_API woort_api wojeapi_branch_new_command_buffer(void)
+{
+    auto* branch = (je_RenderBranch*)woort_pointer(0);
 
     jegl_frame_buffer* fb = nullptr;
+    jeecs::basic::resource<jeecs::graphic::framebuffer>* fb_res = nullptr;
+
     if (woort_option_get(WOORT_RETURN_SLOT, 1))
     {
-        auto* fb_res =
-            (jeecs::basic::resource<jeecs::graphic::framebuffer> *)woort_gcpointer(WOORT_RETURN_SLOT);
+        fb_res =
+            (jeecs::basic::resource<jeecs::graphic::framebuffer> *)
+                woort_gcpointer(WOORT_RETURN_SLOT);
         fb = (*fb_res)->resource();
     }
 
@@ -4296,59 +4338,43 @@ WOORT_API woort_api wojeapi_branch_new_chain(void)
     uint32_t w = (uint32_t)woort_int(4);
     uint32_t h = (uint32_t)woort_int(5);
 
-    return woort_ret_pointer(jegl_branch_new_chain(branch, fb, x, y, w, h));
-}
-
-WOORT_API woort_api wojeapi_rchain_create(void)
-{
-    return woort_ret_pointer(jegl_rchain_create());
-}
-
-WOORT_API woort_api wojeapi_rchain_close(void)
-{
-    auto* chain = (jegl_rendchain*)woort_pointer(0);
-    jegl_rchain_close(chain);
-
-    return woort_ret_void();
-}
-
-WOORT_API woort_api wojeapi_rchain_begin(void)
-{
-    auto* chain = (jegl_rendchain*)woort_pointer(0);
-
-    jegl_frame_buffer* fb = nullptr;
-    if (woort_option_get(WOORT_RETURN_SLOT, 1))
+    if (w == 0 || h == 0)
     {
-        auto* fb_res =
-            (jeecs::basic::resource<jeecs::graphic::framebuffer> *)woort_gcpointer(WOORT_RETURN_SLOT);
-        fb = (*fb_res)->resource();
+        if (fb_res != nullptr)
+        {
+            w = (uint32_t)(*fb_res)->width();
+            h = (uint32_t)(*fb_res)->height();
+        }
+        else
+        {
+            int window_w = 0, window_h = 0;
+            je_io_get_window_size(&window_w, &window_h);
+            w = (uint32_t)window_w;
+            h = (uint32_t)window_h;
+        }
     }
 
-    int32_t x = (int32_t)woort_int(2);
-    int32_t y = (int32_t)woort_int(3);
-    uint32_t w = (uint32_t)woort_int(4);
-    uint32_t h = (uint32_t)woort_int(5);
+    assert(w > 0 && h > 0);
+    const jegl_viewport viewport{ x, y, w, h };
 
-    jegl_rchain_begin(chain, fb, x, y, w, h);
-
-    return woort_ret_void();
+    return woort_ret_pointer(
+        jegl_branch_new_command_buffer(branch, fb, &viewport));
 }
 
-WOORT_API woort_api wojeapi_rchain_bind_uniform_buffer(void)
+WOORT_API woort_api wojeapi_command_buffer_bind_uniform_buffer(void)
 {
-    auto* chain = (jegl_rendchain*)woort_pointer(0);
+    auto* cmd = (jegl_command_buffer*)woort_pointer(0);
     auto* ub =
         (jeecs::basic::resource<jeecs::graphic::uniformbuffer> *)woort_gcpointer(1);
 
-    jegl_rchain_bind_uniform_buffer(chain, (*ub)->resource());
-
+    jegl_cmd_bind_uniform_buffer(cmd, (*ub)->resource());
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_rchain_clear_color_buffer(void)
+WOORT_API woort_api wojeapi_command_buffer_clear_color_buffer(void)
 {
-    auto* chain = (jegl_rendchain*)woort_pointer(0);
-    size_t attachment_index = (size_t)woort_int(1);
+    auto* cmd = (jegl_command_buffer*)woort_pointer(0);
+    const uint32_t attachment = (uint32_t)woort_int(1);
 
     const woort_value color_tuple = 2;
     float clear_color[4];
@@ -4357,276 +4383,235 @@ WOORT_API woort_api wojeapi_rchain_clear_color_buffer(void)
     clear_color[2] = (float)woort_struct_get_real(color_tuple, 2);
     clear_color[3] = (float)woort_struct_get_real(color_tuple, 3);
 
-    jegl_rchain_clear_color_buffer(chain, attachment_index, clear_color);
-
+    jegl_cmd_clear_color(cmd, attachment, clear_color);
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_rchain_clear_depth_buffer(void)
+WOORT_API woort_api wojeapi_command_buffer_clear_depth_buffer(void)
 {
-    auto* chain = (jegl_rendchain*)woort_pointer(0);
-    float clear_depth = woort_float(1);
-
-    jegl_rchain_clear_depth_buffer(chain, clear_depth);
-
+    auto* cmd = (jegl_command_buffer*)woort_pointer(0);
+    jegl_cmd_clear_depth(cmd, woort_float(1));
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_rchain_allocate_texture_group(void)
+WOORT_API woort_api wojeapi_command_buffer_bind_texture(void)
 {
-    auto* chain = (jegl_rendchain*)woort_pointer(0);
-    return woort_ret_pointer(jegl_rchain_allocate_texture_group(chain));
-}
-
-WOORT_API woort_api wojeapi_rchain_bind_texture(void)
-{
-    auto* chain = (jegl_rendchain*)woort_pointer(0);
-    auto* tg = (jegl_rchain_texture_group*)woort_pointer(1);
-    size_t binding_pass = (size_t)woort_int(2);
+    auto* cmd = (jegl_command_buffer*)woort_pointer(0);
+    const uint32_t pass = (uint32_t)woort_int(1);
     auto* tex =
-        (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(3);
+        (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(2);
 
-    // 按 gchandle 载荷的实际纹理类别分发绑定
     switch (woje_texture_kind_of(tex))
     {
     case jegl_texture_kind::TEXTURE_2D:
-        jegl_rchain_bind_texture_2d(
-            chain, tg, binding_pass, (*tex)->resource());
+        jegl_cmd_bind_texture_2d(cmd, pass, (*tex)->resource());
         break;
     case jegl_texture_kind::TEXTURE_3D:
-        jegl_rchain_bind_texture_3d(
-            chain, tg, binding_pass,
+        jegl_cmd_bind_texture_3d(
+            cmd, pass,
             (*(jeecs::basic::resource<jeecs::graphic::texture3d> *)tex)->resource());
         break;
     case jegl_texture_kind::TEXTURE_ARRAY:
-        jegl_rchain_bind_texture_array(
-            chain, tg, binding_pass,
+        jegl_cmd_bind_texture_array(
+            cmd, pass,
             (*(jeecs::basic::resource<jeecs::graphic::texture_array> *)tex)->resource());
         break;
     case jegl_texture_kind::TEXTURE_CUBE:
-        jegl_rchain_bind_texture_cube(
-            chain, tg, binding_pass,
+        jegl_cmd_bind_texture_cube(
+            cmd, pass,
             (*(jeecs::basic::resource<jeecs::graphic::texture_cube> *)tex)->resource());
         break;
-    case jegl_texture_kind::TEXTURE_MSAA:
-        jegl_rchain_bind_texture_msaa(
-            chain, tg, binding_pass,
-            (*(jeecs::basic::resource<jeecs::graphic::texture_msaa> *)tex)->resource());
-        break;
     default:
-        jeecs::debug::logerr("Unknown texture kind when binding texture to rendchain.");
+        jeecs::debug::logerr(
+            "Unknown texture kind when binding texture to command buffer.");
         break;
     }
 
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_rchain_draw(void)
+WOORT_API woort_api wojeapi_command_buffer_draw(void)
 {
-    auto* chain = (jegl_rendchain*)woort_pointer(0);
+    auto* cmd = (jegl_command_buffer*)woort_pointer(0);
     auto* shad =
         (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
     auto* vert =
         (jeecs::basic::resource<jeecs::graphic::vertex> *)woort_gcpointer(2);
 
-    jegl_rchain_texture_group* tg = nullptr;
-    if (woort_option_get(WOORT_RETURN_SLOT, 3))
-        tg = (jegl_rchain_texture_group*)woort_pointer(WOORT_RETURN_SLOT);
+    auto* shader_resource = (*shad)->resource();
+    auto* vertex_resource = (*vert)->resource();
 
-    auto* act = jegl_rchain_draw(chain, (*shad)->resource(), (*vert)->resource(), tg);
+    auto* pipeline = _woje_get_pipeline(
+        jegl_cmd_get_context(cmd), shader_resource, vertex_resource);
 
-    return woort_ret_pointer(act);
+    _jegl_cmd_begin_deferred_draw(
+        cmd,
+        pipeline,
+        vertex_resource,
+        (uint32_t)vertex_resource->m_index_count,
+        1);
+
+    auto& action =
+        _woje_draw_actions[_woje_draw_action_index++ % 64];
+    action.m_command = cmd;
+    action.m_pipeline = pipeline;
+
+    return woort_ret_pointer(&action);
 }
 
-WOORT_API woort_api wojeapi_rchain_commit(void)
+WOORT_API woort_api wojeapi_command_buffer_commit(void)
 {
-    auto* chain = (jegl_rendchain*)woort_pointer(0);
-    auto* ctx = (jegl_context*)woort_pointer(1);
-
-    jegl_rchain_commit(chain, ctx);
-
+    auto* cmd = (jegl_command_buffer*)woort_pointer(0);
+    jegl_cmd_commit(cmd);
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_rchain_get_target_framebuf(void)
+WOORT_API woort_api wojeapi_draw_action_set_uniform_int(void)
 {
-    auto* chain = (jegl_rendchain*)woort_pointer(0);
-    auto* fb = jegl_rchain_get_target_framebuf(chain);
-
-    if (fb != nullptr)
-        return woort_ret_option_pointer(fb);
-
-    return woort_ret_option_none();
-}
-
-WOORT_API woort_api wojeapi_rchain_set_uniform_buffer(void)
-{
-    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
-    auto* ub =
-        (jeecs::basic::resource<jeecs::graphic::uniformbuffer> *)woort_gcpointer(1);
-
-    jegl_rchain_set_uniform_buffer(act, (*ub)->resource());
-
-    return woort_ret_void();
-}
-
-WOORT_API woort_api wojeapi_rchain_set_uniform_int(void)
-{
-    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
-    auto* shad =
-        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    auto* act = (woje_draw_action*)woort_pointer(0);
     const char* name = woort_string(2);
-    int val = (int)woort_int(3);
+    auto slot = _woje_action_uniform_slot(act, name);
+    if (slot.m_offset == JEGL_UNIFORM_SLOT_NONE)
+        return woort_ret_void();
 
-    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
-    jegl_rchain_set_uniform_int(act, loc, val);
-
+    jegl_cmd_set_uniform_int(act->m_command, slot, (int)woort_int(3));
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_rchain_set_uniform_int2(void)
+WOORT_API woort_api wojeapi_draw_action_set_uniform_int2(void)
 {
-    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
-    auto* shad =
-        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    auto* act = (woje_draw_action*)woort_pointer(0);
     const char* name = woort_string(2);
+    auto slot = _woje_action_uniform_slot(act, name);
+    if (slot.m_offset == JEGL_UNIFORM_SLOT_NONE)
+        return woort_ret_void();
 
-    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
-    jegl_rchain_set_uniform_int2(act, loc, (int)woort_int(3), (int)woort_int(4));
-
+    jegl_cmd_set_uniform_int2(
+        act->m_command, slot, (int)woort_int(3), (int)woort_int(4));
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_rchain_set_uniform_int3(void)
+WOORT_API woort_api wojeapi_draw_action_set_uniform_int3(void)
 {
-    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
-    auto* shad =
-        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    auto* act = (woje_draw_action*)woort_pointer(0);
     const char* name = woort_string(2);
+    auto slot = _woje_action_uniform_slot(act, name);
+    if (slot.m_offset == JEGL_UNIFORM_SLOT_NONE)
+        return woort_ret_void();
 
-    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
-    jegl_rchain_set_uniform_int3(act, loc,
+    jegl_cmd_set_uniform_int3(act->m_command, slot,
         (int)woort_int(3), (int)woort_int(4), (int)woort_int(5));
-
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_rchain_set_uniform_int4(void)
+WOORT_API woort_api wojeapi_draw_action_set_uniform_int4(void)
 {
-    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
-    auto* shad =
-        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    auto* act = (woje_draw_action*)woort_pointer(0);
     const char* name = woort_string(2);
+    auto slot = _woje_action_uniform_slot(act, name);
+    if (slot.m_offset == JEGL_UNIFORM_SLOT_NONE)
+        return woort_ret_void();
 
-    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
-    jegl_rchain_set_uniform_int4(act, loc,
+    jegl_cmd_set_uniform_int4(act->m_command, slot,
         (int)woort_int(3), (int)woort_int(4), (int)woort_int(5), (int)woort_int(6));
-
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_rchain_set_uniform_float(void)
+WOORT_API woort_api wojeapi_draw_action_set_uniform_float(void)
 {
-    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
-    auto* shad =
-        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    auto* act = (woje_draw_action*)woort_pointer(0);
     const char* name = woort_string(2);
-    float val = woort_float(3);
+    auto slot = _woje_action_uniform_slot(act, name);
+    if (slot.m_offset == JEGL_UNIFORM_SLOT_NONE)
+        return woort_ret_void();
 
-    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
-    jegl_rchain_set_uniform_float(act, loc, val);
-
+    jegl_cmd_set_uniform_float(act->m_command, slot, woort_float(3));
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_rchain_set_uniform_float2(void)
+WOORT_API woort_api wojeapi_draw_action_set_uniform_float2(void)
 {
-    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
-    auto* shad =
-        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    auto* act = (woje_draw_action*)woort_pointer(0);
     const char* name = woort_string(2);
+    auto slot = _woje_action_uniform_slot(act, name);
+    if (slot.m_offset == JEGL_UNIFORM_SLOT_NONE)
+        return woort_ret_void();
 
-    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
-    jegl_rchain_set_uniform_float2(act, loc, woort_float(3), woort_float(4));
-
+    jegl_cmd_set_uniform_float2(
+        act->m_command, slot, woort_float(3), woort_float(4));
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_rchain_set_uniform_float3(void)
+WOORT_API woort_api wojeapi_draw_action_set_uniform_float3(void)
 {
-    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
-    auto* shad =
-        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    auto* act = (woje_draw_action*)woort_pointer(0);
     const char* name = woort_string(2);
+    auto slot = _woje_action_uniform_slot(act, name);
+    if (slot.m_offset == JEGL_UNIFORM_SLOT_NONE)
+        return woort_ret_void();
 
-    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
-    jegl_rchain_set_uniform_float3(act, loc,
+    jegl_cmd_set_uniform_float3(act->m_command, slot,
         woort_float(3), woort_float(4), woort_float(5));
-
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_rchain_set_uniform_float4(void)
+WOORT_API woort_api wojeapi_draw_action_set_uniform_float4(void)
 {
-    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
-    auto* shad =
-        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    auto* act = (woje_draw_action*)woort_pointer(0);
     const char* name = woort_string(2);
+    auto slot = _woje_action_uniform_slot(act, name);
+    if (slot.m_offset == JEGL_UNIFORM_SLOT_NONE)
+        return woort_ret_void();
 
-    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
-    jegl_rchain_set_uniform_float4(act, loc,
+    jegl_cmd_set_uniform_float4(act->m_command, slot,
         woort_float(3), woort_float(4), woort_float(5), woort_float(6));
-
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_rchain_set_uniform_float2x2(void)
+WOORT_API woort_api wojeapi_draw_action_set_uniform_float2x2(void)
 {
-    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
-    auto* shad =
-        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    auto* act = (woje_draw_action*)woort_pointer(0);
     const char* name = woort_string(2);
+    auto slot = _woje_action_uniform_slot(act, name);
+    if (slot.m_offset == JEGL_UNIFORM_SLOT_NONE)
+        return woort_ret_void();
 
     float mat[2][2];
     for (int i = 0; i < 4; ++i)
         (&mat[0][0])[i] = woort_float((woort_value)(3 + i));
 
-    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
-    jegl_rchain_set_uniform_float2x2(act, loc, mat);
-
+    jegl_cmd_set_uniform_float2x2(act->m_command, slot, mat);
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_rchain_set_uniform_float3x3(void)
+WOORT_API woort_api wojeapi_draw_action_set_uniform_float3x3(void)
 {
-    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
-    auto* shad =
-        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    auto* act = (woje_draw_action*)woort_pointer(0);
     const char* name = woort_string(2);
+    auto slot = _woje_action_uniform_slot(act, name);
+    if (slot.m_offset == JEGL_UNIFORM_SLOT_NONE)
+        return woort_ret_void();
 
     float mat[3][3];
     for (int i = 0; i < 9; ++i)
         (&mat[0][0])[i] = woort_float((woort_value)(3 + i));
 
-    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
-    jegl_rchain_set_uniform_float3x3(act, loc, mat);
-
+    jegl_cmd_set_uniform_float3x3(act->m_command, slot, mat);
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_rchain_set_uniform_float4x4(void)
+WOORT_API woort_api wojeapi_draw_action_set_uniform_float4x4(void)
 {
-    auto* act = (jegl_rendchain_rend_action*)woort_pointer(0);
-    auto* shad =
-        (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(1);
+    auto* act = (woje_draw_action*)woort_pointer(0);
     const char* name = woort_string(2);
+    auto slot = _woje_action_uniform_slot(act, name);
+    if (slot.m_offset == JEGL_UNIFORM_SLOT_NONE)
+        return woort_ret_void();
 
     float mat[4][4];
     for (int i = 0; i < 16; ++i)
         (&mat[0][0])[i] = woort_float((woort_value)(3 + i));
 
-    const uint32_t* loc = _wojeapi_lookup_uniform_location(shad, name);
-    jegl_rchain_set_uniform_float4x4(act, loc, mat);
-
+    jegl_cmd_set_uniform_float4x4(act->m_command, slot, mat);
     return woort_ret_void();
 }

@@ -44,6 +44,9 @@ namespace JEEditor::GUI::Statebar
             
             if (!s_statebar_hidden)
             {
+                // 队列为空时 try! 会在 BeginViewportSideBar 之前失败；
+                // 只有实际调用了 Begin，才能配对调用 End。
+                let began = mutable::create(false);
                 do try!{
                     try! current_state = s_state_showing_queue->front;
                     let (state, height, _) = current_state;
@@ -60,11 +63,13 @@ namespace JEEditor::GUI::Statebar
                     if ((immut bar_height) > max_bar_height)
                         bar_height = max_bar_height;
                         
-                    if (BeginViewportSideBar(
+                    let show = BeginViewportSideBar(
                             "EditorStatebar",
                             Direction::ImGuiDir_Down,
                             bar_height,
-                            WindowsAttribute::ImGuiWindowFlags_None))
+                            WindowsAttribute::ImGuiWindowFlags_None);
+                    began->set(true);
+                    if (show)
                     {
                         state();
                         
@@ -77,7 +82,8 @@ namespace JEEditor::GUI::Statebar
                     
                     return_value!;
                 };
-                End();
+                if (began->get)
+                    End();
             }
             yield!;
         }

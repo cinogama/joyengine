@@ -1,6 +1,8 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
+#include "jeecs_graphic_render_internal.hpp"
+
 #ifdef JE_ENABLE_DX11_GAPI
 
 #include "jeecs_imgui_backend_api.hpp"
@@ -74,6 +76,7 @@ namespace jeecs::graphic::api::dx11
 
         jedx11_shader* m_current_target_shader;
         jedx11_framebuffer* m_current_target_framebuffer;
+        jedx11_vertex* m_current_vertex = nullptr;
     };
 
     struct jedx11_texture
@@ -116,11 +119,8 @@ namespace jeecs::graphic::api::dx11
         jegl_dx11_context::MSWRLComPtr<ID3D11PixelShader> m_fragment;
 
         jegl_dx11_context::MSWRLComPtr<ID3D11Buffer> m_uniforms;
-        void* m_uniform_cpu_buffers;
         size_t m_uniform_buffer_size;
-        bool m_uniform_updated;
 
-        bool m_draw_for_r2b;
         uint32_t m_ndc_scale_uniform_id;
 
         jegl_dx11_context::MSWRLComPtr<ID3D11RasterizerState> m_rasterizer;
@@ -1217,8 +1217,6 @@ namespace jeecs::graphic::api::dx11
                 static_cast<dx11_resource_shader_blob*>(blob);
 
             jedx11_shader* jedx11_shader_res = new jedx11_shader;
-            jedx11_shader_res->m_draw_for_r2b = false;
-            jedx11_shader_res->m_uniform_updated = false;
 
             auto& builtin_uniforms = shader->m_builtin_uniforms;
 
@@ -1275,17 +1273,7 @@ namespace jeecs::graphic::api::dx11
                 JERCHECK(context->m_dx_device->CreateBuffer(
                     &const_buffer_describe, nullptr,
                     jedx11_shader_res->m_uniforms.GetAddressOf()));
-
-                jedx11_shader_res->m_uniform_cpu_buffers =
-                    malloc(shader_blob->m_uniform_size);
-
-                memset(
-                    jedx11_shader_res->m_uniform_cpu_buffers,
-                    0,
-                    shader_blob->m_uniform_size);
             }
-            else
-                jedx11_shader_res->m_uniform_cpu_buffers = nullptr;
 
             jedx11_shader_res->m_vao = shader_blob->m_vao;
             jedx11_shader_res->m_vertex = shader_blob->m_vertex;
@@ -1317,14 +1305,7 @@ namespace jeecs::graphic::api::dx11
     {
         auto* dx11_shader = static_cast<jedx11_shader*>(shader->m_handle.m_ptr);
         if (dx11_shader != nullptr)
-        {
-            if (dx11_shader->m_uniform_buffer_size != 0)
-            {
-                assert(dx11_shader->m_uniform_cpu_buffers != nullptr);
-                free(dx11_shader->m_uniform_cpu_buffers);
-            }
             delete dx11_shader;
-        }
     }
 
     template<typename TexT>
@@ -1841,7 +1822,7 @@ namespace jeecs::graphic::api::dx11
         for (size_t i = 0; i < resource->m_attachment_count; ++i)
         {
             auto& attachment = attachments[i];
-            jegl_bind_texture_2d(attachment->resource(), 0);
+            (void)_jegl_prepare_texture_2d_resource(attachment->resource());
 
             if (0 != (
                 attachment->resource()->m_format
@@ -1971,125 +1952,7 @@ namespace jeecs::graphic::api::dx11
         delete static_cast<jedx11_uniformbuf*>(resource->m_handle.m_ptr);
     }
 
-    void dx11_set_uniform(
-        je_GraphicImplContext ctx,
-        uint32_t location,
-        jegl_shader::uniform_type type,
-        const void* val);
-
-    void dx11_draw_vertex_with_shader(
-        je_GraphicImplContext ctx, jegl_vertex* vert)
-    {
-        jegl_dx11_context* context = static_cast<jegl_dx11_context*>(ctx);
-
-        auto* current_shader_instance = context->m_current_target_shader;
-        assert(current_shader_instance != nullptr);
-
-        if (current_shader_instance->m_uniform_buffer_size != 0)
-        {
-            if (context->m_current_target_framebuffer == nullptr)
-            {
-                if (current_shader_instance->m_draw_for_r2b)
-                {
-                    const float ndc_scale[4] = { 1.f, 1.f, 1.f, 1.f };
-
-                    current_shader_instance->m_draw_for_r2b = false;
-                    dx11_set_uniform(
-                        ctx,
-                        current_shader_instance->m_ndc_scale_uniform_id,
-                        jegl_shader::uniform_type::FLOAT4,
-                        ndc_scale);
-                }
-            }
-            else
-            {
-                if (!current_shader_instance->m_draw_for_r2b)
-                {
-                    const float ndc_scale_r2b[4] = { 1.f, -1.f, 1.f, 1.f };
-
-                    current_shader_instance->m_draw_for_r2b = true;
-                    dx11_set_uniform(
-                        ctx,
-                        current_shader_instance->m_ndc_scale_uniform_id,
-                        jegl_shader::uniform_type::FLOAT4,
-                        ndc_scale_r2b);
-                }
-            }
-
-            if (current_shader_instance->m_uniform_updated)
-            {
-                current_shader_instance->m_uniform_updated = false;
-                D3D11_MAPPED_SUBRESOURCE mappedData;
-                JERCHECK(context->m_dx_context->Map(
-                    current_shader_instance->m_uniforms.Get(),
-                    0,
-                    D3D11_MAP_WRITE_DISCARD,
-                    0,
-                    &mappedData));
-
-                memcpy(mappedData.pData,
-                    current_shader_instance->m_uniform_cpu_buffers,
-                    current_shader_instance->m_uniform_buffer_size);
-
-                context->m_dx_context->Unmap(current_shader_instance->m_uniforms.Get(), 0);
-            }
-            
-            context->m_dx_context->VSSetConstantBuffers(0, 1,
-                current_shader_instance->m_uniforms.GetAddressOf());
-            context->m_dx_context->PSSetConstantBuffers(0, 1,
-                current_shader_instance->m_uniforms.GetAddressOf());
-        }
-
-        auto* vertex = static_cast<jedx11_vertex*>(vert->m_handle.m_ptr);
-
-        const UINT offset = 0;
-        const UINT strides = vertex->m_stride;
-        context->m_dx_context->IASetIndexBuffer(
-            vertex->m_ebo.Get(), DXGI_FORMAT_R32_UINT, 0);
-        context->m_dx_context->IASetVertexBuffers(
-            0, 1, vertex->m_vbo.GetAddressOf(), &strides, &offset);
-        context->m_dx_context->IASetPrimitiveTopology(vertex->m_method);
-        context->m_dx_context->DrawIndexed(vertex->m_count, 0, 0);
-    }
-    bool dx11_bind_shader(je_GraphicImplContext ctx, jegl_shader* shader)
-    {
-        jegl_dx11_context* context = static_cast<jegl_dx11_context*>(ctx);
-
-        auto* shader_instance = static_cast<jedx11_shader*>(shader->m_handle.m_ptr);
-
-        if (context->m_current_target_shader == shader_instance)
-            return shader_instance != nullptr;
-
-        context->m_current_target_shader = shader_instance;
-
-        if (shader_instance == nullptr)
-            return false;
-
-        context->m_dx_context->VSSetShader(shader_instance->m_vertex.Get(), nullptr, 0);
-        context->m_dx_context->PSSetShader(shader_instance->m_fragment.Get(), nullptr, 0);
-        context->m_dx_context->IASetInputLayout(shader_instance->m_vao.Get());
-
-        if (context->m_current_target_framebuffer == nullptr)
-            context->m_dx_context->RSSetState(shader_instance->m_rasterizer.Get());
-        else
-            context->m_dx_context->RSSetState(shader_instance->m_rasterizer_r2b.Get());
-
-        float _useless[4] = {};
-        context->m_dx_context->OMSetBlendState(shader_instance->m_blend.Get(), _useless, UINT_MAX);
-        context->m_dx_context->OMSetDepthStencilState(shader_instance->m_depth.Get(), 0);
-
-        // 使用缓存的采样器绑定
-        for (auto& sampler : shader_instance->m_samplers)
-        {
-            context->m_dx_context->VSSetSamplers(
-                sampler.m_sampler_id, 1, sampler.m_sampler.GetAddressOf());
-            context->m_dx_context->PSSetSamplers(
-                sampler.m_sampler_id, 1, sampler.m_sampler.GetAddressOf());
-        }
-        return true;
-    }
-
-    void dx11_bind_uniform_buffer(je_GraphicImplContext ctx, jegl_uniform_buffer* uniformbuf)
+                void dx11_bind_uniform_buffer(je_GraphicImplContext ctx, jegl_uniform_buffer* uniformbuf)
     {
         jegl_dx11_context* context = static_cast<jegl_dx11_context*>(ctx);
 
@@ -2115,30 +1978,287 @@ namespace jeecs::graphic::api::dx11
         }
     }
 
-    void dx11_set_rend_to_framebuffer(
-        je_GraphicImplContext ctx,
-        jegl_frame_buffer* framebuffer,
-        const int32_t(*viewport_xywh)[4],
-        const jegl_frame_buffer_clear_operation* clear_operations)
+            /////////////////////////////////////////////////////////////////////////
+    // Render API (v2)
+    /////////////////////////////////////////////////////////////////////////
+
+    struct jegl_dx11_render_pipeline
     {
-        jegl_dx11_context* context = static_cast<jegl_dx11_context*>(ctx);
+        jegl_dx11_context::MSWRLComPtr<ID3D11DepthStencilState> m_depth;
+        jegl_dx11_context::MSWRLComPtr<ID3D11BlendState> m_blend;
+    };
 
-        // Reset current binded shader.
+    struct jegl_dx11_render_sampler
+    {
+        jegl_dx11_context::MSWRLComPtr<ID3D11SamplerState> m_sampler;
+    };
+
+    D3D11_COMPARISON_FUNC dx11_render_depth_func(
+        jegl_shader::depth_test_method method)
+    {
+        switch (method)
+        {
+        case jegl_shader::depth_test_method::NEVER: return D3D11_COMPARISON_NEVER;
+        case jegl_shader::depth_test_method::LESS: return D3D11_COMPARISON_LESS;
+        case jegl_shader::depth_test_method::EQUAL: return D3D11_COMPARISON_EQUAL;
+        case jegl_shader::depth_test_method::LESS_EQUAL: return D3D11_COMPARISON_LESS_EQUAL;
+        case jegl_shader::depth_test_method::GREATER: return D3D11_COMPARISON_GREATER;
+        case jegl_shader::depth_test_method::NOT_EQUAL: return D3D11_COMPARISON_NOT_EQUAL;
+        case jegl_shader::depth_test_method::GREATER_EQUAL: return D3D11_COMPARISON_GREATER_EQUAL;
+        case jegl_shader::depth_test_method::ALWAYS: return D3D11_COMPARISON_ALWAYS;
+        default:
+            assert(false);
+            return D3D11_COMPARISON_LESS;
+        }
+    }
+
+    D3D11_BLEND_OP dx11_render_blend_op(
+        jegl_shader::blend_equation equation)
+    {
+        switch (equation)
+        {
+        case jegl_shader::blend_equation::ADD: return D3D11_BLEND_OP_ADD;
+        case jegl_shader::blend_equation::SUBTRACT: return D3D11_BLEND_OP_SUBTRACT;
+        case jegl_shader::blend_equation::REVERSE_SUBTRACT: return D3D11_BLEND_OP_REV_SUBTRACT;
+        case jegl_shader::blend_equation::MIN: return D3D11_BLEND_OP_MIN;
+        case jegl_shader::blend_equation::MAX: return D3D11_BLEND_OP_MAX;
+        default:
+            assert(false);
+            return D3D11_BLEND_OP_ADD;
+        }
+    }
+
+    D3D11_BLEND dx11_render_blend_factor(
+        jegl_shader::blend_method method)
+    {
+        switch (method)
+        {
+        case jegl_shader::blend_method::ZERO: return D3D11_BLEND_ZERO;
+        case jegl_shader::blend_method::ONE: return D3D11_BLEND_ONE;
+        case jegl_shader::blend_method::SRC_COLOR: return D3D11_BLEND_SRC_COLOR;
+        case jegl_shader::blend_method::SRC_ALPHA: return D3D11_BLEND_SRC_ALPHA;
+        case jegl_shader::blend_method::ONE_MINUS_SRC_ALPHA: return D3D11_BLEND_INV_SRC_ALPHA;
+        case jegl_shader::blend_method::ONE_MINUS_SRC_COLOR: return D3D11_BLEND_INV_SRC_COLOR;
+        case jegl_shader::blend_method::DST_COLOR: return D3D11_BLEND_DEST_COLOR;
+        case jegl_shader::blend_method::DST_ALPHA: return D3D11_BLEND_DEST_ALPHA;
+        case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA: return D3D11_BLEND_INV_DEST_ALPHA;
+        case jegl_shader::blend_method::ONE_MINUS_DST_COLOR: return D3D11_BLEND_INV_DEST_COLOR;
+        default:
+            assert(false);
+            return D3D11_BLEND_ONE;
+        }
+    }
+
+    D3D11_CULL_MODE dx11_render_cull_mode(jegl_shader::cull_mode mode)
+    {
+        switch (mode)
+        {
+        case jegl_shader::cull_mode::NONE: return D3D11_CULL_NONE;
+        case jegl_shader::cull_mode::FRONT: return D3D11_CULL_FRONT;
+        case jegl_shader::cull_mode::BACK: return D3D11_CULL_BACK;
+        default:
+            assert(false);
+            return D3D11_CULL_NONE;
+        }
+    }
+
+    void dx11_render_pipeline_init(je_GraphicImplContext ctx, jegl_pipeline* pipeline)
+    {
+        auto* context = static_cast<jegl_dx11_context*>(ctx);
+        auto* shader_instance = static_cast<jedx11_shader*>(
+            pipeline->m_shader->m_handle.m_ptr);
+
+        assert(shader_instance != nullptr);
+
+        auto* dxpipeline = new jegl_dx11_render_pipeline();
+
+        D3D11_DEPTH_STENCIL_DESC depth_desc = {};
+        depth_desc.DepthEnable = pipeline->m_state.m_depth_test ? TRUE : FALSE;
+        depth_desc.DepthWriteMask = pipeline->m_state.m_depth_write
+            ? D3D11_DEPTH_WRITE_MASK_ALL
+            : D3D11_DEPTH_WRITE_MASK_ZERO;
+        depth_desc.DepthFunc = dx11_render_depth_func(pipeline->m_state.m_depth_func);
+        depth_desc.StencilEnable = FALSE;
+        depth_desc.StencilReadMask = D3D11_DEFAULT_STENCIL_READ_MASK;
+        depth_desc.StencilWriteMask = D3D11_DEFAULT_STENCIL_WRITE_MASK;
+        depth_desc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+        depth_desc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+        depth_desc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+        depth_desc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+        depth_desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+        depth_desc.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+        depth_desc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+        depth_desc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+
+        JERCHECK(context->m_dx_device->CreateDepthStencilState(
+            &depth_desc, dxpipeline->m_depth.GetAddressOf()));
+
+        D3D11_BLEND_DESC blend_desc = {};
+        blend_desc.AlphaToCoverageEnable = FALSE;
+        blend_desc.IndependentBlendEnable = FALSE;
+
+        auto& render_target = blend_desc.RenderTarget[0];
+        render_target.RenderTargetWriteMask =
+            pipeline->m_state.m_color_write_mask & 0x0F;
+        render_target.BlendEnable = pipeline->m_state.m_blend ? TRUE : FALSE;
+        render_target.BlendOp = pipeline->m_state.m_blend
+            ? dx11_render_blend_op(pipeline->m_state.m_blend_equation)
+            : D3D11_BLEND_OP_ADD;
+        render_target.BlendOpAlpha = render_target.BlendOp;
+        render_target.SrcBlend = dx11_render_blend_factor(pipeline->m_state.m_blend_src_color);
+        render_target.DestBlend = dx11_render_blend_factor(pipeline->m_state.m_blend_dst_color);
+        render_target.SrcBlendAlpha = dx11_render_blend_factor(pipeline->m_state.m_blend_src_alpha);
+        render_target.DestBlendAlpha = dx11_render_blend_factor(pipeline->m_state.m_blend_dst_alpha);
+
+        JERCHECK(context->m_dx_device->CreateBlendState(
+            &blend_desc, dxpipeline->m_blend.GetAddressOf()));
+
+        pipeline->m_backend_ptr = dxpipeline;
+    }
+
+    void dx11_render_pipeline_close(je_GraphicImplContext, jegl_pipeline* pipeline)
+    {
+        delete static_cast<jegl_dx11_render_pipeline*>(pipeline->m_backend_ptr);
+        pipeline->m_backend_ptr = nullptr;
+    }
+
+    void dx11_render_pipeline_bind(je_GraphicImplContext ctx, jegl_pipeline* pipeline)
+    {
+        auto* context = static_cast<jegl_dx11_context*>(ctx);
+        auto* shader_instance = static_cast<jedx11_shader*>(
+            pipeline->m_shader->m_handle.m_ptr);
+        auto* dxpipeline = static_cast<jegl_dx11_render_pipeline*>(
+            pipeline->m_backend_ptr);
+
+        assert(shader_instance != nullptr);
+        assert(dxpipeline != nullptr);
+
+        context->m_current_target_shader = shader_instance;
+
+        context->m_dx_context->VSSetShader(shader_instance->m_vertex.Get(), nullptr, 0);
+        context->m_dx_context->PSSetShader(shader_instance->m_fragment.Get(), nullptr, 0);
+        context->m_dx_context->IASetInputLayout(shader_instance->m_vao.Get());
+
+        const size_t cull_index =
+            static_cast<size_t>(pipeline->m_state.m_cull);
+        assert(cull_index < 3);
+
+        context->m_dx_context->RSSetState(
+            (context->m_current_target_framebuffer == nullptr
+                ? context->m_rasterizers[cull_index]
+                : context->m_rasterizers_r2b[cull_index]).Get());
+
+        float blend_factor[4] = {};
+        context->m_dx_context->OMSetBlendState(
+            dxpipeline->m_blend.Get(), blend_factor, 0xFFFFFFFF);
+        context->m_dx_context->OMSetDepthStencilState(
+            dxpipeline->m_depth.Get(), 0);
+
+        for (auto& sampler : shader_instance->m_samplers)
+        {
+            context->m_dx_context->VSSetSamplers(
+                sampler.m_sampler_id, 1, sampler.m_sampler.GetAddressOf());
+            context->m_dx_context->PSSetSamplers(
+                sampler.m_sampler_id, 1, sampler.m_sampler.GetAddressOf());
+        }
+    }
+
+    void dx11_render_sampler_init(je_GraphicImplContext ctx, jegl_sampler* sampler)
+    {
+        auto* context = static_cast<jegl_dx11_context*>(ctx);
+        auto* native = new jegl_dx11_render_sampler();
+
+        D3D11_SAMPLER_DESC desc = {};
+        desc.Filter = (sampler->m_desc.m_min_filter == jegl_filter::LINEAR
+            ? (sampler->m_desc.m_mag_filter == jegl_filter::LINEAR
+                ? (sampler->m_desc.m_mip_filter == jegl_mip_filter::LINEAR
+                    ? D3D11_FILTER_MIN_MAG_MIP_LINEAR
+                    : D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT)
+                : (sampler->m_desc.m_mip_filter == jegl_mip_filter::LINEAR
+                    ? D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR
+                    : D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT))
+            : (sampler->m_desc.m_mag_filter == jegl_filter::LINEAR
+                ? (sampler->m_desc.m_mip_filter == jegl_mip_filter::LINEAR
+                    ? D3D11_FILTER_MIN_POINT_MAG_MIP_LINEAR
+                    : D3D11_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT)
+                : (sampler->m_desc.m_mip_filter == jegl_mip_filter::LINEAR
+                    ? D3D11_FILTER_MIN_MAG_POINT_MIP_LINEAR
+                    : D3D11_FILTER_MIN_MAG_MIP_POINT)));
+
+        auto cmp_wrap = [](jegl_wrap_mode wrap) -> D3D11_TEXTURE_ADDRESS_MODE
+        {
+            switch (wrap)
+            {
+            case jegl_wrap_mode::CLAMP_TO_EDGE: return D3D11_TEXTURE_ADDRESS_CLAMP;
+            case jegl_wrap_mode::REPEAT: return D3D11_TEXTURE_ADDRESS_WRAP;
+            case jegl_wrap_mode::MIRRORED_REPEAT: return D3D11_TEXTURE_ADDRESS_MIRROR;
+            default:
+                assert(false);
+                return D3D11_TEXTURE_ADDRESS_CLAMP;
+            }
+        };
+
+        desc.AddressU = cmp_wrap(sampler->m_desc.m_u_wrap);
+        desc.AddressV = cmp_wrap(sampler->m_desc.m_v_wrap);
+        desc.AddressW = cmp_wrap(sampler->m_desc.m_w_wrap);
+        desc.MipLODBias = 0.0f;
+        desc.MaxAnisotropy = 0;
+        desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+        desc.BorderColor[0] = 0.0f;
+        desc.BorderColor[1] = 0.0f;
+        desc.BorderColor[2] = 0.0f;
+        desc.BorderColor[3] = 0.0f;
+        desc.MinLOD = 0.0f;
+        desc.MaxLOD = D3D11_FLOAT32_MAX;
+
+        JERCHECK(context->m_dx_device->CreateSamplerState(
+            &desc, native->m_sampler.GetAddressOf()));
+
+        sampler->m_backend_ptr = native;
+    }
+
+    void dx11_render_sampler_close(je_GraphicImplContext, jegl_sampler* sampler)
+    {
+        delete static_cast<jegl_dx11_render_sampler*>(sampler->m_backend_ptr);
+        sampler->m_backend_ptr = nullptr;
+    }
+
+    void dx11_render_sampler_bind(
+        je_GraphicImplContext ctx, uint32_t sampler_id, jegl_sampler* sampler)
+    {
+        auto* context = static_cast<jegl_dx11_context*>(ctx);
+        auto* native = static_cast<jegl_dx11_render_sampler*>(
+            sampler->m_backend_ptr);
+
+        assert(native != nullptr);
+        context->m_dx_context->VSSetSamplers(
+            sampler_id, 1, native->m_sampler.GetAddressOf());
+        context->m_dx_context->PSSetSamplers(
+            sampler_id, 1, native->m_sampler.GetAddressOf());
+    }
+
+    void dx11_render_begin_pass(
+        je_GraphicImplContext ctx,
+        /* OPTIONAL */ jegl_frame_buffer* target,
+        const jegl_viewport* viewport)
+    {
+        auto* context = static_cast<jegl_dx11_context*>(ctx);
+
         context->m_current_target_shader = nullptr;
+        context->m_current_vertex = nullptr;
 
-        if (framebuffer == nullptr)
+        if (target == nullptr)
         {
             context->m_current_target_framebuffer = nullptr;
-
-            context->m_dx_context->OMSetRenderTargets(1,
+            context->m_dx_context->OMSetRenderTargets(
+                1,
                 context->m_dx_main_renderer_target_view.GetAddressOf(),
                 context->m_dx_main_renderer_target_depth_view.Get());
         }
         else
         {
             context->m_current_target_framebuffer =
-                static_cast<jedx11_framebuffer*>(
-                    framebuffer->m_handle.m_ptr);
+                static_cast<jedx11_framebuffer*>(target->m_handle.m_ptr);
 
             context->m_dx_context->OMSetRenderTargets(
                 context->m_current_target_framebuffer->m_color_target_count,
@@ -2146,169 +2266,223 @@ namespace jeecs::graphic::api::dx11
                 context->m_current_target_framebuffer->m_target_depth_view_may_null);
         }
 
-        int32_t x = 0, y = 0, w = 0, h = 0;
-        if (viewport_xywh != nullptr)
-        {
-            auto& v = *viewport_xywh;
-            x = v[0];
-            y = v[1];
-            w = v[2];
-            h = v[3];
-        }
+        const int32_t buf_h = static_cast<int32_t>(
+            context->m_current_target_framebuffer != nullptr
+            ? context->m_current_target_framebuffer->m_frame_height
+            : context->RESOLUTION_HEIGHT);
 
-        const int32_t buf_h =
-            static_cast<int32_t>(
-                context->m_current_target_framebuffer != nullptr
-                ? context->m_current_target_framebuffer->m_frame_height
-                : context->RESOLUTION_HEIGHT);
+        D3D11_VIEWPORT dx_viewport = {};
+        dx_viewport.MinDepth = 0.0f;
+        dx_viewport.MaxDepth = 1.0f;
+        dx_viewport.Width = (float)viewport->width;
+        dx_viewport.TopLeftX = (float)viewport->x;
+        dx_viewport.Height = (float)viewport->height;
+        dx_viewport.TopLeftY =
+            (float)(buf_h - (int32_t)viewport->y - (int32_t)viewport->height);
 
-        if (w == 0)
-        {
-            w = static_cast<int32_t>(
-                context->m_current_target_framebuffer != nullptr
-                ? context->m_current_target_framebuffer->m_frame_width
-                : context->RESOLUTION_WIDTH);
-        }
-        if (h == 0)
-            h = buf_h;
-
-        D3D11_VIEWPORT viewport;
-
-        viewport.MinDepth = 0.0f;
-        viewport.MaxDepth = 1.0f;
-
-        viewport.Width = (float)w;
-        viewport.TopLeftX = (float)x;
-
-        viewport.Height = (float)h;
-        viewport.TopLeftY = (float)(buf_h - y - h);
-
-        context->m_dx_context->RSSetViewports(1, &viewport);
-
-        while (clear_operations != nullptr)
-        {
-            switch (clear_operations->m_type)
-            {
-            case jegl_frame_buffer_clear_operation::clear_type::COLOR:
-                if (context->m_current_target_framebuffer == nullptr)
-                {
-                    if (clear_operations->m_color.m_color_attachment_idx == 0)
-                        context->m_dx_context->ClearRenderTargetView(
-                            context->m_dx_main_renderer_target_view.Get(),
-                            clear_operations->m_color.m_clear_color_rgba);
-                }
-                else if (clear_operations->m_color.m_color_attachment_idx <
-                    context->m_current_target_framebuffer->m_target_views.size())
-                {
-                    context->m_dx_context->ClearRenderTargetView(
-                        context->m_current_target_framebuffer->m_target_views[
-                            clear_operations->m_color.m_color_attachment_idx],
-                        clear_operations->m_color.m_clear_color_rgba);
-                }
-                break;
-            case jegl_frame_buffer_clear_operation::clear_type::DEPTH:
-                if (context->m_current_target_framebuffer == nullptr)
-                    context->m_dx_context->ClearDepthStencilView(
-                        context->m_dx_main_renderer_target_depth_view.Get(),
-                        D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL,
-                        clear_operations->m_depth.m_clear_depth,
-                        0);
-                else
-                {
-                    if (context->m_current_target_framebuffer->m_target_depth_view_may_null != nullptr)
-                        context->m_dx_context->ClearDepthStencilView(
-                            context->m_current_target_framebuffer->m_target_depth_view_may_null,
-                            D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL,
-                            clear_operations->m_depth.m_clear_depth,
-                            0);
-                }
-                break;
-            default:
-                jeecs::debug::logfatal("Unknown framebuffer clear operation.");
-                abort();
-                break;
-            }
-
-            clear_operations = clear_operations->m_next;
-        }
+        context->m_dx_context->RSSetViewports(1, &dx_viewport);
     }
-    void dx11_set_uniform(
-        je_GraphicImplContext ctx,
-        uint32_t location,
-        jegl_shader::uniform_type type,
-        const void* val)
+
+    void dx11_render_clear_color(
+        je_GraphicImplContext ctx, uint32_t attachment, const float rgba[4])
     {
-        jegl_dx11_context* context = static_cast<jegl_dx11_context*>(ctx);
+        auto* context = static_cast<jegl_dx11_context*>(ctx);
 
-        if (location == jeecs::graphic::INVALID_UNIFORM_LOCATION)
-            return;
-
-        assert(context->m_current_target_shader->m_uniform_buffer_size != 0);
-        assert(context->m_current_target_shader->m_uniform_cpu_buffers != nullptr);
-        assert(location < context->m_current_target_shader->m_uniform_buffer_size);
-
-        auto* target_buffer = static_cast<void*>(
-            static_cast<char*>(context->m_current_target_shader->m_uniform_cpu_buffers) + location);
-
-        size_t data_size_byte_length = 0;
-        switch (type)
+        if (context->m_current_target_framebuffer == nullptr)
         {
-        case jegl_shader::INT:
-        case jegl_shader::FLOAT:
-            data_size_byte_length = 4;
-            break;
-        case jegl_shader::INT2:
-        case jegl_shader::FLOAT2:
-            data_size_byte_length = 8;
-            break;
-        case jegl_shader::INT3:
-        case jegl_shader::FLOAT3:
-            data_size_byte_length = 12;
-            break;
-        case jegl_shader::INT4:
-        case jegl_shader::FLOAT4:
-            data_size_byte_length = 16;
-            break;
-        case jegl_shader::FLOAT2X2:
-            data_size_byte_length = 16;
-            break;
-        case jegl_shader::FLOAT3X3:
+            if (attachment == 0)
+                context->m_dx_context->ClearRenderTargetView(
+                    context->m_dx_main_renderer_target_view.Get(), rgba);
+        }
+        else if (attachment
+            < context->m_current_target_framebuffer->m_target_views.size())
         {
-            // 3x3 矩阵在 DX11 中需要特殊处理，每行按 16 字节对齐
-            float* target_storage = static_cast<float*>(target_buffer);
-            const float* source_storage = static_cast<const float*>(val);
-
-            // 检查数据是否已经相同，避免不必要的更新
-            bool needs_update = 
-                memcmp(target_storage, source_storage, 12) != 0 ||
-                memcmp(target_storage + 4, source_storage + 3, 12) != 0 ||
-                memcmp(target_storage + 8, source_storage + 6, 12) != 0;
-
-            if (!needs_update)
-                return;
-
-            memcpy(target_storage, source_storage, 12);
-            memcpy(target_storage + 4, source_storage + 3, 12);
-            memcpy(target_storage + 8, source_storage + 6, 12);
-
-            context->m_current_target_shader->m_uniform_updated = true;
-            return;
+            context->m_dx_context->ClearRenderTargetView(
+                context->m_current_target_framebuffer->m_target_views[attachment],
+                rgba);
         }
-        case jegl_shader::FLOAT4X4:
-            data_size_byte_length = 64;
-            break;
-        default:
-            jeecs::debug::logerr("Unknown uniform variable type to set.");
-            return;
-        }
-
-        // 检查数据是否已经相同，避免不必要的更新
-        if (memcmp(target_buffer, val, data_size_byte_length) == 0)
-            return;
-
-        memcpy(target_buffer, val, data_size_byte_length);
-        context->m_current_target_shader->m_uniform_updated = true;
     }
+
+    void dx11_render_clear_depth(je_GraphicImplContext ctx, float depth)
+    {
+        auto* context = static_cast<jegl_dx11_context*>(ctx);
+
+        if (context->m_current_target_framebuffer == nullptr)
+            context->m_dx_context->ClearDepthStencilView(
+                context->m_dx_main_renderer_target_depth_view.Get(),
+                D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL,
+                depth, 0);
+        else if (context->m_current_target_framebuffer->m_target_depth_view_may_null != nullptr)
+            context->m_dx_context->ClearDepthStencilView(
+                context->m_current_target_framebuffer->m_target_depth_view_may_null,
+                D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL,
+                depth, 0);
+    }
+
+    void dx11_render_end_pass(je_GraphicImplContext)
+    {}
+
+    void dx11_render_bind_vertex(je_GraphicImplContext ctx, jegl_vertex* vertex)
+    {
+        auto* context = static_cast<jegl_dx11_context*>(ctx);
+        auto* vertex_instance = static_cast<jedx11_vertex*>(
+            vertex->m_handle.m_ptr);
+
+        assert(vertex_instance != nullptr);
+        context->m_current_vertex = vertex_instance;
+    }
+
+    void dx11_render_bind_uniform_buffer(
+        je_GraphicImplContext ctx, jegl_uniform_buffer* uniform_buffer)
+    {
+        dx11_bind_uniform_buffer(ctx, uniform_buffer);
+    }
+
+    void dx11_render_bind_texture_2d(
+        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_2d* texture)
+    {
+        dx11_bind_texture<jegl_texture_2d>(ctx, texture, pass);
+    }
+
+    void dx11_render_bind_texture_3d(
+        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_3d* texture)
+    {
+        dx11_bind_texture<jegl_texture_3d>(ctx, texture, pass);
+    }
+
+    void dx11_render_bind_texture_array(
+        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_array* texture)
+    {
+        dx11_bind_texture<jegl_texture_array>(ctx, texture, pass);
+    }
+
+    void dx11_render_bind_texture_cube(
+        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_cube* texture)
+    {
+        dx11_bind_texture<jegl_texture_cube>(ctx, texture, pass);
+    }
+
+    void dx11_render_upload_uniform_block(
+        jegl_dx11_context* context,
+        jedx11_shader* shader_instance,
+        const void* uniform_data,
+        uint32_t uniform_size)
+    {
+        assert(uniform_data != nullptr);
+        assert(shader_instance->m_uniform_buffer_size != 0);
+        assert(uniform_size == shader_instance->m_uniform_buffer_size);
+
+        D3D11_MAPPED_SUBRESOURCE mapped = {};
+        JERCHECK(context->m_dx_context->Map(
+            shader_instance->m_uniforms.Get(),
+            0,
+            D3D11_MAP_WRITE_DISCARD,
+            0,
+            &mapped));
+
+        memcpy(mapped.pData, uniform_data, uniform_size);
+
+        const uint32_t ndc_offset = shader_instance->m_ndc_scale_uniform_id;
+        if (ndc_offset != jeecs::graphic::INVALID_UNIFORM_LOCATION
+            && ndc_offset + sizeof(float) * 4 <= uniform_size)
+        {
+            const float ndc_scale[4] = {
+                1.f,
+                context->m_current_target_framebuffer == nullptr ? 1.f : -1.f,
+                1.f,
+                1.f };
+            memcpy(
+                static_cast<char*>(mapped.pData) + ndc_offset,
+                ndc_scale,
+                sizeof(ndc_scale));
+        }
+
+        context->m_dx_context->Unmap(shader_instance->m_uniforms.Get(), 0);
+
+        context->m_dx_context->VSSetConstantBuffers(
+            0, 1, shader_instance->m_uniforms.GetAddressOf());
+        context->m_dx_context->PSSetConstantBuffers(
+            0, 1, shader_instance->m_uniforms.GetAddressOf());
+    }
+
+    void dx11_render_draw_indexed(
+        je_GraphicImplContext ctx,
+        uint32_t index_count,
+        uint32_t first_index,
+        uint32_t instance_count,
+        const void* uniform_data,
+        uint32_t uniform_size)
+    {
+        auto* context = static_cast<jegl_dx11_context*>(ctx);
+        auto* shader_instance = context->m_current_target_shader;
+        auto* vertex_instance = context->m_current_vertex;
+
+        assert(shader_instance != nullptr);
+        assert(vertex_instance != nullptr);
+
+        if (shader_instance->m_uniform_buffer_size != 0)
+            dx11_render_upload_uniform_block(
+                context, shader_instance, uniform_data, uniform_size);
+        else
+            assert(uniform_size == 0);
+
+        const UINT offset = 0;
+        const UINT stride = vertex_instance->m_stride;
+
+        context->m_dx_context->IASetIndexBuffer(
+            vertex_instance->m_ebo.Get(), DXGI_FORMAT_R32_UINT, 0);
+        context->m_dx_context->IASetVertexBuffers(
+            0, 1, vertex_instance->m_vbo.GetAddressOf(), &stride, &offset);
+        context->m_dx_context->IASetPrimitiveTopology(vertex_instance->m_method);
+
+        if (instance_count > 1)
+            context->m_dx_context->DrawIndexedInstanced(
+                index_count, instance_count, first_index, 0, 0);
+        else
+            context->m_dx_context->DrawIndexed(
+                index_count, first_index, 0);
+    }
+
+    void dx11_render_draw(
+        je_GraphicImplContext ctx,
+        uint32_t vertex_count,
+        uint32_t first_vertex,
+        uint32_t instance_count,
+        const void* uniform_data,
+        uint32_t uniform_size)
+    {
+        auto* context = static_cast<jegl_dx11_context*>(ctx);
+        auto* shader_instance = context->m_current_target_shader;
+        auto* vertex_instance = context->m_current_vertex;
+
+        assert(shader_instance != nullptr);
+        assert(vertex_instance != nullptr);
+
+        if (shader_instance->m_uniform_buffer_size != 0)
+            dx11_render_upload_uniform_block(
+                context, shader_instance, uniform_data, uniform_size);
+        else
+            assert(uniform_size == 0);
+
+        const UINT offset = 0;
+        const UINT stride = vertex_instance->m_stride;
+
+        context->m_dx_context->IASetVertexBuffers(
+            0, 1, vertex_instance->m_vbo.GetAddressOf(), &stride, &offset);
+        context->m_dx_context->IASetPrimitiveTopology(vertex_instance->m_method);
+
+        if (instance_count > 1)
+            context->m_dx_context->DrawInstanced(
+                vertex_count, instance_count, first_vertex, 0);
+        else
+            context->m_dx_context->Draw(vertex_count, first_vertex);
+    }
+
+    void dx11_render_commit_begin(je_GraphicImplContext)
+    {}
+
+    void dx11_render_commit_end(je_GraphicImplContext)
+    {}
 }
 
 void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis)
@@ -2364,18 +2538,31 @@ void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->framebuffer_close = dx11_framebuf_close;
     write_to_apis->ubuffer_close = dx11_ubuffer_close;
 
-    write_to_apis->bind_uniform_buffer = dx11_bind_uniform_buffer;
-    write_to_apis->bind_texture_2d = dx11_bind_texture<jegl_texture_2d>;
-    write_to_apis->bind_texture_3d = dx11_bind_texture<jegl_texture_3d>;
-    write_to_apis->bind_texture_array = dx11_bind_texture<jegl_texture_array>;
-    write_to_apis->bind_texture_cube = dx11_bind_texture<jegl_texture_cube>;
-    write_to_apis->bind_texture_msaa = dx11_bind_texture<jegl_texture_msaa>;
-    write_to_apis->bind_shader = dx11_bind_shader;
-    write_to_apis->draw_vertex = dx11_draw_vertex_with_shader;
+    write_to_apis->pipeline_init = dx11_render_pipeline_init;
+    write_to_apis->pipeline_close = dx11_render_pipeline_close;
+    write_to_apis->pipeline_bind = dx11_render_pipeline_bind;
 
-    write_to_apis->bind_framebuf = dx11_set_rend_to_framebuffer;
+    write_to_apis->sampler_init = dx11_render_sampler_init;
+    write_to_apis->sampler_close = dx11_render_sampler_close;
+    write_to_apis->sampler_bind = dx11_render_sampler_bind;
 
-    write_to_apis->set_uniform = dx11_set_uniform;
+    write_to_apis->begin_pass = dx11_render_begin_pass;
+    write_to_apis->clear_color = dx11_render_clear_color;
+    write_to_apis->clear_depth = dx11_render_clear_depth;
+    write_to_apis->end_pass = dx11_render_end_pass;
+
+    write_to_apis->bind_vertex = dx11_render_bind_vertex;
+    write_to_apis->bind_uniform_buffer = dx11_render_bind_uniform_buffer;
+    write_to_apis->bind_texture_2d = dx11_render_bind_texture_2d;
+    write_to_apis->bind_texture_3d = dx11_render_bind_texture_3d;
+    write_to_apis->bind_texture_array = dx11_render_bind_texture_array;
+    write_to_apis->bind_texture_cube = dx11_render_bind_texture_cube;
+
+    write_to_apis->draw_indexed = dx11_render_draw_indexed;
+    write_to_apis->draw = dx11_render_draw;
+
+    write_to_apis->commit_begin = dx11_render_commit_begin;
+    write_to_apis->commit_end = dx11_render_commit_end;
 }
 
 #else

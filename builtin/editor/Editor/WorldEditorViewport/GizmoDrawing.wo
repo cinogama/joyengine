@@ -3,7 +3,7 @@
 // 2D 光源实体图标、粒子发射器实体图标、变换游标本体、2D 物理碰撞体
 // 线框与编辑手柄、2D 光源形状（Range 同心环 / BlockShadow 遮挡多边形）
 // 线框与编辑手柄、粒子发射器（发射形状 / 方向箭头 / 散布角环）线框
-// 与编辑手柄的渲染，走视口自有的 rendchain 分支。2D（正交）模式下
+// 与编辑手柄的渲染，走视口自有的 render 分支。2D（正交）模式下
 // 游标与视线平行的轴/环、粒子发射器与视线平行的形状手柄不绘制
 //（剔除口径与各 update*Gizmo 的悬停检测一致，见 GizmoMath.wo）。
 
@@ -71,7 +71,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             if (self->uiEditingActive())
                 return_value!;
 
-            let gizmo_rend_chain = self.m_gizmo_draw_branch->new_chain(
+            let gizmo_rend_chain = self.m_gizmo_draw_branch->new_command_buffer(
                 option::value(fb), 0, 0, 0, 0);
                 
             // 绑定默认 ubo
@@ -97,20 +97,16 @@ namespace JEEditor::Editor::WorldEditorViewport
                     let model_view = camera_projection->get_view_mat * model;
                     let model_view_proj = camera_projection->get_view_proj_mat * model;
                     
-                    let mut texture_group = option::none: option<texture_group>;
                     match (texture)
                     {
                         none?;
                         value((texture_instance, _, _))?
                         {
-                            let group = gizmo_rend_chain->allocate_texture_group;
-                            gizmo_rend_chain->bind_texture(group, 0, texture_instance);
-                            
-                            texture_group = option::value(group);
+                            gizmo_rend_chain->bind_texture(0, texture_instance);
                         }
                     }
                     
-                    let draw_action = gizmo_rend_chain->draw(shader_instance, shape_instance, texture_group);
+                    let draw_action = gizmo_rend_chain->draw(shader_instance, shape_instance);
                     draw_action->set_uniform_mat4x4(shader_instance, "JE_M", model as raw mat4);
                     draw_action->set_uniform_mat4x4(shader_instance, "JE_MV", model_view as raw mat4);
                     draw_action->set_uniform_mat4x4(shader_instance, "JE_MVP", model_view_proj as raw mat4);
@@ -147,11 +143,10 @@ namespace JEEditor::Editor::WorldEditorViewport
                     let model_view = camera_projection->get_view_mat * model;
                     let model_view_proj = camera_projection->get_view_proj_mat * model;
                     
-                    let texture_group = gizmo_rend_chain->allocate_texture_group;
-                    gizmo_rend_chain->bind_texture(texture_group, 0, icon);
+                    gizmo_rend_chain->bind_texture(0, icon);
                     
                     let draw_action = gizmo_rend_chain->draw(
-                        shader_instance, shape_instance, option::value(texture_group));
+                        shader_instance, shape_instance);
                     draw_action->set_uniform_mat4x4(shader_instance, "JE_M", model as raw mat4);
                     draw_action->set_uniform_mat4x4(shader_instance, "JE_MV", model_view as raw mat4);
                     draw_action->set_uniform_mat4x4(shader_instance, "JE_MVP", model_view_proj as raw mat4);
@@ -213,7 +208,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                     let model_view_proj = camera_projection->get_view_proj_mat * model;
                     
                     let draw_action = gizmo_rend_chain->draw(
-                        shader_instance, shape_instance, option::none);
+                        shader_instance, shape_instance);
                     draw_action->set_uniform_mat4x4(shader_instance, "JE_M", model as raw mat4);
                     draw_action->set_uniform_mat4x4(shader_instance, "JE_MV", model_view as raw mat4);
                     draw_action->set_uniform_mat4x4(shader_instance, "JE_MVP", model_view_proj as raw mat4);
@@ -984,7 +979,7 @@ namespace JEEditor::Editor::WorldEditorViewport
     protected func drawWorldGrid(
         camera_entity: entity,
         camera_projection: Camera::Projection,
-        rend_chain: rendchain)=> void
+        rend_chain: command_buffer)=> void
     {
         do try!{
             try! camera_trans =
@@ -1005,7 +1000,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             let up = rot * ((0., 1., 0.) as vec3);
             let forward = rot * ((0., 0., 1.) as vec3);
             
-            let draw_action = rend_chain->draw(shader_instance, shape_instance, option::none);
+            let draw_action = rend_chain->draw(shader_instance, shape_instance);
             draw_action->set_uniform_mat4x4(
                 shader_instance, "JE_GRID_INV_PROJ",
                 camera_projection->get_inv_proj_mat as raw mat4);

@@ -1,6 +1,8 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
+#include "jeecs_graphic_render_internal.hpp"
+
 #ifdef JE_ENABLE_METAL_GAPI
 
 #include "jeecs_imgui_backend_api.hpp"
@@ -22,6 +24,7 @@ namespace jeecs::graphic::api::metal
 {
     struct metal_shader;
     struct metal_framebuffer;
+    struct metal_vertex;
 
     struct jegl_metal_context
     {
@@ -51,6 +54,16 @@ namespace jeecs::graphic::api::metal
 
             MTL::CommandBuffer* m_current_command_buffer;
             MTL::RenderCommandEncoder* m_current_command_encoder;
+
+            // Render API (v2) deferred encoder state.
+            metal_vertex* m_current_vertex = nullptr;
+            bool m_pending_pass = false;
+            metal_framebuffer* m_pending_target = nullptr;
+            int32_t m_pending_viewport[4] = { 0, 0, 0, 0 };
+            uint64_t m_pending_color_clear_mask = 0;
+            float m_pending_color_clears[8][4] = {};
+            bool m_pending_depth_clear = false;
+            float m_pending_depth_clear_value = 1.f;
         };
         render_runtime_states m_render_states;
 
@@ -216,8 +229,6 @@ namespace jeecs::graphic::api::metal
         bool m_uniform_buffer_updated;
         void* m_uniform_cpu_buffer;
 
-        bool m_draw_for_r2b;
-
         size_t m_command_commit_round;
         size_t m_next_allocate_uniform_buffer_index;
         std::vector<MTL::Buffer*> m_allocated_uniform_buffers;
@@ -268,7 +279,6 @@ namespace jeecs::graphic::api::metal
             : m_shared_state(blob->m_shared_state)
             , m_uniform_cpu_buffer_size(blob->m_uniform_size)
             , m_uniform_buffer_updated(false)
-            , m_draw_for_r2b(false)
             , m_command_commit_round(0)
             , m_next_allocate_uniform_buffer_index(0)
         {
@@ -1252,7 +1262,7 @@ namespace jeecs::graphic::api::metal
         for (size_t i = 0; i < fbuffer->m_attachment_count; ++i)
         {
             auto* attachment_resource = attachments[i]->resource();
-            jegl_bind_texture_2d(attachment_resource, 0);
+            (void)_jegl_prepare_texture_2d_resource(attachment_resource);
 
             if (attachment_resource->m_format & jegl_texture_common::format::DEPTH)
             {
@@ -1529,162 +1539,7 @@ namespace jeecs::graphic::api::metal
         metal_context->m_render_states.m_current_command_encoder->setFragmentTexture(
             texture_instance->m_texture, (uint32_t)pass);
     }
-    void set_uniform(
-        je_GraphicImplContext ctx,
-        uint32_t location,
-        jegl_shader::uniform_type type,
-        const void* val)
-    {
-        auto* metal_context = static_cast<jegl_metal_context*>(ctx);
-        auto* current_shader = metal_context->m_render_states.m_current_target_shader;
-
-        if (location == jeecs::graphic::INVALID_UNIFORM_LOCATION)
-            return;
-
-        void* target_buffer = static_cast<void*>(
-            static_cast<char*>(
-                current_shader->m_uniform_cpu_buffer) + location);
-
-        size_t data_size_byte_length = 0;
-        switch (type)
-        {
-        case jegl_shader::INT:
-        case jegl_shader::FLOAT:
-            data_size_byte_length = 4;
-            break;
-        case jegl_shader::INT2:
-        case jegl_shader::FLOAT2:
-            data_size_byte_length = 8;
-            break;
-        case jegl_shader::INT3:
-        case jegl_shader::FLOAT3:
-            data_size_byte_length = 12;
-            break;
-        case jegl_shader::INT4:
-        case jegl_shader::FLOAT4:
-            data_size_byte_length = 16;
-            break;
-        case jegl_shader::FLOAT2X2:
-            data_size_byte_length = 16;
-            break;
-        case jegl_shader::FLOAT3X3:
-        {
-            // 3x3 矩阵需要特殊处理，每行按 16 字节对齐
-            float* target_storage = static_cast<float*>(target_buffer);
-            const float* source_storage = static_cast<const float*>(val);
-
-            // 检查数据是否已经相同，避免不必要的更新
-            bool needs_update = 
-                memcmp(target_storage, source_storage, 12) != 0 ||
-                memcmp(target_storage + 4, source_storage + 3, 12) != 0 ||
-                memcmp(target_storage + 8, source_storage + 6, 12) != 0;
-
-            if (!needs_update)
-                return;
-
-            memcpy(target_storage, source_storage, 12);
-            memcpy(target_storage + 4, source_storage + 3, 12);
-            memcpy(target_storage + 8, source_storage + 6, 12);
-
-            current_shader->m_uniform_buffer_updated = true;
-            return;
-        }
-        case jegl_shader::FLOAT4X4:
-            data_size_byte_length = 64;
-            break;
-        default:
-            jeecs::debug::logerr("Unknown uniform variable type to set.");
-            return;
-        }
-
-        // 检查数据是否已经相同，避免不必要的更新
-        if (memcmp(target_buffer, val, data_size_byte_length) == 0)
-            return;
-
-        memcpy(target_buffer, val, data_size_byte_length);
-        current_shader->m_uniform_buffer_updated = true;
-    }
-
-    void draw_vertex_with_shader(je_GraphicImplContext ctx, jegl_vertex* res)
-    {
-        auto* metal_context = static_cast<jegl_metal_context*>(ctx);
-        auto* vertex_instance =
-            static_cast<metal_vertex*>(res->m_handle.m_ptr);
-
-        auto* current_shader = metal_context->m_render_states.m_current_target_shader;
-        assert(current_shader != nullptr);
-
-        if (current_shader->m_uniform_cpu_buffer_size != 0)
-        {
-            if (metal_context->m_render_states.m_current_target_framebuffer_may_null == nullptr)
-            {
-                if (current_shader->m_draw_for_r2b)
-                {
-                    // 正准备渲染到屏幕，但是此前shader被用于渲染到缓冲区，重置 NDC 矫正
-                    const float ndc_scale[4] = { 1.f, 1.f, 1.f, 1.f };
-
-                    current_shader->m_draw_for_r2b = false;
-                    set_uniform(
-                        ctx,
-                        current_shader->m_ndc_scale_uniform_id,
-                        jegl_shader::uniform_type::FLOAT4,
-                        ndc_scale);
-                }
-            }
-            else
-            {
-                if (!current_shader->m_draw_for_r2b)
-                {
-                    // 和上面的情况相反，准备渲染到缓冲区，准备 NDC 矫正
-                    const float ndc_scale_r2b[4] = { 1.f, -1.f, 1.f, 1.f };
-                    current_shader->m_draw_for_r2b = true;
-                    set_uniform(
-                        ctx,
-                        current_shader->m_ndc_scale_uniform_id,
-                        jegl_shader::uniform_type::FLOAT4,
-                        ndc_scale_r2b);
-                }
-            }
-        }
-
-        metal_context->m_render_states.m_current_command_encoder->setVertexBuffer(
-            vertex_instance->m_vertex_buffer, 0, vertex_instance->m_vertex_stride, 0);
-
-        // Binding shader uniform. 仅当 shader 存在 uniform 时才分配/绑定 UBO，
-        // 避免为无 uniform 的 shader 分配 0 字节 buffer。
-        if (current_shader->m_uniform_cpu_buffer_size != 0)
-        {
-            MTL::Buffer* current_shader_uniform_buffer;
-            if (current_shader->m_uniform_buffer_updated)
-            {
-                current_shader->m_uniform_buffer_updated = false;
-                current_shader_uniform_buffer = current_shader->allocate_buffer_to_update(metal_context);
-
-                // 将CPU端的uniform数据更新到GPU缓冲区
-                void* buffer_contents = current_shader_uniform_buffer->contents();
-                memcpy(
-                    buffer_contents,
-                    current_shader->m_uniform_cpu_buffer,
-                    current_shader->m_uniform_cpu_buffer_size);
-            }
-            else
-                current_shader_uniform_buffer = current_shader->get_last_usable_buffer(metal_context);
-
-            metal_context->m_render_states.m_current_command_encoder->setVertexBuffer(
-                current_shader_uniform_buffer, 0, 0 + 1);
-            metal_context->m_render_states.m_current_command_encoder->setFragmentBuffer(
-                current_shader_uniform_buffer, 0, 0 + 1);
-        }
-
-        metal_context->m_render_states.m_current_command_encoder->drawIndexedPrimitives(
-            vertex_instance->m_primitive_type,
-            vertex_instance->m_index_count,
-            MTL::IndexType::IndexTypeUInt32,
-            vertex_instance->m_index_buffer,
-            0);
-    }
-
-    void set_framebuffer_clear(
+            void set_framebuffer_clear(
         jegl_metal_context* metal_context,
         metal_framebuffer* fb_maynull,
         const jegl_frame_buffer_clear_operation* clear_operations)
@@ -1902,6 +1757,426 @@ namespace jeecs::graphic::api::metal
         metal_context->m_render_states.m_current_target_framebuffer_may_null =
             target_framebuf_may_null;
     }
+
+    /////////////////////////////////////////////////////////////////////////
+    // Render API (v2)
+    /////////////////////////////////////////////////////////////////////////
+
+    struct jegl_metal_render_sampler
+    {
+        MTL::SamplerState* m_sampler;
+    };
+
+    void finish_render_encoder(jegl_metal_context* ctx)
+    {
+        auto& states = ctx->m_render_states;
+
+        if (states.m_current_command_encoder != nullptr)
+        {
+            states.m_current_command_encoder->endEncoding();
+            states.m_current_command_buffer->commit();
+
+            states.m_current_command_encoder = nullptr;
+            states.m_current_command_buffer = nullptr;
+        }
+    }
+
+    void ensure_render_encoder(jegl_metal_context* ctx)
+    {
+        auto& states = ctx->m_render_states;
+
+        if (!states.m_pending_pass)
+            return;
+
+        jegl_frame_buffer_clear_operation clear_ops[9];
+        jegl_frame_buffer_clear_operation* first_clear = nullptr;
+        size_t clear_count = 0;
+
+        for (size_t i = 0; i < 8; ++i)
+        {
+            if ((states.m_pending_color_clear_mask & (1ull << i)) == 0)
+                continue;
+
+            auto& op = clear_ops[clear_count++];
+            op.m_type = jegl_frame_buffer_clear_operation::clear_type::COLOR;
+            op.m_color = jegl_frame_buffer_clear_operation::clear_color_attachment{
+                i,
+                {
+                    states.m_pending_color_clears[i][0],
+                    states.m_pending_color_clears[i][1],
+                    states.m_pending_color_clears[i][2],
+                    states.m_pending_color_clears[i][3],
+                } };
+            op.m_next = first_clear;
+            first_clear = &op;
+        }
+
+        if (states.m_pending_depth_clear)
+        {
+            auto& op = clear_ops[clear_count++];
+            op.m_type = jegl_frame_buffer_clear_operation::clear_type::DEPTH;
+            op.m_depth = jegl_frame_buffer_clear_operation::clear_depth_attachment{
+                states.m_pending_depth_clear_value };
+            op.m_next = first_clear;
+            first_clear = &op;
+        }
+
+        set_framebuffer_clear(ctx, states.m_pending_target, first_clear);
+
+        auto* target_descriptor = states.m_pending_target != nullptr
+            ? states.m_pending_target->m_render_pass_descriptor
+            : states.m_main_render_pass_descriptor;
+
+        states.m_current_command_buffer =
+            ctx->m_command_queue->commandBuffer();
+        states.m_current_command_encoder =
+            states.m_current_command_buffer->renderCommandEncoder(target_descriptor);
+
+        const int32_t buffer_height = states.m_pending_target != nullptr
+            ? (int32_t)states.m_pending_target->m_frame_height
+            : states.m_screen_height;
+
+        MTL::Viewport viewport;
+        viewport.originX = (double)states.m_pending_viewport[0];
+        viewport.originY = (double)(
+            buffer_height
+            - states.m_pending_viewport[1]
+            - states.m_pending_viewport[3]);
+        viewport.width = states.m_pending_viewport[2];
+        viewport.height = states.m_pending_viewport[3];
+        viewport.znear = 0.0;
+        viewport.zfar = 1.0;
+
+        states.m_current_command_encoder->setViewport(viewport);
+
+        states.m_current_target_framebuffer_may_null = states.m_pending_target;
+        states.m_pending_pass = false;
+    }
+
+    void render_pipeline_init(je_GraphicImplContext, jegl_pipeline*)
+    {}
+
+    void render_pipeline_close(je_GraphicImplContext, jegl_pipeline*)
+    {}
+
+    void render_pipeline_bind(
+        je_GraphicImplContext ctx, jegl_pipeline* pipeline)
+    {
+        auto* metal_context = static_cast<jegl_metal_context*>(ctx);
+        ensure_render_encoder(metal_context);
+
+        bind_shader(ctx, pipeline->m_shader);
+    }
+
+    void render_sampler_init(je_GraphicImplContext ctx, jegl_sampler* sampler)
+    {
+        auto* metal_context = static_cast<jegl_metal_context*>(ctx);
+        auto* native = new jegl_metal_render_sampler{ nullptr };
+
+        auto cvt_filter = [](jegl_filter filter) -> MTL::SamplerMinMagFilter
+        {
+            return filter == jegl_filter::LINEAR
+                ? MTL::SamplerMinMagFilterLinear
+                : MTL::SamplerMinMagFilterNearest;
+        };
+        auto cvt_wrap = [](jegl_wrap_mode wrap) -> MTL::SamplerAddressMode
+        {
+            switch (wrap)
+            {
+            case jegl_wrap_mode::CLAMP_TO_EDGE:
+                return MTL::SamplerAddressModeClampToEdge;
+            case jegl_wrap_mode::REPEAT:
+                return MTL::SamplerAddressModeRepeat;
+            case jegl_wrap_mode::MIRRORED_REPEAT:
+                return MTL::SamplerAddressModeMirrorRepeat;
+            default:
+                assert(false);
+                return MTL::SamplerAddressModeClampToEdge;
+            }
+        };
+
+        MTL::SamplerDescriptor* desc =
+            MTL::SamplerDescriptor::alloc()->init();
+        desc->setMinFilter(cvt_filter(sampler->m_desc.m_min_filter));
+        desc->setMagFilter(cvt_filter(sampler->m_desc.m_mag_filter));
+        desc->setSAddressMode(cvt_wrap(sampler->m_desc.m_u_wrap));
+        desc->setTAddressMode(cvt_wrap(sampler->m_desc.m_v_wrap));
+        desc->setRAddressMode(cvt_wrap(sampler->m_desc.m_w_wrap));
+
+        native->m_sampler =
+            metal_context->m_metal_device->newSamplerState(desc);
+        desc->release();
+
+        sampler->m_backend_ptr = native;
+    }
+
+    void render_sampler_close(je_GraphicImplContext, jegl_sampler* sampler)
+    {
+        auto* native = static_cast<jegl_metal_render_sampler*>(
+            sampler->m_backend_ptr);
+
+        if (native != nullptr)
+        {
+            if (native->m_sampler != nullptr)
+                native->m_sampler->release();
+            delete native;
+            sampler->m_backend_ptr = nullptr;
+        }
+    }
+
+    void render_sampler_bind(
+        je_GraphicImplContext ctx, uint32_t sampler_id, jegl_sampler* sampler)
+    {
+        auto* metal_context = static_cast<jegl_metal_context*>(ctx);
+        auto* native = static_cast<jegl_metal_render_sampler*>(
+            sampler->m_backend_ptr);
+
+        ensure_render_encoder(metal_context);
+
+        assert(native != nullptr);
+        metal_context->m_render_states.m_current_command_encoder
+            ->setFragmentSamplerState(native->m_sampler, sampler_id);
+    }
+
+    void render_begin_pass(
+        je_GraphicImplContext ctx,
+        /* OPTIONAL */ jegl_frame_buffer* target,
+        const jegl_viewport* viewport)
+    {
+        auto* metal_context = static_cast<jegl_metal_context*>(ctx);
+        auto& states = metal_context->m_render_states;
+
+        finish_render_encoder(metal_context);
+
+        states.m_current_target_shader = nullptr;
+        states.m_current_vertex = nullptr;
+
+        states.m_pending_pass = true;
+        states.m_pending_target = target != nullptr
+            ? static_cast<metal_framebuffer*>(target->m_handle.m_ptr)
+            : nullptr;
+        states.m_pending_viewport[0] = viewport->x;
+        states.m_pending_viewport[1] = viewport->y;
+        states.m_pending_viewport[2] = (int32_t)viewport->width;
+        states.m_pending_viewport[3] = (int32_t)viewport->height;
+        states.m_pending_color_clear_mask = 0;
+        states.m_pending_depth_clear = false;
+        states.m_pending_depth_clear_value = 1.f;
+    }
+
+    void render_clear_color(
+        je_GraphicImplContext ctx, uint32_t attachment, const float rgba[4])
+    {
+        auto* metal_context = static_cast<jegl_metal_context*>(ctx);
+        auto& states = metal_context->m_render_states;
+
+        if (attachment >= 8)
+        {
+            jeecs::debug::logfatal(
+                "Metal render API supports at most 8 color clear attachments.");
+            return;
+        }
+
+        states.m_pending_color_clear_mask |= (1ull << attachment);
+        for (size_t i = 0; i < 4; ++i)
+            states.m_pending_color_clears[attachment][i] = rgba[i];
+    }
+
+    void render_clear_depth(je_GraphicImplContext ctx, float depth)
+    {
+        auto* metal_context = static_cast<jegl_metal_context*>(ctx);
+        auto& states = metal_context->m_render_states;
+
+        states.m_pending_depth_clear = true;
+        states.m_pending_depth_clear_value = depth;
+    }
+
+    void render_end_pass(je_GraphicImplContext ctx)
+    {
+        auto* metal_context = static_cast<jegl_metal_context*>(ctx);
+        ensure_render_encoder(metal_context);
+    }
+
+    void render_bind_vertex(je_GraphicImplContext ctx, jegl_vertex* vertex)
+    {
+        auto* metal_context = static_cast<jegl_metal_context*>(ctx);
+        ensure_render_encoder(metal_context);
+
+        metal_context->m_render_states.m_current_vertex =
+            static_cast<metal_vertex*>(vertex->m_handle.m_ptr);
+    }
+
+    void render_bind_uniform_buffer(
+        je_GraphicImplContext ctx, jegl_uniform_buffer* uniform_buffer)
+    {
+        ensure_render_encoder(static_cast<jegl_metal_context*>(ctx));
+        bind_uniform_buffer(ctx, uniform_buffer);
+    }
+
+    void render_bind_texture_2d(
+        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_2d* texture)
+    {
+        ensure_render_encoder(static_cast<jegl_metal_context*>(ctx));
+        bind_texture<jegl_texture_2d>(ctx, texture, pass);
+    }
+
+    void render_bind_texture_3d(
+        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_3d* texture)
+    {
+        ensure_render_encoder(static_cast<jegl_metal_context*>(ctx));
+        bind_texture<jegl_texture_3d>(ctx, texture, pass);
+    }
+
+    void render_bind_texture_array(
+        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_array* texture)
+    {
+        ensure_render_encoder(static_cast<jegl_metal_context*>(ctx));
+        bind_texture<jegl_texture_array>(ctx, texture, pass);
+    }
+
+    void render_bind_texture_cube(
+        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_cube* texture)
+    {
+        ensure_render_encoder(static_cast<jegl_metal_context*>(ctx));
+        bind_texture<jegl_texture_cube>(ctx, texture, pass);
+    }
+
+    void render_prepare_uniform_block(
+        jegl_metal_context* metal_context,
+        const void* uniform_data,
+        uint32_t uniform_size)
+    {
+        auto* shader = metal_context->m_render_states.m_current_target_shader;
+        assert(shader != nullptr);
+
+        if (shader->m_uniform_cpu_buffer_size == 0)
+        {
+            assert(uniform_size == 0);
+            return;
+        }
+
+        assert(uniform_data != nullptr);
+        assert(uniform_size == shader->m_uniform_cpu_buffer_size);
+
+        memcpy(shader->m_uniform_cpu_buffer, uniform_data, uniform_size);
+
+        const uint32_t ndc_offset = shader->m_ndc_scale_uniform_id;
+        if (ndc_offset != jeecs::graphic::INVALID_UNIFORM_LOCATION
+            && ndc_offset + sizeof(float) * 4 <= uniform_size)
+        {
+            const float ndc_scale[4] = {
+                1.f,
+                metal_context->m_render_states.m_current_target_framebuffer_may_null == nullptr
+                    ? 1.f : -1.f,
+                1.f,
+                1.f };
+            memcpy(
+                static_cast<uint8_t*>(shader->m_uniform_cpu_buffer) + ndc_offset,
+                ndc_scale,
+                sizeof(ndc_scale));
+        }
+
+        shader->m_uniform_buffer_updated = true;
+    }
+
+    void render_bind_draw_state(jegl_metal_context* metal_context)
+    {
+        auto& states = metal_context->m_render_states;
+        auto* shader = states.m_current_target_shader;
+        auto* vertex = states.m_current_vertex;
+
+        assert(shader != nullptr);
+        assert(vertex != nullptr);
+        assert(states.m_current_command_encoder != nullptr);
+
+        states.m_current_command_encoder->setVertexBuffer(
+            vertex->m_vertex_buffer, 0, vertex->m_vertex_stride, 0);
+
+        if (shader->m_uniform_cpu_buffer_size != 0)
+        {
+            MTL::Buffer* uniform_buffer;
+
+            if (shader->m_uniform_buffer_updated)
+            {
+                shader->m_uniform_buffer_updated = false;
+                uniform_buffer = shader->allocate_buffer_to_update(metal_context);
+
+                memcpy(
+                    uniform_buffer->contents(),
+                    shader->m_uniform_cpu_buffer,
+                    shader->m_uniform_cpu_buffer_size);
+            }
+            else
+                uniform_buffer = shader->get_last_usable_buffer(metal_context);
+
+            states.m_current_command_encoder->setVertexBuffer(
+                uniform_buffer, 0, 1);
+            states.m_current_command_encoder->setFragmentBuffer(
+                uniform_buffer, 0, 1);
+        }
+    }
+
+    void render_draw_indexed(
+        je_GraphicImplContext ctx,
+        uint32_t index_count,
+        uint32_t first_index,
+        uint32_t instance_count,
+        const void* uniform_data,
+        uint32_t uniform_size)
+    {
+        auto* metal_context = static_cast<jegl_metal_context*>(ctx);
+        ensure_render_encoder(metal_context);
+
+        assert(metal_context->m_render_states.m_current_vertex != nullptr);
+        assert(index_count > 0);
+        assert(instance_count > 0);
+
+        render_prepare_uniform_block(metal_context, uniform_data, uniform_size);
+        render_bind_draw_state(metal_context);
+
+        auto* vertex = metal_context->m_render_states.m_current_vertex;
+        metal_context->m_render_states.m_current_command_encoder
+            ->drawIndexedPrimitives(
+                vertex->m_primitive_type,
+                index_count,
+                MTL::IndexType::IndexTypeUInt32,
+                vertex->m_index_buffer,
+                (NS::UInteger)first_index * sizeof(uint32_t),
+                instance_count);
+    }
+
+    void render_draw(
+        je_GraphicImplContext ctx,
+        uint32_t vertex_count,
+        uint32_t first_vertex,
+        uint32_t instance_count,
+        const void* uniform_data,
+        uint32_t uniform_size)
+    {
+        auto* metal_context = static_cast<jegl_metal_context*>(ctx);
+        ensure_render_encoder(metal_context);
+
+        assert(metal_context->m_render_states.m_current_vertex != nullptr);
+        assert(vertex_count > 0);
+        assert(instance_count > 0);
+
+        render_prepare_uniform_block(metal_context, uniform_data, uniform_size);
+        render_bind_draw_state(metal_context);
+
+        auto* vertex = metal_context->m_render_states.m_current_vertex;
+        metal_context->m_render_states.m_current_command_encoder
+            ->drawPrimitives(
+                vertex->m_primitive_type,
+                first_vertex,
+                vertex_count,
+                instance_count);
+    }
+
+    void render_commit_begin(je_GraphicImplContext)
+    {}
+
+    void render_commit_end(je_GraphicImplContext)
+    {}
 }
 
 void jegl_using_metal_apis(jegl_graphic_api* write_to_apis)
@@ -1957,18 +2232,31 @@ void jegl_using_metal_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->framebuffer_close = close_framebuffer;
     write_to_apis->ubuffer_close = close_ubuffer;
 
-    write_to_apis->bind_uniform_buffer = bind_uniform_buffer;
-    write_to_apis->bind_texture_2d = bind_texture<jegl_texture_2d>;
-    write_to_apis->bind_texture_3d = bind_texture<jegl_texture_3d>;
-    write_to_apis->bind_texture_array = bind_texture<jegl_texture_array>;
-    write_to_apis->bind_texture_cube = bind_texture<jegl_texture_cube>;
-    write_to_apis->bind_texture_msaa = bind_texture<jegl_texture_msaa>;
-    write_to_apis->bind_shader = bind_shader;
-    write_to_apis->draw_vertex = draw_vertex_with_shader;
+    write_to_apis->pipeline_init = render_pipeline_init;
+    write_to_apis->pipeline_close = render_pipeline_close;
+    write_to_apis->pipeline_bind = render_pipeline_bind;
 
-    write_to_apis->bind_framebuf = bind_framebuffer;
+    write_to_apis->sampler_init = render_sampler_init;
+    write_to_apis->sampler_close = render_sampler_close;
+    write_to_apis->sampler_bind = render_sampler_bind;
 
-    write_to_apis->set_uniform = set_uniform;
+    write_to_apis->begin_pass = render_begin_pass;
+    write_to_apis->clear_color = render_clear_color;
+    write_to_apis->clear_depth = render_clear_depth;
+    write_to_apis->end_pass = render_end_pass;
+
+    write_to_apis->bind_vertex = render_bind_vertex;
+    write_to_apis->bind_uniform_buffer = render_bind_uniform_buffer;
+    write_to_apis->bind_texture_2d = render_bind_texture_2d;
+    write_to_apis->bind_texture_3d = render_bind_texture_3d;
+    write_to_apis->bind_texture_array = render_bind_texture_array;
+    write_to_apis->bind_texture_cube = render_bind_texture_cube;
+
+    write_to_apis->draw_indexed = render_draw_indexed;
+    write_to_apis->draw = render_draw;
+
+    write_to_apis->commit_begin = render_commit_begin;
+    write_to_apis->commit_end = render_commit_end;
 }
 
 #else
