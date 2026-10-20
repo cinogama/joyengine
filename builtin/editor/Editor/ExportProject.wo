@@ -1,0 +1,974 @@
+// 项目导出向导（文件 → 导出项目...）。
+//
+// 流程参照旧版 export_project.wo，但全部改用当前编辑器的 API：
+//   0 欢迎/确认  → 1 启动世界 → 2 分辨率 → 3 镜像分片大小 → 4 确认
+// 点击“开始打包”后向导关闭，打包在 ModulePrepare 的后台线程里进行，
+// 进度与错误显示在“项目导出”日志窗口中。
+//
+// 产物布局（<项目>/.export/）：
+//   images.je4index + disk<N>.je4image   资源镜像（项目文件、着色器、启动脚本）
+//   modules/lib<模块名>.dll              RELEASE 编译的原生模块（真实文件）
+//   <项目名>.exe + 引擎运行库             引擎运行时
+//   licenses/                            引擎使用的第三方许可证
+//
+// 镜像中的键约定与引擎的资源路径一致：项目文件使用 @/<相对路径>，
+// 引擎内部着色器使用 !/builtin/shader/internal/<文件名>。
+
+import pkg::std;
+import pkg::fsys;
+import pkg::interface;
+import pkg::try;
+import pkg::buffer;
+import pkg::dumpling;
+import pkg::platform;
+import pkg::process;
+import pkg::worst;
+
+import je;
+import je::graphic;
+import je::gui;
+import je::internal;
+
+import builtin::editor::GUI::Windows;
+import builtin::editor::Editor::ModulePrepare;
+import builtin::editor::Editor::Template;
+import builtin::editor::Editor::Project;
+import builtin::editor::Editor::ResourcePath;
+import builtin::editor::Editor::WorldEditorViewport;
+
+import builtin::editor::Singleton;
+
+using std;
+using fsys;
+using platform;
+using je;
+using je::graphic;
+using je::gui;
+using dumpling;
+using JEEditor::GUI::Windows;
+using JEEditor::Singleton;
+
+namespace JEEditor::Editor
+{
+    using ExportProject = struct{
+        m_step: mut int,
+        // (打包键, 是否作为启动世界)；打包键形如 @/resource/worlds/x.je4world
+        m_worlds: vec<(string, mutable<bool>)>,
+        m_reso_index: mut int,
+        m_resolution: mut (int, int),
+        m_image_size_mb: mut int,
+        m_closed: mut bool,
+    }
+    {
+        // 导出任务的输入快照。打包在后台线程进行，不能再去读编辑器里的
+        // Project/ToWoo 集合（它们可能被编辑操作并发修改），因此在这里
+        // 一次性取出全部信息。
+        using Settings = struct{
+            m_project_name: string,
+            m_working_path: path_t,
+            m_start_up_worlds: array<string>,
+            m_resolution: (int, int),
+            m_image_size_mb: int,
+            m_modules: array<(string, path_t)>,
+            m_towoo_components: array<(string, path_t)>,
+            m_towoo_systems: array<(string, path_t)>,
+            m_has_types_script: bool,
+        };
+        
+        // 向导可选的分辨率列表，与旧版导出向导保持一致。
+        func resolutions()
+        {
+            static let items = [
+                ("1280x720 [16:9]", (1280, 720)),
+                ("1366x768 [16:9]", (1366, 768)),
+                ("1920x1080 [16:9]", (1920, 1080)),
+                ("2560x1440 [16:9]", (2560, 1440)),
+                ("3840x2160 [16:9]", (3840, 2160)),
+                ("800x600 [4:3]", (800, 600)),
+                ("1024x768 [4:3]", (1024, 768)),
+                ("1400x1050 [4:3]", (1400, 1050)),
+                ("1920x1440 [4:3]", (1920, 1440)),
+            ];
+            return items;
+        }
+        
+        public func create()=> ExportProject
+            where require!(ExportProject: IWindows);
+        {
+            return ExportProject{
+                m_step = mut 0,
+                m_worlds = scanWorlds(),
+                m_reso_index = mut 1,
+                m_resolution = mut (1366, 768),
+                m_image_size_mb = mut 128,
+                m_closed = mut false,
+            };
+        }
+        
+        public func showExportProject()
+        {
+            do show(ExportProject::create());
+        }
+        
+        public func getTitle(_: ExportProject)=> string
+        {
+            return "项目导出向导";
+        }
+        public func getAttrib(_: ExportProject)=> WindowsAttribute
+        {
+            return WindowsAttribute::ImGuiWindowFlags_NoDocking
+                + WindowsAttribute::ImGuiWindowFlags_NoCollapse;
+        }
+        public func getSizeConstraints(_: ExportProject)=> SizeConstraints
+        {
+            return SizeConstraints::AutoSize;
+        }
+        public func isModal(_: ExportProject)=> bool
+        {
+            return true;
+        }
+        
+        public func run(self: ExportProject)=> bool
+        {
+            let content_width = GetContentRegionAvail().0;
+            
+            if (self.m_step == 0)
+                self->drawWelcomeStep(content_width);
+            else if (self.m_step == 1)
+                self->drawWorldsStep(content_width);
+            else if (self.m_step == 2)
+                self->drawResolutionStep(content_width);
+            else if (self.m_step == 3)
+                self->drawImageSizeStep(content_width);
+            else if (self.m_step == 4)
+                self->drawConfirmStep(content_width);
+                
+            return !self.m_closed;
+        }
+        
+        // ==========================
+        //  向导各步骤
+        // ==========================
+        
+        func drawWelcomeStep(self: ExportProject, content_width: real)
+        {
+            TextDisabled("即将开始……");
+            Separator();
+            
+            if (BeginChildSize("##export_welcome", 500., 300.))
+            {
+                Text("欢迎使用 JoyEngineECS 项目导出向导");
+                Text("向导将把当前项目打包到项目目录下的 .export 目录。");
+                Separator();
+                TextColored((255, 170, 90, 255),
+                    "注意：导出会先删除 .export 目录中的全部内容。");
+                Separator();
+                Text("导出前请先保存所有世界（文件 → 保存全部），");
+                Text("否则打包进镜像的将是磁盘上旧的世界数据。");
+                Separator();
+                if (ButtonSize("保存全部世界", (GetContentRegionAvail().0, 0.)))
+                    WorldEditorViewport::saveAllWorlds();
+            }
+            EndChild();
+            
+            if (ButtonSize("我已确认准备就绪，继续下一步", (content_width, 0.)))
+                self.m_step = 1;
+            if (ButtonSize("取消导出", (content_width, 0.)))
+                self.m_closed = true;
+        }
+        
+        func drawWorldsStep(self: ExportProject, content_width: real)
+        {
+            TextDisabled("第一步 选择启动时自动加载的世界");
+            Separator();
+            
+            if (BeginChildSize("##export_worlds", 500., 300.))
+            {
+                if (self.m_worlds->len == 0)
+                    TextDisabled("项目中没有找到 .je4world 文件。");
+                else
+                {
+                    for (let mut i = 0; i < self.m_worlds->len; i += 1)
+                    {
+                        let entry = self.m_worlds[i];
+                        match (CheckBox(entry.0, entry.1->get))
+                        {
+                            none?;
+                            value(checked)?
+                            {
+                                entry.1->set(checked);
+                            }
+                        }
+                    }
+                }
+            }
+            EndChild();
+            
+            if (Button("全选"))
+            {
+                for (let mut i = 0; i < self.m_worlds->len; i += 1)
+                    self.m_worlds[i].1->set(true);
+            }
+            SameLine();
+            if (Button("全不选"))
+            {
+                for (let mut i = 0; i < self.m_worlds->len; i += 1)
+                    self.m_worlds[i].1->set(false);
+            }
+            
+            if (ButtonSize("下一步", (content_width, 0.)))
+                self.m_step = 2;
+            if (ButtonSize("上一步", (content_width, 0.)))
+                self.m_step = 0;
+        }
+        
+        func drawResolutionStep(self: ExportProject, content_width: real)
+        {
+            TextDisabled("第二步 导出画面设置");
+            Separator();
+            
+            if (BeginChildSize("##export_resolution", 500., 300.))
+            {
+                Text("请选择启动时默认渲染的画面分辨率：");
+                TextDisabled("默认为 1366x768 [16:9]");
+                Separator();
+                
+                match (Combo("##EXPORT_RESOLUTIONS",
+                        resolutionLabels(), option::value(self.m_reso_index)))
+                {
+                    none?;
+                    value(index)?
+                    {
+                        self.m_reso_index = index;
+                        self.m_resolution = resolutions()[index].1;
+                    }
+                }
+            }
+            EndChild();
+            
+            if (ButtonSize("下一步", (content_width, 0.)))
+                self.m_step = 3;
+            if (ButtonSize("上一步", (content_width, 0.)))
+                self.m_step = 1;
+        }
+        
+        func drawImageSizeStep(self: ExportProject, content_width: real)
+        {
+            TextDisabled("第三步 导出镜像设置");
+            Separator();
+            
+            if (BeginChildSize("##export_image_size", 500., 300.))
+            {
+                Text("请为打包镜像设置分包大小，单位为 MB。");
+                TextDisabled("默认为 128 MB");
+                Separator();
+                
+                match (InputInt("##EXPORT_IMAGE_SIZE_MB", self.m_image_size_mb))
+                {
+                    none?;
+                    value(new_size)?
+                    {
+                        if (new_size > 0)
+                            self.m_image_size_mb = new_size;
+                    }
+                }
+            }
+            EndChild();
+            
+            if (ButtonSize("下一步", (content_width, 0.)))
+                self.m_step = 4;
+            if (ButtonSize("上一步", (content_width, 0.)))
+                self.m_step = 2;
+        }
+        
+        func drawConfirmStep(self: ExportProject, content_width: real)
+        {
+            TextDisabled("导出操作确认");
+            Separator();
+            
+            if (BeginChildSize("##export_confirm", 500., 300.))
+            {
+                Text(F"项目：{projectName()}");
+                Text(F"启动世界：{self->selectedWorldCount()} 个");
+                Text(F"分辨率：{self.m_resolution.0}x{self.m_resolution.1}");
+                Text(F"镜像分片大小：{self.m_image_size_mb} MB");
+                Separator();
+                Text("按下“开始打包”后，向导会关闭，");
+                Text("编译与打包过程显示在“项目导出”日志窗口中。");
+                Separator();
+                Text("导出会以 RELEASE 配置重新编译全部原生模块，可能需要较长时间。");
+                Separator();
+                TextColored((255, 170, 90, 255),
+                    "再次确认：.export 目录中的现有内容将被删除！");
+            }
+            EndChild();
+            
+            if (ButtonSize("开始打包", (content_width, 0.)))
+                self->startExport();
+            if (ButtonSize("上一步", (content_width, 0.)))
+                self.m_step = 3;
+        }
+        
+        // ==========================
+        //  向导数据
+        // ==========================
+        
+        func projectName()=> string
+        {
+            let name = filename(workpath());
+            return name->len == 0 ? "Game" | name;
+        }
+        
+        func resolutionLabels()=> array<string>
+        {
+            let mut labels = []mut: vec<string>;
+            for (let item : resolutions())
+                labels->add(item.0);
+                
+            return labels->unsafe::asarray;
+        }
+        
+        func selectedWorldCount(self: ExportProject)=> int
+        {
+            let mut count = 0;
+            for (let entry : self.m_worlds)
+            {
+                if (entry.1->get)
+                    count += 1;
+            }
+            return count;
+        }
+        
+        func isHiddenRelativePath(rel: string)=> bool
+        {
+            // 相对路径无前导 '/'，补一个再查找 "/."，与旧版导出的隐藏文件规则一致。
+            return ("/" + rel)->find("/.")->is_value;
+        }
+        
+        // 扫描项目中的 .je4world，生成 @/ 形式的打包键。
+        func scanWorlds()=> vec<(string, mutable<bool>)>
+        {
+            let mut worlds = []mut: vec<(string, mutable<bool>)>;
+            
+            match (allsubpath(workpath()))
+            {
+                ok(paths)?
+                {
+                    for (let p : paths)
+                    {
+                        if (!isfile(p) || extension(p)->lower != ".je4world")
+                            continue;
+                            
+                        match (relative(p, workpath()))
+                        {
+                            ok(rel)?
+                            {
+                                if (rel->len == 0 || isHiddenRelativePath(rel))
+                                    continue;
+                                    
+                                worlds->add((
+                                        ResourcePath::toRuntimeResourcePath(p),
+                                        mutable::create(false)));
+                            }
+                            err(_)?;
+                        }
+                    }
+                }
+                err(_)?;
+            }
+            
+            return worlds;
+        }
+        
+        // 过滤掉已从磁盘删除的注册条目：它们既不会被打包，也无法在运行期
+        // 注册，保留在启动脚本里只会产生无意义的错误日志。
+        func existingEntries(entries: array<(string, path_t)>)
+        {
+            let mut result = []mut: vec<(string, path_t)>;
+            for (let (name, path) : entries)
+            {
+                if (isfile(path))
+                    result->add((name, path));
+            }
+            return result->unsafe::asarray;
+        }
+        
+        // 收集向导配置并启动后台打包。
+        func startExport(self: ExportProject)
+        {
+            let mut start_up_worlds = []mut: vec<string>;
+            for (let entry : self.m_worlds)
+            {
+                if (entry.1->get)
+                    start_up_worlds->add(entry.0);
+            }
+            
+            let settings = apply:<Project>(
+                func(proj)
+                {
+                    return Settings{
+                        m_project_name = projectName(),
+                        m_working_path = workpath(),
+                        m_start_up_worlds = start_up_worlds->unsafe::asarray,
+                        m_resolution = self.m_resolution,
+                        m_image_size_mb = self.m_image_size_mb,
+                        m_modules = proj->getDeclaredModules(),
+                        m_towoo_components = existingEntries(
+                            proj->getAllToWooComponentNameAndPath()),
+                        m_towoo_systems = existingEntries(
+                            proj->getAllToWooSystemNameAndPath()),
+                        m_has_types_script = isfile(
+                            workpath() / "resource" / "editor" / "types.wo"),
+                    };
+                });
+                
+            do showModal(
+                ModulePrepare::createWithTitle(
+                    "项目导出",
+                    func(prepare: ModulePrepare){
+                        return runExportJob(prepare, settings);
+                    }));
+                    
+            self.m_closed = true;
+        }
+        
+        // ==========================
+        //  后台打包任务
+        // ==========================
+        
+        func runExportJob(prepare: ModulePrepare, settings: Settings)
+        {
+            let export_path = settings.m_working_path / ".export";
+            
+            prepare->postMessage("开始打包……");
+            prepare->postMessage(F"项目：{settings.m_project_name}");
+            prepare->postMessage(F"导出目录：{export_path->to_string}");
+            
+            try! _ = remove(export_path)
+                -> or_map(\e = F"删除旧的导出目录失败（{e}）";);
+            try! _ = mkdir(export_path)
+                -> or_map(\e = F"创建导出目录失败（{e}）";);
+                
+            let packer = je::internal::fimage_packer::create(
+                export_path->to_string,
+                settings.m_image_size_mb * 1024 * 1024);
+                
+            // 失败路径同样要收尾：finish 负责写出镜像索引并释放打包上下文。
+            let packer_finished = mutable::create(false);
+            defer {
+                if (!packer_finished->get)
+                    packer->finish();
+            };
+            
+            try! _ = packShaders(prepare, packer, settings.m_working_path);
+            try! _ = buildAndCopyModules(prepare, export_path, settings.m_modules);
+            try! _ = packProjectFiles(
+                prepare, packer, settings.m_working_path, export_path);
+            try! _ = packBootScript(prepare, packer, settings);
+            try! _ = copyRuntimeFiles(prepare, export_path, settings);
+            
+            packer->finish();
+            packer_finished->set(true);
+            
+            prepare->postMessage("打包完成。");
+            return_ok!;
+        }
+        
+        // 编译并打包引擎内部着色器与项目着色器。
+        //
+        // 着色器编译使用 shader::load(option::none, ...)：
+        //   * none 使加载器拿到空的 graphic context，不会触碰图形上下文
+        //     的共享资源缓存，因此可以安全地在打包工作线程里调用；
+        //   * 真正的 GPU 着色器对象在运行时绑定管线时才创建，这里只是
+        //     CPU 侧的 Woolang 编译 + HLSL/SPIR-V/GLSL/MSL 生成 + 缓存写盘；
+        //   * 磁盘缓存按源码 CRC 校验，源码有改动会自动重编译，保证随后
+        //     打包的 .je4cache 与打包的源码一致。
+        func packShaders(prepare: ModulePrepare, packer: je::internal::fimage_packer,
+            working_path: path_t)
+        {
+            // 1. 引擎内部着色器：C++ 侧以 !/builtin/shader/internal/... 加载，
+            //    必须随包携带，否则导出游戏启动时找不到这些着色器。
+            let engine_root = normalize(std::host_path());
+            let internal_shader_dir = engine_root / "builtin" / "shader" / "internal";
+            
+            prepare->postMessage(F"正在编译引擎内部着色器：{internal_shader_dir->to_string}");
+            match (allsubpath(internal_shader_dir))
+            {
+                ok(paths)?
+                {
+                    for (let p : paths)
+                    {
+                        if (!isfile(p) || extension(p)->lower != ".shader")
+                            continue;
+                            
+                        let pack_key = "!/builtin/shader/internal/" + filename(p);
+                        try! _ = packOneShader(prepare, packer, p, pack_key);
+                    }
+                }
+                err(_)?
+                {
+                    prepare->postMessage(F"无法扫描引擎内部着色器目录，跳过：{internal_shader_dir->to_string}");
+                }
+            }
+            
+            // 2. 项目着色器
+            prepare->postMessage("正在编译项目着色器");
+            match (allsubpath(working_path))
+            {
+                ok(paths)?
+                {
+                    for (let p : paths)
+                    {
+                        if (!isfile(p) || extension(p)->lower != ".shader")
+                            continue;
+                            
+                        match (relative(p, working_path))
+                        {
+                            ok(rel)?
+                            {
+                                if (rel->len == 0 || isHiddenRelativePath(rel))
+                                    continue;
+                                    
+                                let pack_key = ResourcePath::toRuntimeResourcePath(p);
+                                if (!pack_key->begin_with("@/"))
+                                {
+                                    prepare->postMessage(
+                                        F"跳过项目目录之外的着色器：{p->to_string}");
+                                    continue;
+                                }
+                                
+                                try! _ = packOneShader(prepare, packer, p, pack_key);
+                            }
+                            err(_)?;
+                        }
+                    }
+                }
+                err(_)?
+                {
+                    prepare->postMessage("无法扫描项目目录，跳过项目着色器");
+                }
+            }
+            
+            return_ok!;
+        }
+        
+        // 编译一个着色器并打包源码与缓存。pack_key 同时是引擎运行时的
+        // 资源路径（!/... 或 @/...），shader::load 直接用它定位源码。
+        func packOneShader(prepare: ModulePrepare, packer: je::internal::fimage_packer,
+            source_path: path_t, pack_key: string)
+        {
+            match (shader::load(option::none, pack_key))
+            {
+                none?
+                {
+                    prepare->postMessage(F"无法编译着色器，仅打包源码：{pack_key}");
+                }
+                value(_)?
+                {
+                    prepare->postMessage(F"已编译着色器：{pack_key}");
+                }
+            }
+            
+            if (!packer->pack(source_path->to_string, pack_key))
+                throw! F"打包着色器源码失败：{source_path->to_string}";
+                
+            let cache_path = source_path->to_string + ".je4cache";
+            if (isfile(normalize(cache_path)))
+            {
+                if (!packer->pack(cache_path, pack_key + ".je4cache"))
+                    throw! F"打包着色器缓存失败：{cache_path}";
+            }
+            else
+            {
+                prepare->postMessage(F"未生成着色器缓存，跳过：{pack_key}");
+            }
+            
+            return_ok!;
+        }
+        
+        // 以 RELEASE 配置编译全部原生模块，并把产物动态库复制到 .export/modules。
+        // 使用 build-only 入口，避免把 RELEASE 库热重载进正在运行的编辑器。
+        func buildAndCopyModules(prepare: ModulePrepare, export_path: path_t,
+            modules: array<(string, path_t)>)
+        {
+            if (modules->len == 0)
+            {
+                prepare->postMessage("项目中未声明原生模块，跳过模块编译。");
+                return_ok!;
+            }
+            
+            let modules_dir = export_path / "modules";
+            if (!exist(modules_dir))
+            {
+                try! _ = mkdir(modules_dir)
+                    -> or_map(\e = F"创建模块目录失败（{e}）";);
+            }
+            
+            for (let (name, path) : modules)
+            {
+                prepare->postMessage(F"==== 编译模块 {name}（RELEASE） ====");
+                
+                try! dylib_path = ModulePrepare::configureAndBuildCppModuleDir(
+                    prepare, path, name, ModulePrepare::BuildConfig::RELEASE);
+                    
+                let dst = modules_dir / ModulePrepare::moduleDylibFilename(name);
+                prepare->postMessage(
+                    F"复制模块：{dylib_path->to_string} -> {dst->to_string}");
+                    
+                try! _ = copy(dylib_path, dst)
+                    -> or_map(\e = F"复制模块 {name} 失败（{e}）";);
+            }
+            
+            return_ok!;
+        }
+        
+        func isSkippedExtension(ext: string)=> bool
+        {
+            return ext == ".je4project"
+                || ext == ".je4cache"
+                || ext == ".dmp";
+        }
+        
+        // 把 path 复制到 dst（保持目录结构），失败时抛出描述。
+        func copyOrigin(path: path_t, dst: path_t)
+        {
+            let parent_dir = parent(dst);
+            if (parent_dir->to_string->len > 0 && !exist(parent_dir))
+            {
+                try! _ = mkdir(parent_dir)
+                    -> or_map(\e = F"创建目录失败（{e}）：{parent_dir->to_string}";);
+            }
+            
+            try! _ = copy(path, dst)
+                -> or_map(\e = F"复制文件失败（{e}）：{path->to_string}";);
+                
+            return_ok!;
+        }
+        
+        // 按项目文件规则整理项目目录：脚本预编译为 WORT 二进制，动态库原样
+        // 复制，其余文件打进资源镜像。着色器与 .je4cache 已在 packShaders
+        // 中处理，这里跳过。
+        func packProjectFiles(prepare: ModulePrepare,
+            packer: je::internal::fimage_packer,
+            working_path: path_t, export_path: path_t)
+        {
+            prepare->postMessage("正在整理项目文件……");
+            
+            try! paths = allsubpath(working_path)
+                -> or_map(\e = F"遍历项目目录失败（{e}）";);
+                
+            for (let p : paths)
+            {
+                if (!isfile(p))
+                    continue;
+                    
+                try! rel = relative(p, working_path)
+                    -> or_map(\e = F"计算相对路径失败（{e}）：{p->to_string}";);
+                    
+                // 隐藏文件/目录（.export、.temp、.vscode、.git、.build*、
+                // .runtime 等）整体跳过。
+                if (rel->len == 0 || isHiddenRelativePath(rel))
+                    continue;
+                    
+                let lower_rel = rel->lower;
+                let ext = extension(p)->lower;
+                
+                if (isSkippedExtension(ext))
+                    continue;
+                    
+                // C++ 模块源码已编译进动态库，不需要随包携带。
+                if (lower_rel->find(".je4module/")->is_value)
+                    continue;
+                    
+                // 着色器源码/缓存交由 packShaders 处理。
+                if (ext == ".shader")
+                    continue;
+                    
+                let pack_key = "@/" + rel;
+                
+                // 动态库需要真实文件才能被运行时加载。
+                if (ext == ".dll" || ext == ".so" || ext == ".dylib")
+                {
+                    try! _ = copyOrigin(p, export_path / rel);
+                    prepare->postMessage(F"复制 {pack_key}");
+                    continue;
+                }
+                
+                if (ext == ".wo")
+                {
+                    let fname = filename(p)->lower;
+                    if (fname->end_with(".je.wo") || fname->end_with(".image.wo"))
+                        continue;
+                        
+                    match (dumpling::Program::dump_file(p))
+                    {
+                        ok(binary)?
+                        {
+                            let builder = buffer::builder::create();
+                            builder->appendbuffer(binary);
+                            
+                            if (!packer->pack_buffer(
+                                    builder->ptr(0, builder->len),
+                                    builder->len,
+                                    pack_key))
+                                throw! F"打包脚本失败：{pack_key}";
+                                
+                            prepare->postMessage(F"编译并打包脚本 {pack_key}");
+                        }
+                        err(errors)?
+                        {
+                            prepare->postMessage(
+                                F"编译脚本失败，原样打包源码：{pack_key}");
+                            prepare->postMessage(errors->to_string);
+                            
+                            if (!packer->pack(p->to_string, pack_key))
+                                throw! F"打包脚本源码失败：{pack_key}";
+                        }
+                    }
+                    continue;
+                }
+                
+                if (!packer->pack(p->to_string, pack_key))
+                    throw! F"打包文件失败：{pack_key}";
+                    
+                prepare->postMessage(F"打包 {pack_key}");
+            }
+            
+            return_ok!;
+        }
+        
+        // ==========================
+        //  启动脚本生成
+        // ==========================
+        
+        func generateModuleLoads(modules: array<(string, path_t)>)=> string
+        {
+            let mut code = "";
+            for (let (name, _) : modules)
+            {
+                let dylib_name = ModulePrepare::moduleDylibFilename(name);
+                
+                code += "    match (load_module(" + name->enstring
+                    + ", std::host_path() + \"/modules/\" + "
+                    + dylib_name->enstring + "))\n"
+                    + "    {\n"
+                    + "        value(module_handle)?\n"
+                    + "        {\n"
+                    + "            loaded_modules->add(module_handle);\n"
+                    + "        }\n"
+                    + "        none?;\n"
+                    + "    }\n";
+            }
+            return code;
+        }
+        
+        func generateToWooLoads(func_name: string, entries: array<(string, path_t)>)=> string
+        {
+            let mut code = "";
+            for (let (name, path) : entries)
+            {
+                code += "    match (je::towoo::" + func_name
+                    + "(" + name->enstring + ", "
+                    + ResourcePath::toRuntimeResourcePath(path)->enstring + "))\n"
+                    + "    {\n"
+                    + "        value(_)?;\n"
+                    + "        none?\n"
+                    + "        {\n"
+                    + "            je::logerr(\"注册 ToWoo 类型失败：\" + "
+                    + name->enstring + ");\n"
+                    + "        }\n"
+                    + "    }\n";
+            }
+            return code;
+        }
+        
+        func generateTypeLoader(has_types_script: bool)=> string
+        {
+            if (!has_types_script)
+                return "    // 项目中没有 resource/editor/types.wo，跳过类型序列化器装载。";
+                
+            return "    match (je::towoo::unsafe::dynamic_parser::update_types("
+                + "\"@/resource/editor/types.wo\"))\n"
+                + "    {\n"
+                + "        ok(_)?;\n"
+                + "        err(message)?\n"
+                + "        {\n"
+                + "            je::logerr(message);\n"
+                + "        }\n"
+                + "    }";
+        }
+        
+        func generateWorldLoads(worlds: array<string>)=> string
+        {
+            let mut code = "";
+            for (let world_path : worlds)
+            {
+                code += "    match (JEGaming::Loading::World::load(u, "
+                    + world_path->enstring + "))\n"
+                    + "    {\n"
+                    + "        ok(w)?\n"
+                    + "        {\n"
+                    + "            w->set_enable(true);\n"
+                    + "        }\n"
+                    + "        err(message)?\n"
+                    + "        {\n"
+                    + "            je::logerr(message);\n"
+                    + "        }\n"
+                    + "    }\n";
+            }
+            return code;
+        }
+        
+        func packBootScript(prepare: ModulePrepare,
+            packer: je::internal::fimage_packer, settings: Settings)
+        {
+            prepare->postMessage("正在生成启动脚本……");
+            
+            try! template = Template::load(Template::Type::RUNTIME_MAIN)
+                -> ok_or("读取启动脚本模板失败");
+                
+            let boot_source = template
+                ->replace("$$LOAD_DYLIB_MODULES$$",
+                    generateModuleLoads(settings.m_modules))
+                ->replace("$$LOAD_TOWOO_COMPONENT$$",
+                    generateToWooLoads(
+                        "update_component", settings.m_towoo_components))
+                ->replace("$$LOAD_TOWOO_SYSTEM$$",
+                    generateToWooLoads(
+                        "update_system", settings.m_towoo_systems))
+                ->replace("$$LOAD_TYPE_LOADER$$",
+                    generateTypeLoader(settings.m_has_types_script))
+                ->replace("$$APPLY_RESOLUTION$$",
+                    F"    je::internal::set_window_size({settings.m_resolution.0}, {settings.m_resolution.1});")
+                ->replace("$$APPLY_TITLE$$",
+                    F"    je::internal::set_window_title({settings.m_project_name->enstring});")
+                ->replace("$$LOAD_WORLD_INSTANCE$$",
+                    generateWorldLoads(settings.m_start_up_worlds));
+                
+            try! boot_binary = or_map(\e = e->to_string;) <|
+                dumpling::Program::dump_source(
+                    "@/builtin/main.wo", boot_source as buffer);
+                    
+            let builder = buffer::builder::create();
+            builder->appendbuffer(boot_binary);
+            
+            if (!packer->pack_buffer(
+                    builder->ptr(0, builder->len),
+                    builder->len,
+                    "@/builtin/main.wo"))
+                throw! "打包启动脚本失败：@/builtin/main.wo";
+                
+            prepare->postMessage("已生成并打包启动脚本：@/builtin/main.wo");
+            return_ok!;
+        }
+        
+        // ==========================
+        //  引擎运行时复制
+        // ==========================
+        
+        func copyRuntimeFiles(prepare: ModulePrepare, export_path: path_t,
+            settings: Settings)
+        {
+            let engine_root = normalize(std::host_path());
+            
+            // 1. 可执行文件：host_path 下与当前进程同名的文件。
+            let exe_src = engine_root / filename(normalize(std::cmdlines()[0]));
+            let exe_dst_name = settings.m_project_name
+                + (os == Os::WINDOWS ? ".exe" | "");
+            let exe_dst = export_path / exe_dst_name;
+            
+            prepare->postMessage(
+                F"复制引擎运行时：{exe_src->to_string} -> {exe_dst_name}");
+            try! _ = copy(exe_src, exe_dst)
+                -> or_map(\e = F"复制引擎可执行文件失败（{e}）";);
+                
+            // 2. 引擎运行库。静态链接核心的构建可能没有这些动态库，缺失时只告警。
+            let mut libs = []mut: vec<string>;
+            libs->add(ModulePrepare::moduleDylibFilename("joyecs"));
+            libs->add(ModulePrepare::moduleDylibFilename("woo"));
+            libs->add(ModulePrepare::moduleDylibFilename("woort"));
+            
+            if (os == Os::WINDOWS)
+                libs->add("OpenAL32.dll");
+            else if (os == Os::MACOS)
+                libs->add("libopenal.dylib");
+            else
+                libs->add("libopenal.so");
+                
+            for (let lib_name : libs)
+            {
+                let lib_path = engine_root / lib_name;
+                if (!isfile(lib_path))
+                {
+                    prepare->postMessage(F"未找到运行库，跳过：{lib_name}");
+                    continue;
+                }
+                
+                try! _ = copy(lib_path, export_path / lib_name)
+                    -> or_map(\e = F"复制运行库 {lib_name} 失败（{e}）";);
+            }
+            
+            // 3. 引擎使用的第三方许可证。
+            let licenses_path = engine_root / "licenses";
+            if (isdir(licenses_path))
+            {
+                prepare->postMessage("复制第三方许可证……");
+                try! _ = copy(licenses_path, export_path / "licenses")
+                    -> or_map(\e = F"复制许可证目录失败（{e}）";);
+            }
+            
+            // 4. Windows 下若项目根有 icon.ico，则替换导出程序的图标。
+            if (os == Os::WINDOWS)
+            {
+                try! _ = applyIcon(exe_dst);
+            }
+                
+            return_ok!;
+        }
+        
+        func applyIcon(exe_path: path_t)
+        {
+            let icon_path = workpath() / "icon.ico";
+            if (!isfile(icon_path))
+                return_ok!;
+                
+            let rcedit_path = normalize(std::host_path())
+                / "builtin" / "rcedit-x64.exe";
+            if (!isfile(rcedit_path))
+            {
+                logwarn("未找到 builtin/rcedit-x64.exe，跳过设置程序图标");
+                return_ok!;
+            }
+            
+            match (process::create(rcedit_path, [
+                    rcedit_path->to_string,
+                    exe_path->to_string,
+                    "--set-icon",
+                    icon_path->to_string,
+                ]))
+            {
+                none?
+                {
+                    logwarn("无法启动 rcedit 设置程序图标");
+                }
+                value(proc)?
+                {
+                    match (process::wait(proc))
+                    {
+                        ok(status)?
+                        {
+                            if (status != 0 as process::status_t)
+                                logwarn(F"rcedit 设置程序图标失败，退出码：{status}");
+                        }
+                        err(code)?
+                        {
+                            logwarn(F"等待 rcedit 结束失败（{code}）");
+                        }
+                    }
+                }
+            }
+            
+            return_ok!;
+        }
+    }
+}

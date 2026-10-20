@@ -46,6 +46,9 @@ namespace JEEditor::Editor
     // m_module_state_mx 保护全部跨线程可变状态（m_msg_list / m_finished / m_error）。
     // 子进程（CMake）的 stdout/stderr 由独立读线程经管道转发为 postMessage（见 startProcessAndWait）。
     using ModulePrepare = struct{
+        // 窗口标题；导出流程复用它作为打包进度窗口，标题由调用方指定。
+        m_title: string,
+        
         m_module_state_mx: mutex,
         
         // 工作线程 → 窗口的消息队列（受 m_module_state_mx 保护）
@@ -64,7 +67,16 @@ namespace JEEditor::Editor
         public func create(thread_job: (ModulePrepare)=> result<void, string>)=> ModulePrepare
             where require!(ModulePrepare: IWindows);
         {
+            return ModulePrepare::createWithTitle("模块装载器", thread_job);
+        }
+        
+        // 与 create 相同，但由调用方指定窗口标题（例如项目导出）。
+        public func createWithTitle(
+            title: string, thread_job: (ModulePrepare)=> result<void, string>)=> ModulePrepare
+            where require!(ModulePrepare: IWindows);
+        {
             let self = ModulePrepare{
+                m_title = title,
                 m_module_state_mx = mutex::create(),
                 m_msg_list = list::create:<string>(),
                 m_logbuf = list::create:<string>(),
@@ -129,9 +141,9 @@ namespace JEEditor::Editor
             return (self.m_finished, self.m_error);
         }
         
-        public func getTitle(_: ModulePrepare)=> string
+        public func getTitle(self: ModulePrepare)=> string
         {
-            return "模块装载器$ID";
+            return self.m_title + "$ID";
         }
         public func getAttrib(_: ModulePrepare)=> WindowsAttribute
         {
@@ -439,11 +451,26 @@ namespace JEEditor::Editor
             return_ok! runtime_dir;
         }
         
-        // 为指定的C++模块目录生成loader.hpp与CMakeLists.txt，
-        // 刷新.engine内的引擎链接库，调用CMake完成配置与编译，
-        // 最后把产物动态库拷贝到模块目录下的 .runtime 目录；
-        // CMake的输出实时转发到 win 的日志区。
-        public func buildCppModuleDir(win: ModulePrepare, path: path_t, name: string, config: BuildConfig)
+        // 在 build_root 下递归查找模块产物动态库；目录不存在时返回 none。
+        func findModuleDylib(build_root: path_t, dylib_filename: string)=> option<path_t>
+        {
+            if (!isdir(build_root))
+                return option::none;
+                
+            for (let p : recursive_walk(build_root)->iter_result)
+            {
+                if (isfile(p) && filename(p)->lower == dylib_filename->lower)
+                    return option::value(p);
+            }
+            return option::none;
+        }
+        
+        // 为指定的C++模块目录生成loader.hpp与CMakeLists.txt，刷新引擎链接库，
+        // 调用CMake完成配置与编译，返回 .build 下生成的动态库路径。
+        // 本函数只编译，不安装到 .runtime、也不装载进编辑器——导出流程用它做
+        // RELEASE 构建；编辑器内的构建请使用 buildCppModuleDir。
+        public func configureAndBuildCppModuleDir(
+            win: ModulePrepare, path: path_t, name: string, config: BuildConfig)
         {
             // 1. 定位CMake
             try! cmake_path = locateCMake();
@@ -510,7 +537,29 @@ namespace JEEditor::Editor
                 ],
                 "C++编译失败");
                 
-            // 5. 通知项目，装载动态库
+            // 5. 查找产物：优先该配置的输出目录。CMAKE_*_OUTPUT_DIRECTORY 在
+            // 模板里固定为 .build/<CMAKE_BUILD_TYPE>，按配置查找可以避免误取
+            // 另一份配置（如 debug 与 relwithdebinfo 同时存在时）的产物。
+            let dylib_filename = moduleDylibFilename(name);
+            let mut dylib_path = findModuleDylib(
+                path / ".build" / config_name, dylib_filename);
+                
+            if (dylib_path->is_none)
+                dylib_path = findModuleDylib(path / ".build", dylib_filename);
+                
+            try! found_dylib_path = dylib_path
+                -> ok_or(F"在 .build 目录下未找到模块动态库 {dylib_filename}");
+                
+            return_ok! found_dylib_path;
+        }
+        
+        // 在编辑器内构建模块：调用 configureAndBuildCppModuleDir，把产物安装到
+        // 模块目录下的 .runtime，然后热重载进正在运行的编辑器。
+        public func buildCppModuleDir(win: ModulePrepare, path: path_t, name: string, config: BuildConfig)
+        {
+            try! found_dylib_path = configureAndBuildCppModuleDir(win, path, name, config);
+            
+            // 通知项目，装载动态库
             let finished_flag = mutable::create(option::none: option<result<void, string>>);
             FreezeWorldsTodo::show(
                 "正在更新模块的动态库",
@@ -523,19 +572,6 @@ namespace JEEditor::Editor
                                 let dylib_filename = moduleDylibFilename(name);
                                 try! runtime_dir = prepareDirToPlaceRuntimeLib(path);
                                 
-                                let mut dylib_path = option::none: option<path_t>;
-                                for (let p : recursive_walk(path / ".build")->iter_result)
-                                {
-                                    if (isfile(p) && filename(p)->lower == dylib_filename->lower)
-                                    {
-                                        dylib_path = option::value(p);
-                                        break;
-                                    }
-                                }
-                                
-                                try! found_dylib_path = dylib_path
-                                    -> ok_or(F"在 .build 目录下未找到模块动态库 {dylib_filename}");
-                                    
                                 do win->postMessage(
                                     F"移动产物：{found_dylib_path->to_string} -> {(runtime_dir / dylib_filename)->to_string}");
                                     

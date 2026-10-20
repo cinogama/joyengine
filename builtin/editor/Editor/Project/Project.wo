@@ -541,6 +541,25 @@ namespace JEEditor::Editor
             return self.m_towoo_collection->checkAll();
         }
         /* --------------------------------------------- */
+        /* 导出流程用：项目文件中声明的全部原生模块（含本次编译失败的条目，
+        导出时必须全部构建成功才能继续）。 */
+        public func getDeclaredModules(self: Project)=> array<(string, path_t)>
+        {
+            let mut modules = []mut: vec<(string, path_t)>;
+            for (let (name, path) : self.m_declared_modules)
+                modules->add((name, path));
+                
+            return modules->unsafe::asarray;
+        }
+        /* 导出流程用：已注册的 ToWoo 组件/系统，供启动脚本生成装载代码。 */
+        public func getAllToWooComponentNameAndPath(self: Project)
+        {
+            return self.m_towoo_collection->getAllComponentNameAndPath;
+        }
+        public func getAllToWooSystemNameAndPath(self: Project)
+        {
+            return self.m_towoo_collection->getAllSystemNameAndPath;
+        }
         public func dumpTombs()
         {
             apply:<Project>(

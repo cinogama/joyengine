@@ -1,0 +1,67 @@
+// JoyEngineECS 导出版启动脚本模板。
+//
+// 项目导出向导会填充下面这些占位符，然后用 dumpling 把它预编译为 WORT
+// 二进制，以 @/builtin/main.wo 为键打包进资源镜像。引擎启动时
+// je_main_script_entry 会优先加载该入口（见 src/jeecs_startup.cpp）。
+//
+// 占位符（每个在正文中只出现一次，由导出向导整体替换）：
+//   LOAD_DYLIB_MODULES   装载导出的原生模块
+//   LOAD_TOWOO_COMPONENT 注册项目的 ToWoo 组件
+//   LOAD_TOWOO_SYSTEM    注册项目的 ToWoo 系统
+//   LOAD_TYPE_LOADER     装载动态类型序列化器
+//   APPLY_RESOLUTION     设置初始窗口尺寸
+//   APPLY_TITLE          设置窗口标题
+//   LOAD_WORLD_INSTANCE  加载启动世界
+import pkg::std;
+
+import je;
+import je::ecs;
+import je::internal;
+import je::towoo;
+
+import builtin::gaming::Loading::World;
+
+using std;
+using je;
+
+func main()
+{
+    // 原生模块的句柄必须保持存活到进程退出；defer 在 main 返回时统一释放。
+    let loaded_modules = []mut: vec<handle>;
+    defer {
+        for (let module_handle : loaded_modules)
+            do unload_module(module_handle);
+    }
+
+    // ---------- 原生模块 ----------
+$$LOAD_DYLIB_MODULES$$
+
+    // ---------- ToWoo 组件与系统 ----------
+    // update_api 必须在注册 ToWoo 类型之前调用，与编辑器打开项目时的顺序一致。
+    je::towoo::update_api();
+
+$$LOAD_TOWOO_COMPONENT$$
+
+$$LOAD_TOWOO_SYSTEM$$
+
+    // ---------- 动态类型序列化器 ----------
+$$LOAD_TYPE_LOADER$$
+
+    // ---------- 窗口 ----------
+$$APPLY_RESOLUTION$$
+$$APPLY_TITLE$$
+
+    // ---------- 世界 ----------
+    let u = universe::create();
+    defer u->close();
+
+    // 引擎的图形宿主默认跳过所有绘制（je_GraphicUhost::m_skip_all_draw），
+    // 这里开启该宇宙的图形管线。函数名中的 editor 是历史遗留，导出游戏同样需要调用。
+    je::internal::init_graphic_pipeline_for_editor(u);
+
+$$LOAD_WORLD_INSTANCE$$
+
+    u->wait();
+}
+
+main();
