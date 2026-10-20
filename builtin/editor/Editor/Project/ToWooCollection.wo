@@ -204,5 +204,17 @@ namespace JEEditor::Editor::Project
             return self.m_component_collection->checkAll()
                 || self.m_system_collection->checkAll();
         }
+        
+        // 导出流程用：全部已注册组件的 (名称, 路径)。
+        public func getAllComponentNameAndPath(self: ToWooCollection)
+        {
+            return self.m_component_collection->getAllNameAndPath;
+        }
+        
+        // 导出流程用：全部已注册系统的 (名称, 路径)。
+        public func getAllSystemNameAndPath(self: ToWooCollection)
+        {
+            return self.m_system_collection->getAllNameAndPath;
+        }
     }
 }

@@ -172,5 +172,16 @@ namespace JEEditor::Editor::Project
             }
             return false;
         }
+        
+        // 返回全部已注册条目的 (名称, 路径)，供导出流程生成运行期装载代码。
+        public func getAllNameAndPath<SUFFIX: string, UPDATER: ToWooUpdaterFuncT>(
+            self: ToWooCollectionTemplate<{SUFFIX}, {UPDATER}>)=> array<(string, path_t)>
+        {
+            let mut entries = []mut: vec<(string, path_t)>;
+            for (let (name, info) : self.m_registered)
+                entries->add((name, info.m_path));
+                
+            return entries->unsafe::asarray;
+        }
     }
 }

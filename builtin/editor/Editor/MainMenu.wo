@@ -15,6 +15,7 @@ import Inspector;
 import DebugRun;
 import Project;
 import About;
+import ExportProject;
 
 import builtin::editor::Singleton::Universe;
 
@@ -45,6 +46,17 @@ namespace JEEditor::Editor::MainMenu
         return true;
     }
 
+    // “导出项目”可用条件：未在运行/停止过渡、未冻结。导出会以 RELEASE
+    // 重新编译模块并写 .export，冻结期间（世界暂停等待重建）不应插入。
+    func canExportProject()=> bool
+    {
+        if (DebugRun::isDebugRunActive())
+            return false;
+        if (WorldEditorViewport::isWorldsFrozen())
+            return false;
+        return true;
+    }
+
     public func registerMainMenu()
     {
         let engineMainMenu = Menu::create("")
@@ -54,6 +66,10 @@ namespace JEEditor::Editor::MainMenu
                 ->  subItem("保存全部", WorldEditorViewport::saveAllWorlds)
                 ->      enableWhen(canSaveAllWorlds)
                 ->      shortCut("Ctrl+Shfit+S")
+                ->      endItem
+                ->  separator()
+                ->  subItem("导出项目...", \= ExportProject::showExportProject();)
+                ->      enableWhen(canExportProject)
                 ->      endItem
                 ->  endMenu
             -> subMenu("视图")

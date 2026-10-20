@@ -2,5 +2,6 @@
 
 /.temp/
 /.vscode/
+/.export/
 
 *.je4cache
