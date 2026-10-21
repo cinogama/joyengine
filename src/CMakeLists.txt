@@ -325,7 +325,8 @@ target_link_libraries(joyecs PRIVATE
     woolang
     woort
     box2d 
-    assimp)
+    assimp
+    miniz)
 
 if (JE4_SPECIFY_OPENAL_LIB_NAME STREQUAL "")
     target_link_libraries(joyecs PRIVATE OpenAL)

@@ -150,6 +150,9 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static assimp" FORCE)
 set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "Build zlib in assimp" FORCE)
 add_subdirectory("3rd/assimp")
 
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static miniz" FORCE)
+add_subdirectory("3rd/miniz")
+
 # Use glslang and spirv-cross to generate shader wraper for all supported platform.
 if (JE4_ENABLE_SHADER_WRAP_GENERATOR)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glslangc" FORCE)

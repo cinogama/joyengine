@@ -107,7 +107,12 @@ namespace je
         public using fimg_writer = handle
         {
             extern("libjoyecs", "wojeapi_fimg_writer_create")
-                public func create(root: string, shard_size: int)=> fimg_writer;
+                public func create(root: string, shard_size: int,
+                    compression_level: int, min_compress_size: int,
+                    skip_extensions: string)=> fimg_writer;
+
+            extern("libjoyecs", "wojeapi_fimg_default_skip_extensions")
+                public func default_skip_extensions()=> string;
                 
             extern("libjoyecs", "wojeapi_fimg_writer_pack_file")
                 public func pack(self: fimg_writer, file_path: string, archive_path: string)=> bool;

@@ -39,6 +39,10 @@ jeecs_fimg_writer_pack_buffer(writer, config, strlen(config), "@/config/game.jso
 jeecs_fimg_writer_pack_buffer(writer, nullptr, 0, "@/empty.txt");
 ```
 
+## 注意事项
+
+- 文件是否压缩由 writer 的压缩选项和归档路径的扩展名决定
+
 ## 相关接口
 
 - [jeecs_fimg_writer_pack_file](jeecs_fimg_writer_pack_file.md)

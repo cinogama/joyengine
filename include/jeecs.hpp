@@ -1998,14 +1998,38 @@ jeecs_fimg_archive_file_size [基本接口]
 JE_API size_t jeecs_fimg_archive_file_size(const jeecs_fimg_archive* archive, const char* path);
 
 /*
+jeecs_fimg_writer_options [类型]
+fimg 打包选项
+*/
+typedef struct jeecs_fimg_writer_options
+{
+    /* -1 使用默认等级 6；0 仅存储；1-9 使用 deflate */
+    int compression_level;
+    /* 小于该大小的文件不压缩 */
+    size_t min_compress_size;
+    /* OPTIONAL: nullptr 使用内置默认列表；空字符串表示不跳过任何扩展名
+       逗号/分号/空白分隔，大小写不敏感，前导 '.' 可有可无 */
+    const char* skip_extensions;
+} jeecs_fimg_writer_options;
+
+/*
 jeecs_fimg_writer_create [基本接口]
 准备在 root 目录下创建 fimg 镜像
     * root 必须已经存在且可写
     * shard_size 是单个分片文件的目标大小，传 0 使用默认值（1 MiB）
+    * options 为 nullptr 时使用默认压缩配置（等级 6、最小 64 字节、内置跳过列表）
 */
 JE_API jeecs_fimg_writer* jeecs_fimg_writer_create(
     const char* root,
-    size_t shard_size);
+    size_t shard_size,
+    /* OPTIONAL */ const jeecs_fimg_writer_options* options);
+
+/*
+jeecs_fimg_default_skip_extensions [基本接口]
+获取内置的“已压缩扩展名”列表，按逗号分隔
+用于编辑器初始化可编辑的跳过列表
+*/
+JE_API const char* jeecs_fimg_default_skip_extensions();
 
 /*
 jeecs_fimg_writer_pack_file [基本接口]

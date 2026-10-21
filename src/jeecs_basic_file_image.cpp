@@ -413,15 +413,39 @@ size_t jeecs_fimg_archive_file_size(const jeecs_fimg_archive* archive, const cha
     return entry == nullptr ? 0 : static_cast<size_t>(entry->size);
 }
 
-jeecs_fimg_writer* jeecs_fimg_writer_create(const char* root, size_t shard_size)
+jeecs_fimg_writer* jeecs_fimg_writer_create(
+    const char* root,
+    size_t shard_size,
+    const jeecs_fimg_writer_options* options)
 {
     assert(root != nullptr);
 
-    auto impl = jeecs::fimg::writer::create(root, shard_size);
+    jeecs::fimg::writer_options resolved;
+    if (options != nullptr)
+    {
+        resolved.compression_level = options->compression_level;
+        resolved.min_compress_size = options->min_compress_size;
+        resolved.skip_extensions = options->skip_extensions != nullptr
+            ? options->skip_extensions
+            : jeecs::fimg::default_skip_extensions();
+    }
+    else
+    {
+        resolved.compression_level = 6;
+        resolved.min_compress_size = 64;
+        resolved.skip_extensions = jeecs::fimg::default_skip_extensions();
+    }
+
+    auto impl = jeecs::fimg::writer::create(root, shard_size, std::move(resolved));
 
     auto* writer = new jeecs_fimg_writer;
     writer->impl = std::move(impl);
     return writer;
+}
+
+const char* jeecs_fimg_default_skip_extensions()
+{
+    return jeecs::fimg::default_skip_extensions();
 }
 
 bool jeecs_fimg_writer_pack_file(

@@ -8,7 +8,7 @@ JE_API size_t jeecs_fimg_archive_file_size(const jeecs_fimg_archive* archive, co
 
 ## 描述
 
-获取镜像中指定文件的大小。
+获取镜像中指定文件的大小（解压后的逻辑大小）。
 
 ## 参数
 

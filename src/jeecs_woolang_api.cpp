@@ -155,9 +155,20 @@ WOORT_API woort_api wojeapi_set_runtime_path(void)
 
 WOORT_API woort_api wojeapi_fimg_writer_create(void)
 {
+    jeecs_fimg_writer_options options;
+    options.compression_level = (int)woort_int(2);
+    options.min_compress_size = (size_t)woort_int(3);
+    options.skip_extensions = woort_string(4);
+
     return woort_ret_pointer(jeecs_fimg_writer_create(
         woort_string(0),
-        (size_t)woort_int(1)));
+        (size_t)woort_int(1),
+        &options));
+}
+
+WOORT_API woort_api wojeapi_fimg_default_skip_extensions(void)
+{
+    return woort_ret_string(jeecs_fimg_default_skip_extensions());
 }
 
 WOORT_API woort_api wojeapi_fimg_writer_pack_file(void)

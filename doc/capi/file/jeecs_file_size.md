@@ -8,7 +8,7 @@ JE_API size_t jeecs_file_size(jeecs_file* file);
 
 ## 描述
 
-获取文件总大小（字节）。`jeecs_file` 的布局由引擎内部维护，应通过此接口读取大小。
+获取文件总大小（解压后的逻辑大小）。`jeecs_file` 的布局由引擎内部维护，应通过此接口读取大小。
 
 ## 参数
 

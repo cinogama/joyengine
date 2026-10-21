@@ -73,3 +73,8 @@
 	path = 3rd/woodyn
 	url = https://git.cinogama.net/cinogamaproject/woodyn.git
 	branch = master
+[submodule "3rd/miniz"]
+	path = 3rd/miniz
+	url = https://git.cinogama.net/cinogamaproject/joyengineecs/miniz.git
+	branch = master
+	tag = 3.1.2

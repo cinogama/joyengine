@@ -22,6 +22,7 @@ import pkg::buffer;
 import pkg::dumpling;
 import pkg::platform;
 import pkg::process;
+import pkg::toml;
 import pkg::worst;
 
 import je;
@@ -45,11 +46,113 @@ using je;
 using je::graphic;
 using je::gui;
 using dumpling;
+using toml;
 using JEEditor::GUI::Windows;
 using JEEditor::Singleton;
 
 namespace JEEditor::Editor
 {
+    // 导出设置会通过 Singleton 保存到项目的 .temp/export_settings.toml，
+    // 下次打开导出向导时恢复。
+    using ExportSettings = struct{
+        m_compression_enabled: mut bool,
+        m_compression_level: mut int,
+        m_min_compress_size_kb: mut int,
+        m_skip_extensions: mut string,
+    }
+    {
+        public let SINGLETON_LABEL = "export_settings";
+
+        public func createAndLoad(content: option<Toml>)=> ExportSettings
+            where require!(ExportSettings: ISingleton);
+        {
+            let mut enabled = true;
+            let mut level = 6;
+            let mut min_kb = 1;
+            let mut skip = je::internal::fimg_writer::default_skip_extensions();
+
+            match (content)
+            {
+                none?;
+                value(data)?
+                {
+                    match (data->get("compression_enabled"))
+                    {
+                        none?;
+                        value(v)?
+                        {
+                            match (v->as_bool)
+                            {
+                                none?;
+                                value(b)? enabled = b;
+                            }
+                        }
+                    }
+                    match (data->get("compression_level"))
+                    {
+                        none?;
+                        value(v)?
+                        {
+                            match (v->as_int)
+                            {
+                                none?;
+                                value(i)? level = i;
+                            }
+                        }
+                    }
+                    match (data->get("min_compress_size_kb"))
+                    {
+                        none?;
+                        value(v)?
+                        {
+                            match (v->as_int)
+                            {
+                                none?;
+                                value(i)? min_kb = i;
+                            }
+                        }
+                    }
+                    match (data->get("skip_extensions"))
+                    {
+                        none?;
+                        value(v)?
+                        {
+                            match (v->as_string)
+                            {
+                                none?;
+                                value(s)? skip = s;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (level < 1)
+                level = 1;
+            if (level > 9)
+                level = 9;
+            if (min_kb < 0)
+                min_kb = 0;
+
+            return ExportSettings{
+                m_compression_enabled = mut enabled,
+                m_compression_level = mut level,
+                m_min_compress_size_kb = mut min_kb,
+                m_skip_extensions = mut skip,
+            };
+        }
+
+        public func save(self: ExportSettings)=> option<Toml>
+        {
+            let data = new_table();
+            data->set("compression_enabled", self.m_compression_enabled);
+            data->set("compression_level", self.m_compression_level);
+            data->set("min_compress_size_kb", self.m_min_compress_size_kb);
+            data->set("skip_extensions", self.m_skip_extensions);
+            return option::value(data);
+        }
+    }
+
     using ExportProject = struct{
         m_step: mut int,
         // (打包键, 是否作为启动世界)；打包键形如 @/resource/worlds/x.je4world
@@ -57,6 +160,10 @@ namespace JEEditor::Editor
         m_reso_index: mut int,
         m_resolution: mut (int, int),
         m_image_size_mb: mut int,
+        m_compress_enabled: mut bool,
+        m_compression_level: mut int,
+        m_min_compress_size_kb: mut int,
+        m_skip_extensions: mut string,
         m_closed: mut bool,
     }
     {
@@ -69,6 +176,10 @@ namespace JEEditor::Editor
             m_start_up_worlds: array<string>,
             m_resolution: (int, int),
             m_image_size_mb: int,
+            m_compress_enabled: bool,
+            m_compression_level: int,
+            m_min_compress_size_kb: int,
+            m_skip_extensions: string,
             m_modules: array<(string, path_t)>,
             m_towoo_components: array<(string, path_t)>,
             m_towoo_systems: array<(string, path_t)>,
@@ -95,12 +206,18 @@ namespace JEEditor::Editor
         public func create()=> ExportProject
             where require!(ExportProject: IWindows);
         {
+            let export_settings = apply:<ExportSettings>(func(s){ return s; });
+
             return ExportProject{
                 m_step = mut 0,
                 m_worlds = scanWorlds(),
                 m_reso_index = mut 1,
                 m_resolution = mut (1366, 768),
                 m_image_size_mb = mut 128,
+                m_compress_enabled = mut export_settings.m_compression_enabled,
+                m_compression_level = mut export_settings.m_compression_level,
+                m_min_compress_size_kb = mut export_settings.m_min_compress_size_kb,
+                m_skip_extensions = mut export_settings.m_skip_extensions,
                 m_closed = mut false,
             };
         }
@@ -272,6 +389,40 @@ namespace JEEditor::Editor
                             self.m_image_size_mb = new_size;
                     }
                 }
+
+                Separator();
+                Text("压缩设置");
+                match (CheckBox("压缩资源镜像##EXPORT_COMPRESS", self.m_compress_enabled))
+                {
+                    none?;
+                    value(enabled)? self.m_compress_enabled = enabled;
+                }
+                if (self.m_compress_enabled)
+                {
+                    match (SliderInt("压缩级别##EXPORT_COMPRESS_LEVEL",
+                        self.m_compression_level, 1, 9))
+                    {
+                        none?;
+                        value(level)? self.m_compression_level = level;
+                    }
+                    match (InputInt("最小压缩大小 (KB)##EXPORT_MIN_COMPRESS",
+                        self.m_min_compress_size_kb))
+                    {
+                        none?;
+                        value(min_kb)?
+                        {
+                            if (min_kb >= 0)
+                                self.m_min_compress_size_kb = min_kb;
+                        }
+                    }
+                    match (InputText("跳过扩展名（逗号分隔）##EXPORT_SKIP_EXT",
+                        self.m_skip_extensions))
+                    {
+                        none?;
+                        value(text)? self.m_skip_extensions = text;
+                    }
+                    TextDisabled("PNG/JPEG/ZIP 等已压缩格式默认不重复压缩");
+                }
             }
             EndChild();
             
@@ -292,6 +443,13 @@ namespace JEEditor::Editor
                 Text(F"启动世界：{self->selectedWorldCount()} 个");
                 Text(F"分辨率：{self.m_resolution.0}x{self.m_resolution.1}");
                 Text(F"镜像分片大小：{self.m_image_size_mb} MB");
+                if (self.m_compress_enabled)
+                {
+                    Text(F"镜像压缩：等级 {self.m_compression_level}，最小 {self.m_min_compress_size_kb} KB");
+                    Text(F"跳过扩展名：{self.m_skip_extensions}");
+                }
+                else
+                    Text("镜像压缩：关闭");
                 Separator();
                 Text("按下“开始打包”后，向导会关闭，");
                 Text("编译与打包过程显示在“项目导出”日志窗口中。");
@@ -412,6 +570,10 @@ namespace JEEditor::Editor
                         m_start_up_worlds = start_up_worlds->unsafe::asarray,
                         m_resolution = self.m_resolution,
                         m_image_size_mb = self.m_image_size_mb,
+                        m_compress_enabled = self.m_compress_enabled,
+                        m_compression_level = self.m_compression_level,
+                        m_min_compress_size_kb = self.m_min_compress_size_kb,
+                        m_skip_extensions = self.m_skip_extensions,
                         m_modules = proj->getDeclaredModules(),
                         m_towoo_components = existingEntries(
                             proj->getAllToWooComponentNameAndPath()),
@@ -422,6 +584,15 @@ namespace JEEditor::Editor
                     };
                 });
                 
+            do apply:<ExportSettings>(
+                func(s)
+                {
+                    s.m_compression_enabled = self.m_compress_enabled;
+                    s.m_compression_level = self.m_compression_level;
+                    s.m_min_compress_size_kb = self.m_min_compress_size_kb;
+                    s.m_skip_extensions = self.m_skip_extensions;
+                });
+
             do showModal(
                 ModulePrepare::createWithTitle(
                     "项目导出",
@@ -451,7 +622,10 @@ namespace JEEditor::Editor
                 
             let packer = je::internal::fimg_writer::create(
                 export_path->to_string,
-                settings.m_image_size_mb * 1024 * 1024);
+                settings.m_image_size_mb * 1024 * 1024,
+                (settings.m_compress_enabled ? settings.m_compression_level | 0),
+                settings.m_min_compress_size_kb * 1024,
+                settings.m_skip_extensions);
                 
             // 失败路径调用 abort 释放 writer；输出目录由下次导出前清理。
             let packer_finished = mutable::create(false);
