@@ -2105,6 +2105,13 @@ struct jegl_context_notifier;
 struct jegl_graphic_api;
 struct jegl_context_promise_t;
 
+/*
+jegl_update_action [类型]
+图形后端的帧更新接口返回的渲染动作，也会作为参数传给帧渲染任务
+    * JEGL_UPDATE_CONTINUE 表示继续正常渲染
+    * JEGL_UPDATE_SKIP 表示跳过本帧的渲染
+    * JEGL_UPDATE_STOP 表示请求关闭渲染
+*/
 enum jegl_update_action
 {
     JEGL_UPDATE_CONTINUE,
@@ -2634,12 +2641,21 @@ struct jegl_frame_buffer_clear_operation
     const jegl_frame_buffer_clear_operation* m_next;
 };
 
-// Render API (v2) objects. The definitions are private to the engine; the
-// public boundary only exposes these distinct opaque handle types.
+/*
+jegl_pipeline / jegl_sampler / jegl_command_buffer [类型]
+Render API (v2) 的不透明对象句柄；具体定义由引擎内部持有，
+外部只能通过对应的 jegl_* 接口创建、使用和关闭
+    * jegl_command_buffer 的录制与提交规则见其接口说明
+*/
 struct jegl_pipeline;
 struct jegl_sampler;
 struct jegl_command_buffer;
 
+/*
+jegl_viewport [类型]
+渲染 pass 的视口范围，单位为像素
+    * width 与 height 必须大于 0
+*/
 struct jegl_viewport
 {
     int32_t x;
@@ -3201,7 +3217,7 @@ typedef void  (*jeecs_api_register_func_t)(jegl_graphic_api*);
 typedef void  (*jeecs_sync_callback_func_t)(jegl_context*, void*);
 
 /*
-jegl_register_sync_graphic_callback [基本接口]
+jegl_register_sync_thread_callback [基本接口]
 一些平台下，由于上下文等限制，不能创建独立的渲染线程，
 对于这种情况，可以使用此函数注册一个回调函数，在本应
 创建图形线程的地方调用此回调，用于获取对应的universe
@@ -3214,6 +3230,13 @@ JE_API void jegl_register_sync_thread_callback(
     jeecs_sync_callback_func_t callback,
     /* OPTIONAL */ void* arg);
 
+/*
+jegl_sync_state [类型]
+手动同步图形更新时，jegl_sync_update 返回的状态
+    * JEGL_SYNC_COMPLETE 表示本帧正常结束
+    * JEGL_SYNC_SHUTDOWN 表示绘制将结束
+    * JEGL_SYNC_REBOOT 表示需要重新初始化图形上下文
+*/
 enum jegl_sync_state
 {
     JEGL_SYNC_COMPLETE,
@@ -3224,7 +3247,7 @@ enum jegl_sync_state
 /*
 jegl_sync_init [基本接口]
 一些平台下，由于上下文等限制，不能创建独立的渲染线程，
-对于这种情况，可以使用jegl_register_sync_graphic_callback
+对于这种情况，可以使用jegl_register_sync_thread_callback
 注册回调函数，并手动执行 jegl_sync_init、jegl_sync_update
 和 jegl_sync_shutdown。
     * jegl_sync_init 用于图形在首次启动或重启时执行图形
@@ -3232,7 +3255,7 @@ jegl_sync_init [基本接口]
         jegl_sync_update 直到其返回 JEGL_SYNC_SHUTDOWN
         或 JEGL_SYNC_REBOOT 之前，都不需要重新初始化
 请参见：
-    jegl_register_sync_graphic_callback
+    jegl_register_sync_thread_callback
     jegl_sync_update
     jegl_sync_shutdown
 */
@@ -3243,7 +3266,7 @@ JE_API void jegl_sync_init(
 /*
 jegl_sync_update [基本接口]
 一些平台下，由于上下文等限制，不能创建独立的渲染线程，
-对于这种情况，可以使用jegl_register_sync_graphic_callback
+对于这种情况，可以使用jegl_register_sync_thread_callback
 注册回调函数，并手动执行 jegl_sync_init、jegl_sync_update
 和 jegl_sync_shutdown。
     * jegl_sync_update 用于更新图形图形的一帧
@@ -3255,7 +3278,7 @@ jegl_sync_update [基本接口]
         上下文，然后以 isreboot = true 调用jegl_sync_init
         重新执行初始化
 请参见：
-    jegl_register_sync_graphic_callback
+    jegl_register_sync_thread_callback
     jegl_sync_init
     jegl_sync_shutdown
 */
@@ -3264,7 +3287,7 @@ JE_API jegl_sync_state jegl_sync_update(jegl_context* thread);
 /*
 jegl_sync_shutdown [基本接口]
 一些平台下，由于上下文等限制，不能创建独立的渲染线程，
-对于这种情况，可以使用jegl_register_sync_graphic_callback
+对于这种情况，可以使用jegl_register_sync_thread_callback
 注册回调函数，并手动执行 jegl_sync_init、jegl_sync_update
 和 jegl_sync_shutdown。
     * jegl_sync_shutdown 用于释放上下文，根据jegl_sync_update
@@ -3272,7 +3295,7 @@ jegl_sync_shutdown [基本接口]
     * 返回值事实上只与 isreboot 有关：返回 true 表示确实退出，
         返回 false 表示仍需重新初始化
 请参见：
-    jegl_register_sync_graphic_callback
+    jegl_register_sync_thread_callback
     jegl_sync_init
     jegl_sync_shutdown
 */
@@ -3305,12 +3328,22 @@ jegl_terminate_graphic_thread [基本接口]
 */
 JE_API void jegl_terminate_graphic_thread(jegl_context* thread_handle);
 
+/*
+jegl_update_sync_mode [类型]
+jegl_update 的同步模式
+    * JEGL_WAIT_THIS_FRAME_END 表示阻塞直到当前帧渲染完毕
+    * JEGL_WAIT_LAST_FRAME_END 表示阻塞直到上一帧渲染完毕
+*/
 enum jegl_update_sync_mode
 {
     JEGL_WAIT_THIS_FRAME_END,
     JEGL_WAIT_LAST_FRAME_END,
 };
 
+/*
+jegl_update_sync_callback_t [类型]
+jegl_update 完成等待后调用的回调函数类型，参数为注册时传入的 callback_param
+*/
 typedef void (*jegl_update_sync_callback_t)(void*);
 
 /*
@@ -3771,7 +3804,7 @@ jegl_using_opengl3_apis [基本接口]
 JE_API void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis);
 
 /*
-jegl_using_vulkan120_apis [基本接口]
+jegl_using_vk120_apis [基本接口]
 加载Vulkan API v1.2集合，通常与jegl_start_graphic_thread一起使用以指定图形线程使用的基本图形
 实现。
 请参见：
@@ -3861,6 +3894,14 @@ struct jegl_pipeline_state
     uint8_t m_color_write_mask;
 };
 
+/*
+jegl_pipeline_desc [类型]
+pipeline 的创建描述
+    * m_shader 不得为空，pipeline 会持有其引用
+    * m_state 为空时，使用 shader 的 ZTEST/ZWRITE/BLEND/CULL 配置
+请参见：
+    jegl_pipeline_create
+*/
 struct jegl_pipeline_desc
 {
     jegl_shader* m_shader;
@@ -3882,6 +3923,11 @@ struct jegl_uniform_slot
     uint32_t m_size;
 };
 
+/*
+jegl_builtin_uniform_slots [类型]
+pipeline 在创建时缓存的内建 uniform 位置表
+    * 未在 shader 中声明的项，其 m_offset 为 JEGL_UNIFORM_SLOT_NONE
+*/
 struct jegl_builtin_uniform_slots
 {
     jegl_uniform_slot m_model;
@@ -3907,6 +3953,16 @@ jegl_pipeline_create [基本接口]
 JE_API jegl_pipeline* /* NOT NULL */ jegl_pipeline_create(
     jegl_context* context, const jegl_pipeline_desc* desc);
 
+/*
+jegl_close_pipeline [基本接口]
+关闭一个 pipeline 资源（使得其引用计数减少），如果资源被 jegl_share_resource
+引用过多次，那么需要对应调用多次才能真正释放资源
+    * 若此操作使得引用计数变为 0，pipeline 持有的 shader 引用随之释放，
+        对应的后端对象将由资源所属图形线程在适当的时机销毁
+请参见：
+    jegl_pipeline_create
+    jegl_share_resource
+*/
 JE_API void jegl_close_pipeline(jegl_pipeline* pipeline);
 
 /*
@@ -3934,8 +3990,8 @@ JE_API const jegl_builtin_uniform_slots* /* NOT NULL */
 jegl_pipeline_builtin_uniform_slots(jegl_pipeline* pipeline);
 
 /*
-jegl_sampler / jegl_sampler_desc [类型]
-独立采样器对象；未显式绑定时使用 shader 声明的默认采样器。
+jegl_filter / jegl_mip_filter [类型]
+采样器的缩小/放大过滤与 mipmap 过滤模式
 */
 enum class jegl_filter : uint8_t
 {
@@ -3949,6 +4005,10 @@ enum class jegl_mip_filter : uint8_t
     LINEAR,
 };
 
+/*
+jegl_wrap_mode [类型]
+采样器在 U/V/W 方向上的寻址模式
+*/
 enum class jegl_wrap_mode : uint8_t
 {
     CLAMP_TO_EDGE,
@@ -3956,6 +4016,13 @@ enum class jegl_wrap_mode : uint8_t
     MIRRORED_REPEAT,
 };
 
+/*
+jegl_sampler_desc [类型]
+独立采样器的创建描述，所有字段都必须显式初始化
+    * 未通过 jegl_cmd_bind_sampler 显式绑定时，使用 shader 声明的默认采样器
+请参见：
+    jegl_sampler_create
+*/
 struct jegl_sampler_desc
 {
     jegl_filter m_min_filter;
@@ -3966,9 +4033,29 @@ struct jegl_sampler_desc
     jegl_wrap_mode m_w_wrap;
 };
 
+/*
+jegl_sampler_create [基本接口]
+根据描述创建一个独立采样器
+    * 返回的采样器持有引用计数，需要使用 jegl_close_sampler 减少引用计数
+    * 未通过 jegl_cmd_bind_sampler 显式绑定时，使用 shader 声明的默认采样器
+请参见：
+    jegl_sampler_desc
+    jegl_close_sampler
+    jegl_cmd_bind_sampler
+*/
 JE_API jegl_sampler* /* NOT NULL */ jegl_sampler_create(
     jegl_context* context, const jegl_sampler_desc* desc);
 
+/*
+jegl_close_sampler [基本接口]
+关闭一个采样器（使得其引用计数减少），如果资源被 jegl_share_resource 引用过多次，
+那么需要对应调用多次才能真正释放资源
+    * 若此操作使得引用计数变为 0，对应的后端对象将由资源所属图形线程在适当的
+        时机销毁
+请参见：
+    jegl_sampler_create
+    jegl_share_resource
+*/
 JE_API void jegl_close_sampler(jegl_sampler* sampler);
 
 /*
@@ -3977,12 +4064,48 @@ jegl_command_buffer [类型]
     * reset 后可以重复使用；begin_pass 之前不需要额外的 begin
     * commit 只允许在创建时指定的图形线程中调用
 */
+
+/*
+jegl_cmd_create [基本接口]
+创建一个命令缓冲区，并绑定到指定的图形上下文
+    * 命令录制可以在任意线程进行；jegl_cmd_commit 只允许在 context 所属的
+        图形线程调用
+    * 创建出的命令缓冲区需要使用 jegl_cmd_close 关闭
+请参见：
+    jegl_cmd_close
+    jegl_cmd_reset
+    jegl_cmd_commit
+*/
 JE_API jegl_command_buffer* /* NOT NULL */ jegl_cmd_create(
     jegl_context* context);
+
+/*
+jegl_cmd_close [基本接口]
+关闭一个命令缓冲区，并释放其录制期持有的全部资源引用
+    * 尚未提交的录制内容会被直接丢弃
+请参见：
+    jegl_cmd_create
+*/
 JE_API void jegl_cmd_close(jegl_command_buffer* cmd);
+
+/*
+jegl_cmd_reset [基本接口]
+重置命令缓冲区以便复用：清空已录制的命令，并释放录制期持有的全部资源引用
+    * 重置会直接丢弃仍未提交的内容（包括尚未结束的 pass），不会报错
+请参见：
+    jegl_cmd_create
+    jegl_cmd_commit
+*/
 JE_API void jegl_cmd_reset(jegl_command_buffer* cmd);
 
-/* 返回创建命令缓冲区时绑定的图形上下文 */
+/*
+jegl_cmd_get_context [基本接口]
+返回创建命令缓冲区时绑定的图形上下文
+    * 该上下文也是唯一允许调用 jegl_cmd_commit 的图形线程
+请参见：
+    jegl_cmd_create
+    jegl_cmd_commit
+*/
 JE_API jegl_context* /* NOT NULL */ jegl_cmd_get_context(
     jegl_command_buffer* cmd);
 
@@ -4005,17 +4128,65 @@ JE_API void jegl_cmd_clear_color(
     jegl_command_buffer* cmd, uint32_t attachment, const float rgba[4]);
 JE_API void jegl_cmd_clear_depth(
     jegl_command_buffer* cmd, float depth);
+
+/*
+jegl_cmd_end_pass [基本接口]
+结束当前渲染 pass
+    * 必须与 jegl_cmd_begin_pass 配对；未显式调用时 jegl_cmd_commit 会自动结束
+请参见：
+    jegl_cmd_begin_pass
+    jegl_cmd_commit
+*/
 JE_API void jegl_cmd_end_pass(jegl_command_buffer* cmd);
 
+/*
+jegl_cmd_bind_pipeline [基本接口]
+为后续绘制绑定 pipeline
+    * 必须在 pass 内调用
+    * pipeline 必须与命令缓冲区属于同一个图形上下文
+    * 绑定 pipeline 会按 shader 的默认值重新初始化 per-draw uniform 块
+请参见：
+    jegl_pipeline_create
+    jegl_cmd_set_uniform
+*/
 JE_API void jegl_cmd_bind_pipeline(
     jegl_command_buffer* cmd, jegl_pipeline* pipeline);
+
+/*
+jegl_cmd_bind_vertex [基本接口]
+为后续绘制绑定顶点（模型）资源
+    * 必须在 pass 内调用；draw 之前必须同时绑定 pipeline 和 vertex
+请参见：
+    jegl_cmd_bind_pipeline
+    jegl_cmd_draw
+    jegl_cmd_draw_indexed
+*/
 JE_API void jegl_cmd_bind_vertex(
     jegl_command_buffer* cmd, jegl_vertex* vertex);
 
-/* 使用 uniform buffer 自带的 binding place，避免绑定位置不一致 */
+/*
+jegl_cmd_bind_uniform_buffer [基本接口]
+为后续绘制绑定一致变量缓冲区
+    * 必须在 pass 内调用
+    * 使用 buffer 创建时指定的 binding place，避免绑定位置不一致
+请参见：
+    jegl_create_uniformbuf
+    jegl_update_uniformbuf
+*/
 JE_API void jegl_cmd_bind_uniform_buffer(
     jegl_command_buffer* cmd, jegl_uniform_buffer* buffer);
 
+/*
+jegl_cmd_bind_texture_2d / jegl_cmd_bind_texture_3d / jegl_cmd_bind_texture_array /
+jegl_cmd_bind_texture_cube [基本接口]
+将指定类别的纹理绑定到 shader 的纹理声明（pass）上
+    * 必须在 pass 内调用
+    * pass 取自 shader 反射（jegl_shader::m_sampler_methods）
+    * 同一 pass 重复绑定会覆盖此前的纹理
+请参见：
+    jegl_cmd_bind_sampler
+    jegl_shader
+*/
 JE_API void jegl_cmd_bind_texture_2d(
     jegl_command_buffer* cmd, uint32_t pass, jegl_texture_2d* texture);
 JE_API void jegl_cmd_bind_texture_3d(
@@ -4024,6 +4195,17 @@ JE_API void jegl_cmd_bind_texture_array(
     jegl_command_buffer* cmd, uint32_t pass, jegl_texture_array* texture);
 JE_API void jegl_cmd_bind_texture_cube(
     jegl_command_buffer* cmd, uint32_t pass, jegl_texture_cube* texture);
+
+/*
+jegl_cmd_bind_sampler [基本接口]
+为指定的采样器声明绑定独立采样器
+    * 必须在 pass 内且已绑定 pipeline 后调用
+    * sampler_id 取自 shader 反射（jegl_shader::m_sampler_methods）
+    * 未绑定采样器的声明使用 shader 的默认采样器
+请参见：
+    jegl_sampler_create
+    jegl_cmd_bind_texture_2d
+*/
 JE_API void jegl_cmd_bind_sampler(
     jegl_command_buffer* cmd, uint32_t sampler_id, jegl_sampler* sampler);
 
@@ -4038,6 +4220,15 @@ JE_API void jegl_cmd_set_uniform(
     jegl_command_buffer* cmd, jegl_uniform_slot slot,
     const void* data, uint32_t size);
 
+/*
+jegl_cmd_set_uniform_float / jegl_cmd_set_uniform_float2 /
+jegl_cmd_set_uniform_float3 / jegl_cmd_set_uniform_float4 [基本接口]
+以标量或浮点向量的形式设置当前 pipeline 的 per-draw uniform
+    * 参数约定与 jegl_cmd_set_uniform 一致：必须先绑定 pipeline，
+        slot 必须有效且大小匹配
+请参见：
+    jegl_cmd_set_uniform
+*/
 JE_API void jegl_cmd_set_uniform_float(
     jegl_command_buffer* cmd, jegl_uniform_slot slot, float value);
 JE_API void jegl_cmd_set_uniform_float2(
@@ -4047,6 +4238,15 @@ JE_API void jegl_cmd_set_uniform_float3(
 JE_API void jegl_cmd_set_uniform_float4(
     jegl_command_buffer* cmd, jegl_uniform_slot slot, float x, float y, float z, float w);
 
+/*
+jegl_cmd_set_uniform_int / jegl_cmd_set_uniform_int2 /
+jegl_cmd_set_uniform_int3 / jegl_cmd_set_uniform_int4 [基本接口]
+以标量或整数向量的形式设置当前 pipeline 的 per-draw uniform
+    * 参数约定与 jegl_cmd_set_uniform 一致：必须先绑定 pipeline，
+        slot 必须有效且大小匹配
+请参见：
+    jegl_cmd_set_uniform
+*/
 JE_API void jegl_cmd_set_uniform_int(
     jegl_command_buffer* cmd, jegl_uniform_slot slot, int value);
 JE_API void jegl_cmd_set_uniform_int2(
@@ -4056,6 +4256,17 @@ JE_API void jegl_cmd_set_uniform_int3(
 JE_API void jegl_cmd_set_uniform_int4(
     jegl_command_buffer* cmd, jegl_uniform_slot slot, int x, int y, int z, int w);
 
+/*
+jegl_cmd_set_uniform_float2x2 / jegl_cmd_set_uniform_float3x3 /
+jegl_cmd_set_uniform_float4x4 [基本接口]
+以矩阵的形式设置当前 pipeline 的 per-draw uniform
+    * 矩阵按连续内存写入 uniform 块；float3x3 的每个 3 分量向量按 std140
+        规则占用 16 字节
+    * 参数约定与 jegl_cmd_set_uniform 一致：必须先绑定 pipeline，
+        slot 必须有效且大小匹配
+请参见：
+    jegl_cmd_set_uniform
+*/
 JE_API void jegl_cmd_set_uniform_float2x2(
     jegl_command_buffer* cmd, jegl_uniform_slot slot, const float (*mat)[2]);
 JE_API void jegl_cmd_set_uniform_float3x3(
