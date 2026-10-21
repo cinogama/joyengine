@@ -295,30 +295,47 @@ namespace JEEditor::Editor
         // 顶部横幅：吉祥物 + 标题 + 当前项目，与「项目」「关于」窗口一致。
         func drawHeader()
         {
+            // Joy.png 是 256x256，但内容只占 x:40..240，直接整张缩放会把
+            // 左右透明边也算进图标宽度，显得又小又偏；这里按 UV 裁掉。
+            let icon_h = 50.;
+            let icon_w = icon_h * 200. / 256.;
+            let icon_gap = 12.;
+            let (sx, sy) = GetCursorScreenPos();
+
+            let line_h = GetTextLineHeight();
+            let spacing_h = GetTextLineHeightWithSpacing();
+            // 三行文字：放大 1.5 倍的标题 + 两行说明
+            let text_height = line_h * 1.5 + (spacing_h - line_h)
+                + spacing_h * 2.;
+
+            Indent(icon_w + icon_gap);
+
+            SetWindowFontScale(1.5);
+            TextColored(k_title_color, "项目导出");
+            SetWindowFontScale(1.);
+
+            TextDisabled(F"项目：{shrinkPath(projectName(), 36)}");
+            if (IsItemHovered())
+                do SetTooltip(workpath()->to_string);
+
+            TextDisabled("收集资源、编译着色器并生成可独立运行的游戏");
+
+            Unindent(icon_w + icon_gap);
+
+            // 吉祥物与右侧文字块垂直居中，绘制在文字之后不影响排版
             match (s_joy_logo)
             {
                 none?;
                 value(logo)?
                 {
-                    ImageSize(logo, 64., 64.);
-                    SameLine();
+                    let icon_y = sy + (text_height - icon_h) * 0.5;
+                    let draw = GetWindowDrawList();
+                    draw->AddImageUV(
+                        (sx, icon_y), (sx + icon_w, icon_y + icon_h),
+                        (40. / 256., 0.), (240. / 256., 1.),
+                        logo, (255, 255, 255, 255));
                 }
             }
-
-            // 有吉祥物时文字列从它右侧开始；纹理缺失时即为窗口缩进处
-            let text_x = GetCursorPos().0;
-
-            SetWindowFontScale(1.6);
-            TextColored(k_title_color, "项目导出");
-            SetWindowFontScale(1.);
-
-            setCursorX(text_x);
-            TextDisabled(F"项目：{shrinkPath(projectName(), 36)}");
-            if (IsItemHovered())
-                do SetTooltip(workpath()->to_string);
-
-            setCursorX(text_x);
-            TextDisabled("收集资源、编译着色器并生成可独立运行的游戏");
         }
 
         // 顶部步骤指示条：已完成步骤填暖橙色，当前步骤带光晕与描边，
