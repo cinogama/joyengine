@@ -448,6 +448,19 @@ namespace JEEditor::Editor
                         
             return proj;
         }
+        /* 项目文件中的模块表只在打开项目时解析，本次会话新建的模块尚未
+        写回项目文件。以声明的模块表为准，再合并本次会话已装载的模块
+        （含新建的），同名的以本次会话的路径为准。 */
+        func collectModules(self: Project)=> map<string, path_t>
+        {
+            let mut modules = {}mut: map<string, path_t>;
+            for (let (name, path) : self.m_declared_modules)
+                modules->set(name, path);
+            for (let (name, path) : self.m_native_modules->getAllLoadedModuleNameAndPath)
+                modules->set(name, path);
+                
+            return modules;
+        }
         public func save(self: Project)=> option<Toml>
         {
             /* TODO: 在此处将 Project 数据保存为 Toml，然后写入 PROJECT_FILE_NAME */
@@ -458,9 +471,7 @@ namespace JEEditor::Editor
             /* Module list：以项目文件声明的模块表为准，再合并本次会话装载
             的模块（含新建的），保证编译失败的模块不会从项目文件中丢失 */
             let native_modules = new_table();
-            for (let (name, path) : self.m_declared_modules)
-                native_modules->set(name, ResourcePath::toRuntimeResourcePath(path));
-            for (let (name, path) : self.m_native_modules->getAllLoadedModuleNameAndPath)
+            for (let (name, path) : self->collectModules())
                 native_modules->set(name, ResourcePath::toRuntimeResourcePath(path));
             project_toml->set("modules", native_modules);
             
@@ -541,15 +552,15 @@ namespace JEEditor::Editor
             return self.m_towoo_collection->checkAll();
         }
         /* --------------------------------------------- */
-        /* 导出流程用：项目文件中声明的全部原生模块（含本次编译失败的条目，
-        导出时必须全部构建成功才能继续）。 */
+        /* 导出流程用：项目声明的全部原生模块（含本次编译失败的条目和本
+        次会话新建的模块，导出时必须全部构建成功才能继续）。 */
         public func getDeclaredModules(self: Project)=> array<(string, path_t)>
         {
-            let mut modules = []mut: vec<(string, path_t)>;
-            for (let (name, path) : self.m_declared_modules)
-                modules->add((name, path));
+            let mut result = []mut: vec<(string, path_t)>;
+            for (let (name, path) : self->collectModules())
+                result->add((name, path));
                 
-            return modules->unsafe::asarray;
+            return result->unsafe::asarray;
         }
         /* 导出流程用：已注册的 ToWoo 组件/系统，供启动脚本生成装载代码。 */
         public func getAllToWooComponentNameAndPath(self: Project)
