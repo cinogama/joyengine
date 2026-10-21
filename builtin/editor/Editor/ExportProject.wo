@@ -167,6 +167,23 @@ namespace JEEditor::Editor
         m_closed: mut bool,
     }
     {
+        // 视觉主题：与「项目」「关于」窗口共用一套暖橙色系，保持编辑器风格统一。
+        let s_joy_logo = texture2d::load(option::none, "!/builtin/icon/Joy.png");
+        let k_title_color = (242, 176, 109, 255);
+        let k_panel_bg_color = (37, 37, 42, 255);
+        let k_primary_btn_color = (219, 134, 63, 255);
+        let k_primary_btn_hover_color = (241, 157, 89, 255);
+        let k_primary_btn_active_color = (190, 113, 50, 255);
+        let k_warning_color = (255, 184, 92, 255);
+        let k_danger_color = (255, 128, 128, 255);
+
+        // 向导内容固定尺寸：模态窗口为 AutoSize，固定宽度可避免切换步骤时
+        // 窗口尺寸随内容抖动。
+        let k_content_width = 560.;
+        let k_content_height = 320.;
+
+        let k_step_labels = ["准备", "启动世界", "画面", "镜像", "确认"];
+
         // 导出任务的输入快照。打包在后台线程进行，不能再去读编辑器里的
         // Project/ToWoo 集合（它们可能被编辑操作并发修改），因此在这里
         // 一次性取出全部信息。
@@ -245,82 +262,240 @@ namespace JEEditor::Editor
             return true;
         }
         
+        // ==========================
+        //  向导界面
+        // ==========================
+
         public func run(self: ExportProject)=> bool
         {
-            let content_width = GetContentRegionAvail().0;
-            
-            if (self.m_step == 0)
-                self->drawWelcomeStep(content_width);
-            else if (self.m_step == 1)
-                self->drawWorldsStep(content_width);
-            else if (self.m_step == 2)
-                self->drawResolutionStep(content_width);
-            else if (self.m_step == 3)
-                self->drawImageSizeStep(content_width);
-            else if (self.m_step == 4)
-                self->drawConfirmStep(content_width);
-                
+            drawHeader();
+            Spacing();
+            self->drawStepIndicator();
+
+            // 步骤内容卡片：固定尺寸，避免 AutoSize 窗口随步骤内容跳动
+            if (beginStepCard())
+            {
+                if (self.m_step == 0)
+                    self->drawWelcomeStep();
+                else if (self.m_step == 1)
+                    self->drawWorldsStep();
+                else if (self.m_step == 2)
+                    self->drawResolutionStep();
+                else if (self.m_step == 3)
+                    self->drawImageSizeStep();
+                else if (self.m_step == 4)
+                    self->drawConfirmStep();
+            }
+            endStepCard();
+
+            self->drawFooter();
             return !self.m_closed;
         }
-        
+
+        // 顶部横幅：吉祥物 + 标题 + 当前项目，与「项目」「关于」窗口一致。
+        func drawHeader()
+        {
+            match (s_joy_logo)
+            {
+                none?;
+                value(logo)?
+                {
+                    ImageSize(logo, 64., 64.);
+                    SameLine();
+                }
+            }
+
+            // 有吉祥物时文字列从它右侧开始；纹理缺失时即为窗口缩进处
+            let text_x = GetCursorPos().0;
+
+            SetWindowFontScale(1.6);
+            TextColored(k_title_color, "项目导出");
+            SetWindowFontScale(1.);
+
+            setCursorX(text_x);
+            TextDisabled(F"项目：{shrinkPath(projectName(), 36)}");
+            if (IsItemHovered())
+                do SetTooltip(workpath()->to_string);
+
+            setCursorX(text_x);
+            TextDisabled("收集资源、编译着色器并生成可独立运行的游戏");
+        }
+
+        // 顶部步骤指示条：已完成步骤填暖橙色，当前步骤带光晕与描边，
+        // 未开始步骤用描边圆点；圆点之间用亮/暗连线表示进度。
+        func drawStepIndicator(self: ExportProject)
+        {
+            let draw = GetWindowDrawList();
+            let (sx, sy) = GetCursorScreenPos();
+            let width = k_content_width;
+            let radius = 13.;
+            let label_gap = 7.;
+            let row_height = radius * 2. + label_gap + GetTextLineHeight();
+            let count = k_step_labels->len;
+            let segment = width / (count as real);
+            let cy = sy + radius + 2.;
+
+            let text_c = GetStyleColor(ImGuiCol::ImGuiCol_Text);
+            let disabled_c = GetStyleColor(ImGuiCol::ImGuiCol_TextDisabled);
+
+            let accent_soft = (219, 134, 63, 210);
+            let accent_glow = (242, 176, 109, 40);
+            let done_fill = (188, 112, 52, 255);
+            let idle_line = toColor32(disabled_c, 70);
+            let idle_circle = toColor32(disabled_c, 130);
+            let idle_bg = (45, 45, 52, 255);
+
+            // 先画连接线，再用圆点盖住线头
+            for (let mut i = 0; i + 1 < count; i += 1)
+            {
+                let x0 = sx + segment * ((i as real) + 0.5) + radius + 7.;
+                let x1 = sx + segment * ((i as real) + 1.5) - radius - 7.;
+                let line_c = (i < self.m_step) ? accent_soft | idle_line;
+                draw->AddLine((x0, cy), (x1, cy), line_c, 2.);
+            }
+
+            for (let mut i = 0; i < count; i += 1)
+            {
+                let cx = sx + segment * ((i as real) + 0.5);
+                let is_done = i < self.m_step;
+                let is_current = i == self.m_step;
+
+                if (is_current)
+                {
+                    draw->AddCircleFilled((cx, cy), radius + 5., accent_glow);
+                    draw->AddCircleFilled((cx, cy), radius, k_title_color);
+                    draw->AddCircle((cx, cy), radius + 3., (242, 176, 109, 140), 1.5);
+                }
+                else if (is_done)
+                    draw->AddCircleFilled((cx, cy), radius, done_fill);
+                else
+                {
+                    draw->AddCircleFilled((cx, cy), radius, idle_bg);
+                    draw->AddCircle((cx, cy), radius, idle_circle, 1.5);
+                }
+
+                let mut number_c = toColor32(disabled_c, 200);
+                if (is_done || is_current)
+                    number_c = (28, 28, 32, 255);
+
+                let number = F"{i + 1}";
+                let number_size = CalcTextSize(number);
+                draw->AddText(
+                    (cx - number_size.0 * 0.5, cy - number_size.1 * 0.5),
+                    number_c, number);
+
+                let mut label_c = toColor32(disabled_c, 150);
+                if (is_done)
+                    label_c = toColor32(text_c, 220);
+                if (is_current)
+                    label_c = k_title_color;
+
+                let label = k_step_labels[i];
+                let label_size = CalcTextSize(label);
+                draw->AddText(
+                    (cx - label_size.0 * 0.5, cy + radius + label_gap),
+                    label_c, label);
+            }
+
+            Dummy((width, row_height + 4.));
+            Spacing();
+        }
+
+        // 步骤内容卡片：主题色底、微圆角、加厚内边距
+        func beginStepCard()=> bool
+        {
+            PushStyleColor(ImGuiCol::ImGuiCol_ChildBg, k_panel_bg_color);
+            PushStyleReal(StyleVar::ImGuiStyleVar_ChildRounding, 6.);
+            PushStyleReal(StyleVar::ImGuiStyleVar_ChildBorderSize, 1.);
+            PushStyleVec2(StyleVar::ImGuiStyleVar_WindowPadding, (16., 14.));
+            return BeginChildSizeFlags("##export_step_card", k_content_width,
+                k_content_height, WindowsAttribute::ImGuiWindowFlags_None);
+        }
+        func endStepCard()
+        {
+            EndChild();
+            PopStyleVar(3);
+            PopStyleColor(1);
+        }
+
         // ==========================
         //  向导各步骤
         // ==========================
-        
-        func drawWelcomeStep(self: ExportProject, content_width: real)
+
+        func drawWelcomeStep(self: ExportProject)
         {
-            TextDisabled("即将开始……");
-            Separator();
-            
-            if (BeginChildSize("##export_welcome", 500., 300.))
-            {
-                Text("欢迎使用 JoyEngineECS 项目导出向导");
-                Text("向导将把当前项目打包到项目目录下的 .export 目录。");
-                Separator();
-                TextColored((255, 170, 90, 255),
-                    "注意：导出会先删除 .export 目录中的全部内容。");
-                Separator();
-                Text("导出前请先保存所有世界（文件 → 保存全部），");
-                Text("否则打包进镜像的将是磁盘上旧的世界数据。");
-                Separator();
-                if (ButtonSize("保存全部世界", (GetContentRegionAvail().0, 0.)))
-                    WorldEditorViewport::saveAllWorlds();
-            }
-            EndChild();
-            
-            if (ButtonSize("我已确认准备就绪，继续下一步", (content_width, 0.)))
-                self.m_step = 1;
-            if (ButtonSize("取消导出", (content_width, 0.)))
-                self.m_closed = true;
+            do self;
+
+            SeparatorText("开始之前");
+
+            SetWindowFontScale(1.2);
+            Text("把当前项目打包成可以独立分发的游戏");
+            SetWindowFontScale(1.);
+            Spacing();
+
+            TextDisabled("向导会收集项目资源、编译着色器与原生模块，");
+            TextDisabled("并生成可以直接运行的游戏程序。");
+            Spacing();
+
+            BulletText("建议先保存全部世界，确保打包的是最新数据");
+            BulletText("原生模块会以 RELEASE 配置重新编译，可能需要较长时间");
+            BulletText("资源与脚本会写入 .export 目录下的资源镜像");
+            Spacing();
+
+            drawCallout([
+                "开始打包会先删除 .export 目录中的全部内容。",
+                "如需保留之前的导出产物，请先自行备份。",
+            ], k_warning_color);
+            Spacing();
+
+            if (ButtonSize("保存全部世界", (GetContentRegionAvail().0, 32.)))
+                WorldEditorViewport::saveAllWorlds();
+
+            TextDisabled("保存完成后，点击右下角的“开始配置”继续。");
         }
-        
-        func drawWorldsStep(self: ExportProject, content_width: real)
+
+        func drawWorldsStep(self: ExportProject)
         {
-            TextDisabled("第一步 选择启动时自动加载的世界");
-            Separator();
-            
-            if (BeginChildSize("##export_worlds", 500., 300.))
+            SeparatorText("启动世界");
+
+            TextDisabled("勾选游戏启动时自动加载的世界；");
+            TextDisabled("未勾选的世界仍会打包，只是不会自动载入。");
+            Spacing();
+
+            let avail = GetContentRegionAvail();
+            let mut list_height = avail.1 - 40.;
+            if (list_height < 80.)
+                list_height = 80.;
+
+            if (BeginChildSizeFlags("##export_world_list", avail.0, list_height,
+                    WindowsAttribute::ImGuiWindowFlags_None))
             {
                 if (self.m_worlds->len == 0)
+                {
+                    Spacing();
                     TextDisabled("项目中没有找到 .je4world 文件。");
+                    TextDisabled("可以先在编辑器中新建世界，再回来导出。");
+                }
                 else
                 {
                     for (let mut i = 0; i < self.m_worlds->len; i += 1)
                     {
                         let entry = self.m_worlds[i];
-                        match (CheckBox(entry.0, entry.1->get))
+                        let display = F"{i + 1}.  "
+                            + shrinkPath(worldDisplayPath(entry.0), 60);
+                        match (CheckBox(F"{display}##world_{i}", entry.1->get))
                         {
                             none?;
-                            value(checked)?
-                            {
-                                entry.1->set(checked);
-                            }
+                            value(checked)? entry.1->set(checked);
                         }
+                        if (IsItemHovered())
+                            do SetTooltip(entry.0);
                     }
                 }
             }
             EndChild();
-            
+
+            Spacing();
             if (Button("全选"))
             {
                 for (let mut i = 0; i < self.m_worlds->len; i += 1)
@@ -332,140 +507,320 @@ namespace JEEditor::Editor
                 for (let mut i = 0; i < self.m_worlds->len; i += 1)
                     self.m_worlds[i].1->set(false);
             }
-            
-            if (ButtonSize("下一步", (content_width, 0.)))
-                self.m_step = 2;
-            if (ButtonSize("上一步", (content_width, 0.)))
-                self.m_step = 0;
+            SameLine();
+            TextDisabled(F"已选择 {self->selectedWorldCount()} / {self.m_worlds->len}");
         }
-        
-        func drawResolutionStep(self: ExportProject, content_width: real)
-        {
-            TextDisabled("第二步 导出画面设置");
-            Separator();
-            
-            if (BeginChildSize("##export_resolution", 500., 300.))
-            {
-                Text("请选择启动时默认渲染的画面分辨率：");
-                TextDisabled("默认为 1366x768 [16:9]");
-                Separator();
-                
-                match (Combo("##EXPORT_RESOLUTIONS",
-                        resolutionLabels(), option::value(self.m_reso_index)))
-                {
-                    none?;
-                    value(index)?
-                    {
-                        self.m_reso_index = index;
-                        self.m_resolution = resolutions()[index].1;
-                    }
-                }
-            }
-            EndChild();
-            
-            if (ButtonSize("下一步", (content_width, 0.)))
-                self.m_step = 3;
-            if (ButtonSize("上一步", (content_width, 0.)))
-                self.m_step = 1;
-        }
-        
-        func drawImageSizeStep(self: ExportProject, content_width: real)
-        {
-            TextDisabled("第三步 导出镜像设置");
-            Separator();
-            
-            if (BeginChildSize("##export_image_size", 500., 300.))
-            {
-                Text("请为打包镜像设置分包大小，单位为 MB。");
-                TextDisabled("默认为 128 MB");
-                Separator();
-                
-                match (InputInt("##EXPORT_IMAGE_SIZE_MB", self.m_image_size_mb))
-                {
-                    none?;
-                    value(new_size)?
-                    {
-                        if (new_size > 0)
-                            self.m_image_size_mb = new_size;
-                    }
-                }
 
-                Separator();
-                Text("压缩设置");
-                match (CheckBox("压缩资源镜像##EXPORT_COMPRESS", self.m_compress_enabled))
-                {
-                    none?;
-                    value(enabled)? self.m_compress_enabled = enabled;
-                }
-                if (self.m_compress_enabled)
-                {
-                    match (SliderInt("压缩级别##EXPORT_COMPRESS_LEVEL",
-                        self.m_compression_level, 1, 9))
-                    {
-                        none?;
-                        value(level)? self.m_compression_level = level;
-                    }
-                    match (InputInt("最小压缩大小 (KB)##EXPORT_MIN_COMPRESS",
-                        self.m_min_compress_size_kb))
-                    {
-                        none?;
-                        value(min_kb)?
-                        {
-                            if (min_kb >= 0)
-                                self.m_min_compress_size_kb = min_kb;
-                        }
-                    }
-                    match (InputText("跳过扩展名（逗号分隔）##EXPORT_SKIP_EXT",
-                        self.m_skip_extensions))
-                    {
-                        none?;
-                        value(text)? self.m_skip_extensions = text;
-                    }
-                    TextDisabled("PNG/JPEG/ZIP 等已压缩格式默认不重复压缩");
-                }
-            }
-            EndChild();
-            
-            if (ButtonSize("下一步", (content_width, 0.)))
-                self.m_step = 4;
-            if (ButtonSize("上一步", (content_width, 0.)))
-                self.m_step = 2;
-        }
-        
-        func drawConfirmStep(self: ExportProject, content_width: real)
+        func drawResolutionStep(self: ExportProject)
         {
-            TextDisabled("导出操作确认");
-            Separator();
-            
-            if (BeginChildSize("##export_confirm", 500., 300.))
+            SeparatorText("默认画面分辨率");
+
+            TextDisabled("游戏窗口启动时的默认大小。");
+            Spacing();
+
+            TextDisabled("分辨率");
+            PushItemWidth(280.);
+            match (Combo("##EXPORT_RESOLUTIONS", resolutionLabels(),
+                    option::value(self.m_reso_index)))
             {
-                Text(F"项目：{projectName()}");
-                Text(F"启动世界：{self->selectedWorldCount()} 个");
-                Text(F"分辨率：{self.m_resolution.0}x{self.m_resolution.1}");
-                Text(F"镜像分片大小：{self.m_image_size_mb} MB");
-                if (self.m_compress_enabled)
+                none?;
+                value(index)?
                 {
-                    Text(F"镜像压缩：等级 {self.m_compression_level}，最小 {self.m_min_compress_size_kb} KB");
-                    Text(F"跳过扩展名：{self.m_skip_extensions}");
+                    self.m_reso_index = index;
+                    self.m_resolution = resolutions()[index].1;
                 }
-                else
-                    Text("镜像压缩：关闭");
-                Separator();
-                Text("按下“开始打包”后，向导会关闭，");
-                Text("编译与打包过程显示在“项目导出”日志窗口中。");
-                Separator();
-                Text("导出会以 RELEASE 配置重新编译全部原生模块，可能需要较长时间。");
-                Separator();
-                TextColored((255, 170, 90, 255),
-                    "再次确认：.export 目录中的现有内容将被删除！");
             }
-            EndChild();
-            
-            if (ButtonSize("开始打包", (content_width, 0.)))
-                self->startExport();
-            if (ButtonSize("上一步", (content_width, 0.)))
-                self.m_step = 3;
+            PopItemWidth();
+
+            Spacing();
+            self->drawResolutionPreview();
         }
+
+        // 按所选宽高比绘制窗口预览框，直观展示画面形状
+        func drawResolutionPreview(self: ExportProject)
+        {
+            let (sx, sy) = GetCursorScreenPos();
+            let width = GetContentRegionAvail().0;
+            let area_height = 150.;
+            let max_height = 118.;
+            let aspect = (self.m_resolution.0 as real)
+                / (self.m_resolution.1 as real);
+
+            let mut w = width - 24.;
+            let mut h = w / aspect;
+            if (h > max_height)
+            {
+                h = max_height;
+                w = h * aspect;
+            }
+
+            let x0 = sx + (width - w) * 0.5;
+            let y0 = sy + (area_height - h) * 0.5;
+            let draw = GetWindowDrawList();
+
+            draw->AddRectFilled((x0, y0), (x0 + w, y0 + h), (26, 26, 31, 255));
+            draw->AddRect((x0, y0), (x0 + w, y0 + h),
+                (242, 176, 109, 150), 1.5);
+
+            let label = F"{self.m_resolution.0} × {self.m_resolution.1}";
+            let label_size = CalcTextSize(label);
+            draw->AddText(
+                (x0 + (w - label_size.0) * 0.5, y0 + (h - label_size.1) * 0.5),
+                k_title_color, label);
+
+            Dummy((width, area_height));
+        }
+
+        func drawImageSizeStep(self: ExportProject)
+        {
+            SeparatorText("镜像分片");
+
+            TextDisabled("资源镜像会按分片大小切分为多个文件。");
+            Spacing();
+
+            SetNextItemWidth(220.);
+            match (InputInt("分片大小（MB）##EXPORT_IMAGE_SIZE_MB",
+                    self.m_image_size_mb))
+            {
+                none?;
+                value(new_size)?
+                {
+                    if (new_size > 0)
+                        self.m_image_size_mb = new_size;
+                }
+            }
+            if (IsItemHovered())
+                do SetTooltip("每个镜像分片的容量上限，默认为 128 MB。");
+
+            Spacing();
+            SeparatorText("压缩");
+
+            match (CheckBox("压缩资源镜像##EXPORT_COMPRESS", self.m_compress_enabled))
+            {
+                none?;
+                value(enabled)? self.m_compress_enabled = enabled;
+            }
+
+            BeginDisabled(!self.m_compress_enabled);
+
+            SetNextItemWidth(240.);
+            match (SliderInt("压缩级别##EXPORT_COMPRESS_LEVEL",
+                    self.m_compression_level, 1, 9))
+            {
+                none?;
+                value(level)? self.m_compression_level = level;
+            }
+            if (IsItemHovered())
+                do SetTooltip("1 最快，9 压缩率最高。");
+
+            SetNextItemWidth(240.);
+            match (InputInt("最小压缩大小（KB）##EXPORT_MIN_COMPRESS",
+                    self.m_min_compress_size_kb))
+            {
+                none?;
+                value(min_kb)?
+                {
+                    if (min_kb >= 0)
+                        self.m_min_compress_size_kb = min_kb;
+                }
+            }
+            if (IsItemHovered())
+                do SetTooltip("小于该大小的文件直接写入镜像，不再压缩。");
+
+            TextDisabled("跳过扩展名（逗号分隔）");
+            SetNextItemWidth(GetContentRegionAvail().0);
+            match (InputText("##EXPORT_SKIP_EXT", self.m_skip_extensions))
+            {
+                none?;
+                value(text)? self.m_skip_extensions = text;
+            }
+            if (IsItemHovered())
+                do SetTooltip("PNG、JPEG、ZIP 等已经是压缩格式，通常无需重复压缩。");
+
+            EndDisabled();
+
+            Spacing();
+            if (self.m_compress_enabled)
+                TextDisabled("PNG/JPEG/ZIP 等已压缩格式默认不重复压缩。");
+            else
+                TextDisabled("压缩已关闭，资源将以原始大小写入镜像。");
+        }
+
+        func drawConfirmStep(self: ExportProject)
+        {
+            SeparatorText("打包摘要");
+
+            let label_x = GetCursorPos().0;
+            let label_w = 100.;
+
+            drawSummaryRow(label_x, label_w, "项目名称", projectName());
+            drawSummaryRow(label_x, label_w, "启动世界",
+                F"{self->selectedWorldCount()} / {self.m_worlds->len} 个");
+            drawSummaryRow(label_x, label_w, "分辨率",
+                F"{self.m_resolution.0} × {self.m_resolution.1}");
+            drawSummaryRow(label_x, label_w, "镜像分片",
+                F"{self.m_image_size_mb} MB");
+
+            if (self.m_compress_enabled)
+            {
+                drawSummaryRow(label_x, label_w, "镜像压缩",
+                    F"等级 {self.m_compression_level}，最小 {self.m_min_compress_size_kb} KB");
+
+                let mut skip_desc = self.m_skip_extensions;
+                if (skip_desc->len == 0)
+                    skip_desc = "（无）";
+                drawSummaryRow(label_x, label_w, "跳过扩展名", skip_desc);
+            }
+            else
+                drawSummaryRow(label_x, label_w, "镜像压缩", "关闭");
+
+            drawSummaryRow(label_x, label_w, "输出目录",
+                shrinkPath((workpath() / ".export")->to_string, 40));
+
+            Spacing();
+            drawCallout([
+                "打包开始后向导会关闭，进度显示在“项目导出”窗口。",
+                ".export 目录中的现有内容将被删除，请确认无需保留。",
+            ], k_danger_color);
+
+            Spacing();
+            TextDisabled("准备好后，点击右下角的“开始打包”。");
+        }
+
+        // 底部信息与导航：左侧次要动作，右侧暖橙色主按钮
+        func drawFooter(self: ExportProject)
+        {
+            Spacing();
+            Separator();
+
+            let export_dir = (workpath() / ".export")->to_string;
+            TextDisabled(F"输出目录 {shrinkPath(export_dir, 56)}");
+            if (IsItemHovered())
+                do SetTooltip(export_dir);
+
+            Spacing();
+
+            let start_x = GetCursorPos().0;
+            let width = GetContentRegionAvail().0;
+            let button_height = 34.;
+            let secondary_w = 108.;
+            let primary_w = 190.;
+
+            let secondary_label = (self.m_step == 0) ? "取消导出" | "上一步";
+            if (ButtonSize(secondary_label, (secondary_w, button_height)))
+            {
+                if (self.m_step == 0)
+                    self.m_closed = true;
+                else
+                    self.m_step -= 1;
+            }
+
+            let mut primary_label = "下一步";
+            if (self.m_step == 0)
+                primary_label = "开始配置";
+            else if (self.m_step == 4)
+                primary_label = "开始打包";
+
+            // 主按钮右对齐：与左侧按钮同一行
+            SameLine();
+            setCursorX(start_x + width - primary_w);
+            if (self->drawPrimaryButton(primary_label, (primary_w, button_height)))
+            {
+                if (self.m_step == 4)
+                    self->startExport();
+                else
+                    self.m_step += 1;
+            }
+        }
+
+        // ==========================
+        //  界面辅助
+        // ==========================
+
+        func drawPrimaryButton(self: ExportProject, label: string,
+            btn_size: ImVec2)=> bool
+        {
+            do self;
+
+            PushStyleColor(ImGuiCol::ImGuiCol_Button, k_primary_btn_color);
+            PushStyleColor(ImGuiCol::ImGuiCol_ButtonHovered,
+                k_primary_btn_hover_color);
+            PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive,
+                k_primary_btn_active_color);
+            PushStyleReal(StyleVar::ImGuiStyleVar_FrameRounding, 5.);
+
+            let clicked = ButtonSize(label, btn_size);
+
+            PopStyleVar(1);
+            PopStyleColor(3);
+            return clicked;
+        }
+
+        // 提示块：淡色底 + 左侧色条 + 指定颜色的说明文字
+        func drawCallout(lines: array<string>, accent: Color32RGBA)
+        {
+            let width = GetContentRegionAvail().0;
+            let line_height = GetTextLineHeightWithSpacing();
+            let height = line_height * ((lines->len) as real) + 12.;
+            let (sx, sy) = GetCursorScreenPos();
+            let draw = GetWindowDrawList();
+
+            let bg = (accent.0, accent.1, accent.2, 26);
+            let bar = (accent.0, accent.1, accent.2, 210);
+            draw->AddRectFilled((sx, sy), (sx + width, sy + height), bg);
+            draw->AddRectFilled((sx, sy), (sx + 3., sy + height), bar);
+
+            // 逐行显式定位：Text 换行后会回到窗口左缘，不能沿用首行的缩进
+            let mut line_y = sy + 6.;
+            for (let line : lines)
+            {
+                SetCursorScreenPos((sx + 12., line_y));
+                TextColored(accent, line);
+                line_y += line_height;
+            }
+
+            // 复位到提示块下方，避免后续控件叠在框内
+            SetCursorScreenPos((sx, sy + height));
+        }
+
+        // 摘要行：左侧弱化标签列 + 右侧取值
+        func drawSummaryRow(label_x: real, label_w: real,
+            label: string, value: string)
+        {
+            TextDisabled(label);
+            SameLine();
+            setCursorX(label_x + label_w);
+            Text(value);
+        }
+
+        func setCursorX(x: real)
+        {
+            let (_, y) = GetCursorPos();
+            SetCursorPos((x, y));
+        }
+
+        func shrinkPath(path: string, max_chars: int)=> string
+        {
+            if (path->len <= max_chars)
+                return path;
+            return "..." + path->sub(path->len - max_chars + 3);
+        }
+
+        // 打包键 @/resource/worlds/x.je4world 去掉前缀后显示
+        func worldDisplayPath(pack_key: string)=> string
+        {
+            if (pack_key->begin_with("@/"))
+                return pack_key->sub(2);
+            return pack_key;
+        }
+
+        // ImGui 风格色（0..1 浮点）转为绘制用颜色
+        func toColor32(c: (real, real, real, real), alpha: int)=> Color32RGBA
+        {
+            return ((c.0 * 255.) as int, (c.1 * 255.) as int,
+                (c.2 * 255.) as int, alpha);
+        }
+
         
         // ==========================
         //  向导数据
