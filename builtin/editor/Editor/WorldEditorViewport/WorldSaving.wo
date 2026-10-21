@@ -217,6 +217,19 @@ namespace JEEditor::Editor::WorldEditorViewport
             F"以下世界尚未保存到文件中，请拖动其视口顶部的图标到资源管理器以保存：{unsaved_list}");
     }
 
+    // 主菜单“文件 → 保存”入口：保存当前聚焦的世界视口（与视口内
+    // Ctrl+S 的行为一致；未聚焦任何视口时提示）。
+    public func saveFocusedWorld()=> void
+    {
+        match (getLastFocused())
+        {
+            none?
+                MsgBox::msg("保存", "当前没有聚焦的世界视口");
+            value(viewport)?
+                viewport->saveByShortcut();
+        }
+    }
+
     // 以新的名称/保存路径重建本视口（沿用当前世界实例与未保存的修改）。
     // 重建成功时把编辑历史（m_action_history）迁移到新视口以保持撤销/重做连续，
     // 再以 CLOSE_BUT_KEEP_WORLD 关闭旧视口；窗口创建失败时返回 false。

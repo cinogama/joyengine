@@ -1,24 +1,33 @@
 import pkg::std;
 import pkg::fsys;
+import pkg::iterator;
+import pkg::worst;
 
 import je;
 import je::ecs;
 import je::graphic;
+import je::gui;
 import je::internal;
 import je::tilemap;
 import je::towoo::components;
 
 import builtin::editor::GUI::Forms::MsgBox;
+import builtin::editor::GUI::Statebar;
 
 import builtin::editor::Singleton::Universe;
 import ResourcePath;
 
 using std;
+using fsys;
+using iterator;
 using je;
 using je::graphic;
+using je::gui;
 using je::tilemap;
 
+using JEEditor::GUI;
 using JEEditor::GUI::Forms;
+using JEEditor::GUI::Statebar;
 using JEEditor::Singleton;
 using JEEditor::Editor::ResourcePath;
 
@@ -175,5 +184,32 @@ namespace JEEditor::Editor::ShaderUpdater
         {
             do updateTilemapLayers(tmap, runtime_path);
         }
+    }
+
+    // 主菜单「工具 → 更新全部着色器」：遍历工作目录（含子目录）下的
+    // 全部 .shader，逐个走 update 的缓存失效与实例替换流程。
+    // 单个着色器加载失败时 update 会弹窗提示并跳过，其余继续更新。
+    public func updateAll()=> void
+    {
+        let shader_files = recursive_walk(workpath()) |> iter_result
+            |> filter(\p = isfile(p)
+                && string::lower(extension(p)) == ".shader";)
+            |> collect
+            |> sort(\l, r = l->to_string() < r->to_string();)
+            ;
+
+        for (let p : shader_files)
+            update(p);
+
+        if (shader_files->len == 0)
+        {
+            MsgBox::msg("更新全部着色器", "工作目录下没有找到 .shader 文件");
+            return;
+        }
+
+        let shader_count = shader_files->len;
+        Statebar::showState(3.) <| func(){
+                Text(F"已更新 {shader_count} 个着色器");
+            };
     }
 }

@@ -1,0 +1,98 @@
+// 主菜单「工具 → 复制诊断信息」：把引擎版本、平台、项目路径、已打开的
+// 世界与原生模块汇总到剪贴板，便于提交问题时附带完整环境信息。
+
+import pkg::std;
+
+import je;
+import je::gui;
+import je::internal;
+
+import pkg::fsys;
+import pkg::platform;
+
+import builtin::editor::GUI::Statebar;
+import builtin::editor::Editor::Project;
+import builtin::editor::Editor::WorldEditorViewport;
+import builtin::editor::Singleton;
+
+using std;
+using fsys;
+using platform;
+using je;
+using je::gui;
+
+using JEEditor::GUI;
+using JEEditor::GUI::Statebar;
+using JEEditor::Singleton;
+
+namespace JEEditor::Editor::Diagnostics
+{
+    func osName()=> string
+    {
+        let current_os = platform::get_os();
+        if (current_os == platform::Os::WINDOWS) return "Windows";
+        if (current_os == platform::Os::MACOS) return "macOS";
+        if (current_os == platform::Os::LINUX) return "Linux";
+        if (current_os == platform::Os::ANDROID) return "Android";
+        if (current_os == platform::Os::IOS) return "iOS";
+        if (current_os == platform::Os::FREEBSD) return "FreeBSD";
+        return "Unknown";
+    }
+
+    func archName()=> string
+    {
+        let current_arch = platform::get_arch();
+        if (current_arch == platform::Arch::X86) return "x86";
+        if (current_arch == platform::Arch::X86_64) return "x86_64";
+        if (current_arch == platform::Arch::ARM) return "arm";
+        if (current_arch == platform::Arch::AARCH64) return "aarch64";
+        if (current_arch == platform::Arch::RISCV) return "riscv";
+        return "unknown";
+    }
+
+    func buildTypeName()=> string
+    {
+        return platform::get_build_type() == platform::BuildType::DEBUG
+            ? "Debug" | "Release";
+    }
+
+    public func copyDiagnosticInfo()=> void
+    {
+        let mut info = "";
+        info += "===== JoyEngine Diagnostics =====\n";
+        info += F"Engine: {internal::build_version()} ({internal::build_commit()})\n";
+        info += F"Build: {internal::build_version_info()}\n";
+        info += F"Woolang: {internal::woolang_version()} / WooRT: {internal::woort_version()}\n";
+        info += F"Platform: {osName()} ({archName()}, {platform::bit_width}-bit, {buildTypeName()})\n";
+        info += F"Project: {workpath()->to_string}\n";
+
+        let viewports = WorldEditorViewport::getAllViewports();
+        info += F"\nOpened worlds ({viewports->len}):\n";
+        if (viewports->len == 0)
+            info += "  (none)\n";
+        for (let viewport : viewports)
+        {
+            let mut saving_path = "<unsaved>";
+            match (viewport->getSavingPath())
+            {
+                value(p)? saving_path = p->to_string;
+                none?;
+            }
+            info += F"  - {viewport->getName()}: {saving_path}\n";
+        }
+
+        let modules = Singleton::apply:<Project>(
+            func(proj){ return proj->getDeclaredModules(); });
+        info += F"\nNative modules ({modules->len}):\n";
+        if (modules->len == 0)
+            info += "  (none)\n";
+        for (let (name, path) : modules)
+            info += F"  - {name}: {path->to_string}\n";
+
+        do SetClipboardText(info);
+
+        Statebar::showState(3.) <| func(){
+                Text("诊断信息已复制到剪贴板");
+            };
+    }
+}

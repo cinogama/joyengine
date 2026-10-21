@@ -1,0 +1,249 @@
+// 「打开世界」选择窗口：列出工作目录下所有 .je4world 文件，
+// 供主菜单「文件 → 打开世界...」使用。
+//
+// 引擎没有原生文件选择对话框，这里沿用项目打开窗口的迷你列表方案：
+// 支持按路径过滤、刷新列表，双击行（或选中后回车/点「打开」）打开世界。
+// 已打开的世界在列表中标记，避免重复打开触发错误弹窗。
+
+import pkg::std;
+
+import je;
+import je::gui;
+
+import pkg::fsys;
+import pkg::interface;
+import pkg::iterator;
+import pkg::worst;
+
+import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Shortcut;
+
+import WorldEditorViewport;
+
+using std;
+using fsys;
+using iterator;
+
+using je::gui;
+
+using JEEditor::GUI;
+using JEEditor::GUI::Windows;
+
+namespace JEEditor::Editor
+{
+    using OpenWorld = struct{
+        m_filter: mut string,               // 路径过滤关键字
+        m_selected: mut option<path_t>,     // 当前选中的世界文件
+        m_files: mut array<path_t>,         // 扫描到的全部世界文件（按路径排序）
+        m_closed: mut bool,
+    }
+    {
+        // 隐藏路径规则与导出流程一致：目录名以 . 开头（.temp/.build 等）
+        // 的条目不属于项目资源，不列入选择列表。
+        func isHiddenRelativePath(rel: string)=> bool
+        {
+            return ("/" + rel)->find("/.")->is_value;
+        }
+
+        // 相对工作目录的显示路径；转换失败时退回完整路径。
+        func displayPath(p: path_t)=> string
+        {
+            match (relative(p, workpath()))
+            {
+                ok(rel)? return rel;
+                err(_)? return p->to_string;
+            }
+        }
+
+        func scanWorldFiles()=> array<path_t>
+        {
+            match (allsubpath(workpath()))
+            {
+                ok(paths)?
+                {
+                    let mut files = []mut: vec<path_t>;
+                    for (let p : paths)
+                    {
+                        if (!isfile(p) || string::lower(extension(p)) != ".je4world")
+                            continue;
+
+                        match (relative(p, workpath()))
+                        {
+                            ok(rel)?
+                            {
+                                if (rel->len != 0 && !isHiddenRelativePath(rel))
+                                    files->add(p);
+                            }
+                            err(_)?;
+                        }
+                    }
+                    return sort(
+                        files->to_array,
+                        \l, r = string::lower(displayPath(l))
+                            < string::lower(displayPath(r)););
+                }
+                err(_)?
+                    return []: array<path_t>;
+            }
+        }
+
+        public func create()=> OpenWorld
+            where require!(OpenWorld: IWindows);
+        {
+            return OpenWorld{
+                m_filter = mut "",
+                m_selected = mut option::none,
+                m_files = mut scanWorldFiles(),
+                m_closed = mut false,
+            };
+        }
+
+        public func showOpenWorld()
+        {
+            do show(create());
+        }
+
+        public func getTitle(_: OpenWorld)=> string
+        {
+            return "打开世界";
+        }
+        public func getAttrib(_: OpenWorld)=> WindowsAttribute
+        {
+            return WindowsAttribute::ImGuiWindowFlags_NoDocking
+                + WindowsAttribute::ImGuiWindowFlags_NoCollapse
+                + WindowsAttribute::ImGuiWindowFlags_NoSavedSettings
+                ;
+        }
+        public func getSizeConstraints(_: OpenWorld)=> SizeConstraints
+        {
+            return SizeConstraints::Limited(((520., 320.), (960., 800.)));
+        }
+        public func isModal(_: OpenWorld)=> bool
+        {
+            return true;
+        }
+        public func getShortcut(self: OpenWorld)=> option<Shortcut>
+        {
+            return option::value <|
+                Shortcut::begin()
+                    ->shortCut([ImGuiKey::ImGuiKey_Enter], \= self->openSelected();)
+                    ->shortCut([ImGuiKey::ImGuiKey_Escape], \= self.m_closed = true;)
+                    ->finish();
+        }
+
+        // 打开选中的世界；窗口先关闭，打开失败的错误弹窗由
+        // WorldEditorViewport::openWorldEditorViewportFromFile 负责。
+        func openSelected(self: OpenWorld)=> void
+        {
+            match (self.m_selected)
+            {
+                none?;
+                value(path)?
+                {
+                    self.m_closed = true;
+                    WorldEditorViewport::openWorldEditorViewportFromFile(
+                        path, option::none);
+                }
+            }
+        }
+
+        func pathMatchesFilter(self: OpenWorld, p: path_t)=> bool
+        {
+            if (self.m_filter->trim->len == 0)
+                return true;
+
+            return string::lower(displayPath(p))
+                ->find(string::lower(self.m_filter->trim))
+                ->is_value;
+        }
+
+        func drawList(self: OpenWorld)=> void
+        {
+            let mut shown = 0;
+            let mut index = 0;
+            for (let p : self.m_files)
+            {
+                let item_index = index;
+                index += 1;
+
+                if (!self->pathMatchesFilter(p))
+                    continue;
+
+                shown += 1;
+
+                let mut selected = false;
+                match (self.m_selected)
+                {
+                    none?;
+                    value(sel)? selected = (sel == p);
+                }
+
+                let is_opened =
+                    WorldEditorViewport::findWorldEditorViewportByPath(p)->is_value;
+                let label = is_opened
+                    ? F"{displayPath(p)}  （已打开）##{item_index}"
+                    | F"{displayPath(p)}##{item_index}";
+
+                if (SelectableSelected(label, selected))
+                    self.m_selected = option::value(p);
+
+                if (IsItemHovered())
+                    do SetTooltip(p->to_string);
+            }
+
+            if (shown == 0)
+            {
+                Spacing();
+                if (self.m_files->len == 0)
+                {
+                    TextDisabled("项目中未找到 .je4world 文件");
+                    TextDisabled(F"工作目录: {workpath()->to_string}");
+                }
+                else
+                {
+                    TextDisabled("没有匹配的世界文件");
+                }
+            }
+        }
+
+        public func run(self: OpenWorld)=> bool
+        {
+            SeparatorText("项目中的世界");
+
+            let avail = GetContentRegionAvail();
+            PushItemWidth(avail.0 - 70.);
+            match (InputText("##world_filter", self.m_filter))
+            {
+                none?;
+                value(new_text)? self.m_filter = new_text;
+            }
+            PopItemWidth();
+
+            SameLine();
+            if (Button("刷新"))
+                self.m_files = scanWorldFiles();
+
+            let list_avail = GetContentRegionAvail();
+            let list_height = list_avail.1 > 52. ? list_avail.1 - 44. | 52.;
+            if (BeginChildSizeFlags("##world_list", list_avail.0, list_height,
+                    WindowsAttribute::ImGuiWindowFlags_None))
+            {
+                self->drawList();
+            }
+            EndChild();
+
+            Separator();
+
+            BeginDisabled(self.m_selected->is_none);
+            if (ButtonSize("打开", (80., 34.)))
+                self->openSelected();
+            EndDisabled();
+
+            SameLine();
+            if (ButtonSize("取消", (80., 34.)))
+                self.m_closed = true;
+
+            return !self.m_closed;
+        }
+    }
+}

@@ -3,6 +3,7 @@ import pkg::std;
 import je::ecs;
 
 import builtin::editor::GUI::Menu;
+import builtin::editor::GUI::Forms::AskBox;
 
 import Browser;
 import EntityList;
@@ -16,10 +17,16 @@ import DebugRun;
 import Project;
 import About;
 import ExportProject;
+import OpenWorld;
+import SystemShell;
+import Diagnostics;
+import ShaderUpdater;
+import Shutdown;
 
 import builtin::editor::Singleton::Universe;
 
 using std;
+using JEEditor::GUI::Forms;
 
 namespace JEEditor::Editor::MainMenu
 {
@@ -35,8 +42,8 @@ namespace JEEditor::Editor::MainMenu
         return Singleton::Universe::getUniverse()->get_all_worlds->len > 0;
     }
 
-    // “保存全部”可用条件：未在运行/停止过渡、未冻结（冻结/调试运行期间
-    // 世界不落盘，见 WorldEditorViewport::saveWorldTo 的拦截）
+    // “保存/保存全部”可用条件：未在运行/停止过渡、未冻结（冻结/调试运行
+    // 期间世界不落盘，见 WorldEditorViewport::saveWorldTo 的拦截）
     func canSaveAllWorlds()=> bool
     {
         if (DebugRun::isDebugRunActive())
@@ -57,21 +64,47 @@ namespace JEEditor::Editor::MainMenu
         return true;
     }
 
+    // 退出编辑器：与窗口关闭按钮走同一套确认与收尾流程
+    //（Shutdown 会依次请求所有窗口关闭，并把编辑器状态写入 Tombs）
+    func requestExit()
+    {
+        do AskBox::show(
+                "退出编辑器",
+                "退出前请确认已保存修改。JoyEngine 将依次关闭所有编辑器窗口，继续退出？")
+            ->onYes(func(){
+                    Shutdown::editorShutdownRequest(
+                        Singleton::Universe::getUniverse());
+                });
+    }
+
     public func registerMainMenu()
     {
         let engineMainMenu = Menu::create("")
             -> subMenu("JoyEngine")
+            ->  subItem("关于 JoyEngine", About::showAbout)
+            ->      endItem
+            ->  separator()
+            ->  subItem("退出编辑器", requestExit)
+            ->      endItem
             ->  endMenu
-                -> subMenu("文件")
-                ->  subItem("保存全部", WorldEditorViewport::saveAllWorlds)
-                ->      enableWhen(canSaveAllWorlds)
-                ->      shortCut("Ctrl+Shfit+S")
-                ->      endItem
-                ->  separator()
-                ->  subItem("导出项目...", \= ExportProject::showExportProject();)
-                ->      enableWhen(canExportProject)
-                ->      endItem
-                ->  endMenu
+            -> subMenu("文件")
+            ->  subItem("新建世界", WorldEditorViewport::createNewWorldToEdit)
+            ->      endItem
+            ->  subItem("打开世界...", OpenWorld::showOpenWorld)
+            ->      endItem
+            ->  separator()
+            ->  subItem("保存", WorldEditorViewport::saveFocusedWorld)
+            ->      enableWhen(canSaveAllWorlds)
+            ->      endItem
+            ->  subItem("保存全部", WorldEditorViewport::saveAllWorlds)
+            ->      enableWhen(canSaveAllWorlds)
+            ->      shortCut("Ctrl+Shift+S")
+            ->      endItem
+            ->  separator()
+            ->  subItem("导出项目...", \= ExportProject::showExportProject();)
+            ->      enableWhen(canExportProject)
+            ->      endItem
+            ->  endMenu
             -> subMenu("视图")
             ->  subItem("项目资源管理器",
                 func()
@@ -145,9 +178,6 @@ namespace JEEditor::Editor::MainMenu
             ->      endItem
             ->  endMenu
             -> subMenu("编辑")
-            ->  subItem("新建世界", WorldEditorViewport::createNewWorldToEdit)
-            ->      endItem
-            ->  separator()
             ->  subItem("更新类型 & 编辑器", Project::updateEditorTypes)
             ->      endItem
             ->  subItem("重新编译 ToWoo", Project::recompileAllToWoo)
@@ -160,13 +190,22 @@ namespace JEEditor::Editor::MainMenu
             ->      endItem
             ->  endMenu
             -> subMenu("工具")
+            ->  subItem("在资源管理器中打开项目目录", SystemShell::revealProjectDir)
+            ->      endItem
+            ->  subItem("在 VSCode 中打开项目", SystemShell::openProjectInVSCode)
+            ->      endItem
+            ->  separator()
+            ->  subItem("更新全部着色器", ShaderUpdater::updateAll)
+            ->      endItem
+            ->  subItem("复制诊断信息", Diagnostics::copyDiagnosticInfo)
+            ->      endItem
             ->  endMenu
             -> subMenu("帮助")
             ->  subItem("关于 JoyEngine", About::showAbout)
             ->      endItem
             ->  endMenu
             ;
-            
+
         Menu::registerMainMenu(engineMainMenu);
     }
 }

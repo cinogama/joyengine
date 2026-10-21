@@ -1,0 +1,55 @@
+// 编辑器外部工具集成：在系统文件管理器 / VS Code 中打开项目目录。
+// 供主菜单「工具」使用。
+
+import pkg::std;
+
+import je;
+
+import pkg::fsys;
+import pkg::platform;
+import pkg::thread;
+
+using std;
+using fsys;
+using je;
+
+namespace JEEditor::Editor::SystemShell
+{
+    // 在后台线程执行 shell 命令：platform::shell 是阻塞的 system()，
+    // 外部程序启动期间（如 vscode 冷启动）在 UI 协程直接调用会卡住整
+    // 个编辑器。返回的线程不等待，结束后由 GC 回收（thread 句柄的终结
+    // 器会自动 detach）。命令失败（退出码非 0）时记录错误日志。
+    func shellDetached(cmd: string)=> void
+    {
+        do thread::create(func(){
+                if (platform::shell(cmd) != 0)
+                    logerr(F"执行外部命令失败（退出码非 0）：{cmd}");
+            });
+    }
+
+    // fsys 的路径统一为正斜杠，而 Windows 的 explorer / start 只认反斜杠。
+    func winPath(target: path_t)=> string
+    {
+        return target->to_string->replace("/", "\\");
+    }
+
+    // 在系统文件管理器中打开当前项目目录。
+    public func revealProjectDir()=> void
+    {
+        let current_os = platform::get_os();
+        let current = workpath();
+
+        if (current_os == platform::Os::WINDOWS)
+            shellDetached(F"explorer.exe \"{winPath(current)}\"");
+        else if (current_os == platform::Os::MACOS)
+            shellDetached(F"open \"{current->to_string}\"");
+        else
+            shellDetached(F"xdg-open \"{current->to_string}\"");
+    }
+
+    // 用 VS Code 打开当前项目目录（code 不在 PATH 等启动失败的情况记日志）。
+    public func openProjectInVSCode()=> void
+    {
+        shellDetached(F"code \"{workpath()->to_string}\"");
+    }
+}
