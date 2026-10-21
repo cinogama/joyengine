@@ -17,7 +17,12 @@ import pkg::std;
 import je;
 import je::ecs;
 import je::internal;
-import je::towoo;
+
+// 不要在这里 import je::towoo —— towwo.wo 会导入 je::towoo::components，
+// 而 components.wo 的顶层 `typeinfo = load(...)->unwrap` 在 import 阶段执行，
+// 早于下面的原生模块装载与 ToWoo 类型注册；项目类型此时尚未注册，会直接 panic。
+// 本脚本用到的 update_api / update_component / update_system / dynamic_parser
+// 都声明在 je.wo 中，只 import je 即可。
 
 import builtin::gaming::Loading::World;
 

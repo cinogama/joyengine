@@ -8,8 +8,6 @@ import je;
 import je::ecs;
 import je::typeinfo;
 import je::internal;
-import je::towoo;
-import je::towoo::components;
 
 import Entity;
 
@@ -24,11 +22,22 @@ namespace JEGaming::Saving::World
     {
         let world_dat = new_table();
 
+        // 这里不能引用 je::towoo::components：导出启动脚本会导入本模块，
+        // 而 components.wo 的顶层 typeinfo 初始化发生在 import 阶段，早于
+        // 原生模块与 ToWoo 组件注册，此时查询项目类型会得到 none 并 panic。
+        let invisible_type = je::typeinfo::load("Editor::Invisible");
+
         // Save entities
         let entities_dat = []mut: vec<mut (entity::internal::euid_t, Toml)>;
         for (let e : w->internal::get_all_entities())
         {
-            if (e->towoo::get_component:<Editor::Invisible>->is_value)
+            let mut invisible = false;
+            match (invisible_type)
+            {
+                value(t)? invisible = e->get_component(t)->is_value;
+                none?;
+            }
+            if (invisible)
                 continue;
 
             entities_dat->add(mut (
