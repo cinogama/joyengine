@@ -630,6 +630,11 @@ namespace jeecs
             m_camera_list.clear();
             m_renderer_list.clear();
 
+            // MouseOn 是逐帧派生态：帧首统一清零，随后各摄像机的 UI 阶段
+            // 命中时置位（只累加不清理，见 UpdateMouseOn）。
+            for (auto&& [mouse_on] : query<view typesof(MouseOn&)>())
+                mouse_on.is_mouse_on = false;
+
             this->branch_allocate_begin();
 
             UserInterfaceGraphicPipelineSystem::PrepareCameras();
@@ -712,6 +717,64 @@ namespace jeecs
             }
         }
 
+        // 逐摄像机更新 MouseOn（UI 命中测试）。UI 元素矩形按本摄像机目标
+        // 尺寸像素化后做含旋转的命中测试，因此必须逐摄像机执行：
+        //   * render_to_window 为 false 时不处理——渲染到 Framebuffer 的
+        //     摄像机是离屏目标，窗口鼠标不在其空间中；
+        //   * 鼠标须落在摄像机视口（Camera::Viewport，归一化、左下原点）
+        //     内；视口只裁剪绘制，不改变元素矩形（仍按目标完整尺寸解析）；
+        //   * 命中只置位，不清理其他摄像机已写入的结果：帧首已统一清零，
+        //     多个摄像机命中同一元素时保持 true。
+        // 不参与渲染的元素（无 Shape/Text/Shaders）同样参与测试，可作为
+        // 不可见按钮热区。
+        void UpdateMouseOn(
+            const camera_arch& camera,
+            bool render_to_window,
+            size_t buffer_w, size_t buffer_h)
+        {
+            if (!render_to_window
+                || WINDOWS_WIDTH == 0 || WINDOWS_HEIGHT == 0
+                || buffer_w == 0 || buffer_h == 0)
+                return;
+
+            const math::ivec2 mouse = jeecs::input::mousepos(0);
+
+            // 窗口鼠标 -> 渲染目标空间 NDC（-1..1，y 向上），与
+            // resolved_rect::hit_test 的 mouse_view_pos 约定一致。
+            const math::vec2 mouse_view(
+                ((float)mouse.x / (float)WINDOWS_WIDTH - 0.5f) * 2.0f,
+                ((float)mouse.y / (float)WINDOWS_HEIGHT - 0.5f) * -2.0f);
+
+            if (camera.viewport != nullptr)
+            {
+                const math::vec4& vp = camera.viewport->viewport;
+                if (vp.z <= 0.f || vp.w <= 0.f)
+                    return;
+
+                // 视口以渲染目标左下角为原点；鼠标也折算到左下原点后
+                // 做包含判定。
+                const float x = (float)mouse.x / (float)WINDOWS_WIDTH;
+                const float y = 1.0f - (float)mouse.y / (float)WINDOWS_HEIGHT;
+                if (x < vp.x || x > vp.x + vp.z
+                    || y < vp.y || y > vp.y + vp.w)
+                    return;
+            }
+
+            for (auto&& [elem, layout, mouse_on] : query<view typesof(
+                Element&, WorldLayout&, MouseOn&)>())
+            {
+                const auto rect = elem.resolve_display_rect(
+                    layout, (float)buffer_w, (float)buffer_h);
+
+                if (!rect.hit_test(
+                        layout.rotation, mouse_view,
+                        (float)buffer_w, (float)buffer_h))
+                    continue;
+
+                mouse_on.is_mouse_on = true;
+            }
+        }
+
         void DrawFrame()
         {
             const double current_time = je_clock_time();
@@ -745,6 +808,10 @@ namespace jeecs
                 }
                 const size_t RENDAIMBUFFER_WIDTH = rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH,
                     RENDAIMBUFFER_HEIGHT = rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT;
+
+                // 逐摄像机更新鼠标命中状态；离屏 Framebuffer 不参与。
+                UpdateMouseOn(current_camera, rend_aim_buffer == nullptr,
+                    RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
                 const float MAT4_UI_VIEW[4][4] = {
                     {2.0f / (float)RENDAIMBUFFER_WIDTH, 0.0f, 0.0f, 0.0f},

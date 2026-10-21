@@ -12681,6 +12681,33 @@ namespace jeecs
                 typing::register_member(guard, &Text::wrap, "wrap");
             }
         };
+
+        // 鼠标与 UI 元素的交互状态（用户挂载，UI 渲染管线逐帧写入，用户只读）。
+        // 挂在需要鼠标交互的 UI 实体上（如按钮；通常同时挂 Element + WorldLayout）
+        // 后，UI 渲染管线在该实体的每个摄像机绘制阶段做命中测试：
+        //   1) 只处理目标为窗口的摄像机——渲染到 Framebuffer 的摄像机是离屏
+        //      目标，鼠标不存在于其空间中，不参与命中；
+        //   2) 鼠标必须落在摄像机的 Camera::Viewport 子视口内（未挂视口则
+        //      整个目标）；视口只裁剪绘制，元素矩形仍按目标完整尺寸解析；
+        //   3) 元素矩形按该摄像机目标尺寸像素化（resolve_display_rect），
+        //      命中测试含元素自身角与祖先旋转链（WorldLayout::rotation）；
+        //   4) 不参与渲染（无 Shape/Text/Shaders）的元素同样参与测试——
+        //      可用于不可见按钮热区。
+        // 命中状态每帧先清零再逐摄像机累加：同一元素被多个摄像机命中时
+        // 保持为 true。
+        struct MouseOn
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(MouseOn);
+            JECS_DEFAULT_CONSTRUCTOR(MouseOn);
+
+            // 本帧鼠标是否位于该元素上（任一参与测试的摄像机命中）。
+            bool is_mouse_on = false;
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &MouseOn::is_mouse_on, "is_mouse_on");
+            }
+        };
     };
     namespace Renderer
     {
@@ -15731,6 +15758,7 @@ namespace jeecs
             jeecs::typing::register_type<UserInterface::WorldLayout>(guard, "UserInterface::WorldLayout");
             jeecs::typing::register_type<UserInterface::Rotation>(guard, "UserInterface::Rotation");
             jeecs::typing::register_type<UserInterface::Text>(guard, "UserInterface::Text");
+            jeecs::typing::register_type<UserInterface::MouseOn>(guard, "UserInterface::MouseOn");
 
             jeecs::typing::register_type<Renderer::Rendqueue>(guard, "Renderer::Rendqueue");
             jeecs::typing::register_type<Renderer::Shape>(guard, "Renderer::Shape");
