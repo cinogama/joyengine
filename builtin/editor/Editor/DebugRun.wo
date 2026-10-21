@@ -354,13 +354,13 @@ namespace JEEditor::Editor::DebugRun
         
         public func run(self: DebugRunToolbar)=> bool
         {
-            TextColored((90, 230, 115, 255), "● 调试运行中");
+            TextColored((90, 230, 115, 255), "调试运行中");
             SameLine();
             let text_toggle = isDebugRunUIVisible() ? "隐藏编辑器" | "显示编辑器";
             if (Button(text_toggle))
                 do toggleDebugRunUI();
             SameLine();
-            if (Button("■ 停止"))
+            if (Button("停止"))
                 do stopDebugRun();
             
             return !self.m_close;
