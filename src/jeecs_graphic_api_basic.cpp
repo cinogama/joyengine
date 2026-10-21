@@ -81,7 +81,7 @@ namespace Assimp
          *  Returns the filesize. */
         virtual size_t FileSize() const override
         {
-            return m_file->m_file_length;
+            return jeecs_file_size(m_file);
         }
 
         // -------------------------------------------------------------------
@@ -2353,9 +2353,10 @@ jegl_shader* _jegl_load_shader_source_impl(
     }
     if (jeecs_file* texfile = jeecs_file_open(path))
     {
-        char* src = (char*)malloc(texfile->m_file_length + 1);
-        jeecs_file_read(src, sizeof(char), texfile->m_file_length, texfile);
-        src[texfile->m_file_length] = 0;
+        const size_t shader_source_size = jeecs_file_size(texfile);
+        char* src = (char*)malloc(shader_source_size + 1);
+        jeecs_file_read(src, sizeof(char), shader_source_size, texfile);
+        src[shader_source_size] = 0;
 
         jeecs_file_close(texfile);
 
@@ -2395,7 +2396,7 @@ void jegl_share_resource_handle(jegl_resource_handle* resource_handle)
         res_reader.read = [](void* f, char* data, int size)
             { return (int)jeecs_file_read(data, 1, (size_t)size, (jeecs_file*)f); };
         res_reader.eof = [](void* f)
-            { return jeecs_file_tell((jeecs_file*)f) >= ((jeecs_file*)f)->m_file_length ? 1 : 0; };
+            { return jeecs_file_tell((jeecs_file*)f) >= jeecs_file_size((jeecs_file*)f) ? 1 : 0; };
         res_reader.skip = [](void* f, int n)
             { jeecs_file_seek((jeecs_file*)f, (size_t)n, je_read_file_seek_mode::JE_READ_FILE_SEEK_CURRENT); };
 

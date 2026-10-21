@@ -64,8 +64,9 @@ WOORT_API woort_api wojeapi_read_file_all(void)
     {
         if (auto* file = jeecs_file_open(filepath))
         {
-            std::vector<char> readed_buf(file->m_file_length);
-            auto readed_len = jeecs_file_read(readed_buf.data(), sizeof(char), file->m_file_length, file);
+            const size_t file_size = jeecs_file_size(file);
+            std::vector<char> readed_buf(file_size);
+            auto readed_len = jeecs_file_read(readed_buf.data(), sizeof(char), file_size, file);
             readed_buf.resize(readed_len);
 
             jeecs_file_close(file);
@@ -108,8 +109,9 @@ WOORT_API woort_api wojeapi_file_cache_read_all(void)
     woort_vm* const last = woort_vm_swap(nullptr);
     if (auto* cache = jeecs_load_cache_file(filepath, 0, -1))
     {
-        std::vector<char> readed_buf(cache->m_file_length);
-        auto readed_len = jeecs_file_read(readed_buf.data(), sizeof(char), cache->m_file_length, cache);
+        const size_t cache_size = jeecs_file_size(cache);
+        std::vector<char> readed_buf(cache_size);
+        auto readed_len = jeecs_file_read(readed_buf.data(), sizeof(char), cache_size, cache);
         readed_buf.resize(readed_len);
 
         jeecs_file_close(cache);
@@ -151,34 +153,40 @@ WOORT_API woort_api wojeapi_set_runtime_path(void)
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_create_fimg_packer(void)
+WOORT_API woort_api wojeapi_fimg_writer_create(void)
 {
-    return woort_ret_pointer(jeecs_file_image_begin(
+    return woort_ret_pointer(jeecs_fimg_writer_create(
         woort_string(0),
         (size_t)woort_int(1)));
 }
 
-WOORT_API woort_api wojeapi_pack_file_to_fimg_packer(void)
+WOORT_API woort_api wojeapi_fimg_writer_pack_file(void)
 {
-    auto* ctx = static_cast<fimg_creating_context*>(woort_pointer(0));
-    return woort_ret_bool(jeecs_file_image_pack_file(ctx, woort_string(1), woort_string(2)));
+    auto* writer = static_cast<jeecs_fimg_writer*>(woort_pointer(0));
+    return woort_ret_bool(jeecs_fimg_writer_pack_file(writer, woort_string(1), woort_string(2)));
 }
 
-WOORT_API woort_api wojeapi_pack_buffer_to_fimg_packer(void)
+WOORT_API woort_api wojeapi_fimg_writer_pack_buffer(void)
 {
-    auto* ctx = static_cast<fimg_creating_context*>(woort_pointer(0));
+    auto* writer = static_cast<jeecs_fimg_writer*>(woort_pointer(0));
     return woort_ret_bool(
-        jeecs_file_image_pack_buffer(
-            ctx,
+        jeecs_fimg_writer_pack_buffer(
+            writer,
             woort_pointer(1),
             (size_t)woort_int(2),
             woort_string(3)));
 }
 
-WOORT_API woort_api wojeapi_finish_fimg_packer(void)
+WOORT_API woort_api wojeapi_fimg_writer_finish(void)
 {
-    auto* ctx = static_cast<fimg_creating_context*>(woort_pointer(0));
-    jeecs_file_image_finish(ctx);
+    auto* writer = static_cast<jeecs_fimg_writer*>(woort_pointer(0));
+    return woort_ret_bool(jeecs_fimg_writer_finish(writer));
+}
+
+WOORT_API woort_api wojeapi_fimg_writer_abort(void)
+{
+    auto* writer = static_cast<jeecs_fimg_writer*>(woort_pointer(0));
+    jeecs_fimg_writer_abort(writer);
     return woort_ret_void();
 }
 
@@ -2643,18 +2651,19 @@ WOORT_API woort_api wojeapi_towoo_update_component(void)
     }
     else
     {
-        char* const src = (char*)malloc(texfile->m_file_length);
+        const size_t component_size = jeecs_file_size(texfile);
+        char* const src = (char*)malloc(component_size);
         if (src == nullptr)
         {
             jeecs::debug::logerr("Failed to register: '%s', out of memory.", component_name);
         }
         else
         {
-            (void)jeecs_file_read(src, sizeof(char), texfile->m_file_length, texfile);
+            (void)jeecs_file_read(src, sizeof(char), component_size, texfile);
 
             wo_CompileErrors* cerror;
             woort_CodeEnv* const cenv =
-                wo_load_binary(component_path, src, texfile->m_file_length, &cerror);
+                wo_load_binary(component_path, src, component_size, &cerror);
 
             jeecs_file_close(texfile);
             free(src);
@@ -2866,7 +2875,7 @@ std::optional<std::string> _je_dynamic_parser_update_script(
     if (file == nullptr)
         return std::optional("Failed to open '"s + path + "'.");
 
-    size_t filelen = file->m_file_length;
+    size_t filelen = jeecs_file_size(file);
 
     char* const content = (char*)malloc(filelen + 1);
     if (content == nullptr)

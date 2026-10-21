@@ -1065,12 +1065,13 @@ void je_towoo_unregister_system(/* OPTIONAL */ const je_TypeInfo* tinfo)
         return nullptr;
     }
 
-    char* src = static_cast<char*>(malloc(texfile->m_file_length + 1));
-    jeecs_file_read(src, sizeof(char), texfile->m_file_length, texfile);
-    src[texfile->m_file_length] = 0;
+    const size_t script_size = jeecs_file_size(texfile);
+    char* src = static_cast<char*>(malloc(script_size + 1));
+    jeecs_file_read(src, sizeof(char), script_size, texfile);
+    src[script_size] = 0;
 
     wo_CompileErrors* cerror;
-    woort_CodeEnv* cenv = wo_load_binary(script_path, src, texfile->m_file_length, &cerror);
+    woort_CodeEnv* cenv = wo_load_binary(script_path, src, script_size, &cerror);
 
     jeecs_file_close(texfile);
     free(src);

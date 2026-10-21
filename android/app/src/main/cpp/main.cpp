@@ -439,7 +439,7 @@ extern "C" {
         jeecs_file_set_host_path(jni_cstring(env, cache_path).c_str());
         jeecs_file_set_runtime_path(jni_cstring(env, asset_path).c_str());
 
-        jeecs_file_update_default_fimg("#");
+        jeecs_fimg_set_default_archive("#");
     }
 
     void _je_handle_inputs(struct android_app* app_) {

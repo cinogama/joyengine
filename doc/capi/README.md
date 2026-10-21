@@ -44,7 +44,7 @@ C-API 是 JoyEngine 的外部实现与引擎核心的交互接口。出于规避
 文件读写与缓存管理。
 
 - `jeecs_file_*` - 文件操作
-- `jeecs_file_image_*` - 文件镜像打包
+- `jeecs_fimg_*` - 资源镜像（打开、查询与打包）
 - `jeecs_*_cache_file` - 缓存文件管理
 
 ### [graphic/](graphic/) - 图形接口

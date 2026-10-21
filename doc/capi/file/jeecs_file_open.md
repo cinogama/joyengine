@@ -31,7 +31,7 @@ JE_API jeecs_file* jeecs_file_open(const char* path);
 | 前缀 | 描述 |
 |------|------|
 | `@` | 运行时目录（优先加载实际存在的文件，然后尝试默认镜像） |
-| `!` | 可执行文件所在目录 |
+| `!` | 可执行文件所在目录（优先加载实际存在的文件，然后尝试默认镜像） |
 
 ### 示例
 
@@ -41,7 +41,7 @@ jeecs_file* file = jeecs_file_open("@/config/settings.json");
 
 if (file != nullptr) {
     // 获取文件大小
-    size_t file_size = file->m_file_length;
+    size_t file_size = jeecs_file_size(file);
     
     // 读取文件内容
     char* buffer = (char*)je_mem_alloc(file_size + 1);
@@ -58,11 +58,14 @@ if (file != nullptr) {
 ## 注意事项
 
 - 若文件成功打开，使用完毕后需要使用 `jeecs_file_close` 关闭
-- 以 `@` 开头的路径会优先查找实际文件，如不存在则尝试从默认镜像中读取
+- 以 `@`/`!` 开头的路径会优先查找实际文件，如不存在则尝试从默认镜像读取（键为带前缀的原始路径）
+- 默认镜像通过 `jeecs_fimg_set_default_archive` 加载，包含 `fimg.je4index` 与 `fimg.<N>.je4image`
 - 文件以只读二进制模式打开
 
 ## 相关接口
 
 - [jeecs_file_close](jeecs_file_close.md) - 关闭文件
 - [jeecs_file_read](jeecs_file_read.md) - 读取文件内容
+- [jeecs_file_size](jeecs_file_size.md) - 获取文件大小
+- [jeecs_fimg_set_default_archive](jeecs_fimg_set_default_archive.md) - 加载默认镜像
 - [jeecs_file_set_runtime_path](jeecs_file_set_runtime_path.md) - 设置运行时路径

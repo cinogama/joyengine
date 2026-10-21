@@ -18,7 +18,7 @@ uint64_t _crc64_of_file(const char* filepath)
 
         char buf[READ_COUNT_PER_GROUP];
 
-        size_t reserved_byte_len = origin_file->m_file_length;
+        size_t reserved_byte_len = jeecs_file_size(origin_file);
         while (reserved_byte_len > 0)
         {
             size_t this_time_read_size = std::min(READ_COUNT_PER_GROUP, reserved_byte_len);

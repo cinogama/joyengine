@@ -467,7 +467,7 @@ namespace jeecs
             jeecs_file* f = jeecs_file_open(path.c_str());
             if (f == nullptr)
                 return {};
-            std::vector<char> buf(f->m_file_length);
+            std::vector<char> buf(jeecs_file_size(f));
             size_t got = jeecs_file_read(buf.data(), 1, buf.size(), f);
             jeecs_file_close(f);
             if (got != buf.size())

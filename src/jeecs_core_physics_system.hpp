@@ -372,7 +372,7 @@ namespace jeecs
                 return std::nullopt;
             }
 
-            std::vector<char> buf(fp->m_file_length);
+            std::vector<char> buf(jeecs_file_size(fp));
             jeecs_file_read(buf.data(), sizeof(char), buf.size(), fp);
             jeecs_file_close(fp);
 

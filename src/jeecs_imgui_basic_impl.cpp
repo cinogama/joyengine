@@ -2866,14 +2866,18 @@ void jegui_init_basic(
 
     if (general_ttf_file)
     {
-        void* file_buf = malloc(general_ttf_file->m_file_length);
-        jeecs_file_read(file_buf, sizeof(char), general_ttf_file->m_file_length, general_ttf_file);
+        const size_t general_ttf_size = jeecs_file_size(general_ttf_file);
+        const size_t latin_ttf_size
+            = latin_ttf_file != nullptr ? jeecs_file_size(latin_ttf_file) : 0;
+
+        void* file_buf = malloc(general_ttf_size);
+        jeecs_file_read(file_buf, sizeof(char), general_ttf_size, general_ttf_file);
 
         void* latin_file_buf = nullptr;
         if (latin_ttf_file != nullptr)
         {
-            latin_file_buf = malloc(latin_ttf_file->m_file_length);
-            jeecs_file_read(latin_file_buf, sizeof(char), latin_ttf_file->m_file_length, latin_ttf_file);
+            latin_file_buf = malloc(latin_ttf_size);
+            jeecs_file_read(latin_file_buf, sizeof(char), latin_ttf_size, latin_ttf_file);
         }
 
         if (latin_file_buf != nullptr)
@@ -2899,7 +2903,7 @@ void jegui_init_basic(
 
             io.Fonts->AddFontFromMemoryTTF(
                 latin_file_buf,
-                (int)latin_ttf_file->m_file_length,
+                (int)latin_ttf_size,
                 (float)_je_gui_static_ctx._jegui_specify_font_size,
                 nullptr,
                 io.Fonts->GetGlyphRangesDefault());
@@ -2909,7 +2913,7 @@ void jegui_init_basic(
 
             io.Fonts->AddFontFromMemoryTTF(
                 file_buf,
-                (int)general_ttf_file->m_file_length,
+                (int)general_ttf_size,
                 (float)_je_gui_static_ctx._jegui_specify_font_size,
                 &merge_config,
                 ranges);
@@ -2919,7 +2923,7 @@ void jegui_init_basic(
         else
             io.Fonts->AddFontFromMemoryTTF(
                 file_buf,
-                (int)general_ttf_file->m_file_length,
+                (int)general_ttf_size,
                 (float)_je_gui_static_ctx._jegui_specify_font_size,
                 nullptr,
                 io.Fonts->GetGlyphRangesChineseFull());

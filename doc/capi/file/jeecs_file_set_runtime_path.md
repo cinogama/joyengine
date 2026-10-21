@@ -35,11 +35,11 @@ jeecs_file_set_runtime_path("/projects/my_game");
 
 ## 注意事项
 
-- 设置路径时，引擎会尝试以相同参数调用 `jeecs_file_update_default_fimg` 更新默认镜像
+- 此接口不会自动加载镜像；需要另行调用 `jeecs_fimg_set_default_archive`
 - 默认值为可执行文件所在路径
 
 ## 相关接口
 
 - [jeecs_file_get_runtime_path](jeecs_file_get_runtime_path.md) - 获取运行时路径
 - [jeecs_file_set_host_path](jeecs_file_set_host_path.md) - 设置宿主环境路径
-- [jeecs_file_update_default_fimg](jeecs_file_update_default_fimg.md) - 更新默认镜像
+- [jeecs_fimg_set_default_archive](jeecs_fimg_set_default_archive.md) - 加载默认镜像

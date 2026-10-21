@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void jeecs_file_seek(jeecs_file* file, int64_t offset, je_read_file_seek_mode mode);
+JE_API bool jeecs_file_seek(jeecs_file* file, int64_t offset, je_read_file_seek_mode mode);
 ```
 
 ## 描述
@@ -28,7 +28,11 @@ JE_API void jeecs_file_seek(jeecs_file* file, int64_t offset, je_read_file_seek_
 
 ## 返回值
 
-无返回值。
+| 类型 | 描述 |
+|------|------|
+| `bool` | 成功返回 `true`；参数非法或底层跳转失败返回 `false` |
+
+镜像文件的目标位置会被钳制在 `[0, 文件大小]`：负偏移从 0 开始，超出末尾则停在末尾。
 
 ## 用法
 

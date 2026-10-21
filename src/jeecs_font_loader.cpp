@@ -28,11 +28,11 @@ struct je_stb_font_data
 
     if (auto* file = jeecs_file_open(font_path))
     {
-        font->m_font_file_buf = (uint8_t*)malloc(file->m_file_length);
+        font->m_font_file_buf = (uint8_t*)malloc(jeecs_file_size(file));
         jeecs_file_read(
             font->m_font_file_buf,
             sizeof(uint8_t),
-            file->m_file_length,
+            jeecs_file_size(file),
             file);
 
         jeecs_file_close(file);

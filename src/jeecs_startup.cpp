@@ -260,6 +260,7 @@ void je_init(int argc, /* OPTIONAL: If argc == 0 */ char** argv)
     const auto exe_path = _je_woort_exe_path();
     jeecs_file_set_host_path(exe_path.c_str());
     jeecs_file_set_runtime_path(exe_path.c_str());
+    jeecs_fimg_set_default_archive(exe_path.c_str());
 
     je_extern_lib_woo_api_init();
     je_extern_lib_3rd_pkgs_init();
@@ -279,8 +280,8 @@ static woort_CodeEnv* _je_open_file_to_compile_vm(const char* vpath)
     if (src_file_handle == nullptr)
         return nullptr;
 
-    std::vector<char> src_buffer(src_file_handle->m_file_length);
-    jeecs_file_read(src_buffer.data(), sizeof(char), src_file_handle->m_file_length, src_file_handle);
+    std::vector<char> src_buffer(jeecs_file_size(src_file_handle));
+    jeecs_file_read(src_buffer.data(), sizeof(char), src_buffer.size(), src_file_handle);
     jeecs_file_close(src_file_handle);
 
     wo_CompileErrors* cerror;
@@ -405,7 +406,7 @@ void je_finish()
     delete _je_global_context._je_unregister_guard;
     _je_global_context._je_unregister_guard = nullptr;
 
-    jeecs_file_update_default_fimg(nullptr);
+    jeecs_fimg_set_default_archive(nullptr);
     jegl_shader_generator_shutdown();
     je_log_finish();
 }

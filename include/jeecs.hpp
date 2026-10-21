@@ -1808,25 +1808,40 @@ JE_API void je_uid_generate(je_Uuid* out_uid);
 /////////////////////////// FILE /////////////////////////////////
 
 /*
-jeecs_fimg_file [类型]
-镜像文件类型，用于加载从镜像中读取的文件时储存镜像文件的上下文信息
+jeecs_file [类型]
+文件，用于保存引擎读取的文件。具体布局由引擎内部维护，不对外公开。
 一般使用此类型的指针类型
 请参见：
-    jeecs_file
+    jeecs_file_open
+    jeecs_file_close
+    jeecs_file_read
+    jeecs_file_size
 */
-struct jeecs_fimg_file;
+struct jeecs_file;
 
 /*
-fimg_creating_context [类型]
-镜像上下文，用于创建镜像时保存创建上下文信息
+jeecs_fimg_archive [类型]
+只读资源镜像，对应一个目录下的 fimg.je4index 清单与若干 fimg.<N>.je4image 分片
 一般使用此类型的指针类型
 请参见：
-    jeecs_file_image_begin
-    jeecs_file_image_pack_file
-    jeecs_file_image_pack_buffer
-    jeecs_file_image_finish
+    jeecs_fimg_archive_open
+    jeecs_fimg_archive_close
+    jeecs_fimg_set_default_archive
 */
-struct fimg_creating_context;
+struct jeecs_fimg_archive;
+
+/*
+jeecs_fimg_writer [类型]
+资源镜像打包器
+一般使用此类型的指针类型
+请参见：
+    jeecs_fimg_writer_create
+    jeecs_fimg_writer_pack_file
+    jeecs_fimg_writer_pack_buffer
+    jeecs_fimg_writer_finish
+    jeecs_fimg_writer_abort
+*/
+struct jeecs_fimg_writer;
 
 enum je_read_file_seek_mode
 {
@@ -1844,22 +1859,6 @@ typedef int (*je_read_file_seek_func_t)(jeecs_raw_file, int64_t, je_read_file_se
 typedef int (*je_read_file_close_func_t)(jeecs_raw_file);
 
 /*
-jeecs_file [类型]
-文件，用于保存引擎读取的文件
-一般使用此类型的指针类型
-请参见：
-    jeecs_file_open
-    jeecs_file_close
-    jeecs_file_read
-*/
-struct jeecs_file
-{
-    jeecs_fimg_file* m_image_file_handle;
-    jeecs_raw_file m_native_file_handle;
-    size_t m_file_length;
-};
-
-/*
 jeecs_file_set_host_path [基本接口]
 设置当前引擎的宿主环境在路径，不影响“实际可执行文件所在路径”
     * 设置此路径将影响以 ! 开头的路径的实际位置
@@ -1874,20 +1873,22 @@ JE_API void jeecs_file_set_host_path(const char* path);
 jeecs_file_set_runtime_path [基本接口]
 设置当前引擎的运行时路径，不影响“工作路径”
     * 设置此路径将影响以 @ 开头的路径的实际位置
-    * 设置路径时，引擎会尝试以相同参数调用jeecs_file_update_default_fimg
+    * 此接口不会自动加载镜像，需要另行调用 jeecs_fimg_set_default_archive
 请参考：
-    jeecs_file_update_default_fimg
+    jeecs_fimg_set_default_archive
 */
 JE_API void jeecs_file_set_runtime_path(const char* path);
 
 /*
-* jeecs_file_update_default_fimg [基本接口]
-读取指定位置的镜像文件作为默认镜像
-    * 以 @/ 开头的路径将优先从默认镜像中读取
-    * 无论打开是否成功，之前打开的默认镜像都将被关闭
-    * 若 path == nullptr，则仅关闭旧的镜像
+jeecs_fimg_set_default_archive [基本接口]
+从指定目录加载 fimg 镜像作为默认镜像
+    * 以 @/ 或 !/ 开头的路径在实际文件不存在时将从默认镜像读取
+    * 无论加载是否成功，之前打开的默认镜像都将被关闭
+    * 若 root == nullptr，则仅关闭旧的镜像并返回 true
+    * 目录下不存在 fimg.je4index 时静默返回 false
+    * 清单存在但损坏时记录错误并返回 false
 */
-JE_API void jeecs_file_update_default_fimg(/* OPTIONAL: If path == nullptr, only close the old image */ const char* path);
+JE_API bool jeecs_fimg_set_default_archive(/* OPTIONAL: If root == nullptr, only close the old archive */ const char* root);
 
 /*
 jeecs_file_get_host_path [基本接口]
@@ -1924,9 +1925,10 @@ JE_API void jeecs_register_native_file_operator(
 jeecs_file_open [基本接口]
 从指定路径打开一个文件，若打开失败返回nullptr
 若文件成功打开，使用完毕后需要使用 jeecs_file_close 关闭
-    * 若路径由 '@' 开头，则如同加载指定运行目录下的文件（优先加
-    实际存在的文件）
-    * 若路径由 '!' 开头，则如同加载可执行文件所在目录下的文件
+    * 若路径由 '@' 开头，则如同加载指定运行目录下的文件：
+      优先打开实际存在的文件，不存在时从默认镜像读取
+    * 若路径由 '!' 开头，则如同加载可执行文件所在目录下的文件：
+      优先打开实际存在的文件，不存在时从默认镜像读取
 请参见：
     jeecs_file_close
 */
@@ -1957,47 +1959,90 @@ JE_API size_t jeecs_file_tell(jeecs_file* file);
 /*
 jeecs_file_seek [基本接口]
 按照指定的模式，对文件即将读取的位置进行偏移和跳转
+镜像文件的位置会被钳制在 [0, 文件大小] 范围内；成功返回 true
 请参见：
     je_read_file_seek_mode
 */
-JE_API void jeecs_file_seek(jeecs_file* file, int64_t offset, je_read_file_seek_mode mode);
+JE_API bool jeecs_file_seek(jeecs_file* file, int64_t offset, je_read_file_seek_mode mode);
 
 /*
-jeecs_file_image_begin [基本接口]
-准备开始创建文件镜像，镜像文件将被保存到 storing_path 指定的目录下
-镜像会进行分卷操作，max_image_size是单个镜像文件的大小
+jeecs_file_size [基本接口]
+获取文件总大小
 */
-JE_API fimg_creating_context* jeecs_file_image_begin(
-    const char* storing_path,
-    size_t max_image_size);
+JE_API size_t jeecs_file_size(jeecs_file* file);
 
 /*
-jeecs_file_image_pack_file [基本接口]
-向指定镜像中写入由 filepath 指定的一个文件，此文件在镜像中的路径被
-指定为packingpath
+jeecs_fimg_archive_open [基本接口]
+从指定目录打开一个 fimg 镜像（fimg.je4index + fimg.<N>.je4image）
+目录下不存在清单或清单损坏时返回 nullptr
+使用完毕后需要使用 jeecs_fimg_archive_close 关闭
 */
-JE_API bool jeecs_file_image_pack_file(
-    fimg_creating_context* context,
+JE_API /* OPTIONAL */ jeecs_fimg_archive* jeecs_fimg_archive_open(const char* root);
+
+/*
+jeecs_fimg_archive_close [基本接口]
+关闭一个镜像；已打开的文件句柄仍然有效，直到它们自身被关闭
+*/
+JE_API void jeecs_fimg_archive_close(jeecs_fimg_archive* archive);
+
+/*
+jeecs_fimg_archive_has_file [基本接口]
+判断镜像中是否存在指定路径的文件
+*/
+JE_API bool jeecs_fimg_archive_has_file(const jeecs_fimg_archive* archive, const char* path);
+
+/*
+jeecs_fimg_archive_file_size [基本接口]
+获取镜像中指定文件的大小；文件不存在时返回 0
+*/
+JE_API size_t jeecs_fimg_archive_file_size(const jeecs_fimg_archive* archive, const char* path);
+
+/*
+jeecs_fimg_writer_create [基本接口]
+准备在 root 目录下创建 fimg 镜像
+    * root 必须已经存在且可写
+    * shard_size 是单个分片文件的目标大小，传 0 使用默认值（1 MiB）
+*/
+JE_API jeecs_fimg_writer* jeecs_fimg_writer_create(
+    const char* root,
+    size_t shard_size);
+
+/*
+jeecs_fimg_writer_pack_file [基本接口]
+将 filepath 指定的文件写入镜像，镜像内路径指定为 archive_path
+archive_path 重复、源文件读取失败或 writer 已结束/失败时返回 false
+*/
+JE_API bool jeecs_fimg_writer_pack_file(
+    jeecs_fimg_writer* writer,
     const char* filepath,
-    const char* packingpath);
+    const char* archive_path);
 
 /*
-jeecs_file_image_pack_file [基本接口]
-向指定镜像中写入一个缓冲区指定的内容作为文件，此文件在镜像中的路径被
-指定为packingpath
+jeecs_fimg_writer_pack_buffer [基本接口]
+将缓冲区内容作为文件写入镜像，镜像内路径指定为 archive_path
+archive_path 重复、参数非法或 writer 已结束/失败时返回 false
 */
-JE_API bool jeecs_file_image_pack_buffer(
-    fimg_creating_context* context,
+JE_API bool jeecs_fimg_writer_pack_buffer(
+    jeecs_fimg_writer* writer,
     /* OPTIONAL: If len == 0 */ const void* buffer,
     size_t len,
-    const char* packingpath);
+    const char* archive_path);
 
 /*
-jeecs_file_image_finish [基本接口]
-结束镜像创建，将最后剩余数据写入镜像并创建镜像索引文件
+jeecs_fimg_writer_finish [基本接口]
+结束镜像创建：关闭最后一个分片并写出 fimg.je4index 清单
+成功返回 true；失败返回 false 且 writer 进入失败状态，需要调用
+jeecs_fimg_writer_abort 清理
 */
-JE_API void jeecs_file_image_finish(
-    fimg_creating_context* context);
+JE_API bool jeecs_fimg_writer_finish(jeecs_fimg_writer* writer);
+
+/*
+jeecs_fimg_writer_abort [基本接口]
+结束并释放 writer
+    * 如果尚未成功 finish，仅关闭当前分片并释放 writer，已经写出的文件保留
+    * 输出目录由调用方负责清理
+*/
+JE_API void jeecs_fimg_writer_abort(jeecs_fimg_writer* writer);
 
 // If ignore_crc64 == true, cache will always work even if origin file changed.
 

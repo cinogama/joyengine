@@ -104,19 +104,22 @@ namespace je
         extern("libjoyecs", "wojeapi_input_update_window_title")
             public func set_window_title(title: string)=> void;
             
-        public using fimage_packer = handle
+        public using fimg_writer = handle
         {
-            extern("libjoyecs", "wojeapi_create_fimg_packer")
-                public func create(saving_path: string, max_img_size: int)=> fimage_packer;
+            extern("libjoyecs", "wojeapi_fimg_writer_create")
+                public func create(root: string, shard_size: int)=> fimg_writer;
                 
-            extern("libjoyecs", "wojeapi_pack_file_to_fimg_packer")
-                public func pack(self: fimage_packer, file_path: string, pack_path: string)=> bool;
+            extern("libjoyecs", "wojeapi_fimg_writer_pack_file")
+                public func pack(self: fimg_writer, file_path: string, archive_path: string)=> bool;
                 
-            extern("libjoyecs", "wojeapi_pack_buffer_to_fimg_packer")
-                public func pack_buffer(self: fimage_packer, buffer: handle, len: int, pack_path: string)=> bool;
+            extern("libjoyecs", "wojeapi_fimg_writer_pack_buffer")
+                public func pack_buffer(self: fimg_writer, buffer: handle, len: int, archive_path: string)=> bool;
                 
-            extern("libjoyecs", "wojeapi_finish_fimg_packer")
-                public func finish(self: fimage_packer)=> void;
+            extern("libjoyecs", "wojeapi_fimg_writer_finish")
+                public func finish(self: fimg_writer)=> bool;
+
+            extern("libjoyecs", "wojeapi_fimg_writer_abort")
+                public func abort(self: fimg_writer)=> void;
         }
         
         extern("libjoyecs", "wojeapi_get_sleep_suppression")

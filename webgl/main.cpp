@@ -22,7 +22,7 @@ public:
     {
         jeecs_file_set_host_path("/.je4");
         jeecs_file_set_runtime_path("/.je4");
-        jeecs_file_update_default_fimg("");
+        jeecs_fimg_set_default_archive("/");
 
         (void)prepare_graphic(true);
     }

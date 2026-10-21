@@ -6,7 +6,7 @@
 // 进度与错误显示在“项目导出”日志窗口中。
 //
 // 产物布局（<项目>/.export/）：
-//   images.je4index + disk<N>.je4image   资源镜像（项目文件、着色器、启动脚本）
+//   fimg.je4index + fimg.<N>.je4image   资源镜像（项目文件、着色器、启动脚本）
 //   modules/lib<模块名>.dll              RELEASE 编译的原生模块（真实文件）
 //   <项目名>.exe + 引擎运行库             引擎运行时
 //   licenses/                            引擎使用的第三方许可证
@@ -449,15 +449,15 @@ namespace JEEditor::Editor
             try! _ = mkdir(export_path)
                 -> or_map(\e = F"创建导出目录失败（{e}）";);
                 
-            let packer = je::internal::fimage_packer::create(
+            let packer = je::internal::fimg_writer::create(
                 export_path->to_string,
                 settings.m_image_size_mb * 1024 * 1024);
                 
-            // 失败路径同样要收尾：finish 负责写出镜像索引并释放打包上下文。
+            // 失败路径调用 abort 释放 writer；输出目录由下次导出前清理。
             let packer_finished = mutable::create(false);
             defer {
                 if (!packer_finished->get)
-                    packer->finish();
+                    packer->abort();
             };
             
             try! _ = packShaders(prepare, packer, settings.m_working_path);
@@ -467,8 +467,10 @@ namespace JEEditor::Editor
             try! _ = packBootScript(prepare, packer, settings);
             try! _ = copyRuntimeFiles(prepare, export_path, settings);
             
-            packer->finish();
+            if (!packer->finish())
+                throw! "写入资源镜像索引失败";
             packer_finished->set(true);
+            packer->abort();
             
             prepare->postMessage("打包完成。");
             return_ok!;
@@ -483,7 +485,7 @@ namespace JEEditor::Editor
         //     CPU 侧的 Woolang 编译 + HLSL/SPIR-V/GLSL/MSL 生成 + 缓存写盘；
         //   * 磁盘缓存按源码 CRC 校验，源码有改动会自动重编译，保证随后
         //     打包的 .je4cache 与打包的源码一致。
-        func packShaders(prepare: ModulePrepare, packer: je::internal::fimage_packer,
+        func packShaders(prepare: ModulePrepare, packer: je::internal::fimg_writer,
             working_path: path_t)
         {
             // 1. 引擎内部着色器：C++ 侧以 !/builtin/shader/internal/... 加载，
@@ -554,7 +556,7 @@ namespace JEEditor::Editor
         
         // 编译一个着色器并打包源码与缓存。pack_key 同时是引擎运行时的
         // 资源路径（!/... 或 @/...），shader::load 直接用它定位源码。
-        func packOneShader(prepare: ModulePrepare, packer: je::internal::fimage_packer,
+        func packOneShader(prepare: ModulePrepare, packer: je::internal::fimg_writer,
             source_path: path_t, pack_key: string)
         {
             match (shader::load(option::none, pack_key))
@@ -649,7 +651,7 @@ namespace JEEditor::Editor
         // 复制，其余文件打进资源镜像。着色器与 .je4cache 已在 packShaders
         // 中处理，这里跳过。
         func packProjectFiles(prepare: ModulePrepare,
-            packer: je::internal::fimage_packer,
+            packer: je::internal::fimg_writer,
             working_path: path_t, export_path: path_t)
         {
             prepare->postMessage("正在整理项目文件……");
@@ -820,7 +822,7 @@ namespace JEEditor::Editor
         }
         
         func packBootScript(prepare: ModulePrepare,
-            packer: je::internal::fimage_packer, settings: Settings)
+            packer: je::internal::fimg_writer, settings: Settings)
         {
             prepare->postMessage("正在生成启动脚本……");
             
