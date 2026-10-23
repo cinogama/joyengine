@@ -26,4 +26,14 @@ namespace JEGaming::Loading::Entity
         return Saving::Entity::restore(w, entity_dat)
             -> ok_or(F"Bad entity data of `{path}`.");
     }
+    public func loadPrefab(w: world, path: string)=> result<entity, string>
+    {
+        try! entity_dat = readall(path)
+            -> ok_or(F"Failed to load prefab from `{path}`.")
+            =>> parse
+            ;
+            
+        return Saving::Entity::restorePrefab(w, entity_dat)
+            -> ok_or(F"Bad prefab entity data of `{path}`.");
+    }
 }

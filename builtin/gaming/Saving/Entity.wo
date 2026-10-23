@@ -859,7 +859,7 @@ namespace JEGaming::Saving::Entity
         }
     }
     
-    public func restore(w: world, edat: Toml)=> option<entity>
+    private func _restore(w: world, edat: Toml, creator: (world, array<typeinfo>)=> option<entity>)=> option<entity>
     {
         let component_dats =
             edat->get("components")=>> \v = v->as_table;->or({})->iter
@@ -875,8 +875,7 @@ namespace JEGaming::Saving::Entity
         let universe = option::value(w->get_universe);
         
         // Create entity.
-        try! e = w->add_entity(
-            component_dats->> \(ctype, _) = ctype;);
+        try! e = creator(w, component_dats->> \(ctype, _) = ctype;);
             
         // Apply component data.
         for (let (ctype, cdat) : component_dats)
@@ -929,5 +928,14 @@ namespace JEGaming::Saving::Entity
             edat->get("shaders")=>> \v = v->as_array;->or([]));
             
         return_value! e;
+    }
+
+    public func restore(w: world, edat: Toml)=> option<entity>
+    {
+        return _restore(w, edat, world::add_entity);
+    }
+    public func restorePrefab(w: world, edat: Toml)=> option<entity>
+    {
+        return _restore(w, edat, world::add_prefab);
     }
 }
