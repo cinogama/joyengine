@@ -774,10 +774,13 @@ namespace jeecs_impl
 
             // OK, 碎片整理完毕，将新的chunk队列重新挂载回去
             // NOTE: 按给定顺序插回，这样可以使得富集实体的区块集中在尾部，使得实体查询更快
+            //      被删空的chunk并不保证构成链表的连续后缀：更靠尾的一侧可能留有含预设体等
+            //      无法搬运实体的幸存chunk，因此只能逐个跳过nullptr，不能提前break——否则
+            //      幸存chunk会脱链（泄漏且从查询中消失），其空闲计数也无法归还（alloc将abort）。
             for (auto* chunk : chunks)
             {
                 if (chunk == nullptr)
-                    break;
+                    continue;
 
                 _m_chunks.add_one(chunk);
             }
