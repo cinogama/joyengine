@@ -222,6 +222,8 @@ typedef struct je_GameEntityMeta {
     je_EntityStat m_stat;
 } je_GameEntityMeta;
 
+// 注意：除预设体（JE_ENTITY_STAT_PREFAB）之外的 je_GameEntity，只允许在一帧期间持有；
+// 一帧结束时，引擎可能执行碎片回收（defragmentation），导致 je_GameEntity 索引失效。
 typedef struct je_GameEntity {
     je_Chunk* _m_in_chunk;
     je_EntityIdInChunk _m_id;

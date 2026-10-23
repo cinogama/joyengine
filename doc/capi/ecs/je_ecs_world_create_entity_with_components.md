@@ -64,6 +64,7 @@ if (transform != nullptr) {
 
 - `component_ids` 应指向一个储存有 N 个类型 ID 的连续空间
 - 其中 N 是组件种类数量（`component_count`）且不应该为 0
+- 除预设体（见 [je_ecs_world_create_prefab_with_components](je_ecs_world_create_prefab_with_components.md)）外，`je_GameEntity` 只允许在一帧期间持有：一帧结束时，引擎可能执行碎片回收（defragmentation），导致 `je_GameEntity` 索引失效
 - 世界销毁是异步的（见 [je_ecs_world_destroy](je_ecs_world_destroy.md)）：向已提交销毁请求（正在销毁中）的世界创建实体仍会成功，`out_entity` 将被写入有效句柄，但该实体会在下一次世界更新时随世界一并销毁
 - 向已被销毁的世界（指针已悬空）创建实体是未定义行为
 
