@@ -735,12 +735,14 @@ namespace JEEditor::Editor::WorldEditorViewport
                 return_value!;
             };
             
-            // 绘制 2D 光源形状编辑 gizmo（仅选中实体）：
+            // 绘制 2D 光源编辑 gizmo（仅选中实体）：
             // Light2D::Range 的多层同心环线框（环色亮度随该环强度调制，
             // 各环按闭合环绘制）与 Light2D::BlockShadow 的多边形线框
             //（仅依次连接相邻顶点、不加隐式闭合边——与渲染 TRIANGLESTRIP
             // 语义一致，闭合由数据以首尾重复同一点显式表达），并为选中
-            // 实体绘制可拖拽的顶点手柄。线段与手柄的绘制方式同碰撞体；
+            // 实体绘制可拖拽的顶点手柄；挂 Light2D::Offset 的实体另绘
+            // 实体原点到发光点（偏移后）的连线与发光点处的偏移把手
+            //（点光源无形状线框时也显示）。线段与手柄的绘制方式同碰撞体；
             // 本块在碰撞体块之后提交，绘制在最上层。
             do try!{
                 try! debug_camera_trans =
@@ -749,7 +751,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 let fb_rsize = (fbw as real, fbh as real) as vec2;
                 let debug_view_proj = camera_projection->get_view_proj_mat;
                 let billboard_rot = debug_camera_trans->get_global_rot;
-                
+
                 // 单条形状边：单位 X 轴线段旋到 ab 方向（同碰撞体边）
                 func drawLightEdge(
                     a: vec3, b: vec3, color: (real, real, real, real))=> void
@@ -762,7 +764,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                         a, gizmoEdgeRotation(ab), (len, len, len) as vec3,
                         GIZMO_LINE_X, color);
                 }
-                
+
                 // 手柄方块：面向调试摄像机、屏幕像素恒定大小，激活时染黄
                 func drawLightHandle(pos: vec3, active: bool)=> void
                 {
@@ -775,52 +777,89 @@ namespace JEEditor::Editor::WorldEditorViewport
                         DEFAULT_SQUARE_SHAPE,
                         active ? GIZMO_COLOR_HOVER | COLLIDER_HANDLE_COLOR);
                 }
-                
+
                 do try!{
                     try! selected_euid = self.m_selected_entity_id;
                     try! selected_entity = self->findEntityByEuid(selected_euid);
-                    try! outlines_info = getLightShapeOutlines(selected_entity);
-                    let kind = outlines_info.0;
-                    let rings = outlines_info.1;
-                    let strengths = outlines_info.2;
-                    
-                    let base_color = (kind == LightShapeKind::RANGE)
-                        ? LIGHT2D_RANGE_GIZMO_COLOR
-                        | LIGHT2D_BLOCK_GIZMO_COLOR;
-                        
-                    for (let mut r = 0; r < rings->len; r += 1)
-                    {
-                        let ring = rings[r];
-                        if (ring->len < 2)
-                            continue;
-                        let mut color = base_color;
-                        // 范围光按环强度调制线框亮度（遮挡体强度固定 1）
-                        if (kind == LightShapeKind::RANGE && r < strengths->len)
-                        {
-                            let s = mathf::clamp(strengths[r], 0., 1.) * 0.7 + 0.3;
-                            color = (
-                                base_color.0 * s, base_color.1 * s,
-                                base_color.2 * s, base_color.3);
-                        }
-                        for (let mut i = 0; i + 1 < ring->len; i += 1)
-                            drawLightEdge(ring[i], ring[i + 1], color);
-                        // 仅范围光的环按闭合环绘制
-                        if (kind == LightShapeKind::RANGE && ring->len > 2)
-                            drawLightEdge(ring[ring->len - 1], ring[0], color);
-                    }
-                    
-                    // 为选中实体绘制顶点手柄
-                    match (getLightShapeHandles(selected_entity))
+
+                    // 形状线框与顶点手柄（Range/BlockShadow，无形状
+                    // 组件时跳过，偏移把手仍可显示）
+                    match (getLightShapeOutlines(selected_entity))
                     {
                         none?;
-                        value(handles_info)?
+                        value(outlines_info)?
                         {
+                            let kind = outlines_info.0;
+                            let rings = outlines_info.1;
+                            let strengths = outlines_info.2;
+
+                            let base_color = (kind == LightShapeKind::RANGE)
+                                ? LIGHT2D_RANGE_GIZMO_COLOR
+                                | LIGHT2D_BLOCK_GIZMO_COLOR;
+
+                            for (let mut r = 0; r < rings->len; r += 1)
+                            {
+                                let ring = rings[r];
+                                if (ring->len < 2)
+                                    continue;
+                                let mut color = base_color;
+                                // 范围光按环强度调制线框亮度（遮挡体强度固定 1）
+                                if (kind == LightShapeKind::RANGE && r < strengths->len)
+                                {
+                                    let s = mathf::clamp(strengths[r], 0., 1.) * 0.7 + 0.3;
+                                    color = (
+                                        base_color.0 * s, base_color.1 * s,
+                                        base_color.2 * s, base_color.3);
+                                }
+                                for (let mut i = 0; i + 1 < ring->len; i += 1)
+                                    drawLightEdge(ring[i], ring[i + 1], color);
+                                // 仅范围光的环按闭合环绘制
+                                if (kind == LightShapeKind::RANGE && ring->len > 2)
+                                    drawLightEdge(ring[ring->len - 1], ring[0], color);
+                            }
+
+                            // 为选中实体绘制顶点手柄
+                            match (getLightShapeHandles(selected_entity))
+                            {
+                                none?;
+                                value(handles_info)?
+                                {
+                                    let active_handle = self.m_light_dragging
+                                        ? self.m_light_drag_handle
+                                        | self.m_light_hover_handle;
+                                    let handles = handles_info.1;
+                                    for (let mut i = 0; i < handles->len; i += 1)
+                                        drawLightHandle(handles[i], i == active_handle);
+                                }
+                            }
+                        }
+                    }
+
+                    // 发光点偏移把手（Light2D::Offset）：实体原点到发光点
+                    // 的连线（偏移为零时把手与原点重合、不画线）与发光点
+                    // 处的把手方块，拖拽编辑 Offset.offset
+                    match (getLightOffsetHandle(selected_entity))
+                    {
+                        none?;
+                        value(p)?
+                        {
+                            try! trans =
+                                selected_entity->towoo::get_component:<Transform::Translation>();
+                            let origin = trans->get_global_pos;
+
                             let active_handle = self.m_light_dragging
                                 ? self.m_light_drag_handle
                                 | self.m_light_hover_handle;
-                            let handles = handles_info.1;
-                            for (let mut i = 0; i < handles->len; i += 1)
-                                drawLightHandle(handles[i], i == active_handle);
+                            let is_active =
+                                active_handle == LIGHT2D_HANDLE_OFFSET;
+
+                            if ((p - origin)->length > 0.0001)
+                                drawLightEdge(
+                                    origin, p,
+                                    is_active
+                                        ? GIZMO_COLOR_HOVER
+                                        | LIGHT2D_OFFSET_GIZMO_COLOR);
+                            drawLightHandle(p, is_active);
                         }
                     }
                     return_value!;

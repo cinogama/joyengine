@@ -6,6 +6,10 @@
 // 拖拽在形状平面（实体 Z 轴为法线）内进行，命中点换算回形状局部坐标
 // 后直接写回组件 shape 成员；拖拽结束值有变化时发布可撤销的
 // ModifyComponentMember（与变换游标/碰撞体手柄同一套撤销机制）。
+// 另有发光点偏移把手（Light2D::Offset，挂载组件即显示，点光源无形状
+// 线框时也可用）：把手位于偏移后的发光点，拖拽把命中点逆变换回实体
+// 局部空间（旋转的逆，不受 local_scale 影响）写回 Offset.offset，
+// 撤销机制同上。
 // 线框与手柄的绘制见 GizmoDrawing.wo，几何换算复用本文件的纯函数
 // 与 GizmoMath.wo。与碰撞体不同：光源形状几何随实体 local_scale
 // 缩放（渲染系统 object2world 口径），且仅选中实体时绘制。
@@ -46,13 +50,26 @@ namespace JEEditor::Editor::WorldEditorViewport
     // 光源形状框架：形状局部坐标 -> 世界坐标的变换。与渲染系统口径
     // 一致（object2world = transform(world_pos, world_rot, local_scale)），
     // scale 取实体 local_scale 的 xy 分量，形状几何按它乘入各顶点。
+    // 挂 Light2D::Offset 时中心再叠加经实体旋转的偏移量（不受
+    // local_scale 缩放，渲染系统按 world_pos + world_rot * offset
+    // 口径），使线框与手柄跟随偏移后的发光点。
     protected func lightFrame(e: entity)=> option<(vec3, quat, vec2)>
     {
         return or(option::none: option<(vec3, quat, vec2)>) <| try!{
             try! trans = e->towoo::get_component:<Transform::Translation>();
             let scale = trans->get_local_scale;
+            let mut center = trans->get_global_pos;
+            match (e->towoo::get_component:<Light2D::Offset>())
+            {
+                value(off)?
+                {
+                    let offv = off.offset->get;
+                    center = center + trans->get_global_rot * offv;
+                }
+                none?;
+            }
             return_value! option::value((
-                trans->get_global_pos,
+                center,
                 trans->get_global_rot,
                 (scale[0], scale[1]) as vec2));
         };
@@ -85,6 +102,19 @@ namespace JEEditor::Editor::WorldEditorViewport
     protected func lightSamePoint(a: vec2, b: vec2)=> bool
     {
         return mathf::abs(a[0] - b[0]) + mathf::abs(a[1] - b[1]) < 0.00001;
+    }
+
+    // 发光点偏移把手（Light2D::Offset，组件存在时才有）：位于偏移后的
+    // 发光点（lightFrame 中心），拖拽写回 Offset.offset（实体局部空间）；
+    // 无该组件时为 none
+    protected func getLightOffsetHandle(e: entity)=> option<vec3>
+    {
+        return or(option::none: option<vec3>) <| try!{
+            if (e->towoo::get_component:<Light2D::Offset>()->is_none)
+                return_value! option::none: option<vec3>;
+            try! frame = lightFrame(e);
+            return_value! option::value(frame.0);
+        };
     }
 
     // 选中实体光源形状的（种类, 手柄世界坐标列表）；无形状组件时为
@@ -187,12 +217,14 @@ namespace JEEditor::Editor::WorldEditorViewport
 
     // ==================== 交互（悬停 / 拖拽 / 撤销） ====================
 
-    // 每帧更新光源形状编辑手柄状态：选中带 Range/BlockShadow 的实体
-    // 即显示手柄、无需模式开关可直接拖拽。本函数在 updateColliderGizmo
-    // 之后、updateTransformGizmo 之前运行——碰撞体手柄优先于本手柄
-    //（其被悬停/拖拽中时本手柄让位），本手柄被悬停/拖拽中时变换游标
-    // 让位。松开左键结束拖拽并提交撤销记录；拖拽中按鼠标射线应用编辑；
-    // 否则做屏幕空间悬停检测，悬停手柄上按下左键开始拖拽。
+    // 每帧更新光源编辑手柄状态：选中带 Range/BlockShadow 的实体显示
+    // 形状手柄、带 Light2D::Offset 的实体显示发光点偏移把手（无需模式
+    // 开关可直接拖拽，点光源无形状线框时偏移把手仍可用）。本函数在
+    // updateColliderGizmo 之后、updateTransformGizmo 之前运行——碰撞体
+    // 手柄优先于本手柄（其被悬停/拖拽中时本手柄让位），本手柄被悬停/
+    // 拖拽中时变换游标让位。松开左键结束拖拽并提交撤销记录；拖拽中按
+    // 鼠标射线应用编辑；否则做屏幕空间悬停检测，悬停手柄上按下左键
+    // 开始拖拽。
     protected func updateLightGizmo(
         self: WorldEditorViewport,
         debug_camera: option<entity>,
@@ -227,8 +259,6 @@ namespace JEEditor::Editor::WorldEditorViewport
                 camera_entity->towoo::get_component:<Camera::Projection>();
             try! selected_euid = self.m_selected_entity_id;
             try! selected_entity = self->findEntityByEuid(selected_euid);
-            try! handles_info = getLightShapeHandles(selected_entity);
-            let handles = handles_info.1;
 
             let rmin = rect_min as vec2;
             let rsize = rect_size as vec2;
@@ -265,20 +295,51 @@ namespace JEEditor::Editor::WorldEditorViewport
                 && self.m_collider_hover_handle == GIZMO_HANDLE_NONE))
                 return_value!;
 
-            // 悬停检测：手柄世界坐标投影到屏幕，取距离最近者
+            // 悬停检测：手柄世界坐标投影到屏幕，取距离最近者。形状
+            // 手柄（Range/BlockShadow，无形状组件时跳过）与发光点偏移
+            // 把手一并参与最近者竞争
             let view_proj = camera_proj->get_view_proj_mat;
             let mut best = GIZMO_HANDLE_NONE;
             let mut best_dist = GIZMO_HIT_PX;
-            for (let mut i = 0; i < handles->len; i += 1)
+
+            // 偏移把手分派只看手柄编号，kind 仅形状手柄使用（选中实体
+            // 无形状组件时以 RANGE 占位，不会被读到）
+            let mut drag_kind = LightShapeKind::RANGE;
+            match (getLightShapeHandles(selected_entity))
             {
-                let d = (mouse - gizmoWorldToScreen(
-                        view_proj, handles[i], rmin, rsize))->length;
-                if (d < best_dist)
+                none?;
+                value(handles_info)?
                 {
-                    best_dist = d;
-                    best = i;
+                    drag_kind = handles_info.0;
+                    let handles = handles_info.1;
+                    for (let mut i = 0; i < handles->len; i += 1)
+                    {
+                        let d = (mouse - gizmoWorldToScreen(
+                                view_proj, handles[i], rmin, rsize))->length;
+                        if (d < best_dist)
+                        {
+                            best_dist = d;
+                            best = i;
+                        }
+                    }
                 }
             }
+
+            match (getLightOffsetHandle(selected_entity))
+            {
+                none?;
+                value(p)?
+                {
+                    let d = (mouse - gizmoWorldToScreen(
+                            view_proj, p, rmin, rsize))->length;
+                    if (d < best_dist)
+                    {
+                        best_dist = d;
+                        best = LIGHT2D_HANDLE_OFFSET;
+                    }
+                }
+            }
+
             self.m_light_hover_handle = best;
 
             // 悬停手柄上按下左键：开始拖拽
@@ -287,7 +348,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             {
                 self->beginLightDrag(
                     selected_entity, selected_euid,
-                    handles_info.0, self.m_light_hover_handle);
+                    drag_kind, self.m_light_hover_handle);
             }
 
             return_value!;
@@ -305,12 +366,25 @@ namespace JEEditor::Editor::WorldEditorViewport
         do try!{
             try! frame = lightFrame(selected_entity);
 
-            let undo_component = (kind == LightShapeKind::RANGE)
-                ? "Light2D::Range"
-                | "Light2D::BlockShadow";
+            // 偏移把手直接编辑 Light2D::Offset.offset；形状手柄编辑
+            // shape 成员（undo_component 依形状种类而定）
+            let mut undo_component = "";
+            let mut undo_member = "";
+            if (handle == LIGHT2D_HANDLE_OFFSET)
+            {
+                undo_component = "Light2D::Offset";
+                undo_member = "offset";
+            }
+            else
+            {
+                undo_component = (kind == LightShapeKind::RANGE)
+                    ? "Light2D::Range"
+                    | "Light2D::BlockShadow";
+                undo_member = "shape";
+            }
 
             try! old_value = serializeMemberValue(
-                selected_entity, undo_component, "shape");
+                selected_entity, undo_component, undo_member);
 
             self.m_light_dragging = true;
             self.m_light_drag_handle = handle;
@@ -343,6 +417,23 @@ namespace JEEditor::Editor::WorldEditorViewport
                 self.m_light_drag_center);
 
             let handle = self.m_light_drag_handle;
+
+            // 偏移把手：命中点逆变换回实体局部空间（旋转的逆，与渲染
+            // world_pos + world_rot * offset 口径互逆，不涉及 local_scale）
+            // 写回 Offset.offset；拖拽平面以实体 Z 轴为法线，平面内命中
+            // 点的局部 z 恒等于起始值，offset.z 在拖拽中保持不变。
+            // 旋转取当前帧的，实体移动中拖拽仍跟随
+            if (handle == LIGHT2D_HANDLE_OFFSET)
+            {
+                try! off =
+                    selected_entity->towoo::get_component:<Light2D::Offset>();
+                try! trans =
+                    selected_entity->towoo::get_component:<Transform::Translation>();
+                let local = trans->get_global_rot->inverse
+                    * (hit - trans->get_global_pos);
+                off.offset->set(local);
+                return_value!;
+            }
 
             if (self.m_light_drag_kind == LightShapeKind::RANGE)
             {

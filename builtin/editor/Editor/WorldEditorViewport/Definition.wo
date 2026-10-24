@@ -408,6 +408,14 @@ namespace JEEditor::Editor
         protected let LIGHT2D_RANGE_GIZMO_COLOR = (1., 0.78, 0.35, 0.65);
         protected let LIGHT2D_BLOCK_GIZMO_COLOR = (0.62, 0.52, 0.95, 0.65);
 
+        // ---- 2D 光源发光点偏移把手参数 ----
+        // 把手编号（负数哨兵，形状手柄为 >= 0 的数组下标，
+        // 与 GIZMO_HANDLE_NONE = -1 不冲突）：Offset = 拖拽发光点
+        protected let LIGHT2D_HANDLE_OFFSET = -2;
+        // 实体原点到发光点（偏移后）的连线配色：青色（与碰撞体中心
+        // 偏移把手同一“偏移”语义），激活高亮复用 GIZMO_COLOR_HOVER
+        protected let LIGHT2D_OFFSET_GIZMO_COLOR = (0.3, 0.9, 0.95, 0.9);
+
         // ---- 粒子发射器 gizmo 参数 ----
         protected let PARTICLE_GIZMO_ICON_SIZE_PX = 48.;  // 发射器图标边长（像素）
         // 特殊手柄编号（负数哨兵，形状手柄为 >= 0 的数组下标，
