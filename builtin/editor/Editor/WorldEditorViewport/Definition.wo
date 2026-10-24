@@ -132,10 +132,10 @@ namespace JEEditor::Editor
 
         // 编辑层：同一时刻只绘制/响应一个手柄家族，避免变换游标、
         // 碰撞体、光源形状与粒子发射器的手柄在同一位置叠加。
-        // AUTO 按选中实体的组件自动选择（碰撞体 > 光源 > 粒子 > 变换），
-        // 手动选择的层仅在当前选中实体支持时生效，否则回退 AUTO。
+        // ALL 同时显示全部层的手柄（沿用“后绘制者优先”的命中顺序）；
+        // 其余为单层模式，手动选择的组件层对当前选中实体不可用时回退 ALL。
         protected m_gizmo_layer: mut GizmoLayer,
-        // 本帧解析出的实际激活层（AUTO 解析结果；UI 编辑模式恒为 TRANSFORM）
+        // 本帧解析出的实际激活层（UI 编辑模式恒为 TRANSFORM）
         protected m_gizmo_active_layer: mut GizmoLayer,
         
         protected m_gizmo_hover_handle: mut int,
@@ -371,10 +371,11 @@ namespace JEEditor::Editor
         // 悬停手柄说明文字颜色（ImGui Color32RGBA）
         protected let GIZMO_LABEL_COLOR = (255, 255, 255, 235);
 
-        // 编辑层枚举：AUTO 之外的层为手动选择。跨文件使用，须为 public。
+        // 编辑层枚举：ALL 同时显示全部手柄，其余为单层模式。跨文件使用，
+        // 须为 public。ALL 保持 0 值，兼容旧存档里的 AUTO(0)。
         public enum GizmoLayer
         {
-            AUTO,
+            ALL,
             TRANSFORM,
             COLLIDER,
             LIGHT2D,
@@ -723,8 +724,8 @@ namespace JEEditor::Editor
         // 编辑层显示名（工具栏“当前: X”与提示）
         protected func gizmoLayerLabel(layer: GizmoLayer)=> string
         {
-            if (layer == GizmoLayer::AUTO)
-                return "自动";
+            if (layer == GizmoLayer::ALL)
+                return "全部";
             if (layer == GizmoLayer::TRANSFORM)
                 return "变换";
             if (layer == GizmoLayer::COLLIDER)
@@ -734,13 +735,13 @@ namespace JEEditor::Editor
             return "粒子";
         }
 
-        // 当前选中实体是否支持指定编辑层。TRANSFORM 始终可用（具体模式
-        // 是否可操作仍由 updateTransformGizmo 的组件检查决定）；COLLIDER
-        // 与绘制口径一致要求 Rigidbody；LIGHT2D 覆盖形状与阴影偏移；
-        // PARTICLE 只要求发射器组件。
+        // 当前选中实体是否支持指定编辑层。ALL 与 TRANSFORM 始终可用
+        //（变换的具体模式是否可操作仍由 updateTransformGizmo 的组件检查
+        // 决定）；COLLIDER 与绘制口径一致要求 Rigidbody；LIGHT2D 覆盖
+        // 形状与阴影偏移；PARTICLE 只要求发射器组件。
         protected func gizmoLayerAvailableFor(layer: GizmoLayer, e: entity)=> bool
         {
-            if (layer == GizmoLayer::TRANSFORM)
+            if (layer == GizmoLayer::ALL || layer == GizmoLayer::TRANSFORM)
                 return true;
             if (layer == GizmoLayer::COLLIDER)
                 return hasPhysics2DCollider(e);
@@ -753,33 +754,25 @@ namespace JEEditor::Editor
             return false;
         }
 
-        // 解析本帧激活的编辑层：手动层在当前选中实体上可用则直接使用，
-        // 否则回退 AUTO（并把手动选择重置为 AUTO，使工具栏状态与回退
-        // 结果一致）。AUTO 按 碰撞体 > 光源 > 粒子 > 变换 选取；选中实体
-        // 为空时只保留变换层。
+        // 解析本帧激活的编辑层：ALL 直接生效；单层模式在当前选中实体
+        // 上可用则使用，否则回退 ALL 并重置手动选择，保证选中实体总有
+        // 可见可操作的手柄。选中实体为空时保持当前选择（无手柄可画）。
         protected func resolveGizmoLayer(
             self: WorldEditorViewport,
             selected: option<entity>)=> GizmoLayer
         {
             match (selected)
             {
-                none? return GizmoLayer::TRANSFORM;
+                none? return self.m_gizmo_layer;
                 value(e)?
                 {
-                    if (self.m_gizmo_layer != GizmoLayer::AUTO)
-                    {
-                        if (gizmoLayerAvailableFor(self.m_gizmo_layer, e))
-                            return self.m_gizmo_layer;
-                        self.m_gizmo_layer = GizmoLayer::AUTO;
-                    }
+                    if (self.m_gizmo_layer == GizmoLayer::ALL)
+                        return GizmoLayer::ALL;
+                    if (gizmoLayerAvailableFor(self.m_gizmo_layer, e))
+                        return self.m_gizmo_layer;
 
-                    if (gizmoLayerAvailableFor(GizmoLayer::COLLIDER, e))
-                        return GizmoLayer::COLLIDER;
-                    if (gizmoLayerAvailableFor(GizmoLayer::LIGHT2D, e))
-                        return GizmoLayer::LIGHT2D;
-                    if (gizmoLayerAvailableFor(GizmoLayer::PARTICLE, e))
-                        return GizmoLayer::PARTICLE;
-                    return GizmoLayer::TRANSFORM;
+                    self.m_gizmo_layer = GizmoLayer::ALL;
+                    return GizmoLayer::ALL;
                 }
             }
         }

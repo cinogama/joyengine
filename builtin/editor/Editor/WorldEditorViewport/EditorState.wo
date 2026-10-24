@@ -206,14 +206,14 @@ namespace JEEditor::Editor::WorldEditorViewport
         self.m_gizmo_space =
             read_int(data, "gizmo_space", GizmoSpace::GLOBAL as int) as GizmoSpace;
 
-        // 编辑层：旧存档没有该键时回退 AUTO；越界值同样回退，避免
-        // 非法枚举值进入运行时状态
+        // 编辑层：旧存档没有该键时回退 ALL；越界值同样回退，避免
+        // 非法枚举值进入运行时状态（旧版 AUTO 的 0 值即现在的 ALL）
         let layer_value =
-            read_int(data, "gizmo_layer", GizmoLayer::AUTO as int);
-        self.m_gizmo_layer = (layer_value >= GizmoLayer::AUTO as int
+            read_int(data, "gizmo_layer", GizmoLayer::ALL as int);
+        self.m_gizmo_layer = (layer_value >= GizmoLayer::ALL as int
                 && layer_value <= GizmoLayer::PARTICLE as int)
             ? layer_value as GizmoLayer
-            | GizmoLayer::AUTO;
+            | GizmoLayer::ALL;
 
         self.m_lock_mouse_on_look = read_bool(data, "lock_mouse", false);
 

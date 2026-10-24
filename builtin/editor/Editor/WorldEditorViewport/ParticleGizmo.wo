@@ -451,13 +451,11 @@ namespace JEEditor::Editor::WorldEditorViewport
                 && !self.m_is_look_active
                 && !self.m_is_pan_active
                 && !self.m_is_orbit_active
-                // 变换游标/碰撞体/光源手柄拖拽进行中时由其接管
+                // 全部模式按 粒子 > 光源 > 碰撞体 > 变换 运行，粒子先跑；
+                // 其他层的拖拽仍在进行时由对应层接管
                 && !self.m_gizmo_dragging
                 && !self.m_collider_dragging
-                && !self.m_light_dragging
-                // 碰撞体/光源手柄悬停时让位（其先运行，目标更小更具体）
-                && self.m_collider_hover_handle == GIZMO_HANDLE_NONE
-                && self.m_light_hover_handle == GIZMO_HANDLE_NONE))
+                && !self.m_light_dragging))
                 return_value!;
 
             // 悬停检测：手柄世界坐标投影到屏幕，取距离最近者；

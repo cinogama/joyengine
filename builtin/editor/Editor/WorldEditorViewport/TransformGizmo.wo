@@ -582,9 +582,8 @@ namespace JEEditor::Editor::WorldEditorViewport
     }
 
     // 快捷键切换游标模式（W/E/R）：正在操作调试摄像机（环视/平移/环绕，
-    // 此时 WASD 用于飞行移动）或任何手柄拖拽进行中时不响应。切换模式
-    // 同时回到变换层：组件层激活时变换游标不绘制，W/E/R 是回到移动/
-    // 旋转/缩放的显式入口。
+    // 此时 WASD 用于飞行移动）或任何手柄拖拽进行中时不响应。只切换
+    // 平移/旋转/缩放，不改变编辑层（编辑层由 0-4 或右下角工具栏控制）。
     protected func switchGizmoModeByShortcut(self: WorldEditorViewport, mode: GizmoMode)=> void
     {
         if (self.m_is_look_active || self.m_is_pan_active || self.m_is_orbit_active
@@ -592,12 +591,11 @@ namespace JEEditor::Editor::WorldEditorViewport
             || self.m_light_dragging || self.m_particle_dragging)
             return;
         self.m_gizmo_mode = mode;
-        self.m_gizmo_layer = GizmoLayer::TRANSFORM;
     }
 
-    // 快捷键切换编辑层（0=自动 1=变换 2=碰撞体 3=光源 4=粒子）。
-    // 当前选中实体不支持目标组件层时不切换；AUTO 总是可用。守卫条件
-    // 与模式切换一致，避免拖拽中/摄像机操作中换层。
+    // 快捷键切换编辑层（0=全部 1=变换 2=碰撞体 3=光源 4=粒子）。
+    // 当前选中实体不支持目标组件层时不切换；全部/变换总是可用。守卫
+    // 条件与模式切换一致，避免拖拽中/摄像机操作中换层。
     protected func switchGizmoLayerByShortcut(
         self: WorldEditorViewport, layer: GizmoLayer)=> void
     {
@@ -606,7 +604,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             || self.m_light_dragging || self.m_particle_dragging)
             return;
 
-        if (layer != GizmoLayer::AUTO)
+        if (layer != GizmoLayer::ALL)
         {
             match (self->getSelectedEntity())
             {

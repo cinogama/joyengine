@@ -3,9 +3,10 @@
 // 2D 光源实体图标、粒子发射器实体图标、变换游标本体、2D 物理碰撞体
 // 线框与编辑手柄、2D 光源形状（Range 同心环 / BlockShadow 遮挡多边形）
 // 线框与编辑手柄、粒子发射器（发射形状 / 方向箭头 / 散布角环）线框
-// 与编辑手柄的渲染，走视口自有的 render 分支。同一时刻只绘制当前
+// 与编辑手柄的渲染，走视口自有的 render 分支。单层模式只绘制当前
 // 编辑层（变换 / 碰撞体 / 光源 / 粒子）的手柄，其余层只保留淡化线框
-// 作背景；选中实体图标降为半号淡色徽标，让出原点附近的手柄。
+// 作背景；全部模式绘制所有层的手柄（后绘制的层在命中时优先）。
+// 选中实体图标降为半号淡色徽标，让出原点附近的手柄。
 // 2D（正交）模式下游标与视线平行的轴/环、粒子发射器与视线平行的
 // 形状手柄不绘制（剔除口径与各 update*Gizmo 的悬停检测一致，见
 // GizmoMath.wo）。
@@ -567,13 +568,14 @@ namespace JEEditor::Editor::WorldEditorViewport
                 return_value!;
             };
             
-            // 绘制变换游标（操作手柄）。只有变换层激活时绘制；组件层
-            // 下变换游标整体让位，避免轴/环/中心与组件手柄叠加（按
-            // W/E/R 或工具栏切回变换层）。2D（正交）模式下跳过与视线
+            // 绘制变换游标（操作手柄）。变换层或全部模式下绘制；单层
+            // 组件模式下变换游标整体让位，避免轴/环/中心与组件手柄叠加
+            //（按 1 或工具栏切到变换层）。2D（正交）模式下跳过与视线
             // 平行的部件：轴向手柄投影成一点、锥体叠在中央手柄上，
             // 旋转环侧视成过心的线段（命中剔除见 pickGizmoHandle）
             if (self.m_gizmo_draw_visible
                 && (self.m_gizmo_active_layer == GizmoLayer::TRANSFORM
+                    || self.m_gizmo_active_layer == GizmoLayer::ALL
                     || self.m_gizmo_dragging))
             {
                 let origin = self.m_gizmo_draw_origin;
@@ -672,6 +674,7 @@ namespace JEEditor::Editor::WorldEditorViewport
 
                 let layer_active =
                     self.m_gizmo_active_layer == GizmoLayer::COLLIDER
+                    || self.m_gizmo_active_layer == GizmoLayer::ALL
                     || self.m_collider_dragging;
                 let active_handle = self.m_collider_dragging
                     ? self.m_collider_drag_handle
@@ -825,6 +828,7 @@ namespace JEEditor::Editor::WorldEditorViewport
 
                 let layer_active =
                     self.m_gizmo_active_layer == GizmoLayer::LIGHT2D
+                    || self.m_gizmo_active_layer == GizmoLayer::ALL
                     || self.m_light_dragging;
                 let active_handle = self.m_light_dragging
                     ? self.m_light_drag_handle
@@ -989,6 +993,7 @@ namespace JEEditor::Editor::WorldEditorViewport
 
                 let layer_active =
                     self.m_gizmo_active_layer == GizmoLayer::PARTICLE
+                    || self.m_gizmo_active_layer == GizmoLayer::ALL
                     || self.m_particle_dragging;
                 let active_handle = self.m_particle_dragging
                     ? self.m_particle_drag_handle
@@ -1150,7 +1155,23 @@ namespace JEEditor::Editor::WorldEditorViewport
             return;
 
         let mut label = "";
-        if (self.m_gizmo_active_layer == GizmoLayer::TRANSFORM)
+        if (self.m_gizmo_active_layer == GizmoLayer::ALL)
+        {
+            // 全部模式同一时刻只有一个层赢得悬停（按 粒子 > 光源 >
+            // 碰撞体 > 变换 让位），标签取赢得悬停的那一层
+            if (self.m_particle_hover_handle != GIZMO_HANDLE_NONE
+                || self.m_particle_dragging)
+                label = self->particleGizmoHandleLabel();
+            else if (self.m_light_hover_handle != GIZMO_HANDLE_NONE
+                || self.m_light_dragging)
+                label = self->lightGizmoHandleLabel();
+            else if (self.m_collider_hover_handle != GIZMO_HANDLE_NONE
+                || self.m_collider_dragging)
+                label = self->colliderGizmoHandleLabel();
+            else
+                label = self->transformGizmoHandleLabel();
+        }
+        else if (self.m_gizmo_active_layer == GizmoLayer::TRANSFORM)
             label = self->transformGizmoHandleLabel();
         else if (self.m_gizmo_active_layer == GizmoLayer::COLLIDER)
             label = self->colliderGizmoHandleLabel();

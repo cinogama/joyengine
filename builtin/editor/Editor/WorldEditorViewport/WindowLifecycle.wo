@@ -247,8 +247,8 @@ namespace JEEditor::Editor::WorldEditorViewport
             
             m_gizmo_mode = mut GizmoMode::TRANSLATE,
             m_gizmo_space = mut GizmoSpace::GLOBAL,
-            m_gizmo_layer = mut GizmoLayer::AUTO,
-            m_gizmo_active_layer = mut GizmoLayer::TRANSFORM,
+            m_gizmo_layer = mut GizmoLayer::ALL,
+            m_gizmo_active_layer = mut GizmoLayer::ALL,
             
             m_gizmo_hover_handle = mut GIZMO_HANDLE_NONE,
             m_gizmo_drag_handle = mut GIZMO_HANDLE_NONE,
@@ -602,7 +602,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 ->shortCut(
                     [ImGuiKey::ImGuiKey_G], \= self->toggleGizmoSpaceByShortcut();)
                 ->shortCut(
-                    [ImGuiKey::ImGuiKey_0], \= self->switchGizmoLayerByShortcut(GizmoLayer::AUTO);)
+                    [ImGuiKey::ImGuiKey_0], \= self->switchGizmoLayerByShortcut(GizmoLayer::ALL);)
                 ->shortCut(
                     [ImGuiKey::ImGuiKey_1], \= self->switchGizmoLayerByShortcut(GizmoLayer::TRANSFORM);)
                 ->shortCut(
@@ -777,10 +777,9 @@ namespace JEEditor::Editor::WorldEditorViewport
             viewport_hovered && !toolbar_hovered,
             viewport_rect);
 
-        // 解析本帧唯一激活的编辑层：同一时刻只绘制、只响应一个手柄
-        // 家族，避免变换游标与碰撞体/光源/粒子手柄在同一位置叠加。
-        // UI 编辑模式由 UI 手柄整体接管，3D 层不参与命中与绘制
-        //（drawGizmos 亦会提前返回）。
+        // 解析本帧激活的编辑层：ALL 同时启用全部层；单层模式只运行
+        // 对应家族。UI 编辑模式由 UI 手柄整体接管，3D 层不参与命中与
+        // 绘制（drawGizmos 亦会提前返回）。
         let ui_editing = self->uiEditingActive();
         if (ui_editing)
             self.m_gizmo_active_layer = GizmoLayer::TRANSFORM;
@@ -797,17 +796,24 @@ namespace JEEditor::Editor::WorldEditorViewport
         self.m_gizmo_draw_visible = false;
 
         let input_hovered = viewport_hovered && !toolbar_hovered;
+        let all_layers =
+            !ui_editing && self.m_gizmo_active_layer == GizmoLayer::ALL;
 
-        // 只运行激活层的手柄交互；拖拽中的层即使层状态被外部改动也要
-        // 继续运行，以便松开左键时正常收尾并提交撤销记录。
-        if ((!ui_editing && self.m_gizmo_active_layer == GizmoLayer::COLLIDER)
-            || self.m_collider_dragging)
+        // 全部模式按“后绘制者优先”的顺序运行：粒子 > 光源 > 碰撞体 >
+        // 变换（绘制顺序为 变换 → 碰撞体 → 光源 → 粒子，最上层最后
+        // 运行）。各 update 内部对更早运行的层让位，保证同一时刻只有
+        // 一个手柄进入悬停/拖拽，且与画面层级一致。单层模式只有对应
+        // 层满足条件；拖拽中的层即使层状态改变也会继续运行以完成收尾。
+        if (all_layers
+            || (!ui_editing
+                && self.m_gizmo_active_layer == GizmoLayer::PARTICLE)
+            || self.m_particle_dragging)
         {
             match (viewport_rect)
             {
                 none?;
                 value((rect_min, rect_max))?
-                    self->updateColliderGizmo(
+                    self->updateParticleGizmo(
                         debug_camera,
                         input_hovered,
                         rect_min,
@@ -815,7 +821,9 @@ namespace JEEditor::Editor::WorldEditorViewport
             }
         }
 
-        if ((!ui_editing && self.m_gizmo_active_layer == GizmoLayer::LIGHT2D)
+        if (all_layers
+            || (!ui_editing
+                && self.m_gizmo_active_layer == GizmoLayer::LIGHT2D)
             || self.m_light_dragging)
         {
             match (viewport_rect)
@@ -830,14 +838,16 @@ namespace JEEditor::Editor::WorldEditorViewport
             }
         }
 
-        if ((!ui_editing && self.m_gizmo_active_layer == GizmoLayer::PARTICLE)
-            || self.m_particle_dragging)
+        if (all_layers
+            || (!ui_editing
+                && self.m_gizmo_active_layer == GizmoLayer::COLLIDER)
+            || self.m_collider_dragging)
         {
             match (viewport_rect)
             {
                 none?;
                 value((rect_min, rect_max))?
-                    self->updateParticleGizmo(
+                    self->updateColliderGizmo(
                         debug_camera,
                         input_hovered,
                         rect_min,
@@ -857,9 +867,11 @@ namespace JEEditor::Editor::WorldEditorViewport
                     (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
         }
 
-        // 变换游标只在变换层（或拖拽收尾）运行；组件层激活时其手柄
-        // 不绘制也不参与命中，移动实体请按 W/E/R 或工具栏切回变换层。
-        if ((!ui_editing && self.m_gizmo_active_layer == GizmoLayer::TRANSFORM)
+        // 变换游标在变换层、全部模式或拖拽收尾时运行；单层组件模式
+        // 下不绘制也不参与命中（按 1 或工具栏切到变换层）。
+        if (all_layers
+            || (!ui_editing
+                && self.m_gizmo_active_layer == GizmoLayer::TRANSFORM)
             || self.m_gizmo_dragging)
         {
             match (viewport_rect)
