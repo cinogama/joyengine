@@ -146,9 +146,10 @@ namespace JEEditor::Editor::WorldEditorViewport
             self.m_gizmo_drag_handle = GIZMO_HANDLE_NONE;
         }
 
-        // 非变换层不参与悬停/命中；拖拽中仍需继续运行以完成本次拖拽
-        //（层状态在拖拽开始时冻结，正常不会出现中途换层）
+        // 非变换/全部层不参与悬停/命中；拖拽中仍需继续运行以完成本次
+        // 拖拽（层状态在拖拽开始时冻结，正常不会出现中途换层）
         if (self.m_gizmo_active_layer != GizmoLayer::TRANSFORM
+            && self.m_gizmo_active_layer != GizmoLayer::ALL
             && !self.m_gizmo_dragging)
         {
             self.m_gizmo_hover_handle = GIZMO_HANDLE_NONE;
