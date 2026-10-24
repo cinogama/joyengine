@@ -1568,6 +1568,9 @@ namespace jeecs
             const Light2D::Point* point;
             const Light2D::Parallel* parallel;
             const Light2D::Range* range;
+            // 发光点偏移（可选）：只影响光照发射位置与光照范围网格；
+            // 阴影投射与高度判定仍用 translation->world_position
+            const Light2D::Offset* offset;
             const Light2D::Gain* gain;
             const Light2D::ShadowBuffer* shadowbuffer;
             const Renderer::Color* color;
@@ -1772,6 +1775,7 @@ namespace jeecs
                 point,
                 parallel,
                 range,
+                offset,
                 gain,
                 shadowbuffer,
                 color,
@@ -1786,6 +1790,7 @@ namespace jeecs
                     Point*,
                     Parallel*,
                     Range*,
+                    Offset*,
                     Gain*,
                     ShadowBuffer*,
                     Color*,
@@ -1802,7 +1807,7 @@ namespace jeecs
             {
                 m_2dlight_list.emplace_back(
                     light2d_arch{
-                        &trans, topdown, point, parallel, range, gain, shadowbuffer,
+                        &trans, topdown, point, parallel, range, offset, gain, shadowbuffer,
                         color, &shape, &shads, texs,
                     });
                 if (shadowbuffer != nullptr)
@@ -2274,8 +2279,20 @@ namespace jeecs
 
                         if (current_camera.frustumCulling != nullptr && lightarch.parallel == nullptr)
                         {
+                            // 剔除以发光点（含 Light2D::Offset 偏移，
+                            // world_position + world_rotation * offset，
+                            // 不乘 local_scale）为球心；下方阴影绘制
+                            // 仍取原始 world_position
+                            math::vec3 light_emission_pos =
+                                lightarch.translation->world_position;
+                            if (lightarch.offset != nullptr)
+                                light_emission_pos =
+                                    light_emission_pos
+                                    + lightarch.translation->world_rotation
+                                        * lightarch.offset->offset;
+
                             if (false == current_camera.frustumCulling->test_circle(
-                                lightarch.translation->world_position,
+                                light_emission_pos,
                                 light_range))
                                 continue;
                         }
@@ -2710,7 +2727,26 @@ namespace jeecs
                             : m_defer_light2d_host._no_shadow->resource());
 
                         // 开始渲染光照！
-                        const float(&MAT4_MODEL)[4][4] = light2d.translation->object2world;
+                        // 挂 Light2D::Offset 时，把模型矩阵的平移列改写为
+                        // world_position + world_rotation * offset（偏移随
+                        // 实体旋转、不乘 local_scale）：光照范围网格与着色器
+                        // light_vpos（发光点）整体从偏移后的位置计算；阴影
+                        // pass 不经过这里，仍以原始 world_position 投射
+                        //（见 draw_shadow_occluder）
+                        float MAT4_MODEL[4][4];
+                        memcpy(MAT4_MODEL,
+                            light2d.translation->object2world,
+                            sizeof(MAT4_MODEL));
+                        if (light2d.offset != nullptr)
+                        {
+                            const math::vec3 emission =
+                                light2d.translation->world_position
+                                + light2d.translation->world_rotation
+                                    * light2d.offset->offset;
+                            MAT4_MODEL[3][0] = emission.x;
+                            MAT4_MODEL[3][1] = emission.y;
+                            MAT4_MODEL[3][2] = emission.z;
+                        }
                         float MAT4_MV[4][4], MAT4_MVP[4][4];
                         math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
                         math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
