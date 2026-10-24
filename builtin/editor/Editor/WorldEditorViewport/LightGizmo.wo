@@ -385,7 +385,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             self.m_light_drag_center = frame.0;
             self.m_light_drag_normal = frame.1 * ((0., 0., 1.) as vec3);
             self.m_light_drag_undo_component = undo_component;
-            self.m_light_drag_undo_member = "shape";
+            self.m_light_drag_undo_member = undo_member;
             self.m_light_drag_undo_old_value = old_value;
             return_value!;
         };
