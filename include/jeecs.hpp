@@ -13536,23 +13536,23 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Parallel);
             JECS_DEFAULT_CONSTRUCTOR(Parallel);
         };
-        // 发光点偏移：offset 为光源实体局部空间的偏移量（随实体旋转
-        // 变换到世界空间，不受实体 local_scale 缩放影响）。挂载后光照
-        // 发射位置（着色器内的 light_vpos）与光照范围网格整体从
-        // world_position + world_rotation * offset 的位置计算；阴影投射
-        //（BlockShadow / ShapeShadow / SpriteShadow / WallShadow /
-        // SelfShadow 及各 auto_disable 高度判定、遮挡距离剔除）仍以光源
-        // 实体原始的 Translation::world_position 为原点，不应用此偏移。
-        struct Offset
+        // 阴影计算点偏移：offset 为光源实体局部空间的偏移量（随实体
+        // 旋转变换到世界空间，不受实体 local_scale 缩放影响）。挂载后
+        // 光照本身（着色器内的 light_vpos 与光照范围网格）仍从光源实体
+        // 原始的 Translation::world_position 渲染；而阴影投射（BlockShadow
+        // / ShapeShadow / SpriteShadow / WallShadow / SelfShadow 及各
+        // auto_disable 高度判定、遮挡距离剔除）改为以
+        // world_position + world_rotation * offset 为原点计算。
+        struct ShadowOffset
         {
-            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Offset);
-            JECS_DEFAULT_CONSTRUCTOR(Offset);
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(ShadowOffset);
+            JECS_DEFAULT_CONSTRUCTOR(ShadowOffset);
 
             math::vec3 offset = math::vec3(0.f, 0.f, 0.f);
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(guard, &Offset::offset, "offset");
+                typing::register_member(guard, &ShadowOffset::offset, "offset");
             }
         };
         struct ShadowBuffer
@@ -15804,7 +15804,7 @@ namespace jeecs
             jeecs::typing::register_type<Light2D::Point>(guard, "Light2D::Point");
             jeecs::typing::register_type<Light2D::Range>(guard, "Light2D::Range");
             jeecs::typing::register_type<Light2D::Parallel>(guard, "Light2D::Parallel");
-            jeecs::typing::register_type<Light2D::Offset>(guard, "Light2D::Offset");
+            jeecs::typing::register_type<Light2D::ShadowOffset>(guard, "Light2D::ShadowOffset");
             jeecs::typing::register_type<Light2D::ShadowBuffer>(guard, "Light2D::ShadowBuffer");
             jeecs::typing::register_type<Light2D::CameraPostPass>(guard, "Light2D::CameraPostPass");
             jeecs::typing::register_type<Light2D::BlockShadow>(guard, "Light2D::BlockShadow");

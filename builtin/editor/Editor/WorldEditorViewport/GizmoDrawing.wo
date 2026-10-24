@@ -740,9 +740,10 @@ namespace JEEditor::Editor::WorldEditorViewport
             // 各环按闭合环绘制）与 Light2D::BlockShadow 的多边形线框
             //（仅依次连接相邻顶点、不加隐式闭合边——与渲染 TRIANGLESTRIP
             // 语义一致，闭合由数据以首尾重复同一点显式表达），并为选中
-            // 实体绘制可拖拽的顶点手柄；挂 Light2D::Offset 的实体另绘
-            // 实体原点到发光点（偏移后）的连线与发光点处的偏移把手
-            //（点光源无形状线框时也显示）。线段与手柄的绘制方式同碰撞体；
+            // 实体绘制可拖拽的顶点手柄；挂 Light2D::ShadowOffset 的实体
+            // 另绘实体原点到阴影计算点（偏移后）的连线与阴影计算点处的
+            // 偏移把手（点光源无形状线框时也显示；光照本身仍从 Translation
+            // 渲染）。线段与手柄的绘制方式同碰撞体；
             // 本块在碰撞体块之后提交，绘制在最上层。
             do try!{
                 try! debug_camera_trans =
@@ -835,10 +836,11 @@ namespace JEEditor::Editor::WorldEditorViewport
                         }
                     }
 
-                    // 发光点偏移把手（Light2D::Offset）：实体原点到发光点
-                    // 的连线（偏移为零时把手与原点重合、不画线）与发光点
-                    // 处的把手方块，拖拽编辑 Offset.offset
-                    match (getLightOffsetHandle(selected_entity))
+                    // 阴影计算点偏移把手（Light2D::ShadowOffset）：实体
+                    // 原点到阴影计算点的连线（偏移为零时把手与原点重合、
+                    // 不画线）与阴影计算点处的把手方块，拖拽编辑
+                    // ShadowOffset.offset
+                    match (getShadowOffsetHandle(selected_entity))
                     {
                         none?;
                         value(p)?
@@ -851,14 +853,14 @@ namespace JEEditor::Editor::WorldEditorViewport
                                 ? self.m_light_drag_handle
                                 | self.m_light_hover_handle;
                             let is_active =
-                                active_handle == LIGHT2D_HANDLE_OFFSET;
+                                active_handle == LIGHT2D_HANDLE_SHADOW_OFFSET;
 
                             if ((p - origin)->length > 0.0001)
                                 drawLightEdge(
                                     origin, p,
                                     is_active
                                         ? GIZMO_COLOR_HOVER
-                                        | LIGHT2D_OFFSET_GIZMO_COLOR);
+                                        | LIGHT2D_SHADOW_OFFSET_GIZMO_COLOR);
                             drawLightHandle(p, is_active);
                         }
                     }
