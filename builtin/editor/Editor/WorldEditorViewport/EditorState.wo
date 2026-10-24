@@ -144,6 +144,7 @@ namespace JEEditor::Editor::WorldEditorViewport
 
         dump->set("gizmo_mode", self.m_gizmo_mode as int);
         dump->set("gizmo_space", self.m_gizmo_space as int);
+        dump->set("gizmo_layer", self.m_gizmo_layer as int);
         dump->set("lock_mouse", self.m_lock_mouse_on_look);
 
         match (self.m_debug_camera_selector->iter |> collect->get(0))
@@ -204,6 +205,16 @@ namespace JEEditor::Editor::WorldEditorViewport
             read_int(data, "gizmo_mode", GizmoMode::TRANSLATE as int) as GizmoMode;
         self.m_gizmo_space =
             read_int(data, "gizmo_space", GizmoSpace::GLOBAL as int) as GizmoSpace;
+
+        // 编辑层：旧存档没有该键时回退 AUTO；越界值同样回退，避免
+        // 非法枚举值进入运行时状态
+        let layer_value =
+            read_int(data, "gizmo_layer", GizmoLayer::AUTO as int);
+        self.m_gizmo_layer = (layer_value >= GizmoLayer::AUTO as int
+                && layer_value <= GizmoLayer::PARTICLE as int)
+            ? layer_value as GizmoLayer
+            | GizmoLayer::AUTO;
+
         self.m_lock_mouse_on_look = read_bool(data, "lock_mouse", false);
 
         let is_2d = read_bool(data, "is_2d", false);

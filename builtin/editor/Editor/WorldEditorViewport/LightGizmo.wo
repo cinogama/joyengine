@@ -208,14 +208,13 @@ namespace JEEditor::Editor::WorldEditorViewport
 
     // ==================== 交互（悬停 / 拖拽 / 撤销） ====================
 
-    // 每帧更新光源编辑手柄状态：选中带 Range/BlockShadow 的实体显示
-    // 形状手柄、带 Light2D::ShadowOffset 的实体显示阴影计算点偏移把手
-    //（无需模式开关可直接拖拽，点光源无形状线框时偏移把手仍可用）。
-    // 本函数在 updateColliderGizmo 之后、updateTransformGizmo 之前运行
-    //——碰撞体手柄优先于本手柄（其被悬停/拖拽中时本手柄让位），本手柄
-    // 被悬停/拖拽中时变换游标让位。松开左键结束拖拽并提交撤销记录；
-    // 拖拽中按鼠标射线应用编辑；否则做屏幕空间悬停检测，悬停手柄上
-    // 按下左键开始拖拽。
+    // 每帧更新光源编辑手柄状态：光源层激活时，选中带 Range/BlockShadow
+    // 的实体显示形状手柄、带 Light2D::ShadowOffset 的实体显示阴影计算点
+    // 偏移把手（可直接拖拽，点光源无形状线框时偏移把手仍可用）。本函数
+    // 只由 WindowLifecycle 在光源层激活（或拖拽收尾）时调用；其他层不
+    // 运行，避免与碰撞体/粒子/变换手柄叠加。松开左键结束拖拽并提交
+    // 撤销记录；拖拽中按鼠标射线应用编辑；否则做屏幕空间悬停检测，
+    // 悬停手柄上按下左键开始拖拽。
     protected func updateLightGizmo(
         self: WorldEditorViewport,
         debug_camera: option<entity>,
@@ -291,7 +290,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             // 偏移把手一并参与最近者竞争
             let view_proj = camera_proj->get_view_proj_mat;
             let mut best = GIZMO_HANDLE_NONE;
-            let mut best_dist = GIZMO_HIT_PX;
+            let mut best_dist = GIZMO_POINT_HIT_PX;
 
             // 偏移把手分派只看手柄编号，kind 仅形状手柄使用（选中实体
             // 无形状组件时以 RANGE 占位，不会被读到）
@@ -497,6 +496,27 @@ namespace JEEditor::Editor::WorldEditorViewport
                         self.m_light_drag_undo_old_value,
                         new_value));
             return_value!;
+        };
+    }
+
+    // 当前悬停/拖拽的光源手柄说明（供视口悬停标签使用）
+    protected func lightGizmoHandleLabel(self: WorldEditorViewport)=> string
+    {
+        let handle = self.m_light_dragging
+            ? self.m_light_drag_handle
+            | self.m_light_hover_handle;
+        if (handle == GIZMO_HANDLE_NONE)
+            return "";
+        if (handle == LIGHT2D_HANDLE_SHADOW_OFFSET)
+            return "光源阴影偏移";
+
+        return or("光源形状顶点") <| try!{
+            try! selected_entity = self->getSelectedEntity();
+            try! info = getLightShapeHandles(selected_entity);
+            let prefix = (info.0 == LightShapeKind::RANGE)
+                ? "范围光顶点"
+                | "遮挡体顶点";
+            return_value! F"{prefix} {handle + 1}";
         };
     }
 }

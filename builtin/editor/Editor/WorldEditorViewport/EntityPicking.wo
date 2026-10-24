@@ -243,10 +243,15 @@ namespace JEEditor::Editor::WorldEditorViewport
                         if ((pos - cam_pos)->dot(cam_forward) <= 0.)
                             return_value!;
 
+                        // 选中实体的图标绘制为半号淡色徽标（见
+                        // GizmoDrawing），命中矩形同步缩小
+                        let size_px = self->euidIsSelected(euid)
+                            ? icon_size_px * 0.5
+                            | icon_size_px;
                         self.m_icon_gizmo_rects->add(mut (
                             euid,
                             gizmoWorldToScreen(view_proj, pos, rmin, rsize),
-                            icon_size_px * 0.5 + GIZMO_HIT_PX));
+                            size_px * 0.5 + GIZMO_HIT_PX));
                         return_value!;
                     };
                 }
@@ -582,6 +587,17 @@ namespace JEEditor::Editor::WorldEditorViewport
     public func getSelectedEntityId(self: WorldEditorViewport)
     {
         return self.m_selected_entity_id;
+    }
+
+    // 按当前选中 EUID 反查实体（可拾取实体范围）；无选中或已失效时为 none。
+    // 供编辑层解析与各手柄标签等每帧入口使用，避免重复展开 match。
+    protected func getSelectedEntity(self: WorldEditorViewport)=> option<entity>
+    {
+        match (self.m_selected_entity_id)
+        {
+            none? return option::none: option<entity>;
+            value(euid)? return self->findEntityByEuid(euid);
+        }
     }
 
     public func setSelectedEntityId(self: WorldEditorViewport, id: option<entity::internal::euid_t>)=> void

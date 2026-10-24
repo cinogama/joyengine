@@ -60,9 +60,11 @@ namespace JEEditor::Editor::WorldEditorViewport
     {
         let center_screen = gizmoWorldToScreen(view_proj, origin, rect_min, rect_size);
 
-        // 中央手柄（屏幕平面移动 / 整体缩放）优先
+        // 中央手柄（屏幕平面移动 / 整体缩放）优先。命中半径与绘制边长
+        // 匹配（16px 方块取半边长），比轴/环的 10px 容差更精确
         if (self.m_gizmo_mode != GizmoMode::ROTATE
-            && gizmoScreenDistToSegment(mouse, center_screen, center_screen) < GIZMO_HIT_PX)
+            && gizmoScreenDistToSegment(mouse, center_screen, center_screen)
+                < GIZMO_CENTER_SIZE_PX * 0.5)
             return GIZMO_HANDLE_CENTER;
 
         let mut best = GIZMO_HANDLE_NONE;
@@ -142,6 +144,15 @@ namespace JEEditor::Editor::WorldEditorViewport
             self->finishGizmoDrag();
             self.m_gizmo_dragging = false;
             self.m_gizmo_drag_handle = GIZMO_HANDLE_NONE;
+        }
+
+        // 非变换层不参与悬停/命中；拖拽中仍需继续运行以完成本次拖拽
+        //（层状态在拖拽开始时冻结，正常不会出现中途换层）
+        if (self.m_gizmo_active_layer != GizmoLayer::TRANSFORM
+            && !self.m_gizmo_dragging)
+        {
+            self.m_gizmo_hover_handle = GIZMO_HANDLE_NONE;
+            return;
         }
 
         if (debug_camera->is_none || self.m_selected_entity_id->is_none)
@@ -261,11 +272,10 @@ namespace JEEditor::Editor::WorldEditorViewport
                     view_proj, origin, orientation,
                     self.m_gizmo_draw_size, mouse, rmin, rsize, is_2d);
 
-            // 碰撞体/光源形状/粒子发射器/UI 元素编辑手柄优先：其被悬停
-            // 或拖拽中时变换游标让位（不响应悬停高亮与左键拖拽；游标
-            // 本帧仍照常绘制）。本函数在 updateColliderGizmo/
-            // updateLightGizmo/updateParticleGizmo/updateUIGizmo 之后运行，
-            // 读到的即本帧结果。
+            // 组件/UI 手柄被悬停或拖拽中时变换游标让位（不响应悬停高亮
+            // 与左键拖拽）。单层门控下组件 update 与变换 update 不会同帧
+            // 运行，这里主要防御拖拽收尾、UI 手柄与外部状态，保证任何
+            // 情况下变换游标都不抢其他手柄的点击。
             if (self.m_collider_hover_handle != GIZMO_HANDLE_NONE
                 || self.m_collider_dragging
                 || self.m_light_hover_handle != GIZMO_HANDLE_NONE
@@ -572,13 +582,71 @@ namespace JEEditor::Editor::WorldEditorViewport
     }
 
     // 快捷键切换游标模式（W/E/R）：正在操作调试摄像机（环视/平移/环绕，
-    // 此时 WASD 用于飞行移动）或游标拖拽进行中时不响应。
+    // 此时 WASD 用于飞行移动）或任何手柄拖拽进行中时不响应。切换模式
+    // 同时回到变换层：组件层激活时变换游标不绘制，W/E/R 是回到移动/
+    // 旋转/缩放的显式入口。
     protected func switchGizmoModeByShortcut(self: WorldEditorViewport, mode: GizmoMode)=> void
     {
         if (self.m_is_look_active || self.m_is_pan_active || self.m_is_orbit_active
-            || self.m_gizmo_dragging)
+            || self.m_gizmo_dragging || self.m_collider_dragging
+            || self.m_light_dragging || self.m_particle_dragging)
             return;
         self.m_gizmo_mode = mode;
+        self.m_gizmo_layer = GizmoLayer::TRANSFORM;
+    }
+
+    // 快捷键切换编辑层（0=自动 1=变换 2=碰撞体 3=光源 4=粒子）。
+    // 当前选中实体不支持目标组件层时不切换；AUTO 总是可用。守卫条件
+    // 与模式切换一致，避免拖拽中/摄像机操作中换层。
+    protected func switchGizmoLayerByShortcut(
+        self: WorldEditorViewport, layer: GizmoLayer)=> void
+    {
+        if (self.m_is_look_active || self.m_is_pan_active || self.m_is_orbit_active
+            || self.m_gizmo_dragging || self.m_collider_dragging
+            || self.m_light_dragging || self.m_particle_dragging)
+            return;
+
+        if (layer != GizmoLayer::AUTO)
+        {
+            match (self->getSelectedEntity())
+            {
+                none?
+                {
+                    if (layer != GizmoLayer::TRANSFORM)
+                        return;
+                }
+                value(e)?
+                {
+                    if (!gizmoLayerAvailableFor(layer, e))
+                        return;
+                }
+            }
+        }
+        self.m_gizmo_layer = layer;
+    }
+
+    // 当前悬停/拖拽的变换手柄说明（供视口悬停标签使用）
+    protected func transformGizmoHandleLabel(self: WorldEditorViewport)=> string
+    {
+        let handle = self.m_gizmo_dragging
+            ? self.m_gizmo_drag_handle
+            | self.m_gizmo_hover_handle;
+        if (handle == GIZMO_HANDLE_NONE)
+            return "";
+
+        if (handle == GIZMO_HANDLE_CENTER)
+            return (self.m_gizmo_mode == GizmoMode::SCALE)
+                ? "整体缩放"
+                | "屏幕平面移动";
+
+        let axis = (handle == GIZMO_HANDLE_X)
+            ? "X"
+            | ((handle == GIZMO_HANDLE_Y) ? "Y" | "Z");
+        if (self.m_gizmo_mode == GizmoMode::TRANSLATE)
+            return F"移动 {axis}";
+        if (self.m_gizmo_mode == GizmoMode::ROTATE)
+            return F"旋转 {axis}";
+        return F"缩放 {axis}";
     }
 
     // 快捷键切换 Local/Global（G）：守卫条件同上；缩放仅支持 Local，不做切换

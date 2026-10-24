@@ -247,6 +247,8 @@ namespace JEEditor::Editor::WorldEditorViewport
             
             m_gizmo_mode = mut GizmoMode::TRANSLATE,
             m_gizmo_space = mut GizmoSpace::GLOBAL,
+            m_gizmo_layer = mut GizmoLayer::AUTO,
+            m_gizmo_active_layer = mut GizmoLayer::TRANSFORM,
             
             m_gizmo_hover_handle = mut GIZMO_HANDLE_NONE,
             m_gizmo_drag_handle = mut GIZMO_HANDLE_NONE,
@@ -599,6 +601,16 @@ namespace JEEditor::Editor::WorldEditorViewport
                     [ImGuiKey::ImGuiKey_R], \= self->switchGizmoModeByShortcut(GizmoMode::SCALE);)
                 ->shortCut(
                     [ImGuiKey::ImGuiKey_G], \= self->toggleGizmoSpaceByShortcut();)
+                ->shortCut(
+                    [ImGuiKey::ImGuiKey_0], \= self->switchGizmoLayerByShortcut(GizmoLayer::AUTO);)
+                ->shortCut(
+                    [ImGuiKey::ImGuiKey_1], \= self->switchGizmoLayerByShortcut(GizmoLayer::TRANSFORM);)
+                ->shortCut(
+                    [ImGuiKey::ImGuiKey_2], \= self->switchGizmoLayerByShortcut(GizmoLayer::COLLIDER);)
+                ->shortCut(
+                    [ImGuiKey::ImGuiKey_3], \= self->switchGizmoLayerByShortcut(GizmoLayer::LIGHT2D);)
+                ->shortCut(
+                    [ImGuiKey::ImGuiKey_4], \= self->switchGizmoLayerByShortcut(GizmoLayer::PARTICLE);)
                 ->finish();
     }
     public func onUpdate(self: WorldEditorViewport)
@@ -763,73 +775,102 @@ namespace JEEditor::Editor::WorldEditorViewport
             debug_camera,
             viewport_hovered && !toolbar_hovered,
             viewport_rect);
-            
-        // 碰撞体编辑手柄交互需先于变换游标：手柄目标更小更具体，优先
-        // 接管左键拖拽；随后运行的 updateTransformGizmo 读取其悬停状态
-        // 并让位。二者均先于摄像机控制，以抑制点击选中/摄像机操作
-        match (viewport_rect)
+
+        // 解析本帧唯一激活的编辑层：同一时刻只绘制、只响应一个手柄
+        // 家族，避免变换游标与碰撞体/光源/粒子手柄在同一位置叠加。
+        // UI 编辑模式由 UI 手柄整体接管，3D 层不参与命中与绘制
+        //（drawGizmos 亦会提前返回）。
+        let ui_editing = self->uiEditingActive();
+        if (ui_editing)
+            self.m_gizmo_active_layer = GizmoLayer::TRANSFORM;
+        else
+            self.m_gizmo_active_layer =
+                self->resolveGizmoLayer(self->getSelectedEntity());
+
+        // 被跳过的 update 不会自行清理悬停/绘制快照，这里统一复位。
+        // 拖拽中的层仍会运行（见下方条件），随后各 update 自行重新写入。
+        self.m_gizmo_hover_handle = GIZMO_HANDLE_NONE;
+        self.m_collider_hover_handle = GIZMO_HANDLE_NONE;
+        self.m_light_hover_handle = GIZMO_HANDLE_NONE;
+        self.m_particle_hover_handle = GIZMO_HANDLE_NONE;
+        self.m_gizmo_draw_visible = false;
+
+        let input_hovered = viewport_hovered && !toolbar_hovered;
+
+        // 只运行激活层的手柄交互；拖拽中的层即使层状态被外部改动也要
+        // 继续运行，以便松开左键时正常收尾并提交撤销记录。
+        if ((!ui_editing && self.m_gizmo_active_layer == GizmoLayer::COLLIDER)
+            || self.m_collider_dragging)
         {
-            none?;
-            value((rect_min, rect_max))?
-                self->updateColliderGizmo(
-                    debug_camera,
-                    viewport_hovered && !toolbar_hovered,
-                    rect_min,
-                    (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
-        }
-        
-        // 2D 光源形状编辑手柄交互：优先级介于碰撞体手柄与变换游标
-        // 之间（碰撞体手柄被悬停/拖拽时让位，其被悬停/拖拽时变换
-        // 游标让位），同样先于摄像机控制
-        match (viewport_rect)
-        {
-            none?;
-            value((rect_min, rect_max))?
-                self->updateLightGizmo(
-                    debug_camera,
-                    viewport_hovered && !toolbar_hovered,
-                    rect_min,
-                    (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
+            match (viewport_rect)
+            {
+                none?;
+                value((rect_min, rect_max))?
+                    self->updateColliderGizmo(
+                        debug_camera,
+                        input_hovered,
+                        rect_min,
+                        (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
+            }
         }
 
-        // 粒子发射器编辑手柄交互：优先级介于光源手柄与变换游标之间
-        //（碰撞体/光源手柄被悬停/拖拽时让位，其被悬停/拖拽时变换
-        // 游标让位），同样先于摄像机控制
-        match (viewport_rect)
+        if ((!ui_editing && self.m_gizmo_active_layer == GizmoLayer::LIGHT2D)
+            || self.m_light_dragging)
         {
-            none?;
-            value((rect_min, rect_max))?
-                self->updateParticleGizmo(
-                    debug_camera,
-                    viewport_hovered && !toolbar_hovered,
-                    rect_min,
-                    (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
+            match (viewport_rect)
+            {
+                none?;
+                value((rect_min, rect_max))?
+                    self->updateLightGizmo(
+                        debug_camera,
+                        input_hovered,
+                        rect_min,
+                        (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
+            }
+        }
+
+        if ((!ui_editing && self.m_gizmo_active_layer == GizmoLayer::PARTICLE)
+            || self.m_particle_dragging)
+        {
+            match (viewport_rect)
+            {
+                none?;
+                value((rect_min, rect_max))?
+                    self->updateParticleGizmo(
+                        debug_camera,
+                        input_hovered,
+                        rect_min,
+                        (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
+            }
         }
 
         // UI 元素编辑手柄交互：选中带 UserInterface::Element 的实体即
-        // 生效，优先级介于粒子手柄与变换游标之间（其被悬停/拖拽时变换
-        // 游标让位；且 UI 元素实体的变换游标整体让位，见
-        // updateTransformGizmo），同样先于摄像机控制
+        // 生效；非 UI 选择时本函数自行清理悬停状态并返回。
         match (viewport_rect)
         {
             none?;
             value((rect_min, rect_max))?
                 self->updateUIGizmo(
-                    viewport_hovered && !toolbar_hovered,
+                    input_hovered,
                     rect_min,
                     (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
         }
-        
-        // 变换游标交互（碰撞体手柄被悬停/拖拽时让位，见 updateTransformGizmo）
-        match (viewport_rect)
+
+        // 变换游标只在变换层（或拖拽收尾）运行；组件层激活时其手柄
+        // 不绘制也不参与命中，移动实体请按 W/E/R 或工具栏切回变换层。
+        if ((!ui_editing && self.m_gizmo_active_layer == GizmoLayer::TRANSFORM)
+            || self.m_gizmo_dragging)
         {
-            none?;
-            value((rect_min, rect_max))?
-                self->updateTransformGizmo(
-                    debug_camera,
-                    viewport_hovered && !toolbar_hovered,
-                    rect_min,
-                    (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
+            match (viewport_rect)
+            {
+                none?;
+                value((rect_min, rect_max))?
+                    self->updateTransformGizmo(
+                        debug_camera,
+                        input_hovered,
+                        rect_min,
+                        (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
+            }
         }
         
         // 先处理右键状态（记录按下起点、松开时按位移决定是否弹实体菜单），
@@ -873,6 +914,10 @@ namespace JEEditor::Editor::WorldEditorViewport
         
         // Draw gizmo here.
         self->drawGizmos(debug_camera);
+
+        // 悬停手柄说明（屏幕空间）：与绘制/命中同源的激活层与手柄编号，
+        // 帮助区分层内相邻/重合的手柄
+        self->drawGizmoHoverLabel(viewport_hovered && !toolbar_hovered);
 
         // UI 元素 gizmo 覆盖层（ImGui DrawList，屏幕空间；在视口图像
         // 之后提交，天然盖在画面与 render gizmo 之上）

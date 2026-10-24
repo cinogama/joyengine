@@ -129,6 +129,14 @@ namespace JEEditor::Editor
         // ---- 变换游标（操作手柄）状态 ----
         protected m_gizmo_mode: mut GizmoMode,
         protected m_gizmo_space: mut GizmoSpace,
+
+        // 编辑层：同一时刻只绘制/响应一个手柄家族，避免变换游标、
+        // 碰撞体、光源形状与粒子发射器的手柄在同一位置叠加。
+        // AUTO 按选中实体的组件自动选择（碰撞体 > 光源 > 粒子 > 变换），
+        // 手动选择的层仅在当前选中实体支持时生效，否则回退 AUTO。
+        protected m_gizmo_layer: mut GizmoLayer,
+        // 本帧解析出的实际激活层（AUTO 解析结果；UI 编辑模式恒为 TRANSFORM）
+        protected m_gizmo_active_layer: mut GizmoLayer,
         
         protected m_gizmo_hover_handle: mut int,
         protected m_gizmo_drag_handle: mut int,
@@ -349,12 +357,30 @@ namespace JEEditor::Editor
         
         // ---- 变换游标参数 ----
         protected let GIZMO_SIZE_PX = 96.;              // 游标轴在屏幕上的长度（像素）
-        protected let GIZMO_HIT_PX = 10.;               // 手柄命中判定半径（像素）
+        protected let GIZMO_HIT_PX = 10.;               // 轴/环命中判定半径（像素）
+        protected let GIZMO_POINT_HIT_PX = 6.;          // 点状手柄命中半径（像素，
+                                                        // 与 8px 方块/菱形匹配；比轴/环
+                                                        // 更小，降低相邻手柄误抓概率）
+        protected let GIZMO_INACTIVE_HANDLE_ALPHA = 0.25; // 有手柄激活时其余手柄的透明度系数
+        protected let GIZMO_CONTEXT_WIRE_ALPHA = 0.2;   // 非激活层线框的背景透明度系数
         protected let GIZMO_RING_RADIUS_RATIO = 1.15;   // 旋转圆环半径相对轴长的比例
         protected let GIZMO_SCALE_AXIS_RATIO = 0.85;    // 缩放游标轴长相对平移轴长的比例
         protected let GIZMO_CENTER_SIZE_PX = 16.;       // 中央手柄边长（像素）
         protected let GIZMO_SCALE_FACTOR_MIN = 0.01;
         protected let GIZMO_SCALE_FACTOR_MAX = 100.;
+        // 悬停手柄说明文字颜色（ImGui Color32RGBA）
+        protected let GIZMO_LABEL_COLOR = (255, 255, 255, 235);
+
+        // 编辑层枚举：AUTO 之外的层为手动选择。跨文件使用，须为 public。
+        public enum GizmoLayer
+        {
+            AUTO,
+            TRANSFORM,
+            COLLIDER,
+            LIGHT2D,
+            PARTICLE,
+        }
+
         
         // 手柄编号：三根轴 + 中央手柄（屏幕平面移动 / 整体缩放）
         protected let GIZMO_HANDLE_NONE = -1;
@@ -680,6 +706,82 @@ namespace JEEditor::Editor
                     || !(e->towoo::get_component:<Physics2D::Collider::Circle>->is_none)
                     || !(e->towoo::get_component:<Physics2D::Collider::Capsule>->is_none)
                     || !(e->towoo::get_component:<Physics2D::Collider::Mesh>->is_none));
+        }
+
+        // 选中实体是否为指定 EUID（图标绘制/命中缩放等无 selected 快照的
+        // 循环使用）
+        protected func euidIsSelected(
+            self: WorldEditorViewport, euid: entity::internal::euid_t)=> bool
+        {
+            match (self.m_selected_entity_id)
+            {
+                none? return false;
+                value(selected)? return selected == euid;
+            }
+        }
+
+        // 编辑层显示名（工具栏“当前: X”与提示）
+        protected func gizmoLayerLabel(layer: GizmoLayer)=> string
+        {
+            if (layer == GizmoLayer::AUTO)
+                return "自动";
+            if (layer == GizmoLayer::TRANSFORM)
+                return "变换";
+            if (layer == GizmoLayer::COLLIDER)
+                return "碰撞体";
+            if (layer == GizmoLayer::LIGHT2D)
+                return "光源";
+            return "粒子";
+        }
+
+        // 当前选中实体是否支持指定编辑层。TRANSFORM 始终可用（具体模式
+        // 是否可操作仍由 updateTransformGizmo 的组件检查决定）；COLLIDER
+        // 与绘制口径一致要求 Rigidbody；LIGHT2D 覆盖形状与阴影偏移；
+        // PARTICLE 只要求发射器组件。
+        protected func gizmoLayerAvailableFor(layer: GizmoLayer, e: entity)=> bool
+        {
+            if (layer == GizmoLayer::TRANSFORM)
+                return true;
+            if (layer == GizmoLayer::COLLIDER)
+                return hasPhysics2DCollider(e);
+            if (layer == GizmoLayer::LIGHT2D)
+                return e->towoo::get_component:<Light2D::Range>->is_value
+                    || e->towoo::get_component:<Light2D::BlockShadow>->is_value
+                    || e->towoo::get_component:<Light2D::ShadowOffset>->is_value;
+            if (layer == GizmoLayer::PARTICLE)
+                return e->towoo::get_component:<Particle::Emitter>->is_value;
+            return false;
+        }
+
+        // 解析本帧激活的编辑层：手动层在当前选中实体上可用则直接使用，
+        // 否则回退 AUTO（并把手动选择重置为 AUTO，使工具栏状态与回退
+        // 结果一致）。AUTO 按 碰撞体 > 光源 > 粒子 > 变换 选取；选中实体
+        // 为空时只保留变换层。
+        protected func resolveGizmoLayer(
+            self: WorldEditorViewport,
+            selected: option<entity>)=> GizmoLayer
+        {
+            match (selected)
+            {
+                none? return GizmoLayer::TRANSFORM;
+                value(e)?
+                {
+                    if (self.m_gizmo_layer != GizmoLayer::AUTO)
+                    {
+                        if (gizmoLayerAvailableFor(self.m_gizmo_layer, e))
+                            return self.m_gizmo_layer;
+                        self.m_gizmo_layer = GizmoLayer::AUTO;
+                    }
+
+                    if (gizmoLayerAvailableFor(GizmoLayer::COLLIDER, e))
+                        return GizmoLayer::COLLIDER;
+                    if (gizmoLayerAvailableFor(GizmoLayer::LIGHT2D, e))
+                        return GizmoLayer::LIGHT2D;
+                    if (gizmoLayerAvailableFor(GizmoLayer::PARTICLE, e))
+                        return GizmoLayer::PARTICLE;
+                    return GizmoLayer::TRANSFORM;
+                }
+            }
         }
         
         public func redo(self: WorldEditorViewport)

@@ -191,4 +191,30 @@ namespace JEEditor::Editor::Gizmo::Shapes
         (0., 0., 1.) as vec3, (1., 0., 0.) as vec3, 64);
     public let GIZMO_RING_AROUND_Z = makeRing(
         (1., 0., 0.) as vec3, (0., 1., 0.) as vec3, 64);
+
+    // ==================== 编辑手柄形状 ====================
+    // 各单位手柄均为 XY 平面内的填充图元（CULL NONE，绕序不影响），
+    // 绘制时与方块一样通过模型矩阵缩放到屏幕像素恒定大小。
+    // 不同家族使用不同轮廓，便于在层内相邻/重合时快速区分。
+
+    // 菱形：光源形状顶点手柄
+    public let GIZMO_DIAMOND = makeShape(
+        vertex::type::TRIANGLES,
+        [
+            0., 0.5, 0.,
+            0.5, 0., 0.,
+            0., -0.5, 0.,
+            -0.5, 0., 0.,
+        ]mut,
+        [0, 1, 2, 0, 2, 3]mut);
+
+    // 三角形：粒子发射器形状手柄
+    public let GIZMO_TRIANGLE = makeShape(
+        vertex::type::TRIANGLES,
+        [
+            0., 0.5, 0.,
+            0.5, -0.5, 0.,
+            -0.5, -0.5, 0.,
+        ]mut,
+        [0, 1, 2]mut);
 }

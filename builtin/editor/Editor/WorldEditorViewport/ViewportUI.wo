@@ -8,12 +8,15 @@ import pkg::std;
 import je;
 import je::ecs;
 import je::gui;
+import je::towoo;
 import je::towoo::types;
+import je::towoo::components;
 
 import builtin::editor::Editor::Practice;
 
 import Definition;
 import CameraControl;
+import EntityPicking;
 import UIGizmo;
 
 using std;
@@ -95,20 +98,31 @@ namespace JEEditor::Editor::WorldEditorViewport
 
         let mut toolbar_hovered = false;
 
+        // 模式按钮同时切回变换层：组件层激活时变换游标不绘制，点击
+        // 移动/旋转/缩放应直接进入完整变换游标（与 W/E/R 一致）
         if (RadioButton("移动", self.m_gizmo_mode == GizmoMode::TRANSLATE))
+        {
             self.m_gizmo_mode = GizmoMode::TRANSLATE;
+            self.m_gizmo_layer = GizmoLayer::TRANSFORM;
+        }
         if (IsItemHovered())
             toolbar_hovered = true;
         SameLine();
 
         if (RadioButton("旋转", self.m_gizmo_mode == GizmoMode::ROTATE))
+        {
             self.m_gizmo_mode = GizmoMode::ROTATE;
+            self.m_gizmo_layer = GizmoLayer::TRANSFORM;
+        }
         if (IsItemHovered())
             toolbar_hovered = true;
         SameLine();
 
         if (RadioButton("缩放", self.m_gizmo_mode == GizmoMode::SCALE))
+        {
             self.m_gizmo_mode = GizmoMode::SCALE;
+            self.m_gizmo_layer = GizmoLayer::TRANSFORM;
+        }
         if (IsItemHovered())
             toolbar_hovered = true;
         SameLine();
@@ -194,6 +208,98 @@ namespace JEEditor::Editor::WorldEditorViewport
                         "开启后调试摄像机以 2D 延迟光照渲染（需要世界正在运行 Graphic::DeferLight2DGraphicPipelineSystem）");
                 }
             }
+        }
+
+        // ---- 编辑层选择（第二行） ----
+        // 选中实体带有组件编辑手柄时提供层切换。同一时刻只有一个层
+        // 绘制/响应手柄：变换层 = 完整游标；组件层 = 对应线框与手柄；
+        // 其余层只保留淡化线框。自动模式按 碰撞体 > 光源 > 粒子 > 变换
+        // 选择，W/E/R 始终切回变换层。
+        let selected_entity = self->getSelectedEntity();
+        let mut has_collider_layer = false;
+        let mut has_light_layer = false;
+        let mut has_particle_layer = false;
+        match (selected_entity)
+        {
+            none?;
+            value(e)?
+            {
+                has_collider_layer = hasPhysics2DCollider(e);
+                has_light_layer =
+                    e->towoo::get_component:<Light2D::Range>->is_value
+                    || e->towoo::get_component:<Light2D::BlockShadow>->is_value
+                    || e->towoo::get_component:<Light2D::ShadowOffset>->is_value;
+                has_particle_layer =
+                    e->towoo::get_component:<Particle::Emitter>->is_value;
+            }
+        }
+
+        if (has_collider_layer || has_light_layer || has_particle_layer)
+        {
+            SetCursorScreenPos((
+                rect_min.0 + 8.,
+                rect_min.1 + 8. + GetFrameHeight() + 4.));
+
+            let layer_label = gizmoLayerLabel(self.m_gizmo_active_layer);
+            TextDisabled(F"编辑层（当前：{layer_label}）");
+            SameLine();
+
+            if (RadioButton("自动", self.m_gizmo_layer == GizmoLayer::AUTO))
+                self.m_gizmo_layer = GizmoLayer::AUTO;
+            if (IsItemHovered())
+            {
+                toolbar_hovered = true;
+                do SetTooltip(
+                    "按选中实体自动选择编辑层：碰撞体 > 光源 > 粒子 > 变换");
+            }
+            SameLine();
+
+            if (RadioButton("变换", self.m_gizmo_layer == GizmoLayer::TRANSFORM))
+                self.m_gizmo_layer = GizmoLayer::TRANSFORM;
+            if (IsItemHovered())
+            {
+                toolbar_hovered = true;
+                do SetTooltip("完整变换游标（W/E/R 快捷进入）");
+            }
+
+            if (has_collider_layer)
+            {
+                SameLine();
+                if (RadioButton("碰撞体", self.m_gizmo_layer == GizmoLayer::COLLIDER))
+                    self.m_gizmo_layer = GizmoLayer::COLLIDER;
+                if (IsItemHovered())
+                {
+                    toolbar_hovered = true;
+                    do SetTooltip("碰撞体线框与编辑手柄（2）");
+                }
+            }
+
+            if (has_light_layer)
+            {
+                SameLine();
+                if (RadioButton("光源", self.m_gizmo_layer == GizmoLayer::LIGHT2D))
+                    self.m_gizmo_layer = GizmoLayer::LIGHT2D;
+                if (IsItemHovered())
+                {
+                    toolbar_hovered = true;
+                    do SetTooltip("光源形状顶点与阴影偏移手柄（3）");
+                }
+            }
+
+            if (has_particle_layer)
+            {
+                SameLine();
+                if (RadioButton("粒子", self.m_gizmo_layer == GizmoLayer::PARTICLE))
+                    self.m_gizmo_layer = GizmoLayer::PARTICLE;
+                if (IsItemHovered())
+                {
+                    toolbar_hovered = true;
+                    do SetTooltip("发射形状、方向与散布角手柄（4）");
+                }
+            }
+
+            SameLine();
+            TextDisabled("W/E/R 变换");
         }
 
         return toolbar_hovered;

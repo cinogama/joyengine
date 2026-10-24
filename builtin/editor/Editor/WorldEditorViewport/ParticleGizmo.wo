@@ -375,12 +375,12 @@ namespace JEEditor::Editor::WorldEditorViewport
 
     // ==================== 交互（悬停 / 拖拽 / 撤销） ====================
 
-    // 每帧更新粒子发射器编辑手柄状态：选中带 Particle::Emitter 的实体
-    // 即显示手柄、无需模式开关可直接拖拽。本函数在 updateLightGizmo
-    // 之后、updateTransformGizmo 之前运行——碰撞体/光源手柄优先于本
-    // 手柄（其被悬停/拖拽中时本手柄让位），本手柄被悬停/拖拽中时变换
-    // 游标让位。松开左键结束拖拽并提交撤销记录；拖拽中按鼠标射线应用
-    // 编辑；否则做屏幕空间悬停检测，悬停手柄上按下左键开始拖拽。
+    // 每帧更新粒子发射器编辑手柄状态：粒子层激活时，选中带
+    // Particle::Emitter 的实体即显示手柄、可直接拖拽。本函数只由
+    // WindowLifecycle 在粒子层激活（或拖拽收尾）时调用；其他层不运行，
+    // 避免与碰撞体/光源/变换手柄叠加。松开左键结束拖拽并提交撤销
+    // 记录；拖拽中按鼠标射线应用编辑；否则做屏幕空间悬停检测，悬停
+    // 手柄上按下左键开始拖拽。
     protected func updateParticleGizmo(
         self: WorldEditorViewport,
         debug_camera: option<entity>,
@@ -464,7 +464,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             // 散布环按环分段距离参与竞争（与碰撞体旋转环同一判定口径）
             let view_proj = camera_proj->get_view_proj_mat;
             let mut best = GIZMO_HANDLE_NONE;
-            let mut best_dist = GIZMO_HIT_PX;
+            let mut best_dist = GIZMO_POINT_HIT_PX;
 
             match (getParticleShapeHandles(selected_entity))
             {
@@ -740,5 +740,54 @@ namespace JEEditor::Editor::WorldEditorViewport
                         new_value));
             return_value!;
         };
+    }
+
+    // 当前悬停/拖拽的粒子手柄说明（供视口悬停标签使用）
+    protected func particleGizmoHandleLabel(self: WorldEditorViewport)=> string
+    {
+        let handle = self.m_particle_dragging
+            ? self.m_particle_drag_handle
+            | self.m_particle_hover_handle;
+        if (handle == GIZMO_HANDLE_NONE)
+            return "";
+        if (handle == PARTICLE_HANDLE_DIRECTION)
+            return "粒子发射方向";
+        if (handle == PARTICLE_HANDLE_SPREAD)
+            return "粒子散布角";
+
+        let mut label = F"粒子形状手柄 {handle + 1}";
+        match (self->getSelectedEntity())
+        {
+            none?;
+            value(e)?
+            {
+                match (e->towoo::get_component:<Particle::Emitter>())
+                {
+                    none?;
+                    value(emitter)?
+                    {
+                        let kind = particleShapeKind(emitter);
+                        if (kind == ParticleShapeKind::SPHERE)
+                        {
+                            let axis_name = (handle == 0)
+                                ? "X"
+                                | ((handle == 1) ? "Y" | "Z");
+                            label = F"球半径 {axis_name}";
+                        }
+                        else if (kind == ParticleShapeKind::CIRCLE)
+                            label = "圆半径";
+                        else if (kind == ParticleShapeKind::BOX)
+                        {
+                            let axis = handle / 2;
+                            let axis_name = (axis == 0)
+                                ? "X"
+                                | ((axis == 1) ? "Y" | "Z");
+                            label = F"盒半边长 {axis_name}";
+                        }
+                    }
+                }
+            }
+        }
+        return label;
     }
 }

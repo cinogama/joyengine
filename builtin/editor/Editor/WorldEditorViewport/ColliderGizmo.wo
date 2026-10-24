@@ -313,12 +313,12 @@ namespace JEEditor::Editor::WorldEditorViewport
 
     // ==================== 交互（悬停 / 拖拽 / 撤销） ====================
 
-    // 每帧更新碰撞体编辑手柄状态：选中带碰撞体的实体即显示手柄、
-    // 无需模式开关可直接拖拽。本函数先于 updateTransformGizmo 运行，
-    // 碰撞体手柄优先——其被悬停/拖拽中时变换游标让位（游标拖拽中
-    // 则不响应手柄）。松开左键结束拖拽并提交撤销记录；拖拽中按鼠标
-    // 射线应用编辑；否则做屏幕空间悬停检测，悬停手柄上按下左键开始
-    // 拖拽。
+    // 每帧更新碰撞体编辑手柄状态：碰撞体层激活时，选中带碰撞体的实体
+    // 即显示手柄、可直接拖拽。本函数只由 WindowLifecycle 在碰撞体层
+    // 激活（或拖拽收尾）时调用；变换/光源/粒子层不运行，因此不会与
+    // 其他家族的手柄争夺同一屏幕位置。松开左键结束拖拽并提交撤销
+    // 记录；拖拽中按鼠标射线应用编辑；否则做屏幕空间悬停检测，悬停
+    // 手柄上按下左键开始拖拽。
     protected func updateColliderGizmo(
         self: WorldEditorViewport,
         debug_camera: option<entity>,
@@ -391,7 +391,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             // 悬停检测：手柄世界坐标投影到屏幕，取距离最近者
             let view_proj = camera_proj->get_view_proj_mat;
             let mut best = GIZMO_HANDLE_NONE;
-            let mut best_dist = GIZMO_HIT_PX;
+            let mut best_dist = GIZMO_POINT_HIT_PX;
             for (let mut i = 0; i < handles->len; i += 1)
             {
                 let d = (mouse - gizmoWorldToScreen(
@@ -681,5 +681,45 @@ namespace JEEditor::Editor::WorldEditorViewport
                         new_value));
             return_value!;
         };
+    }
+
+    // 当前悬停/拖拽的碰撞体手柄说明（供视口悬停标签使用）
+    protected func colliderGizmoHandleLabel(self: WorldEditorViewport)=> string
+    {
+        let handle = self.m_collider_dragging
+            ? self.m_collider_drag_handle
+            | self.m_collider_hover_handle;
+        if (handle == GIZMO_HANDLE_NONE)
+            return "";
+        if (handle == COLLIDER_HANDLE_OFFSET_POSITION)
+            return "碰撞体中心偏移";
+        if (handle == COLLIDER_HANDLE_OFFSET_ROTATION)
+            return "碰撞体旋转偏移";
+
+        let mut label = "碰撞体手柄";
+        match (self->getSelectedEntity())
+        {
+            none?;
+            value(e)?
+            {
+                match (getColliderHandles(e))
+                {
+                    none?;
+                    value(info)?
+                    {
+                        let kind = info.0;
+                        if (kind == ColliderKind::BOX)
+                            label = F"碰撞体角点 {handle + 1}";
+                        else if (kind == ColliderKind::CIRCLE)
+                            label = "碰撞体半径";
+                        else if (kind == ColliderKind::CAPSULE)
+                            label = (handle == 0) ? "碰撞体高度" | "碰撞体半径";
+                        else
+                            label = F"碰撞体顶点 {handle + 1}";
+                    }
+                }
+            }
+        }
+        return label;
     }
 }
