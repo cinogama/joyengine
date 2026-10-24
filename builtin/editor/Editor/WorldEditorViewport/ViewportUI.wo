@@ -26,11 +26,13 @@ using je::gui;
 
 namespace JEEditor::Editor::WorldEditorViewport
 {
-    // 在视口左上角绘制变换游标工具栏；返回工具栏是否被悬停
+    // 在视口左上角绘制变换游标工具栏，编辑层选择显示在右下角；
+    // 返回工具栏（含编辑层行）是否被悬停
     protected func drawGizmoToolbar(
         self: WorldEditorViewport,
         debug_camera: option<entity>,
-        rect_min: ImVec2)=> bool
+        rect_min: ImVec2,
+        rect_max: ImVec2)=> bool
     {
         // UI 编辑模式（选中 UI 元素）：隐藏变换游标工具栏，保持视口干净
         //（移动/旋转/缩放选项对 UI 手柄无意义，2D 模式等视口开关亦
@@ -236,12 +238,35 @@ namespace JEEditor::Editor::WorldEditorViewport
 
         if (has_collider_layer || has_light_layer || has_particle_layer)
         {
-            SetCursorScreenPos((
-                rect_min.0 + 8.,
-                rect_min.1 + 8. + GetFrameHeight() + 4.));
+            // 右下角显示编辑层：按实际文本/按钮宽度估算整行宽度后右对齐。
+            // 估算略偏大，宁可留一点间隙也不越过右边界；视口过窄时钳制
+            // 到左内边距，允许向右溢出。
+            let layer_text =
+                F"编辑层（当前：{gizmoLayerLabel(self.m_gizmo_active_layer)}）";
+            let hint_text = "W/E/R 变换";
+            let mut row_width = CalcTextSize(layer_text).0;
+            row_width +=
+                10. + GetFrameHeight() + 5. + CalcTextSize("自动").0;
+            row_width +=
+                10. + GetFrameHeight() + 5. + CalcTextSize("变换").0;
+            if (has_collider_layer)
+                row_width +=
+                    10. + GetFrameHeight() + 5. + CalcTextSize("碰撞体").0;
+            if (has_light_layer)
+                row_width +=
+                    10. + GetFrameHeight() + 5. + CalcTextSize("光源").0;
+            if (has_particle_layer)
+                row_width +=
+                    10. + GetFrameHeight() + 5. + CalcTextSize("粒子").0;
+            row_width += 10. + CalcTextSize(hint_text).0;
 
-            let layer_label = gizmoLayerLabel(self.m_gizmo_active_layer);
-            TextDisabled(F"编辑层（当前：{layer_label}）");
+            let mut row_x = rect_max.0 - 8. - row_width;
+            if (row_x < rect_min.0 + 8.)
+                row_x = rect_min.0 + 8.;
+            let row_y = rect_max.1 - 8. - GetFrameHeight();
+            SetCursorScreenPos((row_x, row_y));
+
+            TextDisabled(layer_text);
             SameLine();
 
             if (RadioButton("自动", self.m_gizmo_layer == GizmoLayer::AUTO))
@@ -299,7 +324,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             }
 
             SameLine();
-            TextDisabled("W/E/R 变换");
+            TextDisabled(hint_text);
         }
 
         return toolbar_hovered;

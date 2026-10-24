@@ -728,7 +728,8 @@ namespace JEEditor::Editor::WorldEditorViewport
             none?;
             value((rect_min, rect_max))?
             {
-                toolbar_hovered = self->drawGizmoToolbar(debug_camera, rect_min);
+                toolbar_hovered = self->drawGizmoToolbar(
+                    debug_camera, rect_min, rect_max);
                 // 未保存标记悬停时同样抑制视口内的点击选取
                 if (self->drawUnsavedMark(rect_min, rect_max))
                     toolbar_hovered = true;
