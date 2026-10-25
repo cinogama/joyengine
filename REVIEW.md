@@ -23,6 +23,9 @@
 - [x] `GizmoDrawing.wo` 的 `linearColor` 改用 `color::from_srgb`，删除重复的
       `math::pow` 实现与 `import pkg::math`。
 - [x] `WorldGrid*.shader`、`SelectedEntity.shader` 的预转换常量按决策维持原状。
+- [x] `draw_action::set_uniform_color` 改走 color 专用的
+      `wojeapi_draw_action_set_uniform_color`，由 `math::color::to_linear()`
+      决定颜色到管线表示的转换；不再把四个分量直接当作最终 float4 写入。
 
 ## ImGui 线性颜色空间调查
 
@@ -46,13 +49,13 @@
 
 ## 待处理
 
-### P1 冗余 API
+### P1 类型安全（已确认，保持现状）
 
-- [ ] `wojeapi_color_to_linear` 是恒等函数（`src/jeecs_towoo_script_basic.cpp`），
-      可在 `je/towoo/towoo.wo` 用纯 Woolang 元组 cast 实现，删除该 C API。
-- [ ] `wojeapi_set_uniforms_color`（`src/jeecs_woolang_api.cpp`）最终也走
-      float4 setter，可直接删除；`shader::set_uniform_color` 改调
-      `_set_uniform_float4`（`draw_action::set_uniform_color` 已如此）。
+- [x] 所有颜色写入/转换必须经过 color 专用入口，不得假设 `color` 的内部
+      存储布局。`wojeapi_color_to_linear`、`wojeapi_set_uniforms_color` 以及
+      新增的 `wojeapi_draw_action_set_uniform_color` 都属于这类“语义入口”：
+      即使当前实现是恒等转换或最终落到 float4 写入，也应保留，由 color
+      类型自己决定表示为管线的形式。
 
 ### P2 设计/结构
 

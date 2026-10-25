@@ -312,6 +312,8 @@ namespace je
                 func _set_uniform_float3(act: draw_action, shad: shader, name: string, x: real, y: real, z: real)=> void;
             extern("libjoyecs", "wojeapi_draw_action_set_uniform_float4")
                 func _set_uniform_float4(act: draw_action, shad: shader, name: string, x: real, y: real, z: real, w: real)=> void;
+            extern("libjoyecs", "wojeapi_draw_action_set_uniform_color")
+                func _set_uniform_color(act: draw_action, shad: shader, name: string, x: real, y: real, z: real, w: real)=> void;
             
             extern("libjoyecs", "wojeapi_draw_action_set_uniform_float2x2")
                 func _set_uniform_float2x2(act: draw_action, shad: shader, name: string,
@@ -360,7 +362,7 @@ namespace je
                 self: draw_action, shad: shader, name: string,
                 val: (real, real, real, real))=> void
             {
-                _set_uniform_float4(self, shad, name, val...);
+                _set_uniform_color(self, shad, name, val...);
             }
 
             public func set_uniform_mat4x4(

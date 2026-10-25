@@ -4618,6 +4618,25 @@ WOORT_API woort_api wojeapi_draw_action_set_uniform_float4(void)
     return woort_ret_void();
 }
 
+WOORT_API woort_api wojeapi_draw_action_set_uniform_color(void)
+{
+    auto* act = (woje_draw_action*)woort_pointer(0);
+    const char* name = woort_string(2);
+    auto slot = _woje_action_uniform_slot(act, name);
+    if (slot.m_offset == JEGL_UNIFORM_SLOT_NONE)
+        return woort_ret_void();
+
+    // Do not reinterpret the components as the final pipeline values: route
+    // them through math::color so its storage-to-linear conversion stays the
+    // only place that knows how a color is represented.
+    const jeecs::math::vec4 linear = jeecs::math::color(
+        woort_float(3), woort_float(4), woort_float(5), woort_float(6))
+        .to_linear();
+    jegl_cmd_set_uniform_float4(act->m_command, slot,
+        linear.x, linear.y, linear.z, linear.w);
+    return woort_ret_void();
+}
+
 WOORT_API woort_api wojeapi_draw_action_set_uniform_float2x2(void)
 {
     auto* act = (woje_draw_action*)woort_pointer(0);
