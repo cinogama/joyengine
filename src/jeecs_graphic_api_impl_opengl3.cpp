@@ -215,18 +215,18 @@ namespace jeecs::graphic::api::gl3
         bool m_render_target_is_default = false;
 
         // sRGB presentation mode. Hardware mode uses an sRGB-capable default
-        // framebuffer plus FRAMEBUFFER_SRGB; otherwise a full-screen encode
-        // pass writes sRGB-encoded values (GLES/WebGL without the extension).
+        // framebuffer plus FRAMEBUFFER_SRGB; otherwise all screen-bound draws
+        // are redirected to a linear offscreen FBO, which is encoded to the
+        // real default framebuffer at the end of the frame.
         bool m_srgb_output_hardware = false;
         bool m_srgb_output_encode_pass = false;
+        bool m_encoding_srgb_screen = false;
 
-        // Full-screen encode pass resources.
-        GLuint m_srgb_encode_program = 0;
-        GLuint m_srgb_encode_vao = 0;
-        GLuint m_srgb_encode_fbo = 0;
-        GLuint m_srgb_encode_texture = 0;
-        int m_srgb_encode_width = 0;
-        int m_srgb_encode_height = 0;
+        GLuint m_srgb_encode_screen_fbo = 0;
+        GLuint m_srgb_encode_screen_depth_rb = 0;
+        jegl_texture_2d* m_srgb_encode_screen_color_texture = nullptr;
+        int m_srgb_encode_screen_width = 0;
+        int m_srgb_encode_screen_height = 0;
 
         JECS_DISABLE_MOVE_AND_COPY(jegl_gl3_context);
 
@@ -420,175 +420,75 @@ namespace jeecs::graphic::api::gl3
         return false;
     }
 
-    static const char* _gl_srgb_encode_vertex_source()
+    // 默认帧缓冲不支持硬件 sRGB 写入控制时，用这个离屏 FBO 代替屏幕：
+    // 整帧先按线性颜色渲染到这里，最后再用 srgb_encode.shader 绘制到真正的
+    // 默认帧缓冲。颜色纹理同时作为编码 shader 的输入。
+    static void _gl_destroy_srgb_screen_target(jegl_gl3_context* context)
     {
-#if defined(JE_ENABLE_GL330_GAPI)
-        return R"(#version 330 core
-out vec2 v_uv;
-void main()
-{
-    vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
-    v_uv = p;
-    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
-}
-)";
-#else
-        return R"(#version 300 es
-out vec2 v_uv;
-void main()
-{
-    vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
-    v_uv = p;
-    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
-}
-)";
-#endif
-    }
-
-    static const char* _gl_srgb_encode_fragment_source()
-    {
-#if defined(JE_ENABLE_GL330_GAPI)
-        return R"(#version 330 core
-in vec2 v_uv;
-uniform sampler2D u_screen;
-out vec4 o_color;
-
-vec3 linear_to_srgb(vec3 c)
-{
-    c = max(c, vec3(0.0));
-    vec3 lo = c * 12.92;
-    vec3 hi = 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055;
-    return mix(lo, hi, step(vec3(0.0031308), c));
-}
-
-void main()
-{
-    vec4 c = texture(u_screen, v_uv);
-    o_color = vec4(linear_to_srgb(c.rgb), c.a);
-}
-)";
-#else
-        return R"(#version 300 es
-precision mediump float;
-
-in vec2 v_uv;
-uniform sampler2D u_screen;
-out vec4 o_color;
-
-vec3 linear_to_srgb(vec3 c)
-{
-    c = max(c, vec3(0.0));
-    vec3 lo = c * 12.92;
-    vec3 hi = 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055;
-    return mix(lo, hi, step(vec3(0.0031308), c));
-}
-
-void main()
-{
-    vec4 c = texture(u_screen, v_uv);
-    o_color = vec4(linear_to_srgb(c.rgb), c.a);
-}
-)";
-#endif
-    }
-
-    static GLuint _gl_compile_srgb_encode_shader(GLenum type, const char* source)
-    {
-        GLuint shader = glCreateShader(type);
-        glShaderSource(shader, 1, &source, nullptr);
-        glCompileShader(shader);
-
-        GLint compile_result = GL_FALSE;
-        glGetShaderiv(shader, GL_COMPILE_STATUS, &compile_result);
-        if (compile_result == GL_TRUE)
-            return shader;
-
-        GLint log_length = 0;
-        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &log_length);
-        std::vector<char> log((size_t)(log_length > 1 ? log_length : 1), '\0');
-        glGetShaderInfoLog(shader, log_length, nullptr, log.data());
-        jeecs::debug::logerr("GL sRGB encode shader compile failed: %s", log.data());
-        glDeleteShader(shader);
-        return 0;
-    }
-
-    static bool _gl_prepare_srgb_encode_pass(jegl_gl3_context* context)
-    {
-        if (context->m_srgb_encode_program != 0)
-            return true;
-
-        GLuint vertex_shader = _gl_compile_srgb_encode_shader(
-            GL_VERTEX_SHADER, _gl_srgb_encode_vertex_source());
-        GLuint fragment_shader = _gl_compile_srgb_encode_shader(
-            GL_FRAGMENT_SHADER, _gl_srgb_encode_fragment_source());
-
-        if (vertex_shader == 0 || fragment_shader == 0)
+        if (context->m_srgb_encode_screen_fbo != 0)
         {
-            if (vertex_shader != 0)
-                glDeleteShader(vertex_shader);
-            if (fragment_shader != 0)
-                glDeleteShader(fragment_shader);
-            return false;
+            glDeleteFramebuffers(1, &context->m_srgb_encode_screen_fbo);
+            context->m_srgb_encode_screen_fbo = 0;
         }
-
-        GLuint program = glCreateProgram();
-        glAttachShader(program, vertex_shader);
-        glAttachShader(program, fragment_shader);
-        glLinkProgram(program);
-        glDeleteShader(vertex_shader);
-        glDeleteShader(fragment_shader);
-
-        GLint link_result = GL_FALSE;
-        glGetProgramiv(program, GL_LINK_STATUS, &link_result);
-        if (link_result != GL_TRUE)
+        if (context->m_srgb_encode_screen_depth_rb != 0)
         {
-            GLint log_length = 0;
-            glGetProgramiv(program, GL_INFO_LOG_LENGTH, &log_length);
-            std::vector<char> log((size_t)(log_length > 1 ? log_length : 1), '\0');
-            glGetProgramInfoLog(program, log_length, nullptr, log.data());
-            jeecs::debug::logerr("GL sRGB encode program link failed: %s", log.data());
-            glDeleteProgram(program);
-            return false;
+            glDeleteRenderbuffers(1, &context->m_srgb_encode_screen_depth_rb);
+            context->m_srgb_encode_screen_depth_rb = 0;
         }
-
-        glUseProgram(program);
-        glUniform1i(glGetUniformLocation(program, "u_screen"), 0);
-
-        context->m_srgb_encode_program = program;
-        glGenVertexArrays(1, &context->m_srgb_encode_vao);
-        glGenFramebuffers(1, &context->m_srgb_encode_fbo);
-        return true;
+        if (context->m_srgb_encode_screen_color_texture != nullptr)
+        {
+            jegl_close_texture_2d(context->m_srgb_encode_screen_color_texture);
+            context->m_srgb_encode_screen_color_texture = nullptr;
+        }
+        context->m_srgb_encode_screen_width = 0;
+        context->m_srgb_encode_screen_height = 0;
     }
 
-    static bool _gl_resize_srgb_encode_pass(
+    static bool _gl_ensure_srgb_screen_target(
         jegl_gl3_context* context, int width, int height)
     {
-        if (context->m_srgb_encode_texture != 0
-            && context->m_srgb_encode_width == width
-            && context->m_srgb_encode_height == height)
+        if (width <= 0 || height <= 0)
+            return false;
+
+        if (context->m_srgb_encode_screen_fbo != 0
+            && context->m_srgb_encode_screen_color_texture != nullptr
+            && context->m_srgb_encode_screen_width == width
+            && context->m_srgb_encode_screen_height == height)
             return true;
 
-        if (context->m_srgb_encode_texture != 0)
+        _gl_destroy_srgb_screen_target(context);
+
+        context->m_srgb_encode_screen_color_texture = jegl_create_texture_2d(
+            (size_t)width, (size_t)height,
+            (jegl_texture_common::format)(
+                jegl_texture_common::format::FRAMEBUF
+                | jegl_texture_common::format::RGBA));
+
+        if (!_jegl_prepare_texture_2d_resource(
+                context->m_srgb_encode_screen_color_texture))
         {
-            glDeleteTextures(1, &context->m_srgb_encode_texture);
-            context->m_srgb_encode_texture = 0;
+            jeecs::debug::logerr(
+                "GL: failed to create the linear offscreen screen texture.");
+            _gl_destroy_srgb_screen_target(context);
+            return false;
         }
 
-        glGenTextures(1, &context->m_srgb_encode_texture);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, context->m_srgb_encode_texture);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexImage2D(
-            GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0,
-            GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        auto* color_texture = static_cast<jegl_gl3_texture*>(
+            context->m_srgb_encode_screen_color_texture->m_handle.m_ptr);
 
-        glBindFramebuffer(GL_FRAMEBUFFER, context->m_srgb_encode_fbo);
+        glGenFramebuffers(1, &context->m_srgb_encode_screen_fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, context->m_srgb_encode_screen_fbo);
         glFramebufferTexture2D(
             GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
-            context->m_srgb_encode_texture, 0);
+            color_texture->m_texture_id, 0);
+
+        glGenRenderbuffers(1, &context->m_srgb_encode_screen_depth_rb);
+        glBindRenderbuffer(GL_RENDERBUFFER, context->m_srgb_encode_screen_depth_rb);
+        glRenderbufferStorage(
+            GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height);
+        glFramebufferRenderbuffer(
+            GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER,
+            context->m_srgb_encode_screen_depth_rb);
 
         const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -596,122 +496,15 @@ void main()
         if (status != GL_FRAMEBUFFER_COMPLETE)
         {
             jeecs::debug::logerr(
-                "GL sRGB encode framebuffer is incomplete (status=0x%x).",
-                (unsigned)status);
+                "GL: linear offscreen screen framebuffer is incomplete "
+                "(status=0x%x).", (unsigned)status);
+            _gl_destroy_srgb_screen_target(context);
             return false;
         }
 
-        context->m_srgb_encode_width = width;
-        context->m_srgb_encode_height = height;
+        context->m_srgb_encode_screen_width = width;
+        context->m_srgb_encode_screen_height = height;
         return true;
-    }
-
-    // Read the finished frame back and encode it to sRGB in a full-screen
-    // pass. Used when the default framebuffer cannot encode in hardware
-    // (OpenGL ES / WebGL, or GLES without the sRGB surface extension).
-    static void _gl_srgb_encode_present(jegl_gl3_context* context)
-    {
-        GLint previous_program = 0;
-        GLint previous_vao = 0;
-        GLint previous_active_texture = GL_TEXTURE0;
-        GLint previous_texture = 0;
-        GLint previous_sampler = 0;
-        GLint previous_viewport[4] = { 0, 0, 0, 0 };
-        GLint previous_read_framebuffer = 0;
-        GLint previous_draw_framebuffer = 0;
-        const GLboolean scissor_enabled = glIsEnabled(GL_SCISSOR_TEST);
-        const GLboolean depth_enabled = glIsEnabled(GL_DEPTH_TEST);
-        const GLboolean blend_enabled = glIsEnabled(GL_BLEND);
-        const GLboolean cull_enabled = glIsEnabled(GL_CULL_FACE);
-
-        glGetIntegerv(GL_CURRENT_PROGRAM, &previous_program);
-        glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &previous_vao);
-        glGetIntegerv(GL_ACTIVE_TEXTURE, &previous_active_texture);
-        glGetIntegerv(GL_VIEWPORT, previous_viewport);
-        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &previous_read_framebuffer);
-        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &previous_draw_framebuffer);
-        glActiveTexture(GL_TEXTURE0);
-        glGetIntegerv(GL_TEXTURE_BINDING_2D, &previous_texture);
-        glGetIntegerv(GL_SAMPLER_BINDING, &previous_sampler);
-
-        if (!_gl_prepare_srgb_encode_pass(context))
-        {
-            jeecs::debug::logerr(
-                "GL: failed to prepare the sRGB encode pass; output stays linear.");
-            context->m_srgb_output_encode_pass = false;
-            return;
-        }
-
-        int width = (int)context->RESOLUTION_WIDTH;
-        int height = (int)context->RESOLUTION_HEIGHT;
-        if (width <= 0 || height <= 0)
-            je_io_get_window_size(&width, &height);
-        if (width <= 0 || height <= 0)
-            return;
-
-        if (!_gl_resize_srgb_encode_pass(context, width, height))
-            return;
-
-        // Resolve/copy the finished frame into the linear copy texture.
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, context->m_srgb_encode_fbo);
-        glBlitFramebuffer(
-            0, 0, width, height,
-            0, 0, width, height,
-            GL_COLOR_BUFFER_BIT, GL_NEAREST);
-
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glDisable(GL_SCISSOR_TEST);
-        glDisable(GL_DEPTH_TEST);
-        glDisable(GL_BLEND);
-        glDisable(GL_CULL_FACE);
-        glViewport(0, 0, width, height);
-
-        glUseProgram(context->m_srgb_encode_program);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, context->m_srgb_encode_texture);
-        glBindSampler(0, 0);
-        glBindVertexArray(context->m_srgb_encode_vao);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
-
-        glBindVertexArray(previous_vao);
-        glBindSampler(0, previous_sampler);
-        glBindTexture(GL_TEXTURE_2D, previous_texture);
-        glActiveTexture(previous_active_texture);
-        glUseProgram(previous_program);
-        glViewport(
-            previous_viewport[0], previous_viewport[1],
-            previous_viewport[2], previous_viewport[3]);
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, previous_read_framebuffer);
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, previous_draw_framebuffer);
-
-        if (scissor_enabled)
-            glEnable(GL_SCISSOR_TEST);
-        else
-            glDisable(GL_SCISSOR_TEST);
-        if (depth_enabled)
-            glEnable(GL_DEPTH_TEST);
-        else
-            glDisable(GL_DEPTH_TEST);
-        if (blend_enabled)
-            glEnable(GL_BLEND);
-        else
-            glDisable(GL_BLEND);
-        if (cull_enabled)
-            glEnable(GL_CULL_FACE);
-        else
-            glDisable(GL_CULL_FACE);
-
-        // The engine caches GL states; the pass above bypassed the cache.
-        context->current_active_shader_may_null = nullptr;
-        context->m_render_current_shader_resource = nullptr;
-        context->m_render_current_vertex = nullptr;
-        context->ACTIVE_DEPTH_MODE = GL_INVALID_ENUM;
-        context->ACTIVE_MASK_MODE = GL_INVALID_ENUM;
-        context->ACTIVE_BLEND_EQUATION = GL_INVALID_ENUM;
-        context->ACTIVE_BLEND_SRC_MODE = GL_INVALID_ENUM;
-        context->ACTIVE_BLEND_DST_MODE = GL_INVALID_ENUM;
-        context->ACTIVE_CULL_MODE = GL_INVALID_ENUM;
     }
 
     je_GraphicImplContext gl_startup(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
@@ -844,15 +637,33 @@ void main()
     {
         auto* context = static_cast<jegl_gl3_context*>(ctx);
 
-        // 回到默认帧缓冲区
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        // 没有硬件 sRGB 写入控制时，整帧（包括 ImGui）先渲染到线性离屏
+        // FBO，最后再统一编码到真正的默认帧缓冲。
+        if (context->m_srgb_output_encode_pass)
+        {
+            int width = (int)context->RESOLUTION_WIDTH;
+            int height = (int)context->RESOLUTION_HEIGHT;
+            if (width <= 0 || height <= 0)
+                je_io_get_window_size(&width, &height);
+
+            if (_gl_ensure_srgb_screen_target(context, width, height))
+                glBindFramebuffer(
+                    GL_DRAW_FRAMEBUFFER, context->m_srgb_encode_screen_fbo);
+            else
+                glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        }
+        else
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 
         jegui_update_gl330();
 
-        // 管线外 sRGB 重映射：没有硬件 sRGB 写入控制时（GLES/WebGL），
-        // 在 ImGui 之后对整个画面做一次全屏编码。
         if (context->m_srgb_output_encode_pass)
-            _gl_srgb_encode_present(context);
+        {
+            context->m_encoding_srgb_screen = true;
+            jegui_commit_srgb_encode_pass(
+                context->m_srgb_encode_screen_color_texture, false);
+            context->m_encoding_srgb_screen = false;
+        }
 
         // 将绘制命令异步地提交给GPU
         glFlush();
@@ -2304,7 +2115,28 @@ void main()
         context->m_render_current_vertex = nullptr;
         context->m_render_target_is_default = (target == nullptr);
 
-        if (target != nullptr)
+        const bool encode_fallback =
+            target == nullptr
+            && context->m_srgb_output_encode_pass
+            && !context->m_encoding_srgb_screen;
+
+        if (encode_fallback)
+        {
+            int target_width = (int)context->RESOLUTION_WIDTH;
+            int target_height = (int)context->RESOLUTION_HEIGHT;
+            if (target_width <= 0 || target_height <= 0)
+                je_io_get_window_size(&target_width, &target_height);
+
+            if (_gl_ensure_srgb_screen_target(
+                    context, target_width, target_height))
+            {
+                glBindFramebuffer(
+                    GL_FRAMEBUFFER, context->m_srgb_encode_screen_fbo);
+            }
+            else
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        }
+        else if (target != nullptr)
         {
             auto* framebuffer = static_cast<jegl_gl3_framebuf*>(
                 target->m_handle.m_ptr);
@@ -2313,6 +2145,10 @@ void main()
         }
         else
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        // 引擎不使用 scissor；ImGui 渲染结束后可能留下 scissor 状态，
+        // 编码 pass 必须完整覆盖整个屏幕。
+        glDisable(GL_SCISSOR_TEST);
 
         glViewport(
             (GLint)viewport->x,

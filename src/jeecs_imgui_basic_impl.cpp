@@ -47,6 +47,16 @@ struct _jegui_thread_local_context
     std::string _jegui_imgui_config_path;
     std::optional<jeecs::basic::resource<jeecs::graphic::shader>>
         _jegl_rend_texture_shader;
+
+    // 默认帧缓冲不支持硬件 sRGB 时的全屏编码资源。着色器通过
+    // jeecs::graphic::shader::load 加载，由引擎翻译为各后端代码。
+    std::optional<jeecs::basic::resource<jeecs::graphic::shader>>
+        _jegl_srgb_encode_shader;
+    std::optional<jeecs::basic::resource<jeecs::graphic::vertex>>
+        _jegl_srgb_encode_quad;
+    jegl_pipeline* _jegl_srgb_encode_pipeline = nullptr;
+    jegl_command_buffer* _jegl_srgb_encode_cmd = nullptr;
+    bool _jegl_srgb_encode_failed = false;
 };
 thread_local _jegui_thread_local_context _je_gui_tls_ctx;
 
@@ -2973,6 +2983,122 @@ void jegui_init_basic(
         // free(file_buf); // No need to free.
         jeecs_file_close(general_ttf_file);
     }
+}
+
+void jegui_commit_srgb_encode_pass(
+    jegl_texture_2d* source_texture, bool flip_v)
+{
+    if (_je_gui_tls_ctx._jegl_context == nullptr
+        || source_texture == nullptr
+        || _je_gui_tls_ctx._jegl_srgb_encode_failed)
+        return;
+
+    if (!_je_gui_tls_ctx._jegl_srgb_encode_shader.has_value())
+    {
+        auto shader = jeecs::graphic::shader::load(
+            _je_gui_tls_ctx._jegl_context,
+            "!/builtin/shader/internal/srgb_encode.shader");
+        if (!shader.has_value())
+        {
+            jeecs::debug::logerr(
+                "Failed to load the sRGB encode shader: %s",
+                "!/builtin/shader/internal/srgb_encode.shader");
+            _je_gui_tls_ctx._jegl_srgb_encode_failed = true;
+            return;
+        }
+        _je_gui_tls_ctx._jegl_srgb_encode_shader = shader.value();
+    }
+
+    // pipeline 创建需要 shader 的反射信息，必须等资源准备完成。
+    if (_je_gui_tls_ctx._jegl_srgb_encode_pipeline == nullptr)
+    {
+        const auto prepare = _jegl_prepare_shader_resource(
+            _je_gui_tls_ctx._jegl_srgb_encode_shader.value()->resource());
+        if (prepare == jegl_resource_prepare_result::INVALID)
+        {
+            jeecs::debug::logerr(
+                "Failed to prepare the sRGB encode shader.");
+            _je_gui_tls_ctx._jegl_srgb_encode_failed = true;
+            return;
+        }
+
+        static const float quad_data[] = {
+            /* vpos, vuv */
+            -1.f, -1.f, 0.f,  0.f, 0.f,
+             1.f, -1.f, 0.f,  1.f, 0.f,
+            -1.f,  1.f, 0.f,  0.f, 1.f,
+             1.f,  1.f, 0.f,  1.f, 1.f,
+        };
+        auto quad = jeecs::graphic::vertex::create(
+            jegl_vertex::TRIANGLESTRIP,
+            quad_data,
+            sizeof(quad_data),
+            { 0, 1, 2, 3 },
+            {
+                { jegl_vertex::data_type::FLOAT32, 3 },
+                { jegl_vertex::data_type::FLOAT32, 2 },
+            });
+        if (!quad.has_value())
+        {
+            jeecs::debug::logerr(
+                "Failed to create the sRGB encode full-screen quad.");
+            _je_gui_tls_ctx._jegl_srgb_encode_failed = true;
+            return;
+        }
+        _je_gui_tls_ctx._jegl_srgb_encode_quad = quad.value();
+
+        jegl_pipeline_state state = jegl_pipeline_state_from_shader(
+            _je_gui_tls_ctx._jegl_srgb_encode_shader.value()->resource());
+        state.m_topology = jegl_topology::TRIANGLE_STRIP;
+        state.m_depth_test = false;
+
+        jegl_pipeline_desc desc{};
+        desc.m_shader =
+            _je_gui_tls_ctx._jegl_srgb_encode_shader.value()->resource();
+        desc.m_state = &state;
+
+        _je_gui_tls_ctx._jegl_srgb_encode_pipeline =
+            jegl_pipeline_create(
+                _je_gui_tls_ctx._jegl_context, &desc);
+    }
+
+    int width = (int)source_texture->m_width;
+    int height = (int)source_texture->m_height;
+    if (width <= 0 || height <= 0)
+        je_io_get_window_size(&width, &height);
+    if (width <= 0 || height <= 0)
+        return;
+
+    if (_je_gui_tls_ctx._jegl_srgb_encode_cmd == nullptr)
+        _je_gui_tls_ctx._jegl_srgb_encode_cmd =
+            jegl_cmd_create(_je_gui_tls_ctx._jegl_context);
+
+    auto* cmd = _je_gui_tls_ctx._jegl_srgb_encode_cmd;
+    jegl_cmd_reset(cmd);
+
+    const jegl_viewport viewport{
+        0, 0, (uint32_t)width, (uint32_t)height };
+
+    // begin_pass(nullptr) 由后端在编码标志置位时解析为真正的屏幕缓冲区。
+    jegl_cmd_begin_pass(cmd, nullptr, &viewport);
+    jegl_cmd_bind_pipeline(
+        cmd, _je_gui_tls_ctx._jegl_srgb_encode_pipeline);
+    jegl_cmd_bind_vertex(
+        cmd,
+        _je_gui_tls_ctx._jegl_srgb_encode_quad.value()->resource());
+    jegl_cmd_bind_texture_2d(cmd, 0, source_texture);
+
+    const jegl_uniform_slot flip_slot = jegl_pipeline_uniform_slot(
+        _je_gui_tls_ctx._jegl_srgb_encode_pipeline, "FlipV");
+    if (flip_slot.m_offset != JEGL_UNIFORM_SLOT_NONE)
+    {
+        jegl_cmd_set_uniform_float(
+            cmd, flip_slot, flip_v ? 1.f : 0.f);
+    }
+
+    jegl_cmd_draw(cmd, 4, 0, 1);
+    jegl_cmd_end_pass(cmd);
+    jegl_cmd_commit(cmd);
 }
 
 // These backends present through either a hardware sRGB target or a final
