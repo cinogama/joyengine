@@ -26,6 +26,11 @@
 - [x] `draw_action::set_uniform_color` 改走 color 专用的
       `wojeapi_draw_action_set_uniform_color`，由 `math::color::to_linear()`
       决定颜色到管线表示的转换；不再把四个分量直接当作最终 float4 写入。
+- [x] `COLOR` 从 `uniform_type` 拆成 `uniform_mask` 位标签：颜色 uniform 的
+      存储类型恢复为 `FLOAT4`，四个后端不再感知颜色语义；wrapper 从
+      woshader `Type::Color` 写入标签，标签随 shader 缓存持久化
+      （`SHADER_CACHE_VERSION` 已递增）。后续新增编辑器语义标签只需扩展
+      `uniform_mask`。
 
 ## ImGui 线性颜色空间调查
 
@@ -59,10 +64,9 @@
 
 ### P2 设计/结构
 
-- [ ] `uniform_type::COLOR` 只是“带编辑器语义的 FLOAT4”。建议把标签从存储
-      类型中拆出（FLOAT4 + `is_color`），避免后端 layout switch 的乘法式
-      修改。若保留，确认 `jeecs_graphic_shader_wrapper.cpp` 中 vertex-in /
-      fragment-out 的 `COLOR→FLOAT4` 归一化是否可达，不可达则删除。
+- [x] `uniform_type::COLOR` 改为 `uniform_mask` 标签（存储仍为 FLOAT4）；
+      backend layout switch、cmd、tilemap 序列化中的 COLOR 分支已删除，
+      vertex-in / fragment-out 的 `COLOR→FLOAT4` 归一化也一并移除。
 - [ ] GL 的屏幕尺寸解析在 `gl_commit_update` 与 `gl_begin_render_to_target`
       中重复，提取 helper；`jegui_commit_srgb_encode_pass` 里基于
       `source_texture` 尺寸的 `width <= 0` + 窗口尺寸 fallback 不可达，可删。
@@ -117,5 +121,6 @@
 ## 本次验证
 
 - `baozi check builtin/editor/Editor/WorldEditorViewport/GizmoDrawing.wo`：通过。
+- `baozi check builtin/shader/CameraDefer2DFogPass.shader`（color uniform）：通过。
 - `cmake --build build --config=RelWithDebInfo --target joyecs --parallel 8`：通过。
 - 未运行 `jedriver`，未做实际画面验证。

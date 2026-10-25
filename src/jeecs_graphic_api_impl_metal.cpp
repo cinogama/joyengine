@@ -727,7 +727,6 @@ namespace jeecs::graphic::api::metal
                     attribute_size = 3 * sizeof(float);
                     break;
                 case jegl_shader::uniform_type::FLOAT4:
-                case jegl_shader::uniform_type::COLOR:
                     attribute->setFormat(MTL::VertexFormatFloat4);
                     attribute_size = 4 * sizeof(float);
                     break;
@@ -915,7 +914,6 @@ namespace jeecs::graphic::api::metal
                     break;
                 case jegl_shader::uniform_type::INT4:
                 case jegl_shader::uniform_type::FLOAT4:
-                case jegl_shader::uniform_type::COLOR:
                     unit_size = 16;
                     allign_base = 16;
                     break;

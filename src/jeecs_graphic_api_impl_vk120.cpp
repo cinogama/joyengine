@@ -3308,7 +3308,6 @@ namespace jeecs::graphic::api::vk120
                     vertex_point_data_size += sizeof(float) * 3;
                     break;
                 case jegl_shader::uniform_type::FLOAT4:
-                case jegl_shader::uniform_type::COLOR:
                     shader_blob->m_vertex_input_attribute_descriptions[i].format =
                         VkFormat::VK_FORMAT_R32G32B32A32_SFLOAT;
                     vertex_point_data_size += sizeof(float) * 4;

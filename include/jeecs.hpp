@@ -2486,9 +2486,16 @@ struct jegl_shader
         FLOAT2X2,
         FLOAT3X3,
         FLOAT4X4,
-        // Same storage as FLOAT4; exposes a color-specific editor and
-        // set_uniform overload while backends treat it as 4 floats.
-        COLOR,
+    };
+    /*
+    自定义 uniform 的附加标签（位掩码）。标签不改变存储类型与 ABI：
+    例如 COLOR 仍然是 FLOAT4，仅告知编辑器/脚本层按颜色呈现。
+    后续新增的编辑器语义标签继续在这里追加。
+    */
+    enum uniform_mask : uint32_t
+    {
+        NONE = 0x0000,
+        COLOR = 0x0001,
     };
     struct builtin_uniform_location
     {
@@ -2527,6 +2534,7 @@ struct jegl_shader
         uint32_t m_offset;
         uint32_t m_size;
         uniform_type m_uniform_type;
+        uniform_mask m_uniform_mask;
         bool m_updated;
         union value
         {
@@ -11403,11 +11411,9 @@ namespace jeecs
                     if (jegl_shad_uniforms->m_name == name)
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
-                                jegl_shader::uniform_type::FLOAT4
-                            && jegl_shad_uniforms->m_uniform_type !=
-                                jegl_shader::uniform_type::COLOR)
+                            jegl_shader::uniform_type::FLOAT4)
                             debug::logerr(
-                                "Trying set uniform('%s' = (%f, %f, %f, %f)) to shader(%p), but current uniform type is not 'FLOAT4' or 'COLOR'.",
+                                "Trying set uniform('%s' = (%f, %f, %f, %f)) to shader(%p), but current uniform type is not 'FLOAT4'.",
                                 name.c_str(), val.x, val.y, val.z, val.w, this);
                         else
                         {

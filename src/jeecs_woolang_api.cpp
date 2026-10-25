@@ -2385,18 +2385,19 @@ WOORT_API woort_api wojeapi_get_uniforms_from_shader(void)
         woort_set_struct(val, 2);
         (void)woort_map_set_by_string(out_map, uniforms->m_name, val);
 
-        if (uniforms->m_uniform_type >= jegl_shader::uniform_type::INT && uniforms->m_uniform_type <= jegl_shader::uniform_type::FLOAT4)
+        if ((uniforms->m_uniform_mask & jegl_shader::uniform_mask::COLOR) != 0)
+        {
+            // `color` follows `others` in the Woolang uniform_variable union;
+            // the storage type stays FLOAT4.
+            woort_set_int(elem, 1 + jegl_shader::uniform_type::TEXTURE + 1);
+        }
+        else if (uniforms->m_uniform_type >= jegl_shader::uniform_type::INT && uniforms->m_uniform_type <= jegl_shader::uniform_type::FLOAT4)
         {
             woort_set_int(elem, uniforms->m_uniform_type);
         }
         else if (uniforms->m_uniform_type == jegl_shader::uniform_type::TEXTURE)
         {
             woort_set_int(elem, jegl_shader::uniform_type::TEXTURE);
-        }
-        else if (uniforms->m_uniform_type == jegl_shader::uniform_type::COLOR)
-        {
-            // `color` follows `others` in the Woolang uniform_variable union.
-            woort_set_int(elem, 1 + jegl_shader::uniform_type::TEXTURE + 1);
         }
         else
             // Others
@@ -2443,7 +2444,6 @@ WOORT_API woort_api wojeapi_get_uniforms_from_shader(void)
             woort_struct_set_float(elem, 2, uniforms->m_value.m_float3[2]);
             break;
         case jegl_shader::uniform_type::FLOAT4:
-        case jegl_shader::uniform_type::COLOR:
             woort_set_struct(elem, 4);
             woort_struct_set_float(elem, 0, uniforms->m_value.m_float4[0]);
             woort_struct_set_float(elem, 1, uniforms->m_value.m_float4[1]);

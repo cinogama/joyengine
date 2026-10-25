@@ -704,9 +704,8 @@ namespace jeecs
         {
             if (u->m_name == nullptr || strncmp(u->m_name, "JE_", 3) == 0)
                 return false;
-            return (u->m_uniform_type >= jegl_shader::uniform_type::INT
-                    && u->m_uniform_type <= jegl_shader::uniform_type::FLOAT4)
-                || u->m_uniform_type == jegl_shader::uniform_type::COLOR;
+            return u->m_uniform_type >= jegl_shader::uniform_type::INT
+                && u->m_uniform_type <= jegl_shader::uniform_type::FLOAT4;
         }
 
         // 把着色器实例上的 uniform 当前值写入 w（紧凑形态：名字 + 类型
@@ -753,7 +752,6 @@ namespace jeecs
                         w.f32(uniforms->m_value.m_float3[1]);
                         w.f32(uniforms->m_value.m_float3[2]); break;
                     case jegl_shader::uniform_type::FLOAT4:
-                    case jegl_shader::uniform_type::COLOR:
                         for (float c : uniforms->m_value.m_float4) w.f32(c);
                         break;
                     default: break;   // is_saved_uniform 已过滤，不会到达
@@ -774,8 +772,7 @@ namespace jeecs
             {
                 std::string name = r.str();
                 uint8_t type = r.u8();
-                if (type > (uint8_t)jegl_shader::uniform_type::FLOAT4
-                    && type != (uint8_t)jegl_shader::uniform_type::COLOR)
+                if (type > (uint8_t)jegl_shader::uniform_type::FLOAT4)
                 {
                     r.ok = false;    // 类型非法视为文件损坏
                     break;
@@ -834,14 +831,13 @@ namespace jeecs
                     break;
                 }
                 case jegl_shader::uniform_type::FLOAT4:
-                case jegl_shader::uniform_type::COLOR:
                 {
                     float a = r.f32();
                     float b = r.f32();
                     float c = r.f32();
                     float d = r.f32();
                     if (r.ok && shad != nullptr)
-                        shad->set_uniform(name, math::color(a, b, c, d));
+                        shad->set_uniform(name, math::vec4(a, b, c, d));
                     break;
                 }
                 default: break;      // 类型已在读入时校验
