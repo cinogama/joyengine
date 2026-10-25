@@ -56,7 +56,6 @@ struct _jegui_thread_local_context
         _jegl_srgb_encode_quad;
     jegl_pipeline* _jegl_srgb_encode_pipeline = nullptr;
     jegl_command_buffer* _jegl_srgb_encode_cmd = nullptr;
-    bool _jegl_srgb_encode_failed = false;
 };
 thread_local _jegui_thread_local_context _je_gui_tls_ctx;
 
@@ -2987,9 +2986,7 @@ void jegui_init_basic(
 
 void jegui_commit_srgb_encode_pass(jegl_texture_2d* source_texture)
 {
-    if (_je_gui_tls_ctx._jegl_context == nullptr
-        || source_texture == nullptr
-        || _je_gui_tls_ctx._jegl_srgb_encode_failed)
+    if (source_texture == nullptr)
         return;
 
     if (!_je_gui_tls_ctx._jegl_srgb_encode_shader.has_value())
@@ -2999,11 +2996,10 @@ void jegui_commit_srgb_encode_pass(jegl_texture_2d* source_texture)
             "!/builtin/shader/internal/srgb_encode.shader");
         if (!shader.has_value())
         {
-            jeecs::debug::logerr(
+            jeecs::debug::logfatal(
                 "Failed to load the sRGB encode shader: %s",
                 "!/builtin/shader/internal/srgb_encode.shader");
-            _je_gui_tls_ctx._jegl_srgb_encode_failed = true;
-            return;
+            abort();
         }
         _je_gui_tls_ctx._jegl_srgb_encode_shader = shader.value();
     }
@@ -3011,14 +3007,13 @@ void jegui_commit_srgb_encode_pass(jegl_texture_2d* source_texture)
     // pipeline 创建需要 shader 的反射信息，必须等资源准备完成。
     if (_je_gui_tls_ctx._jegl_srgb_encode_pipeline == nullptr)
     {
-        const auto prepare = _jegl_prepare_shader_resource(
-            _je_gui_tls_ctx._jegl_srgb_encode_shader.value()->resource());
-        if (prepare == jegl_resource_prepare_result::INVALID)
+        if (_jegl_prepare_shader_resource(
+                _je_gui_tls_ctx._jegl_srgb_encode_shader.value()->resource())
+            == jegl_resource_prepare_result::INVALID)
         {
-            jeecs::debug::logerr(
+            jeecs::debug::logfatal(
                 "Failed to prepare the sRGB encode shader.");
-            _je_gui_tls_ctx._jegl_srgb_encode_failed = true;
-            return;
+            abort();
         }
 
         static const float quad_data[] = {
@@ -3039,10 +3034,9 @@ void jegui_commit_srgb_encode_pass(jegl_texture_2d* source_texture)
             });
         if (!quad.has_value())
         {
-            jeecs::debug::logerr(
+            jeecs::debug::logfatal(
                 "Failed to create the sRGB encode full-screen quad.");
-            _je_gui_tls_ctx._jegl_srgb_encode_failed = true;
-            return;
+            abort();
         }
         _je_gui_tls_ctx._jegl_srgb_encode_quad = quad.value();
 
@@ -3061,22 +3055,16 @@ void jegui_commit_srgb_encode_pass(jegl_texture_2d* source_texture)
                 _je_gui_tls_ctx._jegl_context, &desc);
     }
 
-    int width = (int)source_texture->m_width;
-    int height = (int)source_texture->m_height;
-    if (width <= 0 || height <= 0)
-        je_io_get_window_size(&width, &height);
-    if (width <= 0 || height <= 0)
-        return;
-
-    if (_je_gui_tls_ctx._jegl_srgb_encode_cmd == nullptr)
-        _je_gui_tls_ctx._jegl_srgb_encode_cmd =
-            jegl_cmd_create(_je_gui_tls_ctx._jegl_context);
-
     auto* cmd = _je_gui_tls_ctx._jegl_srgb_encode_cmd;
+    if (cmd == nullptr)
+        cmd = _je_gui_tls_ctx._jegl_srgb_encode_cmd =
+            jegl_cmd_create(_je_gui_tls_ctx._jegl_context);
     jegl_cmd_reset(cmd);
 
     const jegl_viewport viewport{
-        0, 0, (uint32_t)width, (uint32_t)height };
+        0, 0,
+        (uint32_t)source_texture->m_width,
+        (uint32_t)source_texture->m_height };
 
     // begin_pass(nullptr) 由后端在编码标志置位时解析为真正的屏幕缓冲区。
     jegl_cmd_begin_pass(cmd, nullptr, &viewport);

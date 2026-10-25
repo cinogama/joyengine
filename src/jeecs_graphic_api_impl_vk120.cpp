@@ -1821,7 +1821,7 @@ namespace jeecs::graphic::api::vk120
         }
         bool ensure_srgb_encode_screen_target(size_t width, size_t height)
         {
-            if (!_vk_use_srgb_encode_pass || width == 0 || height == 0)
+            if (width == 0 || height == 0)
                 return false;
 
             if (_vk_srgb_encode_screen_framebuffer != nullptr
@@ -4654,24 +4654,12 @@ namespace jeecs::graphic::api::vk120
 
                 // 没有硬件 sRGB 写入控制时，把“绘制到屏幕”重定向到线性离屏
                 // framebuffer；帧末再由编码 pass 绘制到真正的 swapchain。
-                if (_vk_use_srgb_encode_pass && !_vk_encoding_srgb_screen)
-                {
-                    resolved_framebuffer =
-                        _vk_srgb_encode_screen_framebuffer;
-                    if (resolved_framebuffer == nullptr)
-                    {
-                        jeecs::debug::logerr(
-                            "VK120: the linear offscreen screen target is not "
-                            "ready; rendering directly to the swapchain image.");
-                        resolved_framebuffer =
-                            _vk_current_swapchain_image_content->m_framebuffer;
-                    }
-                }
-                else
-                {
-                    resolved_framebuffer =
-                        _vk_current_swapchain_image_content->m_framebuffer;
-                }
+                // 目标创建失败时 ensure 已记录错误，这里退回直接绘制。
+                resolved_framebuffer =
+                    (_vk_use_srgb_encode_pass && !_vk_encoding_srgb_screen
+                        && _vk_srgb_encode_screen_framebuffer != nullptr)
+                    ? _vk_srgb_encode_screen_framebuffer
+                    : _vk_current_swapchain_image_content->m_framebuffer;
             }
 
             _vk_current_target_framebuffer = resolved_framebuffer;

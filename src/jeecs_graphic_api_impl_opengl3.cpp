@@ -218,9 +218,22 @@ namespace jeecs::graphic::api::gl3
         // framebuffer plus FRAMEBUFFER_SRGB; otherwise all screen-bound draws
         // are redirected to a linear offscreen FBO, which is encoded to the
         // real default framebuffer at the end of the frame.
-        bool m_srgb_output_hardware = false;
-        bool m_srgb_output_encode_pass = false;
+        enum class srgb_output_mode
+        {
+            HARDWARE,
+            ENCODE_PASS,
+        };
+        srgb_output_mode m_srgb_output_mode = srgb_output_mode::ENCODE_PASS;
         bool m_encoding_srgb_screen = false;
+
+        bool is_srgb_hardware() const
+        {
+            return m_srgb_output_mode == srgb_output_mode::HARDWARE;
+        }
+        bool is_srgb_encode_pass() const
+        {
+            return m_srgb_output_mode == srgb_output_mode::ENCODE_PASS;
+        }
 
         GLuint m_srgb_encode_screen_fbo = 0;
         GLuint m_srgb_encode_screen_depth_rb = 0;
@@ -444,9 +457,12 @@ namespace jeecs::graphic::api::gl3
         context->m_srgb_encode_screen_height = 0;
     }
 
-    static bool _gl_ensure_srgb_screen_target(
-        jegl_gl3_context* context, int width, int height)
+    static bool _gl_ensure_srgb_screen_target(jegl_gl3_context* context)
     {
+        int width = (int)context->RESOLUTION_WIDTH;
+        int height = (int)context->RESOLUTION_HEIGHT;
+        if (width <= 0 || height <= 0)
+            je_io_get_window_size(&width, &height);
         if (width <= 0 || height <= 0)
             return false;
 
@@ -544,9 +560,8 @@ namespace jeecs::graphic::api::gl3
 #if defined(JE_ENABLE_GL330_GAPI)
 #   if defined(GL_FRAMEBUFFER_SRGB)
         glEnable(GL_FRAMEBUFFER_SRGB);
-        context->m_srgb_output_hardware = true;
-#   else
-        context->m_srgb_output_encode_pass = true;
+        context->m_srgb_output_mode =
+            jegl_gl3_context::srgb_output_mode::HARDWARE;
 #   endif
 #elif defined(JE_ENABLE_GLES300_GAPI)
         bool surface_srgb_capable = false;
@@ -559,12 +574,9 @@ namespace jeecs::graphic::api::gl3
             && _gl_extension_supported("GL_EXT_sRGB_write_control"))
         {
             glEnable(GL_FRAMEBUFFER_SRGB_EXT);
-            context->m_srgb_output_hardware = true;
+            context->m_srgb_output_mode =
+                jegl_gl3_context::srgb_output_mode::HARDWARE;
         }
-        else
-            context->m_srgb_output_encode_pass = true;
-#else
-        context->m_srgb_output_encode_pass = true;
 #endif
         jegui_init_gl330(
             gthread,
@@ -636,28 +648,19 @@ namespace jeecs::graphic::api::gl3
         je_GraphicImplContext ctx, jegl_update_action)
     {
         auto* context = static_cast<jegl_gl3_context*>(ctx);
+        const bool encode_pass = context->is_srgb_encode_pass();
 
         // 没有硬件 sRGB 写入控制时，整帧（包括 ImGui）先渲染到线性离屏
         // FBO，最后再统一编码到真正的默认帧缓冲。
-        if (context->m_srgb_output_encode_pass)
-        {
-            int width = (int)context->RESOLUTION_WIDTH;
-            int height = (int)context->RESOLUTION_HEIGHT;
-            if (width <= 0 || height <= 0)
-                je_io_get_window_size(&width, &height);
-
-            if (_gl_ensure_srgb_screen_target(context, width, height))
-                glBindFramebuffer(
-                    GL_DRAW_FRAMEBUFFER, context->m_srgb_encode_screen_fbo);
-            else
-                glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-        }
+        if (encode_pass && _gl_ensure_srgb_screen_target(context))
+            glBindFramebuffer(
+                GL_DRAW_FRAMEBUFFER, context->m_srgb_encode_screen_fbo);
         else
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 
         jegui_update_gl330();
 
-        if (context->m_srgb_output_encode_pass)
+        if (encode_pass)
         {
             context->m_encoding_srgb_screen = true;
             jegui_commit_srgb_encode_pass(
@@ -2116,18 +2119,12 @@ namespace jeecs::graphic::api::gl3
 
         const bool encode_fallback =
             target == nullptr
-            && context->m_srgb_output_encode_pass
+            && context->is_srgb_encode_pass()
             && !context->m_encoding_srgb_screen;
 
         if (encode_fallback)
         {
-            int target_width = (int)context->RESOLUTION_WIDTH;
-            int target_height = (int)context->RESOLUTION_HEIGHT;
-            if (target_width <= 0 || target_height <= 0)
-                je_io_get_window_size(&target_width, &target_height);
-
-            if (_gl_ensure_srgb_screen_target(
-                    context, target_width, target_height))
+            if (_gl_ensure_srgb_screen_target(context))
             {
                 glBindFramebuffer(
                     GL_FRAMEBUFFER, context->m_srgb_encode_screen_fbo);
@@ -2161,7 +2158,7 @@ namespace jeecs::graphic::api::gl3
     {
         auto* context = static_cast<jegl_gl3_context*>(ctx);
         if (context->m_render_target_is_default
-            && context->m_srgb_output_hardware)
+            && context->is_srgb_hardware())
         {
             // sRGB conversion applies to fragment writes and blending, but
             // not to clears; encode the linear clear color before writing.

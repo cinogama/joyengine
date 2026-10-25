@@ -67,15 +67,15 @@
 - [x] `uniform_type::COLOR` 改为 `uniform_mask` 标签（存储仍为 FLOAT4）；
       backend layout switch、cmd、tilemap 序列化中的 COLOR 分支已删除，
       vertex-in / fragment-out 的 `COLOR→FLOAT4` 归一化也一并移除。
-- [ ] GL 的屏幕尺寸解析在 `gl_commit_update` 与 `gl_begin_render_to_target`
-      中重复，提取 helper；`jegui_commit_srgb_encode_pass` 里基于
-      `source_texture` 尺寸的 `width <= 0` + 窗口尺寸 fallback 不可达，可删。
-- [ ] `m_srgb_output_hardware` / `m_srgb_output_encode_pass` 改为单个 enum
-      （HARDWARE / ENCODE_PASS），消除非法状态。
-- [ ] VK `ensure_srgb_encode_screen_target` 失败后每帧 `logerr` 且不再重试，
-      建议 latch（只记一次）或逐帧重试。
-- [ ] 编码 pass 失败（shader 缺失/编译失败）时，GL/VK 都会把整帧留在离屏
-      目标且不再写屏幕；建议失败后关闭重定向，保证至少能出图。
+- [x] GL 的屏幕尺寸解析与 `_gl_ensure_srgb_screen_target` 合并，两个调用点
+      不再各自解析尺寸；`jegui_commit_srgb_encode_pass` 中不可达的尺寸
+      fallback 已删除。
+- [x] `m_srgb_output_hardware` / `m_srgb_output_encode_pass` 合并为
+      `srgb_output_mode`（HARDWARE / ENCODE_PASS），非法状态不再可表示。
+- [x] VK 离屏目标未就绪时的逐帧 `logerr` 已删除，创建失败由
+      `ensure_srgb_encode_screen_target` 记录一次并退回直接绘制。
+- [x] 编码 pass 变为强制资源：shader 加载/准备或全屏四边形创建失败时
+      直接 `logfatal` + `abort`，不再静默跳过编码导致黑屏。
 
 ### P2 正确性/健壮性
 
