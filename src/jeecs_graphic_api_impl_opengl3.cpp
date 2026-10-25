@@ -661,7 +661,7 @@ namespace jeecs::graphic::api::gl3
         {
             context->m_encoding_srgb_screen = true;
             jegui_commit_srgb_encode_pass(
-                context->m_srgb_encode_screen_color_texture, false);
+                context->m_srgb_encode_screen_color_texture);
             context->m_encoding_srgb_screen = false;
         }
 

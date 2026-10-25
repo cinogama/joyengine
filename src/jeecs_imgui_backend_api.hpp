@@ -7,9 +7,8 @@
 
 // 当默认帧缓冲不支持硬件 sRGB 写入控制时，由后端在 ImGui 绘制结束后调用：
 // 使用 srgb_encode.shader 把 source_texture（本帧的线性离屏画面）编码后
-// 绘制到真正的默认帧缓冲。flip_v 用于适配 Vulkan 屏幕 viewport 的纵向翻转。
-void jegui_commit_srgb_encode_pass(
-    jegl_texture_2d* source_texture, bool flip_v);
+// 绘制到真正的默认帧缓冲。纵向方向由后端通过内建 JE_NDC_SCALE 处理。
+void jegui_commit_srgb_encode_pass(jegl_texture_2d* source_texture);
 
 #ifdef JE_ENABLE_DX11_GAPI
 #include <Windows.h>

@@ -2985,8 +2985,7 @@ void jegui_init_basic(
     }
 }
 
-void jegui_commit_srgb_encode_pass(
-    jegl_texture_2d* source_texture, bool flip_v)
+void jegui_commit_srgb_encode_pass(jegl_texture_2d* source_texture)
 {
     if (_je_gui_tls_ctx._jegl_context == nullptr
         || source_texture == nullptr
@@ -3087,15 +3086,6 @@ void jegui_commit_srgb_encode_pass(
         cmd,
         _je_gui_tls_ctx._jegl_srgb_encode_quad.value()->resource());
     jegl_cmd_bind_texture_2d(cmd, 0, source_texture);
-
-    const jegl_uniform_slot flip_slot = jegl_pipeline_uniform_slot(
-        _je_gui_tls_ctx._jegl_srgb_encode_pipeline, "FlipV");
-    if (flip_slot.m_offset != JEGL_UNIFORM_SLOT_NONE)
-    {
-        jegl_cmd_set_uniform_float(
-            cmd, flip_slot, flip_v ? 1.f : 0.f);
-    }
-
     jegl_cmd_draw(cmd, 4, 0, 1);
     jegl_cmd_end_pass(cmd);
     jegl_cmd_commit(cmd);
