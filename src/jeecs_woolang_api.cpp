@@ -2381,10 +2381,10 @@ WOORT_API woort_api wojeapi_get_uniforms_from_shader(void)
     auto* uniforms = (*shader)->resource()->m_custom_uniforms;
 
     // je/graphic.wo 中 `shader::uniform_variable` 的 union 顺序：
-    // integer..float4, texture, others, color。
-    constexpr int UNIFORM_VARIANT_OTHERS =
+    // integer..float4, texture, color, others。
+    constexpr int UNIFORM_VARIANT_COLOR =
         (int)jegl_shader::uniform_type::TEXTURE + 1;
-    constexpr int UNIFORM_VARIANT_COLOR = UNIFORM_VARIANT_OTHERS + 1;
+    constexpr int UNIFORM_VARIANT_OTHERS = UNIFORM_VARIANT_COLOR + 1;
 
     while (uniforms)
     {
@@ -2393,7 +2393,7 @@ WOORT_API woort_api wojeapi_get_uniforms_from_shader(void)
 
         if ((uniforms->m_uniform_mask & jegl_shader::uniform_mask::COLOR) != 0)
         {
-            // `color` follows `others` in the Woolang union; storage is FLOAT4.
+            // Color sits between `texture` and `others`; storage is FLOAT4.
             woort_set_int(elem, UNIFORM_VARIANT_COLOR);
         }
         else if (uniforms->m_uniform_type >= jegl_shader::uniform_type::INT && uniforms->m_uniform_type <= jegl_shader::uniform_type::FLOAT4)

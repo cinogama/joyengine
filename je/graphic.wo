@@ -165,9 +165,9 @@ namespace je
                 float3((real, real, real)),
                 float4((real, real, real, real)),
                 texture(int),
-                others,
                 // Declared by woshader::Type::Color; stored as linear RGBA.
                 color((real, real, real, real)),
+                others,
             }
             
             public using uniform_value_data = struct {

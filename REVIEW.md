@@ -103,7 +103,8 @@
       副窗口渲染函数空检查已删除。
 - [x] `je_gui_coloredit4` / `je_gui_colorpicker4` 共用参数解析 helper 与
       ImGui flags 常量。
-- [x] `1 + TEXTURE + 1` 魔法映射改为命名的 union variant 常量。
+- [x] `1 + TEXTURE + 1` 魔法映射改为命名的 union variant 常量；
+      `uniform_variable` 的 `others` 已移到 `color` 之后，保持惯例上的最后位置。
 - [x] `FORMAT_MASK` 已删除（无引用，语义已被 `NON_PIXEL_FORMAT_MASK` 取代）。
 - [x] `srgb_encode.shader` 已注明 woshader `step(value, edge)` 与 GLSL
       参数顺序相反。
