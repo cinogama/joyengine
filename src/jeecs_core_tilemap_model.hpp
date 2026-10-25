@@ -1733,9 +1733,13 @@ namespace jeecs
                     "array layers beyond image will be blank.",
                     path.c_str());
 
+            // Keep the atlas' color-space flag: the layer pixels are copied
+            // raw, so the array must decode sRGB exactly like the source.
             auto arr = graphic::texture_array::create(
                 cw, ch, (size_t)(xcount * ycount),
-                jegl_texture_common::format::RGBA);
+                (jegl_texture_common::format)(
+                    jegl_texture_common::format::RGBA
+                    | (raw->m_format & jegl_texture_common::format::SRGB)));
             uint8_t* dst = arr->pixels();
 
             for (int32_t ty = 0; ty < yc; ++ty)

@@ -2125,6 +2125,38 @@ jeecs_close_cache_file [基本接口]
 */
 JE_API void jeecs_close_cache_file(void* file);
 
+/*
+je_image_texture_color_space [类型]
+图片纹理的颜色空间。图片加载时按此决定 GPU 纹理格式：
+    * SRGB   —— 8 位 RGB 数据按 sRGB 编码存储，采样时由硬件转换为线性；
+                这是未提供属性缓存时的默认值
+    * LINEAR —— 8 位 RGB 数据按线性数值直接采样（法线图、遮罩等非颜色数据）
+*/
+enum je_image_texture_color_space
+{
+    JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB = 0,
+    JE_IMAGE_TEXTURE_COLOR_SPACE_LINEAR = 1,
+};
+
+/*
+je_image_texture_get_color_space [基本接口]
+读取图片纹理属性缓存（<path>.je4cache）中记录的颜色空间
+    * 缓存不存在、校验失败（图片已改动）或内容非法时返回 SRGB
+    * 不检查 path 指向的文件是否为图片
+*/
+JE_API je_image_texture_color_space je_image_texture_get_color_space(
+    const char* path);
+
+/*
+je_image_texture_set_color_space [基本接口]
+将图片纹理颜色空间写入 <path>.je4cache
+    * 缓存带有图片内容的 CRC64；图片之后被修改时，旧缓存会自动失效
+    * 返回 false 表示缓存写入失败（路径不可写、源文件不可读等）
+*/
+JE_API bool je_image_texture_set_color_space(
+    const char* path,
+    je_image_texture_color_space color_space);
+
 /////////////////////////// GRAPHIC //////////////////////////////
 // Here to store low-level-graphic-api.
 
@@ -2264,8 +2296,13 @@ struct jegl_texture_common
         FLOAT16 = 0x0010,
         DEPTH = 0x0020,
         FRAMEBUF = 0x0040,
+        // Sample RGB through the sRGB transfer function (hardware decode).
+        // Pixel storage is unchanged; alpha is always linear.
+        SRGB = 0x0080,
 
         FORMAT_MASK = 0xFFF0,
+        // Formats that do not keep a CPU-side pixel buffer.
+        NON_PIXEL_FORMAT_MASK = FLOAT16 | DEPTH | FRAMEBUF,
     };
 
     // NOTE:
@@ -10824,7 +10861,8 @@ namespace jeecs
                 jegl_texture_common::format new_texture_format =
                     (jegl_texture_common::format)(
                         src->resource()->m_format
-                        & jegl_texture_common::format::COLOR_DEPTH_MASK);
+                        & (jegl_texture_common::format::COLOR_DEPTH_MASK
+                            | jegl_texture_common::format::SRGB));
 
                 jegl_texture_2d* res =
                     jegl_create_texture_2d(w, h, new_texture_format);
@@ -10844,7 +10882,8 @@ namespace jeecs
                     }
                 }
 #else
-                auto color_depth = (int)new_texture_format;
+                auto color_depth = (int)(new_texture_format
+                    & jegl_texture_common::format::COLOR_DEPTH_MASK);
                 auto* dst_pixels = new_texture->resource()->m_pixels;
                 auto* src_pixels = src->resource()->m_pixels;
 
@@ -10887,7 +10926,8 @@ namespace jeecs
                 {
                     if (_m_pixel == nullptr)
                         return {};
-                    switch (_m_texture->m_format)
+                    switch (_m_texture->m_format
+                        & jegl_texture_common::format::COLOR_DEPTH_MASK)
                     {
                     case jegl_texture_common::format::MONO:
                         return math::vec4{
@@ -10938,7 +10978,8 @@ namespace jeecs
                             raw_texture_data->m_modified_max_y = _m_y;
                     }
 
-                    switch (raw_texture_data->m_format)
+                    switch (raw_texture_data->m_format
+                        & jegl_texture_common::format::COLOR_DEPTH_MASK)
                     {
                     case jegl_texture_common::format::MONO:
                         _m_pixel[0] = (jegl_texture_common::pixel_data_t)round(math::clamp(value.x, 0.f, 1.f) * 255.0f);

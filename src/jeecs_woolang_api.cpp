@@ -1603,6 +1603,20 @@ WOORT_API woort_api wojeapi_type_basic_type(void)
 
 ///////////////////////////////////////////////////////////////////////
 
+WOORT_API woort_api wojeapi_image_texture_get_color_space(void)
+{
+    return woort_ret_int(
+        (woort_Int)je_image_texture_get_color_space(woort_string(0)));
+}
+
+WOORT_API woort_api wojeapi_image_texture_set_color_space(void)
+{
+    return woort_ret_bool(
+        je_image_texture_set_color_space(
+            woort_string(0),
+            (je_image_texture_color_space)woort_int(1)));
+}
+
 WOORT_API woort_api wojeapi_texture2d_open(void)
 {
     const woort_value universe_ptr = WOORT_RETURN_SLOT;

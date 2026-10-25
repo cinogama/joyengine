@@ -1315,6 +1315,8 @@ namespace jeecs::graphic::api::dx11
     {
         const bool float16 =
             0 != (resource->m_format & jegl_texture_common::format::FLOAT16);
+        const bool srgb =
+            0 != (resource->m_format & jegl_texture_common::format::SRGB);
 
         switch (resource->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK)
         {
@@ -1323,7 +1325,9 @@ namespace jeecs::graphic::api::dx11
         case jegl_texture_common::format::RGBA:
             return float16
                 ? DXGI_FORMAT_R16G16B16A16_FLOAT
-                : DXGI_FORMAT_R8G8B8A8_UNORM;
+                : (srgb
+                    ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
+                    : DXGI_FORMAT_R8G8B8A8_UNORM);
         default:
             return DXGI_FORMAT_UNKNOWN;
         }

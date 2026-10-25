@@ -1173,7 +1173,6 @@ namespace JEEditor::Editor
         func isSkippedExtension(ext: string)=> bool
         {
             return ext == ".je4project"
-                || ext == ".je4cache"
                 || ext == ".dmp";
         }
         
@@ -1194,8 +1193,8 @@ namespace JEEditor::Editor
         }
         
         // 按项目文件规则整理项目目录：脚本预编译为 WORT 二进制，动态库原样
-        // 复制，其余文件打进资源镜像。着色器与 .je4cache 已在 packShaders
-        // 中处理，这里跳过。
+        // 复制，其余文件打进资源镜像。着色器源码与缓存已在 packShaders 中
+        // 处理；图片属性等其他 .je4cache 在此按原路径打包。
         func packProjectFiles(prepare: ModulePrepare,
             packer: je::internal::fimg_writer,
             working_path: path_t, export_path: path_t)
@@ -1221,6 +1220,12 @@ namespace JEEditor::Editor
                 let lower_rel = rel->lower;
                 let ext = extension(p)->lower;
                 
+                // 着色器缓存与着色器源码一起由 packShaders 打包；图片属性
+                // 等其他 .je4cache 按原路径打进资源镜像，供运行时读取。
+                if (ext == ".je4cache"
+                    && purename(p)->lower->end_with(".shader"))
+                    continue;
+
                 if (isSkippedExtension(ext))
                     continue;
                     

@@ -3426,11 +3426,15 @@ namespace jeecs::graphic::api::vk120
 
             const bool is_float16 =
                 0 != (format & jegl_texture_common::format::FLOAT16);
+            const bool is_srgb =
+                0 != (format & jegl_texture_common::format::SRGB);
             if (0 != (format & jegl_texture_common::format::RGBA))
             {
                 return is_float16
                     ? VK_FORMAT_R16G16B16A16_SFLOAT
-                    : VK_FORMAT_R8G8B8A8_UNORM;
+                    : (is_srgb
+                        ? VK_FORMAT_R8G8B8A8_SRGB
+                        : VK_FORMAT_R8G8B8A8_UNORM);
             }
             return is_float16 ? VK_FORMAT_R16_SFLOAT : VK_FORMAT_R8_UNORM;
         }

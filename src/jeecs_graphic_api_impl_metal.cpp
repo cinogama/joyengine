@@ -1132,6 +1132,8 @@ namespace jeecs::graphic::api::metal
         }
         else
         {
+            const bool srgb =
+                0 != (texture->m_format & jegl_texture_common::format::SRGB);
             switch (texture->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK)
             {
             case jegl_texture_common::format::MONO:
@@ -1139,8 +1141,11 @@ namespace jeecs::graphic::api::metal
                     float16 ? MTL::PixelFormatR16Float : MTL::PixelFormatR8Unorm;
                 break;
             case jegl_texture_common::format::RGBA:
-                texture_format =
-                    float16 ? MTL::PixelFormatRGBA16Float : MTL::PixelFormatRGBA8Unorm;
+                texture_format = float16
+                    ? MTL::PixelFormatRGBA16Float
+                    : (srgb
+                        ? MTL::PixelFormatRGBA8Unorm_sRGB
+                        : MTL::PixelFormatRGBA8Unorm);
                 break;
             default:
                 jeecs::debug::logfatal("Unsupported texture color format.");

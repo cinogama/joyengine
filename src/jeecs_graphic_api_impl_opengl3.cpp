@@ -965,6 +965,8 @@ namespace jeecs::graphic::api::gl3
         jegl_texture_common::format fmt, bool is_16bit,
         GLint& texture_src_format, GLint& texture_aim_format)
     {
+        const bool is_srgb =
+            0 != (fmt & jegl_texture_common::format::SRGB);
         switch (fmt & jegl_texture_common::format::COLOR_DEPTH_MASK)
         {
         case jegl_texture_common::format::MONO:
@@ -973,7 +975,9 @@ namespace jeecs::graphic::api::gl3
             return true;
         case jegl_texture_common::format::RGBA:
             texture_src_format = GL_RGBA;
-            texture_aim_format = is_16bit ? GL_RGBA16F : GL_RGBA;
+            texture_aim_format = is_16bit
+                ? GL_RGBA16F
+                : (is_srgb ? GL_SRGB8_ALPHA8 : GL_RGBA);
             return true;
         default:
             jeecs::debug::logerr("Unknown texture raw-data format.");
