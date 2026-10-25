@@ -454,7 +454,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                             none?;
                             value(light_color)?
                             {
-                                let c = light_color.color->get;
+                                let c = light_color.color->get->to_linear;
                                 icon_tint = (c.0, c.1, c.2, 1.);
                             }
                         }
@@ -516,8 +516,8 @@ namespace JEEditor::Editor::WorldEditorViewport
                                 is_hover = hovered == euid;
                         }
                         
-                        let cmin = emitter.color_min->get;
-                        let cmax = emitter.color_max->get;
+                        let cmin = emitter.color_min->get->to_linear;
+                        let cmax = emitter.color_max->get->to_linear;
                         let mut icon_tint = (
                             mathf::clamp((cmin.0 + cmax.0) * 0.5, 0., 1.),
                             mathf::clamp((cmin.1 + cmax.1) * 0.5, 0., 1.),

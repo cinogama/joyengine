@@ -486,7 +486,7 @@ namespace JEEditor::Editor::Animation2D
             return DataValue::VEC2((0., 0.));
         else if (t == je::typeinfo::float3)
             return DataValue::VEC3((0., 0., 0.));
-        else if (t == je::typeinfo::float4)
+        else if (t == je::typeinfo::float4 || t == color::type::typeinfo)
             return DataValue::VEC4((0., 0., 0., 0.));
         else if (t == je::typeinfo::quat)
             return DataValue::QUAT4((0., 0., 0.));
@@ -499,6 +499,7 @@ namespace JEEditor::Editor::Animation2D
             || t == je::typeinfo::float2
             || t == je::typeinfo::float3
             || t == je::typeinfo::float4
+            || t == color::type::typeinfo
             || t == je::typeinfo::quat;
     }
 

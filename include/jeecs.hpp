@@ -12991,7 +12991,7 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Color);
             JECS_DEFAULT_CONSTRUCTOR(Color);
 
-            math::vec4 color = math::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+            math::color color = math::color(1.0f, 1.0f, 1.0f, 1.0f);
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
@@ -13097,7 +13097,7 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Clear);
             JECS_DEFAULT_CONSTRUCTOR(Clear);
 
-            math::vec4 color = math::vec4(0.f, 0.f, 0.f, 1.f);
+            math::color color = math::color(0.f, 0.f, 0.f, 1.f);
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Clear::color, "color");
@@ -14355,14 +14355,14 @@ namespace jeecs
             struct color_gradient
             {
                 basic::vector<float> m_times;
-                basic::vector<math::vec4> m_colors;
+                basic::vector<math::color> m_colors;
 
                 color_gradient()
                 {
                     m_times.push_back(0.0f);
                     m_times.push_back(1.0f);
-                    m_colors.push_back(math::vec4(1.0f, 1.0f, 1.0f, 1.0f));
-                    m_colors.push_back(math::vec4(1.0f, 1.0f, 1.0f, 0.0f));
+                    m_colors.push_back(math::color(1.0f, 1.0f, 1.0f, 1.0f));
+                    m_colors.push_back(math::color(1.0f, 1.0f, 1.0f, 0.0f));
                 }
 
                 // 关键帧数量（times/colors 以较短者为准）
@@ -14371,7 +14371,7 @@ namespace jeecs
                     return std::min(m_times.size(), m_colors.size());
                 }
                 // 采样：空渐变返回 fallback；t 超出范围时钳制到首/末关键帧
-                math::vec4 sample(float t, const math::vec4& fallback) const
+                math::color sample(float t, const math::color& fallback) const
                 {
                     const size_t key_count = size();
                     if (key_count == 0)
@@ -14388,13 +14388,13 @@ namespace jeecs
                             const float t0 = m_times.at(i - 1), t1 = m_times.at(i);
                             const float span = t1 - t0;
                             const float k = span > 0.0f ? (t - t0) / span : 0.0f;
-                            const math::vec4& c0 = m_colors.at(i - 1);
-                            const math::vec4& c1 = m_colors.at(i);
-                            return math::vec4(
-                                c0.x + (c1.x - c0.x) * k,
-                                c0.y + (c1.y - c0.y) * k,
-                                c0.z + (c1.z - c0.z) * k,
-                                c0.w + (c1.w - c0.w) * k);
+                            const math::color& c0 = m_colors.at(i - 1);
+                            const math::color& c1 = m_colors.at(i);
+                            return math::color(
+                                c0.r + (c1.r - c0.r) * k,
+                                c0.g + (c1.g - c0.g) * k,
+                                c0.b + (c1.b - c0.b) * k,
+                                c0.a + (c1.a - c0.a) * k);
                         }
                     }
                     return m_colors.at(key_count - 1);
@@ -14411,7 +14411,7 @@ namespace jeecs
                         "{\n"
                         "    public using color_gradient = struct{\n"
                         "        public m_times: array<float>,\n"
-                        "        public m_colors: array<vec4>,\n"
+                        "        public m_colors: array<color>,\n"
                         "    };\n"
                         "}";
                 }
@@ -14441,9 +14441,9 @@ namespace jeecs
                                 m_times.push_back(woort_unbox_float(tmp));
                             if (woort_vec_get(tmp, colors, i))
                             {
-                                math::vec4 color;
-                                color.JEParseFromScriptType(tmp);
-                                m_colors.push_back(color);
+                                math::color key_color;
+                                key_color.JEParseFromScriptType(tmp);
+                                m_colors.push_back(key_color);
                             }
                         }
 
@@ -14625,8 +14625,8 @@ namespace jeecs
             // ===== 初始外观（在区间内均匀随机） =====
             float m_size_min = 0.08f;               // 初始尺寸区间（世界单位）
             float m_size_max = 0.16f;
-            math::vec4 m_color_min = { 1.0f, 1.0f, 1.0f, 1.0f };
-            math::vec4 m_color_max = { 1.0f, 1.0f, 1.0f, 1.0f };
+            math::color m_color_min = math::color(1.0f, 1.0f, 1.0f, 1.0f);
+            math::color m_color_max = math::color(1.0f, 1.0f, 1.0f, 1.0f);
             float m_rotation_min = 0.0f;            // 初始自转区间（度）
             float m_rotation_max = 0.0f;
             float m_angular_min = 0.0f;             // 自转速度区间（度/秒）
@@ -15876,6 +15876,10 @@ namespace jeecs
             // 0. register built-in components
             using namespace typing;
 
+            // color 会被组件成员声明引用（如 Particle::color_gradient），
+            // 先于组件注册，保证生成的 types.wo 中类型声明位于使用之前。
+            jeecs::typing::register_type<math::color>(guard, nullptr);
+
             jeecs::typing::register_type<Transform::LocalPosition>(guard, "Transform::LocalPosition");
             jeecs::typing::register_type<Transform::LocalRotation>(guard, "Transform::LocalRotation");
             jeecs::typing::register_type<Transform::LocalScale>(guard, "Transform::LocalScale");
@@ -15969,7 +15973,6 @@ namespace jeecs
             // 1. register basic types
             jeecs::typing::register_type<basic::file_resource<>>(guard, nullptr);
             jeecs::typing::register_type<math::ivec2>(guard, nullptr);
-            jeecs::typing::register_type<math::color>(guard, nullptr);
             typing::register_script_parser<bool>(
                 guard,
                 [](const bool* v, woort_value value)

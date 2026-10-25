@@ -436,7 +436,7 @@ namespace Particle::color_gradient
             let times = []mut: vec<float>;
             for (let mut i = 0; i < count; i += 1)
                 times->add(data->get_or(1 + i, 0.) as float);
-            let colors = []mut: vec<vec4>;
+            let colors = []mut: vec<color>;
             for (let mut i = 0; i < count; i += 1)
             {
                 let base = 1 + count + i * 4;
@@ -444,7 +444,7 @@ namespace Particle::color_gradient
                     data->get_or(base, 0.),
                     data->get_or(base + 1, 0.),
                     data->get_or(base + 2, 0.),
-                    data->get_or(base + 3, 1.)) as vec4);
+                    data->get_or(base + 3, 1.)) as color);
             }
             return Particle::color_gradient{
                 m_times = times->to_array,
