@@ -62,7 +62,9 @@ namespace JEEditor::Editor::Animation2D
             }
         }
 
-        public func input_data_value(label: string, value: DataValue, on_change: (DataValue)=>void)
+        public func input_data_value(
+            label: string, value: DataValue, is_color: bool,
+            on_change: (DataValue)=>void)
         {
             match (value)
             {
@@ -75,7 +77,27 @@ namespace JEEditor::Editor::Animation2D
                 VEC3((x, y, z))?
                     do InputFloat3(label, x, y, z)->> \nv = on_change(DataValue::VEC3(nv));;
                 VEC4((x, y, z, w))?
-                    do InputFloat4(label, x, y, z, w)->> \nv = on_change(DataValue::VEC4(nv));;
+                {
+                    if (is_color)
+                    {
+                        // 颜色按线性存储，选择器以 sRGB 显示并写回线性值。
+                        let display = ((x, y, z, w) as color)->to_srgb;
+                        match (ColorEdit4(label, display as raw vec4))
+                        {
+                            value(picked)?
+                            {
+                                let linear =
+                                    color::from_srgb(picked as vec4)->to_linear;
+                                do on_change(DataValue::VEC4(
+                                    (linear.0, linear.1, linear.2, linear.3)));
+                            }
+                            none?;
+                        }
+                    }
+                    else
+                        do InputFloat4(label, x, y, z, w)
+                            ->> \nv = on_change(DataValue::VEC4(nv));;
+                }
                 QUAT4((x, y, z))?
                     do InputFloat3(label, x, y, z)->> \nv = on_change(DataValue::QUAT4(nv));;
             }
@@ -501,6 +523,43 @@ namespace JEEditor::Editor::Animation2D
             || t == je::typeinfo::float4
             || t == color::type::typeinfo
             || t == je::typeinfo::quat;
+    }
+    public func type_is_color(t: je::typeinfo) => bool
+    {
+        return t == color::type::typeinfo;
+    }
+
+    // 组件成员是否为 color 类型。动画文件只存 VEC4 数值，编辑器据此决定
+    // 用颜色选择器还是原始数值编辑；类型系统在会话内不变，结果做缓存。
+    let mut s_component_member_is_color = {}mut: map<string, bool>;
+    public func component_member_is_color(
+        comp_name: string, member_name: string) => bool
+    {
+        let key = comp_name + "." + member_name;
+        match (s_component_member_is_color->get(key))
+        {
+            value(cached)? return cached;
+            none?;
+        }
+
+        let mut is_color = false;
+        match (je::typeinfo::load(comp_name))
+        {
+            value(t)?
+            {
+                for (let (name, mtype) : t->get_members_info)
+                {
+                    if (name == member_name)
+                    {
+                        is_color = mtype == color::type::typeinfo;
+                        break;
+                    }
+                }
+            }
+            none?;
+        }
+        s_component_member_is_color->set(key, is_color);
+        return is_color;
     }
 
     // ======================================================================

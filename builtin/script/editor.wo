@@ -204,7 +204,7 @@ namespace quat
         public extern func edit(val: quat, tag: string)=> option<quat>
         {
             let angle = val->euler_angle;
-            return InputFloat3(F"##{tag}", angle...)->>\v = quat::euler(v...);;
+            return InputFloat3(F"##{tag}", angle.0, angle.1, angle.2)->>\v = quat::euler(v...);;
         }
     }
 }
@@ -219,7 +219,7 @@ namespace Physics2D::vertex_list
             // 顶点一行“点N + XY 输入”，全部对齐控件列）
             let col_x = Widgets::editColumnX();
             match (Widgets::editPointRing(
-                    (val as array<vec2>)->to_vec, col_x, tag))
+                (val as array<vec2>)->to_vec, col_x, tag))
             {
                 none?
                     return option::none;
@@ -240,7 +240,7 @@ namespace Light2D::BlockShadow::block_mesh
             // 顶点一行“点N + XY 输入”，全部对齐控件列）
             let col_x = Widgets::editColumnX();
             match (Widgets::editPointRing(
-                    (val as array<vec2>)->to_vec, col_x, tag))
+                (val as array<vec2>)->to_vec, col_x, tag))
             {
                 none?
                     return option::none;
@@ -263,7 +263,7 @@ namespace Light2D::Range::light_shape
             let mut positions = (val.m_positions)->to_vec;
             let mut need_update = false;
             let col_x = Widgets::editColumnX();
-            
+
             // 每环顶点数（环至少 3 个顶点才能构成多边形），首行与成员名同行
             Widgets::beginStepRow("每环顶点数", col_x, 84.);
             match (InputInt(F"##{tag}_pcount", point_count)->>\n = n < 3 ? 3 | n;)
@@ -279,7 +279,7 @@ namespace Light2D::Range::light_shape
                 }
                 none?;
             }
-            
+
             // 环数（每环一个强度；改变环数时同步伸缩 positions）
             Widgets::beginStepRow("环数", col_x, 84.);
             match (InputInt(F"##{tag}_rings", strengths->len)->>\n = n < 1 ? 1 | n;)
@@ -302,7 +302,7 @@ namespace Light2D::Range::light_shape
                 }
                 none?;
             }
-            
+
             for (let mut l = 0; l < strengths->len; l += 1)
             {
                 Widgets::beginRow(F"环{l} 强度", col_x, 84.);
@@ -320,7 +320,7 @@ namespace Light2D::Range::light_shape
                     none?;
                 }
             }
-            
+
             for (let mut i = 0; i < positions->len; i += 1)
             {
                 Widgets::beginRow(F"环{i / point_count} 点{i % point_count}", col_x, 84.);
@@ -338,13 +338,13 @@ namespace Light2D::Range::light_shape
                     none?;
                 }
             }
-            
+
             if (need_update)
                 return option::value(Light2D::Range::light_shape{
-                        m_point_count = point_count,
-                        m_strength = strengths->to_array,
-                        m_positions = positions->to_array,
-                    });
+                    m_point_count = point_count,
+                    m_strength = strengths->to_array,
+                    m_positions = positions->to_array,
+                });
             return option::none;
         }
     }
@@ -410,7 +410,7 @@ namespace Particle::color_gradient
             updated->add((j == i) ? v | src[j]);
         return updated;
     }
-    
+
     using parser = void
     {
         public extern func edit(val: Particle::color_gradient, tag: string)=> option<Particle::color_gradient>
@@ -419,7 +419,7 @@ namespace Particle::color_gradient
             let mut colors = (val.m_colors)->to_vec;
             let mut need_update = false;
             let col_x = Widgets::editColumnX();
-            
+
             // 渐变预览条：24 段色带按关键帧插值着色，并推进布局光标
             let draw_list = GetWindowDrawList();
             let bar_pos = GetCursorScreenPos();
@@ -437,7 +437,7 @@ namespace Particle::color_gradient
                     (to8(c.0), to8(c.1), to8(c.2), to8(c.3)));
             }
             do Dummy((0., bar_h + 6.));
-            
+
             // 关键帧数（至少 1 帧），首行与成员名同行
             Widgets::beginStepRow("关键帧数", col_x, 72.);
             match (InputInt(F"##{tag}_count", times->len)->>\n = n < 1 ? 1 | n;)
@@ -453,7 +453,7 @@ namespace Particle::color_gradient
                 }
                 none?;
             }
-            
+
             // 每个关键帧两行：时间（0~1）、颜色（RGBA）
             for (let mut i = 0; i < times->len; i += 1)
             {
@@ -467,7 +467,7 @@ namespace Particle::color_gradient
                     }
                     none?;
                 }
-                
+
                 Widgets::beginRow(F"颜色{i}", col_x, 72.);
                 match (ColorEdit4(
                         F"##{tag}_c{i}",
@@ -482,12 +482,12 @@ namespace Particle::color_gradient
                     none?;
                 }
             }
-            
+
             if (need_update)
                 return option::value(Particle::color_gradient{
-                        m_times = times->to_array,
-                        m_colors = colors->to_array,
-                    });
+                    m_times = times->to_array,
+                    m_colors = colors->to_array,
+                });
             return option::none;
         }
     }
@@ -529,7 +529,7 @@ namespace Particle::scalar_curve
             updated->add((j == i) ? v | src[j]);
         return updated;
     }
-    
+
     using parser = void
     {
         public extern func edit(val: Particle::scalar_curve, tag: string)=> option<Particle::scalar_curve>
@@ -537,7 +537,7 @@ namespace Particle::scalar_curve
             let mut keys = (val.m_keys)->to_vec;
             let mut need_update = false;
             let col_x = Widgets::editColumnX();
-            
+
             // 曲线预览：以最大绝对值为纵轴归一化绘制折线，并推进布局光标
             let mut vabs_max = 0.001;
             for (let k : keys)
@@ -547,7 +547,7 @@ namespace Particle::scalar_curve
                 if (a > vabs_max)
                     vabs_max = a;
             }
-            
+
             let draw_list = GetWindowDrawList();
             let plot_pos = GetCursorScreenPos();
             let plot_w = GetContentRegionAvail().0;
@@ -572,7 +572,7 @@ namespace Particle::scalar_curve
                     (240, 200, 90, 255), 2.);
             }
             do Dummy((0., plot_h + 6.));
-            
+
             // 关键帧数（至少 1 帧），首行与成员名同行
             Widgets::beginStepRow("关键帧数", col_x, 72.);
             match (InputInt(F"##{tag}_count", keys->len)->>\n = n < 1 ? 1 | n;)
@@ -587,7 +587,7 @@ namespace Particle::scalar_curve
                 }
                 none?;
             }
-            
+
             // 每个关键帧一行：时间与数值
             for (let mut i = 0; i < keys->len; i += 1)
             {
@@ -604,11 +604,11 @@ namespace Particle::scalar_curve
                     none?;
                 }
             }
-            
+
             if (need_update)
                 return option::value(Particle::scalar_curve{
-                        m_keys = keys->to_array,
-                    });
+                    m_keys = keys->to_array,
+                });
             return option::none;
         }
     }
@@ -622,7 +622,7 @@ namespace Animation::FrameAnimation::animation_list
     // .je4animation 可能正在动画编辑器中被修改，以时间戳判断缓存失效。
     let mut s_action_names_cache = {}mut: map<string, array<string>>;
     let mut s_action_names_stamp = {}mut: map<string, int>;
-    
+
     // 读取动画文件中的动作名列表；文件缺失或无法解析时返回空表。
     func read_action_names(runtime_path: string)=> array<string>
     {
@@ -631,7 +631,7 @@ namespace Animation::FrameAnimation::animation_list
             let empty = []mut: vec<string>;
             return empty->to_array;
         }
-        
+
         let local_path = ResourcePath::toLocalResourcePath(runtime_path);
         let mut stamp = -1;
         match (fsys::lastwrite(local_path))
@@ -639,7 +639,7 @@ namespace Animation::FrameAnimation::animation_list
             value(t)? stamp = t as int;
             none?;
         }
-        
+
         match (s_action_names_stamp->get(runtime_path))
         {
             value(cached)?
@@ -655,20 +655,20 @@ namespace Animation::FrameAnimation::animation_list
             }
             none?;
         }
-        
+
         let mut names = []mut: vec<string>;
         match (JEEditor::Editor::Animation2D::AnimationContext::open(local_path))
         {
             ok(ctx)? names = ctx->action_names->to_vec;
             err(_)?;
         }
-        
+
         let arr = names->to_array;
         s_action_names_cache->set(runtime_path, arr);
         s_action_names_stamp->set(runtime_path, stamp);
         return arr;
     }
-    
+
     // 以下 entry_* 辅助：struct 成员不可变，修改单个字段需重建整个条目
     func entry_with_path(entry: Animation::FrameAnimation::animation_state, path: string)=> Animation::FrameAnimation::animation_state
     {
@@ -700,7 +700,7 @@ namespace Animation::FrameAnimation::animation_list
         do entries->remove(i);
         do entries->insert(i, entry);
     }
-    
+
     using parser = void
     {
         public extern func edit(val: Animation::FrameAnimation::animation_list, tag: string)=> option<Animation::FrameAnimation::animation_list>
@@ -708,7 +708,7 @@ namespace Animation::FrameAnimation::animation_list
             let mut entries = (val as array<Animation::FrameAnimation::animation_state>)->to_vec;
             let mut need_update = false;
             let col_x = Widgets::editColumnX();
-            
+
             // 动画条目数，首行与成员名同行
             Widgets::beginStepRow("动画数", col_x, 56.);
             match (InputInt(F"##{tag}_count", entries->len)->>\n = n < 0 ? 0 | n;)
@@ -718,16 +718,16 @@ namespace Animation::FrameAnimation::animation_list
                     if (count != entries->len)
                     {
                         entries->resize(count, Animation::FrameAnimation::animation_state{
-                                m_path = "",
-                                m_action = option::none,
-                                m_loop = false,
-                            });
+                            m_path = "",
+                            m_action = option::none,
+                            m_loop = false,
+                        });
                         need_update = true;
                     }
                 }
                 none?;
             }
-            
+
             // 每个条目占两行：“文件 + 移除”一行，“动作 + 循环”一行
             for (let mut i = 0; i < entries->len; i += 1)
             {
@@ -736,7 +736,7 @@ namespace Animation::FrameAnimation::animation_list
                 let mut cur_local = option::none: option<fsys::path_t>;
                 if (entries[i].m_path != "")
                     cur_local = option::value(ResourcePath::toLocalResourcePath(entries[i].m_path));
-                    
+
                 Widgets::beginRow(F"文件{i}", col_x, 56.);
                 // 行末还要放“移除条目”× 按钮，为它预留右侧空间
                 match (FileDrop::FileTrailing(F"##{tag}_file{i}", cur_local, 32.))
@@ -770,7 +770,7 @@ namespace Animation::FrameAnimation::animation_list
                     if (IsItemHovered())
                         do SetTooltip("移除该动画条目");
                 }
-                
+
                 // 2) 载入后自动播放的动作：Combo 列出文件中的动作名；
                 //    当前动作不在文件中时附加标注项展示，避免值被静默丢弃
                 let file_names = read_action_names(entries[i].m_path);
@@ -780,7 +780,7 @@ namespace Animation::FrameAnimation::animation_list
                     value(a)? cur_action = a;
                     none?;
                 }
-                
+
                 let mut raw_names = []mut: vec<string>;
                 let mut disp = []mut: vec<string>;
                 raw_names->add("");
@@ -799,7 +799,7 @@ namespace Animation::FrameAnimation::animation_list
                     disp->add(F"{cur_action}（文件中不存在）");
                     sel = raw_names->len - 1;
                 }
-                
+
                 Widgets::beginRow(F"动作{i}", col_x, 56.);
                 // 同行还要放“循环”开关，为其预留右侧空间
                 SetNextItemWidth(GetContentRegionAvail().0 - 74.);
@@ -816,7 +816,7 @@ namespace Animation::FrameAnimation::animation_list
                     }
                     none?;
                 }
-                
+
                 // 3) 循环开关
                 SameLine();
                 match (CheckBox(F"循环##{tag}_loop{i}", entries[i].m_loop))
@@ -829,13 +829,13 @@ namespace Animation::FrameAnimation::animation_list
                     none?;
                 }
             }
-            
+
             if (entries->len == 0)
             {
                 Widgets::setCursorX(col_x);
                 do TextDisabled("无动画条目，点击上方“动画数”的 + 添加");
             }
-            
+
             if (need_update)
                 return option::value(entries->to_array as Animation::FrameAnimation::animation_list);
             return option::none;
@@ -851,7 +851,7 @@ namespace file_resource
             match (FileDrop::File(tag, val.path->>\p = ResourcePath::toLocalResourcePath(p);))
             {
                 value(p)?
-                
+
                     return option::value(file_resource{
                             path = p->> \p = ResourcePath::toRuntimeResourcePath(p);,
                         });
@@ -898,7 +898,7 @@ namespace UserInterface::Element::alignment
             ];
             let mut newval = val;
             let col_x = Widgets::editColumnX();
-            
+
             PushStyleVec2(StyleVar::ImGuiStyleVar_ItemSpacing, (10., 6.));
             for (let mut row = 0; row < 3; row += 1)
             {
@@ -912,7 +912,7 @@ namespace UserInterface::Element::alignment
                 }
             }
             PopStyleVar(1);
-            
+
             if (newval != val)
                 return option::value(newval);
             else
@@ -931,8 +931,8 @@ namespace UserInterface::Element::ratio_unit
             //（枚举值与选项下标一致；根元素的参考矩形是显示区，
             // 子元素的是父元素矩形，因此选项不写“父”字）
             match (Combo(F"##{tag}",
-                    ["以高为单位1", "以宽为单位1", "宽高分别取1"],
-                    option::value(val as int)))
+                ["以高为单位1", "以宽为单位1", "宽高分别取1"],
+                option::value(val as int)))
             {
                 value(idx)?
                     return option::value(idx as UserInterface::Element::ratio_unit);
@@ -952,8 +952,8 @@ namespace UserInterface::Text::wrap_mode
             // 文本换行策略下拉选择（枚举值与选项下标一致；
             // word 按元素宽度折行生效）
             match (Combo(F"##{tag}",
-                    ["不自动换行", "按元素宽度换行"],
-                    option::value(val as int)))
+                ["不自动换行", "按元素宽度换行"],
+                option::value(val as int)))
             {
                 value(idx)?
                     return option::value(idx as UserInterface::Text::wrap_mode);
@@ -972,8 +972,8 @@ namespace Particle::Emitter::shape_type
         {
             // 发射形状下拉选择（枚举值与选项下标一致）
             match (Combo(F"##{tag}",
-                    ["点", "球体", "圆（2D）", "盒"],
-                    option::value(val as int)))
+                ["点", "球体", "圆（2D）", "盒"],
+                option::value(val as int)))
             {
                 value(idx)?
                     return option::value(idx as Particle::Emitter::shape_type);
@@ -992,8 +992,8 @@ namespace Particle::Emitter::simulation_space_type
         {
             // 模拟空间下拉选择（枚举值与选项下标一致）
             match (Combo(F"##{tag}",
-                    ["世界空间", "发射器局部空间"],
-                    option::value(val as int)))
+                ["世界空间", "发射器局部空间"],
+                option::value(val as int)))
             {
                 value(idx)?
                     return option::value(idx as Particle::Emitter::simulation_space_type);

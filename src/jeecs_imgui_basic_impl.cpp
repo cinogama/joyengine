@@ -1298,6 +1298,31 @@ WOORT_API woort_api je_gui_set_next_window_pos(void)
     return woort_ret_void();
 }
 
+namespace
+{
+    constexpr ImGuiColorEditFlags _JEGUI_COLOR_EDIT_FLAGS =
+        ImGuiColorEditFlags_Float
+        | ImGuiColorEditFlags_HDR
+        | ImGuiColorEditFlags_DisplayRGB
+        | ImGuiColorEditFlags_InputRGB
+        | ImGuiColorEditFlags_PickerHueBar;
+
+    // Woolang 侧把颜色作为单个 (real, real, real, real) 元组传入，
+    // 不能像 InputFloat4 那样按 4 个独立实参读取。
+    void _jegui_read_color4(woort_value s, float (&rgba)[4])
+    {
+        woort_value elem = s + 0;
+        woort_struct_get(elem, 1, 0);
+        rgba[0] = woort_float(elem);
+        woort_struct_get(elem, 1, 1);
+        rgba[1] = woort_float(elem);
+        woort_struct_get(elem, 1, 2);
+        rgba[2] = woort_float(elem);
+        woort_struct_get(elem, 1, 3);
+        rgba[3] = woort_float(elem);
+    }
+}
+
 WOORT_API woort_api je_gui_colorbutton(void)
 {
     return woort_ret_bool(ImGui::ColorButton(woort_string(0), val2vec4(1)));
@@ -1309,27 +1334,9 @@ WOORT_API woort_api je_gui_coloredit4(void)
         return woort_ret_panic("Stack overflow.");
 
     float rgba[4] = {};
+    _jegui_read_color4(s, rgba);
 
-    // Woolang 侧把颜色作为单个 (real, real, real, real) 元组传入，
-    // 不能像 InputFloat4 那样按 4 个独立实参读取。
-    woort_value elem = s + 0;
-    woort_struct_get(elem, 1, 0);
-    rgba[0] = woort_float(elem);
-    woort_struct_get(elem, 1, 1);
-    rgba[1] = woort_float(elem);
-    woort_struct_get(elem, 1, 2);
-    rgba[2] = woort_float(elem);
-    woort_struct_get(elem, 1, 3);
-    rgba[3] = woort_float(elem);
-
-    if (ImGui::ColorEdit4(
-        woort_string(0),
-        rgba,
-        ImGuiColorEditFlags_Float
-        | ImGuiColorEditFlags_HDR
-        | ImGuiColorEditFlags_DisplayRGB
-        | ImGuiColorEditFlags_InputRGB
-        | ImGuiColorEditFlags_PickerHueBar))
+    if (ImGui::ColorEdit4(woort_string(0), rgba, _JEGUI_COLOR_EDIT_FLAGS))
     {
         woort_value result = s + 1;
         set_float4_to_struct(result, rgba[0], rgba[1], rgba[2], rgba[3]);
@@ -1344,29 +1351,12 @@ WOORT_API woort_api je_gui_colorpicker4(void)
         return woort_ret_panic("Stack overflow.");
 
     float rgba[4] = {};
+    _jegui_read_color4(s, rgba);
 
-    woort_value elem = s + 0;
-    woort_struct_get(elem, 1, 0);
-    rgba[0] = woort_float(elem);
-    woort_struct_get(elem, 1, 1);
-    rgba[1] = woort_float(elem);
-    woort_struct_get(elem, 1, 2);
-    rgba[2] = woort_float(elem);
-    woort_struct_get(elem, 1, 3);
-    rgba[3] = woort_float(elem);
-
-    if (ImGui::ColorPicker4(
-        woort_string(0),
-        rgba,
-        ImGuiColorEditFlags_Float
-        | ImGuiColorEditFlags_HDR
-        | ImGuiColorEditFlags_DisplayRGB
-        | ImGuiColorEditFlags_InputRGB
-        | ImGuiColorEditFlags_PickerHueBar))
+    if (ImGui::ColorPicker4(woort_string(0), rgba, _JEGUI_COLOR_EDIT_FLAGS))
     {
         woort_value result = s + 1;
         set_float4_to_struct(result, rgba[0], rgba[1], rgba[2], rgba[3]);
-
         return woort_ret_option_value(result);
     }
     return woort_ret_option_none();
@@ -3095,9 +3085,6 @@ namespace
     // colors before uploading them: the framebuffer then re-encodes them.
     void _jegui_linearize_draw_data(ImDrawData* draw_data)
     {
-        if (draw_data == nullptr)
-            return;
-
         for (int n = 0; n < draw_data->CmdListsCount; ++n)
         {
             ImDrawList* list = draw_data->CmdLists[n];
@@ -3127,8 +3114,7 @@ namespace
         ImGuiViewport* viewport, void* render_arg)
     {
         _jegui_linearize_draw_data(viewport->DrawData);
-        if (_g_original_render_window != nullptr)
-            _g_original_render_window(viewport, render_arg);
+        _g_original_render_window(viewport, render_arg);
     }
 
     void _jegui_install_linearize_hooks()

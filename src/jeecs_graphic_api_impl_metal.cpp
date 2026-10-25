@@ -2068,21 +2068,10 @@ namespace jeecs::graphic::api::metal
 
         memcpy(shader->m_uniform_cpu_buffer, uniform_data, uniform_size);
 
-        const uint32_t ndc_offset = shader->m_ndc_scale_uniform_id;
-        if (ndc_offset != jeecs::graphic::INVALID_UNIFORM_LOCATION
-            && ndc_offset + sizeof(float) * 4 <= uniform_size)
-        {
-            const float ndc_scale[4] = {
-                1.f,
-                metal_context->m_render_states.m_current_target_framebuffer_may_null == nullptr
-                    ? 1.f : -1.f,
-                1.f,
-                1.f };
-            memcpy(
-                static_cast<uint8_t*>(shader->m_uniform_cpu_buffer) + ndc_offset,
-                ndc_scale,
-                sizeof(ndc_scale));
-        }
+        _jegl_patch_ndc_scale(
+            shader->m_uniform_cpu_buffer, uniform_size,
+            shader->m_ndc_scale_uniform_id,
+            metal_context->m_render_states.m_current_target_framebuffer_may_null != nullptr);
 
         shader->m_uniform_buffer_updated = true;
     }

@@ -2300,7 +2300,6 @@ struct jegl_texture_common
         // Pixel storage is unchanged; alpha is always linear.
         SRGB = 0x0080,
 
-        FORMAT_MASK = 0xFFF0,
         // Formats that do not keep a CPU-side pixel buffer.
         NON_PIXEL_FORMAT_MASK = FLOAT16 | DEPTH | FRAMEBUF,
     };

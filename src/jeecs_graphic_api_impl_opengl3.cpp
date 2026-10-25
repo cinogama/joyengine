@@ -414,7 +414,7 @@ namespace jeecs::graphic::api::gl3
     {
         const char* extensions =
             reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS));
-        if (extensions == nullptr || name == nullptr)
+        if (extensions == nullptr)
             return false;
 
         const size_t name_length = std::strlen(name);

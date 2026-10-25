@@ -5971,18 +5971,11 @@ namespace jeecs::graphic::api::vk120
         if (context->_vk_encoding_srgb_screen
             && context->_vk_current_shader_resource != nullptr)
         {
-            const uint32_t ndc_offset =
+            _jegl_patch_ndc_scale(
+                shader_instance->m_uniform_cpu_buffer, uniform_size,
                 context->_vk_current_shader_resource->m_builtin_uniforms
-                    .m_builtin_uniform_ndc_scale;
-            if (ndc_offset != jeecs::graphic::INVALID_UNIFORM_LOCATION
-                && ndc_offset + sizeof(float) * 4 <= uniform_size)
-            {
-                const float ndc_scale[4] = { 1.f, -1.f, 1.f, 1.f };
-                memcpy(
-                    shader_instance->m_uniform_cpu_buffer + ndc_offset,
-                    ndc_scale,
-                    sizeof(ndc_scale));
-            }
+                    .m_builtin_uniform_ndc_scale,
+                true);
         }
     }
     void render_draw_indexed(

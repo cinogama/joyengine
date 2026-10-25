@@ -2389,20 +2389,10 @@ namespace jeecs::graphic::api::dx11
 
         memcpy(mapped.pData, uniform_data, uniform_size);
 
-        const uint32_t ndc_offset = shader_instance->m_ndc_scale_uniform_id;
-        if (ndc_offset != jeecs::graphic::INVALID_UNIFORM_LOCATION
-            && ndc_offset + sizeof(float) * 4 <= uniform_size)
-        {
-            const float ndc_scale[4] = {
-                1.f,
-                context->m_current_target_framebuffer == nullptr ? 1.f : -1.f,
-                1.f,
-                1.f };
-            memcpy(
-                static_cast<char*>(mapped.pData) + ndc_offset,
-                ndc_scale,
-                sizeof(ndc_scale));
-        }
+        _jegl_patch_ndc_scale(
+            mapped.pData, uniform_size,
+            shader_instance->m_ndc_scale_uniform_id,
+            context->m_current_target_framebuffer != nullptr);
 
         context->m_dx_context->Unmap(shader_instance->m_uniforms.Get(), 0);
 

@@ -958,7 +958,10 @@ namespace JEEditor::Editor::Animation2D
                     ctx.m_selected_c_or_u_data = SelectedComponentOrUniformData::ComponentIndex(ci);
                 do TableNextColumn();
                 PushIDInt(ci);
-                DataValue::input_data_value(F"##cv{ci}", cd.m_value, func(v)
+                DataValue::input_data_value(F"##cv{ci}", cd.m_value,
+                    component_member_is_color(
+                        cd.m_component_name, cd.m_member_name),
+                    func(v)
                     {
                         do state->begin_value_edit(frames);
                         cd.m_value = v;
@@ -1007,7 +1010,10 @@ namespace JEEditor::Editor::Animation2D
                     ctx.m_selected_c_or_u_data = SelectedComponentOrUniformData::UniformIndex(ui);
                 do TableNextColumn();
                 PushIDInt(ui + 100000);
-                DataValue::input_data_value(F"##uv{ui}", ud.m_value, func(v)
+                // 动画文件只存数值类型，变量行没有 shader 上下文可判断颜色
+                // 标签；这里保持原始数值编辑。
+                DataValue::input_data_value(F"##uv{ui}", ud.m_value, false,
+                    func(v)
                     {
                         do state->begin_value_edit(frames);
                         ud.m_value = v;
@@ -1142,6 +1148,7 @@ namespace JEEditor::Editor::Animation2D
                         state.m_addc_editing_value = default_data_value_for_type(mtype);
                     }
                     DataValue::input_data_value("值##cvv", state.m_addc_editing_value,
+                        type_is_color(mtype),
                         \v = state.m_addc_editing_value = v;);
                     if (state.m_addc_sel_type->is_value && Button("添加##cca"))
                     {
@@ -1181,7 +1188,8 @@ namespace JEEditor::Editor::Animation2D
         {
             value(ti)?
             {
-                DataValue::input_data_value("值##uvv", types[ti][1], \v = types[ti][1] = v;);
+                DataValue::input_data_value("值##uvv", types[ti][1], false,
+                    \v = types[ti][1] = v;);
                 if (state.m_addu_name == "")
                     TextDisabled("变量名不能为空");
                 else if (Button("添加##una"))

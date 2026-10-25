@@ -53,6 +53,8 @@ func linear_to_srgb_channel(c: float3)=> float3
 
     let srgb_factor = 1. / 2.4;
     let hi = 1.055 * pow(clamped, vec3!(srgb_factor, srgb_factor, srgb_factor)) - vec3!(0.055, 0.055, 0.055);
+    // woshader 的 step(value, edge) 与 GLSL step(edge, x) 参数顺序相反；
+    // 这里表示 clamped >= 0.0031308 时选择高光段（pow）。
     let use_hi = step(clamped, vec3!(0.0031308, 0.0031308, 0.0031308));
     return lerp(lo, hi, use_hi);
 }

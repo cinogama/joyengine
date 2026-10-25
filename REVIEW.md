@@ -97,19 +97,22 @@
 
 ### P3 小项
 
-- [ ] `math::color` 的 4 行 defaulted copy/move/assign 可删。
-- [ ] `_gl_extension_supported` 的 `name == nullptr`、
-      `_jegui_linearize_draw_data` 的 `draw_data == nullptr` 等防御检查可删。
-- [ ] `je_gui_coloredit4` / `je_gui_colorpicker4` 的参数解析与 ImGui flags 重复。
-- [ ] `1 + TEXTURE + 1` 魔法映射（`src/jeecs_woolang_api.cpp`）改为 switch/常量。
-- [ ] `FORMAT_MASK` 已无引用且语义现在包含 `SRGB`，删除或标注 legacy。
-- [ ] `srgb_encode.shader` 的 `step(value, edge)` 与 GLSL 参数顺序相反，
-      加注释防止后续误改。
-- [ ] NDC scale 补丁在 DX11/Metal/VK 三处重复，可提取 helper。
-- [ ] `builtin/script/editor.wo` 有 70 行格式化噪声（含 trailing whitespace）
-      和无关的 quat `InputFloat3` 改动，建议拆分/回退。
-- [ ] 动画编辑器颜色关键帧仍用 `InputFloat4` 编辑线性原始值
-      （`Animation2D/DataModel.wo`），与其它颜色编辑器口径不一致。
+- [x] `math::color` 的 defaulted copy/move/assign 按决策保留，不做改动。
+- [x] `_gl_extension_supported` 的 `name == nullptr`、
+      `_jegui_linearize_draw_data` 的 `draw_data == nullptr` 及原始
+      副窗口渲染函数空检查已删除。
+- [x] `je_gui_coloredit4` / `je_gui_colorpicker4` 共用参数解析 helper 与
+      ImGui flags 常量。
+- [x] `1 + TEXTURE + 1` 魔法映射改为命名的 union variant 常量。
+- [x] `FORMAT_MASK` 已删除（无引用，语义已被 `NON_PIXEL_FORMAT_MASK` 取代）。
+- [x] `srgb_encode.shader` 已注明 woshader `step(value, edge)` 与 GLSL
+      参数顺序相反。
+- [x] NDC scale 补丁提取为 `_jegl_patch_ndc_scale`，DX11/Metal/VK 共用。
+- [x] `builtin/script/editor.wo` 的格式化噪声与无关 quat 改动已回退，
+      仅保留 color parser 与 color_gradient 的颜色语义。
+- [x] 动画编辑器的组件颜色关键帧改用 sRGB 颜色选择器
+      （`input_data_value` 增加 `is_color`）；着色器变量行因文件格式没有
+      颜色标签、且无 shader 上下文，保持原始数值编辑。
 
 ## 兼容性提醒
 
@@ -124,5 +127,8 @@
 
 - `baozi check builtin/editor/Editor/WorldEditorViewport/GizmoDrawing.wo`：通过。
 - `baozi check builtin/shader/CameraDefer2DFogPass.shader`（color uniform）：通过。
+- `baozi check builtin/shader/internal/srgb_encode.shader`：通过。
+- `baozi check builtin/script/editor.wo`（含动画编辑器依赖图）：通过。
+- `baozi check builtin/editor/Editor/Animation2D/UI.wo`：通过。
 - `cmake --build build --config=RelWithDebInfo --target joyecs --parallel 8`：通过。
 - 未运行 `jedriver`，未做实际画面验证。
