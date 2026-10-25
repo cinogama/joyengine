@@ -228,6 +228,23 @@ namespace vec4
         }
     }
 }
+// color 的 RGB 分量按线性颜色空间保存；序列化格式与 vec4 相同，
+// 缺失通道按黑色 / 不透明处理。
+namespace color
+{
+    using parser = void
+    {
+        public extern func saving(val: color)=> string
+        {
+            return [val.0, val.1, val.2, val.3]->serialize->or("[0,0,0,1]");
+        }
+        public extern func restoring(dat: string)=> color
+        {
+            let data = dat->array::deserialize->or([0 as dynamic, 0 as dynamic, 0 as dynamic, 1 as dynamic])->> \x = x as real;;
+            return (data->get_or(0, 0.), data->get_or(1, 0.), data->get_or(2, 0.), data->get_or(3, 1.)) as color;
+        }
+    }
+}
 namespace quat
 {
     using parser = void
@@ -419,7 +436,7 @@ namespace Particle::color_gradient
             let times = []mut: vec<float>;
             for (let mut i = 0; i < count; i += 1)
                 times->add(data->get_or(1 + i, 0.) as float);
-            let colors = []mut: vec<vec4>;
+            let colors = []mut: vec<color>;
             for (let mut i = 0; i < count; i += 1)
             {
                 let base = 1 + count + i * 4;
@@ -427,7 +444,7 @@ namespace Particle::color_gradient
                     data->get_or(base, 0.),
                     data->get_or(base + 1, 0.),
                     data->get_or(base + 2, 0.),
-                    data->get_or(base + 3, 1.)) as vec4);
+                    data->get_or(base + 3, 1.)) as color);
             }
             return Particle::color_gradient{
                 m_times = times->to_array,

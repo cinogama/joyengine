@@ -1,6 +1,7 @@
 import pkg::std;
 
 import je::gui;
+import je::towoo;
 import je::towoo::types;
 
 import pkg::guid;
@@ -126,6 +127,36 @@ namespace vec4
                 -> map_or(
                     \arr = (arr->get_or(0, 0.), arr->get_or(1, 0.), arr->get_or(2, 0.), arr->get_or(3, 0.)) as vec4;,
                     (0., 0., 0., 0.) as vec4)
+                ;
+        }
+    }
+}
+
+namespace color
+{
+    namespace node_editor
+    {
+        public let name = "color";
+        public let color = 0xFFAF5FFF;  // RRGGBBAA
+        
+        public func edit(self: color, uid: guid::GUID)=> option<color>
+        {
+            SetNextItemWidth(175.);
+            let display = self->to_srgb;
+            return ColorEdit4(F"##{uid as string}", display)
+                ->> \picked = color::from_srgb(picked);;
+        }
+        public func save(self: color)=> string
+        {
+            return [self.0, self.1, self.2, self.3]->serialize->unwrap;
+        }
+        public func restore(str: string)=> color
+        {
+            return array::deserialize(str)
+                =>> \arr = arr as dynamic->trycast:<array<real>>();
+                -> map_or(
+                    \arr = (arr->get_or(0, 0.), arr->get_or(1, 0.), arr->get_or(2, 0.), arr->get_or(3, 1.)) as color;,
+                    (0., 0., 0., 1.) as color)
                 ;
         }
     }

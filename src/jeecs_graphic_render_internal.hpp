@@ -78,6 +78,23 @@ bool _jegl_prepare_texture_array_resource(jegl_texture_array* texture);
 bool _jegl_prepare_texture_cube_resource(jegl_texture_cube* texture);
 bool _jegl_prepare_texture_msaa_resource(jegl_texture_msaa* texture);
 
+// Patch the built-in JE_NDC_SCALE uniform inside an already-copied CPU
+// uniform block. DX11/Metal flip y for offscreen targets; Vulkan flips it
+// only for the sRGB encode pass.
+inline void _jegl_patch_ndc_scale(
+    void* uniform_data, uint32_t uniform_size,
+    uint32_t ndc_offset, bool flip_y)
+{
+    if (ndc_offset == jeecs::graphic::INVALID_UNIFORM_LOCATION
+        || ndc_offset + sizeof(float) * 4 > uniform_size)
+        return;
+
+    const float ndc_scale[4] = { 1.f, flip_y ? -1.f : 1.f, 1.f, 1.f };
+    memcpy(
+        static_cast<uint8_t*>(uniform_data) + ndc_offset,
+        ndc_scale, sizeof(ndc_scale));
+}
+
 // Deferred draw used by the engine's render systems and the Woolang bindings.
 // Mirrors the old "draw returns an action, uniforms are set on it, the next
 // operation flushes it" pattern. Public users should prefer the explicit

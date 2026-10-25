@@ -99,6 +99,9 @@ namespace jeecs::graphic::api::metal
             // 否则在跨 autorelease pool 边界后会变成野指针。
             m_metal_layer->retain();
             m_metal_layer->setDevice(m_metal_device);
+            // sRGB drawable: shaders render linear and the layer performs
+            // the final linear-to-sRGB encode on write.
+            m_metal_layer->setPixelFormat(MTL::PixelFormatBGRA8Unorm_sRGB);
 
             m_render_states.m_screen_width = (int)cfg->m_width;
             m_render_states.m_screen_height = (int)cfg->m_height;
@@ -1130,6 +1133,8 @@ namespace jeecs::graphic::api::metal
         }
         else
         {
+            const bool srgb =
+                0 != (texture->m_format & jegl_texture_common::format::SRGB);
             switch (texture->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK)
             {
             case jegl_texture_common::format::MONO:
@@ -1137,8 +1142,11 @@ namespace jeecs::graphic::api::metal
                     float16 ? MTL::PixelFormatR16Float : MTL::PixelFormatR8Unorm;
                 break;
             case jegl_texture_common::format::RGBA:
-                texture_format =
-                    float16 ? MTL::PixelFormatRGBA16Float : MTL::PixelFormatRGBA8Unorm;
+                texture_format = float16
+                    ? MTL::PixelFormatRGBA16Float
+                    : (srgb
+                        ? MTL::PixelFormatRGBA8Unorm_sRGB
+                        : MTL::PixelFormatRGBA8Unorm);
                 break;
             default:
                 jeecs::debug::logfatal("Unsupported texture color format.");
@@ -1457,7 +1465,7 @@ namespace jeecs::graphic::api::metal
                 // Create pso for main framebuffer
                 auto* desc = pDesc->colorAttachments()->object(0);
                 desc->setPixelFormat(
-                    MTL::PixelFormat::PixelFormatBGRA8Unorm);
+                    MTL::PixelFormat::PixelFormatBGRA8Unorm_sRGB);
 
                 apply_blend_setting_to_attachment(desc);
 
@@ -2060,21 +2068,10 @@ namespace jeecs::graphic::api::metal
 
         memcpy(shader->m_uniform_cpu_buffer, uniform_data, uniform_size);
 
-        const uint32_t ndc_offset = shader->m_ndc_scale_uniform_id;
-        if (ndc_offset != jeecs::graphic::INVALID_UNIFORM_LOCATION
-            && ndc_offset + sizeof(float) * 4 <= uniform_size)
-        {
-            const float ndc_scale[4] = {
-                1.f,
-                metal_context->m_render_states.m_current_target_framebuffer_may_null == nullptr
-                    ? 1.f : -1.f,
-                1.f,
-                1.f };
-            memcpy(
-                static_cast<uint8_t*>(shader->m_uniform_cpu_buffer) + ndc_offset,
-                ndc_scale,
-                sizeof(ndc_scale));
-        }
+        _jegl_patch_ndc_scale(
+            shader->m_uniform_cpu_buffer, uniform_size,
+            shader->m_ndc_scale_uniform_id,
+            metal_context->m_render_states.m_current_target_framebuffer_may_null != nullptr);
 
         shader->m_uniform_buffer_updated = true;
     }

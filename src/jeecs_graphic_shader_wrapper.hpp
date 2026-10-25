@@ -36,6 +36,7 @@ struct shader_uniform_variable
 {
     std::string m_name;
     jegl_shader::uniform_type m_type;
+    jegl_shader::uniform_mask m_uniform_mask;
     jegl_shader::unifrom_variables::value m_init_value;
 };
 

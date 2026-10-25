@@ -34,6 +34,11 @@ void jegui_init_gl330(
 #endif
 #else
     ImGui_ImplGlfw_InitForOpenGL((GLFWwindow *)window_handle, true);
+#if defined(JE_ENABLE_GL330_GAPI)
+    // ImGui multi-viewport windows are created later by the platform backend;
+    // request sRGB-capable default framebuffers for them as well.
+    glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
+#endif
 #endif
     ImGui_ImplOpenGL3_Init(nullptr);
 }

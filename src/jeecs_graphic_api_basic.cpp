@@ -1857,11 +1857,13 @@ static void _jegl_close_texture_instance(TexT* texture)
         // close resource's raw data, then send this resource to closing-queue
         if (texture->m_pixels)
         {
-            assert(0 == (texture->m_format & jegl_texture_common::format::FORMAT_MASK));
+            assert(0 == (texture->m_format
+                & jegl_texture_common::format::NON_PIXEL_FORMAT_MASK));
             stbi_image_free(texture->m_pixels);
         }
         else
-            assert(0 != (texture->m_format & jegl_texture_common::format::FORMAT_MASK));
+            assert(0 != (texture->m_format
+                & jegl_texture_common::format::NON_PIXEL_FORMAT_MASK));
         _jegl_free_resource_instance(new jeecs::graphic::resource_to_destroy(texture));
     }
 }
@@ -2070,13 +2072,15 @@ jegl_texture_2d* jegl_create_texture_2d(size_t width, size_t height, jegl_textur
     if (height == 0)
         height = 1;
 
-    if ((format & jegl_texture_common::format::FORMAT_MASK) == 0)
+    if ((format & jegl_texture_common::format::NON_PIXEL_FORMAT_MASK) == 0)
     {
+        const size_t pixel_size =
+            (size_t)(format & jegl_texture_common::format::COLOR_DEPTH_MASK);
         texture_instance->m_pixels =
-            (jegl_texture_common::pixel_data_t*)malloc(width * height * format);
+            (jegl_texture_common::pixel_data_t*)malloc(width * height * pixel_size);
 
         assert(texture_instance->m_pixels != nullptr);
-        memset(texture_instance->m_pixels, 0, width * height * format);
+        memset(texture_instance->m_pixels, 0, width * height * pixel_size);
     }
     else
         // For special format texture such as depth, do not alloc for pixel.
@@ -2106,13 +2110,15 @@ jegl_texture_3d* jegl_create_texture_3d(
     if (depth == 0)
         depth = 1;
 
-    if ((format & jegl_texture_common::format::FORMAT_MASK) == 0)
+    if ((format & jegl_texture_common::format::NON_PIXEL_FORMAT_MASK) == 0)
     {
+        const size_t pixel_size =
+            (size_t)(format & jegl_texture_common::format::COLOR_DEPTH_MASK);
         texture_instance->m_pixels =
-            (jegl_texture_common::pixel_data_t*)malloc(width * height * depth * format);
+            (jegl_texture_common::pixel_data_t*)malloc(width * height * depth * pixel_size);
 
         assert(texture_instance->m_pixels != nullptr);
-        memset(texture_instance->m_pixels, 0, width * height * depth * format);
+        memset(texture_instance->m_pixels, 0, width * height * depth * pixel_size);
     }
     else
         texture_instance->m_pixels = nullptr;
@@ -2142,13 +2148,15 @@ jegl_texture_array* jegl_create_texture_array(
     if (layers == 0)
         layers = 1;
 
-    if ((format & jegl_texture_common::format::FORMAT_MASK) == 0)
+    if ((format & jegl_texture_common::format::NON_PIXEL_FORMAT_MASK) == 0)
     {
+        const size_t pixel_size =
+            (size_t)(format & jegl_texture_common::format::COLOR_DEPTH_MASK);
         texture_instance->m_pixels =
-            (jegl_texture_common::pixel_data_t*)malloc(width * height * layers * format);
+            (jegl_texture_common::pixel_data_t*)malloc(width * height * layers * pixel_size);
 
         assert(texture_instance->m_pixels != nullptr);
-        memset(texture_instance->m_pixels, 0, width * height * layers * format);
+        memset(texture_instance->m_pixels, 0, width * height * layers * pixel_size);
     }
     else
         texture_instance->m_pixels = nullptr;
@@ -2178,16 +2186,18 @@ jegl_texture_cube* jegl_create_texture_cube(
 
     constexpr size_t CUBE_FACE_COUNT = 6;
 
-    if ((format & jegl_texture_common::format::FORMAT_MASK) == 0)
+    if ((format & jegl_texture_common::format::NON_PIXEL_FORMAT_MASK) == 0)
     {
+        const size_t pixel_size =
+            (size_t)(format & jegl_texture_common::format::COLOR_DEPTH_MASK);
         texture_instance->m_pixels =
             (jegl_texture_common::pixel_data_t*)malloc(
-                CUBE_FACE_COUNT * width * height * format);
+                CUBE_FACE_COUNT * width * height * pixel_size);
 
         assert(texture_instance->m_pixels != nullptr);
         memset(
             texture_instance->m_pixels, 0,
-            CUBE_FACE_COUNT * width * height * format);
+            CUBE_FACE_COUNT * width * height * pixel_size);
     }
     else
         texture_instance->m_pixels = nullptr;
@@ -2416,6 +2426,15 @@ void jegl_share_resource_handle(jegl_resource_handle* resource_handle)
         texture_instance->m_width = (size_t)w;
         texture_instance->m_height = (size_t)h;
         texture_instance->m_format = jegl_texture_common::RGBA;
+
+        // Image textures default to sRGB; a texture property cache written by
+        // the editor can mark non-color data (normal maps, masks, ...) linear.
+        if (je_image_texture_get_color_space(path)
+            == JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB)
+        {
+            texture_instance->m_format = (jegl_texture_common::format)(
+                texture_instance->m_format | jegl_texture_common::format::SRGB);
+        }
 
         _jegl_init_resource_handle(&texture_instance->m_handle, path);
 

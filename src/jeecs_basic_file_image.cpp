@@ -1,5 +1,6 @@
 #define JE_IMPL
 #include "jeecs.hpp"
+#include "jeecs_cache_version.hpp"
 #include "jeecs_fimg_archive.hpp"
 
 #include <cstdio>
@@ -484,4 +485,41 @@ void jeecs_fimg_writer_abort(jeecs_fimg_writer* writer)
 
     writer->impl->abort();
     delete writer;
+}
+
+je_image_texture_color_space je_image_texture_get_color_space(const char* path)
+{
+    assert(path != nullptr);
+
+    // Missing/stale caches intentionally fall back to sRGB, matching the
+    // historical behavior of image textures before this property existed.
+    if (auto* cache = jeecs_load_cache_file(path, IMAGE_TEXTURE_CACHE_VERSION, 0))
+    {
+        uint32_t color_space = (uint32_t)JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB;
+        const size_t read = jeecs_file_read(&color_space, sizeof(color_space), 1, cache);
+        jeecs_file_close(cache);
+
+        if (read == 1 && color_space == (uint32_t)JE_IMAGE_TEXTURE_COLOR_SPACE_LINEAR)
+            return JE_IMAGE_TEXTURE_COLOR_SPACE_LINEAR;
+    }
+    return JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB;
+}
+
+bool je_image_texture_set_color_space(
+    const char* path, je_image_texture_color_space color_space)
+{
+    assert(path != nullptr);
+
+    // jeecs_create_cache_file also embeds the image CRC64, so changing the
+    // image later invalidates this property cache automatically.
+    void* cache = jeecs_create_cache_file(path, IMAGE_TEXTURE_CACHE_VERSION, 0);
+    if (cache == nullptr)
+        return false;
+
+    const uint32_t value =
+        color_space == JE_IMAGE_TEXTURE_COLOR_SPACE_LINEAR ? 1u : 0u;
+    const size_t written =
+        jeecs_write_cache_file(&value, sizeof(value), 1, cache);
+    jeecs_close_cache_file(cache);
+    return written == 1;
 }

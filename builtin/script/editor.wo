@@ -183,6 +183,20 @@ namespace vec4
         }
     }
 }
+// color 内部按线性颜色空间保存，颜色选择器使用 sRGB 显示与拾取，
+// 写回时再转换回线性颜色。
+namespace color
+{
+    using parser = void
+    {
+        public extern func edit(val: color, tag: string)=> option<color>
+        {
+            let display = val->to_srgb;
+            return ColorEdit4(F"##{tag}", display as raw vec4)
+                ->> \picked = color::from_srgb(picked as vec4);;
+        }
+    }
+}
 namespace quat
 {
     using parser = void
@@ -347,11 +361,11 @@ namespace Particle::color_gradient
         return (v < 0.) ? 0. | ((v > 1.) ? 1. | v);
     }
     // 按关键帧插值采样（与引擎侧 color_gradient::sample 一致）
-    func sample(times: vec<float>, colors: vec<vec4>, t: real)=> vec4
+    func sample(times: vec<float>, colors: vec<color>, t: real)=> color
     {
         let count = times->len;
         if (count == 0 || colors->len == 0)
-            return (1., 1., 1., 1.) as vec4;
+            return (1., 1., 1., 1.) as color;
         if (count == 1 || t <= times[0] as real)
             return colors[0];
         if (t >= times[count - 1] as real)
@@ -370,7 +384,7 @@ namespace Particle::color_gradient
                     c0.0 + (c1.0 - c0.0) * k,
                     c0.1 + (c1.1 - c0.1) * k,
                     c0.2 + (c1.2 - c0.2) * k,
-                    c0.3 + (c1.3 - c0.3) * k) as vec4;
+                    c0.3 + (c1.3 - c0.3) * k) as color;
             }
         }
         return colors[count - 1];
@@ -389,9 +403,9 @@ namespace Particle::color_gradient
             updated->add((j == i) ? v | src[j]);
         return updated;
     }
-    func replace_color_at(src: vec<vec4>, i: int, v: vec4)=> vec<vec4>
+    func replace_color_at(src: vec<color>, i: int, v: color)=> vec<color>
     {
-        let updated = []mut: vec<vec4>;
+        let updated = []mut: vec<color>;
         for (let mut j = 0; j < src->len; j += 1)
             updated->add((j == i) ? v | src[j]);
         return updated;
@@ -414,7 +428,7 @@ namespace Particle::color_gradient
             for (let mut i = 0; i < 24; i += 1)
             {
                 let t = i as real / 24.;
-                let c = sample(times, colors, t);
+                let c = sample(times, colors, t)->to_srgb;
                 let x0 = bar_pos.0 + bar_w * t;
                 let x1 = bar_pos.0 + bar_w * ((i + 1) as real / 24.);
                 do draw_list->AddRectFilled(
@@ -433,7 +447,7 @@ namespace Particle::color_gradient
                     if (count != times->len)
                     {
                         times->resize(count, 1. as float);
-                        colors->resize(count, (1., 1., 1., 1.) as vec4);
+                        colors->resize(count, (1., 1., 1., 1.) as color);
                         need_update = true;
                     }
                 }
@@ -455,10 +469,10 @@ namespace Particle::color_gradient
                 }
 
                 Widgets::beginRow(F"颜色{i}", col_x, 72.);
-                match (InputFloat4(
+                match (ColorEdit4(
                         F"##{tag}_c{i}",
-                        colors[i][0] as real, colors[i][1] as real,
-                        colors[i][2] as real, colors[i][3] as real)->>\v = v as vec4;)
+                        colors[i]->to_srgb as raw vec4)
+                        ->> \picked = color::from_srgb(picked as vec4);)
                 {
                     value(nc)?
                     {

@@ -235,11 +235,13 @@ namespace jeecs
                 std::max(emitter.m_size_min, emitter.m_size_max));
 
             const float color_k = math::random(0.0f, 1.0f);
+            const math::vec4 color_min = emitter.m_color_min.to_linear();
+            const math::vec4 color_max = emitter.m_color_max.to_linear();
             pool.base_color[i] = math::vec4(
-                math::lerp(emitter.m_color_min.x, emitter.m_color_max.x, color_k),
-                math::lerp(emitter.m_color_min.y, emitter.m_color_max.y, color_k),
-                math::lerp(emitter.m_color_min.z, emitter.m_color_max.z, color_k),
-                math::lerp(emitter.m_color_min.w, emitter.m_color_max.w, color_k));
+                math::lerp(color_min.x, color_max.x, color_k),
+                math::lerp(color_min.y, color_max.y, color_k),
+                math::lerp(color_min.z, color_max.z, color_k),
+                math::lerp(color_min.w, color_max.w, color_k));
 
             pool.rot[i] = math::random(
                 std::min(emitter.m_rotation_min, emitter.m_rotation_max),
@@ -448,7 +450,7 @@ namespace jeecs
                 float max_size = 0.f;
                 bool has_bounds = false;
 
-                const math::vec4 white(1.f, 1.f, 1.f, 1.f);
+                const math::color white(1.f, 1.f, 1.f, 1.f);
                 const float unit_scale = 1.f;
 
                 for (size_t i = 0; i < pool.alive_count; ++i)
@@ -469,7 +471,7 @@ namespace jeecs
                         pool.age[i] / pool.lifetime[i], 0.0f, 1.0f);
 
                     const math::vec4 grad
-                        = emitter.m_color_over_lifetime.sample(t, white);
+                        = emitter.m_color_over_lifetime.sample(t, white).to_linear();
                     const math::vec4& base = pool.base_color[i];
                     const math::vec4 color(
                         base.x * grad.x, base.y * grad.y,

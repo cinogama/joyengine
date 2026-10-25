@@ -91,6 +91,8 @@ namespace JEGaming::Saving::Entity
                     shader_dat->set(uname, from([vr1, vr2, vr3]));
                 float4((vr1, vr2, vr3, vr4))?
                     shader_dat->set(uname, from([vr1, vr2, vr3, vr4]));
+                color((vr1, vr2, vr3, vr4))?
+                    shader_dat->set(uname, from([vr1, vr2, vr3, vr4]));
                 _?/* Ignore. */;
             }
         }

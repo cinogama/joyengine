@@ -237,8 +237,9 @@ void _jegl_create_shader_cache(jegl_shader* shader_resource, uint64_t virtual_fi
             jeecs_write_cache_file(&uniform_name_len, sizeof(uint64_t), 1, cachefile);
             jeecs_write_cache_file(custom_uniform->m_name, sizeof(char), (size_t)uniform_name_len, cachefile);
 
-            // 4.1.2 write type
+            // 4.1.2 write type & tags
             jeecs_write_cache_file(&custom_uniform->m_uniform_type, sizeof(jegl_shader::uniform_type), 1, cachefile);
+            jeecs_write_cache_file(&custom_uniform->m_uniform_mask, sizeof(jegl_shader::uniform_mask), 1, cachefile);
 
             // 4.1.3 write data
             static_assert(sizeof(custom_uniform->m_value.m_float4x4) == sizeof(float[4][4]));
@@ -774,6 +775,7 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
 
             variable->m_name = jeecs::basic::make_new_string(uniform_info.m_name);
             variable->m_uniform_type = uniform_info.m_type;
+            variable->m_uniform_mask = uniform_info.m_uniform_mask;
             variable->m_index = jeecs::graphic::INVALID_UNIFORM_LOCATION;
             variable->m_offset = 0;
             variable->m_size = 0;
@@ -792,6 +794,7 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
             variable->m_next = nullptr;
             variable->m_name = jeecs::basic::make_new_string(texture.m_name);
             variable->m_uniform_type = jegl_shader::uniform_type::TEXTURE;
+            variable->m_uniform_mask = jegl_shader::uniform_mask::NONE;
             variable->m_index = jeecs::graphic::INVALID_UNIFORM_LOCATION;
             variable->m_offset = jeecs::graphic::INVALID_UNIFORM_LOCATION;
             variable->m_size = 0;
@@ -1035,8 +1038,9 @@ jegl_shader* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
         jeecs_file_read(const_cast<char*>(current_variable->m_name), sizeof(char), (size_t)uniform_name_len, cache_file);
         const_cast<char*>(current_variable->m_name)[(size_t)uniform_name_len] = 0;
 
-        // 4.1.2 read type
+        // 4.1.2 read type & tags
         jeecs_file_read(&current_variable->m_uniform_type, sizeof(jegl_shader::uniform_type), 1, cache_file);
+        jeecs_file_read(&current_variable->m_uniform_mask, sizeof(jegl_shader::uniform_mask), 1, cache_file);
 
         // 4.1.3 read data
         static_assert(sizeof(current_variable->m_value.m_float4x4) == sizeof(float[4][4]));
@@ -1237,6 +1241,7 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
         TextureCube,
         Texture2DMS,
         Structure, // User defined structure.
+        Color,     // float4 storage, tagged by woshader::Type::Color.
     };
     enum WoshaderFilter
     {
@@ -1264,6 +1269,9 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
             case Integer2: return jegl_shader::uniform_type::INT2;
             case Integer3: return jegl_shader::uniform_type::INT3;
             case Integer4: return jegl_shader::uniform_type::INT4;
+            // Color uses FLOAT4 storage; the color semantics are carried by
+            // the uniform mask recorded next to the type.
+            case Color: return jegl_shader::uniform_type::FLOAT4;
             default:
                 jeecs::debug::logfatal("Unsupport woshader type: %d.", (int)t);
                 return jegl_shader::uniform_type::FLOAT;
@@ -1412,8 +1420,12 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
         uniform_variable.m_name = woort_string(tmp2);
 
         woort_struct_get(tmp2, tmp, 1);
+        const auto woshader_type = (WoshaderType)woort_int(tmp2);
         uniform_variable.m_type =
-            parse_woshader_type_to_je_uniform_type((WoshaderType)woort_int(tmp2));
+            parse_woshader_type_to_je_uniform_type(woshader_type);
+        uniform_variable.m_uniform_mask = woshader_type == WoshaderType::Color
+            ? jegl_shader::uniform_mask::COLOR
+            : jegl_shader::uniform_mask::NONE;
 
         woort_struct_get(tmp2, tmp, 2);
 

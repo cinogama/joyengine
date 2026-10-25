@@ -50,7 +50,9 @@ let SelfLumine      = JE_LIGHT2D_SelfLuminescence;
 
 public func frag(vf: v2f)
 {
-    let albedo_color_rgb = pow(tex2d(Albedo, vf.uv)->xyz, vec3!(2.2, 2.2, 2.2));
+    // G-buffer and light targets are linear. Keep the composite linear;
+    // the swapchain's sRGB format performs the final encode.
+    let albedo_color_rgb = tex2d(Albedo, vf.uv)->xyz;
     
     let light_color_rgb = tex2d(Light, vf.uv)->xyz;
     let self_lumine_color_rgb = tex2d(SelfLumine, vf.uv)->xyz;
@@ -59,9 +61,8 @@ public func frag(vf: v2f)
     let mixed_color_rgb = max(vec3!(0., 0., 0.), albedo_color_rgb * glowing_color_rgb);
     
     let hdr_color_rgb = mixed_color_rgb / (mixed_color_rgb + vec3!(1., 1., 1.));
-    let hdr_ambient_with_gamma = pow(hdr_color_rgb, vec3!(1. / 2.2, 1. / 2.2, 1. / 2.2));
     
     return fout{
-        color = JE_COLOR * vec4!(hdr_ambient_with_gamma, 1.)
+        color = JE_COLOR * vec4!(hdr_color_rgb, 1.)
         };
 }

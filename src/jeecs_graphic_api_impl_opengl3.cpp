@@ -7,7 +7,13 @@
     || defined(JE_ENABLE_GLES300_GAPI)  \
     || defined(JE_ENABLE_WEBGL20_GAPI)
 
+#include <cstring>
+
 #include "jeecs_imgui_backend_api.hpp"
+
+#ifndef GL_FRAMEBUFFER_SRGB_EXT
+#   define GL_FRAMEBUFFER_SRGB_EXT 0x8DB9
+#endif
 
 #ifdef JE_ENABLE_GLES300_GAPI
 // #   ifdef __APPLE__
@@ -204,6 +210,34 @@ namespace jeecs::graphic::api::gl3
         jegl_shader* m_render_current_shader_resource = nullptr;
         jegl3_vertex_data* m_render_current_vertex = nullptr;
 
+        // Clears of the default framebuffer need an explicit sRGB encode on
+        // desktop GL because glClearBufferfv bypasses FRAMEBUFFER_SRGB.
+        bool m_render_target_is_default = false;
+
+        // sRGB presentation mode. Hardware mode uses an sRGB-capable default
+        // framebuffer plus FRAMEBUFFER_SRGB; otherwise all screen-bound draws
+        // are redirected to a linear offscreen FBO, which is encoded to the
+        // real default framebuffer at the end of the frame.
+        enum class srgb_output_mode
+        {
+            HARDWARE,
+            ENCODE_PASS,
+        };
+        srgb_output_mode m_srgb_output_mode = srgb_output_mode::ENCODE_PASS;
+        bool m_encoding_srgb_screen = false;
+
+        bool is_srgb_hardware() const
+        {
+            return m_srgb_output_mode == srgb_output_mode::HARDWARE;
+        }
+        bool is_srgb_encode_pass() const
+        {
+            return m_srgb_output_mode == srgb_output_mode::ENCODE_PASS;
+        }
+
+        std::optional<jeecs::basic::resource<jeecs::graphic::framebuffer>>
+            m_srgb_encode_screen_target;
+
         JECS_DISABLE_MOVE_AND_COPY(jegl_gl3_context);
 
         jegl_gl3_context(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
@@ -375,6 +409,90 @@ namespace jeecs::graphic::api::gl3
         je_log(jelog_level, "(%d)%s-%s: %s", id, source_type, msg_type, message);
     }
 #endif
+
+    [[maybe_unused]] static bool _gl_extension_supported(const char* name)
+    {
+        const char* extensions =
+            reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS));
+        if (extensions == nullptr)
+            return false;
+
+        const size_t name_length = std::strlen(name);
+        const char* cursor = extensions;
+        while ((cursor = std::strstr(cursor, name)) != nullptr)
+        {
+            const char* end = cursor + name_length;
+            if ((cursor == extensions || cursor[-1] == ' ')
+                && (*end == ' ' || *end == '\0'))
+                return true;
+            cursor = end;
+        }
+        return false;
+    }
+
+    // 默认帧缓冲不支持硬件 sRGB 写入控制时，用这个离屏 framebuffer 代替屏幕：
+    // 整帧先按线性颜色渲染到这里，最后再用 srgb_encode.shader 绘制到真正的
+    // 默认帧缓冲。颜色附件同时作为编码 shader 的输入。
+    static bool _gl_ensure_srgb_screen_target(jegl_gl3_context* context)
+    {
+        int width = (int)context->RESOLUTION_WIDTH;
+        int height = (int)context->RESOLUTION_HEIGHT;
+        if (width <= 0 || height <= 0)
+            je_io_get_window_size(&width, &height);
+        if (width <= 0 || height <= 0)
+            return false;
+
+        auto& target = context->m_srgb_encode_screen_target;
+        if (target.has_value()
+            && (*target)->width() == (size_t)width
+            && (*target)->height() == (size_t)height)
+            return true;
+
+        target.reset();
+
+        auto created = jeecs::graphic::framebuffer::create(
+            (size_t)width, (size_t)height,
+            { jegl_texture_common::format::RGBA },
+            true);
+        if (!created.has_value()
+            || !_jegl_prepare_framebuffer_resource(
+                created.value()->resource()))
+        {
+            jeecs::debug::logerr(
+                "GL: failed to create the linear offscreen screen target.");
+            return false;
+        }
+
+        target = created.value();
+        return true;
+    }
+
+    static void _gl_bind_srgb_encode_target(jegl_gl3_context* context)
+    {
+        if (_gl_ensure_srgb_screen_target(context))
+        {
+            auto* framebuffer = static_cast<jegl_gl3_framebuf*>(
+                (*context->m_srgb_encode_screen_target)
+                    ->resource()->m_handle.m_ptr);
+            glBindFramebuffer(GL_FRAMEBUFFER, framebuffer->m_fbo);
+        }
+        else
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+
+    static jegl_texture_2d* _gl_srgb_encode_source(
+        jegl_gl3_context* context)
+    {
+        auto& target = context->m_srgb_encode_screen_target;
+        if (!target.has_value())
+            return nullptr;
+
+        auto attachment = (*target)->get_attachment(0);
+        return attachment.has_value()
+            ? attachment.value()->resource()
+            : nullptr;
+    }
+
     je_GraphicImplContext gl_startup(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
     {
         jegl_gl3_context* context = new jegl_gl3_context(gthread, config, reboot);
@@ -404,6 +522,32 @@ namespace jeecs::graphic::api::gl3
 #endif
 #endif
         glEnable(GL_DEPTH_TEST);
+
+        // Choose how the final linear-to-sRGB encode happens:
+        //  * desktop GL: sRGB-capable window + FRAMEBUFFER_SRGB
+        //  * GLES with EGL_KHR_gl_colorspace + EXT_sRGB_write_control: same
+        //  * otherwise (WebGL, GLES without support): full-screen encode pass
+#if defined(JE_ENABLE_GL330_GAPI)
+        // FRAMEBUFFER_SRGB is core since OpenGL 3.0; the window is requested
+        // with GLFW_SRGB_CAPABLE, so the default framebuffer encodes directly.
+        glEnable(GL_FRAMEBUFFER_SRGB);
+        context->m_srgb_output_mode =
+            jegl_gl3_context::srgb_output_mode::HARDWARE;
+#elif defined(JE_ENABLE_GLES300_GAPI)
+        bool surface_srgb_capable = false;
+#   ifdef JE_GL_USE_EGL_INSTEAD_GLFW
+        surface_srgb_capable =
+            static_cast<egl*>(context->m_interface)
+                ->is_surface_srgb_capable();
+#   endif
+        if (surface_srgb_capable
+            && _gl_extension_supported("GL_EXT_sRGB_write_control"))
+        {
+            glEnable(GL_FRAMEBUFFER_SRGB_EXT);
+            context->m_srgb_output_mode =
+                jegl_gl3_context::srgb_output_mode::HARDWARE;
+        }
+#endif
         jegui_init_gl330(
             gthread,
             [](jegl_context*, jegl_texture_2d* res)
@@ -471,19 +615,39 @@ namespace jeecs::graphic::api::gl3
     }
 
     jegl_update_action gl_commit_update(
-        je_GraphicImplContext, jegl_update_action)
+        je_GraphicImplContext ctx, jegl_update_action)
     {
-        // 回到默认帧缓冲区
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        auto* context = static_cast<jegl_gl3_context*>(ctx);
+        const bool encode_pass = context->is_srgb_encode_pass();
+
+        // 没有硬件 sRGB 写入控制时，整帧（包括 ImGui）先渲染到线性离屏
+        // framebuffer，最后再统一编码到真正的默认帧缓冲。
+        if (encode_pass)
+            _gl_bind_srgb_encode_target(context);
+        else
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 
         jegui_update_gl330();
+
+        if (encode_pass)
+        {
+            context->m_encoding_srgb_screen = true;
+            jegui_commit_srgb_encode_pass(_gl_srgb_encode_source(context));
+            context->m_encoding_srgb_screen = false;
+        }
 
         // 将绘制命令异步地提交给GPU
         glFlush();
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
-    void gl_pre_shutdown(jegl_context*, je_GraphicImplContext, bool)
-    {}
+    void gl_pre_shutdown(
+        jegl_context*, je_GraphicImplContext userdata, bool)
+    {
+        // 该目标是上下文自持的 framebuffer，在资源层释放前显式释放，
+        // 让颜色/深度附件与资源句柄走正常的回收流程。
+        static_cast<jegl_gl3_context*>(userdata)
+            ->m_srgb_encode_screen_target.reset();
+    }
     void gl_shutdown(jegl_context*, je_GraphicImplContext userdata, bool reboot)
     {
         jegl_gl3_context* context = static_cast<jegl_gl3_context*>(userdata);
@@ -964,6 +1128,8 @@ namespace jeecs::graphic::api::gl3
         jegl_texture_common::format fmt, bool is_16bit,
         GLint& texture_src_format, GLint& texture_aim_format)
     {
+        const bool is_srgb =
+            0 != (fmt & jegl_texture_common::format::SRGB);
         switch (fmt & jegl_texture_common::format::COLOR_DEPTH_MASK)
         {
         case jegl_texture_common::format::MONO:
@@ -972,7 +1138,9 @@ namespace jeecs::graphic::api::gl3
             return true;
         case jegl_texture_common::format::RGBA:
             texture_src_format = GL_RGBA;
-            texture_aim_format = is_16bit ? GL_RGBA16F : GL_RGBA;
+            texture_aim_format = is_16bit
+                ? GL_RGBA16F
+                : (is_srgb ? GL_SRGB8_ALPHA8 : GL_RGBA);
             return true;
         default:
             jeecs::debug::logerr("Unknown texture raw-data format.");
@@ -1921,8 +2089,16 @@ namespace jeecs::graphic::api::gl3
         context->current_active_shader_may_null = nullptr;
         context->m_render_current_shader_resource = nullptr;
         context->m_render_current_vertex = nullptr;
+        context->m_render_target_is_default = (target == nullptr);
 
-        if (target != nullptr)
+        const bool encode_fallback =
+            target == nullptr
+            && context->is_srgb_encode_pass()
+            && !context->m_encoding_srgb_screen;
+
+        if (encode_fallback)
+            _gl_bind_srgb_encode_target(context);
+        else if (target != nullptr)
         {
             auto* framebuffer = static_cast<jegl_gl3_framebuf*>(
                 target->m_handle.m_ptr);
@@ -1932,6 +2108,10 @@ namespace jeecs::graphic::api::gl3
         else
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+        // 引擎不使用 scissor；ImGui 渲染结束后可能留下 scissor 状态，
+        // 编码 pass 必须完整覆盖整个屏幕。
+        glDisable(GL_SCISSOR_TEST);
+
         glViewport(
             (GLint)viewport->x,
             (GLint)viewport->y,
@@ -1940,8 +2120,20 @@ namespace jeecs::graphic::api::gl3
     }
 
     void gl_render_clear_color(
-        je_GraphicImplContext, uint32_t attachment, const float rgba[4])
+        je_GraphicImplContext ctx, uint32_t attachment, const float rgba[4])
     {
+        auto* context = static_cast<jegl_gl3_context*>(ctx);
+        if (context->m_render_target_is_default
+            && context->is_srgb_hardware())
+        {
+            // sRGB conversion applies to fragment writes and blending, but
+            // not to clears; encode the linear clear color before writing.
+            const jeecs::math::vec4 srgb =
+                jeecs::math::color(rgba[0], rgba[1], rgba[2], rgba[3]).to_srgb();
+            const float encoded[4] = { srgb.x, srgb.y, srgb.z, srgb.w };
+            glClearBufferfv(GL_COLOR, (GLint)attachment, encoded);
+            return;
+        }
         glClearBufferfv(GL_COLOR, (GLint)attachment, rgba);
     }
 

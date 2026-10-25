@@ -122,11 +122,12 @@ namespace jeecs
                                                 }
                                                 break;
                                             case Animation::FrameAnimation::animation_list::frame_data::data_value::type::VEC4:
-                                                if (cdata.m_member_info->m_member_type != jeecs::typing::of<math::vec4>())
+                                                if (cdata.m_member_info->m_member_type != jeecs::typing::of<math::vec4>()
+                                                    && cdata.m_member_info->m_member_type != jeecs::typing::of<math::color>())
                                                 {
                                                     jeecs::debug::logerr(
                                                         "Cannot apply animation frame data for component '%s''s member '%s', "
-                                                        "type should be 'vec4', but member is '%s'.",
+                                                        "type should be 'vec4' or 'color', but member is '%s'.",
                                                         cdata.m_component_type->m_typename,
                                                         cdata.m_member_info->m_member_name,
                                                         cdata.m_member_info->m_member_type->m_typename);
@@ -188,7 +189,21 @@ namespace jeecs
                                                     *(math::vec3*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.v3;
                                                 break;
                                             case Animation::FrameAnimation::animation_list::frame_data::data_value::type::VEC4:
-                                                if (cdata.m_offset_mode)
+                                                if (cdata.m_member_info->m_member_type == jeecs::typing::of<math::color>())
+                                                {
+                                                    auto* color_member = (math::color*)cdata.m_member_addr_cache;
+                                                    const auto& value = cdata.m_member_value.m_value.v4;
+                                                    if (cdata.m_offset_mode)
+                                                        *color_member = math::color(
+                                                            color_member->r + value.x,
+                                                            color_member->g + value.y,
+                                                            color_member->b + value.z,
+                                                            color_member->a + value.w);
+                                                    else
+                                                        *color_member = math::color(
+                                                            value.x, value.y, value.z, value.w);
+                                                }
+                                                else if (cdata.m_offset_mode)
                                                     *(math::vec4*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.v4;
                                                 else
                                                     *(math::vec4*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.v4;

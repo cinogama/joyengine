@@ -416,8 +416,9 @@ namespace jeecs
         {
             if (clear != nullptr)
             {
+                const math::vec4 clear_color = clear->color.to_linear();
                 const float clear_buffer_color[] = {
-                    clear->color.x, clear->color.y, clear->color.z, clear->color.w };
+                    clear_color.x, clear_color.y, clear_color.z, clear_color.w };
                 jegl_cmd_clear_color(cmd, 0, clear_buffer_color);
             }
         }
@@ -572,7 +573,7 @@ namespace jeecs
                 u.tiling = bound.tiling;
                 u.offset = bound.offset;
                 if (rendentity.color != nullptr)
-                    u.color = rendentity.color->color;
+                    u.color = rendentity.color->color.to_linear();
 
                 draw_shader_passes(cmd, drawing_shape, drawing_shaders, u);
             }
@@ -933,7 +934,7 @@ namespace jeecs
                         u.tiling = bound.tiling;
                         u.offset = bound.offset;
                         if (rendentity.color != nullptr)
-                            u.color = rendentity.color->color;
+                            u.color = rendentity.color->color.to_linear();
 
                         draw_shader_passes(rend_chain, drawing_shape, drawing_shaders, u);
                     }
@@ -1005,7 +1006,7 @@ namespace jeecs
             // 节点色调烘焙进顶点色（批内共享一次绘制，无法逐节点传 uniform）。
             math::vec4 tint(1.f, 1.f, 1.f, 1.f);
             if (rendentity.color != nullptr)
-                tint = rendentity.color->color;
+                tint = rendentity.color->color.to_linear();
 
             // 文本像素 → 相机像素：布局在窗口分辨率下量化，相机目标分辨率
             // 不同时按基准轴比例统一缩放（行为与旧纹理路径等价）。
@@ -2754,7 +2755,9 @@ namespace jeecs
 
                         // 传入 Light2D 所需的颜色、衰减信息
                         math::vec4 light_color =
-                            light2d.color == nullptr ? math::vec4(1.f, 1.f, 1.f, 1.f) : light2d.color->color;
+                            light2d.color == nullptr
+                            ? math::vec4(1.f, 1.f, 1.f, 1.f)
+                            : light2d.color->color.to_linear();
                         if (light2d.gain != nullptr)
                             light_color.w *= light2d.gain->gain;
 
@@ -2838,7 +2841,7 @@ namespace jeecs
                         (float)post_light_target_fb->width(),
                         (float)post_light_target_fb->height());
                     math::vec4 final_color = current_camera.color != nullptr
-                        ? current_camera.color->color
+                        ? current_camera.color->color.to_linear()
                         : math::vec4(1.f, 1.f, 1.f, 1.f);
 
                     // 注意：合成 pass 不设置 m/mv/mvp/local_scale（这些 shader 不使用它们），

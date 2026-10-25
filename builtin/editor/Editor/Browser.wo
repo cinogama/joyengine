@@ -42,6 +42,7 @@ import builtin::editor::Editor::Workflow;
 import builtin::editor::Editor::TilemapEditor;
 import ResourcePath;
 import ShaderUpdater;
+import TextureProperties;
 import Action::ModifyPrefab;
 
 using std;
@@ -1797,6 +1798,12 @@ namespace JEEditor::Editor
                             if (MenuItem("打开"))
                                 open_action(sel);
                     }
+
+                    if (isfile(sel) && isImagePath(sel)
+                        && MenuItem("纹理属性"))
+                    {
+                        TextureProperties::showTextureProperties(sel);
+                    }
                     
                     if (is_module_dir && MenuItem("重新构建并载入"))
                     {
@@ -1895,6 +1902,18 @@ namespace JEEditor::Editor
             }
         }
         
+        // 编辑器可打开为纹理属性窗口的图片扩展名（与 stb_image 的常见
+        // 输入格式一致；新格式接入时同时更新 iconForPath）。
+        func isImagePath(path: fsys::path_t)=> bool
+        {
+            let ext = string::lower(extension(path));
+            return ext == ".png"
+                || ext == ".jpg"
+                || ext == ".jpeg"
+                || ext == ".bmp"
+                || ext == ".tga";
+        }
+
         // 双击 / 右键“打开”时按扩展名查找打开回调：目录与未注册的扩展名返回 none。
         func openActionForPath(path: fsys::path_t)=> option<(fsys::path_t)=> void>
         {
@@ -1917,6 +1936,13 @@ namespace JEEditor::Editor
             
             if (!isfile(path))
                 return option::none;
+
+            if (isImagePath(path))
+            {
+                return option::value(func(p: fsys::path_t) {
+                        TextureProperties::showTextureProperties(p);
+                    });
+            }
                 
             return ext_open_map->get(string::lower(extension(path)));
         }

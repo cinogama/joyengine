@@ -283,6 +283,25 @@ namespace vec4
         return self[0] * b[0] + self[1] * b[1] + self[2] * b[2] + self[3] * b[3];
     }
 }
+// color 以线性颜色空间保存 RGBA。to_srgb 用于编辑器显示和最终输出，
+// to_linear 返回可直接交给 shader/管线的线性颜色，from_srgb 用于把
+// sRGB 数据（如颜色选择器结果）写回 color。
+namespace color
+{
+    extern("libjoyecs", "wojeapi_color_to_srgb")
+        public func to_srgb(self: color)=> vec4;
+        
+    extern("libjoyecs", "wojeapi_color_to_linear")
+        public func to_linear(self: color)=> vec4;
+        
+    extern("libjoyecs", "wojeapi_color_from_srgb")
+        public func from_srgb(v: vec4)=> color;
+        
+    public func from_linear(v: vec4)=> color
+    {
+        return (v[0], v[1], v[2], v[3]) as color;
+    }
+}
 namespace ivec2
 {
     public func operator + (a: ivec2, b: ivec2)

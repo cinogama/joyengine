@@ -9,6 +9,21 @@ namespace je
 {
     namespace graphic
     {
+        // 图片纹理颜色空间：sRGB（默认，颜色贴图）或 Linear（法线/遮罩等
+        // 非颜色数据）。属性保存在 <图片路径>.je4cache 中。
+        public enum texture_color_space
+        {
+            SRGB = 0,
+            LINEAR = 1,
+        }
+
+        extern("libjoyecs", "wojeapi_image_texture_get_color_space")
+            public func image_texture_get_color_space(path: string)=> texture_color_space;
+
+        extern("libjoyecs", "wojeapi_image_texture_set_color_space")
+            public func image_texture_set_color_space(
+                path: string, space: texture_color_space)=> bool;
+
         public using vertex = gchandle
         {
             public enum type
@@ -139,6 +154,7 @@ namespace je
             extern("libjoyecs", "wojeapi_shader_path")
                 public func path(self: shader)=> option<string>;
                 
+            // 顺序必须与 jeecs.hpp 的 jegl_shader::script_uniform_variant 一致。
             public union uniform_variable
             {
                 integer(int),
@@ -150,6 +166,8 @@ namespace je
                 float3((real, real, real)),
                 float4((real, real, real, real)),
                 texture(int),
+                // Declared by woshader::Type::Color; stored as linear RGBA.
+                color((real, real, real, real)),
                 others,
             }
             
@@ -181,6 +199,8 @@ namespace je
                 func _set_uniform_float3(shad: shader, name: string, x: real, y: real, z: real)=> void;
             extern("libjoyecs", "wojeapi_set_uniforms_float4")
                 func _set_uniform_float4(shad: shader, name: string, x: real, y: real, z: real, w: real)=> void;
+            extern("libjoyecs", "wojeapi_set_uniforms_color")
+                func _set_uniform_color(shad: shader, name: string, x: real, y: real, z: real, w: real)=> void;
                 
             public func set_uniform<T>(self: shader, name: string, val: T)
                 where val is int
@@ -210,6 +230,13 @@ namespace je
                     _set_uniform_float4(self, name, val...);
                 else
                     std::panic("Here should not been exec.");
+            }
+            // Color uniforms carry linear RGBA. This variant is explicit so
+            // callers can express colour intent; the underlying slot is float4.
+            public func set_uniform_color(
+                self: shader, name: string, val: (real, real, real, real))=> void
+            {
+                _set_uniform_color(self, name, val...);
             }
         }
         
@@ -286,6 +313,8 @@ namespace je
                 func _set_uniform_float3(act: draw_action, shad: shader, name: string, x: real, y: real, z: real)=> void;
             extern("libjoyecs", "wojeapi_draw_action_set_uniform_float4")
                 func _set_uniform_float4(act: draw_action, shad: shader, name: string, x: real, y: real, z: real, w: real)=> void;
+            extern("libjoyecs", "wojeapi_draw_action_set_uniform_color")
+                func _set_uniform_color(act: draw_action, shad: shader, name: string, x: real, y: real, z: real, w: real)=> void;
             
             extern("libjoyecs", "wojeapi_draw_action_set_uniform_float2x2")
                 func _set_uniform_float2x2(act: draw_action, shad: shader, name: string,
@@ -329,7 +358,14 @@ namespace je
                 else
                     std::panic("Here should not been exec.");
             }
-            
+
+            public func set_uniform_color(
+                self: draw_action, shad: shader, name: string,
+                val: (real, real, real, real))=> void
+            {
+                _set_uniform_color(self, shad, name, val...);
+            }
+
             public func set_uniform_mat4x4(
                 self: draw_action,
                 shad: shader, 
