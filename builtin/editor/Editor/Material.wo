@@ -7,6 +7,7 @@ import je::gui;
 import je::internal;
 import je::typeinfo;
 import je::towoo;
+import je::towoo::types;
 import je::towoo::components;
 
 import pkg::fsys;
@@ -351,6 +352,22 @@ namespace JEEditor::Editor
                         {
                             trackUniformEdit(wctx, eid, shader_index, uname, tag, uvar, shader::uniform_variable::float4((n1, n2, n3, n4)));
                             sinst->set_uniform(uname, (n1, n2, n3, n4));
+                        }
+                    }
+                }
+                color((v1, v2, v3, v4))?
+                {
+                    // 存储值为线性颜色，选择器以 sRGB 显示并写回线性值。
+                    let display = ((v1, v2, v3, v4) as color)->to_srgb;
+                    match (ColorEdit4(tag, display as raw vec4)
+                        ->> \picked = ((picked as vec4) as color)->to_linear;)
+                    {
+                        none?;
+                        value((n1, n2, n3, n4))?
+                        {
+                            trackUniformEdit(wctx, eid, shader_index, uname, tag, uvar,
+                                shader::uniform_variable::color((n1, n2, n3, n4)));
+                            sinst->set_uniform_color(uname, (n1, n2, n3, n4));
                         }
                     }
                 }

@@ -65,6 +65,8 @@ namespace JEEditor::Editor::Action
                     do sinst->set_uniform(uname, (v1, v2, v3));
                 float4((v1, v2, v3, v4))?
                     do sinst->set_uniform(uname, (v1, v2, v3, v4));
+                color((v1, v2, v3, v4))?
+                    do sinst->set_uniform_color(uname, (v1, v2, v3, v4));
                 // 采样器与未知类型的 uniform 没有写入口径
                 _? return false;
             }

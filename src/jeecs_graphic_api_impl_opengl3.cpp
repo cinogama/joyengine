@@ -678,6 +678,7 @@ namespace jeecs::graphic::api::gl3
                     break;
                 case jegl_shader::uniform_type::INT4:
                 case jegl_shader::uniform_type::FLOAT4:
+                case jegl_shader::uniform_type::COLOR:
                     unit_size = 16;
                     allign_base = 16;
                     break;

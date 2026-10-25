@@ -151,6 +151,8 @@ namespace je
                 float4((real, real, real, real)),
                 texture(int),
                 others,
+                // Declared by woshader::Type::Color; stored as linear RGBA.
+                color((real, real, real, real)),
             }
             
             public using uniform_value_data = struct {
@@ -181,6 +183,8 @@ namespace je
                 func _set_uniform_float3(shad: shader, name: string, x: real, y: real, z: real)=> void;
             extern("libjoyecs", "wojeapi_set_uniforms_float4")
                 func _set_uniform_float4(shad: shader, name: string, x: real, y: real, z: real, w: real)=> void;
+            extern("libjoyecs", "wojeapi_set_uniforms_color")
+                func _set_uniform_color(shad: shader, name: string, x: real, y: real, z: real, w: real)=> void;
                 
             public func set_uniform<T>(self: shader, name: string, val: T)
                 where val is int
@@ -210,6 +214,13 @@ namespace je
                     _set_uniform_float4(self, name, val...);
                 else
                     std::panic("Here should not been exec.");
+            }
+            // Color uniforms carry linear RGBA. This variant is explicit so
+            // callers can express colour intent; the underlying slot is float4.
+            public func set_uniform_color(
+                self: shader, name: string, val: (real, real, real, real))=> void
+            {
+                _set_uniform_color(self, name, val...);
             }
         }
         
@@ -329,7 +340,14 @@ namespace je
                 else
                     std::panic("Here should not been exec.");
             }
-            
+
+            public func set_uniform_color(
+                self: draw_action, shad: shader, name: string,
+                val: (real, real, real, real))=> void
+            {
+                _set_uniform_float4(self, shad, name, val...);
+            }
+
             public func set_uniform_mat4x4(
                 self: draw_action,
                 shad: shader, 

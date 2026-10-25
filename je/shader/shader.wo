@@ -147,6 +147,7 @@ namespace je::shader
         if (type == woshader::Type::Float4x4
             || type == woshader::Type::Float3x3
             || type == woshader::Type::Float4
+            || type == woshader::Type::Color
             || type == woshader::Type::Integer4)
             return 4;
         else if (type == woshader::Type::Float3
@@ -228,6 +229,8 @@ namespace je::shader
             else if (type == Type::Float3)
                 return "float3";
             else if (type == Type::Float4)
+                return "float4";
+            else if (type == Type::Color)
                 return "float4";
             else if (type == Type::Float2x2)
                 return "float2x2";

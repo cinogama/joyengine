@@ -40,6 +40,7 @@ namespace
             break;
         case jegl_shader::uniform_type::INT4:
         case jegl_shader::uniform_type::FLOAT4:
+        case jegl_shader::uniform_type::COLOR:
             *out_size = 16;
             *out_align = 16;
             break;
@@ -1237,6 +1238,7 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
         TextureCube,
         Texture2DMS,
         Structure, // User defined structure.
+        Color,     // float4 storage, tagged by woshader::Type::Color.
     };
     enum WoshaderFilter
     {
@@ -1264,6 +1266,7 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
             case Integer2: return jegl_shader::uniform_type::INT2;
             case Integer3: return jegl_shader::uniform_type::INT3;
             case Integer4: return jegl_shader::uniform_type::INT4;
+            case Color: return jegl_shader::uniform_type::COLOR;
             default:
                 jeecs::debug::logfatal("Unsupport woshader type: %d.", (int)t);
                 return jegl_shader::uniform_type::FLOAT;
@@ -1345,9 +1348,12 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
     for (size_t i = 0; i < vin_layout_len; ++i)
     {
         (void)woort_vec_get(tmp, vertex_in_layout, i);
-        wrapper->m_vin_layout.at(i) =
-            parse_woshader_type_to_je_uniform_type(
-                static_cast<WoshaderType>(woort_unbox_int(tmp)));
+        auto vin_type = parse_woshader_type_to_je_uniform_type(
+            static_cast<WoshaderType>(woort_unbox_int(tmp)));
+        // color is float4 on the vertex layout; COLOR is uniform metadata.
+        if (vin_type == jegl_shader::uniform_type::COLOR)
+            vin_type = jegl_shader::uniform_type::FLOAT4;
+        wrapper->m_vin_layout.at(i) = vin_type;
     }
 
     const auto fout_layout_len = woort_vec_len(fragment_out_layout);
@@ -1355,9 +1361,11 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
     for (size_t i = 0; i < fout_layout_len; ++i)
     {
         (void)woort_vec_get(tmp, fragment_out_layout, i);
-        wrapper->m_fout_layout.at(i) =
-            parse_woshader_type_to_je_uniform_type(
-                static_cast<WoshaderType>(woort_unbox_int(tmp)));
+        auto fout_type = parse_woshader_type_to_je_uniform_type(
+            static_cast<WoshaderType>(woort_unbox_int(tmp)));
+        if (fout_type == jegl_shader::uniform_type::COLOR)
+            fout_type = jegl_shader::uniform_type::FLOAT4;
+        wrapper->m_fout_layout.at(i) = fout_type;
     }
 
     const auto sampler_count = woort_vec_len(samplers);
@@ -1466,6 +1474,7 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
             uniform_variable.m_init_value.m_float3[2] = woort_float(tmp2);
             break;
         case jegl_shader::uniform_type::FLOAT4:
+        case jegl_shader::uniform_type::COLOR:
             woort_struct_get(tmp2, tmp, 0);
             uniform_variable.m_init_value.m_float4[0] = woort_float(tmp2);
             woort_struct_get(tmp2, tmp, 1);

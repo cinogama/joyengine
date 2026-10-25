@@ -302,6 +302,13 @@ namespace JEEditor::Editor::EditSession
                         return av.0 == bx && av.1 == by && av.2 == bz && av.3 == bw;
                     _? return false;
                 }
+            color(av)?
+                match (b)
+                {
+                    color((bx, by, bz, bw))?
+                        return av.0 == bx && av.1 == by && av.2 == bz && av.3 == bw;
+                    _? return false;
+                }
             texture(ap)?
                 match (b)
                 {

@@ -807,6 +807,7 @@ namespace jeecs::graphic::api::dx11
                     break;
                 }
                 case jegl_shader::uniform_type::FLOAT4:
+                case jegl_shader::uniform_type::COLOR:
                 {
                     vlayout.SemanticIndex = FLOAT3_4_COUNT++;
                     if (vlayout.SemanticIndex == 0)
@@ -922,6 +923,7 @@ namespace jeecs::graphic::api::dx11
                     break;
                 case jegl_shader::uniform_type::INT4:
                 case jegl_shader::uniform_type::FLOAT4:
+                case jegl_shader::uniform_type::COLOR:
                     unit_size = 16;
                     break;
                 case jegl_shader::uniform_type::FLOAT2X2:

@@ -2379,6 +2379,11 @@ WOORT_API woort_api wojeapi_get_uniforms_from_shader(void)
         {
             woort_set_int(elem, jegl_shader::uniform_type::TEXTURE);
         }
+        else if (uniforms->m_uniform_type == jegl_shader::uniform_type::COLOR)
+        {
+            // `color` follows `others` in the Woolang uniform_variable union.
+            woort_set_int(elem, 1 + jegl_shader::uniform_type::TEXTURE + 1);
+        }
         else
             // Others
             woort_set_int(elem, 1 + jegl_shader::uniform_type::TEXTURE);
@@ -2424,6 +2429,7 @@ WOORT_API woort_api wojeapi_get_uniforms_from_shader(void)
             woort_struct_set_float(elem, 2, uniforms->m_value.m_float3[2]);
             break;
         case jegl_shader::uniform_type::FLOAT4:
+        case jegl_shader::uniform_type::COLOR:
             woort_set_struct(elem, 4);
             woort_struct_set_float(elem, 0, uniforms->m_value.m_float4[0]);
             woort_struct_set_float(elem, 1, uniforms->m_value.m_float4[1]);
@@ -2499,6 +2505,16 @@ WOORT_API woort_api wojeapi_set_uniforms_float4(void)
     auto* shader = (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(0);
     (*shader)->set_uniform(woort_string(1),
         jeecs::math::vec4(woort_float(2), woort_float(3), woort_float(4), woort_float(5)));
+
+    return woort_ret_void();
+}
+WOORT_API woort_api wojeapi_set_uniforms_color(void)
+{
+    auto* shader = (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(0);
+    // The caller supplies linear components; math::color stores linear too,
+    // so the color overload is an explicit type check plus a float4 write.
+    (*shader)->set_uniform(woort_string(1),
+        jeecs::math::color(woort_float(2), woort_float(3), woort_float(4), woort_float(5)));
 
     return woort_ret_void();
 }

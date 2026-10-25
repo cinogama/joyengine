@@ -2449,6 +2449,9 @@ struct jegl_shader
         FLOAT2X2,
         FLOAT3X3,
         FLOAT4X4,
+        // Same storage as FLOAT4; exposes a color-specific editor and
+        // set_uniform overload while backends treat it as 4 floats.
+        COLOR,
     };
     struct builtin_uniform_location
     {
@@ -11354,9 +11357,11 @@ namespace jeecs
                     if (jegl_shad_uniforms->m_name == name)
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
-                            jegl_shader::uniform_type::FLOAT4)
+                                jegl_shader::uniform_type::FLOAT4
+                            && jegl_shad_uniforms->m_uniform_type !=
+                                jegl_shader::uniform_type::COLOR)
                             debug::logerr(
-                                "Trying set uniform('%s' = (%f, %f, %f, %f)) to shader(%p), but current uniform type is not 'FLOAT4'.",
+                                "Trying set uniform('%s' = (%f, %f, %f, %f)) to shader(%p), but current uniform type is not 'FLOAT4' or 'COLOR'.",
                                 name.c_str(), val.x, val.y, val.z, val.w, this);
                         else
                         {
@@ -11372,6 +11377,10 @@ namespace jeecs
                     }
                     jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
+            }
+            void set_uniform(const std::string& name, const math::color& val) noexcept
+            {
+                set_uniform(name, val.to_linear());
             }
             const uint32_t* get_uniform_location(const std::string& name)
             {

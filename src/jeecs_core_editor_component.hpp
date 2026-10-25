@@ -85,6 +85,7 @@ inline void update_shader(
     case UT::FLOAT2: new_shad->set_uniform(uname, jeecs::math::vec2(v.m_float2[0], v.m_float2[1])); break;
     case UT::FLOAT3: new_shad->set_uniform(uname, jeecs::math::vec3(v.m_float3[0], v.m_float3[1], v.m_float3[2])); break;
     case UT::FLOAT4: new_shad->set_uniform(uname, jeecs::math::vec4(v.m_float4[0], v.m_float4[1], v.m_float4[2], v.m_float4[3])); break;
+    case UT::COLOR: new_shad->set_uniform(uname, jeecs::math::color(v.m_float4[0], v.m_float4[1], v.m_float4[2], v.m_float4[3])); break;
     default: break; // donothing
     }
 }

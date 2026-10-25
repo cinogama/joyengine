@@ -142,6 +142,7 @@ namespace
                 base_type = jegl_vertex::data_type::FLOAT32;
                 break;
             case jegl_shader::uniform_type::FLOAT4:
+            case jegl_shader::uniform_type::COLOR:
                 count = 4;
                 base_type = jegl_vertex::data_type::FLOAT32;
                 break;
