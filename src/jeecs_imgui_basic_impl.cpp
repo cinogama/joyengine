@@ -1296,16 +1296,35 @@ WOORT_API woort_api je_gui_colorbutton(void)
 WOORT_API woort_api je_gui_coloredit4(void)
 {
     woort_value s;
-    if (!woort_push_reserve(1, &s))
+    if (!woort_push_reserve(2, &s))
         return woort_ret_panic("Stack overflow.");
 
-    woort_U8CString label = woort_string(0);
-    float rgba[] = { woort_float(1), woort_float(2), woort_float(3), woort_float(4) };
+    float rgba[4] = {};
 
-    if (ImGui::ColorEdit4(label, rgba))
+    // Woolang 侧把颜色作为单个 (real, real, real, real) 元组传入，
+    // 不能像 InputFloat4 那样按 4 个独立实参读取。
+    woort_value elem = s + 0;
+    woort_struct_get(elem, 1, 0);
+    rgba[0] = woort_float(elem);
+    woort_struct_get(elem, 1, 1);
+    rgba[1] = woort_float(elem);
+    woort_struct_get(elem, 1, 2);
+    rgba[2] = woort_float(elem);
+    woort_struct_get(elem, 1, 3);
+    rgba[3] = woort_float(elem);
+
+    if (ImGui::ColorEdit4(
+        woort_string(0),
+        rgba,
+        ImGuiColorEditFlags_Float
+        | ImGuiColorEditFlags_HDR
+        | ImGuiColorEditFlags_DisplayRGB
+        | ImGuiColorEditFlags_InputRGB
+        | ImGuiColorEditFlags_PickerHueBar))
     {
-        return woort_ret_option_value(
-            set_float4_to_struct(s + 0, rgba[0], rgba[1], rgba[2], rgba[3]));
+        woort_value result = s + 1;
+        set_float4_to_struct(result, rgba[0], rgba[1], rgba[2], rgba[3]);
+        return woort_ret_option_value(result);
     }
     return woort_ret_option_none();
 }
@@ -1327,7 +1346,14 @@ WOORT_API woort_api je_gui_colorpicker4(void)
     woort_struct_get(elem, 1, 3);
     rgba[3] = woort_float(elem);
 
-    if (ImGui::ColorPicker4(woort_string(0), rgba))
+    if (ImGui::ColorPicker4(
+        woort_string(0),
+        rgba,
+        ImGuiColorEditFlags_Float
+        | ImGuiColorEditFlags_HDR
+        | ImGuiColorEditFlags_DisplayRGB
+        | ImGuiColorEditFlags_InputRGB
+        | ImGuiColorEditFlags_PickerHueBar))
     {
         woort_value result = s + 1;
         set_float4_to_struct(result, rgba[0], rgba[1], rgba[2], rgba[3]);
@@ -1746,7 +1772,7 @@ WOORT_API woort_api je_gui_register_exit_callback(void)
         return woort_ret_panic("Callback has been registered.");
 
     assert(
-        _je_gui_static_ctx._jegui_exit_callback_handler_vm == nullptr 
+        _je_gui_static_ctx._jegui_exit_callback_handler_vm == nullptr
         && _je_gui_static_ctx._jegui_exit_callback_function == nullptr);
 
     _je_gui_static_ctx._jegui_exit_callback_handler_vm = woort_vm_create();
@@ -2840,7 +2866,7 @@ void jegui_init_basic(
         jeecs::graphic::shader::load(
             gl_context,
             "!/builtin/shader/internal/imgui_image_displayer.shader")
-            .value();
+        .value();
 
     _je_gui_tls_ctx._jegui_imgui_config_path =
         jeecs_file_get_host_path() + std::string("/builtin/imgui.ini.je4cache");
