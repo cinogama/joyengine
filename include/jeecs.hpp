@@ -10301,6 +10301,30 @@ namespace jeecs
         }
 
         /*
+        标准 sRGB 传输函数（逐通道）。
+            * srgb_to_linear：sRGB 编码值 -> 线性值；sRGB 无法表示负
+              分量，负输入按 0 处理
+            * linear_to_srgb：线性值 -> sRGB 编码值；负值按 0 处理，
+              大于 1 的 HDR 分量保持大于 1
+        */
+        inline float srgb_to_linear(float c) noexcept
+        {
+            if (c <= 0.f)
+                return 0.f;
+            if (c <= 0.04045f)
+                return c / 12.92f;
+            return std::pow((c + 0.055f) / 1.055f, 2.4f);
+        }
+        inline float linear_to_srgb(float c) noexcept
+        {
+            if (c <= 0.f)
+                return 0.f;
+            if (c <= 0.0031308f)
+                return 12.92f * c;
+            return 1.055f * std::pow(c, 1.f / 2.4f) - 0.055f;
+        }
+
+        /*
         jeecs::math::color [类型]
         引擎内部使用的颜色类型。RGB 分量按线性颜色空间保存（通常为
         [0, 1]，允许 HDR 分量大于 1），alpha 不参与颜色空间转换。
@@ -10330,9 +10354,9 @@ namespace jeecs
             inline vec4 to_srgb() const noexcept
             {
                 return vec4(
-                    _linear_to_srgb_channel(r),
-                    _linear_to_srgb_channel(g),
-                    _linear_to_srgb_channel(b),
+                    math::linear_to_srgb(r),
+                    math::linear_to_srgb(g),
+                    math::linear_to_srgb(b),
                     a);
             }
             // 颜色按线性空间保存，返回可供 shader/管线直接使用的 vec4
@@ -10345,9 +10369,9 @@ namespace jeecs
             static color from_srgb(const vec4& srgb) noexcept
             {
                 return color(
-                    _srgb_to_linear_channel(srgb.x),
-                    _srgb_to_linear_channel(srgb.y),
-                    _srgb_to_linear_channel(srgb.z),
+                    math::srgb_to_linear(srgb.x),
+                    math::srgb_to_linear(srgb.y),
+                    math::srgb_to_linear(srgb.z),
                     srgb.w);
             }
             // 从线性 vec4 构造
@@ -10387,25 +10411,6 @@ namespace jeecs
                 woort_struct_set_float(v, 1, g);
                 woort_struct_set_float(v, 2, b);
                 woort_struct_set_float(v, 3, a);
-            }
-
-        private:
-            // 标准 sRGB 传输函数。sRGB 无法表示负分量，按 0 处理。
-            static float _linear_to_srgb_channel(float c) noexcept
-            {
-                if (c <= 0.f)
-                    return 0.f;
-                if (c <= 0.0031308f)
-                    return 12.92f * c;
-                return 1.055f * std::pow(c, 1.f / 2.4f) - 0.055f;
-            }
-            static float _srgb_to_linear_channel(float c) noexcept
-            {
-                if (c <= 0.f)
-                    return 0.f;
-                if (c <= 0.04045f)
-                    return c / 12.92f;
-                return std::pow((c + 0.055f) / 1.055f, 2.4f);
             }
         };
 

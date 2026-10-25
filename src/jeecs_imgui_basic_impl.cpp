@@ -3105,13 +3105,6 @@ namespace
     // ImGui colors are authored in sRGB. The swapchain is an sRGB target and
     // the scene shaders already output linear, so linearize ImGui's vertex
     // colors before uploading them: the framebuffer then re-encodes them.
-    inline float _jegui_srgb_to_linear(float c)
-    {
-        if (c <= 0.04045f)
-            return c / 12.92f;
-        return std::pow((c + 0.055f) / 1.055f, 2.4f);
-    }
-
     void _jegui_linearize_draw_data(ImDrawData* draw_data)
     {
         if (draw_data == nullptr)
@@ -3131,9 +3124,9 @@ namespace
                 const float a = (float)((col >> 24) & 0xFF) / 255.f;
 
                 verts[i].col = IM_COL32(
-                    (int)(_jegui_srgb_to_linear(r) * 255.f + 0.5f),
-                    (int)(_jegui_srgb_to_linear(g) * 255.f + 0.5f),
-                    (int)(_jegui_srgb_to_linear(b) * 255.f + 0.5f),
+                    (int)(jeecs::math::srgb_to_linear(r) * 255.f + 0.5f),
+                    (int)(jeecs::math::srgb_to_linear(g) * 255.f + 0.5f),
+                    (int)(jeecs::math::srgb_to_linear(b) * 255.f + 0.5f),
                     (int)(a * 255.f + 0.5f));
             }
         }

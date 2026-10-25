@@ -24,7 +24,6 @@ import je::towoo::types;
 import je::towoo::components;
 
 import pkg::try;
-import pkg::math;
 
 import builtin::editor::GUI::Icons;
 
@@ -202,19 +201,10 @@ namespace JEEditor::Editor::WorldEditorViewport
             // 编辑器 gizmo 配色以 sRGB 设计；引擎 shader 现在在线性空间工作，
             // 提交 JE_COLOR 前统一转换到线性，最终由 sRGB 交换链编码。
             func linearColor(
-                color: (real, real, real, real))=> (real, real, real, real)
+                srgb: (real, real, real, real))=> (real, real, real, real)
             {
-                func channel(c: real)=> real
-                {
-                    if (c <= 0.04045)
-                        return c / 12.92;
-                    return math::pow((c + 0.055) / 1.055, 2.4);
-                }
-                return (
-                    channel(color.0),
-                    channel(color.1),
-                    channel(color.2),
-                    color.3);
+                let linear = color::from_srgb(srgb as vec4);
+                return (linear.0, linear.1, linear.2, linear.3);
             }
 
             // 绘制变换游标（纯色，颜色由每次绘制的 JE_COLOR 提供）
