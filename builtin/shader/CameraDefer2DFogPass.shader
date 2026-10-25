@@ -61,7 +61,10 @@ WOSHADER_UNIFORM!
     
 public func frag(vf: v2f)
 {
-    let albedo_color_rgb = pow(tex2d(Albedo, vf.uv)->xyz, vec3!(2.2, 2.2, 2.2));
+    // FogColor is authored in sRGB (material float3 uniform); the rest of the
+    // composite is linear. The swapchain performs the final sRGB encode.
+    let fog_color_linear = pow(FogColor, vec3!(2.2, 2.2, 2.2));
+    let albedo_color_rgb = tex2d(Albedo, vf.uv)->xyz;
     
     let light_color_rgb = tex2d(Light, vf.uv)->xyz;
     let self_lumine_color_rgb = tex2d(SelfLumine, vf.uv)->xyz;
@@ -70,7 +73,6 @@ public func frag(vf: v2f)
     let mixed_color_rgb = max(vec3!(0., 0., 0.), albedo_color_rgb * glowing_color_rgb);
     
     let hdr_color_rgb = mixed_color_rgb / (mixed_color_rgb + vec3!(1., 1., 1.));
-    let hdr_ambient_with_gamma = pow(hdr_color_rgb, vec3!(1. / 2.2, 1. / 2.2, 1. / 2.2));
     
     let fog_distance = tex2d(VPosition, vf.uv)->z - FogBeginDistance;
     let fog_range = FogEndDistance - FogBeginDistance;
@@ -81,8 +83,8 @@ public func frag(vf: v2f)
     return fout{
         color = JE_COLOR * vec4!(
             lerp(
-                hdr_ambient_with_gamma,
-                FogColor,
+                hdr_color_rgb,
+                fog_color_linear,
                 vec3!(fog_factor, fog_factor, fog_factor)),
             1.),
     };

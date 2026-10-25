@@ -360,7 +360,7 @@ namespace JEEditor::Editor
                     // 存储值为线性颜色，选择器以 sRGB 显示并写回线性值。
                     let display = ((v1, v2, v3, v4) as color)->to_srgb;
                     match (ColorEdit4(tag, display as raw vec4)
-                        ->> \picked = ((picked as vec4) as color)->to_linear;)
+                        ->> \picked = color::from_srgb(picked as vec4)->to_linear;)
                     {
                         none?;
                         value((n1, n2, n3, n4))?

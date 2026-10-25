@@ -2975,6 +2975,78 @@ void jegui_init_basic(
     }
 }
 
+// These backends present through a hardware sRGB target, so linear vertex
+// colors are encoded on write. OpenGL ES / WebGL have no core sRGB write
+// control for the default framebuffer and keep the previous sRGB-authored UI.
+#if defined(JE_ENABLE_DX11_GAPI) || defined(JE_ENABLE_VK120_GAPI) \
+    || defined(JE_ENABLE_METAL_GAPI) || defined(JE_ENABLE_GL330_GAPI)
+#define JEGUI_LINEARIZE_VERTEX_COLORS 1
+#endif
+
+#ifdef JEGUI_LINEARIZE_VERTEX_COLORS
+namespace
+{
+    // ImGui colors are authored in sRGB. The swapchain is an sRGB target and
+    // the scene shaders already output linear, so linearize ImGui's vertex
+    // colors before uploading them: the framebuffer then re-encodes them.
+    inline float _jegui_srgb_to_linear(float c)
+    {
+        if (c <= 0.04045f)
+            return c / 12.92f;
+        return std::pow((c + 0.055f) / 1.055f, 2.4f);
+    }
+
+    void _jegui_linearize_draw_data(ImDrawData* draw_data)
+    {
+        if (draw_data == nullptr)
+            return;
+
+        for (int n = 0; n < draw_data->CmdListsCount; ++n)
+        {
+            ImDrawList* list = draw_data->CmdLists[n];
+            ImDrawVert* verts = list->VtxBuffer.Data;
+
+            for (int i = 0; i < list->VtxBuffer.Size; ++i)
+            {
+                const ImU32 col = verts[i].col;
+                const float r = (float)(col & 0xFF) / 255.f;
+                const float g = (float)((col >> 8) & 0xFF) / 255.f;
+                const float b = (float)((col >> 16) & 0xFF) / 255.f;
+                const float a = (float)((col >> 24) & 0xFF) / 255.f;
+
+                verts[i].col = IM_COL32(
+                    (int)(_jegui_srgb_to_linear(r) * 255.f + 0.5f),
+                    (int)(_jegui_srgb_to_linear(g) * 255.f + 0.5f),
+                    (int)(_jegui_srgb_to_linear(b) * 255.f + 0.5f),
+                    (int)(a * 255.f + 0.5f));
+            }
+        }
+    }
+
+    using _jegui_render_window_func_t = void (*)(ImGuiViewport*, void*);
+    _jegui_render_window_func_t _g_original_render_window = nullptr;
+
+    void _jegui_linearized_render_window(
+        ImGuiViewport* viewport, void* render_arg)
+    {
+        _jegui_linearize_draw_data(viewport->DrawData);
+        if (_g_original_render_window != nullptr)
+            _g_original_render_window(viewport, render_arg);
+    }
+
+    void _jegui_install_linearize_hooks()
+    {
+        ImGuiPlatformIO& io = ImGui::GetPlatformIO();
+        if (io.Renderer_RenderWindow != nullptr
+            && io.Renderer_RenderWindow != _jegui_linearized_render_window)
+        {
+            _g_original_render_window = io.Renderer_RenderWindow;
+            io.Renderer_RenderWindow = _jegui_linearized_render_window;
+        }
+    }
+}
+#endif
+
 void jegui_update_basic(
     jegui_platform_draw_callback_t platform_draw_callback,
     /* OPTIONAL */ void* data)
@@ -3058,6 +3130,11 @@ void jegui_update_basic(
     }
 
     ImGui::Render();
+
+#ifdef JEGUI_LINEARIZE_VERTEX_COLORS
+    _jegui_install_linearize_hooks();
+    _jegui_linearize_draw_data(ImGui::GetDrawData());
+#endif
 
     platform_draw_callback(data);
 

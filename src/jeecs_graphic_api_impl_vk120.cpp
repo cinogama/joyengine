@@ -1866,25 +1866,50 @@ namespace jeecs::graphic::api::vk120
             if (vk_present_modes.empty())
                 jeecs::debug::logfatal("VK120: the surface reports no supported present modes.");
 
-            // 获取受支持的颜色格式，优先选择VK_FORMAT_B8G8R8A8_UNORM 和 VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
+            // Prefer an sRGB swapchain: scene shaders output linear values and
+            // the backbuffer write performs the final linear-to-sRGB encode.
             _vk_surface_format = {};
-            if (vk_surface_formats.size() == 1 && vk_surface_formats.front().format == VK_FORMAT_UNDEFINED)
+            if (vk_surface_formats.size() == 1
+                && vk_surface_formats.front().format == VK_FORMAT_UNDEFINED)
             {
-                _vk_surface_format.format = VK_FORMAT_B8G8R8A8_UNORM;
+                _vk_surface_format.format = VK_FORMAT_B8G8R8A8_SRGB;
                 _vk_surface_format.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
             }
             else
             {
+                const VkFormat preferred_formats[] = {
+                    VK_FORMAT_B8G8R8A8_SRGB,
+                    VK_FORMAT_R8G8B8A8_SRGB,
+                };
                 bool found_support_format = false;
-                ;
-                for (auto& format : vk_surface_formats)
+                for (VkFormat preferred : preferred_formats)
                 {
-                    if (format.format == VK_FORMAT_B8G8R8A8_UNORM &&
-                        format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+                    for (auto& format : vk_surface_formats)
                     {
-                        found_support_format = true;
-                        _vk_surface_format = format;
+                        if (format.format == preferred
+                            && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+                        {
+                            found_support_format = true;
+                            _vk_surface_format = format;
+                            break;
+                        }
+                    }
+                    if (found_support_format)
                         break;
+                }
+                if (!found_support_format)
+                {
+                    // Last resort: an 8-bit UNORM surface. The engine still
+                    // renders linear, but this surface cannot hardware-encode.
+                    for (auto& format : vk_surface_formats)
+                    {
+                        if (format.format == VK_FORMAT_B8G8R8A8_UNORM
+                            && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+                        {
+                            found_support_format = true;
+                            _vk_surface_format = format;
+                            break;
+                        }
                     }
                 }
                 if (!found_support_format)

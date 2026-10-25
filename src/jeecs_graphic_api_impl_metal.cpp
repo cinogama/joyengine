@@ -99,6 +99,9 @@ namespace jeecs::graphic::api::metal
             // 否则在跨 autorelease pool 边界后会变成野指针。
             m_metal_layer->retain();
             m_metal_layer->setDevice(m_metal_device);
+            // sRGB drawable: shaders render linear and the layer performs
+            // the final linear-to-sRGB encode on write.
+            m_metal_layer->setPixelFormat(MTL::PixelFormatBGRA8Unorm_sRGB);
 
             m_render_states.m_screen_width = (int)cfg->m_width;
             m_render_states.m_screen_height = (int)cfg->m_height;
@@ -1464,7 +1467,7 @@ namespace jeecs::graphic::api::metal
                 // Create pso for main framebuffer
                 auto* desc = pDesc->colorAttachments()->object(0);
                 desc->setPixelFormat(
-                    MTL::PixelFormat::PixelFormatBGRA8Unorm);
+                    MTL::PixelFormat::PixelFormatBGRA8Unorm_sRGB);
 
                 apply_blend_setting_to_attachment(desc);
 

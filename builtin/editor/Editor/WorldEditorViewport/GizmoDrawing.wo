@@ -24,6 +24,7 @@ import je::towoo::types;
 import je::towoo::components;
 
 import pkg::try;
+import pkg::math;
 
 import builtin::editor::GUI::Icons;
 
@@ -198,6 +199,24 @@ namespace JEEditor::Editor::WorldEditorViewport
                 return_value!;
             };
             
+            // 编辑器 gizmo 配色以 sRGB 设计；引擎 shader 现在在线性空间工作，
+            // 提交 JE_COLOR 前统一转换到线性，最终由 sRGB 交换链编码。
+            func linearColor(
+                color: (real, real, real, real))=> (real, real, real, real)
+            {
+                func channel(c: real)=> real
+                {
+                    if (c <= 0.04045)
+                        return c / 12.92;
+                    return math::pow((c + 0.055) / 1.055, 2.4);
+                }
+                return (
+                    channel(color.0),
+                    channel(color.1),
+                    channel(color.2),
+                    color.3);
+            }
+
             // 绘制变换游标（纯色，颜色由每次绘制的 JE_COLOR 提供）
             func drawSolid(
                 pos: vec3,
@@ -219,7 +238,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                     draw_action->set_uniform_mat4x4(shader_instance, "JE_M", model as raw mat4);
                     draw_action->set_uniform_mat4x4(shader_instance, "JE_MV", model_view as raw mat4);
                     draw_action->set_uniform_mat4x4(shader_instance, "JE_MVP", model_view_proj as raw mat4);
-                    draw_action->set_uniform(shader_instance, "JE_COLOR", color);
+                    draw_action->set_uniform(shader_instance, "JE_COLOR", linearColor(color));
                     return_value!;
                 };
             }
@@ -323,9 +342,9 @@ namespace JEEditor::Editor::WorldEditorViewport
                             frustum_color = GIZMO_COLOR_HOVER;
                         let mut icon_tint = (1., 1., 1., 1.);
                         if (is_hover)
-                            icon_tint = (1., 1., 0.6, 1.);
+                            icon_tint = linearColor((1., 1., 0.6, 1.));
                         if (is_selected)
-                            icon_tint = (1., 1., 0.25, 1.);
+                            icon_tint = linearColor((1., 1., 0.25, 1.));
                             
                         // ---- 视锥体线框 ----
                         // 用该摄像机自己的逆投影矩阵反变换 NDC 角点
@@ -459,9 +478,9 @@ namespace JEEditor::Editor::WorldEditorViewport
                             }
                         }
                         if (is_hover)
-                            icon_tint = (1., 1., 0.6, 1.);
+                            icon_tint = linearColor((1., 1., 0.6, 1.));
                         if (is_selected)
-                            icon_tint = (1., 1., 0.25, 1.);
+                            icon_tint = linearColor((1., 1., 0.25, 1.));
                             
                         // 位于调试摄像机身后的光源不绘制图标（避免镜像投影）
                         if ((pos - debug_cam_pos)->dot(debug_cam_forward) > 0.)
@@ -524,9 +543,9 @@ namespace JEEditor::Editor::WorldEditorViewport
                             mathf::clamp((cmin.2 + cmax.2) * 0.5, 0., 1.),
                             1.);
                         if (is_hover)
-                            icon_tint = (1., 1., 0.6, 1.);
+                            icon_tint = linearColor((1., 1., 0.6, 1.));
                         if (is_selected)
-                            icon_tint = (1., 1., 0.25, 1.);
+                            icon_tint = linearColor((1., 1., 0.25, 1.));
                             
                         // 位于调试摄像机身后的发射器不绘制图标（避免镜像投影）
                         if ((pos - debug_cam_pos)->dot(debug_cam_forward) > 0.)

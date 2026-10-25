@@ -221,8 +221,11 @@ namespace jeecs::graphic::api::dx11
         // 重设交换链并且重新创建渲染目标视图
         jegl_dx11_context::MSWRLComPtr<ID3D11Texture2D> back_buffer;
 
+        // sRGB swapchain: shaders render linear and the backbuffer write
+        // performs the final linear-to-sRGB encode.
         JERCHECK(context->m_dx_swapchain->ResizeBuffers(
-            1, (UINT)context->RESOLUTION_WIDTH, (UINT)context->RESOLUTION_HEIGHT, DXGI_FORMAT_R8G8B8A8_UNORM, 0));
+            1, (UINT)context->RESOLUTION_WIDTH, (UINT)context->RESOLUTION_HEIGHT,
+            DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, 0));
         JERCHECK(context->m_dx_swapchain->GetBuffer(
             0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(back_buffer.GetAddressOf())));
         JERCHECK(context->m_dx_device->CreateRenderTargetView(
@@ -470,7 +473,7 @@ namespace jeecs::graphic::api::dx11
         sd.BufferDesc.Height = (UINT)config->m_height;
         sd.BufferDesc.RefreshRate.Numerator = (UINT)context->FPS;
         sd.BufferDesc.RefreshRate.Denominator = 1;
-        sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
         sd.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
         sd.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
 
@@ -479,7 +482,7 @@ namespace jeecs::graphic::api::dx11
         if (context->MSAA_LEVEL != 0)
         {
             context->m_dx_device->CheckMultisampleQualityLevels(
-                DXGI_FORMAT_R8G8B8A8_UNORM, (UINT)context->MSAA_LEVEL, &msaa_quality);
+                DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, (UINT)context->MSAA_LEVEL, &msaa_quality);
         }
 
         if (msaa_quality > 0)

@@ -184,6 +184,8 @@ public func frag(vf: v2f)
         * front;
 
     return fout{
-        color = vec4!(rgb_final, alpha),
+        // 网格配色按 sRGB 设计，转换到线性后交由 sRGB 交换链编码。
+        color = vec4!(
+            pow(rgb_final, vec3!(2.2, 2.2, 2.2)), alpha),
     };
 }

@@ -204,6 +204,10 @@ namespace jeecs::graphic::api::gl3
         jegl_shader* m_render_current_shader_resource = nullptr;
         jegl3_vertex_data* m_render_current_vertex = nullptr;
 
+        // Clears of the default framebuffer need an explicit sRGB encode on
+        // desktop GL because glClearBufferfv bypasses FRAMEBUFFER_SRGB.
+        bool m_render_target_is_default = false;
+
         JECS_DISABLE_MOVE_AND_COPY(jegl_gl3_context);
 
         jegl_gl3_context(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
@@ -404,6 +408,11 @@ namespace jeecs::graphic::api::gl3
 #endif
 #endif
         glEnable(GL_DEPTH_TEST);
+#if defined(JE_ENABLE_GL330_GAPI) && defined(GL_FRAMEBUFFER_SRGB)
+        // Desktop GL: shaders render linear; the default framebuffer performs
+        // the final linear-to-sRGB encode. Requires an sRGB-capable window.
+        glEnable(GL_FRAMEBUFFER_SRGB);
+#endif
         jegui_init_gl330(
             gthread,
             [](jegl_context*, jegl_texture_2d* res)
@@ -1926,6 +1935,7 @@ namespace jeecs::graphic::api::gl3
         context->current_active_shader_may_null = nullptr;
         context->m_render_current_shader_resource = nullptr;
         context->m_render_current_vertex = nullptr;
+        context->m_render_target_is_default = (target == nullptr);
 
         if (target != nullptr)
         {
@@ -1945,8 +1955,23 @@ namespace jeecs::graphic::api::gl3
     }
 
     void gl_render_clear_color(
-        je_GraphicImplContext, uint32_t attachment, const float rgba[4])
+        je_GraphicImplContext ctx, uint32_t attachment, const float rgba[4])
     {
+#if defined(JE_ENABLE_GL330_GAPI) && defined(GL_FRAMEBUFFER_SRGB)
+        auto* context = static_cast<jegl_gl3_context*>(ctx);
+        if (context->m_render_target_is_default)
+        {
+            // sRGB conversion applies to fragment writes and blending, but
+            // not to clears; encode the linear clear color before writing.
+            const jeecs::math::vec4 srgb =
+                jeecs::math::color(rgba[0], rgba[1], rgba[2], rgba[3]).to_srgb();
+            const float encoded[4] = { srgb.x, srgb.y, srgb.z, srgb.w };
+            glClearBufferfv(GL_COLOR, (GLint)attachment, encoded);
+            return;
+        }
+#else
+        (void)ctx;
+#endif
         glClearBufferfv(GL_COLOR, (GLint)attachment, rgba);
     }
 
