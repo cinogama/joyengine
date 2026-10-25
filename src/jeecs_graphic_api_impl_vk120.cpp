@@ -9,6 +9,8 @@
 
 #include <vulkan/vulkan.h>
 
+#include "jeecs_srgb_encode_spirv.hpp"
+
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
 #   include <vulkan/vulkan_win32.h>
 #   define JE4_VK_USE_DYNAMIC_VK_LIB 1
@@ -58,6 +60,21 @@ namespace jeecs::graphic::api::vk120
             std::abort();                                                        \
         }                                                                        \
     } while (0)
+
+    static bool _vk_format_is_srgb(VkFormat format)
+    {
+        switch (format)
+        {
+        case VK_FORMAT_R8G8B8A8_SRGB:
+        case VK_FORMAT_B8G8R8A8_SRGB:
+        case VK_FORMAT_A8B8G8R8_SRGB_PACK32:
+        case VK_FORMAT_R8G8B8_SRGB:
+        case VK_FORMAT_B8G8R8_SRGB:
+            return true;
+        default:
+            return false;
+        }
+    }
 
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
 #   define VK_API_PLATFORM_API_LIST \
@@ -150,6 +167,7 @@ namespace jeecs::graphic::api::vk120
     VK_API_DECL(vkCmdSetScissor);                           \
     VK_API_DECL(vkCmdClearAttachments);                     \
     VK_API_DECL(vkCmdBindDescriptorSets);                   \
+    VK_API_DECL(vkCmdCopyImage);                            \
     VK_API_DECL(vkCmdCopyBufferToImage);                    \
     VK_API_DECL(vkCmdPipelineBarrier);                      \
     VK_API_DECL(vkCmdPushConstants);                        \
@@ -462,6 +480,16 @@ namespace jeecs::graphic::api::vk120
         VkPresentModeKHR _vk_surface_present_mode;
         VkFormat _vk_depth_format;
 
+        // When the surface offers no sRGB format, the whole frame is encoded
+        // to sRGB by a full-screen pass before present.
+        bool _vk_use_srgb_encode_pass = false;
+        VkRenderPass _vk_srgb_encode_render_pass = VK_NULL_HANDLE;
+        VkDescriptorSetLayout _vk_srgb_encode_descriptor_set_layout = VK_NULL_HANDLE;
+        VkPipelineLayout _vk_srgb_encode_pipeline_layout = VK_NULL_HANDLE;
+        VkPipeline _vk_srgb_encode_pipeline = VK_NULL_HANDLE;
+        VkDescriptorPool _vk_srgb_encode_descriptor_pool = VK_NULL_HANDLE;
+        VkSampler _vk_srgb_encode_sampler = VK_NULL_HANDLE;
+
         VkFence _vk_queue_commit_fence;
 
         size_t RESOLUTION_WIDTH;
@@ -526,6 +554,11 @@ namespace jeecs::graphic::api::vk120
             jevk12_texture* m_color_attachment = nullptr;
             jevk12_texture* m_depth_attachment = nullptr;
             jevk12_texture* m_msaa_attachment = nullptr;
+
+            // sRGB encode pass fallback resources for this swapchain image.
+            jevk12_texture* m_srgb_encode_copy_texture = nullptr;
+            VkFramebuffer m_srgb_encode_framebuffer = VK_NULL_HANDLE;
+            VkDescriptorSet m_srgb_encode_descriptor_set = VK_NULL_HANDLE;
 
             swapchain_image_content(
                 jegl_vk120_context* main_contant,
@@ -1769,6 +1802,435 @@ namespace jeecs::graphic::api::vk120
 
             return result;
         }
+        void destroy_srgb_encode_resources()
+        {
+            if (_vk_srgb_encode_descriptor_pool != VK_NULL_HANDLE)
+            {
+                vkDestroyDescriptorPool(
+                    _vk_logic_device, _vk_srgb_encode_descriptor_pool, nullptr);
+                _vk_srgb_encode_descriptor_pool = VK_NULL_HANDLE;
+            }
+            if (_vk_srgb_encode_pipeline != VK_NULL_HANDLE)
+            {
+                vkDestroyPipeline(
+                    _vk_logic_device, _vk_srgb_encode_pipeline, nullptr);
+                _vk_srgb_encode_pipeline = VK_NULL_HANDLE;
+            }
+            if (_vk_srgb_encode_pipeline_layout != VK_NULL_HANDLE)
+            {
+                vkDestroyPipelineLayout(
+                    _vk_logic_device, _vk_srgb_encode_pipeline_layout, nullptr);
+                _vk_srgb_encode_pipeline_layout = VK_NULL_HANDLE;
+            }
+            if (_vk_srgb_encode_descriptor_set_layout != VK_NULL_HANDLE)
+            {
+                vkDestroyDescriptorSetLayout(
+                    _vk_logic_device,
+                    _vk_srgb_encode_descriptor_set_layout, nullptr);
+                _vk_srgb_encode_descriptor_set_layout = VK_NULL_HANDLE;
+            }
+            if (_vk_srgb_encode_sampler != VK_NULL_HANDLE)
+            {
+                vkDestroySampler(
+                    _vk_logic_device, _vk_srgb_encode_sampler, nullptr);
+                _vk_srgb_encode_sampler = VK_NULL_HANDLE;
+            }
+            if (_vk_srgb_encode_render_pass != VK_NULL_HANDLE)
+            {
+                vkDestroyRenderPass(
+                    _vk_logic_device, _vk_srgb_encode_render_pass, nullptr);
+                _vk_srgb_encode_render_pass = VK_NULL_HANDLE;
+            }
+        }
+        bool create_srgb_encode_resources()
+        {
+            if (!_vk_use_srgb_encode_pass)
+                return true;
+            if (_vk_srgb_encode_pipeline != VK_NULL_HANDLE)
+                return true;
+
+            const uint32_t image_count = (uint32_t)_vk_swapchain_images.size();
+            if (image_count == 0)
+            {
+                jeecs::debug::logerr(
+                    "VK120: cannot create the sRGB encode pass without swapchain images.");
+                return false;
+            }
+
+            VkShaderModuleCreateInfo module_info = {};
+            module_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+
+            VkShaderModule vertex_module = VK_NULL_HANDLE;
+            module_info.codeSize =
+                sizeof(srgb_encode_spirv::k_fullscreen_vertex);
+            module_info.pCode = srgb_encode_spirv::k_fullscreen_vertex;
+            JE_VK_CHECK(vkCreateShaderModule(
+                _vk_logic_device, &module_info, nullptr, &vertex_module));
+
+            VkShaderModule fragment_module = VK_NULL_HANDLE;
+            module_info.codeSize = sizeof(srgb_encode_spirv::k_srgb_fragment);
+            module_info.pCode = srgb_encode_spirv::k_srgb_fragment;
+            JE_VK_CHECK(vkCreateShaderModule(
+                _vk_logic_device, &module_info, nullptr, &fragment_module));
+
+            VkDescriptorSetLayoutBinding texture_binding = {};
+            texture_binding.binding = 0;
+            texture_binding.descriptorType =
+                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            texture_binding.descriptorCount = 1;
+            texture_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+            VkDescriptorSetLayoutCreateInfo set_layout_info = {};
+            set_layout_info.sType =
+                VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+            set_layout_info.bindingCount = 1;
+            set_layout_info.pBindings = &texture_binding;
+            JE_VK_CHECK(vkCreateDescriptorSetLayout(
+                _vk_logic_device, &set_layout_info, nullptr,
+                &_vk_srgb_encode_descriptor_set_layout));
+
+            VkSamplerCreateInfo sampler_info = {};
+            sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+            sampler_info.magFilter = VK_FILTER_NEAREST;
+            sampler_info.minFilter = VK_FILTER_NEAREST;
+            sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            sampler_info.maxLod = 0.f;
+            JE_VK_CHECK(vkCreateSampler(
+                _vk_logic_device, &sampler_info, nullptr,
+                &_vk_srgb_encode_sampler));
+
+            VkPipelineLayoutCreateInfo pipeline_layout_info = {};
+            pipeline_layout_info.sType =
+                VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+            pipeline_layout_info.setLayoutCount = 1;
+            pipeline_layout_info.pSetLayouts =
+                &_vk_srgb_encode_descriptor_set_layout;
+            JE_VK_CHECK(vkCreatePipelineLayout(
+                _vk_logic_device, &pipeline_layout_info, nullptr,
+                &_vk_srgb_encode_pipeline_layout));
+
+            VkAttachmentDescription color_attachment = {};
+            color_attachment.format = _vk_surface_format.format;
+            color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+            color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            color_attachment.initialLayout =
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            color_attachment.finalLayout =
+                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+            VkAttachmentReference color_reference = {};
+            color_reference.attachment = 0;
+            color_reference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+            VkSubpassDescription subpass = {};
+            subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+            subpass.colorAttachmentCount = 1;
+            subpass.pColorAttachments = &color_reference;
+
+            VkSubpassDependency subpass_dependency = {};
+            subpass_dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+            subpass_dependency.dstSubpass = 0;
+            subpass_dependency.srcStageMask =
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            subpass_dependency.dstStageMask =
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            subpass_dependency.dstAccessMask =
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+            VkRenderPassCreateInfo render_pass_info = {};
+            render_pass_info.sType =
+                VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+            render_pass_info.attachmentCount = 1;
+            render_pass_info.pAttachments = &color_attachment;
+            render_pass_info.subpassCount = 1;
+            render_pass_info.pSubpasses = &subpass;
+            render_pass_info.dependencyCount = 1;
+            render_pass_info.pDependencies = &subpass_dependency;
+            JE_VK_CHECK(vkCreateRenderPass(
+                _vk_logic_device, &render_pass_info, nullptr,
+                &_vk_srgb_encode_render_pass));
+
+            VkPipelineShaderStageCreateInfo stages[2] = {};
+            stages[0].sType =
+                VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+            stages[0].module = vertex_module;
+            stages[0].pName = "main";
+            stages[1].sType =
+                VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+            stages[1].module = fragment_module;
+            stages[1].pName = "main";
+
+            VkPipelineVertexInputStateCreateInfo vertex_input = {};
+            vertex_input.sType =
+                VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+
+            VkPipelineInputAssemblyStateCreateInfo input_assembly = {};
+            input_assembly.sType =
+                VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+            input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+            VkPipelineViewportStateCreateInfo viewport_state = {};
+            viewport_state.sType =
+                VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+            viewport_state.viewportCount = 1;
+            viewport_state.scissorCount = 1;
+
+            VkPipelineRasterizationStateCreateInfo rasterization = {};
+            rasterization.sType =
+                VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+            rasterization.polygonMode = VK_POLYGON_MODE_FILL;
+            rasterization.cullMode = VK_CULL_MODE_NONE;
+            rasterization.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+            rasterization.lineWidth = 1.f;
+
+            VkPipelineMultisampleStateCreateInfo multisample = {};
+            multisample.sType =
+                VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+            multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+            VkPipelineColorBlendAttachmentState blend_attachment = {};
+            blend_attachment.colorWriteMask =
+                VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
+                | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+            blend_attachment.blendEnable = VK_FALSE;
+
+            VkPipelineColorBlendStateCreateInfo color_blend = {};
+            color_blend.sType =
+                VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+            color_blend.attachmentCount = 1;
+            color_blend.pAttachments = &blend_attachment;
+
+            const VkDynamicState dynamic_states[] = {
+                VK_DYNAMIC_STATE_VIEWPORT,
+                VK_DYNAMIC_STATE_SCISSOR };
+            VkPipelineDynamicStateCreateInfo dynamic_state = {};
+            dynamic_state.sType =
+                VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+            dynamic_state.dynamicStateCount =
+                (uint32_t)(sizeof(dynamic_states) / sizeof(dynamic_states[0]));
+            dynamic_state.pDynamicStates = dynamic_states;
+
+            VkGraphicsPipelineCreateInfo pipeline_info = {};
+            pipeline_info.sType =
+                VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+            pipeline_info.stageCount = 2;
+            pipeline_info.pStages = stages;
+            pipeline_info.pVertexInputState = &vertex_input;
+            pipeline_info.pInputAssemblyState = &input_assembly;
+            pipeline_info.pViewportState = &viewport_state;
+            pipeline_info.pRasterizationState = &rasterization;
+            pipeline_info.pMultisampleState = &multisample;
+            pipeline_info.pColorBlendState = &color_blend;
+            pipeline_info.pDynamicState = &dynamic_state;
+            pipeline_info.layout = _vk_srgb_encode_pipeline_layout;
+            pipeline_info.renderPass = _vk_srgb_encode_render_pass;
+            pipeline_info.subpass = 0;
+            pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
+            pipeline_info.basePipelineIndex = -1;
+            JE_VK_CHECK(vkCreateGraphicsPipelines(
+                _vk_logic_device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr,
+                &_vk_srgb_encode_pipeline));
+
+            vkDestroyShaderModule(_vk_logic_device, vertex_module, nullptr);
+            vkDestroyShaderModule(_vk_logic_device, fragment_module, nullptr);
+
+            VkDescriptorPoolSize pool_size = {};
+            pool_size.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            pool_size.descriptorCount = image_count;
+
+            VkDescriptorPoolCreateInfo pool_info = {};
+            pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+            pool_info.maxSets = image_count;
+            pool_info.poolSizeCount = 1;
+            pool_info.pPoolSizes = &pool_size;
+            JE_VK_CHECK(vkCreateDescriptorPool(
+                _vk_logic_device, &pool_info, nullptr,
+                &_vk_srgb_encode_descriptor_pool));
+
+            std::vector<VkDescriptorSetLayout> set_layouts(
+                image_count, _vk_srgb_encode_descriptor_set_layout);
+            std::vector<VkDescriptorSet> descriptor_sets(image_count);
+
+            VkDescriptorSetAllocateInfo set_allocate_info = {};
+            set_allocate_info.sType =
+                VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+            set_allocate_info.descriptorPool =
+                _vk_srgb_encode_descriptor_pool;
+            set_allocate_info.descriptorSetCount = image_count;
+            set_allocate_info.pSetLayouts = set_layouts.data();
+            JE_VK_CHECK(vkAllocateDescriptorSets(
+                _vk_logic_device, &set_allocate_info,
+                descriptor_sets.data()));
+
+            for (uint32_t i = 0; i < image_count; ++i)
+            {
+                auto* image = _vk_swapchain_images[i];
+                auto* swapchain_texture = image->m_color_attachment;
+
+                auto* copy_texture = new jevk12_texture{};
+                copy_texture->m_width = swapchain_texture->m_width;
+                copy_texture->m_height = swapchain_texture->m_height;
+                create_image(
+                    copy_texture,
+                    _vk_surface_format.format,
+                    VK_IMAGE_USAGE_TRANSFER_DST_BIT
+                    | VK_IMAGE_USAGE_SAMPLED_BIT,
+                    VK_IMAGE_TYPE_2D, 1, 1,
+                    VK_SAMPLE_COUNT_1_BIT, 0,
+                    VK_IMAGE_VIEW_TYPE_2D);
+                image->m_srgb_encode_copy_texture = copy_texture;
+
+                VkImageView attachments[] = {
+                    swapchain_texture->m_vk_texture_image_view };
+                VkFramebufferCreateInfo framebuffer_info = {};
+                framebuffer_info.sType =
+                    VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+                framebuffer_info.renderPass =
+                    _vk_srgb_encode_render_pass;
+                framebuffer_info.attachmentCount = 1;
+                framebuffer_info.pAttachments = attachments;
+                framebuffer_info.width = (uint32_t)copy_texture->m_width;
+                framebuffer_info.height = (uint32_t)copy_texture->m_height;
+                framebuffer_info.layers = 1;
+                JE_VK_CHECK(vkCreateFramebuffer(
+                    _vk_logic_device, &framebuffer_info, nullptr,
+                    &image->m_srgb_encode_framebuffer));
+
+                VkDescriptorImageInfo image_info = {};
+                image_info.sampler = _vk_srgb_encode_sampler;
+                image_info.imageView = copy_texture->m_vk_texture_image_view;
+                image_info.imageLayout =
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+                VkWriteDescriptorSet descriptor_write = {};
+                descriptor_write.sType =
+                    VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                descriptor_write.dstSet = descriptor_sets[i];
+                descriptor_write.dstBinding = 0;
+                descriptor_write.descriptorCount = 1;
+                descriptor_write.descriptorType =
+                    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                descriptor_write.pImageInfo = &image_info;
+                vkUpdateDescriptorSets(
+                    _vk_logic_device, 1, &descriptor_write, 0, nullptr);
+
+                image->m_srgb_encode_descriptor_set = descriptor_sets[i];
+            }
+
+            return true;
+        }
+        void encode_srgb_to_swapchain()
+        {
+            if (!_vk_use_srgb_encode_pass
+                || _vk_srgb_encode_pipeline == VK_NULL_HANDLE)
+                return;
+
+            auto* image = _vk_current_swapchain_image_content;
+            if (image == nullptr
+                || image->m_srgb_encode_copy_texture == nullptr
+                || image->m_srgb_encode_framebuffer == VK_NULL_HANDLE
+                || image->m_srgb_encode_descriptor_set == VK_NULL_HANDLE)
+                return;
+
+            VkCommandBuffer command_buffer = _vk_current_command_buffer;
+            auto* swapchain_texture = image->m_color_attachment;
+            auto* copy_texture = image->m_srgb_encode_copy_texture;
+
+            record_transition_barrier(
+                command_buffer, swapchain_texture,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+            swapchain_texture->m_current_layout =
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+
+            record_transition_barrier(
+                command_buffer, copy_texture,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            copy_texture->m_current_layout =
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+
+            VkImageCopy copy_region = {};
+            copy_region.srcSubresource.aspectMask =
+                VK_IMAGE_ASPECT_COLOR_BIT;
+            copy_region.srcSubresource.layerCount = 1;
+            copy_region.dstSubresource.aspectMask =
+                VK_IMAGE_ASPECT_COLOR_BIT;
+            copy_region.dstSubresource.layerCount = 1;
+            copy_region.extent.width = (uint32_t)copy_texture->m_width;
+            copy_region.extent.height = (uint32_t)copy_texture->m_height;
+            copy_region.extent.depth = 1;
+            vkCmdCopyImage(
+                command_buffer,
+                swapchain_texture->m_vk_texture_image,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                copy_texture->m_vk_texture_image,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                1, &copy_region);
+
+            record_transition_barrier(
+                command_buffer, copy_texture,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            copy_texture->m_current_layout =
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+            record_transition_barrier(
+                command_buffer, swapchain_texture,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            swapchain_texture->m_current_layout =
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+            VkRenderPassBeginInfo render_pass_begin = {};
+            render_pass_begin.sType =
+                VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            render_pass_begin.renderPass = _vk_srgb_encode_render_pass;
+            render_pass_begin.framebuffer = image->m_srgb_encode_framebuffer;
+            render_pass_begin.renderArea.offset = { 0, 0 };
+            render_pass_begin.renderArea.extent = {
+                (uint32_t)copy_texture->m_width,
+                (uint32_t)copy_texture->m_height };
+
+            VkClearValue clear_value = {};
+            clear_value.color = { { 0.f, 0.f, 0.f, 1.f } };
+            render_pass_begin.clearValueCount = 1;
+            render_pass_begin.pClearValues = &clear_value;
+
+            vkCmdBeginRenderPass(
+                command_buffer, &render_pass_begin,
+                VK_SUBPASS_CONTENTS_INLINE);
+
+            VkViewport viewport = {};
+            viewport.width = (float)copy_texture->m_width;
+            viewport.height = (float)copy_texture->m_height;
+            viewport.minDepth = 0.f;
+            viewport.maxDepth = 1.f;
+            vkCmdSetViewport(command_buffer, 0, 1, &viewport);
+
+            VkRect2D scissor = {};
+            scissor.extent = {
+                (uint32_t)copy_texture->m_width,
+                (uint32_t)copy_texture->m_height };
+            vkCmdSetScissor(command_buffer, 0, 1, &scissor);
+
+            vkCmdBindPipeline(
+                command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                _vk_srgb_encode_pipeline);
+            vkCmdBindDescriptorSets(
+                command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                _vk_srgb_encode_pipeline_layout, 0, 1,
+                &image->m_srgb_encode_descriptor_set, 0, nullptr);
+            vkCmdDraw(command_buffer, 3, 1, 0, 0);
+            vkCmdEndRenderPass(command_buffer);
+
+            swapchain_texture->m_current_layout =
+                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        }
         void destroy_pipelines_for_framebuffer(jevk12_framebuffer* fb)
         {
             for (auto it = _vk_pso_cache.begin(); it != _vk_pso_cache.end();)
@@ -1798,9 +2260,29 @@ namespace jeecs::graphic::api::vk120
         void destroy_swap_chain()
         {
             for (auto* image : _vk_swapchain_images)
+            {
+                if (image->m_srgb_encode_framebuffer != VK_NULL_HANDLE)
+                {
+                    vkDestroyFramebuffer(
+                        _vk_logic_device,
+                        image->m_srgb_encode_framebuffer, nullptr);
+                    image->m_srgb_encode_framebuffer = VK_NULL_HANDLE;
+                }
+                if (image->m_srgb_encode_copy_texture != nullptr)
+                {
+                    destroy_texture_instance(
+                        image->m_srgb_encode_copy_texture);
+                    image->m_srgb_encode_copy_texture = nullptr;
+                }
+
                 delete image;
+            }
 
             _vk_swapchain_images.clear();
+
+            // The encode pass references per-image views; drop it after the
+            // images but before the swapchain itself.
+            destroy_srgb_encode_resources();
 
             for (auto semaphore : _vk_image_render_finished_semaphores)
                 destroy_semaphore(semaphore);
@@ -1914,6 +2396,18 @@ namespace jeecs::graphic::api::vk120
                 }
                 if (!found_support_format)
                     _vk_surface_format = vk_surface_formats.front();
+            }
+
+            // No sRGB surface format: render normally and run a full-screen
+            // linear-to-sRGB encode pass before presenting.
+            _vk_use_srgb_encode_pass =
+                !_vk_format_is_srgb(_vk_surface_format.format);
+            if (_vk_use_srgb_encode_pass)
+            {
+                jeecs::debug::logwarn(
+                    "VK120: surface format %d has no sRGB variant; "
+                    "using the full-screen sRGB encode pass.",
+                    (int)_vk_surface_format.format);
             }
 
             // 获取受支持的深度数据格式
@@ -2064,6 +2558,22 @@ namespace jeecs::graphic::api::vk120
             swapchain_create_info.imageExtent = used_extent;
             swapchain_create_info.imageArrayLayers = 1;
             swapchain_create_info.imageUsage = VkImageUsageFlagBits::VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+            if (_vk_use_srgb_encode_pass)
+            {
+                if (0 == (_vk_surface_capabilities.supportedUsageFlags
+                    & VK_IMAGE_USAGE_TRANSFER_SRC_BIT))
+                {
+                    jeecs::debug::logwarn(
+                        "VK120: swapchain does not support TRANSFER_SRC; "
+                        "the sRGB encode pass is disabled.");
+                    _vk_use_srgb_encode_pass = false;
+                }
+                else
+                {
+                    swapchain_create_info.imageUsage |=
+                        VkImageUsageFlagBits::VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+                }
+            }
 
             uint32_t queueFamilyIndices[] = {
                 _vk_device_queue_graphic_family_index,
@@ -2207,6 +2717,8 @@ namespace jeecs::graphic::api::vk120
                         this, framebuffer, color_attachment, depth_attachment,
                         msaa_attachment);
             }
+
+            create_srgb_encode_resources();
         }
 
 #define VK_API_DECL(name) PFN_##name name
@@ -3630,7 +4142,7 @@ namespace jeecs::graphic::api::vk120
             barrier.subresourceRange.baseArrayLayer = 0;
             barrier.subresourceRange.layerCount = texture->m_layers;
 
-            auto stage_and_access = [](VkImageLayout layout, bool is_source,
+            auto stage_and_access = [](VkImageLayout layout,
                 VkPipelineStageFlags& stage, VkAccessFlags& access)
                 {
                     access = 0;
@@ -3640,11 +4152,12 @@ namespace jeecs::graphic::api::vk120
                         stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
                         break;
                     case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+                        stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+                        access = VK_ACCESS_TRANSFER_WRITE_BIT;
+                        break;
                     case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
                         stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-                        access = is_source
-                            ? VK_ACCESS_TRANSFER_WRITE_BIT
-                            : VK_ACCESS_TRANSFER_READ_BIT;
+                        access = VK_ACCESS_TRANSFER_READ_BIT;
                         break;
                     case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
                         stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
@@ -3663,6 +4176,7 @@ namespace jeecs::graphic::api::vk120
                         break;
                     case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
                         stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+                        access = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
                         break;
                     default:
                         stage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
@@ -3672,8 +4186,8 @@ namespace jeecs::graphic::api::vk120
 
             VkPipelineStageFlags source_stage;
             VkPipelineStageFlags destination_stage;
-            stage_and_access(old_layout, true, source_stage, barrier.srcAccessMask);
-            stage_and_access(new_layout, false, destination_stage, barrier.dstAccessMask);
+            stage_and_access(old_layout, source_stage, barrier.srcAccessMask);
+            stage_and_access(new_layout, destination_stage, barrier.dstAccessMask);
 
             vkCmdPipelineBarrier(
                 command_buffer,
@@ -4477,6 +4991,11 @@ namespace jeecs::graphic::api::vk120
                 cmd_begin_frame_buffer(nullptr, 0, 0, 0, 0);
                 jegui_update_vk120(_vk_current_command_buffer);
                 end_render_pass();
+
+                // Surface has no sRGB format: encode the finished frame
+                // (scene + ImGui) before handing it to the presentation engine.
+                if (_vk_use_srgb_encode_pass)
+                    encode_srgb_to_swapchain();
             }
 
             submit_frame();

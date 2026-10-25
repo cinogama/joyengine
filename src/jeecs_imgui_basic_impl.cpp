@@ -2975,11 +2975,11 @@ void jegui_init_basic(
     }
 }
 
-// These backends present through a hardware sRGB target, so linear vertex
-// colors are encoded on write. OpenGL ES / WebGL have no core sRGB write
-// control for the default framebuffer and keep the previous sRGB-authored UI.
+// These backends present through either a hardware sRGB target or a final
+// full-screen sRGB encode pass, so linear vertex colors are always expected.
 #if defined(JE_ENABLE_DX11_GAPI) || defined(JE_ENABLE_VK120_GAPI) \
-    || defined(JE_ENABLE_METAL_GAPI) || defined(JE_ENABLE_GL330_GAPI)
+    || defined(JE_ENABLE_METAL_GAPI) || defined(JE_ENABLE_GL330_GAPI) \
+    || defined(JE_ENABLE_GLES300_GAPI) || defined(JE_ENABLE_WEBGL20_GAPI)
 #define JEGUI_LINEARIZE_VERTEX_COLORS 1
 #endif
 

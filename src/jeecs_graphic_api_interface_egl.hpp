@@ -15,6 +15,16 @@
 #include <EGL/eglext.h>
 #include <android/native_window.h>
 
+#include <cstring>
+
+// EGL_KHR_gl_colorspace tokens (not always present in older EGL headers).
+#ifndef EGL_GL_COLORSPACE_KHR
+#   define EGL_GL_COLORSPACE_KHR 0x309D
+#endif
+#ifndef EGL_GL_COLORSPACE_SRGB_KHR
+#   define EGL_GL_COLORSPACE_SRGB_KHR 0x3089
+#endif
+
 namespace jeecs::graphic
 {
     class egl : public basic_interface
@@ -57,11 +67,22 @@ namespace jeecs::graphic
         int32_t _m_recorded_height;
         ANativeWindow** _m_live_window_ptr;
 
+        // True when the EGL window surface was created with the sRGB
+        // colorspace (EGL_KHR_gl_colorspace), i.e. hardware sRGB write
+        // control can be used for the default framebuffer.
+        bool _m_surface_srgb_capable;
+
     public:
+        bool is_surface_srgb_capable() const
+        {
+            return _m_surface_srgb_capable;
+        }
+
         egl(interface_type type)
             : _m_recorded_width(0)
             , _m_recorded_height(0)
             , _m_live_window_ptr(nullptr)
+            , _m_surface_srgb_capable(false)
         {
             m_context.m_type = type;
             m_context.m_window = nullptr;
@@ -76,6 +97,8 @@ namespace jeecs::graphic
         {
             auto* data = static_cast<_jegl_window_android_app*>(config->m_userdata);
             assert(data != nullptr);
+
+            _m_surface_srgb_capable = false;
 
             m_context.m_window = data->m_android_window;
             m_context.m_app = data->m_android_app;
@@ -157,7 +180,40 @@ namespace jeecs::graphic
                 EGLint format;
                 eglGetConfigAttrib(display, egl_config, EGL_NATIVE_VISUAL_ID, &format);
 
-                EGLSurface surface = eglCreateWindowSurface(display, egl_config, m_context.m_window, nullptr);
+                EGLSurface surface = EGL_NO_SURFACE;
+
+                // Prefer an sRGB-capable EGL surface so the default
+                // framebuffer can perform the final linear-to-sRGB encode
+                // (GL_EXT_sRGB_write_control). Fall back to the implementation
+                // default when the extension is unavailable.
+                const char* egl_extensions =
+                    eglQueryString(display, EGL_EXTENSIONS);
+                if (egl_extensions != nullptr
+                    && std::strstr(egl_extensions, "EGL_KHR_gl_colorspace") != nullptr)
+                {
+                    const EGLint srgb_attribs[] = {
+                        EGL_GL_COLORSPACE_KHR, EGL_GL_COLORSPACE_SRGB_KHR,
+                        EGL_NONE };
+                    surface = eglCreateWindowSurface(
+                        display, egl_config, m_context.m_window, srgb_attribs);
+
+                    if (surface != EGL_NO_SURFACE)
+                    {
+                        EGLint colorspace = 0;
+                        if (eglQuerySurface(
+                                display, surface,
+                                EGL_GL_COLORSPACE_KHR, &colorspace))
+                        {
+                            _m_surface_srgb_capable =
+                                colorspace == EGL_GL_COLORSPACE_SRGB_KHR;
+                        }
+                    }
+                }
+
+                if (surface == EGL_NO_SURFACE)
+                    surface = eglCreateWindowSurface(
+                        display, egl_config, m_context.m_window, nullptr);
+
                 if (surface == EGL_NO_SURFACE)
                 {
                     jeecs::debug::logfatal("Failed to create EGL window surface: 0x%x.", eglGetError());
