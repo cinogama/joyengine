@@ -1603,6 +1603,20 @@ WOORT_API woort_api wojeapi_type_basic_type(void)
 
 ///////////////////////////////////////////////////////////////////////
 
+WOORT_API woort_api wojeapi_image_texture_get_color_space(void)
+{
+    return woort_ret_int(
+        (woort_Int)je_image_texture_get_color_space(woort_string(0)));
+}
+
+WOORT_API woort_api wojeapi_image_texture_set_color_space(void)
+{
+    return woort_ret_bool(
+        je_image_texture_set_color_space(
+            woort_string(0),
+            (je_image_texture_color_space)woort_int(1)));
+}
+
 WOORT_API woort_api wojeapi_texture2d_open(void)
 {
     const woort_value universe_ptr = WOORT_RETURN_SLOT;
@@ -2344,6 +2358,37 @@ WOORT_API woort_api wojeapi_set_shaders_of_entity(void)
     return woort_ret_void();
 }
 
+static jegl_shader::script_uniform_variant _woje_uniform_variant(
+    const jegl_shader::unifrom_variables* uniform)
+{
+    if ((uniform->m_uniform_mask & jegl_shader::uniform_mask::COLOR) != 0)
+        return jegl_shader::SCRIPT_UNIFORM_COLOR;
+
+    switch (uniform->m_uniform_type)
+    {
+    case jegl_shader::uniform_type::INT:
+        return jegl_shader::SCRIPT_UNIFORM_INTEGER;
+    case jegl_shader::uniform_type::INT2:
+        return jegl_shader::SCRIPT_UNIFORM_INTEGER2;
+    case jegl_shader::uniform_type::INT3:
+        return jegl_shader::SCRIPT_UNIFORM_INTEGER3;
+    case jegl_shader::uniform_type::INT4:
+        return jegl_shader::SCRIPT_UNIFORM_INTEGER4;
+    case jegl_shader::uniform_type::FLOAT:
+        return jegl_shader::SCRIPT_UNIFORM_FLOAT;
+    case jegl_shader::uniform_type::FLOAT2:
+        return jegl_shader::SCRIPT_UNIFORM_FLOAT2;
+    case jegl_shader::uniform_type::FLOAT3:
+        return jegl_shader::SCRIPT_UNIFORM_FLOAT3;
+    case jegl_shader::uniform_type::FLOAT4:
+        return jegl_shader::SCRIPT_UNIFORM_FLOAT4;
+    case jegl_shader::uniform_type::TEXTURE:
+        return jegl_shader::SCRIPT_UNIFORM_TEXTURE;
+    default:
+        return jegl_shader::SCRIPT_UNIFORM_OTHERS;
+    }
+}
+
 WOORT_API woort_api wojeapi_get_uniforms_from_shader(void)
 {
     /*
@@ -2371,17 +2416,7 @@ WOORT_API woort_api wojeapi_get_uniforms_from_shader(void)
         woort_set_struct(val, 2);
         (void)woort_map_set_by_string(out_map, uniforms->m_name, val);
 
-        if (uniforms->m_uniform_type >= jegl_shader::uniform_type::INT && uniforms->m_uniform_type <= jegl_shader::uniform_type::FLOAT4)
-        {
-            woort_set_int(elem, uniforms->m_uniform_type);
-        }
-        else if (uniforms->m_uniform_type == jegl_shader::uniform_type::TEXTURE)
-        {
-            woort_set_int(elem, jegl_shader::uniform_type::TEXTURE);
-        }
-        else
-            // Others
-            woort_set_int(elem, 1 + jegl_shader::uniform_type::TEXTURE);
+        woort_set_int(elem, (int)_woje_uniform_variant(uniforms));
 
         woort_struct_set(val, 0, elem);
 
@@ -2499,6 +2534,16 @@ WOORT_API woort_api wojeapi_set_uniforms_float4(void)
     auto* shader = (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(0);
     (*shader)->set_uniform(woort_string(1),
         jeecs::math::vec4(woort_float(2), woort_float(3), woort_float(4), woort_float(5)));
+
+    return woort_ret_void();
+}
+WOORT_API woort_api wojeapi_set_uniforms_color(void)
+{
+    auto* shader = (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(0);
+    // The caller supplies linear components; math::color stores linear too,
+    // so the color overload is an explicit type check plus a float4 write.
+    (*shader)->set_uniform(woort_string(1),
+        jeecs::math::color(woort_float(2), woort_float(3), woort_float(4), woort_float(5)));
 
     return woort_ret_void();
 }
@@ -4585,6 +4630,25 @@ WOORT_API woort_api wojeapi_draw_action_set_uniform_float4(void)
 
     jegl_cmd_set_uniform_float4(act->m_command, slot,
         woort_float(3), woort_float(4), woort_float(5), woort_float(6));
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_draw_action_set_uniform_color(void)
+{
+    auto* act = (woje_draw_action*)woort_pointer(0);
+    const char* name = woort_string(2);
+    auto slot = _woje_action_uniform_slot(act, name);
+    if (slot.m_offset == JEGL_UNIFORM_SLOT_NONE)
+        return woort_ret_void();
+
+    // Do not reinterpret the components as the final pipeline values: route
+    // them through math::color so its storage-to-linear conversion stays the
+    // only place that knows how a color is represented.
+    const jeecs::math::vec4 linear = jeecs::math::color(
+        woort_float(3), woort_float(4), woort_float(5), woort_float(6))
+        .to_linear();
+    jegl_cmd_set_uniform_float4(act->m_command, slot,
+        linear.x, linear.y, linear.z, linear.w);
     return woort_ret_void();
 }
 

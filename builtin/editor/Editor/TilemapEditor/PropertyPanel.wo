@@ -10,6 +10,8 @@ import pkg::std;
 import je;
 import je::gui;
 import je::graphic;
+import je::towoo;
+import je::towoo::types;
 import je::tilemap;
 
 import pkg::fsys;
@@ -422,6 +424,21 @@ namespace JEEditor::Editor::TilemapEditor
                     value(nv)?
                     {
                         do sinst->set_uniform(uname, nv);
+                        state.m_dirty = true;
+                    }
+                    none?;
+                }
+            }
+            color((v1, v2, v3, v4))?
+            {
+                // 存储值为线性颜色，选择器以 sRGB 显示并写回线性值。
+                let display = ((v1, v2, v3, v4) as color)->to_srgb;
+                match (ColorEdit4(tag, display as raw vec4)
+                    ->> \picked = color::from_srgb(picked as vec4)->to_linear;)
+                {
+                    value((n1, n2, n3, n4))?
+                    {
+                        do sinst->set_uniform_color(uname, (n1, n2, n3, n4));
                         state.m_dirty = true;
                     }
                     none?;

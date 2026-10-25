@@ -47,6 +47,15 @@ struct _jegui_thread_local_context
     std::string _jegui_imgui_config_path;
     std::optional<jeecs::basic::resource<jeecs::graphic::shader>>
         _jegl_rend_texture_shader;
+
+    // 默认帧缓冲不支持硬件 sRGB 时的全屏编码资源。着色器通过
+    // jeecs::graphic::shader::load 加载，由引擎翻译为各后端代码。
+    std::optional<jeecs::basic::resource<jeecs::graphic::shader>>
+        _jegl_srgb_encode_shader;
+    std::optional<jeecs::basic::resource<jeecs::graphic::vertex>>
+        _jegl_srgb_encode_quad;
+    jegl_pipeline* _jegl_srgb_encode_pipeline = nullptr;
+    jegl_command_buffer* _jegl_srgb_encode_cmd = nullptr;
 };
 thread_local _jegui_thread_local_context _je_gui_tls_ctx;
 
@@ -1289,9 +1298,51 @@ WOORT_API woort_api je_gui_set_next_window_pos(void)
     return woort_ret_void();
 }
 
+namespace
+{
+    constexpr ImGuiColorEditFlags _JEGUI_COLOR_EDIT_FLAGS =
+        ImGuiColorEditFlags_Float
+        | ImGuiColorEditFlags_HDR
+        | ImGuiColorEditFlags_DisplayRGB
+        | ImGuiColorEditFlags_InputRGB
+        | ImGuiColorEditFlags_PickerHueBar;
+
+    // Woolang 侧把颜色作为单个 (real, real, real, real) 元组传入，
+    // 不能像 InputFloat4 那样按 4 个独立实参读取。
+    void _jegui_read_color4(woort_value s, float (&rgba)[4])
+    {
+        woort_value elem = s + 0;
+        woort_struct_get(elem, 1, 0);
+        rgba[0] = woort_float(elem);
+        woort_struct_get(elem, 1, 1);
+        rgba[1] = woort_float(elem);
+        woort_struct_get(elem, 1, 2);
+        rgba[2] = woort_float(elem);
+        woort_struct_get(elem, 1, 3);
+        rgba[3] = woort_float(elem);
+    }
+}
+
 WOORT_API woort_api je_gui_colorbutton(void)
 {
     return woort_ret_bool(ImGui::ColorButton(woort_string(0), val2vec4(1)));
+}
+WOORT_API woort_api je_gui_coloredit4(void)
+{
+    woort_value s;
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
+
+    float rgba[4] = {};
+    _jegui_read_color4(s, rgba);
+
+    if (ImGui::ColorEdit4(woort_string(0), rgba, _JEGUI_COLOR_EDIT_FLAGS))
+    {
+        woort_value result = s + 1;
+        set_float4_to_struct(result, rgba[0], rgba[1], rgba[2], rgba[3]);
+        return woort_ret_option_value(result);
+    }
+    return woort_ret_option_none();
 }
 WOORT_API woort_api je_gui_colorpicker4(void)
 {
@@ -1300,22 +1351,12 @@ WOORT_API woort_api je_gui_colorpicker4(void)
         return woort_ret_panic("Stack overflow.");
 
     float rgba[4] = {};
+    _jegui_read_color4(s, rgba);
 
-    woort_value elem = s + 0;
-    woort_struct_get(elem, 1, 0);
-    rgba[0] = woort_float(elem);
-    woort_struct_get(elem, 1, 1);
-    rgba[1] = woort_float(elem);
-    woort_struct_get(elem, 1, 2);
-    rgba[2] = woort_float(elem);
-    woort_struct_get(elem, 1, 3);
-    rgba[3] = woort_float(elem);
-
-    if (ImGui::ColorPicker4(woort_string(0), rgba))
+    if (ImGui::ColorPicker4(woort_string(0), rgba, _JEGUI_COLOR_EDIT_FLAGS))
     {
         woort_value result = s + 1;
         set_float4_to_struct(result, rgba[0], rgba[1], rgba[2], rgba[3]);
-
         return woort_ret_option_value(result);
     }
     return woort_ret_option_none();
@@ -1730,7 +1771,7 @@ WOORT_API woort_api je_gui_register_exit_callback(void)
         return woort_ret_panic("Callback has been registered.");
 
     assert(
-        _je_gui_static_ctx._jegui_exit_callback_handler_vm == nullptr 
+        _je_gui_static_ctx._jegui_exit_callback_handler_vm == nullptr
         && _je_gui_static_ctx._jegui_exit_callback_function == nullptr);
 
     _je_gui_static_ctx._jegui_exit_callback_handler_vm = woort_vm_create();
@@ -2824,7 +2865,7 @@ void jegui_init_basic(
         jeecs::graphic::shader::load(
             gl_context,
             "!/builtin/shader/internal/imgui_image_displayer.shader")
-            .value();
+        .value();
 
     _je_gui_tls_ctx._jegui_imgui_config_path =
         jeecs_file_get_host_path() + std::string("/builtin/imgui.ini.je4cache");
@@ -2933,6 +2974,162 @@ void jegui_init_basic(
     }
 }
 
+void jegui_commit_srgb_encode_pass(jegl_texture_2d* source_texture)
+{
+    if (source_texture == nullptr)
+        return;
+
+    if (!_je_gui_tls_ctx._jegl_srgb_encode_shader.has_value())
+    {
+        auto shader = jeecs::graphic::shader::load(
+            _je_gui_tls_ctx._jegl_context,
+            "!/builtin/shader/internal/srgb_encode.shader");
+        if (!shader.has_value())
+        {
+            jeecs::debug::logfatal(
+                "Failed to load the sRGB encode shader: %s",
+                "!/builtin/shader/internal/srgb_encode.shader");
+            abort();
+        }
+        _je_gui_tls_ctx._jegl_srgb_encode_shader = shader.value();
+    }
+
+    // pipeline 创建需要 shader 的反射信息，必须等资源准备完成。
+    if (_je_gui_tls_ctx._jegl_srgb_encode_pipeline == nullptr)
+    {
+        if (_jegl_prepare_shader_resource(
+                _je_gui_tls_ctx._jegl_srgb_encode_shader.value()->resource())
+            == jegl_resource_prepare_result::INVALID)
+        {
+            jeecs::debug::logfatal(
+                "Failed to prepare the sRGB encode shader.");
+            abort();
+        }
+
+        static const float quad_data[] = {
+            /* vpos, vuv */
+            -1.f, -1.f, 0.f,  0.f, 0.f,
+             1.f, -1.f, 0.f,  1.f, 0.f,
+            -1.f,  1.f, 0.f,  0.f, 1.f,
+             1.f,  1.f, 0.f,  1.f, 1.f,
+        };
+        auto quad = jeecs::graphic::vertex::create(
+            jegl_vertex::TRIANGLESTRIP,
+            quad_data,
+            sizeof(quad_data),
+            { 0, 1, 2, 3 },
+            {
+                { jegl_vertex::data_type::FLOAT32, 3 },
+                { jegl_vertex::data_type::FLOAT32, 2 },
+            });
+        if (!quad.has_value())
+        {
+            jeecs::debug::logfatal(
+                "Failed to create the sRGB encode full-screen quad.");
+            abort();
+        }
+        _je_gui_tls_ctx._jegl_srgb_encode_quad = quad.value();
+
+        jegl_pipeline_state state = jegl_pipeline_state_from_shader(
+            _je_gui_tls_ctx._jegl_srgb_encode_shader.value()->resource());
+        state.m_topology = jegl_topology::TRIANGLE_STRIP;
+        state.m_depth_test = false;
+
+        jegl_pipeline_desc desc{};
+        desc.m_shader =
+            _je_gui_tls_ctx._jegl_srgb_encode_shader.value()->resource();
+        desc.m_state = &state;
+
+        _je_gui_tls_ctx._jegl_srgb_encode_pipeline =
+            jegl_pipeline_create(
+                _je_gui_tls_ctx._jegl_context, &desc);
+    }
+
+    auto* cmd = _je_gui_tls_ctx._jegl_srgb_encode_cmd;
+    if (cmd == nullptr)
+        cmd = _je_gui_tls_ctx._jegl_srgb_encode_cmd =
+            jegl_cmd_create(_je_gui_tls_ctx._jegl_context);
+    jegl_cmd_reset(cmd);
+
+    const jegl_viewport viewport{
+        0, 0,
+        (uint32_t)source_texture->m_width,
+        (uint32_t)source_texture->m_height };
+
+    // begin_pass(nullptr) 由后端在编码标志置位时解析为真正的屏幕缓冲区。
+    jegl_cmd_begin_pass(cmd, nullptr, &viewport);
+    jegl_cmd_bind_pipeline(
+        cmd, _je_gui_tls_ctx._jegl_srgb_encode_pipeline);
+    jegl_cmd_bind_vertex(
+        cmd,
+        _je_gui_tls_ctx._jegl_srgb_encode_quad.value()->resource());
+    jegl_cmd_bind_texture_2d(cmd, 0, source_texture);
+    jegl_cmd_draw(cmd, 4, 0, 1);
+    jegl_cmd_end_pass(cmd);
+    jegl_cmd_commit(cmd);
+}
+
+// These backends present through either a hardware sRGB target or a final
+// full-screen sRGB encode pass, so linear vertex colors are always expected.
+#if defined(JE_ENABLE_DX11_GAPI) || defined(JE_ENABLE_VK120_GAPI) \
+    || defined(JE_ENABLE_METAL_GAPI) || defined(JE_ENABLE_GL330_GAPI) \
+    || defined(JE_ENABLE_GLES300_GAPI) || defined(JE_ENABLE_WEBGL20_GAPI)
+#define JEGUI_LINEARIZE_VERTEX_COLORS 1
+#endif
+
+#ifdef JEGUI_LINEARIZE_VERTEX_COLORS
+namespace
+{
+    // ImGui colors are authored in sRGB. The swapchain is an sRGB target and
+    // the scene shaders already output linear, so linearize ImGui's vertex
+    // colors before uploading them: the framebuffer then re-encodes them.
+    void _jegui_linearize_draw_data(ImDrawData* draw_data)
+    {
+        for (int n = 0; n < draw_data->CmdListsCount; ++n)
+        {
+            ImDrawList* list = draw_data->CmdLists[n];
+            ImDrawVert* verts = list->VtxBuffer.Data;
+
+            for (int i = 0; i < list->VtxBuffer.Size; ++i)
+            {
+                const ImU32 col = verts[i].col;
+                const float r = (float)(col & 0xFF) / 255.f;
+                const float g = (float)((col >> 8) & 0xFF) / 255.f;
+                const float b = (float)((col >> 16) & 0xFF) / 255.f;
+                const float a = (float)((col >> 24) & 0xFF) / 255.f;
+
+                verts[i].col = IM_COL32(
+                    (int)(jeecs::math::srgb_to_linear(r) * 255.f + 0.5f),
+                    (int)(jeecs::math::srgb_to_linear(g) * 255.f + 0.5f),
+                    (int)(jeecs::math::srgb_to_linear(b) * 255.f + 0.5f),
+                    (int)(a * 255.f + 0.5f));
+            }
+        }
+    }
+
+    using _jegui_render_window_func_t = void (*)(ImGuiViewport*, void*);
+    _jegui_render_window_func_t _g_original_render_window = nullptr;
+
+    void _jegui_linearized_render_window(
+        ImGuiViewport* viewport, void* render_arg)
+    {
+        _jegui_linearize_draw_data(viewport->DrawData);
+        _g_original_render_window(viewport, render_arg);
+    }
+
+    void _jegui_install_linearize_hooks()
+    {
+        ImGuiPlatformIO& io = ImGui::GetPlatformIO();
+        if (io.Renderer_RenderWindow != nullptr
+            && io.Renderer_RenderWindow != _jegui_linearized_render_window)
+        {
+            _g_original_render_window = io.Renderer_RenderWindow;
+            io.Renderer_RenderWindow = _jegui_linearized_render_window;
+        }
+    }
+}
+#endif
+
 void jegui_update_basic(
     jegui_platform_draw_callback_t platform_draw_callback,
     /* OPTIONAL */ void* data)
@@ -3016,6 +3213,11 @@ void jegui_update_basic(
     }
 
     ImGui::Render();
+
+#ifdef JEGUI_LINEARIZE_VERTEX_COLORS
+    _jegui_install_linearize_hooks();
+    _jegui_linearize_draw_data(ImGui::GetDrawData());
+#endif
 
     platform_draw_callback(data);
 

@@ -1,0 +1,173 @@
+import pkg::std;
+
+import je;
+import je::gui;
+import je::graphic;
+import je::internal;
+
+import pkg::fsys;
+import pkg::interface;
+
+import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Forms::MsgBox;
+import builtin::editor::Singleton::Universe;
+
+import ResourcePath;
+
+using std;
+using je;
+using je::gui;
+using je::graphic;
+using fsys;
+
+using JEEditor::GUI;
+using JEEditor::GUI::Forms;
+using JEEditor::Singleton;
+using JEEditor::GUI::Windows;
+using JEEditor::Editor::ResourcePath;
+
+namespace JEEditor::Editor
+{
+    // 图片纹理属性窗口：编辑图片的颜色空间，写入 <图片路径>.je4cache。
+    // 引擎加载图片时读取该缓存决定 GPU 纹理格式：
+    //   SRGB   —— 颜色贴图（默认），采样时硬件把 sRGB 转为线性；
+    //   LINEAR —— 法线/遮罩等非颜色数据，按线性数值直接采样。
+    using TextureProperties = struct{
+        m_path: path_t,
+        m_runtime_path: string,
+        m_color_space: mut texture_color_space,
+        m_preview: mut option<texture2d>,
+        m_status: mut string,
+    }
+    {
+        public func create(path: path_t)=> TextureProperties
+            where require!(TextureProperties: Windows::IWindows);
+        {
+            let runtime_path = ResourcePath::toRuntimeResourcePath(path);
+            return TextureProperties{
+                m_path = path,
+                m_runtime_path = runtime_path,
+                m_color_space = mut image_texture_get_color_space(runtime_path),
+                m_preview = mut texture2d::load(
+                    option::value(Singleton::Universe::getUniverse()), runtime_path),
+                m_status = mut "",
+            };
+        }
+        public func showTextureProperties(path: path_t)
+        {
+            do Windows::show(create(path));
+        }
+        public func getTitle(self: TextureProperties)=> string
+        {
+            // $ID 让多张图片的属性窗口可以同时打开（见 Windows::show）。
+            return F"图片属性: {filename(self.m_path)} $ID";
+        }
+        public func getAttrib(_: TextureProperties)=> WindowsAttribute
+        {
+            return WindowsAttribute::ImGuiWindowFlags_NoDocking
+                + WindowsAttribute::ImGuiWindowFlags_NoCollapse
+                + WindowsAttribute::ImGuiWindowFlags_NoSavedSettings
+                ;
+        }
+        public func getSizeConstraints(_: TextureProperties)=> SizeConstraints
+        {
+            return SizeConstraints::Limited(((420., 300.), (960., 900.)));
+        }
+        // 属性改变后失效共享纹理缓存并重新加载预览。已经绑定到场景实体的
+        // 旧纹理句柄不会自动替换，重新打开世界/视口后生效。
+        func reloadPreview(self: TextureProperties)=> void
+        {
+            let univ = Singleton::Universe::getUniverse();
+            do univ->internal::mark_shared_glresource_outdated(self.m_runtime_path);
+            self.m_preview = texture2d::load(
+                option::value(univ), self.m_runtime_path);
+        }
+        func drawPreview(self: TextureProperties)=> void
+        {
+            let avail = GetContentRegionAvail();
+            if (BeginChildSizeFlags("##texture_preview", avail.0, 320.,
+                    WindowsAttribute::ImGuiWindowFlags_None))
+            {
+                match (self.m_preview)
+                {
+                    none?
+                        TextDisabled("无法加载图片预览");
+                    value(tex)?
+                    {
+                        let (tw, th) = tex->size;
+                        if (tw <= 0 || th <= 0)
+                            TextDisabled("图片尺寸无效");
+                        else
+                        {
+                            let panel = GetContentRegionAvail();
+                            let scale_w = panel.0 / tw as real;
+                            let scale_h = panel.1 / th as real;
+                            let mut scale = (scale_w < scale_h)
+                                ? scale_w | scale_h;
+                            if (scale > 1.)
+                                scale = 1.;
+                            ImageSize(tex,
+                                tw as real * scale, th as real * scale);
+                        }
+                    }
+                }
+            }
+            EndChild();
+        }
+        public func run(self: TextureProperties)=> bool
+        {
+            Text(F"文件: {filename(self.m_path)}");
+            TextDisabled(self.m_path->to_string);
+            if (IsItemHovered())
+                do SetTooltip(self.m_path->to_string);
+
+            Separator();
+
+            Text("颜色空间");
+            let labels = [
+                "sRGB（默认，颜色贴图）",
+                "Linear（非颜色数据）",
+            ];
+            match (Combo("##texture_color_space", labels,
+                    option::value(self.m_color_space as int)))
+            {
+                none?;
+                value(index)?
+                    self.m_color_space = (index == 1)
+                        ? texture_color_space::LINEAR
+                        | texture_color_space::SRGB;
+            }
+            if (IsItemHovered())
+                do SetTooltip(
+                    "sRGB：硬件在采样时把 8 位 sRGB 数据转换为线性；Linear：按线性数值直接采样，适用于法线图、遮罩等非颜色数据。");
+
+            Separator();
+            self->drawPreview();
+            Separator();
+
+            if (Button("保存"))
+            {
+                if (image_texture_set_color_space(
+                        self.m_runtime_path, self.m_color_space))
+                {
+                    self->reloadPreview();
+                    self.m_status = "已保存。已打开视口中的纹理需重新加载后生效。";
+                }
+                else
+                    do MsgBox::err("保存失败",
+                        "无法写入图片属性缓存，请检查图片路径是否可写。");
+            }
+            SameLine();
+            if (Button("重新加载预览"))
+            {
+                self->reloadPreview();
+                self.m_status = "预览已重新加载。";
+            }
+
+            if (self.m_status->len > 0)
+                TextDisabled(self.m_status);
+
+            return true;
+        }
+    }
+}

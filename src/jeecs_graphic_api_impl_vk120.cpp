@@ -59,6 +59,21 @@ namespace jeecs::graphic::api::vk120
         }                                                                        \
     } while (0)
 
+    static bool _vk_format_is_srgb(VkFormat format)
+    {
+        switch (format)
+        {
+        case VK_FORMAT_R8G8B8A8_SRGB:
+        case VK_FORMAT_B8G8R8A8_SRGB:
+        case VK_FORMAT_A8B8G8R8_SRGB_PACK32:
+        case VK_FORMAT_R8G8B8_SRGB:
+        case VK_FORMAT_B8G8R8_SRGB:
+            return true;
+        default:
+            return false;
+        }
+    }
+
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
 #   define VK_API_PLATFORM_API_LIST \
     VK_API_DECL(vkCreateWin32SurfaceKHR)
@@ -461,6 +476,14 @@ namespace jeecs::graphic::api::vk120
         VkSurfaceFormatKHR _vk_surface_format;
         VkPresentModeKHR _vk_surface_present_mode;
         VkFormat _vk_depth_format;
+
+        // When the surface offers no sRGB format, all screen-bound draws are
+        // redirected to a linear offscreen framebuffer; a woshader-based
+        // encode pass then writes it to the real swapchain image.
+        bool _vk_use_srgb_encode_pass = false;
+        bool _vk_encoding_srgb_screen = false;
+        std::optional<jeecs::basic::resource<jeecs::graphic::framebuffer>>
+            _vk_srgb_encode_screen_target;
 
         VkFence _vk_queue_commit_fence;
 
@@ -1769,6 +1792,57 @@ namespace jeecs::graphic::api::vk120
 
             return result;
         }
+        jevk12_framebuffer* srgb_encode_screen_framebuffer() const
+        {
+            if (!_vk_srgb_encode_screen_target.has_value())
+                return nullptr;
+
+            return static_cast<jevk12_framebuffer*>(
+                (*_vk_srgb_encode_screen_target)
+                    ->resource()->m_handle.m_ptr);
+        }
+        jegl_texture_2d* srgb_encode_screen_source() const
+        {
+            if (!_vk_srgb_encode_screen_target.has_value())
+                return nullptr;
+
+            auto attachment =
+                (*_vk_srgb_encode_screen_target)->get_attachment(0);
+            return attachment.has_value()
+                ? attachment.value()->resource()
+                : nullptr;
+        }
+        bool ensure_srgb_encode_screen_target(size_t width, size_t height)
+        {
+            if (width == 0 || height == 0)
+                return false;
+
+            auto& target = _vk_srgb_encode_screen_target;
+            if (target.has_value()
+                && (*target)->width() == width
+                && (*target)->height() == height)
+                return true;
+
+            target.reset();
+
+            // 固定使用 1x 离屏目标，避免依赖与 surface 格式不同的 MSAA 支持；
+            // 编码 pass 仍可写入交换链自身的 MSAA framebuffer。
+            auto created = jeecs::graphic::framebuffer::create(
+                width, height,
+                { jegl_texture_common::format::RGBA },
+                true);
+            if (!created.has_value()
+                || !_jegl_prepare_framebuffer_resource(
+                    created.value()->resource()))
+            {
+                jeecs::debug::logerr(
+                    "VK120: failed to create the linear offscreen screen target.");
+                return false;
+            }
+
+            target = created.value();
+            return true;
+        }
         void destroy_pipelines_for_framebuffer(jevk12_framebuffer* fb)
         {
             for (auto it = _vk_pso_cache.begin(); it != _vk_pso_cache.end();)
@@ -1801,6 +1875,8 @@ namespace jeecs::graphic::api::vk120
                 delete image;
 
             _vk_swapchain_images.clear();
+
+            _vk_srgb_encode_screen_target.reset();
 
             for (auto semaphore : _vk_image_render_finished_semaphores)
                 destroy_semaphore(semaphore);
@@ -1866,29 +1942,66 @@ namespace jeecs::graphic::api::vk120
             if (vk_present_modes.empty())
                 jeecs::debug::logfatal("VK120: the surface reports no supported present modes.");
 
-            // 获取受支持的颜色格式，优先选择VK_FORMAT_B8G8R8A8_UNORM 和 VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
+            // Prefer an sRGB swapchain: scene shaders output linear values and
+            // the backbuffer write performs the final linear-to-sRGB encode.
             _vk_surface_format = {};
-            if (vk_surface_formats.size() == 1 && vk_surface_formats.front().format == VK_FORMAT_UNDEFINED)
+            if (vk_surface_formats.size() == 1
+                && vk_surface_formats.front().format == VK_FORMAT_UNDEFINED)
             {
-                _vk_surface_format.format = VK_FORMAT_B8G8R8A8_UNORM;
+                _vk_surface_format.format = VK_FORMAT_B8G8R8A8_SRGB;
                 _vk_surface_format.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
             }
             else
             {
+                const VkFormat preferred_formats[] = {
+                    VK_FORMAT_B8G8R8A8_SRGB,
+                    VK_FORMAT_R8G8B8A8_SRGB,
+                };
                 bool found_support_format = false;
-                ;
-                for (auto& format : vk_surface_formats)
+                for (VkFormat preferred : preferred_formats)
                 {
-                    if (format.format == VK_FORMAT_B8G8R8A8_UNORM &&
-                        format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+                    for (auto& format : vk_surface_formats)
                     {
-                        found_support_format = true;
-                        _vk_surface_format = format;
+                        if (format.format == preferred
+                            && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+                        {
+                            found_support_format = true;
+                            _vk_surface_format = format;
+                            break;
+                        }
+                    }
+                    if (found_support_format)
                         break;
+                }
+                if (!found_support_format)
+                {
+                    // Last resort: an 8-bit UNORM surface. The engine still
+                    // renders linear, but this surface cannot hardware-encode.
+                    for (auto& format : vk_surface_formats)
+                    {
+                        if (format.format == VK_FORMAT_B8G8R8A8_UNORM
+                            && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+                        {
+                            found_support_format = true;
+                            _vk_surface_format = format;
+                            break;
+                        }
                     }
                 }
                 if (!found_support_format)
                     _vk_surface_format = vk_surface_formats.front();
+            }
+
+            // No sRGB surface format: render normally and run a full-screen
+            // linear-to-sRGB encode pass before presenting.
+            _vk_use_srgb_encode_pass =
+                !_vk_format_is_srgb(_vk_surface_format.format);
+            if (_vk_use_srgb_encode_pass)
+            {
+                jeecs::debug::logwarn(
+                    "VK120: surface format %d has no sRGB variant; "
+                    "using the full-screen sRGB encode pass.",
+                    (int)_vk_surface_format.format);
             }
 
             // 获取受支持的深度数据格式
@@ -2181,6 +2294,12 @@ namespace jeecs::graphic::api::vk120
                     new swapchain_image_content(
                         this, framebuffer, color_attachment, depth_attachment,
                         msaa_attachment);
+            }
+
+            if (_vk_use_srgb_encode_pass)
+            {
+                ensure_srgb_encode_screen_target(
+                    used_extent.width, used_extent.height);
             }
         }
 
@@ -3425,11 +3544,15 @@ namespace jeecs::graphic::api::vk120
 
             const bool is_float16 =
                 0 != (format & jegl_texture_common::format::FLOAT16);
+            const bool is_srgb =
+                0 != (format & jegl_texture_common::format::SRGB);
             if (0 != (format & jegl_texture_common::format::RGBA))
             {
                 return is_float16
                     ? VK_FORMAT_R16G16B16A16_SFLOAT
-                    : VK_FORMAT_R8G8B8A8_UNORM;
+                    : (is_srgb
+                        ? VK_FORMAT_R8G8B8A8_SRGB
+                        : VK_FORMAT_R8G8B8A8_UNORM);
             }
             return is_float16 ? VK_FORMAT_R16_SFLOAT : VK_FORMAT_R8_UNORM;
         }
@@ -3600,7 +3723,7 @@ namespace jeecs::graphic::api::vk120
             barrier.subresourceRange.baseArrayLayer = 0;
             barrier.subresourceRange.layerCount = texture->m_layers;
 
-            auto stage_and_access = [](VkImageLayout layout, bool is_source,
+            auto stage_and_access = [](VkImageLayout layout,
                 VkPipelineStageFlags& stage, VkAccessFlags& access)
                 {
                     access = 0;
@@ -3610,11 +3733,12 @@ namespace jeecs::graphic::api::vk120
                         stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
                         break;
                     case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+                        stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+                        access = VK_ACCESS_TRANSFER_WRITE_BIT;
+                        break;
                     case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
                         stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-                        access = is_source
-                            ? VK_ACCESS_TRANSFER_WRITE_BIT
-                            : VK_ACCESS_TRANSFER_READ_BIT;
+                        access = VK_ACCESS_TRANSFER_READ_BIT;
                         break;
                     case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
                         stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
@@ -3633,6 +3757,7 @@ namespace jeecs::graphic::api::vk120
                         break;
                     case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
                         stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+                        access = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
                         break;
                     default:
                         stage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
@@ -3642,8 +3767,8 @@ namespace jeecs::graphic::api::vk120
 
             VkPipelineStageFlags source_stage;
             VkPipelineStageFlags destination_stage;
-            stage_and_access(old_layout, true, source_stage, barrier.srcAccessMask);
-            stage_and_access(new_layout, false, destination_stage, barrier.dstAccessMask);
+            stage_and_access(old_layout, source_stage, barrier.srcAccessMask);
+            stage_and_access(new_layout, destination_stage, barrier.dstAccessMask);
 
             vkCmdPipelineBarrier(
                 command_buffer,
@@ -4329,17 +4454,15 @@ namespace jeecs::graphic::api::vk120
             _vk_pending_present_image_index = UINT32_MAX;
 
             const VkRenderPass previous_render_pass =
-                _vk_imgui_initialized && !_vk_swapchain_images.empty()
-                ? _vk_swapchain_images.front()->m_framebuffer->m_rendpass
+                _vk_imgui_initialized
+                ? imgui_target_render_pass()
                 : VK_NULL_HANDLE;
             const size_t previous_image_count = _vk_swapchain_images.size();
 
             recreate_swap_chain_for_current_surface();
 
             const VkRenderPass current_render_pass =
-                _vk_swapchain_images.empty()
-                ? VK_NULL_HANDLE
-                : _vk_swapchain_images.front()->m_framebuffer->m_rendpass;
+                imgui_target_render_pass();
 
             if (_vk_imgui_initialized
                 && previous_render_pass == current_render_pass
@@ -4447,6 +4570,17 @@ namespace jeecs::graphic::api::vk120
                 cmd_begin_frame_buffer(nullptr, 0, 0, 0, 0);
                 jegui_update_vk120(_vk_current_command_buffer);
                 end_render_pass();
+
+                // Surface has no sRGB format: the whole frame was rendered
+                // into the linear offscreen target; encode it onto the real
+                // swapchain image before presenting.
+                if (_vk_use_srgb_encode_pass)
+                {
+                    _vk_encoding_srgb_screen = true;
+                    jegui_commit_srgb_encode_pass(
+                        srgb_encode_screen_source());
+                    _vk_encoding_srgb_screen = false;
+                }
             }
 
             submit_frame();
@@ -4458,9 +4592,11 @@ namespace jeecs::graphic::api::vk120
         {
             end_render_pass();
 
+            const bool wants_screen = (framebuf == nullptr);
+
             if (!_vk_frame_recording)
             {
-                if (framebuf == nullptr)
+                if (wants_screen)
                 {
                     if (!_vk_frame_has_swapchain_image
                         || _vk_current_swapchain_image_content == nullptr)
@@ -4477,7 +4613,8 @@ namespace jeecs::graphic::api::vk120
                 }
             }
 
-            if (framebuf == nullptr)
+            jevk12_framebuffer* resolved_framebuffer = framebuf;
+            if (wants_screen)
             {
                 if (!_vk_frame_has_swapchain_image
                     || _vk_current_swapchain_image_content == nullptr)
@@ -4486,13 +4623,20 @@ namespace jeecs::graphic::api::vk120
                         "VK120: cannot render to the screen without an acquired swapchain image.");
                     return;
                 }
-                _vk_current_target_framebuffer =
-                    _vk_current_swapchain_image_content->m_framebuffer;
+
+                // 没有硬件 sRGB 写入控制时，把“绘制到屏幕”重定向到线性离屏
+                // framebuffer；帧末再由编码 pass 绘制到真正的 swapchain。
+                // 目标创建失败时 ensure 已记录错误，这里退回直接绘制。
+                auto* encode_target =
+                    (_vk_use_srgb_encode_pass && !_vk_encoding_srgb_screen)
+                    ? srgb_encode_screen_framebuffer()
+                    : nullptr;
+                resolved_framebuffer = encode_target != nullptr
+                    ? encode_target
+                    : _vk_current_swapchain_image_content->m_framebuffer;
             }
-            else
-            {
-                _vk_current_target_framebuffer = framebuf;
-            }
+
+            _vk_current_target_framebuffer = resolved_framebuffer;
 
             // 确保附件处于 render pass 期望的 initial layout。离屏/MSAA 附件可能在
             // 上一个 pass 结束后处于 SHADER_READ_ONLY，而 render pass 期望别的布局。
@@ -5114,6 +5258,19 @@ namespace jeecs::graphic::api::vk120
                 first_vertex,
                 0);
         }
+        VkRenderPass imgui_target_render_pass() const
+        {
+            if (_vk_use_srgb_encode_pass)
+            {
+                auto* encode_target = srgb_encode_screen_framebuffer();
+                if (encode_target != nullptr)
+                    return encode_target->m_rendpass;
+            }
+            return _vk_swapchain_images.empty()
+                ? VK_NULL_HANDLE
+                : _vk_swapchain_images.front()->m_framebuffer->m_rendpass;
+        }
+
         void imgui_init()
         {
             assert(!_vk_swapchain_images.empty());
@@ -5138,7 +5295,9 @@ namespace jeecs::graphic::api::vk120
             init_info.MinImageCount = std::max<uint32_t>(
                 2, _vk_surface_capabilities.minImageCount);
             init_info.ImageCount = (uint32_t)_vk_swapchain_images.size();
-            init_info.MSAASamples = _vk_active_msaa_samples;
+            init_info.MSAASamples = _vk_use_srgb_encode_pass
+                ? VK_SAMPLE_COUNT_1_BIT
+                : _vk_active_msaa_samples;
             init_info.CheckVkResultFn = nullptr;
 
             auto cmdbuf = begin_temp_command_buffer_records();
@@ -5172,7 +5331,7 @@ namespace jeecs::graphic::api::vk120
                 [](jegl_context*, jegl_shader*) {},
                 _vk_jegl_interface->interface_handle(),
                 &init_info,
-                _vk_swapchain_images.front()->m_framebuffer->m_rendpass,
+                imgui_target_render_pass(),
                 cmdbuf,
 #if JE4_VK_USE_DYNAMIC_VK_LIB
                 [](const char* funcname, void* userdata)
@@ -5806,6 +5965,18 @@ namespace jeecs::graphic::api::vk120
         // 图像末行，即引擎 V=1 的一侧），两者都不需要改 JE_NDC_SCALE。
         // 与 dx11/metal 不同，这里不能对离屏目标做 y 取反，否则 RT 内容
         // 在采样时会上下颠倒。
+        //
+        // 例外：sRGB 编码 pass 采样的是按屏幕方向渲染的离屏纹理，绘制到
+        // 屏幕时需要翻转一次 NDC y 才能得到正确的采样方向。
+        if (context->_vk_encoding_srgb_screen
+            && context->_vk_current_shader_resource != nullptr)
+        {
+            _jegl_patch_ndc_scale(
+                shader_instance->m_uniform_cpu_buffer, uniform_size,
+                context->_vk_current_shader_resource->m_builtin_uniforms
+                    .m_builtin_uniform_ndc_scale,
+                true);
+        }
     }
     void render_draw_indexed(
         je_GraphicImplContext ctx,

@@ -221,8 +221,11 @@ namespace jeecs::graphic::api::dx11
         // 重设交换链并且重新创建渲染目标视图
         jegl_dx11_context::MSWRLComPtr<ID3D11Texture2D> back_buffer;
 
+        // sRGB swapchain: shaders render linear and the backbuffer write
+        // performs the final linear-to-sRGB encode.
         JERCHECK(context->m_dx_swapchain->ResizeBuffers(
-            1, (UINT)context->RESOLUTION_WIDTH, (UINT)context->RESOLUTION_HEIGHT, DXGI_FORMAT_R8G8B8A8_UNORM, 0));
+            1, (UINT)context->RESOLUTION_WIDTH, (UINT)context->RESOLUTION_HEIGHT,
+            DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, 0));
         JERCHECK(context->m_dx_swapchain->GetBuffer(
             0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(back_buffer.GetAddressOf())));
         JERCHECK(context->m_dx_device->CreateRenderTargetView(
@@ -470,7 +473,7 @@ namespace jeecs::graphic::api::dx11
         sd.BufferDesc.Height = (UINT)config->m_height;
         sd.BufferDesc.RefreshRate.Numerator = (UINT)context->FPS;
         sd.BufferDesc.RefreshRate.Denominator = 1;
-        sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
         sd.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
         sd.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
 
@@ -479,7 +482,7 @@ namespace jeecs::graphic::api::dx11
         if (context->MSAA_LEVEL != 0)
         {
             context->m_dx_device->CheckMultisampleQualityLevels(
-                DXGI_FORMAT_R8G8B8A8_UNORM, (UINT)context->MSAA_LEVEL, &msaa_quality);
+                DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, (UINT)context->MSAA_LEVEL, &msaa_quality);
         }
 
         if (msaa_quality > 0)
@@ -1313,6 +1316,8 @@ namespace jeecs::graphic::api::dx11
     {
         const bool float16 =
             0 != (resource->m_format & jegl_texture_common::format::FLOAT16);
+        const bool srgb =
+            0 != (resource->m_format & jegl_texture_common::format::SRGB);
 
         switch (resource->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK)
         {
@@ -1321,7 +1326,9 @@ namespace jeecs::graphic::api::dx11
         case jegl_texture_common::format::RGBA:
             return float16
                 ? DXGI_FORMAT_R16G16B16A16_FLOAT
-                : DXGI_FORMAT_R8G8B8A8_UNORM;
+                : (srgb
+                    ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
+                    : DXGI_FORMAT_R8G8B8A8_UNORM);
         default:
             return DXGI_FORMAT_UNKNOWN;
         }
@@ -2382,20 +2389,10 @@ namespace jeecs::graphic::api::dx11
 
         memcpy(mapped.pData, uniform_data, uniform_size);
 
-        const uint32_t ndc_offset = shader_instance->m_ndc_scale_uniform_id;
-        if (ndc_offset != jeecs::graphic::INVALID_UNIFORM_LOCATION
-            && ndc_offset + sizeof(float) * 4 <= uniform_size)
-        {
-            const float ndc_scale[4] = {
-                1.f,
-                context->m_current_target_framebuffer == nullptr ? 1.f : -1.f,
-                1.f,
-                1.f };
-            memcpy(
-                static_cast<char*>(mapped.pData) + ndc_offset,
-                ndc_scale,
-                sizeof(ndc_scale));
-        }
+        _jegl_patch_ndc_scale(
+            mapped.pData, uniform_size,
+            shader_instance->m_ndc_scale_uniform_id,
+            context->m_current_target_framebuffer != nullptr);
 
         context->m_dx_context->Unmap(shader_instance->m_uniforms.Get(), 0);
 

@@ -681,11 +681,13 @@ namespace jeecs
             for (size_t i = 0; i < n; ++i)
                 buf[i] = (char)hex[i];
             const unsigned int packed = (unsigned int)strtoul(buf, nullptr, 16);
-            return math::vec4(
+            // Inline markup colors are authored in sRGB; glyph vertex colors
+            // are consumed by linear shaders, so decode them here.
+            return math::color::from_srgb(math::vec4(
                 (float)((packed >> 24) & 0xFF) / 255.f,
                 (float)((packed >> 16) & 0xFF) / 255.f,
                 (float)((packed >> 8) & 0xFF) / 255.f,
-                (float)(packed & 0xFF) / 255.f);
+                (float)(packed & 0xFF) / 255.f)).to_linear();
         }
 
         // 单遍标记解析：{field:value} 属性段（绝对设置）+ '\' 转义。

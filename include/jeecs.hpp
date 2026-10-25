@@ -2125,6 +2125,38 @@ jeecs_close_cache_file [基本接口]
 */
 JE_API void jeecs_close_cache_file(void* file);
 
+/*
+je_image_texture_color_space [类型]
+图片纹理的颜色空间。图片加载时按此决定 GPU 纹理格式：
+    * SRGB   —— 8 位 RGB 数据按 sRGB 编码存储，采样时由硬件转换为线性；
+                这是未提供属性缓存时的默认值
+    * LINEAR —— 8 位 RGB 数据按线性数值直接采样（法线图、遮罩等非颜色数据）
+*/
+enum je_image_texture_color_space
+{
+    JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB = 0,
+    JE_IMAGE_TEXTURE_COLOR_SPACE_LINEAR = 1,
+};
+
+/*
+je_image_texture_get_color_space [基本接口]
+读取图片纹理属性缓存（<path>.je4cache）中记录的颜色空间
+    * 缓存不存在、校验失败（图片已改动）或内容非法时返回 SRGB
+    * 不检查 path 指向的文件是否为图片
+*/
+JE_API je_image_texture_color_space je_image_texture_get_color_space(
+    const char* path);
+
+/*
+je_image_texture_set_color_space [基本接口]
+将图片纹理颜色空间写入 <path>.je4cache
+    * 缓存带有图片内容的 CRC64；图片之后被修改时，旧缓存会自动失效
+    * 返回 false 表示缓存写入失败（路径不可写、源文件不可读等）
+*/
+JE_API bool je_image_texture_set_color_space(
+    const char* path,
+    je_image_texture_color_space color_space);
+
 /////////////////////////// GRAPHIC //////////////////////////////
 // Here to store low-level-graphic-api.
 
@@ -2264,8 +2296,12 @@ struct jegl_texture_common
         FLOAT16 = 0x0010,
         DEPTH = 0x0020,
         FRAMEBUF = 0x0040,
+        // Sample RGB through the sRGB transfer function (hardware decode).
+        // Pixel storage is unchanged; alpha is always linear.
+        SRGB = 0x0080,
 
-        FORMAT_MASK = 0xFFF0,
+        // Formats that do not keep a CPU-side pixel buffer.
+        NON_PIXEL_FORMAT_MASK = FLOAT16 | DEPTH | FRAMEBUF,
     };
 
     // NOTE:
@@ -2450,6 +2486,34 @@ struct jegl_shader
         FLOAT3X3,
         FLOAT4X4,
     };
+    /*
+    自定义 uniform 的附加标签（位掩码）。标签不改变存储类型与 ABI：
+    例如 COLOR 仍然是 FLOAT4，仅告知编辑器/脚本层按颜色呈现。
+    后续新增的编辑器语义标签继续在这里追加。
+    */
+    enum uniform_mask : uint32_t
+    {
+        NONE = 0x0000,
+        COLOR = 0x0001,
+    };
+    /*
+    Woolang `shader::uniform_variable` union 的 variant 索引（脚本 ABI）。
+    必须与 je/graphic.wo 中的 union 声明顺序一致。
+    */
+    enum script_uniform_variant
+    {
+        SCRIPT_UNIFORM_INTEGER = 0,
+        SCRIPT_UNIFORM_INTEGER2,
+        SCRIPT_UNIFORM_INTEGER3,
+        SCRIPT_UNIFORM_INTEGER4,
+        SCRIPT_UNIFORM_FLOAT,
+        SCRIPT_UNIFORM_FLOAT2,
+        SCRIPT_UNIFORM_FLOAT3,
+        SCRIPT_UNIFORM_FLOAT4,
+        SCRIPT_UNIFORM_TEXTURE,
+        SCRIPT_UNIFORM_COLOR,
+        SCRIPT_UNIFORM_OTHERS,
+    };
     struct builtin_uniform_location
     {
         // NOTE: m_builtin_uniform_ndc_scale 是图形库的保留变量，任何情况下都不要
@@ -2487,6 +2551,7 @@ struct jegl_shader
         uint32_t m_offset;
         uint32_t m_size;
         uniform_type m_uniform_type;
+        uniform_mask m_uniform_mask;
         bool m_updated;
         union value
         {
@@ -10260,6 +10325,120 @@ namespace jeecs
             return vec4(_v4.x * _f, _v4.y * _f, _v4.z * _f, _v4.w * _f);
         }
 
+        /*
+        标准 sRGB 传输函数（逐通道）。
+            * srgb_to_linear：sRGB 编码值 -> 线性值；sRGB 无法表示负
+              分量，负输入按 0 处理
+            * linear_to_srgb：线性值 -> sRGB 编码值；负值按 0 处理，
+              大于 1 的 HDR 分量保持大于 1
+        */
+        inline float srgb_to_linear(float c) noexcept
+        {
+            if (c <= 0.f)
+                return 0.f;
+            if (c <= 0.04045f)
+                return c / 12.92f;
+            return std::pow((c + 0.055f) / 1.055f, 2.4f);
+        }
+        inline float linear_to_srgb(float c) noexcept
+        {
+            if (c <= 0.f)
+                return 0.f;
+            if (c <= 0.0031308f)
+                return 12.92f * c;
+            return 1.055f * std::pow(c, 1.f / 2.4f) - 0.055f;
+        }
+
+        /*
+        jeecs::math::color [类型]
+        引擎内部使用的颜色类型。RGB 分量按线性颜色空间保存（通常为
+        [0, 1]，允许 HDR 分量大于 1），alpha 不参与颜色空间转换。
+
+        编辑器显示和最终输出需要 sRGB 编码时使用 to_srgb()；传递给
+        shader/管线时统一使用 to_linear() 的结果；从 sRGB 数据（如
+        颜色选择器、外部资源）导入时使用 from_srgb()。
+        */
+        struct color
+        {
+            float r = 1.f;
+            float g = 1.f;
+            float b = 1.f;
+            float a = 1.f;
+
+            constexpr color() noexcept = default;
+            constexpr color(float _r, float _g, float _b, float _a = 1.f) noexcept
+                : r(_r), g(_g), b(_b), a(_a)
+            {
+            }
+            constexpr color(const color&) noexcept = default;
+            constexpr color(color&&) noexcept = default;
+            constexpr color& operator=(const color&) noexcept = default;
+            constexpr color& operator=(color&&) noexcept = default;
+
+            // 线性分量 -> sRGB 编码（编辑器显示 / 最终输出）
+            inline vec4 to_srgb() const noexcept
+            {
+                return vec4(
+                    math::linear_to_srgb(r),
+                    math::linear_to_srgb(g),
+                    math::linear_to_srgb(b),
+                    a);
+            }
+            // 颜色按线性空间保存，返回可供 shader/管线直接使用的 vec4
+            inline constexpr vec4 to_linear() const noexcept
+            {
+                return vec4(r, g, b, a);
+            }
+
+            // 从 sRGB 编码构造（编辑器写回 / 外部 sRGB 数据导入）
+            static color from_srgb(const vec4& srgb) noexcept
+            {
+                return color(
+                    math::srgb_to_linear(srgb.x),
+                    math::srgb_to_linear(srgb.y),
+                    math::srgb_to_linear(srgb.z),
+                    srgb.w);
+            }
+            // 从线性 vec4 构造
+            static constexpr color from_linear(const vec4& linear) noexcept
+            {
+                return color(linear.x, linear.y, linear.z, linear.w);
+            }
+
+            inline constexpr bool operator==(const color& _color) const noexcept
+            {
+                return r == _color.r && g == _color.g && b == _color.b && a == _color.a;
+            }
+            inline constexpr bool operator!=(const color& _color) const noexcept
+            {
+                return !(*this == _color);
+            }
+
+            static const char* JEScriptTypeName()
+            {
+                return "color";
+            }
+            static const char* JEScriptTypeDeclare()
+            {
+                return "public using color = (real, real, real, real);";
+            }
+            void JEParseFromScriptType(woort_value v)
+            {
+                r = woort_struct_get_float(v, 0);
+                g = woort_struct_get_float(v, 1);
+                b = woort_struct_get_float(v, 2);
+                a = woort_struct_get_float(v, 3);
+            }
+            void JEParseToScriptType(woort_value v) const
+            {
+                woort_set_struct(v, 4);
+                woort_struct_set_float(v, 0, r);
+                woort_struct_set_float(v, 1, g);
+                woort_struct_set_float(v, 2, b);
+                woort_struct_set_float(v, 3, a);
+            }
+        };
+
         struct quat
         {
             float x, y, z, w;
@@ -10712,7 +10891,8 @@ namespace jeecs
                 jegl_texture_common::format new_texture_format =
                     (jegl_texture_common::format)(
                         src->resource()->m_format
-                        & jegl_texture_common::format::COLOR_DEPTH_MASK);
+                        & (jegl_texture_common::format::COLOR_DEPTH_MASK
+                            | jegl_texture_common::format::SRGB));
 
                 jegl_texture_2d* res =
                     jegl_create_texture_2d(w, h, new_texture_format);
@@ -10732,7 +10912,8 @@ namespace jeecs
                     }
                 }
 #else
-                auto color_depth = (int)new_texture_format;
+                auto color_depth = (int)(new_texture_format
+                    & jegl_texture_common::format::COLOR_DEPTH_MASK);
                 auto* dst_pixels = new_texture->resource()->m_pixels;
                 auto* src_pixels = src->resource()->m_pixels;
 
@@ -10775,7 +10956,8 @@ namespace jeecs
                 {
                     if (_m_pixel == nullptr)
                         return {};
-                    switch (_m_texture->m_format)
+                    switch (_m_texture->m_format
+                        & jegl_texture_common::format::COLOR_DEPTH_MASK)
                     {
                     case jegl_texture_common::format::MONO:
                         return math::vec4{
@@ -10826,7 +11008,8 @@ namespace jeecs
                             raw_texture_data->m_modified_max_y = _m_y;
                     }
 
-                    switch (raw_texture_data->m_format)
+                    switch (raw_texture_data->m_format
+                        & jegl_texture_common::format::COLOR_DEPTH_MASK)
                     {
                     case jegl_texture_common::format::MONO:
                         _m_pixel[0] = (jegl_texture_common::pixel_data_t)round(math::clamp(value.x, 0.f, 1.f) * 255.0f);
@@ -11263,6 +11446,10 @@ namespace jeecs
                     }
                     jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
+            }
+            void set_uniform(const std::string& name, const math::color& val) noexcept
+            {
+                set_uniform(name, val.to_linear());
             }
             const uint32_t* get_uniform_location(const std::string& name)
             {
@@ -12882,7 +13069,7 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Color);
             JECS_DEFAULT_CONSTRUCTOR(Color);
 
-            math::vec4 color = math::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+            math::color color = math::color(1.0f, 1.0f, 1.0f, 1.0f);
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
@@ -12988,7 +13175,7 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Clear);
             JECS_DEFAULT_CONSTRUCTOR(Clear);
 
-            math::vec4 color = math::vec4(0.f, 0.f, 0.f, 1.f);
+            math::color color = math::color(0.f, 0.f, 0.f, 1.f);
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Clear::color, "color");
@@ -14246,14 +14433,14 @@ namespace jeecs
             struct color_gradient
             {
                 basic::vector<float> m_times;
-                basic::vector<math::vec4> m_colors;
+                basic::vector<math::color> m_colors;
 
                 color_gradient()
                 {
                     m_times.push_back(0.0f);
                     m_times.push_back(1.0f);
-                    m_colors.push_back(math::vec4(1.0f, 1.0f, 1.0f, 1.0f));
-                    m_colors.push_back(math::vec4(1.0f, 1.0f, 1.0f, 0.0f));
+                    m_colors.push_back(math::color(1.0f, 1.0f, 1.0f, 1.0f));
+                    m_colors.push_back(math::color(1.0f, 1.0f, 1.0f, 0.0f));
                 }
 
                 // 关键帧数量（times/colors 以较短者为准）
@@ -14262,7 +14449,7 @@ namespace jeecs
                     return std::min(m_times.size(), m_colors.size());
                 }
                 // 采样：空渐变返回 fallback；t 超出范围时钳制到首/末关键帧
-                math::vec4 sample(float t, const math::vec4& fallback) const
+                math::color sample(float t, const math::color& fallback) const
                 {
                     const size_t key_count = size();
                     if (key_count == 0)
@@ -14279,13 +14466,13 @@ namespace jeecs
                             const float t0 = m_times.at(i - 1), t1 = m_times.at(i);
                             const float span = t1 - t0;
                             const float k = span > 0.0f ? (t - t0) / span : 0.0f;
-                            const math::vec4& c0 = m_colors.at(i - 1);
-                            const math::vec4& c1 = m_colors.at(i);
-                            return math::vec4(
-                                c0.x + (c1.x - c0.x) * k,
-                                c0.y + (c1.y - c0.y) * k,
-                                c0.z + (c1.z - c0.z) * k,
-                                c0.w + (c1.w - c0.w) * k);
+                            const math::color& c0 = m_colors.at(i - 1);
+                            const math::color& c1 = m_colors.at(i);
+                            return math::color(
+                                c0.r + (c1.r - c0.r) * k,
+                                c0.g + (c1.g - c0.g) * k,
+                                c0.b + (c1.b - c0.b) * k,
+                                c0.a + (c1.a - c0.a) * k);
                         }
                     }
                     return m_colors.at(key_count - 1);
@@ -14302,7 +14489,7 @@ namespace jeecs
                         "{\n"
                         "    public using color_gradient = struct{\n"
                         "        public m_times: array<float>,\n"
-                        "        public m_colors: array<vec4>,\n"
+                        "        public m_colors: array<color>,\n"
                         "    };\n"
                         "}";
                 }
@@ -14332,9 +14519,9 @@ namespace jeecs
                                 m_times.push_back(woort_unbox_float(tmp));
                             if (woort_vec_get(tmp, colors, i))
                             {
-                                math::vec4 color;
-                                color.JEParseFromScriptType(tmp);
-                                m_colors.push_back(color);
+                                math::color key_color;
+                                key_color.JEParseFromScriptType(tmp);
+                                m_colors.push_back(key_color);
                             }
                         }
 
@@ -14516,8 +14703,8 @@ namespace jeecs
             // ===== 初始外观（在区间内均匀随机） =====
             float m_size_min = 0.08f;               // 初始尺寸区间（世界单位）
             float m_size_max = 0.16f;
-            math::vec4 m_color_min = { 1.0f, 1.0f, 1.0f, 1.0f };
-            math::vec4 m_color_max = { 1.0f, 1.0f, 1.0f, 1.0f };
+            math::color m_color_min = math::color(1.0f, 1.0f, 1.0f, 1.0f);
+            math::color m_color_max = math::color(1.0f, 1.0f, 1.0f, 1.0f);
             float m_rotation_min = 0.0f;            // 初始自转区间（度）
             float m_rotation_max = 0.0f;
             float m_angular_min = 0.0f;             // 自转速度区间（度/秒）
@@ -15766,6 +15953,10 @@ namespace jeecs
         {
             // 0. register built-in components
             using namespace typing;
+
+            // color 会被组件成员声明引用（如 Particle::color_gradient），
+            // 先于组件注册，保证生成的 types.wo 中类型声明位于使用之前。
+            jeecs::typing::register_type<math::color>(guard, nullptr);
 
             jeecs::typing::register_type<Transform::LocalPosition>(guard, "Transform::LocalPosition");
             jeecs::typing::register_type<Transform::LocalRotation>(guard, "Transform::LocalRotation");

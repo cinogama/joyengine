@@ -336,6 +336,9 @@ namespace jeecs::graphic
             {
             case interface_type::OPENGL330:
                 glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
+                // Request an sRGB-capable default framebuffer so the GL
+                // backend can enable GL_FRAMEBUFFER_SRGB for linear output.
+                glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
                 glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
                 glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS

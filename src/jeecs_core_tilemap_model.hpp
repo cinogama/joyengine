@@ -840,7 +840,7 @@ namespace jeecs
                         shad->set_uniform(name, math::vec4(a, b, c, d));
                     break;
                 }
-                default: break;      // type 已验证 0..7，不会到达
+                default: break;      // 类型已在读入时校验
                 }
             }
         }
@@ -1729,9 +1729,13 @@ namespace jeecs
                     "array layers beyond image will be blank.",
                     path.c_str());
 
+            // Keep the atlas' color-space flag: the layer pixels are copied
+            // raw, so the array must decode sRGB exactly like the source.
             auto arr = graphic::texture_array::create(
                 cw, ch, (size_t)(xcount * ycount),
-                jegl_texture_common::format::RGBA);
+                (jegl_texture_common::format)(
+                    jegl_texture_common::format::RGBA
+                    | (raw->m_format & jegl_texture_common::format::SRGB)));
             uint8_t* dst = arr->pixels();
 
             for (int32_t ty = 0; ty < yc; ++ty)

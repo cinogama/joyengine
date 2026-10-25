@@ -59,6 +59,7 @@ namespace JEEditor::Editor::ShaderUpdater
                 float2(v)? new_sinst->set_uniform(uname, v);
                 float3(v)? new_sinst->set_uniform(uname, v);
                 float4(v)? new_sinst->set_uniform(uname, v);
+                color(v)? new_sinst->set_uniform_color(uname, v);
                 _?;
             }
         }

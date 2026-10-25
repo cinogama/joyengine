@@ -46,6 +46,9 @@ public func frag(vf: v2f)
 {
     let alpha = 0.5 * tex2d(Main, vf.uv)->w;
     return fout{
-        color = alphatest(JE_TIME->w * vec4!(1., 0.5, 0., alpha)),
+        // 高亮色直接使用线性值（sRGB 设计色 (1, 0.5, 0) 预先转换），
+        // 最终由 sRGB 交换链编码。
+        color = alphatest(JE_TIME->w * vec4!(
+            vec3!(1., 0.214041, 0.), alpha)),
     };
 }

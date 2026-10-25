@@ -1475,6 +1475,26 @@ WOORT_API woort_api wojeapi_towoo_math_atan2(void)
 {
     return woort_ret_real(atan2(woort_real(0), woort_real(1)));
 }
+WOORT_API woort_api wojeapi_color_to_srgb(void)
+{
+    const auto linear = wo_vec4(0);
+    wo_set_vec4(
+        WOORT_RETURN_SLOT,
+        jeecs::math::color(linear.x, linear.y, linear.z, linear.w).to_srgb());
+    return woort_ret();
+}
+WOORT_API woort_api wojeapi_color_to_linear(void)
+{
+    wo_set_vec4(WOORT_RETURN_SLOT, wo_vec4(0));
+    return woort_ret();
+}
+WOORT_API woort_api wojeapi_color_from_srgb(void)
+{
+    wo_set_vec4(
+        WOORT_RETURN_SLOT,
+        jeecs::math::color::from_srgb(wo_vec4(0)).to_linear());
+    return woort_ret();
+}
 WOORT_API woort_api wojeapi_towoo_math_quat_slerp(void)
 {
     wo_set_quat(
