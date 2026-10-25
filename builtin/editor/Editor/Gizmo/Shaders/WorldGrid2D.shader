@@ -157,12 +157,14 @@ public func frag(vf: v2f)
     let fade = clamp(1. - dist / 5000., 0., 1.);
     let smooth_fade = fade * fade * (3. - 2. * fade);
 
-    let MINOR_LINE_COLOR  = vec3!(0.42, 0.45, 0.50);
-    let MAJOR_LINE_COLOR  = vec3!(0.62, 0.65, 0.70);
-    let GRAND_LINE_COLOR  = vec3!(0.72, 0.75, 0.80);
-    let COARSE_LINE_COLOR = vec3!(0.80, 0.82, 0.86);
-    let AXIS_X_COLOR = vec3!(0.92, 0.32, 0.32);
-    let AXIS_Y_COLOR = vec3!(0.38, 0.85, 0.38);
+    // 线性空间配色（注释为原始 sRGB 设计值，已按精确传输函数预转换）；
+    // 各级颜色在线性空间混合，最终由 sRGB 交换链编码。
+    let MINOR_LINE_COLOR  = vec3!(0.147319, 0.170645, 0.214041); // 0.42, 0.45, 0.50
+    let MAJOR_LINE_COLOR  = vec3!(0.342392, 0.380056, 0.447988); // 0.62, 0.65, 0.70
+    let GRAND_LINE_COLOR  = vec3!(0.477000, 0.522522, 0.603827); // 0.72, 0.75, 0.80
+    let COARSE_LINE_COLOR = vec3!(0.603827, 0.638283, 0.710566); // 0.80, 0.82, 0.86
+    let AXIS_X_COLOR = vec3!(0.827571, 0.083535, 0.083535);      // 0.92, 0.32, 0.32
+    let AXIS_Y_COLOR = vec3!(0.119280, 0.692071, 0.119280);      // 0.38, 0.85, 0.38
 
     let rgb_minor = MINOR_LINE_COLOR
         + (MAJOR_LINE_COLOR - MINOR_LINE_COLOR) * major;
@@ -184,8 +186,6 @@ public func frag(vf: v2f)
         * front;
 
     return fout{
-        // 网格配色按 sRGB 设计，转换到线性后交由 sRGB 交换链编码。
-        color = vec4!(
-            pow(rgb_final, vec3!(2.2, 2.2, 2.2)), alpha),
+        color = vec4!(rgb_final, alpha),
     };
 }

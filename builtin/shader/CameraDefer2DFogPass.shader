@@ -56,14 +56,13 @@ WOSHADER_UNIFORM!
     let FogEndDistance      = vec1!(1000.);
 WOSHADER_UNIFORM!
     let FogAttenuation      = vec1!(1.);
+// 颜色 uniform：编辑器按 sRGB 显示与拾取并存储线性值，默认值在编译期
+// 完成 sRGB->线性转换，因此合成时可直接使用。
 WOSHADER_UNIFORM!
-    let FogColor            = vec3!(1., 1., 1.);
+    let FogColor            = color::uniform(1., 1., 1., 1.);
     
 public func frag(vf: v2f)
 {
-    // FogColor is authored in sRGB (material float3 uniform); the rest of the
-    // composite is linear. The swapchain performs the final sRGB encode.
-    let fog_color_linear = pow(FogColor, vec3!(2.2, 2.2, 2.2));
     let albedo_color_rgb = tex2d(Albedo, vf.uv)->xyz;
     
     let light_color_rgb = tex2d(Light, vf.uv)->xyz;
@@ -84,7 +83,7 @@ public func frag(vf: v2f)
         color = JE_COLOR * vec4!(
             lerp(
                 hdr_color_rgb,
-                fog_color_linear,
+                FogColor->xyz,
                 vec3!(fog_factor, fog_factor, fog_factor)),
             1.),
     };
