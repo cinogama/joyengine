@@ -10260,6 +10260,115 @@ namespace jeecs
             return vec4(_v4.x * _f, _v4.y * _f, _v4.z * _f, _v4.w * _f);
         }
 
+        /*
+        jeecs::math::color [类型]
+        引擎内部使用的颜色类型。RGB 分量按线性颜色空间保存（通常为
+        [0, 1]，允许 HDR 分量大于 1），alpha 不参与颜色空间转换。
+
+        编辑器显示和最终输出需要 sRGB 编码时使用 to_srgb()；传递给
+        shader/管线时统一使用 to_linear() 的结果；从 sRGB 数据（如
+        颜色选择器、外部资源）导入时使用 from_srgb()。
+        */
+        struct color
+        {
+            float r = 1.f;
+            float g = 1.f;
+            float b = 1.f;
+            float a = 1.f;
+
+            constexpr color() noexcept = default;
+            constexpr color(float _r, float _g, float _b, float _a = 1.f) noexcept
+                : r(_r), g(_g), b(_b), a(_a)
+            {
+            }
+            constexpr color(const color&) noexcept = default;
+            constexpr color(color&&) noexcept = default;
+            constexpr color& operator=(const color&) noexcept = default;
+            constexpr color& operator=(color&&) noexcept = default;
+
+            // 线性分量 -> sRGB 编码（编辑器显示 / 最终输出）
+            inline vec4 to_srgb() const noexcept
+            {
+                return vec4(
+                    _linear_to_srgb_channel(r),
+                    _linear_to_srgb_channel(g),
+                    _linear_to_srgb_channel(b),
+                    a);
+            }
+            // 颜色按线性空间保存，返回可供 shader/管线直接使用的 vec4
+            inline constexpr vec4 to_linear() const noexcept
+            {
+                return vec4(r, g, b, a);
+            }
+
+            // 从 sRGB 编码构造（编辑器写回 / 外部 sRGB 数据导入）
+            static color from_srgb(const vec4& srgb) noexcept
+            {
+                return color(
+                    _srgb_to_linear_channel(srgb.x),
+                    _srgb_to_linear_channel(srgb.y),
+                    _srgb_to_linear_channel(srgb.z),
+                    srgb.w);
+            }
+            // 从线性 vec4 构造
+            static constexpr color from_linear(const vec4& linear) noexcept
+            {
+                return color(linear.x, linear.y, linear.z, linear.w);
+            }
+
+            inline constexpr bool operator==(const color& _color) const noexcept
+            {
+                return r == _color.r && g == _color.g && b == _color.b && a == _color.a;
+            }
+            inline constexpr bool operator!=(const color& _color) const noexcept
+            {
+                return !(*this == _color);
+            }
+
+            static const char* JEScriptTypeName()
+            {
+                return "color";
+            }
+            static const char* JEScriptTypeDeclare()
+            {
+                return "public using color = (real, real, real, real);";
+            }
+            void JEParseFromScriptType(woort_value v)
+            {
+                r = woort_struct_get_float(v, 0);
+                g = woort_struct_get_float(v, 1);
+                b = woort_struct_get_float(v, 2);
+                a = woort_struct_get_float(v, 3);
+            }
+            void JEParseToScriptType(woort_value v) const
+            {
+                woort_set_struct(v, 4);
+                woort_struct_set_float(v, 0, r);
+                woort_struct_set_float(v, 1, g);
+                woort_struct_set_float(v, 2, b);
+                woort_struct_set_float(v, 3, a);
+            }
+
+        private:
+            // 标准 sRGB 传输函数。sRGB 无法表示负分量，按 0 处理。
+            static float _linear_to_srgb_channel(float c) noexcept
+            {
+                if (c <= 0.f)
+                    return 0.f;
+                if (c <= 0.0031308f)
+                    return 12.92f * c;
+                return 1.055f * std::pow(c, 1.f / 2.4f) - 0.055f;
+            }
+            static float _srgb_to_linear_channel(float c) noexcept
+            {
+                if (c <= 0.f)
+                    return 0.f;
+                if (c <= 0.04045f)
+                    return c / 12.92f;
+                return std::pow((c + 0.055f) / 1.055f, 2.4f);
+            }
+        };
+
         struct quat
         {
             float x, y, z, w;
@@ -15860,6 +15969,7 @@ namespace jeecs
             // 1. register basic types
             jeecs::typing::register_type<basic::file_resource<>>(guard, nullptr);
             jeecs::typing::register_type<math::ivec2>(guard, nullptr);
+            jeecs::typing::register_type<math::color>(guard, nullptr);
             typing::register_script_parser<bool>(
                 guard,
                 [](const bool* v, woort_value value)

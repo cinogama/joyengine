@@ -507,6 +507,9 @@ namespace je::gui
     extern("libjoyecs", "je_gui_colorpicker4")
         public func ColorPicker4(label:string, color: (real, real, real, real))=> option<(real, real, real, real)>;
         
+    extern("libjoyecs", "je_gui_coloredit4")
+        public func ColorEdit4(label:string, color: (real, real, real, real))=> option<(real, real, real, real)>;
+        
     extern("libjoyecs", "je_gui_colorbutton")
         public func ColorButton(label:string, color: (real, real, real, real))=> bool;
         

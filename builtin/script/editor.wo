@@ -183,6 +183,19 @@ namespace vec4
         }
     }
 }
+// color 内部按线性颜色空间保存，颜色选择器使用 sRGB 显示与拾取，
+// 写回时再转换回线性颜色。
+namespace color
+{
+    using parser = void
+    {
+        public extern func edit(val: color, tag: string)=> option<color>
+        {
+            let display = val->to_srgb;
+            return ColorEdit4(F"##{tag}", display)->>\picked = color::from_srgb(picked);;
+        }
+    }
+}
 namespace quat
 {
     using parser = void

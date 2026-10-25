@@ -1293,6 +1293,22 @@ WOORT_API woort_api je_gui_colorbutton(void)
 {
     return woort_ret_bool(ImGui::ColorButton(woort_string(0), val2vec4(1)));
 }
+WOORT_API woort_api je_gui_coloredit4(void)
+{
+    woort_value s;
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
+
+    woort_U8CString label = woort_string(0);
+    float rgba[] = { woort_float(1), woort_float(2), woort_float(3), woort_float(4) };
+
+    if (ImGui::ColorEdit4(label, rgba))
+    {
+        return woort_ret_option_value(
+            set_float4_to_struct(s + 0, rgba[0], rgba[1], rgba[2], rgba[3]));
+    }
+    return woort_ret_option_none();
+}
 WOORT_API woort_api je_gui_colorpicker4(void)
 {
     woort_value s;
