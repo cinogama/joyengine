@@ -2358,6 +2358,37 @@ WOORT_API woort_api wojeapi_set_shaders_of_entity(void)
     return woort_ret_void();
 }
 
+static jegl_shader::script_uniform_variant _woje_uniform_variant(
+    const jegl_shader::unifrom_variables* uniform)
+{
+    if ((uniform->m_uniform_mask & jegl_shader::uniform_mask::COLOR) != 0)
+        return jegl_shader::SCRIPT_UNIFORM_COLOR;
+
+    switch (uniform->m_uniform_type)
+    {
+    case jegl_shader::uniform_type::INT:
+        return jegl_shader::SCRIPT_UNIFORM_INTEGER;
+    case jegl_shader::uniform_type::INT2:
+        return jegl_shader::SCRIPT_UNIFORM_INTEGER2;
+    case jegl_shader::uniform_type::INT3:
+        return jegl_shader::SCRIPT_UNIFORM_INTEGER3;
+    case jegl_shader::uniform_type::INT4:
+        return jegl_shader::SCRIPT_UNIFORM_INTEGER4;
+    case jegl_shader::uniform_type::FLOAT:
+        return jegl_shader::SCRIPT_UNIFORM_FLOAT;
+    case jegl_shader::uniform_type::FLOAT2:
+        return jegl_shader::SCRIPT_UNIFORM_FLOAT2;
+    case jegl_shader::uniform_type::FLOAT3:
+        return jegl_shader::SCRIPT_UNIFORM_FLOAT3;
+    case jegl_shader::uniform_type::FLOAT4:
+        return jegl_shader::SCRIPT_UNIFORM_FLOAT4;
+    case jegl_shader::uniform_type::TEXTURE:
+        return jegl_shader::SCRIPT_UNIFORM_TEXTURE;
+    default:
+        return jegl_shader::SCRIPT_UNIFORM_OTHERS;
+    }
+}
+
 WOORT_API woort_api wojeapi_get_uniforms_from_shader(void)
 {
     /*
@@ -2380,33 +2411,12 @@ WOORT_API woort_api wojeapi_get_uniforms_from_shader(void)
 
     auto* uniforms = (*shader)->resource()->m_custom_uniforms;
 
-    // je/graphic.wo 中 `shader::uniform_variable` 的 union 顺序：
-    // integer..float4, texture, color, others。
-    constexpr int UNIFORM_VARIANT_COLOR =
-        (int)jegl_shader::uniform_type::TEXTURE + 1;
-    constexpr int UNIFORM_VARIANT_OTHERS = UNIFORM_VARIANT_COLOR + 1;
-
     while (uniforms)
     {
         woort_set_struct(val, 2);
         (void)woort_map_set_by_string(out_map, uniforms->m_name, val);
 
-        if ((uniforms->m_uniform_mask & jegl_shader::uniform_mask::COLOR) != 0)
-        {
-            // Color sits between `texture` and `others`; storage is FLOAT4.
-            woort_set_int(elem, UNIFORM_VARIANT_COLOR);
-        }
-        else if (uniforms->m_uniform_type >= jegl_shader::uniform_type::INT && uniforms->m_uniform_type <= jegl_shader::uniform_type::FLOAT4)
-        {
-            woort_set_int(elem, (int)uniforms->m_uniform_type);
-        }
-        else if (uniforms->m_uniform_type == jegl_shader::uniform_type::TEXTURE)
-        {
-            woort_set_int(elem, (int)jegl_shader::uniform_type::TEXTURE);
-        }
-        else
-            // Others
-            woort_set_int(elem, UNIFORM_VARIANT_OTHERS);
+        woort_set_int(elem, (int)_woje_uniform_variant(uniforms));
 
         woort_struct_set(val, 0, elem);
 

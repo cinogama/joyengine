@@ -154,6 +154,7 @@ namespace je
             extern("libjoyecs", "wojeapi_shader_path")
                 public func path(self: shader)=> option<string>;
                 
+            // 顺序必须与 jeecs.hpp 的 jegl_shader::script_uniform_variant 一致。
             public union uniform_variable
             {
                 integer(int),

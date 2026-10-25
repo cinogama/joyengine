@@ -2496,6 +2496,24 @@ struct jegl_shader
         NONE = 0x0000,
         COLOR = 0x0001,
     };
+    /*
+    Woolang `shader::uniform_variable` union 的 variant 索引（脚本 ABI）。
+    必须与 je/graphic.wo 中的 union 声明顺序一致。
+    */
+    enum script_uniform_variant
+    {
+        SCRIPT_UNIFORM_INTEGER = 0,
+        SCRIPT_UNIFORM_INTEGER2,
+        SCRIPT_UNIFORM_INTEGER3,
+        SCRIPT_UNIFORM_INTEGER4,
+        SCRIPT_UNIFORM_FLOAT,
+        SCRIPT_UNIFORM_FLOAT2,
+        SCRIPT_UNIFORM_FLOAT3,
+        SCRIPT_UNIFORM_FLOAT4,
+        SCRIPT_UNIFORM_TEXTURE,
+        SCRIPT_UNIFORM_COLOR,
+        SCRIPT_UNIFORM_OTHERS,
+    };
     struct builtin_uniform_location
     {
         // NOTE: m_builtin_uniform_ndc_scale 是图形库的保留变量，任何情况下都不要
