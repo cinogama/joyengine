@@ -84,6 +84,12 @@
       条件分支已删除。
 - [x] GL 的 encode 目标（FBO/RBO/纹理）改在 `gl_pre_shutdown` 中显式销毁，
       避免 reboot 时离屏纹理结构与资源句柄泄漏。
+- [x] GL 的线性离屏屏幕目标改为复用 `graphic::framebuffer`，上下文只持有
+      `std::optional<basic::resource<framebuffer>>`；手工 FBO/RBO/纹理管理
+      全部删除，颜色/深度附件随资源句柄自动回收。
+- [x] Vulkan 的线性离屏屏幕目标同样改为复用 `graphic::framebuffer`；
+      手工 `jevk12_texture` / `jevk12_framebuffer` / 尺寸字段全部删除，
+      `init_framebuffer` 已提供相同的 `SHADER_READ_ONLY_OPTIMAL` 离屏布局。
 
 ### P2 导出
 

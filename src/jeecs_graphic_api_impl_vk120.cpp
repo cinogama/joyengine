@@ -482,12 +482,8 @@ namespace jeecs::graphic::api::vk120
         // encode pass then writes it to the real swapchain image.
         bool _vk_use_srgb_encode_pass = false;
         bool _vk_encoding_srgb_screen = false;
-        jegl_texture_2d* _vk_srgb_encode_screen_color_resource = nullptr;
-        jevk12_texture* _vk_srgb_encode_screen_color_texture = nullptr;
-        jevk12_texture* _vk_srgb_encode_screen_depth_texture = nullptr;
-        jevk12_framebuffer* _vk_srgb_encode_screen_framebuffer = nullptr;
-        size_t _vk_srgb_encode_screen_width = 0;
-        size_t _vk_srgb_encode_screen_height = 0;
+        std::optional<jeecs::basic::resource<jeecs::graphic::framebuffer>>
+            _vk_srgb_encode_screen_target;
 
         VkFence _vk_queue_commit_fence;
 
@@ -1796,79 +1792,55 @@ namespace jeecs::graphic::api::vk120
 
             return result;
         }
-        void destroy_srgb_encode_screen_target()
+        jevk12_framebuffer* srgb_encode_screen_framebuffer() const
         {
-            if (_vk_srgb_encode_screen_framebuffer != nullptr)
-            {
-                destroy_frame_buffer(_vk_srgb_encode_screen_framebuffer);
-                _vk_srgb_encode_screen_framebuffer = nullptr;
-            }
-            if (_vk_srgb_encode_screen_depth_texture != nullptr)
-            {
-                destroy_texture_instance(
-                    _vk_srgb_encode_screen_depth_texture);
-                _vk_srgb_encode_screen_depth_texture = nullptr;
-            }
-            if (_vk_srgb_encode_screen_color_resource != nullptr)
-            {
-                jegl_close_texture_2d(
-                    _vk_srgb_encode_screen_color_resource);
-                _vk_srgb_encode_screen_color_resource = nullptr;
-            }
-            _vk_srgb_encode_screen_color_texture = nullptr;
-            _vk_srgb_encode_screen_width = 0;
-            _vk_srgb_encode_screen_height = 0;
+            if (!_vk_srgb_encode_screen_target.has_value())
+                return nullptr;
+
+            return static_cast<jevk12_framebuffer*>(
+                (*_vk_srgb_encode_screen_target)
+                    ->resource()->m_handle.m_ptr);
+        }
+        jegl_texture_2d* srgb_encode_screen_source() const
+        {
+            if (!_vk_srgb_encode_screen_target.has_value())
+                return nullptr;
+
+            auto attachment =
+                (*_vk_srgb_encode_screen_target)->get_attachment(0);
+            return attachment.has_value()
+                ? attachment.value()->resource()
+                : nullptr;
         }
         bool ensure_srgb_encode_screen_target(size_t width, size_t height)
         {
             if (width == 0 || height == 0)
                 return false;
 
-            if (_vk_srgb_encode_screen_framebuffer != nullptr
-                && _vk_srgb_encode_screen_color_resource != nullptr
-                && _vk_srgb_encode_screen_width == width
-                && _vk_srgb_encode_screen_height == height)
+            auto& target = _vk_srgb_encode_screen_target;
+            if (target.has_value()
+                && (*target)->width() == width
+                && (*target)->height() == height)
                 return true;
 
-            destroy_srgb_encode_screen_target();
+            target.reset();
 
-            _vk_srgb_encode_screen_color_resource = jegl_create_texture_2d(
+            // 固定使用 1x 离屏目标，避免依赖与 surface 格式不同的 MSAA 支持；
+            // 编码 pass 仍可写入交换链自身的 MSAA framebuffer。
+            auto created = jeecs::graphic::framebuffer::create(
                 width, height,
-                (jegl_texture_common::format)(
-                    jegl_texture_common::format::FRAMEBUF
-                    | jegl_texture_common::format::RGBA));
-            if (!_jegl_prepare_texture_2d_resource(
-                    _vk_srgb_encode_screen_color_resource))
+                { jegl_texture_common::format::RGBA },
+                true);
+            if (!created.has_value()
+                || !_jegl_prepare_framebuffer_resource(
+                    created.value()->resource()))
             {
                 jeecs::debug::logerr(
-                    "VK120: failed to create the linear offscreen screen texture.");
-                destroy_srgb_encode_screen_target();
+                    "VK120: failed to create the linear offscreen screen target.");
                 return false;
             }
 
-            _vk_srgb_encode_screen_color_texture =
-                static_cast<jevk12_texture*>(
-                    _vk_srgb_encode_screen_color_resource->m_handle.m_ptr);
-
-            // 回退路径固定使用 1x 离屏目标，避免依赖与 surface 格式不同的
-            // MSAA 支持；编码 pass 仍可写入交换链自身的 MSAA framebuffer。
-            _vk_srgb_encode_screen_depth_texture = create_framebuf_texture(
-                (jegl_texture_common::format)(
-                    jegl_texture_common::format::DEPTH
-                    | jegl_texture_common::format::FRAMEBUF),
-                width, height,
-                VK_SAMPLE_COUNT_1_BIT);
-
-            _vk_srgb_encode_screen_framebuffer = create_frame_buffer(
-                width, height,
-                { _vk_srgb_encode_screen_color_texture },
-                nullptr,
-                _vk_srgb_encode_screen_depth_texture,
-                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                false);
-
-            _vk_srgb_encode_screen_width = width;
-            _vk_srgb_encode_screen_height = height;
+            target = created.value();
             return true;
         }
         void destroy_pipelines_for_framebuffer(jevk12_framebuffer* fb)
@@ -1904,7 +1876,7 @@ namespace jeecs::graphic::api::vk120
 
             _vk_swapchain_images.clear();
 
-            destroy_srgb_encode_screen_target();
+            _vk_srgb_encode_screen_target.reset();
 
             for (auto semaphore : _vk_image_render_finished_semaphores)
                 destroy_semaphore(semaphore);
@@ -4606,7 +4578,7 @@ namespace jeecs::graphic::api::vk120
                 {
                     _vk_encoding_srgb_screen = true;
                     jegui_commit_srgb_encode_pass(
-                        _vk_srgb_encode_screen_color_resource);
+                        srgb_encode_screen_source());
                     _vk_encoding_srgb_screen = false;
                 }
             }
@@ -4655,10 +4627,12 @@ namespace jeecs::graphic::api::vk120
                 // 没有硬件 sRGB 写入控制时，把“绘制到屏幕”重定向到线性离屏
                 // framebuffer；帧末再由编码 pass 绘制到真正的 swapchain。
                 // 目标创建失败时 ensure 已记录错误，这里退回直接绘制。
-                resolved_framebuffer =
-                    (_vk_use_srgb_encode_pass && !_vk_encoding_srgb_screen
-                        && _vk_srgb_encode_screen_framebuffer != nullptr)
-                    ? _vk_srgb_encode_screen_framebuffer
+                auto* encode_target =
+                    (_vk_use_srgb_encode_pass && !_vk_encoding_srgb_screen)
+                    ? srgb_encode_screen_framebuffer()
+                    : nullptr;
+                resolved_framebuffer = encode_target != nullptr
+                    ? encode_target
                     : _vk_current_swapchain_image_content->m_framebuffer;
             }
 
@@ -5286,10 +5260,11 @@ namespace jeecs::graphic::api::vk120
         }
         VkRenderPass imgui_target_render_pass() const
         {
-            if (_vk_use_srgb_encode_pass
-                && _vk_srgb_encode_screen_framebuffer != nullptr)
+            if (_vk_use_srgb_encode_pass)
             {
-                return _vk_srgb_encode_screen_framebuffer->m_rendpass;
+                auto* encode_target = srgb_encode_screen_framebuffer();
+                if (encode_target != nullptr)
+                    return encode_target->m_rendpass;
             }
             return _vk_swapchain_images.empty()
                 ? VK_NULL_HANDLE

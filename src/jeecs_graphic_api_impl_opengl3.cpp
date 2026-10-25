@@ -235,11 +235,8 @@ namespace jeecs::graphic::api::gl3
             return m_srgb_output_mode == srgb_output_mode::ENCODE_PASS;
         }
 
-        GLuint m_srgb_encode_screen_fbo = 0;
-        GLuint m_srgb_encode_screen_depth_rb = 0;
-        jegl_texture_2d* m_srgb_encode_screen_color_texture = nullptr;
-        int m_srgb_encode_screen_width = 0;
-        int m_srgb_encode_screen_height = 0;
+        std::optional<jeecs::basic::resource<jeecs::graphic::framebuffer>>
+            m_srgb_encode_screen_target;
 
         JECS_DISABLE_MOVE_AND_COPY(jegl_gl3_context);
 
@@ -433,30 +430,9 @@ namespace jeecs::graphic::api::gl3
         return false;
     }
 
-    // 默认帧缓冲不支持硬件 sRGB 写入控制时，用这个离屏 FBO 代替屏幕：
+    // 默认帧缓冲不支持硬件 sRGB 写入控制时，用这个离屏 framebuffer 代替屏幕：
     // 整帧先按线性颜色渲染到这里，最后再用 srgb_encode.shader 绘制到真正的
-    // 默认帧缓冲。颜色纹理同时作为编码 shader 的输入。
-    static void _gl_destroy_srgb_screen_target(jegl_gl3_context* context)
-    {
-        if (context->m_srgb_encode_screen_fbo != 0)
-        {
-            glDeleteFramebuffers(1, &context->m_srgb_encode_screen_fbo);
-            context->m_srgb_encode_screen_fbo = 0;
-        }
-        if (context->m_srgb_encode_screen_depth_rb != 0)
-        {
-            glDeleteRenderbuffers(1, &context->m_srgb_encode_screen_depth_rb);
-            context->m_srgb_encode_screen_depth_rb = 0;
-        }
-        if (context->m_srgb_encode_screen_color_texture != nullptr)
-        {
-            jegl_close_texture_2d(context->m_srgb_encode_screen_color_texture);
-            context->m_srgb_encode_screen_color_texture = nullptr;
-        }
-        context->m_srgb_encode_screen_width = 0;
-        context->m_srgb_encode_screen_height = 0;
-    }
-
+    // 默认帧缓冲。颜色附件同时作为编码 shader 的输入。
     static bool _gl_ensure_srgb_screen_target(jegl_gl3_context* context)
     {
         int width = (int)context->RESOLUTION_WIDTH;
@@ -466,61 +442,55 @@ namespace jeecs::graphic::api::gl3
         if (width <= 0 || height <= 0)
             return false;
 
-        if (context->m_srgb_encode_screen_fbo != 0
-            && context->m_srgb_encode_screen_color_texture != nullptr
-            && context->m_srgb_encode_screen_width == width
-            && context->m_srgb_encode_screen_height == height)
+        auto& target = context->m_srgb_encode_screen_target;
+        if (target.has_value()
+            && (*target)->width() == (size_t)width
+            && (*target)->height() == (size_t)height)
             return true;
 
-        _gl_destroy_srgb_screen_target(context);
+        target.reset();
 
-        context->m_srgb_encode_screen_color_texture = jegl_create_texture_2d(
+        auto created = jeecs::graphic::framebuffer::create(
             (size_t)width, (size_t)height,
-            (jegl_texture_common::format)(
-                jegl_texture_common::format::FRAMEBUF
-                | jegl_texture_common::format::RGBA));
-
-        if (!_jegl_prepare_texture_2d_resource(
-                context->m_srgb_encode_screen_color_texture))
+            { jegl_texture_common::format::RGBA },
+            true);
+        if (!created.has_value()
+            || !_jegl_prepare_framebuffer_resource(
+                created.value()->resource()))
         {
             jeecs::debug::logerr(
-                "GL: failed to create the linear offscreen screen texture.");
-            _gl_destroy_srgb_screen_target(context);
+                "GL: failed to create the linear offscreen screen target.");
             return false;
         }
 
-        auto* color_texture = static_cast<jegl_gl3_texture*>(
-            context->m_srgb_encode_screen_color_texture->m_handle.m_ptr);
-
-        glGenFramebuffers(1, &context->m_srgb_encode_screen_fbo);
-        glBindFramebuffer(GL_FRAMEBUFFER, context->m_srgb_encode_screen_fbo);
-        glFramebufferTexture2D(
-            GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
-            color_texture->m_texture_id, 0);
-
-        glGenRenderbuffers(1, &context->m_srgb_encode_screen_depth_rb);
-        glBindRenderbuffer(GL_RENDERBUFFER, context->m_srgb_encode_screen_depth_rb);
-        glRenderbufferStorage(
-            GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height);
-        glFramebufferRenderbuffer(
-            GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER,
-            context->m_srgb_encode_screen_depth_rb);
-
-        const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-        if (status != GL_FRAMEBUFFER_COMPLETE)
-        {
-            jeecs::debug::logerr(
-                "GL: linear offscreen screen framebuffer is incomplete "
-                "(status=0x%x).", (unsigned)status);
-            _gl_destroy_srgb_screen_target(context);
-            return false;
-        }
-
-        context->m_srgb_encode_screen_width = width;
-        context->m_srgb_encode_screen_height = height;
+        target = created.value();
         return true;
+    }
+
+    static void _gl_bind_srgb_encode_target(jegl_gl3_context* context)
+    {
+        if (_gl_ensure_srgb_screen_target(context))
+        {
+            auto* framebuffer = static_cast<jegl_gl3_framebuf*>(
+                (*context->m_srgb_encode_screen_target)
+                    ->resource()->m_handle.m_ptr);
+            glBindFramebuffer(GL_FRAMEBUFFER, framebuffer->m_fbo);
+        }
+        else
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+
+    static jegl_texture_2d* _gl_srgb_encode_source(
+        jegl_gl3_context* context)
+    {
+        auto& target = context->m_srgb_encode_screen_target;
+        if (!target.has_value())
+            return nullptr;
+
+        auto attachment = (*target)->get_attachment(0);
+        return attachment.has_value()
+            ? attachment.value()->resource()
+            : nullptr;
     }
 
     je_GraphicImplContext gl_startup(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
@@ -651,10 +621,9 @@ namespace jeecs::graphic::api::gl3
         const bool encode_pass = context->is_srgb_encode_pass();
 
         // 没有硬件 sRGB 写入控制时，整帧（包括 ImGui）先渲染到线性离屏
-        // FBO，最后再统一编码到真正的默认帧缓冲。
-        if (encode_pass && _gl_ensure_srgb_screen_target(context))
-            glBindFramebuffer(
-                GL_DRAW_FRAMEBUFFER, context->m_srgb_encode_screen_fbo);
+        // framebuffer，最后再统一编码到真正的默认帧缓冲。
+        if (encode_pass)
+            _gl_bind_srgb_encode_target(context);
         else
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 
@@ -663,8 +632,7 @@ namespace jeecs::graphic::api::gl3
         if (encode_pass)
         {
             context->m_encoding_srgb_screen = true;
-            jegui_commit_srgb_encode_pass(
-                context->m_srgb_encode_screen_color_texture);
+            jegui_commit_srgb_encode_pass(_gl_srgb_encode_source(context));
             context->m_encoding_srgb_screen = false;
         }
 
@@ -675,10 +643,10 @@ namespace jeecs::graphic::api::gl3
     void gl_pre_shutdown(
         jegl_context*, je_GraphicImplContext userdata, bool)
     {
-        // 该离屏目标是上下文自持的裸资源，不属于任何 resource 句柄；
-        // 在资源层释放前显式关闭，避免 reboot 时泄漏 FBO/纹理与句柄。
-        _gl_destroy_srgb_screen_target(
-            static_cast<jegl_gl3_context*>(userdata));
+        // 该目标是上下文自持的 framebuffer，在资源层释放前显式释放，
+        // 让颜色/深度附件与资源句柄走正常的回收流程。
+        static_cast<jegl_gl3_context*>(userdata)
+            ->m_srgb_encode_screen_target.reset();
     }
     void gl_shutdown(jegl_context*, je_GraphicImplContext userdata, bool reboot)
     {
@@ -2129,15 +2097,7 @@ namespace jeecs::graphic::api::gl3
             && !context->m_encoding_srgb_screen;
 
         if (encode_fallback)
-        {
-            if (_gl_ensure_srgb_screen_target(context))
-            {
-                glBindFramebuffer(
-                    GL_FRAMEBUFFER, context->m_srgb_encode_screen_fbo);
-            }
-            else
-                glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        }
+            _gl_bind_srgb_encode_target(context);
         else if (target != nullptr)
         {
             auto* framebuffer = static_cast<jegl_gl3_framebuf*>(
