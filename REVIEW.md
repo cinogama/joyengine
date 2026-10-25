@@ -79,19 +79,15 @@
 
 ### P2 正确性/健壮性
 
-- [ ] 桌面 GL 仅依赖 `GLFW_SRGB_CAPABLE` hint 就 enable
-      `FRAMEBUFFER_SRGB`；建议用
-      `glGetFramebufferAttachmentParameteriv(..., GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING)`
-      验证，失败则切 encode pass。
-- [ ] GL 的 encode 目标（FBO/RBO/纹理）在 `gl_shutdown` 未销毁，reboot 会
-      泄漏；在 `gl_pre_shutdown` / `gl_shutdown` 补一行销毁。
+- [x] 桌面 GL 按决策不增加运行时校验：`FRAMEBUFFER_SRGB` 是 OpenGL 3.0
+      起的核心功能，GL 3.3 路径直接启用，`#if defined(GL_FRAMEBUFFER_SRGB)`
+      条件分支已删除。
+- [x] GL 的 encode 目标（FBO/RBO/纹理）改在 `gl_pre_shutdown` 中显式销毁，
+      避免 reboot 时离屏纹理结构与资源句柄泄漏。
 
 ### P2 导出
 
-- [ ] `ExportProject.wo` 只排除 `*.shader.je4cache`，其余 `.je4cache` 全部
-      打包，会带入 `imgui.ini.je4cache`、`history.je4cache` 等编辑器缓存；
-      建议用 `isImagePath(purename(p))` 限定。`isImagePath` 目前位于
-      `Browser.wo`，需移到共享位置。
+- [x] 按决策不处理：`ExportProject.wo` 的缓存打包范围维持现状。
 
 ### P3 小项
 

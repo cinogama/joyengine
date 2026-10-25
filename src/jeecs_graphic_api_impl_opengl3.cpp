@@ -558,11 +558,11 @@ namespace jeecs::graphic::api::gl3
         //  * GLES with EGL_KHR_gl_colorspace + EXT_sRGB_write_control: same
         //  * otherwise (WebGL, GLES without support): full-screen encode pass
 #if defined(JE_ENABLE_GL330_GAPI)
-#   if defined(GL_FRAMEBUFFER_SRGB)
+        // FRAMEBUFFER_SRGB is core since OpenGL 3.0; the window is requested
+        // with GLFW_SRGB_CAPABLE, so the default framebuffer encodes directly.
         glEnable(GL_FRAMEBUFFER_SRGB);
         context->m_srgb_output_mode =
             jegl_gl3_context::srgb_output_mode::HARDWARE;
-#   endif
 #elif defined(JE_ENABLE_GLES300_GAPI)
         bool surface_srgb_capable = false;
 #   ifdef JE_GL_USE_EGL_INSTEAD_GLFW
@@ -672,8 +672,14 @@ namespace jeecs::graphic::api::gl3
         glFlush();
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
-    void gl_pre_shutdown(jegl_context*, je_GraphicImplContext, bool)
-    {}
+    void gl_pre_shutdown(
+        jegl_context*, je_GraphicImplContext userdata, bool)
+    {
+        // 该离屏目标是上下文自持的裸资源，不属于任何 resource 句柄；
+        // 在资源层释放前显式关闭，避免 reboot 时泄漏 FBO/纹理与句柄。
+        _gl_destroy_srgb_screen_target(
+            static_cast<jegl_gl3_context*>(userdata));
+    }
     void gl_shutdown(jegl_context*, je_GraphicImplContext userdata, bool reboot)
     {
         jegl_gl3_context* context = static_cast<jegl_gl3_context*>(userdata);
