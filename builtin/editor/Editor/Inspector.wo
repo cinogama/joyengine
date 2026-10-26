@@ -597,6 +597,26 @@ namespace JEEditor::Editor
                 }
             }
         }
+        // “添加组件”候选行：点击立即发布添加操作并保持弹窗打开，便于连续
+        // 添加；已添加的组件自下一帧起从候选中消失
+        func showAddComponentCandidate(
+            wctx: WorldEditorViewport, e: entity, ctype: typeinfo)=> void
+        {
+            let (_, short_name) = splitTypeName(ctype->name);
+            if (Selectable(F"{short_name}##add_{ctype->name}"))
+            {
+                // 先结束可能进行中的编辑手势，再发布添加组件的操作
+                EditSession::commit();
+                match (AddComponent::try_create(e, ctype))
+                {
+                    none?
+                        // 没有 EUID 的实体退化为直接添加（无法支持撤销）
+                        do e->add_component(ctype);
+                    value(action)?
+                        wctx->doAction(action);
+                }
+            }
+        }
         // “添加组件”选择弹窗：搜索过滤 + 常用组合一键整组添加 + 按命名
         // 空间分组的候选列表。选中一项立即发布添加操作且保持弹窗打开，
         // 便于连续添加；已添加的组件自下一帧起从候选中消失。
@@ -646,31 +666,31 @@ namespace JEEditor::Editor
             if (BeginListBox("##add_component_candidates", picker_width,
                     GetFrameHeightWithSpacing() * 8.))
             {
-                // 与上方组件区一致的命名空间分组标题
+                // 与上方组件区一致的命名空间分组标题；类型名不含 "::"
+                // 的组件（如 towoo 组件）没有命名空间，单独成组放在最前，
+                // 避免它们按名字散落在命名空间组之间、被误认作相邻组的
+                // 一部分
+                let unnamed = candidates->forall(
+                    \ctype = ctype->name->find("::")->is_none;);
+                if (unnamed->len > 0)
+                {
+                    SeparatorText("无命名空间");
+                    for (let ctype : unnamed)
+                        showAddComponentCandidate(wctx, e, ctype);
+                }
+
                 let mut last_namespace = "";
                 for (let ctype : candidates)
                 {
-                    let (ns, short_name) = splitTypeName(ctype->name);
+                    let (ns, _) = splitTypeName(ctype->name);
+                    if (ns == "")
+                        continue;
                     if (ns != last_namespace)
                     {
-                        if (ns != "")
-                            SeparatorText(ns);
+                        SeparatorText(ns);
                         last_namespace = ns;
                     }
-                    
-                    if (Selectable(F"{short_name}##add_{ctype->name}"))
-                    {
-                        // 先结束可能进行中的编辑手势，再发布添加组件的操作
-                        EditSession::commit();
-                        match (AddComponent::try_create(e, ctype))
-                        {
-                            none?
-                                // 没有 EUID 的实体退化为直接添加（无法支持撤销）
-                                do e->add_component(ctype);
-                            value(action)?
-                                wctx->doAction(action);
-                        }
-                    }
+                    showAddComponentCandidate(wctx, e, ctype);
                 }
                 if (candidates->len == 0)
                     TextDisabled("（没有匹配的组件）");
@@ -1014,29 +1034,39 @@ namespace JEEditor::Editor
             SeparatorText("组件");
             
             // 组件按全名排序后同一命名空间的组件自然相邻：按命名空间
-            // 分组，组头（色带 + 组件数）醒目标出组别；无命名空间的
-            // 组件不设组头
+            // 分组，组头（色带 + 组件数）醒目标出组别。类型名不含 "::"
+            // 的组件（如 towoo 组件）没有命名空间，统一收进单独的组放在
+            // 最前；否则它们会按名字散落在命名空间组之间，看起来像属于
+            // 相邻的命名空间
             let visibles = e->internal::get_components_types
                 |> sort(\l, r = l->name < r->name;)
                 |> forall(\t = !t->name->begin_with("Editor::"););
                 
-            let mut group_begin = 0;
-            while (group_begin < visibles->len)
+            let unnamed = visibles->forall(\t = t->name->find("::")->is_none;);
+            if (unnamed->len > 0)
             {
-                let (ns, _) = splitTypeName(visibles[group_begin]->name);
+                showGroupHeader("无命名空间", unnamed->len);
+                for (let t : unnamed)
+                    do showComponentBlock(wctx, e, t, prefab);
+            }
+
+            let named = visibles->forall(\t = t->name->find("::")->is_value;);
+            let mut group_begin = 0;
+            while (group_begin < named->len)
+            {
+                let (ns, _) = splitTypeName(named[group_begin]->name);
                 let mut group_end = group_begin;
-                while (group_end < visibles->len)
+                while (group_end < named->len)
                 {
-                    let (cur_ns, _) = splitTypeName(visibles[group_end]->name);
+                    let (cur_ns, _) = splitTypeName(named[group_end]->name);
                     if (cur_ns != ns)
                         break;
                     group_end += 1;
                 }
-                if (ns != "")
-                    showGroupHeader(ns, group_end - group_begin);
+                showGroupHeader(ns, group_end - group_begin);
                 for (let mut i = group_begin; i < group_end; i += 1)
                 {
-                    showComponentBlock(wctx, e, visibles[i], prefab);
+                    showComponentBlock(wctx, e, named[i], prefab);
                 }
                 group_begin = group_end;
             }

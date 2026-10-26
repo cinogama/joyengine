@@ -485,6 +485,23 @@ namespace JEEditor::Editor
                 selected_ctypes, wctx->getSpawnPosInFrontOfCamera()));
             CloseCurrentPopup();
         }
+        // “新建实体”候选行：勾选状态保存在类型名集合中，与“常用组合”
+        // 的整组勾选互通
+        func showNewEntityCandidate(cname: string, short_name: string)=> void
+        {
+            match (CheckBox(F"{short_name}##new_{cname}",
+                    s_new_entity_selected->contains(cname)))
+            {
+                none?;
+                value(checked)?
+                {
+                    if (checked)
+                        s_new_entity_selected->set(cname, true);
+                    else
+                        do s_new_entity_selected->remove(cname);
+                }
+            }
+        }
         // “新建实体”弹窗：搜索过滤 + 常用组合一键整组勾选 + 按命名空间
         // 分组的组件候选，自由勾选组合若干组件后确认创建；不允许一个
         // 组件都不选。
@@ -533,31 +550,32 @@ namespace JEEditor::Editor
             if (BeginListBox("##new_entity_candidates", picker_width,
                     GetFrameHeightWithSpacing() * 8.))
             {
-                // 与检视面板一致的命名空间分组标题
+                // 与检视面板一致的命名空间分组标题；类型名不含 "::"
+                // 的组件（如 towoo 组件）没有命名空间，单独成组放在最前，
+                // 避免它们按名字散落在命名空间组之间、被误认作相邻组的
+                // 一部分
+                let unnamed = candidates->forall(
+                    \ctype = ctype->name->find("::")->is_none;);
+                if (unnamed->len > 0)
+                {
+                    SeparatorText("无命名空间");
+                    for (let ctype : unnamed)
+                        showNewEntityCandidate(ctype->name, ctype->name);
+                }
+
                 let mut last_namespace = "";
                 for (let ctype : candidates)
                 {
                     let cname = ctype->name;
                     let (ns, short_name) = splitTypeName(cname);
+                    if (ns == "")
+                        continue;
                     if (ns != last_namespace)
                     {
-                        if (ns != "")
-                            SeparatorText(ns);
+                        SeparatorText(ns);
                         last_namespace = ns;
                     }
-
-                    match (CheckBox(F"{short_name}##new_{cname}",
-                            s_new_entity_selected->contains(cname)))
-                    {
-                        none?;
-                        value(checked)?
-                        {
-                            if (checked)
-                                s_new_entity_selected->set(cname, true);
-                            else
-                                do s_new_entity_selected->remove(cname);
-                        }
-                    }
+                    showNewEntityCandidate(cname, short_name);
                 }
                 if (candidates->len == 0)
                     TextDisabled("（没有匹配的组件）");
