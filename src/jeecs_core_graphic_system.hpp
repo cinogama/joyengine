@@ -1975,12 +1975,20 @@ namespace jeecs
                         std::vector<uint32_t> _index_buffer;
                         if (!blockshadow->shape.m_block_points.empty())
                         {
+                            // 通用 block 的逐段 key 使用多边形最低局部 Y；
+                            // 瓦片分片走 write_part_blockshadow_mesh 的逐段
+                            // key。vertex_priority=false 时 shader 会用实体
+                            // 底边 key 覆盖它，这里只保证顶点布局一致。
+                            float _min_point_y = blockshadow->shape.m_block_points.front().y;
+                            for (auto& point : blockshadow->shape.m_block_points)
+                                _min_point_y = std::min(_min_point_y, point.y);
+
                             for (auto& point : blockshadow->shape.m_block_points)
                             {
                                 _vertex_buffer.insert(_vertex_buffer.end(),
                                     {
-                                        point.x, point.y, 0.f, 0.f,
-                                        point.x, point.y, 0.f, 1.f,
+                                        point.x, point.y, 0.f, 0.f, _min_point_y,
+                                        point.x, point.y, 0.f, 1.f, _min_point_y,
                                     });
 
                                 uint32_t _index_offset = _index_buffer.size();
@@ -1996,6 +2004,7 @@ namespace jeecs
                                 _index_buffer,
                                 {
                                     {jegl_vertex::data_type::FLOAT32, 3},
+                                    {jegl_vertex::data_type::FLOAT32, 1},
                                     {jegl_vertex::data_type::FLOAT32, 1},
                                 });
                         }
@@ -2035,7 +2044,7 @@ namespace jeecs
             // 不稳定排序导致覆盖胜负不确定。
             // 注意：这里只决定遍历/分层顺序；最终逐像素胜负由 shadow buffer
             // 的深度测试（JE_SHADOW_KEY）决定，chunk 级排序键不再能覆盖
-            // 更靠前的 SelfShadow。逐顶点 key 见各 shadow shader。
+            // 更靠前的 SelfShadow。逐段/逐块 key 见各 shadow shader。
             std::sort(m_2dblock_y_list.begin(), m_2dblock_y_list.end(),
                 [](const block2d_arch& a, const block2d_arch& b)
                 {
@@ -2438,7 +2447,7 @@ namespace jeecs
                                     block_in_current_layer.push_back(&blockarch);
 
                                     // 实体级 painter key：TopDown=包围盒底边世界 Y，
-                                    // 普通 2D=实体世界 Z。逐顶点 key（瓦片轮廓）在
+                                    // 普通 2D=实体世界 Z。逐段 key（瓦片轮廓）在
                                     // 顶点着色器里用顶点世界坐标覆盖它。
                                     const float shadow_entity_key = topdown_light
                                         ? blockarch.bottom_world_center.y

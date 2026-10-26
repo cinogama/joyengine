@@ -15,6 +15,8 @@ WOSHADER_VERTEX_IN!
     using vin = struct {
         vertex: float3,
         factor: float,
+        // 段最低局部 Y：连续墙段整体排序用（见 write_part_blockshadow_mesh）
+        key_y: float,
     };
     
 WOSHADER_VERTEX_TO_FRAGMENT!
@@ -33,12 +35,13 @@ public func vert(v: vin)
     let light_vdir = (JE_V * JE_COLOR)->xyz - movement(JE_V);
     let vpos = JE_MV * vec4!(v.vertex, 1.);
     
-    // 逐像素 painter key：逐边优先用未挤出顶点的世界坐标
-    //（瓦片轮廓按边所在行排序），普通实体回退到实体 key。
+    // 逐像素 painter key：逐边优先用段的最低 Y（连续墙段整体排序），
+    // 普通实体回退到实体 key。
     let wp = JE_M * vec4!(v.vertex, 1.);
     let use_vertex = step(JE_SHADOW_KEY->w, 1.5);
     let vertex_topdown = step(JE_SHADOW_KEY->w, 2.5);
-    let vertex_key = wp->z + (wp->y - wp->z) * vertex_topdown;
+    let key_point = JE_M * vec4!(v.vertex->x, v.key_y, v.vertex->z, 1.);
+    let vertex_key = wp->z + (key_point->y - wp->z) * vertex_topdown;
     let key_world = JE_SHADOW_KEY->x + (vertex_key - JE_SHADOW_KEY->x) * use_vertex;
     let shadow_depth = clamp(
         key_world * JE_SHADOW_KEY->y + JE_SHADOW_KEY->z, 0., 0.999999);

@@ -13869,7 +13869,8 @@ namespace jeecs
             bool reverse = false;
             bool auto_disable = true;
             // 内部标志：由瓦片地图分片置位。true 时 DeferLight2D 用阴影
-            // 网格顶点携带的逐边 painter key（TopDown=世界 Y，普通=世界 Z）
+            // 网格顶点携带的逐段 painter key（TopDown=世界 Y，普通=世界 Z；
+            // 连续轮廓段取段的最低 Y/Z）
             // 参与逐像素深度排序，而不是整个实体共用一个底边 key；普通
             // 实体保持 false，维持实体级语义。不注册到脚本/编辑器，由
             // TilemapSystem 每帧对齐。

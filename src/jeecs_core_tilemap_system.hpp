@@ -354,25 +354,32 @@ namespace jeecs
             const int32_t y0 = std::max(by, 0);
             const int32_t y1 = std::min<int32_t>(by + (int32_t)CHUNK, doc.height);
 
-            // (x, y, z=0, 挤出因子)：因子 0 = 原位，1 = 背光挤出
+            // (x, y, z=0, 挤出因子, 段最低局部 Y)
+            // 因子 0 = 原位，1 = 背光挤出；段最低 Y 是该连续边界段
+            // 最靠前（Y 最小）的端点，用作整段的逐像素排序 key。
             std::vector<float> verts;
-            auto push_point = [&verts](float px, float py, float f)
+            auto push_point = [&verts](float px, float py, float f, float key_y)
             {
                 verts.push_back(px);
                 verts.push_back(py);
                 verts.push_back(0.f);
                 verts.push_back(f);
+                verts.push_back(key_y);
             };
             // 一条边界线段（8 顶点）：A 的过渡点对（全原位，衔接上一段）
             // + A/B 实点对（原位/挤出，构成阴影四边形）+ B 的过渡点对
             //（全原位，衔接下一段）。段间过渡四边形的两侧点对挤出因子
-            // 均为 0，两个三角形各有一对重合顶点 → 零面积不产生像素
+            // 均为 0，两个三角形各有一对重合顶点 → 零面积不产生像素。
+            // 连续墙段（尤其是竖直 run）整体用 min(ay, ey) 作为 key：
+            // 上段不能因为自身端点 Y 更高而被其下方实体的 SelfShadow 清除，
+            // 否则同一面墙的阴影会在格子交界处断开。
             auto push_segment = [&push_point](float ax, float ay, float ex, float ey)
             {
-                push_point(ax, ay, 0.f); push_point(ax, ay, 0.f);
-                push_point(ax, ay, 0.f); push_point(ax, ay, 1.f);
-                push_point(ex, ey, 0.f); push_point(ex, ey, 1.f);
-                push_point(ex, ey, 0.f); push_point(ex, ey, 0.f);
+                const float key_y = std::min(ay, ey);
+                push_point(ax, ay, 0.f, key_y); push_point(ax, ay, 0.f, key_y);
+                push_point(ax, ay, 0.f, key_y); push_point(ax, ay, 1.f, key_y);
+                push_point(ex, ey, 0.f, key_y); push_point(ex, ey, 1.f, key_y);
+                push_point(ex, ey, 0.f, key_y); push_point(ex, ey, 0.f, key_y);
             };
 
             // 四类边界各自独立成趟提取（上/下按行、左/右按列，各自贪心
@@ -469,7 +476,7 @@ namespace jeecs
                 return;
             }
 
-            std::vector<uint32_t> indices(verts.size() / 4);
+            std::vector<uint32_t> indices(verts.size() / 5);
             for (size_t i = 0; i < indices.size(); ++i)
                 indices[i] = (uint32_t)i;
 
@@ -480,6 +487,7 @@ namespace jeecs
                 {
                     { jegl_vertex::data_type::FLOAT32, 3 }, // pos
                     { jegl_vertex::data_type::FLOAT32, 1 }, // 挤出因子
+                    { jegl_vertex::data_type::FLOAT32, 1 }, // 段最低局部 Y（逐像素排序 key）
                 });
             if (created.has_value())
                 blockshadow->shape.m_block_mesh = created;
