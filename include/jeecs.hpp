@@ -5613,7 +5613,8 @@ Light2D::PerBlockSelfShadow（网格顶点携带块底边高度），格底边�
 （ON 模式与普通光源不受影响，仍为整实体判定）
 瓦片分片带 PerBlockSelfShadow 标记，其自阴影按 MAX 合并到光照阴影缓冲：
 只加深阴影，不会清除本层 BlockShadow 或其它图层已写入的遮挡阴影
-（普通精灵实体的 SelfShadow 仍为覆盖语义，受光态会清除覆盖）。
+（普通精灵实体的 SelfShadow 仍为覆盖语义，但按 painter key 深度只清除
+其后方/key 更大的遮挡阴影，位于其前方的遮挡阴影仍会覆盖它）。
 请参见：
     je_tilemap_set_layer_selfshadow
     je_tilemap_set_layer_selfshadow_factor
@@ -5641,6 +5642,9 @@ je_tilemap_layer_blockshadow / je_tilemap_set_layer_blockshadow 的取值。
 与空心格的边界（跨分块判定，贪心合并共线段）构成遮挡轮廓，随网格编辑
 重建。（阴影浓度 factor 经 je_tilemap_set_layer_blockshadow_factor 按层
 设置）
+TopDown 光源下，轮廓段的逐像素排序 key 按列合并所有开启 BlockShadow 的
+图层：取该列最低实心格的底边作为整面墙的基座。同一面墙跨图层/跨格子
+拼成时共享最前端基座，不会因上段 Y 更高而被实体 SelfShadow 清除。
 请参见：
     je_tilemap_set_layer_blockshadow
     je_tilemap_set_layer_blockshadow_factor
@@ -13870,7 +13874,7 @@ namespace jeecs
             bool auto_disable = true;
             // 内部标志：由瓦片地图分片置位。true 时 DeferLight2D 用阴影
             // 网格顶点携带的逐段 painter key（TopDown=世界 Y，普通=世界 Z；
-            // 连续轮廓段取段的最低 Y/Z）
+            // 瓦片轮廓按列合并所有 BlockShadow 层，取列底）
             // 参与逐像素深度排序，而不是整个实体共用一个底边 key；普通
             // 实体保持 false，维持实体级语义。不注册到脚本/编辑器，由
             // TilemapSystem 每帧对齐。

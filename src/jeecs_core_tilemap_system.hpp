@@ -342,7 +342,10 @@ namespace jeecs
         // TRIANGLESTRIP 即可承载任意多条不相邻线段。邻居判定取整层
         // 网格（跨分块），分块接缝处的实心邻接不产生边界。m_block_points
         // 留空：DeferLight2D 只在 m_block_mesh 缺失时才从 points 构建，
-        // 此处直接持有预生成网格
+        // 此处直接持有预生成网格。
+        // 轮廓段的逐像素排序 key 不是本层行号，而是该列在所有开启
+        // BlockShadow 的图层中的最低实心格底边：同一面墙跨图层/跨格子
+        // 拼成时，整面墙共享最前端基座，阴影不会在层/格交界处断开。
         static void write_part_blockshadow_mesh(const Tilemap::MapDocument& doc,
             const part_key& key, Light2D::BlockShadow* blockshadow)
         {
@@ -354,9 +357,50 @@ namespace jeecs
             const int32_t y0 = std::max(by, 0);
             const int32_t y1 = std::min<int32_t>(by + (int32_t)CHUNK, doc.height);
 
-            // (x, y, z=0, 挤出因子, 段最低局部 Y)
-            // 因子 0 = 原位，1 = 背光挤出；段最低 Y 是该连续边界段
-            // 最靠前（Y 最小）的端点，用作整段的逐像素排序 key。
+            // 跨层列底：同一面墙可能由多个 tilemap 层（例如图层 2/3）
+            // 的轮廓拼成。以所有开启 BlockShadow 的图层的联合占用为准，
+            // 取该列最低实心格的底边（世界 Y 最小）作为该列轮廓段的
+            // painter key。这样跨层的上下墙段共享同一“最前端基座”，
+            // 不会因上段自身 Y 更高而被实体 SelfShadow 清除。
+            std::vector<float> column_bottom((size_t)(x1 - x0), 0.f);
+            for (int32_t x = x0; x < x1; ++x)
+            {
+                float bottom = 0.f;
+                bool found = false;
+                for (const auto& candidate : doc.layers)
+                {
+                    if (candidate.blockshadow == JE_LAYER_BLOCKSHADOW_OFF)
+                        continue;
+                    for (int32_t y = 0; y < doc.height; ++y)
+                    {
+                        if (!cell_blocks_light(doc, candidate, x, y))
+                            continue;
+                        const float yb = -(float)(y + 1);
+                        if (!found || yb < bottom)
+                        {
+                            bottom = yb;
+                            found = true;
+                        }
+                    }
+                }
+                column_bottom[(size_t)(x - x0)] = found ? bottom : 0.f;
+            }
+            const auto column_key = [&](int32_t x) -> float
+            {
+                const size_t i = (size_t)(x - x0);
+                return i < column_bottom.size() ? column_bottom[i] : 0.f;
+            };
+            const auto run_column_key = [&](int32_t c0, int32_t c1) -> float
+            {
+                float result = column_key(c0);
+                for (int32_t c = c0 + 1; c < c1; ++c)
+                    result = std::min(result, column_key(c));
+                return result;
+            };
+
+            // (x, y, z=0, 挤出因子, 列底局部 Y)
+            // 因子 0 = 原位，1 = 背光挤出；列底 Y 是该列跨层连续墙
+            // 最靠前（Y 最小）的基座，用作整段的逐像素排序 key。
             std::vector<float> verts;
             auto push_point = [&verts](float px, float py, float f, float key_y)
             {
@@ -370,12 +414,9 @@ namespace jeecs
             // + A/B 实点对（原位/挤出，构成阴影四边形）+ B 的过渡点对
             //（全原位，衔接下一段）。段间过渡四边形的两侧点对挤出因子
             // 均为 0，两个三角形各有一对重合顶点 → 零面积不产生像素。
-            // 连续墙段（尤其是竖直 run）整体用 min(ay, ey) 作为 key：
-            // 上段不能因为自身端点 Y 更高而被其下方实体的 SelfShadow 清除，
-            // 否则同一面墙的阴影会在格子交界处断开。
-            auto push_segment = [&push_point](float ax, float ay, float ex, float ey)
+            auto push_segment = [&push_point](
+                float ax, float ay, float ex, float ey, float key_y)
             {
-                const float key_y = std::min(ay, ey);
                 push_point(ax, ay, 0.f, key_y); push_point(ax, ay, 0.f, key_y);
                 push_point(ax, ay, 0.f, key_y); push_point(ax, ay, 1.f, key_y);
                 push_point(ex, ey, 0.f, key_y); push_point(ex, ey, 1.f, key_y);
@@ -401,7 +442,8 @@ namespace jeecs
                             && cell_blocks_light(doc, layer, e, y)
                             && !cell_blocks_light(doc, layer, e, y - 1))
                             ++e;
-                        push_segment((float)e, -(float)y, (float)x, -(float)y);
+                        push_segment((float)e, -(float)y, (float)x, -(float)y,
+                            run_column_key(x, e));
                         x = e;
                         continue;
                     }
@@ -421,7 +463,7 @@ namespace jeecs
                             && !cell_blocks_light(doc, layer, e, y + 1))
                             ++e;
                         push_segment((float)x, -(float)(y + 1),
-                            (float)e, -(float)(y + 1));
+                            (float)e, -(float)(y + 1), run_column_key(x, e));
                         x = e;
                         continue;
                     }
@@ -440,7 +482,8 @@ namespace jeecs
                             && cell_blocks_light(doc, layer, x, e)
                             && !cell_blocks_light(doc, layer, x - 1, e))
                             ++e;
-                        push_segment((float)x, -(float)y, (float)x, -(float)e);
+                        push_segment((float)x, -(float)y, (float)x, -(float)e,
+                            column_key(x));
                         y = e;
                         continue;
                     }
@@ -460,7 +503,7 @@ namespace jeecs
                             && !cell_blocks_light(doc, layer, x + 1, e))
                             ++e;
                         push_segment((float)(x + 1), -(float)e,
-                            (float)(x + 1), -(float)y);
+                            (float)(x + 1), -(float)y, column_key(x));
                         y = e;
                         continue;
                     }
@@ -487,7 +530,7 @@ namespace jeecs
                 {
                     { jegl_vertex::data_type::FLOAT32, 3 }, // pos
                     { jegl_vertex::data_type::FLOAT32, 1 }, // 挤出因子
-                    { jegl_vertex::data_type::FLOAT32, 1 }, // 段最低局部 Y（逐像素排序 key）
+                    { jegl_vertex::data_type::FLOAT32, 1 }, // 列底局部 Y（跨层连续墙基座 key）
                 });
             if (created.has_value())
                 blockshadow->shape.m_block_mesh = created;
