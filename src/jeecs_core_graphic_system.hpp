@@ -1359,9 +1359,12 @@ namespace jeecs
 
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_pass;
 
-            // 所有 shadow pass 都写逐像素 painter key 深度，并以
+            // 遮挡/自阴影 pass 写逐像素 painter key 深度，并以
             // ZTEST(LESS_EQUAL) / ZWRITE(ENABLE) 让更靠前的贡献胜出；
             // BLEND(MAX) 只负责同一 key 内的阴影叠加（不再用于跨层仲裁）。
+            // 例外：SpriteShadow 的四边形只是椭圆/尾迹的包围框，片元里才
+            // 裁出实际覆盖，因此它不写深度（ZWRITE DISABLE），只 MAX 叠加
+            // 强度，避免包围框内无阴影的空洞以脚底 key 擦除其它阴影。
 
             // 数组纹理采样版 sub pass：瓦片地图分片把图集绑在
             // Textures2DArray 槽 0（顶点 uv 为 (u, v, 数组层号) float3），

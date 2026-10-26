@@ -13752,8 +13752,9 @@ namespace jeecs
         };
         // 阴影缓冲：颜色附件 R 存阴影强度（MAX 合并）；内部还带深度附件，
         // 存每个阴影贡献的逐像素 painter key（TopDown 世界 Y / 普通世界 Z），
-        // 用于按俯视角前后关系仲裁 SelfShadow 与 BlockShadow。分辨率由
-        // resolution_ratio 控制（深度/颜色同尺寸）。
+        // 用于按俯视角前后关系仲裁 SelfShadow 与 BlockShadow。SpriteShadow
+        // 只做 MAX 叠加、不写深度（其四边形是接触阴影的包围框，不应当作
+        // 遮挡面参与仲裁）。分辨率由 resolution_ratio 控制（深度/颜色同尺寸）。
         struct ShadowBuffer
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(ShadowBuffer);
@@ -13916,6 +13917,8 @@ namespace jeecs
         // 椭圆轴固定在视空间（长轴水平、短轴垂直，不随光向旋转），
         // 只有尾迹朝背光方向延伸；各长度均为视图空间单位
         //（正交 2D 相机下等同世界单位），与 distance 同口径。
+        // 接触阴影只按 MAX 叠加强度，不参与逐像素 painter key 深度仲裁
+        //（其四边形只是椭圆/尾迹的包围框，不应以脚底 key 遮挡其它阴影）。
         struct SpriteShadow
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(SpriteShadow);

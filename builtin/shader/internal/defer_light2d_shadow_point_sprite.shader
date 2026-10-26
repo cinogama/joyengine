@@ -6,8 +6,15 @@ import pkg::woshader;
 using woshader;
 using je::shader;
 
+// SpriteShadow 是纯加法的接触阴影：只往阴影缓冲里叠加强度。
+// 它的四边形只是「椭圆 + 背光切线锥」的包围框（片元里才裁出实际覆盖），
+// 且一个片元可能覆盖离脚底很远的区域；如果写逐像素 painter key 深度，
+// 包围框内本不产生阴影的空洞也会以脚底 key 占据深度，使随后绘制的
+// 遮挡阴影 / 自阴影（key 更大，即更靠后）被深度测试丢弃，出现
+// “接触阴影把别的阴影擦掉”的瑕疵。因此这里只测试深度（不覆盖更靠前
+// 的既有贡献），不写深度。
 ZTEST   (LESS_EQUAL);
-ZWRITE  (ENABLE);
+ZWRITE  (DISABLE);
 BLEND   (MAX, ONE, ONE);
 // MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
 CULL    (NONE);
@@ -112,7 +119,8 @@ public func vert(v: vin)
         center_view->y + off_y,
         center_view->z);
 
-    // SpriteShadow 用脚底实体级 painter key
+    // SpriteShadow 用脚底实体级 painter key：仅用于深度测试（被更靠前的
+    // 贡献遮挡），本 pass 不写深度，不参与遮挡仲裁。
     let shadow_depth = clamp(
         JE_SHADOW_KEY->x * JE_SHADOW_KEY->y + JE_SHADOW_KEY->z, 0., 0.999999);
 
