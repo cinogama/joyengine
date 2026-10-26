@@ -15,7 +15,7 @@ WOSHADER_VERTEX_IN!
     using vin = struct {
         vertex: float3,
         factor: float,
-        // 局部墙底 Y：本段及附近跨层墙段的较低基座，整段统一排序
+        // 局部墙底 Y：本段最低边及 8 邻域内贴合跨层墙段的较低基座
         key_y: float,
     };
     
@@ -35,7 +35,7 @@ public func vert(v: vin)
     let light_vpos = JE_V * JE_COLOR;
     let vpos = JE_MV * vec4!(v.vertex, 1.);
     
-    // 逐像素 painter key：瓦片轮廓取本段及附近跨层墙段的局部墙底，
+    // 逐像素 painter key：瓦片轮廓取本段最低边及贴合跨层墙段，
     // 普通实体回退到实体 key。
     let wp = JE_M * vec4!(v.vertex, 1.);
     let use_vertex = step(JE_SHADOW_KEY->w, 1.5);

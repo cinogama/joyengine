@@ -343,10 +343,10 @@ namespace jeecs
         // 网格（跨分块），分块接缝处的实心邻接不产生边界。m_block_points
         // 留空：DeferLight2D 只在 m_block_mesh 缺失时才从 points 构建，
         // 此处直接持有预生成网格。
-        // 轮廓段的逐像素排序 key 不是本层行号，而是该段及其附近 ±2 行/列
-        // 内其它开启 BlockShadow 图层墙段的最低实心格底边：相邻跨层墙段
-        // 共享较低基座，阴影在层/格交界处保持连续；远处不连通的低墙不会
-        // 把 key 拉低。
+        // 轮廓段的逐像素排序 key 不是本层行号，而是该段自身的最低边，
+        // 加上与本段格子严格相邻（8 邻域）的其它 BlockShadow 图层墙段：
+        // 真正贴合的跨层上下段共享较低基座；隔开 2 格以上的墙不会把 key
+        // 拉低。
         static void write_part_blockshadow_mesh(const Tilemap::MapDocument& doc,
             const part_key& key, Light2D::BlockShadow* blockshadow)
         {
@@ -359,38 +359,44 @@ namespace jeecs
             const int32_t y1 = std::min<int32_t>(by + (int32_t)CHUNK, doc.height);
 
             // 跨层局部墙底：同一面墙的上下段可能位于不同的 tilemap 层。
-            // 只合并源格附近（±2 行/列）的其它 BlockShadow 层实心格，
-            // 取局部最低底边作为 key：
-            //  * 相邻/隔一格的跨层墙段会共享较低基座，阴影连续；
-            //  * 同一列远处另一段不连通的低墙不会被拉进来，避免原本位于
-            //    实体后方的墙阴影又被判为前方而盖住实体。
+            // 只合并与本段格子**严格相邻**（8 邻域，含同格）的其它
+            // BlockShadow 层实心格，取局部最低底边作为 key：
+            //  * 真正贴合的跨层墙段会共享较低基座，阴影连续；
+            //  * 距离 2 格以上的另一段低墙不会被拉进来，避免上方墙的
+            //    阴影被误判为前方而盖住带有 SelfShadow 的实体。
             const int32_t map_w = doc.width;
             const int32_t map_h = doc.height;
             const auto segment_key = [&](int32_t c0, int32_t c1,
                 int32_t r0, int32_t r1, bool horizontal, float own_key) -> float
             {
                 float result = own_key;
-                for (const auto& candidate : doc.layers)
-                {
-                    if (candidate.blockshadow == JE_LAYER_BLOCKSHADOW_OFF)
-                        continue;
 
-                    const int32_t last_row = horizontal ? r1 : (r1 - 1);
-                    const int32_t ry0 = std::max(0, r0 - 2);
-                    const int32_t ry1 = std::min(map_h - 1, last_row + 2);
-                    if (horizontal)
+                const auto consider_cell = [&](int32_t x, int32_t y)
+                {
+                    if (x < 0 || y < 0 || x >= map_w || y >= map_h)
+                        return;
+                    for (const auto& candidate : doc.layers)
                     {
-                        for (int32_t ry = ry0; ry <= ry1; ++ry)
-                            for (int32_t cx = c0; cx < c1; ++cx)
-                                if (cell_blocks_light(doc, candidate, cx, ry))
-                                    result = std::min(result, -(float)(ry + 1));
+                        if (candidate.blockshadow == JE_LAYER_BLOCKSHADOW_OFF)
+                            continue;
+                        if (cell_blocks_light(doc, candidate, x, y))
+                            result = std::min(result, -(float)(y + 1));
                     }
-                    else
-                    {
-                        for (int32_t ry = ry0; ry <= ry1; ++ry)
-                            if (cell_blocks_light(doc, candidate, c0, ry))
-                                result = std::min(result, -(float)(ry + 1));
-                    }
+                };
+
+                if (horizontal)
+                {
+                    for (int32_t cx = c0; cx < c1; ++cx)
+                        for (int32_t dy = -1; dy <= 1; ++dy)
+                            for (int32_t dx = -1; dx <= 1; ++dx)
+                                consider_cell(cx + dx, r0 + dy);
+                }
+                else
+                {
+                    for (int32_t cy = r0; cy < r1; ++cy)
+                        for (int32_t dy = -1; dy <= 1; ++dy)
+                            for (int32_t dx = -1; dx <= 1; ++dx)
+                                consider_cell(c0 + dx, cy + dy);
                 }
                 return result;
             };

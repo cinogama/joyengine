@@ -5642,10 +5642,10 @@ je_tilemap_layer_blockshadow / je_tilemap_set_layer_blockshadow 的取值。
 与空心格的边界（跨分块判定，贪心合并共线段）构成遮挡轮廓，随网格编辑
 重建。（阴影浓度 factor 经 je_tilemap_set_layer_blockshadow_factor 按层
 设置）
-TopDown 光源下，轮廓段的逐像素排序 key 会合并该段附近 ±2 行/列内其它
-开启 BlockShadow 图层的墙段，取局部最低实心格底边作为基座。相邻的跨层
-上下墙段因此共享较低基座，不会因上段 Y 更高而被实体 SelfShadow 清除；
-远处不连通的低墙不会把 key 拉低。
+TopDown 光源下，轮廓段的逐像素排序 key 取该段自身的最低边，并合并与本段
+格子严格相邻（8 邻域）的其它开启 BlockShadow 图层墙段。贴合的跨层上下
+墙段因此共享较低基座，不会因上段 Y 更高而被实体 SelfShadow 清除；隔开
+2 格以上的墙不会把 key 拉低。
 请参见：
     je_tilemap_set_layer_blockshadow
     je_tilemap_set_layer_blockshadow_factor
@@ -13876,7 +13876,7 @@ namespace jeecs
             bool auto_disable = true;
             // 内部标志：由瓦片地图分片置位。true 时 DeferLight2D 用阴影
             // 网格顶点携带的逐段 painter key（TopDown=世界 Y，普通=世界 Z；
-            // 瓦片轮廓按附近跨层墙段取局部墙底）
+            // 瓦片轮廓取本段最低边并合并 8 邻域内的跨层墙段）
             // 参与逐像素深度排序，而不是整个实体共用一个底边 key；普通
             // 实体保持 false，维持实体级语义。不注册到脚本/编辑器，由
             // TilemapSystem 每帧对齐。

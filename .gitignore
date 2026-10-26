@@ -375,3 +375,6 @@ _deps
 .zcode/
 
 *.dmp
+
+# MSVC temporary folder for edited headers during compilation
+enc_temp_folder/
