@@ -4078,6 +4078,10 @@ struct jegl_builtin_uniform_slots
     jegl_uniform_slot m_light2d_resolution;
     jegl_uniform_slot m_light2d_decay;
     jegl_uniform_slot m_shadow_ellipse;
+
+    // DeferLight2D 阴影逐像素排序：x=key，y=缩放，z=偏移，w=模式位。
+    // 仅 shadow pass 的 shader 声明该 uniform，其余 shader 解析为 NONE。
+    jegl_uniform_slot m_shadow_key;
 };
 
 /*
@@ -13742,6 +13746,10 @@ namespace jeecs
                 typing::register_member(guard, &ShadowOffset::offset, "offset");
             }
         };
+        // 阴影缓冲：颜色附件 R 存阴影强度（MAX 合并）；内部还带深度附件，
+        // 存每个阴影贡献的逐像素 painter key（TopDown 世界 Y / 普通世界 Z），
+        // 用于按俯视角前后关系仲裁 SelfShadow 与 BlockShadow。分辨率由
+        // resolution_ratio 控制（深度/颜色同尺寸）。
         struct ShadowBuffer
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(ShadowBuffer);
@@ -13860,6 +13868,12 @@ namespace jeecs
             float factor = 1.0f;
             bool reverse = false;
             bool auto_disable = true;
+            // 内部标志：由瓦片地图分片置位。true 时 DeferLight2D 用阴影
+            // 网格顶点携带的逐边 painter key（TopDown=世界 Y，普通=世界 Z）
+            // 参与逐像素深度排序，而不是整个实体共用一个底边 key；普通
+            // 实体保持 false，维持实体级语义。不注册到脚本/编辑器，由
+            // TilemapSystem 每帧对齐。
+            bool vertex_priority = false;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
@@ -13942,6 +13956,10 @@ namespace jeecs
         //    受光——高大实体仍以脚下位置判断，而不是以原点中心判断；
         //  * 同挂 PerBlockSelfShadow 时，TopDown 下进一步改为按网格顶点
         //    携带的块底边逐块判定（见下文 PerBlockSelfShadow）。
+        // 阴影合成按逐像素 painter key 排序：SelfShadow 的 key 取实体底边
+        // 减半层偏移（0.005），因此它只清除位于其后方（key 更大）的遮挡
+        // 阴影；位于前方的遮挡阴影仍会覆盖它。这样“有时被阴影盖住、有时
+        // 清除阴影”由俯视角前后关系决定，而不是绘制先后决定。
         struct SelfShadow
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(SelfShadow);
@@ -13967,6 +13985,8 @@ namespace jeecs
         //    图元内判定才一致）。块底边变换到世界后的 Y >= 光源世界 Y 时
         //    该块受光（cover=0，MAX 下等同不写入），否则写 factor。
         //    非 TopDown 光源忽略逐块高度判定，仅保留上面的 MAX 合并。
+        //  * 深度排序同样逐块进行：TopDown 下以格顶（bottom + 1）作为
+        //    painter key；同一 key 的自阴影仍按 MAX 合并，不清除遮挡。
         struct PerBlockSelfShadow
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(PerBlockSelfShadow);

@@ -6,8 +6,8 @@ import pkg::woshader;
 using woshader;
 using je::shader;
 
-ZTEST   (ALWAYS);
-ZWRITE  (DISABLE);
+ZTEST   (LESS_EQUAL);
+ZWRITE  (ENABLE);
 BLEND   (MAX, ONE, ONE);
 // MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
 CULL    (NONE);
@@ -112,8 +112,13 @@ public func vert(v: vin)
         center_view->y + off_y,
         center_view->z);
 
+    // SpriteShadow 用脚底实体级 painter key
+    let shadow_depth = clamp(
+        JE_SHADOW_KEY->x * JE_SHADOW_KEY->y + JE_SHADOW_KEY->z, 0., 0.999999);
+
+    let pos = JE_P * vec4!(view_pos, 1.);
     return v2f{
-        pos = JE_P * vec4!(view_pos, 1.),
+        pos = vec4!(pos->x, pos->y, shadow_depth * pos->w, pos->w),
         off = vec2!(off_x, off_y),
         dir = dir_view,
     };

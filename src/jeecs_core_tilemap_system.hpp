@@ -513,6 +513,10 @@ namespace jeecs
             blockshadow->reverse = false;
             blockshadow->auto_disable =
                 layer_blockshadow == JE_LAYER_BLOCKSHADOW_AUTO;
+            // 瓦片轮廓逐边生成：用顶点 key 让每个片元按所在边的世界 Y/Z
+            // 参与 DeferLight2D 的逐像素深度排序，避免整个 chunk 共用
+            // 一个 AABB 底边 key 时覆盖站在其上的实体 SelfShadow。
+            blockshadow->vertex_priority = true;
         }
 
         // 分块静态角点索引：每格 4 个四边形槽位，各 6 索引（0,1,2 2,1,3）

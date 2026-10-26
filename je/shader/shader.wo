@@ -1200,6 +1200,12 @@ namespace je::shader
         public let JE_UV_OFFSET = woshader::vec2!(0., 0.);
     WOSHADER_UNIFORM!
         public let JE_COLOR = woshader::vec4!(1., 1., 1., 1.);
+    // 阴影逐像素排序键：x=实体/图层 painter key（世界单位），
+    // y=key→NDC 深度的缩放，z=偏移，w=模式位
+    //   0/1 = 统一 key（普通/TopDown），2/3 = 逐顶点 key（普通/TopDown）
+    // 仅 DeferLight2D 的 shadow pass 使用，见 defer_light2d_shadow_*。
+    WOSHADER_UNIFORM!
+        public let JE_SHADOW_KEY = woshader::vec4!(0., 1., 0., 0.);
     WOSHADER_UNIFORM!
         public let JE_NDC_SCALE = woshader::vec4!(1., 1., 1., 1.);
     // SpriteShadow 接触椭圆参数：x=长轴全长，y=短轴全长，

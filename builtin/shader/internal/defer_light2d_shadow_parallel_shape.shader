@@ -6,8 +6,8 @@ import pkg::woshader;
 using woshader;
 using je::shader;
 
-ZTEST   (ALWAYS);
-ZWRITE  (DISABLE);
+ZTEST   (LESS_EQUAL);
+ZWRITE  (ENABLE);
 BLEND   (MAX, ONE, ONE);
 // MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
 CULL    (NONE);
@@ -37,12 +37,17 @@ public func vert(v: vin)
     let vpos = JE_MV * vec4!(v.vertex, 1.);
     let shadow_vpos = normalize(light2d_vdir) * shadow_scale_factor;
     
+    // ShapeShadow 用实体级 painter key
+    let shadow_depth = clamp(
+        JE_SHADOW_KEY->x * JE_SHADOW_KEY->y + JE_SHADOW_KEY->z, 0., 0.999999);
+
     let shadow_tiling_scale = JE_LOCAL_SCALE->yz;
     let shadow_tiling_scale_apply_offset =
         (vec2!(0.5, 0.5) - v.uv) * 2. * (vec2!(1., 1.) - shadow_tiling_scale);
-        
+
+    let pos = JE_P * vec4!((vpos->xyz / vpos->w) + shadow_vpos, 1.);
     return v2f{
-        pos = JE_P * vec4!((vpos->xyz / vpos->w) + shadow_vpos, 1.),
+        pos = vec4!(pos->x, pos->y, shadow_depth * pos->w, pos->w),
         uv = uvtrans(v.uv, JE_UV_TILING, JE_UV_OFFSET) + shadow_tiling_scale_apply_offset,
     };
 }

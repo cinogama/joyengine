@@ -2013,6 +2013,8 @@ jegl_pipeline* jegl_pipeline_create(
         _jegl_find_shader_uniform_slot(desc->m_shader, "JE_LIGHT2D_DECAY");
     pipeline->m_builtin_slots.m_shadow_ellipse =
         _jegl_find_shader_uniform_slot(desc->m_shader, "JE_SHADOW_ELLIPSE");
+    pipeline->m_builtin_slots.m_shadow_key =
+        _jegl_find_shader_uniform_slot(desc->m_shader, "JE_SHADOW_KEY");
 
     return pipeline;
 }

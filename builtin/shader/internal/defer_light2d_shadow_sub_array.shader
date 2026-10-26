@@ -6,8 +6,8 @@ import pkg::woshader;
 using woshader;
 using je::shader;
 
-ZTEST   (ALWAYS);
-ZWRITE  (DISABLE);
+ZTEST   (LESS_EQUAL);
+ZWRITE  (ENABLE);
 // MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
 CULL    (NONE);
 
@@ -31,9 +31,13 @@ WOSHADER_FRAGMENT_OUT!
 
 public func vert(v: vin)
 {
+    // 普通 SelfShadow：实体级 key（CPU 已按半层偏移处理）
+    let shadow_depth = clamp(
+        JE_SHADOW_KEY->x * JE_SHADOW_KEY->y + JE_SHADOW_KEY->z, 0., 0.999999);
+    let pos = JE_MVP * vec4!(v.vertex, 1.);
     // tiling/offset 只作用于 uv.xy，数组层号分量原样传递
     return v2f{
-        pos = JE_MVP * vec4!(v.vertex, 1.),
+        pos = vec4!(pos->x, pos->y, shadow_depth * pos->w, pos->w),
         uv = vec3!(uvtrans(v.uv->xy, JE_UV_TILING, JE_UV_OFFSET), v.uv->z),
     };
 }

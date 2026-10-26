@@ -6,8 +6,8 @@ import pkg::woshader;
 using woshader;
 using je::shader;
 
-ZTEST   (ALWAYS);
-ZWRITE  (DISABLE);
+ZTEST   (LESS_EQUAL);
+ZWRITE  (ENABLE);
 // MAX 合并：受光格 cover=0 不写入，避免擦除遮挡体已写入的阴影
 BLEND   (MAX, ONE, ONE);
 // MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
@@ -38,10 +38,18 @@ WOSHADER_FRAGMENT_OUT!
 public func vert(v: vin)
 {
     let wb = (JE_M * vec4!(v.vertex->x, v.bottom, v.vertex->z, 1.))->y;
-    let lit = step(wb, JE_COLOR->y);
 
+    // 逐块 painter key：格顶（bottom + 1）作为地面高度
+    let wtop = (JE_M * vec4!(v.vertex->x, v.bottom + 1., v.vertex->z, 1.))->y;
+    let use_vertex = step(JE_SHADOW_KEY->w, 1.5);
+    let key_world = JE_SHADOW_KEY->x + (wtop - JE_SHADOW_KEY->x) * use_vertex;
+    let shadow_depth = clamp(
+        key_world * JE_SHADOW_KEY->y + JE_SHADOW_KEY->z, 0., 0.999999);
+
+    let lit = step(wb, JE_COLOR->y);
+    let pos = JE_MVP * vec4!(v.vertex, 1.);
     return v2f{
-        pos = JE_MVP * vec4!(v.vertex, 1.),
+        pos = vec4!(pos->x, pos->y, shadow_depth * pos->w, pos->w),
         // tiling/offset 只作用于 uv.xy，数组层号分量原样传递
         uv = vec3!(uvtrans(v.uv->xy, JE_UV_TILING, JE_UV_OFFSET), v.uv->z),
         cover = JE_COLOR->x * (1. - lit),

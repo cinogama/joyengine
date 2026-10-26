@@ -6,8 +6,8 @@ import pkg::woshader;
 using woshader;
 using je::shader;
 
-ZTEST   (ALWAYS);
-ZWRITE  (DISABLE);
+ZTEST   (LESS_EQUAL);
+ZWRITE  (ENABLE);
 BLEND   (MAX, ONE, ONE);
 // MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
 CULL    (NONE);
@@ -42,12 +42,17 @@ public func vert(v: vin)
     let edge_normal = (JE_MV * vec4!(v.normal->x, v.normal->y, 0., 0.))->xy;
     let keep_edge = step(dot(edge_normal, shadow_dir->xy), 0.);
 
+    // WallShadow 用实体级 painter key
+    let shadow_depth = clamp(
+        JE_SHADOW_KEY->x * JE_SHADOW_KEY->y + JE_SHADOW_KEY->z, 0., 0.999999);
+
     let vpos = JE_MV * vec4!(v.vertex, 1.);
+    let pos = JE_P * vec4!(
+        (vpos->xyz / vpos->w)
+            + shadow_dir * shadow_scale_factor * v.factor * keep_edge,
+        1.);
     return v2f{
-        pos = JE_P * vec4!(
-            (vpos->xyz / vpos->w)
-                + shadow_dir * shadow_scale_factor * v.factor * keep_edge,
-            1.),
+        pos = vec4!(pos->x, pos->y, shadow_depth * pos->w, pos->w),
         uv = uvtrans(v.uv, JE_UV_TILING, JE_UV_OFFSET),
     };
 }

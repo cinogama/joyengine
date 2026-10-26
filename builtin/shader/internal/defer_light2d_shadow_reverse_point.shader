@@ -6,8 +6,8 @@ import pkg::woshader;
 using woshader;
 using je::shader;
 
-ZTEST   (ALWAYS);
-ZWRITE  (DISABLE);
+ZTEST   (LESS_EQUAL);
+ZWRITE  (ENABLE);
 BLEND   (MAX, ONE, ONE);
 CULL    (FRONT);
 
@@ -33,9 +33,22 @@ public func vert(v: vin)
     let light_vpos = JE_V * JE_COLOR;
     let vpos = JE_MV * vec4!(v.vertex, 1.);
     
+    // 逐像素 painter key：逐边优先用未挤出顶点的世界坐标
+    //（瓦片轮廓按边所在行排序），普通实体回退到实体 key。
+    let wp = JE_M * vec4!(v.vertex, 1.);
+    let use_vertex = step(JE_SHADOW_KEY->w, 1.5);
+    let vertex_topdown = step(JE_SHADOW_KEY->w, 2.5);
+    let vertex_key = wp->z + (wp->y - wp->z) * vertex_topdown;
+    let key_world = JE_SHADOW_KEY->x + (vertex_key - JE_SHADOW_KEY->x) * use_vertex;
+    let shadow_depth = clamp(
+        key_world * JE_SHADOW_KEY->y + JE_SHADOW_KEY->z, 0., 0.999999);
+
     let shadow_vdir = vec3!(normalize(vpos->xy - light_vpos->xy), 0.) * 2000. * v.factor;
-    
-    return v2f{pos = JE_P * vec4!(vpos->xyz + shadow_vdir, 1.)};
+
+    let pos = JE_P * vec4!(vpos->xyz + shadow_vdir, 1.);
+    return v2f{
+        pos = vec4!(pos->x, pos->y, shadow_depth * pos->w, pos->w),
+    };
 }
 
 public func frag(_: v2f)

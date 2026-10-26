@@ -1359,6 +1359,10 @@ namespace jeecs
 
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_pass;
 
+            // 所有 shadow pass 都写逐像素 painter key 深度，并以
+            // ZTEST(LESS_EQUAL) / ZWRITE(ENABLE) 让更靠前的贡献胜出；
+            // BLEND(MAX) 只负责同一 key 内的阴影叠加（不再用于跨层仲裁）。
+
             // 数组纹理采样版 sub pass：瓦片地图分片把图集绑在
             // Textures2DArray 槽 0（顶点 uv 为 (u, v, 数组层号) float3），
             // 用本变体按层采样图集 alpha 做自阴影覆盖
@@ -1588,6 +1592,9 @@ namespace jeecs
             // AABB 八角点变换计算一次，供 TopDown 排序 / 分层、各阴影的
             // auto_disable 判定与 SpriteShadow 椭圆中心复用
             math::vec3 bottom_world_center;
+            // 同一包围盒的顶边中点（.y 即顶部 Y）：仅用于 TopDown 阴影
+            // 逐像素深度映射的 key 范围，保证逐块/逐边 key 都落在范围内
+            math::vec3 top_world_center;
 
             const Light2D::BlockShadow* blockshadow;
             const Light2D::ShapeShadow* shapeshadow;
@@ -1838,9 +1845,13 @@ namespace jeecs
                             std::max((size_t)1, SHADOW_BUFFER_HEIGHT),
                             {
                                 jegl_texture_common::format::RGBA,
-                                // Only store shadow value to R-pass
+                                // R = 世界/遮挡阴影强度（MAX 合并）
                             },
-                            false).value();
+                            // 深度附件：DeferLight2D 的逐像素排序键。
+                            // 深度值不是相机深度，而是 painter key（TopDown
+                            // 世界 Y / 普通世界 Z）经每光源线性映射后的值；
+                            // ZTEST(LESS_EQUAL) 保留最靠前的阴影贡献。
+                            true).value();
                     }
                 }
                 if (range != nullptr)
@@ -1992,10 +2003,12 @@ namespace jeecs
                             blockshadow->shape.m_block_mesh.reset();
                     }
                 }
+                math::vec3 top_world_center;
                 m_2dblock_z_list.push_back(
                     block2d_arch{
                         &trans,
-                        get_block_bottom_world_center(trans, shape),
+                        get_block_bottom_world_center(trans, shape, &top_world_center),
+                        top_world_center,
                         blockshadow,
                         shapeshadow,
                         spriteshadow,
@@ -2019,7 +2032,10 @@ namespace jeecs
             // 参与层级排序，而不是原点中心）。底部 Y 相同时按 z 降序平手——
             // z 小者（默认沿 -z 叠放的视觉上层）后 flush、其自阴影覆盖在
             // 共享像素生效，与普通光源按 z 降序遍历的层级结果一致，避免
-            // 不稳定排序导致覆盖胜负不确定
+            // 不稳定排序导致覆盖胜负不确定。
+            // 注意：这里只决定遍历/分层顺序；最终逐像素胜负由 shadow buffer
+            // 的深度测试（JE_SHADOW_KEY）决定，chunk 级排序键不再能覆盖
+            // 更靠前的 SelfShadow。逐顶点 key 见各 shadow shader。
             std::sort(m_2dblock_y_list.begin(), m_2dblock_y_list.end(),
                 [](const block2d_arch& a, const block2d_arch& b)
                 {
@@ -2095,10 +2111,13 @@ namespace jeecs
         // 轴心——实体旋转后该点仍在世界空间底部（脚下）。
         // 结果缓存进 block2d_arch::bottom_world_center；TopDown 排序/分层、
         // 各阴影的 auto_disable 与 SpriteShadow 椭圆中心均复用它。
+        // top_out 返回同一 AABB 的顶边中点（.y 为最大值），用于 TopDown
+        // 阴影深度映射的 key 上界（逐块/逐边 key 可能高于实体底边）。
         // 挂 PerBlockSelfShadow 的分块大网格走顶点属性逐块判定
         //（见 sub_topdown pass），不经过这里。
         math::vec3 get_block_bottom_world_center(
-            const Translation& translation, const Shape& shape) const
+            const Translation& translation, const Shape& shape,
+            /* OPTIONAL */ math::vec3* top_out = nullptr) const
         {
             const auto& using_shape = shape.vertex.has_value()
                 ? shape.vertex.value()
@@ -2133,10 +2152,59 @@ namespace jeecs
                     max_point.z = std::max(max_point.z, world_point[2]);
                 }
             }
+            if (top_out != nullptr)
+            {
+                *top_out = math::vec3(
+                    (min_point.x + max_point.x) * 0.5f,
+                    max_point.y,
+                    (min_point.z + max_point.z) * 0.5f);
+            }
             return math::vec3(
                 (min_point.x + max_point.x) * 0.5f,
                 min_point.y,
                 (min_point.z + max_point.z) * 0.5f);
+        }
+
+        // 阴影逐像素排序的 key→NDC 深度线性映射：TopDown 用世界 Y，
+        // 普通 2D 用世界 Z；key 越小越靠前，映射到 [0.05, 0.95] 后由
+        // ZTEST(LESS_EQUAL) 保留最靠前的阴影贡献。
+        struct shadow_depth_mapping
+        {
+            float scale = 1.f;
+            float bias = 0.f;
+        };
+        shadow_depth_mapping make_shadow_depth_mapping(
+            const std::vector<block2d_arch>& blocks, bool topdown) const
+        {
+            shadow_depth_mapping mapping;
+            if (blocks.empty())
+                return mapping;
+
+            const auto key_of_bottom = [topdown](const block2d_arch& block)
+                {
+                    return topdown
+                        ? block.bottom_world_center.y
+                        : block.translation->world_position.z;
+                };
+
+            float key_min = key_of_bottom(blocks.front());
+            float key_max = topdown
+                ? blocks.front().top_world_center.y
+                : blocks.front().translation->world_position.z;
+
+            for (const auto& block : blocks)
+            {
+                key_min = std::min(key_min, key_of_bottom(block));
+                key_max = std::max(key_max, topdown
+                    ? block.top_world_center.y
+                    : block.translation->world_position.z);
+            }
+
+            const float margin = 1.f;
+            const float range = std::max(key_max - key_min, 1.f) + 2.f * margin;
+            mapping.scale = 0.9f / range;
+            mapping.bias = 0.05f - (key_min - margin) * mapping.scale;
+            return mapping;
         }
 
         // Unified draw call for the 3 Light2D shadow occluder types (block / shape / sprite).
@@ -2157,6 +2225,7 @@ namespace jeecs
             float color_w,
             const math::vec3& parallel_dir_ref,
             const Textures2D* textures,
+            const math::vec4& shadow_key,
             /* OPTIONAL */ const math::vec4* color_override = nullptr,
             /* OPTIONAL */ const math::vec4* ellipse_params = nullptr)
         {
@@ -2181,6 +2250,9 @@ namespace jeecs
             JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view_projection, float4x4, MAT4_MVP);
             JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_local_scale, float3,
                 local_scale.x, local_scale.y, local_scale.z);
+            // 阴影逐像素排序键：x=实体/顶点 key，y/z=深度映射，w=模式位
+            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_shadow_key, float4,
+                shadow_key.x, shadow_key.y, shadow_key.z, shadow_key.w);
 
             if (textures != nullptr)
             {
@@ -2237,6 +2309,13 @@ namespace jeecs
                 (float)abs(2.0 * (current_time * 2.0 - double(int(current_time * 2.0)) - 0.5)),
                 (float)abs(2.0 * (current_time - double(int(current_time)) - 0.5)),
                 (float)abs(2.0 * (current_time / 2.0 - double(int(current_time / 2.0)) - 0.5)) };
+
+            // 阴影逐像素排序：每帧按当前 block 列表计算一次 key→深度映射。
+            // TopDown 用世界 Y，普通 2D 用世界 Z；两种模式各一份。
+            const shadow_depth_mapping shadow_depth_z =
+                make_shadow_depth_mapping(m_2dblock_z_list, false);
+            const shadow_depth_mapping shadow_depth_y =
+                make_shadow_depth_mapping(m_2dblock_y_list, true);
 
             for (auto& current_camera : m_2dcamera_list)
             {
@@ -2318,11 +2397,21 @@ namespace jeecs
 
                             const float clear_color[4] = { 0.f, 0.f, 0.f, 0.f };
                             jegl_cmd_clear_color(light2d_shadow_rend_chain, 0, clear_color);
+                            // 深度清为 1（远）；shadow shader 把 painter key 映射
+                            // 到 [0.05, 0.95]，LESS_EQUAL 保留最小（最靠前）值
+                            jegl_cmd_clear_depth(light2d_shadow_rend_chain, 1.0);
 
                             jegl_cmd_bind_uniform_buffer(light2d_shadow_rend_chain,
                                 current_camera.projection->default_uniform_buffer->resource());
 
                             const auto shadow_passes = select_shadow_passes(lightarch.parallel != nullptr);
+
+                            const bool topdown_light = lightarch.topdown != nullptr;
+                            const shadow_depth_mapping& shadow_depth =
+                                topdown_light ? shadow_depth_y : shadow_depth_z;
+                            // 统一 key 模式下 TopDown=1 / 普通=0；逐顶点 key
+                            // 由 +2 位标记（0/1 统一，2/3 逐顶点）
+                            const float shadow_key_base_mode = topdown_light ? 1.f : 0.f;
 
                             std::list<block2d_arch*> block_in_current_layer;
 
@@ -2347,6 +2436,26 @@ namespace jeecs
                                 if (lightarch.parallel != nullptr || l2b_distance <= block_range + light_range)
                                 {
                                     block_in_current_layer.push_back(&blockarch);
+
+                                    // 实体级 painter key：TopDown=包围盒底边世界 Y，
+                                    // 普通 2D=实体世界 Z。逐顶点 key（瓦片轮廓）在
+                                    // 顶点着色器里用顶点世界坐标覆盖它。
+                                    const float shadow_entity_key = topdown_light
+                                        ? blockarch.bottom_world_center.y
+                                        : blockarch.translation->world_position.z;
+                                    const math::vec4 shadow_key(
+                                        shadow_entity_key,
+                                        shadow_depth.scale,
+                                        shadow_depth.bias,
+                                        shadow_key_base_mode);
+                                    const float block_shadow_mode = shadow_key_base_mode
+                                        + (blockarch.blockshadow != nullptr
+                                            && blockarch.blockshadow->vertex_priority ? 2.f : 0.f);
+                                    const math::vec4 block_shadow_key(
+                                        shadow_entity_key,
+                                        shadow_depth.scale,
+                                        shadow_depth.bias,
+                                        block_shadow_mode);
 
                                     bool light_is_above_block = lightarch.topdown == nullptr
                                         ? blockarch.translation->world_position.z >= shadow_cast_pos.z
@@ -2374,7 +2483,8 @@ namespace jeecs
                                             math::vec3(blockarch.blockshadow->factor, 0.f, 0.f),
                                             /*color_w=*/1.f,
                                             math::vec3(0.f, -1.f, 1.f).unit(),
-                                            blockarch.textures);
+                                            blockarch.textures,
+                                            block_shadow_key);
                                     }
                                     if (blockarch.shapeshadow != nullptr
                                         && blockarch.shapeshadow->factor > 0.f
@@ -2403,7 +2513,8 @@ namespace jeecs
                                                 blockarch.shapeshadow->tiling_scale.y),
                                             blockarch.shapeshadow->distance,
                                             math::vec3(0.f, -1.f, 0.f),
-                                            blockarch.textures);
+                                            blockarch.textures,
+                                            shadow_key);
                                     }
                                     if (blockarch.wallshadow != nullptr && blockarch.wallshadow->factor > 0.f)
                                     {
@@ -2423,7 +2534,8 @@ namespace jeecs
                                             math::vec3(blockarch.wallshadow->factor, 0.f, 0.f),
                                             blockarch.wallshadow->distance,
                                             math::vec3(0.f, -1.f, 0.f),
-                                            blockarch.textures);
+                                            blockarch.textures,
+                                            shadow_key);
                                     }
                                     if (blockarch.spriteshadow != nullptr && blockarch.spriteshadow->factor > 0.f)
                                     {
@@ -2506,6 +2618,7 @@ namespace jeecs
                                             0.f,
                                             math::vec3(0.f, -1.f, 0.f),
                                             nullptr,
+                                            shadow_key,
                                             &ellipse_center,
                                             &ellipse_params);
                                     }
@@ -2589,6 +2702,30 @@ namespace jeecs
                                             JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model, float4x4, MAT4_MODEL);
                                             JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view, float4x4, MAT4_MV);
                                             JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view_projection, float4x4, MAT4_MVP);
+
+                                            // 自阴影参与逐像素排序：
+                                            //  * 普通 SelfShadow 用实体底边 key 减半层
+                                            //    （0.005），保证同层内覆盖 BlockShadow；
+                                            //  * TopDown 的 PerBlockSelfShadow 由顶点着色器
+                                            //    用格顶（bottom + 1）逐块生成 key；
+                                            //  * 非 TopDown 的 PerBlock 用实体/图层 key。
+                                            const float self_entity_key = topdown_light
+                                                ? block_in_layer->bottom_world_center.y
+                                                : block_in_layer->translation->world_position.z;
+                                            float self_shadow_key_value = self_entity_key;
+                                            float self_shadow_mode = shadow_key_base_mode;
+                                            if (per_block_selfshadow)
+                                                self_shadow_mode = 3.f;
+                                            else if (max_combine_selfshadow)
+                                                self_shadow_mode = 0.f;
+                                            else
+                                                self_shadow_key_value -= 0.005f;
+
+                                            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_shadow_key, float4,
+                                                self_shadow_key_value,
+                                                shadow_depth.scale,
+                                                shadow_depth.bias,
+                                                self_shadow_mode);
 
                                             // local_scale.x .y .z 通道预留
                                             /*NEED_AND_SET_UNIFORM(local_scale, float3,
