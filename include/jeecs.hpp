@@ -5611,10 +5611,11 @@ TopDown 光源（Light2D::TopDown）下的 AUTO 判定按格进行：分片同�
 Light2D::PerBlockSelfShadow（网格顶点携带块底边高度），格底边不低于光源
 高度线时该格受光、否则写 factor——整张地图不会被实体原点一刀切。
 （ON 模式与普通光源不受影响，仍为整实体判定）
-瓦片分片带 PerBlockSelfShadow 标记，其自阴影按 MAX 合并到光照阴影缓冲：
-只加深阴影，不会清除本层 BlockShadow 或其它图层已写入的遮挡阴影
-（普通精灵实体的 SelfShadow 仍为覆盖语义，但按 painter key 深度只清除
-其后方/key 更大的遮挡阴影，位于其前方的遮挡阴影仍会覆盖它）。
+瓦片分片带 PerBlockSelfShadow 标记。非 TopDown 光源下，其自阴影与普通
+精灵同款为覆盖语义：自阴影 key 取图层 key 减半层偏移，写入时按 painter
+key 深度替换阴影缓冲——本层 BlockShadow 落在本层图块上的自遮挡会被清除，
+而更靠前图层/遮挡体的阴影 key 更小，仍会保留。TopDown 光源下自阴影改为
+逐块判定并按 MAX 合并：只加深阴影，不会清除遮挡体已写入的阴影。
 请参见：
     je_tilemap_set_layer_selfshadow
     je_tilemap_set_layer_selfshadow_factor
@@ -5855,8 +5856,10 @@ je_tilemap_set_layer_selfshadow [基本接口]
 设置图层的 2D 光照自阴影行为：OFF 时该层渲染分片移除 Light2D::SelfShadow
 组件（不参与自阴影覆盖），ON/AUTO 时挂载该组件并分别固定 auto_disable 为
 false / true；覆盖强度由 je_tilemap_set_layer_selfshadow_factor 设置
-（缺省 1）。渲染分片自阴影按 MAX 合并进光照阴影缓冲：只加深阴影，不会
-清除遮挡阴影。渲染分片由引擎生成，组件的挂载与摘除由 TilemapSystem 逐帧
+（缺省 1）。非 TopDown 光源下自阴影为覆盖语义：按 painter key 清除本层
+BlockShadow 落在本层图块上的自遮挡，更靠前图层/遮挡体的阴影保留；
+TopDown 光源下按逐块 key 并 MAX 合并（只加深阴影，不清除遮挡阴影）。
+渲染分片由引擎生成，组件的挂载与摘除由 TilemapSystem 逐帧
 对齐（走命令缓冲，下一帧迁移生效）；该设置随图层记录落盘
     * 下标越界时不做任何修改
 请参见：
@@ -13985,17 +13988,16 @@ namespace jeecs
         };
         // 逐块自阴影修饰标记（与 Light2D::SelfShadow 同挂时生效）：
         // 标记遮挡物为分块式大网格内容（瓦片地图等）。两个作用：
-        //  * 所有光源下，自阴影按 MAX 合并进阴影缓冲——只加深阴影，不清除
-        //    同层 BlockShadow / 其它图层已写入的遮挡阴影（普通精灵实体不带
-        //    本组件，仍为覆盖语义）；
+        //  * 非 TopDown 光源下与普通精灵的 SelfShadow 完全一致：自阴影以
+        //    半层偏移的 painter key 覆盖阴影缓冲，本层 BlockShadow 落在本层
+        //    图块上的自遮挡被清除，更靠前图层/遮挡体的阴影保留；
         //  * TopDown 光源下，遮挡物不再作为整体参与 AUTO 高度判定，而是
         //    逐"块"独立判定——要求渲染网格在顶点属性位置 3 额外携带
         //    float1 "bottom"（本块底边的局部 Y，同一块的各顶点须写同值，
         //    图元内判定才一致）。块底边变换到世界后的 Y >= 光源世界 Y 时
         //    该块受光（cover=0，MAX 下等同不写入），否则写 factor。
-        //    非 TopDown 光源忽略逐块高度判定，仅保留上面的 MAX 合并。
-        //  * 深度排序同样逐块进行：TopDown 下以格顶（bottom + 1）作为
-        //    painter key；同一 key 的自阴影仍按 MAX 合并，不清除遮挡。
+        //  * TopDown 的深度排序同样逐块进行：以格顶（bottom + 1）作为
+        //    painter key；同一 key 的自阴影按 MAX 合并，不清除遮挡。
         struct PerBlockSelfShadow
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(PerBlockSelfShadow);

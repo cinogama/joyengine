@@ -1371,15 +1371,6 @@ namespace jeecs
             // 用本变体按层采样图集 alpha 做自阴影覆盖
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_array_pass;
 
-            // MAX 合并版 sub pass ×2：分块式大网格（瓦片地图等，带
-            // Light2D::PerBlockSelfShadow）专用。普通 sub pass 不启用混合，
-            // 自阴影覆盖会直接改写阴影缓冲——对单一精灵是"自阴影状态优先于
-            // 遮挡阴影"的预期语义，但整张地面覆盖时会把瓦片自身/其它图层的
-            // 遮挡阴影一并擦除。本变体按 MAX 叠加：只加深阴影，不清除既有
-            // 遮挡结果（cover=0 的受光格等同不写入）
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_max_pass;
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_array_max_pass;
-
             // 逐块判定版 sub pass ×2（TopDown 光源 + Light2D::PerBlockSelfShadow
             // 遮挡物专用）：AUTO 高度判定不在 CPU 按实体原点一刀切，而是用
             // 网格顶点属性 3 携带的块底边（局部 Y）在顶点着色器逐块比较，
@@ -1525,12 +1516,6 @@ namespace jeecs
                 }
                 , _defer_light2d_shadow_sub_array_pass{
                     jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_sub_array.shader").value()
-                }
-                , _defer_light2d_shadow_sub_max_pass{
-                    jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_sub_max.shader").value()
-                }
-                , _defer_light2d_shadow_sub_array_max_pass{
-                    jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_sub_array_max.shader").value()
                 }
                 , _defer_light2d_shadow_sub_topdown_pass{
                     jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_sub_topdown.shader").value()
@@ -2073,10 +2058,6 @@ namespace jeecs
             const basic::resource<graphic::shader>& wall;
             const basic::resource<graphic::shader>& sub;
             const basic::resource<graphic::shader>& sub_texarray;
-            // MAX 合并版自阴影：分块式大网格（Light2D::PerBlockSelfShadow）
-            // 专用，只加深阴影，不擦除遮挡体写入的阴影
-            const basic::resource<graphic::shader>& sub_max;
-            const basic::resource<graphic::shader>& sub_texarray_max;
         };
         defer_light2d_shadow_passes_t select_shadow_passes(bool is_parallel) const
         {
@@ -2089,8 +2070,6 @@ namespace jeecs
                     m_defer_light2d_host._defer_light2d_shadow_wall_parallel_pass,
                     m_defer_light2d_host._defer_light2d_shadow_sub_pass,
                     m_defer_light2d_host._defer_light2d_shadow_sub_array_pass,
-                    m_defer_light2d_host._defer_light2d_shadow_sub_max_pass,
-                    m_defer_light2d_host._defer_light2d_shadow_sub_array_max_pass,
             }
             : defer_light2d_shadow_passes_t{
                 m_defer_light2d_host._defer_light2d_shadow_point_pass,
@@ -2100,8 +2079,6 @@ namespace jeecs
                 m_defer_light2d_host._defer_light2d_shadow_wall_point_pass,
                 m_defer_light2d_host._defer_light2d_shadow_sub_pass,
                 m_defer_light2d_host._defer_light2d_shadow_sub_array_pass,
-                m_defer_light2d_host._defer_light2d_shadow_sub_max_pass,
-                m_defer_light2d_host._defer_light2d_shadow_sub_array_max_pass,
             };
         }
 
@@ -2669,25 +2646,23 @@ namespace jeecs
                                                 lightarch.topdown != nullptr
                                                 && block_in_layer->perblock != nullptr;
 
-                                            // PerBlockSelfShadow 标记分块式大网格
-                                            //（瓦片地图等）：自阴影按 MAX 合并，只加深
-                                            // 阴影缓冲，保留同层 BlockShadow / 其它图层
-                                            // 已写入的遮挡阴影；普通精灵维持原有的覆盖
-                                            // 语义（auto_disable 的受光态会清除覆盖）
-                                            const bool max_combine_selfshadow =
-                                                block_in_layer->perblock != nullptr;
-
+                                            // 非 TopDown 的自阴影（普通精灵与瓦片分片
+                                            // 同款）用覆盖语义：写入即替换阴影缓冲，
+                                            // 由 painter key 深度决定谁能覆盖谁。
+                                            // 自阴影 key 取实体/图层 key 减半层偏移，
+                                            // 因此本层 BlockShadow 落在本层图块上的
+                                            // 自遮挡会被清除（同一 key 的遮挡阴影被
+                                            // 自阴影压过后写入），而更靠前图层/遮挡体
+                                            // 的阴影 key 更小、仍通过深度测试保留。
+                                            // TopDown 的逐块 key 与同层遮挡段的 key
+                                            // 不可直接比较，保留 MAX 合并语义。
                                             auto& sub_pass_shader = per_block_selfshadow
                                                 ? (array_atlas.has_value()
                                                     ? m_defer_light2d_host._defer_light2d_shadow_sub_topdown_array_pass
                                                     : m_defer_light2d_host._defer_light2d_shadow_sub_topdown_pass)
-                                                : (max_combine_selfshadow
-                                                    ? (array_atlas.has_value()
-                                                        ? shadow_passes.sub_texarray_max
-                                                        : shadow_passes.sub_max)
-                                                    : (array_atlas.has_value()
-                                                        ? shadow_passes.sub_texarray
-                                                        : shadow_passes.sub));
+                                                : (array_atlas.has_value()
+                                                    ? shadow_passes.sub_texarray
+                                                    : shadow_passes.sub);
 
                                             assert(block_in_layer->shape != nullptr);
                                             const auto& using_shape =
@@ -2716,11 +2691,12 @@ namespace jeecs
                                             JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view_projection, float4x4, MAT4_MVP);
 
                                             // 自阴影参与逐像素排序：
-                                            //  * 普通 SelfShadow 用实体底边 key 减半层
-                                            //    （0.005），保证同层内覆盖 BlockShadow；
-                                            //  * TopDown 的 PerBlockSelfShadow 由顶点着色器
-                                            //    用格顶（bottom + 1）逐块生成 key；
-                                            //  * 非 TopDown 的 PerBlock 用实体/图层 key。
+                                            //  * 普通 SelfShadow 与瓦片分片都用实体/
+                                            //    图层 key 减半层（0.005）：同层内覆盖
+                                            //    BlockShadow（消除瓦片自遮挡），更靠前
+                                            //    的遮挡阴影仍然保留；
+                                            //  * TopDown 的 PerBlockSelfShadow 由顶点
+                                            //    着色器用格顶（bottom + 1）逐块生成 key。
                                             const float self_entity_key = topdown_light
                                                 ? block_in_layer->bottom_world_center.y
                                                 : block_in_layer->translation->world_position.z;
@@ -2728,8 +2704,6 @@ namespace jeecs
                                             float self_shadow_mode = shadow_key_base_mode;
                                             if (per_block_selfshadow)
                                                 self_shadow_mode = 3.f;
-                                            else if (max_combine_selfshadow)
-                                                self_shadow_mode = 0.f;
                                             else
                                                 self_shadow_key_value -= 0.005f;
 
