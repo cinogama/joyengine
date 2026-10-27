@@ -745,12 +745,12 @@ namespace je
 
         // ==================== 图层自阴影行为 ====================
         // 与引擎侧 je_LayerSelfShadow 一一对应（Light2D 延迟光照管线）：
-        // 分片同挂 PerBlockSelfShadow。非 TopDown 光源下自阴影与普通精灵
-        // 同款（半层偏移 painter key + 覆盖语义）：本层 BlockShadow 落在
-        // 本层图块上的自遮挡被清除，更靠前图层/遮挡体的阴影保留；TopDown
-        // 下每个格子以格顶（bottom + 1）作为逐像素排序键，自阴影按 MAX
-        // 合并（只加深阴影），参与与实体 SelfShadow / 遮挡阴影的前后关系
-        // 仲裁。
+        // 分片同挂 PerBlockSelfShadow。非 TopDown 光源下，受光格用与同层
+        // BlockShadow 相同 painter key 的 EQUAL 清除 pass，只去掉本层遮挡
+        // 阴影落在本层图块上的自遮挡（其它图层的阴影保留）；常开/未受光格
+        // 按 MAX 叠加 factor。TopDown 下每个格子以格顶（bottom + 1）作为
+        // 逐像素排序键，自阴影按 MAX 合并（只加深阴影），参与与实体
+        // SelfShadow / 遮挡阴影的前后关系仲裁。
         public enum self_shadow
         {
             OFF = 0,    // 禁用：该层分片不挂 SelfShadow 组件，图块正常

@@ -53,10 +53,11 @@ jeecs_core_tilemap_model.hpp；本文件只做三件事：
   * 图层自阴影（je_LayerSelfShadow）：ON/AUTO 模式的层为其全部分片挂
     Light2D::SelfShadow（auto_disable 分别固定 false/true，factor 取
     图层强度 selfshadow_factor，缺省 1），OFF 模式的层不挂该组件；同挂
-    Light2D::PerBlockSelfShadow。非 TopDown 光源下自阴影与普通精灵同款：
-    以半层偏移的 painter key 覆盖阴影缓冲，本层 BlockShadow 落在本层图块
-    上的自遮挡被清除，更靠前图层/遮挡体的阴影仍保留；TopDown 光源下
-    按网格顶点携带的块底边逐格判高，自阴影按 MAX 合并（只加深阴影）。
+    Light2D::PerBlockSelfShadow。非 TopDown 光源下自阴影只清除本层
+    BlockShadow 落在本层图块上的自遮挡：受光格用与 BlockShadow 同 key 的
+    EQUAL pass 清除，常开/未受光格按 MAX 叠加 factor，其它图层投来的阴影
+    保留；TopDown 光源下按网格顶点携带的块底边逐格判高，自阴影按 MAX
+    合并（只加深阴影）。
     与着色器/纹理/比例尺同款每帧对齐（组件增删走命令缓冲，下一帧迁移
     生效）。
   * 图层遮挡阴影（je_LayerBlockShadow）：ON/AUTO 模式的层为其全部分片
@@ -571,9 +572,10 @@ namespace jeecs
             blockshadow->reverse = false;
             blockshadow->auto_disable =
                 layer_blockshadow == JE_LAYER_BLOCKSHADOW_AUTO;
-            // 瓦片轮廓逐边生成：用顶点 key 让每个片元按所在边的世界 Y/Z
-            // 参与 DeferLight2D 的逐像素深度排序，避免整个 chunk 共用
-            // 一个 AABB 底边 key 时覆盖站在其上的实体 SelfShadow。
+            // 瓦片轮廓逐边生成：TopDown 下用顶点 key 让每个片元按所在边的
+            // 世界 Y 参与逐像素深度排序，避免整个 chunk 共用 AABB 底边 key
+            // 时覆盖站在其上的实体 SelfShadow；普通光源仍用实体 Z，与同层
+            // SelfShadow 的 EQUAL 清除 pass 对齐（深度必须完全相同）。
             blockshadow->vertex_priority = true;
         }
 
