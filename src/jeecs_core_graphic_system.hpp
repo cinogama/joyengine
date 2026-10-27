@@ -2420,7 +2420,9 @@ namespace jeecs
                                         && blockarch.blockshadow->shape.m_block_mesh.has_value())
                                     {
                                         // BlockShadow 用 (0,-1,1).unit() 作为平行光方向参考，
-                                        // 通过 local_scale.x 传递阴影权重，color.w 固定为 1。
+                                        // 通过 local_scale.x 传递阴影权重，local_scale.y
+                                        // 传递本光源的背光挤出长度（世界单位），
+                                        // color.w 固定为 1。
                                         const auto& pass = blockarch.blockshadow->reverse
                                             ? shadow_passes.reverse_normal
                                             : shadow_passes.normal;
@@ -2433,7 +2435,10 @@ namespace jeecs
                                             lightarch,
                                             shadow_cast_pos,
                                             MAT4_VIEW, MAT4_VP,
-                                            math::vec3(blockarch.blockshadow->factor, 0.f, 0.f),
+                                            math::vec3(
+                                                blockarch.blockshadow->factor,
+                                                lightarch.shadowbuffer->block_shadow_length,
+                                                0.f),
                                             /*color_w=*/1.f,
                                             math::vec3(0.f, -1.f, 1.f).unit(),
                                             blockarch.textures,

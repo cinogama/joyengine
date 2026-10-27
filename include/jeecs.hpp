@@ -13764,11 +13764,15 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(ShadowBuffer);
 
             float resolution_ratio = 0.5f;
+            // BlockShadow 的背光挤出长度（世界单位）：阴影四边形从遮挡
+            // 轮廓沿背光方向延伸的距离，默认 2000（与旧硬编码值一致）。
+            float block_shadow_length = 2000.0f;
             basic::optional<basic::resource<graphic::framebuffer>> buffer;
 
             ShadowBuffer() = default;
             ShadowBuffer(const ShadowBuffer& another)
                 : resolution_ratio(another.resolution_ratio)
+                , block_shadow_length(another.block_shadow_length)
             {
             }
             ShadowBuffer(ShadowBuffer&&) = default;
@@ -13776,6 +13780,7 @@ namespace jeecs
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &ShadowBuffer::resolution_ratio, "resolution_ratio");
+                typing::register_member(guard, &ShadowBuffer::block_shadow_length, "block_shadow_length");
             }
         };
         struct CameraPostPass

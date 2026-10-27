@@ -46,7 +46,8 @@ public func vert(v: vin)
     let shadow_depth = clamp(
         key_world * JE_SHADOW_KEY->y + JE_SHADOW_KEY->z, 0., 0.999999);
 
-    let shadow_vdir = vec3!(normalize(vpos->xy - light_vpos->xy), 0.) * 2000. * v.factor;
+    // JE_LOCAL_SCALE.y：本光源的背光挤出长度（Light2D::ShadowBuffer::block_shadow_length）
+    let shadow_vdir = vec3!(normalize(vpos->xy - light_vpos->xy), 0.) * max(JE_LOCAL_SCALE->y, 0.) * v.factor;
 
     let pos = JE_P * vec4!(vpos->xyz + shadow_vdir, 1.);
     return v2f{
