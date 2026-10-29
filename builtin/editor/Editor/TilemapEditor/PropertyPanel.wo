@@ -852,6 +852,122 @@ namespace JEEditor::Editor::TilemapEditor
             do state->mark_tileset_dirty(ts_id);
     }
 
+    // ---- 瓦片法线编辑 ----
+    // 法线半球盘：盘心 = 屏幕外 (0,0,-1)，盘缘 = 与屏幕平面平行（nz = 0）。
+    // 按住拖动时鼠标位置直接映射为法线：角度 = 屏幕平面内的方位，半径 =
+    // 偏离屏幕法线的倾斜量（拖出盘外按盘缘夹取）。盘面同时作为预览：高光
+    // 按法线的屏幕投影偏移，做出受该方向光照的球面观感；方向手柄指出
+    // 方位。返回被改动的单位法线（未改动返回 none）。
+    func draw_normal_dial(label: string, nx: real, ny: real, nz: real,
+        side: real)=> option<(real, real, real)>
+    {
+        let pos = GetCursorScreenPos();
+        let half = side * 0.5;
+        let center = (pos[0] + half, pos[1] + half);
+        let pressed = InvisibleButton(label, (side, side));
+
+        let mut result = option::none: option<(real, real, real)>;
+        if (pressed || IsItemActive())
+        {
+            let (mx, my) = GetMousePos();
+            let mut dx = (mx - center[0]) / half;
+            let mut dy = -(my - center[1]) / half;
+            let len = mathf::sqrt(dx * dx + dy * dy);
+            if (len > 1.)
+            {
+                // 拖出盘外：夹到盘缘（法线变为与屏幕平行）
+                dx = dx / len;
+                dy = dy / len;
+            }
+            else if (len < 0.02)
+            {
+                // 圆心附近吸附正对摄像机，避免拖动时抖出杂散方位
+                dx = 0.;
+                dy = 0.;
+            }
+            let mut rest = 1. - dx * dx - dy * dy;
+            if (rest < 0.) rest = 0.;
+            let nz_new = -mathf::sqrt(rest);
+            if (dx != nx || dy != ny || nz_new != nz)
+                result = option::value((dx, dy, nz_new));
+        }
+
+        // ---- 预览：伪球面高光 + 盘缘 + 方位手柄 ----
+        let dl = GetWindowDrawList();
+        let radius = half - 1.;
+        let text_c = GetStyleColor(ImGuiCol::ImGuiCol_Text);
+        let frame_c = GetStyleColor(ImGuiCol::ImGuiCol_FrameBg);
+        let hot = pressed || IsItemActive() || IsItemHovered();
+        // 悬停/拖拽时盘缘染强调色，提示此盘可拖动
+        let ring_c = mixStyleColor(text_c, (0.42, 0.62, 0.95, 1.),
+            hot ? 0.7 | 0., hot ? 190 | 82);
+        let cross_c = mixStyleColor(text_c, text_c, 0., 30);
+        let accent_c = mixStyleColor(text_c, (0.42, 0.62, 0.95, 1.), 0.7, 255);
+        let bright_c = mixStyleColor(frame_c, text_c, 0.85, 255);
+
+        // 由暗到亮、沿法线屏幕投影偏移的一串同心圆 = 受该方向光照的球面
+        for (let mut i = 0; i < 12; i += 1)
+        {
+            let t = (i as real) / 11.;
+            let off = 0.66 * t;
+            do dl->AddCircleFilled(
+                (center[0] + nx * radius * off, center[1] - ny * radius * off),
+                radius * (1. - 0.86 * t),
+                mixStyleColor(frame_c, text_c, 0.08 + 0.74 * t, 255));
+        }
+        do dl->AddCircle(center, radius, ring_c, 1.);
+        do dl->AddLine((center[0] - radius, center[1]),
+            (center[0] + radius, center[1]), cross_c, 1.);
+        do dl->AddLine((center[0], center[1] - radius),
+            (center[0], center[1] + radius), cross_c, 1.);
+
+        let hx = center[0] + nx * radius;
+        let hy = center[1] - ny * radius;
+        if (nx * nx + ny * ny > 0.0004)
+        {
+            do dl->AddLine(center, (hx, hy), accent_c, 2.);
+            do dl->AddCircleFilled((hx, hy), 5., accent_c);
+        }
+        do dl->AddCircleFilled(center, 3., bright_c);
+        return result;
+    }
+
+    // 法线方向的一句话描述（配合方向盘预览阅读）
+    func normal_direction_label(nx: real, ny: real, nz: real)=> string
+    {
+        if (mathf::sqrt(nx * nx + ny * ny) < 0.02)
+            return nz > 0.
+                ? "屏幕内（背对摄像机）"
+                | "屏幕外（正对摄像机）";
+
+        let ang = mathf::atan2(ny, nx) * mathf::RAD2DEG;
+        let mut sector = "右";
+        if (ang >= 22.5 && ang < 67.5)
+            sector = "右上";
+        else if (ang >= 67.5 && ang < 112.5)
+            sector = "上";
+        else if (ang >= 112.5 && ang < 157.5)
+            sector = "左上";
+        else if (ang >= 157.5 || ang < -157.5)
+            sector = "左";
+        else if (ang >= -157.5 && ang < -112.5)
+            sector = "左下";
+        else if (ang >= -112.5 && ang < -67.5)
+            sector = "下";
+        else if (ang < -22.5)
+            sector = "右下";
+
+        let mut polar = -nz;
+        if (polar < 0.) polar = 0.;
+        if (polar > 1.) polar = 1.;
+        let tilt = (mathf::acos(polar) * mathf::RAD2DEG) as int;
+        // 方向盘只覆盖朝向摄像机的半球；背向（nz > 0，仅数值输入可达）
+        // 单独说明，避免与盘心（屏幕外）混淆
+        return nz > 0.02
+            ? F"{sector}，背向倾斜 {tilt}°"
+            | F"{sector}，倾斜 {tilt}°";
+    }
+
     public func draw_tile_panel(state: EditorState,
         ctx: option<TilemapContext>)=> void
     {
@@ -906,6 +1022,70 @@ namespace JEEditor::Editor::TilemapEditor
 
                 do SeparatorText("法线");
                 let (nx, ny, nz) = ts_id->tile_normal(tid);
+
+                // 旋转手柄 + 球面预览：按住盘面拖动即旋转法线
+                let avail_w = GetContentRegionAvail()[0];
+                let dial = avail_w > 132. ? 132. | avail_w;
+                let dial_pos = GetCursorScreenPos();
+                do SetCursorScreenPos(
+                    (dial_pos[0] + (avail_w - dial) * 0.5, dial_pos[1]));
+                match (draw_normal_dial("##tile_normal_dial", nx, ny, nz, dial))
+                {
+                    value(n)?
+                    {
+                        if (ts_id->set_tile_normal(tid, n.0, n.1, n.2))
+                            do note_tileset_edit(state, ts_id);
+                    }
+                    none?;
+                }
+                let caption = normal_direction_label(nx, ny, nz);
+                let cap_w = CalcTextSize(caption)[0];
+                let cap_pos = GetCursorScreenPos();
+                if (avail_w > cap_w)
+                    do SetCursorScreenPos(
+                        (cap_pos[0] + (avail_w - cap_w) * 0.5, cap_pos[1]));
+                do TextDisabled(caption);
+                do PushTextWrapPos(0.);
+                do TextDisabled("拖动圆盘旋转：圆心 = 屏幕外，盘缘 = 与屏幕平行。");
+                do TextDisabled("法线参与网格顶点生成；自动拼接格整格共享锚点瓦片的法线。");
+                do PopTextWrapPos();
+
+                // 常用方向预设：3×3 方位盘（中心正对摄像机，四周为屏幕平面内）
+                let mut presets = []mut: vec<(string, real, real, real)>;
+                do presets->add(("左上##tnrm_ul", -0.70710678, 0.70710678, 0.));
+                do presets->add(("上##tnrm_u", 0., 1., 0.));
+                do presets->add(("右上##tnrm_ur", 0.70710678, 0.70710678, 0.));
+                do presets->add(("左##tnrm_l", -1., 0., 0.));
+                do presets->add(("屏幕外##tnrm_c", 0., 0., -1.));
+                do presets->add(("右##tnrm_r", 1., 0., 0.));
+                do presets->add(("左下##tnrm_dl", -0.70710678, -0.70710678, 0.));
+                do presets->add(("下##tnrm_d", 0., -1., 0.));
+                do presets->add(("右下##tnrm_dr", 0.70710678, -0.70710678, 0.));
+
+                let bw = (GetContentRegionAvail()[0] - 16.) / 3.;
+                let bh = 24.;
+                for (let mut i = 0; i < presets->len; i += 1)
+                {
+                    if (i % 3 != 0)
+                        do SameLine();
+                    let (label, px, py, pz) = presets[i];
+                    let current = mathf::abs(px - nx) < 0.0005
+                        && mathf::abs(py - ny) < 0.0005
+                        && mathf::abs(pz - nz) < 0.0005;
+                    if (current)
+                        do PushStyleColor(ImGuiCol::ImGuiCol_Button,
+                            mixStyleColor(GetStyleColor(ImGuiCol::ImGuiCol_Text),
+                                (0.42, 0.62, 0.95, 1.), 0.55, 255));
+                    if (ButtonSize(label, (bw, bh)))
+                    {
+                        if (ts_id->set_tile_normal(tid, px, py, pz))
+                            do note_tileset_edit(state, ts_id);
+                    }
+                    if (current)
+                        do PopStyleColor(1);
+                }
+
+                // 精确数值（方向盘之外的直接输入）
                 match (InputFloat3("##tile_normal", nx, ny, nz))
                 {
                     value(n)?
@@ -915,13 +1095,6 @@ namespace JEEditor::Editor::TilemapEditor
                     }
                     none?;
                 }
-                if (Button("重置为默认 (0, 0, -1)"))
-                {
-                    if (ts_id->set_tile_normal(tid, 0.0, 0.0, -1.0))
-                        do note_tileset_edit(state, ts_id);
-                }
-                do TextDisabled("参与网格顶点生成的局部空间单位法线，默认 -Z 指向屏幕外侧；");
-                do TextDisabled("自动拼接格整格共享锚点瓦片的法线。");
 
                 do SeparatorText("自动拼接");
                 let kinds = ["普通瓦片", "四象限(XP条带)", "blob47", "四象限(VX 2x3块)"];
