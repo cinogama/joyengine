@@ -1,8 +1,10 @@
 // 瓦片地图编辑器 —— 绘制工具。
-// 铅笔/橡皮/矩形/填充/吸管/图章；除吸管外都经 EditorState 的笔划机制
-// 产生可撤销命令。图章把调色板框选的 N×M 图集格整块写入地图（按原样，
-// 不解析自动拼接）。自动图块无需特殊处理：网格只记录瓦片值（负值 = 自动拼接），
-// 邻接变体由引擎在渲染时解析（相邻笔划会即时改变已绘制格的形状）。
+// 铅笔/矩形/填充/吸管；除吸管外都经 EditorState 的笔划机制产生可撤销
+// 命令。铅笔与图章已合并：调色板框选的 N×M 图集格由铅笔整块写入地图
+//（按原样，不解析自动拼接），单选一格即 1×1 普通画笔。左键绘制，
+// 右键清除（矩形与填充同样支持）。自动图块无需特殊处理：网格只记录
+// 瓦片值（负值 = 自动拼接），邻接变体由引擎在渲染时解析
+//（相邻笔划会即时改变已绘制格的形状）。
 
 import pkg::std;
 
@@ -24,15 +26,17 @@ using JEEditor::Editor::TilemapEditor;
 
 namespace JEEditor::Editor::TilemapEditor
 {
-    // 当前画笔生效值（橡皮固定 0）
-    func paint_value(state: EditorState)=> int
+    // 当前落笔值；右键（erase）恒为 0 = 清除
+    func paint_value(state: EditorState, erase: bool)=> int
     {
-        return state.m_tool == tool::ERASER ? 0 | state.m_paint;
+        return erase ? 0 | state.m_paint;
     }
 
-    // 吸管：取格子值并回填调色板选择
+    // 吸管：取格子值并回填调色板选择（同时收回画笔块，
+    // 吸取到的永远是单格画笔）
     func apply_eyedropper(state: EditorState, ctx: TilemapContext, x: int, y: int)=> void
     {
+        do state->clear_stamp();
         let v = ctx.m_map->get_tile(state.m_layer, x, y);
         if (v == 0)
         {
@@ -72,17 +76,17 @@ namespace JEEditor::Editor::TilemapEditor
         }
     }
 
-    // 铅笔/橡皮：单格写入（经笔划快照）
-    func apply_pencil(state: EditorState, x: int, y: int)=> void
+    // 铅笔：单格写入（经笔划快照）
+    func apply_pencil(state: EditorState, x: int, y: int, erase: bool)=> void
     {
-        do state->touch_cell(x, y, paint_value(state));
+        do state->touch_cell(x, y, paint_value(state, erase));
     }
 
-    // 图章：把框选的 N×M 块按原样写到地图，左上角对齐当前格；
+    // 多格画笔：把框选的 N×M 块按原样写到地图，左上角对齐当前格；
     // 伸出地图边界的格子跳过。内容在框选时已编码好（含图集下标），
-    // 落笔不再查询图集文档。
+    // 落笔不再查询图集文档。右键（erase）按同一块范围清除。
     func apply_stamp(state: EditorState, ctx: TilemapContext,
-        x0: int, y0: int)=> void
+        x0: int, y0: int, erase: bool)=> void
     {
         if (!state->stamp_ready())
             return;
@@ -100,45 +104,47 @@ namespace JEEditor::Editor::TilemapEditor
                 if (x < 0 || x >= mw)
                     continue;
                 do state->touch_cell(x, y,
-                    state.m_stamp_values[dy * sw + dx]);
+                    erase ? 0 | state.m_stamp_values[dy * sw + dx]);
             }
         }
     }
 
-    // 矩形：在锚点与当前格之间填充
-    func apply_rect(state: EditorState, x0: int, y0: int, x1: int, y1: int)=> void
+    // 矩形：在锚点与当前格之间填充（右键清除）
+    func apply_rect(state: EditorState, x0: int, y0: int, x1: int, y1: int,
+        erase: bool)=> void
     {
         let left = math::min(x0, x1);
         let right = math::max(x0, x1);
         let top = math::min(y0, y1);
         let bottom = math::max(y0, y1);
-        do state->begin_stroke(state.m_layer, "矩形填充");
+        do state->begin_stroke(state.m_layer, erase ? "矩形清除" | "矩形填充");
         for (let mut y = top; y <= bottom; y += 1)
         {
             for (let mut x = left; x <= right; x += 1)
             {
-                do state->touch_cell(x, y, paint_value(state));
+                do state->touch_cell(x, y, paint_value(state, erase));
             }
         }
         do state->end_stroke();
     }
 
-    // 填充：同值连通域（4 邻接）替换为画笔值。泛洪遍历用显式栈
-    //（vec pop，DFS 序，与结果集无关），直接读写文档
+    // 填充：同值连通域（4 邻接）替换为画笔值（右键替换为 0 = 清除）。
+    // 泛洪遍历用显式栈（vec pop，DFS 序，与结果集无关），直接读写文档
     //（touch_cell 负责撤销快照），访问标记用 map<int, mut bool>
     //（支持索引赋值）
-    func apply_fill(state: EditorState, ctx: TilemapContext, sx: int, sy: int)=> void
+    func apply_fill(state: EditorState, ctx: TilemapContext, sx: int, sy: int,
+        erase: bool)=> void
     {
         let (w, h, _, layer_count) = ctx.m_map->size();
         let layer = state.m_layer;
         if (sx < 0 || sy < 0 || sx >= w || sy >= h || layer < 0 || layer >= layer_count)
             return;
         let target = ctx.m_map->get_tile(layer, sx, sy);
-        let repl = paint_value(state);
+        let repl = paint_value(state, erase);
         if (target == repl)
             return;
 
-        do state->begin_stroke(layer, "填充");
+        do state->begin_stroke(layer, erase ? "清除填充" | "填充");
         let mut pending = []mut: vec<int>;
         do pending->add(sx + sy * w);
         let mut visited = new_int_bool_map();
@@ -189,30 +195,50 @@ namespace JEEditor::Editor::TilemapEditor
         return m;
     }
 
-    // 画布交互入口：down=本帧按下，drag=按住拖动中，up=本帧抬起
+    // 画布交互入口：cell = 悬停格（none = 在画布内但已移出地图范围）；
+    // erase = 右键（清除）；down/drag/up 为同一按键的帧事件
     public func handle_canvas_input(
         state: EditorState, ctx: TilemapContext,
-        cell: (int, int), down: bool, drag: bool, up: bool)=> void
+        cell: option<(int, int)>, erase: bool,
+        down: bool, drag: bool, up: bool)=> void
     {
-        let (x, y) = cell;
         if (state.m_tool == tool::EYEDROPPER)
         {
-            if (down)
-                do apply_eyedropper(state, ctx, x, y);
+            match (cell)
+            {
+                value((x, y))?
+                {
+                    if (down && !erase)
+                        do apply_eyedropper(state, ctx, x, y);
+                }
+                none?;
+            }
             return;
         }
 
         if (state.m_tool == tool::RECT)
         {
             if (down)
-                state.m_rect_anchor = option::value((x, y));
+            {
+                match (cell)
+                {
+                    value((x, y))? state.m_rect_anchor = option::value((x, y));
+                    none?;
+                }
+            }
             else if (up)
             {
                 match (state.m_rect_anchor)
                 {
                     value((ax, ay))?
                     {
-                        do apply_rect(state, ax, ay, x, y);
+                        // 在地图外抬起时终点不可知：放弃本次矩形
+                        match (cell)
+                        {
+                            value((x, y))?
+                                do apply_rect(state, ax, ay, x, y, erase);
+                            none?;
+                        }
                         state.m_rect_anchor = option::none;
                     }
                     none?;
@@ -223,49 +249,68 @@ namespace JEEditor::Editor::TilemapEditor
 
         if (state.m_tool == tool::FILL)
         {
-            if (down)
-                do apply_fill(state, ctx, x, y);
+            match (cell)
+            {
+                value((x, y))?
+                {
+                    if (down)
+                        do apply_fill(state, ctx, x, y, erase);
+                }
+                none?;
+            }
             return;
         }
 
-        // 铅笔/橡皮/图章：按下开笔划，拖动续写，抬起提交。
-        // 图章未框选（或已因切换图集页签/源而失效）时退化为单格画笔
-        let use_stamp = state.m_tool == tool::STAMP && state->stamp_ready();
-        if (down)
+        // 铅笔：按下开笔划，拖动续写，抬起提交。框选多格时整块绘制，
+        // 否则逐格绘制（未框选/框选已因切换图集页签或源而失效时
+        // 同样退化为单格画笔）
+        let use_stamp = state->stamp_is_block();
+        match (cell)
         {
-            do state->begin_stroke(state.m_layer, tool::name(state.m_tool));
-            if (use_stamp)
+            value((x, y))?
             {
-                do apply_stamp(state, ctx, x, y);
-                state.m_stamp_last = option::value((x, y));
-            }
-            else
-                do apply_pencil(state, x, y);
-        }
-        else if (drag)
-        {
-            if (use_stamp)
-            {
-                // 同一格不重复整块写入（触摸快照按格去重，重复写只是浪费）
-                match (state.m_stamp_last)
+                // 按下即开笔划；若按下帧被吞（如右键与左键抬起同帧、
+                // 弹窗抢走悬停），拖动的第一帧补开，避免 touch_cell
+                // 在没有笔划时解包 none
+                if (down || (drag && state.m_stroke_layer->is_none))
                 {
-                    value((lx, ly))?
+                    do state->begin_stroke(state.m_layer,
+                        erase ? "清除" | tool::name(state.m_tool));
+                    if (use_stamp)
                     {
-                        if (lx != x || ly != y)
-                        {
-                            do apply_stamp(state, ctx, x, y);
-                            state.m_stamp_last = option::value((x, y));
-                        }
-                    }
-                    none?
-                    {
-                        do apply_stamp(state, ctx, x, y);
+                        do apply_stamp(state, ctx, x, y, erase);
                         state.m_stamp_last = option::value((x, y));
                     }
+                    else
+                        do apply_pencil(state, x, y, erase);
+                }
+                else if (drag)
+                {
+                    if (use_stamp)
+                    {
+                        // 同一格不重复整块写入（快照按格去重，重复写只是浪费）
+                        match (state.m_stamp_last)
+                        {
+                            value((lx, ly))?
+                            {
+                                if (lx != x || ly != y)
+                                {
+                                    do apply_stamp(state, ctx, x, y, erase);
+                                    state.m_stamp_last = option::value((x, y));
+                                }
+                            }
+                            none?
+                            {
+                                do apply_stamp(state, ctx, x, y, erase);
+                                state.m_stamp_last = option::value((x, y));
+                            }
+                        }
+                    }
+                    else
+                        do apply_pencil(state, x, y, erase);
                 }
             }
-            else
-                do apply_pencil(state, x, y);
+            none?;
         }
         if (up)
         {

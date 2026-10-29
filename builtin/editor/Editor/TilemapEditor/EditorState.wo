@@ -1,7 +1,7 @@
 // 瓦片地图编辑器 —— 编辑期状态与撤销/重做。
 // 撤销采用命令模式（仿 Animation2D）：笔划级别的格子快照闭包。
 // 结构性操作（图层增删/移动、地图尺寸）不进入撤销栈，绘制类操作
-//（铅笔/矩形/填充/图章/属性覆盖）均可撤销。
+//（画笔/矩形/填充/属性覆盖）均可撤销。
 
 import pkg::std;
 
@@ -21,15 +21,14 @@ using fsys;
 
 namespace JEEditor::Editor::TilemapEditor
 {
-    // 绘制工具
+    // 绘制工具。铅笔与图章已合并：画笔始终按调色板的框选起效，
+    // 单选一格即 1×1 图章，框选 N×M 即整块绘制。
     public enum tool
     {
-        PENCIL,     // 铅笔：按下/拖动逐格绘制
-        ERASER,     // 橡皮：逐格清除
+        PENCIL,     // 铅笔：按下/拖动绘制（单格或框选的 N×M 块）
         RECT,       // 矩形：拖拽框选批量填充
         FILL,       // 填充：点击同值连通域
         EYEDROPPER, // 吸管：取格子值作为画笔
-        STAMP,      // 图章：把调色板框选的 N×M 图集格整块绘制
     }
     namespace tool
     {
@@ -37,16 +36,12 @@ namespace JEEditor::Editor::TilemapEditor
         {
             if (self == tool::PENCIL)
                 return "铅笔";
-            if (self == tool::ERASER)
-                return "橡皮";
             if (self == tool::RECT)
                 return "矩形";
             if (self == tool::FILL)
                 return "填充";
             if (self == tool::EYEDROPPER)
                 return "吸管";
-            if (self == tool::STAMP)
-                return "图章";
             return "?";
         }
     }
@@ -88,7 +83,7 @@ namespace JEEditor::Editor::TilemapEditor
 
         // ===== 工具与画笔 =====
         protected m_tool: mut tool,
-        // 当前画笔瓦片值（tile_value/auto_value/0=橡皮）
+        // 当前画笔瓦片值（tile_value/auto_value/0=空；右键清除时恒写 0）
         protected m_paint: mut int,
         // 矩形工具的按下锚点（屏幕世界格子坐标；none=未按下）
         protected m_rect_anchor: mut option<(int, int)>,
@@ -105,20 +100,21 @@ namespace JEEditor::Editor::TilemapEditor
         // 调色板视图模式：0 = 瓦片网格；1 = 自动图块列表（地图编辑器）
         protected m_palette_mode: mut int,
 
-        // ===== 图章（调色板内框选 N×M 图集格，一次整块绘制） =====
+        // ===== 画笔块（调色板内框选 N×M 图集格，铅笔一次整块绘制；
+        // 单格选择即普通铅笔） =====
         // 框选锚点（图集源纹理格坐标；none = 未在拖动框选中）
         protected m_stamp_anchor: mut option<(int, int)>,
-        // 图章区域：左上角与尺寸（单位图集格；1×1 = 单格）
+        // 画笔块区域：左上角与尺寸（单位图集格；1×1 = 单格）
         protected m_stamp_left: mut int,
         protected m_stamp_top: mut int,
         protected m_stamp_w: mut int,
         protected m_stamp_h: mut int,
-        // 图章内容：行优先的编码瓦片值，长度恒 = 宽 × 高（空 = 未框选）
+        // 画笔块内容：行优先的编码瓦片值，长度恒 = 宽 × 高（空 = 未框选）
         protected m_stamp_values: vec<int>,
-        // 图章所属图集文档与源纹理（预览用；切换页签/源后图章清空）
+        // 画笔块所属图集文档与源纹理（预览用；切换页签/源后清空）
         protected m_stamp_ts: mut option<tilemap::Tileset>,
         protected m_stamp_source: mut int,
-        // 图章拖动画布时上一次落笔的格子（同一格不重复整块写入）
+        // 拖动画布时上一次落笔的格子（同一格不重复整块写入）
         protected m_stamp_last: mut option<(int, int)>,
         // 地图编辑器内修改过的图集文档（保存地图时一并保存；保存用
         // 文档自身的当前路径，另存后也不会写错文件）
@@ -297,9 +293,9 @@ namespace JEEditor::Editor::TilemapEditor
             }
         }
 
-        // ===== 图章（图集矩形框选） =====
+        // ===== 画笔块（图集矩形框选） =====
 
-        // 清空图章框选（切换图集页签/源纹理或移除引用后失效）
+        // 清空画笔框选（切换图集页签/源纹理或移除引用后失效）
         public func clear_stamp(self: EditorState)=> void
         {
             self.m_stamp_anchor = option::none;
@@ -313,8 +309,8 @@ namespace JEEditor::Editor::TilemapEditor
             self.m_stamp_last = option::none;
         }
 
-        // 以图集格矩形（(left,top) 起 w×h）重建图章内容。值按原样绘制
-        //（正值）：图章复制图集格的原始排布，不按自动拼接类型解析邻接，
+        // 以图集格矩形（(left,top) 起 w×h）重建画笔块内容。值按原样绘制
+        //（正值）：按原样复制图集格的排布，不按自动拼接类型解析邻接，
         // 需要自动拼接时请用「自动图块」视图的单格画笔。
         public func set_stamp_region(self: EditorState,
             ts_id: tilemap::Tileset, source: int,
@@ -338,14 +334,14 @@ namespace JEEditor::Editor::TilemapEditor
             self.m_stamp_source = source;
         }
 
-        // 图章内容是否可落笔（有框选且缓存长度与尺寸一致）
+        // 画笔块内容是否可落笔（有框选且缓存长度与尺寸一致）
         public func stamp_ready(self: EditorState)=> bool
         {
             return self.m_stamp_values->len > 0
                 && self.m_stamp_values->len == self.m_stamp_w * self.m_stamp_h;
         }
 
-        // 是否为多格图章（1×1 与普通画笔等价，不显示预览与状态）
+        // 是否为多格画笔块（1×1 与普通铅笔等价，不显示预览与状态）
         public func stamp_is_block(self: EditorState)=> bool
         {
             return self->stamp_ready() && self.m_stamp_w * self.m_stamp_h > 1;

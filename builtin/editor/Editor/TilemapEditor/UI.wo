@@ -76,12 +76,26 @@ namespace JEEditor::Editor::TilemapEditor
         return new_h;
     }
 
+    // 工具按钮的悬停说明（右键清除对所有绘制工具生效）
+    func tool_tip(t: tool)=> string
+    {
+        if (t == tool::PENCIL)
+            return "铅笔：左键绘制，右键清除；在左侧调色板按住左键"
+                + "拖出 N×M 框选后整块绘制（左上角对齐）";
+        if (t == tool::RECT)
+            return "矩形：左键拖出范围填充，右键拖出范围清除";
+        if (t == tool::FILL)
+            return "填充：左键点击填充同值连通域，右键点击清除连通域";
+        if (t == tool::EYEDROPPER)
+            return "吸管：左键点击取该格的瓦片为画笔";
+        return "";
+    }
+
     func toolbar_button(state: EditorState, t: tool)=> void
     {
         let pressed = Button(F"{tool::name(t)}##tool{t as int}");
-        if (IsItemHovered() && t == tool::STAMP)
-            do SetTooltip("图章：在左侧调色板按住左键拖出 N×M 框选，"
-                + "再在画布点击/拖动整块绘制（左上角对齐）");
+        if (IsItemHovered())
+            do SetTooltip(tool_tip(t));
         if (state.m_tool == t)
         {
             // 当前工具：画个下划线指示
@@ -97,11 +111,9 @@ namespace JEEditor::Editor::TilemapEditor
     public func draw_toolbar(state: EditorState, ctx: TilemapContext)=> void
     {
         do toolbar_button(state, tool::PENCIL);
-        do toolbar_button(state, tool::ERASER);
         do toolbar_button(state, tool::RECT);
         do toolbar_button(state, tool::FILL);
         do toolbar_button(state, tool::EYEDROPPER);
-        do toolbar_button(state, tool::STAMP);
 
         if (Button("撤销"))
             do state->undo();
@@ -131,11 +143,12 @@ namespace JEEditor::Editor::TilemapEditor
         SameLine();
         do Text(F"{w}×{h} @ {tile_px}px | 图层{state.m_layer + 1}/{layer_count}「{lname}」"
             + (state->stamp_is_block()
-                ? F" | 图章 {state.m_stamp_w}×{state.m_stamp_h}" | "")
+                ? F" | 画笔 {state.m_stamp_w}×{state.m_stamp_h}" | "")
             + (state->has_unsaved() ? " | 未保存" | ""));
         if (IsItemHovered() && state->stamp_is_block())
-            do SetTooltip("图章大小：在左侧调色板按住左键拖出框选后，"
-                + "画布点击/拖动整块绘制；单击调色板单格可恢复单格画笔");
+            do SetTooltip("画笔大小：在左侧调色板按住左键拖出框选后，"
+                + "画布点击/拖动整块绘制，右键按同一块清除；"
+                + "单击调色板单格可恢复单格画笔");
         do draw_resize_map_popup(state, ctx);
     }
 

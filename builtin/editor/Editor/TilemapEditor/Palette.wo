@@ -1,7 +1,7 @@
 // 瓦片地图编辑器 —— 瓦片调色板。
 // 图集的每个源纹理格都是一块瓦片：左栏直接展示图集网格，点击即选中
-// 该格为画笔（无需注册）；按住左键拖动则框选 N×M 矩形，作为图章在
-// 画布上整块绘制。"自动图块"视图列出自动拼接类型非普通的
+// 该格为画笔（无需注册）；按住左键拖动则框选 N×M 矩形，作为多格
+// 画笔在画布上整块绘制。"自动图块"视图列出自动拼接类型非普通的
 // 瓦片（原来的"地形"），点击按自动拼接绘制。图集编辑器使用同一套
 // 网格视图，点选瓦片后在右侧编辑其通行性/属性/自动拼接类型。
 
@@ -95,13 +95,15 @@ namespace JEEditor::Editor::TilemapEditor
         return false;
     }
 
-    // 按瓦片 id 选中画笔（自动图块列表；锚点格由 tile_info 反查）
+    // 按瓦片 id 选中画笔（自动图块列表；锚点格由 tile_info 反查）。
+    // 自动图块只按单格绘制，先收回已有框选，避免多格画笔残留
     func select_tile_brush_by_id(state: EditorState, ts_id: tilemap::Tileset,
         tid: int, auto_mode: bool)=> void
     {
         let (src, ix, iy, _) = ts_id->tile_info(tid);
         if (src < 0)
             return;
+        do state->clear_stamp();
         do select_tile_brush(state, ts_id, src, ix, iy, auto_mode);
     }
 
@@ -367,7 +369,7 @@ namespace JEEditor::Editor::TilemapEditor
                 // 交互层：整张网格覆盖一个不可见按钮。Image 不是交互项，
                 // 直接在上面按住拖动会被 ImGui 当成在窗口空白处拖动窗口
                 //（ConfigWindowsMoveFromTitleBarOnly 缺省为 false），
-                // 导致框选图章时整个编辑器窗口跟着鼠标走。
+                // 导致框选画笔时整个编辑器窗口跟着鼠标走。
                 // 按钮取得 ActiveId 后，EndFrame 的移动窗口判定直接跳过。
                 SetCursorScreenPos(rect_min);
                 do InvisibleButton("##palette_grid_hit",
@@ -382,7 +384,7 @@ namespace JEEditor::Editor::TilemapEditor
 
                 do draw_atlas_grid_lines(rect_min, rect_max, cell_px, xc, yc);
                 do draw_auto_tile_overlays(state, ts_id, rect_min, cell_px);
-                // 地图编辑器：点击选画笔、拖动框选图章；
+                // 地图编辑器：点击选画笔、拖动框选多格画笔；
                 // 图集编辑器：只做悬停提示与点击选中
                 if (brush)
                     do handle_atlas_brush_interaction(state, ts_id, rect_min,
@@ -477,7 +479,7 @@ namespace JEEditor::Editor::TilemapEditor
                 (255, 255, 255, 220), 1.5);
             do SetTooltip(F"{shown} [{tile_kind_name(kind)}]"
                 + (wk != 0 ? "：可通行" | "：不可通行")
-                + (brush ? "，点击选为画笔，拖动框选图章"
+                + (brush ? "，点击选为画笔，拖动框选多格画笔"
                     | "，点击编辑属性"));
         }
     }
@@ -492,7 +494,7 @@ namespace JEEditor::Editor::TilemapEditor
         return v;
     }
 
-    // 以锚点格与当前格（含两端）更新图章框选；矩形未变时不重建内容
+    // 以锚点格与当前格（含两端）更新画笔框选；矩形未变时不重建内容
     func update_stamp_box(state: EditorState, ts_id: tilemap::Tileset,
         ax: int, ay: int, bx: int, by: int)=> void
     {
@@ -508,9 +510,9 @@ namespace JEEditor::Editor::TilemapEditor
             left, top, w, h, brush_tileset_index(state));
     }
 
-    // 地图调色板网格交互：点击选中单格画笔，按住拖动框选 N×M 图章。
-    // 框选期间鼠标移出网格也继续（按最近边界格夹取），松开提交，多格
-    // 时自动切到图章工具（单击保持原工具）。
+    // 地图调色板网格交互：点击选中单格画笔，按住拖动框选 N×M 画笔块。
+    // 框选期间鼠标移出网格也继续（按最近边界格夹取），松开提交；
+    // 铅笔直接按框选结果落笔，无需切换工具。
     func handle_atlas_brush_interaction(state: EditorState,
         ts_id: tilemap::Tileset, rect_min: (real, real), cell_px: real,
         xc: int, yc: int, item_hovered: bool)=> void
@@ -551,8 +553,9 @@ namespace JEEditor::Editor::TilemapEditor
                     do update_stamp_box(state, ts_id, ax, ay,
                         clamp_grid_cell(hx, xc), clamp_grid_cell(hy, yc));
                     state.m_stamp_anchor = option::none;
+                    // 框出多格后切到铅笔，落笔即为整块（单击不改变工具）
                     if (state->stamp_is_block())
-                        state.m_tool = tool::STAMP;
+                        state.m_tool = tool::PENCIL;
                 }
                 else
                 {
@@ -582,13 +585,13 @@ namespace JEEditor::Editor::TilemapEditor
                 cx, cy, false);
     }
 
-    // 选中态描边：图章框选整块（蓝底+蓝框）或单格选中格（蓝框）；
+    // 选中态描边：画笔框选整块（蓝底+蓝框）或单格选中格（蓝框）；
     // 自动图块画笔选中时另画锚点块白框
     func draw_atlas_selection(state: EditorState, ts_id: tilemap::Tileset,
         rect_min: (real, real), cell_px: real)=> void
     {
         let dl = GetWindowDrawList();
-        // 图章框选优先于单格选中框（1×1 时两者重合）
+        // 画笔框选优先于单格选中框（1×1 时两者重合）
         let mut stamp_shown = false;
         if (state->stamp_ready())
         {

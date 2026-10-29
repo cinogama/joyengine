@@ -1384,7 +1384,7 @@ namespace JEEditor::Editor::TilemapEditor
             if (Button("取消引用"))
             {
                 do ctx.m_map->remove_tileset(i);
-                // 引用表下标变化，已有图章（值里编码了图集下标）失效
+                // 引用表下标变化，已有画笔块（值里编码了图集下标）失效
                 do state->clear_stamp();
                 state.m_dirty = true;
             }

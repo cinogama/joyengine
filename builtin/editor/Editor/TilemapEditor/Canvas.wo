@@ -1,8 +1,8 @@
 // 瓦片地图编辑器 —— 地图画布。
 // 以 ImGui 窗口绘制列表渲染全部可见图层（与实际渲染一致：普通瓦片整块、
 // 四象限自动图块按象限拼合，数据来自 Tilemap::cell_quad），叠加网格、
-// 悬停高亮与矩形工具预览；开启突出选中层时其余图层整体压为半透明。
-// 滚轮缩放（以鼠标为中心）、中键拖拽平移。
+// 悬停高亮、矩形预览与画笔块预览；开启突出选中层时其余图层整体压为
+// 半透明。滚轮缩放（以鼠标为中心）、中键拖拽平移；左键绘制、右键清除。
 
 import pkg::std;
 
@@ -187,11 +187,15 @@ namespace JEEditor::Editor::TilemapEditor
                             let top = math::min(ay, hy);
                             let rw = (math::abs(ax - hx) + 1) as real * cellpx;
                             let rh = (math::abs(ay - hy) + 1) as real * cellpx;
+                            // 右键拖出的矩形染红，提示将清除该范围
+                            let erasing = IsMouseDown(
+                                ImGuiMouseButton::ImGuiMouseButton_Right);
                             do dl->AddRect(
                                 (origin[0] + left as real * cellpx, origin[1] + top as real * cellpx),
                                 (origin[0] + left as real * cellpx + rw,
                                  origin[1] + top as real * cellpx + rh),
-                                (90, 160, 255, 220), 2.);
+                                erasing ? (255, 110, 110, 240) | (90, 160, 255, 220),
+                                2.);
                         }
                         none?;
                     }
@@ -200,13 +204,15 @@ namespace JEEditor::Editor::TilemapEditor
             }
         }
 
-        // ---- 图章预览：在悬停格处半透明绘制整个 N×M 块 ----
-        if (state.m_tool == tool::STAMP && state->stamp_is_block())
+        // ---- 画笔块预览：在悬停格处半透明绘制整个 N×M 块
+        //（按住右键时染红，提示将清除该块） ----
+        if (state.m_tool == tool::PENCIL && state->stamp_is_block())
         {
+            let erasing = IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Right);
             match (hover_cell)
             {
                 value(cell)?
-                    do draw_stamp_preview(state, cell, origin, cellpx);
+                    do draw_stamp_preview(state, cell, origin, cellpx, erasing);
                 none?;
             }
         }
@@ -234,33 +240,45 @@ namespace JEEditor::Editor::TilemapEditor
 
         do PopClipRect();
 
-        // ---- 笔划交互（仅本窗口聚焦时，避免与其他面板抢输入） ----
-        if (hovered && IsWindowFocused())
+        // ---- 笔划交互。左键绘制、右键清除；左键事件优先，两键同时
+        // 按住时不会混写。左键沿用"画布子窗口聚焦时才响应"，避免与其他
+        // 面板抢输入；右键不会改变 ImGui 焦点（焦点仍停在调色板等面板
+        // 上），故只按悬停判定 ----
+        let l_click = IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left);
+        let l_down = IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left);
+        let l_up = IsMouseReleased(ImGuiMouseButton::ImGuiMouseButton_Left);
+        let r_click = IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Right);
+        let r_down = IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Right);
+        let r_up = IsMouseReleased(ImGuiMouseButton::ImGuiMouseButton_Right);
+        let l_event = l_click || l_down || l_up;
+        let r_event = r_click || r_down || r_up;
+        let focused = IsWindowFocused();
+        if (hovered)
         {
-            let down = IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left);
-            let dragging = IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left);
-            let up = IsMouseReleased(ImGuiMouseButton::ImGuiMouseButton_Left);
-            match (hover_cell)
-            {
-                value(cell)?
-                {
-                    if (down || dragging || up)
-                        do handle_canvas_input(state, ctx, cell, down, dragging && !down, up);
-                }
-                none?
-                {
-                    // 在画布外抬起时也要结束笔划/矩形
-                    if (up)
-                        do handle_canvas_input(state, ctx, (0, 0), false, false, true);
-                }
-            }
+            if (l_event && focused)
+                do handle_canvas_input(state, ctx, hover_cell, false,
+                    l_click, l_down && !l_click, l_up);
+            else if (r_event && !l_event)
+                do handle_canvas_input(state, ctx, hover_cell, true,
+                    r_click, r_down && !r_click, r_up);
+        }
+        else
+        {
+            // 移出画布后抬起也要结束笔划/取消矩形
+            if (l_up && focused)
+                do handle_canvas_input(state, ctx, option::none, false,
+                    false, false, true);
+            else if (r_up)
+                do handle_canvas_input(state, ctx, option::none, true,
+                    false, false, true);
         }
     }
 
-    // 图章预览：在悬停格处半透明绘制框选的 N×M 块（左上角对齐落笔点）。
-    // 图章按图集原格原样绘制，预览与落笔结果一致（不解析自动拼接）
+    // 画笔块预览：在悬停格处半透明绘制框选的 N×M 块（左上角对齐落笔点）。
+    // 按图集原格原样绘制，预览与落笔结果一致（不解析自动拼接）；
+    // 右键清除时染红并改用红框
     func draw_stamp_preview(state: EditorState, cell: (int, int),
-        origin: (real, real), cellpx: real)=> void
+        origin: (real, real), cellpx: real, erasing: bool)=> void
     {
         match (state.m_stamp_ts)
         {
@@ -271,6 +289,7 @@ namespace JEEditor::Editor::TilemapEditor
                 let sw = state.m_stamp_w;
                 let sh = state.m_stamp_h;
                 let dl = GetWindowDrawList();
+                let tint = erasing ? (255, 120, 120, 170) | (255, 255, 255, 150);
                 for (let mut dy = 0; dy < sh; dy += 1)
                 {
                     for (let mut dx = 0; dx < sw; dx += 1)
@@ -297,8 +316,7 @@ namespace JEEditor::Editor::TilemapEditor
                                                 + (y0 + dy) as real * cellpx;
                                             do dl->AddImageUV((px, py),
                                                 (px + cellpx, py + cellpx),
-                                                (u0, v0), (u1, v1), tex,
-                                                (255, 255, 255, 150));
+                                                (u0, v0), (u1, v1), tex, tint);
                                         }
                                         none?;
                                     }
@@ -313,7 +331,7 @@ namespace JEEditor::Editor::TilemapEditor
                      origin[1] + y0 as real * cellpx),
                     (origin[0] + (x0 + sw) as real * cellpx,
                      origin[1] + (y0 + sh) as real * cellpx),
-                    (255, 190, 90, 230), 2.);
+                    erasing ? (255, 110, 110, 240) | (255, 190, 90, 230), 2.);
             }
         }
     }
