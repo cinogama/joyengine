@@ -1,6 +1,6 @@
 // 瓦片地图编辑器 —— 绘制工具。
 // 铅笔/橡皮/矩形/填充/吸管；除吸管外都经 EditorState 的笔划机制
-// 产生可撤销命令。自动图块地形无需特殊处理：网格只记录地形值，
+// 产生可撤销命令。自动图块无需特殊处理：网格只记录瓦片值（负值 = 自动拼接），
 // 邻接变体由引擎在渲染时解析（相邻笔划会即时改变已绘制格的形状）。
 
 import pkg::std;
@@ -39,33 +39,32 @@ namespace JEEditor::Editor::TilemapEditor
             return;
         }
         state.m_paint = v;
-        // 回填调色板：图集页签与地形/瓦片高亮
+        // 回填调色板：图集页签、源、格、瓦片 id 与绘制模式
+        //（负值 = 切到自动图块视图）
         match (tilemap::decode_value(v))
         {
-            value((ts_idx, local, is_terrain))?
+            value((ts_idx, tile_id, is_auto))?
             {
                 do ctx->sync_tilesets();
                 let ts_count = ctx.m_map->tileset_count();
                 if (ts_idx >= 0 && ts_idx < ts_count)
                     state.m_palette_tileset = ts_idx;
-                if (is_terrain)
+                match (ctx->tileset_id(ts_idx))
                 {
-                    state.m_palette_terrain = option::value(local);
-                    state.m_palette_cell = option::none;
-                }
-                else
-                {
-                    match (ctx->tileset_id(ts_idx))
+                    value(ts_id)?
                     {
-                        value(ts_id)?
+                        let (src, ix, iy, _) = ts_id->tile_info(tile_id);
+                        if (src >= 0)
                         {
-                            let (src, ix, iy, _) = ts_id->tile_info(local);
                             state.m_palette_source = src;
                             state.m_palette_cell = option::value((ix, iy));
-                            state.m_palette_terrain = option::none;
+                            state.m_palette_tile = tile_id;
+                            state.m_palette_tile_ts = option::value(ts_id);
+                            state.m_palette_auto = is_auto;
+                            state.m_palette_mode = is_auto ? 1 | 0;
                         }
-                        none? { }
                     }
+                    none? { }
                 }
             }
             none? { }

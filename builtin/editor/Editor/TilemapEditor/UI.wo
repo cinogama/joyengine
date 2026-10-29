@@ -126,7 +126,7 @@ namespace JEEditor::Editor::TilemapEditor
         }
         SameLine();
         do Text(F"{w}×{h} @ {tile_px}px | 图层{state.m_layer + 1}/{layer_count}「{lname}」"
-            + (state.m_dirty ? " | 未保存" | ""));
+            + (state->has_unsaved() ? " | 未保存" | ""));
         do draw_resize_map_popup(state, ctx);
     }
 
@@ -192,7 +192,7 @@ namespace JEEditor::Editor::TilemapEditor
         }
     }
 
-    // 图集编辑器窗口布局：左调色板 + 右图集设置（无地图上下文）
+    // 图集编辑器窗口布局：左调色板 + 右属性页（选中瓦片 / 图集设置）
     public func render_tileset(state: EditorState)=> void
     {
         let avail = GetContentRegionAvail();
@@ -201,7 +201,7 @@ namespace JEEditor::Editor::TilemapEditor
         EndChild();
         SameLine();
         if (BeginChildSize("##ts_right", GetContentRegionAvail()[0], 0.))
-            do draw_tileset_settings(state, option::none);
+            do draw_tileset_properties(state);
         EndChild();
     }
 

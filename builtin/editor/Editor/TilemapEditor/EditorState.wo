@@ -85,7 +85,7 @@ namespace JEEditor::Editor::TilemapEditor
 
         // ===== 工具与画笔 =====
         protected m_tool: mut tool,
-        // 当前画笔瓦片值（tile_value/terrain_value/0=橡皮）
+        // 当前画笔瓦片值（tile_value/auto_value/0=橡皮）
         protected m_paint: mut int,
         // 矩形工具的按下锚点（屏幕世界格子坐标；none=未按下）
         protected m_rect_anchor: mut option<(int, int)>,
@@ -94,11 +94,16 @@ namespace JEEditor::Editor::TilemapEditor
         protected m_palette_tileset: mut int,    // 地图图集下标
         protected m_palette_source: mut int,     // 图集内源纹理下标
         protected m_palette_cell: mut option<(int, int)>,  // 选中的源纹理网格
-        protected m_palette_terrain: mut option<int>,      // 选中的地形 id
-        // 新建地形弹窗的编辑期字段
-        protected m_new_terrain_name: mut string,
-        protected m_new_terrain_kind: mut int,
-        protected m_new_terrain_walkable: mut bool,
+        protected m_palette_tile: mut int,       // 选中的瓦片 id（0 = 未选中）
+        // 选中瓦片所属图集文档句柄（切换图集页签/文档后用于判定选择
+        // 是否仍然有效；none = 未选中）
+        protected m_palette_tile_ts: mut option<tilemap::Tileset>,
+        protected m_palette_auto: mut bool,      // 画笔按自动拼接类型绘制
+        // 调色板视图模式：0 = 瓦片网格；1 = 自动图块列表（地图编辑器）
+        protected m_palette_mode: mut int,
+        // 地图编辑器内修改过的图集文档（保存地图时一并保存；保存用
+        // 文档自身的当前路径，另存后也不会写错文件）
+        protected m_tileset_dirty: vec<tilemap::Tileset>,
         // 添加源纹理弹窗
         protected m_new_source_path: mut string,
         protected m_new_source_tilepx: mut int,
@@ -141,11 +146,9 @@ namespace JEEditor::Editor::TilemapEditor
         protected m_textures: vec<(string, texture2d)>,
         protected m_textures_failed: vec<string>,
 
-        // ===== 地形连接预览（每个自动图块地形一张隐藏 3x3 预览地图） =====
-        // 键 = "图集路径#地形id"，值 = 预览地图句柄（不可用时为 none）
+        // ===== 自动图块连接预览（每个自动图块一张隐藏 3x3 预览地图） =====
+        // 键 = "图集路径#瓦片id"，值 = 预览地图句柄（不可用时为 none）
         protected m_preview_maps: vec<(string, option<tilemap::Tilemap>)>,
-        // 调色板未注册格的双击计时（时刻, x, y；none = 无记录）
-        protected m_last_cell_click: mut option<(real, int, int)>,
     }
     {
         // 地图编辑模式（编辑 context 指向的地图文档）
@@ -173,10 +176,11 @@ namespace JEEditor::Editor::TilemapEditor
                 m_palette_tileset = mut 0,
                 m_palette_source = mut 0,
                 m_palette_cell = mut option::none,
-                m_palette_terrain = mut option::none,
-                m_new_terrain_name = mut "",
-                m_new_terrain_kind = mut 1,
-                m_new_terrain_walkable = mut true,
+                m_palette_tile = mut 0,
+                m_palette_tile_ts = mut option::none,
+                m_palette_auto = mut false,
+                m_palette_mode = mut 0,
+                m_tileset_dirty = []mut,
                 m_new_source_path = mut "",
                 m_new_source_tilepx = mut 32,
                 m_new_extra_path = {}mut: map<int, string>,
@@ -207,11 +211,35 @@ namespace JEEditor::Editor::TilemapEditor
                 m_textures_failed = []mut,
 
                 m_preview_maps = []mut,
-                m_last_cell_click = mut option::none,
             };
         }
 
         public func mark_dirty(self: EditorState)=> void { self.m_dirty = true; }
+
+        // 记录"该图集文档被地图编辑器修改过"：保存地图时一并保存这些
+        // 图集（图集是独立文档，但两者共享同一实例，编辑实时生效）。
+        // 保存时用文档自身的当前路径（另存后不会写回旧文件）。
+        public func mark_tileset_dirty(self: EditorState, ts: tilemap::Tileset)=> void
+        {
+            for (let p : self.m_tileset_dirty)
+            {
+                if (p == ts)
+                    return;
+            }
+            do self.m_tileset_dirty->add(ts);
+        }
+
+        // 是否有未保存的修改（地图或图集）
+        public func has_unsaved(self: EditorState)=> bool
+        {
+            return self.m_dirty || self.m_tileset_dirty->len > 0;
+        }
+
+        // 图集保存成功后的清理
+        public func clear_tileset_dirty(self: EditorState)=> void
+        {
+            self.m_tileset_dirty->clear();
+        }
 
         // 按路径取图集显示纹理（带缓存；失败记录避免重复加载）
         public func atlas_texture(self: EditorState, path: string)=> option<texture2d>

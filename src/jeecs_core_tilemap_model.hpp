@@ -39,25 +39,33 @@ namespace jeecs
     {
         // ==================== 瓦片值编码 ====================
         // 网格与笔刷统一编码（对 C ABI 与编辑器的交换格式）：
-        // 0 = 空；v>0 普通瓦片；v<0 自动图块地形。
-        // |v| = (tileset_idx + 1) * TILE_ID_BASE + local_id
+        // 0 = 空；v>0 按原样绘制瓦片；v<0 按瓦片的自动拼接类型绘制。
+        // |v| = (tileset_idx + 1) * TILE_ID_BASE + tile_id
+        //
+        // 图集中的每个源纹理格都是瓦片：瓦片 id 由图集源分配（添加源时
+        // 领一个基址，格 (ix,iy) 的 id = 基址 + iy * xcount + ix），删除
+        // 源不会导致 id 漂移或复用。瓦片的通行性、名称、属性与自动拼接
+        // 类型都是这条 id 上的稀疏元数据（无元数据即"默认可通行的普通
+        // 瓦片"）。"地形"不再是与瓦片并列的另一种实体，而是带
+        // je_TileKind 非 PLAIN 的瓦片；负值只表达"这次按自动拼接绘制"
+        // （普通瓦片两种符号等价）。
         constexpr int32_t TILE_ID_BASE = 0x100000;
 
-        inline int32_t encode_tile_value(int32_t tileset_idx, int32_t local_id)
+        inline int32_t encode_tile_value(int32_t tileset_idx, int32_t tile_id)
         {
-            return (tileset_idx + 1) * TILE_ID_BASE + local_id;
+            return (tileset_idx + 1) * TILE_ID_BASE + tile_id;
         }
-        inline int32_t encode_terrain_value(int32_t tileset_idx, int32_t local_id)
+        inline int32_t encode_auto_value(int32_t tileset_idx, int32_t tile_id)
         {
-            return -encode_tile_value(tileset_idx, local_id);
+            return -encode_tile_value(tileset_idx, tile_id);
         }
         // 解码结果：tileset_idx 为地图引用表下标，local_id 为图集内
-        // 瓦片/地形 id（1 起，0 为占位槽），is_terrain 区分符号位
+        // 瓦片 id（恒 > 0），is_auto 区分符号位（是否按自动拼接绘制）
         struct decoded_cell
         {
             int32_t tileset_idx;
             int32_t local_id;
-            bool is_terrain;
+            bool is_auto;
         };
         // 空（v == 0）返回 nullopt
         inline std::optional<decoded_cell> decode_tile_value(int32_t v)
@@ -133,6 +141,10 @@ namespace jeecs
             std::string path;   // 运行时路径（@/ 或 !/）
             int32_t tile_px = 32;
             int32_t xcount = 1, ycount = 1;
+            // 瓦片 id 基址：本源的格子 (ix,iy) 对应瓦片 id
+            // base_tile_id + iy * xcount + ix。添加源时分配、随文档保存，
+            // 删除源后该区间永不复用（0 = 尚未分配）。
+            int32_t base_tile_id = 0;
             // 纹理像素尺寸（UV 计算用）；nullopt = 未测量，按网格推算。
             // 有值时恒为正
             std::optional<int32_t> tex_w, tex_h;
@@ -163,23 +175,17 @@ namespace jeecs
             // 运行期：构建失败标记（同 SourceTexture::array_failed）
             bool array_failed = false;
         };
+        // 瓦片元数据：图集格 (source, ix, iy) 上的稀疏定义。没有条目的
+        // 格子按默认值处理（可通行、普通瓦片、无属性、名称为空）。所有
+        // 字段都只描述"这块瓦片本身"，自动图块（地形）也只是 kind 非
+        // PLAIN 的瓦片，不再有独立的属性/通行性表。
         struct TileDef
         {
-            // 所属源纹理下标；nullopt = 墓碑（已删除，id 槽位保留防漂移）
-            std::optional<int32_t> source;
-            int32_t ix = 0, iy = 0; // 图集网格坐标（自左上角）
-            bool walkable = true;
-        };
-        struct TerrainDef
-        {
             std::string name;
-            je_TerrainKind kind = JE_TERRAIN_KIND_SINGLE;  // 拼接类型
-            // 所属源纹理下标；nullopt = 墓碑（已删除，id 槽位保留防漂移）
-            std::optional<int32_t> source;
-            int32_t ix = 0, iy = 0; // 锚点图集网格坐标
             bool walkable = true;
-            std::vector<int32_t> variant_tiles;             // blob47 显式变体表（普通瓦片 id）
-            std::map<std::string, property_value> properties;   // 地形默认属性
+            je_TileKind kind = JE_TILE_KIND_PLAIN;  // 自动拼接类型
+            std::vector<int32_t> variant_tiles;     // blob47 显式变体表（瓦片 id）
+            std::map<std::string, property_value> properties;   // 瓦片默认属性
         };
         struct PropertyDef
         {
@@ -193,33 +199,81 @@ namespace jeecs
             std::string name;
             std::string path;   // .je4tileset 运行时路径；未保存为空
             std::vector<SourceTexture> sources;
-            std::vector<TileDef> tiles;        // tiles[0] 占位，瓦片 id = 下标（1 起）
-            std::vector<TerrainDef> terrains;   // terrains[0] 占位，地形 id = 下标（1 起）
+            // 稀疏瓦片元数据：瓦片 id -> 定义（无条目 = 默认瓦片）
+            std::map<int32_t, TileDef> tiles;
+            // 下一个可分配的瓦片 id 基址（只增不减：删除源后其区间作废，
+            // 已有地图按 id 引用不会漂移到别的格子）
+            int32_t next_tile_id = 1;
             std::vector<PropertyDef> properties;
-            std::map<int32_t, std::map<std::string, property_value>> tile_properties;
 
             uint64_t version = 1;
-            // (source<<32|flat_pos) -> tile id 的反查表，懒构建
-            std::unordered_map<int64_t, int32_t> flat_tile_index;
 
-            std::optional<int32_t> tile_at_flat(int32_t source_idx, int32_t flat) const
+            // 某图集格子的瓦片 id（参数越界或源未分配 id 时返回 0）
+            int32_t tile_id_at(int32_t source_idx, int32_t ix, int32_t iy) const
             {
-                auto fnd = flat_tile_index.find(((int64_t)source_idx << 32) | (uint32_t)flat);
-                if (fnd == flat_tile_index.end())
-                    return std::nullopt;
-                return fnd->second;
+                if (source_idx < 0 || source_idx >= (int32_t)sources.size())
+                    return 0;
+                const auto& s = sources[source_idx];
+                if (s.base_tile_id <= 0 || ix < 0 || iy < 0
+                    || ix >= s.xcount || iy >= s.ycount)
+                    return 0;
+                return s.base_tile_id + iy * s.xcount + ix;
             }
-            void rebuild_flat_index()
+            // 瓦片 id -> (源下标, ix, iy)；不属于任何现存格子返回 nullopt
+            std::optional<std::tuple<int32_t, int32_t, int32_t>>
+                tile_cell(int32_t tile_id) const
             {
-                flat_tile_index.clear();
-                for (size_t i = 1; i < tiles.size(); ++i)
+                if (tile_id <= 0)
+                    return std::nullopt;
+                for (size_t i = 0; i < sources.size(); ++i)
                 {
-                    const auto& t = tiles[i];
-                    if (!t.source.has_value() || *t.source >= (int32_t)sources.size())
+                    const auto& s = sources[i];
+                    if (s.base_tile_id <= 0)
                         continue;
-                    flat_tile_index[((int64_t)*t.source << 32)
-                        | (uint32_t)(t.iy * sources[*t.source].xcount + t.ix)] = (int32_t)i;
+                    const int64_t count = (int64_t)s.xcount * s.ycount;
+                    if (tile_id < s.base_tile_id
+                        || (int64_t)tile_id >= (int64_t)s.base_tile_id + count)
+                        continue;
+                    const int32_t off = tile_id - s.base_tile_id;
+                    return std::make_tuple(
+                        (int32_t)i, off % s.xcount, off / s.xcount);
                 }
+                return std::nullopt;
+            }
+            const TileDef* tile_def(int32_t tile_id) const
+            {
+                auto fnd = tiles.find(tile_id);
+                return fnd == tiles.end() ? nullptr : &fnd->second;
+            }
+            // 取（必要时创建）瓦片元数据；调用方须保证 tile_id 属于
+            // 某个现存格子
+            TileDef& ensure_tile_def(int32_t tile_id)
+            {
+                return tiles[tile_id];
+            }
+            bool tile_walkable(int32_t tile_id) const
+            {
+                const auto* def = tile_def(tile_id);
+                return def == nullptr || def->walkable;
+            }
+            je_TileKind tile_kind(int32_t tile_id) const
+            {
+                const auto* def = tile_def(tile_id);
+                return def == nullptr ? JE_TILE_KIND_PLAIN : def->kind;
+            }
+            // 元数据是否已回到默认（默认条目可从稀疏表移除）
+            static bool tile_def_is_default(const TileDef& def)
+            {
+                return def.name.empty() && def.walkable
+                    && def.kind == JE_TILE_KIND_PLAIN
+                    && def.variant_tiles.empty() && def.properties.empty();
+            }
+            // 元数据编辑器收尾：默认条目从稀疏表移除
+            void compact_tile_def(int32_t tile_id)
+            {
+                auto fnd = tiles.find(tile_id);
+                if (fnd != tiles.end() && tile_def_is_default(fnd->second))
+                    tiles.erase(fnd);
             }
         };
 
@@ -317,20 +371,17 @@ namespace jeecs
         // 与 .je4animation 同风格的自有二进制格式（魔数 + 小端字段），
         // 由 C++ 侧统一读写，避免在内核引入 TOML 依赖。
         // 属性值为类型化数据：每值前有 1 字节类型标记（je_PropertyType）。
-        // 图集（JTS4）中瓦片/地形均带 1 字节存活标记（0 = 墓碑，1 = 在案，
-        // 其余视为损坏）：墓碑不写载荷——id 槽位仍占位以保持 id 稳定，
-        // 删除信息不依赖任何特殊字段值。地形的 kind 为 je_TerrainKind 的
-        // u8，越界视为损坏。源纹理的 tex_w/tex_h 写 0 表示未测量；JTS4
-        // 起每个源在 6 个基础字段后带附加层级纹理表（u32 计数 + 每条
-        // pass/path/tex_w/tex_h），pass < 1 视为损坏（与地图层样式槽位
-        // 同口径）。JTS3 为无层级表的旧版（读取兼容，保存升级为 JTS4）。
-        // 地图（JTM5）图层记录内联 rend_queue（i32）、自阴影行为
+        // 图集（JTS5）不再兼容旧版：每个源记录自己的瓦片 id 基址，瓦片
+        // 元数据按 id 稀疏保存（无条目 = 默认可通行普通瓦片）。源的
+        // tex_w/tex_h 写 0 表示未测量；每个源在基础字段后带附加层级
+        // 纹理表（u32 计数 + 每条 pass/path/tex_w/tex_h），pass < 1 视为
+        // 损坏。瓦片 kind 为 je_TileKind 的 u8，越界视为损坏。
+        // 地图（JTM6）图层记录内联 rend_queue（i32）、自阴影行为
         //（je_LayerSelfShadow 的 u8，越界视为损坏）、自阴影强度（f32）、
         // 遮挡阴影行为（je_LayerBlockShadow 的 u8，越界视为损坏）与
-        // 遮挡阴影强度（f32）。
-        constexpr uint32_t TILESET_MAGIC = 0x4A545334;     // "JTS4"
-        constexpr uint32_t TILESET_MAGIC_V3 = 0x4A545333;  // "JTS3"（旧版，只读兼容）
-        constexpr uint32_t MAP_MAGIC = 0x4A544D35;         // "JTM5"
+        // 遮挡阴影强度（f32）。瓦片值语义见文件开头的编码说明。
+        constexpr uint32_t TILESET_MAGIC = 0x4A545335;     // "JTS5"
+        constexpr uint32_t MAP_MAGIC = 0x4A544D36;         // "JTM6"
 
         struct bin_writer
         {
@@ -480,29 +531,19 @@ namespace jeecs
             bin_writer w;
             w.u32(TILESET_MAGIC);
             w.str(ts.name);
+            w.i32(ts.next_tile_id);
             w.u32((uint32_t)ts.sources.size());
             for (const auto& s : ts.sources)
             {
                 w.str(s.path); w.i32(s.tile_px); w.i32(s.xcount); w.i32(s.ycount);
                 w.i32(s.tex_w.value_or(0)); w.i32(s.tex_h.value_or(0));
-                // 附加层级纹理表（JTS4）：每条 pass/path/tex_w/tex_h
+                w.i32(s.base_tile_id);
+                // 附加层级纹理表：每条 pass/path/tex_w/tex_h
                 w.u32((uint32_t)s.extras.size());
                 for (const auto& e : s.extras)
                 {
                     w.i32(e.pass); w.str(e.path);
                     w.i32(e.tex_w.value_or(0)); w.i32(e.tex_h.value_or(0));
-                }
-            }
-            w.u32((uint32_t)(ts.tiles.size() - 1));
-            for (size_t i = 1; i < ts.tiles.size(); ++i)
-            {
-                const auto& t = ts.tiles[i];
-                const bool alive = t.source.has_value();
-                w.u8(alive ? 1 : 0);
-                if (alive)
-                {
-                    w.i32(*t.source); w.i32(t.ix); w.i32(t.iy);
-                    w.u8(t.walkable ? 1 : 0);
                 }
             }
             w.u32((uint32_t)ts.properties.size());
@@ -511,41 +552,21 @@ namespace jeecs
                 w.str(pd.name); w.u8((uint8_t)pd.type);
                 write_property_value(w, pd.default_value);
             }
-            w.u32((uint32_t)(ts.terrains.size() - 1));
-            for (size_t i = 1; i < ts.terrains.size(); ++i)
+            // 稀疏瓦片元数据：只写显式定义过的瓦片（无条目 = 默认瓦片）
+            w.u32((uint32_t)ts.tiles.size());
+            for (const auto& [tile_id, t] : ts.tiles)
             {
-                const auto& t = ts.terrains[i];
-                const bool alive = t.source.has_value();
-                w.u8(alive ? 1 : 0);
-                if (!alive)
-                    continue;
-                w.str(t.name); w.u8((uint8_t)t.kind);
-                w.i32(*t.source); w.i32(t.ix); w.i32(t.iy); w.u8(t.walkable ? 1 : 0);
+                w.i32(tile_id);
+                w.str(t.name);
+                w.u8(t.walkable ? 1 : 0);
+                w.u8((uint8_t)t.kind);
                 w.u32((uint32_t)t.variant_tiles.size());
                 for (int32_t v : t.variant_tiles) w.i32(v);
-            }
-            // 此计数是"带属性的瓦片条目数"，与读取侧逐条 (tid, kv 数) 对应；
-            // 误写成键值对总数会让读取器越过数据末尾而判定整文件损坏。
-            w.u32((uint32_t)ts.tile_properties.size());
-            for (const auto& [tid, kvs] : ts.tile_properties)
-            {
-                w.i32(tid); w.u32((uint32_t)kvs.size());
-                for (const auto& [k, v] : kvs) { w.str(k); write_property_value(w, v); }
-            }
-            // 尾块：地形默认属性（键为地形 id），置于计数数据之后（与地图
-            // z 偏移尾块同款做法）。
-            uint32_t terrprop_count = 0;
-            for (size_t i = 1; i < ts.terrains.size(); ++i)
-                if (!ts.terrains[i].properties.empty())
-                    ++terrprop_count;
-            w.u32(terrprop_count);
-            for (size_t i = 1; i < ts.terrains.size(); ++i)
-            {
-                const auto& kvs = ts.terrains[i].properties;
-                if (kvs.empty())
-                    continue;
-                w.i32((int32_t)i); w.u32((uint32_t)kvs.size());
-                for (const auto& [k, v] : kvs) { w.str(k); write_property_value(w, v); }
+                w.u32((uint32_t)t.properties.size());
+                for (const auto& [k, v] : t.properties)
+                {
+                    w.str(k); write_property_value(w, v);
+                }
             }
             return write_buffer_to_file(w.b, path);
         }
@@ -560,9 +581,12 @@ namespace jeecs
             auto ts = std::make_shared<TilesetDocument>();
             ts->path = path;
             const uint32_t magic = r.u32();
-            if (magic != TILESET_MAGIC && magic != TILESET_MAGIC_V3)
+            if (magic != TILESET_MAGIC)
                 return std::nullopt;
             ts->name = r.str();
+            ts->next_tile_id = r.i32();
+            if (ts->next_tile_id <= 0 || ts->next_tile_id > TILE_ID_BASE)
+                return std::nullopt;
             uint32_t src_n = r.u32();
             for (uint32_t i = 0; i < src_n && r.ok; ++i)
             {
@@ -572,44 +596,46 @@ namespace jeecs
                 int32_t tw = r.i32(), th = r.i32();
                 if (tw > 0) s.tex_w = tw;
                 if (th > 0) s.tex_h = th;
-                // 附加层级纹理表（JTS4 起有；pass 越界或同源重复视为损坏）
-                if (magic == TILESET_MAGIC)
-                {
-                    uint32_t ex_n = r.u32();
-                    for (uint32_t k = 0; k < ex_n && r.ok; ++k)
-                    {
-                        SourceExtra e;
-                        e.pass = r.i32();
-                        e.path = r.str();
-                        int32_t ew = r.i32(), eh = r.i32();
-                        if (ew > 0) e.tex_w = ew;
-                        if (eh > 0) e.tex_h = eh;
-                        if (e.pass < 1 || e.path.empty())
-                        { r.ok = false; break; }
-                        for (const auto& prev : s.extras)
-                            if (prev.pass == e.pass)
-                            { r.ok = false; break; }
-                        if (r.ok)
-                            s.extras.push_back(std::move(e));
-                    }
-                }
-                ts->sources.push_back(std::move(s));
-            }
-            ts->tiles.push_back(TileDef{}); // id 0 占位
-            uint32_t tile_n = r.u32();
-            for (uint32_t i = 0; i < tile_n && r.ok; ++i)
-            {
-                TileDef t;
-                const uint8_t alive = r.u8();
-                if (alive > 1)
+                s.base_tile_id = r.i32();
+                if (s.tile_px <= 0 || s.xcount <= 0 || s.ycount <= 0
+                    || s.base_tile_id <= 0)
                 { r.ok = false; break; }
-                if (alive != 0)
+                // 附加层级纹理表（pass 越界或同源重复视为损坏）
+                uint32_t ex_n = r.u32();
+                for (uint32_t k = 0; k < ex_n && r.ok; ++k)
                 {
-                    t.source = r.i32();
-                    t.ix = r.i32(); t.iy = r.i32();
-                    t.walkable = r.u8() != 0;
+                    SourceExtra e;
+                    e.pass = r.i32();
+                    e.path = r.str();
+                    int32_t ew = r.i32(), eh = r.i32();
+                    if (ew > 0) e.tex_w = ew;
+                    if (eh > 0) e.tex_h = eh;
+                    if (e.pass < 1 || e.path.empty())
+                    { r.ok = false; break; }
+                    for (const auto& prev : s.extras)
+                        if (prev.pass == e.pass)
+                        { r.ok = false; break; }
+                    if (r.ok)
+                        s.extras.push_back(std::move(e));
                 }
-                ts->tiles.push_back(t);
+                if (!r.ok)
+                    break;
+                // 基址区间不得重叠，且须落在 next_tile_id 之前；瓦片 id
+                // 还要能编入 32 位瓦片值（低 TILE_ID_BASE 位）
+                const int64_t end = (int64_t)s.base_tile_id
+                    + (int64_t)s.xcount * s.ycount;
+                if (end > ts->next_tile_id || end > (int64_t)TILE_ID_BASE)
+                { r.ok = false; break; }
+                for (const auto& prev : ts->sources)
+                {
+                    const int64_t prev_end = (int64_t)prev.base_tile_id
+                        + (int64_t)prev.xcount * prev.ycount;
+                    if (s.base_tile_id < prev_end && prev.base_tile_id < end)
+                    { r.ok = false; break; }
+                }
+                if (!r.ok)
+                    break;
+                ts->sources.push_back(std::move(s));
             }
             uint32_t prop_n = r.u32();
             for (uint32_t i = 0; i < prop_n && r.ok; ++i)
@@ -622,64 +648,40 @@ namespace jeecs
                 pd.default_value = read_property_value(r);
                 ts->properties.push_back(std::move(pd));
             }
-            ts->terrains.push_back(TerrainDef{}); // id 0 占位
-            uint32_t terr_n = r.u32();
-            for (uint32_t i = 0; i < terr_n && r.ok; ++i)
+            uint32_t tile_n = r.u32();
+            for (uint32_t i = 0; i < tile_n && r.ok; ++i)
             {
-                TerrainDef t;
-                const uint8_t alive = r.u8();
-                if (alive > 1)
+                const int32_t tile_id = r.i32();
+                TileDef t;
+                t.name = r.str();
+                t.walkable = r.u8() != 0;
+                uint8_t kind = r.u8();
+                if (!ts->tile_cell(tile_id).has_value()
+                    || kind > (uint8_t)JE_TILE_KIND_RPGMAKER_VX)
                 { r.ok = false; break; }
-                if (alive != 0)
+                t.kind = (je_TileKind)kind;
+                uint32_t vn = r.u32();
+                for (uint32_t k = 0; k < vn && r.ok; ++k)
                 {
-                    t.name = r.str();
-                    uint8_t kind = r.u8();
-                    if (kind > (uint8_t)JE_TERRAIN_KIND_RPGMAKER_VX)
+                    const int32_t variant = r.i32();
+                    if (!ts->tile_cell(variant).has_value())
                     { r.ok = false; break; }
-                    t.kind = (je_TerrainKind)kind;
-                    t.source = r.i32();
-                    t.ix = r.i32(); t.iy = r.i32();
-                    t.walkable = r.u8() != 0;
-                    uint32_t vn = r.u32();
-                    for (uint32_t k = 0; k < vn && r.ok; ++k) t.variant_tiles.push_back(r.i32());
+                    t.variant_tiles.push_back(variant);
                 }
-                ts->terrains.push_back(std::move(t));
-            }
-            auto read_kv = [&](std::map<std::string, property_value>& kvs)
-            {
-                std::string key = r.str();
-                kvs[std::move(key)] = read_property_value(r);
-            };
-            uint32_t tp_n = r.u32();
-            for (uint32_t i = 0; i < tp_n && r.ok; ++i)
-            {
-                int32_t tid = r.i32();
-                uint32_t kv_n = r.u32();
-                for (uint32_t k = 0; k < kv_n && r.ok; ++k)
-                    read_kv(ts->tile_properties[tid]);
+                if (!r.ok)
+                    break;
+                uint32_t pn = r.u32();
+                for (uint32_t k = 0; k < pn && r.ok; ++k)
+                {
+                    std::string key = r.str();
+                    t.properties[std::move(key)] = read_property_value(r);
+                }
+                if (!r.ok)
+                    break;
+                ts->tiles[tile_id] = std::move(t);
             }
             if (!r.ok)
                 return std::nullopt;
-            // 尾块（可选）：地形默认属性。条目至少 8 字节（地形 id + 键值
-            // 数），总量越界视为损坏。
-            if (r.o + 4 <= r.n)
-            {
-                uint32_t tprop_n = r.u32();
-                if (tprop_n > ts->terrains.size() || r.o + (size_t)tprop_n * 8 > r.n)
-                    return std::nullopt;
-                for (uint32_t i = 0; i < tprop_n && r.ok; ++i)
-                {
-                    int32_t tid = r.i32();
-                    uint32_t kv_n = r.u32();
-                    if (tid <= 0 || tid >= (int32_t)ts->terrains.size())
-                    { r.ok = false; break; }
-                    for (uint32_t k = 0; k < kv_n && r.ok; ++k)
-                        read_kv(ts->terrains[tid].properties);
-                }
-                if (!r.ok)
-                    return std::nullopt;
-            }
-            ts->rebuild_flat_index();
             return ts;
         }
 
@@ -1502,7 +1504,7 @@ namespace jeecs
         constexpr int NB_U = 1, NB_D = 2, NB_L = 4, NB_R = 8;
         constexpr int NB_UL = 16, NB_LD = 32, NB_RU = 64, NB_RD = 128;
 
-        // 计算某格地形的 8 邻接掩码：邻居与该格存储值完全相同才算连接
+        // 计算某格瓦片值的 8 邻接掩码：邻居与该格存储值完全相同才算连接
         inline int compute_mask(const MapDocument& m, int32_t layer, int32_t x, int32_t y, int32_t encoded)
         {
             const auto& grid = m.layers[layer].grid;
@@ -1622,7 +1624,7 @@ namespace jeecs
                 if (fnd != cit->second.end())
                     return &fnd->second;
             }
-            // 2. 瓦片/地形默认 -> 3. schema 默认值
+            // 2. 瓦片默认 -> 3. schema 默认值（瓦片没有元数据即默认瓦片）
             int32_t v = doc->layers[layer].grid[y * doc->width + x];
             if (v != 0)
             {
@@ -1633,23 +1635,11 @@ namespace jeecs
                     && doc->tilesets[cell->tileset_idx].resolved.has_value())
                 {
                     const auto* ts = doc->tilesets[cell->tileset_idx].resolved->get();
-                    const std::map<std::string, property_value>* defaults = nullptr;
-                    const int32_t local = cell->local_id;
-                    if (cell->is_terrain)
+                    const auto* def = ts->tile_def(cell->local_id);
+                    if (def != nullptr)
                     {
-                        if (local < (int32_t)ts->terrains.size())
-                            defaults = &ts->terrains[local].properties;
-                    }
-                    else if (local < (int32_t)ts->tiles.size())
-                    {
-                        auto tit = ts->tile_properties.find(local);
-                        if (tit != ts->tile_properties.end())
-                            defaults = &tit->second;
-                    }
-                    if (defaults != nullptr)
-                    {
-                        auto fnd = defaults->find(name);
-                        if (fnd != defaults->end())
+                        auto fnd = def->properties.find(name);
+                        if (fnd != def->properties.end())
                             return &fnd->second;
                     }
                     for (const auto& pd : ts->properties)
@@ -1675,12 +1665,7 @@ namespace jeecs
                 || !doc->tilesets[cell->tileset_idx].resolved.has_value())
                 return true;
             const auto* ts = doc->tilesets[cell->tileset_idx].resolved->get();
-            const int32_t local = cell->local_id;
-            if (cell->is_terrain)
-                return local < (int32_t)ts->terrains.size()
-                ? ts->terrains[local].walkable : true;
-            return local < (int32_t)ts->tiles.size()
-                ? ts->tiles[local].walkable : true;
+            return ts->tile_walkable(cell->local_id);
         }
 
         // ==================== 单元格渲染解析（唯一权威实现） ====================
@@ -1693,7 +1678,7 @@ namespace jeecs
             int32_t source_idx = 0;         // 图集内源纹理下标
             float u0 = 0.f, v0 = 0.f, u1 = 0.f, v1 = 0.f; // tile-local UV（v0 下 v1 上，[0,1]²）
             int32_t layer = 0;              // 数组纹理层号（每层一个瓦片）
-            // 目标象限：nullopt = 整格；0=LU 1=RU 2=LD 3=RD（四象限地形）
+            // 目标象限：nullopt = 整格；0=LU 1=RU 2=LD 3=RD（四象限自动图块）
             std::optional<int32_t> corner;
         };
 
@@ -1829,47 +1814,47 @@ namespace jeecs
                 || !doc.tilesets[cell->tileset_idx].resolved.has_value())
                 return 0;
             const int32_t ts_idx = cell->tileset_idx;
-            const int32_t local = cell->local_id;
+            const int32_t tile_id = cell->local_id;
             const auto* ts = doc.tilesets[ts_idx].resolved->get();
 
-            // 整格取件：普通瓦片 / 单块地形 / blob47 变体
-            auto fill_full = [&](const SourceTexture& src,
-                int32_t source_idx, int32_t ix, int32_t iy)
+            // 瓦片 id -> 图集格（不属于任何现存源即不可解析）
+            const auto hit = ts->tile_cell(tile_id);
+            if (!hit.has_value())
+                return 0;
+            const int32_t source_idx = std::get<0>(*hit);
+            const int32_t ix = std::get<1>(*hit);
+            const int32_t iy = std::get<2>(*hit);
+            const auto& src = ts->sources[source_idx];
+            const je_TileKind kind = ts->tile_kind(tile_id);
+            const TileDef* def = ts->tile_def(tile_id);
+
+            // 整格取件：按原样绘制 / 普通瓦片 / blob47 变体
+            auto fill_full = [&](int32_t src_idx, int32_t cx, int32_t cy)
             {
                 out[0].tileset_idx = ts_idx;
-                out[0].source_idx = source_idx;
-                tile_uv(src, ix, iy, out[0].u0, out[0].v0, out[0].u1, out[0].v1, out[0].layer);
+                out[0].source_idx = src_idx;
+                tile_uv(ts->sources[src_idx], cx, cy,
+                    out[0].u0, out[0].v0, out[0].u1, out[0].v1, out[0].layer);
                 out[0].corner = std::nullopt;
             };
 
-            if (!cell->is_terrain)
+            // 正值 = 按原样绘制；普通瓦片的自动模式与之一致
+            if (!cell->is_auto || kind == JE_TILE_KIND_PLAIN)
             {
-                if (local <= 0 || local >= (int32_t)ts->tiles.size())
-                    return 0;
-                const auto& t = ts->tiles[local];
-                if (!t.source.has_value() || *t.source >= (int32_t)ts->sources.size())
-                    return 0;
-                fill_full(ts->sources[*t.source], *t.source, t.ix, t.iy);
+                fill_full(source_idx, ix, iy);
                 return 1;
             }
 
-            if (local <= 0 || local >= (int32_t)ts->terrains.size())
-                return 0;
-            const auto& terrain = ts->terrains[local];
-            if (!terrain.source.has_value() || *terrain.source >= (int32_t)ts->sources.size())
-                return 0;
-            const auto& src = ts->sources[*terrain.source];
-
-            if (terrain.kind == JE_TERRAIN_KIND_RPGMAKER_XP
-                || terrain.kind == JE_TERRAIN_KIND_RPGMAKER_VX)
+            if (kind == JE_TILE_KIND_RPGMAKER_XP
+                || kind == JE_TILE_KIND_RPGMAKER_VX)
             {
                 // RPGMaker 四象限（XP 式条带 / VX 式 2x3 块）：
                 // 槽位序 [LU, RU, LD, RD]
                 int mask = compute_mask(doc, layer, x, y, v);
-                if (terrain.kind == JE_TERRAIN_KIND_RPGMAKER_VX && mask == 0)
+                if (kind == JE_TILE_KIND_RPGMAKER_VX && mask == 0)
                 {
                     // VX 孤块：mkxp 变体47 = 锚点整块
-                    fill_full(src, *terrain.source, terrain.ix, terrain.iy);
+                    fill_full(source_idx, ix, iy);
                     return 1;
                 }
                 struct corner_bits { int o1, o2, diag; };
@@ -1887,11 +1872,10 @@ namespace jeecs
                     // 顶部向下增长。块越出图集网格时钳到边界层（原像素
                     // UV 实现同样越界采样，行为对齐且层号必须合法）。
                     const int32_t layer = std::clamp(
-                        (terrain.iy + hc.row / 2) * src.xcount
-                        + (terrain.ix + hc.col / 2),
+                        (iy + hc.row / 2) * src.xcount + (ix + hc.col / 2),
                         0, src.xcount * src.ycount - 1);
                     out[c].tileset_idx = ts_idx;
-                    out[c].source_idx = *terrain.source;
+                    out[c].source_idx = source_idx;
                     out[c].u0 = (hc.col % 2) * 0.5f;
                     out[c].u1 = (hc.col % 2) * 0.5f + 0.5f;
                     out[c].v1 = 1.f - (hc.row % 2) * 0.5f;
@@ -1902,36 +1886,25 @@ namespace jeecs
                 return 4;
             }
 
-            // 单块：直接取锚点整块（不依赖瓦片定义表）
-            if (terrain.kind == JE_TERRAIN_KIND_SINGLE)
-            {
-                fill_full(src, *terrain.source, terrain.ix, terrain.iy);
-                return 1;
-            }
-
             // blob47：按邻接掩码解析为一个整块变体（显式变体表，或自
             // 锚点起行优先连续取 47 块的默认布局）
-            std::optional<int32_t> variant_tile;
+            int mask = compute_mask(doc, layer, x, y, v);
+            uint8_t variant = blob47_table()[(uint8_t)(mask & 0xFF)];
+            if (def != nullptr && (size_t)variant < def->variant_tiles.size())
             {
-                int mask = compute_mask(doc, layer, x, y, v);
-                uint8_t variant = blob47_table()[(uint8_t)(mask & 0xFF)];
-                if ((size_t)variant < terrain.variant_tiles.size())
-                    variant_tile = terrain.variant_tiles[variant];
-                else
-                    variant_tile = ts->tile_at_flat(*terrain.source,
-                        terrain.iy * src.xcount + terrain.ix + variant);
+                const auto variant_hit = ts->tile_cell(def->variant_tiles[variant]);
+                if (!variant_hit.has_value())
+                    return 0;
+                fill_full(std::get<0>(*variant_hit),
+                    std::get<1>(*variant_hit), std::get<2>(*variant_hit));
+                return 1;
             }
-            if (variant_tile.has_value()
-                && *variant_tile > 0 && *variant_tile < (int32_t)ts->tiles.size())
-            {
-                const auto& t = ts->tiles[*variant_tile];
-                if (t.source.has_value() && *t.source < (int32_t)ts->sources.size())
-                {
-                    fill_full(ts->sources[*t.source], *t.source, t.ix, t.iy);
-                    return 1;
-                }
-            }
-            return 0;
+            // 默认布局：锚点格起行优先 + variant（块越出网格即不可解析）
+            const int32_t flat = iy * src.xcount + ix + variant;
+            if (flat < 0 || flat >= src.xcount * src.ycount)
+                return 0;
+            fill_full(source_idx, flat % src.xcount, flat / src.xcount);
+            return 1;
         }
     }
 }

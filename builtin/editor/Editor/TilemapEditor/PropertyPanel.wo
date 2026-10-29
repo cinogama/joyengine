@@ -1,9 +1,12 @@
 // 瓦片地图编辑器 —— 属性面板。
-// 三个页签：
-//   格子属性：悬停/最后交互格子的属性取值链展示与逐格覆盖编辑；
-//   图集设置：地图的图集引用管理、当前调色板图集的源纹理管理、
-//             地形编辑、属性 schema、选中瓦片/地形的默认值与可通行性；
-//   图层样式：活动图层的专属着色器、附加纹理通道与 uniform 变量。
+// 地图编辑器的页签：
+//   格子属性：悬停格子的属性取值链展示与逐格覆盖编辑；
+//   瓦片：选中瓦片的名称/通行性/自动拼接类型/默认属性（写回图集文档）；
+//   图层样式：活动图层的专属着色器、附加纹理通道与 uniform 变量；
+//   图集设置：地图的图集引用管理。
+// 图集编辑器的页签：
+//   瓦片：选中瓦片的名称/通行性/自动拼接类型/默认属性；
+//   图集设置：图集名称、源纹理（含附加层级）与属性 schema。
 
 import pkg::std;
 
@@ -183,7 +186,18 @@ namespace JEEditor::Editor::TilemapEditor
                     EndChild();
                     do EndTabItem();
                 }
+            }
 
+            if (BeginTabItem("瓦片"))
+            {
+                if (BeginChildSize("##tile_props", GetContentRegionAvail()[0], 0.))
+                    do draw_tile_panel(state, option::value(ctx));
+                EndChild();
+                do EndTabItem();
+            }
+
+            if (state.m_tileset_only->is_none)
+            {
                 if (BeginTabItem("图层样式"))
                 {
                     if (BeginChildSize("##layer_style", GetContentRegionAvail()[0], 0.))
@@ -803,6 +817,145 @@ namespace JEEditor::Editor::TilemapEditor
         }
     }
 
+    // 图集编辑器右侧面板：选中瓦片 / 图集设置
+    public func draw_tileset_properties(state: EditorState)=> void
+    {
+        if (BeginTabBar("##ts_prop_tabs"))
+        {
+            if (BeginTabItem("瓦片"))
+            {
+                if (BeginChildSize("##ts_tile_props", GetContentRegionAvail()[0], 0.))
+                    do draw_tile_panel(state, option::none);
+                EndChild();
+                do EndTabItem();
+            }
+            if (BeginTabItem("图集设置"))
+            {
+                if (BeginChildSize("##ts_props", GetContentRegionAvail()[0], 0.))
+                    do draw_tileset_settings(state, option::none);
+                EndChild();
+                do EndTabItem();
+            }
+            do EndTabBar();
+        }
+    }
+
+    // ---- 瓦片：选中瓦片的通行性/自动拼接类型/默认属性 ----
+    // 瓦片属于图集文档：地图编辑器里的修改同样写进共享的图集实例，
+    // 保存地图时一并保存被修改的图集（见 Window.wo）。
+
+    // 记录一次图集内容修改（地图模式同时登记该图集待保存）
+    func note_tileset_edit(state: EditorState, ts_id: tilemap::Tileset)=> void
+    {
+        state.m_dirty = true;
+        if (state.m_tileset_only->is_none)
+            do state->mark_tileset_dirty(ts_id);
+    }
+
+    public func draw_tile_panel(state: EditorState,
+        ctx: option<TilemapContext>)=> void
+    {
+        let ts_doc = palette_tileset_doc(state, ctx);
+        match (ts_doc)
+        {
+            none? { do TextDisabled("没有可用的图集文档"); return; }
+            value(ts_id)?
+            {
+                let tid = state.m_palette_tile;
+                let (src, ix, iy, walkable) = ts_id->tile_info(tid);
+                let mut same_owner = false;
+                match (state.m_palette_tile_ts)
+                {
+                    value(owner)? same_owner = owner == ts_id;
+                    none?;
+                }
+                if (tid <= 0 || src < 0 || !same_owner)
+                {
+                    do TextDisabled("在左侧调色板点选一个瓦片以编辑");
+                    do TextDisabled("瓦片的通行性、属性与自动拼接类型属于图集文档");
+                    return;
+                }
+
+                let name = ts_id->tile_name(tid);
+                let kind = ts_id->tile_kind(tid);
+                do Text(F"瓦片 #{tid}（源 {src + 1}，格 {ix},{iy}）");
+                if (state.m_tileset_only->is_none)
+                    do TextDisabled("瓦片的通行性/属性属于图集文档；保存地图时会一并保存引用图集");
+                else
+                    do TextDisabled("瓦片的通行性/属性属于本图集文档，保存图集（Ctrl+S）写回");
+                do Separator();
+
+                match (InputText("名称##tile_name", name))
+                {
+                    value(s)?
+                    {
+                        if (ts_id->set_tile_name(tid, s))
+                            do note_tileset_edit(state, ts_id);
+                    }
+                    none?;
+                }
+                match (CheckBox("可通行##tile_walk", walkable != 0))
+                {
+                    value(b)?
+                    {
+                        do ts_id->set_tile_walkable(tid, b ? 1 | 0);
+                        do note_tileset_edit(state, ts_id);
+                    }
+                    none?;
+                }
+
+                do SeparatorText("自动拼接");
+                let kinds = ["普通瓦片", "四象限(XP条带)", "blob47", "四象限(VX 2x3块)"];
+                match (ListBoxSelect("##tile_kind_edit", kinds, kind))
+                {
+                    value(k)?
+                    {
+                        if (ts_id->set_tile_kind(tid, k))
+                            do note_tileset_edit(state, ts_id);
+                    }
+                    none?;
+                }
+                if (kind == tilemap::tile_kind::PLAIN as int)
+                    do TextDisabled("普通瓦片：整块绘制，不解析邻接");
+                else if (is_quadrant_kind(kind))
+                {
+                    do TextDisabled("锚点 = 本瓦片；四象限占用锚点起 2×3 格，");
+                    do TextDisabled("请确认这些格子在源纹理中属于同一块自动图块素材。");
+                }
+                else if (kind == tilemap::tile_kind::BLOB47 as int)
+                {
+                    do TextDisabled("默认布局：锚点起行优先连续 47 格；");
+                    let vn = ts_id->tile_variant_count(tid);
+                    if (vn == 0)
+                        do TextDisabled("当前使用默认布局（无显式变体）");
+                    else
+                    {
+                        do Text(F"显式变体 {vn} 项（按 47 变体序的瓦片 id）");
+                        if (Button("清空显式变体"))
+                        {
+                            do ts_id->tile_clear_variants(tid);
+                            do note_tileset_edit(state, ts_id);
+                        }
+                    }
+                }
+                do TextDisabled("地图中按自动拼接绘制时，用画笔的「自动图块」视图选中本瓦片。");
+
+                let pcount = ts_id->property_count();
+                if (pcount > 0)
+                {
+                    do SeparatorText("默认属性");
+                    for (let mut i = 0; i < pcount; i += 1)
+                    {
+                        let (pname, ptype) = ts_id->property_info(i);
+                        do draw_tile_default_editor(state, ts_id, tid, pname, ptype);
+                    }
+                }
+                else
+                    do TextDisabled("图集尚未定义属性 schema");
+            }
+        }
+    }
+
     // ---- 格子属性：取值链展示 + 覆盖编辑 ----
     func draw_cell_properties(state: EditorState, ctx: TilemapContext)=> void
     {
@@ -1204,9 +1357,9 @@ namespace JEEditor::Editor::TilemapEditor
         {
             do draw_tileset_references(state, ctx->unwrap());
             do Separator();
-            do TextDisabled("图集内容（源纹理/地形/属性）的编辑");
-            do TextDisabled("请在资源浏览器中双击图集文件，");
-            do TextDisabled("在图集编辑器中进行。");
+            do TextDisabled("瓦片本身的通行性、属性与自动拼接类型在「瓦片」页编辑；");
+            do TextDisabled("源纹理/属性 schema 的编辑请双击图集文件，在");
+            do TextDisabled("图集编辑器的「图集设置」中进行。");
             return;
         }
         do draw_tileset_content(state, state.m_tileset_only->unwrap());
@@ -1307,7 +1460,7 @@ namespace JEEditor::Editor::TilemapEditor
         }
     }
 
-    // ---- 图集设置：名称/源纹理/地形/schema/默认值 ----
+    // ---- 图集设置：名称/源纹理（含附加层级）/属性 schema ----
     func draw_tileset_content(state: EditorState, ts_id: tilemap::Tileset)=> void
     {
 
@@ -1369,16 +1522,8 @@ namespace JEEditor::Editor::TilemapEditor
         }
         do Separator();
 
-        // 地形编辑
-        do draw_terrain_editing(state, ts_id);
-        do Separator();
-
-        // 属性 schema
+        // 属性 schema（瓦片通行性/自动拼接类型/默认属性在「瓦片」页编辑）
         do draw_schema_editing(state, ts_id);
-        do Separator();
-
-        // 选中瓦片/地形的默认值
-        do draw_defaults_editing(state, ts_id);
     }
 
     // 某源最小未占用的层级通道号（>= 1；新增层级的默认通道）
@@ -1473,85 +1618,6 @@ namespace JEEditor::Editor::TilemapEditor
                 "层级与主纹理共用瓦片网格，按指定通道展开为数组纹理供着色器采样（采样声明如 texture2darray::uniform(通道)）");
     }
 
-    func draw_terrain_editing(state: EditorState, ts_id: tilemap::Tileset)=> void
-    {
-        do Text("自动图块地形：");
-        let terr_total = ts_id->terrain_count();
-        if (terr_total == 0)
-        {
-            do TextDisabled("（在左侧调色板中新建地形）");
-            return;
-        }
-        match (state.m_palette_terrain)
-        {
-            none? { do TextDisabled("选择一个地形以编辑"); }
-            value(tid)?
-            {
-                if (tid > terr_total)
-                {
-                    state.m_palette_terrain = option::none;
-                    return;
-                }
-                let (tname, kind, src, ix, iy, wk, _) =
-                    ts_id->terrain_info(tid);
-                // 已删除（墓碑，源下标为 -1）的地形不可编辑
-                if (src < 0)
-                {
-                    state.m_palette_terrain = option::none;
-                    return;
-                }
-                do Text(F"地形 #{tid}");
-                match (InputText("名称##tname", tname))
-                {
-                    value(s)?
-                    {
-                        do ts_id->set_terrain(tid, s, kind, src, ix, iy, wk != 0 ? 1 | 0);
-                        state.m_dirty = true;
-                    }
-                    none?;
-                }
-                let kinds = ["单块", "四象限(XP条带)", "blob47", "四象限(VX 2x3块)"];
-                match (ListBoxSelect("##terrain_kind_edit", kinds, kind))
-                {
-                    value(k)?
-                    {
-                        do ts_id->set_terrain(tid, tname, k, src, ix, iy, wk != 0 ? 1 | 0);
-                        state.m_dirty = true;
-                    }
-                    none?;
-                }
-                match (InputInt2("锚点(列,行)", ix, iy))
-                {
-                    value((nx, ny))?
-                    {
-                        do ts_id->set_terrain(tid, tname, kind, src, nx, ny, wk != 0 ? 1 | 0);
-                        state.m_dirty = true;
-                    }
-                    none?;
-                }
-                match (CheckBox("可通行##twalk", wk != 0))
-                {
-                    value(b)?
-                    {
-                        do ts_id->set_terrain(tid, tname, kind, src, ix, iy, b ? 1 | 0);
-                        state.m_dirty = true;
-                    }
-                    none?;
-                }
-                SameLine();
-                if (Button("删除地形"))
-                {
-                    do ts_id->remove_terrain(tid);
-                    state.m_palette_terrain = option::none;
-                    state.m_dirty = true;
-                }
-                do TextDisabled("XP条带：锚点右2格×下3格（旧编辑器格式）");
-                do TextDisabled("VX块：锚点右2格×下3格，右上2x2为内部填充");
-                do TextDisabled("blob47 默认布局：锚点起行优先连续 47 块");
-            }
-        }
-    }
-
     // 按所选类型添加属性（默认值取类型零值）；返回新属性下标
     func add_schema_property(ts_id: tilemap::Tileset, name: string, ptype: int)=> option<int>
     {
@@ -1615,242 +1681,8 @@ namespace JEEditor::Editor::TilemapEditor
         }
     }
 
-    func draw_defaults_editing(state: EditorState, ts_id: tilemap::Tileset)=> void
-    {
-        let pcount = ts_id->property_count();
-        if (pcount == 0)
-            return;
-
-        // 选中地形：编辑地形默认值
-        match (state.m_palette_terrain)
-        {
-            value(tid)?
-            {
-                do Text(F"地形 #{tid} 默认属性：");
-                for (let mut i = 0; i < pcount; i += 1)
-                {
-                    let (pname, ptype) = ts_id->property_info(i);
-                    do draw_terrain_default_editor(state, ts_id, tid, pname, ptype);
-                }
-                return;
-            }
-            none?;
-        }
-
-        // 选中普通瓦片：编辑瓦片默认值与可通行
-        match (state.m_palette_cell)
-        {
-            value((cx, cy))?
-            {
-                do Text(F"瓦片 ({cx},{cy}) 默认属性：");
-                if (state.m_palette_source < ts_id->source_count())
-                {
-                    match (ts_id->add_tile(state.m_palette_source, cx, cy, 1))
-                    {
-                        value(tile_id)?
-                        {
-                            let (_, _, _, wk) = ts_id->tile_info(tile_id);
-                            match (CheckBox("可通行", wk != 0))
-                            {
-                                value(b)?
-                                {
-                                    do ts_id->set_tile_walkable(tile_id, b ? 1 | 0);
-                                    state.m_dirty = true;
-                                }
-                                none?;
-                            }
-                            for (let mut i = 0; i < pcount; i += 1)
-                            {
-                                let (pname, ptype) = ts_id->property_info(i);
-                                do draw_tile_default_editor(state, ts_id, tile_id, pname, ptype);
-                            }
-                        }
-                        none?;
-                    }
-                }
-            }
-            none? { do TextDisabled("在调色板选中瓦片或地形以编辑默认值"); }
-        }
-    }
-
-    // 地形默认值一行：无值时 + 按钮（类型零值），有值时控件 + 清除。
-    // 脏标记在写回处统一设置
-    func draw_terrain_default_editor(state: EditorState, ts_id: tilemap::Tileset,
-        tid: int, name: string, ptype: int)=> void
-    {
-        do PushIDStr(name);
-        if (ptype == property_type::BOOL as int)
-        {
-            match (ts_id->get_terrain_property_bool(tid, name))
-            {
-                none?
-                {
-                    if (Button("+")) { do ts_id->set_terrain_property_bool(tid, name, option::value(false)); state.m_dirty = true; }
-                    SameLine();
-                    do Text(F"{name}（默认）");
-                }
-                value(cur)?
-                {
-                    do Text(name);
-                    SameLine();
-                    if (Button("清除")) { do ts_id->set_terrain_property_bool(tid, name, option::none); state.m_dirty = true; }
-                    SameLine();
-                    match (CheckBox("##def", cur))
-                    {
-                        value(b)? { do ts_id->set_terrain_property_bool(tid, name, option::value(b)); state.m_dirty = true; }
-                        none?;
-                    }
-                }
-            }
-        }
-        else if (ptype == property_type::INT as int)
-        {
-            match (ts_id->get_terrain_property_int(tid, name))
-            {
-                none?
-                {
-                    if (Button("+")) { do ts_id->set_terrain_property_int(tid, name, option::value(0)); state.m_dirty = true; }
-                    SameLine();
-                    do Text(F"{name}（默认）");
-                }
-                value(cur)?
-                {
-                    do Text(name);
-                    SameLine();
-                    if (Button("清除")) { do ts_id->set_terrain_property_int(tid, name, option::none); state.m_dirty = true; }
-                    SameLine();
-                    match (InputInt("##def", cur))
-                    {
-                        value(v)? { do ts_id->set_terrain_property_int(tid, name, option::value(v)); state.m_dirty = true; }
-                        none?;
-                    }
-                }
-            }
-        }
-        else if (ptype == property_type::FLOAT as int)
-        {
-            match (ts_id->get_terrain_property_real(tid, name))
-            {
-                none?
-                {
-                    if (Button("+")) { do ts_id->set_terrain_property_real(tid, name, option::value(0.)); state.m_dirty = true; }
-                    SameLine();
-                    do Text(F"{name}（默认）");
-                }
-                value(cur)?
-                {
-                    do Text(name);
-                    SameLine();
-                    if (Button("清除")) { do ts_id->set_terrain_property_real(tid, name, option::none); state.m_dirty = true; }
-                    SameLine();
-                    match (InputFloat("##def", cur))
-                    {
-                        value(v)? { do ts_id->set_terrain_property_real(tid, name, option::value(v)); state.m_dirty = true; }
-                        none?;
-                    }
-                }
-            }
-        }
-        else if (ptype == property_type::STRING as int)
-        {
-            match (ts_id->get_terrain_property_string(tid, name))
-            {
-                none?
-                {
-                    if (Button("+")) { do ts_id->set_terrain_property_string(tid, name, option::value("")); state.m_dirty = true; }
-                    SameLine();
-                    do Text(F"{name}（默认）");
-                }
-                value(cur)?
-                {
-                    do Text(name);
-                    SameLine();
-                    if (Button("清除")) { do ts_id->set_terrain_property_string(tid, name, option::none); state.m_dirty = true; }
-                    SameLine();
-                    match (InputText("##def", cur))
-                    {
-                        value(s)? { do ts_id->set_terrain_property_string(tid, name, option::value(s)); state.m_dirty = true; }
-                        none?;
-                    }
-                }
-            }
-        }
-        else if (ptype == property_type::VEC2 as int)
-        {
-            match (ts_id->get_terrain_property_vec2(tid, name))
-            {
-                none?
-                {
-                    if (Button("+")) { do ts_id->set_terrain_property_vec2(tid, name, option::value((0., 0.))); state.m_dirty = true; }
-                    SameLine();
-                    do Text(F"{name}（默认）");
-                }
-                value((ca, cb))?
-                {
-                    do Text(name);
-                    SameLine();
-                    if (Button("清除")) { do ts_id->set_terrain_property_vec2(tid, name, option::none); state.m_dirty = true; }
-                    SameLine();
-                    match (InputFloat2("##def", ca, cb))
-                    {
-                        value((a, b))? { do ts_id->set_terrain_property_vec2(tid, name, option::value((a, b))); state.m_dirty = true; }
-                        none?;
-                    }
-                }
-            }
-        }
-        else if (ptype == property_type::VEC3 as int)
-        {
-            match (ts_id->get_terrain_property_vec3(tid, name))
-            {
-                none?
-                {
-                    if (Button("+")) { do ts_id->set_terrain_property_vec3(tid, name, option::value((0., 0., 0.))); state.m_dirty = true; }
-                    SameLine();
-                    do Text(F"{name}（默认）");
-                }
-                value((ca, cb, cc))?
-                {
-                    do Text(name);
-                    SameLine();
-                    if (Button("清除")) { do ts_id->set_terrain_property_vec3(tid, name, option::none); state.m_dirty = true; }
-                    SameLine();
-                    match (InputFloat3("##def", ca, cb, cc))
-                    {
-                        value((a, b, c))? { do ts_id->set_terrain_property_vec3(tid, name, option::value((a, b, c))); state.m_dirty = true; }
-                        none?;
-                    }
-                }
-            }
-        }
-        else
-        {
-            match (ts_id->get_terrain_property_vec4(tid, name))
-            {
-                none?
-                {
-                    if (Button("+")) { do ts_id->set_terrain_property_vec4(tid, name, option::value((0., 0., 0., 0.))); state.m_dirty = true; }
-                    SameLine();
-                    do Text(F"{name}（默认）");
-                }
-                value((ca, cb, cc, cd))?
-                {
-                    do Text(name);
-                    SameLine();
-                    if (Button("清除")) { do ts_id->set_terrain_property_vec4(tid, name, option::none); state.m_dirty = true; }
-                    SameLine();
-                    match (InputFloat4("##def", ca, cb, cc, cd))
-                    {
-                        value((a, b, c, d))? { do ts_id->set_terrain_property_vec4(tid, name, option::value((a, b, c, d))); state.m_dirty = true; }
-                        none?;
-                    }
-                }
-            }
-        }
-        do PopID();
-    }
-
-    // 瓦片默认值一行：与地形版同款交互，读写瓦片默认值表
+    // 瓦片默认属性一行：无值时 + 按钮（类型零值），有值时控件 + 清除。
+    // 脏标记统一经 note_tileset_edit（地图模式同时登记图集待保存）
     func draw_tile_default_editor(state: EditorState, ts_id: tilemap::Tileset,
         tile_id: int, name: string, ptype: int)=> void
     {
@@ -1861,7 +1693,7 @@ namespace JEEditor::Editor::TilemapEditor
             {
                 none?
                 {
-                    if (Button("+")) { do ts_id->set_tile_property_bool(tile_id, name, option::value(false)); state.m_dirty = true; }
+                    if (Button("+")) { do ts_id->set_tile_property_bool(tile_id, name, option::value(false)); do note_tileset_edit(state, ts_id); }
                     SameLine();
                     do Text(F"{name}（默认）");
                 }
@@ -1869,11 +1701,11 @@ namespace JEEditor::Editor::TilemapEditor
                 {
                     do Text(name);
                     SameLine();
-                    if (Button("清除")) { do ts_id->set_tile_property_bool(tile_id, name, option::none); state.m_dirty = true; }
+                    if (Button("清除")) { do ts_id->set_tile_property_bool(tile_id, name, option::none); do note_tileset_edit(state, ts_id); }
                     SameLine();
                     match (CheckBox("##def", cur))
                     {
-                        value(b)? { do ts_id->set_tile_property_bool(tile_id, name, option::value(b)); state.m_dirty = true; }
+                        value(b)? { do ts_id->set_tile_property_bool(tile_id, name, option::value(b)); do note_tileset_edit(state, ts_id); }
                         none?;
                     }
                 }
@@ -1885,7 +1717,7 @@ namespace JEEditor::Editor::TilemapEditor
             {
                 none?
                 {
-                    if (Button("+")) { do ts_id->set_tile_property_int(tile_id, name, option::value(0)); state.m_dirty = true; }
+                    if (Button("+")) { do ts_id->set_tile_property_int(tile_id, name, option::value(0)); do note_tileset_edit(state, ts_id); }
                     SameLine();
                     do Text(F"{name}（默认）");
                 }
@@ -1893,11 +1725,11 @@ namespace JEEditor::Editor::TilemapEditor
                 {
                     do Text(name);
                     SameLine();
-                    if (Button("清除")) { do ts_id->set_tile_property_int(tile_id, name, option::none); state.m_dirty = true; }
+                    if (Button("清除")) { do ts_id->set_tile_property_int(tile_id, name, option::none); do note_tileset_edit(state, ts_id); }
                     SameLine();
                     match (InputInt("##def", cur))
                     {
-                        value(v)? { do ts_id->set_tile_property_int(tile_id, name, option::value(v)); state.m_dirty = true; }
+                        value(v)? { do ts_id->set_tile_property_int(tile_id, name, option::value(v)); do note_tileset_edit(state, ts_id); }
                         none?;
                     }
                 }
@@ -1909,7 +1741,7 @@ namespace JEEditor::Editor::TilemapEditor
             {
                 none?
                 {
-                    if (Button("+")) { do ts_id->set_tile_property_real(tile_id, name, option::value(0.)); state.m_dirty = true; }
+                    if (Button("+")) { do ts_id->set_tile_property_real(tile_id, name, option::value(0.)); do note_tileset_edit(state, ts_id); }
                     SameLine();
                     do Text(F"{name}（默认）");
                 }
@@ -1917,11 +1749,11 @@ namespace JEEditor::Editor::TilemapEditor
                 {
                     do Text(name);
                     SameLine();
-                    if (Button("清除")) { do ts_id->set_tile_property_real(tile_id, name, option::none); state.m_dirty = true; }
+                    if (Button("清除")) { do ts_id->set_tile_property_real(tile_id, name, option::none); do note_tileset_edit(state, ts_id); }
                     SameLine();
                     match (InputFloat("##def", cur))
                     {
-                        value(v)? { do ts_id->set_tile_property_real(tile_id, name, option::value(v)); state.m_dirty = true; }
+                        value(v)? { do ts_id->set_tile_property_real(tile_id, name, option::value(v)); do note_tileset_edit(state, ts_id); }
                         none?;
                     }
                 }
@@ -1933,7 +1765,7 @@ namespace JEEditor::Editor::TilemapEditor
             {
                 none?
                 {
-                    if (Button("+")) { do ts_id->set_tile_property_string(tile_id, name, option::value("")); state.m_dirty = true; }
+                    if (Button("+")) { do ts_id->set_tile_property_string(tile_id, name, option::value("")); do note_tileset_edit(state, ts_id); }
                     SameLine();
                     do Text(F"{name}（默认）");
                 }
@@ -1941,11 +1773,11 @@ namespace JEEditor::Editor::TilemapEditor
                 {
                     do Text(name);
                     SameLine();
-                    if (Button("清除")) { do ts_id->set_tile_property_string(tile_id, name, option::none); state.m_dirty = true; }
+                    if (Button("清除")) { do ts_id->set_tile_property_string(tile_id, name, option::none); do note_tileset_edit(state, ts_id); }
                     SameLine();
                     match (InputText("##def", cur))
                     {
-                        value(s)? { do ts_id->set_tile_property_string(tile_id, name, option::value(s)); state.m_dirty = true; }
+                        value(s)? { do ts_id->set_tile_property_string(tile_id, name, option::value(s)); do note_tileset_edit(state, ts_id); }
                         none?;
                     }
                 }
@@ -1957,7 +1789,7 @@ namespace JEEditor::Editor::TilemapEditor
             {
                 none?
                 {
-                    if (Button("+")) { do ts_id->set_tile_property_vec2(tile_id, name, option::value((0., 0.))); state.m_dirty = true; }
+                    if (Button("+")) { do ts_id->set_tile_property_vec2(tile_id, name, option::value((0., 0.))); do note_tileset_edit(state, ts_id); }
                     SameLine();
                     do Text(F"{name}（默认）");
                 }
@@ -1965,11 +1797,11 @@ namespace JEEditor::Editor::TilemapEditor
                 {
                     do Text(name);
                     SameLine();
-                    if (Button("清除")) { do ts_id->set_tile_property_vec2(tile_id, name, option::none); state.m_dirty = true; }
+                    if (Button("清除")) { do ts_id->set_tile_property_vec2(tile_id, name, option::none); do note_tileset_edit(state, ts_id); }
                     SameLine();
                     match (InputFloat2("##def", ca, cb))
                     {
-                        value((a, b))? { do ts_id->set_tile_property_vec2(tile_id, name, option::value((a, b))); state.m_dirty = true; }
+                        value((a, b))? { do ts_id->set_tile_property_vec2(tile_id, name, option::value((a, b))); do note_tileset_edit(state, ts_id); }
                         none?;
                     }
                 }
@@ -1981,7 +1813,7 @@ namespace JEEditor::Editor::TilemapEditor
             {
                 none?
                 {
-                    if (Button("+")) { do ts_id->set_tile_property_vec3(tile_id, name, option::value((0., 0., 0.))); state.m_dirty = true; }
+                    if (Button("+")) { do ts_id->set_tile_property_vec3(tile_id, name, option::value((0., 0., 0.))); do note_tileset_edit(state, ts_id); }
                     SameLine();
                     do Text(F"{name}（默认）");
                 }
@@ -1989,11 +1821,11 @@ namespace JEEditor::Editor::TilemapEditor
                 {
                     do Text(name);
                     SameLine();
-                    if (Button("清除")) { do ts_id->set_tile_property_vec3(tile_id, name, option::none); state.m_dirty = true; }
+                    if (Button("清除")) { do ts_id->set_tile_property_vec3(tile_id, name, option::none); do note_tileset_edit(state, ts_id); }
                     SameLine();
                     match (InputFloat3("##def", ca, cb, cc))
                     {
-                        value((a, b, c))? { do ts_id->set_tile_property_vec3(tile_id, name, option::value((a, b, c))); state.m_dirty = true; }
+                        value((a, b, c))? { do ts_id->set_tile_property_vec3(tile_id, name, option::value((a, b, c))); do note_tileset_edit(state, ts_id); }
                         none?;
                     }
                 }
@@ -2005,7 +1837,7 @@ namespace JEEditor::Editor::TilemapEditor
             {
                 none?
                 {
-                    if (Button("+")) { do ts_id->set_tile_property_vec4(tile_id, name, option::value((0., 0., 0., 0.))); state.m_dirty = true; }
+                    if (Button("+")) { do ts_id->set_tile_property_vec4(tile_id, name, option::value((0., 0., 0., 0.))); do note_tileset_edit(state, ts_id); }
                     SameLine();
                     do Text(F"{name}（默认）");
                 }
@@ -2013,11 +1845,11 @@ namespace JEEditor::Editor::TilemapEditor
                 {
                     do Text(name);
                     SameLine();
-                    if (Button("清除")) { do ts_id->set_tile_property_vec4(tile_id, name, option::none); state.m_dirty = true; }
+                    if (Button("清除")) { do ts_id->set_tile_property_vec4(tile_id, name, option::none); do note_tileset_edit(state, ts_id); }
                     SameLine();
                     match (InputFloat4("##def", ca, cb, cc, cd))
                     {
-                        value((a, b, c, d))? { do ts_id->set_tile_property_vec4(tile_id, name, option::value((a, b, c, d))); state.m_dirty = true; }
+                        value((a, b, c, d))? { do ts_id->set_tile_property_vec4(tile_id, name, option::value((a, b, c, d))); do note_tileset_edit(state, ts_id); }
                         none?;
                     }
                 }
