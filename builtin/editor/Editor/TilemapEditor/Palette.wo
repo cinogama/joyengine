@@ -1,6 +1,7 @@
 // 瓦片地图编辑器 —— 瓦片调色板。
 // 图集的每个源纹理格都是一块瓦片：左栏直接展示图集网格，点击即选中
-// 该格为画笔（无需注册）；"自动图块"视图列出自动拼接类型非普通的
+// 该格为画笔（无需注册）；按住左键拖动则框选 N×M 矩形，作为图章在
+// 画布上整块绘制。"自动图块"视图列出自动拼接类型非普通的
 // 瓦片（原来的"地形"），点击按自动拼接绘制。图集编辑器使用同一套
 // 网格视图，点选瓦片后在右侧编辑其通行性/属性/自动拼接类型。
 
@@ -107,7 +108,7 @@ namespace JEEditor::Editor::TilemapEditor
     // 图集源纹理网格格的引擎空间 UV，供 AddImageUV 使用：
     // 返回 (左, 下, 右, 上)；引擎 v 向上增长而图像行向下增长，
     // 故 v = 1 - 图像行分数
-    func atlas_cell_uv(tex: texture2d, tile_px: int, ix: int, iy: int)
+    public func atlas_cell_uv(tex: texture2d, tile_px: int, ix: int, iy: int)
         => (real, real, real, real)
     {
         let (tw, th) = tex->size();
@@ -199,6 +200,8 @@ namespace JEEditor::Editor::TilemapEditor
                     {
                         if (BeginTabItem(F"图集{i + 1}##ts{i}"))
                         {
+                            if (state.m_palette_tileset != i)
+                                do state->clear_stamp();
                             state.m_palette_tileset = i;
                             do EndTabItem();
                         }
@@ -268,6 +271,8 @@ namespace JEEditor::Editor::TilemapEditor
         {
             value(sel)?
             {
+                if (state.m_palette_source != sel)
+                    do state->clear_stamp();
                 state.m_palette_source = sel;
                 state.m_palette_cell = option::none;
                 state.m_palette_tile = 0;
@@ -354,6 +359,8 @@ namespace JEEditor::Editor::TilemapEditor
                 // 整张贴图缩放到面板宽度内（保持像素清晰由 NEAREST 采样保证）
                 let scale = math::min(1., avail[0] / tw as real);
                 do ImageSize(tex, tw as real * scale, th as real * scale);
+                // 悬停状态必须紧跟贴图项读取（后续绘制调用不产生 item）
+                let item_hovered = IsItemHovered();
 
                 let (rect_min, rect_max) = GetItemRect();
                 // 格子像素按显示贴图尺寸/网格数推导（层级贴图分辨率可与
@@ -364,9 +371,14 @@ namespace JEEditor::Editor::TilemapEditor
 
                 do draw_atlas_grid_lines(rect_min, rect_max, cell_px, xc, yc);
                 do draw_auto_tile_overlays(state, ts_id, rect_min, cell_px);
-                if (IsItemHovered())
-                    do handle_atlas_hover(state, ts_id, rect_min, cell_px, xc, yc,
-                        brush);
+                // 地图编辑器：点击选画笔、拖动框选图章；
+                // 图集编辑器：只做悬停提示与点击选中
+                if (brush)
+                    do handle_atlas_brush_interaction(state, ts_id, rect_min,
+                        cell_px, xc, yc, item_hovered);
+                else
+                    do handle_atlas_edit_interaction(state, ts_id, rect_min,
+                        cell_px, xc, yc, item_hovered);
                 do draw_atlas_selection(state, ts_id, rect_min, cell_px);
             }
         }
@@ -432,17 +444,11 @@ namespace JEEditor::Editor::TilemapEditor
         }
     }
 
-    // 悬停处理：整块感知（四象限块内任意格都高亮整块并提示），点击
-    // 选中该格的瓦片（地图编辑器同时设为画笔）
-    func handle_atlas_hover(state: EditorState, ts_id: tilemap::Tileset,
-        rect_min: (real, real), cell_px: real, xc: int, yc: int,
+    // 悬停提示与描边：整块感知（四象限块内任意格都高亮整块并提示）
+    func draw_atlas_hover_cell(state: EditorState, ts_id: tilemap::Tileset,
+        cx: int, cy: int, rect_min: (real, real), cell_px: real,
         brush: bool)=> void
     {
-        let mouse = GetMousePos();
-        let cx = ((mouse[0] - rect_min[0]) / cell_px) as int;
-        let cy = ((mouse[1] - rect_min[1]) / cell_px) as int;
-        if (cx < 0 || cy < 0 || cx >= xc || cy >= yc)
-            return;
         let dl = GetWindowDrawList();
 
         let tid = ts_id->tile_id_at(state.m_palette_source, cx, cy);
@@ -460,30 +466,157 @@ namespace JEEditor::Editor::TilemapEditor
                 (255, 255, 255, 220), 1.5);
             do SetTooltip(F"{shown} [{tile_kind_name(kind)}]"
                 + (wk != 0 ? "：可通行" | "：不可通行")
-                + (brush ? "，点击选为画笔" | "，点击编辑属性"));
-            if (IsItemClickedLeft())
-                do select_tile_brush(state, ts_id, state.m_palette_source,
-                    cx, cy, false);
+                + (brush ? "，点击选为画笔，拖动框选图章"
+                    | "，点击编辑属性"));
         }
     }
 
-    // 选中态描边：选中格（蓝框）；自动图块画笔选中时另画锚点块白框
+    // 图集格坐标夹取到网格内（框选拖动越界时按边界格继续）
+    func clamp_grid_cell(v: int, n: int)=> int
+    {
+        if (v < 0)
+            return 0;
+        if (v >= n)
+            return n - 1;
+        return v;
+    }
+
+    // 以锚点格与当前格（含两端）更新图章框选；矩形未变时不重建内容
+    func update_stamp_box(state: EditorState, ts_id: tilemap::Tileset,
+        ax: int, ay: int, bx: int, by: int)=> void
+    {
+        let left = math::min(ax, bx);
+        let top = math::min(ay, by);
+        let w = math::abs(ax - bx) + 1;
+        let h = math::abs(ay - by) + 1;
+        if (left == state.m_stamp_left && top == state.m_stamp_top
+            && w == state.m_stamp_w && h == state.m_stamp_h
+            && state.m_stamp_source == state.m_palette_source)
+            return;
+        do state->set_stamp_region(ts_id, state.m_palette_source,
+            left, top, w, h, brush_tileset_index(state));
+    }
+
+    // 地图调色板网格交互：点击选中单格画笔，按住拖动框选 N×M 图章。
+    // 框选期间鼠标移出网格也继续（按最近边界格夹取），松开提交，多格
+    // 时自动切到图章工具（单击保持原工具）。
+    func handle_atlas_brush_interaction(state: EditorState,
+        ts_id: tilemap::Tileset, rect_min: (real, real), cell_px: real,
+        xc: int, yc: int, item_hovered: bool)=> void
+    {
+        let mouse = GetMousePos();
+        let hx = ((mouse[0] - rect_min[0]) / cell_px) as int;
+        let hy = ((mouse[1] - rect_min[1]) / cell_px) as int;
+        let inside = hx >= 0 && hy >= 0 && hx < xc && hy < yc;
+
+        if (inside)
+            do draw_atlas_hover_cell(state, ts_id, hx, hy, rect_min, cell_px,
+                true);
+
+        if (item_hovered && inside
+            && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left))
+        {
+            // 按下：从该格开始框选（同时设为单格画笔）
+            state.m_stamp_anchor = option::value((hx, hy));
+            do state->set_stamp_region(ts_id, state.m_palette_source,
+                hx, hy, 1, 1, brush_tileset_index(state));
+            do select_tile_brush(state, ts_id, state.m_palette_source,
+                hx, hy, false);
+            return;
+        }
+
+        match (state.m_stamp_anchor)
+        {
+            value((ax, ay))?
+            {
+                if (IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left))
+                {
+                    do update_stamp_box(state, ts_id, ax, ay,
+                        clamp_grid_cell(hx, xc), clamp_grid_cell(hy, yc));
+                }
+                else if (IsMouseReleased(
+                    ImGuiMouseButton::ImGuiMouseButton_Left))
+                {
+                    do update_stamp_box(state, ts_id, ax, ay,
+                        clamp_grid_cell(hx, xc), clamp_grid_cell(hy, yc));
+                    state.m_stamp_anchor = option::none;
+                    if (state->stamp_is_block())
+                        state.m_tool = tool::STAMP;
+                }
+                else
+                {
+                    // 窗口失焦/输入被系统抢走时松开事件会丢失，
+                    // 放弃未完成的框选，避免下次点击沿用旧锚点
+                    state.m_stamp_anchor = option::none;
+                }
+            }
+            none?;
+        }
+    }
+
+    // 图集编辑器网格交互：悬停提示 + 点击选中当前编辑的瓦片
+    func handle_atlas_edit_interaction(state: EditorState,
+        ts_id: tilemap::Tileset, rect_min: (real, real), cell_px: real,
+        xc: int, yc: int, item_hovered: bool)=> void
+    {
+        let mouse = GetMousePos();
+        let cx = ((mouse[0] - rect_min[0]) / cell_px) as int;
+        let cy = ((mouse[1] - rect_min[1]) / cell_px) as int;
+        if (cx < 0 || cy < 0 || cx >= xc || cy >= yc)
+            return;
+        do draw_atlas_hover_cell(state, ts_id, cx, cy, rect_min, cell_px, false);
+        if (item_hovered
+            && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left))
+            do select_tile_brush(state, ts_id, state.m_palette_source,
+                cx, cy, false);
+    }
+
+    // 选中态描边：图章框选整块（蓝底+蓝框）或单格选中格（蓝框）；
+    // 自动图块画笔选中时另画锚点块白框
     func draw_atlas_selection(state: EditorState, ts_id: tilemap::Tileset,
         rect_min: (real, real), cell_px: real)=> void
     {
         let dl = GetWindowDrawList();
-        match (state.m_palette_cell)
+        // 图章框选优先于单格选中框（1×1 时两者重合）
+        let mut stamp_shown = false;
+        if (state->stamp_ready())
         {
-            value((sx, sy))?
+            match (state.m_stamp_ts)
             {
-                do dl->AddRect(
-                    (rect_min[0] + sx as real * cell_px,
-                     rect_min[1] + sy as real * cell_px),
-                    (rect_min[0] + (sx + 1) as real * cell_px,
-                     rect_min[1] + (sy + 1) as real * cell_px),
-                    (110, 200, 255, 255), 2.);
+                value(owner)?
+                {
+                    if (owner == ts_id
+                        && state.m_stamp_source == state.m_palette_source)
+                    {
+                        let x0 = rect_min[0] + state.m_stamp_left as real * cell_px;
+                        let y0 = rect_min[1] + state.m_stamp_top as real * cell_px;
+                        let x1 = x0 + state.m_stamp_w as real * cell_px;
+                        let y1 = y0 + state.m_stamp_h as real * cell_px;
+                        do dl->AddRectFilled((x0, y0), (x1, y1),
+                            (110, 200, 255, 40));
+                        do dl->AddRect((x0, y0), (x1, y1),
+                            (110, 200, 255, 255), 2.);
+                        stamp_shown = true;
+                    }
+                }
+                none?;
             }
-            none?;
+        }
+        if (!stamp_shown)
+        {
+            match (state.m_palette_cell)
+            {
+                value((sx, sy))?
+                {
+                    do dl->AddRect(
+                        (rect_min[0] + sx as real * cell_px,
+                         rect_min[1] + sy as real * cell_px),
+                        (rect_min[0] + (sx + 1) as real * cell_px,
+                         rect_min[1] + (sy + 1) as real * cell_px),
+                        (110, 200, 255, 255), 2.);
+                }
+                none?;
+            }
         }
         if (state.m_palette_auto && palette_tile_selected(state, ts_id))
         {

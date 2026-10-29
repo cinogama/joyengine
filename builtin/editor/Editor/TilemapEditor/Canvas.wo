@@ -14,6 +14,7 @@ import pkg::math;
 
 import DataModel;
 import EditorState;
+import Palette;
 import Tools;
 
 using std;
@@ -199,6 +200,17 @@ namespace JEEditor::Editor::TilemapEditor
             }
         }
 
+        // ---- 图章预览：在悬停格处半透明绘制整个 N×M 块 ----
+        if (state.m_tool == tool::STAMP && state->stamp_is_block())
+        {
+            match (hover_cell)
+            {
+                value(cell)?
+                    do draw_stamp_preview(state, cell, origin, cellpx);
+                none?;
+            }
+        }
+
         // ---- 悬停高亮与坐标 ----
         match (hover_cell)
         {
@@ -241,6 +253,67 @@ namespace JEEditor::Editor::TilemapEditor
                     if (up)
                         do handle_canvas_input(state, ctx, (0, 0), false, false, true);
                 }
+            }
+        }
+    }
+
+    // 图章预览：在悬停格处半透明绘制框选的 N×M 块（左上角对齐落笔点）。
+    // 图章按图集原格原样绘制，预览与落笔结果一致（不解析自动拼接）
+    func draw_stamp_preview(state: EditorState, cell: (int, int),
+        origin: (real, real), cellpx: real)=> void
+    {
+        match (state.m_stamp_ts)
+        {
+            none?;
+            value(ts)?
+            {
+                let (x0, y0) = cell;
+                let sw = state.m_stamp_w;
+                let sh = state.m_stamp_h;
+                let dl = GetWindowDrawList();
+                for (let mut dy = 0; dy < sh; dy += 1)
+                {
+                    for (let mut dx = 0; dx < sw; dx += 1)
+                    {
+                        match (tilemap::decode_value(
+                            state.m_stamp_values[dy * sw + dx]))
+                        {
+                            value((_, tid, _))?
+                            {
+                                let (src, ix, iy, _) = ts->tile_info(tid);
+                                if (src >= 0 && src < ts->source_count())
+                                {
+                                    let (tp, tpx, _, _) =
+                                        ts->source_info(src);
+                                    match (state->atlas_texture(tp))
+                                    {
+                                        value(tex)?
+                                        {
+                                            let (u0, v0, u1, v1) =
+                                                atlas_cell_uv(tex, tpx, ix, iy);
+                                            let px = origin[0]
+                                                + (x0 + dx) as real * cellpx;
+                                            let py = origin[1]
+                                                + (y0 + dy) as real * cellpx;
+                                            do dl->AddImageUV((px, py),
+                                                (px + cellpx, py + cellpx),
+                                                (u0, v0), (u1, v1), tex,
+                                                (255, 255, 255, 150));
+                                        }
+                                        none?;
+                                    }
+                                }
+                            }
+                            none?;
+                        }
+                    }
+                }
+                do dl->AddRect(
+                    (origin[0] + x0 as real * cellpx,
+                     origin[1] + y0 as real * cellpx),
+                    (origin[0] + (x0 + sw) as real * cellpx,
+                     origin[1] + (y0 + sh) as real * cellpx),
+                    (255, 190, 90, 230), 2.);
             }
         }
     }

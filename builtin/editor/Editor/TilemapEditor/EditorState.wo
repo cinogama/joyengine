@@ -1,7 +1,7 @@
 // 瓦片地图编辑器 —— 编辑期状态与撤销/重做。
 // 撤销采用命令模式（仿 Animation2D）：笔划级别的格子快照闭包。
 // 结构性操作（图层增删/移动、地图尺寸）不进入撤销栈，绘制类操作
-//（铅笔/矩形/填充/属性覆盖）均可撤销。
+//（铅笔/矩形/填充/图章/属性覆盖）均可撤销。
 
 import pkg::std;
 
@@ -29,6 +29,7 @@ namespace JEEditor::Editor::TilemapEditor
         RECT,       // 矩形：拖拽框选批量填充
         FILL,       // 填充：点击同值连通域
         EYEDROPPER, // 吸管：取格子值作为画笔
+        STAMP,      // 图章：把调色板框选的 N×M 图集格整块绘制
     }
     namespace tool
     {
@@ -44,6 +45,8 @@ namespace JEEditor::Editor::TilemapEditor
                 return "填充";
             if (self == tool::EYEDROPPER)
                 return "吸管";
+            if (self == tool::STAMP)
+                return "图章";
             return "?";
         }
     }
@@ -101,6 +104,22 @@ namespace JEEditor::Editor::TilemapEditor
         protected m_palette_auto: mut bool,      // 画笔按自动拼接类型绘制
         // 调色板视图模式：0 = 瓦片网格；1 = 自动图块列表（地图编辑器）
         protected m_palette_mode: mut int,
+
+        // ===== 图章（调色板内框选 N×M 图集格，一次整块绘制） =====
+        // 框选锚点（图集源纹理格坐标；none = 未在拖动框选中）
+        protected m_stamp_anchor: mut option<(int, int)>,
+        // 图章区域：左上角与尺寸（单位图集格；1×1 = 单格）
+        protected m_stamp_left: mut int,
+        protected m_stamp_top: mut int,
+        protected m_stamp_w: mut int,
+        protected m_stamp_h: mut int,
+        // 图章内容：行优先的编码瓦片值，长度恒 = 宽 × 高（空 = 未框选）
+        protected m_stamp_values: vec<int>,
+        // 图章所属图集文档与源纹理（预览用；切换页签/源后图章清空）
+        protected m_stamp_ts: mut option<tilemap::Tileset>,
+        protected m_stamp_source: mut int,
+        // 图章拖动画布时上一次落笔的格子（同一格不重复整块写入）
+        protected m_stamp_last: mut option<(int, int)>,
         // 地图编辑器内修改过的图集文档（保存地图时一并保存；保存用
         // 文档自身的当前路径，另存后也不会写错文件）
         protected m_tileset_dirty: vec<tilemap::Tileset>,
@@ -180,6 +199,15 @@ namespace JEEditor::Editor::TilemapEditor
                 m_palette_tile_ts = mut option::none,
                 m_palette_auto = mut false,
                 m_palette_mode = mut 0,
+                m_stamp_anchor = mut option::none,
+                m_stamp_left = mut 0,
+                m_stamp_top = mut 0,
+                m_stamp_w = mut 1,
+                m_stamp_h = mut 1,
+                m_stamp_values = []mut,
+                m_stamp_ts = mut option::none,
+                m_stamp_source = mut 0,
+                m_stamp_last = mut option::none,
                 m_tileset_dirty = []mut,
                 m_new_source_path = mut "",
                 m_new_source_tilepx = mut 32,
@@ -267,6 +295,60 @@ namespace JEEditor::Editor::TilemapEditor
                     return option::none;
                 }
             }
+        }
+
+        // ===== 图章（图集矩形框选） =====
+
+        // 清空图章框选（切换图集页签/源纹理或移除引用后失效）
+        public func clear_stamp(self: EditorState)=> void
+        {
+            self.m_stamp_anchor = option::none;
+            self.m_stamp_values->clear();
+            self.m_stamp_left = 0;
+            self.m_stamp_top = 0;
+            self.m_stamp_w = 1;
+            self.m_stamp_h = 1;
+            self.m_stamp_ts = option::none;
+            self.m_stamp_source = 0;
+            self.m_stamp_last = option::none;
+        }
+
+        // 以图集格矩形（(left,top) 起 w×h）重建图章内容。值按原样绘制
+        //（正值）：图章复制图集格的原始排布，不按自动拼接类型解析邻接，
+        // 需要自动拼接时请用「自动图块」视图的单格画笔。
+        public func set_stamp_region(self: EditorState,
+            ts_id: tilemap::Tileset, source: int,
+            left: int, top: int, w: int, h: int, tileset_index: int)=> void
+        {
+            self.m_stamp_left = left;
+            self.m_stamp_top = top;
+            self.m_stamp_w = w;
+            self.m_stamp_h = h;
+            self.m_stamp_values->clear();
+            for (let mut y = top; y < top + h; y += 1)
+            {
+                for (let mut x = left; x < left + w; x += 1)
+                {
+                    let tid = ts_id->tile_id_at(source, x, y);
+                    do self.m_stamp_values->add(
+                        tid > 0 ? tilemap::tile_value(tileset_index, tid) | 0);
+                }
+            }
+            self.m_stamp_ts = option::value(ts_id);
+            self.m_stamp_source = source;
+        }
+
+        // 图章内容是否可落笔（有框选且缓存长度与尺寸一致）
+        public func stamp_ready(self: EditorState)=> bool
+        {
+            return self.m_stamp_values->len > 0
+                && self.m_stamp_values->len == self.m_stamp_w * self.m_stamp_h;
+        }
+
+        // 是否为多格图章（1×1 与普通画笔等价，不显示预览与状态）
+        public func stamp_is_block(self: EditorState)=> bool
+        {
+            return self->stamp_ready() && self.m_stamp_w * self.m_stamp_h > 1;
         }
 
         // ===== 笔划（一次按下到抬起的连续编辑 -> 一条撤销命令） =====

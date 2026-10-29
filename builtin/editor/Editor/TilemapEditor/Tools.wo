@@ -1,6 +1,7 @@
 // 瓦片地图编辑器 —— 绘制工具。
-// 铅笔/橡皮/矩形/填充/吸管；除吸管外都经 EditorState 的笔划机制
-// 产生可撤销命令。自动图块无需特殊处理：网格只记录瓦片值（负值 = 自动拼接），
+// 铅笔/橡皮/矩形/填充/吸管/图章；除吸管外都经 EditorState 的笔划机制
+// 产生可撤销命令。图章把调色板框选的 N×M 图集格整块写入地图（按原样，
+// 不解析自动拼接）。自动图块无需特殊处理：网格只记录瓦片值（负值 = 自动拼接），
 // 邻接变体由引擎在渲染时解析（相邻笔划会即时改变已绘制格的形状）。
 
 import pkg::std;
@@ -75,6 +76,33 @@ namespace JEEditor::Editor::TilemapEditor
     func apply_pencil(state: EditorState, x: int, y: int)=> void
     {
         do state->touch_cell(x, y, paint_value(state));
+    }
+
+    // 图章：把框选的 N×M 块按原样写到地图，左上角对齐当前格；
+    // 伸出地图边界的格子跳过。内容在框选时已编码好（含图集下标），
+    // 落笔不再查询图集文档。
+    func apply_stamp(state: EditorState, ctx: TilemapContext,
+        x0: int, y0: int)=> void
+    {
+        if (!state->stamp_ready())
+            return;
+        let (mw, mh, _, _) = ctx.m_map->size();
+        let sw = state.m_stamp_w;
+        let sh = state.m_stamp_h;
+        for (let mut dy = 0; dy < sh; dy += 1)
+        {
+            let y = y0 + dy;
+            if (y < 0 || y >= mh)
+                continue;
+            for (let mut dx = 0; dx < sw; dx += 1)
+            {
+                let x = x0 + dx;
+                if (x < 0 || x >= mw)
+                    continue;
+                do state->touch_cell(x, y,
+                    state.m_stamp_values[dy * sw + dx]);
+            }
+        }
     }
 
     // 矩形：在锚点与当前格之间填充
@@ -200,17 +228,49 @@ namespace JEEditor::Editor::TilemapEditor
             return;
         }
 
-        // 铅笔/橡皮：按下开笔划，拖动续写，抬起提交
+        // 铅笔/橡皮/图章：按下开笔划，拖动续写，抬起提交。
+        // 图章未框选（或已因切换图集页签/源而失效）时退化为单格画笔
+        let use_stamp = state.m_tool == tool::STAMP && state->stamp_ready();
         if (down)
         {
             do state->begin_stroke(state.m_layer, tool::name(state.m_tool));
-            do apply_pencil(state, x, y);
+            if (use_stamp)
+            {
+                do apply_stamp(state, ctx, x, y);
+                state.m_stamp_last = option::value((x, y));
+            }
+            else
+                do apply_pencil(state, x, y);
         }
         else if (drag)
         {
-            do apply_pencil(state, x, y);
+            if (use_stamp)
+            {
+                // 同一格不重复整块写入（触摸快照按格去重，重复写只是浪费）
+                match (state.m_stamp_last)
+                {
+                    value((lx, ly))?
+                    {
+                        if (lx != x || ly != y)
+                        {
+                            do apply_stamp(state, ctx, x, y);
+                            state.m_stamp_last = option::value((x, y));
+                        }
+                    }
+                    none?
+                    {
+                        do apply_stamp(state, ctx, x, y);
+                        state.m_stamp_last = option::value((x, y));
+                    }
+                }
+            }
+            else
+                do apply_pencil(state, x, y);
         }
         if (up)
+        {
             do state->end_stroke();
+            state.m_stamp_last = option::none;
+        }
     }
 }
