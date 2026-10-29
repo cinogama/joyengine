@@ -334,7 +334,9 @@ namespace JEEditor::Editor::TilemapEditor
 
     // 某源纹理网格视图（贴图 + 网格线 + 自动图块标记 + 交互选中）。
     // brush = true（地图编辑器）时点击即选为画笔；false（图集编辑器）
-    // 时只选为"当前编辑的瓦片"，由右侧面板编辑其属性。
+    // 时选为"当前编辑的瓦片"。两种模式都支持按住拖动框选矩形：
+    // 地图编辑器里框选即多格画笔块，图集编辑器里框选用于批量编辑
+    // 瓦片属性（见 PropertyPanel 的 selected_tile_ids）。
     public func draw_tile_grid(state: EditorState, ts_id: tilemap::Tileset,
         brush: bool)=> void
     {
@@ -480,7 +482,7 @@ namespace JEEditor::Editor::TilemapEditor
             do SetTooltip(F"{shown} [{tile_kind_name(kind)}]"
                 + (wk != 0 ? "：可通行" | "：不可通行")
                 + (brush ? "，点击选为画笔，拖动框选多格画笔"
-                    | "，点击编辑属性"));
+                    | "，点击编辑属性，拖动框选批量编辑"));
         }
     }
 
@@ -568,21 +570,53 @@ namespace JEEditor::Editor::TilemapEditor
         }
     }
 
-    // 图集编辑器网格交互：悬停提示 + 点击选中当前编辑的瓦片
+    // 图集编辑器网格交互：点击选中当前编辑的瓦片，拖动框选矩形用于
+    // 批量编辑属性（复用画笔块的框选状态与描边；两个编辑器窗口各持
+    // 独立的 EditorState，互不影响）。
     func handle_atlas_edit_interaction(state: EditorState,
         ts_id: tilemap::Tileset, rect_min: (real, real), cell_px: real,
         xc: int, yc: int, item_hovered: bool)=> void
     {
         let mouse = GetMousePos();
-        let cx = ((mouse[0] - rect_min[0]) / cell_px) as int;
-        let cy = ((mouse[1] - rect_min[1]) / cell_px) as int;
-        if (cx < 0 || cy < 0 || cx >= xc || cy >= yc)
-            return;
-        do draw_atlas_hover_cell(state, ts_id, cx, cy, rect_min, cell_px, false);
-        if (item_hovered
+        let hx = ((mouse[0] - rect_min[0]) / cell_px) as int;
+        let hy = ((mouse[1] - rect_min[1]) / cell_px) as int;
+        let inside = hx >= 0 && hy >= 0 && hx < xc && hy < yc;
+
+        if (inside)
+            do draw_atlas_hover_cell(state, ts_id, hx, hy, rect_min, cell_px,
+                false);
+
+        if (item_hovered && inside
             && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left))
+        {
+            // 按下：从该格开始框选，同时设为当前编辑的瓦片（锚点）
+            state.m_stamp_anchor = option::value((hx, hy));
+            do state->set_stamp_region(ts_id, state.m_palette_source,
+                hx, hy, 1, 1, brush_tileset_index(state));
             do select_tile_brush(state, ts_id, state.m_palette_source,
-                cx, cy, false);
+                hx, hy, false);
+            return;
+        }
+
+        match (state.m_stamp_anchor)
+        {
+            value((ax, ay))?
+            {
+                if (IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left))
+                    do update_stamp_box(state, ts_id, ax, ay,
+                        clamp_grid_cell(hx, xc), clamp_grid_cell(hy, yc));
+                else if (IsMouseReleased(
+                    ImGuiMouseButton::ImGuiMouseButton_Left))
+                {
+                    do update_stamp_box(state, ts_id, ax, ay,
+                        clamp_grid_cell(hx, xc), clamp_grid_cell(hy, yc));
+                    state.m_stamp_anchor = option::none;
+                }
+                else
+                    state.m_stamp_anchor = option::none;
+            }
+            none?;
+        }
     }
 
     // 选中态描边：画笔框选整块（蓝底+蓝框）或单格选中格（蓝框）；

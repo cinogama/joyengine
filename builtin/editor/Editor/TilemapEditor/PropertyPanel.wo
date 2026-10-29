@@ -1,11 +1,13 @@
 // 瓦片地图编辑器 —— 属性面板。
 // 地图编辑器的页签：
 //   格子属性：悬停格子的属性取值链展示与逐格覆盖编辑；
-//   瓦片：选中瓦片的名称/通行性/法线/自动拼接类型/默认属性（写回图集文档）；
+//   瓦片：选中瓦片的名称/通行性/法线/自动拼接类型/默认属性（写回图集
+//     文档；调色板框选多格时通行性/法线/自动拼接/默认属性批量应用）；
 //   图层样式：活动图层的专属着色器、附加纹理通道与 uniform 变量；
 //   图集设置：地图的图集引用管理。
 // 图集编辑器的页签：
-//   瓦片：选中瓦片的名称/通行性/法线/自动拼接类型/默认属性；
+//   瓦片：选中瓦片的名称/通行性/法线/自动拼接类型/默认属性（同上，
+//     调色板拖动框选可批量设置）；
 //   图集设置：图集名称、源纹理（含附加层级）与属性 schema。
 
 import pkg::std;
@@ -852,22 +854,199 @@ namespace JEEditor::Editor::TilemapEditor
             do state->mark_tileset_dirty(ts_id);
     }
 
+    // ===== 批量设置瓦片属性 =====
+    // 瓦片面板里的通行性/法线/自动拼接/默认属性对当前框选内的全部瓦片
+    // 生效（图集编辑器里拖动框选，地图编辑器里即画笔块；无框选时退化为
+    // 单块）。名称只写锚点瓦片——批量重名没有意义。
+    //
+    // 框选内的瓦片 id（行优先）；框选不属于该图集/当前源时退化为空，
+    // 由调用方回落到 m_palette_tile。
+    func selected_tile_ids(state: EditorState, ts_id: tilemap::Tileset)
+        => vec<int>
+    {
+        let mut ids = []mut: vec<int>;
+        if (state->stamp_ready())
+        {
+            match (state.m_stamp_ts)
+            {
+                value(owner)?
+                {
+                    if (owner == ts_id
+                        && state.m_stamp_source == state.m_palette_source)
+                    {
+                        for (let mut y = state.m_stamp_top;
+                            y < state.m_stamp_top + state.m_stamp_h; y += 1)
+                        {
+                            for (let mut x = state.m_stamp_left;
+                                x < state.m_stamp_left + state.m_stamp_w; x += 1)
+                            {
+                                let tid = ts_id->tile_id_at(
+                                    state.m_stamp_source, x, y);
+                                if (tid > 0)
+                                    do ids->add(tid);
+                            }
+                        }
+                    }
+                }
+                none?;
+            }
+        }
+        if (ids->len == 0 && state.m_palette_tile > 0)
+            do ids->add(state.m_palette_tile);
+        return ids;
+    }
+
+    func batch_set_walkable(state: EditorState, ts_id: tilemap::Tileset,
+        ids: vec<int>, walkable: bool)=> void
+    {
+        for (let tid : ids)
+            do ts_id->set_tile_walkable(tid, walkable ? 1 | 0);
+        do note_tileset_edit(state, ts_id);
+    }
+    func batch_set_kind(state: EditorState, ts_id: tilemap::Tileset,
+        ids: vec<int>, kind: int)=> void
+    {
+        let mut any = false;
+        for (let tid : ids)
+            if (ts_id->set_tile_kind(tid, kind))
+                any = true;
+        if (any)
+            do note_tileset_edit(state, ts_id);
+    }
+    func batch_set_normal(state: EditorState, ts_id: tilemap::Tileset,
+        ids: vec<int>, x: real, y: real, z: real)=> void
+    {
+        let mut any = false;
+        for (let tid : ids)
+            if (ts_id->set_tile_normal(tid, x, y, z))
+                any = true;
+        if (any)
+            do note_tileset_edit(state, ts_id);
+    }
+    // 把框选内每块倾斜法线的 z 分量翻到指定半球（保留各块的方位）；
+    // 与屏幕平行的法线保持不变，半球由后续编辑/预设决定
+    func batch_flip_normal(state: EditorState, ts_id: tilemap::Tileset,
+        ids: vec<int>, back: bool)=> void
+    {
+        let mut any = false;
+        for (let tid : ids)
+        {
+            let (x, y, z) = ts_id->tile_normal(tid);
+            if (mathf::abs(z) > 0.001)
+            {
+                let want = back ? mathf::abs(z) | -mathf::abs(z);
+                if (want != z)
+                {
+                    do ts_id->set_tile_normal(tid, x, y, want);
+                    any = true;
+                }
+            }
+        }
+        if (any)
+            do note_tileset_edit(state, ts_id);
+    }
+    func batch_set_prop_bool(state: EditorState, ts_id: tilemap::Tileset,
+        ids: vec<int>, name: string, value: option<bool>)=> void
+    {
+        for (let tid : ids)
+            do ts_id->set_tile_property_bool(tid, name, value);
+        do note_tileset_edit(state, ts_id);
+    }
+    func batch_set_prop_int(state: EditorState, ts_id: tilemap::Tileset,
+        ids: vec<int>, name: string, value: option<int>)=> void
+    {
+        for (let tid : ids)
+            do ts_id->set_tile_property_int(tid, name, value);
+        do note_tileset_edit(state, ts_id);
+    }
+    func batch_set_prop_real(state: EditorState, ts_id: tilemap::Tileset,
+        ids: vec<int>, name: string, value: option<real>)=> void
+    {
+        for (let tid : ids)
+            do ts_id->set_tile_property_real(tid, name, value);
+        do note_tileset_edit(state, ts_id);
+    }
+    func batch_set_prop_string(state: EditorState, ts_id: tilemap::Tileset,
+        ids: vec<int>, name: string, value: option<string>)=> void
+    {
+        for (let tid : ids)
+            do ts_id->set_tile_property_string(tid, name, value);
+        do note_tileset_edit(state, ts_id);
+    }
+    func batch_set_prop_vec2(state: EditorState, ts_id: tilemap::Tileset,
+        ids: vec<int>, name: string, value: option<(real, real)>)=> void
+    {
+        for (let tid : ids)
+            do ts_id->set_tile_property_vec2(tid, name, value);
+        do note_tileset_edit(state, ts_id);
+    }
+    func batch_set_prop_vec3(state: EditorState, ts_id: tilemap::Tileset,
+        ids: vec<int>, name: string, value: option<(real, real, real)>)=> void
+    {
+        for (let tid : ids)
+            do ts_id->set_tile_property_vec3(tid, name, value);
+        do note_tileset_edit(state, ts_id);
+    }
+    func batch_set_prop_vec4(state: EditorState, ts_id: tilemap::Tileset,
+        ids: vec<int>, name: string,
+        value: option<(real, real, real, real)>)=> void
+    {
+        for (let tid : ids)
+            do ts_id->set_tile_property_vec4(tid, name, value);
+        do note_tileset_edit(state, ts_id);
+    }
+
     // ---- 瓦片法线编辑 ----
-    // 法线半球盘：盘心 = 屏幕外 (0,0,-1)，盘缘 = 与屏幕平面平行（nz = 0）。
-    // 按住拖动时鼠标位置直接映射为法线：角度 = 屏幕平面内的方位，半径 =
-    // 偏离屏幕法线的倾斜量（拖出盘外按盘缘夹取）。盘面同时作为预览：高光
-    // 按法线的屏幕投影偏移，做出受该方向光照的球面观感；方向手柄指出
-    // 方位。返回被改动的单位法线（未改动返回 none）。
+    // 编辑模式跨瓦片选择保留：tilt45 = 预设倾斜档位（45° / 与屏幕平行
+    // 90°）；s_normal_back 是法线与屏幕平行（nz≈0）时默认使用的半球，
+    // 法线明显倾斜时半球由法线自身的 z 符号决定。
+    let mut s_normal_back = false;
+    let mut s_normal_tilt45 = true;
+    // 方向盘拖拽锁存的半球：按下瞬间决定，拖拽期间不随法线符号变化
+    //（否则拖到盘缘 nz = 0 后半球判定可能来回切换，法线来回跳变）
+    let mut s_dial_held = false;
+    let mut s_dial_held_back = false;
+
+    // 法线模式切换按钮（当前档位高亮）
+    func normal_mode_button(label: string, active: bool, w: real)=> bool
+    {
+        if (active)
+            do PushStyleColor(ImGuiCol::ImGuiCol_Button,
+                mixStyleColor(GetStyleColor(ImGuiCol::ImGuiCol_Text),
+                    (0.42, 0.62, 0.95, 1.), 0.55, 255));
+        let pressed = ButtonSize(label, (w, 22.));
+        if (active)
+            do PopStyleColor(1);
+        return pressed;
+    }
+
+    // 法线半球盘：盘心 = 屏幕外侧 (0,0,-1)，盘缘 = 与屏幕平面平行
+    // （nz = 0）。按住拖动时鼠标位置直接映射为法线：角度 = 屏幕平面内的
+    // 方位，半径 = 偏离屏幕法线的倾斜量（拖出盘外按盘缘夹取）。back 为
+    // true 时盘心变为屏幕内侧 (0,0,1)，用于编辑背向法线。盘面同时作为
+    // 预览：高光按法线的屏幕投影偏移，做出受该方向光照的球面观感；
+    // 方位手柄指出方位（背向时改用琥珀色）。返回被改动的单位法线。
     func draw_normal_dial(label: string, nx: real, ny: real, nz: real,
-        side: real)=> option<(real, real, real)>
+        back: bool, side: real)=> option<(real, real, real)>
     {
         let pos = GetCursorScreenPos();
         let half = side * 0.5;
         let center = (pos[0] + half, pos[1] + half);
         let pressed = InvisibleButton(label, (side, side));
+        let active = IsItemActive();
+        if (active && !s_dial_held)
+        {
+            s_dial_held = true;
+            s_dial_held_back = back;
+        }
+        let use_back = active
+            ? s_dial_held_back
+            | (pressed ? s_dial_held_back | back);
+        if (!active)
+            s_dial_held = false;
 
         let mut result = option::none: option<(real, real, real)>;
-        if (pressed || IsItemActive())
+        if (pressed || active)
         {
             let (mx, my) = GetMousePos();
             let mut dx = (mx - center[0]) / half;
@@ -887,7 +1066,9 @@ namespace JEEditor::Editor::TilemapEditor
             }
             let mut rest = 1. - dx * dx - dy * dy;
             if (rest < 0.) rest = 0.;
-            let nz_new = -mathf::sqrt(rest);
+            let nz_new = use_back
+                ? mathf::sqrt(rest)
+                | -mathf::sqrt(rest);
             if (dx != nx || dy != ny || nz_new != nz)
                 result = option::value((dx, dy, nz_new));
         }
@@ -897,12 +1078,14 @@ namespace JEEditor::Editor::TilemapEditor
         let radius = half - 1.;
         let text_c = GetStyleColor(ImGuiCol::ImGuiCol_Text);
         let frame_c = GetStyleColor(ImGuiCol::ImGuiCol_FrameBg);
-        let hot = pressed || IsItemActive() || IsItemHovered();
+        let hot = pressed || active || IsItemHovered();
+        // 背向（指向屏幕内）时手柄/盘缘改用琥珀色，与正面蓝盘区分
+        let accent_f = use_back ? (1., 0.72, 0.35, 1.) | (0.42, 0.62, 0.95, 1.);
         // 悬停/拖拽时盘缘染强调色，提示此盘可拖动
-        let ring_c = mixStyleColor(text_c, (0.42, 0.62, 0.95, 1.),
+        let ring_c = mixStyleColor(text_c, accent_f,
             hot ? 0.7 | 0., hot ? 190 | 82);
         let cross_c = mixStyleColor(text_c, text_c, 0., 30);
-        let accent_c = mixStyleColor(text_c, (0.42, 0.62, 0.95, 1.), 0.7, 255);
+        let accent_c = mixStyleColor(text_c, accent_f, 0.7, 255);
         let bright_c = mixStyleColor(frame_c, text_c, 0.85, 255);
 
         // 由暗到亮、沿法线屏幕投影偏移的一串同心圆 = 受该方向光照的球面
@@ -961,8 +1144,8 @@ namespace JEEditor::Editor::TilemapEditor
         if (polar < 0.) polar = 0.;
         if (polar > 1.) polar = 1.;
         let tilt = (mathf::acos(polar) * mathf::RAD2DEG) as int;
-        // 方向盘只覆盖朝向摄像机的半球；背向（nz > 0，仅数值输入可达）
-        // 单独说明，避免与盘心（屏幕外）混淆
+        // 正面/背面半球都可能出现；背向（nz > 0）单独说明，避免与
+        // 盘心（屏幕外）混淆
         return nz > 0.02
             ? F"{sector}，背向倾斜 {tilt}°"
             | F"{sector}，倾斜 {tilt}°";
@@ -994,14 +1177,26 @@ namespace JEEditor::Editor::TilemapEditor
 
                 let name = ts_id->tile_name(tid);
                 let kind = ts_id->tile_kind(tid);
+                // 批量编辑范围：调色板框选（无框选即单块）
+                let ids = selected_tile_ids(state, ts_id);
+                let batch = ids->len > 1;
+
                 do Text(F"瓦片 #{tid}（源 {src + 1}，格 {ix},{iy}）");
                 if (state.m_tileset_only->is_none)
                     do TextDisabled("瓦片的通行性/属性属于图集文档；保存地图时会一并保存引用图集");
                 else
                     do TextDisabled("瓦片的通行性/属性属于本图集文档，保存图集（Ctrl+S）写回");
+                if (batch)
+                {
+                    do TextColored((255, 196, 96, 255),
+                        F"批量编辑：框选 {ids->len} 块瓦片");
+                    do TextDisabled("通行性/法线/自动拼接/默认属性应用到全部；名称只改锚点");
+                }
                 do Separator();
 
-                match (InputText("名称##tile_name", name))
+                match (InputText(batch
+                        ? "名称（仅锚点）##tile_name"
+                        | "名称##tile_name", name))
                 {
                     value(s)?
                     {
@@ -1012,16 +1207,17 @@ namespace JEEditor::Editor::TilemapEditor
                 }
                 match (CheckBox("可通行##tile_walk", walkable != 0))
                 {
-                    value(b)?
-                    {
-                        do ts_id->set_tile_walkable(tid, b ? 1 | 0);
-                        do note_tileset_edit(state, ts_id);
-                    }
+                    value(b)? do batch_set_walkable(state, ts_id, ids, b);
                     none?;
                 }
 
                 do SeparatorText("法线");
                 let (nx, ny, nz) = ts_id->tile_normal(tid);
+
+                // 半球跟随当前法线；法线与屏幕平行（nz≈0）时沿用上次选择
+                let mut back = s_normal_back;
+                if (mathf::abs(nz) > 0.001)
+                    back = nz > 0.;
 
                 // 旋转手柄 + 球面预览：按住盘面拖动即旋转法线
                 let avail_w = GetContentRegionAvail()[0];
@@ -1029,13 +1225,11 @@ namespace JEEditor::Editor::TilemapEditor
                 let dial_pos = GetCursorScreenPos();
                 do SetCursorScreenPos(
                     (dial_pos[0] + (avail_w - dial) * 0.5, dial_pos[1]));
-                match (draw_normal_dial("##tile_normal_dial", nx, ny, nz, dial))
+                match (draw_normal_dial("##tile_normal_dial", nx, ny, nz,
+                        back, dial))
                 {
                     value(n)?
-                    {
-                        if (ts_id->set_tile_normal(tid, n.0, n.1, n.2))
-                            do note_tileset_edit(state, ts_id);
-                    }
+                        do batch_set_normal(state, ts_id, ids, n.0, n.1, n.2);
                     none?;
                 }
                 let caption = normal_direction_label(nx, ny, nz);
@@ -1047,20 +1241,59 @@ namespace JEEditor::Editor::TilemapEditor
                 do TextDisabled(caption);
                 do PushTextWrapPos(0.);
                 do TextDisabled("拖动圆盘旋转：圆心 = 屏幕外，盘缘 = 与屏幕平行。");
+                do TextDisabled("正面/背面切换法线所在半球；预设可选 45° 或 90° 倾斜。");
                 do TextDisabled("法线参与网格顶点生成；自动拼接格整格共享锚点瓦片的法线。");
                 do PopTextWrapPos();
 
-                // 常用方向预设：3×3 方位盘（中心正对摄像机，四周为屏幕平面内）
+                // 半球与预设倾斜档位：正面/背面 × 45°/90°
+                let bw4 = (GetContentRegionAvail()[0] - 24.) / 4.;
+                if (normal_mode_button("正面##tnrm_front", !back, bw4))
+                {
+                    s_normal_back = false;
+                    do batch_flip_normal(state, ts_id, ids, false);
+                }
+                do SameLine();
+                if (normal_mode_button("背面##tnrm_back", back, bw4))
+                {
+                    s_normal_back = true;
+                    do batch_flip_normal(state, ts_id, ids, true);
+                }
+                do SameLine();
+                if (normal_mode_button("45°##tnrm_t45", s_normal_tilt45, bw4))
+                    s_normal_tilt45 = true;
+                do SameLine();
+                if (normal_mode_button("90°##tnrm_t90", !s_normal_tilt45, bw4))
+                    s_normal_tilt45 = false;
+
+                // 常用方向预设：3×3 方位盘，倾斜量取上面的档位；
+                // 中心 = 正对摄像机（背面模式下为屏幕内）
+                let sin_t = s_normal_tilt45 ? 0.70710678 | 1.;
+                let cos_t = s_normal_tilt45 ? 0.70710678 | 0.;
+                let hemi = back ? 1. | -1.;
+                let pad_labels = ["左上", "上", "右上", "左", "屏幕外", "右",
+                    "左下", "下", "右下"];
                 let mut presets = []mut: vec<(string, real, real, real)>;
-                do presets->add(("左上##tnrm_ul", -0.70710678, 0.70710678, 0.));
-                do presets->add(("上##tnrm_u", 0., 1., 0.));
-                do presets->add(("右上##tnrm_ur", 0.70710678, 0.70710678, 0.));
-                do presets->add(("左##tnrm_l", -1., 0., 0.));
-                do presets->add(("屏幕外##tnrm_c", 0., 0., -1.));
-                do presets->add(("右##tnrm_r", 1., 0., 0.));
-                do presets->add(("左下##tnrm_dl", -0.70710678, -0.70710678, 0.));
-                do presets->add(("下##tnrm_d", 0., -1., 0.));
-                do presets->add(("右下##tnrm_dr", 0.70710678, -0.70710678, 0.));
+                for (let mut i = 0; i < 9; i += 1)
+                {
+                    let col = i % 3;
+                    let row = i / 3;
+                    let ux = (col - 1) as real;
+                    let uy = (1 - row) as real;
+                    let ulen = mathf::sqrt(ux * ux + uy * uy);
+                    let mut px = 0.;
+                    let mut py = 0.;
+                    let mut pz = hemi;
+                    if (ulen > 0.)
+                    {
+                        px = ux / ulen * sin_t;
+                        py = uy / ulen * sin_t;
+                        pz = hemi * cos_t;
+                    }
+                    let shown = i == 4
+                        ? (back ? "屏幕内" | "屏幕外")
+                        | pad_labels[i];
+                    do presets->add((F"{shown}##tnrm_{i}", px, py, pz));
+                }
 
                 let bw = (GetContentRegionAvail()[0] - 16.) / 3.;
                 let bh = 24.;
@@ -1077,10 +1310,7 @@ namespace JEEditor::Editor::TilemapEditor
                             mixStyleColor(GetStyleColor(ImGuiCol::ImGuiCol_Text),
                                 (0.42, 0.62, 0.95, 1.), 0.55, 255));
                     if (ButtonSize(label, (bw, bh)))
-                    {
-                        if (ts_id->set_tile_normal(tid, px, py, pz))
-                            do note_tileset_edit(state, ts_id);
-                    }
+                        do batch_set_normal(state, ts_id, ids, px, py, pz);
                     if (current)
                         do PopStyleColor(1);
                 }
@@ -1089,10 +1319,7 @@ namespace JEEditor::Editor::TilemapEditor
                 match (InputFloat3("##tile_normal", nx, ny, nz))
                 {
                     value(n)?
-                    {
-                        if (ts_id->set_tile_normal(tid, n.0, n.1, n.2))
-                            do note_tileset_edit(state, ts_id);
-                    }
+                        do batch_set_normal(state, ts_id, ids, n.0, n.1, n.2);
                     none?;
                 }
 
@@ -1100,11 +1327,7 @@ namespace JEEditor::Editor::TilemapEditor
                 let kinds = ["普通瓦片", "四象限(XP条带)", "blob47", "四象限(VX 2x3块)"];
                 match (ListBoxSelect("##tile_kind_edit", kinds, kind))
                 {
-                    value(k)?
-                    {
-                        if (ts_id->set_tile_kind(tid, k))
-                            do note_tileset_edit(state, ts_id);
-                    }
+                    value(k)? do batch_set_kind(state, ts_id, ids, k);
                     none?;
                 }
                 if (kind == tilemap::tile_kind::PLAIN as int)
@@ -1139,7 +1362,7 @@ namespace JEEditor::Editor::TilemapEditor
                     for (let mut i = 0; i < pcount; i += 1)
                     {
                         let (pname, ptype) = ts_id->property_info(i);
-                        do draw_tile_default_editor(state, ts_id, tid, pname, ptype);
+                        do draw_tile_default_editor(state, ts_id, ids, tid, pname, ptype);
                     }
                 }
                 else
@@ -1878,9 +2101,10 @@ namespace JEEditor::Editor::TilemapEditor
     }
 
     // 瓦片默认属性一行：无值时 + 按钮（类型零值），有值时控件 + 清除。
-    // 脏标记统一经 note_tileset_edit（地图模式同时登记图集待保存）
+    // 显示值读自锚点瓦片；写入对框选内的全部瓦片生效。脏标记统一经
+    // note_tileset_edit（地图模式同时登记图集待保存）
     func draw_tile_default_editor(state: EditorState, ts_id: tilemap::Tileset,
-        tile_id: int, name: string, ptype: int)=> void
+        ids: vec<int>, tile_id: int, name: string, ptype: int)=> void
     {
         do PushIDStr(name);
         if (ptype == property_type::BOOL as int)
@@ -1889,7 +2113,8 @@ namespace JEEditor::Editor::TilemapEditor
             {
                 none?
                 {
-                    if (Button("+")) { do ts_id->set_tile_property_bool(tile_id, name, option::value(false)); do note_tileset_edit(state, ts_id); }
+                    if (Button("+"))
+                        do batch_set_prop_bool(state, ts_id, ids, name, option::value(false));
                     SameLine();
                     do Text(F"{name}（默认）");
                 }
@@ -1897,11 +2122,12 @@ namespace JEEditor::Editor::TilemapEditor
                 {
                     do Text(name);
                     SameLine();
-                    if (Button("清除")) { do ts_id->set_tile_property_bool(tile_id, name, option::none); do note_tileset_edit(state, ts_id); }
+                    if (Button("清除"))
+                        do batch_set_prop_bool(state, ts_id, ids, name, option::none);
                     SameLine();
                     match (CheckBox("##def", cur))
                     {
-                        value(b)? { do ts_id->set_tile_property_bool(tile_id, name, option::value(b)); do note_tileset_edit(state, ts_id); }
+                        value(b)? do batch_set_prop_bool(state, ts_id, ids, name, option::value(b));
                         none?;
                     }
                 }
@@ -1913,7 +2139,8 @@ namespace JEEditor::Editor::TilemapEditor
             {
                 none?
                 {
-                    if (Button("+")) { do ts_id->set_tile_property_int(tile_id, name, option::value(0)); do note_tileset_edit(state, ts_id); }
+                    if (Button("+"))
+                        do batch_set_prop_int(state, ts_id, ids, name, option::value(0));
                     SameLine();
                     do Text(F"{name}（默认）");
                 }
@@ -1921,11 +2148,12 @@ namespace JEEditor::Editor::TilemapEditor
                 {
                     do Text(name);
                     SameLine();
-                    if (Button("清除")) { do ts_id->set_tile_property_int(tile_id, name, option::none); do note_tileset_edit(state, ts_id); }
+                    if (Button("清除"))
+                        do batch_set_prop_int(state, ts_id, ids, name, option::none);
                     SameLine();
                     match (InputInt("##def", cur))
                     {
-                        value(v)? { do ts_id->set_tile_property_int(tile_id, name, option::value(v)); do note_tileset_edit(state, ts_id); }
+                        value(v)? do batch_set_prop_int(state, ts_id, ids, name, option::value(v));
                         none?;
                     }
                 }
@@ -1937,7 +2165,8 @@ namespace JEEditor::Editor::TilemapEditor
             {
                 none?
                 {
-                    if (Button("+")) { do ts_id->set_tile_property_real(tile_id, name, option::value(0.)); do note_tileset_edit(state, ts_id); }
+                    if (Button("+"))
+                        do batch_set_prop_real(state, ts_id, ids, name, option::value(0.));
                     SameLine();
                     do Text(F"{name}（默认）");
                 }
@@ -1945,11 +2174,12 @@ namespace JEEditor::Editor::TilemapEditor
                 {
                     do Text(name);
                     SameLine();
-                    if (Button("清除")) { do ts_id->set_tile_property_real(tile_id, name, option::none); do note_tileset_edit(state, ts_id); }
+                    if (Button("清除"))
+                        do batch_set_prop_real(state, ts_id, ids, name, option::none);
                     SameLine();
                     match (InputFloat("##def", cur))
                     {
-                        value(v)? { do ts_id->set_tile_property_real(tile_id, name, option::value(v)); do note_tileset_edit(state, ts_id); }
+                        value(v)? do batch_set_prop_real(state, ts_id, ids, name, option::value(v));
                         none?;
                     }
                 }
@@ -1961,7 +2191,8 @@ namespace JEEditor::Editor::TilemapEditor
             {
                 none?
                 {
-                    if (Button("+")) { do ts_id->set_tile_property_string(tile_id, name, option::value("")); do note_tileset_edit(state, ts_id); }
+                    if (Button("+"))
+                        do batch_set_prop_string(state, ts_id, ids, name, option::value(""));
                     SameLine();
                     do Text(F"{name}（默认）");
                 }
@@ -1969,11 +2200,12 @@ namespace JEEditor::Editor::TilemapEditor
                 {
                     do Text(name);
                     SameLine();
-                    if (Button("清除")) { do ts_id->set_tile_property_string(tile_id, name, option::none); do note_tileset_edit(state, ts_id); }
+                    if (Button("清除"))
+                        do batch_set_prop_string(state, ts_id, ids, name, option::none);
                     SameLine();
                     match (InputText("##def", cur))
                     {
-                        value(s)? { do ts_id->set_tile_property_string(tile_id, name, option::value(s)); do note_tileset_edit(state, ts_id); }
+                        value(s)? do batch_set_prop_string(state, ts_id, ids, name, option::value(s));
                         none?;
                     }
                 }
@@ -1985,7 +2217,8 @@ namespace JEEditor::Editor::TilemapEditor
             {
                 none?
                 {
-                    if (Button("+")) { do ts_id->set_tile_property_vec2(tile_id, name, option::value((0., 0.))); do note_tileset_edit(state, ts_id); }
+                    if (Button("+"))
+                        do batch_set_prop_vec2(state, ts_id, ids, name, option::value((0., 0.)));
                     SameLine();
                     do Text(F"{name}（默认）");
                 }
@@ -1993,11 +2226,12 @@ namespace JEEditor::Editor::TilemapEditor
                 {
                     do Text(name);
                     SameLine();
-                    if (Button("清除")) { do ts_id->set_tile_property_vec2(tile_id, name, option::none); do note_tileset_edit(state, ts_id); }
+                    if (Button("清除"))
+                        do batch_set_prop_vec2(state, ts_id, ids, name, option::none);
                     SameLine();
                     match (InputFloat2("##def", ca, cb))
                     {
-                        value((a, b))? { do ts_id->set_tile_property_vec2(tile_id, name, option::value((a, b))); do note_tileset_edit(state, ts_id); }
+                        value((a, b))? do batch_set_prop_vec2(state, ts_id, ids, name, option::value((a, b)));
                         none?;
                     }
                 }
@@ -2009,7 +2243,8 @@ namespace JEEditor::Editor::TilemapEditor
             {
                 none?
                 {
-                    if (Button("+")) { do ts_id->set_tile_property_vec3(tile_id, name, option::value((0., 0., 0.))); do note_tileset_edit(state, ts_id); }
+                    if (Button("+"))
+                        do batch_set_prop_vec3(state, ts_id, ids, name, option::value((0., 0., 0.)));
                     SameLine();
                     do Text(F"{name}（默认）");
                 }
@@ -2017,11 +2252,12 @@ namespace JEEditor::Editor::TilemapEditor
                 {
                     do Text(name);
                     SameLine();
-                    if (Button("清除")) { do ts_id->set_tile_property_vec3(tile_id, name, option::none); do note_tileset_edit(state, ts_id); }
+                    if (Button("清除"))
+                        do batch_set_prop_vec3(state, ts_id, ids, name, option::none);
                     SameLine();
                     match (InputFloat3("##def", ca, cb, cc))
                     {
-                        value((a, b, c))? { do ts_id->set_tile_property_vec3(tile_id, name, option::value((a, b, c))); do note_tileset_edit(state, ts_id); }
+                        value((a, b, c))? do batch_set_prop_vec3(state, ts_id, ids, name, option::value((a, b, c)));
                         none?;
                     }
                 }
@@ -2033,7 +2269,8 @@ namespace JEEditor::Editor::TilemapEditor
             {
                 none?
                 {
-                    if (Button("+")) { do ts_id->set_tile_property_vec4(tile_id, name, option::value((0., 0., 0., 0.))); do note_tileset_edit(state, ts_id); }
+                    if (Button("+"))
+                        do batch_set_prop_vec4(state, ts_id, ids, name, option::value((0., 0., 0., 0.)));
                     SameLine();
                     do Text(F"{name}（默认）");
                 }
@@ -2041,11 +2278,12 @@ namespace JEEditor::Editor::TilemapEditor
                 {
                     do Text(name);
                     SameLine();
-                    if (Button("清除")) { do ts_id->set_tile_property_vec4(tile_id, name, option::none); do note_tileset_edit(state, ts_id); }
+                    if (Button("清除"))
+                        do batch_set_prop_vec4(state, ts_id, ids, name, option::none);
                     SameLine();
                     match (InputFloat4("##def", ca, cb, cc, cd))
                     {
-                        value((a, b, c, d))? { do ts_id->set_tile_property_vec4(tile_id, name, option::value((a, b, c, d))); do note_tileset_edit(state, ts_id); }
+                        value((a, b, c, d))? do batch_set_prop_vec4(state, ts_id, ids, name, option::value((a, b, c, d)));
                         none?;
                     }
                 }
