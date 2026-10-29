@@ -175,6 +175,11 @@ namespace jeecs
             // 运行期：构建失败标记（同 SourceTexture::array_failed）
             bool array_failed = false;
         };
+        // 瓦片默认法线：指向屏幕外侧（引擎内 -Z 为朝向摄像机的方向）。
+        // 参与网格顶点生成，瓦片的显式法线与之相同即视为默认（可从稀疏
+        // 元数据表移除）。
+        inline constexpr std::array<float, 3> DEFAULT_TILE_NORMAL{ 0.f, 0.f, -1.f };
+
         // 瓦片元数据：图集格 (source, ix, iy) 上的稀疏定义。没有条目的
         // 格子按默认值处理（可通行、普通瓦片、无属性、名称为空）。所有
         // 字段都只描述"这块瓦片本身"，自动图块（地形）也只是 kind 非
@@ -184,6 +189,10 @@ namespace jeecs
             std::string name;
             bool walkable = true;
             je_TileKind kind = JE_TILE_KIND_PLAIN;  // 自动拼接类型
+            // 顶点法线（局部空间单位向量，默认 DEFAULT_TILE_NORMAL）：
+            // 网格生成时写入该瓦片全部顶点，供光照判定"这块瓦片朝哪"。
+            // 自动拼接格整格共享锚点瓦片的法线（四象限/变体不各自取用）。
+            std::array<float, 3> normal = DEFAULT_TILE_NORMAL;
             std::vector<int32_t> variant_tiles;     // blob47 显式变体表（瓦片 id）
             std::map<std::string, property_value> properties;   // 瓦片默认属性
         };
@@ -266,6 +275,7 @@ namespace jeecs
             {
                 return def.name.empty() && def.walkable
                     && def.kind == JE_TILE_KIND_PLAIN
+                    && def.normal == DEFAULT_TILE_NORMAL
                     && def.variant_tiles.empty() && def.properties.empty();
             }
             // 元数据编辑器收尾：默认条目从稀疏表移除
@@ -371,16 +381,17 @@ namespace jeecs
         // 与 .je4animation 同风格的自有二进制格式（魔数 + 小端字段），
         // 由 C++ 侧统一读写，避免在内核引入 TOML 依赖。
         // 属性值为类型化数据：每值前有 1 字节类型标记（je_PropertyType）。
-        // 图集（JTS5）不再兼容旧版：每个源记录自己的瓦片 id 基址，瓦片
+        // 图集（JTS6）不再兼容旧版：每个源记录自己的瓦片 id 基址，瓦片
         // 元数据按 id 稀疏保存（无条目 = 默认可通行普通瓦片）。源的
         // tex_w/tex_h 写 0 表示未测量；每个源在基础字段后带附加层级
         // 纹理表（u32 计数 + 每条 pass/path/tex_w/tex_h），pass < 1 视为
-        // 损坏。瓦片 kind 为 je_TileKind 的 u8，越界视为损坏。
+        // 损坏。瓦片 kind 为 je_TileKind 的 u8，越界视为损坏；其后为该
+        // 瓦片的顶点法线（3×f32，读取时归一化，零长/非有限分量视为损坏）。
         // 地图（JTM6）图层记录内联 rend_queue（i32）、自阴影行为
         //（je_LayerSelfShadow 的 u8，越界视为损坏）、自阴影强度（f32）、
         // 遮挡阴影行为（je_LayerBlockShadow 的 u8，越界视为损坏）与
         // 遮挡阴影强度（f32）。瓦片值语义见文件开头的编码说明。
-        constexpr uint32_t TILESET_MAGIC = 0x4A545335;     // "JTS5"
+        constexpr uint32_t TILESET_MAGIC = 0x4A545336;     // "JTS6"
         constexpr uint32_t MAP_MAGIC = 0x4A544D36;         // "JTM6"
 
         struct bin_writer
@@ -560,6 +571,9 @@ namespace jeecs
                 w.str(t.name);
                 w.u8(t.walkable ? 1 : 0);
                 w.u8((uint8_t)t.kind);
+                w.f32(t.normal[0]);
+                w.f32(t.normal[1]);
+                w.f32(t.normal[2]);
                 w.u32((uint32_t)t.variant_tiles.size());
                 for (int32_t v : t.variant_tiles) w.i32(v);
                 w.u32((uint32_t)t.properties.size());
@@ -660,6 +674,12 @@ namespace jeecs
                     || kind > (uint8_t)JE_TILE_KIND_RPGMAKER_VX)
                 { r.ok = false; break; }
                 t.kind = (je_TileKind)kind;
+                // 顶点法线按文件值归一化；零长或含非有限分量视为损坏
+                float nx = r.f32(), ny = r.f32(), nz = r.f32();
+                const float nlen = std::sqrt(nx * nx + ny * ny + nz * nz);
+                if (!r.ok || !std::isfinite(nlen) || nlen <= 0.f)
+                { r.ok = false; break; }
+                t.normal = { nx / nlen, ny / nlen, nz / nlen };
                 uint32_t vn = r.u32();
                 for (uint32_t k = 0; k < vn && r.ok; ++k)
                 {
@@ -1669,15 +1689,19 @@ namespace jeecs
         }
 
         // ==================== 单元格渲染解析（唯一权威实现） ====================
-        // 把某格解析为 1~4 个带 UV 的子四边形。网格构建（TilemapSystem）
+        // 把某格解析为 1~4 个带 UV/法线的子四边形。网格构建（TilemapSystem）
         // 与编辑器预览（je_tilemap_cell_quad*）共用本实现，保证两者所见
-        // 永远一致（含自动图块的邻接象限解析）。
+        // 永远一致（含自动图块的邻接象限解析）。法线取自地图格存储的锚点
+        // 瓦片（自动拼接的变体/象限不各自取用）。
         struct cell_quad_info
         {
             int32_t tileset_idx = 0;        // 地图引用表中的图集下标
             int32_t source_idx = 0;         // 图集内源纹理下标
             float u0 = 0.f, v0 = 0.f, u1 = 0.f, v1 = 0.f; // tile-local UV（v0 下 v1 上，[0,1]²）
             int32_t layer = 0;              // 数组纹理层号（每层一个瓦片）
+            // 顶点法线（局部空间单位向量，取自格子的锚点瓦片；自动拼接
+            // 的整格/四象限变体共享锚点瓦片的法线）
+            std::array<float, 3> normal = DEFAULT_TILE_NORMAL;
             // 目标象限：nullopt = 整格；0=LU 1=RU 2=LD 3=RD（四象限自动图块）
             std::optional<int32_t> corner;
         };
@@ -1827,6 +1851,10 @@ namespace jeecs
             const auto& src = ts->sources[source_idx];
             const je_TileKind kind = ts->tile_kind(tile_id);
             const TileDef* def = ts->tile_def(tile_id);
+            // 顶点法线取锚点瓦片（地图格存储的瓦片）的元数据；自动拼接
+            // 解析出的变体/象限只是该格的取样来源，不覆盖法线
+            const std::array<float, 3> normal =
+                def == nullptr ? DEFAULT_TILE_NORMAL : def->normal;
 
             // 整格取件：按原样绘制 / 普通瓦片 / blob47 变体
             auto fill_full = [&](int32_t src_idx, int32_t cx, int32_t cy)
@@ -1835,6 +1863,7 @@ namespace jeecs
                 out[0].source_idx = src_idx;
                 tile_uv(ts->sources[src_idx], cx, cy,
                     out[0].u0, out[0].v0, out[0].u1, out[0].v1, out[0].layer);
+                out[0].normal = normal;
                 out[0].corner = std::nullopt;
             };
 
@@ -1881,6 +1910,7 @@ namespace jeecs
                     out[c].v1 = 1.f - (hc.row % 2) * 0.5f;
                     out[c].v0 = 1.f - (hc.row % 2) * 0.5f - 0.5f;
                     out[c].layer = layer;
+                    out[c].normal = normal;
                     out[c].corner = c;
                 }
                 return 4;

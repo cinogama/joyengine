@@ -96,9 +96,10 @@ namespace jeecs
     {
         static constexpr size_t CHUNK = 32;         // 分块边长（格）
         // pos3 + uv3(u,v,layer) + normal3 + bottom1：
-        // bottom 为本块底边局部 Y（Light2D::PerBlockSelfShadow 契约，
-        // TopDown 光源的逐块自阴影高度判定用；尾部追加对 ≤3 属性的
-        // 着色器不可见——顶点属性按网格布局前缀绑定）
+        // normal 取自瓦片元数据（每块瓦片可指定，默认 (0,0,-1) 指向屏幕
+        // 外侧）；bottom 为本块底边局部 Y（Light2D::PerBlockSelfShadow
+        // 契约，TopDown 光源的逐块自阴影高度判定用；尾部追加对 ≤3 属性
+        // 的着色器不可见——顶点属性按网格布局前缀绑定）
         static constexpr size_t FLOATS_PER_VERTEX = 10;
         static constexpr size_t VERTS_PER_CELL = 16;     // 每格 4 个子四边形槽位
         static constexpr size_t FLOATS_PER_CELL = VERTS_PER_CELL * FLOATS_PER_VERTEX;
@@ -599,17 +600,20 @@ namespace jeecs
 
         // 写一个四边形（x0/y0 左下，x1/y1 右上；v 引擎空间向上增长；
         // uv 为 tile-local [0,1]²，layer 为数组纹理层号；
-        // bottom 为本块底边局部 Y，同块各顶点写同值）
+        // normal 为该瓦片的顶点法线（图集元数据，默认 (0,0,-1) 指向屏幕
+        // 外侧）；bottom 为本块底边局部 Y，同块各顶点写同值）
         static void write_quad(float* v,
             float x0, float y0, float x1, float y1,
-            float u0, float v0, float u1, float v1, float layer, float bottom)
+            float u0, float v0, float u1, float v1, float layer, float bottom,
+            const std::array<float, 3>& normal)
         {
+            const float nx = normal[0], ny = normal[1], nz = normal[2];
             // 顶点序：0=左下 1=右下 2=左上 3=右上（索引 0,1,2 2,1,3）
             float* p = v;
-            *p++ = x0; *p++ = y0; *p++ = 0.f; *p++ = u0; *p++ = v0; *p++ = layer; *p++ = 0.f; *p++ = 0.f; *p++ = -1.f; *p++ = bottom;
-            *p++ = x1; *p++ = y0; *p++ = 0.f; *p++ = u1; *p++ = v0; *p++ = layer; *p++ = 0.f; *p++ = 0.f; *p++ = -1.f; *p++ = bottom;
-            *p++ = x0; *p++ = y1; *p++ = 0.f; *p++ = u0; *p++ = v1; *p++ = layer; *p++ = 0.f; *p++ = 0.f; *p++ = -1.f; *p++ = bottom;
-            *p++ = x1; *p++ = y1; *p++ = 0.f; *p++ = u1; *p++ = v1; *p++ = layer; *p++ = 0.f; *p++ = 0.f; *p++ = -1.f; *p++ = bottom;
+            *p++ = x0; *p++ = y0; *p++ = 0.f; *p++ = u0; *p++ = v0; *p++ = layer; *p++ = nx; *p++ = ny; *p++ = nz; *p++ = bottom;
+            *p++ = x1; *p++ = y0; *p++ = 0.f; *p++ = u1; *p++ = v0; *p++ = layer; *p++ = nx; *p++ = ny; *p++ = nz; *p++ = bottom;
+            *p++ = x0; *p++ = y1; *p++ = 0.f; *p++ = u0; *p++ = v1; *p++ = layer; *p++ = nx; *p++ = ny; *p++ = nz; *p++ = bottom;
+            *p++ = x1; *p++ = y1; *p++ = 0.f; *p++ = u1; *p++ = v1; *p++ = layer; *p++ = nx; *p++ = ny; *p++ = nz; *p++ = bottom;
         }
 
         // 把某格的解析结果写入 staging（16 顶点槽位：未用槽位写零面积
@@ -624,13 +628,15 @@ namespace jeecs
             const float xm = x0 + half, ym = ybot + half;
 
             for (size_t q = 0; q < 4; ++q)
-                write_quad(dst + q * 4 * FLOATS_PER_VERTEX, x0, ytop, x0, ytop, 0.f, 0.f, 0.f, 0.f, 0.f, ybot);
+                write_quad(dst + q * 4 * FLOATS_PER_VERTEX, x0, ytop, x0, ytop,
+                    0.f, 0.f, 0.f, 0.f, 0.f, ybot, Tilemap::DEFAULT_TILE_NORMAL);
             for (int32_t i = 0; i < count; ++i)
             {
                 const auto& q = quads[i];
                 if (!q.corner.has_value())
                 {
-                    write_quad(dst, x0, ybot, x1, ytop, q.u0, q.v0, q.u1, q.v1, (float)q.layer, ybot);
+                    write_quad(dst, x0, ybot, x1, ytop,
+                        q.u0, q.v0, q.u1, q.v1, (float)q.layer, ybot, q.normal);
                 }
                 else
                 {
@@ -645,7 +651,8 @@ namespace jeecs
                     }
                     // 子象限仍写整格的 ybot：同格判定必须一致，避免自动图块混合格内缝
                     write_quad(dst + (size_t)*q.corner * 4 * FLOATS_PER_VERTEX,
-                        cx0, cy0, cx1, cy1, q.u0, q.v0, q.u1, q.v1, (float)q.layer, ybot);
+                        cx0, cy0, cx1, cy1, q.u0, q.v0, q.u1, q.v1,
+                        (float)q.layer, ybot, q.normal);
                 }
             }
         }
@@ -2519,6 +2526,42 @@ void je_tilemap_set_tile_walkable(je_TilesetDocument* doc, je_TileId tile_id, in
         doc->compact_tile_def(tile_id);   // 可能是新建的空条目
 }
 
+// ---------------- 瓦片法线（参与网格顶点生成） ----------------
+bool je_tilemap_tile_normal(je_TilesetDocument* doc, je_TileId tile_id,
+    /* OPTIONAL */ float* out_x, /* OPTIONAL */ float* out_y, /* OPTIONAL */ float* out_z)
+{
+    if (!doc->tile_cell(tile_id).has_value())
+        return false;
+    const auto* def = je_tilemap_tile_def(doc, tile_id, false);
+    const auto& normal = def == nullptr
+        ? jeecs::Tilemap::DEFAULT_TILE_NORMAL : def->normal;
+    if (out_x != nullptr) *out_x = normal[0];
+    if (out_y != nullptr) *out_y = normal[1];
+    if (out_z != nullptr) *out_z = normal[2];
+    return true;
+}
+bool je_tilemap_set_tile_normal(je_TilesetDocument* doc, je_TileId tile_id,
+    float x, float y, float z)
+{
+    // 法线必须能归一化：零长/非有限分量拒绝（否则顶点法线无意义）
+    const float len = std::sqrt(x * x + y * y + z * z);
+    if (!std::isfinite(len) || len <= 0.f)
+        return false;
+    auto* def = je_tilemap_tile_def(doc, tile_id, true);
+    if (def == nullptr)
+        return false;
+    const std::array<float, 3> normal{ x / len, y / len, z / len };
+    if (def->normal != normal)
+    {
+        def->normal = normal;
+        doc->compact_tile_def(tile_id);
+        ++doc->version;
+    }
+    else
+        doc->compact_tile_def(tile_id);   // 可能是新建的空条目
+    return true;
+}
+
 // ---------------- 属性 schema 与默认值 ----------------
 bool je_tilemap_add_property(je_TilesetDocument* doc, const char* name,
     je_PropertyType type, /* OPTIONAL */ const void* default_value, int32_t* out_index)
@@ -3523,6 +3566,25 @@ WOORT_API woort_api wojeapi_tilemap_set_tile_walkable(void)
 {
     je_tilemap_set_tile_walkable(woje_ts_doc(0), (int32_t)woort_int(1), (int32_t)woort_int(2));
     return woort_ret_void();
+}
+WOORT_API woort_api wojeapi_tilemap_tile_normal(void)
+{
+    woort_value s;
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
+    float x = 0.f, y = 0.f, z = -1.f;
+    je_tilemap_tile_normal(woje_ts_doc(0), (int32_t)woort_int(1), &x, &y, &z);
+    woort_set_struct(s + 0, 3);
+    woort_struct_set_float(s + 0, 0, x);
+    woort_struct_set_float(s + 0, 1, y);
+    woort_struct_set_float(s + 0, 2, z);
+    return woort_ret_value(s + 0);
+}
+WOORT_API woort_api wojeapi_tilemap_set_tile_normal(void)
+{
+    return woort_ret_bool(je_tilemap_set_tile_normal(woje_ts_doc(0),
+        (int32_t)woort_int(1), woort_float(2), woort_float(3), woort_float(4))
+        ? true : false);
 }
 // ---- 图集侧：schema 与默认值（按类型展开）----
 JE_WO_PROP_ADDER(wojeapi_tilemap_add_property_bool,

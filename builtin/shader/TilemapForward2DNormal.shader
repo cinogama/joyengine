@@ -4,9 +4,10 @@
 // 为法线数组图集（图集源纹理的附加层级，编辑器中把法线贴图按通道 1
 // 添加到源纹理即可）。顶点 uv 为 float3 —— (u, v, 数组层号)；两张数组
 // 的层号一致（层号 = iy*xcount + ix），同一 uv 可同时采样两通道。
-// 瓦片网格顶点轴对齐（uv.x/y 对齐局部 x/y 轴，法线 +Z），局部切线基
-// 恒为单位基（T=(1,0,0), B=(0,1,0), N=+Z），法线图采样后按 Forward2DNormal
-// 的视空间切线基（含 JE_LOCAL_SCALE 去斜）重建视空间法线。
+// 瓦片网格顶点轴对齐（uv.x/y 对齐局部 x/y 轴），切线基取 T=+X 与顶点
+// 法线 N（图集可为每块瓦片指定，默认 -Z 指向屏幕外侧），B=cross(T,N)；
+// 法线图采样后按 Forward2DNormal 的视空间切线基（含 JE_LOCAL_SCALE 去斜）
+// 重建视空间法线。
 import pkg::std;
 
 import je::shader;
@@ -62,10 +63,16 @@ public func vert(v: vin)
 {
     let vpos = JE_MV * vec4!(v.vertex, 1.);
 
-    // 瓦片四边形轴对齐：局部切线基为单位基（T=+X, B=+Y, N=+Z），
-    // 与 uv.xy 同向，故切线基取模型旋转（含缩放去斜）后的固定基
+    // 瓦片四边形轴对齐、uv.xy 对齐局部 x/y 轴：切线 T 取局部 +x 在法线
+    // 切平面上的投影（B = cross(T, N)）。法线取自瓦片元数据（默认 -Z，
+    // 此时 T/B 与旧行为一致）；法线与 +x 近乎平行时改用局部 +y 作参考，
+    // 避免 Gram-Schmidt 投影退化。
     let N = vtangent(v.normal);
-    let T = vtangent(vec3!(1., 0., 0.));
+    let T0 = vtangent(vec3!(1., 0., 0.));
+    let B0 = vtangent(vec3!(0., 1., 0.));
+    let degenerate = step(abs(dot(N, T0)), 0.95);
+    let ref = T0 * (1. - degenerate) + B0 * degenerate;
+    let T = normalize(ref - N * dot(N, ref));
     let B = normalize(cross(T, N));
 
     return v2f{

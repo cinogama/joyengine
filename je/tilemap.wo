@@ -542,7 +542,7 @@ namespace je
             // ==================== 瓦片（每个图集格都是一块瓦片） ====================
             // 源纹理的每个格都是瓦片：瓦片 id 由添加源时分配（格 (ix,iy)
             // 的 id = 源基址 + iy * 列数 + ix），跨保存稳定、删除源后不复用。
-            // 通行性/名称/属性/自动拼接类型都是这条 id 上的稀疏元数据，
+            // 通行性/名称/属性/自动拼接类型/法线都是这条 id 上的稀疏元数据，
             // 无需"注册"；未定义元数据的瓦片 = 可通行的普通瓦片。
             extern("libjoyecs", "wojeapi_tilemap_tile_id_at")
                 public func tile_id_at(self: Tileset, source_idx: int,
@@ -570,6 +570,19 @@ namespace je
             extern("libjoyecs", "wojeapi_tilemap_set_tile_walkable")
                 public func set_tile_walkable(self: Tileset, tile_id: int,
                     walkable: int)=> void;
+
+            // ==================== 瓦片法线 ====================
+            // 顶点法线（局部空间单位向量，参与地图网格顶点生成），默认
+            // (0, 0, -1) 指向屏幕外侧（朝向摄像机）。自动拼接格整格共享
+            // 锚点瓦片的法线。返回 (x, y, z)；id 无效时返回默认值。
+            extern("libjoyecs", "wojeapi_tilemap_tile_normal")
+                public func tile_normal(self: Tileset, tile_id: int)=> (real, real, real);
+
+            // 设置瓦片法线（按传入向量归一化后存储；零向量/非有限分量
+            // 返回 false）。设为默认 (0,0,-1) 即清除该瓦片的法线覆盖。
+            extern("libjoyecs", "wojeapi_tilemap_set_tile_normal")
+                public func set_tile_normal(self: Tileset, tile_id: int,
+                    x: real, y: real, z: real)=> bool;
 
             // ==================== 自动拼接（"地形"行为，是瓦片属性） ====================
             // kind 取 tile_kind 枚举值；PLAIN 即普通整块瓦片。地图格存负值

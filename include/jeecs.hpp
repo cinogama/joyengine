@@ -5473,6 +5473,9 @@ JE_API bool je_main_script_entry();
 // 瓦片默认值 -> 图集 schema 默认值。属性值为类型化数据（je_PropertyType）：
 // 设置/读取都须传入类型枚举并给出对应的数据指针，与实际存储类型不符时
 // 返回 false。
+// 瓦片的名称/通行性/自动拼接类型/顶点法线都是瓦片 id 上的稀疏元数据；法线
+// 参与地图网格的顶点生成（默认 (0, 0, -1) 指向屏幕外侧），见
+// je_tilemap_tile_normal / je_tilemap_set_tile_normal。
 // =============================================================================
 
 namespace jeecs { namespace Tilemap
@@ -6359,6 +6362,32 @@ je_tilemap_set_tile_walkable [基本接口]
 */
 JE_API void je_tilemap_set_tile_walkable(je_TilesetDocument* tileset,
     je_TileId tile_id, int32_t walkable);
+
+// ---- 瓦片法线（参与地图网格顶点生成） ----
+
+/*
+je_tilemap_tile_normal [基本接口]
+取指定 id 瓦片的顶点法线（局部空间单位向量），经出参返回 (x, y, z)
+    * 默认 (0, 0, -1)，在引擎内指向屏幕外侧（朝向摄像机）
+    * 出参均可传 nullptr 跳过；id 无效返回 false 且不写出参
+请参见：
+    je_tilemap_set_tile_normal
+*/
+JE_API bool je_tilemap_tile_normal(je_TilesetDocument* tileset, je_TileId tile_id,
+    /* OPTIONAL */ float* out_x, /* OPTIONAL */ float* out_y, /* OPTIONAL */ float* out_z);
+
+/*
+je_tilemap_set_tile_normal [基本接口]
+设置指定 id 瓦片的顶点法线（按传入向量归一化后存储）
+    * 地图网格生成时写入该瓦片的全部顶点；自动拼接格（四象限/变体）
+      整格共享锚点瓦片的法线，取样出的变体瓦片不各取各的
+    * (0,0,0) 或含非有限分量的向量非法，返回 false 且不修改
+    * id 无效返回 false；设为默认 (0,0,-1) 即清除该瓦片的法线覆盖
+请参见：
+    je_tilemap_tile_normal
+*/
+JE_API bool je_tilemap_set_tile_normal(je_TilesetDocument* tileset,
+    je_TileId tile_id, float x, float y, float z);
 
 // ---- 自动拼接（"地形"行为，是瓦片自身的属性） ----
 
@@ -14898,6 +14927,7 @@ namespace jeecs
             bool walkable;         // 默认通行性
             je_TileKind kind;      // 自动拼接类型（PLAIN = 普通瓦片）
             int32_t variant_count; // blob47 显式变体数
+            math::vec3 normal;     // 顶点法线（局部空间；默认 (0,0,-1)）
         };
 
         /*
@@ -15143,6 +15173,9 @@ namespace jeecs
                 info.walkable = walkable != 0;
                 info.kind = je_tilemap_tile_kind(_m_doc, id);
                 info.variant_count = je_tilemap_tile_variant_count(_m_doc, id);
+                float nx = 0.f, ny = 0.f, nz = -1.f;
+                je_tilemap_tile_normal(_m_doc, id, &nx, &ny, &nz);
+                info.normal = math::vec3(nx, ny, nz);
                 return info;
             }
 

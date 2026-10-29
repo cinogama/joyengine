@@ -1,11 +1,11 @@
 // 瓦片地图编辑器 —— 属性面板。
 // 地图编辑器的页签：
 //   格子属性：悬停格子的属性取值链展示与逐格覆盖编辑；
-//   瓦片：选中瓦片的名称/通行性/自动拼接类型/默认属性（写回图集文档）；
+//   瓦片：选中瓦片的名称/通行性/法线/自动拼接类型/默认属性（写回图集文档）；
 //   图层样式：活动图层的专属着色器、附加纹理通道与 uniform 变量；
 //   图集设置：地图的图集引用管理。
 // 图集编辑器的页签：
-//   瓦片：选中瓦片的名称/通行性/自动拼接类型/默认属性；
+//   瓦片：选中瓦片的名称/通行性/法线/自动拼接类型/默认属性；
 //   图集设置：图集名称、源纹理（含附加层级）与属性 schema。
 
 import pkg::std;
@@ -903,6 +903,25 @@ namespace JEEditor::Editor::TilemapEditor
                     }
                     none?;
                 }
+
+                do SeparatorText("法线");
+                let (nx, ny, nz) = ts_id->tile_normal(tid);
+                match (InputFloat3("##tile_normal", nx, ny, nz))
+                {
+                    value(n)?
+                    {
+                        if (ts_id->set_tile_normal(tid, n.0, n.1, n.2))
+                            do note_tileset_edit(state, ts_id);
+                    }
+                    none?;
+                }
+                if (Button("重置为默认 (0, 0, -1)"))
+                {
+                    if (ts_id->set_tile_normal(tid, 0.0, 0.0, -1.0))
+                        do note_tileset_edit(state, ts_id);
+                }
+                do TextDisabled("参与网格顶点生成的局部空间单位法线，默认 -Z 指向屏幕外侧；");
+                do TextDisabled("自动拼接格整格共享锚点瓦片的法线。");
 
                 do SeparatorText("自动拼接");
                 let kinds = ["普通瓦片", "四象限(XP条带)", "blob47", "四象限(VX 2x3块)"];
