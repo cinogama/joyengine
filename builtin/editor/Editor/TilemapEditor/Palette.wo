@@ -171,7 +171,9 @@ namespace JEEditor::Editor::TilemapEditor
                         state.m_palette_source = 0;
                     do draw_source_selector(state, ts_id);
                     do draw_palette_layer_selector(state, ts_id);
-                    if (BeginChildSize("##palette_grid", GetContentRegionAvail()[0], 0.))
+                    if (BeginChildSizeFlags("##palette_grid",
+                        GetContentRegionAvail()[0], 0.,
+                        WindowsAttribute::ImGuiWindowFlags_NoMove))
                         do draw_tile_grid(state, ts_id, false);
                     EndChild();
                 }
@@ -231,8 +233,9 @@ namespace JEEditor::Editor::TilemapEditor
                             {
                                 state.m_palette_mode = 0;
                                 do draw_palette_layer_selector(state, ts_id);
-                                if (BeginChildSize("##palette_grid",
-                                    GetContentRegionAvail()[0], 0.))
+                                if (BeginChildSizeFlags("##palette_grid",
+                                    GetContentRegionAvail()[0], 0.,
+                                    WindowsAttribute::ImGuiWindowFlags_NoMove))
                                     do draw_tile_grid(state, ts_id, true);
                                 EndChild();
                                 do EndTabItem();
@@ -359,10 +362,18 @@ namespace JEEditor::Editor::TilemapEditor
                 // 整张贴图缩放到面板宽度内（保持像素清晰由 NEAREST 采样保证）
                 let scale = math::min(1., avail[0] / tw as real);
                 do ImageSize(tex, tw as real * scale, th as real * scale);
-                // 悬停状态必须紧跟贴图项读取（后续绘制调用不产生 item）
+                let (rect_min, rect_max) = GetItemRect();
+
+                // 交互层：整张网格覆盖一个不可见按钮。Image 不是交互项，
+                // 直接在上面按住拖动会被 ImGui 当成在窗口空白处拖动窗口
+                //（ConfigWindowsMoveFromTitleBarOnly 缺省为 false），
+                // 导致框选图章时整个编辑器窗口跟着鼠标走。
+                // 按钮取得 ActiveId 后，EndFrame 的移动窗口判定直接跳过。
+                SetCursorScreenPos(rect_min);
+                do InvisibleButton("##palette_grid_hit",
+                    (rect_max[0] - rect_min[0], rect_max[1] - rect_min[1]));
                 let item_hovered = IsItemHovered();
 
-                let (rect_min, rect_max) = GetItemRect();
                 // 格子像素按显示贴图尺寸/网格数推导（层级贴图分辨率可与
                 // 主纹理不同，格子比例恒与网格一致）
                 let cell_px = tw as real / xc as real * scale;
