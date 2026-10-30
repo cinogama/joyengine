@@ -1234,10 +1234,17 @@ namespace JEEditor::Editor::TilemapEditor
         else if (ang < -22.5)
             sector = "右下";
 
+        // 倾斜角 = 从屏幕外法线起算的夹角；背面法线从屏幕内法线起算，
+        // 即同样显示"倾斜 45°"而不是 135°。归一化后的分量是 float 近似
+        // 值（0.7071068），acos 会算出 44.999…/89.999…，须四舍五入，
+        // 否则整度截断会显示成 44°/89°。
         let mut polar = -nz;
-        if (polar < 0.) polar = 0.;
+        if (polar < -1.) polar = -1.;
         if (polar > 1.) polar = 1.;
-        let tilt = (mathf::acos(polar) * mathf::RAD2DEG) as int;
+        let mut tilt_deg = mathf::acos(polar) * mathf::RAD2DEG;
+        if (nz > 0.)
+            tilt_deg = 180. - tilt_deg;
+        let tilt = (tilt_deg + 0.5) as int;
         // 正面/背面半球都可能出现；背向（nz > 0）单独说明，避免与
         // 盘心（屏幕外）混淆
         return nz > 0.02
