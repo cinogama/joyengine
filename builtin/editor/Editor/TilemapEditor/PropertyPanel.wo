@@ -997,9 +997,10 @@ namespace JEEditor::Editor::TilemapEditor
     }
 
     // ---- 瓦片法线编辑 ----
-    // s_normal_snap：拖拽时吸附到盘面格点（中心 / 45° 倾斜环 / 盘缘，
-    // 各 8 方位）；s_normal_back 是法线与屏幕平行（nz≈0）时默认使用的
-    // 半球，法线明显倾斜时半球由法线自身的 z 符号决定。
+    // s_normal_snap：拖拽时吸附（优先盘面格点：中心 / 45° 倾斜环 / 盘缘，
+    // 各 8 方位；其次 8 根方位轴，轴吸附保持倾斜量）；s_normal_back 是
+    // 法线与屏幕平行（nz≈0）时默认使用的半球，法线明显倾斜时半球由
+    // 法线自身的 z 符号决定。
     let mut s_normal_snap = true;
     let mut s_normal_back = false;
     // 方向盘拖拽锁存的半球：按下瞬间决定，拖拽期间不随法线符号变化
@@ -1061,6 +1062,33 @@ namespace JEEditor::Editor::TilemapEditor
             | option::none: option<(real, real, real)>;
     }
 
+    // 吸附到 8 根方位轴（每 45°：上下左右 + 四个斜向）：角度在容差内
+    // 时把方向投影到轴上，保持径向距离（即倾斜量）不变。
+    func snap_normal_dial_axis(dx: real, dy: real)=> (real, real)
+    {
+        let len = mathf::sqrt(dx * dx + dy * dy);
+        if (len < 0.0001)
+            return (dx, dy);
+        let step = mathf::PI / 4.;
+        let ang = mathf::atan2(dy, dx);
+        let mut best = ang;
+        let mut best_diff = 999.;
+        for (let mut k = -4; k <= 4; k += 1)
+        {
+            let target = (k as real) * step;
+            let d = mathf::abs(ang - target);
+            if (d < best_diff)
+            {
+                best_diff = d;
+                best = target;
+            }
+        }
+        // 6° 角度容差；容差外保持自由角度
+        if (best_diff > 0.10471976)
+            return (dx, dy);
+        return (mathf::cos(best) * len, mathf::sin(best) * len);
+    }
+
     // 法线半球盘：盘心 = 屏幕外侧 (0,0,-1)，盘缘 = 与屏幕平面平行
     // （nz = 0）。按住拖动时鼠标位置直接映射为法线：角度 = 屏幕平面内的
     // 方位，半径 = 偏离屏幕法线的倾斜量（拖出盘外按盘缘夹取）。back 为
@@ -1112,9 +1140,10 @@ namespace JEEditor::Editor::TilemapEditor
             let mut nz_new = use_back
                 ? mathf::sqrt(rest)
                 | -mathf::sqrt(rest);
-            // 吸附格点：命中则使用格点的精确方向（可关闭）
+            // 吸附（可关闭）：优先格点，其次 8 根方位轴（轴吸附保持倾斜量）
             if (snap)
             {
+                let mut on_point = false;
                 match (snap_normal_dial_point(dx, dy, use_back, snap_threshold))
                 {
                     value((sx, sy, sz))?
@@ -1122,8 +1151,15 @@ namespace JEEditor::Editor::TilemapEditor
                         dx = sx;
                         dy = sy;
                         nz_new = sz;
+                        on_point = true;
                     }
                     none?;
+                }
+                if (!on_point)
+                {
+                    let (ax, ay) = snap_normal_dial_axis(dx, dy);
+                    dx = ax;
+                    dy = ay;
                 }
             }
             if (dx != nx || dy != ny || nz_new != nz)
@@ -1147,6 +1183,8 @@ namespace JEEditor::Editor::TilemapEditor
         // 格点颜色：开启吸附时更醒目；关闭时只作方位参考
         let dot_c = mixStyleColor(text_c, text_c, 0., snap ? 120 | 55);
         let ring45_c = mixStyleColor(text_c, text_c, 0., snap ? 34 | 20);
+        // 斜向方位轴参考线：比水平/垂直十字更淡
+        let axis_c = mixStyleColor(text_c, text_c, 0., snap ? 26 | 16);
 
         // 由暗到亮、沿法线屏幕投影偏移的一串同心圆 = 受该方向光照的球面
         for (let mut i = 0; i < 12; i += 1)
@@ -1159,6 +1197,17 @@ namespace JEEditor::Editor::TilemapEditor
                 mixStyleColor(frame_c, text_c, 0.08 + 0.74 * t, 255));
         }
         do dl->AddCircle(center, radius, ring_c, 1.);
+
+        // 8 根方位轴（吸附参考）：水平/垂直稍亮，四个斜向更淡
+        for (let mut k = 0; k < 8; k += 1)
+        {
+            let ang = (k as real) * (mathf::PI / 4.);
+            let ux = mathf::cos(ang);
+            let uy = mathf::sin(ang);
+            do dl->AddLine(center,
+                (center[0] + ux * radius, center[1] - uy * radius),
+                k % 2 == 0 ? cross_c | axis_c, 1.);
+        }
 
         // 预制格点：中心、45° 倾斜环、盘缘（与屏幕平行），各 8 方位
         do dl->AddCircle(center, radius * 0.70710678, ring45_c, 1.);
@@ -1192,11 +1241,6 @@ namespace JEEditor::Editor::TilemapEditor
                 none?;
             }
         }
-
-        do dl->AddLine((center[0] - radius, center[1]),
-            (center[0] + radius, center[1]), cross_c, 1.);
-        do dl->AddLine((center[0], center[1] - radius),
-            (center[0], center[1] + radius), cross_c, 1.);
 
         let hx = center[0] + nx * radius;
         let hy = center[1] - ny * radius;
@@ -1342,18 +1386,18 @@ namespace JEEditor::Editor::TilemapEditor
                 do TextDisabled(caption);
                 do PushTextWrapPos(0.);
                 do TextDisabled("拖动圆盘旋转：圆心 = 屏幕外，盘缘 = 与屏幕平行。");
-                do TextDisabled("开启「吸附格点」时自动对齐中心 / 45° / 90° 格点。");
+                do TextDisabled("开启「吸附」时对准中心 / 45° / 90° 格点与 8 根方位轴。");
                 do TextDisabled("法线参与网格顶点生成；自动拼接格整格共享锚点瓦片的法线。");
                 do PopTextWrapPos();
 
                 // 吸附开关与半球开关（背面 = 法线指向屏幕内）
-                match (CheckBox("吸附格点##tile_normal_snap", s_normal_snap))
+                match (CheckBox("吸附##tile_normal_snap", s_normal_snap))
                 {
                     value(v)? s_normal_snap = v;
                     none?;
                 }
                 if (IsItemHovered())
-                    do SetTooltip("拖动圆盘时吸附到中心 / 45° / 90° 格点");
+                    do SetTooltip("拖动圆盘时吸附到中心 / 45° / 90° 格点与 8 根方位轴");
                 do SameLine();
                 match (CheckBox("背面##tile_normal_back", back))
                 {
