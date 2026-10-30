@@ -997,27 +997,68 @@ namespace JEEditor::Editor::TilemapEditor
     }
 
     // ---- 瓦片法线编辑 ----
-    // 编辑模式跨瓦片选择保留：tilt45 = 预设倾斜档位（45° / 与屏幕平行
-    // 90°）；s_normal_back 是法线与屏幕平行（nz≈0）时默认使用的半球，
-    // 法线明显倾斜时半球由法线自身的 z 符号决定。
+    // s_normal_snap：拖拽时吸附到盘面格点（中心 / 45° 倾斜环 / 盘缘，
+    // 各 8 方位）；s_normal_back 是法线与屏幕平行（nz≈0）时默认使用的
+    // 半球，法线明显倾斜时半球由法线自身的 z 符号决定。
+    let mut s_normal_snap = true;
     let mut s_normal_back = false;
-    let mut s_normal_tilt45 = true;
     // 方向盘拖拽锁存的半球：按下瞬间决定，拖拽期间不随法线符号变化
     //（否则拖到盘缘 nz = 0 后半球判定可能来回切换，法线来回跳变）
     let mut s_dial_held = false;
     let mut s_dial_held_back = false;
 
-    // 法线模式切换按钮（当前档位高亮）
-    func normal_mode_button(label: string, active: bool, w: real)=> bool
+    // 盘面坐标 (dx, dy)（单位圆盘，+y = 屏幕上）附近最近的格点方向。
+    // 格点：中心（正对/背对摄像机）、45° 倾斜环与盘缘（与屏幕平行）
+    // 各 8 个方位；threshold 为盘半径比例，超出范围返回 none。
+    func snap_normal_dial_point(dx: real, dy: real, back: bool,
+        threshold: real)=> option<(real, real, real)>
     {
-        if (active)
-            do PushStyleColor(ImGuiCol::ImGuiCol_Button,
-                mixStyleColor(GetStyleColor(ImGuiCol::ImGuiCol_Text),
-                    (0.42, 0.62, 0.95, 1.), 0.55, 255));
-        let pressed = ButtonSize(label, (w, 22.));
-        if (active)
-            do PopStyleColor(1);
-        return pressed;
+        let mut best = threshold * threshold;
+        let mut hit = false;
+        let mut bx = 0.;
+        let mut by = 0.;
+        let mut bz = back ? 1. | -1.;
+
+        // 中心格点：正对（背面模式下背对）摄像机
+        let dc = dx * dx + dy * dy;
+        if (dc <= best)
+        {
+            best = dc;
+            hit = true;
+        }
+
+        let inner_z = back ? 0.70710678 | -0.70710678;
+        for (let mut k = 0; k < 8; k += 1)
+        {
+            let ang = (k as real) * (mathf::PI / 4.);
+            let ux = mathf::cos(ang);
+            let uy = mathf::sin(ang);
+            // 45° 倾斜环（投影半径 = sin45°）
+            let ix = ux * 0.70710678;
+            let iy = uy * 0.70710678;
+            let di = (ix - dx) * (ix - dx) + (iy - dy) * (iy - dy);
+            if (di < best)
+            {
+                best = di;
+                hit = true;
+                bx = ix;
+                by = iy;
+                bz = inner_z;
+            }
+            // 盘缘：与屏幕平面平行（90° 倾斜）
+            let de = (ux - dx) * (ux - dx) + (uy - dy) * (uy - dy);
+            if (de < best)
+            {
+                best = de;
+                hit = true;
+                bx = ux;
+                by = uy;
+                bz = 0.;
+            }
+        }
+        return hit
+            ? option::value((bx, by, bz))
+            | option::none: option<(real, real, real)>;
     }
 
     // 法线半球盘：盘心 = 屏幕外侧 (0,0,-1)，盘缘 = 与屏幕平面平行
@@ -1025,9 +1066,10 @@ namespace JEEditor::Editor::TilemapEditor
     // 方位，半径 = 偏离屏幕法线的倾斜量（拖出盘外按盘缘夹取）。back 为
     // true 时盘心变为屏幕内侧 (0,0,1)，用于编辑背向法线。盘面同时作为
     // 预览：高光按法线的屏幕投影偏移，做出受该方向光照的球面观感；
-    // 方位手柄指出方位（背向时改用琥珀色）。返回被改动的单位法线。
+    // 方位手柄指出方位（背向时改用琥珀色）。snap 为 true 时拖拽吸附到
+    // 盘面格点（中心 / 45° 环 / 盘缘）。返回被改动的单位法线。
     func draw_normal_dial(label: string, nx: real, ny: real, nz: real,
-        back: bool, side: real)=> option<(real, real, real)>
+        back: bool, snap: bool, side: real)=> option<(real, real, real)>
     {
         let pos = GetCursorScreenPos();
         let half = side * 0.5;
@@ -1045,6 +1087,7 @@ namespace JEEditor::Editor::TilemapEditor
         if (!active)
             s_dial_held = false;
 
+        let snap_threshold = 0.18;
         let mut result = option::none: option<(real, real, real)>;
         if (pressed || active)
         {
@@ -1066,14 +1109,28 @@ namespace JEEditor::Editor::TilemapEditor
             }
             let mut rest = 1. - dx * dx - dy * dy;
             if (rest < 0.) rest = 0.;
-            let nz_new = use_back
+            let mut nz_new = use_back
                 ? mathf::sqrt(rest)
                 | -mathf::sqrt(rest);
+            // 吸附格点：命中则使用格点的精确方向（可关闭）
+            if (snap)
+            {
+                match (snap_normal_dial_point(dx, dy, use_back, snap_threshold))
+                {
+                    value((sx, sy, sz))?
+                    {
+                        dx = sx;
+                        dy = sy;
+                        nz_new = sz;
+                    }
+                    none?;
+                }
+            }
             if (dx != nx || dy != ny || nz_new != nz)
                 result = option::value((dx, dy, nz_new));
         }
 
-        // ---- 预览：伪球面高光 + 盘缘 + 方位手柄 ----
+        // ---- 预览：伪球面高光 + 盘缘 + 格点 + 方位手柄 ----
         let dl = GetWindowDrawList();
         let radius = half - 1.;
         let text_c = GetStyleColor(ImGuiCol::ImGuiCol_Text);
@@ -1087,6 +1144,9 @@ namespace JEEditor::Editor::TilemapEditor
         let cross_c = mixStyleColor(text_c, text_c, 0., 30);
         let accent_c = mixStyleColor(text_c, accent_f, 0.7, 255);
         let bright_c = mixStyleColor(frame_c, text_c, 0.85, 255);
+        // 格点颜色：开启吸附时更醒目；关闭时只作方位参考
+        let dot_c = mixStyleColor(text_c, text_c, 0., snap ? 120 | 55);
+        let ring45_c = mixStyleColor(text_c, text_c, 0., snap ? 34 | 20);
 
         // 由暗到亮、沿法线屏幕投影偏移的一串同心圆 = 受该方向光照的球面
         for (let mut i = 0; i < 12; i += 1)
@@ -1099,6 +1159,40 @@ namespace JEEditor::Editor::TilemapEditor
                 mixStyleColor(frame_c, text_c, 0.08 + 0.74 * t, 255));
         }
         do dl->AddCircle(center, radius, ring_c, 1.);
+
+        // 预制格点：中心、45° 倾斜环、盘缘（与屏幕平行），各 8 方位
+        do dl->AddCircle(center, radius * 0.70710678, ring45_c, 1.);
+        do dl->AddCircleFilled(center, 2.5, dot_c);
+        for (let mut k = 0; k < 8; k += 1)
+        {
+            let ang = (k as real) * (mathf::PI / 4.);
+            let ux = mathf::cos(ang);
+            let uy = mathf::sin(ang);
+            do dl->AddCircleFilled(
+                (center[0] + ux * radius * 0.70710678,
+                 center[1] - uy * radius * 0.70710678), 2.5, dot_c);
+            do dl->AddCircleFilled(
+                (center[0] + ux * radius, center[1] - uy * radius),
+                2.5, dot_c);
+        }
+        // 悬停时高亮鼠标附近的格点，提示松开后会吸附到该点
+        if (snap && IsItemHovered())
+        {
+            let (mx, my) = GetMousePos();
+            let hdx = (mx - center[0]) / half;
+            let hdy = -(my - center[1]) / half;
+            match (snap_normal_dial_point(hdx, hdy, use_back, snap_threshold))
+            {
+                value((sx, sy, _))?
+                {
+                    do dl->AddCircleFilled(
+                        (center[0] + sx * radius, center[1] - sy * radius),
+                        4.5, accent_c);
+                }
+                none?;
+            }
+        }
+
         do dl->AddLine((center[0] - radius, center[1]),
             (center[0] + radius, center[1]), cross_c, 1.);
         do dl->AddLine((center[0], center[1] - radius),
@@ -1226,7 +1320,7 @@ namespace JEEditor::Editor::TilemapEditor
                 do SetCursorScreenPos(
                     (dial_pos[0] + (avail_w - dial) * 0.5, dial_pos[1]));
                 match (draw_normal_dial("##tile_normal_dial", nx, ny, nz,
-                        back, dial))
+                        back, s_normal_snap, dial))
                 {
                     value(n)?
                         do batch_set_normal(state, ts_id, ids, n.0, n.1, n.2);
@@ -1241,79 +1335,30 @@ namespace JEEditor::Editor::TilemapEditor
                 do TextDisabled(caption);
                 do PushTextWrapPos(0.);
                 do TextDisabled("拖动圆盘旋转：圆心 = 屏幕外，盘缘 = 与屏幕平行。");
-                do TextDisabled("正面/背面切换法线所在半球；预设可选 45° 或 90° 倾斜。");
+                do TextDisabled("开启「吸附格点」时自动对齐中心 / 45° / 90° 格点。");
                 do TextDisabled("法线参与网格顶点生成；自动拼接格整格共享锚点瓦片的法线。");
                 do PopTextWrapPos();
 
-                // 半球与预设倾斜档位：正面/背面 × 45°/90°
-                let bw4 = (GetContentRegionAvail()[0] - 24.) / 4.;
-                if (normal_mode_button("正面##tnrm_front", !back, bw4))
+                // 吸附开关与半球开关（背面 = 法线指向屏幕内）
+                match (CheckBox("吸附格点##tile_normal_snap", s_normal_snap))
                 {
-                    s_normal_back = false;
-                    do batch_flip_normal(state, ts_id, ids, false);
+                    value(v)? s_normal_snap = v;
+                    none?;
                 }
+                if (IsItemHovered())
+                    do SetTooltip("拖动圆盘时吸附到中心 / 45° / 90° 格点");
                 do SameLine();
-                if (normal_mode_button("背面##tnrm_back", back, bw4))
+                match (CheckBox("背面##tile_normal_back", back))
                 {
-                    s_normal_back = true;
-                    do batch_flip_normal(state, ts_id, ids, true);
-                }
-                do SameLine();
-                if (normal_mode_button("45°##tnrm_t45", s_normal_tilt45, bw4))
-                    s_normal_tilt45 = true;
-                do SameLine();
-                if (normal_mode_button("90°##tnrm_t90", !s_normal_tilt45, bw4))
-                    s_normal_tilt45 = false;
-
-                // 常用方向预设：3×3 方位盘，倾斜量取上面的档位；
-                // 中心 = 正对摄像机（背面模式下为屏幕内）
-                let sin_t = s_normal_tilt45 ? 0.70710678 | 1.;
-                let cos_t = s_normal_tilt45 ? 0.70710678 | 0.;
-                let hemi = back ? 1. | -1.;
-                let pad_labels = ["左上", "上", "右上", "左", "屏幕外", "右",
-                    "左下", "下", "右下"];
-                let mut presets = []mut: vec<(string, real, real, real)>;
-                for (let mut i = 0; i < 9; i += 1)
-                {
-                    let col = i % 3;
-                    let row = i / 3;
-                    let ux = (col - 1) as real;
-                    let uy = (1 - row) as real;
-                    let ulen = mathf::sqrt(ux * ux + uy * uy);
-                    let mut px = 0.;
-                    let mut py = 0.;
-                    let mut pz = hemi;
-                    if (ulen > 0.)
+                    value(v)?
                     {
-                        px = ux / ulen * sin_t;
-                        py = uy / ulen * sin_t;
-                        pz = hemi * cos_t;
+                        s_normal_back = v;
+                        do batch_flip_normal(state, ts_id, ids, v);
                     }
-                    let shown = i == 4
-                        ? (back ? "屏幕内" | "屏幕外")
-                        | pad_labels[i];
-                    do presets->add((F"{shown}##tnrm_{i}", px, py, pz));
+                    none?;
                 }
-
-                let bw = (GetContentRegionAvail()[0] - 16.) / 3.;
-                let bh = 24.;
-                for (let mut i = 0; i < presets->len; i += 1)
-                {
-                    if (i % 3 != 0)
-                        do SameLine();
-                    let (label, px, py, pz) = presets[i];
-                    let current = mathf::abs(px - nx) < 0.0005
-                        && mathf::abs(py - ny) < 0.0005
-                        && mathf::abs(pz - nz) < 0.0005;
-                    if (current)
-                        do PushStyleColor(ImGuiCol::ImGuiCol_Button,
-                            mixStyleColor(GetStyleColor(ImGuiCol::ImGuiCol_Text),
-                                (0.42, 0.62, 0.95, 1.), 0.55, 255));
-                    if (ButtonSize(label, (bw, bh)))
-                        do batch_set_normal(state, ts_id, ids, px, py, pz);
-                    if (current)
-                        do PopStyleColor(1);
-                }
+                if (IsItemHovered())
+                    do SetTooltip("法线指向屏幕内（背对摄像机）；平面内法线保持原有方位");
 
                 // 精确数值（方向盘之外的直接输入）
                 match (InputFloat3("##tile_normal", nx, ny, nz))
