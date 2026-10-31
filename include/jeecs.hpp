@@ -5599,22 +5599,23 @@ je_LayerSelfShadow [枚举]
 je_tilemap_layer_selfshadow / je_tilemap_set_layer_selfshadow 的取值。
 渲染分片是运行时生成的隐藏实体，无法逐个挂组件，故由图层属性驱动：
     * JE_LAYER_SELFSHADOW_OFF 禁用：该层分片不挂 SelfShadow 组件，
-      图块正常接收更高层遮挡体投下的阴影
+      图块正常接收其它图层遮挡体投下的阴影
     * JE_LAYER_SELFSHADOW_ON  启用（常开）：分片挂 SelfShadow 且
       auto_disable = false，无论光源高度如何，自阴影覆盖始终按 factor 生效
     * JE_LAYER_SELFSHADOW_AUTO 启用（自动）：分片挂 SelfShadow 且
       auto_disable = true，光源不高于该层时不追加自阴影覆盖（图块受光；
-      仍会被遮挡体投下的阴影遮挡）
+      仍会接收位于该层之前的遮挡阴影）
 （覆盖强度 factor 经 je_tilemap_set_layer_selfshadow_factor 按层设置）
 TopDown 光源（Light2D::TopDown）下的 AUTO 判定按格进行：分片同挂
 Light2D::PerBlockSelfShadow（网格顶点携带块底边高度），格底边不低于光源
 高度线时该格受光、否则写 factor——整张地图不会被实体原点一刀切。
 （ON 模式与普通光源不受影响，仍为整实体判定）
-瓦片分片带 PerBlockSelfShadow 标记。非 TopDown 光源下，受光格的自阴影用
-与本层 BlockShadow 完全相同 painter key 的 EQUAL 清除 pass：只清除同层遮挡
-阴影落在本层图块上的自遮挡，其它图层投到本层图块上的阴影保持不动；常开/
-AUTO 未受光格按 MAX 叠加 factor（只加深，不清除）。TopDown 光源下自阴影
-改为逐块判定并按 MAX 合并：只加深阴影，不会清除遮挡体已写入的阴影。
+瓦片分片带 PerBlockSelfShadow 标记。非 TopDown 光源下，分片自阴影与普通
+精灵同款为“接收面”语义：自阴影 key 取图层 key 减半层偏移，按 painter key
+覆盖写入——落在本层图块上的本层 BlockShadow 自遮挡被清除，且位于该层之后
+（key 更大）的遮挡阴影一并被覆盖；只有位于该层之前（key 更小）的遮挡阴影
+保留。TopDown 光源下自阴影改为逐块判定并按 MAX 合并：只加深阴影，不会
+清除遮挡体已写入的阴影。
 请参见：
     je_tilemap_set_layer_selfshadow
     je_tilemap_set_layer_selfshadow_factor
@@ -5855,9 +5856,10 @@ je_tilemap_set_layer_selfshadow [基本接口]
 设置图层的 2D 光照自阴影行为：OFF 时该层渲染分片移除 Light2D::SelfShadow
 组件（不参与自阴影覆盖），ON/AUTO 时挂载该组件并分别固定 auto_disable 为
 false / true；覆盖强度由 je_tilemap_set_layer_selfshadow_factor 设置
-（缺省 1）。非 TopDown 光源下自阴影按同层 key 清除本层 BlockShadow 落在
-本层图块上的自遮挡（只清同层贡献，其它图层的遮挡阴影保留）；TopDown
-光源下按逐块 key 并 MAX 合并（只加深阴影，不清除遮挡阴影）。
+（缺省 1）。非 TopDown 光源下自阴影为接收面语义：按 painter key 清除本层
+BlockShadow 落在本层图块上的自遮挡，同时抹掉位于该层之后的遮挡阴影，只
+保留位于该层之前的阴影；TopDown 光源下按逐块 key 并 MAX 合并（只加深
+阴影，不清除遮挡阴影）。
 渲染分片由引擎生成，组件的挂载与摘除由 TilemapSystem 逐帧
 对齐（走命令缓冲，下一帧迁移生效）；该设置随图层记录落盘
     * 下标越界时不做任何修改
@@ -13903,10 +13905,10 @@ namespace jeecs
             // 内部标志：由瓦片地图分片置位。TopDown 光源下 DeferLight2D 用
             // 阴影网格顶点携带的逐段 painter key（世界 Y；瓦片轮廓取本段
             // 最低边并合并 8 邻域内的跨层墙段）参与逐像素深度排序，而不是
-            // 整个实体共用一个底边 key；普通光源下仍用实体世界 Z——与同层
-            // SelfShadow 写入完全相同的深度，供 EQUAL 清除 pass 精确命中
-            // 同层自遮挡。普通实体保持 false，维持实体级语义。不注册到
-            // 脚本/编辑器，由 TilemapSystem 每帧对齐。
+            // 整个实体共用一个底边 key；普通光源下仍用实体世界 Z，与同层
+            // SelfShadow 的 surface key 只差固定的半层偏移，由后者覆盖掉
+            // 本层遮挡落在本层表面上的自遮挡。普通实体保持 false，维持
+            // 实体级语义。不注册到脚本/编辑器，由 TilemapSystem 每帧对齐。
             bool vertex_priority = false;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
@@ -14011,16 +14013,14 @@ namespace jeecs
             }
         };
         // 逐块自阴影修饰标记（与 Light2D::SelfShadow 同挂时生效）：
-        // 标记遮挡物为分块式大网格内容（瓦片地图等）。两个作用：
-        //  * 非 TopDown 光源下：受光格用与同层 BlockShadow 相同的 painter
-        //    key 做 EQUAL 清除，只去掉本层遮挡阴影落在本层图块上的自遮挡；
-        //    其它图层投到本层图块上的阴影深度不同，保持不动。常开/未受光
-        //    格按 MAX 叠加 factor（只加深，不清除）；
-        //  * TopDown 光源下，遮挡物不再作为整体参与 AUTO 高度判定，而是
-        //    逐"块"独立判定——要求渲染网格在顶点属性位置 3 额外携带
-        //    float1 "bottom"（本块底边的局部 Y，同一块的各顶点须写同值，
-        //    图元内判定才一致）。块底边变换到世界后的 Y >= 光源世界 Y 时
-        //    该块受光（cover=0，MAX 下等同不写入），否则写 factor。
+        // 标记遮挡物为分块式大网格内容（瓦片地图等）。非 TopDown 光源下
+        // 与普通精灵的 SelfShadow 完全一致（接收面覆盖语义），本标记只在
+        // TopDown 光源下生效：
+        //  * 遮挡物不再作为整体参与 AUTO 高度判定，而是逐"块"独立判定——
+        //    要求渲染网格在顶点属性位置 3 额外携带 float1 "bottom"（本块
+        //    底边的局部 Y，同一块的各顶点须写同值，图元内判定才一致）。
+        //    块底边变换到世界后的 Y >= 光源世界 Y 时该块受光（cover=0，
+        //    MAX 下等同不写入），否则写 factor。
         //  * TopDown 的深度排序同样逐块进行：以格顶（bottom + 1）作为
         //    painter key；同一 key 的自阴影按 MAX 合并，不清除遮挡。
         struct PerBlockSelfShadow

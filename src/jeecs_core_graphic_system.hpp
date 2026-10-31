@@ -1356,8 +1356,6 @@ namespace jeecs
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_wall_point_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_wall_parallel_pass;
 
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_pass;
-
             // 遮挡/自阴影 pass 写逐像素 painter key 深度，并以
             // ZTEST(LESS_EQUAL) / ZWRITE(ENABLE) 让更靠前的贡献胜出；
             // BLEND(MAX) 只负责同一 key 内的阴影叠加（不再用于跨层仲裁）。
@@ -1365,29 +1363,23 @@ namespace jeecs
             // 裁出实际覆盖，因此它不写深度（ZWRITE DISABLE），只 MAX 叠加
             // 强度，避免包围框内无阴影的空洞以脚底 key 擦除其它阴影。
 
-            // 数组纹理采样版 sub pass：瓦片地图分片把图集绑在
-            // Textures2DArray 槽 0（顶点 uv 为 (u, v, 数组层号) float3），
-            // 用本变体按层采样图集 alpha 做自阴影覆盖
+            // 自阴影接收面 pass ×2（普通精灵与非 TopDown 瓦片分片共用）：
+            // 以半层偏移的 surface key + 覆盖写入参与 painter key 仲裁，
+            // 覆盖位于其后方（key 更大）的阴影、保留前方阴影；同一图层的
+            // BlockShadow 也因 key 稍后而被本 pass 清掉（自遮挡消除）。
+            // 数组纹理采样版：瓦片地图分片把图集绑在 Textures2DArray
+            // 槽 0（顶点 uv 为 (u, v, 数组层号) float3），按层采样图集
+            // alpha 做自阴影覆盖
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_array_pass;
-
-            // 同层自遮挡清除 pass ×2（非 TopDown 的瓦片分片受光格专用）：
-            // ZTEST(EQUAL) 只命中与本层 BlockShadow 完全相同 painter key 的
-            // 像素，把同层遮挡阴影替换为 0；其它图层投到本层图块上的阴影
-            // 深度不同，保持不动。
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_equal_pass;
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_array_equal_pass;
-
-            // MAX 合并版 sub pass ×2（非 TopDown 瓦片分片常开/未受光格专用）：
-            // 把自阴影 factor 叠进阴影缓冲，仅加深、不清除其它图层的遮挡。
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_max_pass;
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_array_max_pass;
 
             // 逐块判定版 sub pass ×2（TopDown 光源 + Light2D::PerBlockSelfShadow
             // 遮挡物专用）：AUTO 高度判定不在 CPU 按实体原点一刀切，而是用
             // 网格顶点属性 3 携带的块底边（局部 Y）在顶点着色器逐块比较，
             // 整块受光或整块自阴影。JE_COLOR 约定：x=factor，
             // y=高度线（AUTO 为光源世界 Y；ON 恒暗时为 +1e30），z/w 备用。
-            // 仅分块大网格使用，同样按 MAX 合并（受光格不擦除遮挡阴影）
+            // 仅分块大网格使用，按 MAX 合并（逐块 key 与墙段 key 不可直接
+            // 比较，只加深、不清除遮挡阴影）
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_topdown_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_topdown_array_pass;
 
@@ -1527,18 +1519,6 @@ namespace jeecs
                 }
                 , _defer_light2d_shadow_sub_array_pass{
                     jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_sub_array.shader").value()
-                }
-                , _defer_light2d_shadow_sub_equal_pass{
-                    jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_sub_equal.shader").value()
-                }
-                , _defer_light2d_shadow_sub_array_equal_pass{
-                    jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_sub_array_equal.shader").value()
-                }
-                , _defer_light2d_shadow_sub_max_pass{
-                    jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_sub_max.shader").value()
-                }
-                , _defer_light2d_shadow_sub_array_max_pass{
-                    jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_sub_array_max.shader").value()
                 }
                 , _defer_light2d_shadow_sub_topdown_pass{
                     jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_sub_topdown.shader").value()
@@ -2057,15 +2037,9 @@ namespace jeecs
             const basic::resource<graphic::shader>& shape;
             const basic::resource<graphic::shader>& sprite;
             const basic::resource<graphic::shader>& wall;
+            // 自阴影接收面 pass：普通精灵与非 TopDown 瓦片分片共用
             const basic::resource<graphic::shader>& sub;
             const basic::resource<graphic::shader>& sub_texarray;
-            // 非 TopDown 瓦片分片的两种自阴影 pass：
-            //  * sub_equal：受光格，EQUAL 清除本层自遮挡；
-            //  * sub_max：常开/未受光格，MAX 叠加 factor。
-            const basic::resource<graphic::shader>& sub_equal;
-            const basic::resource<graphic::shader>& sub_texarray_equal;
-            const basic::resource<graphic::shader>& sub_max;
-            const basic::resource<graphic::shader>& sub_texarray_max;
         };
         defer_light2d_shadow_passes_t select_shadow_passes(bool is_parallel) const
         {
@@ -2078,10 +2052,6 @@ namespace jeecs
                     m_defer_light2d_host._defer_light2d_shadow_wall_parallel_pass,
                     m_defer_light2d_host._defer_light2d_shadow_sub_pass,
                     m_defer_light2d_host._defer_light2d_shadow_sub_array_pass,
-                    m_defer_light2d_host._defer_light2d_shadow_sub_equal_pass,
-                    m_defer_light2d_host._defer_light2d_shadow_sub_array_equal_pass,
-                    m_defer_light2d_host._defer_light2d_shadow_sub_max_pass,
-                    m_defer_light2d_host._defer_light2d_shadow_sub_array_max_pass,
             }
             : defer_light2d_shadow_passes_t{
                 m_defer_light2d_host._defer_light2d_shadow_point_pass,
@@ -2091,10 +2061,6 @@ namespace jeecs
                 m_defer_light2d_host._defer_light2d_shadow_wall_point_pass,
                 m_defer_light2d_host._defer_light2d_shadow_sub_pass,
                 m_defer_light2d_host._defer_light2d_shadow_sub_array_pass,
-                m_defer_light2d_host._defer_light2d_shadow_sub_equal_pass,
-                m_defer_light2d_host._defer_light2d_shadow_sub_array_equal_pass,
-                m_defer_light2d_host._defer_light2d_shadow_sub_max_pass,
-                m_defer_light2d_host._defer_light2d_shadow_sub_array_max_pass,
             };
         }
 
@@ -2304,6 +2270,134 @@ namespace jeecs
             }
         }
 
+        // 自阴影的 painter key 前移量（世界单位）：同一图层的 BlockShadow
+        // 写实体/图层 key，自阴影写在它之前半层，于是按 painter key 的
+        // “最靠前胜出”规则清除本层遮挡落在本层表面上的自遮挡。
+        static constexpr float SELF_SHADOW_SURFACE_BIAS = 0.005f;
+
+        // 自阴影接收面绘制（普通精灵与非 TopDown 瓦片分片共用）：
+        //  * 普通光源：key = 实体/图层世界 Z - 半层偏移，ZTEST(LESS_EQUAL)
+        //    + 覆盖写入。自阴影就是“接收面”本身——位于其后的遮挡阴影
+        //    （key 更大）被覆盖，位于其前的遮挡阴影（key 更小）保留；
+        //    同一图层的 BlockShadow 也因此被清除（自遮挡）。
+        //  * TopDown + PerBlockSelfShadow：按块底边逐块判高，key 取块顶
+        //    （顶点着色器计算），MAX 合并；逐块 key 与墙段 key 不可直接
+        //    比较，故只加深、不清除。
+        void draw_self_shadow(
+            jegl_command_buffer* shadow_chain,
+            const defer_light2d_shadow_passes_t& passes,
+            const block2d_arch& block,
+            bool topdown_light,
+            const shadow_depth_mapping& depth_mapping,
+            const math::vec3& shadow_cast_pos,
+            const float(&view)[4][4],
+            const float(&vp)[4][4],
+            float shadow_key_mode)
+        {
+            assert(block.selfshadow != nullptr);
+
+            // 瓦片地图分片的图集绑在数组纹理槽 0（顶点 uv.z 为数组层号），
+            // 走数组采样版 sub pass；其余实体按普通 2D 纹理采样。
+            // 数组绑定在 2D 绑定之后写入槽 0（后写覆盖）
+            std::optional<basic::resource<graphic::texture_array>> array_atlas;
+            if (block.textures_array != nullptr)
+                array_atlas = block.textures_array->get_texture(0);
+
+            bind_shadow_texture(shadow_chain, block.textures);
+            if (array_atlas.has_value())
+                jegl_cmd_bind_texture_array(shadow_chain, 0,
+                    array_atlas.value()->resource());
+
+            const bool per_block = topdown_light && block.perblock != nullptr;
+            auto& sub_pass_shader = per_block
+                ? (array_atlas.has_value()
+                    ? m_defer_light2d_host._defer_light2d_shadow_sub_topdown_array_pass
+                    : m_defer_light2d_host._defer_light2d_shadow_sub_topdown_pass)
+                : (array_atlas.has_value()
+                    ? passes.sub_texarray
+                    : passes.sub);
+
+            assert(block.shape != nullptr);
+            const auto& using_shape = block.shape->vertex.has_value()
+                ? block.shape->vertex.value()
+                : m_default_resources.default_shape_quad;
+
+            auto* vertex_resource = using_shape->resource();
+            auto* pipeline = pipeline_for(
+                sub_pass_shader.get(), vertex_resource);
+
+            render_draw_action draw_action(
+                shadow_chain,
+                pipeline,
+                vertex_resource,
+                (uint32_t)vertex_resource->m_index_count,
+                1);
+
+            const float(&MAT4_MODEL)[4][4] = block.translation->object2world;
+            float MAT4_MVP[4][4], MAT4_MV[4][4];
+            math::mat4xmat4(MAT4_MVP, vp, MAT4_MODEL);
+            math::mat4xmat4(MAT4_MV, view, MAT4_MODEL);
+
+            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model, float4x4, MAT4_MODEL);
+            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view, float4x4, MAT4_MV);
+            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view_projection, float4x4, MAT4_MVP);
+
+            // painter key：TopDown 用实体底边世界 Y，普通 2D 用实体世界 Z；
+            // 接收面再前移半层，使同层 BlockShadow（key 稍后）被清除。
+            // TopDown 逐块 key 由顶点着色器用格顶（bottom + 1）生成。
+            float surface_key = topdown_light
+                ? block.bottom_world_center.y
+                : block.translation->world_position.z;
+            float key_mode = shadow_key_mode;
+            if (per_block)
+                key_mode = 3.f;
+            else
+                surface_key -= SELF_SHADOW_SURFACE_BIAS;
+
+            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_shadow_key, float4,
+                surface_key,
+                depth_mapping.scale,
+                depth_mapping.bias,
+                key_mode);
+
+            if (per_block)
+            {
+                // 高度线打包进 JE_COLOR 供顶点着色器逐块比较：
+                // AUTO 用阴影计算点世界 Y；ON（auto_disable=false）
+                // 恒暗，高度线取 +1e30 使 lit 恒 0（整块写 factor）
+                const float height_line = block.selfshadow->auto_disable
+                    ? shadow_cast_pos.y
+                    : 1e30f;
+                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4,
+                    block.selfshadow->factor,
+                    height_line,
+                    0.f,
+                    0.f);
+            }
+            // AUTO 受光面写 0（接收面清除后方阴影）；TopDown 以实体底边
+            //（包围盒世界 Y 最小值）判定，避免高大实体以原点高于光源时被
+            // 整块点亮；普通光源仍按原点 Z。
+            else if (block.selfshadow->auto_disable
+                && (topdown_light
+                    ? block.bottom_world_center.y >= shadow_cast_pos.y
+                    : block.translation->world_position.z >= shadow_cast_pos.z))
+                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4, 0.f, 0.f, 0.f, 0.f);
+            else
+                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4,
+                    block.selfshadow->factor,
+                    block.selfshadow->factor,
+                    block.selfshadow->factor,
+                    block.selfshadow->factor);
+
+            if (block.textures != nullptr)
+            {
+                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_uv_tiling, float2,
+                    block.textures->tiling.x, block.textures->tiling.y);
+                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_uv_offset, float2,
+                    block.textures->offset.x, block.textures->offset.y);
+            }
+        }
+
         void DrawFrame()
         {
             const double current_time = je_clock_time();
@@ -2432,8 +2526,8 @@ namespace jeecs
                                     // 实体级 painter key：TopDown=包围盒底边世界 Y，
                                     // 普通 2D=实体世界 Z。逐段 key（瓦片轮廓）只在
                                     // TopDown 下用顶点世界 Y 覆盖实体 key；普通光源
-                                    // 保持实体 Z，使同层 BlockShadow 与 SelfShadow
-                                    // 写入完全相同的深度，供 EQUAL 清除 pass 命中。
+                                    // 保持实体 Z，与同层 SelfShadow 的 surface key
+                                    // 只差固定的半层偏移，便于后者清除自遮挡。
                                     const float shadow_entity_key = topdown_light
                                         ? blockarch.bottom_world_center.y
                                         : blockarch.translation->world_position.z;
@@ -2626,165 +2720,15 @@ namespace jeecs
                                     // 自阴影紧随本实体的遮挡物绘制；逐像素胜负由
                                     // painter key 深度决定，与绘制先后无关。
                                     if (blockarch.selfshadow != nullptr)
-                                    {
-                                        // 瓦片地图分片的图集绑在数组纹理槽 0
-                                        //（顶点 uv.z 为数组层号），走数组采样版
-                                        // sub pass；其余实体按普通 2D 纹理采样。
-                                        // 数组绑定在 2D 绑定之后写入槽 0（后写覆盖）
-                                        std::optional<basic::resource<graphic::texture_array>> array_atlas;
-                                        if (blockarch.textures_array != nullptr)
-                                            array_atlas = blockarch.textures_array->get_texture(0);
-
-                                        bind_shadow_texture(
-                                            light2d_shadow_rend_chain, blockarch.textures);
-                                        if (array_atlas.has_value())
-                                            jegl_cmd_bind_texture_array(
-                                                light2d_shadow_rend_chain, 0,
-                                                array_atlas.value()->resource());
-
-                                        // TopDown 光源 + PerBlockSelfShadow 修饰：
-                                        // 换用按块底边逐块判定的 topdown sub pass
-                                        const bool per_block_selfshadow =
-                                            lightarch.topdown != nullptr
-                                            && blockarch.perblock != nullptr;
-
-                                        // 非 TopDown 的瓦片分片（PerBlockSelfShadow）
-                                        // 单独处理：
-                                        //  * 受光格（AUTO 且光源在图层前方）用 EQUAL
-                                        //    清除 pass：只清除与本层 BlockShadow 完全
-                                        //    同 key 的贡献（同层自遮挡）；其它图层投到
-                                        //    本层图块上的阴影深度不同，保持不动，避免
-                                        //    清掉后方墙体的投影造成漏光；
-                                        //  * 常开 / AUTO 未受光格用 MAX 叠加 pass：
-                                        //    只把 factor 叠进阴影缓冲，同样不清除其它
-                                        //    图层的遮挡。
-                                        // 非分块实体（普通精灵）保持半层偏移覆盖语义。
-                                        const bool tilemap_flat_selfshadow =
-                                            lightarch.topdown == nullptr
-                                            && blockarch.perblock != nullptr;
-                                        const bool self_cover_lit = tilemap_flat_selfshadow
-                                            && blockarch.selfshadow->auto_disable
-                                            && blockarch.translation->world_position.z
-                                                >= shadow_cast_pos.z;
-
-                                        auto& sub_pass_shader = per_block_selfshadow
-                                            ? (array_atlas.has_value()
-                                                ? m_defer_light2d_host._defer_light2d_shadow_sub_topdown_array_pass
-                                                : m_defer_light2d_host._defer_light2d_shadow_sub_topdown_pass)
-                                            : (tilemap_flat_selfshadow
-                                                ? (self_cover_lit
-                                                    ? (array_atlas.has_value()
-                                                        ? shadow_passes.sub_texarray_equal
-                                                        : shadow_passes.sub_equal)
-                                                    : (array_atlas.has_value()
-                                                        ? shadow_passes.sub_texarray_max
-                                                        : shadow_passes.sub_max))
-                                                : (array_atlas.has_value()
-                                                    ? shadow_passes.sub_texarray
-                                                    : shadow_passes.sub));
-
-                                        assert(blockarch.shape != nullptr);
-                                        const auto& using_shape =
-                                            blockarch.shape->vertex.has_value()
-                                            ? blockarch.shape->vertex.value()
-                                            : m_default_resources.default_shape_quad;
-
-                                        auto* vertex_resource = using_shape->resource();
-                                        auto* pipeline = pipeline_for(
-                                            sub_pass_shader.get(), vertex_resource);
-
-                                        render_draw_action draw_action(
+                                        draw_self_shadow(
                                             light2d_shadow_rend_chain,
-                                            pipeline,
-                                            vertex_resource,
-                                            (uint32_t)vertex_resource->m_index_count,
-                                            1);
-
-                                        const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
-                                        float MAT4_MVP[4][4], MAT4_MV[4][4];
-                                        math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
-                                        math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
-
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model, float4x4, MAT4_MODEL);
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view, float4x4, MAT4_MV);
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view_projection, float4x4, MAT4_MVP);
-
-                                        // 自阴影参与逐像素仲裁：
-                                        //  * 普通 SelfShadow 用实体/图层 key 减半层
-                                        //    （0.005）覆盖；
-                                        //  * 非 TopDown 瓦片分片用与同层 BlockShadow
-                                        //    完全相同的实体 key，受光格由 EQUAL pass
-                                        //    精确命中同层贡献；
-                                        //  * TopDown 的 PerBlockSelfShadow 由顶点
-                                        //    着色器用格顶（bottom + 1）逐块生成 key。
-                                        const float self_entity_key = topdown_light
-                                            ? blockarch.bottom_world_center.y
-                                            : blockarch.translation->world_position.z;
-                                        float self_shadow_key_value = self_entity_key;
-                                        float self_shadow_mode = shadow_key_base_mode;
-                                        if (per_block_selfshadow)
-                                            self_shadow_mode = 3.f;
-                                        else if (!tilemap_flat_selfshadow)
-                                            self_shadow_key_value -= 0.005f;
-
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_shadow_key, float4,
-                                            self_shadow_key_value,
-                                            shadow_depth.scale,
-                                            shadow_depth.bias,
-                                            self_shadow_mode);
-
-                                        // local_scale.x .y .z 通道预留
-                                        /*NEED_AND_SET_UNIFORM(local_scale, float3,
-                                            0.f,
-                                            0.f,
-                                            0.f);*/
-
-                                        if (per_block_selfshadow)
-                                        {
-                                            // 高度线打包进 JE_COLOR 供顶点着色器逐块比较：
-                                            // AUTO 用阴影计算点世界 Y；ON（auto_disable=false）
-                                            // 恒暗，高度线取 +1e30 使 lit 恒 0（整块写 factor）
-                                            const float height_line =
-                                                blockarch.selfshadow->auto_disable
-                                                ? shadow_cast_pos.y
-                                                : 1e30f;
-                                            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4,
-                                                blockarch.selfshadow->factor,
-                                                height_line,
-                                                0.f,
-                                                0.f);
-                                        }
-                                        // TopDown 光源下 AUTO 以实体底边（包围盒
-                                        // 世界 Y 最小值）判定，避免高大实体以原点
-                                        // 高于光源时被整块点亮；普通光源仍按原点 Z。
-                                        else if (blockarch.selfshadow->auto_disable &&
-                                            (lightarch.topdown == nullptr
-                                                ? blockarch.translation->world_position.z >= shadow_cast_pos.z
-                                                : blockarch.bottom_world_center.y >= shadow_cast_pos.y))
-                                            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4, 0.f, 0.f, 0.f, 0.f);
-                                        else
-                                            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4,
-                                                blockarch.selfshadow->factor,
-                                                blockarch.selfshadow->factor,
-                                                blockarch.selfshadow->factor,
-                                                blockarch.selfshadow->factor);
-
-                                        if (blockarch.textures != nullptr)
-                                        {
-                                            JE_CHECK_NEED_AND_SET_UNIFORM(
-                                                draw_action,
-                                                m_uv_tiling,
-                                                float2,
-                                                blockarch.textures->tiling.x,
-                                                blockarch.textures->tiling.y);
-                                            JE_CHECK_NEED_AND_SET_UNIFORM(
-                                                draw_action,
-                                                m_uv_offset,
-                                                float2,
-                                                blockarch.textures->offset.x,
-                                                blockarch.textures->offset.y);
-                                        }
-                                    }
+                                            shadow_passes,
+                                            blockarch,
+                                            topdown_light,
+                                            shadow_depth,
+                                            shadow_cast_pos,
+                                            MAT4_VIEW, MAT4_VP,
+                                            shadow_key_base_mode);
                                 }
                             }
                         }
