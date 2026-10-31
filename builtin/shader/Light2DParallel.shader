@@ -34,8 +34,10 @@ public func vert(v: vin)
 {
     return v2f{
         pos = vec4!(v.vertex, 0.5) * 2.,
+        // 平行光方向：实体局部 -Y（屏幕向下），不含偏向摄像机的 Z 分量；
+        // 与阴影挤出、编辑器 gizmo 箭头使用同一个方向。
         light_vdir = normalize(
-            vec3x3!(JE_MV) * vec3!(0., -1., 1.)),
+            vec3x3!(JE_MV) * vec3!(0., -1., 0.)),
     };
 }
 

@@ -2180,8 +2180,8 @@ namespace jeecs
 
         // Unified draw call for the 3 Light2D shadow occluder types (block / shape / sprite).
         // They all compute MV/MVP from the occluder's object2world and pack shadow params
-        // into local_scale + color. Block uses (0,-1,1).unit() as parallel light dir ref;
-        // shape/sprite use (0,-1,0). shadow_cast_pos is the point-light shadow origin
+        // into local_scale + color. All occluders use the same parallel light dir ref
+        // (0,-1,0). shadow_cast_pos is the point-light shadow origin
         //（world_position + world_rotation * ShadowOffset，见 DrawFrame）.
         void draw_shadow_occluder(
             jegl_command_buffer* shadow_chain,
@@ -2555,7 +2555,7 @@ namespace jeecs
                                         && (!light_is_above_block || !blockarch.blockshadow->auto_disable)
                                         && blockarch.blockshadow->shape.m_block_mesh.has_value())
                                     {
-                                        // BlockShadow 用 (0,-1,1).unit() 作为平行光方向参考，
+                                        // BlockShadow 用 (0,-1,0) 作为平行光方向参考，
                                         // 通过 local_scale.x 传递阴影权重，local_scale.y
                                         // 传递本光源的背光挤出长度（世界单位），
                                         // color.w 固定为 1。
@@ -2576,7 +2576,7 @@ namespace jeecs
                                                 lightarch.shadowbuffer->block_shadow_length,
                                                 0.f),
                                             /*color_w=*/1.f,
-                                            math::vec3(0.f, -1.f, 1.f).unit(),
+                                            math::vec3(0.f, -1.f, 0.f),
                                             blockarch.textures,
                                             block_shadow_key);
                                     }
