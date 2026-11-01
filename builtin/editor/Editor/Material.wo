@@ -67,6 +67,11 @@ namespace JEEditor::Editor
         // .shader 文件（按路径排序）；每次点击添加按钮时重新扫描工作目录
         let mut s_shader_picker_groups = map::create:<string, array<path_t>>(0);
         
+        // 菜单展开期间每帧重绘：目录的显示名与工作目录根在扫描时算好，
+        // 避免把 fsys::relative / workpath 放进逐帧的菜单绘制里
+        let mut s_shader_picker_display = map::create:<string, string>(0);
+        let mut s_shader_picker_root = "";
+        
         public func isMaterialExist()
         {
             return s_material_singleton->is_value;
@@ -490,8 +495,10 @@ namespace JEEditor::Editor
         }
         
         // 遍历当前工作目录（含子目录）下的所有 .shader 文件，
-        // 按所在目录分组：目录完整路径字符串 → 组内文件（按路径排序）
-        func scanShaderFilesUnderWorkpath()=> map<string, array<path_t>>
+        // 按所在目录分组：目录完整路径字符串 → 组内文件（按路径排序）。
+        // 同时算好菜单展示需要的根路径与各目录的相对显示名（一次扫描
+        // 的代价），菜单展开期间逐帧重绘不再访问文件系统。
+        func scanShaderFilesUnderWorkpath()=> void
         {
             let groups = map::create:<string, array<path_t>>(0);
             for (let p : recursive_walk(workpath()) |> iter_result
@@ -503,17 +510,30 @@ namespace JEEditor::Editor
                 let dir = parent(p)->to_string();
                 groups->set(dir, groups->get_or(dir, []: array<path_t>)->append(p));
             }
-            return groups;
+            
+            let root = workpath()->to_string();
+            let display = map::create:<string, string>(0);
+            for (let dir : groups->keys)
+            {
+                // 工作目录根在菜单里平铺，不需要显示名
+                if (dir == root)
+                    continue;
+                match (relative(normalize(dir), workpath()))
+                {
+                    ok(rel)? display->set(dir, rel);
+                    err(_)? display->set(dir, dir);
+                }
+            }
+            
+            s_shader_picker_groups = groups;
+            s_shader_picker_display = display;
+            s_shader_picker_root = root;
         }
         
-        // 菜单里的目录显示名：相对工作目录的路径，转换失败时退回完整路径
+        // 菜单里的目录显示名：扫描时算好的相对路径，缺失时退回完整路径
         func pickerDirDisplayName(dir: string)=> string
         {
-            match (relative(normalize(dir), workpath()))
-            {
-                ok(rel)? return rel;
-                err(_)? return dir;
-            }
+            return s_shader_picker_display->get(dir)->or(dir);
         }
         
         // “添加着色器”弹出菜单：按路径分组展示工作目录下的 .shader 文件，
@@ -530,7 +550,7 @@ namespace JEEditor::Editor
                 return;
             }
             
-            let root_dir = workpath()->to_string();
+            let root_dir = s_shader_picker_root;
             for (let dir : s_shader_picker_groups->keys |> sort(\l, r = l < r;))
             {
                 let files = s_shader_picker_groups->get(dir)->unwrap;
@@ -567,7 +587,7 @@ namespace JEEditor::Editor
         {
             if (ButtonSize("＋ 添加着色器##material_shader_append", (-1., 0.)))
             {
-                s_shader_picker_groups = scanShaderFilesUnderWorkpath();
+                scanShaderFilesUnderWorkpath();
                 OpenPopup("##material_shader_picker_menu");
             }
             if (IsItemHovered())

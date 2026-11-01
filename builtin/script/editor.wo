@@ -620,8 +620,13 @@ namespace Animation::FrameAnimation::animation_list
 {
     // 动作名缓存（runtime_path -> 动作名表 / 文件最后写入时间）：
     // .je4animation 可能正在动画编辑器中被修改，以时间戳判断缓存失效。
+    // 检视面板里每个动画条目每帧都会调用本函数，而 lastwrite 是一次
+    // 文件的 stat（@/ 路径还要取 workpath），因此时间戳最多每
+    // ACTION_NAMES_RECHECK_INTERVAL 秒复核一次，其余帧直接命中缓存。
+    let ACTION_NAMES_RECHECK_INTERVAL = 0.5;
     let mut s_action_names_cache = {}mut: map<string, array<string>>;
     let mut s_action_names_stamp = {}mut: map<string, int>;
+    let mut s_action_names_checked_at = {}mut: map<string, real>;
 
     // 读取动画文件中的动作名列表；文件缺失或无法解析时返回空表。
     func read_action_names(runtime_path: string)=> array<string>
@@ -631,6 +636,22 @@ namespace Animation::FrameAnimation::animation_list
             let empty = []mut: vec<string>;
             return empty->to_array;
         }
+
+        // 复核间隔内且已有缓存：不做路径展开与 stat
+        let now = time();
+        match (s_action_names_cache->get(runtime_path))
+        {
+            value(names)?
+                match (s_action_names_checked_at->get(runtime_path))
+                {
+                    value(checked)?
+                        if (now - checked < ACTION_NAMES_RECHECK_INTERVAL)
+                            return names;
+                    none?;
+                }
+            none?;
+        }
+        s_action_names_checked_at->set(runtime_path, now);
 
         let local_path = ResourcePath::toLocalResourcePath(runtime_path);
         let mut stamp = -1;

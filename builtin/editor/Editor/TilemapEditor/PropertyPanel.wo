@@ -249,7 +249,12 @@ namespace JEEditor::Editor::TilemapEditor
     //（按路径排序）；每次点击选择按钮时重新扫描工作目录
     let mut s_style_shader_groups = map::create:<string, array<fsys::path_t>>(0);
 
-    func scan_style_shader_groups()=> map<string, array<fsys::path_t>>
+    // 菜单展开期间每帧重绘：目录显示名与工作目录根在扫描时算好，
+    // 避免把 fsys::relative / workpath 放进逐帧的菜单绘制里
+    let mut s_style_shader_display = map::create:<string, string>(0);
+    let mut s_style_shader_root = "";
+
+    func scan_style_shader_groups()=> void
     {
         let groups = map::create:<string, array<fsys::path_t>>(0);
         for (let p : recursive_walk(workpath()) |> iter_result
@@ -261,7 +266,24 @@ namespace JEEditor::Editor::TilemapEditor
             let dir = parent(p)->to_string();
             groups->set(dir, groups->get_or(dir, []: array<fsys::path_t>)->append(p));
         }
-        return groups;
+
+        let root = workpath()->to_string();
+        let display = map::create:<string, string>(0);
+        for (let dir : groups->keys)
+        {
+            // 工作目录根在菜单里平铺，不需要显示名
+            if (dir == root)
+                continue;
+            match (relative(normalize(dir), workpath()))
+            {
+                ok(rel)? display->set(dir, rel);
+                err(_)? display->set(dir, dir);
+            }
+        }
+
+        s_style_shader_groups = groups;
+        s_style_shader_display = display;
+        s_style_shader_root = root;
     }
 
     // 指定图层着色器：加载独立实例交给图层样式（uniform 值写在该实例上，
@@ -297,7 +319,7 @@ namespace JEEditor::Editor::TilemapEditor
             return;
         }
 
-        let root_dir = workpath()->to_string();
+        let root_dir = s_style_shader_root;
         for (let dir : s_style_shader_groups->keys |> sort(\l, r = l < r;))
         {
             let files = s_style_shader_groups->get(dir)->unwrap;
@@ -312,12 +334,7 @@ namespace JEEditor::Editor::TilemapEditor
                 continue;
             }
 
-            let mut disp = dir;
-            match (relative(normalize(dir), workpath()))
-            {
-                ok(rel)? disp = rel;
-                err(_)?;
-            }
+            let disp = s_style_shader_display->get(dir)->or(dir);
             if (BeginMenu(disp))
             {
                 defer EndMenu();
@@ -775,7 +792,7 @@ namespace JEEditor::Editor::TilemapEditor
         SetCursorPos((right_x - 62., row_start.1 + (card_h - GetFrameHeight()) * 0.5));
         if (ButtonSize("选择…##layer_style_shader_pick", (58., 0.)))
         {
-            s_style_shader_groups = scan_style_shader_groups();
+            scan_style_shader_groups();
             OpenPopup("##layer_style_shader_menu");
         }
         if (IsItemHovered())

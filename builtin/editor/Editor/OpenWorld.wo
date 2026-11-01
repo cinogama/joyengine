@@ -31,10 +31,20 @@ using JEEditor::GUI::Windows;
 
 namespace JEEditor::Editor
 {
+    // 扫描结果的一条记录。列表每帧重绘，显示路径/过滤键/身份键都必须在
+    // 扫描时算好：fsys::relative 与 path_t 的 == 都会访问文件系统，不能
+    // 放在逐帧的绘制循环里。
+    using WorldFileEntry = struct{
+        public m_path: path_t,          // 实际路径（打开时使用）
+        public m_display: string,       // 相对工作目录的显示路径
+        public m_display_lower: string, // 过滤比较用
+        public m_key: string,           // 规范化且小写的完整路径（判定“已打开”）
+    };
+    
     using OpenWorld = struct{
         m_filter: mut string,               // 路径过滤关键字
         m_selected: mut option<path_t>,     // 当前选中的世界文件
-        m_files: mut array<path_t>,         // 扫描到的全部世界文件（按路径排序）
+        m_files: mut array<WorldFileEntry>, // 扫描到的全部世界文件（按显示路径排序）
         m_closed: mut bool,
     }
     {
@@ -45,23 +55,13 @@ namespace JEEditor::Editor
             return ("/" + rel)->find("/.")->is_value;
         }
 
-        // 相对工作目录的显示路径；转换失败时退回完整路径。
-        func displayPath(p: path_t)=> string
-        {
-            match (relative(p, workpath()))
-            {
-                ok(rel)? return rel;
-                err(_)? return p->to_string;
-            }
-        }
-
-        func scanWorldFiles()=> array<path_t>
+        func scanWorldFiles()=> array<WorldFileEntry>
         {
             match (allsubpath(workpath()))
             {
                 ok(paths)?
                 {
-                    let mut files = []mut: vec<path_t>;
+                    let mut files = []mut: vec<WorldFileEntry>;
                     for (let p : paths)
                     {
                         if (!isfile(p) || string::lower(extension(p)) != ".je4world")
@@ -72,18 +72,24 @@ namespace JEEditor::Editor
                             ok(rel)?
                             {
                                 if (rel->len != 0 && !isHiddenRelativePath(rel))
-                                    files->add(p);
+                                {
+                                    files->add(WorldFileEntry{
+                                            m_path = p,
+                                            m_display = rel,
+                                            m_display_lower = rel->lower,
+                                            m_key = p->to_string->lower,
+                                        });
+                                }
                             }
                             err(_)?;
                         }
                     }
                     return sort(
                         files->to_array,
-                        \l, r = string::lower(displayPath(l))
-                            < string::lower(displayPath(r)););
+                        \l, r = l.m_display_lower < r.m_display_lower;);
                 }
                 err(_)?
-                    return []: array<path_t>;
+                    return []: array<WorldFileEntry>;
             }
         }
 
@@ -147,48 +153,53 @@ namespace JEEditor::Editor
             }
         }
 
-        func pathMatchesFilter(self: OpenWorld, p: path_t)=> bool
-        {
-            if (self.m_filter->trim->len == 0)
-                return true;
-
-            return string::lower(displayPath(p))
-                ->find(string::lower(self.m_filter->trim))
-                ->is_value;
-        }
-
         func drawList(self: OpenWorld)=> void
         {
+            let filter_lower = string::lower(self.m_filter->trim);
+            let has_filter = filter_lower->len != 0;
+
+            // “已打开”集合每帧只从视口注册表取一次：转换开销与视口数
+            // 相关，与列表长度无关；逐行查询不再走 path_t 的 ==
+            //（它会做文件系统查询）。
+            let opened = map::create:<string, bool>(0);
+            for (let viewport : WorldEditorViewport::getAllViewports())
+            {
+                match (viewport->getSavingPath)
+                {
+                    none?;
+                    value(p)? opened->set(p->to_string->lower, true);
+                }
+            }
+
+            let mut has_selected = self.m_selected->is_value;
+            let mut selected_key = "";
+            if (has_selected)
+                selected_key = self.m_selected->unwrap->to_string->lower;
+
             let mut shown = 0;
             let mut index = 0;
-            for (let p : self.m_files)
+            for (let entry : self.m_files)
             {
                 let item_index = index;
                 index += 1;
 
-                if (!self->pathMatchesFilter(p))
+                if (has_filter
+                    && entry.m_display_lower->find(filter_lower)->is_none)
                     continue;
 
                 shown += 1;
 
-                let mut selected = false;
-                match (self.m_selected)
-                {
-                    none?;
-                    value(sel)? selected = (sel == p);
-                }
-
-                let is_opened =
-                    WorldEditorViewport::findWorldEditorViewportByPath(p)->is_value;
+                let selected = has_selected && selected_key == entry.m_key;
+                let is_opened = opened->contains(entry.m_key);
                 let label = is_opened
-                    ? F"{displayPath(p)}  （已打开）##{item_index}"
-                    | F"{displayPath(p)}##{item_index}";
+                    ? F"{entry.m_display}  （已打开）##{item_index}"
+                    | F"{entry.m_display}##{item_index}";
 
                 if (SelectableSelected(label, selected))
-                    self.m_selected = option::value(p);
+                    self.m_selected = option::value(entry.m_path);
 
                 if (IsItemHovered())
-                    do SetTooltip(p->to_string);
+                    do SetTooltip(entry.m_path->to_string);
             }
 
             if (shown == 0)

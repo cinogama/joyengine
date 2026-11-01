@@ -93,9 +93,14 @@ namespace JEEditor::Editor
         
         // 预设体数据缓存：检视面板每帧重绘，不能每帧读盘解析；按
         // 「路径 + 最后写入时间」缓存解析结果，预设体文件被重新保存
-        // （如再次拖拽实体生成预设体）或被外部修改后自动重载
+        // （如再次拖拽实体生成预设体）或被外部修改后自动重载。
+        // lastwrite 本身是一次文件的 stat：选中带预设体的实体时面板
+        // 每帧都会走到这里，因此时间戳最多每 PREFAB_STAMP_RECHECK_INTERVAL
+        // 秒复核一次，其余帧直接命中缓存。
+        let PREFAB_STAMP_RECHECK_INTERVAL = 0.5;
         let mut s_prefab_cache_path = "";
         let mut s_prefab_cache_stamp = 0 as fsys::unix1970_time_t;
+        let mut s_prefab_cache_checked_at = -1000.;
         let mut s_prefab_cache_dat = option::none: option<toml::Toml>;
         
         public func isInspectorExist()
@@ -145,6 +150,14 @@ namespace JEEditor::Editor
         // 判缓存失效前需先经 ResourcePath 展开
         func loadPrefabDatCached(prefab_path: string)=> option<toml::Toml>
         {
+            // 同一路径在复核间隔内直接命中缓存：不做 stat，也不展开
+            // @/ 路径（toLocalResourcePath 会取 workpath）。
+            let now = time();
+            if (prefab_path == s_prefab_cache_path
+                && now - s_prefab_cache_checked_at < PREFAB_STAMP_RECHECK_INTERVAL)
+                return s_prefab_cache_dat;
+                
+            s_prefab_cache_checked_at = now;
             let stamp = fsys::lastwrite(ResourcePath::toLocalResourcePath(prefab_path))
                 ->or(0 as fsys::unix1970_time_t);
                 
@@ -156,6 +169,13 @@ namespace JEEditor::Editor
             s_prefab_cache_dat =
                 JEGaming::Saving::Entity::load(prefab_path);
             return s_prefab_cache_dat;
+        }
+        
+        // 编辑器内部刚写入预设体文件时调用：下一次读取立即复核时间戳，
+        // 不等节流间隔（否则写盘后最多 0.5 秒内的差异高亮仍按旧数据渲染）
+        func invalidatePrefabCache()=> void
+        {
+            s_prefab_cache_checked_at = -1000.;
         }
         // 取实体挂载的预设体引用；未挂载（无 Editor::Prefab 组件或
         // 路径为空，与实体列表的判定一致）返回 none
@@ -533,7 +553,10 @@ namespace JEEditor::Editor
                             MsgBox::err("更新失败",
                                 F"更新预设体 \"{path}\" 失败：{msg}");
                         ok(_)?
+                        {
+                            invalidatePrefabCache();
                             PrefabSync::commitSync(sync_ctx);
+                        }
                     }
                 }
             }
@@ -592,7 +615,10 @@ namespace JEEditor::Editor
                             MsgBox::err("更新失败",
                                 F"更新预设体 \"{path}\" 失败：{msg}");
                         ok(_)?
+                        {
+                            invalidatePrefabCache();
                             PrefabSync::commitSync(sync_ctx);
+                        }
                     }
                 }
             }
