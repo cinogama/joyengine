@@ -30,8 +30,14 @@ WOSHADER_VERTEX_IN!
 WOSHADER_VERTEX_TO_FRAGMENT!
     using v2f = struct{
         pos: float4,
-        off: float2,
-        dir: float2,
+        // s（沿背光方向）、t（垂直背光方向）的视空间坐标
+        st: float2,
+        // 视空间偏移除以椭圆半径：椭圆二次型 q = dot(ell, ell)
+        ell: float2,
+        // 逐 draw 常量：A、B、C、L²（见 frag 的光线抛物线）
+        coef: float4,
+        // tail_on（尾迹是否启用）、1/fade_len
+        misc: float2,
     };
     
 WOSHADER_FRAGMENT_OUT!
@@ -62,13 +68,17 @@ public func vert(v: vin)
     let perp_view = vec2!(dir_view->y, 0. - dir_view->x);
 
     // 椭圆在阴影局部系（s 沿光向、t 垂直光向）中的二次型
-    // A s² + 2 B s t + C t² = 1
-    let A = dir_view->x * dir_view->x / (half_a * half_a)
-        + dir_view->y * dir_view->y / (half_b * half_b);
-    let B = dir_view->x * dir_view->y
-        * (1. / (half_a * half_a) - 1. / (half_b * half_b));
-    let C = dir_view->y * dir_view->y / (half_a * half_a)
-        + dir_view->x * dir_view->x / (half_b * half_b);
+    // A s² + 2 B s t + C t² = 1 的系数只由 draw 参数决定，在顶点算一次
+    // 传给片元，省掉每像素的除法和重复展开；半轴下限避免零半轴除零。
+    let ha = max(half_a, 0.0001);
+    let hb = max(half_b, 0.0001);
+    let ia2 = 1. / (ha * ha);
+    let ib2 = 1. / (hb * hb);
+    let A = dir_view->x * dir_view->x * ia2
+        + dir_view->y * dir_view->y * ib2;
+    let B = dir_view->x * dir_view->y * (ia2 - ib2);
+    let C = dir_view->y * dir_view->y * ia2
+        + dir_view->x * dir_view->x * ib2;
 
     let along = sqrt(
         half_a * half_a * dir_view->x * dir_view->x
@@ -79,6 +89,8 @@ public func vert(v: vin)
 
     // 尾迹延伸范围与光源距离
     let tail = max(JE_SHADOW_ELLIPSE->z, 0.);
+    let tail_on = step(tail, 0.0001);
+    let fade_len = max(JE_SHADOW_ELLIPSE->w, 0.0001);
     let s_end = along + tail;
     let light_dist = max(JE_COLOR->z, 0.0001);
 
@@ -128,74 +140,50 @@ public func vert(v: vin)
     let pos = JE_P * vec4!(view_pos, 1.);
     return v2f{
         pos = vec4!(pos->x, pos->y, shadow_depth * pos->w, pos->w),
-        off = vec2!(off_x, off_y),
-        dir = dir_view,
+        st = vec2!(frame_s, frame_t),
+        ell = vec2!(off_x / ha, off_y / hb),
+        coef = vec4!(A, B, C, light_dist * light_dist),
+        misc = vec2!(tail_on, 1. / fade_len),
     };
 }
     
 public func frag(vf: v2f)
 {
-    let half_a = max(max(JE_SHADOW_ELLIPSE->x, 0.) * 0.5, 0.0001);
-    let half_b = max(max(JE_SHADOW_ELLIPSE->y, 0.) * 0.5, 0.0001);
-    let dir_view = vf.dir;
-    let perp_view = vec2!(dir_view->y, 0. - dir_view->x);
-    let tail = max(JE_SHADOW_ELLIPSE->z, 0.);
-    let fade_len = max(JE_SHADOW_ELLIPSE->w, 0.0001);
+    let s = vf.st->x;
+    let t = vf.st->y;
     let light_dist = max(JE_COLOR->z, 0.0001);
 
-    let ellipse_enabled =
-        step(max(JE_SHADOW_ELLIPSE->x, 0.), 0.0001)
-            * step(max(JE_SHADOW_ELLIPSE->y, 0.), 0.0001);
+    // 接触椭圆（固定在视空间 X/Y、不随光向旋转）：核心区满强度，
+    // 外缘约 13% 半径渐隐（软边）
+    let q = dot(vf.ell, vf.ell);
+    let ellipse_cover = clamp((1. - q) * 4., 0., 1.);
 
-    // 阴影局部坐标
-    let s = dot(vf.off, dir_view);
-    let t = dot(vf.off, perp_view);
-
-    // 椭圆二次型
-    let A = dir_view->x * dir_view->x / (half_a * half_a)
-        + dir_view->y * dir_view->y / (half_b * half_b);
-    let B = dir_view->x * dir_view->y
-        * (1. / (half_a * half_a) - 1. / (half_b * half_b));
-    let C = dir_view->y * dir_view->y / (half_a * half_a)
-        + dir_view->x * dir_view->x / (half_b * half_b);
-
-    // 接触椭圆：核心区满强度，外缘约 13% 半径渐隐（软边）
-    let q = A * s * s + 2. * B * s * t + C * t * t;
-    let ellipse_cover = clamp((1. - q) * 4., 0., 1.) * ellipse_enabled;
-
-    // 从光源 P=(-L,0) 沿 (ws,wt) 看，光线与椭圆相切即阴影锥边界。
-    // 抛物线 q(μ)=A L²+2 b μ+Qw μ²，片段位于 μ=1；
+    // 从光源 P=(-L,0) 沿 (ws,t) 看，光线与椭圆相切即阴影锥边界。
+    // q(μ) = A L² + 2 b μ + Qw μ² 是 μ 的抛物线，片段位于 μ=1；
     // 尾迹 = 软椭圆沿该光线扫掠：取 [0,1] 上 q 的最小值（椭圆最厚处
     // μ_thick），所以椭圆软边之外的背光侧不会留下没被尾迹覆盖的亮缝。
     let ws = s + light_dist;
-    let wt = t;
-    let Qw = A * ws * ws + 2. * B * ws * wt + C * wt * wt;
-    let b = (0. - light_dist) * (A * ws + B * wt);
-    let l2 = light_dist * light_dist;
-    let mu_thick = (0. - b) / max(Qw, 0.000001);
-    let q_thick = A * l2 - b * b / max(Qw, 0.000001);
+    let Qw = vf.coef->x * ws * ws + 2. * vf.coef->y * ws * t
+        + vf.coef->z * t * t;
+    let b = (0. - light_dist) * (vf.coef->x * ws + vf.coef->y * t);
+    let inv_qw = 1. / max(Qw, 0.000001);
+    let al2 = vf.coef->w * vf.coef->x;
+    let mu_thick = (0. - b) * inv_qw;
+    let q_thick = al2 - b * b * inv_qw;
     let on_ray = step(1., mu_thick) * step(mu_thick, 0.);
-    let q_frag = Qw + 2. * b + A * l2;
-    let swept = clamp((1. - lerp(q_frag, q_thick, on_ray)) * 4., 0., 1.);
+    let swept = clamp(
+        (1. - lerp(Qw + 2. * b + al2, q_thick, on_ray)) * 4., 0., 1.);
 
     // 尾迹从光线离开椭圆的出射点（大根）起算：与椭圆相切处距离为 0，
-    // 正好接上椭圆背光侧软边；随后按消隐距离渐隐。
-    let c0 = A * l2 - 1.;
-    let disc = b * b - Qw * c0;
+    // 正好接上椭圆背光侧软边；CPU 保证消隐距离不超过尾迹长度。
+    let disc = b * b - Qw * (al2 - 1.);
     let sq = sqrt(max(disc, 0.));
-    let mu_exit = (0. - b + sq) / max(Qw, 0.000001);
-    let s_b = 0. - light_dist + mu_exit * ws;
-    let d_behind = s - s_b;
-
-    let u = clamp(d_behind / fade_len, 0., 1.);
+    let mu_exit = (0. - b + sq) * inv_qw;
+    let s_b = ws * mu_exit - light_dist;
+    let u = clamp((s - s_b) * vf.misc->y, 0., 1.);
     let fade = 1. - u * u * (3. - 2. * u);
 
-    let in_tail =
-        step(tail, d_behind)
-            * step(tail, 0.0001)
-            * fade;
-
-    let cover = max(ellipse_cover, in_tail * swept);
+    let cover = max(ellipse_cover, (vf.misc->x * fade) * swept);
     let shadow_factor = JE_LOCAL_SCALE->x * cover;
     return fout{
         shadow_factor = vec4!(
