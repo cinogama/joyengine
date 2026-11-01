@@ -490,8 +490,11 @@ namespace JEEditor::Editor
             
             // 工具栏第一行：上级目录 + 盘符切换（仅 Windows 探测到盘符时显示）
             let parent_dir = parent(self.m_current);
-            let can_go_up = parent_dir->to_string->len != 0
-                && !(parent_dir == self.m_current);
+            // 字符串比较：path_t 的 == 是 std::filesystem::equivalent，
+            // 会在这里逐帧发起文件系统查询。
+            let parent_str = parent_dir->to_string;
+            let can_go_up = parent_str->len != 0
+                && parent_str != self.m_current->to_string();
                 
             BeginDisabled(!can_go_up);
             if (Button("上级目录"))

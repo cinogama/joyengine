@@ -24,12 +24,19 @@ using JEEditor::GUI::Windows;
 
 namespace JEEditor::Editor
 {
+    // 授权文件条目：相对路径在打开窗口时算好（fsys::relative 会访问
+    // 文件系统），列表逐帧重绘时不再重复计算。
+    using LicenseEntry = struct{
+        public m_path: path_t,
+        public m_rel: string,
+    };
+    
     // 「关于」窗口：展示引擎信息，以及宿主路径（exe 所在目录）下 licenses
     // 目录内的所有第三方授权文件——该目录由 prebuild 脚本从 3rd/ 各依赖
     // 中收集而来。左栏为授权文件列表（按相对路径排序），右栏查看选中文件
     // 的路径、大小与全文；全文在选中时才读取，避免打开窗口时的批量 IO。
     using About = struct{
-        m_license_files: mut array<path_t>,  // licenses 下的全部授权文件（按路径排序）
+        m_license_files: mut array<LicenseEntry>,  // licenses 下的全部授权文件（按路径排序）
         m_selected: mut int,                 // 当前选中的文件下标，-1 表示未选中
         m_content: mut option<string>,       // 选中文件的内容，选中时懒加载
         m_closed: mut bool,
@@ -46,7 +53,10 @@ namespace JEEditor::Editor
         // 工作目录无关，prebuild 会把它生成到与 jedriver.exe 同级的位置。
         func licensesRoot()=> path_t
         {
-            return normalize(host_path()) / "licenses";
+            // 宿主路径在整个进程生命周期内不变，只解析一次；
+            // 头部的目录展示等位置每帧都会取它。
+            static let s_root = normalize(host_path()) / "licenses";
+            return s_root;
         }
 
         // 相对 licenses 根目录的显示路径（如 "imgui/LICENSE.txt"），
@@ -64,26 +74,31 @@ namespace JEEditor::Editor
 
         // 收集 licenses 目录下的全部授权文件：目录不存在（如未经 prebuild
         // 直接从源码目录运行）时返回空列表，由列表面板给出提示。
-        func collectLicenseFiles()=> array<path_t>
+        func collectLicenseFiles()=> array<LicenseEntry>
         {
             let root = licensesRoot();
             if (!exist(root))
-                return []: array<path_t>;
+                return []: array<LicenseEntry>;
 
             match (allsubpath(root))
             {
                 ok(paths)?
                 {
-                    let mut files = []mut: vec<path_t>;
+                    let mut files = []mut: vec<LicenseEntry>;
                     for (let p : paths)
                     {
                         if (isfile(p))
-                            files->add(p);
+                        {
+                            files->add(LicenseEntry{
+                                    m_path = p,
+                                    m_rel = relPathOf(p, root),
+                                });
+                        }
                     }
-                    return sort(files, \l, r = relPathOf(l, root) < relPathOf(r, root););
+                    return sort(files, \l, r = l.m_rel < r.m_rel;);
                 }
                 err(_)?
-                    return []: array<path_t>;
+                    return []: array<LicenseEntry>;
             }
         }
 
@@ -161,7 +176,8 @@ namespace JEEditor::Editor
             if (index == self.m_selected)
                 return;
             self.m_selected = index;
-            self.m_content = file::readall(self.m_license_files[index]->to_string);
+            self.m_content = file::readall(
+                self.m_license_files[index].m_path->to_string);
         }
 
         public func run(self: About)=> bool
@@ -238,17 +254,17 @@ namespace JEEditor::Editor
                 return;
             }
 
-            let root = licensesRoot();
             let mut index = 0;
-            for (let p : self.m_license_files)
+            for (let entry : self.m_license_files)
             {
-                let rel = relPathOf(p, root);
-                if (SelectableSelected(F"{shrinkPath(rel, 34)}##{index}", index == self.m_selected))
+                if (SelectableSelected(
+                        F"{shrinkPath(entry.m_rel, 34)}##{index}",
+                        index == self.m_selected))
                 {
                     self->selectLicense(index);
                 }
                 if (IsItemHovered())
-                    do SetTooltip(p->to_string);
+                    do SetTooltip(entry.m_path->to_string);
                 index += 1;
             }
         }
@@ -263,13 +279,13 @@ namespace JEEditor::Editor
                 return;
             }
 
-            let p = self.m_license_files[self.m_selected];
-            SeparatorText(filename(p));
+            let entry = self.m_license_files[self.m_selected];
+            SeparatorText(filename(entry.m_path));
 
             // 信息与全文都在窗口宽度内自动换行，避免超长行撑破布局
             PushTextWrapPos(0.);
-            TextDisabled(F"路径: {p->to_string}");
-            TextDisabled(F"大小: {prettySizeOf(p)}");
+            TextDisabled(F"路径: {entry.m_path->to_string}");
+            TextDisabled(F"大小: {prettySizeOf(entry.m_path)}");
             PopTextWrapPos();
 
             match (self.m_content)

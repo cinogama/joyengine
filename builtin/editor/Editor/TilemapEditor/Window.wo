@@ -87,16 +87,54 @@ namespace JEEditor::Editor::TilemapEditor
     }
 
     // ===== 保存流程 =====
+    // 保存地图编辑器内修改过的图集（瓦片的通行性/属性/自动拼接类型
+    // 都属于图集文档；图集是独立文件，保存地图时一并写回）。
+    // 全部成功后清空待保存表；任一失败返回 false（调用方保持现状）。
+    func save_dirty_tilesets(state: EditorState)=> bool
+    {
+        if (state.m_tileset_dirty->len == 0)
+            return true;
+        let docs = state.m_tileset_dirty;
+        let mut all_ok = true;
+        for (let ts : docs)
+        {
+            let p = ts->doc_path();
+            if (p == "")
+            {
+                all_ok = false;
+                do MsgBox::err("保存图集失败",
+                    "图集尚未保存到文件，请在图集编辑器中指定保存路径");
+                continue;
+            }
+            if (ts->save(p))
+            {
+                do Statebar::showState(3.) <| func()
+                {
+                    do Text(F"图集已保存：{p}");
+                };
+            }
+            else
+            {
+                all_ok = false;
+                do MsgBox::err("保存图集失败", F"无法写入文件：{p}");
+            }
+        }
+        if (all_ok)
+            do state->clear_tileset_dirty();
+        return all_ok;
+    }
+
     // 保存地图：无路径（新建未保存）时先询问路径。保存成功（含异步询问
     // 路径后）才调用 after 继续后续流程（关闭窗口/切换文档）；
-    // 失败或取消时不调用 —— 调用方保持现状即可。
+    // 失败或取消时不调用 —— 调用方保持现状即可。地图编辑器内修改过的
+    // 图集随地图一并保存（任一失败则不继续后续流程）。
     func try_save_map_then(state: EditorState, after: ()=>void)=> void
     {
         let ctx = state.m_context->unwrap();
         let path = ctx.m_path->to_string;
         if (path != "")
         {
-            if (ctx->save_to(ctx.m_path))
+            if (ctx->save_to(ctx.m_path) && save_dirty_tilesets(state))
             {
                 state.m_dirty = false;
                 do after();
@@ -113,7 +151,7 @@ namespace JEEditor::Editor::TilemapEditor
                 "@/resource/maps/newmap.je4tilemap")
             ->then(func(p)
                 {
-                    if (ctx->save_to(fsys::normalize(p)))
+                    if (ctx->save_to(fsys::normalize(p)) && save_dirty_tilesets(state))
                     {
                         state.m_dirty = false;
                         do after();
@@ -181,7 +219,7 @@ namespace JEEditor::Editor::TilemapEditor
     func ask_save_then(state: EditorState, after: ()=>void,
         save_then: (EditorState, ()=>void)=>void)=> void
     {
-        if (!state.m_dirty)
+        if (!state->has_unsaved())
         {
             do after();
             return;
@@ -302,7 +340,7 @@ namespace JEEditor::Editor::TilemapEditor
 
         func requestClose(self: TilemapEditorWindow)=> void
         {
-            if (!self.m_state.m_dirty || self.m_close)
+            if (!self.m_state->has_unsaved() || self.m_close)
             {
                 self.m_close = true;
                 return;
@@ -314,7 +352,7 @@ namespace JEEditor::Editor::TilemapEditor
         }
         public func onPreClose(self: TilemapEditorWindow)=> bool
         {
-            if (self.m_close || !self.m_state.m_dirty)
+            if (self.m_close || !self.m_state->has_unsaved())
                 return true;
             let editor = self;
             do ask_save_then_close(editor.m_state,
@@ -405,7 +443,7 @@ namespace JEEditor::Editor::TilemapEditor
 
         func requestClose(self: TilesetEditorWindow)=> void
         {
-            if (!self.m_state.m_dirty || self.m_close)
+            if (!self.m_state->has_unsaved() || self.m_close)
             {
                 self.m_close = true;
                 return;
@@ -417,7 +455,7 @@ namespace JEEditor::Editor::TilemapEditor
         }
         public func onPreClose(self: TilesetEditorWindow)=> bool
         {
-            if (self.m_close || !self.m_state.m_dirty)
+            if (self.m_close || !self.m_state->has_unsaved())
                 return true;
             let editor = self;
             do ask_save_then_close(editor.m_state,

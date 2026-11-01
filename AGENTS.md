@@ -43,9 +43,27 @@ There is no unit-test infrastructure; `script/prebuild/test/test_prebuild.wo` on
 - openal-soft must stay a **shared** library (LGPL compliance) — never static-link it.
 - Woolang ↔ C++: C side implements `wojeapi_*` functions (see `src/jeecs_woolang_api.cpp`); Woolang side declares them with `extern("libjoyecs", ...)` (see `je/typeinfo.wo`).
 
+## C/C++ style rules
+
+Hard rules for all C/C++ code (core, `include/jeecs.hpp`, `driver/`, `module/`, graphic API impls):
+
+1. **No default parameters.** Express optional behavior with overloads or separate functions instead.
+2. **Null-capable interfaces must be marked.** A parameter designed to accept null gets `/* OPTIONAL */` before its type: `void attach(/* OPTIONAL */ je_entity_t* parent);`. A return value that can be null is marked the same way: `/* OPTIONAL */ je_mesh_t* find_mesh(const char* name);`. If null is allowed only under special circumstances, add a comment explaining why.
+3. **Null is the exception, not the default.** Do not design interfaces to accept/return null pointers unless there is a real need.
+4. **No defensive code.** Never null-check, validate, or silently fall back for parameters that are non-null by contract; `assert` is the maximum allowed. Contract violations should fail loudly in development, not be masked.
+
+These rules govern code being written or modified; do not mass-refactor existing code to comply unless explicitly asked.
+
 ## Woolang work
 
 Use the locally available skills `woolang-script` (writing/fixing `.wo` code), `woolang-baozi` (package management), and `woolang-c-api` (C API / native module integration) for `.wo` and binding work. Packages are managed with baozi (`baozi.toml`, lockfile `baozi.lock.toml`); `no_compile = true` at root — this repo is not itself compiled as a woolang package.
+
+Syntax-check `.wo` code with `baozi check` — compilation only, the script is NOT executed:
+
+- **cwd must be the baozi project directory** (baozi operates on the manifest in the cwd): `cd` into the project first, then run `baozi check [script]` there.
+- `baozi check <script>` checks the given script; without arguments it checks the project's default `<name>.wo`.
+- It runs `install` and `compile` first (failures there are only warnings), prepares the lock-pinned woolang×woort toolchain, then invokes woolang with `--check --woolang-ignore-not-found-extern-func 1 --woort-enable-jit 0 --woort-halt-panic-vm 1`. Missing extern (native) function definitions are ignored, so `extern("libjoyecs", ...)` bindings check fine outside the engine.
+- Exits non-zero when errors are found. Always run this after writing or editing woolang code to catch errors early — do not guess syntax.
 
 ## Conventions
 

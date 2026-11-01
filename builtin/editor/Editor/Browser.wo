@@ -339,6 +339,35 @@ namespace JEEditor::Editor
             return self.m_show_hidden || !isHiddenName(name);
         }
         
+        // 逐帧路径比较必须用字符串：path_t 的 == 走
+        // std::filesystem::equivalent（每次至少两次 stat），目录列表里
+        // 每行每帧比较一次的话会形成大量文件系统查询。浏览器内的路径都
+        // 经 walk/workpath 规范化，内容一致的字符串即指向同一项。
+        func isSamePath(a: fsys::path_t, b: fsys::path_t)=> bool
+        {
+            return a->to_string() == b->to_string();
+        }
+        
+        // 工具栏显示的“相对项目根”路径：两端都是规范化绝对路径，直接
+        // 按字符串前缀截取。原实现用 fsys::relative，它每帧都会做一次
+        // 文件系统查询（weakly_canonical）。
+        func currentPathDisplay(self: Browser)=> string
+        {
+            let root = self.m_root->to_string();
+            let cur = self.m_current->to_string();
+            
+            if (cur == root)
+                return "/";
+                
+            let prefix = root->end_with("/") ? root | root + "/";
+            if (cur->begin_with(prefix))
+            {
+                let rel = cur->sub(prefix->len);
+                return rel->len == 0 ? "/" | rel;
+            }
+            return cur;
+        }
+        
         func visibleEntryCount(self: Browser, entries: array<fsys::path_t>)=> int
         {
             let mut count = 0;
@@ -1300,20 +1329,16 @@ namespace JEEditor::Editor
                 
             SameLine();
             
-            let mut rel = "";
-            match (relative(self.m_current, self.m_root))
-            {
-                err(_)?;
-                ok(r)?
-                    rel = r;
-            }
-            let display = (rel->len == 0 || rel == ".") ? "/" | rel;
-            TextDisabled(display);
+            TextDisabled(self->currentPathDisplay());
             
             SameLine();
             
             if (Button("刷新"))
+            {
                 self.m_selected = option::none;
+                // 文件系统可能在编辑器外被改动：清空树/列表缓存重新扫描
+                self.m_fs_dirty->set(true);
+            }
                 
             SameLine();
             
@@ -1343,7 +1368,7 @@ namespace JEEditor::Editor
         // 轨迹，因此清空前进栈（与浏览器行为一致）。
         func goTo(self: Browser, dir: fsys::path_t)=> void
         {
-            if (dir == self.m_current)
+            if (isSamePath(dir, self.m_current))
                 return;
                 
             self.m_history->add(self.m_current);
@@ -1401,7 +1426,7 @@ namespace JEEditor::Editor
         
         func navigateUp(self: Browser)=> void
         {
-            if (self.m_current != self.m_root)
+            if (!isSamePath(self.m_current, self.m_root))
             {
                 self->goTo(parent(self.m_current));
                 self.m_selected = option::none;
@@ -1432,7 +1457,7 @@ namespace JEEditor::Editor
                 + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick
                 + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
                 
-            if (self.m_current == self.m_root)
+            if (isSamePath(self.m_current, self.m_root))
                 root_flags += TreeNodeAttribute::ImGuiTreeNodeFlags_Selected;
                 
             let root_open = TreeNodeEx(F"{display_name}##browser_root", root_flags);
@@ -1454,14 +1479,20 @@ namespace JEEditor::Editor
         
         func drawDirNode(self: Browser, dir: fsys::path_t)=> void
         {
+            // 选中路径每帧只取出一次；逐节点比较用字符串（见 isSamePath）
+            let mut has_selected = self.m_selected->is_value;
+            let mut selected_str = "";
+            if (has_selected)
+                selected_str = self.m_selected->unwrap->to_string;
+                
             for (let d : self->getSubDirs(dir))
             {
                 let name = filename(d);
                 if (!self->isEntryVisible(name))
                     continue;
                     
-                let is_selected = self.m_selected->is_value
-                    && self.m_selected->unwrap == d;
+                let is_selected = has_selected
+                    && selected_str == d->to_string();
                     
                 let mut flags = TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow
                     + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick
@@ -1491,7 +1522,9 @@ namespace JEEditor::Editor
         // 根据路径返回对应的图标：目录返回文件夹图标（*.je4module 拓展模块
         // 目录除外，使用 C++ 程序图标），文件按扩展名走 ext_icon_map 查询，
         // 未命中则返回默认 FILE 图标。
-        func iconForPath(path: fsys::path_t)=> option<texture2d>
+        // is_dir 由调用方（已缓存的目录/文件列表）给出，这里不再 isdir：
+        // 每行每帧一次 stat 是纯浪费，且目录/文件本来就分列表渲染。
+        func iconForPath(path: fsys::path_t, is_dir: bool)=> option<texture2d>
         {
             // 扩展名 -> 图标 的查找表；命中即用，未命中走默认 FILE 图标。
             static let ext_icon_map = {
@@ -1545,17 +1578,17 @@ namespace JEEditor::Editor
             };
 
 
-            if (isdir(path))
+            let ext = string::lower(extension(path));
+            if (is_dir)
             {
-                if (isJe4ModuleDir(path))
+                if (ext == ".je4module")
                     return Icons::CPP;
                 // Workflow 集目录（*.je4workflows）
-                if (string::lower(extension(path)) == ".je4workflows")
+                if (ext == ".je4workflows")
                     return Icons::WORKFLOW;
                 return Icons::FOLDER;
             }
 
-            let ext = string::lower(extension(path));
             return ext_icon_map->get(ext)=>> \v = v;->or_bind(\= Icons::FILE;);
         }
         
@@ -1577,9 +1610,9 @@ namespace JEEditor::Editor
         
         // 在整行 Selectable 之上叠绘条目图标（见 drawFileList）：图标本
         // 身不拦截输入，图标区域同样命中所在行的悬浮/点击/拖拽。
-        func drawItemIcon(path: fsys::path_t)=> void
+        func drawItemIcon(path: fsys::path_t, is_dir: bool)=> void
         {
-            match(iconForPath(path))
+            match(iconForPath(path, is_dir))
             {
                 none?;
                 value(icon)?
@@ -1599,6 +1632,12 @@ namespace JEEditor::Editor
             let filter_lower = self.m_filter->lower;
             let has_filter = filter_lower->len > 0;
             
+            // 选中路径每帧只取出一次；逐行比较用字符串（见 isSamePath）
+            let mut has_selected = self.m_selected->is_value;
+            let mut selected_str = "";
+            if (has_selected)
+                selected_str = self.m_selected->unwrap->to_string;
+            
             let visible_count = self->visibleEntryCount(dirs) + self->visibleEntryCount(files);
             if (visible_count == 0)
                 TextDisabled("(空目录)");
@@ -1614,8 +1653,8 @@ namespace JEEditor::Editor
                 let name = filename(d);
                 if (self->isEntryVisible(name) && (!has_filter || name->lower->find(filter_lower)->is_value))
                 {
-                    let is_selected = self.m_selected->is_value
-                        && self.m_selected->unwrap == d;
+                    let is_selected = has_selected
+                        && selected_str == d->to_string();
                         
                     let line_pos = GetCursorScreenPos();
                     let clicked = SelectableSelected(
@@ -1630,7 +1669,7 @@ namespace JEEditor::Editor
                         self->handleItemClick(d);
                         
                     SetCursorScreenPos(line_pos);
-                    drawItemIcon(d);
+                    drawItemIcon(d, true);
                     Text(F"{name}/");
                 }
             }
@@ -1640,8 +1679,8 @@ namespace JEEditor::Editor
                 let name = filename(f);
                 if (self->isEntryVisible(name) && (!has_filter || name->lower->find(filter_lower)->is_value))
                 {
-                    let is_selected = self.m_selected->is_value
-                        && self.m_selected->unwrap == f;
+                    let is_selected = has_selected
+                        && selected_str == f->to_string();
                         
                     let line_pos = GetCursorScreenPos();
                     let clicked = SelectableSelected(
@@ -1656,7 +1695,7 @@ namespace JEEditor::Editor
                         self->handleItemClick(f);
                         
                     SetCursorScreenPos(line_pos);
-                    drawItemIcon(f);
+                    drawItemIcon(f, false);
                     Text(name);
                 }
             }

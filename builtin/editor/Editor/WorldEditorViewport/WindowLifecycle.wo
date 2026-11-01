@@ -1126,15 +1126,20 @@ namespace JEEditor::Editor::WorldEditorViewport
     }
     
     // 按保存路径反查视口；资源管理器打开 .je4world 前用它去重。
+    // 比较用字符串：path_t 的 == 走 std::filesystem::equivalent（两次
+    // stat），而这里只需判定“是否为同一路径”，保存路径都经 normalize，
+    // 字符串比较即可。调用点可能在列表绘制路径上（如“打开世界”窗口），
+    // 不能引入文件系统查询。
     public func findWorldEditorViewportByPath(path: path_t)
     {
+        let path_str = path->to_string();
         for (let (_, viewport) : s_world_viewports)
         {
             match (viewport.m_saving_path)
             {
                 none?;
                 value(opened_path)?
-                    if (opened_path == path)
+                    if (opened_path->to_string() == path_str)
                         return option::value(viewport);
             }
         }

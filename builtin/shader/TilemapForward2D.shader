@@ -3,7 +3,7 @@
 // 供光照后处理使用）+ TilemapUnlitBlend 的数组图集采样（每层一个瓦片，
 // layer = iy*xcount + ix）。顶点 uv 为 float3 —— (u, v, 数组层号)；
 // tiling/offset 只作用于 uv.xy，层号分量原样传递。瓦片网格顶点自带
-// normal 属性（面向相机的平面法线），参与光照计算。
+// normal 属性（图集按瓦片指定，默认 -Z 指向屏幕外侧），参与光照计算。
 import pkg::std;
 
 import je::shader;
