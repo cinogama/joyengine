@@ -1362,6 +1362,8 @@ namespace jeecs
             // 例外：SpriteShadow 的四边形只是椭圆/尾迹的包围框，片元里才
             // 裁出实际覆盖，因此它不写深度（ZWRITE DISABLE），只 MAX 叠加
             // 强度，避免包围框内无阴影的空洞以脚底 key 擦除其它阴影。
+            // 它在同一光源的其余贡献之后统一绘制，否则自阴影接收面的
+            // 覆盖写入会把位于其后方（key 更大）的接触阴影一并擦掉。
 
             // 自阴影接收面 pass ×2（普通精灵与非 TopDown 瓦片分片共用）：
             // 以半层偏移的 surface key + 覆盖写入参与 painter key 仲裁，
@@ -2398,6 +2400,97 @@ namespace jeecs
             }
         }
 
+        // SpriteShadow（角色接触阴影）绘制：在实体世界包围盒底边中点
+        //（脚下）画椭圆，并沿背光方向拉出尾迹。中心取世界空间底部，
+        // 旋转实体不会带着椭圆一起转离地面。
+        // local_scale.x 传强度，.yz 传 CPU 预计算的世界空间背光方向
+        //（着色器用 JE_V 转到视空间，避免实体非等比缩放扭曲方向）；
+        // JE_COLOR.xy 传椭圆中心（世界空间），.z 传阴影计算点到实体的
+        // 平面距离（点光用于切线张开率，平行光不用），.w 传中心世界 Z；
+        // JE_SHADOW_ELLIPSE 传轴长/延伸/消隐距离。点光方向取"阴影计算点
+        // →脚底"（而非→实体中心），尾迹从接触点向外延伸；平行光方向由
+        // 光源自身朝向决定，与实体位置无关。
+        void draw_sprite_shadow(
+            jegl_command_buffer* shadow_chain,
+            const defer_light2d_shadow_passes_t& passes,
+            const block2d_arch& block,
+            const light2d_arch& light,
+            const math::vec3& shadow_cast_pos,
+            const float(&view)[4][4],
+            const float(&vp)[4][4],
+            const math::vec4& shadow_key)
+        {
+            assert(block.spriteshadow != nullptr);
+
+            const math::vec3 shadow_dir_world_raw =
+                (light.parallel != nullptr
+                    ? light.translation->world_rotation * math::vec3(0.f, -1.f, 0.f)
+                    : block.bottom_world_center
+                        - shadow_cast_pos);
+            // 阴影只在 XY 平面内延伸（2D 画面），Z 分量不参与
+            // 方向计算，避免光源与实体的高度差稀释方向
+            const float shadow_dir_world_len = std::sqrt(
+                shadow_dir_world_raw.x * shadow_dir_world_raw.x
+                + shadow_dir_world_raw.y * shadow_dir_world_raw.y);
+            const math::vec3 shadow_dir_world =
+                shadow_dir_world_len > 0.000001f
+                ? math::vec3(
+                    shadow_dir_world_raw.x / shadow_dir_world_len,
+                    shadow_dir_world_raw.y / shadow_dir_world_len,
+                    0.f)
+                : math::vec3(0.f, -1.f, 0.f);
+
+            assert(block.shape != nullptr);
+            const math::vec3 ellipse_center_world = block.bottom_world_center;
+
+            // 点光阴影由着色器从阴影计算点向椭圆作切线锥，
+            // 需要椭圆中心到阴影计算点的平面距离（JE_COLOR.z）；
+            // 平行光不用，写 0。距离取世界空间椭圆中心
+            // 到阴影计算点的 XY 距离。
+            float light_plane_distance = 0.f;
+            if (light.parallel == nullptr)
+            {
+                light_plane_distance = std::sqrt(
+                    (ellipse_center_world.x - shadow_cast_pos.x) * (ellipse_center_world.x - shadow_cast_pos.x)
+                    + (ellipse_center_world.y - shadow_cast_pos.y) * (ellipse_center_world.y - shadow_cast_pos.y));
+            }
+
+            const math::vec4 ellipse_center(
+                ellipse_center_world.x,
+                ellipse_center_world.y,
+                light_plane_distance,
+                ellipse_center_world.z);
+
+            const float shadow_distance = std::max(block.spriteshadow->distance, 0.f);
+            const float shadow_fade = block.spriteshadow->fade_distance > 0.f
+                ? std::min(block.spriteshadow->fade_distance, shadow_distance)
+                : shadow_distance;
+            const math::vec4 ellipse_params(
+                block.spriteshadow->ellipse_major,
+                block.spriteshadow->ellipse_minor,
+                shadow_distance,
+                shadow_fade);
+
+            draw_shadow_occluder(
+                shadow_chain,
+                passes.sprite,
+                m_defer_light2d_host._sprite_shadow_quad,
+                block.translation,
+                light,
+                shadow_cast_pos,
+                view, vp,
+                math::vec3(
+                    block.spriteshadow->factor,
+                    shadow_dir_world.x,
+                    shadow_dir_world.y),
+                0.f,
+                math::vec3(0.f, -1.f, 0.f),
+                nullptr,
+                shadow_key,
+                &ellipse_center,
+                &ellipse_params);
+        }
+
         void DrawFrame()
         {
             const double current_time = je_clock_time();
@@ -2511,6 +2604,11 @@ namespace jeecs
                             // 统一 key 模式下 TopDown=1 / 普通=0；逐顶点 key
                             // 由 +2 位标记（0/1 统一，2/3 逐顶点）
                             const float shadow_key_base_mode = topdown_light ? 1.f : 0.f;
+
+                            // 本光源待绘制的接触阴影：推迟到其余贡献全部写入后
+                            // 统一绘制，避免覆盖写入的自阴影接收面擦掉位于其
+                            // 后方的接触阴影
+                            std::vector<const block2d_arch*> pending_sprite_shadows;
 
                             for (auto& blockarch : m_2dblock_list)
                             {
@@ -2632,90 +2730,11 @@ namespace jeecs
                                             shadow_key);
                                     }
                                     if (blockarch.spriteshadow != nullptr && blockarch.spriteshadow->factor > 0.f)
-                                    {
-                                        // SpriteShadow（角色接触阴影）：在实体世界包围盒
-                                        // 底边中点（脚下）画椭圆，并沿背光方向拉出尾迹。
-                                        // 中心取世界空间底部，旋转实体不会带着椭圆一起
-                                        // 转离地面。
-                                        // local_scale.x 传强度，.yz 传 CPU 预计算的世界
-                                        // 空间背光方向（着色器用 JE_V 转到视空间，避免
-                                        // 实体非等比缩放扭曲方向）；JE_COLOR.xy 传椭圆
-                                        // 中心（世界空间），.z 传阴影计算点到实体的平面
-                                        // 距离（点光用于切线张开率，平行光不用），.w 传
-                                        // 中心世界 Z；JE_SHADOW_ELLIPSE 传轴长/延伸/消隐
-                                        // 距离。点光方向取"阴影计算点→脚底"（而非
-                                        // →实体中心），尾迹从接触点向外延伸；平行光方向
-                                        // 由光源自身朝向决定，与实体位置无关
-                                        const math::vec3 shadow_dir_world_raw =
-                                            (lightarch.parallel != nullptr
-                                                ? lightarch.translation->world_rotation * math::vec3(0.f, -1.f, 0.f)
-                                                : blockarch.bottom_world_center
-                                                    - shadow_cast_pos);
-                                        // 阴影只在 XY 平面内延伸（2D 画面），Z 分量不参与
-                                        // 方向计算，避免光源与实体的高度差稀释方向
-                                        const float shadow_dir_world_len = std::sqrt(
-                                            shadow_dir_world_raw.x * shadow_dir_world_raw.x
-                                            + shadow_dir_world_raw.y * shadow_dir_world_raw.y);
-                                        const math::vec3 shadow_dir_world =
-                                            shadow_dir_world_len > 0.000001f
-                                            ? math::vec3(
-                                                shadow_dir_world_raw.x / shadow_dir_world_len,
-                                                shadow_dir_world_raw.y / shadow_dir_world_len,
-                                                0.f)
-                                            : math::vec3(0.f, -1.f, 0.f);
-
-                                        assert(blockarch.shape != nullptr);
-                                        const math::vec3 ellipse_center_world =
-                                            blockarch.bottom_world_center;
-
-                                        // 点光阴影由着色器从阴影计算点向椭圆作切线锥，
-                                        // 需要椭圆中心到阴影计算点的平面距离（JE_COLOR.z）；
-                                        // 平行光不用，写 0。距离取世界空间椭圆中心
-                                        // 到阴影计算点的 XY 距离。
-                                        float light_plane_distance = 0.f;
-                                        if (lightarch.parallel == nullptr)
-                                        {
-                                            light_plane_distance = std::sqrt(
-                                                (ellipse_center_world.x - shadow_cast_pos.x) * (ellipse_center_world.x - shadow_cast_pos.x)
-                                                + (ellipse_center_world.y - shadow_cast_pos.y) * (ellipse_center_world.y - shadow_cast_pos.y));
-                                        }
-
-                                        const math::vec4 ellipse_center(
-                                            ellipse_center_world.x,
-                                            ellipse_center_world.y,
-                                            light_plane_distance,
-                                            ellipse_center_world.z);
-
-                                        const float shadow_distance = std::max(
-                                            blockarch.spriteshadow->distance, 0.f);
-                                        const float shadow_fade = blockarch.spriteshadow->fade_distance > 0.f
-                                            ? std::min(blockarch.spriteshadow->fade_distance, shadow_distance)
-                                            : shadow_distance;
-                                        const math::vec4 ellipse_params(
-                                            blockarch.spriteshadow->ellipse_major,
-                                            blockarch.spriteshadow->ellipse_minor,
-                                            shadow_distance,
-                                            shadow_fade);
-
-                                        draw_shadow_occluder(
-                                            light2d_shadow_rend_chain,
-                                            shadow_passes.sprite,
-                                            m_defer_light2d_host._sprite_shadow_quad,
-                                            blockarch.translation,
-                                            lightarch,
-                                            shadow_cast_pos,
-                                            MAT4_VIEW, MAT4_VP,
-                                            math::vec3(
-                                                blockarch.spriteshadow->factor,
-                                                shadow_dir_world.x,
-                                                shadow_dir_world.y),
-                                            0.f,
-                                            math::vec3(0.f, -1.f, 0.f),
-                                            nullptr,
-                                            shadow_key,
-                                            &ellipse_center,
-                                            &ellipse_params);
-                                    }
+                                        // 接触阴影不写深度、只 MAX 叠加，若在此处按实体
+                                        // 顺序绘制，随后绘制的自阴影接收面（覆盖写入）
+                                        // 会把位于它后方的接触阴影一并擦掉。推迟到本
+                                        // 光源其余全部贡献之后统一绘制，见下方循环。
+                                        pending_sprite_shadows.push_back(&blockarch);
 
                                     // 自阴影紧随本实体的遮挡物绘制；逐像素胜负由
                                     // painter key 深度决定，与绘制先后无关。
@@ -2730,6 +2749,32 @@ namespace jeecs
                                             MAT4_VIEW, MAT4_VP,
                                             shadow_key_base_mode);
                                 }
+                            }
+
+                            // 接触阴影最后绘制：它只做 MAX 叠加、不写深度，
+                            // 仅按 painter key 深度测试被更靠前的贡献遮挡。
+                            // 先让所有遮挡阴影与自阴影接收面写入颜色/深度，
+                            // 后方接收面的覆盖写入便擦不掉接触阴影；更靠前
+                            // 的接收面/遮挡阴影已占据更小深度，仍会正确挡住它。
+                            for (const block2d_arch* blockarch : pending_sprite_shadows)
+                            {
+                                const float shadow_entity_key = topdown_light
+                                    ? blockarch->bottom_world_center.y
+                                    : blockarch->translation->world_position.z;
+                                const math::vec4 shadow_key(
+                                    shadow_entity_key,
+                                    shadow_depth.scale,
+                                    shadow_depth.bias,
+                                    shadow_key_base_mode);
+
+                                draw_sprite_shadow(
+                                    light2d_shadow_rend_chain,
+                                    shadow_passes,
+                                    *blockarch,
+                                    lightarch,
+                                    shadow_cast_pos,
+                                    MAT4_VIEW, MAT4_VP,
+                                    shadow_key);
                             }
                         }
                     }

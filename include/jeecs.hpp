@@ -13949,6 +13949,9 @@ namespace jeecs
         //（正交 2D 相机下等同世界单位），与 distance 同口径。
         // 接触阴影只按 MAX 叠加强度，不参与逐像素 painter key 深度仲裁
         //（其四边形只是椭圆/尾迹的包围框，不应以脚底 key 遮挡其它阴影）。
+        // 它推迟到同一光源的其它阴影贡献之后绘制，因此后方 SelfShadow
+        // 接收面的覆盖写入不会擦掉它；位于其前方（key 更小）的阴影仍按
+        // 深度测试正确遮挡它。
         struct SpriteShadow
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(SpriteShadow);
