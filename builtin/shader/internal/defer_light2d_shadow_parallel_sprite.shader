@@ -106,20 +106,16 @@ public func frag(vf: v2f)
     let tail = max(JE_SHADOW_ELLIPSE->z, 0.);
     let fade_len = max(JE_SHADOW_ELLIPSE->w, 0.0001);
 
-    // 椭圆（固定在视空间 X/Y，不随光向旋转）
-    let ex = vf.off->x / half_a;
-    let ey = vf.off->y / half_b;
     let ellipse_enabled =
         step(max(JE_SHADOW_ELLIPSE->x, 0.), 0.0001)
             * step(max(JE_SHADOW_ELLIPSE->y, 0.), 0.0001);
-    let ellipse_cover =
-        clamp((1. - (ex * ex + ey * ey)) * 4., 0., 1.) * ellipse_enabled;
 
     // 阴影局部坐标
     let s = dot(vf.off, dir_view);
     let t = dot(vf.off, perp_view);
 
     // 椭圆二次型 A s² + 2 B s t + C t² = 1
+    //（即固定在视空间 X/Y、不随光向旋转的接触椭圆）
     let A = dir_view->x * dir_view->x / (half_a * half_a)
         + dir_view->y * dir_view->y / (half_b * half_b);
     let B = dir_view->x * dir_view->y
@@ -127,27 +123,32 @@ public func frag(vf: v2f)
     let C = dir_view->y * dir_view->y / (half_a * half_a)
         + dir_view->x * dir_view->x / (half_b * half_b);
 
-    let perp_support = sqrt(
-        half_a * half_a * dir_view->y * dir_view->y
-            + half_b * half_b * dir_view->x * dir_view->x);
+    // 接触椭圆：核心区满强度，外缘约 13% 半径渐隐（软边）
+    let q = A * s * s + 2. * B * s * t + C * t * t;
+    let ellipse_cover = clamp((1. - q) * 4., 0., 1.) * ellipse_enabled;
 
-    // 背光扫掠：|t| 在椭圆支撑范围内时，从椭圆背光侧边界
-    //（大根 s_plus）起沿光向延伸；边界与椭圆严格相切，无接缝
+    // 尾迹 = 软椭圆沿背光方向的扫掠：对片段及其迎光侧取二次型的最小值
+    //（椭圆最厚处 u_thick / q_thick）。扫掠在椭圆最厚处即达到满覆盖，
+    // 所以椭圆软边之外的背光侧不会留下一条没被尾迹覆盖的亮缝；迎光侧
+    // 仍取椭圆自身的软边。
+    let u_thick = (0. - B * t) / max(A, 0.0001);
+    let q_thick = (C - B * B / max(A, 0.0001)) * t * t;
+    let swept = clamp((1. - lerp(q, q_thick, step(s, u_thick))) * 4., 0., 1.);
+
+    // 尾迹从椭圆背光侧边界（大根 s_plus）起算，按消隐距离渐隐
     let disc_t = B * B * t * t - A * (C * t * t - 1.);
     let s_plus = (0. - B * t + sqrt(max(disc_t, 0.))) / max(A, 0.0001);
-    let inside_t = step(perp_support, abs(t));
 
     let d_behind = s - s_plus;
     let u = clamp(d_behind / fade_len, 0., 1.);
     let fade = 1. - u * u * (3. - 2. * u);
 
     let in_tail =
-        inside_t
-            * step(d_behind, 0.)
-            * step(tail, d_behind)
-            * step(tail, 0.0001);
+        step(tail, d_behind)
+            * step(tail, 0.0001)
+            * fade;
 
-    let cover = max(ellipse_cover, in_tail * fade);
+    let cover = max(ellipse_cover, in_tail * swept);
     let shadow_factor = JE_LOCAL_SCALE->x * cover;
     return fout{
         shadow_factor = vec4!(

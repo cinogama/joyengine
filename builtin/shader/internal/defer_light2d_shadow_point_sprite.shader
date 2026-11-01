@@ -143,14 +143,9 @@ public func frag(vf: v2f)
     let fade_len = max(JE_SHADOW_ELLIPSE->w, 0.0001);
     let light_dist = max(JE_COLOR->z, 0.0001);
 
-    // 椭圆（固定在视空间 X/Y，不随光向旋转）
-    let ex = vf.off->x / half_a;
-    let ey = vf.off->y / half_b;
     let ellipse_enabled =
         step(max(JE_SHADOW_ELLIPSE->x, 0.), 0.0001)
             * step(max(JE_SHADOW_ELLIPSE->y, 0.), 0.0001);
-    let ellipse_cover =
-        clamp((1. - (ex * ex + ey * ey)) * 4., 0., 1.) * ellipse_enabled;
 
     // 阴影局部坐标
     let s = dot(vf.off, dir_view);
@@ -164,40 +159,43 @@ public func frag(vf: v2f)
     let C = dir_view->y * dir_view->y / (half_a * half_a)
         + dir_view->x * dir_view->x / (half_b * half_b);
 
-    // 从光源 P=(-L,0) 沿 (s+L,t) 看，光线与椭圆相切即阴影锥边界。
-    // 解 Q(μ)=0：Q= A ws²+2B ws wt+C wt²，ws=s+L，wt=t
+    // 接触椭圆：核心区满强度，外缘约 13% 半径渐隐（软边）
+    let q = A * s * s + 2. * B * s * t + C * t * t;
+    let ellipse_cover = clamp((1. - q) * 4., 0., 1.) * ellipse_enabled;
+
+    // 从光源 P=(-L,0) 沿 (ws,wt) 看，光线与椭圆相切即阴影锥边界。
+    // 抛物线 q(μ)=A L²+2 b μ+Qw μ²，片段位于 μ=1；
+    // 尾迹 = 软椭圆沿该光线扫掠：取 [0,1] 上 q 的最小值（椭圆最厚处
+    // μ_thick），所以椭圆软边之外的背光侧不会留下没被尾迹覆盖的亮缝。
     let ws = s + light_dist;
     let wt = t;
     let Qw = A * ws * ws + 2. * B * ws * wt + C * wt * wt;
     let b = (0. - light_dist) * (A * ws + B * wt);
-    let c0 = A * light_dist * light_dist - 1.;
+    let l2 = light_dist * light_dist;
+    let mu_thick = (0. - b) / max(Qw, 0.000001);
+    let q_thick = A * l2 - b * b / max(Qw, 0.000001);
+    let on_ray = step(1., mu_thick) * step(mu_thick, 0.);
+    let q_frag = Qw + 2. * b + A * l2;
+    let swept = clamp((1. - lerp(q_frag, q_thick, on_ray)) * 4., 0., 1.);
+
+    // 尾迹从光线离开椭圆的出射点（大根）起算：与椭圆相切处距离为 0，
+    // 正好接上椭圆背光侧软边；随后按消隐距离渐隐。
+    let c0 = A * l2 - 1.;
     let disc = b * b - Qw * c0;
     let sq = sqrt(max(disc, 0.));
-
-    // 片段在椭圆外且光线在到达片段前穿过椭圆 => 处于本影中
-    let outside = step(Qw, 0.000001);
-    let mu = (0. - b - sq) / max(Qw, 0.000001);
-    let hit =
-        step(disc, 0.)
-            * step(mu, 0.)
-            * step(1., mu)
-            * outside;
-
-    // 片段到椭圆命中点的背光距离（沿 s），用于长度截断与渐隐
-    let s_b = 0. - light_dist + mu * ws;
+    let mu_exit = (0. - b + sq) / max(Qw, 0.000001);
+    let s_b = 0. - light_dist + mu_exit * ws;
     let d_behind = s - s_b;
 
-    // 距离渐隐：椭圆背光侧之后按 smoothstep 消隐
     let u = clamp(d_behind / fade_len, 0., 1.);
     let fade = 1. - u * u * (3. - 2. * u);
 
     let in_tail =
-        hit
-            * step(d_behind, 0.)
-            * step(tail, d_behind)
-            * step(tail, 0.0001);
+        step(tail, d_behind)
+            * step(tail, 0.0001)
+            * fade;
 
-    let cover = max(ellipse_cover, in_tail * fade);
+    let cover = max(ellipse_cover, in_tail * swept);
     let shadow_factor = JE_LOCAL_SCALE->x * cover;
     return fout{
         shadow_factor = vec4!(
