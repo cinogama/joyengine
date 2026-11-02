@@ -2206,26 +2206,28 @@ bool je_tilemap_add_source(je_TilesetDocument* doc, const char* texture_path,
     src.ycount = th / tile_px;
     src.tex_w = tw;
     src.tex_h = th;
-    // 为源的每个格子分配稳定瓦片 id：瓦片 id = 基址 + iy * xcount + ix。
-    // 基址只增不减，删除源后其区间永不复用（旧地图按 id 引用不会
-    // 漂移到别的格子）。瓦片 id 须能编入 32 位瓦片值的低位。
-    const int64_t tile_end = (int64_t)doc->next_tile_id
-        + (int64_t)src.xcount * src.ycount;
-    if (tile_end > (int64_t)jeecs::Tilemap::TILE_ID_BASE)
+    // 为源的每个格子分配稳定瓦片 id（行优先连续分配）。id 只增不减：
+    // 删除源/纹理裁掉格子后其 id 作废永不复用，旧地图按 id 引用不会
+    // 漂移到别的格子。瓦片 id 须能编入 32 位瓦片值的低位。
+    const int64_t cell_count = (int64_t)src.xcount * src.ycount;
+    if ((int64_t)doc->next_tile_id + cell_count
+        > (int64_t)jeecs::Tilemap::TILE_ID_BASE)
     {
         jeecs::debug::logerr(
             "Tilemap: too many tiles in tileset (limit %d).",
             jeecs::Tilemap::TILE_ID_BASE);
         return false;
     }
-    src.base_tile_id = doc->next_tile_id;
-    doc->next_tile_id = (int32_t)tile_end;
+    src.cell_ids.resize((size_t)cell_count);
+    for (int64_t k = 0; k < cell_count; ++k)
+        src.cell_ids[(size_t)k] = doc->next_tile_id++;
     // 展开为"每层一个瓦片"的数组纹理（分片采样用）
     if (!jeecs::Tilemap::build_source_array(src))
         jeecs::debug::logwarn(
             "Tilemap: texture array for '%s' deferred (image not ready).",
             texture_path);
     doc->sources.push_back(std::move(src));
+    doc->rebuild_tile_cells();
     ++doc->version;
     *out_id = (je_SourceId)doc->sources.size() - 1;
     return true;
@@ -2234,20 +2236,12 @@ bool je_tilemap_remove_source(je_TilesetDocument* doc, je_SourceId source_idx)
 {
     if (source_idx < 0 || source_idx >= (int32_t)doc->sources.size())
         return false;
-    // 先丢弃该源格子的瓦片元数据（id 区间作废），再移除源。其余源的
-    // base_tile_id 随结构体整体移动，下标重排不影响已有的瓦片 id。
-    const auto& removed = doc->sources[source_idx];
-    const int64_t first = removed.base_tile_id;
-    const int64_t last = first + (int64_t)removed.xcount * removed.ycount;
-    if (first > 0)
-        for (auto it = doc->tiles.begin(); it != doc->tiles.end();)
-        {
-            if (it->first >= first && it->first < last)
-                it = doc->tiles.erase(it);
-            else
-                ++it;
-        }
+    // 先丢弃该源各格的瓦片元数据（id 作废），再移除源；其余源的格 id
+    // 不随结构体移动/下标重排改变。
+    for (int32_t tile_id : doc->sources[source_idx].cell_ids)
+        doc->tiles.erase(tile_id);
     doc->sources.erase(doc->sources.begin() + source_idx);
+    doc->rebuild_tile_cells();
     ++doc->version;
     return true;
 }
@@ -2398,10 +2392,13 @@ bool je_tilemap_tile_at_index(je_TilesetDocument* doc, int32_t index, je_TileId*
     int32_t offset = index;
     for (const auto& s : doc->sources)
     {
-        const int32_t count = s.xcount * s.ycount;
+        const int32_t count = (int32_t)s.cell_ids.size();
         if (offset < count)
         {
-            *out_id = s.base_tile_id + offset;
+            const int32_t id = s.cell_ids[(size_t)offset];
+            if (id <= 0)
+                return false;
+            *out_id = id;
             return true;
         }
         offset -= count;

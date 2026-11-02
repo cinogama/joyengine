@@ -5468,9 +5468,11 @@ JE_API bool je_main_script_entry();
 //     0            空
 //     v > 0        按原样绘制瓦片: (tileset_idx + 1) * 0x100000 + tile_id
 //     v < 0        按自动拼接类型绘制: -((tileset_idx + 1) * 0x100000 + tile_id)
-// 图集中的每个源纹理格都是一块瓦片（id 由图集源分配、跨保存稳定）；"地形"
-// 不是独立实体，而是 je_TileKind 非 PLAIN 的瓦片。属性取值链：逐格覆盖 ->
-// 瓦片默认值 -> 图集 schema 默认值。属性值为类型化数据（je_PropertyType）：
+// 图集中的每个源纹理格都是一块瓦片（id 由图集源分配、跨保存稳定）；图集
+// 打开时网格按纹理当前尺寸重整，纹理增删一行/一列即增删一行/一列瓦片
+//（已有瓦片 id 不变）。"地形"不是独立实体，而是 je_TileKind 非 PLAIN 的
+// 瓦片。属性取值链：逐格覆盖 -> 瓦片默认值 -> 图集 schema 默认值。
+// 属性值为类型化数据（je_PropertyType）：
 // 设置/读取都须传入类型枚举并给出对应的数据指针，与实际存储类型不符时
 // 返回 false。
 // 瓦片的名称/通行性/自动拼接类型/顶点法线都是瓦片 id 上的稀疏元数据；法线
@@ -5533,9 +5535,11 @@ typedef int32_t je_SourceId;
 /*
 je_TileId [类型别名]
 瓦片在图集文档内的 id。图集的每个源纹理格都是一块瓦片，id 由图集源
-在添加时分配（格 (ix,iy) 的 id = 源基址 + iy * xcount + ix）
+在添加时分配（按行优先连续分配）
     * 从 1 开始，0 是无效值
-    * 删除源后其 id 区间永不复用，跨保存/重载稳定；地图按 id 引用瓦片
+    * 删除源或纹理缩小裁掉格子后其 id 永不复用，跨保存/重载稳定；地图
+      按 id 引用瓦片。图集打开时网格按纹理当前尺寸重整：新增格分配新
+      id，已有格的 id 不变——因此 id 与格坐标不是固定公式关系
     * je_tilemap_tile_id_at 由格坐标反查 id，
       je_tilemap_tile_at_index / je_tilemap_tile_count 枚举全部瓦片
 请参见：
@@ -6225,6 +6229,8 @@ je_tilemap_add_source [基本接口]
 向图集文档添加源纹理，tile_px 为瓦片边长（像素），网格数由纹理尺寸推得，
 源下标（je_SourceId）经 out_id 返回
     * 源的每个格都会分配稳定的瓦片 id（见 je_TileId），无需再注册瓦片
+    * 图集重新打开时网格按纹理当前尺寸重整（纹理增删一行/一列即增删
+      一行/一列瓦片，已有瓦片 id 不变），见 je_tilemap_source_info
     * 已有同路径源时返回 true 且写出其下标；失败（纹理无法加载或参数不合法）
       返回 false，不写出下标
 请参见：
@@ -6249,6 +6255,8 @@ JE_API int32_t je_tilemap_source_count(je_TilesetDocument* tileset);
 /*
 je_tilemap_source_info [基本接口]
 取指定下标源纹理的信息，经出参返回 (纹理路径, 瓦片边长, 横向格数, 纵向格数)
+    * 行列数由纹理当前像素尺寸 / 瓦片边长推得（图集打开时重新测量），
+      纹理增删一行/一列后随之增删
     * 下标越界返回 false
 */
 JE_API bool je_tilemap_source_info(je_TilesetDocument* tileset, je_SourceId source_idx,

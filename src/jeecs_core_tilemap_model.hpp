@@ -141,10 +141,11 @@ namespace jeecs
             std::string path;   // 运行时路径（@/ 或 !/）
             int32_t tile_px = 32;
             int32_t xcount = 1, ycount = 1;
-            // 瓦片 id 基址：本源的格子 (ix,iy) 对应瓦片 id
-            // base_tile_id + iy * xcount + ix。添加源时分配、随文档保存，
-            // 删除源后该区间永不复用（0 = 尚未分配）。
-            int32_t base_tile_id = 0;
+            // 每格的瓦片 id（行优先，长度恒 = xcount*ycount）。添加源时
+            // 按行优先连续分配；纹理尺寸变化后已有格保留原 id、新增格
+            // 从文档的 next_tile_id 追加——地图按 id 引用瓦片不会漂移，
+            // 因此 id 与格坐标不是固定公式关系。0 = 尚未分配（损坏）。
+            std::vector<int32_t> cell_ids;
             // 纹理像素尺寸（UV 计算用）；nullopt = 未测量，按网格推算。
             // 有值时恒为正
             std::optional<int32_t> tex_w, tex_h;
@@ -210,23 +211,51 @@ namespace jeecs
             std::vector<SourceTexture> sources;
             // 稀疏瓦片元数据：瓦片 id -> 定义（无条目 = 默认瓦片）
             std::map<int32_t, TileDef> tiles;
-            // 下一个可分配的瓦片 id 基址（只增不减：删除源后其区间作废，
-            // 已有地图按 id 引用不会漂移到别的格子）
+            // 瓦片 id -> (源下标, ix, iy) 反向索引（只读查询用；sources
+            // 或各源的格 id 表变化后经 rebuild_tile_cells 重建，不落盘）
+            std::unordered_map<int32_t, std::array<int32_t, 3>> tile_cells;
+            // 下一个可分配的瓦片 id（只增不减：删除源/裁掉格子后其 id
+            // 作废，已有地图按 id 引用不会漂移到别的格子）
             int32_t next_tile_id = 1;
             std::vector<PropertyDef> properties;
 
             uint64_t version = 1;
 
+            // 重建 id -> 格 反向索引（先整表构建再换入，读者不会看到
+            // 半成品索引）
+            void rebuild_tile_cells()
+            {
+                std::unordered_map<int32_t, std::array<int32_t, 3>> built;
+                for (size_t si = 0; si < sources.size(); ++si)
+                {
+                    const auto& s = sources[si];
+                    const int64_t count = (int64_t)s.xcount * s.ycount;
+                    if (count <= 0
+                        || (int64_t)s.cell_ids.size() != count)
+                        continue;
+                    for (int32_t iy = 0; iy < s.ycount; ++iy)
+                        for (int32_t ix = 0; ix < s.xcount; ++ix)
+                        {
+                            const int32_t id =
+                                s.cell_ids[(size_t)iy * s.xcount + ix];
+                            if (id > 0)
+                                built[id] = { (int32_t)si, ix, iy };
+                        }
+                }
+                tile_cells = std::move(built);
+            }
             // 某图集格子的瓦片 id（参数越界或源未分配 id 时返回 0）
             int32_t tile_id_at(int32_t source_idx, int32_t ix, int32_t iy) const
             {
                 if (source_idx < 0 || source_idx >= (int32_t)sources.size())
                     return 0;
                 const auto& s = sources[source_idx];
-                if (s.base_tile_id <= 0 || ix < 0 || iy < 0
-                    || ix >= s.xcount || iy >= s.ycount)
+                if (ix < 0 || iy < 0 || ix >= s.xcount || iy >= s.ycount)
                     return 0;
-                return s.base_tile_id + iy * s.xcount + ix;
+                const size_t idx = (size_t)iy * s.xcount + ix;
+                if (idx >= s.cell_ids.size())
+                    return 0;
+                return s.cell_ids[idx];
             }
             // 瓦片 id -> (源下标, ix, iy)；不属于任何现存格子返回 nullopt
             std::optional<std::tuple<int32_t, int32_t, int32_t>>
@@ -234,20 +263,11 @@ namespace jeecs
             {
                 if (tile_id <= 0)
                     return std::nullopt;
-                for (size_t i = 0; i < sources.size(); ++i)
-                {
-                    const auto& s = sources[i];
-                    if (s.base_tile_id <= 0)
-                        continue;
-                    const int64_t count = (int64_t)s.xcount * s.ycount;
-                    if (tile_id < s.base_tile_id
-                        || (int64_t)tile_id >= (int64_t)s.base_tile_id + count)
-                        continue;
-                    const int32_t off = tile_id - s.base_tile_id;
-                    return std::make_tuple(
-                        (int32_t)i, off % s.xcount, off / s.xcount);
-                }
-                return std::nullopt;
+                auto fnd = tile_cells.find(tile_id);
+                if (fnd == tile_cells.end())
+                    return std::nullopt;
+                return std::make_tuple(
+                    fnd->second[0], fnd->second[1], fnd->second[2]);
             }
             const TileDef* tile_def(int32_t tile_id) const
             {
@@ -381,9 +401,11 @@ namespace jeecs
         // 与 .je4animation 同风格的自有二进制格式（魔数 + 小端字段），
         // 由 C++ 侧统一读写，避免在内核引入 TOML 依赖。
         // 属性值为类型化数据：每值前有 1 字节类型标记（je_PropertyType）。
-        // 图集（JTS6）不再兼容旧版：每个源记录自己的瓦片 id 基址，瓦片
-        // 元数据按 id 稀疏保存（无条目 = 默认可通行普通瓦片）。源的
-        // tex_w/tex_h 写 0 表示未测量；每个源在基础字段后带附加层级
+        // 图集（JTS7）每个源记录自己的逐格瓦片 id 表（u32 计数 + i32 id，
+        // 行优先，计数须等于 xcount*ycount）——纹理尺寸变化后新增格持有
+        // 独立 id，不能再用"基址 + 行优先"公式。读取仍接受 JTS6（旧公式
+        // 布局）。瓦片元数据按 id 稀疏保存（无条目 = 默认可通行普通瓦片）。
+        // 源的 tex_w/tex_h 写 0 表示未测量；每个源在 id 表后带附加层级
         // 纹理表（u32 计数 + 每条 pass/path/tex_w/tex_h），pass < 1 视为
         // 损坏。瓦片 kind 为 je_TileKind 的 u8，越界视为损坏；其后为该
         // 瓦片的顶点法线（3×f32，读取时归一化，零长/非有限分量视为损坏）。
@@ -391,7 +413,8 @@ namespace jeecs
         //（je_LayerSelfShadow 的 u8，越界视为损坏）、自阴影强度（f32）、
         // 遮挡阴影行为（je_LayerBlockShadow 的 u8，越界视为损坏）与
         // 遮挡阴影强度（f32）。瓦片值语义见文件开头的编码说明。
-        constexpr uint32_t TILESET_MAGIC = 0x4A545336;     // "JTS6"
+        constexpr uint32_t TILESET_MAGIC = 0x4A545337;     // "JTS7"
+        constexpr uint32_t TILESET_MAGIC_V6 = 0x4A545336;  // "JTS6"（旧布局）
         constexpr uint32_t MAP_MAGIC = 0x4A544D36;         // "JTM6"
 
         struct bin_writer
@@ -537,6 +560,157 @@ namespace jeecs
             return buf;
         }
 
+        // ==================== 源网格跟随纹理尺寸 ====================
+        // 以纹理当前像素尺寸重新推导源的瓦片网格（格数 = 尺寸 / tile_px）。
+        // 纹理增加一行/一列时，源随之新增一行/一列瓦片：已有格保留原瓦片
+        // id（地图按 id 引用不会漂移），新增格从文档的 next_tile_id 追加
+        // 新 id；纹理缩小被裁掉的格连同其元数据一并丢弃。纹理不可读或
+        // 不足一块瓦片时保持记录的网格不变。返回是否改动了文档。
+        inline bool reconcile_source_grid(TilesetDocument& doc, int32_t source_idx)
+        {
+            if (source_idx < 0 || source_idx >= (int32_t)doc.sources.size())
+                return false;
+            auto& src = doc.sources[source_idx];
+            if (src.path.empty() || src.tile_px <= 0)
+                return false;
+            auto tex = graphic::texture2d::load(nullptr, src.path);
+            if (!tex.has_value())
+                return false;
+            const int32_t tw = (int32_t)tex.value()->resource()->m_width;
+            const int32_t th = (int32_t)tex.value()->resource()->m_height;
+            if (tw < src.tile_px || th < src.tile_px)
+            {
+                debug::logwarn(
+                    "Tilemap: texture '%s' (%dx%d) is smaller than one tile "
+                    "(%d px), recorded grid is kept.",
+                    src.path.c_str(), tw, th, src.tile_px);
+                return false;
+            }
+            const int32_t nx = tw / src.tile_px;
+            const int32_t ny = th / src.tile_px;
+
+            // 附加层级与主网格共用格数：同步重新测量（分辨率可与主纹理
+            // 不同，cell 尺寸按各自纹理推得，见 build_extra_array）
+            bool extras_changed = false;
+            for (auto& extra : src.extras)
+            {
+                auto etex = graphic::texture2d::load(nullptr, extra.path);
+                if (!etex.has_value())
+                    continue;
+                const int32_t ew = (int32_t)etex.value()->resource()->m_width;
+                const int32_t eh = (int32_t)etex.value()->resource()->m_height;
+                if (ew / nx < 1 || eh / ny < 1)
+                {
+                    debug::logwarn(
+                        "Tilemap: extra texture '%s' (%dx%d) too small for "
+                        "grid %dx%d, recorded size is kept.",
+                        extra.path.c_str(), ew, eh, nx, ny);
+                    continue;
+                }
+                if (extra.tex_w != ew || extra.tex_h != eh)
+                {
+                    extra.tex_w = ew;
+                    extra.tex_h = eh;
+                    extras_changed = true;
+                }
+            }
+
+            if (nx == src.xcount && ny == src.ycount)
+            {
+                // 网格未变：只刷新测量尺寸（UV 换算用）
+                if (src.tex_w == tw && src.tex_h == th && !extras_changed)
+                    return false;
+                src.tex_w = tw;
+                src.tex_h = th;
+                src.array.reset();
+                src.array_failed = false;
+                for (auto& extra : src.extras)
+                {
+                    extra.array.reset();
+                    extra.array_failed = false;
+                }
+                ++doc.version;
+                return true;
+            }
+
+            const int32_t keep_x = std::min(src.xcount, nx);
+            const int32_t keep_y = std::min(src.ycount, ny);
+            const int64_t new_cells = (int64_t)nx * ny;
+            int64_t occupied = 0;
+            for (int32_t iy = 0; iy < keep_y; ++iy)
+                for (int32_t ix = 0; ix < keep_x; ++ix)
+                {
+                    const size_t old_idx = (size_t)iy * src.xcount + ix;
+                    if (old_idx < src.cell_ids.size() && src.cell_ids[old_idx] > 0)
+                        ++occupied;
+                }
+            if ((int64_t)doc.next_tile_id + (new_cells - occupied)
+                > (int64_t)TILE_ID_BASE)
+            {
+                debug::logerr(
+                    "Tilemap: too many tiles in tileset (limit %d), "
+                    "source '%s' keeps its recorded grid.",
+                    TILE_ID_BASE, src.path.c_str());
+                return false;
+            }
+
+            // 被裁掉的格：其瓦片 id 与稀疏元数据一并丢弃
+            for (int32_t iy = 0; iy < src.ycount; ++iy)
+                for (int32_t ix = 0; ix < src.xcount; ++ix)
+                {
+                    if (ix < keep_x && iy < keep_y)
+                        continue;
+                    const size_t old_idx = (size_t)iy * src.xcount + ix;
+                    if (old_idx < src.cell_ids.size() && src.cell_ids[old_idx] > 0)
+                        doc.tiles.erase(src.cell_ids[old_idx]);
+                }
+
+            std::vector<int32_t> ids((size_t)new_cells, 0);
+            for (int32_t iy = 0; iy < keep_y; ++iy)
+                for (int32_t ix = 0; ix < keep_x; ++ix)
+                {
+                    const size_t old_idx = (size_t)iy * src.xcount + ix;
+                    if (old_idx < src.cell_ids.size())
+                        ids[(size_t)iy * nx + ix] = src.cell_ids[old_idx];
+                }
+            for (int32_t iy = 0; iy < ny; ++iy)
+                for (int32_t ix = 0; ix < nx; ++ix)
+                {
+                    int32_t& id = ids[(size_t)iy * nx + ix];
+                    if (id <= 0)
+                        id = doc.next_tile_id++;
+                }
+
+            debug::loginfo(
+                "Tilemap: source '%s' grid follows texture size: %dx%d -> %dx%d.",
+                src.path.c_str(), src.xcount, src.ycount, nx, ny);
+            src.cell_ids = std::move(ids);
+            src.xcount = nx;
+            src.ycount = ny;
+            src.tex_w = tw;
+            src.tex_h = th;
+            // 数组纹理按新网格重建（层数与层尺寸均已改变）
+            src.array.reset();
+            src.array_failed = false;
+            for (auto& extra : src.extras)
+            {
+                extra.array.reset();
+                extra.array_failed = false;
+            }
+            doc.rebuild_tile_cells();
+            // blob47 显式变体表可能引用被裁掉的格：剔除失效项（空表回落
+            // 到锚点起行优先的默认布局）
+            for (auto& entry : doc.tiles)
+            {
+                auto& variants = entry.second.variant_tiles;
+                variants.erase(std::remove_if(variants.begin(), variants.end(),
+                    [&](int32_t vid) { return !doc.tile_cell(vid).has_value(); }),
+                    variants.end());
+            }
+            ++doc.version;
+            return true;
+        }
+
         inline bool save_tileset_to(const TilesetDocument& ts, const std::string& path)
         {
             bin_writer w;
@@ -548,7 +722,9 @@ namespace jeecs
             {
                 w.str(s.path); w.i32(s.tile_px); w.i32(s.xcount); w.i32(s.ycount);
                 w.i32(s.tex_w.value_or(0)); w.i32(s.tex_h.value_or(0));
-                w.i32(s.base_tile_id);
+                // 逐格瓦片 id 表（行优先，行数 = xcount*ycount）
+                w.u32((uint32_t)s.cell_ids.size());
+                for (int32_t id : s.cell_ids) w.i32(id);
                 // 附加层级纹理表：每条 pass/path/tex_w/tex_h
                 w.u32((uint32_t)s.extras.size());
                 for (const auto& e : s.extras)
@@ -595,7 +771,8 @@ namespace jeecs
             auto ts = std::make_shared<TilesetDocument>();
             ts->path = path;
             const uint32_t magic = r.u32();
-            if (magic != TILESET_MAGIC)
+            const bool legacy_ids = magic == TILESET_MAGIC_V6;
+            if (magic != TILESET_MAGIC && !legacy_ids)
                 return std::nullopt;
             ts->name = r.str();
             ts->next_tile_id = r.i32();
@@ -610,10 +787,56 @@ namespace jeecs
                 int32_t tw = r.i32(), th = r.i32();
                 if (tw > 0) s.tex_w = tw;
                 if (th > 0) s.tex_h = th;
-                s.base_tile_id = r.i32();
                 if (s.tile_px <= 0 || s.xcount <= 0 || s.ycount <= 0
-                    || s.base_tile_id <= 0)
+                    || (int64_t)s.xcount * s.ycount > (int64_t)TILE_ID_BASE)
                 { r.ok = false; break; }
+                const int64_t cell_count = (int64_t)s.xcount * s.ycount;
+                if (legacy_ids)
+                {
+                    // JTS6：格 (ix,iy) 的 id = 基址 + iy*xcount + ix
+                    const int32_t base = r.i32();
+                    if (base <= 0)
+                    { r.ok = false; break; }
+                    // 基址区间不得重叠，且须落在 next_tile_id 之前；瓦片 id
+                    // 还要能编入 32 位瓦片值（低 TILE_ID_BASE 位）
+                    const int64_t end = (int64_t)base + cell_count;
+                    if (end > ts->next_tile_id || end > (int64_t)TILE_ID_BASE)
+                    { r.ok = false; break; }
+                    for (const auto& prev : ts->sources)
+                    {
+                        if (prev.cell_ids.empty())
+                            continue;
+                        const int64_t prev_first = *std::min_element(
+                            prev.cell_ids.begin(), prev.cell_ids.end());
+                        const int64_t prev_end = prev_first
+                            + (int64_t)prev.xcount * prev.ycount;
+                        if (base < prev_end && prev_first < end)
+                        { r.ok = false; break; }
+                    }
+                    if (!r.ok)
+                        break;
+                    s.cell_ids.resize((size_t)cell_count);
+                    for (int64_t k = 0; k < cell_count; ++k)
+                        s.cell_ids[(size_t)k] = (int32_t)(base + k);
+                }
+                else
+                {
+                    // JTS7：逐格 id 表（行优先，长度须等于格数）
+                    uint32_t id_n = r.u32();
+                    if ((int64_t)id_n != cell_count)
+                    { r.ok = false; break; }
+                    s.cell_ids.resize(id_n);
+                    for (uint32_t k = 0; k < id_n && r.ok; ++k)
+                    {
+                        const int32_t id = r.i32();
+                        if (id <= 0 || id >= ts->next_tile_id
+                            || id >= (int32_t)TILE_ID_BASE)
+                        { r.ok = false; break; }
+                        s.cell_ids[k] = id;
+                    }
+                }
+                if (!r.ok)
+                    break;
                 // 附加层级纹理表（pass 越界或同源重复视为损坏）
                 uint32_t ex_n = r.u32();
                 for (uint32_t k = 0; k < ex_n && r.ok; ++k)
@@ -634,23 +857,17 @@ namespace jeecs
                 }
                 if (!r.ok)
                     break;
-                // 基址区间不得重叠，且须落在 next_tile_id 之前；瓦片 id
-                // 还要能编入 32 位瓦片值（低 TILE_ID_BASE 位）
-                const int64_t end = (int64_t)s.base_tile_id
-                    + (int64_t)s.xcount * s.ycount;
-                if (end > ts->next_tile_id || end > (int64_t)TILE_ID_BASE)
-                { r.ok = false; break; }
-                for (const auto& prev : ts->sources)
-                {
-                    const int64_t prev_end = (int64_t)prev.base_tile_id
-                        + (int64_t)prev.xcount * prev.ycount;
-                    if (s.base_tile_id < prev_end && prev.base_tile_id < end)
-                    { r.ok = false; break; }
-                }
-                if (!r.ok)
-                    break;
                 ts->sources.push_back(std::move(s));
             }
+            if (!r.ok)
+                return std::nullopt;
+            // 建立 id -> 格 反向索引；逐格 id 须全局唯一（重复即损坏）
+            ts->rebuild_tile_cells();
+            int64_t cells_total = 0;
+            for (const auto& s : ts->sources)
+                cells_total += (int64_t)s.xcount * s.ycount;
+            if ((int64_t)ts->tile_cells.size() != cells_total)
+                return std::nullopt;
             uint32_t prop_n = r.u32();
             for (uint32_t i = 0; i < prop_n && r.ok; ++i)
             {
@@ -702,6 +919,10 @@ namespace jeecs
             }
             if (!r.ok)
                 return std::nullopt;
+            // 网格跟随纹理当前尺寸：纹理增删一行/一列时图集随之增删
+            // 一行/一列瓦片（已有瓦片 id 不变，新增格从末尾追加新 id）
+            for (size_t i = 0; i < ts->sources.size(); ++i)
+                reconcile_source_grid(*ts, (int32_t)i);
             return ts;
         }
 

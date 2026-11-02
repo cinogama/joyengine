@@ -343,10 +343,11 @@ namespace JEEditor::Editor::TilemapEditor
         if (state.m_palette_source < 0
             || state.m_palette_source >= ts_id->source_count())
             return;
-        let (tex_path, _, xc, yc) =
+        let (tex_path, tpx, xc, yc) =
             ts_id->source_info(state.m_palette_source);
         // 预览层级贴图（0 = 主纹理；n = 第 n 条附加层级，共用网格）
         let mut display_path = tex_path;
+        let mut showing_extra = false;
         if (state.m_palette_layer > 0
             && state.m_palette_layer
                 <= ts_id->source_extra_count(state.m_palette_source))
@@ -354,6 +355,7 @@ namespace JEEditor::Editor::TilemapEditor
             let (_, epath) = ts_id->source_extra_info(
                 state.m_palette_source, state.m_palette_layer - 1);
             display_path = epath;
+            showing_extra = true;
         }
 
         match (state->atlas_texture(display_path))
@@ -378,9 +380,14 @@ namespace JEEditor::Editor::TilemapEditor
                     (rect_max[0] - rect_min[0], rect_max[1] - rect_min[1]));
                 let item_hovered = IsItemHovered();
 
-                // 格子像素按显示贴图尺寸/网格数推导（层级贴图分辨率可与
-                // 主纹理不同，格子比例恒与网格一致）
-                let cell_px = tw as real / xc as real * scale;
+                // 格子边长：主纹理恒为 tile_px（数组纹理按 tile_px 切片，
+                // 纹理一侧不足一格的余量不参与采样）；附加层级按自身
+                // 分辨率与网格数推导（与 build_extra_array 的整数除法
+                // 口径一致），使网格线与实际采样格对齐
+                let mut cell_img = tpx;
+                if (showing_extra)
+                    cell_img = tw / xc;
+                let cell_px = cell_img as real * scale;
                 if (cell_px < 3.)
                     return;
 

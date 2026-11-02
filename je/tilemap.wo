@@ -498,7 +498,9 @@ namespace je
                 public func name(self: Tileset)=> string;
 
             // ==================== 图集源纹理 ====================
-            // 返回新增源的下标（纹理无法加载或参数不合法返回 none）
+            // 返回新增源的下标（纹理无法加载或参数不合法返回 none）。
+            // 网格数由纹理像素尺寸与 tile_px 推得；图集重新打开时会按纹理
+            // 当前尺寸重整网格——纹理增加一行/一列即新增一行/一列瓦片。
             extern("libjoyecs", "wojeapi_tilemap_add_source")
                 public func add_source(self: Tileset, texture_path: string, tile_px: int)=> option<int>;
 
@@ -508,7 +510,8 @@ namespace je
             extern("libjoyecs", "wojeapi_tilemap_source_count")
                 public func source_count(self: Tileset)=> int;
 
-            // 返回 (纹理路径, 瓦片像素, 列数, 行数)
+            // 返回 (纹理路径, 瓦片像素, 列数, 行数)；行列数随纹理当前
+            // 像素尺寸（图集打开时重新测量），增删纹理行/列后随之增删
             extern("libjoyecs", "wojeapi_tilemap_source_info")
                 public func source_info(self: Tileset, source_idx: int)=> (string, int, int, int);
 
@@ -540,10 +543,11 @@ namespace je
                     extra_idx: int, pass: int)=> bool;
 
             // ==================== 瓦片（每个图集格都是一块瓦片） ====================
-            // 源纹理的每个格都是瓦片：瓦片 id 由添加源时分配（格 (ix,iy)
-            // 的 id = 源基址 + iy * 列数 + ix），跨保存稳定、删除源后不复用。
-            // 通行性/名称/属性/自动拼接类型/法线都是这条 id 上的稀疏元数据，
-            // 无需"注册"；未定义元数据的瓦片 = 可通行的普通瓦片。
+            // 源纹理的每个格都是瓦片：瓦片 id 由图集源分配（添加源时按
+            // 行优先连续分配；纹理尺寸变化新增的格从末尾追加），跨保存
+            // 稳定、删除源或裁掉格子后不复用。通行性/名称/属性/自动拼接
+            // 类型/法线都是这条 id 上的稀疏元数据，无需"注册"；未定义
+            // 元数据的瓦片 = 可通行的普通瓦片。
             extern("libjoyecs", "wojeapi_tilemap_tile_id_at")
                 public func tile_id_at(self: Tileset, source_idx: int,
                     ix: int, iy: int)=> int;
