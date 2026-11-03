@@ -51,6 +51,48 @@ void je_binary_document_open(jeecs_file* file, je_binary_document* out_doc)
     out_doc->m_location = jeecs_file_tell(file);
 }
 
+bool je_binary_string_read(
+    /* OPTIONAL: If dst_len == 0 */ char* dst, 
+    size_t dst_len, 
+    const je_binary_string* str)
+{
+    assert(str != nullptr);
+    assert(dst != nullptr || dst_len == 0);
+
+    // Layout written by je_binary_append_string, the handle points at the
+    // type tag:
+    //   [je_binary_value_type][uint64 length][char bytes...]
+    if (!jeecs_file_seek(str->m_file, (int64_t)str->m_location, JE_READ_FILE_SEEK_SET))
+        return false;
+
+    je_binary_value_type type;
+    uint64_t str_len;
+    if (1 != jeecs_file_read(&type, sizeof(type), 1, str->m_file)
+        || type != je_binary_value_type::JE_BINARY_VALUE_STRING
+        || 1 != jeecs_file_read(&str_len, sizeof(str_len), 1, str->m_file))
+        return false;
+
+    if (dst_len > 0)
+    {
+        // Keep one byte for the terminator; longer strings are truncated.
+        const uint64_t copy_len = str_len < dst_len - 1 ? str_len : (uint64_t)(dst_len - 1);
+
+        if (copy_len > 0 && copy_len != jeecs_file_read(dst, sizeof(char), (size_t)copy_len, str->m_file))
+            return false;
+
+        dst[copy_len] = '\0';
+    }
+
+    return true;
+}
+
+bool je_binary_buffer_read(
+    /* OPTIONAL: If dst_len == 0 */ void* dst,
+    size_t dst_len,
+    const je_binary_buffer* buf)
+{
+}
+
 /* ======================================= */
 
 bool je_binary_append_document(je_writing_cache_file* file)
@@ -68,16 +110,20 @@ bool je_binary_append_list(je_writing_cache_file* file)
 bool je_binary_append_string(je_writing_cache_file* file, const char* str)
 {
     const je_binary_value_type type = je_binary_value_type::JE_BINARY_VALUE_STRING;
-    const size_t str_len = strlen(str);
+    const uint64_t str_len = (uint64_t)strlen(str);
 
     return 1 == jeecs_write_cache_file(&type, sizeof(type), 1, file)
-        && str_len == jeecs_write_cache_file(str, sizeof(char), str_len, file);
+        && 1 == jeecs_write_cache_file(&str_len, sizeof(str_len), 1, file)
+        && (size_t)str_len == jeecs_write_cache_file(str, sizeof(char), (size_t)str_len, file);
 }
 
 bool je_binary_append_buffer(je_writing_cache_file* file, const void* buf, size_t buflen)
 {
     const je_binary_value_type type = je_binary_value_type::JE_BINARY_VALUE_BUFFER;
+    const uint64_t len = (uint64_t)buflen;
+
     return 1 == jeecs_write_cache_file(&type, sizeof(type), 1, file)
+        && 1 == jeecs_write_cache_file(&len, sizeof(len), 1, file)
         && buflen == jeecs_write_cache_file(buf, 1, buflen, file);
 }
 
