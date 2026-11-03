@@ -43,6 +43,7 @@ enum class je_binary_value_type : uint8_t
     JE_BINARY_VALUE_BUFFER,
     JE_BINARY_VALUE_LIST,
     JE_BINARY_VALUE_DOCUMENT,
+    JE_BINARY_VALUE_END,
 };
 
 bool je_binary_document_open(jeecs_file* file, je_binary_document* out_doc)
@@ -149,11 +150,113 @@ bool je_binary_buffer_read(
 static bool _je_binary_next_value_offset(
     jeecs_file* file, size_t* inout_offset)
 {
+    assert(file != nullptr);
+    assert(inout_offset != nullptr);
+
+    const size_t file_size = jeecs_file_size(file);
+    size_t offset = *inout_offset;
+
+    // The value may be a container, in which case the following offset is only
+    // known after its END; walk the tags until the outermost value is closed.
+    // Every step consumes at least the type tag, so this always terminates.
+    uint32_t depth = 0;
+    for (;;)
+    {
+        if (offset >= file_size
+            || !jeecs_file_seek(file, (int64_t)offset, JE_READ_FILE_SEEK_SET))
+            return false;
+
+        je_binary_value_type type;
+        if (1 != jeecs_file_read(&type, sizeof(type), 1, file))
+            return false;
+
+        offset += sizeof(type);
+
+        size_t payload_size = 0;
+        switch (type)
+        {
+        case je_binary_value_type::JE_BINARY_VALUE_END:
+            if (depth == 0)
+                return false; // END does not start a value.
+
+            if (--depth == 0)
+            {
+                *inout_offset = offset;
+                return true;
+            }
+            continue;
+
+        case je_binary_value_type::JE_BINARY_VALUE_LIST:
+        case je_binary_value_type::JE_BINARY_VALUE_DOCUMENT:
+            ++depth;
+            continue;
+
+        case je_binary_value_type::JE_BINARY_VALUE_STRING:
+        case je_binary_value_type::JE_BINARY_VALUE_BUFFER:
+        {
+            // [uint64 length][payload...]
+            uint64_t len;
+            if (offset + sizeof(len) > file_size
+                || 1 != jeecs_file_read(&len, sizeof(len), 1, file))
+                return false;
+
+            offset += sizeof(len);
+            if (len > (uint64_t)(file_size - offset))
+                return false;
+
+            payload_size = (size_t)len;
+            break;
+        }
+
+        case je_binary_value_type::JE_BINARY_VALUE_BOOL:
+        case je_binary_value_type::JE_BINARY_VALUE_INT8:
+        case je_binary_value_type::JE_BINARY_VALUE_UINT8:
+            payload_size = sizeof(uint8_t);
+            break;
+
+        case je_binary_value_type::JE_BINARY_VALUE_INT16:
+        case je_binary_value_type::JE_BINARY_VALUE_UINT16:
+            payload_size = sizeof(uint16_t);
+            break;
+
+        case je_binary_value_type::JE_BINARY_VALUE_INT32:
+        case je_binary_value_type::JE_BINARY_VALUE_UINT32:
+        case je_binary_value_type::JE_BINARY_VALUE_FLOAT32:
+            payload_size = sizeof(uint32_t);
+            break;
+
+        case je_binary_value_type::JE_BINARY_VALUE_INT64:
+        case je_binary_value_type::JE_BINARY_VALUE_UINT64:
+        case je_binary_value_type::JE_BINARY_VALUE_FLOAT64:
+            payload_size = sizeof(uint64_t);
+            break;
+        }
+
+        if (payload_size > file_size - offset)
+            return false;
+
+        offset += payload_size;
+
+        if (depth == 0)
+        {
+            *inout_offset = offset;
+            return true;
+        }
+    }
 }
 
 bool je_binary_document_index(
     const je_binary_document* document,
     const char* key,
+    je_binary_value_type expected_type,
+    void* out_value)
+{
+
+}
+
+bool je_binary_list_index(
+    const je_binary_list* list,
+    size_t index,
     je_binary_value_type expected_type,
     void* out_value)
 {
@@ -171,6 +274,12 @@ bool je_binary_append_document(je_writing_cache_file* file)
 bool je_binary_append_list(je_writing_cache_file* file)
 {
     const je_binary_value_type type = je_binary_value_type::JE_BINARY_VALUE_LIST;
+    return 1 == jeecs_write_cache_file(&type, sizeof(type), 1, file);
+}
+
+bool je_binary_append_end(je_writing_cache_file* file)
+{
+    const je_binary_value_type type = je_binary_value_type::JE_BINARY_VALUE_END;
     return 1 == jeecs_write_cache_file(&type, sizeof(type), 1, file);
 }
 
