@@ -52,12 +52,15 @@ void je_binary_document_open(jeecs_file* file, je_binary_document* out_doc)
 }
 
 bool je_binary_string_read(
-    /* OPTIONAL: If dst_len == 0 */ char* dst, 
-    size_t dst_len, 
+    /* OPTIONAL: If *dst_len == 0 */ char* dst, 
+    size_t* dst_len, 
     const je_binary_string* str)
 {
     assert(str != nullptr);
-    assert(dst != nullptr || dst_len == 0);
+    assert(dst_len != nullptr);
+    assert(dst != nullptr || *dst_len == 0);
+
+    const size_t dst_capacity = *dst_len;
 
     // Layout written by je_binary_append_string, the handle points at the
     // type tag:
@@ -72,25 +75,57 @@ bool je_binary_string_read(
         || 1 != jeecs_file_read(&str_len, sizeof(str_len), 1, str->m_file))
         return false;
 
-    if (dst_len > 0)
+    if (dst_capacity > 0)
     {
-        // Keep one byte for the terminator; longer strings are truncated.
-        const uint64_t copy_len = str_len < dst_len - 1 ? str_len : (uint64_t)(dst_len - 1);
+        // Copy as many bytes as the destination can hold; only terminate the
+        // string when there is room left after the copied bytes.
+        const uint64_t copy_len = str_len < dst_capacity ? str_len : (uint64_t)dst_capacity;
 
         if (copy_len > 0 && copy_len != jeecs_file_read(dst, sizeof(char), (size_t)copy_len, str->m_file))
             return false;
 
-        dst[copy_len] = '\0';
+        if (copy_len < dst_capacity)
+            dst[copy_len] = '\0';
     }
 
+    // The capacity was consumed, report the full length of the value.
+    *dst_len = (size_t)str_len;
     return true;
 }
 
 bool je_binary_buffer_read(
-    /* OPTIONAL: If dst_len == 0 */ void* dst,
-    size_t dst_len,
+    /* OPTIONAL: If *dst_len == 0 */ void* dst,
+    size_t* dst_len,
     const je_binary_buffer* buf)
 {
+    assert(buf != nullptr);
+    assert(dst_len != nullptr);
+    assert(dst != nullptr || *dst_len == 0);
+
+    const size_t dst_capacity = *dst_len;
+
+    // Layout written by je_binary_append_buffer, the handle points at the
+    // type tag:
+    //   [je_binary_value_type][uint64 length][byte data...]
+    if (!jeecs_file_seek(buf->m_file, (int64_t)buf->m_location, JE_READ_FILE_SEEK_SET))
+        return false;
+
+    je_binary_value_type type;
+    uint64_t buf_len;
+    if (1 != jeecs_file_read(&type, sizeof(type), 1, buf->m_file)
+        || type != je_binary_value_type::JE_BINARY_VALUE_BUFFER
+        || 1 != jeecs_file_read(&buf_len, sizeof(buf_len), 1, buf->m_file))
+        return false;
+
+    // A buffer has no terminator, so copy as many bytes as the destination
+    // can hold; longer buffers are truncated.
+    const uint64_t copy_len = buf_len < dst_capacity ? buf_len : (uint64_t)dst_capacity;
+    if (copy_len > 0 && copy_len != jeecs_file_read(dst, sizeof(uint8_t), (size_t)copy_len, buf->m_file))
+        return false;
+
+    // The capacity was consumed, report the full length of the value.
+    *dst_len = (size_t)buf_len;
+    return true;
 }
 
 /* ======================================= */
