@@ -45,22 +45,40 @@ enum class je_binary_value_type : uint8_t
     JE_BINARY_VALUE_DOCUMENT,
 };
 
-void je_binary_document_open(jeecs_file* file, je_binary_document* out_doc)
+bool je_binary_document_open(jeecs_file* file, je_binary_document* out_doc)
 {
+    je_binary_value_type type;
+    if (1 != jeecs_file_read(&type, sizeof(type), 1, file)
+        || type != je_binary_value_type::JE_BINARY_VALUE_DOCUMENT)
+        return false;
+
     out_doc->m_file = file;
     out_doc->m_location = jeecs_file_tell(file);
+    return true;
+}
+
+bool je_binary_list_open(jeecs_file* file, je_binary_list* out_doc)
+{
+    je_binary_value_type type;
+    if (1 != jeecs_file_read(&type, sizeof(type), 1, file)
+        || type != je_binary_value_type::JE_BINARY_VALUE_LIST)
+        return false;
+
+    out_doc->m_file = file;
+    out_doc->m_location = jeecs_file_tell(file);
+    return true;
 }
 
 bool je_binary_string_read(
-    /* OPTIONAL: If *dst_len == 0 */ char* dst, 
-    size_t* dst_len, 
+    /* OPTIONAL: If *inout_dst_len == 0 */ char* dst, 
+    size_t* inout_dst_len,
     const je_binary_string* str)
 {
     assert(str != nullptr);
-    assert(dst_len != nullptr);
-    assert(dst != nullptr || *dst_len == 0);
+    assert(inout_dst_len != nullptr);
+    assert(dst != nullptr || *inout_dst_len == 0);
 
-    const size_t dst_capacity = *dst_len;
+    const size_t dst_capacity = *inout_dst_len;
 
     // Layout written by je_binary_append_string, the handle points at the
     // type tag:
@@ -89,20 +107,20 @@ bool je_binary_string_read(
     }
 
     // The capacity was consumed, report the full length of the value.
-    *dst_len = (size_t)str_len;
+    *inout_dst_len = (size_t)str_len;
     return true;
 }
 
 bool je_binary_buffer_read(
-    /* OPTIONAL: If *dst_len == 0 */ void* dst,
-    size_t* dst_len,
+    /* OPTIONAL: If *inout_dst_len == 0 */ void* dst,
+    size_t* inout_dst_len,
     const je_binary_buffer* buf)
 {
     assert(buf != nullptr);
-    assert(dst_len != nullptr);
-    assert(dst != nullptr || *dst_len == 0);
+    assert(inout_dst_len != nullptr);
+    assert(dst != nullptr || *inout_dst_len == 0);
 
-    const size_t dst_capacity = *dst_len;
+    const size_t dst_capacity = *inout_dst_len;
 
     // Layout written by je_binary_append_buffer, the handle points at the
     // type tag:
@@ -124,8 +142,22 @@ bool je_binary_buffer_read(
         return false;
 
     // The capacity was consumed, report the full length of the value.
-    *dst_len = (size_t)buf_len;
+    *inout_dst_len = (size_t)buf_len;
     return true;
+}
+
+static bool _je_binary_next_value_offset(
+    jeecs_file* file, size_t* inout_offset)
+{
+}
+
+bool je_binary_document_index(
+    const je_binary_document* document,
+    const char* key,
+    je_binary_value_type expected_type,
+    void* out_value)
+{
+
 }
 
 /* ======================================= */
