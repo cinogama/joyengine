@@ -36,7 +36,7 @@ JE_API size_t jeecs_write_cache_file(
 ### 示例
 
 ```cpp
-void* cache = jeecs_create_cache_file("@/shader/basic.shader", 1, 0);
+auto* const cache = jeecs_create_cache_file("@/shader/basic.shader", 1, 0);
 
 if (cache != nullptr) {
     // 写入着色器字节码

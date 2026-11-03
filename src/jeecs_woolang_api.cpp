@@ -89,7 +89,7 @@ WOORT_API woort_api wojeapi_file_cache_write_all(void)
     const void* buf = woort_buffer(1, &buflen);
 
     woort_vm* const last = woort_vm_swap(nullptr);
-    if (auto* cache = jeecs_create_cache_file(filepath, 0, 1))
+    if (auto* const cache = jeecs_create_cache_file(filepath, 0, 1))
     {
         auto written_len = jeecs_write_cache_file(buf, sizeof(char), buflen, cache);
 

@@ -14,7 +14,7 @@ JE_API void jeecs_close_cache_file(void* file);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `file` | `void*` | 缓存文件句柄 |
+| `file` | `je_writing_cache_file*` | 缓存文件句柄 |
 
 ## 返回值
 
@@ -27,7 +27,7 @@ JE_API void jeecs_close_cache_file(void* file);
 ### 示例
 
 ```cpp
-void* cache = jeecs_create_cache_file("@/shader/basic.shader", 1, 0);
+auto* const cache = jeecs_create_cache_file("@/shader/basic.shader", 1, 0);
 
 if (cache != nullptr) {
     // 写入数据...

@@ -142,7 +142,7 @@ void _jegl_create_shader_cache(jegl_shader* shader_resource, uint64_t virtual_fi
 {
     assert(shader_resource->m_handle.m_path_may_null_if_builtin != nullptr);
 
-    if (auto* cachefile = jeecs_create_cache_file(
+    if (auto* const cachefile = jeecs_create_cache_file(
         shader_resource->m_handle.m_path_may_null_if_builtin,
         SHADER_CACHE_VERSION,
         virtual_file_crc64))

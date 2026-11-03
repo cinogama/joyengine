@@ -2092,6 +2092,8 @@ JE_API /* OPTIONAL */ jeecs_file* jeecs_load_cache_file(
 
 // If usecrc64 != 0, cache file will use it instead of reading from origin file.
 
+typedef struct je_writing_cache_file je_writing_cache_file;
+
 /*
 jeecs_create_cache_file [基本接口]
 为 filepath 指定的文件创建缓存文件，将覆盖已有的缓存文件（如果已有的话）
@@ -2104,7 +2106,7 @@ jeecs_create_cache_file [基本接口]
     jeecs_close_cache_file
     jeecs_write_cache_file
 */
-JE_API /* OPTIONAL */ void* jeecs_create_cache_file(
+JE_API /* OPTIONAL */ je_writing_cache_file* jeecs_create_cache_file(
     const char* filepath,
     uint32_t format_version,
     uint64_t usecrc64);
@@ -2117,13 +2119,13 @@ JE_API size_t jeecs_write_cache_file(
     const void* write_buffer,
     size_t elem_size,
     size_t count,
-    void* file);
+    je_writing_cache_file* file);
 
 /*
 jeecs_close_cache_file [基本接口]
 关闭创建出的缓存文件
 */
-JE_API void jeecs_close_cache_file(void* file);
+JE_API void jeecs_close_cache_file(je_writing_cache_file* file);
 
 /*
 je_image_texture_color_space [类型]

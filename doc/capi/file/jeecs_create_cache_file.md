@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void* jeecs_create_cache_file(
+JE_API je_writing_cache_file* jeecs_create_cache_file(
     const char* filepath,
     uint32_t format_version,
     wo_integer_t usecrc64);
@@ -32,7 +32,7 @@ JE_API void* jeecs_create_cache_file(
 
 | 类型 | 描述 |
 |------|------|
-| `void*` | 缓存文件句柄；若创建失败返回 `nullptr` |
+| `je_writing_cache_file*` | 缓存文件句柄；若创建失败返回 `nullptr` |
 
 ## 用法
 
@@ -42,7 +42,7 @@ JE_API void* jeecs_create_cache_file(
 
 ```cpp
 // 为着色器文件创建缓存
-void* cache = jeecs_create_cache_file("@/shader/basic.shader", 1, 0);
+auto* const cache = jeecs_create_cache_file("@/shader/basic.shader", 1, 0);
 
 if (cache != nullptr) {
     // 写入编译后的着色器数据

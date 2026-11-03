@@ -512,7 +512,7 @@ bool je_image_texture_set_color_space(
 
     // jeecs_create_cache_file also embeds the image CRC64, so changing the
     // image later invalidates this property cache automatically.
-    void* cache = jeecs_create_cache_file(path, IMAGE_TEXTURE_CACHE_VERSION, 0);
+    je_writing_cache_file* const cache = jeecs_create_cache_file(path, IMAGE_TEXTURE_CACHE_VERSION, 0);
     if (cache == nullptr)
         return false;
 
