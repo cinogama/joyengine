@@ -245,13 +245,191 @@ static bool _je_binary_next_value_offset(
     }
 }
 
+// Compares the string payload at [payload_location, payload_location + len)
+// with `key`, reading the file in chunks to avoid allocating the key.
+static bool _je_binary_key_equals(
+    jeecs_file* file, size_t payload_location, uint64_t len, const char* key)
+{
+    assert(file != nullptr);
+    assert(key != nullptr);
+
+    if (len != (uint64_t)strlen(key))
+        return false;
+
+    if (!jeecs_file_seek(file, (int64_t)payload_location, JE_READ_FILE_SEEK_SET))
+        return false;
+
+    char chunk[256];
+    size_t remain = (size_t)len;
+    while (remain > 0)
+    {
+        const size_t chunk_len = remain < sizeof(chunk) ? remain : sizeof(chunk);
+        if (chunk_len != jeecs_file_read(chunk, sizeof(char), chunk_len, file)
+            || 0 != memcmp(chunk, key, chunk_len))
+            return false;
+
+        key += chunk_len;
+        remain -= chunk_len;
+    }
+    return true;
+}
+
+// Reads the value whose type tag is at `location`. Scalars are copied into
+// `out_value`; containers are handed back as handles over the file. LIST and
+// DOCUMENT handles point at their first child, matching je_binary_*_open,
+// while STRING and BUFFER handles point at the type tag, matching
+// je_binary_string_read / je_binary_buffer_read.
+static bool _je_binary_read_value(
+    jeecs_file* file,
+    size_t location,
+    je_binary_value_type expected_type,
+    void* out_value)
+{
+    assert(file != nullptr);
+    assert(out_value != nullptr);
+
+    if (!jeecs_file_seek(file, (int64_t)location, JE_READ_FILE_SEEK_SET))
+        return false;
+
+    je_binary_value_type type;
+    if (1 != jeecs_file_read(&type, sizeof(type), 1, file)
+        || type != expected_type)
+        return false;
+
+    switch (type)
+    {
+    case je_binary_value_type::JE_BINARY_VALUE_BOOL:
+    {
+        uint8_t raw;
+        if (1 != jeecs_file_read(&raw, sizeof(raw), 1, file))
+            return false;
+
+        *static_cast<bool*>(out_value) = raw != 0;
+        return true;
+    }
+
+    case je_binary_value_type::JE_BINARY_VALUE_INT8:
+        return 1 == jeecs_file_read(out_value, sizeof(int8_t), 1, file);
+
+    case je_binary_value_type::JE_BINARY_VALUE_INT16:
+        return 1 == jeecs_file_read(out_value, sizeof(int16_t), 1, file);
+
+    case je_binary_value_type::JE_BINARY_VALUE_INT32:
+        return 1 == jeecs_file_read(out_value, sizeof(int32_t), 1, file);
+
+    case je_binary_value_type::JE_BINARY_VALUE_INT64:
+        return 1 == jeecs_file_read(out_value, sizeof(int64_t), 1, file);
+
+    case je_binary_value_type::JE_BINARY_VALUE_UINT8:
+        return 1 == jeecs_file_read(out_value, sizeof(uint8_t), 1, file);
+
+    case je_binary_value_type::JE_BINARY_VALUE_UINT16:
+        return 1 == jeecs_file_read(out_value, sizeof(uint16_t), 1, file);
+
+    case je_binary_value_type::JE_BINARY_VALUE_UINT32:
+        return 1 == jeecs_file_read(out_value, sizeof(uint32_t), 1, file);
+
+    case je_binary_value_type::JE_BINARY_VALUE_UINT64:
+        return 1 == jeecs_file_read(out_value, sizeof(uint64_t), 1, file);
+
+    case je_binary_value_type::JE_BINARY_VALUE_FLOAT32:
+        return 1 == jeecs_file_read(out_value, sizeof(float), 1, file);
+
+    case je_binary_value_type::JE_BINARY_VALUE_FLOAT64:
+        return 1 == jeecs_file_read(out_value, sizeof(double), 1, file);
+
+    case je_binary_value_type::JE_BINARY_VALUE_STRING:
+    {
+        je_binary_string* str = static_cast<je_binary_string*>(out_value);
+        str->m_file = file;
+        str->m_location = location;
+        return true;
+    }
+
+    case je_binary_value_type::JE_BINARY_VALUE_BUFFER:
+    {
+        je_binary_buffer* buf = static_cast<je_binary_buffer*>(out_value);
+        buf->m_file = file;
+        buf->m_location = location;
+        return true;
+    }
+
+    case je_binary_value_type::JE_BINARY_VALUE_LIST:
+    {
+        je_binary_list* list = static_cast<je_binary_list*>(out_value);
+        list->m_file = file;
+        list->m_location = location + sizeof(type);
+        return true;
+    }
+
+    case je_binary_value_type::JE_BINARY_VALUE_DOCUMENT:
+    {
+        je_binary_document* document = static_cast<je_binary_document*>(out_value);
+        document->m_file = file;
+        document->m_location = location + sizeof(type);
+        return true;
+    }
+
+    case je_binary_value_type::JE_BINARY_VALUE_END:
+        break;
+    }
+
+    return false;
+}
+
 bool je_binary_document_index(
     const je_binary_document* document,
     const char* key,
     je_binary_value_type expected_type,
     void* out_value)
 {
+    assert(document != nullptr);
+    assert(key != nullptr);
+    assert(out_value != nullptr);
 
+    jeecs_file* file = document->m_file;
+    const size_t file_size = jeecs_file_size(file);
+
+    // A document is a sequence of [string key][value] pairs closed by END;
+    // the handle points at its first key.
+    size_t offset = document->m_location;
+    while (offset < file_size)
+    {
+        if (!jeecs_file_seek(file, (int64_t)offset, JE_READ_FILE_SEEK_SET))
+            return false;
+
+        je_binary_value_type type;
+        if (1 != jeecs_file_read(&type, sizeof(type), 1, file))
+            return false;
+
+        if (type == je_binary_value_type::JE_BINARY_VALUE_END)
+            return false; // The document is closed, the key is absent.
+
+        if (type != je_binary_value_type::JE_BINARY_VALUE_STRING)
+            return false; // Every entry starts with its key.
+
+        uint64_t key_len;
+        if (1 != jeecs_file_read(&key_len, sizeof(key_len), 1, file))
+            return false;
+
+        const size_t key_payload = jeecs_file_tell(file);
+        if (key_len > (uint64_t)(file_size - key_payload))
+            return false;
+
+        const size_t value_location = key_payload + (size_t)key_len;
+
+        // The first matching key wins.
+        if (_je_binary_key_equals(file, key_payload, key_len, key))
+            return _je_binary_read_value(
+                file, value_location, expected_type, out_value);
+
+        // Not the wanted key, step over its value.
+        offset = value_location;
+        if (!_je_binary_next_value_offset(file, &offset))
+            return false;
+    }
+
+    return false;
 }
 
 bool je_binary_list_index(
@@ -260,7 +438,33 @@ bool je_binary_list_index(
     je_binary_value_type expected_type,
     void* out_value)
 {
+    assert(list != nullptr);
+    assert(out_value != nullptr);
 
+    jeecs_file* file = list->m_file;
+
+    // A list is a sequence of values closed by END; the handle points at its
+    // first value.
+    size_t offset = list->m_location;
+    for (size_t i = 0;; ++i)
+    {
+        if (!jeecs_file_seek(file, (int64_t)offset, JE_READ_FILE_SEEK_SET))
+            return false;
+
+        je_binary_value_type type;
+        if (1 != jeecs_file_read(&type, sizeof(type), 1, file))
+            return false;
+
+        if (type == je_binary_value_type::JE_BINARY_VALUE_END)
+            return false; // The list is closed, the index is out of range.
+
+        if (i == index)
+            return _je_binary_read_value(
+                file, offset, expected_type, out_value);
+
+        if (!_je_binary_next_value_offset(file, &offset))
+            return false;
+    }
 }
 
 /* ======================================= */
