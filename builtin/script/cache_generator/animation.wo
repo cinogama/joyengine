@@ -1,0 +1,317 @@
+// 帧动画缓存生成器：把 .je4animation TOML 源转换为引擎可读的
+// 二进制缓存文档（jeecs_cache_binary_* 格式）。
+//
+// 由引擎在 .je4cache 缺失或失效时加载，调用 generate：
+//   cache  —— C 侧创建好的缓存写入器（文件头已写入）
+//   source —— 动画 TOML 的本地路径
+//
+// 文档结构与 src/jeecs_frame_animation_cache.cpp 中的读取逻辑一一对应：
+//   DOCUMENT "animations" -> LIST of DOCUMENT(action)
+//       "name" -> STRING
+//       "frames" -> LIST of DOCUMENT(frame)
+//           "time" -> FLOAT32
+//           "components" -> LIST of DOCUMENT
+//               "name" -> STRING, "member" -> STRING, "offset" -> BOOL,
+//               "type" -> INT32, "value" -> 值
+//           "uniforms" -> LIST of DOCUMENT
+//               "name" -> STRING, "type" -> INT32, "value" -> 值
+// 值类型标记与 jeecs.hpp 的 frame_data::data_value::type 一致：
+//   0 INT / 1 FLOAT / 2 VEC2 / 3 VEC3 / 4 VEC4 / 5 QUAT4
+// QUAT4 在 TOML 中保存欧拉角（度）[ex, ey, ez]，这里换算成四元数
+// (x, y, z, w) 写入缓存。
+
+import pkg::std;
+import pkg::math;
+import pkg::toml;
+import pkg::fsys;
+
+import je;
+import je::cache;
+
+using std;
+using toml;
+
+let DEG2RAD = 3.14159265358979323846 / 180.;
+
+func array_of(value: Toml)=> array<Toml>
+{
+    let mut result = []mut: vec<Toml>;
+    match (value->as_array)
+    {
+        value(items)?
+        {
+            for (let item : items)
+                result->add(item);
+        }
+        none?;
+    }
+    return result->to_array;
+}
+
+func string_of(value: Toml)=> string
+{
+    match (value->as_string)
+    {
+        value(str)? return str;
+        none?;
+    }
+    return "";
+}
+
+func bool_of(value: Toml)=> bool
+{
+    match (value->as_bool)
+    {
+        value(flag)? return flag;
+        none?;
+    }
+    return false;
+}
+
+func int_of(value: Toml)=> int
+{
+    match (value->as_int)
+    {
+        value(number)? return number;
+        none?;
+    }
+    return 0;
+}
+
+func real_of(value: Toml)=> real
+{
+    match (value->as_float)
+    {
+        value(number)? return number;
+        none?;
+    }
+    match (value->as_int)
+    {
+        value(number)? return number as real;
+        none?;
+    }
+    return 0.;
+}
+
+func real_at(values: array<Toml>, index: int)=> real
+{
+    if (index < 0 || index >= values->len)
+        return 0.;
+    return real_of(values[index]);
+}
+
+func value_type_tag(type_name: string)=> int
+{
+    let kind = type_name->lower;
+    if (kind == "int") return 0;
+    if (kind == "float") return 1;
+    if (kind == "vec2") return 2;
+    if (kind == "vec3") return 3;
+    if (kind == "vec4") return 4;
+    if (kind == "quat4") return 5;
+    return -1;
+}
+
+func append_key(cache: je::cache::binary_writer, key: string)=> bool
+{
+    return cache->append_string(key);
+}
+
+func append_float_values(
+    cache: je::cache::binary_writer, values: array<Toml>, count: int)=> bool
+{
+    if (!cache->append_list())
+        return false;
+
+    for (let mut i = 0; i < count; i += 1)
+    {
+        if (!cache->append_float32(real_at(values, i)))
+            return false;
+    }
+    return cache->append_end();
+}
+
+// 与 je/towoo/towoo.wo 的 quat::euler 保持一致：yaw=ez, pitch=ey, roll=ex。
+func append_quat4(
+    cache: je::cache::binary_writer, values: array<Toml>)=> bool
+{
+    let yangle = 0.5 * real_at(values, 2) * DEG2RAD;
+    let pangle = 0.5 * real_at(values, 1) * DEG2RAD;
+    let rangle = 0.5 * real_at(values, 0) * DEG2RAD;
+
+    let ysin = math::sin(yangle);
+    let ycos = math::cos(yangle);
+    let psin = math::sin(pangle);
+    let pcos = math::cos(pangle);
+    let rsin = math::sin(rangle);
+    let rcos = math::cos(rangle);
+
+    let y = rcos * psin * ycos + rsin * pcos * ysin;
+    let x = rcos * pcos * ysin - rsin * psin * ycos;
+    let z = rsin * pcos * ycos - rcos * psin * ysin;
+    let w = rcos * pcos * ycos + rsin * psin * ysin;
+    let mag = x * x + y * y + z * z + w * w;
+
+    if (!cache->append_list())
+        return false;
+    if (!cache->append_float32(x / mag))
+        return false;
+    if (!cache->append_float32(y / mag))
+        return false;
+    if (!cache->append_float32(z / mag))
+        return false;
+    if (!cache->append_float32(w / mag))
+        return false;
+    return cache->append_end();
+}
+
+func append_data_value(
+    cache: je::cache::binary_writer, type_tag: int, value: Toml)=> bool
+{
+    if (type_tag == 0)
+        return cache->append_int32(int_of(value));
+    if (type_tag == 1)
+        return cache->append_float32(real_of(value));
+
+    let values = array_of(value);
+    if (type_tag == 2)
+        return append_float_values(cache, values, 2);
+    if (type_tag == 3)
+        return append_float_values(cache, values, 3);
+    if (type_tag == 4)
+        return append_float_values(cache, values, 4);
+    if (type_tag == 5)
+        return append_quat4(cache, values);
+    return false;
+}
+
+extern func generate(
+    cache: je::cache::binary_writer, source: fsys::path_t)=> bool
+{
+    let mut loaded = option::none: option<Toml>;
+    match (toml::load(source))
+    {
+        ok(root)? loaded = option::value(root);
+        err(msg)?
+        {
+            je::logerr(F"无法解析动画 TOML 文件 {source->to_string()}：{msg}");
+            return false;
+        }
+    }
+    let root = loaded->unwrap;
+
+    if (!cache->append_document())
+        return false;
+
+    if (!append_key(cache, "animations") || !cache->append_list())
+        return false;
+
+    for (let action : array_of(root["animations"]))
+    {
+        if (!cache->append_document())
+            return false;
+        if (!append_key(cache, "name")
+            || !cache->append_string(string_of(action["name"])))
+            return false;
+
+        if (!append_key(cache, "frames") || !cache->append_list())
+            return false;
+
+        for (let frame : array_of(action["frames"]))
+        {
+            if (!cache->append_document())
+                return false;
+            if (!append_key(cache, "time")
+                || !cache->append_float32(real_of(frame["time"])))
+                return false;
+
+            if (!append_key(cache, "components") || !cache->append_list())
+                return false;
+
+            for (let component : array_of(frame["components"]))
+            {
+                if (!cache->append_document())
+                    return false;
+                if (!append_key(cache, "name")
+                    || !cache->append_string(string_of(component["name"])))
+                    return false;
+                if (!append_key(cache, "member")
+                    || !cache->append_string(string_of(component["member"])))
+                    return false;
+                if (!append_key(cache, "offset")
+                    || !cache->append_bool(bool_of(component["offset"])))
+                    return false;
+
+                let type_name = string_of(component["type"]);
+                let type_tag = value_type_tag(type_name);
+                if (type_tag < 0)
+                {
+                    je::logerr(F"动画 {source->to_string()} 中存在未知的值类型：{type_name}");
+                    return false;
+                }
+                if (!append_key(cache, "type") || !cache->append_int32(type_tag))
+                    return false;
+                if (!append_key(cache, "value")
+                    || !append_data_value(cache, type_tag, component["value"]))
+                    return false;
+
+                if (!cache->append_end())
+                    return false;
+            }
+            // 关闭 components 列表
+            if (!cache->append_end())
+                return false;
+
+            if (!append_key(cache, "uniforms") || !cache->append_list())
+                return false;
+
+            for (let uniform : array_of(frame["uniforms"]))
+            {
+                if (!cache->append_document())
+                    return false;
+                if (!append_key(cache, "name")
+                    || !cache->append_string(string_of(uniform["name"])))
+                    return false;
+
+                let type_name = string_of(uniform["type"]);
+                let type_tag = value_type_tag(type_name);
+                if (type_tag < 0)
+                {
+                    je::logerr(F"动画 {source->to_string()} 中存在未知的值类型：{type_name}");
+                    return false;
+                }
+                if (!append_key(cache, "type") || !cache->append_int32(type_tag))
+                    return false;
+                if (!append_key(cache, "value")
+                    || !append_data_value(cache, type_tag, uniform["value"]))
+                    return false;
+
+                if (!cache->append_end())
+                    return false;
+            }
+            // 关闭 uniforms 列表
+            if (!cache->append_end())
+                return false;
+
+            // 关闭 frame 文档
+            if (!cache->append_end())
+                return false;
+        }
+        // 关闭 frames 列表
+        if (!cache->append_end())
+            return false;
+
+        // 关闭 action 文档
+        if (!cache->append_end())
+            return false;
+    }
+    // 关闭 animations 列表
+    if (!cache->append_end())
+        return false;
+
+    // 关闭根文档
+    if (!cache->append_end())
+        return false;
+
+    return true;
+}

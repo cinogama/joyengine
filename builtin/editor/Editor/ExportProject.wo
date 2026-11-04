@@ -29,6 +29,7 @@ import je;
 import je::graphic;
 import je::gui;
 import je::internal;
+import je::cache;
 
 import builtin::editor::GUI::Windows;
 import builtin::editor::Editor::ModulePrepare;
@@ -1007,6 +1008,7 @@ namespace JEEditor::Editor
             };
             
             try! _ = packShaders(prepare, packer, settings.m_working_path);
+            try! _ = packAnimationCaches(prepare, settings.m_working_path);
             try! _ = buildAndCopyModules(prepare, export_path, settings.m_modules);
             try! _ = packProjectFiles(
                 prepare, packer, settings.m_working_path, export_path);
@@ -1133,7 +1135,49 @@ namespace JEEditor::Editor
             
             return_ok!;
         }
-        
+
+        // 预生成项目内全部 .je4animation 的二进制缓存。导出的运行时没有
+        // je/pkg 脚本源码，无法在游戏内加载 cache_generator，因此在编辑器
+        // 进程里先生成；随后的 packProjectFiles 会按通用 .je4cache 规则把
+        // <源>.je4cache 一并打进镜像。
+        func packAnimationCaches(prepare: ModulePrepare, working_path: path_t)
+        {
+            prepare->postMessage("正在生成动画缓存……");
+
+            match (allsubpath(working_path))
+            {
+                ok(paths)?
+                {
+                    for (let p : paths)
+                    {
+                        if (!isfile(p) || extension(p)->lower != ".je4animation")
+                            continue;
+
+                        match (relative(p, working_path))
+                        {
+                            ok(rel)?
+                            {
+                                if (rel->len == 0 || isHiddenRelativePath(rel))
+                                    continue;
+                            }
+                            err(_)?;
+                        }
+
+                        if (!je::cache::generate_animation_cache(p->to_string))
+                            prepare->postMessage(F"生成动画缓存失败：{p->to_string}");
+                        else
+                            prepare->postMessage(F"已生成动画缓存：{p->to_string}");
+                    }
+                }
+                err(_)?
+                {
+                    prepare->postMessage("无法扫描项目目录，跳过动画缓存生成");
+                }
+            }
+
+            return_ok!;
+        }
+
         // 以 RELEASE 配置编译全部原生模块，并把产物动态库复制到 .export/modules。
         // 使用 build-only 入口，避免把 RELEASE 库热重载进正在运行的编辑器。
         func buildAndCopyModules(prepare: ModulePrepare, export_path: path_t,

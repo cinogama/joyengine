@@ -125,6 +125,46 @@ WOORT_API woort_api wojeapi_file_cache_read_all(void)
     return woort_ret_option_none();
 }
 
+// 二进制缓存文档写入器绑定：生成器脚本持有的第一个参数即
+// je_writing_cache_file*，由 C 侧创建缓存文件后传入。
+WOORT_API woort_api wojeapi_cache_binary_append_document(void)
+{
+    auto* file = static_cast<je_writing_cache_file*>(woort_pointer(0));
+    return woort_ret_bool(jeecs_cache_binary_append_document(file));
+}
+WOORT_API woort_api wojeapi_cache_binary_append_list(void)
+{
+    auto* file = static_cast<je_writing_cache_file*>(woort_pointer(0));
+    return woort_ret_bool(jeecs_cache_binary_append_list(file));
+}
+WOORT_API woort_api wojeapi_cache_binary_append_end(void)
+{
+    auto* file = static_cast<je_writing_cache_file*>(woort_pointer(0));
+    return woort_ret_bool(jeecs_cache_binary_append_end(file));
+}
+WOORT_API woort_api wojeapi_cache_binary_append_string(void)
+{
+    auto* file = static_cast<je_writing_cache_file*>(woort_pointer(0));
+    return woort_ret_bool(jeecs_cache_binary_append_string(file, woort_string(1)));
+}
+WOORT_API woort_api wojeapi_cache_binary_append_bool(void)
+{
+    auto* file = static_cast<je_writing_cache_file*>(woort_pointer(0));
+    return woort_ret_bool(jeecs_cache_binary_append_bool(file, woort_bool(1)));
+}
+WOORT_API woort_api wojeapi_cache_binary_append_int32(void)
+{
+    auto* file = static_cast<je_writing_cache_file*>(woort_pointer(0));
+    return woort_ret_bool(
+        jeecs_cache_binary_append_int32(file, (int32_t)woort_int(1)));
+}
+WOORT_API woort_api wojeapi_cache_binary_append_float32(void)
+{
+    auto* file = static_cast<je_writing_cache_file*>(woort_pointer(0));
+    return woort_ret_bool(
+        jeecs_cache_binary_append_float32(file, (float)woort_real(1)));
+}
+
 WOORT_API woort_api wojeapi_mark_shared_glresource_outdated(void)
 {
     auto* uhost = jegl_uhost_get_or_create_for_universe(static_cast<je_GameUniverse*>(woort_pointer(0)), nullptr);
