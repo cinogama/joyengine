@@ -7,6 +7,7 @@
 #include <list>
 #include <optional>
 #include <unordered_map>
+#include <vector>
 
 void _jegl_cmd_begin_deferred_draw(
     jegl_command_buffer* cmd,
@@ -163,6 +164,27 @@ WOORT_API woort_api wojeapi_cache_binary_append_float32(void)
     auto* file = static_cast<je_writing_cache_file*>(woort_pointer(0));
     return woort_ret_bool(
         jeecs_cache_binary_append_float32(file, (float)woort_real(1)));
+}
+// int32 数组按 BUFFER 写入（瓦片网格/格 id 等大批量整数数据）。逐元素
+// 写入 LIST 会让读取侧 list_index 反复从头扫描，因此统一走缓冲区。
+WOORT_API woort_api wojeapi_cache_binary_append_int32_buffer(void)
+{
+    auto* file = static_cast<je_writing_cache_file*>(woort_pointer(0));
+
+    const woort_value values = 1;
+    const size_t count = woort_vec_len(values);
+
+    std::vector<int32_t> buffer(count);
+    for (size_t i = 0; i < count; ++i)
+    {
+        (void)woort_vec_get(WOORT_RETURN_SLOT, values, i);
+        buffer[i] = (int32_t)woort_unbox_int(WOORT_RETURN_SLOT);
+    }
+
+    static const int32_t empty_buffer = 0;
+    return woort_ret_bool(jeecs_cache_binary_append_buffer(file,
+        count > 0 ? (const void*)buffer.data() : (const void*)&empty_buffer,
+        count * sizeof(int32_t)));
 }
 
 WOORT_API woort_api wojeapi_mark_shared_glresource_outdated(void)

@@ -2197,6 +2197,25 @@ typedef struct jeecs_cache_binary_list
 } jeecs_cache_binary_list;
 
 /*
+jeecs_cache_binary_list_iterator [类型]
+二进制缓存列表的顺序遍历游标，位置指向下一个尚未读取的元素
+    * 由 jeecs_cache_binary_list_iterator_open 从列表句柄初始化
+    * 不拥有文件，游标有效期间对应的 jeecs_file 必须保持打开
+    * 读取接口会移动文件读取位置，不要与顺序读取混用
+字段由引擎内部维护，请勿直接修改
+请参见：
+    jeecs_cache_binary_list_iterator_open
+    jeecs_cache_binary_list_iterator_is_end
+    jeecs_cache_binary_list_iterator_read
+    jeecs_cache_binary_list_iterator_advance
+*/
+typedef struct jeecs_cache_binary_list_iterator
+{
+    jeecs_file* m_file;
+    size_t m_location;
+} jeecs_cache_binary_list_iterator;
+
+/*
 jeecs_cache_binary_string [类型]
 二进制缓存字符串值的只读句柄，位置指向该值自己的 STRING 标记
     * 句柄不拥有文件，句柄有效期间对应的 jeecs_file 必须保持打开
@@ -2326,6 +2345,54 @@ JE_API bool jeecs_cache_binary_list_index(
     size_t index,
     jeecs_cache_binary_value_type expected_type,
     void* out_value);
+
+/*
+jeecs_cache_binary_list_iterator_open [基本接口]
+从列表句柄初始化顺序遍历游标
+    * 游标指向列表的第一个元素（可能已经是 END）
+    * 读取接口会移动文件读取位置，不要与顺序读取混用
+请参见：
+    jeecs_cache_binary_list_iterator
+*/
+JE_API bool jeecs_cache_binary_list_iterator_open(
+    const jeecs_cache_binary_list* list,
+    jeecs_cache_binary_list_iterator* out_iterator);
+
+/*
+jeecs_cache_binary_list_iterator_is_end [基本接口]
+判断游标是否已经到达列表末尾
+    * 到达 END 返回 true
+    * 读取失败（越界/截断）返回 false，随后 iterator_read 会失败，调用方
+      据此拒绝损坏的缓存
+    * 读取不会移动游标的逻辑位置
+请参见：
+    jeecs_cache_binary_list_iterator
+*/
+JE_API bool jeecs_cache_binary_list_iterator_is_end(
+    const jeecs_cache_binary_list_iterator* iterator);
+
+/*
+jeecs_cache_binary_list_iterator_read [基本接口]
+读取游标当前元素
+    * expected_type 和 out_value 的约定与 jeecs_cache_binary_document_index 相同
+    * 不移动游标；类型不符或读取失败时返回 false
+请参见：
+    jeecs_cache_binary_list_iterator_advance
+*/
+JE_API bool jeecs_cache_binary_list_iterator_read(
+    const jeecs_cache_binary_list_iterator* iterator,
+    jeecs_cache_binary_value_type expected_type,
+    void* out_value);
+
+/*
+jeecs_cache_binary_list_iterator_advance [基本接口]
+把游标移动到下一个元素
+    * 已到达 END 或读取失败时返回 false
+请参见：
+    jeecs_cache_binary_list_iterator_read
+*/
+JE_API bool jeecs_cache_binary_list_iterator_advance(
+    jeecs_cache_binary_list_iterator* inout_iterator);
 
 /*
 jeecs_cache_binary_append_document [基本接口]
@@ -6160,10 +6227,16 @@ JE_API /* OPTIONAL: If size is invalid */ je_TilemapDocument* je_tilemap_create_
 
 /*
 je_tilemap_save_map [基本接口]
-将地图文档保存为 .je4tilemap，并把该路径登记为文档路径
-    * 写出失败返回 false
+把编辑器序列化好的 TOML 文本写入 path（.je4tilemap），重建
+<path>.je4cache，并把该路径登记为文档路径
+    * 引擎不生成 TOML：文本由 Woolang 编辑器脚本序列化后传入
+    * 写盘或缓存生成失败返回 false（TOML 可能已部分写入，重试即可）
+    * path 支持 @/ 与 !/ 前缀（与 je_tilemap_open_map 一致）
+请参见：
+    je_tilemap_open_map
 */
-JE_API bool je_tilemap_save_map(je_TilemapDocument* map, const char* path);
+JE_API bool je_tilemap_save_map(
+    je_TilemapDocument* map, const char* path, const char* toml_text);
 
 /*
 je_tilemap_reload_map [基本接口]
@@ -6495,6 +6568,17 @@ JE_API int32_t je_tilemap_get_tile(je_TilemapDocument* map, je_LayerId layer,
     int32_t x, int32_t y);
 
 /*
+je_tilemap_layer_grid [基本接口]
+取图层完整网格的只读视图（行优先，y 自上而下，长度 = width*height）
+    * out_count 返回元素数量（可为 nullptr）
+    * 图层无效时返回 nullptr
+    * 指针在文档存活且网格未改动期间有效
+    * 供编辑器序列化等需要遍历整层的场景，避免逐格调用 get_tile
+*/
+JE_API /* OPTIONAL: If layer is invalid */ const int32_t* je_tilemap_layer_grid(
+    je_TilemapDocument* map, je_LayerId layer, /* OPTIONAL */ int32_t* out_count);
+
+/*
 je_tilemap_set_tile [基本接口]
 设置指定图层某格的瓦片值（编码见本段说明）
 */
@@ -6580,6 +6664,48 @@ JE_API bool je_tilemap_get_property(je_TilemapDocument* map, je_LayerId layer,
     /* OPTIONAL */ void* out_value);
 
 /*
+je_TilemapCellPropertyEntry [类型]
+逐格属性覆盖条目的只读索引项，供编辑器序列化枚举
+    * m_layer 为图层下标，m_x/m_y 为格子坐标
+    * m_property_count 为该格覆盖的属性数量（名称/类型经
+      je_tilemap_cell_property_entry_property_info 取得）
+请参见：
+    je_tilemap_cell_property_entries
+*/
+typedef struct je_TilemapCellPropertyEntry
+{
+    je_LayerId m_layer;
+    int32_t m_x;
+    int32_t m_y;
+    int32_t m_property_count;
+} je_TilemapCellPropertyEntry;
+
+/*
+je_tilemap_cell_property_entries [基本接口]
+枚举文档中全部逐格属性覆盖条目（按 (layer, cell) 升序），返回条目总数
+    * out_entries 容量不足时只写入前 capacity 项
+    * out_entries 为 nullptr 或 capacity <= 0 时仅查询数量
+请参见：
+    je_TilemapCellPropertyEntry
+    je_tilemap_cell_property_entry_property_info
+*/
+JE_API int32_t je_tilemap_cell_property_entries(je_TilemapDocument* map,
+    /* OPTIONAL */ je_TilemapCellPropertyEntry* out_entries, int32_t capacity);
+
+/*
+je_tilemap_cell_property_entry_property_info [基本接口]
+取某格覆盖表中指定序号的属性名称与类型
+    * index 越界或该格无覆盖时返回 false
+请参见：
+    je_tilemap_cell_property_entries
+    je_PropertyType
+*/
+JE_API bool je_tilemap_cell_property_entry_property_info(
+    je_TilemapDocument* map, je_LayerId layer, int32_t x, int32_t y,
+    int32_t index, /* OPTIONAL */ const char** name,
+    /* OPTIONAL */ je_PropertyType* type);
+
+/*
 je_tilemap_is_walkable [基本接口]
 取某格全图层合并的通行性（任一图层不可通行即不可通行），出界视为不可通行
     * 返回 1/0
@@ -6641,9 +6767,16 @@ JE_API je_TilesetDocument* je_tilemap_create_tileset(const char* name);
 
 /*
 je_tilemap_save_tileset [基本接口]
-将图集文档保存为 .je4tileset，并把该路径登记为文档路径
+把编辑器序列化好的 TOML 文本写入 path（.je4tileset），重建
+<path>.je4cache，并把该路径登记为文档路径
+    * 引擎不生成 TOML：文本由 Woolang 编辑器脚本序列化后传入
+    * 写盘或缓存生成失败返回 false（TOML 可能已部分写入，重试即可）
+    * path 支持 @/ 与 !/ 前缀（与 je_tilemap_open_tileset 一致）
+请参见：
+    je_tilemap_open_tileset
 */
-JE_API bool je_tilemap_save_tileset(je_TilesetDocument* tileset, const char* path);
+JE_API bool je_tilemap_save_tileset(
+    je_TilesetDocument* tileset, const char* path, const char* toml_text);
 
 /*
 je_tilemap_reload_tileset [基本接口]
@@ -6695,6 +6828,14 @@ je_tilemap_tileset_name [基本接口]
 */
 JE_API const char* je_tilemap_tileset_name(je_TilesetDocument* tileset);
 
+/*
+je_tilemap_tileset_next_tile_id [基本接口]
+取图集文档下一个可分配的瓦片 id（只增不减：删除源/裁掉格子后其 id
+作废，不会被后续新增格复用）
+    * 编辑器序列化 .je4tileset 时须原样保存，保证地图按 id 的引用不漂移
+*/
+JE_API int32_t je_tilemap_tileset_next_tile_id(je_TilesetDocument* tileset);
+
 // ---- 图集源纹理 ----
 
 /*
@@ -6734,6 +6875,29 @@ je_tilemap_source_info [基本接口]
 */
 JE_API bool je_tilemap_source_info(je_TilesetDocument* tileset, je_SourceId source_idx,
     /* OPTIONAL */ const char** texture_path, /* OPTIONAL */ int32_t* tile_px, /* OPTIONAL */ int32_t* xcount, /* OPTIONAL */ int32_t* ycount);
+
+/*
+je_tilemap_source_tex_size [基本接口]
+取指定源纹理的实测像素尺寸，经出参返回 (tex_w, tex_h)
+    * 尺寸未知（尚未测量）时写 0；下标越界返回 false
+    * 编辑器序列化 .je4tileset 时原样保存（加载时仍会按纹理重测）
+*/
+JE_API bool je_tilemap_source_tex_size(je_TilesetDocument* tileset,
+    je_SourceId source_idx,
+    /* OPTIONAL */ int32_t* tex_w, /* OPTIONAL */ int32_t* tex_h);
+
+/*
+je_tilemap_source_cell_ids [基本接口]
+取指定源纹理逐格瓦片 id 表的只读视图（行优先，长度 = xcount*ycount）
+    * out_count 返回元素数量（可为 nullptr）
+    * 下标越界返回 nullptr；指针在文档存活且源网格未改动期间有效
+    * 供编辑器序列化原样保存（纹理尺寸变化后 id 与格坐标不是固定公式）
+请参见：
+    je_tilemap_tile_id_at
+*/
+JE_API /* OPTIONAL: If source_idx is invalid */ const int32_t*
+    je_tilemap_source_cell_ids(je_TilesetDocument* tileset,
+        je_SourceId source_idx, /* OPTIONAL */ int32_t* out_count);
 
 // ---- 图集源纹理附加层级 ----
 
@@ -6776,6 +6940,16 @@ JE_API bool je_tilemap_source_extra_info(je_TilesetDocument* tileset,
     /* OPTIONAL */ int32_t* pass, /* OPTIONAL */ const char** texture_path);
 
 /*
+je_tilemap_source_extra_tex_size [基本接口]
+取指定附加层级的实测像素尺寸，经出参返回 (tex_w, tex_h)
+    * 尺寸未知（尚未测量）时写 0；下标越界返回 false
+    * 附加层级 cell 尺寸由该尺寸与主网格推得，编辑器序列化时原样保存
+*/
+JE_API bool je_tilemap_source_extra_tex_size(je_TilesetDocument* tileset,
+    je_SourceId source_idx, int32_t extra_idx,
+    /* OPTIONAL */ int32_t* tex_w, /* OPTIONAL */ int32_t* tex_h);
+
+/*
 je_tilemap_set_source_extra_pass [基本接口]
 修改附加层级的绑定通道 id（>= 1，同源内通道唯一），渲染侧逐帧对齐自动重绑
 */
@@ -6801,6 +6975,38 @@ je_tilemap_tile_at_index [基本接口]
 */
 JE_API bool je_tilemap_tile_at_index(je_TilesetDocument* tileset, int32_t index,
     je_TileId* out_id);
+
+/*
+je_tilemap_tile_defs [基本接口]
+枚举图集中带有稀疏元数据定义的瓦片 id（按 id 升序），返回总数
+    * 未定义的瓦片按默认元数据（可通行、普通瓦片、无属性、空名称）处理
+    * out_ids 容量不足时只写入前 capacity 项
+    * out_ids 为 nullptr 或 capacity <= 0 时仅查询数量
+    * 供编辑器序列化 .je4tileset 的 [[tiles]] 段
+请参见：
+    je_tilemap_tile_def_property_info
+*/
+JE_API int32_t je_tilemap_tile_defs(je_TilesetDocument* tileset,
+    /* OPTIONAL */ je_TileId* out_ids, int32_t capacity);
+
+/*
+je_tilemap_tile_def_property_count [基本接口]
+取某瓦片定义的默认属性数量（该瓦片无定义返回 0）
+*/
+JE_API int32_t je_tilemap_tile_def_property_count(je_TilesetDocument* tileset,
+    je_TileId tile_id);
+
+/*
+je_tilemap_tile_def_property_info [基本接口]
+取某瓦片定义中指定序号的属性名称与类型（按名称升序）
+    * index 越界或该瓦片无定义返回 false
+请参见：
+    je_tilemap_tile_defs
+    je_PropertyType
+*/
+JE_API bool je_tilemap_tile_def_property_info(je_TilesetDocument* tileset,
+    je_TileId tile_id, int32_t index,
+    /* OPTIONAL */ const char** name, /* OPTIONAL */ je_PropertyType* type);
 
 /*
 je_tilemap_tile_id_at [基本接口]

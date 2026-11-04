@@ -1,0 +1,615 @@
+// 瓦片地图编辑器 —— TOML 序列化。
+// .je4tilemap/.je4tileset 是 TOML 文本源：本模块从引擎文档读取当前
+// 状态，构造 toml::Toml 树；保存时交给引擎写盘并重建 .je4cache。
+// 引擎侧不生成 TOML，只写这里传过去的文本。
+//
+// 格式（详见 src/jeecs_core_tilemap_model.hpp）：
+//   tileset: name / next_tile_id / [[sources]] / [[properties]] / [[tiles]]
+//   tilemap: width / height / tile_px / tilesets / [[layers]] /
+//            [[cell_properties]]
+// 枚举名统一走 je::tilemap 的映射函数，保证与缓存生成器一致。
+
+import pkg::std;
+import pkg::toml;
+import pkg::try;
+import pkg::worst;
+
+import je;
+import je::graphic;
+import je::tilemap;
+
+using std;
+using je;
+using je::graphic;
+using je::tilemap;
+using toml;
+
+namespace JEEditor::Editor::TilemapEditor
+{
+    // ==================== 类型化值写入 ====================
+    // 三类来源（schema 默认 / 瓦片默认 / 逐格覆盖）的 getter 不同，
+    // 分别提供一组 set_*；值直接写进目标 table（Toml 无法单独表示标量）。
+    func set_schema_default(
+        ts: Tileset, table: Toml, name: string, type: int)=> result<void, string>
+    {
+        if (type == property_type::BOOL as int)
+        {
+            try! value = ts->property_default_bool(name)
+                -> ok_or(F"图集属性 '{name}' 的默认值读取失败");
+            table->set("default", value);
+            return_ok!;
+        }
+        if (type == property_type::STRING as int)
+        {
+            try! value = ts->property_default_string(name)
+                -> ok_or(F"图集属性 '{name}' 的默认值读取失败");
+            table->set("default", value);
+            return_ok!;
+        }
+        if (type == property_type::INT as int)
+        {
+            try! value = ts->property_default_int(name)
+                -> ok_or(F"图集属性 '{name}' 的默认值读取失败");
+            table->set("default", value);
+            return_ok!;
+        }
+        if (type == property_type::FLOAT as int)
+        {
+            try! value = ts->property_default_real(name)
+                -> ok_or(F"图集属性 '{name}' 的默认值读取失败");
+            table->set("default", value);
+            return_ok!;
+        }
+        if (type == property_type::VEC2 as int)
+        {
+            try! value = ts->property_default_vec2(name)
+                -> ok_or(F"图集属性 '{name}' 的默认值读取失败");
+            let array = toml::new_array();
+            array->push(value.0);
+            array->push(value.1);
+            table->set("default", array);
+            return_ok!;
+        }
+        if (type == property_type::VEC3 as int)
+        {
+            try! value = ts->property_default_vec3(name)
+                -> ok_or(F"图集属性 '{name}' 的默认值读取失败");
+            let array = toml::new_array();
+            array->push(value.0);
+            array->push(value.1);
+            array->push(value.2);
+            table->set("default", array);
+            return_ok!;
+        }
+        if (type == property_type::VEC4 as int)
+        {
+            try! value = ts->property_default_vec4(name)
+                -> ok_or(F"图集属性 '{name}' 的默认值读取失败");
+            let array = toml::new_array();
+            array->push(value.0);
+            array->push(value.1);
+            array->push(value.2);
+            array->push(value.3);
+            table->set("default", array);
+            return_ok!;
+        }
+        throw! F"图集属性 '{name}' 的类型 {type} 无法识别";
+    }
+
+    func set_tile_property(ts: Tileset, tile_id: int,
+        table: Toml, name: string, type: int)=> result<void, string>
+    {
+        if (type == property_type::BOOL as int)
+        {
+            try! value = ts->get_tile_property_bool(tile_id, name)
+                -> ok_or(F"瓦片 {tile_id} 属性 '{name}' 读取失败");
+            table->set(name, value);
+            return_ok!;
+        }
+        if (type == property_type::STRING as int)
+        {
+            try! value = ts->get_tile_property_string(tile_id, name)
+                -> ok_or(F"瓦片 {tile_id} 属性 '{name}' 读取失败");
+            table->set(name, value);
+            return_ok!;
+        }
+        if (type == property_type::INT as int)
+        {
+            try! value = ts->get_tile_property_int(tile_id, name)
+                -> ok_or(F"瓦片 {tile_id} 属性 '{name}' 读取失败");
+            table->set(name, value);
+            return_ok!;
+        }
+        if (type == property_type::FLOAT as int)
+        {
+            try! value = ts->get_tile_property_real(tile_id, name)
+                -> ok_or(F"瓦片 {tile_id} 属性 '{name}' 读取失败");
+            table->set(name, value);
+            return_ok!;
+        }
+        if (type == property_type::VEC2 as int)
+        {
+            try! value = ts->get_tile_property_vec2(tile_id, name)
+                -> ok_or(F"瓦片 {tile_id} 属性 '{name}' 读取失败");
+            let array = toml::new_array();
+            array->push(value.0);
+            array->push(value.1);
+            table->set(name, array);
+            return_ok!;
+        }
+        if (type == property_type::VEC3 as int)
+        {
+            try! value = ts->get_tile_property_vec3(tile_id, name)
+                -> ok_or(F"瓦片 {tile_id} 属性 '{name}' 读取失败");
+            let array = toml::new_array();
+            array->push(value.0);
+            array->push(value.1);
+            array->push(value.2);
+            table->set(name, array);
+            return_ok!;
+        }
+        if (type == property_type::VEC4 as int)
+        {
+            try! value = ts->get_tile_property_vec4(tile_id, name)
+                -> ok_or(F"瓦片 {tile_id} 属性 '{name}' 读取失败");
+            let array = toml::new_array();
+            array->push(value.0);
+            array->push(value.1);
+            array->push(value.2);
+            array->push(value.3);
+            table->set(name, array);
+            return_ok!;
+        }
+        throw! F"瓦片 {tile_id} 属性 '{name}' 的类型 {type} 无法识别";
+    }
+
+    func set_cell_property(map: Tilemap, layer: int, x: int, y: int,
+        table: Toml, name: string, type: int)=> result<void, string>
+    {
+        if (type == property_type::BOOL as int)
+        {
+            try! value = map->get_cell_property_bool(layer, x, y, name)
+                -> ok_or(F"格子 ({x},{y}) 图层 {layer} 属性 '{name}' 读取失败");
+            table->set(name, value);
+            return_ok!;
+        }
+        if (type == property_type::STRING as int)
+        {
+            try! value = map->get_cell_property_string(layer, x, y, name)
+                -> ok_or(F"格子 ({x},{y}) 图层 {layer} 属性 '{name}' 读取失败");
+            table->set(name, value);
+            return_ok!;
+        }
+        if (type == property_type::INT as int)
+        {
+            try! value = map->get_cell_property_int(layer, x, y, name)
+                -> ok_or(F"格子 ({x},{y}) 图层 {layer} 属性 '{name}' 读取失败");
+            table->set(name, value);
+            return_ok!;
+        }
+        if (type == property_type::FLOAT as int)
+        {
+            try! value = map->get_cell_property_real(layer, x, y, name)
+                -> ok_or(F"格子 ({x},{y}) 图层 {layer} 属性 '{name}' 读取失败");
+            table->set(name, value);
+            return_ok!;
+        }
+        if (type == property_type::VEC2 as int)
+        {
+            try! value = map->get_cell_property_vec2(layer, x, y, name)
+                -> ok_or(F"格子 ({x},{y}) 图层 {layer} 属性 '{name}' 读取失败");
+            let array = toml::new_array();
+            array->push(value.0);
+            array->push(value.1);
+            table->set(name, array);
+            return_ok!;
+        }
+        if (type == property_type::VEC3 as int)
+        {
+            try! value = map->get_cell_property_vec3(layer, x, y, name)
+                -> ok_or(F"格子 ({x},{y}) 图层 {layer} 属性 '{name}' 读取失败");
+            let array = toml::new_array();
+            array->push(value.0);
+            array->push(value.1);
+            array->push(value.2);
+            table->set(name, array);
+            return_ok!;
+        }
+        if (type == property_type::VEC4 as int)
+        {
+            try! value = map->get_cell_property_vec4(layer, x, y, name)
+                -> ok_or(F"格子 ({x},{y}) 图层 {layer} 属性 '{name}' 读取失败");
+            let array = toml::new_array();
+            array->push(value.0);
+            array->push(value.1);
+            array->push(value.2);
+            array->push(value.3);
+            table->set(name, array);
+            return_ok!;
+        }
+        throw! F"格子 ({x},{y}) 图层 {layer} 属性 '{name}' 的类型 {type} 无法识别";
+    }
+
+    // ==================== uniform 值写入 ====================
+    func set_uniform_value(table: Toml, name: string,
+        value: graphic::shader::uniform_variable)=> void
+    {
+        match (value)
+        {
+            integer(v)?
+                table->set(name, v);
+            integer2(v)?
+            {
+                let array = toml::new_array();
+                array->push(v.0);
+                array->push(v.1);
+                table->set(name, array);
+            }
+            integer3(v)?
+            {
+                let array = toml::new_array();
+                array->push(v.0);
+                array->push(v.1);
+                array->push(v.2);
+                table->set(name, array);
+            }
+            integer4(v)?
+            {
+                let array = toml::new_array();
+                array->push(v.0);
+                array->push(v.1);
+                array->push(v.2);
+                array->push(v.3);
+                table->set(name, array);
+            }
+            float(v)?
+                table->set(name, v);
+            float2(v)?
+            {
+                let array = toml::new_array();
+                array->push(v.0);
+                array->push(v.1);
+                table->set(name, array);
+            }
+            float3(v)?
+            {
+                let array = toml::new_array();
+                array->push(v.0);
+                array->push(v.1);
+                array->push(v.2);
+                table->set(name, array);
+            }
+            float4(v)?
+            {
+                let array = toml::new_array();
+                array->push(v.0);
+                array->push(v.1);
+                array->push(v.2);
+                array->push(v.3);
+                table->set(name, array);
+            }
+            color(v)?
+            {
+                let array = toml::new_array();
+                array->push(v.0);
+                array->push(v.1);
+                array->push(v.2);
+                array->push(v.3);
+                table->set(name, array);
+            }
+            // texture（槽位由 style_textures 表达）与矩阵/其它类型不落盘，
+            // 与旧保存行为一致
+            _?;
+        }
+    }
+
+    // ==================== 图集 ====================
+    public func tileset_to_toml(ts: Tileset)=> result<Toml, string>
+    {
+        let root = toml::new_table();
+        root->set("name", ts->name());
+        root->set("next_tile_id", ts->next_tile_id());
+
+        let sources = toml::new_array();
+        for (let mut i = 0; i < ts->source_count(); i += 1)
+        {
+            let (path, tile_px, xcount, ycount) = ts->source_info(i);
+            let (tex_w, tex_h) = ts->source_tex_size(i);
+
+            let source = toml::new_table();
+            source->set("path", path);
+            source->set("tile_px", tile_px);
+            source->set("xcount", xcount);
+            source->set("ycount", ycount);
+            source->set("tex_w", tex_w);
+            source->set("tex_h", tex_h);
+
+            let ids = ts->source_cell_ids(i);
+            if (ids->len != xcount * ycount)
+                throw! F"图集源 {i} 的逐格 id 表长度与网格不符";
+
+            let id_rows = toml::new_array();
+            for (let mut y = 0; y < ycount; y += 1)
+            {
+                let row = toml::new_array();
+                for (let mut x = 0; x < xcount; x += 1)
+                    row->push(ids[y * xcount + x]);
+                id_rows->push(row);
+            }
+            source->set("cell_ids", id_rows);
+
+            let extra_count = ts->source_extra_count(i);
+            if (extra_count > 0)
+            {
+                let extras = toml::new_array();
+                for (let mut k = 0; k < extra_count; k += 1)
+                {
+                    let (pass, extra_path) = ts->source_extra_info(i, k);
+                    let (ew, eh) = ts->source_extra_tex_size(i, k);
+
+                    let extra = toml::new_table();
+                    extra->set("pass", pass);
+                    extra->set("path", extra_path);
+                    extra->set("tex_w", ew);
+                    extra->set("tex_h", eh);
+                    extras->push(extra);
+                }
+                source->set("extras", extras);
+            }
+
+            sources->push(source);
+        }
+        root->set("sources", sources);
+
+        let properties = toml::new_array();
+        for (let mut i = 0; i < ts->property_count(); i += 1)
+        {
+            let (name, type) = ts->property_info(i);
+            let property = toml::new_table();
+            property->set("name", name);
+            property->set("type", property_type_toml_name(type));
+            try! _ = set_schema_default(ts, property, name, type);
+            properties->push(property);
+        }
+        root->set("properties", properties);
+
+        let tiles = toml::new_array();
+        for (let tile_id : ts->tile_defs())
+        {
+            let tile = toml::new_table();
+            tile->set("id", tile_id);
+            tile->set("name", ts->tile_name(tile_id));
+
+            let (_, _, _, walkable) = ts->tile_info(tile_id);
+            tile->set("walkable", walkable != 0);
+            tile->set("kind", tile_kind_toml_name(ts->tile_kind(tile_id)));
+
+            let (nx, ny, nz) = ts->tile_normal(tile_id);
+            let normal = toml::new_array();
+            normal->push(nx);
+            normal->push(ny);
+            normal->push(nz);
+            tile->set("normal", normal);
+
+            let variant_count = ts->tile_variant_count(tile_id);
+            if (variant_count > 0)
+            {
+                let variants = toml::new_array();
+                for (let mut k = 0; k < variant_count; k += 1)
+                {
+                    let variant = ts->tile_variant(tile_id, k);
+                    let (variant_source, _, _, _) = ts->tile_info(variant);
+                    if (variant_source < 0)
+                        continue;   // 引用已删除源格：剔除，保证可再次加载
+                    variants->push(variant);
+                }
+                if (variants->len > 0)
+                    tile->set("variants", variants);
+            }
+
+            let property_count = ts->tile_def_property_count(tile_id);
+            if (property_count > 0)
+            {
+                let tile_properties = toml::new_table();
+                for (let mut k = 0; k < property_count; k += 1)
+                {
+                    try! (name, type) =
+                        ts->tile_def_property_info(tile_id, k)
+                            -> ok_or(F"瓦片 {tile_id} 的属性表读取失败");
+                    try! _ = set_tile_property(
+                        ts, tile_id, tile_properties, name, type);
+                }
+                tile->set("properties", tile_properties);
+            }
+
+            tiles->push(tile);
+        }
+        root->set("tiles", tiles);
+
+        return result::ok(root);
+    }
+
+    // ==================== 地图 ====================
+    public func map_to_toml(map: Tilemap)=> result<Toml, string>
+    {
+        let (width, height, tile_px, layer_count) = map->size();
+
+        let root = toml::new_table();
+        root->set("width", width);
+        root->set("height", height);
+        root->set("tile_px", tile_px);
+
+        let tilesets = toml::new_array();
+        for (let mut i = 0; i < map->tileset_count(); i += 1)
+            tilesets->push(map->tileset_path(i));
+        root->set("tilesets", tilesets);
+
+        let layers = toml::new_array();
+        for (let mut layer = 0; layer < layer_count; layer += 1)
+        {
+            let layer_table = toml::new_table();
+
+            let (name, visible, locked) = map->get_layer(layer);
+            layer_table->set("name", name);
+            layer_table->set("visible", visible != 0);
+            layer_table->set("locked", locked != 0);
+            layer_table->set("z", map->layer_z(layer));
+            layer_table->set("rend_queue", map->layer_rend_queue(layer));
+            layer_table->set("selfshadow",
+                shadow_mode_toml_name(map->layer_selfshadow(layer)));
+            layer_table->set("selfshadow_factor",
+                map->layer_selfshadow_factor(layer));
+            layer_table->set("blockshadow",
+                shadow_mode_toml_name(map->layer_blockshadow(layer)));
+            layer_table->set("blockshadow_factor",
+                map->layer_blockshadow_factor(layer));
+
+            // 样式着色器：只有来源路径的实例可落盘；无路径实例按未配置
+            // 处理（uniform 一并丢弃），与旧保存口径一致。
+            let mut shader_path = "";
+            let mut shader_opt = option::none: option<graphic::shader>;
+            match (map->layer_shader(layer))
+            {
+                value(shader)?
+                {
+                    shader_opt = option::value(shader);
+                    match (shader->path())
+                    {
+                        value(path)? shader_path = path;
+                        none?;
+                    }
+                }
+                none?;
+            }
+            if (shader_path != "")
+                layer_table->set("shader", shader_path);
+            else if (shader_opt->is_value)
+                je::logerr(F"图层 {layer} 的着色器不是由文件创建，样式不会写入地图");
+
+            let grid = map->layer_grid(layer);
+            if (grid->len != width * height)
+                throw! F"图层 {layer} 的网格长度与地图尺寸不符";
+
+            let grid_rows = toml::new_array();
+            for (let mut y = 0; y < height; y += 1)
+            {
+                let row = toml::new_array();
+                for (let mut x = 0; x < width; x += 1)
+                    row->push(grid[y * width + x]);
+                grid_rows->push(row);
+            }
+            layer_table->set("grid", grid_rows);
+
+            let texture_count = map->layer_texture_count(layer);
+            if (texture_count > 0)
+            {
+                let textures = toml::new_array();
+                for (let mut k = 0; k < texture_count; k += 1)
+                {
+                    let (slot, texture_opt) = map->layer_texture(layer, k);
+                    if (texture_opt->is_none)
+                        continue;
+                    let texture = texture_opt->unwrap;
+                    match (texture->path())
+                    {
+                        value(path)?
+                        {
+                            let entry = toml::new_table();
+                            entry->set("slot", slot);
+                            entry->set("path", path);
+                            textures->push(entry);
+                        }
+                        none?
+                            je::logerr(F"图层 {layer} 槽位 {slot} 的纹理不是由文件创建，绑定不会写入地图");
+                    }
+                }
+                if (textures->len > 0)
+                    layer_table->set("style_textures", textures);
+            }
+
+            let uniforms = toml::new_table();
+            if (shader_path != "")
+            {
+                let shader = shader_opt->unwrap;
+                let all_uniforms = shader->get_uniforms();
+                for (let uniform_name : all_uniforms->keys
+                    |> sort(\l, r = l < r;))
+                {
+                    // JE_ 前缀是引擎内置渲染变量；texture/矩阵类由
+                    // set_uniform_value 内的兜底分支过滤。
+                    if (uniform_name->begin_with("JE_"))
+                        continue;
+                    set_uniform_value(
+                        uniforms, uniform_name, all_uniforms[uniform_name]);
+                }
+            }
+            if (uniforms->len > 0)
+                layer_table->set("style_uniforms", uniforms);
+
+            layers->push(layer_table);
+        }
+        root->set("layers", layers);
+
+        let cell_properties = toml::new_array();
+        for (let entry : map->cell_property_entries())
+        {
+            let (layer, x, y, property_count) = entry;
+
+            let cell = toml::new_table();
+            cell->set("layer", layer);
+            cell->set("x", x);
+            cell->set("y", y);
+
+            let properties = toml::new_table();
+            for (let mut k = 0; k < property_count; k += 1)
+            {
+                try! (name, type) =
+                    map->cell_property_entry_property_info(
+                        layer, x, y, k)
+                        -> ok_or(F"格子 ({x},{y}) 图层 {layer} 的属性表读取失败");
+                try! _ = set_cell_property(
+                    map, layer, x, y, properties, name, type);
+            }
+            if (properties->len > 0)
+                cell->set("properties", properties);
+
+            cell_properties->push(cell);
+        }
+        if (cell_properties->len > 0)
+            root->set("cell_properties", cell_properties);
+
+        return result::ok(root);
+    }
+
+    // ==================== 保存入口 ====================
+    // 序列化为 TOML 文本后交给引擎：写盘 + 重建 .je4cache + 登记路径。
+    public func save_map_document(map: Tilemap, path: string)=> bool
+    {
+        let mut root_opt = option::none: option<Toml>;
+        match (map_to_toml(map))
+        {
+            ok(root)? root_opt = option::value(root);
+            err(message)?
+            {
+                je::logerr(F"序列化瓦片地图失败：{message}");
+                return false;
+            }
+        }
+        return map->save_toml(path, root_opt->unwrap->to_toml());
+    }
+
+    public func save_tileset_document(ts: Tileset, path: string)=> bool
+    {
+        let mut root_opt = option::none: option<Toml>;
+        match (tileset_to_toml(ts))
+        {
+            ok(root)? root_opt = option::value(root);
+            err(message)?
+            {
+                je::logerr(F"序列化瓦片图集失败：{message}");
+                return false;
+            }
+        }
+        return ts->save_toml(path, root_opt->unwrap->to_toml());
+    }
+}

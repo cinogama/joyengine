@@ -26,6 +26,13 @@ namespace je::cache
         extern("libjoyecs", "wojeapi_cache_binary_append_int32")
             public func append_int32(self: binary_writer, value: int)=> bool;
 
+        // 整段 int32 数组按 BUFFER 写入（瓦片网格/格 id 等大批量数据）。
+        // 读取侧用 jeecs_cache_binary_buffer_read 一次性取出，避免逐元素
+        // LIST 读取的重复扫描。
+        extern("libjoyecs", "wojeapi_cache_binary_append_int32_buffer")
+            public func append_int32_buffer(self: binary_writer,
+                values: array<int>)=> bool;
+
         extern("libjoyecs", "wojeapi_cache_binary_append_float32")
             public func append_float32(self: binary_writer, value: real)=> bool;
     }
@@ -35,4 +42,11 @@ namespace je::cache
     // 引擎加载动画时会自动走同一流程，这里提供给导出流程预生成缓存。
     extern("libjoyecs", "wojeapi_animation_cache_ensure")
         public func generate_animation_cache(path: string)=> bool;
+
+    // 同上，对应 .je4tileset / .je4tilemap 与 cache_generator 下的生成器。
+    extern("libjoyecs", "wojeapi_tileset_cache_ensure")
+        public func generate_tileset_cache(path: string)=> bool;
+
+    extern("libjoyecs", "wojeapi_tilemap_cache_ensure")
+        public func generate_map_cache(path: string)=> bool;
 }

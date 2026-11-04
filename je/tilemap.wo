@@ -1,6 +1,12 @@
 // Joyengine 4.x
 // 瓦片地图运行时 API：je_tilemap_* C API 的 Woolang 绑定与友好封装。
 //
+// .je4tileset/.je4tilemap 是 TOML 文本源，运行期读取由引擎生成的
+// <源路径>.je4cache（缓存缺失/失效时引擎调用
+// builtin/script/cache_generator/{tileset,tilemap}.wo 重建）。
+// TOML 的生成不在引擎侧：编辑器用本组读取接口序列化后，经 save_toml
+// 交给引擎写盘、重建缓存并登记路径。
+//
 // 文档指针类型为 Tilemap / Tileset（基于 gchandle 声明，载荷为引擎侧
 // 不透明文档实例指针）：值本身持有文档 1 个引用，被 GC 回收（或
 // gchandle::close）时自动 unload 释放，只要指针值仍被引用文档就不会
@@ -11,8 +17,8 @@
 // 延长到指针值之外，如跨场景常驻）；unload -1，归零且已保存时文档被
 // 逐出缓存（实例销毁、指针失效），未保存的文档保留驻留。使用地图的
 // 世界与地图引用的图集亦各占 1 个引用，不受脚本侧影响。相关方法声明
-// 在对应类型的命名空间中，可用接收者形式调用：map->save(path)、
-// tileset->add_source(...)。
+// 在对应类型的命名空间中，可用接收者形式调用：map->save_toml(path, text)、
+// tileset->add_source(...) 等。
 //
 // 瓦片值编码（网格与笔刷统一）：
 //     0            空
@@ -78,9 +84,11 @@ namespace je
             extern("libjoyecs", "wojeapi_tilemap_reload_map")
                 public func reload(path: string)=> void;
 
-            // 保存到指定路径并更新文档登记
+            // 保存：toml_text 由编辑器脚本序列化；引擎负责写入 path、
+            // 重建 <path>.je4cache 并更新文档登记（保存后各世界按新路径
+            // 共享）。写盘或缓存生成失败返回 false。
             extern("libjoyecs", "wojeapi_tilemap_save_map")
-                public func save(self: Tilemap, path: string)=> bool;
+                public func save_toml(self: Tilemap, path: string, toml_text: string)=> bool;
 
             // 返回 (宽, 高, 瓦片像素, 图层数)
             extern("libjoyecs", "wojeapi_tilemap_map_size")
@@ -223,6 +231,10 @@ namespace je
             extern("libjoyecs", "wojeapi_tilemap_get_tile")
                 public func get_tile(self: Tilemap, layer: int, x: int, y: int)=> int;
 
+            // 整层网格（行优先、y 自上而下，长度 = 宽*高），供序列化遍历
+            extern("libjoyecs", "wojeapi_tilemap_layer_grid")
+                public func layer_grid(self: Tilemap, layer: int)=> array<int>;
+
             extern("libjoyecs", "wojeapi_tilemap_set_tile")
                 public func set_tile(self: Tilemap, layer: int,
                     x: int, y: int, value: int)=> void;
@@ -294,6 +306,19 @@ namespace je
             extern("libjoyecs", "wojeapi_tilemap_get_cell_property_vec4")
                 public func get_cell_property_vec4(self: Tilemap, layer: int,
                     x: int, y: int, name: string)=> option<(real, real, real, real)>;
+
+            // ==================== 逐格属性覆盖枚举 ====================
+            // 序列化用：返回 (图层, x, y, 属性数量) 列表；逐格覆盖按
+            // (图层, 格下标) 升序。
+            extern("libjoyecs", "wojeapi_tilemap_cell_property_entries")
+                public func cell_property_entries(self: Tilemap)
+                    => array<(int, int, int, int)>;
+
+            // 某格覆盖表中第 index 个属性的 (名称, property_type)
+            extern("libjoyecs", "wojeapi_tilemap_cell_property_entry_property_info")
+                public func cell_property_entry_property_info(self: Tilemap,
+                    layer: int, x: int, y: int, index: int)
+                    => option<(string, int)>;
 
             // 按取值链解析：逐格覆盖 -> 瓦片默认 -> schema 默认
             extern("libjoyecs", "wojeapi_tilemap_get_property_bool")
@@ -480,9 +505,11 @@ namespace je
             extern("libjoyecs", "wojeapi_tilemap_reload_tileset")
                 public func reload(path: string)=> void;
 
-            // 保存到指定路径并更新文档登记
+            // 保存：toml_text 由编辑器脚本序列化；引擎负责写入 path、
+            // 重建 <path>.je4cache 并更新文档登记。写盘或缓存生成失败
+            // 返回 false。
             extern("libjoyecs", "wojeapi_tilemap_save_tileset")
-                public func save(self: Tileset, path: string)=> bool;
+                public func save_toml(self: Tileset, path: string, toml_text: string)=> bool;
 
             extern("libjoyecs", "wojeapi_tilemap_tileset_version")
                 public func version(self: Tileset)=> int;
@@ -496,6 +523,11 @@ namespace je
 
             extern("libjoyecs", "wojeapi_tilemap_tileset_name")
                 public func name(self: Tileset)=> string;
+
+            // 下一个可分配的瓦片 id（只增不减）。序列化时原样保存，
+            // 保证删除源后 id 不被复用、地图按 id 的引用不漂移。
+            extern("libjoyecs", "wojeapi_tilemap_tileset_next_tile_id")
+                public func next_tile_id(self: Tileset)=> int;
 
             // ==================== 图集源纹理 ====================
             // 返回新增源的下标（纹理无法加载或参数不合法返回 none）。
@@ -514,6 +546,14 @@ namespace je
             // 像素尺寸（图集打开时重新测量），增删纹理行/列后随之增删
             extern("libjoyecs", "wojeapi_tilemap_source_info")
                 public func source_info(self: Tileset, source_idx: int)=> (string, int, int, int);
+
+            // 源纹理实测像素尺寸 (tex_w, tex_h)；0 = 尚未测量
+            extern("libjoyecs", "wojeapi_tilemap_source_tex_size")
+                public func source_tex_size(self: Tileset, source_idx: int)=> (int, int);
+
+            // 逐格瓦片 id 表（行优先，长度 = 列数*行数），序列化原样保存
+            extern("libjoyecs", "wojeapi_tilemap_source_cell_ids")
+                public func source_cell_ids(self: Tileset, source_idx: int)=> array<int>;
 
             // ==================== 图集源纹理附加层级 ====================
             // 附加层级（如法线图集）与源纹理共用同一瓦片网格，按各自
@@ -538,6 +578,11 @@ namespace je
                 public func source_extra_info(self: Tileset, source_idx: int,
                     extra_idx: int)=> (int, string);
 
+            // 附加层级的实测像素尺寸 (tex_w, tex_h)；0 = 尚未测量
+            extern("libjoyecs", "wojeapi_tilemap_source_extra_tex_size")
+                public func source_extra_tex_size(self: Tileset, source_idx: int,
+                    extra_idx: int)=> (int, int);
+
             extern("libjoyecs", "wojeapi_tilemap_set_source_extra_pass")
                 public func set_source_extra_pass(self: Tileset, source_idx: int,
                     extra_idx: int, pass: int)=> bool;
@@ -559,6 +604,20 @@ namespace je
             // 按枚举下标取瓦片 id（越界返回 0）
             extern("libjoyecs", "wojeapi_tilemap_tile_at_index")
                 public func tile_at_index(self: Tileset, index: int)=> int;
+
+            // 带有稀疏元数据定义的瓦片 id 列表（按 id 升序），序列化
+            // [[tiles]] 段用；未列出的瓦片按默认元数据（可通行普通瓦片）
+            extern("libjoyecs", "wojeapi_tilemap_tile_defs")
+                public func tile_defs(self: Tileset)=> array<int>;
+
+            // 某瓦片定义的默认属性数量
+            extern("libjoyecs", "wojeapi_tilemap_tile_def_property_count")
+                public func tile_def_property_count(self: Tileset, tile_id: int)=> int;
+
+            // 某瓦片定义中第 index 个属性的 (名称, property_type)
+            extern("libjoyecs", "wojeapi_tilemap_tile_def_property_info")
+                public func tile_def_property_info(self: Tileset,
+                    tile_id: int, index: int)=> option<(string, int)>;
 
             // 返回 (源纹理下标, 图集列, 图集行, 可通行)；id 无效时源下标为 -1
             extern("libjoyecs", "wojeapi_tilemap_tile_info")
@@ -785,6 +844,65 @@ namespace je
             VEC2 = 4,
             VEC3 = 5,
             VEC4 = 6,
+        }
+
+        // ==================== TOML 文本枚举名 ====================
+        // 编辑器序列化使用的枚举名映射；缓存生成器脚本内联同一套映射
+        //（生成器不导入 je::tilemap），修改时需同步。
+        public func tile_kind_toml_name(kind: int)=> string
+        {
+            if (kind == tile_kind::RPGMAKER as int) return "rpgmaker_xp";
+            if (kind == tile_kind::BLOB47 as int) return "blob47";
+            if (kind == tile_kind::RPGMAKER_VX as int) return "rpgmaker_vx";
+            return "plain";
+        }
+        public func tile_kind_from_toml_name(name: string)=> option<int>
+        {
+            let kind = name->lower;
+            if (kind == "plain") return option::value(tile_kind::PLAIN as int);
+            if (kind == "rpgmaker_xp") return option::value(tile_kind::RPGMAKER as int);
+            if (kind == "blob47") return option::value(tile_kind::BLOB47 as int);
+            if (kind == "rpgmaker_vx") return option::value(tile_kind::RPGMAKER_VX as int);
+            return option::none;
+        }
+
+        // 自阴影/遮挡阴影共用同一组取值（OFF=0 / ON=1 / AUTO=2）
+        public func shadow_mode_toml_name(mode: int)=> string
+        {
+            if (mode == 1) return "on";
+            if (mode == 2) return "auto";
+            return "off";
+        }
+        public func shadow_mode_from_toml_name(name: string)=> option<int>
+        {
+            let mode = name->lower;
+            if (mode == "off") return option::value(0);
+            if (mode == "on") return option::value(1);
+            if (mode == "auto") return option::value(2);
+            return option::none;
+        }
+
+        public func property_type_toml_name(type: int)=> string
+        {
+            if (type == property_type::STRING as int) return "string";
+            if (type == property_type::INT as int) return "int";
+            if (type == property_type::FLOAT as int) return "float";
+            if (type == property_type::VEC2 as int) return "vec2";
+            if (type == property_type::VEC3 as int) return "vec3";
+            if (type == property_type::VEC4 as int) return "vec4";
+            return "bool";
+        }
+        public func property_type_from_toml_name(name: string)=> option<int>
+        {
+            let type = name->lower;
+            if (type == "bool") return option::value(property_type::BOOL as int);
+            if (type == "string") return option::value(property_type::STRING as int);
+            if (type == "int") return option::value(property_type::INT as int);
+            if (type == "float") return option::value(property_type::FLOAT as int);
+            if (type == "vec2") return option::value(property_type::VEC2 as int);
+            if (type == "vec3") return option::value(property_type::VEC3 as int);
+            if (type == "vec4") return option::value(property_type::VEC4 as int);
+            return option::none;
         }
 
         // ==================== 瓦片值编解码 ====================

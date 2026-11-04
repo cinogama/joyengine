@@ -476,6 +476,60 @@ bool jeecs_cache_binary_list_index(
     }
 }
 
+bool jeecs_cache_binary_list_iterator_open(
+    const jeecs_cache_binary_list* list,
+    jeecs_cache_binary_list_iterator* out_iterator)
+{
+    assert(list != nullptr);
+    assert(out_iterator != nullptr);
+
+    out_iterator->m_file = list->m_file;
+    out_iterator->m_location = list->m_location;
+    return true;
+}
+
+bool jeecs_cache_binary_list_iterator_is_end(
+    const jeecs_cache_binary_list_iterator* iterator)
+{
+    assert(iterator != nullptr);
+
+    jeecs_file* file = iterator->m_file;
+    if (!jeecs_file_seek(file, (int64_t)iterator->m_location,
+        JE_READ_FILE_SEEK_SET))
+        return false;
+
+    uint8_t tag;
+    if (1 != jeecs_file_read(&tag, sizeof(tag), 1, file))
+        return false;
+
+    return tag == (uint8_t)JE_CACHE_BINARY_VALUE_END;
+}
+
+bool jeecs_cache_binary_list_iterator_read(
+    const jeecs_cache_binary_list_iterator* iterator,
+    jeecs_cache_binary_value_type expected_type,
+    void* out_value)
+{
+    assert(iterator != nullptr);
+    assert(out_value != nullptr);
+
+    return _jeecs_cache_binary_read_value(
+        iterator->m_file, iterator->m_location, expected_type, out_value);
+}
+
+bool jeecs_cache_binary_list_iterator_advance(
+    jeecs_cache_binary_list_iterator* inout_iterator)
+{
+    assert(inout_iterator != nullptr);
+
+    size_t offset = inout_iterator->m_location;
+    if (!_jeecs_cache_binary_next_value_offset(inout_iterator->m_file, &offset))
+        return false;
+
+    inout_iterator->m_location = offset;
+    return true;
+}
+
 /* ======================================= */
 
 bool jeecs_cache_binary_append_document(je_writing_cache_file* file)

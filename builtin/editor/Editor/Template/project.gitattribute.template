@@ -4,3 +4,5 @@
 *.je4world text eol=lf
 *.je4workflow text eol=lf
 *.je4animation text eol=lf
+*.je4tileset text eol=lf
+*.je4tilemap text eol=lf

@@ -2,9 +2,9 @@
 // 两类编辑器是相互独立的窗口（标题不同、各自唯一实例）：打开另一类
 // 文件时新开/复用另一个窗口，互不抢占、互不影响编辑状态。同类文件
 // 再次打开时重定向现有窗口（脏数据先询问保存）。关闭前有未保存修改
-// 时经 onPreClose 否决并弹保存询问。保存走 je::tilemap 文档保存（写入
-// .je4tilemap/.je4tileset 二进制文件）；未保存的修改在此之前已经实时
-// 同步到世界实例。
+// 时经 onPreClose 否决并弹保存询问。保存由 Serialize.wo 把文档序列化为
+// TOML，引擎写盘并重建 .je4cache；未保存的修改在此之前已经实时同步到
+// 世界实例。
 
 import pkg::std;
 
@@ -28,6 +28,7 @@ import builtin::editor::GUI::Statebar;
 
 import DataModel;
 import EditorState;
+import Serialize;
 import UI;
 
 using std;
@@ -106,7 +107,7 @@ namespace JEEditor::Editor::TilemapEditor
                     "图集尚未保存到文件，请在图集编辑器中指定保存路径");
                 continue;
             }
-            if (ts->save(p))
+            if (save_tileset_document(ts, p))
             {
                 do Statebar::showState(3.) <| func()
                 {
@@ -172,7 +173,7 @@ namespace JEEditor::Editor::TilemapEditor
         let cur_path = ts->doc_path();
         if (cur_path != "")
         {
-            if (ts->save(cur_path))
+            if (save_tileset_document(ts, cur_path))
             {
                 state.m_dirty = false;
                 do after();
@@ -189,7 +190,7 @@ namespace JEEditor::Editor::TilemapEditor
                 "@/resource/tilesets/new.je4tileset")
             ->then(func(p)
                 {
-                    if (ts->save(p))
+                    if (save_tileset_document(ts, p))
                     {
                         state.m_dirty = false;
                         do after();
