@@ -2473,6 +2473,131 @@ JE_API bool jeecs_cache_binary_append_float64(
     je_writing_cache_file* file,
     double val);
 
+/////////////////////////// ANIMATION RESOURCE /////////////////////////////////
+
+/*
+je_animation_value_type [类型]
+帧动画中一个数据值的类型标记，与缓存文档中写入的 type 字段一致
+*/
+typedef enum je_animation_value_type
+{
+    JE_ANIMATION_VALUE_INT = 0,
+    JE_ANIMATION_VALUE_FLOAT,
+    JE_ANIMATION_VALUE_VEC2,
+    JE_ANIMATION_VALUE_VEC3,
+    JE_ANIMATION_VALUE_VEC4,
+    JE_ANIMATION_VALUE_QUAT4,
+} je_animation_value_type;
+
+/*
+je_animation_value [类型]
+帧动画中的一个数据值。按 m_type 解释 m_value：
+    * INT   —— i32
+    * FLOAT —— f32
+    * VEC2  —— v2[0..1]
+    * VEC3  —— v3[0..2]
+    * VEC4  —— v4[0..3]
+    * QUAT4 —— q4[0..3]（x, y, z, w）
+*/
+typedef struct je_animation_value
+{
+    uint8_t m_type;
+    union
+    {
+        int32_t i32;
+        float f32;
+        float v2[2];
+        float v3[3];
+        float v4[4];
+        float q4[4];
+    } m_value;
+} je_animation_value;
+
+/*
+je_animation_component_data [类型]
+帧动画中作用于组件成员的一段数据
+    * m_component_type / m_member_info 在加载时解析并校验，无效条目不会保留
+    * m_offset_mode 为 true 时在原值上叠加，否则直接赋值
+*/
+typedef struct je_animation_component_data
+{
+    const je_TypeInfo* m_component_type;
+    const je_MemberInfo* m_member_info;
+    je_animation_value m_member_value;
+    bool m_offset_mode;
+} je_animation_component_data;
+
+/*
+je_animation_uniform_data [类型]
+帧动画中作用于着色器变量的一段数据
+*/
+typedef struct je_animation_uniform_data
+{
+    const char* m_uniform_name;
+    je_animation_value m_uniform_value;
+} je_animation_uniform_data;
+
+/*
+je_animation_frame_data [类型]
+帧动画中的一帧：持续时间、组件数据与着色器变量数据
+*/
+typedef struct je_animation_frame_data
+{
+    float m_frame_time;
+    je_animation_component_data* m_component_data;
+    size_t m_component_data_count;
+    je_animation_uniform_data* m_uniform_data;
+    size_t m_uniform_data_count;
+} je_animation_frame_data;
+
+/*
+je_animation_action_data [类型]
+帧动画中的一个动作（一组帧）
+*/
+typedef struct je_animation_action_data
+{
+    const char* m_name;
+    je_animation_frame_data* m_frames;
+    size_t m_frame_count;
+} je_animation_action_data;
+
+/*
+je_animation [类型]
+帧动画的只读数据，由 je_animation_open 创建、je_animation_close 释放
+    * 该结构不包含任何 C++ 容器，动画数据以连续数组持有
+    * 数据在加载完成后不再修改，可被多个组件/实体共享
+*/
+typedef struct je_animation
+{
+    je_animation_action_data* m_actions;
+    size_t m_action_count;
+} je_animation;
+
+/*
+je_animation_open [基本接口]
+加载 path 指向的帧动画：
+    * 读取 <path>.je4cache；缓存缺失/失效时先调用
+      builtin/script/cache_generator/animation.wo 生成
+    * 空路径返回一个不含任何动作的空动画
+    * 其他失败情况返回 nullptr 并记录日志
+    * 返回的数据使用 je_animation_close 释放
+*/
+JE_API /* OPTIONAL */ je_animation* je_animation_open(const char* path);
+
+/*
+je_animation_close [基本接口]
+释放 je_animation_open 返回的帧动画数据
+*/
+JE_API void je_animation_close(je_animation* animation);
+
+/*
+je_animation_find_action [基本接口]
+按名称查找动作，找不到返回 nullptr
+*/
+JE_API /* OPTIONAL */ const je_animation_action_data* je_animation_find_action(
+    const je_animation* animation,
+    const char* name);
+
 /*
 je_image_texture_color_space [类型]
 图片纹理的颜色空间。图片加载时按此决定 GPU 纹理格式：
@@ -11197,7 +11322,8 @@ namespace jeecs
                 std::same_as<T, jegl_frame_buffer> ||
                 std::same_as<T, jegl_uniform_buffer> ||
                 std::same_as<T, jegl_pipeline> ||
-                std::same_as<T, jegl_sampler>;
+                std::same_as<T, jegl_sampler> ||
+                std::same_as<T, je_animation>;
         }
 
         template<requirements::basic_graphic_resource T>
@@ -11237,6 +11363,8 @@ namespace jeecs
                     jegl_close_pipeline(_m_resource);
                 else if constexpr (std::is_same_v<T, jegl_sampler>)
                     jegl_close_sampler(_m_resource);
+                else if constexpr (std::is_same_v<T, je_animation>)
+                    je_animation_close(_m_resource);
                 else
                 {
                     static_assert(sizeof(T) == 0,
@@ -11851,6 +11979,30 @@ namespace jeecs
                     jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
                 return nullptr;
+            }
+        };
+        class animation : public resource_basic<je_animation>
+        {
+            explicit animation(je_animation* res)
+                : resource_basic(res)
+            {
+            }
+
+        public:
+            // 加载 .je4animation 对应的缓存；失败时记录日志并返回空动画，
+            // 保证 animation_list 的条目下标始终与脚本数据对齐。
+            static basic::resource<animation> load(const std::string& path)
+            {
+                je_animation* res = je_animation_open(path.c_str());
+                if (res == nullptr)
+                    res = je_animation_open("");
+
+                assert(res != nullptr);
+                return basic::resource<animation>(new animation(res));
+            }
+            const je_animation_action_data* find_action(const char* name) const
+            {
+                return je_animation_find_action(resource(), name);
             }
         };
         class vertex : public resource_basic<jegl_vertex>
@@ -14397,86 +14549,13 @@ namespace jeecs
 
             struct animation_list
             {
-                struct frame_data
+                // 每个动画条目的播放状态。动画数据本身由 graphic::animation
+                // 资源共享，播放进度必须按条目/实体独立。
+                struct animation_state
                 {
-                    struct data_value
-                    {
-                        enum type : uint8_t
-                        {
-                            INT,
-                            FLOAT,
-                            VEC2,
-                            VEC3,
-                            VEC4,
-                            QUAT4,
-                        };
-                        union value
-                        {
-                            int i32;
-                            float f32;
-                            math::vec2 v2;
-                            math::vec3 v3;
-                            math::vec4 v4;
-                            math::quat q4;
-                        };
-
-                        type m_type = type::INT;
-                        value m_value = { 0 };
-
-                        data_value() noexcept = default;
-                        data_value(const data_value& val) noexcept
-                        {
-                            m_type = val.m_type;
-                            memcpy((void*)&m_value, &val.m_value, sizeof(value));
-                        }
-                        data_value(data_value&& val) noexcept
-                        {
-                            m_type = val.m_type;
-                            memcpy((void*)&m_value, &val.m_value, sizeof(value));
-                        }
-                        data_value& operator=(const data_value& val) noexcept
-                        {
-                            m_type = val.m_type;
-                            memcpy((void*)&m_value, &val.m_value, sizeof(value));
-                            return *this;
-                        }
-                        data_value& operator=(data_value&& val) noexcept
-                        {
-                            m_type = val.m_type;
-                            memcpy((void*)&m_value, &val.m_value, sizeof(value));
-                            return *this;
-                        }
-                    };
-                    struct component_data
-                    {
-                        const je_TypeInfo*
-                            m_component_type;
-                        const je_MemberInfo*
-                            m_member_info;
-                        data_value m_member_value;
-                        bool m_offset_mode;
-
-                        void* m_member_addr_cache;
-                        jeecs::game_entity m_entity_cache;
-                    };
-                    struct uniform_data
-                    {
-                        basic::string m_uniform_name;
-                        data_value m_uniform_value;
-                    };
-
-                    float m_frame_time;
-                    basic::vector<component_data> m_component_data;
-                    basic::vector<uniform_data> m_uniform_data;
-                };
-                struct animation_data
-                {
-                    basic::vector<frame_data> frames;
-                };
-
-                struct animation_data_set
-                {
-                    basic::map<basic::string, animation_data> m_animations;
+                    // 动画数据（按资源共享）与播放状态同属一个条目，
+                    // 单一 m_animations 数组即可保证二者一一对应。
+                    basic::resource<graphic::animation> m_animation;
                     basic::string m_path;
 
                     basic::optional<basic::string> m_current_action;
@@ -14485,6 +14564,16 @@ namespace jeecs
                     float m_last_speed = 1.0f;
 
                     bool m_loop = false;
+
+                    // 记录当前动作各帧组件数据已经作用于哪个实体
+                    // （[帧下标][组件下标]），避免同一帧反复叠加 offset。
+                    basic::vector<basic::vector<game_entity>> m_applied_entities;
+
+                    animation_state(const std::string& path)
+                        : m_animation(graphic::animation::load(path))
+                        , m_path(path)
+                    {
+                    }
 
                     void set_loop(bool loop)
                     {
@@ -14501,6 +14590,7 @@ namespace jeecs
                         m_current_action.emplace() = animation_name;
                         m_current_frame_index = SIZE_MAX;
                         m_next_update_time = 0.0f;
+                        m_applied_entities.clear();
                     }
                     std::optional<std::string> get_action() const
                     {
@@ -14509,12 +14599,9 @@ namespace jeecs
                         else
                             return std::nullopt;
                     }
-
-                    // 从 <str>.je4cache 读取动画；缓存由
-                    // builtin/script/cache_generator/animation.wo 从 TOML 源生成，缓存缺失时先触发一次生成。
-                    void load_animation(const std::string& str);
                 };
-                basic::vector<animation_data_set> m_animations;
+
+                basic::vector<animation_state> m_animations;
 
                 void active_action(size_t id, const char* act_name, bool loop)
                 {
@@ -14570,13 +14657,13 @@ namespace jeecs
 
                         for (size_t i = 0; i < animation_count; ++i)
                         {
-                            m_animations.push_back(animation_data_set{});
-                            auto& animation_inst = m_animations.back();
-
                             (void)woort_vec_get(animation, v, i);
 
                             woort_struct_get(tmp, animation, 0);
-                            animation_inst.load_animation(woort_string(tmp));
+                            const std::string path = woort_string(tmp);
+
+                            m_animations.push_back(animation_state(path));
+                            auto& animation_inst = m_animations.back();
 
                             woort_struct_get(tmp, animation, 1);
                             if (woort_option_get(tmp, tmp))
@@ -14606,7 +14693,7 @@ namespace jeecs
 
                         for (size_t i = 0; i < m_animations.size(); ++i)
                         {
-                            auto animation_inst = m_animations.at(i);
+                            auto& animation_inst = m_animations.at(i);
                             woort_set_struct(animation, 3);
 
                             woort_set_string(tmp, animation_inst.m_path.c_str());

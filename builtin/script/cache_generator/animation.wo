@@ -15,7 +15,7 @@
 //               "type" -> INT32, "value" -> 值
 //           "uniforms" -> LIST of DOCUMENT
 //               "name" -> STRING, "type" -> INT32, "value" -> 值
-// 值类型标记与 jeecs.hpp 的 frame_data::data_value::type 一致：
+// 值类型标记与 jeecs.hpp 的 je_animation_value_type 一致：
 //   0 INT / 1 FLOAT / 2 VEC2 / 3 VEC3 / 4 VEC4 / 5 QUAT4
 // QUAT4 在 TOML 中保存欧拉角（度）[ex, ey, ez]，这里换算成四元数
 // (x, y, z, w) 写入缓存。
