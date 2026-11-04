@@ -4,56 +4,12 @@
 
 #include "wo.h"
 
-#include <cstdio>
-#include <string>
 #include <vector>
 
 namespace jeecs
 {
     namespace cache
     {
-        std::string resolve_source_path(const char* filepath)
-        {
-            assert(filepath != nullptr);
-
-            if (filepath[0] == '@')
-            {
-                std::string root = jeecs_file_get_runtime_path();
-                if (root.empty())
-                    root = jeecs_file_get_host_path();
-
-                const char* rest = filepath + 1;
-                if (root.empty())
-                    return rest;
-
-                const bool root_sep = root.back() == '/' || root.back() == '\\';
-                const bool rest_sep = rest[0] == '/' || rest[0] == '\\';
-                if (root_sep && rest_sep)
-                    return root + (rest + 1);
-                if (!root_sep && !rest_sep)
-                    return root + "/" + rest;
-                return root + rest;
-            }
-
-            if (filepath[0] == '!')
-            {
-                std::string root = jeecs_file_get_host_path();
-                const char* rest = filepath + 1;
-                if (root.empty())
-                    return rest;
-
-                const bool root_sep = root.back() == '/' || root.back() == '\\';
-                const bool rest_sep = rest[0] == '/' || rest[0] == '\\';
-                if (root_sep && rest_sep)
-                    return root + (rest + 1);
-                if (!root_sep && !rest_sep)
-                    return root + "/" + rest;
-                return root + rest;
-            }
-
-            return filepath;
-        }
-
         bool generate_from_script(
             const char* source_filepath,
             uint32_t format_version,
@@ -100,9 +56,9 @@ namespace jeecs
                 return false;
             }
 
-            // 生成器第一个参数是缓存写入器，第二个参数是源 TOML 的本地路径。
-            // 缓存文件头由 C 侧创建，脚本只负责写二进制文档。
-            const std::string source_path = resolve_source_path(source_filepath);
+            // 生成器第一个参数是缓存写入器，第二个参数是源 TOML 的引擎
+            // 路径（@/ 或 !/）。缓存文件头由 C 侧创建，脚本只负责写
+            // 二进制文档并自行经 je::file::readall 读取源文件。
             je_writing_cache_file* const cache_file = jeecs_create_cache_file(
                 source_filepath, format_version, 0);
             if (cache_file == nullptr)
@@ -143,7 +99,7 @@ namespace jeecs
                             const woort_value func = stack + 2;
 
                             woort_set_pointer(arg_cache, cache_file);
-                            woort_set_string(arg_source, source_path.c_str());
+                            woort_set_string(arg_source, source_filepath);
 
                             if (!woort_load_extern_const(
                                 func, cenv, generator_entry))
@@ -185,8 +141,7 @@ namespace jeecs
                 }
             }
 
-            const std::string cache_path = source_path + ".je4cache";
-            std::remove(cache_path.c_str());
+            jeecs_remove_cache_file(source_filepath);
 
             woort_codeenv_drop(cenv);
             return false;

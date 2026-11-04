@@ -3,7 +3,7 @@
 //
 // 由引擎在 .je4cache 缺失或失效时加载，调用 generate：
 //   cache  —— C 侧创建好的缓存写入器（文件头已写入）
-//   source —— 动画 TOML 的本地路径
+//   source —— 动画 TOML 的引擎路径（@/ 或 !/），经 je::file::readall 读取
 //
 // 文档结构与 src/jeecs_frame_animation_cache.cpp 中的读取逻辑一一对应：
 //   DOCUMENT "animations" -> LIST of DOCUMENT(action)
@@ -23,7 +23,6 @@
 import pkg::std;
 import pkg::math;
 import pkg::toml;
-import pkg::fsys;
 
 import je;
 import je::cache;
@@ -186,15 +185,26 @@ func append_data_value(
 }
 
 extern func generate(
-    cache: je::cache::binary_writer, source: fsys::path_t)=> bool
+    cache: je::cache::binary_writer, source: string)=> bool
 {
+    let mut source_text = option::none: option<string>;
+    match (je::file::readall(source))
+    {
+        value(text)? source_text = option::value(text);
+        none?
+        {
+            je::logerr(F"无法读取动画 TOML 文件 {source}");
+            return false;
+        }
+    }
+
     let mut loaded = option::none: option<Toml>;
-    match (toml::load(source))
+    match (toml::parse(source_text->unwrap))
     {
         ok(root)? loaded = option::value(root);
         err(msg)?
         {
-            je::logerr(F"无法解析动画 TOML 文件 {source->to_string()}：{msg}");
+            je::logerr(F"无法解析动画 TOML 文件 {source}：{msg}");
             return false;
         }
     }
@@ -246,7 +256,7 @@ extern func generate(
                 let type_tag = value_type_tag(type_name);
                 if (type_tag < 0)
                 {
-                    je::logerr(F"动画 {source->to_string()} 中存在未知的值类型：{type_name}");
+                    je::logerr(F"动画 {source} 中存在未知的值类型：{type_name}");
                     return false;
                 }
                 if (!append_key(cache, "type") || !cache->append_int32(type_tag))
@@ -277,7 +287,7 @@ extern func generate(
                 let type_tag = value_type_tag(type_name);
                 if (type_tag < 0)
                 {
-                    je::logerr(F"动画 {source->to_string()} 中存在未知的值类型：{type_name}");
+                    je::logerr(F"动画 {source} 中存在未知的值类型：{type_name}");
                     return false;
                 }
                 if (!append_key(cache, "type") || !cache->append_int32(type_tag))

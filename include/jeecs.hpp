@@ -2127,6 +2127,16 @@ jeecs_close_cache_file [基本接口]
 */
 JE_API void jeecs_close_cache_file(je_writing_cache_file* file);
 
+/*
+jeecs_remove_cache_file [基本接口]
+删除 filepath 对应的 <filepath>.je4cache 缓存文件（不存在时无操作）
+    * filepath 的 @/ 与 !/ 前缀展开规则与 jeecs_create_cache_file 一致
+    * 供生成器调用失败后清理半成品缓存
+请参见：
+    jeecs_create_cache_file
+*/
+JE_API void jeecs_remove_cache_file(const char* filepath);
+
 /////////////////////////// CACHE BINARY DOCUMENT /////////////////////////////////
 
 /*

@@ -3,7 +3,7 @@
 //
 // 由引擎在 .je4cache 缺失或失效时加载，调用 generate：
 //   cache  —— C 侧创建好的缓存写入器（文件头已写入）
-//   source —— 图集 TOML 的本地路径
+//   source —— 图集 TOML 的引擎路径（@/ 或 !/），经 je::file::readall 读取
 //
 // 文档结构与 src/jeecs_core_tilemap_model.hpp 顶部注释一一对应：
 //   DOCUMENT
@@ -30,7 +30,6 @@
 
 import pkg::std;
 import pkg::toml;
-import pkg::fsys;
 
 import je;
 import je::cache;
@@ -289,15 +288,26 @@ func append_property_entry(
 }
 
 extern func generate(
-    cache: je::cache::binary_writer, source: fsys::path_t)=> bool
+    cache: je::cache::binary_writer, source: string)=> bool
 {
+    let mut source_text = option::none: option<string>;
+    match (je::file::readall(source))
+    {
+        value(text)? source_text = option::value(text);
+        none?
+        {
+            je::logerr(F"无法读取瓦片图集 TOML 文件 {source}");
+            return false;
+        }
+    }
+
     let mut loaded = option::none: option<Toml>;
-    match (toml::load(source))
+    match (toml::parse(source_text->unwrap))
     {
         ok(root)? loaded = option::value(root);
         err(msg)?
         {
-            je::logerr(F"无法解析瓦片图集 TOML 文件 {source->to_string()}：{msg}");
+            je::logerr(F"无法解析瓦片图集 TOML 文件 {source}：{msg}");
             return false;
         }
     }
@@ -312,7 +322,7 @@ extern func generate(
 
     let next_tile_id = int_of(root["next_tile_id"]);
     if (next_tile_id <= 0)
-        return fail(source->to_string(), "next_tile_id 必须是正整数");
+        return fail(source, "next_tile_id 必须是正整数");
     if (!append_key(cache, "next_tile_id")
         || !cache->append_int32(next_tile_id))
         return false;
@@ -331,7 +341,7 @@ extern func generate(
         let xcount = int_of(source_toml["xcount"]);
         let ycount = int_of(source_toml["ycount"]);
         if (path == "" || tile_px <= 0 || xcount <= 0 || ycount <= 0)
-            return fail(source->to_string(), "source 的 path/tile_px/行列数不合法");
+            return fail(source, "source 的 path/tile_px/行列数不合法");
 
         if (!append_key(cache, "path") || !cache->append_string(path))
             return false;
@@ -352,7 +362,7 @@ extern func generate(
         cell_ids_opt = int_rows_of(
             source_toml["cell_ids"], ycount, xcount);
         if (cell_ids_opt->is_none)
-            return fail(source->to_string(),
+            return fail(source,
                 "source.cell_ids 必须是 ycount 行、每行 xcount 个整数");
         let cell_ids = cell_ids_opt->unwrap;
 
@@ -371,7 +381,7 @@ extern func generate(
             let pass = int_of(extra["pass"]);
             let extra_path = string_of(extra["path"]);
             if (pass < 1 || extra_path == "")
-                return fail(source->to_string(),
+                return fail(source,
                     "source.extras 的 pass/path 不合法");
 
             if (!append_key(cache, "pass") || !cache->append_int32(pass))
@@ -417,7 +427,7 @@ extern func generate(
             none?;
         }
         if (name == "" || type_tag < 0)
-            return fail(source->to_string(),
+            return fail(source,
                 F"properties '{name}' 的类型 '{type_name}' 无法识别");
 
         if (!append_key(cache, "name") || !cache->append_string(name))
@@ -453,7 +463,7 @@ extern func generate(
             none?;
         }
         if (tile_id <= 0 || kind < 0)
-            return fail(source->to_string(),
+            return fail(source,
                 F"tiles 条目 id '{tile_id}' 或 kind '{kind_name}' 不合法");
 
         if (!append_key(cache, "id") || !cache->append_int32(tile_id))

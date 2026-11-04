@@ -3,7 +3,7 @@
 //
 // 由引擎在 .je4cache 缺失或失效时加载，调用 generate：
 //   cache  —— C 侧创建好的缓存写入器（文件头已写入）
-//   source —— 地图 TOML 的本地路径
+//   source —— 地图 TOML 的引擎路径（@/ 或 !/），经 je::file::readall 读取
 //
 // 文档结构与 src/jeecs_core_tilemap_model.hpp 顶部注释一一对应：
 //   DOCUMENT
@@ -31,7 +31,6 @@
 
 import pkg::std;
 import pkg::toml;
-import pkg::fsys;
 
 import je;
 import je::cache;
@@ -347,15 +346,26 @@ func append_uniform_value(
 }
 
 extern func generate(
-    cache: je::cache::binary_writer, source: fsys::path_t)=> bool
+    cache: je::cache::binary_writer, source: string)=> bool
 {
+    let mut source_text = option::none: option<string>;
+    match (je::file::readall(source))
+    {
+        value(text)? source_text = option::value(text);
+        none?
+        {
+            je::logerr(F"无法读取瓦片地图 TOML 文件 {source}");
+            return false;
+        }
+    }
+
     let mut loaded = option::none: option<Toml>;
-    match (toml::load(source))
+    match (toml::parse(source_text->unwrap))
     {
         ok(root)? loaded = option::value(root);
         err(msg)?
         {
-            je::logerr(F"无法解析瓦片地图 TOML 文件 {source->to_string()}：{msg}");
+            je::logerr(F"无法解析瓦片地图 TOML 文件 {source}：{msg}");
             return false;
         }
     }
@@ -368,7 +378,7 @@ extern func generate(
     let height = int_of(root["height"]);
     let tile_px = int_of(root["tile_px"]);
     if (width <= 0 || height <= 0 || tile_px <= 0)
-        return fail(source->to_string(), "width/height/tile_px 必须是正整数");
+        return fail(source, "width/height/tile_px 必须是正整数");
 
     if (!append_key(cache, "width") || !cache->append_int32(width))
         return false;
@@ -421,7 +431,7 @@ extern func generate(
             match (shadow_mode_from_toml_name(selfshadow_name))
             {
                 value(value)? selfshadow = value;
-                none? return fail(source->to_string(),
+                none? return fail(source,
                     F"selfshadow '{selfshadow_name}' 无法识别");
             }
         }
@@ -432,7 +442,7 @@ extern func generate(
             match (shadow_mode_from_toml_name(blockshadow_name))
             {
                 value(value)? blockshadow = value;
-                none? return fail(source->to_string(),
+                none? return fail(source,
                     F"blockshadow '{blockshadow_name}' 无法识别");
             }
         }
@@ -455,7 +465,7 @@ extern func generate(
         let mut grid_opt = option::none: option<array<int>>;
         grid_opt = int_rows_of(layer["grid"], height, width);
         if (grid_opt->is_none)
-            return fail(source->to_string(),
+            return fail(source,
                 "layer.grid 必须是 height 行、每行 width 个整数");
         if (!append_key(cache, "grid")
             || !cache->append_int32_buffer(grid_opt->unwrap))
@@ -476,7 +486,7 @@ extern func generate(
             let slot = int_of(texture["slot"]);
             let path = string_of(texture["path"]);
             if (slot < 1 || path == "")
-                return fail(source->to_string(),
+                return fail(source,
                     "style_textures 的 slot/path 不合法");
 
             if (!append_key(cache, "slot") || !cache->append_int32(slot))
@@ -500,7 +510,7 @@ extern func generate(
                 {
                     let type_tag = infer_uniform_type(value);
                     if (type_tag < 0)
-                        return fail(source->to_string(),
+                        return fail(source,
                             F"style_uniforms '{name}' 的值类型无法识别");
 
                     if (!cache->append_document())

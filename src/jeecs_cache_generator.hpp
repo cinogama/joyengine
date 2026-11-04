@@ -15,12 +15,11 @@ namespace jeecs
         constexpr size_t CACHE_FILE_HEADER_SIZE =
             sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint64_t);
 
-        // 把 @/!/ 前缀展开成脚本侧可直接访问的本地路径；普通路径原样返回。
-        std::string resolve_source_path(const char* filepath);
-
         // 调用生成器脚本，把 source_filepath 指向的 TOML 源转换为
-        // <source_filepath>.je4cache。返回 true 表示缓存已写出并通过
-        // jeecs_load_cache_file 校验；失败时删除半成品缓存。
+        // <source_filepath>.je4cache。source_filepath 保持引擎原样路径
+        //（@/ 或 !/ 前缀），由脚本经 je::file::readall 自行读取源文件。
+        // 返回 true 表示缓存已写出并通过 jeecs_load_cache_file 校验；
+        // 失败时删除半成品缓存。
         bool generate_from_script(
             const char* source_filepath,
             uint32_t format_version,

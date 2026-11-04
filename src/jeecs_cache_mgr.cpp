@@ -4,6 +4,7 @@
 
 #include "wo.h"
 
+#include <cstdio>
 #include <string>
 
 // WARNING!!!!
@@ -147,4 +148,17 @@ size_t jeecs_write_cache_file(
 void jeecs_close_cache_file(je_writing_cache_file* file)
 {
     fclose(reinterpret_cast<FILE*>(file));
+}
+
+void jeecs_remove_cache_file(const char* filepath)
+{
+    assert(filepath != nullptr);
+
+    std::string file_cache_path = std::string(filepath) + ".je4cache";
+    if (file_cache_path[0] == '@')
+        file_cache_path = jeecs_file_get_runtime_path() + file_cache_path.substr(1);
+    if (file_cache_path[0] == '!')
+        file_cache_path = jeecs_file_get_host_path() + file_cache_path.substr(1);
+
+    std::remove(file_cache_path.c_str());
 }
