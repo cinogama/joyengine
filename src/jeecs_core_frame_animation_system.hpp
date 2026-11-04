@@ -21,52 +21,16 @@ namespace jeecs
         {
         }
 
-        // 同一帧的同一段组件数据只对同一实体应用一次，避免 offset 模式在
-        // 重复选中同一帧时反复叠加。缓存按动画条目保存（[帧][组件]），
-        // je_animation 本身是共享的只读数据，不能放实体相关的缓存。
-        static void _apply_component_frame_data(
+        static void _apply_component_and_uniform_frame_data(
             const game_entity& e,
-            const je_animation_action_data& action,
-            size_t frame_index,
-            jeecs::Animation::FrameAnimation::animation_list::animation_state& state)
+            /* OPTIONAL */ Renderer::Shaders* shaders,
+            const je_animation_frame_data& frame)
         {
-            if (state.m_applied_entities.size() != action.m_frame_count)
-            {
-                state.m_applied_entities.clear();
-                for (size_t frame = 0; frame < action.m_frame_count; ++frame)
-                {
-                    basic::vector<game_entity> applied;
-                    for (size_t i = 0;
-                        i < action.m_frames[frame].m_component_data_count;
-                        ++i)
-                        applied.push_back(game_entity{});
-
-                    state.m_applied_entities.push_back(applied);
-                }
-            }
-
-            const je_animation_frame_data& frame = action.m_frames[frame_index];
-            basic::vector<game_entity>& applied =
-                state.m_applied_entities.at(frame_index);
-
-            if (applied.size() != frame.m_component_data_count)
-            {
-                applied.clear();
-                for (size_t i = 0; i < frame.m_component_data_count; ++i)
-                    applied.push_back(game_entity{});
-            }
-
             for (size_t i = 0; i < frame.m_component_data_count; ++i)
             {
-                const je_animation_component_data& cdata =
-                    frame.m_component_data[i];
+                const je_animation_component_data& cdata = frame.m_component_data[i];
+                auto* component_addr = je_ecs_world_entity_get_component(&e._m_raw, cdata.m_component_type->m_id);
 
-                if (applied.at(i) == e)
-                    continue;
-                applied.at(i) = e;
-
-                auto* component_addr = je_ecs_world_entity_get_component(
-                    &e._m_raw, cdata.m_component_type->m_id);
                 if (component_addr == nullptr)
                     continue;
 
@@ -123,10 +87,10 @@ namespace jeecs
                     }
                     else if (cdata.m_offset_mode)
                         *(math::vec4*)member_addr +=
-                            math::vec4(v[0], v[1], v[2], v[3]);
+                        math::vec4(v[0], v[1], v[2], v[3]);
                     else
                         *(math::vec4*)member_addr =
-                            math::vec4(v[0], v[1], v[2], v[3]);
+                        math::vec4(v[0], v[1], v[2], v[3]);
                     break;
                 }
                 case JE_ANIMATION_VALUE_QUAT4:
@@ -140,7 +104,7 @@ namespace jeecs
 
                     if (cdata.m_offset_mode)
                         *(math::quat*)member_addr =
-                            *(math::quat*)member_addr * value;
+                        *(math::quat*)member_addr * value;
                     else
                         *(math::quat*)member_addr = value;
                     break;
@@ -149,51 +113,49 @@ namespace jeecs
                     break;
                 }
             }
-        }
-
-        static void _apply_uniform_frame_data(
-            Renderer::Shaders* shaders, const je_animation_frame_data& frame)
-        {
-            for (size_t i = 0; i < frame.m_uniform_data_count; ++i)
+            if (shaders != nullptr)
             {
-                const je_animation_uniform_data& udata = frame.m_uniform_data[i];
-                switch (udata.m_uniform_value.m_type)
+                for (size_t i = 0; i < frame.m_uniform_data_count; ++i)
                 {
-                case JE_ANIMATION_VALUE_INT:
-                    shaders->set_uniform(
-                        udata.m_uniform_name, udata.m_uniform_value.m_value.i32);
-                    break;
-                case JE_ANIMATION_VALUE_FLOAT:
-                    shaders->set_uniform(
-                        udata.m_uniform_name, udata.m_uniform_value.m_value.f32);
-                    break;
-                case JE_ANIMATION_VALUE_VEC2:
-                {
-                    const float* v = udata.m_uniform_value.m_value.v2;
-                    shaders->set_uniform(
-                        udata.m_uniform_name, math::vec2(v[0], v[1]));
-                    break;
-                }
-                case JE_ANIMATION_VALUE_VEC3:
-                {
-                    const float* v = udata.m_uniform_value.m_value.v3;
-                    shaders->set_uniform(
-                        udata.m_uniform_name, math::vec3(v[0], v[1], v[2]));
-                    break;
-                }
-                case JE_ANIMATION_VALUE_VEC4:
-                {
-                    const float* v = udata.m_uniform_value.m_value.v4;
-                    shaders->set_uniform(
-                        udata.m_uniform_name, math::vec4(v[0], v[1], v[2], v[3]));
-                    break;
-                }
-                default:
-                    jeecs::debug::logerr(
-                        "Bad animation data type(%d) when trying set data of uniform variable '%s', please check.",
-                        (int)udata.m_uniform_value.m_type,
-                        udata.m_uniform_name);
-                    break;
+                    const je_animation_uniform_data& udata = frame.m_uniform_data[i];
+                    switch (udata.m_uniform_value.m_type)
+                    {
+                    case JE_ANIMATION_VALUE_INT:
+                        shaders->set_uniform(
+                            udata.m_uniform_name, udata.m_uniform_value.m_value.i32);
+                        break;
+                    case JE_ANIMATION_VALUE_FLOAT:
+                        shaders->set_uniform(
+                            udata.m_uniform_name, udata.m_uniform_value.m_value.f32);
+                        break;
+                    case JE_ANIMATION_VALUE_VEC2:
+                    {
+                        const float* v = udata.m_uniform_value.m_value.v2;
+                        shaders->set_uniform(
+                            udata.m_uniform_name, math::vec2(v[0], v[1]));
+                        break;
+                    }
+                    case JE_ANIMATION_VALUE_VEC3:
+                    {
+                        const float* v = udata.m_uniform_value.m_value.v3;
+                        shaders->set_uniform(
+                            udata.m_uniform_name, math::vec3(v[0], v[1], v[2]));
+                        break;
+                    }
+                    case JE_ANIMATION_VALUE_VEC4:
+                    {
+                        const float* v = udata.m_uniform_value.m_value.v4;
+                        shaders->set_uniform(
+                            udata.m_uniform_name, math::vec4(v[0], v[1], v[2], v[3]));
+                        break;
+                    }
+                    default:
+                        jeecs::debug::logerr(
+                            "Bad animation data type(%d) when trying set data of uniform variable '%s', please check.",
+                            (int)udata.m_uniform_value.m_type,
+                            udata.m_uniform_name);
+                        break;
+                    }
                 }
             }
         }
@@ -251,20 +213,20 @@ namespace jeecs
                             size_t next_frame_index =
                                 (animation.m_current_frame_index + 1) % frame_count;
 
-                            while (delta_time_between_frams
-                                > active_action->m_frames[next_frame_index].m_frame_time
-                                    / frame_animation.speed)
+                            for (;;)
                             {
+                                const auto& frame = active_action->m_frames[next_frame_index];
+                                if (delta_time_between_frams <= frame.m_frame_time / frame_animation.speed)
+                                    break;
+
                                 if (animation.m_loop == false
                                     && next_frame_index == frame_count - 1)
                                     break;
 
                                 // 在此应用跳过帧的deltaframe数据
-                                _apply_component_frame_data(
-                                    e, *active_action, next_frame_index, animation);
+                                _apply_component_and_uniform_frame_data(e, shaders, frame);
 
-                                delta_time_between_frams -=
-                                    active_action->m_frames[next_frame_index].m_frame_time
+                                delta_time_between_frams -= frame.m_frame_time
                                     / frame_animation.speed;
                                 next_frame_index = (next_frame_index + 1) % frame_count;
                             }
@@ -289,11 +251,7 @@ namespace jeecs
                         const je_animation_frame_data& updating_frame =
                             active_action->m_frames[animation.m_current_frame_index];
 
-                        _apply_component_frame_data(
-                            e, *active_action, animation.m_current_frame_index, animation);
-
-                        if (shaders != nullptr)
-                            _apply_uniform_frame_data(shaders, updating_frame);
+                        _apply_component_and_uniform_frame_data(e, shaders, updating_frame);
 
                         if (finish_animation)
                             // 终止动画

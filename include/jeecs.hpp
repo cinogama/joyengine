@@ -14565,10 +14565,6 @@ namespace jeecs
 
                     bool m_loop = false;
 
-                    // 记录当前动作各帧组件数据已经作用于哪个实体
-                    // （[帧下标][组件下标]），避免同一帧反复叠加 offset。
-                    basic::vector<basic::vector<game_entity>> m_applied_entities;
-
                     animation_state(const std::string& path)
                         : m_animation(graphic::animation::load(path))
                         , m_path(path)
@@ -14590,7 +14586,6 @@ namespace jeecs
                         m_current_action.emplace() = animation_name;
                         m_current_frame_index = SIZE_MAX;
                         m_next_update_time = 0.0f;
-                        m_applied_entities.clear();
                     }
                     std::optional<std::string> get_action() const
                     {
