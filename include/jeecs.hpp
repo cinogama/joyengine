@@ -2727,7 +2727,8 @@ je_image_texture_color_space_get [基本接口]
 读取图片纹理的颜色空间（来自属性源文件 <path>.je4texture）
     * 属性源文件是 TOML，例如 color_space = "linear"；值缺失或非法时为 SRGB
     * 引擎按源文件 CRC64 生成/复用 <path>.je4texture.je4cache，缓存可随时删除重建
-    * 属性源文件不存在、缓存无法生成或内容非法时返回 SRGB
+    * 已有缓存时直接读取；源文件缺失（如导出的运行时只携带缓存）时跳过 CRC 校验
+    * 属性源文件与缓存都不存在、缓存无法生成或内容非法时返回 SRGB
     * 不检查 path 指向的文件是否为图片
 */
 JE_API je_image_texture_color_space_t je_image_texture_color_space_get(
