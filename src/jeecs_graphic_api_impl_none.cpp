@@ -237,7 +237,7 @@ namespace jeecs::graphic::api::none
     }
 }
 
-void jegl_using_none_apis(jegl_graphic_api* write_to_apis)
+void je_graphic_using_none_apis(jegl_graphic_api* write_to_apis)
 {
     using namespace jeecs::graphic::api::none;
 

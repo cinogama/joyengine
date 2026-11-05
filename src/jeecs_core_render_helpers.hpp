@@ -32,7 +32,7 @@ namespace jeecs
             uint32_t index_count,
             uint32_t instance_count)
             : m_command(command)
-            , m_builtin_slots(jegl_pipeline_builtin_uniform_slots(pipeline))
+            , m_builtin_slots(je_graphic_pipeline_builtin_uniform_slots(pipeline))
             , m_pending(true)
         {
             _jegl_cmd_begin_deferred_draw(
@@ -65,7 +65,7 @@ namespace jeecs
     {                                                                                           \
         const auto& _je_uniform_slot = (ACTION).m_builtin_slots->ITEM;                           \
         if (_je_uniform_slot.m_offset != JEGL_UNIFORM_SLOT_NONE)                                 \
-            jegl_cmd_set_uniform_##TYPE(                                                         \
+            je_graphic_cmd_set_uniform_##TYPE(                                                   \
                 (ACTION).m_command, _je_uniform_slot, __VA_ARGS__);                              \
     } while (0)
 }

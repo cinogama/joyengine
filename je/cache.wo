@@ -3,8 +3,8 @@ import pkg::std;
 
 namespace je::cache
 {
-    // 二进制缓存文档写入器（C 侧 je_writing_cache_file*）。
-    // 缓存文件头由引擎创建，脚本只负责按 jeecs_cache_binary_* 的格式写
+    // 二进制缓存文档写入器（C 侧 je_cache_file_*）。
+    // 缓存文件头由引擎创建，脚本只负责按 je_cache_binary_* 的格式写
     // 文档内容；失败时返回 false，调用方会删除半成品缓存。
     public using binary_writer = handle
     {
@@ -27,7 +27,7 @@ namespace je::cache
             public func append_int32(self: binary_writer, value: int)=> bool;
 
         // 整段 int32 数组按 BUFFER 写入（瓦片网格/格 id 等大批量数据）。
-        // 读取侧用 jeecs_cache_binary_buffer_read 一次性取出，避免逐元素
+        // 读取侧用 je_cache_binary_buffer_read 一次性取出，避免逐元素
         // LIST 读取的重复扫描。
         extern("libjoyecs", "wojeapi_cache_binary_append_int32_buffer")
             public func append_int32_buffer(self: binary_writer,

@@ -321,13 +321,13 @@ namespace jeecs
         ~BaseImpledGraphicPipeline()
         {
             for (auto& [key, pipeline] : m_pipeline_cache)
-                jegl_close_pipeline(pipeline);
+                je_graphic_pipeline_close(pipeline);
             m_pipeline_cache.clear();
         }
 
         jegl_context* graphic_context() const
         {
-            jegl_context* context = jegl_uhost_get_context(_m_graphic_host);
+            jegl_context* context = je_graphic_uhost_get_context(_m_graphic_host);
             assert(context != nullptr);
             return context;
         }
@@ -363,7 +363,7 @@ namespace jeecs
                 return found->second;
 
             jegl_pipeline_state state =
-                jegl_pipeline_state_from_shader(shader->resource());
+                je_graphic_pipeline_state_from_shader(shader->resource());
             state.m_topology = topology;
 
             jegl_pipeline_desc desc{};
@@ -371,7 +371,7 @@ namespace jeecs
             desc.m_state = &state;
 
             jegl_pipeline* pipeline =
-                jegl_pipeline_create(graphic_context(), &desc);
+                je_graphic_pipeline_create(graphic_context(), &desc);
             m_pipeline_cache.emplace(key, pipeline);
             return pipeline;
         }
@@ -406,7 +406,7 @@ namespace jeecs
             }
 
             assert(vp.width > 0 && vp.height > 0);
-            return jegl_branch_new_command_buffer(branch, fb, &vp);
+            return je_graphic_branch_new_command_buffer(branch, fb, &vp);
         }
 
         // Clear attachment 0 if the camera requested a clear color.
@@ -418,7 +418,7 @@ namespace jeecs
                 const math::vec4 clear_color = clear->color.to_linear();
                 const float clear_buffer_color[] = {
                     clear_color.x, clear_color.y, clear_color.z, clear_color.w };
-                jegl_cmd_clear_color(cmd, 0, clear_buffer_color);
+                je_graphic_cmd_clear_color(cmd, 0, clear_buffer_color);
             }
         }
 
@@ -435,7 +435,7 @@ namespace jeecs
             bound_textures_t result{
                 math::vec2(1.f, 1.f), math::vec2(0.f, 0.f) };
 
-            jegl_cmd_bind_texture_2d(
+            je_graphic_cmd_bind_texture_2d(
                 cmd, 0, m_default_resources.default_texture->resource());
 
             if (textures != nullptr)
@@ -443,14 +443,14 @@ namespace jeecs
                 result.tiling = textures->tiling;
                 result.offset = textures->offset;
                 for (auto& texture : textures->textures)
-                    jegl_cmd_bind_texture_2d(
+                    je_graphic_cmd_bind_texture_2d(
                         cmd, texture.m_pass_id, texture.m_texture->resource());
             }
 
             // 数组纹理在 2D 绑定之后写入同通道（后写覆盖，各后端语义一致）
             if (textures_array != nullptr)
                 for (auto& texture : textures_array->textures)
-                    jegl_cmd_bind_texture_array(
+                    je_graphic_cmd_bind_texture_array(
                         cmd, texture.m_pass_id, texture.m_texture->resource());
             return result;
         }
@@ -828,8 +828,8 @@ namespace jeecs
                     rend_aim_buffer, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
                 clear_color_if_any(rend_chain, current_camera.clear);
-                jegl_cmd_clear_depth(rend_chain, 1.0f);
-                jegl_cmd_bind_uniform_buffer(rend_chain,
+                je_graphic_cmd_clear_depth(rend_chain, 1.0f);
+                je_graphic_cmd_bind_uniform_buffer(rend_chain,
                     current_camera.projection->default_uniform_buffer->resource());
 
                 for (auto& rendentity : m_renderer_list)
@@ -1117,7 +1117,7 @@ namespace jeecs
             m_text_batch_vb = &m_text_vb_pool[m_text_vb_used++];
         }
 
-        // 冲刷当前批：一次 jegl_update_vertex_buffer + 一次 command-buffer draw。
+        // 冲刷当前批：一次 je_graphic_vertex_buffer_update + 一次 command-buffer draw。
         // 顶点已烘焙至相机像素空间，M=I、MVP/MV=UI 视图矩阵。
         void FlushTextBatch(jegl_command_buffer* chain, const float(&view)[4][4])
         {
@@ -1133,7 +1133,7 @@ namespace jeecs
                 m_text_batch_quads * 4 * TEXT_VERTEX_FLOATS * sizeof(float),
                 m_text_batch_quads * 6);
 
-            jegl_cmd_bind_texture_2d(chain, 0, m_text_batch_page);
+            je_graphic_cmd_bind_texture_2d(chain, 0, m_text_batch_page);
 
             auto* pipeline = pipeline_for(
                 m_text_batch_shader, vb->resource());
@@ -1165,7 +1165,7 @@ namespace jeecs
 
         // 创建一块文本动态顶点缓冲：静态角点索引一次分配，顶点数据逐帧
         // 整体重写并收缩激活索引数量（与粒子系统同款机制，见
-        // jegl_update_vertex_buffer）。
+        // je_graphic_vertex_buffer_update）。
         basic::resource<graphic::vertex> CreateTextVertexBuffer()
         {
             const size_t floats_per_vb =
@@ -1320,8 +1320,8 @@ namespace jeecs
                     rend_aim_buffer, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
                 clear_color_if_any(rend_chain, current_camera.clear);
-                jegl_cmd_clear_depth(rend_chain, 1.0);
-                jegl_cmd_bind_uniform_buffer(rend_chain,
+                je_graphic_cmd_clear_depth(rend_chain, 1.0);
+                je_graphic_cmd_bind_uniform_buffer(rend_chain,
                     current_camera.projection->default_uniform_buffer->resource());
 
                 draw_world_renderers(rend_chain, current_camera.frustumCulling, MAT4_VIEW, MAT4_VP);
@@ -2072,7 +2072,7 @@ namespace jeecs
             auto main_texture =
                 textures == nullptr ? std::nullopt : textures->get_texture(0);
 
-            jegl_cmd_bind_texture_2d(
+            je_graphic_cmd_bind_texture_2d(
                 chain, 0,
                 main_texture.has_value()
                 ? main_texture.value()->resource()
@@ -2307,7 +2307,7 @@ namespace jeecs
 
             bind_shadow_texture(shadow_chain, block.textures);
             if (array_atlas.has_value())
-                jegl_cmd_bind_texture_array(shadow_chain, 0,
+                je_graphic_cmd_bind_texture_array(shadow_chain, 0,
                     array_atlas.value()->resource());
 
             const bool per_block = topdown_light && block.perblock != nullptr;
@@ -2588,12 +2588,12 @@ namespace jeecs
                                 light2d_shadow_aim_buffer->height());
 
                             const float clear_color[4] = { 0.f, 0.f, 0.f, 0.f };
-                            jegl_cmd_clear_color(light2d_shadow_rend_chain, 0, clear_color);
+                            je_graphic_cmd_clear_color(light2d_shadow_rend_chain, 0, clear_color);
                             // 深度清为 1（远）；shadow shader 把 painter key 映射
                             // 到 [0.05, 0.95]，LESS_EQUAL 保留最小（最靠前）值
-                            jegl_cmd_clear_depth(light2d_shadow_rend_chain, 1.0);
+                            je_graphic_cmd_clear_depth(light2d_shadow_rend_chain, 1.0);
 
-                            jegl_cmd_bind_uniform_buffer(light2d_shadow_rend_chain,
+                            je_graphic_cmd_bind_uniform_buffer(light2d_shadow_rend_chain,
                                 current_camera.projection->default_uniform_buffer->resource());
 
                             const auto shadow_passes = select_shadow_passes(lightarch.parallel != nullptr);
@@ -2793,11 +2793,11 @@ namespace jeecs
                     const float clear_norm[4] = { 0.f, 0.f, 1.f, 1.f };
 
                     // 用 zero 清空自发光通道
-                    jegl_cmd_clear_color(rend_chain, 1, clear_zero);
+                    je_graphic_cmd_clear_color(rend_chain, 1, clear_zero);
                     // 用 infi 清空距离通道
-                    jegl_cmd_clear_color(rend_chain, 2, clear_infi);
+                    je_graphic_cmd_clear_color(rend_chain, 2, clear_infi);
                     // 用 norm 清空法线通道
-                    jegl_cmd_clear_color(rend_chain, 3, clear_norm);
+                    je_graphic_cmd_clear_color(rend_chain, 3, clear_norm);
                 }
                 else
                 {
@@ -2807,9 +2807,9 @@ namespace jeecs
                     clear_color_if_any(rend_chain, current_camera.clear);
                 }
                 // Clear depth buffer to overwrite pixels.
-                jegl_cmd_clear_depth(rend_chain, 1.0);
+                je_graphic_cmd_clear_depth(rend_chain, 1.0);
 
-                jegl_cmd_bind_uniform_buffer(rend_chain,
+                je_graphic_cmd_bind_uniform_buffer(rend_chain,
                     current_camera.projection->default_uniform_buffer->resource());
 
                 // Walk through all entities, rend them to target buffer(include L2DCamera/R2Buf/Screen).
@@ -2829,8 +2829,8 @@ namespace jeecs
                         post_light_target_fb->width(), post_light_target_fb->height());
 
                     const float clear_color[] = { 0.f, 0.f, 0.f, 0.f };
-                    jegl_cmd_clear_color(light2d_light_effect_rend_chain, 0, clear_color);
-                    jegl_cmd_bind_uniform_buffer(light2d_light_effect_rend_chain,
+                    je_graphic_cmd_clear_color(light2d_light_effect_rend_chain, 0, clear_color);
+                    je_graphic_cmd_bind_uniform_buffer(light2d_light_effect_rend_chain,
                         current_camera.projection->default_uniform_buffer->resource());
 
                     auto* post_rend_target_frame_buffer = current_camera.light2DPostPass->post_rend_target.value().get();
@@ -2853,11 +2853,11 @@ namespace jeecs
                             light2d_light_effect_rend_chain, light2d.textures, nullptr);
 
                         // 绑定 G-buffer 通道（漫反射 / 自发光 / 视空间坐标 / 视空间法线 / 阴影）到 4..8 槽
-                        jegl_cmd_bind_texture_2d(light2d_light_effect_rend_chain, JE_LIGHT2D_DEFER_0 + 0, diffuse_attachment);
-                        jegl_cmd_bind_texture_2d(light2d_light_effect_rend_chain, JE_LIGHT2D_DEFER_0 + 1, emissive_attachment);
-                        jegl_cmd_bind_texture_2d(light2d_light_effect_rend_chain, JE_LIGHT2D_DEFER_0 + 2, viewpos_attachment);
-                        jegl_cmd_bind_texture_2d(light2d_light_effect_rend_chain, JE_LIGHT2D_DEFER_0 + 3, viewnorm_attachment);
-                        jegl_cmd_bind_texture_2d(
+                        je_graphic_cmd_bind_texture_2d(light2d_light_effect_rend_chain, JE_LIGHT2D_DEFER_0 + 0, diffuse_attachment);
+                        je_graphic_cmd_bind_texture_2d(light2d_light_effect_rend_chain, JE_LIGHT2D_DEFER_0 + 1, emissive_attachment);
+                        je_graphic_cmd_bind_texture_2d(light2d_light_effect_rend_chain, JE_LIGHT2D_DEFER_0 + 2, viewpos_attachment);
+                        je_graphic_cmd_bind_texture_2d(light2d_light_effect_rend_chain, JE_LIGHT2D_DEFER_0 + 3, viewnorm_attachment);
+                        je_graphic_cmd_bind_texture_2d(
                             light2d_light_effect_rend_chain, JE_LIGHT2D_DEFER_0 + 4,
                             light2d.shadowbuffer != nullptr
                             ? light2d.shadowbuffer->buffer.value()->get_attachment(0).value()->resource()
@@ -2936,20 +2936,20 @@ namespace jeecs
                         rend_aim_buffer, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
                     clear_color_if_any(final_target_rend_chain, current_camera.clear);
-                    jegl_cmd_clear_depth(final_target_rend_chain, 1.0);
-                    jegl_cmd_bind_uniform_buffer(final_target_rend_chain,
+                    je_graphic_cmd_clear_depth(final_target_rend_chain, 1.0);
+                    je_graphic_cmd_bind_uniform_buffer(final_target_rend_chain,
                         current_camera.projection->default_uniform_buffer->resource());
 
                     // 槽 0：光照合成结果；槽 4..7：G-buffer 通道
-                    jegl_cmd_bind_texture_2d(final_target_rend_chain, 0,
+                    je_graphic_cmd_bind_texture_2d(final_target_rend_chain, 0,
                         current_camera.light2DPostPass->post_light_target.value()->get_attachment(0).value()->resource());
-                    jegl_cmd_bind_texture_2d(final_target_rend_chain, JE_LIGHT2D_DEFER_0 + 0,
+                    je_graphic_cmd_bind_texture_2d(final_target_rend_chain, JE_LIGHT2D_DEFER_0 + 0,
                         post_rend_target_frame_buffer->get_attachment(0).value()->resource());
-                    jegl_cmd_bind_texture_2d(final_target_rend_chain, JE_LIGHT2D_DEFER_0 + 1,
+                    je_graphic_cmd_bind_texture_2d(final_target_rend_chain, JE_LIGHT2D_DEFER_0 + 1,
                         post_rend_target_frame_buffer->get_attachment(1).value()->resource());
-                    jegl_cmd_bind_texture_2d(final_target_rend_chain, JE_LIGHT2D_DEFER_0 + 2,
+                    je_graphic_cmd_bind_texture_2d(final_target_rend_chain, JE_LIGHT2D_DEFER_0 + 2,
                         post_rend_target_frame_buffer->get_attachment(2).value()->resource());
-                    jegl_cmd_bind_texture_2d(final_target_rend_chain, JE_LIGHT2D_DEFER_0 + 3,
+                    je_graphic_cmd_bind_texture_2d(final_target_rend_chain, JE_LIGHT2D_DEFER_0 + 3,
                         post_rend_target_frame_buffer->get_attachment(3).value()->resource());
 
                     // 相机自带纹理（覆盖槽位由 m_pass_id 决定）
@@ -2959,7 +2959,7 @@ namespace jeecs
                         final_tiling = current_camera.textures->tiling;
                         final_offset = current_camera.textures->offset;
                         for (auto& texture : current_camera.textures->textures)
-                            jegl_cmd_bind_texture_2d(final_target_rend_chain, texture.m_pass_id, texture.m_texture->resource());
+                            je_graphic_cmd_bind_texture_2d(final_target_rend_chain, texture.m_pass_id, texture.m_texture->resource());
                     }
 
                     auto& drawing_shaders =

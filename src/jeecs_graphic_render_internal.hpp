@@ -98,7 +98,7 @@ inline void _jegl_patch_ndc_scale(
 // Deferred draw used by the engine's render systems and the Woolang bindings.
 // Mirrors the old "draw returns an action, uniforms are set on it, the next
 // operation flushes it" pattern. Public users should prefer the explicit
-// jegl_cmd_set_uniform_* + jegl_cmd_draw_indexed ordering.
+// jegl_cmd_set_uniform_* + je_graphic_cmd_draw_indexed ordering.
 void _jegl_cmd_begin_deferred_draw(
     jegl_command_buffer* cmd,
     jegl_pipeline* pipeline,

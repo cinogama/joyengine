@@ -28,7 +28,7 @@ namespace jeecs
       * 每个发射器实体在本系统内持有一个 CPU 粒子池（发射器粒子上限容量的
         SoA 数组），死亡粒子以交换删除方式紧凑排布；
       * 发射器实体复用常规渲染组件：系统把存活粒子构建为面向摄像机的公告板
-        四边形网格（每粒子 4 顶点 6 索引），经 jegl_update_vertex_buffer 逐帧
+        四边形网格（每粒子 4 顶点 6 索引），经 je_graphic_vertex_buffer_update 逐帧
         写入 Renderer::Shape，由常规图形管线（如 UnlitGraphicPipelineSystem）
         随实体一起绘制；粒子纹理绑定在 Renderer::Textures2D 的 pass 0；
       * 公告板朝向在粒子着色器中用视图矩阵展开（顶点属性携带中心

@@ -89,30 +89,30 @@ inline void update_shader(
     }
 }
 
-je_DebugEid jedbg_get_entity_uid(const je_GameEntity* e)
+je_DebugEid je_debug_entity_uid_get(const je_GameEntity* e)
 {
     auto* eid = static_cast<jeecs::Editor::EntityId*>(
-        je_ecs_world_entity_get_component(
+        je_ecs_world_entity_component_get(
             e, jeecs::typing::id<jeecs::Editor::EntityId>()));
     if (eid == nullptr)
     {
-        (void)je_ecs_world_entity_add_component(
+        (void)je_ecs_world_entity_component_add(
             e, jeecs::typing::id<jeecs::Editor::EntityId>());
         return 0 /* invalid */;
     }
     return eid->eid;
 }
 
-void jedbg_set_entity_uid(const je_GameEntity* e, je_DebugEid uid)
+void je_debug_entity_uid_set(const je_GameEntity* e, je_DebugEid uid)
 {
     auto* eid = static_cast<jeecs::Editor::EntityId*>(
-        je_ecs_world_entity_get_component(
+        je_ecs_world_entity_component_get(
             e, jeecs::typing::id<jeecs::Editor::EntityId>()));
     
     if (eid == nullptr)
     {
         eid = static_cast<jeecs::Editor::EntityId*>(
-            je_ecs_world_entity_add_component(
+            je_ecs_world_entity_component_add(
                 e, jeecs::typing::id<jeecs::Editor::EntityId>()));
     }
 

@@ -8,7 +8,7 @@
 // UserInterfaceGraphicPipelineSystem 的接入代码）。
 //
 // 核心不变量：
-//  * 字形按（字体, 量化字号, 码点）经 je_font_get_char 光栅化一次（复用其
+//  * 字形按（字体, 量化字号, 码点）经 je_font_char_get 光栅化一次（复用其
 //    内部缓存），装箱进按字体分页的 RGBA 图集（白色 + 覆盖度 alpha）。
 //    页只增不减（append-only），已有字形的 UV 永不失效，无需重排；图集
 //    与文本内容无关，全场景共享；
@@ -491,7 +491,7 @@ namespace jeecs
             auto* dst_res = page.m_texture->resource();
             const auto* src_res = src.resource();
 
-            // 源为 je_font_get_char 生成的 RGBA 字形纹理（白色 + 覆盖度
+            // 源为 je_font_char_get 生成的 RGBA 字形纹理（白色 + 覆盖度
             // alpha，自底向上行序）；图集页同序，逐行拷贝 alpha、RGB 写白。
             for (size_t row = 0; row < gh; ++row)
             {

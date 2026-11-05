@@ -114,6 +114,6 @@ const jeecs::typing::type_info* my_type = je_typing_register(
 ## 相关接口
 
 - [je_typing_unregister](je_typing_unregister.md) - 取消注册类型
-- [je_typing_get_info_by_id](je_typing_get_info_by_id.md) - 通过 ID 获取类型信息
-- [je_typing_get_info_by_hash](je_typing_get_info_by_hash.md) - 通过哈希获取类型信息
-- [je_typing_get_info_by_name](je_typing_get_info_by_name.md) - 通过名称获取类型信息
+- [je_typing_info_get_by_id](je_typing_info_get_by_id.md) - 通过 ID 获取类型信息
+- [je_typing_info_get_by_hash](je_typing_info_get_by_hash.md) - 通过哈希获取类型信息
+- [je_typing_info_get_by_name](je_typing_info_get_by_name.md) - 通过名称获取类型信息

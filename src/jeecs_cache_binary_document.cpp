@@ -5,39 +5,39 @@
 // terminated by JE_CACHE_BINARY_VALUE_END; strings and buffers are prefixed by
 // their uint64 length. The on-disk layout is documented in jeecs.hpp.
 
-bool jeecs_cache_binary_document_open(
+bool je_cache_binary_document_open(
     jeecs_file* file, jeecs_cache_binary_document* out_doc)
 {
     assert(file != nullptr);
     assert(out_doc != nullptr);
 
     uint8_t tag;
-    if (1 != jeecs_file_read(&tag, sizeof(tag), 1, file)
+    if (1 != je_file_read(&tag, sizeof(tag), 1, file)
         || tag != (uint8_t)JE_CACHE_BINARY_VALUE_DOCUMENT)
         return false;
 
     out_doc->m_file = file;
-    out_doc->m_location = jeecs_file_tell(file);
+    out_doc->m_location = je_file_tell(file);
     return true;
 }
 
-bool jeecs_cache_binary_list_open(
+bool je_cache_binary_list_open(
     jeecs_file* file, jeecs_cache_binary_list* out_list)
 {
     assert(file != nullptr);
     assert(out_list != nullptr);
 
     uint8_t tag;
-    if (1 != jeecs_file_read(&tag, sizeof(tag), 1, file)
+    if (1 != je_file_read(&tag, sizeof(tag), 1, file)
         || tag != (uint8_t)JE_CACHE_BINARY_VALUE_LIST)
         return false;
 
     out_list->m_file = file;
-    out_list->m_location = jeecs_file_tell(file);
+    out_list->m_location = je_file_tell(file);
     return true;
 }
 
-bool jeecs_cache_binary_string_read(
+bool je_cache_binary_string_read(
     /* OPTIONAL: If *inout_dst_len == 0 */ char* dst, 
     size_t* inout_dst_len,
     const jeecs_cache_binary_string* str)
@@ -48,17 +48,17 @@ bool jeecs_cache_binary_string_read(
 
     const size_t dst_capacity = *inout_dst_len;
 
-    // Layout written by jeecs_cache_binary_append_string, the handle points at
+    // Layout written by je_cache_binary_append_string, the handle points at
     // the type tag:
     //   [jeecs_cache_binary_value_type][uint64 length][char bytes...]
-    if (!jeecs_file_seek(str->m_file, (int64_t)str->m_location, JE_READ_FILE_SEEK_SET))
+    if (!je_file_seek(str->m_file, (int64_t)str->m_location, JE_READ_FILE_SEEK_SET))
         return false;
 
     uint8_t tag;
     uint64_t str_len;
-    if (1 != jeecs_file_read(&tag, sizeof(tag), 1, str->m_file)
+    if (1 != je_file_read(&tag, sizeof(tag), 1, str->m_file)
         || tag != (uint8_t)JE_CACHE_BINARY_VALUE_STRING
-        || 1 != jeecs_file_read(&str_len, sizeof(str_len), 1, str->m_file))
+        || 1 != je_file_read(&str_len, sizeof(str_len), 1, str->m_file))
         return false;
 
     if (dst_capacity > 0)
@@ -67,7 +67,7 @@ bool jeecs_cache_binary_string_read(
         // string when there is room left after the copied bytes.
         const uint64_t copy_len = str_len < dst_capacity ? str_len : (uint64_t)dst_capacity;
 
-        if (copy_len > 0 && copy_len != jeecs_file_read(dst, sizeof(char), (size_t)copy_len, str->m_file))
+        if (copy_len > 0 && copy_len != je_file_read(dst, sizeof(char), (size_t)copy_len, str->m_file))
             return false;
 
         if (copy_len < dst_capacity)
@@ -79,7 +79,7 @@ bool jeecs_cache_binary_string_read(
     return true;
 }
 
-bool jeecs_cache_binary_buffer_read(
+bool je_cache_binary_buffer_read(
     /* OPTIONAL: If *inout_dst_len == 0 */ void* dst,
     size_t* inout_dst_len,
     const jeecs_cache_binary_buffer* buf)
@@ -90,23 +90,23 @@ bool jeecs_cache_binary_buffer_read(
 
     const size_t dst_capacity = *inout_dst_len;
 
-    // Layout written by jeecs_cache_binary_append_buffer, the handle points at
+    // Layout written by je_cache_binary_append_buffer, the handle points at
     // the type tag:
     //   [jeecs_cache_binary_value_type][uint64 length][byte data...]
-    if (!jeecs_file_seek(buf->m_file, (int64_t)buf->m_location, JE_READ_FILE_SEEK_SET))
+    if (!je_file_seek(buf->m_file, (int64_t)buf->m_location, JE_READ_FILE_SEEK_SET))
         return false;
 
     uint8_t tag;
     uint64_t buf_len;
-    if (1 != jeecs_file_read(&tag, sizeof(tag), 1, buf->m_file)
+    if (1 != je_file_read(&tag, sizeof(tag), 1, buf->m_file)
         || tag != (uint8_t)JE_CACHE_BINARY_VALUE_BUFFER
-        || 1 != jeecs_file_read(&buf_len, sizeof(buf_len), 1, buf->m_file))
+        || 1 != je_file_read(&buf_len, sizeof(buf_len), 1, buf->m_file))
         return false;
 
     // A buffer has no terminator, so copy as many bytes as the destination
     // can hold; longer buffers are truncated.
     const uint64_t copy_len = buf_len < dst_capacity ? buf_len : (uint64_t)dst_capacity;
-    if (copy_len > 0 && copy_len != jeecs_file_read(dst, sizeof(uint8_t), (size_t)copy_len, buf->m_file))
+    if (copy_len > 0 && copy_len != je_file_read(dst, sizeof(uint8_t), (size_t)copy_len, buf->m_file))
         return false;
 
     // The capacity was consumed, report the full length of the value.
@@ -120,7 +120,7 @@ static bool _jeecs_cache_binary_next_value_offset(
     assert(file != nullptr);
     assert(inout_offset != nullptr);
 
-    const size_t file_size = jeecs_file_size(file);
+    const size_t file_size = je_file_size(file);
     size_t offset = *inout_offset;
 
     // The value may be a container, in which case the following offset is only
@@ -130,13 +130,13 @@ static bool _jeecs_cache_binary_next_value_offset(
     for (;;)
     {
         if (offset >= file_size
-            || !jeecs_file_seek(file, (int64_t)offset, JE_READ_FILE_SEEK_SET))
+            || !je_file_seek(file, (int64_t)offset, JE_READ_FILE_SEEK_SET))
             return false;
 
         const size_t tag_offset = offset;
 
         uint8_t tag;
-        if (1 != jeecs_file_read(&tag, sizeof(tag), 1, file))
+        if (1 != je_file_read(&tag, sizeof(tag), 1, file))
             return false;
 
         offset += sizeof(tag);
@@ -166,7 +166,7 @@ static bool _jeecs_cache_binary_next_value_offset(
             // [uint64 length][payload...]
             uint64_t len;
             if (offset + sizeof(len) > file_size
-                || 1 != jeecs_file_read(&len, sizeof(len), 1, file))
+                || 1 != je_file_read(&len, sizeof(len), 1, file))
                 return false;
 
             offset += sizeof(len);
@@ -241,7 +241,7 @@ static _jeecs_cache_binary_key_compare_result _jeecs_cache_binary_compare_key(
     if (len != (uint64_t)strlen(key))
         return _jeecs_cache_binary_key_compare_result::NOT_EQUAL;
 
-    if (!jeecs_file_seek(file, (int64_t)payload_location, JE_READ_FILE_SEEK_SET))
+    if (!je_file_seek(file, (int64_t)payload_location, JE_READ_FILE_SEEK_SET))
     {
         jeecs::debug::logerr(
             "Failed to seek to binary cache key payload at offset: %zu.",
@@ -255,7 +255,7 @@ static _jeecs_cache_binary_key_compare_result _jeecs_cache_binary_compare_key(
     while (remain > 0)
     {
         const size_t chunk_len = remain < sizeof(chunk) ? remain : sizeof(chunk);
-        if (chunk_len != jeecs_file_read(chunk, sizeof(char), chunk_len, file))
+        if (chunk_len != je_file_read(chunk, sizeof(char), chunk_len, file))
         {
             jeecs::debug::logerr(
                 "Failed to read binary cache key payload at offset: %zu.",
@@ -277,8 +277,8 @@ static _jeecs_cache_binary_key_compare_result _jeecs_cache_binary_compare_key(
 // `out_value`; containers are handed back as handles over the file. LIST and
 // DOCUMENT handles point at their first child, matching
 // jeecs_cache_binary_*_open, while STRING and BUFFER handles point at the type
-// tag, matching jeecs_cache_binary_string_read /
-// jeecs_cache_binary_buffer_read.
+// tag, matching je_cache_binary_string_read /
+// je_cache_binary_buffer_read.
 static bool _jeecs_cache_binary_read_value(
     jeecs_file* file,
     size_t location,
@@ -288,11 +288,11 @@ static bool _jeecs_cache_binary_read_value(
     assert(file != nullptr);
     assert(out_value != nullptr);
 
-    if (!jeecs_file_seek(file, (int64_t)location, JE_READ_FILE_SEEK_SET))
+    if (!je_file_seek(file, (int64_t)location, JE_READ_FILE_SEEK_SET))
         return false;
 
     uint8_t tag;
-    if (1 != jeecs_file_read(&tag, sizeof(tag), 1, file)
+    if (1 != je_file_read(&tag, sizeof(tag), 1, file)
         || tag != (uint8_t)expected_type)
         return false;
 
@@ -301,7 +301,7 @@ static bool _jeecs_cache_binary_read_value(
     case JE_CACHE_BINARY_VALUE_BOOL:
     {
         uint8_t raw;
-        if (1 != jeecs_file_read(&raw, sizeof(raw), 1, file))
+        if (1 != je_file_read(&raw, sizeof(raw), 1, file))
             return false;
 
         *static_cast<bool*>(out_value) = raw != 0;
@@ -309,34 +309,34 @@ static bool _jeecs_cache_binary_read_value(
     }
 
     case JE_CACHE_BINARY_VALUE_INT8:
-        return 1 == jeecs_file_read(out_value, sizeof(int8_t), 1, file);
+        return 1 == je_file_read(out_value, sizeof(int8_t), 1, file);
 
     case JE_CACHE_BINARY_VALUE_INT16:
-        return 1 == jeecs_file_read(out_value, sizeof(int16_t), 1, file);
+        return 1 == je_file_read(out_value, sizeof(int16_t), 1, file);
 
     case JE_CACHE_BINARY_VALUE_INT32:
-        return 1 == jeecs_file_read(out_value, sizeof(int32_t), 1, file);
+        return 1 == je_file_read(out_value, sizeof(int32_t), 1, file);
 
     case JE_CACHE_BINARY_VALUE_INT64:
-        return 1 == jeecs_file_read(out_value, sizeof(int64_t), 1, file);
+        return 1 == je_file_read(out_value, sizeof(int64_t), 1, file);
 
     case JE_CACHE_BINARY_VALUE_UINT8:
-        return 1 == jeecs_file_read(out_value, sizeof(uint8_t), 1, file);
+        return 1 == je_file_read(out_value, sizeof(uint8_t), 1, file);
 
     case JE_CACHE_BINARY_VALUE_UINT16:
-        return 1 == jeecs_file_read(out_value, sizeof(uint16_t), 1, file);
+        return 1 == je_file_read(out_value, sizeof(uint16_t), 1, file);
 
     case JE_CACHE_BINARY_VALUE_UINT32:
-        return 1 == jeecs_file_read(out_value, sizeof(uint32_t), 1, file);
+        return 1 == je_file_read(out_value, sizeof(uint32_t), 1, file);
 
     case JE_CACHE_BINARY_VALUE_UINT64:
-        return 1 == jeecs_file_read(out_value, sizeof(uint64_t), 1, file);
+        return 1 == je_file_read(out_value, sizeof(uint64_t), 1, file);
 
     case JE_CACHE_BINARY_VALUE_FLOAT32:
-        return 1 == jeecs_file_read(out_value, sizeof(float), 1, file);
+        return 1 == je_file_read(out_value, sizeof(float), 1, file);
 
     case JE_CACHE_BINARY_VALUE_FLOAT64:
-        return 1 == jeecs_file_read(out_value, sizeof(double), 1, file);
+        return 1 == je_file_read(out_value, sizeof(double), 1, file);
 
     case JE_CACHE_BINARY_VALUE_STRING:
     {
@@ -377,7 +377,7 @@ static bool _jeecs_cache_binary_read_value(
     return false;
 }
 
-bool jeecs_cache_binary_document_index(
+bool je_cache_binary_document_index(
     const jeecs_cache_binary_document* document,
     const char* key,
     jeecs_cache_binary_value_type expected_type,
@@ -388,18 +388,18 @@ bool jeecs_cache_binary_document_index(
     assert(out_value != nullptr);
 
     jeecs_file* file = document->m_file;
-    const size_t file_size = jeecs_file_size(file);
+    const size_t file_size = je_file_size(file);
 
     // A document is a sequence of [string key][value] pairs closed by END;
     // the handle points at its first key.
     size_t offset = document->m_location;
     while (offset < file_size)
     {
-        if (!jeecs_file_seek(file, (int64_t)offset, JE_READ_FILE_SEEK_SET))
+        if (!je_file_seek(file, (int64_t)offset, JE_READ_FILE_SEEK_SET))
             return false;
 
         uint8_t tag;
-        if (1 != jeecs_file_read(&tag, sizeof(tag), 1, file))
+        if (1 != je_file_read(&tag, sizeof(tag), 1, file))
             return false;
 
         if (tag == (uint8_t)JE_CACHE_BINARY_VALUE_END)
@@ -409,10 +409,10 @@ bool jeecs_cache_binary_document_index(
             return false; // Every entry starts with its key.
 
         uint64_t key_len;
-        if (1 != jeecs_file_read(&key_len, sizeof(key_len), 1, file))
+        if (1 != je_file_read(&key_len, sizeof(key_len), 1, file))
             return false;
 
-        const size_t key_payload = jeecs_file_tell(file);
+        const size_t key_payload = je_file_tell(file);
         if (key_len > (uint64_t)(file_size - key_payload))
             return false;
 
@@ -441,7 +441,7 @@ bool jeecs_cache_binary_document_index(
     return false;
 }
 
-bool jeecs_cache_binary_list_index(
+bool je_cache_binary_list_index(
     const jeecs_cache_binary_list* list,
     size_t index,
     jeecs_cache_binary_value_type expected_type,
@@ -457,11 +457,11 @@ bool jeecs_cache_binary_list_index(
     size_t offset = list->m_location;
     for (size_t i = 0;; ++i)
     {
-        if (!jeecs_file_seek(file, (int64_t)offset, JE_READ_FILE_SEEK_SET))
+        if (!je_file_seek(file, (int64_t)offset, JE_READ_FILE_SEEK_SET))
             return false;
 
         uint8_t tag;
-        if (1 != jeecs_file_read(&tag, sizeof(tag), 1, file))
+        if (1 != je_file_read(&tag, sizeof(tag), 1, file))
             return false;
 
         if (tag == (uint8_t)JE_CACHE_BINARY_VALUE_END)
@@ -476,7 +476,7 @@ bool jeecs_cache_binary_list_index(
     }
 }
 
-bool jeecs_cache_binary_list_iterator_open(
+bool je_cache_binary_list_iterator_open(
     const jeecs_cache_binary_list* list,
     jeecs_cache_binary_list_iterator* out_iterator)
 {
@@ -488,24 +488,24 @@ bool jeecs_cache_binary_list_iterator_open(
     return true;
 }
 
-bool jeecs_cache_binary_list_iterator_is_end(
+bool je_cache_binary_list_iterator_is_end(
     const jeecs_cache_binary_list_iterator* iterator)
 {
     assert(iterator != nullptr);
 
     jeecs_file* file = iterator->m_file;
-    if (!jeecs_file_seek(file, (int64_t)iterator->m_location,
+    if (!je_file_seek(file, (int64_t)iterator->m_location,
         JE_READ_FILE_SEEK_SET))
         return false;
 
     uint8_t tag;
-    if (1 != jeecs_file_read(&tag, sizeof(tag), 1, file))
+    if (1 != je_file_read(&tag, sizeof(tag), 1, file))
         return false;
 
     return tag == (uint8_t)JE_CACHE_BINARY_VALUE_END;
 }
 
-bool jeecs_cache_binary_list_iterator_read(
+bool je_cache_binary_list_iterator_read(
     const jeecs_cache_binary_list_iterator* iterator,
     jeecs_cache_binary_value_type expected_type,
     void* out_value)
@@ -517,7 +517,7 @@ bool jeecs_cache_binary_list_iterator_read(
         iterator->m_file, iterator->m_location, expected_type, out_value);
 }
 
-bool jeecs_cache_binary_list_iterator_advance(
+bool je_cache_binary_list_iterator_advance(
     jeecs_cache_binary_list_iterator* inout_iterator)
 {
     assert(inout_iterator != nullptr);
@@ -532,120 +532,120 @@ bool jeecs_cache_binary_list_iterator_advance(
 
 /* ======================================= */
 
-bool jeecs_cache_binary_append_document(je_writing_cache_file* file)
+bool je_cache_binary_append_document(je_writing_cache_file* file)
 {
     const uint8_t tag = (uint8_t)JE_CACHE_BINARY_VALUE_DOCUMENT;
-    return 1 == jeecs_write_cache_file(&tag, sizeof(tag), 1, file);
+    return 1 == je_cache_file_write(&tag, sizeof(tag), 1, file);
 }
 
-bool jeecs_cache_binary_append_list(je_writing_cache_file* file)
+bool je_cache_binary_append_list(je_writing_cache_file* file)
 {
     const uint8_t tag = (uint8_t)JE_CACHE_BINARY_VALUE_LIST;
-    return 1 == jeecs_write_cache_file(&tag, sizeof(tag), 1, file);
+    return 1 == je_cache_file_write(&tag, sizeof(tag), 1, file);
 }
 
-bool jeecs_cache_binary_append_end(je_writing_cache_file* file)
+bool je_cache_binary_append_end(je_writing_cache_file* file)
 {
     const uint8_t tag = (uint8_t)JE_CACHE_BINARY_VALUE_END;
-    return 1 == jeecs_write_cache_file(&tag, sizeof(tag), 1, file);
+    return 1 == je_cache_file_write(&tag, sizeof(tag), 1, file);
 }
 
-bool jeecs_cache_binary_append_string(je_writing_cache_file* file, const char* str)
+bool je_cache_binary_append_string(je_writing_cache_file* file, const char* str)
 {
     const uint8_t tag = (uint8_t)JE_CACHE_BINARY_VALUE_STRING;
     const uint64_t str_len = (uint64_t)strlen(str);
 
-    return 1 == jeecs_write_cache_file(&tag, sizeof(tag), 1, file)
-        && 1 == jeecs_write_cache_file(&str_len, sizeof(str_len), 1, file)
-        && (size_t)str_len == jeecs_write_cache_file(str, sizeof(char), (size_t)str_len, file);
+    return 1 == je_cache_file_write(&tag, sizeof(tag), 1, file)
+        && 1 == je_cache_file_write(&str_len, sizeof(str_len), 1, file)
+        && (size_t)str_len == je_cache_file_write(str, sizeof(char), (size_t)str_len, file);
 }
 
-bool jeecs_cache_binary_append_buffer(
+bool je_cache_binary_append_buffer(
     je_writing_cache_file* file, const void* buf, size_t buflen)
 {
     const uint8_t tag = (uint8_t)JE_CACHE_BINARY_VALUE_BUFFER;
     const uint64_t len = (uint64_t)buflen;
 
-    return 1 == jeecs_write_cache_file(&tag, sizeof(tag), 1, file)
-        && 1 == jeecs_write_cache_file(&len, sizeof(len), 1, file)
-        && buflen == jeecs_write_cache_file(buf, 1, buflen, file);
+    return 1 == je_cache_file_write(&tag, sizeof(tag), 1, file)
+        && 1 == je_cache_file_write(&len, sizeof(len), 1, file)
+        && buflen == je_cache_file_write(buf, 1, buflen, file);
 }
 
-bool jeecs_cache_binary_append_bool(je_writing_cache_file* file, bool val)
+bool je_cache_binary_append_bool(je_writing_cache_file* file, bool val)
 {
     const uint8_t tag = (uint8_t)JE_CACHE_BINARY_VALUE_BOOL;
     const uint8_t raw = val ? 1 : 0;
 
-    return 1 == jeecs_write_cache_file(&tag, sizeof(tag), 1, file)
-        && 1 == jeecs_write_cache_file(&raw, sizeof(raw), 1, file);
+    return 1 == je_cache_file_write(&tag, sizeof(tag), 1, file)
+        && 1 == je_cache_file_write(&raw, sizeof(raw), 1, file);
 }
 
-bool jeecs_cache_binary_append_int8(je_writing_cache_file* file, int8_t val)
+bool je_cache_binary_append_int8(je_writing_cache_file* file, int8_t val)
 {
     const uint8_t tag = (uint8_t)JE_CACHE_BINARY_VALUE_INT8;
-    return 1 == jeecs_write_cache_file(&tag, sizeof(tag), 1, file)
-        && 1 == jeecs_write_cache_file(&val, sizeof(val), 1, file);
+    return 1 == je_cache_file_write(&tag, sizeof(tag), 1, file)
+        && 1 == je_cache_file_write(&val, sizeof(val), 1, file);
 }
 
-bool jeecs_cache_binary_append_int16(je_writing_cache_file* file, int16_t val)
+bool je_cache_binary_append_int16(je_writing_cache_file* file, int16_t val)
 {
     const uint8_t tag = (uint8_t)JE_CACHE_BINARY_VALUE_INT16;
-    return 1 == jeecs_write_cache_file(&tag, sizeof(tag), 1, file)
-        && 1 == jeecs_write_cache_file(&val, sizeof(val), 1, file);
+    return 1 == je_cache_file_write(&tag, sizeof(tag), 1, file)
+        && 1 == je_cache_file_write(&val, sizeof(val), 1, file);
 }
 
-bool jeecs_cache_binary_append_int32(je_writing_cache_file* file, int32_t val)
+bool je_cache_binary_append_int32(je_writing_cache_file* file, int32_t val)
 {
     const uint8_t tag = (uint8_t)JE_CACHE_BINARY_VALUE_INT32;
-    return 1 == jeecs_write_cache_file(&tag, sizeof(tag), 1, file)
-        && 1 == jeecs_write_cache_file(&val, sizeof(val), 1, file);
+    return 1 == je_cache_file_write(&tag, sizeof(tag), 1, file)
+        && 1 == je_cache_file_write(&val, sizeof(val), 1, file);
 }
 
-bool jeecs_cache_binary_append_int64(je_writing_cache_file* file, int64_t val)
+bool je_cache_binary_append_int64(je_writing_cache_file* file, int64_t val)
 {
     const uint8_t tag = (uint8_t)JE_CACHE_BINARY_VALUE_INT64;
-    return 1 == jeecs_write_cache_file(&tag, sizeof(tag), 1, file)
-        && 1 == jeecs_write_cache_file(&val, sizeof(val), 1, file);
+    return 1 == je_cache_file_write(&tag, sizeof(tag), 1, file)
+        && 1 == je_cache_file_write(&val, sizeof(val), 1, file);
 }
 
-bool jeecs_cache_binary_append_uint8(je_writing_cache_file* file, uint8_t val)
+bool je_cache_binary_append_uint8(je_writing_cache_file* file, uint8_t val)
 {
     const uint8_t tag = (uint8_t)JE_CACHE_BINARY_VALUE_UINT8;
-    return 1 == jeecs_write_cache_file(&tag, sizeof(tag), 1, file)
-        && 1 == jeecs_write_cache_file(&val, sizeof(val), 1, file);
+    return 1 == je_cache_file_write(&tag, sizeof(tag), 1, file)
+        && 1 == je_cache_file_write(&val, sizeof(val), 1, file);
 }
 
-bool jeecs_cache_binary_append_uint16(je_writing_cache_file* file, uint16_t val)
+bool je_cache_binary_append_uint16(je_writing_cache_file* file, uint16_t val)
 {
     const uint8_t tag = (uint8_t)JE_CACHE_BINARY_VALUE_UINT16;
-    return 1 == jeecs_write_cache_file(&tag, sizeof(tag), 1, file)
-        && 1 == jeecs_write_cache_file(&val, sizeof(val), 1, file);
+    return 1 == je_cache_file_write(&tag, sizeof(tag), 1, file)
+        && 1 == je_cache_file_write(&val, sizeof(val), 1, file);
 }
 
-bool jeecs_cache_binary_append_uint32(je_writing_cache_file* file, uint32_t val)
+bool je_cache_binary_append_uint32(je_writing_cache_file* file, uint32_t val)
 {
     const uint8_t tag = (uint8_t)JE_CACHE_BINARY_VALUE_UINT32;
-    return 1 == jeecs_write_cache_file(&tag, sizeof(tag), 1, file)
-        && 1 == jeecs_write_cache_file(&val, sizeof(val), 1, file);
+    return 1 == je_cache_file_write(&tag, sizeof(tag), 1, file)
+        && 1 == je_cache_file_write(&val, sizeof(val), 1, file);
 }
 
-bool jeecs_cache_binary_append_uint64(je_writing_cache_file* file, uint64_t val)
+bool je_cache_binary_append_uint64(je_writing_cache_file* file, uint64_t val)
 {
     const uint8_t tag = (uint8_t)JE_CACHE_BINARY_VALUE_UINT64;
-    return 1 == jeecs_write_cache_file(&tag, sizeof(tag), 1, file)
-        && 1 == jeecs_write_cache_file(&val, sizeof(val), 1, file);
+    return 1 == je_cache_file_write(&tag, sizeof(tag), 1, file)
+        && 1 == je_cache_file_write(&val, sizeof(val), 1, file);
 }
 
-bool jeecs_cache_binary_append_float32(je_writing_cache_file* file, float val)
+bool je_cache_binary_append_float32(je_writing_cache_file* file, float val)
 {
     const uint8_t tag = (uint8_t)JE_CACHE_BINARY_VALUE_FLOAT32;
-    return 1 == jeecs_write_cache_file(&tag, sizeof(tag), 1, file)
-        && 1 == jeecs_write_cache_file(&val, sizeof(val), 1, file);
+    return 1 == je_cache_file_write(&tag, sizeof(tag), 1, file)
+        && 1 == je_cache_file_write(&val, sizeof(val), 1, file);
 }
 
-bool jeecs_cache_binary_append_float64(je_writing_cache_file* file, double val)
+bool je_cache_binary_append_float64(je_writing_cache_file* file, double val)
 {
     const uint8_t tag = (uint8_t)JE_CACHE_BINARY_VALUE_FLOAT64;
-    return 1 == jeecs_write_cache_file(&tag, sizeof(tag), 1, file)
-        && 1 == jeecs_write_cache_file(&val, sizeof(val), 1, file);
+    return 1 == je_cache_file_write(&tag, sizeof(tag), 1, file)
+        && 1 == je_cache_file_write(&val, sizeof(val), 1, file);
 }

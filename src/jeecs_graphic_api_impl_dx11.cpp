@@ -205,7 +205,7 @@ namespace jeecs::graphic::api::dx11
             return;
 
         int w, h;
-        je_io_get_window_size(&w, &h);
+        je_io_window_size_get(&w, &h);
 
         if (w == 0 || h == 0)
             return;
@@ -612,7 +612,7 @@ namespace jeecs::graphic::api::dx11
         switch (context->m_interface->update())
         {
         case basic_interface::update_result::CLOSE:
-            if (jegui_shutdown_callback())
+            if (je_gui_backend_shutdown_callback())
                 return jegl_update_action::JEGL_UPDATE_STOP;
             goto _label_jegl_dx11_normal_job;
         case basic_interface::update_result::PAUSE:
@@ -1710,7 +1710,7 @@ namespace jeecs::graphic::api::dx11
         // 新建索引缓冲区
         static_assert(sizeof(uint32_t) == sizeof(UINT));
 
-        // 按分配容量创建（m_index_count 可能已被 jegl_update_vertex_buffer
+        // 按分配容量创建（m_index_count 可能已被 je_graphic_vertex_buffer_update
         // 收缩为激活数量——D3D11 不允许 ByteWidth 为 0；绘制数量另存于
         // vertex->m_count）
         D3D11_BUFFER_DESC index_buffer_describe;
@@ -2482,7 +2482,7 @@ namespace jeecs::graphic::api::dx11
     {}
 }
 
-void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis)
+void je_graphic_using_dx11_apis(jegl_graphic_api* write_to_apis)
 {
     using namespace jeecs::graphic::api::dx11;
 
@@ -2563,7 +2563,7 @@ void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis)
 }
 
 #else
-void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis)
+void je_graphic_using_dx11_apis(jegl_graphic_api* write_to_apis)
 {
     jeecs::debug::logfatal("DX11 not available.");
 }

@@ -59,7 +59,7 @@
             for (auto& chain_buffer : m_chain_buffers)
             {
                 for (auto& command_buffer : chain_buffer.m_allocated_command_buffers)
-                    jegl_cmd_close(command_buffer.m_command_buffer);
+                    je_graphic_cmd_close(command_buffer.m_command_buffer);
             }
         }
 
@@ -86,15 +86,15 @@
 
                 chain_buffer.m_allocated_command_buffers.push_back(
                     allocated_chain_t::allocated_command_buffer_t{
-                        jegl_cmd_create(m_context), nullptr });
+                        je_graphic_cmd_create(m_context), nullptr });
             }
 
             auto& entry =
                 chain_buffer.m_allocated_command_buffers[
                     chain_buffer.m_allocated_command_buffers_count++];
 
-            jegl_cmd_reset(entry.m_command_buffer);
-            jegl_cmd_begin_pass(entry.m_command_buffer, framebuffer, viewport);
+            je_graphic_cmd_reset(entry.m_command_buffer);
+            je_graphic_cmd_begin_pass(entry.m_command_buffer, framebuffer, viewport);
             entry.m_target = framebuffer;
 
             return entry.m_command_buffer;
@@ -126,7 +126,7 @@
                     && entry.m_target == nullptr)
                     continue;
 
-                jegl_cmd_commit(entry.m_command_buffer);
+                je_graphic_cmd_commit(entry.m_command_buffer);
             }
         }
     };
@@ -160,7 +160,7 @@
                 // ATTENTION: 注意，由于渲染线程在此处翻转，因此任何其他的绘制操作都不能与此同时发生
                 //  由于 _update_frame_universe_job 是一个 universe_after_call_once_job，所以此阶段
                 //  同时不能有其他绘制相关操作。
-                if (!jegl_update(graphic_host->glthread, SYNC_MODE, [](void* p)
+                if (!je_graphic_update(graphic_host->glthread, SYNC_MODE, [](void* p)
                     {
                         auto* graphic_host = static_cast<je_GraphicUhost*>(p);
                         for (auto& branch : graphic_host->m_je_RenderBranchs)
@@ -202,28 +202,28 @@
             if (action == jegl_update_action::JEGL_UPDATE_CONTINUE)
             {
                 int window_w = 0, window_h = 0;
-                je_io_get_window_size(&window_w, &window_h);
+                je_io_window_size_get(&window_w, &window_h);
 
                 if (window_w > 0 && window_h > 0)
                 {
                     if (m_screen_clear_command_buffer == nullptr)
                         m_screen_clear_command_buffer =
-                            jegl_cmd_create(glthread);
+                            je_graphic_cmd_create(glthread);
                     else
-                        jegl_cmd_reset(m_screen_clear_command_buffer);
+                        je_graphic_cmd_reset(m_screen_clear_command_buffer);
 
                     const jegl_viewport viewport{
                         0, 0,
                         (uint32_t)window_w, (uint32_t)window_h };
                     const float clear_color[4] = { 0.f, 0.f, 0.f, 0.f };
 
-                    jegl_cmd_begin_pass(
+                    je_graphic_cmd_begin_pass(
                         m_screen_clear_command_buffer, nullptr, &viewport);
-                    jegl_cmd_clear_color(
+                    je_graphic_cmd_clear_color(
                         m_screen_clear_command_buffer, 0, clear_color);
-                    jegl_cmd_clear_depth(
+                    je_graphic_cmd_clear_depth(
                         m_screen_clear_command_buffer, 1.0f);
-                    jegl_cmd_commit(m_screen_clear_command_buffer);
+                    je_graphic_cmd_commit(m_screen_clear_command_buffer);
                 }
             }
             else if (m_skip_all_draw)
@@ -256,7 +256,7 @@
             , m_graphic_frame_update(true)
             , m_screen_clear_command_buffer(nullptr)
         {
-            auto host_graphic_api = jegl_get_host_graphic_api();
+            auto host_graphic_api = je_graphic_host_api_get();
 
             jegl_interface_config config = {};
             if (_config == nullptr)
@@ -267,10 +267,10 @@
 
 #define JE_VERSION_WRAP(A, B, C) #A "." #B "." #C
 
-                if (host_graphic_api == jegl_using_dx11_apis)
+                if (host_graphic_api == je_graphic_using_dx11_apis)
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " DirectX 11)";
 #if defined(JE_ENABLE_GL330_GAPI) || defined(JE_ENABLE_GLES300_GAPI) || defined(JE_ENABLE_WEBGL20_GAPI)
-                else if (host_graphic_api == jegl_using_opengl3_apis)
+                else if (host_graphic_api == je_graphic_using_opengl3_apis)
 #   ifdef JE_ENABLE_GL330_GAPI
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " OpenGL 3.3)";
 #   elif defined(JE_ENABLE_GLES300_GAPI)
@@ -279,11 +279,11 @@
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " WebGL 2.0)";
 #   endif
 #endif
-                else if (host_graphic_api == jegl_using_vk120_apis)
+                else if (host_graphic_api == je_graphic_using_vk120_apis)
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " Vulkan 1.2)";
-                else if (host_graphic_api == jegl_using_metal_apis)
+                else if (host_graphic_api == je_graphic_using_metal_apis)
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " Metal)";
-                else if (host_graphic_api == jegl_using_none_apis)
+                else if (host_graphic_api == je_graphic_using_none_apis)
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " None)";
                 else
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " Custom Graphic API)";
@@ -300,10 +300,10 @@
                 config = *_config;
             }
 
-            glthread = jegl_start_graphic_thread(
+            glthread = je_graphic_thread_start(
                 config,
                 universe.handle(),
-                jegl_get_host_graphic_api(),
+                je_graphic_host_api_get(),
                 [](jegl_context* glthread, void* ptr, jegl_update_action action)
                 {
                     static_cast<je_GraphicUhost*>(ptr)->_frame_rend_impl(action);
@@ -311,7 +311,7 @@
                 this);
 
             if (glthread != nullptr)
-                je_ecs_universe_register_after_call_once_job(
+                je_ecs_universe_after_call_once_job_register(
                     universe.handle(),
                     _update_frame_universe_job,
                     this,
@@ -322,17 +322,17 @@
         {
             if (m_screen_clear_command_buffer != nullptr)
             {
-                jegl_cmd_close(m_screen_clear_command_buffer);
+                je_graphic_cmd_close(m_screen_clear_command_buffer);
                 m_screen_clear_command_buffer = nullptr;
             }
 
             if (glthread)
-                jegl_terminate_graphic_thread(glthread);
+                je_graphic_thread_terminate(glthread);
 
             // All branches should be freed before graphic-uhost closed.
             assert(m_je_RenderBranchs.empty());
 
-            je_ecs_universe_unregister_after_call_once_job(
+            je_ecs_universe_after_call_once_job_unregister(
                 universe.handle(), _update_frame_universe_job);
         }
 
@@ -363,14 +363,14 @@
                     if (fnd->second->glthread == nullptr)
                         jeecs::debug::logerr("Unable to re-config graphic setting, bad graphic-thread.");
                     else
-                        jegl_reboot_graphic_thread(fnd->second->glthread, config);
+                        je_graphic_thread_reboot(fnd->second->glthread, config);
                 }
                 return fnd->second;
             }
 
             auto* instance = new je_GraphicUhost(universe, config);
             _m_instance_universe_host[universe.handle()] = instance;
-            je_ecs_universe_register_exit_callback(
+            je_ecs_universe_exit_callback_register(
                 universe.handle(),
                 [](void* instance)
                 {
@@ -385,35 +385,35 @@
     };
 
 
-je_GraphicUhost* jegl_uhost_get_or_create_for_universe(
+je_GraphicUhost* je_graphic_uhost_get_or_create_for_universe(
     je_GameUniverse* universe, /* OPTIONAL: nullptr to use default config */ const jegl_interface_config* config)
 {
     return je_GraphicUhost::get_default_graphic_pipeline_instance(universe, config);
 }
-void jegl_uhost_set_skip_behavior(je_GraphicUhost* host, bool skip_all_draw)
+void je_graphic_uhost_set_skip_behavior(je_GraphicUhost* host, bool skip_all_draw)
 {
     host->m_skip_all_draw = skip_all_draw;
 }
-/* OPTIONAL: If graphic thread failed to start up */ jegl_context* jegl_uhost_get_context(je_GraphicUhost* host)
+/* OPTIONAL: If graphic thread failed to start up */ jegl_context* je_graphic_uhost_get_context(je_GraphicUhost* host)
 {
     return host->glthread;
 }
-je_RenderBranch* jegl_uhost_alloc_branch(je_GraphicUhost* host)
+je_RenderBranch* je_graphic_uhost_alloc_branch(je_GraphicUhost* host)
 {
     return host->alloc_pipeline();
 }
-void jegl_uhost_free_branch(je_GraphicUhost* host, je_RenderBranch* free_branch)
+void je_graphic_uhost_free_branch(je_GraphicUhost* host, je_RenderBranch* free_branch)
 {
     return host->free_pipeline(free_branch);
 }
-jegl_command_buffer* jegl_branch_new_command_buffer(
+jegl_command_buffer* je_graphic_branch_new_command_buffer(
     je_RenderBranch* branch,
     /* OPTIONAL: nullptr means screen framebuffer */ jegl_frame_buffer* framebuffer,
     const jegl_viewport* viewport)
 {
     return branch->allocate_new_command_buffer(framebuffer, viewport);
 }
-void jegl_branch_new_frame(je_RenderBranch* branch, int priority)
+void je_graphic_branch_new_frame(je_RenderBranch* branch, int priority)
 {
     branch->new_frame(priority);
 }

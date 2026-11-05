@@ -30,7 +30,7 @@ JE_API const char* je_build_commit();
 #include <cstdio>
 
 int main() {
-    je_init(0, nullptr);
+    je_core_init(0, nullptr);
     
     // 输出引擎版本和提交信息
     printf("Engine: %s\n", je_build_version());
@@ -39,7 +39,7 @@ int main() {
     // "Engine: JoyEngine 4.9.0 Dec 10 2025 14:30:00"
     // "Commit: a1b2c3d4e5f6..." 或 "Commit: untracked"
     
-    je_finish();
+    je_core_finish();
     return 0;
 }
 ```

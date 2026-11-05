@@ -31,12 +31,12 @@
 | `jegl_command_buffer` | 录制 pass/bind/uniform/draw 的命令缓冲区 |
 
 `jegl_pipeline` 持有 shader 的引用；命令缓冲区在录制期持有所有被引用资源的引用，
-`jegl_cmd_reset` / `jegl_cmd_close` 时统一释放。
+`je_graphic_cmd_reset` / `je_graphic_cmd_close` 时统一释放。
 
 ## 线程与生命周期
 
 - 资源创建、pipeline/sampler 创建、命令录制可以在任意线程进行。
-- `jegl_cmd_commit` 只允许在创建命令缓冲区时传入的 `jegl_context*` 所属图形线程调用；
+- `je_graphic_cmd_commit` 只允许在创建命令缓冲区时传入的 `jegl_context*` 所属图形线程调用；
   实现会断言当前图形线程与 `m_context` 一致。
 - `jegl_pipeline` / `jegl_sampler` 的后端对象在首次提交时惰性创建；关闭时通过现有
   的资源销毁队列在图形线程释放。
@@ -44,25 +44,25 @@
 
 ## 录制规则
 
-1. `jegl_cmd_reset` 后调用 `jegl_cmd_begin_pass`；一个命令缓冲区可以包含多个 pass。
+1. `je_graphic_cmd_reset` 后调用 `je_graphic_cmd_begin_pass`；一个命令缓冲区可以包含多个 pass。
 2. 清屏命令只能在 `begin_pass` 之后、该 pass 的第一次 draw 之前调用。
 3. draw 之前必须绑定 pipeline 和 vertex；否则断言失败。
 4. `jegl_cmd_set_uniform_*` 只影响当前 pipeline 的 per-draw uniform 块；绑定新
    pipeline 会用 shader 的默认值重新初始化该块。
-5. `jegl_cmd_commit` 会自动结束仍然打开的 pass；也可以显式调用
-   `jegl_cmd_end_pass`。
-6. commit 后命令缓冲区保留已录制内容；复用前调用 `jegl_cmd_reset`。
+5. `je_graphic_cmd_commit` 会自动结束仍然打开的 pass；也可以显式调用
+   `je_graphic_cmd_end_pass`。
+6. commit 后命令缓冲区保留已录制内容；复用前调用 `je_graphic_cmd_reset`。
 
 ## 空安全约定
 
 ```cpp
-JE_API void jegl_cmd_begin_pass(
+JE_API void je_graphic_cmd_begin_pass(
     jegl_command_buffer* cmd,
     /* OPTIONAL: nullptr 表示屏幕后备缓冲区 */ jegl_frame_buffer* target,
     const jegl_viewport* viewport);
 
 JE_API /* OPTIONAL: m_offset == JEGL_UNIFORM_SLOT_NONE 表示 shader 未声明 */
-jegl_uniform_slot jegl_pipeline_uniform_slot(
+jegl_uniform_slot je_graphic_pipeline_uniform_slot(
     jegl_pipeline* pipeline, const char* name);
 ```
 
@@ -91,30 +91,30 @@ jegl_pipeline_desc pipeline_desc{};
 pipeline_desc.m_shader = shader;      // 非空
 pipeline_desc.m_state = nullptr;      // 使用 shader 的 ZTEST/ZWRITE/BLEND/CULL
 
-jegl_pipeline* pipeline = jegl_pipeline_create(context, &pipeline_desc);
-const auto* slots = jegl_pipeline_builtin_uniform_slots(pipeline);
+jegl_pipeline* pipeline = je_graphic_pipeline_create(context, &pipeline_desc);
+const auto* slots = je_graphic_pipeline_builtin_uniform_slots(pipeline);
 
-jegl_command_buffer* cmd = jegl_cmd_create(context);
-jegl_cmd_begin_pass(cmd, framebuffer, &viewport);
+jegl_command_buffer* cmd = je_graphic_cmd_create(context);
+je_graphic_cmd_begin_pass(cmd, framebuffer, &viewport);
 
 const float clear[4] = { 0.f, 0.f, 0.f, 1.f };
-jegl_cmd_clear_color(cmd, 0, clear);
-jegl_cmd_clear_depth(cmd, 1.f);
+je_graphic_cmd_clear_color(cmd, 0, clear);
+je_graphic_cmd_clear_depth(cmd, 1.f);
 
-jegl_cmd_bind_pipeline(cmd, pipeline);
-jegl_cmd_bind_vertex(cmd, vertex);
+je_graphic_cmd_bind_pipeline(cmd, pipeline);
+je_graphic_cmd_bind_vertex(cmd, vertex);
 
 if (slots->m_model_view_projection.m_offset != JEGL_UNIFORM_SLOT_NONE)
-    jegl_cmd_set_uniform_float4x4(cmd, slots->m_model_view_projection, mvp);
+    je_graphic_cmd_set_uniform_float4x4(cmd, slots->m_model_view_projection, mvp);
 if (slots->m_color.m_offset != JEGL_UNIFORM_SLOT_NONE)
-    jegl_cmd_set_uniform_float4(cmd, slots->m_color, 1.f, 1.f, 1.f, 1.f);
+    je_graphic_cmd_set_uniform_float4(cmd, slots->m_color, 1.f, 1.f, 1.f, 1.f);
 
-jegl_cmd_bind_texture_2d(cmd, 0, albedo);
-jegl_cmd_draw_indexed(cmd, (uint32_t)vertex->m_index_count, 0, 1);
+je_graphic_cmd_bind_texture_2d(cmd, 0, albedo);
+je_graphic_cmd_draw_indexed(cmd, (uint32_t)vertex->m_index_count, 0, 1);
 
-jegl_cmd_end_pass(cmd);
-jegl_cmd_commit(cmd);   // 图形线程
-jegl_cmd_reset(cmd);    // 复用
+je_graphic_cmd_end_pass(cmd);
+je_graphic_cmd_commit(cmd);   // 图形线程
+je_graphic_cmd_reset(cmd);    // 复用
 ```
 
 ## 可移植性地板

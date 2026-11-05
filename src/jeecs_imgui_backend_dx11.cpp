@@ -18,7 +18,7 @@ void jegui_init_dx11(
     void *d11context,
     bool reboot)
 {
-    jegui_init_basic(ctx, get_img_res, apply_shader_sampler);
+    je_gui_backend_init(ctx, get_img_res, apply_shader_sampler);
     ImGui_ImplGlfw_InitForOther((GLFWwindow *)window_handle, true);
     ImGui_ImplDX11_Init(
         (ID3D11Device *)d11device,
@@ -30,7 +30,7 @@ void jegui_update_dx11()
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplGlfw_NewFrame();
 
-    jegui_update_basic(
+    je_gui_backend_update(
         [](void *)
         { ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData()); },
         nullptr);
@@ -38,7 +38,7 @@ void jegui_update_dx11()
 
 void jegui_shutdown_dx11(bool reboot)
 {
-    jegui_shutdown_basic(reboot);
+    je_gui_backend_shutdown(reboot);
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();

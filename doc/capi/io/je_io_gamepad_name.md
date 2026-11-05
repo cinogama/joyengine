@@ -25,12 +25,12 @@ JE_API const char* je_io_gamepad_name(je_io_gamepad_handle_t gamepad);
 ## 用法示例
 
 ```cpp
-je_io_gamepad_handle_t gamepad = je_io_create_gamepad("Xbox Controller", nullptr);
+je_io_gamepad_handle_t gamepad = je_io_gamepad_create("Xbox Controller", nullptr);
 const char* name = je_io_gamepad_name(gamepad);
 // name = "Xbox Controller"
 ```
 
 ## 相关接口
 
-- [je_io_create_gamepad](je_io_create_gamepad.md) - 创建虚拟手柄实例
+- [je_io_gamepad_create](je_io_gamepad_create.md) - 创建虚拟手柄实例
 - [je_io_gamepad_guid](je_io_gamepad_guid.md) - 获取手柄 GUID

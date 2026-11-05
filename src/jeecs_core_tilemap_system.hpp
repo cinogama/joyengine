@@ -1393,7 +1393,7 @@ namespace jeecs
 // ======================================================================
 
 // ---------------- 地图文档 ----------------
-/* OPTIONAL: If path cannot be opened */ je_TilemapDocument* je_tilemap_open_map(const char* path)
+/* OPTIONAL: If path cannot be opened */ je_TilemapDocument* je_tilemap_map_open(const char* path)
 {
     assert(path != nullptr);
     // open_map 返回自带 1 个外部引用的实例（unload/gchandle 回收时
@@ -1401,7 +1401,7 @@ namespace jeecs
     auto doc = jeecs::Tilemap::documents::inst().open_map(path);
     return doc.has_value() ? doc->get() : nullptr;
 }
-/* OPTIONAL: If size is invalid */ je_TilemapDocument* je_tilemap_create_map(int32_t w, int32_t h, int32_t tile_px)
+/* OPTIONAL: If size is invalid */ je_TilemapDocument* je_tilemap_map_create(int32_t w, int32_t h, int32_t tile_px)
 {
     if (w <= 0 || h <= 0 || tile_px <= 0 || w > 65536 || h > 65536)
         return nullptr;
@@ -1414,20 +1414,20 @@ namespace jeecs
     // register_map 返回自带 1 个引用的实例
     return jeecs::Tilemap::documents::inst().register_map(std::move(doc));
 }
-int32_t je_tilemap_keep_map(je_TilemapDocument* map)
+int32_t je_tilemap_map_keep(je_TilemapDocument* map)
 {
     return jeecs::Tilemap::documents::inst().keep_map(map);
 }
-int32_t je_tilemap_unload_map(je_TilemapDocument* map)
+int32_t je_tilemap_map_unload(je_TilemapDocument* map)
 {
     return jeecs::Tilemap::documents::inst().unload_map(map);
 }
-bool je_tilemap_bind_map_path(je_TilemapDocument* map, const char* path)
+bool je_tilemap_map_path_bind(je_TilemapDocument* map, const char* path)
 {
     assert(path != nullptr);
     return jeecs::Tilemap::documents::inst().bind_map_path(map, path);
 }
-void je_tilemap_reload_map(const char* path)
+void je_tilemap_map_reload(const char* path)
 {
     assert(path != nullptr);
     jeecs::Tilemap::documents::inst().reload_map(path);
@@ -1459,7 +1459,7 @@ int32_t je_tilemap_loaded_map_count(void)
     auto doc = jeecs::Tilemap::documents::inst().map_at(index);
     return doc.has_value() ? doc->get() : nullptr;
 }
-void je_tilemap_resize_map(je_TilemapDocument* doc, int32_t new_w, int32_t new_h)
+void je_tilemap_map_resize(je_TilemapDocument* doc, int32_t new_w, int32_t new_h)
 {
     if (new_w <= 0 || new_h <= 0 || new_w > 65536 || new_h > 65536)
         return;
@@ -1486,7 +1486,7 @@ void je_tilemap_resize_map(je_TilemapDocument* doc, int32_t new_w, int32_t new_h
 }
 
 // ---------------- 图层 ----------------
-bool je_tilemap_add_layer(je_TilemapDocument* doc, const char* name, je_LayerId* out_id)
+bool je_tilemap_layer_add(je_TilemapDocument* doc, const char* name, je_LayerId* out_id)
 {
     assert(name != nullptr);
     assert(out_id != nullptr);
@@ -1501,7 +1501,7 @@ bool je_tilemap_add_layer(je_TilemapDocument* doc, const char* name, je_LayerId*
     *out_id = (int32_t)doc->layers.size() - 1;
     return true;
 }
-bool je_tilemap_remove_layer(je_TilemapDocument* doc, je_LayerId layer)
+bool je_tilemap_layer_remove(je_TilemapDocument* doc, je_LayerId layer)
 {
     if (layer < 0 || layer >= (int32_t)doc->layers.size())
         return false;
@@ -1517,7 +1517,7 @@ bool je_tilemap_remove_layer(je_TilemapDocument* doc, je_LayerId layer)
     ++doc->version;
     return true;
 }
-bool je_tilemap_move_layer(je_TilemapDocument* doc, je_LayerId layer, je_LayerId new_pos)
+bool je_tilemap_layer_move(je_TilemapDocument* doc, je_LayerId layer, je_LayerId new_pos)
 {
     if (layer < 0 || layer >= (int32_t)doc->layers.size())
         return false;
@@ -1543,7 +1543,7 @@ bool je_tilemap_move_layer(je_TilemapDocument* doc, je_LayerId layer, je_LayerId
     ++doc->version;
     return true;
 }
-void je_tilemap_get_layer(je_TilemapDocument* doc, je_LayerId layer,
+void je_tilemap_layer_get(je_TilemapDocument* doc, je_LayerId layer,
     /* OPTIONAL */ const char** name, /* OPTIONAL */ int32_t* visible, /* OPTIONAL */ int32_t* locked)
 {
     const jeecs::Tilemap::MapLayer* l =
@@ -1553,7 +1553,7 @@ void je_tilemap_get_layer(je_TilemapDocument* doc, je_LayerId layer,
     if (visible != nullptr) *visible = l ? (l->visible ? 1 : 0) : 0;
     if (locked != nullptr) *locked = l ? (l->locked ? 1 : 0) : 0;
 }
-void je_tilemap_set_layer(je_TilemapDocument* doc, je_LayerId layer,
+void je_tilemap_layer_set(je_TilemapDocument* doc, je_LayerId layer,
     /* OPTIONAL */ const char* name, int32_t visible, int32_t locked)
 {
     if (layer < 0 || layer >= (int32_t)doc->layers.size())
@@ -1573,7 +1573,7 @@ float je_tilemap_layer_z(je_TilemapDocument* doc, je_LayerId layer)
     return layer >= 0 && layer < (int32_t)doc->layers.size()
         ? doc->layers[layer].z : 0.f;
 }
-void je_tilemap_set_layer_z(je_TilemapDocument* doc, je_LayerId layer, float z)
+void je_tilemap_layer_z_set(je_TilemapDocument* doc, je_LayerId layer, float z)
 {
     if (layer < 0 || layer >= (int32_t)doc->layers.size())
         return;
@@ -1590,7 +1590,7 @@ int32_t je_tilemap_layer_rend_queue(je_TilemapDocument* doc, je_LayerId layer)
     return layer >= 0 && layer < (int32_t)doc->layers.size()
         ? doc->layers[layer].rend_queue : 0;
 }
-void je_tilemap_set_layer_rend_queue(je_TilemapDocument* doc, je_LayerId layer, int32_t rend_queue)
+void je_tilemap_layer_rend_queue_set(je_TilemapDocument* doc, je_LayerId layer, int32_t rend_queue)
 {
     if (layer < 0 || layer >= (int32_t)doc->layers.size())
         return;
@@ -1608,7 +1608,7 @@ je_LayerSelfShadow je_tilemap_layer_selfshadow(je_TilemapDocument* doc, je_Layer
     return layer >= 0 && layer < (int32_t)doc->layers.size()
         ? doc->layers[layer].selfshadow : JE_LAYER_SELFSHADOW_OFF;
 }
-void je_tilemap_set_layer_selfshadow(je_TilemapDocument* doc, je_LayerId layer,
+void je_tilemap_layer_selfshadow_set(je_TilemapDocument* doc, je_LayerId layer,
     je_LayerSelfShadow selfshadow)
 {
     if (layer < 0 || layer >= (int32_t)doc->layers.size()
@@ -1629,7 +1629,7 @@ float je_tilemap_layer_selfshadow_factor(je_TilemapDocument* doc, je_LayerId lay
     return layer >= 0 && layer < (int32_t)doc->layers.size()
         ? doc->layers[layer].selfshadow_factor : 1.f;
 }
-void je_tilemap_set_layer_selfshadow_factor(je_TilemapDocument* doc,
+void je_tilemap_layer_selfshadow_factor_set(je_TilemapDocument* doc,
     je_LayerId layer, float factor)
 {
     if (layer < 0 || layer >= (int32_t)doc->layers.size())
@@ -1648,7 +1648,7 @@ je_LayerBlockShadow je_tilemap_layer_blockshadow(je_TilemapDocument* doc, je_Lay
     return layer >= 0 && layer < (int32_t)doc->layers.size()
         ? doc->layers[layer].blockshadow : JE_LAYER_BLOCKSHADOW_OFF;
 }
-void je_tilemap_set_layer_blockshadow(je_TilemapDocument* doc, je_LayerId layer,
+void je_tilemap_layer_blockshadow_set(je_TilemapDocument* doc, je_LayerId layer,
     je_LayerBlockShadow blockshadow)
 {
     if (layer < 0 || layer >= (int32_t)doc->layers.size()
@@ -1669,7 +1669,7 @@ float je_tilemap_layer_blockshadow_factor(je_TilemapDocument* doc, je_LayerId la
     return layer >= 0 && layer < (int32_t)doc->layers.size()
         ? doc->layers[layer].blockshadow_factor : 1.f;
 }
-void je_tilemap_set_layer_blockshadow_factor(je_TilemapDocument* doc,
+void je_tilemap_layer_blockshadow_factor_set(je_TilemapDocument* doc,
     je_LayerId layer, float factor)
 {
     if (layer < 0 || layer >= (int32_t)doc->layers.size())
@@ -1694,7 +1694,7 @@ void je_tilemap_set_layer_blockshadow_factor(je_TilemapDocument* doc,
     return (je_tilemap_shader_ref*)new jeecs::basic::resource<jeecs::graphic::shader>(
         doc->layers[layer].style.shader.value());
 }
-void je_tilemap_set_layer_shader(je_TilemapDocument* doc, je_LayerId layer,
+void je_tilemap_layer_shader_set(je_TilemapDocument* doc, je_LayerId layer,
     /* OPTIONAL */ je_tilemap_shader_ref* shader)
 {
     if (layer < 0 || layer >= (int32_t)doc->layers.size())
@@ -1721,7 +1721,7 @@ int32_t je_tilemap_layer_texture_count(je_TilemapDocument* doc, je_LayerId layer
     return layer >= 0 && layer < (int32_t)doc->layers.size()
         ? (int32_t)doc->layers[layer].style.textures.size() : 0;
 }
-bool je_tilemap_layer_set_texture(je_TilemapDocument* doc, je_LayerId layer,
+bool je_tilemap_layer_texture_set(je_TilemapDocument* doc, je_LayerId layer,
     int32_t slot, /* OPTIONAL */ je_tilemap_texture_ref* texture)
 {
     if (layer < 0 || layer >= (int32_t)doc->layers.size()
@@ -1751,7 +1751,7 @@ bool je_tilemap_layer_set_texture(je_TilemapDocument* doc, je_LayerId layer,
     ++style.style_version;
     return true;
 }
-bool je_tilemap_layer_get_texture(je_TilemapDocument* doc, je_LayerId layer,
+bool je_tilemap_layer_texture_get(je_TilemapDocument* doc, je_LayerId layer,
     int32_t index, /* OPTIONAL */ int32_t* slot, /* OPTIONAL */ je_tilemap_texture_ref** texture)
 {
     if (layer < 0 || layer >= (int32_t)doc->layers.size()
@@ -1764,17 +1764,17 @@ bool je_tilemap_layer_get_texture(je_TilemapDocument* doc, je_LayerId layer,
         new jeecs::basic::resource<jeecs::graphic::texture2d>(t.texture);
     return true;
 }
-void je_tilemap_free_shader_ref(/* OPTIONAL */ je_tilemap_shader_ref* shader)
+void je_tilemap_shader_ref_free(/* OPTIONAL */ je_tilemap_shader_ref* shader)
 {
     delete (jeecs::basic::resource<jeecs::graphic::shader>*)shader;
 }
-void je_tilemap_free_texture_ref(/* OPTIONAL */ je_tilemap_texture_ref* texture)
+void je_tilemap_texture_ref_free(/* OPTIONAL */ je_tilemap_texture_ref* texture)
 {
     delete (jeecs::basic::resource<jeecs::graphic::texture2d>*)texture;
 }
 
 // ---------------- 瓦片读写 ----------------
-int32_t je_tilemap_get_tile(je_TilemapDocument* doc, je_LayerId layer, int32_t x, int32_t y)
+int32_t je_tilemap_tile_get(je_TilemapDocument* doc, je_LayerId layer, int32_t x, int32_t y)
 {
     if (!doc->in_bounds(layer, x, y))
         return 0;
@@ -1789,7 +1789,7 @@ int32_t je_tilemap_get_tile(je_TilemapDocument* doc, je_LayerId layer, int32_t x
         *out_count = (int32_t)doc->layers[layer].grid.size();
     return doc->layers[layer].grid.data();
 }
-void je_tilemap_set_tile(je_TilemapDocument* doc, je_LayerId layer, int32_t x, int32_t y, int32_t value)
+void je_tilemap_tile_set(je_TilemapDocument* doc, je_LayerId layer, int32_t x, int32_t y, int32_t value)
 {
     if (!doc->in_bounds(layer, x, y))
         return;
@@ -1800,7 +1800,7 @@ void je_tilemap_set_tile(je_TilemapDocument* doc, je_LayerId layer, int32_t x, i
         ++doc->version;
     }
 }
-void je_tilemap_fill_tiles(je_TilemapDocument* doc, je_LayerId layer,
+void je_tilemap_tile_fill(je_TilemapDocument* doc, je_LayerId layer,
     int32_t x, int32_t y, int32_t w, int32_t h, int32_t value)
 {
     if (layer < 0 || layer >= (int32_t)doc->layers.size())
@@ -1825,7 +1825,7 @@ int32_t je_tilemap_tileset_count(je_TilemapDocument* doc)
 {
     return (int32_t)doc->tilesets.size();
 }
-bool je_tilemap_add_tileset(je_TilemapDocument* doc, const char* path, int32_t* out_index)
+bool je_tilemap_tileset_add(je_TilemapDocument* doc, const char* path, int32_t* out_index)
 {
     assert(path != nullptr);
     assert(out_index != nullptr);
@@ -1843,7 +1843,7 @@ bool je_tilemap_add_tileset(je_TilemapDocument* doc, const char* path, int32_t* 
     *out_index = (int32_t)doc->tilesets.size() - 1;
     return true;
 }
-bool je_tilemap_remove_tileset(je_TilemapDocument* doc, int32_t idx)
+bool je_tilemap_tileset_remove(je_TilemapDocument* doc, int32_t idx)
 {
     if (idx < 0 || idx >= (int32_t)doc->tilesets.size())
         return false;
@@ -1981,7 +1981,7 @@ static bool je_tilemap_read_property(
     return false;
 }
 
-bool je_tilemap_set_cell_property(je_TilemapDocument* doc, je_LayerId layer,
+bool je_tilemap_cell_property_set(je_TilemapDocument* doc, je_LayerId layer,
     int32_t x, int32_t y, const char* name, je_PropertyType type,
     /* OPTIONAL */ const void* value)
 {
@@ -2017,7 +2017,7 @@ bool je_tilemap_set_cell_property(je_TilemapDocument* doc, je_LayerId layer,
     ++doc->version;
     return true;
 }
-bool je_tilemap_get_cell_property(je_TilemapDocument* doc, je_LayerId layer,
+bool je_tilemap_cell_property_get(je_TilemapDocument* doc, je_LayerId layer,
     int32_t x, int32_t y, const char* name, je_PropertyType type,
     /* OPTIONAL */ void* out_value)
 {
@@ -2033,7 +2033,7 @@ bool je_tilemap_get_cell_property(je_TilemapDocument* doc, je_LayerId layer,
         ? false
         : je_tilemap_read_property(vit->second, type, out_value);
 }
-bool je_tilemap_get_property(je_TilemapDocument* doc, je_LayerId layer,
+bool je_tilemap_property_get(je_TilemapDocument* doc, je_LayerId layer,
     int32_t x, int32_t y, const char* name, je_PropertyType type,
     /* OPTIONAL */ void* out_value)
 {
@@ -2094,7 +2094,7 @@ int32_t je_tilemap_is_walkable_on(je_TilemapDocument* doc, je_LayerId layer, int
 {
     return jeecs::Tilemap::walkable_on(doc, layer, x, y) ? 1 : 0;
 }
-int32_t je_tilemap_find_cells(je_TilemapDocument* doc, je_LayerId layer,
+int32_t je_tilemap_cell_find(je_TilemapDocument* doc, je_LayerId layer,
     const char* name, je_PropertyType type, const void* value)
 {
     assert(name != nullptr);
@@ -2150,7 +2150,7 @@ int32_t je_tilemap_find_cells(je_TilemapDocument* doc, je_LayerId layer,
         try_layer(layer);
     return (int32_t)result.size();
 }
-bool je_tilemap_find_get(je_TilemapDocument* doc, int32_t index, int32_t* x, int32_t* y)
+bool je_tilemap_cell_find_get(je_TilemapDocument* doc, int32_t index, int32_t* x, int32_t* y)
 {
     assert(x != nullptr);
     assert(y != nullptr);
@@ -2163,7 +2163,7 @@ bool je_tilemap_find_get(je_TilemapDocument* doc, int32_t index, int32_t* x, int
 }
 
 // ---------------- 图集文档 ----------------
-/* OPTIONAL: If path cannot be opened */ je_TilesetDocument* je_tilemap_open_tileset(const char* path)
+/* OPTIONAL: If path cannot be opened */ je_TilesetDocument* je_tilemap_tileset_open(const char* path)
 {
     assert(path != nullptr);
     // open_tileset 返回自带 1 个外部引用的实例（unload/gchandle 回收时
@@ -2171,7 +2171,7 @@ bool je_tilemap_find_get(je_TilemapDocument* doc, int32_t index, int32_t* x, int
     auto doc = jeecs::Tilemap::documents::inst().open_tileset(path);
     return doc.has_value() ? doc->get() : nullptr;
 }
-je_TilesetDocument* je_tilemap_create_tileset(const char* name)
+je_TilesetDocument* je_tilemap_tileset_create(const char* name)
 {
     assert(name != nullptr);
     auto doc = std::make_shared<jeecs::Tilemap::TilesetDocument>();
@@ -2179,20 +2179,20 @@ je_TilesetDocument* je_tilemap_create_tileset(const char* name)
     // register_tileset 返回自带 1 个引用的实例
     return jeecs::Tilemap::documents::inst().register_tileset(std::move(doc));
 }
-int32_t je_tilemap_keep_tileset(je_TilesetDocument* tileset)
+int32_t je_tilemap_tileset_keep(je_TilesetDocument* tileset)
 {
     return jeecs::Tilemap::documents::inst().keep_tileset(tileset);
 }
-int32_t je_tilemap_unload_tileset(je_TilesetDocument* tileset)
+int32_t je_tilemap_tileset_unload(je_TilesetDocument* tileset)
 {
     return jeecs::Tilemap::documents::inst().unload_tileset(tileset);
 }
-bool je_tilemap_bind_tileset_path(je_TilesetDocument* tileset, const char* path)
+bool je_tilemap_tileset_path_bind(je_TilesetDocument* tileset, const char* path)
 {
     assert(path != nullptr);
     return jeecs::Tilemap::documents::inst().bind_tileset_path(tileset, path);
 }
-void je_tilemap_reload_tileset(const char* path)
+void je_tilemap_tileset_reload(const char* path)
 {
     assert(path != nullptr);
     jeecs::Tilemap::documents::inst().reload_tileset(path);
@@ -2205,7 +2205,7 @@ const char* je_tilemap_tileset_doc_path(je_TilesetDocument* doc)
 {
     return doc->path.c_str();
 }
-void je_tilemap_tileset_set_name(je_TilesetDocument* doc, const char* name)
+void je_tilemap_tileset_name_set(je_TilesetDocument* doc, const char* name)
 {
     assert(name != nullptr);
     doc->name = name;
@@ -2221,7 +2221,7 @@ int32_t je_tilemap_tileset_next_tile_id(je_TilesetDocument* doc)
 }
 
 // ---------------- 图集源纹理 ----------------
-bool je_tilemap_add_source(je_TilesetDocument* doc, const char* texture_path,
+bool je_tilemap_source_add(je_TilesetDocument* doc, const char* texture_path,
     int32_t tile_px, je_SourceId* out_id)
 {
     assert(texture_path != nullptr);
@@ -2283,7 +2283,7 @@ bool je_tilemap_add_source(je_TilesetDocument* doc, const char* texture_path,
     *out_id = (je_SourceId)doc->sources.size() - 1;
     return true;
 }
-bool je_tilemap_remove_source(je_TilesetDocument* doc, je_SourceId source_idx)
+bool je_tilemap_source_remove(je_TilesetDocument* doc, je_SourceId source_idx)
 {
     if (source_idx < 0 || source_idx >= (int32_t)doc->sources.size())
         return false;
@@ -2350,7 +2350,7 @@ int32_t je_tilemap_source_extra_count(je_TilesetDocument* doc, je_SourceId sourc
         return 0;
     return (int32_t)doc->sources[source_idx].extras.size();
 }
-bool je_tilemap_add_source_extra(je_TilesetDocument* doc, je_SourceId source_idx,
+bool je_tilemap_source_extra_add(je_TilesetDocument* doc, je_SourceId source_idx,
     const char* texture_path, int32_t pass)
 {
     assert(texture_path != nullptr);
@@ -2402,7 +2402,7 @@ bool je_tilemap_add_source_extra(je_TilesetDocument* doc, je_SourceId source_idx
     ++doc->version;
     return true;
 }
-bool je_tilemap_remove_source_extra(je_TilesetDocument* doc,
+bool je_tilemap_source_extra_remove(je_TilesetDocument* doc,
     je_SourceId source_idx, int32_t extra_idx)
 {
     if (source_idx < 0 || source_idx >= (int32_t)doc->sources.size())
@@ -2439,7 +2439,7 @@ bool je_tilemap_source_extra_tex_size(je_TilesetDocument* doc,
     if (tex_h != nullptr) *tex_h = extras[extra_idx].tex_h.value_or(0);
     return true;
 }
-bool je_tilemap_set_source_extra_pass(je_TilesetDocument* doc,
+bool je_tilemap_source_extra_pass_set(je_TilesetDocument* doc,
     je_SourceId source_idx, int32_t extra_idx, int32_t pass)
 {
     if (source_idx < 0 || source_idx >= (int32_t)doc->sources.size())
@@ -2559,7 +2559,7 @@ const char* je_tilemap_tile_name(je_TilesetDocument* doc, je_TileId tile_id)
     const auto* def = je_tilemap_tile_def(doc, tile_id, false);
     return def == nullptr ? "" : def->name.c_str();
 }
-bool je_tilemap_set_tile_name(je_TilesetDocument* doc, je_TileId tile_id, const char* name)
+bool je_tilemap_tile_name_set(je_TilesetDocument* doc, je_TileId tile_id, const char* name)
 {
     assert(name != nullptr);
     auto* def = je_tilemap_tile_def(doc, tile_id, true);
@@ -2579,7 +2579,7 @@ je_TileKind je_tilemap_tile_kind(je_TilesetDocument* doc, je_TileId tile_id)
 {
     return doc->tile_kind(tile_id);
 }
-bool je_tilemap_set_tile_kind(je_TilesetDocument* doc, je_TileId tile_id, je_TileKind kind)
+bool je_tilemap_tile_kind_set(je_TilesetDocument* doc, je_TileId tile_id, je_TileKind kind)
 {
     if (kind < JE_TILE_KIND_PLAIN || kind > JE_TILE_KIND_RPGMAKER_VX
         || !doc->tile_cell(tile_id).has_value())
@@ -2610,7 +2610,7 @@ bool je_tilemap_tile_variant(je_TilesetDocument* doc, je_TileId tile_id,
     *out_variant = def->variant_tiles[index];
     return true;
 }
-bool je_tilemap_tile_clear_variants(je_TilesetDocument* doc, je_TileId tile_id)
+bool je_tilemap_tile_variant_clear(je_TilesetDocument* doc, je_TileId tile_id)
 {
     auto* def = je_tilemap_tile_def(doc, tile_id, false);
     if (def == nullptr || def->variant_tiles.empty())
@@ -2620,7 +2620,7 @@ bool je_tilemap_tile_clear_variants(je_TilesetDocument* doc, je_TileId tile_id)
     ++doc->version;
     return true;
 }
-bool je_tilemap_tile_add_variant(je_TilesetDocument* doc, je_TileId tile_id,
+bool je_tilemap_tile_variant_add(je_TilesetDocument* doc, je_TileId tile_id,
     je_TileId variant_tile)
 {
     auto* def = je_tilemap_tile_def(doc, tile_id, true);
@@ -2635,7 +2635,7 @@ bool je_tilemap_tile_add_variant(je_TilesetDocument* doc, je_TileId tile_id,
     ++doc->version;
     return true;
 }
-void je_tilemap_set_tile_walkable(je_TilesetDocument* doc, je_TileId tile_id, int32_t walkable)
+void je_tilemap_tile_walkable_set(je_TilesetDocument* doc, je_TileId tile_id, int32_t walkable)
 {
     auto* def = je_tilemap_tile_def(doc, tile_id, true);
     if (def == nullptr)
@@ -2665,7 +2665,7 @@ bool je_tilemap_tile_normal(je_TilesetDocument* doc, je_TileId tile_id,
     if (out_z != nullptr) *out_z = normal[2];
     return true;
 }
-bool je_tilemap_set_tile_normal(je_TilesetDocument* doc, je_TileId tile_id,
+bool je_tilemap_tile_normal_set(je_TilesetDocument* doc, je_TileId tile_id,
     float x, float y, float z)
 {
     // 法线必须能归一化：零长/非有限分量拒绝（否则顶点法线无意义）
@@ -2688,7 +2688,7 @@ bool je_tilemap_set_tile_normal(je_TilesetDocument* doc, je_TileId tile_id,
 }
 
 // ---------------- 属性 schema 与默认值 ----------------
-bool je_tilemap_add_property(je_TilesetDocument* doc, const char* name,
+bool je_tilemap_property_add(je_TilesetDocument* doc, const char* name,
     je_PropertyType type, /* OPTIONAL */ const void* default_value, int32_t* out_index)
 {
     assert(name != nullptr);
@@ -2713,7 +2713,7 @@ bool je_tilemap_add_property(je_TilesetDocument* doc, const char* name,
     *out_index = (int32_t)doc->properties.size() - 1;
     return true;
 }
-bool je_tilemap_remove_property(je_TilesetDocument* doc, const char* name)
+bool je_tilemap_property_remove(je_TilesetDocument* doc, const char* name)
 {
     assert(name != nullptr);
     for (size_t i = 0; i < doc->properties.size(); ++i)
@@ -2749,7 +2749,7 @@ bool je_tilemap_property_default(je_TilesetDocument* doc, const char* name,
             return je_tilemap_read_property(pd.default_value, type, out_value);
     return false;
 }
-bool je_tilemap_set_tile_property(je_TilesetDocument* doc, je_TileId tile_id,
+bool je_tilemap_tile_property_set(je_TilesetDocument* doc, je_TileId tile_id,
     const char* name, je_PropertyType type, /* OPTIONAL */ const void* value)
 {
     assert(name != nullptr);
@@ -2788,7 +2788,7 @@ bool je_tilemap_set_tile_property(je_TilesetDocument* doc, je_TileId tile_id,
     ++doc->version;
     return true;
 }
-bool je_tilemap_get_tile_property(je_TilesetDocument* doc, je_TileId tile_id,
+bool je_tilemap_tile_property_get(je_TilesetDocument* doc, je_TileId tile_id,
     const char* name, je_PropertyType type, /* OPTIONAL */ void* out_value)
 {
     assert(name != nullptr);
@@ -2873,16 +2873,16 @@ static inline je_TilesetDocument* woje_ts_doc(woort_StackValue slot)
 // 由引用计数下限 0 与已逐出防护兜底）。
 static void woje_tilemap_release_map(void* ptr)
 {
-    je_tilemap_unload_map((je_TilemapDocument*)ptr);
+    je_tilemap_map_unload((je_TilemapDocument*)ptr);
 }
 static void woje_tilemap_release_tileset(void* ptr)
 {
-    je_tilemap_unload_tileset((je_TilesetDocument*)ptr);
+    je_tilemap_tileset_unload((je_TilesetDocument*)ptr);
 }
 
 WOORT_API woort_api wojeapi_tilemap_open_map(void)
 {
-    je_TilemapDocument* doc = je_tilemap_open_map(woort_string(0));
+    je_TilemapDocument* doc = je_tilemap_map_open(woort_string(0));
     if (doc == nullptr)
         return woort_ret_option_none();
     return woort_ret_option_gchandle(
@@ -2890,7 +2890,7 @@ WOORT_API woort_api wojeapi_tilemap_open_map(void)
 }
 WOORT_API woort_api wojeapi_tilemap_create_map(void)
 {
-    je_TilemapDocument* doc = je_tilemap_create_map(
+    je_TilemapDocument* doc = je_tilemap_map_create(
         (int32_t)woort_int(0), (int32_t)woort_int(1), (int32_t)woort_int(2));
     if (doc == nullptr)
         return woort_ret_option_none();
@@ -2899,12 +2899,12 @@ WOORT_API woort_api wojeapi_tilemap_create_map(void)
 }
 WOORT_API woort_api wojeapi_tilemap_bind_map_path(void)
 {
-    return woort_ret_bool(je_tilemap_bind_map_path(
+    return woort_ret_bool(je_tilemap_map_path_bind(
         woje_map_doc(0), woort_string(1)) ? true : false);
 }
 WOORT_API woort_api wojeapi_tilemap_reload_map(void)
 {
-    je_tilemap_reload_map(woort_string(0));
+    je_tilemap_map_reload(woort_string(0));
     return woort_ret_void();
 }
 WOORT_API woort_api wojeapi_tilemap_map_size(void)
@@ -2957,24 +2957,24 @@ WOORT_API woort_api wojeapi_tilemap_loaded_maps(void)
 }
 WOORT_API woort_api wojeapi_tilemap_resize_map(void)
 {
-    je_tilemap_resize_map(woje_map_doc(0), (int32_t)woort_int(1), (int32_t)woort_int(2));
+    je_tilemap_map_resize(woje_map_doc(0), (int32_t)woort_int(1), (int32_t)woort_int(2));
     return woort_ret_void();
 }
 WOORT_API woort_api wojeapi_tilemap_add_layer(void)
 {
     je_LayerId id = 0;
-    if (!je_tilemap_add_layer(woje_map_doc(0), woort_string(1), &id))
+    if (!je_tilemap_layer_add(woje_map_doc(0), woort_string(1), &id))
         return woort_ret_option_none();
     return woort_ret_option_int(id);
 }
 WOORT_API woort_api wojeapi_tilemap_remove_layer(void)
 {
-    return woort_ret_bool(je_tilemap_remove_layer(
+    return woort_ret_bool(je_tilemap_layer_remove(
         woje_map_doc(0), (int32_t)woort_int(1)) ? true : false);
 }
 WOORT_API woort_api wojeapi_tilemap_move_layer(void)
 {
-    return woort_ret_bool(je_tilemap_move_layer(
+    return woort_ret_bool(je_tilemap_layer_move(
         woje_map_doc(0), (int32_t)woort_int(1), (int32_t)woort_int(2)) ? true : false);
 }
 WOORT_API woort_api wojeapi_tilemap_get_layer(void)
@@ -2984,7 +2984,7 @@ WOORT_API woort_api wojeapi_tilemap_get_layer(void)
         return woort_ret_panic("Stack overflow.");
     const char* name = "";
     int32_t visible = 0, locked = 0;
-    je_tilemap_get_layer(woje_map_doc(0), (int32_t)woort_int(1),
+    je_tilemap_layer_get(woje_map_doc(0), (int32_t)woort_int(1),
         &name, &visible, &locked);
     woort_set_struct(s + 0, 3);
     woort_struct_set_string(s + 0, 0, name);
@@ -2994,7 +2994,7 @@ WOORT_API woort_api wojeapi_tilemap_get_layer(void)
 }
 WOORT_API woort_api wojeapi_tilemap_set_layer(void)
 {
-    je_tilemap_set_layer(woje_map_doc(0), (int32_t)woort_int(1),
+    je_tilemap_layer_set(woje_map_doc(0), (int32_t)woort_int(1),
         woort_string(2), (int32_t)woort_int(3), (int32_t)woort_int(4));
     return woort_ret_void();
 }
@@ -3005,7 +3005,7 @@ WOORT_API woort_api wojeapi_tilemap_layer_z(void)
 }
 WOORT_API woort_api wojeapi_tilemap_set_layer_z(void)
 {
-    je_tilemap_set_layer_z(woje_map_doc(0), (int32_t)woort_int(1),
+    je_tilemap_layer_z_set(woje_map_doc(0), (int32_t)woort_int(1),
         woort_float(2));
     return woort_ret_void();
 }
@@ -3016,7 +3016,7 @@ WOORT_API woort_api wojeapi_tilemap_layer_rend_queue(void)
 }
 WOORT_API woort_api wojeapi_tilemap_set_layer_rend_queue(void)
 {
-    je_tilemap_set_layer_rend_queue(woje_map_doc(0), (int32_t)woort_int(1),
+    je_tilemap_layer_rend_queue_set(woje_map_doc(0), (int32_t)woort_int(1),
         (int32_t)woort_int(2));
     return woort_ret_void();
 }
@@ -3027,7 +3027,7 @@ WOORT_API woort_api wojeapi_tilemap_layer_selfshadow(void)
 }
 WOORT_API woort_api wojeapi_tilemap_set_layer_selfshadow(void)
 {
-    je_tilemap_set_layer_selfshadow(woje_map_doc(0), (int32_t)woort_int(1),
+    je_tilemap_layer_selfshadow_set(woje_map_doc(0), (int32_t)woort_int(1),
         (je_LayerSelfShadow)woort_int(2));
     return woort_ret_void();
 }
@@ -3038,7 +3038,7 @@ WOORT_API woort_api wojeapi_tilemap_layer_selfshadow_factor(void)
 }
 WOORT_API woort_api wojeapi_tilemap_set_layer_selfshadow_factor(void)
 {
-    je_tilemap_set_layer_selfshadow_factor(woje_map_doc(0),
+    je_tilemap_layer_selfshadow_factor_set(woje_map_doc(0),
         (int32_t)woort_int(1), woort_float(2));
     return woort_ret_void();
 }
@@ -3049,7 +3049,7 @@ WOORT_API woort_api wojeapi_tilemap_layer_blockshadow(void)
 }
 WOORT_API woort_api wojeapi_tilemap_set_layer_blockshadow(void)
 {
-    je_tilemap_set_layer_blockshadow(woje_map_doc(0), (int32_t)woort_int(1),
+    je_tilemap_layer_blockshadow_set(woje_map_doc(0), (int32_t)woort_int(1),
         (je_LayerBlockShadow)woort_int(2));
     return woort_ret_void();
 }
@@ -3060,7 +3060,7 @@ WOORT_API woort_api wojeapi_tilemap_layer_blockshadow_factor(void)
 }
 WOORT_API woort_api wojeapi_tilemap_set_layer_blockshadow_factor(void)
 {
-    je_tilemap_set_layer_blockshadow_factor(woje_map_doc(0),
+    je_tilemap_layer_blockshadow_factor_set(woje_map_doc(0),
         (int32_t)woort_int(1), woort_float(2));
     return woort_ret_void();
 }
@@ -3086,7 +3086,7 @@ WOORT_API woort_api wojeapi_tilemap_set_layer_shader(void)
     je_tilemap_shader_ref* shader = nullptr;
     if (woort_push_reserve(1, &s) && woort_option_get(s, 2))
         shader = (je_tilemap_shader_ref*)woort_gcpointer(s);
-    je_tilemap_set_layer_shader(
+    je_tilemap_layer_shader_set(
         woje_map_doc(0), (int32_t)woort_int(1), shader);
     return woort_ret_void();
 }
@@ -3102,7 +3102,7 @@ WOORT_API woort_api wojeapi_tilemap_layer_set_texture(void)
     je_tilemap_texture_ref* texture = nullptr;
     if (woort_push_reserve(1, &s) && woort_option_get(s, 3))
         texture = (je_tilemap_texture_ref*)woort_gcpointer(s);
-    return woort_ret_bool(je_tilemap_layer_set_texture(
+    return woort_ret_bool(je_tilemap_layer_texture_set(
         woje_map_doc(0), (int32_t)woort_int(1), (int32_t)woort_int(2),
         texture) ? true : false);
 }
@@ -3113,7 +3113,7 @@ WOORT_API woort_api wojeapi_tilemap_layer_get_texture(void)
         return woort_ret_panic("Stack overflow.");
     int32_t slot = 0;
     je_tilemap_texture_ref* texture = nullptr;
-    je_tilemap_layer_get_texture(woje_map_doc(0), (int32_t)woort_int(1),
+    je_tilemap_layer_texture_get(woje_map_doc(0), (int32_t)woort_int(1),
         (int32_t)woort_int(2), &slot, &texture);
     woort_set_struct(s + 0, 2);
     woort_struct_set_int(s + 0, 0, slot);
@@ -3132,7 +3132,7 @@ WOORT_API woort_api wojeapi_tilemap_layer_get_texture(void)
 }
 WOORT_API woort_api wojeapi_tilemap_get_tile(void)
 {
-    return woort_ret_int(je_tilemap_get_tile(
+    return woort_ret_int(je_tilemap_tile_get(
         woje_map_doc(0), (int32_t)woort_int(1), (int32_t)woort_int(2), (int32_t)woort_int(3)));
 }
 WOORT_API woort_api wojeapi_tilemap_layer_grid(void)
@@ -3158,13 +3158,13 @@ WOORT_API woort_api wojeapi_tilemap_layer_grid(void)
 }
 WOORT_API woort_api wojeapi_tilemap_set_tile(void)
 {
-    je_tilemap_set_tile(woje_map_doc(0), (int32_t)woort_int(1),
+    je_tilemap_tile_set(woje_map_doc(0), (int32_t)woort_int(1),
         (int32_t)woort_int(2), (int32_t)woort_int(3), (int32_t)woort_int(4));
     return woort_ret_void();
 }
 WOORT_API woort_api wojeapi_tilemap_fill_tiles(void)
 {
-    je_tilemap_fill_tiles(woje_map_doc(0), (int32_t)woort_int(1),
+    je_tilemap_tile_fill(woje_map_doc(0), (int32_t)woort_int(1),
         (int32_t)woort_int(2), (int32_t)woort_int(3),
         (int32_t)woort_int(4), (int32_t)woort_int(5), (int32_t)woort_int(6));
     return woort_ret_void();
@@ -3176,13 +3176,13 @@ WOORT_API woort_api wojeapi_tilemap_tileset_count(void)
 WOORT_API woort_api wojeapi_tilemap_add_tileset(void)
 {
     int32_t index = 0;
-    if (!je_tilemap_add_tileset(woje_map_doc(0), woort_string(1), &index))
+    if (!je_tilemap_tileset_add(woje_map_doc(0), woort_string(1), &index))
         return woort_ret_option_none();
     return woort_ret_option_int(index);
 }
 WOORT_API woort_api wojeapi_tilemap_remove_tileset(void)
 {
-    return woort_ret_bool(je_tilemap_remove_tileset(
+    return woort_ret_bool(je_tilemap_tileset_remove(
         woje_map_doc(0), (int32_t)woort_int(1)) ? true : false);
 }
 WOORT_API woort_api wojeapi_tilemap_tileset_path(void)
@@ -3328,7 +3328,7 @@ WOORT_API woort_api FN(void)                                           \
     const void* pv = nullptr;                                          \
     PROPVAL(2)                                                         \
     int32_t index = 0;                                                 \
-    if (!je_tilemap_add_property(woje_ts_doc(0), woort_string(1),      \
+    if (!je_tilemap_property_add(woje_ts_doc(0), woort_string(1),      \
         TYPE, pv, &index))                                             \
         return woort_ret_option_none();                                \
     return woort_ret_option_int(index);                                \
@@ -3338,7 +3338,7 @@ WOORT_API woort_api FN(void)                                           \
 WOORT_API woort_api FN(void)                                           \
 {                                                                      \
     FINDARG;                                                           \
-    return woort_ret_int(je_tilemap_find_cells(woje_map_doc(0),        \
+    return woort_ret_int(je_tilemap_cell_find(woje_map_doc(0),        \
         (int32_t)woort_int(1), woort_string(2), TYPE, fvptr));         \
 }
 #define JE_WO_FINDARG_BOOL                                             \
@@ -3372,129 +3372,129 @@ WOORT_API woort_api FN(void)                                           \
 // ---- 地图侧：逐格覆盖 / 取值链解析 / 查找 ----
 JE_WO_PROP_SETTER(wojeapi_tilemap_set_cell_property_bool,
     ([&](const void* pv)
-        { return je_tilemap_set_cell_property(woje_map_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_cell_property_set(woje_map_doc(0), (int32_t)woort_int(1),
             (int32_t)woort_int(2), (int32_t)woort_int(3), woort_string(4),
             JE_PROPERTY_TYPE_BOOL, pv); }),
     5, JE_WO_PROPVAL_BOOL)
 JE_WO_PROP_SETTER(wojeapi_tilemap_set_cell_property_int,
     ([&](const void* pv)
-        { return je_tilemap_set_cell_property(woje_map_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_cell_property_set(woje_map_doc(0), (int32_t)woort_int(1),
             (int32_t)woort_int(2), (int32_t)woort_int(3), woort_string(4),
             JE_PROPERTY_TYPE_INT, pv); }),
     5, JE_WO_PROPVAL_INT)
 JE_WO_PROP_SETTER(wojeapi_tilemap_set_cell_property_real,
     ([&](const void* pv)
-        { return je_tilemap_set_cell_property(woje_map_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_cell_property_set(woje_map_doc(0), (int32_t)woort_int(1),
             (int32_t)woort_int(2), (int32_t)woort_int(3), woort_string(4),
             JE_PROPERTY_TYPE_FLOAT, pv); }),
     5, JE_WO_PROPVAL_REAL)
 JE_WO_PROP_SETTER(wojeapi_tilemap_set_cell_property_string,
     ([&](const void* pv)
-        { return je_tilemap_set_cell_property(woje_map_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_cell_property_set(woje_map_doc(0), (int32_t)woort_int(1),
             (int32_t)woort_int(2), (int32_t)woort_int(3), woort_string(4),
             JE_PROPERTY_TYPE_STRING, pv); }),
     5, JE_WO_PROPVAL_STRING)
 JE_WO_PROP_SETTER(wojeapi_tilemap_set_cell_property_vec2,
     ([&](const void* pv)
-        { return je_tilemap_set_cell_property(woje_map_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_cell_property_set(woje_map_doc(0), (int32_t)woort_int(1),
             (int32_t)woort_int(2), (int32_t)woort_int(3), woort_string(4),
             JE_PROPERTY_TYPE_VEC2, pv); }),
     5, JE_WO_PROPVAL_VEC2)
 JE_WO_PROP_SETTER(wojeapi_tilemap_set_cell_property_vec3,
     ([&](const void* pv)
-        { return je_tilemap_set_cell_property(woje_map_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_cell_property_set(woje_map_doc(0), (int32_t)woort_int(1),
             (int32_t)woort_int(2), (int32_t)woort_int(3), woort_string(4),
             JE_PROPERTY_TYPE_VEC3, pv); }),
     5, JE_WO_PROPVAL_VEC3)
 JE_WO_PROP_SETTER(wojeapi_tilemap_set_cell_property_vec4,
     ([&](const void* pv)
-        { return je_tilemap_set_cell_property(woje_map_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_cell_property_set(woje_map_doc(0), (int32_t)woort_int(1),
             (int32_t)woort_int(2), (int32_t)woort_int(3), woort_string(4),
             JE_PROPERTY_TYPE_VEC4, pv); }),
     5, JE_WO_PROPVAL_VEC4)
 
 JE_WO_PROP_GETTER(wojeapi_tilemap_get_cell_property_bool,
     ([&](void* out)
-        { return je_tilemap_get_cell_property(woje_map_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_cell_property_get(woje_map_doc(0), (int32_t)woort_int(1),
             (int32_t)woort_int(2), (int32_t)woort_int(3), woort_string(4),
             JE_PROPERTY_TYPE_BOOL, out); }),
     bool, = false, woort_ret_option_bool)
 JE_WO_PROP_GETTER(wojeapi_tilemap_get_cell_property_int,
     ([&](void* out)
-        { return je_tilemap_get_cell_property(woje_map_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_cell_property_get(woje_map_doc(0), (int32_t)woort_int(1),
             (int32_t)woort_int(2), (int32_t)woort_int(3), woort_string(4),
             JE_PROPERTY_TYPE_INT, out); }),
     int32_t, = 0, woort_ret_option_int)
 JE_WO_PROP_GETTER(wojeapi_tilemap_get_cell_property_real,
     ([&](void* out)
-        { return je_tilemap_get_cell_property(woje_map_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_cell_property_get(woje_map_doc(0), (int32_t)woort_int(1),
             (int32_t)woort_int(2), (int32_t)woort_int(3), woort_string(4),
             JE_PROPERTY_TYPE_FLOAT, out); }),
     float, = 0.f, woort_ret_option_real)
 JE_WO_PROP_GETTER(wojeapi_tilemap_get_cell_property_string,
     ([&](void* out)
-        { return je_tilemap_get_cell_property(woje_map_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_cell_property_get(woje_map_doc(0), (int32_t)woort_int(1),
             (int32_t)woort_int(2), (int32_t)woort_int(3), woort_string(4),
             JE_PROPERTY_TYPE_STRING, out); }),
     const char*, = nullptr, woort_ret_option_string)
 JE_WO_PROP_VECGETTER(wojeapi_tilemap_get_cell_property_vec2,
     ([&](void* out)
-        { return je_tilemap_get_cell_property(woje_map_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_cell_property_get(woje_map_doc(0), (int32_t)woort_int(1),
             (int32_t)woort_int(2), (int32_t)woort_int(3), woort_string(4),
             JE_PROPERTY_TYPE_VEC2, out); }),
     2)
 JE_WO_PROP_VECGETTER(wojeapi_tilemap_get_cell_property_vec3,
     ([&](void* out)
-        { return je_tilemap_get_cell_property(woje_map_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_cell_property_get(woje_map_doc(0), (int32_t)woort_int(1),
             (int32_t)woort_int(2), (int32_t)woort_int(3), woort_string(4),
             JE_PROPERTY_TYPE_VEC3, out); }),
     3)
 JE_WO_PROP_VECGETTER(wojeapi_tilemap_get_cell_property_vec4,
     ([&](void* out)
-        { return je_tilemap_get_cell_property(woje_map_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_cell_property_get(woje_map_doc(0), (int32_t)woort_int(1),
             (int32_t)woort_int(2), (int32_t)woort_int(3), woort_string(4),
             JE_PROPERTY_TYPE_VEC4, out); }),
     4)
 
 JE_WO_PROP_GETTER(wojeapi_tilemap_get_property_bool,
     ([&](void* out)
-        { return je_tilemap_get_property(woje_map_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_property_get(woje_map_doc(0), (int32_t)woort_int(1),
             (int32_t)woort_int(2), (int32_t)woort_int(3), woort_string(4),
             JE_PROPERTY_TYPE_BOOL, out); }),
     bool, = false, woort_ret_option_bool)
 JE_WO_PROP_GETTER(wojeapi_tilemap_get_property_int,
     ([&](void* out)
-        { return je_tilemap_get_property(woje_map_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_property_get(woje_map_doc(0), (int32_t)woort_int(1),
             (int32_t)woort_int(2), (int32_t)woort_int(3), woort_string(4),
             JE_PROPERTY_TYPE_INT, out); }),
     int32_t, = 0, woort_ret_option_int)
 JE_WO_PROP_GETTER(wojeapi_tilemap_get_property_real,
     ([&](void* out)
-        { return je_tilemap_get_property(woje_map_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_property_get(woje_map_doc(0), (int32_t)woort_int(1),
             (int32_t)woort_int(2), (int32_t)woort_int(3), woort_string(4),
             JE_PROPERTY_TYPE_FLOAT, out); }),
     float, = 0.f, woort_ret_option_real)
 JE_WO_PROP_GETTER(wojeapi_tilemap_get_property_string,
     ([&](void* out)
-        { return je_tilemap_get_property(woje_map_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_property_get(woje_map_doc(0), (int32_t)woort_int(1),
             (int32_t)woort_int(2), (int32_t)woort_int(3), woort_string(4),
             JE_PROPERTY_TYPE_STRING, out); }),
     const char*, = nullptr, woort_ret_option_string)
 JE_WO_PROP_VECGETTER(wojeapi_tilemap_get_property_vec2,
     ([&](void* out)
-        { return je_tilemap_get_property(woje_map_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_property_get(woje_map_doc(0), (int32_t)woort_int(1),
             (int32_t)woort_int(2), (int32_t)woort_int(3), woort_string(4),
             JE_PROPERTY_TYPE_VEC2, out); }),
     2)
 JE_WO_PROP_VECGETTER(wojeapi_tilemap_get_property_vec3,
     ([&](void* out)
-        { return je_tilemap_get_property(woje_map_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_property_get(woje_map_doc(0), (int32_t)woort_int(1),
             (int32_t)woort_int(2), (int32_t)woort_int(3), woort_string(4),
             JE_PROPERTY_TYPE_VEC3, out); }),
     3)
 JE_WO_PROP_VECGETTER(wojeapi_tilemap_get_property_vec4,
     ([&](void* out)
-        { return je_tilemap_get_property(woje_map_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_property_get(woje_map_doc(0), (int32_t)woort_int(1),
             (int32_t)woort_int(2), (int32_t)woort_int(3), woort_string(4),
             JE_PROPERTY_TYPE_VEC4, out); }),
     4)
@@ -3530,7 +3530,7 @@ WOORT_API woort_api wojeapi_tilemap_find_get(void)
     if (!woort_push_reserve(1, &s))
         return woort_ret_panic("Stack overflow.");
     int32_t x = -1, y = -1;
-    je_tilemap_find_get(woje_map_doc(0), (int32_t)woort_int(1), &x, &y);
+    je_tilemap_cell_find_get(woje_map_doc(0), (int32_t)woort_int(1), &x, &y);
     woort_set_struct(s + 0, 2);
     woort_struct_set_int(s + 0, 0, x);
     woort_struct_set_int(s + 0, 1, y);
@@ -3541,11 +3541,11 @@ WOORT_API woort_api wojeapi_tilemap_find_get(void)
 // 共享唯一实例，指针相等必为同一文档，比较安全）----
 WOORT_API woort_api wojeapi_tilemap_keep_map(void)
 {
-    return woort_ret_int(je_tilemap_keep_map(woje_map_doc(0)));
+    return woort_ret_int(je_tilemap_map_keep(woje_map_doc(0)));
 }
 WOORT_API woort_api wojeapi_tilemap_unload_map(void)
 {
-    return woort_ret_int(je_tilemap_unload_map(woje_map_doc(0)));
+    return woort_ret_int(je_tilemap_map_unload(woje_map_doc(0)));
 }
 WOORT_API woort_api wojeapi_tilemap_map_same(void)
 {
@@ -3554,11 +3554,11 @@ WOORT_API woort_api wojeapi_tilemap_map_same(void)
 }
 WOORT_API woort_api wojeapi_tilemap_keep_tileset(void)
 {
-    return woort_ret_int(je_tilemap_keep_tileset(woje_ts_doc(0)));
+    return woort_ret_int(je_tilemap_tileset_keep(woje_ts_doc(0)));
 }
 WOORT_API woort_api wojeapi_tilemap_unload_tileset(void)
 {
-    return woort_ret_int(je_tilemap_unload_tileset(woje_ts_doc(0)));
+    return woort_ret_int(je_tilemap_tileset_unload(woje_ts_doc(0)));
 }
 WOORT_API woort_api wojeapi_tilemap_tileset_same(void)
 {
@@ -3568,7 +3568,7 @@ WOORT_API woort_api wojeapi_tilemap_tileset_same(void)
 
 WOORT_API woort_api wojeapi_tilemap_open_tileset(void)
 {
-    je_TilesetDocument* doc = je_tilemap_open_tileset(woort_string(0));
+    je_TilesetDocument* doc = je_tilemap_tileset_open(woort_string(0));
     if (doc == nullptr)
         return woort_ret_option_none();
     return woort_ret_option_gchandle(
@@ -3576,7 +3576,7 @@ WOORT_API woort_api wojeapi_tilemap_open_tileset(void)
 }
 WOORT_API woort_api wojeapi_tilemap_create_tileset(void)
 {
-    je_TilesetDocument* doc = je_tilemap_create_tileset(woort_string(0));
+    je_TilesetDocument* doc = je_tilemap_tileset_create(woort_string(0));
     if (doc == nullptr)
         return woort_ret_option_none();
     return woort_ret_option_gchandle(
@@ -3584,12 +3584,12 @@ WOORT_API woort_api wojeapi_tilemap_create_tileset(void)
 }
 WOORT_API woort_api wojeapi_tilemap_bind_tileset_path(void)
 {
-    return woort_ret_bool(je_tilemap_bind_tileset_path(
+    return woort_ret_bool(je_tilemap_tileset_path_bind(
         woje_ts_doc(0), woort_string(1)) ? true : false);
 }
 WOORT_API woort_api wojeapi_tilemap_reload_tileset(void)
 {
-    je_tilemap_reload_tileset(woort_string(0));
+    je_tilemap_tileset_reload(woort_string(0));
     return woort_ret_void();
 }
 WOORT_API woort_api wojeapi_tilemap_tileset_version(void)
@@ -3602,7 +3602,7 @@ WOORT_API woort_api wojeapi_tilemap_tileset_doc_path(void)
 }
 WOORT_API woort_api wojeapi_tilemap_tileset_set_name(void)
 {
-    je_tilemap_tileset_set_name(woje_ts_doc(0), woort_string(1));
+    je_tilemap_tileset_name_set(woje_ts_doc(0), woort_string(1));
     return woort_ret_void();
 }
 WOORT_API woort_api wojeapi_tilemap_tileset_name(void)
@@ -3617,14 +3617,14 @@ WOORT_API woort_api wojeapi_tilemap_tileset_next_tile_id(void)
 WOORT_API woort_api wojeapi_tilemap_add_source(void)
 {
     int32_t index = 0;
-    if (!je_tilemap_add_source(
+    if (!je_tilemap_source_add(
         woje_ts_doc(0), woort_string(1), (int32_t)woort_int(2), &index))
         return woort_ret_option_none();
     return woort_ret_option_int(index);
 }
 WOORT_API woort_api wojeapi_tilemap_remove_source(void)
 {
-    return woort_ret_bool(je_tilemap_remove_source(
+    return woort_ret_bool(je_tilemap_source_remove(
         woje_ts_doc(0), (int32_t)woort_int(1)) ? true : false);
 }
 WOORT_API woort_api wojeapi_tilemap_source_count(void)
@@ -3688,13 +3688,13 @@ WOORT_API woort_api wojeapi_tilemap_source_extra_count(void)
 }
 WOORT_API woort_api wojeapi_tilemap_add_source_extra(void)
 {
-    return woort_ret_bool(je_tilemap_add_source_extra(
+    return woort_ret_bool(je_tilemap_source_extra_add(
         woje_ts_doc(0), (int32_t)woort_int(1),
         woort_string(2), (int32_t)woort_int(3)) ? true : false);
 }
 WOORT_API woort_api wojeapi_tilemap_remove_source_extra(void)
 {
-    return woort_ret_bool(je_tilemap_remove_source_extra(
+    return woort_ret_bool(je_tilemap_source_extra_remove(
         woje_ts_doc(0), (int32_t)woort_int(1), (int32_t)woort_int(2))
         ? true : false);
 }
@@ -3727,7 +3727,7 @@ WOORT_API woort_api wojeapi_tilemap_source_extra_tex_size(void)
 }
 WOORT_API woort_api wojeapi_tilemap_set_source_extra_pass(void)
 {
-    return woort_ret_bool(je_tilemap_set_source_extra_pass(
+    return woort_ret_bool(je_tilemap_source_extra_pass_set(
         woje_ts_doc(0), (int32_t)woort_int(1),
         (int32_t)woort_int(2), (int32_t)woort_int(3)) ? true : false);
 }
@@ -3819,7 +3819,7 @@ WOORT_API woort_api wojeapi_tilemap_tile_name(void)
 }
 WOORT_API woort_api wojeapi_tilemap_set_tile_name(void)
 {
-    return woort_ret_bool(je_tilemap_set_tile_name(woje_ts_doc(0),
+    return woort_ret_bool(je_tilemap_tile_name_set(woje_ts_doc(0),
         (int32_t)woort_int(1), woort_string(2)) ? true : false);
 }
 WOORT_API woort_api wojeapi_tilemap_tile_kind(void)
@@ -3829,7 +3829,7 @@ WOORT_API woort_api wojeapi_tilemap_tile_kind(void)
 }
 WOORT_API woort_api wojeapi_tilemap_set_tile_kind(void)
 {
-    return woort_ret_bool(je_tilemap_set_tile_kind(woje_ts_doc(0),
+    return woort_ret_bool(je_tilemap_tile_kind_set(woje_ts_doc(0),
         (int32_t)woort_int(1), (je_TileKind)woort_int(2)) ? true : false);
 }
 WOORT_API woort_api wojeapi_tilemap_tile_variant_count(void)
@@ -3847,17 +3847,17 @@ WOORT_API woort_api wojeapi_tilemap_tile_variant(void)
 }
 WOORT_API woort_api wojeapi_tilemap_tile_clear_variants(void)
 {
-    je_tilemap_tile_clear_variants(woje_ts_doc(0), (int32_t)woort_int(1));
+    je_tilemap_tile_variant_clear(woje_ts_doc(0), (int32_t)woort_int(1));
     return woort_ret_void();
 }
 WOORT_API woort_api wojeapi_tilemap_tile_add_variant(void)
 {
-    return woort_ret_bool(je_tilemap_tile_add_variant(
+    return woort_ret_bool(je_tilemap_tile_variant_add(
         woje_ts_doc(0), (int32_t)woort_int(1), (int32_t)woort_int(2)) ? true : false);
 }
 WOORT_API woort_api wojeapi_tilemap_set_tile_walkable(void)
 {
-    je_tilemap_set_tile_walkable(woje_ts_doc(0), (int32_t)woort_int(1), (int32_t)woort_int(2));
+    je_tilemap_tile_walkable_set(woje_ts_doc(0), (int32_t)woort_int(1), (int32_t)woort_int(2));
     return woort_ret_void();
 }
 WOORT_API woort_api wojeapi_tilemap_tile_normal(void)
@@ -3875,7 +3875,7 @@ WOORT_API woort_api wojeapi_tilemap_tile_normal(void)
 }
 WOORT_API woort_api wojeapi_tilemap_set_tile_normal(void)
 {
-    return woort_ret_bool(je_tilemap_set_tile_normal(woje_ts_doc(0),
+    return woort_ret_bool(je_tilemap_tile_normal_set(woje_ts_doc(0),
         (int32_t)woort_int(1), woort_float(2), woort_float(3), woort_float(4))
         ? true : false);
 }
@@ -3897,7 +3897,7 @@ JE_WO_PROP_ADDER(wojeapi_tilemap_add_property_vec4,
 
 WOORT_API woort_api wojeapi_tilemap_remove_property(void)
 {
-    return woort_ret_bool(je_tilemap_remove_property(
+    return woort_ret_bool(je_tilemap_property_remove(
         woje_ts_doc(0), woort_string(1)) ? true : false);
 }
 WOORT_API woort_api wojeapi_tilemap_property_count(void)
@@ -3958,73 +3958,73 @@ JE_WO_PROP_VECGETTER(wojeapi_tilemap_property_default_vec4,
 // ---- 瓦片默认值 ----
 JE_WO_PROP_SETTER(wojeapi_tilemap_set_tile_property_bool,
     ([&](const void* pv)
-        { return je_tilemap_set_tile_property(woje_ts_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_tile_property_set(woje_ts_doc(0), (int32_t)woort_int(1),
             woort_string(2), JE_PROPERTY_TYPE_BOOL, pv); }),
     3, JE_WO_PROPVAL_BOOL)
 JE_WO_PROP_SETTER(wojeapi_tilemap_set_tile_property_int,
     ([&](const void* pv)
-        { return je_tilemap_set_tile_property(woje_ts_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_tile_property_set(woje_ts_doc(0), (int32_t)woort_int(1),
             woort_string(2), JE_PROPERTY_TYPE_INT, pv); }),
     3, JE_WO_PROPVAL_INT)
 JE_WO_PROP_SETTER(wojeapi_tilemap_set_tile_property_real,
     ([&](const void* pv)
-        { return je_tilemap_set_tile_property(woje_ts_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_tile_property_set(woje_ts_doc(0), (int32_t)woort_int(1),
             woort_string(2), JE_PROPERTY_TYPE_FLOAT, pv); }),
     3, JE_WO_PROPVAL_REAL)
 JE_WO_PROP_SETTER(wojeapi_tilemap_set_tile_property_string,
     ([&](const void* pv)
-        { return je_tilemap_set_tile_property(woje_ts_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_tile_property_set(woje_ts_doc(0), (int32_t)woort_int(1),
             woort_string(2), JE_PROPERTY_TYPE_STRING, pv); }),
     3, JE_WO_PROPVAL_STRING)
 JE_WO_PROP_SETTER(wojeapi_tilemap_set_tile_property_vec2,
     ([&](const void* pv)
-        { return je_tilemap_set_tile_property(woje_ts_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_tile_property_set(woje_ts_doc(0), (int32_t)woort_int(1),
             woort_string(2), JE_PROPERTY_TYPE_VEC2, pv); }),
     3, JE_WO_PROPVAL_VEC2)
 JE_WO_PROP_SETTER(wojeapi_tilemap_set_tile_property_vec3,
     ([&](const void* pv)
-        { return je_tilemap_set_tile_property(woje_ts_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_tile_property_set(woje_ts_doc(0), (int32_t)woort_int(1),
             woort_string(2), JE_PROPERTY_TYPE_VEC3, pv); }),
     3, JE_WO_PROPVAL_VEC3)
 JE_WO_PROP_SETTER(wojeapi_tilemap_set_tile_property_vec4,
     ([&](const void* pv)
-        { return je_tilemap_set_tile_property(woje_ts_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_tile_property_set(woje_ts_doc(0), (int32_t)woort_int(1),
             woort_string(2), JE_PROPERTY_TYPE_VEC4, pv); }),
     3, JE_WO_PROPVAL_VEC4)
 
 JE_WO_PROP_GETTER(wojeapi_tilemap_get_tile_property_bool,
     ([&](void* out)
-        { return je_tilemap_get_tile_property(woje_ts_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_tile_property_get(woje_ts_doc(0), (int32_t)woort_int(1),
             woort_string(2), JE_PROPERTY_TYPE_BOOL, out); }),
     bool, = false, woort_ret_option_bool)
 JE_WO_PROP_GETTER(wojeapi_tilemap_get_tile_property_int,
     ([&](void* out)
-        { return je_tilemap_get_tile_property(woje_ts_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_tile_property_get(woje_ts_doc(0), (int32_t)woort_int(1),
             woort_string(2), JE_PROPERTY_TYPE_INT, out); }),
     int32_t, = 0, woort_ret_option_int)
 JE_WO_PROP_GETTER(wojeapi_tilemap_get_tile_property_real,
     ([&](void* out)
-        { return je_tilemap_get_tile_property(woje_ts_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_tile_property_get(woje_ts_doc(0), (int32_t)woort_int(1),
             woort_string(2), JE_PROPERTY_TYPE_FLOAT, out); }),
     float, = 0.f, woort_ret_option_real)
 JE_WO_PROP_GETTER(wojeapi_tilemap_get_tile_property_string,
     ([&](void* out)
-        { return je_tilemap_get_tile_property(woje_ts_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_tile_property_get(woje_ts_doc(0), (int32_t)woort_int(1),
             woort_string(2), JE_PROPERTY_TYPE_STRING, out); }),
     const char*, = nullptr, woort_ret_option_string)
 JE_WO_PROP_VECGETTER(wojeapi_tilemap_get_tile_property_vec2,
     ([&](void* out)
-        { return je_tilemap_get_tile_property(woje_ts_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_tile_property_get(woje_ts_doc(0), (int32_t)woort_int(1),
             woort_string(2), JE_PROPERTY_TYPE_VEC2, out); }),
     2)
 JE_WO_PROP_VECGETTER(wojeapi_tilemap_get_tile_property_vec3,
     ([&](void* out)
-        { return je_tilemap_get_tile_property(woje_ts_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_tile_property_get(woje_ts_doc(0), (int32_t)woort_int(1),
             woort_string(2), JE_PROPERTY_TYPE_VEC3, out); }),
     3)
 JE_WO_PROP_VECGETTER(wojeapi_tilemap_get_tile_property_vec4,
     ([&](void* out)
-        { return je_tilemap_get_tile_property(woje_ts_doc(0), (int32_t)woort_int(1),
+        { return je_tilemap_tile_property_get(woje_ts_doc(0), (int32_t)woort_int(1),
             woort_string(2), JE_PROPERTY_TYPE_VEC4, out); }),
     4)
 
@@ -4071,19 +4071,19 @@ WOORT_API woort_api wojeapi_tilemap_cell_quad(void)
 // ======================================================================
 WOORT_API woort_api wojeapi_tileset_cache_ensure(void)
 {
-    jeecs_file* cache = jeecs_tileset_open_or_create_cache(woort_string(0));
+    jeecs_file* cache = je_tileset_cache_open_or_create(woort_string(0));
     if (cache == nullptr)
         return woort_ret_bool(false);
 
-    jeecs_file_close(cache);
+    je_file_close(cache);
     return woort_ret_bool(true);
 }
 WOORT_API woort_api wojeapi_tilemap_cache_ensure(void)
 {
-    jeecs_file* cache = jeecs_tilemap_open_or_create_cache(woort_string(0));
+    jeecs_file* cache = je_tilemap_cache_open_or_create(woort_string(0));
     if (cache == nullptr)
         return woort_ret_bool(false);
 
-    jeecs_file_close(cache);
+    je_file_close(cache);
     return woort_ret_bool(true);
 }

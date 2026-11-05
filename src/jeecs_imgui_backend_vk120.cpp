@@ -28,7 +28,7 @@ void jegui_init_vk120(
     jegui_vkapi_loader_func_t loader_func_maynull,
     void *user_data)
 {
-    jegui_init_basic(ctx, get_img_res, apply_shader_sampler);
+    je_gui_backend_init(ctx, get_img_res, apply_shader_sampler);
 
     if (loader_func_maynull != nullptr)
         ImGui_ImplVulkan_LoadFunctions(loader_func_maynull, user_data);
@@ -77,7 +77,7 @@ void jegui_update_vk120(VkCommandBuffer cmdbuf)
 #else
     ImGui_ImplGlfw_NewFrame();
 #endif
-    jegui_update_basic(
+    je_gui_backend_update(
         [](void *p_cmdbuf)
         {
             ImGui_ImplVulkan_RenderDrawData(
@@ -89,7 +89,7 @@ void jegui_update_vk120(VkCommandBuffer cmdbuf)
 
 void jegui_shutdown_vk120(bool reboot)
 {
-    jegui_shutdown_basic(reboot);
+    je_gui_backend_shutdown(reboot);
     ImGui_ImplVulkan_Shutdown();
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
 #   if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID

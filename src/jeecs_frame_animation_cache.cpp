@@ -13,7 +13,7 @@
 // 帧动画不再直接读取 .je4animation 源文件，而是读取由
 // builtin/script/cache_generator/animation.wo 生成的二进制缓存：
 //   <动画源路径>.je4cache
-// 缓存文件头由 jeecs_create_cache_file 写入（管理器版本 + 格式版本 +
+// 缓存文件头由 je_cache_file_create 写入（管理器版本 + 格式版本 +
 // 源文件 CRC64），其后是一个 jeecs_cache_binary_* 文档。文档结构：
 //   DOCUMENT
 //     "animations" -> LIST of DOCUMENT(action)
@@ -44,19 +44,19 @@ namespace
         std::string* out)
     {
         jeecs_cache_binary_string str;
-        if (!jeecs_cache_binary_document_index(
+        if (!je_cache_binary_document_index(
             document, key, JE_CACHE_BINARY_VALUE_STRING, &str))
             return false;
 
         size_t len = 0;
-        if (!jeecs_cache_binary_string_read(nullptr, &len, &str))
+        if (!je_cache_binary_string_read(nullptr, &len, &str))
             return false;
 
         out->resize(len);
         if (len > 0)
         {
             size_t capacity = len;
-            if (!jeecs_cache_binary_string_read(out->data(), &capacity, &str))
+            if (!je_cache_binary_string_read(out->data(), &capacity, &str))
                 return false;
         }
         return true;
@@ -67,7 +67,7 @@ namespace
     {
         for (size_t i = 0; i < count; ++i)
         {
-            if (!jeecs_cache_binary_list_index(
+            if (!je_cache_binary_list_index(
                 list, i, JE_CACHE_BINARY_VALUE_FLOAT32, out + i))
                 return false;
         }
@@ -79,7 +79,7 @@ namespace
         je_animation_value* out)
     {
         int32_t type_tag;
-        if (!jeecs_cache_binary_document_index(
+        if (!je_cache_binary_document_index(
             document, "type", JE_CACHE_BINARY_VALUE_INT32, &type_tag))
             return false;
 
@@ -88,7 +88,7 @@ namespace
         case JE_ANIMATION_VALUE_INT:
         {
             int32_t value;
-            if (!jeecs_cache_binary_document_index(
+            if (!je_cache_binary_document_index(
                 document, "value", JE_CACHE_BINARY_VALUE_INT32, &value))
                 return false;
 
@@ -100,7 +100,7 @@ namespace
         case JE_ANIMATION_VALUE_FLOAT:
         {
             float value;
-            if (!jeecs_cache_binary_document_index(
+            if (!je_cache_binary_document_index(
                 document, "value", JE_CACHE_BINARY_VALUE_FLOAT32, &value))
                 return false;
 
@@ -112,7 +112,7 @@ namespace
         case JE_ANIMATION_VALUE_VEC2:
         {
             jeecs_cache_binary_list values;
-            if (!jeecs_cache_binary_document_index(
+            if (!je_cache_binary_document_index(
                 document, "value", JE_CACHE_BINARY_VALUE_LIST, &values)
                 || !_read_cache_floats(&values, out->m_value.v2, 2))
                 return false;
@@ -124,7 +124,7 @@ namespace
         case JE_ANIMATION_VALUE_VEC3:
         {
             jeecs_cache_binary_list values;
-            if (!jeecs_cache_binary_document_index(
+            if (!je_cache_binary_document_index(
                 document, "value", JE_CACHE_BINARY_VALUE_LIST, &values)
                 || !_read_cache_floats(&values, out->m_value.v3, 3))
                 return false;
@@ -136,7 +136,7 @@ namespace
         case JE_ANIMATION_VALUE_VEC4:
         {
             jeecs_cache_binary_list values;
-            if (!jeecs_cache_binary_document_index(
+            if (!je_cache_binary_document_index(
                 document, "value", JE_CACHE_BINARY_VALUE_LIST, &values)
                 || !_read_cache_floats(&values, out->m_value.v4, 4))
                 return false;
@@ -148,7 +148,7 @@ namespace
         case JE_ANIMATION_VALUE_QUAT4:
         {
             jeecs_cache_binary_list values;
-            if (!jeecs_cache_binary_document_index(
+            if (!je_cache_binary_document_index(
                 document, "value", JE_CACHE_BINARY_VALUE_LIST, &values)
                 || !_read_cache_floats(&values, out->m_value.q4, 4))
                 return false;
@@ -280,7 +280,7 @@ namespace
     bool _load_animation_actions(
         const char* path, std::vector<_temp_action>* out_actions)
     {
-        jeecs_file* cache_file = jeecs_animation_open_or_create_cache(path);
+        jeecs_file* cache_file = je_animation_cache_open_or_create(path);
         if (cache_file == nullptr)
         {
             jeecs::debug::logerr(
@@ -289,28 +289,28 @@ namespace
         }
 
         jeecs_cache_binary_document root;
-        if (!jeecs_cache_binary_document_open(cache_file, &root))
+        if (!je_cache_binary_document_open(cache_file, &root))
         {
             jeecs::debug::logerr(
                 "Invalid animation cache document in '%s'.", path);
-            jeecs_file_close(cache_file);
+            je_file_close(cache_file);
             return false;
         }
 
         jeecs_cache_binary_list cache_animations;
-        if (!jeecs_cache_binary_document_index(
+        if (!je_cache_binary_document_index(
             &root, "animations", JE_CACHE_BINARY_VALUE_LIST, &cache_animations))
         {
             jeecs::debug::logerr(
                 "Animation cache '%s' has no 'animations' list.", path);
-            jeecs_file_close(cache_file);
+            je_file_close(cache_file);
             return false;
         }
 
         for (size_t action_index = 0;; ++action_index)
         {
             jeecs_cache_binary_document action;
-            if (!jeecs_cache_binary_list_index(
+            if (!je_cache_binary_list_index(
                 &cache_animations,
                 action_index,
                 JE_CACHE_BINARY_VALUE_DOCUMENT,
@@ -327,7 +327,7 @@ namespace
             }
 
             jeecs_cache_binary_list cache_frames;
-            if (!jeecs_cache_binary_document_index(
+            if (!je_cache_binary_document_index(
                 &action, "frames", JE_CACHE_BINARY_VALUE_LIST, &cache_frames))
             {
                 jeecs::debug::logerr(
@@ -339,7 +339,7 @@ namespace
             for (size_t frame_index = 0;; ++frame_index)
             {
                 jeecs_cache_binary_document frame;
-                if (!jeecs_cache_binary_list_index(
+                if (!je_cache_binary_list_index(
                     &cache_frames,
                     frame_index,
                     JE_CACHE_BINARY_VALUE_DOCUMENT,
@@ -347,7 +347,7 @@ namespace
                     break;
 
                 _temp_frame temp_frame;
-                if (!jeecs_cache_binary_document_index(
+                if (!je_cache_binary_document_index(
                     &frame, "time", JE_CACHE_BINARY_VALUE_FLOAT32,
                     &temp_frame.m_frame_time))
                 {
@@ -358,14 +358,14 @@ namespace
                 }
 
                 jeecs_cache_binary_list cache_components;
-                if (jeecs_cache_binary_document_index(
+                if (je_cache_binary_document_index(
                     &frame, "components", JE_CACHE_BINARY_VALUE_LIST,
                     &cache_components))
                 {
                     for (size_t i = 0;; ++i)
                     {
                         jeecs_cache_binary_document component;
-                        if (!jeecs_cache_binary_list_index(
+                        if (!je_cache_binary_list_index(
                             &cache_components,
                             i,
                             JE_CACHE_BINARY_VALUE_DOCUMENT,
@@ -383,7 +383,7 @@ namespace
                         }
 
                         bool offset_mode = false;
-                        if (!jeecs_cache_binary_document_index(
+                        if (!je_cache_binary_document_index(
                             &component, "offset", JE_CACHE_BINARY_VALUE_BOOL,
                             &offset_mode))
                         {
@@ -448,14 +448,14 @@ namespace
                 }
 
                 jeecs_cache_binary_list cache_uniforms;
-                if (jeecs_cache_binary_document_index(
+                if (je_cache_binary_document_index(
                     &frame, "uniforms", JE_CACHE_BINARY_VALUE_LIST,
                     &cache_uniforms))
                 {
                     for (size_t i = 0;; ++i)
                     {
                         jeecs_cache_binary_document uniform;
-                        if (!jeecs_cache_binary_list_index(
+                        if (!je_cache_binary_list_index(
                             &cache_uniforms,
                             i,
                             JE_CACHE_BINARY_VALUE_DOCUMENT,
@@ -492,7 +492,7 @@ namespace
             out_actions->push_back(std::move(temp_action));
         }
 
-        jeecs_file_close(cache_file);
+        je_file_close(cache_file);
         return true;
     }
 }
@@ -539,7 +539,7 @@ JE_API void je_animation_close(je_animation* animation)
     delete animation;
 }
 
-JE_API /* OPTIONAL */ const je_animation_action_data* je_animation_find_action(
+JE_API /* OPTIONAL */ const je_animation_action_data* je_animation_action_find(
     const je_animation* animation, const char* name)
 {
     assert(animation != nullptr);
@@ -557,10 +557,10 @@ WOORT_API woort_api wojeapi_animation_cache_ensure(void)
 {
     const std::string path = woort_string(0);
 
-    jeecs_file* cache = jeecs_animation_open_or_create_cache(path.c_str());
+    jeecs_file* cache = je_animation_cache_open_or_create(path.c_str());
     if (nullptr != cache)
     {
-        jeecs_file_close(cache);
+        je_file_close(cache);
         return woort_ret_bool(true);
     }
 

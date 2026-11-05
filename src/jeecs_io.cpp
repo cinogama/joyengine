@@ -62,11 +62,11 @@ struct _je_basic_io_state
 };
 _je_basic_io_state _state = {};
 
-void je_io_update_key_state(je_Keycode je_Keycode, bool keydown)
+void je_io_key_state_update(je_Keycode je_Keycode, bool keydown)
 {
     _state._key_states[(uint16_t)je_Keycode] = keydown;
 }
-void je_io_update_mouse_pos(size_t group, int x, int y)
+void je_io_mouse_pos_update(size_t group, int x, int y)
 {
     if (group < jeecs::input::MAX_MOUSE_GROUP_COUNT)
     {
@@ -75,7 +75,7 @@ void je_io_update_mouse_pos(size_t group, int x, int y)
         mouse_stat._pos_y = y;
     }
 }
-void je_io_update_wheel(size_t group, float x, float y)
+void je_io_wheel_update(size_t group, float x, float y)
 {
     if (group < jeecs::input::MAX_MOUSE_GROUP_COUNT)
     {
@@ -84,27 +84,27 @@ void je_io_update_wheel(size_t group, float x, float y)
         mouse_stat._wheel_y = y;
     }
 }
-void je_io_update_window_size(int x, int y)
+void je_io_window_size_update(int x, int y)
 {
     _state._windows_width = x;
     _state._windows_height = y;
 }
-void je_io_update_window_pos(int x, int y)
+void je_io_window_pos_update(int x, int y)
 {
     _state._windows_pos_x = x;
     _state._windows_pos_y = y;
 }
-void je_io_set_lock_mouse(bool lock)
+void je_io_mouse_lock_set(bool lock)
 {
     _state._shoudle_lock_mouse = lock;
 }
 
-bool je_io_get_key_down(je_Keycode je_Keycode)
+bool je_io_key_down_get(je_Keycode je_Keycode)
 {
     return _state._key_states[(uint16_t)je_Keycode];
 }
 
-void je_io_get_mouse_pos(size_t group, int *out_x, int *out_y)
+void je_io_mouse_pos_get(size_t group, int *out_x, int *out_y)
 {
     if (group < jeecs::input::MAX_MOUSE_GROUP_COUNT)
     {
@@ -118,7 +118,7 @@ void je_io_get_mouse_pos(size_t group, int *out_x, int *out_y)
         *out_y = 0;
     }
 }
-void je_io_get_wheel(size_t group, float *out_x, float *out_y)
+void je_io_wheel_get(size_t group, float *out_x, float *out_y)
 {
     if (group < jeecs::input::MAX_MOUSE_GROUP_COUNT)
     {
@@ -132,27 +132,27 @@ void je_io_get_wheel(size_t group, float *out_x, float *out_y)
         *out_y = 0.0f;
     }
 }
-bool je_io_get_lock_mouse()
+bool je_io_mouse_lock_get()
 {
     return _state._shoudle_lock_mouse;
 }
-void je_io_get_window_size(int *out_x, int *out_y)
+void je_io_window_size_get(int *out_x, int *out_y)
 {
     *out_x = _state._windows_width;
     *out_y = _state._windows_height;
 }
-void je_io_get_window_pos(int *out_x, int *out_y)
+void je_io_window_pos_get(int *out_x, int *out_y)
 {
     *out_x = _state._windows_pos_x;
     *out_y = _state._windows_pos_y;
 }
-void je_io_set_window_size(int x, int y)
+void je_io_window_size_set(int x, int y)
 {
     _state._new_windows_width = x;
     _state._new_windows_height = y;
     _state._should_update_windowsize = true;
 }
-bool je_io_fetch_update_window_size(int *out_x, int *out_y)
+bool je_io_window_size_fetch_update(int *out_x, int *out_y)
 {
     if (_state._should_update_windowsize)
     {
@@ -165,13 +165,13 @@ bool je_io_fetch_update_window_size(int *out_x, int *out_y)
     return false;
 }
 
-void je_io_set_window_title(const char *title)
+void je_io_window_title_set(const char *title)
 {
     _state._new_windowtitle = title;
     _state._should_update_windowtitle = true;
 }
 
-bool je_io_fetch_update_window_title(const char **out_title)
+bool je_io_window_title_fetch_update(const char **out_title)
 {
     if (_state._should_update_windowtitle)
     {
@@ -182,20 +182,20 @@ bool je_io_fetch_update_window_title(const char **out_title)
     return false;
 }
 
-bool je_io_get_mouse_state(size_t group, je_Mousecode key)
+bool je_io_mouse_state_get(size_t group, je_Mousecode key)
 {
     if (group < jeecs::input::MAX_MOUSE_GROUP_COUNT)
         return _state._mouses[group]._key_states[(size_t)key];
     return false;
 }
 
-void je_io_update_mouse_state(size_t group, je_Mousecode key, bool keydown)
+void je_io_mouse_state_update(size_t group, je_Mousecode key, bool keydown)
 {
     if (group < jeecs::input::MAX_MOUSE_GROUP_COUNT)
         _state._mouses[group]._key_states[(size_t)key] = keydown;
 }
 
-je_io_gamepad_handle_t je_io_create_gamepad(
+je_io_gamepad_handle_t je_io_gamepad_create(
     /* OPTIONAL */ const char *name_may_null, /* OPTIONAL */ const char *guid_may_null)
 {
     std::lock_guard g(_state._gamepads_mx);
@@ -260,7 +260,7 @@ je_io_gamepad_handle_t je_io_create_gamepad(
     gamepad->_enabled = true;
     return gamepad;
 }
-void je_io_close_gamepad(je_io_gamepad_handle_t gamepad)
+void je_io_gamepad_close(je_io_gamepad_handle_t gamepad)
 {
     if (!gamepad->_enabled)
     {
@@ -309,7 +309,7 @@ bool je_io_gamepad_is_active(
 
     return gamepad->_enabled;
 }
-bool je_io_gamepad_get_button_down(
+bool je_io_gamepad_button_down_get(
     je_io_gamepad_handle_t gamepad, je_Gamepadcode code)
 {
     if (!gamepad->_enabled)
@@ -317,7 +317,7 @@ bool je_io_gamepad_get_button_down(
 
     return gamepad->_key_states[(size_t)code];
 }
-void je_io_gamepad_update_button_state(
+void je_io_gamepad_button_state_update(
     je_io_gamepad_handle_t gamepad, je_Gamepadcode code, bool down)
 {
     if (!gamepad->_enabled)
@@ -330,7 +330,7 @@ void je_io_gamepad_update_button_state(
         gamepad->_last_update_time = je_clock_time_stamp();
 }
 
-void je_io_gamepad_get_stick(
+void je_io_gamepad_stick_get(
     je_io_gamepad_handle_t gamepad, je_Joystickcode stickid, float *out_x, float *out_y)
 {
     if (!gamepad->_enabled)
@@ -343,7 +343,7 @@ void je_io_gamepad_get_stick(
     *out_x = stick._position.x;
     *out_y = stick._position.y;
 }
-void je_io_gamepad_update_stick(
+void je_io_gamepad_stick_update(
     je_io_gamepad_handle_t gamepad, je_Joystickcode stickid, float x, float y)
 {
     if (!gamepad->_enabled)
@@ -365,7 +365,7 @@ void je_io_gamepad_update_stick(
     }
 }
 
-void je_io_gamepad_stick_set_deadzone(
+void je_io_gamepad_stick_deadzone_set(
     je_io_gamepad_handle_t gamepad, je_Joystickcode stickid, float deadzone)
 {
     if (!gamepad->_enabled)

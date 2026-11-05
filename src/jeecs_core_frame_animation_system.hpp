@@ -29,7 +29,7 @@ namespace jeecs
             for (size_t i = 0; i < frame.m_component_data_count; ++i)
             {
                 const je_animation_component_data& cdata = frame.m_component_data[i];
-                auto* component_addr = je_ecs_world_entity_get_component(&e._m_raw, cdata.m_component_type->m_id);
+                auto* component_addr = je_ecs_world_entity_component_get(&e._m_raw, cdata.m_component_type->m_id);
 
                 if (component_addr == nullptr)
                     continue;

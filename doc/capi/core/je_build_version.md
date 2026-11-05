@@ -30,13 +30,13 @@ JE_API const char* je_build_version();
 #include <cstdio>
 
 int main() {
-    je_init(0, nullptr);
+    je_core_init(0, nullptr);
     
     // 输出引擎版本信息
     printf("Engine Version: %s\n", je_build_version());
     // 输出示例: "Engine Version: JoyEngine 4.9.0 Dec 10 2025 14:30:00"
     
-    je_finish();
+    je_core_finish();
     return 0;
 }
 ```
@@ -50,4 +50,4 @@ int main() {
 ## 相关接口
 
 - [je_build_commit](je_build_commit.md) - 获取引擎提交哈希
-- [je_init](je_init.md) - 引擎初始化操作
+- [je_core_init](je_core_init.md) - 引擎初始化操作

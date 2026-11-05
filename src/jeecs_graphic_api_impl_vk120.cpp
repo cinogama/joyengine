@@ -1895,7 +1895,7 @@ namespace jeecs::graphic::api::vk120
         void recreate_swap_chain_for_current_surface()
         {
             int _w, _h;
-            je_io_get_window_size(&_w, &_h);
+            je_io_window_size_get(&_w, &_h);
 
             RESOLUTION_WIDTH = (size_t)_w;
             RESOLUTION_HEIGHT = (size_t)_h;
@@ -3431,7 +3431,7 @@ namespace jeecs::graphic::api::vk120
             }
 
             // 创建索引缓冲区：按分配容量上传（m_index_count 可能已被
-            // jegl_update_vertex_buffer 收缩为激活数量，绘制数量另存于
+            // je_graphic_vertex_buffer_update 收缩为激活数量，绘制数量另存于
             // m_vertex_point_count）
             void* index_mapped = nullptr;
             alloc_vk_device_buffer_memory(
@@ -5440,7 +5440,7 @@ namespace jeecs::graphic::api::vk120
             context->recreate_swapchain_and_reinit_imgui();
             break;
         case basic_interface::update_result::CLOSE:
-            if (jegui_shutdown_callback())
+            if (je_gui_backend_shutdown_callback())
                 return jegl_update_action::JEGL_UPDATE_STOP;
             [[fallthrough]];
         case basic_interface::update_result::NORMAL:
@@ -6039,7 +6039,7 @@ namespace jeecs::graphic::api::vk120
 }
 
 // 导出图形接口！
-void jegl_using_vk120_apis(jegl_graphic_api* write_to_apis)
+void je_graphic_using_vk120_apis(jegl_graphic_api* write_to_apis)
 {
     using namespace jeecs::graphic::api::vk120;
 
@@ -6119,7 +6119,7 @@ void jegl_using_vk120_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->commit_end = render_commit_end;
 }
 #else
-void jegl_using_vk120_apis(jegl_graphic_api* write_to_apis)
+void je_graphic_using_vk120_apis(jegl_graphic_api* write_to_apis)
 {
     jeecs::debug::logfatal("vk120 not available.");
 }

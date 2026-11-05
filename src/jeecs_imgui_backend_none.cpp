@@ -10,7 +10,7 @@ void jegui_init_none(
     jegui_user_image_loader_t get_img_res,
     jegui_user_sampler_loader_t apply_shader_sampler)
 {
-    jegui_init_basic(ctx, get_img_res, apply_shader_sampler);
+    je_gui_backend_init(ctx, get_img_res, apply_shader_sampler);
     ImGuiIO &io = ImGui::GetIO();
 
     unsigned char *tex_pixels = nullptr;
@@ -25,10 +25,10 @@ void jegui_update_none()
     io.DisplaySize = ImVec2(1920, 1080);
     io.DeltaTime = 1.0f / 60.0f;
 
-    jegui_update_basic([](void *) {}, nullptr);
+    je_gui_backend_update([](void *) {}, nullptr);
 }
 
 void jegui_shutdown_none(bool reboot)
 {
-    jegui_shutdown_basic(reboot);
+    je_gui_backend_shutdown(reboot);
 }

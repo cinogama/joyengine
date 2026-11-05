@@ -52,25 +52,25 @@ static std::string _je_woort_exe_path()
     return path;
 }
 
-void jegl_set_host_graphic_api(/* OPTIONAL: nullptr to use platform default */ jegl_graphic_api_entry api)
+void je_graphic_host_api_set(/* OPTIONAL: nullptr to use platform default */ jegl_graphic_api_entry api)
 {
     _je_global_context._jegl_host_graphic_api = api;
 }
 
-jegl_graphic_api_entry jegl_get_host_graphic_api(void)
+jegl_graphic_api_entry je_graphic_host_api_get(void)
 {
     if (_je_global_context._jegl_host_graphic_api == nullptr)
     {
 #if defined(JE_ENABLE_DX11_GAPI)
-        return jegl_using_dx11_apis;
+        return je_graphic_using_dx11_apis;
 #elif defined(JE_ENABLE_METAL_GAPI)
-        return jegl_using_metal_apis;
+        return je_graphic_using_metal_apis;
 #elif defined(JE_ENABLE_VK120_GAPI)
-        return jegl_using_vk120_apis;
+        return je_graphic_using_vk120_apis;
 #elif defined(JE_ENABLE_GL330_GAPI) || defined(JE_ENABLE_GLES300_GAPI) || defined(JE_ENABLE_WEBGL20_GAPI)
-        return jegl_using_opengl3_apis;
+        return je_graphic_using_opengl3_apis;
 #else
-        return jegl_using_none_apis;
+        return je_graphic_using_none_apis;
 #endif
     }
     return _je_global_context._jegl_host_graphic_api;
@@ -191,13 +191,13 @@ static void je_default_graphic_interface_sync_func(jegl_context* gthread, void*)
             jegl_sync_state state = jegl_sync_state::JEGL_SYNC_SHUTDOWN;
             for (;;)
             {
-                jegl_sync_init(gthread, state == jegl_sync_state::JEGL_SYNC_REBOOT);
+                je_graphic_sync_init(gthread, state == jegl_sync_state::JEGL_SYNC_REBOOT);
                 do
                 {
-                    state = jegl_sync_update(gthread);
+                    state = je_graphic_sync_update(gthread);
                 } while (state == jegl_sync_state::JEGL_SYNC_COMPLETE);
 
-                if (jegl_sync_shutdown(gthread, state == jegl_sync_state::JEGL_SYNC_REBOOT))
+                if (je_graphic_sync_shutdown(gthread, state == jegl_sync_state::JEGL_SYNC_REBOOT))
                     break;
             }
         })
@@ -207,10 +207,10 @@ static void je_default_graphic_interface_sync_func(jegl_context* gthread, void*)
 void _jeecs_entry_register_core_systems(
     jeecs::typing::type_unregister_guard* guard);
 
-void je_init(int argc, /* OPTIONAL: If argc == 0 */ char** argv)
+void je_core_init(int argc, /* OPTIONAL: If argc == 0 */ char** argv)
 {
     // Update default graphic sync funciton
-    jegl_register_sync_thread_callback(
+    je_graphic_sync_thread_callback_register(
         je_default_graphic_interface_sync_func, nullptr);
 
     _je_global_context._jegl_host_graphic_api = nullptr;
@@ -238,31 +238,31 @@ void je_init(int argc, /* OPTIONAL: If argc == 0 */ char** argv)
                 ;
 #if defined(JE_ENABLE_DX11_GAPI)
             else if (value == "dx11")
-                jegl_set_host_graphic_api(jegl_using_dx11_apis);
+                je_graphic_host_api_set(je_graphic_using_dx11_apis);
 #endif
 #if defined(JE_ENABLE_GL330_GAPI) || defined(JE_ENABLE_GLES300_GAPI) || defined(JE_ENABLE_WEBGL20_GAPI)
             else if (value == "gl3")
-                jegl_set_host_graphic_api(jegl_using_opengl3_apis);
+                je_graphic_host_api_set(je_graphic_using_opengl3_apis);
 #endif
 #if defined(JE_ENABLE_VK120_GAPI)
             else if (value == "vk120")
-                jegl_set_host_graphic_api(jegl_using_vk120_apis);
+                je_graphic_host_api_set(je_graphic_using_vk120_apis);
 #endif
 #if defined(JE_ENABLE_METAL_GAPI)
             else if (value == "metal")
-                jegl_set_host_graphic_api(jegl_using_metal_apis);
+                je_graphic_host_api_set(je_graphic_using_metal_apis);
 #endif
             else if (value == "none")
-                jegl_set_host_graphic_api(jegl_using_none_apis);
+                je_graphic_host_api_set(je_graphic_using_none_apis);
             else
                 jeecs::debug::logwarn("Unknown graphic api named: '%s'.", value.c_str());
         }
     }
 
     const auto exe_path = _je_woort_exe_path();
-    jeecs_file_set_host_path(exe_path.c_str());
-    jeecs_file_set_runtime_path(exe_path.c_str());
-    jeecs_fimg_set_default_archive(exe_path.c_str());
+    je_file_host_path_set(exe_path.c_str());
+    je_file_runtime_path_set(exe_path.c_str());
+    je_fimg_default_archive_set(exe_path.c_str());
 
     je_extern_lib_woo_api_init();
     je_extern_lib_3rd_pkgs_init();
@@ -279,13 +279,13 @@ void je_init(int argc, /* OPTIONAL: If argc == 0 */ char** argv)
 
 static woort_CodeEnv* _je_open_file_to_compile_vm(const char* vpath)
 {
-    auto* src_file_handle = jeecs_file_open(vpath);
+    auto* src_file_handle = je_file_open(vpath);
     if (src_file_handle == nullptr)
         return nullptr;
 
-    std::vector<char> src_buffer(jeecs_file_size(src_file_handle));
-    jeecs_file_read(src_buffer.data(), sizeof(char), src_buffer.size(), src_file_handle);
-    jeecs_file_close(src_file_handle);
+    std::vector<char> src_buffer(je_file_size(src_file_handle));
+    je_file_read(src_buffer.data(), sizeof(char), src_buffer.size(), src_file_handle);
+    je_file_close(src_file_handle);
 
     wo_CompileErrors* cerror;
     woort_CodeEnv* const cenv =
@@ -307,7 +307,7 @@ static woort_CodeEnv* _je_try_open_cached_binary()
     return _je_open_file_to_compile_vm("@/builtin/editor.woo.je4cache");
 }
 
-bool je_main_script_entry()
+bool je_core_main_script_entry()
 {
     bool failed_in_start_script = false;
 
@@ -321,7 +321,7 @@ bool je_main_script_entry()
         // Cache loaded, skip,
     }
     else if ((cenv = _je_open_file_to_compile_vm(
-        (std::string(jeecs_file_get_host_path()) + "/builtin/editor/main.wo").c_str())) != nullptr)
+        (std::string(je_file_host_path_get()) + "/builtin/editor/main.wo").c_str())) != nullptr)
     {
         size_t binary_length;
         void* buffer;
@@ -367,7 +367,7 @@ bool je_main_script_entry()
     return !failed_in_start_script;
 }
 
-void je_finish()
+void je_core_finish()
 {
     assert(_je_global_context._je_unregister_guard != nullptr);
     jeecs::entry::module_leave(_je_global_context._je_unregister_guard);
@@ -412,7 +412,7 @@ void je_finish()
     delete _je_global_context._je_unregister_guard;
     _je_global_context._je_unregister_guard = nullptr;
 
-    jeecs_fimg_set_default_archive(nullptr);
+    je_fimg_default_archive_set(nullptr);
     jegl_shader_generator_shutdown();
     je_log_finish();
 }

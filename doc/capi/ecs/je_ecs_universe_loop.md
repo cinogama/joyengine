@@ -28,7 +28,7 @@ JE_API void je_ecs_universe_loop(void* universe);
 
 ```cpp
 int main() {
-    je_init(0, nullptr);
+    je_core_init(0, nullptr);
     
     // 创建 Universe
     void* universe = je_ecs_universe_create();
@@ -36,7 +36,7 @@ int main() {
     // 创建世界并初始化
     void* world = je_ecs_world_create(universe);
     // ... 添加系统、创建实体等初始化操作 ...
-    je_ecs_world_set_enable(world, true);
+    je_ecs_world_enable_set(world, true);
     
     // 阻塞主线程，等待 Universe 退出
     // Universe 会在所有世界关闭且生命周期计数归零后退出
@@ -45,7 +45,7 @@ int main() {
     // Universe 已退出，可以安全销毁
     je_ecs_universe_destroy(universe);
     
-    je_finish();
+    je_core_finish();
     return 0;
 }
 ```
@@ -60,4 +60,4 @@ int main() {
 
 - [je_ecs_universe_create](je_ecs_universe_create.md) - 创建 Universe
 - [je_ecs_universe_destroy](je_ecs_universe_destroy.md) - 销毁 Universe
-- [je_ecs_universe_register_exit_callback](je_ecs_universe_register_exit_callback.md) - 注册退出回调
+- [je_ecs_universe_exit_callback_register](je_ecs_universe_exit_callback_register.md) - 注册退出回调

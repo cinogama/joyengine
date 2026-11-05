@@ -22,12 +22,12 @@ namespace jeecs
     };
     time_context _g_time_ctx;
 }
-double je_clock_get_sleep_suppression()
+double je_clock_sleep_suppression_get()
 {
     return jeecs::_g_time_ctx._sleep_suppression;
 }
 
-void je_clock_set_sleep_suppression(double v)
+void je_clock_sleep_suppression_set(double v)
 {
     jeecs::_g_time_ctx._sleep_suppression = v;
 }

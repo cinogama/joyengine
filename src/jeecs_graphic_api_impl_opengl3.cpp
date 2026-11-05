@@ -438,7 +438,7 @@ namespace jeecs::graphic::api::gl3
         int width = (int)context->RESOLUTION_WIDTH;
         int height = (int)context->RESOLUTION_HEIGHT;
         if (width <= 0 || height <= 0)
-            je_io_get_window_size(&width, &height);
+            je_io_window_size_get(&width, &height);
         if (width <= 0 || height <= 0)
             return false;
 
@@ -587,7 +587,7 @@ namespace jeecs::graphic::api::gl3
         switch (context->m_interface->update())
         {
         case basic_interface::update_result::CLOSE:
-            if (jegui_shutdown_callback())
+            if (je_gui_backend_shutdown_callback())
                 return jegl_update_action::JEGL_UPDATE_STOP;
             goto _label_jegl_gl3_normal_job;
         case basic_interface::update_result::PAUSE:
@@ -595,7 +595,7 @@ namespace jeecs::graphic::api::gl3
         case basic_interface::update_result::RESIZE:
         {
             int width, height;
-            je_io_get_window_size(&width, &height);
+            je_io_window_size_get(&width, &height);
 
             context->RESOLUTION_WIDTH = (size_t)width;
             context->RESOLUTION_HEIGHT = (size_t)height;
@@ -1548,7 +1548,7 @@ namespace jeecs::graphic::api::gl3
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
         // 索引缓冲按分配容量上传（m_index_count 可能被
-        // jegl_update_vertex_buffer 收缩为激活数量，绘制数量另存于
+        // je_graphic_vertex_buffer_update 收缩为激活数量，绘制数量另存于
         // m_pointcount）
         glBufferData(GL_ELEMENT_ARRAY_BUFFER,
             resource->m_index_capacity * sizeof(uint32_t),
@@ -2358,7 +2358,7 @@ namespace jeecs::graphic::api::gl3
     }
 }
 
-void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
+void je_graphic_using_opengl3_apis(jegl_graphic_api* write_to_apis)
 {
     using namespace jeecs::graphic::api::gl3;
 
@@ -2438,7 +2438,7 @@ void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->commit_end = gl_render_commit_end;
 }
 #else
-void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
+void je_graphic_using_opengl3_apis(jegl_graphic_api* write_to_apis)
 {
     jeecs::debug::logfatal("GL3 not available.");
 }

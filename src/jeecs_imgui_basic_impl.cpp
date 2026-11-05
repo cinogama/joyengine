@@ -69,7 +69,7 @@ struct _jegui_static_context
 };
 _jegui_static_context _je_gui_static_ctx;
 
-void jegui_set_font(
+void je_gui_backend_font_set(
     /* OPTIONAL */ const char* general_font_path,
     /* OPTIONAL */ const char* latin_font_path,
     size_t size)
@@ -1810,7 +1810,7 @@ WOORT_API woort_api je_gui_set_font(void)
     if (woort_option_get(elem, 1))
         latin_font_path = woort_string(elem);
 
-    jegui_set_font(font_path, latin_font_path, (size_t)woort_int(2));
+    je_gui_backend_font_set(font_path, latin_font_path, (size_t)woort_int(2));
 
     return woort_ret_void();
 }
@@ -2852,7 +2852,7 @@ WOORT_API woort_api je_gui_close_current_popup(void) { ImGui::CloseCurrentPopup(
 
 ////////////////////////////////////////////////////////////////////////////////////////////
 
-void jegui_init_basic(
+void je_gui_backend_init(
     jegl_context* gl_context,
     jegui_user_image_loader_t get_img_res,
     jegui_user_sampler_loader_t apply_shader_sampler)
@@ -2868,7 +2868,7 @@ void jegui_init_basic(
         .value();
 
     _je_gui_tls_ctx._jegui_imgui_config_path =
-        jeecs_file_get_host_path() + std::string("/builtin/imgui.ini.je4cache");
+        je_file_host_path_get() + std::string("/builtin/imgui.ini.je4cache");
 
     _je_gui_tls_ctx._jegui_stop_work_flag = false;
     ImGui::CreateContext();
@@ -2890,35 +2890,35 @@ void jegui_init_basic(
 
     auto* general_ttf_file =
         _je_gui_static_ctx._jegui_specify_font_path.has_value()
-        ? jeecs_file_open(_je_gui_static_ctx._jegui_specify_font_path.value().c_str())
+        ? je_file_open(_je_gui_static_ctx._jegui_specify_font_path.value().c_str())
         : nullptr;
     auto* latin_ttf_file =
         _je_gui_static_ctx._jegui_specify_latin_font_path.has_value()
-        ? jeecs_file_open(_je_gui_static_ctx._jegui_specify_latin_font_path.value().c_str())
+        ? je_file_open(_je_gui_static_ctx._jegui_specify_latin_font_path.value().c_str())
         : nullptr;
 
     if (general_ttf_file == nullptr)
         // Default font
-        general_ttf_file = jeecs_file_open("!/builtin/font/HarmonyOS_Sans_SC_Regular.ttf");
+        general_ttf_file = je_file_open("!/builtin/font/HarmonyOS_Sans_SC_Regular.ttf");
 
     if (latin_ttf_file == nullptr)
         // Default font
-        latin_ttf_file = jeecs_file_open("!/builtin/font/JetBrainsMono_Regular.ttf");
+        latin_ttf_file = je_file_open("!/builtin/font/JetBrainsMono_Regular.ttf");
 
     if (general_ttf_file)
     {
-        const size_t general_ttf_size = jeecs_file_size(general_ttf_file);
+        const size_t general_ttf_size = je_file_size(general_ttf_file);
         const size_t latin_ttf_size
-            = latin_ttf_file != nullptr ? jeecs_file_size(latin_ttf_file) : 0;
+            = latin_ttf_file != nullptr ? je_file_size(latin_ttf_file) : 0;
 
         void* file_buf = malloc(general_ttf_size);
-        jeecs_file_read(file_buf, sizeof(char), general_ttf_size, general_ttf_file);
+        je_file_read(file_buf, sizeof(char), general_ttf_size, general_ttf_file);
 
         void* latin_file_buf = nullptr;
         if (latin_ttf_file != nullptr)
         {
             latin_file_buf = malloc(latin_ttf_size);
-            jeecs_file_read(latin_file_buf, sizeof(char), latin_ttf_size, latin_ttf_file);
+            je_file_read(latin_file_buf, sizeof(char), latin_ttf_size, latin_ttf_file);
         }
 
         if (latin_file_buf != nullptr)
@@ -2970,7 +2970,7 @@ void jegui_init_basic(
                 io.Fonts->GetGlyphRangesChineseFull());
 
         // free(file_buf); // No need to free.
-        jeecs_file_close(general_ttf_file);
+        je_file_close(general_ttf_file);
     }
 }
 
@@ -3030,7 +3030,7 @@ void jegui_commit_srgb_encode_pass(jegl_texture_2d* source_texture)
         }
         _je_gui_tls_ctx._jegl_srgb_encode_quad = quad.value();
 
-        jegl_pipeline_state state = jegl_pipeline_state_from_shader(
+        jegl_pipeline_state state = je_graphic_pipeline_state_from_shader(
             _je_gui_tls_ctx._jegl_srgb_encode_shader.value()->resource());
         state.m_topology = jegl_topology::TRIANGLE_STRIP;
         state.m_depth_test = false;
@@ -3041,15 +3041,15 @@ void jegui_commit_srgb_encode_pass(jegl_texture_2d* source_texture)
         desc.m_state = &state;
 
         _je_gui_tls_ctx._jegl_srgb_encode_pipeline =
-            jegl_pipeline_create(
+            je_graphic_pipeline_create(
                 _je_gui_tls_ctx._jegl_context, &desc);
     }
 
     auto* cmd = _je_gui_tls_ctx._jegl_srgb_encode_cmd;
     if (cmd == nullptr)
         cmd = _je_gui_tls_ctx._jegl_srgb_encode_cmd =
-            jegl_cmd_create(_je_gui_tls_ctx._jegl_context);
-    jegl_cmd_reset(cmd);
+            je_graphic_cmd_create(_je_gui_tls_ctx._jegl_context);
+    je_graphic_cmd_reset(cmd);
 
     const jegl_viewport viewport{
         0, 0,
@@ -3057,16 +3057,16 @@ void jegui_commit_srgb_encode_pass(jegl_texture_2d* source_texture)
         (uint32_t)source_texture->m_height };
 
     // begin_pass(nullptr) 由后端在编码标志置位时解析为真正的屏幕缓冲区。
-    jegl_cmd_begin_pass(cmd, nullptr, &viewport);
-    jegl_cmd_bind_pipeline(
+    je_graphic_cmd_begin_pass(cmd, nullptr, &viewport);
+    je_graphic_cmd_bind_pipeline(
         cmd, _je_gui_tls_ctx._jegl_srgb_encode_pipeline);
-    jegl_cmd_bind_vertex(
+    je_graphic_cmd_bind_vertex(
         cmd,
         _je_gui_tls_ctx._jegl_srgb_encode_quad.value()->resource());
-    jegl_cmd_bind_texture_2d(cmd, 0, source_texture);
-    jegl_cmd_draw(cmd, 4, 0, 1);
-    jegl_cmd_end_pass(cmd);
-    jegl_cmd_commit(cmd);
+    je_graphic_cmd_bind_texture_2d(cmd, 0, source_texture);
+    je_graphic_cmd_draw(cmd, 4, 0, 1);
+    je_graphic_cmd_end_pass(cmd);
+    je_graphic_cmd_commit(cmd);
 }
 
 // These backends present through either a hardware sRGB target or a final
@@ -3130,7 +3130,7 @@ namespace
 }
 #endif
 
-void jegui_update_basic(
+void je_gui_backend_update(
     jegui_platform_draw_callback_t platform_draw_callback,
     /* OPTIONAL */ void* data)
 {
@@ -3227,7 +3227,7 @@ void jegui_update_basic(
         ImGui::RenderPlatformWindowsDefault();
     }
 }
-void jegui_shutdown_basic(bool reboot)
+void je_gui_backend_shutdown(bool reboot)
 {
     if (!reboot)
     {
@@ -3253,7 +3253,7 @@ void jegui_shutdown_basic(bool reboot)
     }
 }
 
-bool jegui_shutdown_callback()
+bool je_gui_backend_shutdown_callback()
 {
 #ifndef NDEBUG
     jeecs::debug::loginfo("Graphic interface has been requested to close.");

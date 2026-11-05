@@ -1,6 +1,6 @@
 # fimg 资源镜像格式（v3）
 
-fimg 是 JoyEngine 使用的资源镜像格式，用于把项目资源、编译后的脚本和着色器缓存打包到一组文件中。运行时 `jeecs_file_open` 在真实文件不存在时，会从默认镜像读取 `@/...` 与 `!/...` 路径。
+fimg 是 JoyEngine 使用的资源镜像格式，用于把项目资源、编译后的脚本和着色器缓存打包到一组文件中。运行时 `je_file_open` 在真实文件不存在时，会从默认镜像读取 `@/...` 与 `!/...` 路径。
 
 v3 在 v2 的基础上为每个文件增加了独立的压缩信息。每个条目要么原样存储，要么使用一条独立的 raw deflate 流压缩。
 
@@ -82,12 +82,12 @@ v3 在 v2 的基础上为每个文件增加了独立的压缩信息。每个条�
 - deflate 条目按需解压，`tell`/`size` 始终返回解压后的逻辑位置/大小。
 - 向前 seek 只更新逻辑位置，下一次读取时再解压丢弃到目标位置。
 - 向后 seek 会重置解压器，并从文件头重新解压到目标位置；复杂度为 O(target)。
-- `jeecs_file_read` 与 `fread` 语义一致：返回完整元素个数；文件末尾的部分元素不会计入返回值。
+- `je_file_read` 与 `fread` 语义一致：返回完整元素个数；文件末尾的部分元素不会计入返回值。
 - 压缩数据损坏/截断时记录错误，后续读取返回 0，不会返回未初始化的数据。
 
 ## 写入行为
 
-通过 `jeecs_fimg_writer_*` 创建镜像：
+通过 `je_fimg_writer_*` 创建镜像：
 
 - `shard_size == 0` 时使用 1 MiB。
 - 分片惰性创建，直接流式写入，不会分配 `shard_size` 大小的整块内存。
@@ -114,6 +114,6 @@ v3 在 v2 的基础上为每个文件增加了独立的压缩信息。每个条�
 
 - `compression_level`：`-1` 使用默认等级 6；`0` 仅存储；`1-9` 使用 deflate。
 - `min_compress_size`：小于该值的文件不压缩。
-- `skip_extensions`：逗号/分号/空白分隔的扩展名列表，大小写不敏感，前导 `.` 可有可无；传 `nullptr` 使用 `jeecs_fimg_default_skip_extensions()` 的默认列表，空字符串表示不跳过任何扩展名。
+- `skip_extensions`：逗号/分号/空白分隔的扩展名列表，大小写不敏感，前导 `.` 可有可无；传 `nullptr` 使用 `je_fimg_default_skip_extensions()` 的默认列表，空字符串表示不跳过任何扩展名。
 
 默认跳过列表包含：PNG、JPEG、GIF、WebP、ICO、PSD、PDF、ZIP、JAR、APK、GZ、BZ2、XZ、7Z、RAR、ZST、BR、MP3、OGG、OPUS、AAC、FLAC、MP4、WEBM、MKV、AVI、MOV、WOFF/WOFF2、DDS、KTX 等。

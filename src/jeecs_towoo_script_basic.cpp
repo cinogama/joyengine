@@ -32,7 +32,7 @@ namespace jeecs
 
                 std::vector<const je_TypeInfo*> m_used_components;
 
-                // 运行时收集的需求（视图需求排在最前，与 je_ecs_collect_requirements 约定一致），
+                // 运行时收集的需求（视图需求排在最前，与 je_ecs_requirements_collect 约定一致），
                 // 仅在首次查询切片缓存时用于初始化 je_CollectedRequirements。
                 std::vector<je_ComponentRequirement> m_requirements;
             };
@@ -247,21 +247,21 @@ namespace jeecs
                 // 时，用运行时收集的 je_ComponentRequirement[] 初始化 je_CollectedRequirements
                 // 并刷新 arch 信息；后续每帧由 _arch_modified 统一驱动更新，生命周期由世界托管。
                 je_RequirementCollection* collection = nullptr;
-                if (!je_ecs_world_query_slice_dependence(
+                if (!je_ecs_world_slice_dependence_query(
                     world_handle, this, work.m_work_sequence, &collection))
                 {
-                    collection->m_collected_requirement = je_ecs_collect_requirements(
+                    collection->m_collected_requirement = je_ecs_requirements_collect(
                         work.m_requirements.data(),
                         work.m_used_components.size(),
                         work.m_requirements.size() - work.m_used_components.size());
-                    je_ecs_world_update_collection(world_handle, collection);
+                    je_ecs_world_collection_update(world_handle, collection);
                 }
 
                 for (size_t arch_idx = 0;
                     arch_idx < collection->m_cached_arch_count; ++arch_idx)
                 {
                     const auto& archinfo = collection->m_cached_archs[arch_idx];
-                    auto cur_chunk = je_arch_get_chunk(archinfo.m_arch);
+                    auto cur_chunk = je_arch_chunk_get(archinfo.m_arch);
                     const size_t used_component_count = work.m_used_components.size();
 
                     woort_value stack_base;
@@ -333,7 +333,7 @@ namespace jeecs
                                 return;
                             }
                         }
-                        cur_chunk = je_arch_next_chunk(cur_chunk);
+                        cur_chunk = je_arch_chunk_next(cur_chunk);
                     }
 
                     woort_pop(used_component_count + 2);
@@ -515,17 +515,17 @@ namespace jeecs
 // File-scope helpers and WOORT_API / free functions (global scope)
 // ==========================================================================
 
-void je_towoo_unregister_system(/* OPTIONAL */ const je_TypeInfo* tinfo);
+void je_towoo_system_unregister(/* OPTIONAL */ const je_TypeInfo* tinfo);
 
 namespace
 {
     //
-    // Helpers for je_towoo_update_api
+    // Helpers for je_towoo_api_update
     //
 
     std::vector<const je_TypeInfo*> _gather_all_registed_types()
     {
-        auto** alltypes = jedbg_get_all_registed_types();
+        auto** alltypes = je_debug_types_registered_get_all();
         std::vector<const je_TypeInfo*> all_registed_types;
         for (auto* idx = alltypes; *idx != nullptr; ++idx)
             all_registed_types.push_back(*idx);
@@ -694,7 +694,7 @@ import je::towoo::types;
 #endif
 
     //
-    // Helpers for je_towoo_register_system
+    // Helpers for je_towoo_system_register
     //
 
     bool _load_system_functions(
@@ -763,7 +763,7 @@ import je::towoo::types;
 
     const je_TypeInfo* _register_system_type(const char* system_name)
     {
-        je_towoo_unregister_system(je_typing_get_info_by_name(system_name));
+        je_towoo_system_unregister(je_typing_info_get_by_name(system_name));
 
         const je_TypeInfo* created_system_type_info = je_typing_register(
             system_name,
@@ -776,7 +776,7 @@ import je::towoo::types;
             jeecs::typing::default_functions<jeecs::towoo::ToWooBaseSystem>::copier,
             jeecs::typing::default_functions<jeecs::towoo::ToWooBaseSystem>::mover);
 
-        je_register_system_updater(
+        je_typing_system_updater_register(
             created_system_type_info,
             jeecs::typing::default_functions<jeecs::towoo::ToWooBaseSystem>::on_enable,
             jeecs::typing::default_functions<jeecs::towoo::ToWooBaseSystem>::on_disable,
@@ -909,7 +909,7 @@ import je::towoo::types;
             if (wooval != nullptr)
                 *woort_internal_value(wooval_init) = wooval->m_wooval_val;
 
-            je_register_member(
+            je_typing_member_register(
                 towoo_component_tinfo,
                 memberinfo.m_type,
                 memberinfo.m_name.c_str(),
@@ -930,7 +930,7 @@ WOORT_API woort_api wojeapi_towoo_add_component(void)
     auto* e = static_cast<je_GameEntity*>(woort_gcpointer(0));
     auto* ty = static_cast<const je_TypeInfo*>(woort_pointer(1));
 
-    void* comp = je_ecs_world_entity_add_component(e, ty->m_id);
+    void* comp = je_ecs_world_entity_component_add(e, ty->m_id);
 
     woort_value stack_base;
     if (!woort_push_reserve(1, &stack_base))
@@ -945,7 +945,7 @@ WOORT_API woort_api wojeapi_towoo_get_component(void)
     auto* e = static_cast<je_GameEntity*>(woort_gcpointer(0));
     auto* ty = static_cast<const je_TypeInfo*>(woort_pointer(1));
 
-    void* comp = je_ecs_world_entity_get_component(e, ty->m_id);
+    void* comp = je_ecs_world_entity_component_get(e, ty->m_id);
     if (comp != nullptr)
     {
         woort_value stack_base;
@@ -963,7 +963,7 @@ WOORT_API woort_api wojeapi_towoo_remove_component(void)
     auto* e = static_cast<je_GameEntity*>(woort_gcpointer(0));
     auto* ty = static_cast<const je_TypeInfo*>(woort_pointer(1));
 
-    je_ecs_world_entity_remove_component(e, ty->m_id);
+    je_ecs_world_entity_component_remove(e, ty->m_id);
     return woort_ret_void();
 }
 WOORT_API woort_api wojeapi_towoo_member_get(void)
@@ -989,7 +989,7 @@ WOORT_API woort_api wojeapi_towoo_member_set(void)
 // System registration / lifecycle
 // ==========================================================================
 
-void je_towoo_update_api()
+void je_towoo_api_update()
 {
     // ATTENTION: woolang_parsing_type_decl cannot import je/towoo/components in any way,
     // because towoo components depend on this file being loaded, and during packaging,
@@ -1029,7 +1029,7 @@ void je_towoo_update_api()
 #endif
 }
 
-void je_towoo_unregister_system(/* OPTIONAL */ const je_TypeInfo* tinfo)
+void je_towoo_system_unregister(/* OPTIONAL */ const je_TypeInfo* tinfo)
 {
     if (tinfo == nullptr)
         return;
@@ -1051,13 +1051,13 @@ void je_towoo_unregister_system(/* OPTIONAL */ const je_TypeInfo* tinfo)
     }
 }
 
-/* OPTIONAL: If registration failed */ const je_TypeInfo* je_towoo_register_system(
+/* OPTIONAL: If registration failed */ const je_TypeInfo* je_towoo_system_register(
     const char* system_name,
     const char* script_path)
 {
     const je_TypeInfo* created_system_type_info = nullptr;
 
-    jeecs_file* texfile = jeecs_file_open(script_path);
+    jeecs_file* texfile = je_file_open(script_path);
     if (texfile == nullptr)
     {
         jeecs::debug::logerr("Failed to register: '%s' unable to open file '%s'.",
@@ -1065,15 +1065,15 @@ void je_towoo_unregister_system(/* OPTIONAL */ const je_TypeInfo* tinfo)
         return nullptr;
     }
 
-    const size_t script_size = jeecs_file_size(texfile);
+    const size_t script_size = je_file_size(texfile);
     char* src = static_cast<char*>(malloc(script_size + 1));
-    jeecs_file_read(src, sizeof(char), script_size, texfile);
+    je_file_read(src, sizeof(char), script_size, texfile);
     src[script_size] = 0;
 
     wo_CompileErrors* cerror;
     woort_CodeEnv* cenv = wo_load_binary(script_path, src, script_size, &cerror);
 
-    jeecs_file_close(texfile);
+    je_file_close(texfile);
     free(src);
 
     if (cenv == nullptr)
@@ -1246,7 +1246,7 @@ WOORT_API woort_api wojeapi_towoo_update_component_data(void)
 {
     const std::string component_name = woort_string(0);
 
-    auto* towoo_component_tinfo = je_typing_get_info_by_name(component_name.c_str());
+    auto* towoo_component_tinfo = je_typing_info_get_by_name(component_name.c_str());
     if (towoo_component_tinfo != nullptr)
     {
         if (towoo_component_tinfo->m_hash

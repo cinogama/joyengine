@@ -457,21 +457,21 @@ void je_typing_reset(
         _move_constructor);
 }
 
-/* OPTIONAL: If _id is invalid or unregistered */ const je_TypeInfo* je_typing_get_info_by_id(
+/* OPTIONAL: If _id is invalid or unregistered */ const je_TypeInfo* je_typing_info_get_by_id(
     je_TypeId _id)
 {
     return jeecs_impl::global_factory_holder::holder()
         ->get_info_by_id(_id);
 }
 
-/* OPTIONAL: If _hash is not registered */ const je_TypeInfo* je_typing_get_info_by_hash(
+/* OPTIONAL: If _hash is not registered */ const je_TypeInfo* je_typing_info_get_by_hash(
     je_TypeHash _hash)
 {
     return jeecs_impl::global_factory_holder::holder()
         ->get_info_by_hash(_hash);
 }
 
-/* OPTIONAL: If type_name is not found */ const je_TypeInfo* je_typing_get_info_by_name(
+/* OPTIONAL: If type_name is not found */ const je_TypeInfo* je_typing_info_get_by_name(
     const char* type_name)
 {
     return jeecs_impl::global_factory_holder::holder()->get_info_by_name(type_name);
@@ -483,7 +483,7 @@ void je_typing_unregister(const je_TypeInfo* tinfo)
         const_cast<je_TypeInfo*>(tinfo));
 }
 
-void je_register_member(
+void je_typing_member_register(
     const je_TypeInfo* _classtype,
     const je_TypeInfo* _membertype,
     const char* _member_name,
@@ -501,7 +501,7 @@ void je_register_member(
             _member_offset);
 }
 
-void je_register_script_parser(
+void je_typing_script_parser_register(
     const je_TypeInfo* _type,
     je_ParseC2WFunc c2w,
     je_ParseW2CFunc w2c,
@@ -517,7 +517,7 @@ void je_register_script_parser(
             woolang_typedecl);
 }
 
-void je_register_system_updater(
+void je_typing_system_updater_register(
     const je_TypeInfo* _type,
     je_OnEnableOrDisableFunc _on_enable,
     je_OnEnableOrDisableFunc _on_disable,
@@ -548,7 +548,7 @@ void je_register_system_updater(
 ///////////////////////////////////////////////////////////////////////////
 
 // NOTE: need free the return result by 'je_mem_free'
-const je_TypeInfo** jedbg_get_all_registed_types(void)
+const je_TypeInfo** je_debug_types_registered_get_all(void)
 {
     auto&& types = jeecs_impl::global_factory_holder::holder()->get_all_registed_types();
     auto result = (const je_TypeInfo**)je_mem_alloc(sizeof(const je_TypeInfo*) * (types.size() + 1));

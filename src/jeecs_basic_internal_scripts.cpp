@@ -12,7 +12,7 @@ namespace jeecs
 {
     static std::optional<woort_CodeEnv*> _je_try_load_internal_script_with_cache(const char* path)
     {
-        auto* const cache_file = jeecs_load_cache_file(path, INTERNAL_SCRIPT_CACHE_VERSION, 0);
+        auto* const cache_file = je_cache_file_load(path, INTERNAL_SCRIPT_CACHE_VERSION, 0);
         woort_CodeEnv* cenv = nullptr;
 
         if (cache_file != nullptr)
@@ -20,11 +20,11 @@ namespace jeecs
             do
             {
                 jeecs_cache_binary_document doc;
-                if (!jeecs_cache_binary_document_open(cache_file, &doc))
+                if (!je_cache_binary_document_open(cache_file, &doc))
                     break;
 
                 jeecs_cache_binary_buffer content;
-                if (!jeecs_cache_binary_document_index(
+                if (!je_cache_binary_document_index(
                     &doc,
                     "content",
                     jeecs_cache_binary_value_type::JE_CACHE_BINARY_VALUE_BUFFER,
@@ -36,11 +36,11 @@ namespace jeecs
 
                 // Ok, trying to load binary buffer.
                 size_t length = 0;
-                if (!jeecs_cache_binary_buffer_read(nullptr, &length, &content))
+                if (!je_cache_binary_buffer_read(nullptr, &length, &content))
                     break;
 
                 vector<char> binary_content(length);
-                if (!jeecs_cache_binary_buffer_read(binary_content.data(), &length, &content))
+                if (!je_cache_binary_buffer_read(binary_content.data(), &length, &content))
                     break;
 
                 wo_CompileErrors* compile_errors;
@@ -60,7 +60,7 @@ namespace jeecs
             } while (0);
 
             // Close cache file.
-            jeecs_file_close(cache_file);
+            je_file_close(cache_file);
 
             if (cenv != nullptr)
                 return cenv;
@@ -68,24 +68,24 @@ namespace jeecs
             debug::logwarn("Bad internal script cache while loading `%s`, retry with source.", path);
         }
 
-        auto* const file = jeecs_file_open(path);
+        auto* const file = je_file_open(path);
         if (file == nullptr)
         {
             debug::log("Unable to load internal script: `%s`, skip.", path);
             return nullopt;
         }
 
-        const size_t source_length = jeecs_file_size(file);
+        const size_t source_length = je_file_size(file);
         std::vector<char> source_content(source_length);
 
-        if (source_length != jeecs_file_read(source_content.data(), sizeof(char), source_length, file))
+        if (source_length != je_file_read(source_content.data(), sizeof(char), source_length, file))
         {
             debug::logwarn("Failed to read internal script `%s`.", path);
-            jeecs_file_close(file);
+            je_file_close(file);
 
             return nullopt;
         }
-        jeecs_file_close(file);
+        je_file_close(file);
 
         wo_CompileErrors* compile_errors;
         cenv = wo_load_binary(path, source_content.data(), source_length, &compile_errors);
@@ -106,21 +106,21 @@ namespace jeecs
         if (!woort_CodeEnv_save_binary(cenv, &binary_buffer, &binary_length))
             debug::logwarn("Failed to save cache file for internal script `%s`.", path);
 
-        auto* const writting_cache = jeecs_create_cache_file(path, INTERNAL_SCRIPT_CACHE_VERSION, 0);
+        auto* const writting_cache = je_cache_file_create(path, INTERNAL_SCRIPT_CACHE_VERSION, 0);
         bool cache_create_succ = false;
 
         if (writting_cache != nullptr) do
         {
-            if (!jeecs_cache_binary_append_document(writting_cache))
+            if (!je_cache_binary_append_document(writting_cache))
                 break;
 
-            if (!jeecs_cache_binary_append_string(writting_cache, "content"))
+            if (!je_cache_binary_append_string(writting_cache, "content"))
                 break;
 
-            if (!jeecs_cache_binary_append_buffer(writting_cache, binary_buffer, binary_length))
+            if (!je_cache_binary_append_buffer(writting_cache, binary_buffer, binary_length))
                 break;
 
-            if (!jeecs_cache_binary_append_end(writting_cache))
+            if (!je_cache_binary_append_end(writting_cache))
                 break;
 
             cache_create_succ = true;
@@ -133,7 +133,7 @@ namespace jeecs
         woort_free(binary_buffer);
 
         if (writting_cache != nullptr)
-            jeecs_close_cache_file(writting_cache);
+            je_cache_file_close(writting_cache);
 
         return cenv;
     }
@@ -230,7 +230,7 @@ static jeecs_file* _jeecs_generate_cache(
         return nullptr;
     }
 
-    je_writing_cache_file* const cache_file = jeecs_create_cache_file(
+    je_writing_cache_file* const cache_file = je_cache_file_create(
         path, format_version, 0);
 
     if (cache_file == nullptr)
@@ -289,17 +289,17 @@ static jeecs_file* _jeecs_generate_cache(
     (void)woort_vm_swap(last_vm);
     woort_vm_close(vmm);
 
-    jeecs_close_cache_file(cache_file);
+    je_cache_file_close(cache_file);
 
     if (succ)
-        return jeecs_load_cache_file(path, format_version, 0);
+        return je_cache_file_load(path, format_version, 0);
 
     return nullptr;
 }
 
-/* OPTIONAL */ jeecs_file* jeecs_animation_open_or_create_cache(const char* path)
+/* OPTIONAL */ jeecs_file* je_animation_cache_open_or_create(const char* path)
 {
-    if (jeecs_file* file = jeecs_load_cache_file(path, ANIMATION_CACHE_VERSION, 0))
+    if (jeecs_file* file = je_cache_file_load(path, ANIMATION_CACHE_VERSION, 0))
         return file;
 
     if (cache_builder_of_animation.has_value())
@@ -310,9 +310,9 @@ static jeecs_file* _jeecs_generate_cache(
     return nullptr;
 }
 
-/* OPTIONAL */ jeecs_file* jeecs_tilemap_open_or_create_cache(const char* path)
+/* OPTIONAL */ jeecs_file* je_tilemap_cache_open_or_create(const char* path)
 {
-    if (jeecs_file* file = jeecs_load_cache_file(path, TILEMAP_CACHE_VERSION, 0))
+    if (jeecs_file* file = je_cache_file_load(path, TILEMAP_CACHE_VERSION, 0))
         return file;
 
     if (cache_builder_of_tilemap.has_value())
@@ -323,9 +323,9 @@ static jeecs_file* _jeecs_generate_cache(
     return nullptr;
 }
 
-/* OPTIONAL */ jeecs_file* jeecs_tileset_open_or_create_cache(const char* path)
+/* OPTIONAL */ jeecs_file* je_tileset_cache_open_or_create(const char* path)
 {
-    if (jeecs_file* file = jeecs_load_cache_file(path, TILESET_CACHE_VERSION, 0))
+    if (jeecs_file* file = je_cache_file_load(path, TILESET_CACHE_VERSION, 0))
         return file;
 
     if (cache_builder_of_tileset.has_value())

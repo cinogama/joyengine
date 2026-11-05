@@ -25,7 +25,7 @@ void jegui_init_gl330(
     void *window_handle,
     bool reboot)
 {
-    jegui_init_basic(ctx, get_img_res, apply_shader_sampler);
+    je_gui_backend_init(ctx, get_img_res, apply_shader_sampler);
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
     jegui_android_init(window_handle);
@@ -77,7 +77,7 @@ void jegui_update_gl330()
 #ifndef JE_GL_USE_EGL_INSTEAD_GLFW
     GLFWwindow *backup_current_context = glfwGetCurrentContext();
 #endif
-    jegui_update_basic(
+    je_gui_backend_update(
         [](void *)
         { ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData()); },
         nullptr);
@@ -89,7 +89,7 @@ void jegui_update_gl330()
 
 void jegui_shutdown_gl330(bool reboot)
 {
-    jegui_shutdown_basic(reboot);
+    je_gui_backend_shutdown(reboot);
     ImGui_ImplOpenGL3_Shutdown();
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID

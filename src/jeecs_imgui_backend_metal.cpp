@@ -15,7 +15,7 @@ void jegui_init_metal(
     void* window_handle,
     MTL::Device* device)
 {
-    jegui_init_basic(ctx, get_img_res, apply_shader_sampler);
+    je_gui_backend_init(ctx, get_img_res, apply_shader_sampler);
     ImGui_ImplGlfw_InitForOther((GLFWwindow*)window_handle, true);
     ImGui_ImplMetal_Init(device);
 }
@@ -34,7 +34,7 @@ void jegui_update_metal(
         MTL::RenderCommandEncoder* m_command_encoder;
     } metal_states = { command_buffer, command_encoder };
 
-    jegui_update_basic(
+    je_gui_backend_update(
         [](void* state)
         { 
             MetalRendCommandStates* metal_states =
@@ -50,7 +50,7 @@ void jegui_update_metal(
 
 void jegui_shutdown_metal(bool reboot)
 {
-    jegui_shutdown_basic(reboot);
+    je_gui_backend_shutdown(reboot);
     ImGui_ImplMetal_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();

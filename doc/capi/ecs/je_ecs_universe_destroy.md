@@ -47,4 +47,4 @@ je_ecs_universe_destroy(universe);
 
 - [je_ecs_universe_create](je_ecs_universe_create.md) - 创建 Universe
 - [je_ecs_universe_loop](je_ecs_universe_loop.md) - 等待 Universe 退出
-- [je_ecs_universe_trim_lifetime](je_ecs_universe_trim_lifetime.md) - 减少生命周期引用计数
+- [je_ecs_universe_lifetime_trim](je_ecs_universe_lifetime_trim.md) - 减少生命周期引用计数

@@ -547,13 +547,13 @@ namespace jeecs::graphic::api::metal
         switch (metal_context->m_interface->update())
         {
         case basic_interface::update_result::CLOSE:
-            if (jegui_shutdown_callback())
+            if (je_gui_backend_shutdown_callback())
                 return jegl_update_action::JEGL_UPDATE_STOP;
             goto _label_jegl_metal_normal_job;
         case basic_interface::update_result::PAUSE:
             return jegl_update_action::JEGL_UPDATE_SKIP;
         case basic_interface::update_result::RESIZE:
-            je_io_get_window_size(
+            je_io_window_size_get(
                 &metal_context->m_render_states.m_screen_width,
                 &metal_context->m_render_states.m_screen_height);
             metal_context->m_metal_layer->setDrawableSize(
@@ -1222,7 +1222,7 @@ namespace jeecs::graphic::api::metal
 
         // Create index buffer: sized by allocation capacity (m_index_count
         // may have been shrunk to the active count by
-        // jegl_update_vertex_buffer; the draw count is kept separately in
+        // je_graphic_vertex_buffer_update; the draw count is kept separately in
         // metal_vertex::m_index_count)
         MTL::Buffer* index_buffer = metal_context->m_metal_device->newBuffer(
             vertex->m_indices,
@@ -2176,7 +2176,7 @@ namespace jeecs::graphic::api::metal
     {}
 }
 
-void jegl_using_metal_apis(jegl_graphic_api* write_to_apis)
+void je_graphic_using_metal_apis(jegl_graphic_api* write_to_apis)
 {
     using namespace jeecs::graphic::api::metal;
 
@@ -2257,7 +2257,7 @@ void jegl_using_metal_apis(jegl_graphic_api* write_to_apis)
 }
 
 #else
-void jegl_using_metal_apis(jegl_graphic_api* write_to_apis)
+void je_graphic_using_metal_apis(jegl_graphic_api* write_to_apis)
 {
     jeecs::debug::logfatal("METAL not available.");
 }

@@ -20,9 +20,9 @@ public:
     je_webgl_context(int argc, char** argv)
         : game_engine_context(argc, argv)
     {
-        jeecs_file_set_host_path("/.je4");
-        jeecs_file_set_runtime_path("/.je4");
-        jeecs_fimg_set_default_archive("/");
+        je_file_host_path_set("/.je4");
+        je_file_runtime_path_set("/.je4");
+        je_fimg_default_archive_set("/");
 
         (void)prepare_graphic(true);
     }
@@ -49,7 +49,7 @@ public:
                     recorded_canvas_height = rheight;
 
                     if (width > 0 && height > 0)
-                        je_io_set_window_size(rwidth, rheight);
+                        je_io_window_size_set(rwidth, rheight);
                 }
             }
             break;
@@ -81,15 +81,15 @@ extern "C"
         g_webgl_context = new je_webgl_context(g_argc, g_argv);
     }
     void EMSCRIPTEN_KEEPALIVE 
-        _je4_je_io_update_mousepos(int group, int x, int y)
+        _je4_je_io_mouse_pos_update(int group, int x, int y)
     {
-        je_io_update_mouse_pos((size_t)group, x, y);
+        je_io_mouse_pos_update((size_t)group, x, y);
     }
     void EMSCRIPTEN_KEEPALIVE 
-        _je4_je_io_update_mouse_state(
+        _je4_je_io_mouse_state_update(
             int group, int /*jeecs::input::mousecode*/ key, bool keydown)
     {
-        je_io_update_mouse_state(
+        je_io_mouse_state_update(
             (size_t)group, (jeecs::input::mousecode)key, keydown);
     }
 }
@@ -109,12 +109,12 @@ int main(int argc, char **argv)
         const _je4_js_callback_prepare_surface_context = 
             Module.cwrap("_je4_js_callback_prepare_surface_context", null, []);
 
-        // void _je4_je_io_update_mousepos(size_t group, int x, int y)
-        // void _je4_je_io_update_mouse_state(size_t group, int /*jeecs::input::mousecode*/ key, bool keydown)
-        const _je4_je_io_update_mousepos =
-            Module.cwrap('_je4_je_io_update_mousepos', null, ['number', 'number', 'number']);
-        const _je4_je_io_update_mouse_state =
-            Module.cwrap('_je4_je_io_update_mouse_state', null, ['number', 'number', 'number']);
+        // void _je4_je_io_mouse_pos_update(size_t group, int x, int y)
+        // void _je4_je_io_mouse_state_update(size_t group, int /*jeecs::input::mousecode*/ key, bool keydown)
+        const _je4_je_io_mouse_pos_update =
+            Module.cwrap('_je4_je_io_mouse_pos_update', null, ['number', 'number', 'number']);
+        const _je4_je_io_mouse_state_update =
+            Module.cwrap('_je4_je_io_mouse_state_update', null, ['number', 'number', 'number']);
 
         if (!FS.analyzePath('/.je4').exists) {
             FS.mkdir('/.je4');
@@ -143,7 +143,7 @@ int main(int argc, char **argv)
                     const rect = canvas.getBoundingClientRect();
                     const x = event.clientX - rect.left;
                     const y = event.clientY - rect.top;
-                    _je4_je_io_update_mousepos(0, x, y);
+                    _je4_je_io_mouse_pos_update(0, x, y);
                 });
 
                 function convert_mouse_button_code(code)
@@ -163,14 +163,14 @@ int main(int argc, char **argv)
                 canvas.addEventListener('mousedown', function (event) {
                     const je_button_code = convert_mouse_button_code(event.button);
                     if (je_button_code !== null)
-                        _je4_je_io_update_mouse_state(0, je_button_code, true);
+                        _je4_je_io_mouse_state_update(0, je_button_code, true);
                 });
 
                 // Mouse up event
                 canvas.addEventListener('mouseup', function (event) {
                     const je_button_code = convert_mouse_button_code(event.button);
                     if (je_button_code !== null)
-                        _je4_je_io_update_mouse_state(0, je_button_code, false);
+                        _je4_je_io_mouse_state_update(0, je_button_code, false);
                 });
 
                 // Touch event for mobile devices
@@ -218,8 +218,8 @@ int main(int argc, char **argv)
                         const touch_id = isDown ? get_or_take_a_free_point(id) : release_a_point(id);
                         if (touch_id !== null)
                         {
-                            _je4_je_io_update_mousepos(touch_id, x, y);
-                            _je4_je_io_update_mouse_state(touch_id, MOUSE_LEFT, isDown);
+                            _je4_je_io_mouse_pos_update(touch_id, x, y);
+                            _je4_je_io_mouse_state_update(touch_id, MOUSE_LEFT, isDown);
                         }
                     }
                 }

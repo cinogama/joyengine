@@ -36,30 +36,30 @@ void* world = je_ecs_world_create(universe);
 
 // 添加系统
 const jeecs::typing::type_info* render_system = 
-    je_typing_get_info_by_name("Renderer::System");
-je_ecs_world_add_system_instance(world, render_system->m_id);
+    je_typing_info_get_by_name("Renderer::System");
+je_ecs_world_system_instance_add(world, render_system->m_id);
 
 // 创建实体
 jeecs::game_entity entity;
 jeecs::typing::typeid_t components[] = {
-    je_typing_get_info_by_name("Transform::Translation")->m_id,
+    je_typing_info_get_by_name("Transform::Translation")->m_id,
     jeecs::typing::INVALID_TYPE_ID  // 结束标记
 };
-je_ecs_world_create_entity_with_components(world, &entity, components);
+je_ecs_world_entity_create_with_components(world, &entity, components);
 
 // 激活世界（开始更新循环）
-je_ecs_world_set_enable(world, true);
+je_ecs_world_enable_set(world, true);
 ```
 
 ## 注意事项
 
 - 世界在创建之后，默认为非激活状态
-- 完成初始化操作后需要调用 `je_ecs_world_set_enable(world, true)` 激活世界
+- 完成初始化操作后需要调用 `je_ecs_world_enable_set(world, true)` 激活世界
 - 每个世界有独立的更新循环
 
 ## 相关接口
 
 - [je_ecs_world_destroy](je_ecs_world_destroy.md) - 销毁世界
-- [je_ecs_world_set_enable](je_ecs_world_set_enable.md) - 设置世界激活状态
-- [je_ecs_world_add_system_instance](je_ecs_world_add_system_instance.md) - 添加系统
-- [je_ecs_world_create_entity_with_components](je_ecs_world_create_entity_with_components.md) - 创建实体
+- [je_ecs_world_enable_set](je_ecs_world_enable_set.md) - 设置世界激活状态
+- [je_ecs_world_system_instance_add](je_ecs_world_system_instance_add.md) - 添加系统
+- [je_ecs_world_entity_create_with_components](je_ecs_world_entity_create_with_components.md) - 创建实体

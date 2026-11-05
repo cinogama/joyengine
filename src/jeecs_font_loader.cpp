@@ -8,7 +8,7 @@ struct je_stb_font_data
 {
     stbtt_fontinfo m_font;
     std::mutex m_character_set_mx;
-    // 字形缓存按（字号, 码点）两级索引；字号在 je_font_get_char 调用时给出
+    // 字形缓存按（字号, 码点）两级索引；字号在 je_font_char_get 调用时给出
     std::map<float, std::map<char32_t, jeecs::graphic::character>> m_character_set;
 };
 
@@ -26,16 +26,16 @@ struct je_stb_font_data
 
     bool font_initialized = false;
 
-    if (auto* file = jeecs_file_open(font_path))
+    if (auto* file = je_file_open(font_path))
     {
-        font->m_font_file_buf = (uint8_t*)malloc(jeecs_file_size(file));
-        jeecs_file_read(
+        font->m_font_file_buf = (uint8_t*)malloc(je_file_size(file));
+        je_file_read(
             font->m_font_file_buf,
             sizeof(uint8_t),
-            jeecs_file_size(file),
+            je_file_size(file),
             file);
 
-        jeecs_file_close(file);
+        je_file_close(file);
 
         font->m_board_size_x = board_blank_size_x;
         font->m_board_size_y = board_blank_size_y;
@@ -85,7 +85,7 @@ void je_font_free(je_font* font)
     delete font;
 }
 
-const jeecs::graphic::character* je_font_get_char(
+const jeecs::graphic::character* je_font_char_get(
     je_font* font, float size, char32_t unicode32_char)
 {
     assert(font != nullptr);

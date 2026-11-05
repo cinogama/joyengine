@@ -385,7 +385,7 @@ namespace jeecs
             std::vector<MapLayer> layers;
             // 逐格属性覆盖：(layer, x + y*width) -> (name -> value)
             std::map<std::pair<int32_t, int32_t>, std::map<std::string, property_value>> cell_properties;
-            // je_tilemap_find_cells 的结果缓存（find_get 逐个取回），随
+            // je_tilemap_cell_find 的结果缓存（find_get 逐个取回），随
             // 文档实例生死，重载/销毁后自然从空表开始
             std::vector<std::pair<int32_t, int32_t>> find_result;
 
@@ -401,7 +401,7 @@ namespace jeecs
         // ==================== 缓存文档读写 ====================
         // .je4tileset/.je4tilemap 是 TOML 文本源，运行期读取由 Woolang
         // 生成器写出的 <源路径>.je4cache。缓存文件头（管理器版本/格式版本/
-        // 源 CRC64）由 jeecs_create_cache_file 写入，其后是一个
+        // 源 CRC64）由 je_cache_file_create 写入，其后是一个
         // jeecs_cache_binary_* 文档：
         //   图集 DOCUMENT
         //     "name" -> STRING
@@ -458,7 +458,7 @@ namespace jeecs
             ~cache_file_holder()
             {
                 if (m_file != nullptr)
-                    ::jeecs_file_close(m_file);
+                    ::je_file_close(m_file);
             }
             cache_file_holder(const cache_file_holder&) = delete;
             cache_file_holder& operator=(const cache_file_holder&) = delete;
@@ -468,14 +468,14 @@ namespace jeecs
             const jeecs_cache_binary_string* str, std::string* out)
         {
             size_t len = 0;
-            if (!::jeecs_cache_binary_string_read(nullptr, &len, str))
+            if (!::je_cache_binary_string_read(nullptr, &len, str))
                 return false;
 
             out->resize(len);
             if (len > 0)
             {
                 size_t capacity = len;
-                if (!::jeecs_cache_binary_string_read(out->data(), &capacity, str))
+                if (!::je_cache_binary_string_read(out->data(), &capacity, str))
                     return false;
             }
             return true;
@@ -485,7 +485,7 @@ namespace jeecs
             const char* key, std::string* out)
         {
             jeecs_cache_binary_string str;
-            if (!::jeecs_cache_binary_document_index(
+            if (!::je_cache_binary_document_index(
                 document, key, JE_CACHE_BINARY_VALUE_STRING, &str))
                 return false;
 
@@ -495,21 +495,21 @@ namespace jeecs
         inline bool read_cache_int32(const jeecs_cache_binary_document* document,
             const char* key, int32_t* out)
         {
-            return ::jeecs_cache_binary_document_index(
+            return ::je_cache_binary_document_index(
                 document, key, JE_CACHE_BINARY_VALUE_INT32, out);
         }
 
         inline bool read_cache_float32(const jeecs_cache_binary_document* document,
             const char* key, float* out)
         {
-            return ::jeecs_cache_binary_document_index(
+            return ::je_cache_binary_document_index(
                 document, key, JE_CACHE_BINARY_VALUE_FLOAT32, out);
         }
 
         inline bool read_cache_bool(const jeecs_cache_binary_document* document,
             const char* key, bool* out)
         {
-            return ::jeecs_cache_binary_document_index(
+            return ::je_cache_binary_document_index(
                 document, key, JE_CACHE_BINARY_VALUE_BOOL, out);
         }
 
@@ -518,7 +518,7 @@ namespace jeecs
             const jeecs_cache_binary_list* list, float* out, size_t count)
         {
             for (size_t i = 0; i < count; ++i)
-                if (!::jeecs_cache_binary_list_index(
+                if (!::je_cache_binary_list_index(
                     list, i, JE_CACHE_BINARY_VALUE_FLOAT32, out + i))
                     return false;
             return true;
@@ -528,7 +528,7 @@ namespace jeecs
             const jeecs_cache_binary_list* list, int32_t* out, size_t count)
         {
             for (size_t i = 0; i < count; ++i)
-                if (!::jeecs_cache_binary_list_index(
+                if (!::je_cache_binary_list_index(
                     list, i, JE_CACHE_BINARY_VALUE_INT32, out + i))
                     return false;
             return true;
@@ -540,12 +540,12 @@ namespace jeecs
             int64_t expected_count, std::vector<int32_t>* out)
         {
             jeecs_cache_binary_buffer buffer;
-            if (!::jeecs_cache_binary_document_index(
+            if (!::je_cache_binary_document_index(
                 document, key, JE_CACHE_BINARY_VALUE_BUFFER, &buffer))
                 return false;
 
             size_t len = 0;
-            if (!::jeecs_cache_binary_buffer_read(nullptr, &len, &buffer))
+            if (!::je_cache_binary_buffer_read(nullptr, &len, &buffer))
                 return false;
             if (len % sizeof(int32_t) != 0)
                 return false;
@@ -557,7 +557,7 @@ namespace jeecs
             if (len > 0)
             {
                 size_t capacity = len;
-                if (!::jeecs_cache_binary_buffer_read(
+                if (!::je_cache_binary_buffer_read(
                     out->data(), &capacity, &buffer))
                     return false;
             }
@@ -616,7 +616,7 @@ namespace jeecs
                 const size_t count =
                     (size_t)(type - (int32_t)JE_PROPERTY_TYPE_VEC2 + 2);
                 jeecs_cache_binary_list list;
-                if (!::jeecs_cache_binary_document_index(
+                if (!::je_cache_binary_document_index(
                     document, value_key, JE_CACHE_BINARY_VALUE_LIST, &list))
                     return false;
 
@@ -643,13 +643,13 @@ namespace jeecs
         }
 
         // @/!/ 前缀 -> 本地文件系统路径（注册表路径键规范化用；读取走
-        // jeecs_file_open 支持 fimg 包）
+        // je_file_open 支持 fimg 包）
         inline std::string resolve_runtime_prefix(const std::string& path)
         {
             if (!path.empty() && path[0] == '@')
-                return std::string(::jeecs_file_get_runtime_path()) + path.substr(1);
+                return std::string(::je_file_runtime_path_get()) + path.substr(1);
             if (!path.empty() && path[0] == '!')
-                return std::string(::jeecs_file_get_host_path()) + path.substr(1);
+                return std::string(::je_file_host_path_get()) + path.substr(1);
             return path;
         }
 
@@ -806,14 +806,14 @@ namespace jeecs
 
         inline std::optional<std::shared_ptr<TilesetDocument>> load_tileset_from(const std::string& path)
         {
-            jeecs_file* cache = jeecs_tileset_open_or_create_cache(path.c_str());
+            jeecs_file* cache = je_tileset_cache_open_or_create(path.c_str());
             if (cache == nullptr)
                 return std::nullopt;
 
             cache_file_holder holder(cache);
 
             jeecs_cache_binary_document root;
-            if (!jeecs_cache_binary_document_open(cache, &root))
+            if (!je_cache_binary_document_open(cache, &root))
                 return std::nullopt;
 
             auto ts = std::make_shared<TilesetDocument>();
@@ -825,18 +825,18 @@ namespace jeecs
                 return std::nullopt;
 
             jeecs_cache_binary_list sources;
-            if (!::jeecs_cache_binary_document_index(&root, "sources",
+            if (!::je_cache_binary_document_index(&root, "sources",
                 JE_CACHE_BINARY_VALUE_LIST, &sources))
                 return std::nullopt;
 
             jeecs_cache_binary_list_iterator source_it;
-            if (!::jeecs_cache_binary_list_iterator_open(&sources, &source_it))
+            if (!::je_cache_binary_list_iterator_open(&sources, &source_it))
                 return std::nullopt;
 
-            while (!::jeecs_cache_binary_list_iterator_is_end(&source_it))
+            while (!::je_cache_binary_list_iterator_is_end(&source_it))
             {
                 jeecs_cache_binary_document source_doc;
-                if (!::jeecs_cache_binary_list_iterator_read(&source_it,
+                if (!::je_cache_binary_list_iterator_read(&source_it,
                     JE_CACHE_BINARY_VALUE_DOCUMENT, &source_doc))
                     return std::nullopt;
 
@@ -865,18 +865,18 @@ namespace jeecs
                         return std::nullopt;
 
                 jeecs_cache_binary_list extras;
-                if (!::jeecs_cache_binary_document_index(&source_doc, "extras",
+                if (!::je_cache_binary_document_index(&source_doc, "extras",
                     JE_CACHE_BINARY_VALUE_LIST, &extras))
                     return std::nullopt;
 
                 jeecs_cache_binary_list_iterator extra_it;
-                if (!::jeecs_cache_binary_list_iterator_open(&extras, &extra_it))
+                if (!::je_cache_binary_list_iterator_open(&extras, &extra_it))
                     return std::nullopt;
 
-                while (!::jeecs_cache_binary_list_iterator_is_end(&extra_it))
+                while (!::je_cache_binary_list_iterator_is_end(&extra_it))
                 {
                     jeecs_cache_binary_document extra_doc;
-                    if (!::jeecs_cache_binary_list_iterator_read(&extra_it,
+                    if (!::je_cache_binary_list_iterator_read(&extra_it,
                         JE_CACHE_BINARY_VALUE_DOCUMENT, &extra_doc))
                         return std::nullopt;
 
@@ -896,13 +896,13 @@ namespace jeecs
                             return std::nullopt;
                     s.extras.push_back(std::move(e));
 
-                    if (!::jeecs_cache_binary_list_iterator_advance(&extra_it))
+                    if (!::je_cache_binary_list_iterator_advance(&extra_it))
                         return std::nullopt;
                 }
 
                 ts->sources.push_back(std::move(s));
 
-                if (!::jeecs_cache_binary_list_iterator_advance(&source_it))
+                if (!::je_cache_binary_list_iterator_advance(&source_it))
                     return std::nullopt;
             }
 
@@ -915,18 +915,18 @@ namespace jeecs
                 return std::nullopt;
 
             jeecs_cache_binary_list properties;
-            if (!::jeecs_cache_binary_document_index(&root, "properties",
+            if (!::je_cache_binary_document_index(&root, "properties",
                 JE_CACHE_BINARY_VALUE_LIST, &properties))
                 return std::nullopt;
 
             jeecs_cache_binary_list_iterator property_it;
-            if (!::jeecs_cache_binary_list_iterator_open(&properties, &property_it))
+            if (!::je_cache_binary_list_iterator_open(&properties, &property_it))
                 return std::nullopt;
 
-            while (!::jeecs_cache_binary_list_iterator_is_end(&property_it))
+            while (!::je_cache_binary_list_iterator_is_end(&property_it))
             {
                 jeecs_cache_binary_document property_doc;
-                if (!::jeecs_cache_binary_list_iterator_read(&property_it,
+                if (!::je_cache_binary_list_iterator_read(&property_it,
                     JE_CACHE_BINARY_VALUE_DOCUMENT, &property_doc))
                     return std::nullopt;
 
@@ -946,23 +946,23 @@ namespace jeecs
 
                 ts->properties.push_back(std::move(pd));
 
-                if (!::jeecs_cache_binary_list_iterator_advance(&property_it))
+                if (!::je_cache_binary_list_iterator_advance(&property_it))
                     return std::nullopt;
             }
 
             jeecs_cache_binary_list tiles;
-            if (!::jeecs_cache_binary_document_index(&root, "tiles",
+            if (!::je_cache_binary_document_index(&root, "tiles",
                 JE_CACHE_BINARY_VALUE_LIST, &tiles))
                 return std::nullopt;
 
             jeecs_cache_binary_list_iterator tile_it;
-            if (!::jeecs_cache_binary_list_iterator_open(&tiles, &tile_it))
+            if (!::je_cache_binary_list_iterator_open(&tiles, &tile_it))
                 return std::nullopt;
 
-            while (!::jeecs_cache_binary_list_iterator_is_end(&tile_it))
+            while (!::je_cache_binary_list_iterator_is_end(&tile_it))
             {
                 jeecs_cache_binary_document tile_doc;
-                if (!::jeecs_cache_binary_list_iterator_read(&tile_it,
+                if (!::je_cache_binary_list_iterator_read(&tile_it,
                     JE_CACHE_BINARY_VALUE_DOCUMENT, &tile_doc))
                     return std::nullopt;
 
@@ -980,7 +980,7 @@ namespace jeecs
                 t.kind = (je_TileKind)kind;
 
                 jeecs_cache_binary_list normal;
-                if (!::jeecs_cache_binary_document_index(&tile_doc, "normal",
+                if (!::je_cache_binary_document_index(&tile_doc, "normal",
                     JE_CACHE_BINARY_VALUE_LIST, &normal))
                     return std::nullopt;
                 float normal_values[3] = { 0.f, 0.f, 0.f };
@@ -1004,20 +1004,20 @@ namespace jeecs
                         return std::nullopt;
 
                 jeecs_cache_binary_list tile_properties;
-                if (!::jeecs_cache_binary_document_index(&tile_doc, "properties",
+                if (!::je_cache_binary_document_index(&tile_doc, "properties",
                     JE_CACHE_BINARY_VALUE_LIST, &tile_properties))
                     return std::nullopt;
 
                 jeecs_cache_binary_list_iterator tile_property_it;
-                if (!::jeecs_cache_binary_list_iterator_open(
+                if (!::je_cache_binary_list_iterator_open(
                     &tile_properties, &tile_property_it))
                     return std::nullopt;
 
-                while (!::jeecs_cache_binary_list_iterator_is_end(
+                while (!::je_cache_binary_list_iterator_is_end(
                     &tile_property_it))
                 {
                     jeecs_cache_binary_document property_doc;
-                    if (!::jeecs_cache_binary_list_iterator_read(
+                    if (!::je_cache_binary_list_iterator_read(
                         &tile_property_it,
                         JE_CACHE_BINARY_VALUE_DOCUMENT, &property_doc))
                         return std::nullopt;
@@ -1030,14 +1030,14 @@ namespace jeecs
                         return std::nullopt;
                     t.properties[std::move(name)] = std::move(value);
 
-                    if (!::jeecs_cache_binary_list_iterator_advance(
+                    if (!::je_cache_binary_list_iterator_advance(
                         &tile_property_it))
                         return std::nullopt;
                 }
 
                 ts->tiles[tile_id] = std::move(t);
 
-                if (!::jeecs_cache_binary_list_iterator_advance(&tile_it))
+                if (!::je_cache_binary_list_iterator_advance(&tile_it))
                     return std::nullopt;
             }
 
@@ -1064,13 +1064,13 @@ namespace jeecs
 
             const auto read_int_list = [&](size_t count)
             {
-                return ::jeecs_cache_binary_document_index(document, "value",
+                return ::je_cache_binary_document_index(document, "value",
                            JE_CACHE_BINARY_VALUE_LIST, &list)
                     && read_cache_int32_list(&list, int_values, count);
             };
             const auto read_float_list_value = [&](size_t count)
             {
-                return ::jeecs_cache_binary_document_index(document, "value",
+                return ::je_cache_binary_document_index(document, "value",
                            JE_CACHE_BINARY_VALUE_LIST, &list)
                     && read_cache_float_list(&list, float_values, count);
             };
@@ -1130,14 +1130,14 @@ namespace jeecs
 
         inline std::optional<std::shared_ptr<MapDocument>> load_map_from(const std::string& path)
         {
-            jeecs_file* cache = jeecs_tilemap_open_or_create_cache(path.c_str());
+            jeecs_file* cache = je_tilemap_cache_open_or_create(path.c_str());
             if (cache == nullptr)
                 return std::nullopt;
 
             cache_file_holder holder(cache);
 
             jeecs_cache_binary_document root;
-            if (!jeecs_cache_binary_document_open(cache, &root))
+            if (!je_cache_binary_document_open(cache, &root))
                 return std::nullopt;
 
             auto m = std::make_shared<MapDocument>();
@@ -1151,18 +1151,18 @@ namespace jeecs
                 return std::nullopt;
 
             jeecs_cache_binary_list tilesets;
-            if (!::jeecs_cache_binary_document_index(&root, "tilesets",
+            if (!::je_cache_binary_document_index(&root, "tilesets",
                 JE_CACHE_BINARY_VALUE_LIST, &tilesets))
                 return std::nullopt;
 
             jeecs_cache_binary_list_iterator tileset_it;
-            if (!::jeecs_cache_binary_list_iterator_open(&tilesets, &tileset_it))
+            if (!::je_cache_binary_list_iterator_open(&tilesets, &tileset_it))
                 return std::nullopt;
 
-            while (!::jeecs_cache_binary_list_iterator_is_end(&tileset_it))
+            while (!::je_cache_binary_list_iterator_is_end(&tileset_it))
             {
                 jeecs_cache_binary_string tileset_path;
-                if (!::jeecs_cache_binary_list_iterator_read(&tileset_it,
+                if (!::je_cache_binary_list_iterator_read(&tileset_it,
                     JE_CACHE_BINARY_VALUE_STRING, &tileset_path))
                     return std::nullopt;
 
@@ -1172,23 +1172,23 @@ namespace jeecs
                 m->tilesets.push_back(
                     TilesetRef{ std::move(resolved), std::nullopt });
 
-                if (!::jeecs_cache_binary_list_iterator_advance(&tileset_it))
+                if (!::je_cache_binary_list_iterator_advance(&tileset_it))
                     return std::nullopt;
             }
 
             jeecs_cache_binary_list layers;
-            if (!::jeecs_cache_binary_document_index(&root, "layers",
+            if (!::je_cache_binary_document_index(&root, "layers",
                 JE_CACHE_BINARY_VALUE_LIST, &layers))
                 return std::nullopt;
 
             jeecs_cache_binary_list_iterator layer_it;
-            if (!::jeecs_cache_binary_list_iterator_open(&layers, &layer_it))
+            if (!::je_cache_binary_list_iterator_open(&layers, &layer_it))
                 return std::nullopt;
 
-            while (!::jeecs_cache_binary_list_iterator_is_end(&layer_it))
+            while (!::je_cache_binary_list_iterator_is_end(&layer_it))
             {
                 jeecs_cache_binary_document layer_doc;
-                if (!::jeecs_cache_binary_list_iterator_read(&layer_it,
+                if (!::je_cache_binary_list_iterator_read(&layer_it,
                     JE_CACHE_BINARY_VALUE_DOCUMENT, &layer_doc))
                     return std::nullopt;
 
@@ -1239,19 +1239,19 @@ namespace jeecs
                 }
 
                 jeecs_cache_binary_list textures;
-                if (!::jeecs_cache_binary_document_index(&layer_doc, "textures",
+                if (!::je_cache_binary_document_index(&layer_doc, "textures",
                     JE_CACHE_BINARY_VALUE_LIST, &textures))
                     return std::nullopt;
 
                 jeecs_cache_binary_list_iterator texture_it;
-                if (!::jeecs_cache_binary_list_iterator_open(
+                if (!::je_cache_binary_list_iterator_open(
                     &textures, &texture_it))
                     return std::nullopt;
 
-                while (!::jeecs_cache_binary_list_iterator_is_end(&texture_it))
+                while (!::je_cache_binary_list_iterator_is_end(&texture_it))
                 {
                     jeecs_cache_binary_document texture_doc;
-                    if (!::jeecs_cache_binary_list_iterator_read(&texture_it,
+                    if (!::je_cache_binary_list_iterator_read(&texture_it,
                         JE_CACHE_BINARY_VALUE_DOCUMENT, &texture_doc))
                         return std::nullopt;
 
@@ -1272,24 +1272,24 @@ namespace jeecs
                             "Tilemap: unable to load layer texture '%s'.",
                             texture_path.c_str());
 
-                    if (!::jeecs_cache_binary_list_iterator_advance(&texture_it))
+                    if (!::je_cache_binary_list_iterator_advance(&texture_it))
                         return std::nullopt;
                 }
 
                 jeecs_cache_binary_list uniforms;
-                if (!::jeecs_cache_binary_document_index(&layer_doc, "uniforms",
+                if (!::je_cache_binary_document_index(&layer_doc, "uniforms",
                     JE_CACHE_BINARY_VALUE_LIST, &uniforms))
                     return std::nullopt;
 
                 jeecs_cache_binary_list_iterator uniform_it;
-                if (!::jeecs_cache_binary_list_iterator_open(
+                if (!::je_cache_binary_list_iterator_open(
                     &uniforms, &uniform_it))
                     return std::nullopt;
 
-                while (!::jeecs_cache_binary_list_iterator_is_end(&uniform_it))
+                while (!::je_cache_binary_list_iterator_is_end(&uniform_it))
                 {
                     jeecs_cache_binary_document uniform_doc;
-                    if (!::jeecs_cache_binary_list_iterator_read(&uniform_it,
+                    if (!::je_cache_binary_list_iterator_read(&uniform_it,
                         JE_CACHE_BINARY_VALUE_DOCUMENT, &uniform_doc))
                         return std::nullopt;
 
@@ -1302,30 +1302,30 @@ namespace jeecs
                         && !apply_cache_uniform(shader, &uniform_doc, type))
                         return std::nullopt;
 
-                    if (!::jeecs_cache_binary_list_iterator_advance(&uniform_it))
+                    if (!::je_cache_binary_list_iterator_advance(&uniform_it))
                         return std::nullopt;
                 }
 
                 m->layers.push_back(std::move(l));
 
-                if (!::jeecs_cache_binary_list_iterator_advance(&layer_it))
+                if (!::je_cache_binary_list_iterator_advance(&layer_it))
                     return std::nullopt;
             }
 
             jeecs_cache_binary_list cell_properties;
-            if (!::jeecs_cache_binary_document_index(&root, "cell_properties",
+            if (!::je_cache_binary_document_index(&root, "cell_properties",
                 JE_CACHE_BINARY_VALUE_LIST, &cell_properties))
                 return std::nullopt;
 
             jeecs_cache_binary_list_iterator cell_it;
-            if (!::jeecs_cache_binary_list_iterator_open(
+            if (!::je_cache_binary_list_iterator_open(
                 &cell_properties, &cell_it))
                 return std::nullopt;
 
-            while (!::jeecs_cache_binary_list_iterator_is_end(&cell_it))
+            while (!::je_cache_binary_list_iterator_is_end(&cell_it))
             {
                 jeecs_cache_binary_document cell_doc;
-                if (!::jeecs_cache_binary_list_iterator_read(&cell_it,
+                if (!::je_cache_binary_list_iterator_read(&cell_it,
                     JE_CACHE_BINARY_VALUE_DOCUMENT, &cell_doc))
                     return std::nullopt;
 
@@ -1336,20 +1336,20 @@ namespace jeecs
                     return std::nullopt;
 
                 jeecs_cache_binary_list properties;
-                if (!::jeecs_cache_binary_document_index(&cell_doc, "properties",
+                if (!::je_cache_binary_document_index(&cell_doc, "properties",
                     JE_CACHE_BINARY_VALUE_LIST, &properties))
                     return std::nullopt;
 
                 jeecs_cache_binary_list_iterator property_it;
-                if (!::jeecs_cache_binary_list_iterator_open(
+                if (!::je_cache_binary_list_iterator_open(
                     &properties, &property_it))
                     return std::nullopt;
 
                 std::map<std::string, property_value> values;
-                while (!::jeecs_cache_binary_list_iterator_is_end(&property_it))
+                while (!::je_cache_binary_list_iterator_is_end(&property_it))
                 {
                     jeecs_cache_binary_document property_doc;
-                    if (!::jeecs_cache_binary_list_iterator_read(&property_it,
+                    if (!::je_cache_binary_list_iterator_read(&property_it,
                         JE_CACHE_BINARY_VALUE_DOCUMENT, &property_doc))
                         return std::nullopt;
 
@@ -1361,7 +1361,7 @@ namespace jeecs
                         return std::nullopt;
                     values[std::move(name)] = std::move(value);
 
-                    if (!::jeecs_cache_binary_list_iterator_advance(&property_it))
+                    if (!::je_cache_binary_list_iterator_advance(&property_it))
                         return std::nullopt;
                 }
 
@@ -1374,7 +1374,7 @@ namespace jeecs
                         "(%d,%d) on layer %d is ignored.",
                         x, y, layer);
 
-                if (!::jeecs_cache_binary_list_iterator_advance(&cell_it))
+                if (!::je_cache_binary_list_iterator_advance(&cell_it))
                     return std::nullopt;
             }
 
@@ -1517,7 +1517,7 @@ namespace jeecs
 
             // 编辑器已把 TOML 源写入 path：把文档的路径登记迁移到 path。
             // 不写盘、不生成缓存——<path>.je4cache 由下次加载经
-            // jeecs_tilemap_open_or_create_cache 按源 CRC 自然重建。
+            // je_tilemap_cache_open_or_create 按源 CRC 自然重建。
             // 重绑路径索引（另一文档对同路径的既有绑定被顶替 ——
             // "最后一次保存者获胜"，与编辑器另存语义一致）。调用方须
             // 持有外部引用（无账目即契约外使用，按失败返回）。
@@ -1711,7 +1711,7 @@ namespace jeecs
             // 注册表键规范化：@/ 与 !/ 前缀解析为真实目录，反斜杠统一为
             // 正斜杠，连续斜杠折叠，Windows 下再统一小写（文件系统不分
             // 大小写）。无前缀的相对路径（浏览器工作目录形态）按运行时
-            // 目录补全，与 jeecs_file_open 的解析一致。同一文件的不同
+            // 目录补全，与 je_file_open 的解析一致。同一文件的不同
             // 形态字符串必须映射到同一文档实例，否则编辑器两侧会各自
             // 持有独立副本，后一次保存会覆盖掉前一份里的新增数据。
             std::string canonical_key(const std::string& path) const
@@ -1719,7 +1719,7 @@ namespace jeecs
                 std::string s = resolve_runtime_prefix(path);
                 bool absolute = s.size() >= 2 && (s[1] == ':' || s[0] == '/');
                 if (!absolute)
-                    s = std::string(::jeecs_file_get_runtime_path()) + '/' + s;
+                    s = std::string(::je_file_runtime_path_get()) + '/' + s;
                 std::string key;
                 key.reserve(s.size());
                 for (char raw : s)

@@ -365,16 +365,16 @@ namespace jeecs
         static std::optional<scene_physics_config> load_scene_physics_config_from_path(
             const std::string& path)
         {
-            jeecs_file* fp = jeecs_file_open(path.c_str());
+            jeecs_file* fp = je_file_open(path.c_str());
             if (fp == nullptr)
             {
                 jeecs::debug::logerr("Unable to open Physics2D scene config: '%s'.", path.c_str());
                 return std::nullopt;
             }
 
-            std::vector<char> buf(jeecs_file_size(fp));
-            jeecs_file_read(buf.data(), sizeof(char), buf.size(), fp);
-            jeecs_file_close(fp);
+            std::vector<char> buf(je_file_size(fp));
+            je_file_read(buf.data(), sizeof(char), buf.size(), fp);
+            je_file_close(fp);
 
             wo_CompileErrors* cerr = nullptr;
             woort_CodeEnv* const cenv = wo_load_binary(path.c_str(), buf.data(), buf.size(), &cerr);
@@ -531,7 +531,7 @@ namespace jeecs
                     assert(f.m_requirement == JE_COMPONENT_REQUIRE_CONTAINS
                         || f.m_requirement == JE_COMPONENT_REQUIRE_EXCEPT);
 
-                    const bool has = je_ecs_world_entity_get_component(&e._m_raw, f.m_type->m_id) != nullptr;
+                    const bool has = je_ecs_world_entity_component_get(&e._m_raw, f.m_type->m_id) != nullptr;
                     if ((f.m_requirement == JE_COMPONENT_REQUIRE_CONTAINS) != has)
                     {
                         matches = false;

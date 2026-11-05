@@ -1771,7 +1771,7 @@ namespace jeecs
             RIFF_Header riff_header;
             WAVE_Data wave_data;
 
-            jeecs_file* wav_file = jeecs_file_open(path);
+            jeecs_file* wav_file = je_file_open(path);
             if (wav_file == nullptr)
             {
                 jeecs::debug::logerr("Failed to open file: '%s', unable to create audio buffer.", path);
@@ -1779,7 +1779,7 @@ namespace jeecs
             }
             // Read in the first chunk into the struct
 
-            jeecs_file_read(&riff_header, sizeof(RIFF_Header), 1, wav_file);
+            je_file_read(&riff_header, sizeof(RIFF_Header), 1, wav_file);
 
             // check for RIFF and WAVE tag in memeory
             if ((riff_header.chunkID[0] != 'R' ||
@@ -1792,12 +1792,12 @@ namespace jeecs
                     riff_header.format[3] != 'E'))
             {
                 jeecs::debug::logerr("Invalid wav file: '%s', bad format tag.", path);
-                jeecs_file_close(wav_file);
+                je_file_close(wav_file);
                 return nullptr;
             }
 
             // Read in the 2nd chunk for the wave info
-            jeecs_file_read(&wave_format, sizeof(WAVE_Format), 1, wav_file);
+            je_file_read(&wave_format, sizeof(WAVE_Format), 1, wav_file);
             // check for fmt tag in memory
             if (wave_format.subChunkID[0] != 'f' ||
                 wave_format.subChunkID[1] != 'm' ||
@@ -1805,14 +1805,14 @@ namespace jeecs
                 wave_format.subChunkID[3] != ' ')
             {
                 jeecs::debug::logerr("Invalid wav file: '%s', bad format head.", path);
-                jeecs_file_close(wav_file);
+                je_file_close(wav_file);
                 return nullptr;
             }
 
             // check for extra parameters;
             if (wave_format.subChunkSize > 16)
             {
-                jeecs_file_seek(
+                je_file_seek(
                     wav_file, 
                     wave_format.subChunkSize - 16, 
                     je_read_file_seek_mode::JE_READ_FILE_SEEK_CURRENT);
@@ -1821,10 +1821,10 @@ namespace jeecs
             do
             {
                 // Read in the the last byte of data before the sound file
-                if (0 == jeecs_file_read(&wave_data, sizeof(WAVE_Data), 1, wav_file))
+                if (0 == je_file_read(&wave_data, sizeof(WAVE_Data), 1, wav_file))
                 {
                     jeecs::debug::logerr("Invalid wav file: '%s', bad data head.", path);
-                    jeecs_file_close(wav_file);
+                    je_file_close(wav_file);
                     return nullptr;
                 }
 
@@ -1840,7 +1840,7 @@ namespace jeecs
                 else
                 {
                     // Skip the chunk data we don't care about
-                    jeecs_file_seek(wav_file, wave_data.subChunk2Size, JE_READ_FILE_SEEK_CURRENT);
+                    je_file_seek(wav_file, wave_data.subChunk2Size, JE_READ_FILE_SEEK_CURRENT);
                 }
 
             } while (true);
@@ -1849,15 +1849,15 @@ namespace jeecs
             void* data = malloc(wave_data.subChunk2Size);
 
             // Read in the sound data into the soundData variable
-            if (!jeecs_file_read(data, wave_data.subChunk2Size, 1, wav_file))
+            if (!je_file_read(data, wave_data.subChunk2Size, 1, wav_file))
             {
                 jeecs::debug::logerr("Invalid wav file: '%s', bad data size.", path);
                 free(data);
-                jeecs_file_close(wav_file);
+                je_file_close(wav_file);
                 return nullptr;
             }
 
-            jeecs_file_close(wav_file);
+            je_file_close(wav_file);
 
             if ((wave_format.byteRate !=
                 wave_format.numChannels * wave_format.bitsPerSample * wave_format.sampleRate / 8) ||
@@ -2823,7 +2823,7 @@ void jeal_finish()
     delete jeecs::g_engine_audio_context;
     jeecs::g_engine_audio_context = nullptr;
 }
-/* OPTIONAL: If format is invalid or buffer_data_len is not aligned to sample size */ const jeal_buffer* jeal_create_buffer(
+/* OPTIONAL: If format is invalid or buffer_data_len is not aligned to sample size */ const jeal_buffer* je_audio_buffer_create(
     const void* data,
     size_t buffer_data_len,
     size_t sample_rate,
@@ -2834,43 +2834,43 @@ void jeal_finish()
     return jeecs::g_engine_audio_context->create_buffer(
         data, buffer_data_len, sample_rate, format);
 }
-/* OPTIONAL: If wav file failed to load */ const jeal_buffer* jeal_load_buffer_wav(const char* path)
+/* OPTIONAL: If wav file failed to load */ const jeal_buffer* je_audio_buffer_load_wav(const char* path)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->load_buffer_wav(path);
 }
-void jeal_close_buffer(const jeal_buffer* buffer)
+void je_audio_buffer_close(const jeal_buffer* buffer)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->close_buffer(buffer);
 }
-jeal_source* jeal_create_source()
+jeal_source* je_audio_source_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->create_source();
 }
-void jeal_update_source(jeal_source* source)
+void je_audio_source_update(jeal_source* source)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->update_source(source);
 }
-void jeal_close_source(jeal_source* source)
+void je_audio_source_close(jeal_source* source)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->close_source(source);
 }
-bool jeal_set_source_buffer(jeal_source* source, const jeal_buffer* buffer)
+bool je_audio_source_buffer_set(jeal_source* source, const jeal_buffer* buffer)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->set_source_buffer(source, buffer);
 }
-void jeal_set_source_effect_slot_and_filter(
+void je_audio_source_effect_slot_and_filter_set(
     jeal_source* source,
     size_t slot_idx,
     /* OPTIONAL */ jeal_effect_slot* slot_may_null,
@@ -2882,201 +2882,201 @@ void jeal_set_source_effect_slot_and_filter(
         source, slot_idx, slot_may_null, filter_may_null);
 }
 
-void jeal_set_source_filter(jeal_source* source, /* OPTIONAL */ jeal_filter* filter_may_null)
+void je_audio_source_filter_set(jeal_source* source, /* OPTIONAL */ jeal_filter* filter_may_null)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->set_source_filter(source, filter_may_null);
 }
 
-void jeal_play_source(jeal_source* source)
+void je_audio_source_play(jeal_source* source)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->play_source(source);
 }
-void jeal_pause_source(jeal_source* source)
+void je_audio_source_pause(jeal_source* source)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->pause_source(source);
 }
-void jeal_stop_source(jeal_source* source)
+void je_audio_source_stop(jeal_source* source)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->stop_source(source);
 }
-jeal_state jeal_get_source_play_state(jeal_source* source)
+jeal_state je_audio_source_play_state_get(jeal_source* source)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->get_source_play_state(source);
 }
-size_t jeal_get_source_play_process(jeal_source* source)
+size_t je_audio_source_play_process_get(jeal_source* source)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->get_source_play_process(source);
 }
-void jeal_set_source_play_process(jeal_source* source, size_t offset)
+void je_audio_source_play_process_set(jeal_source* source, size_t offset)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->set_source_play_process(source, offset);
 }
-jeal_listener* jeal_get_listener()
+jeal_listener* je_audio_listener_get()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->get_listener();
 }
-void jeal_update_listener()
+void je_audio_listener_update()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->update_listener();
 }
 
-jeal_filter* jeal_create_filter()
+jeal_filter* je_audio_filter_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->create_filter();
 }
 
-void jeal_update_filter(jeal_filter* filter)
+void je_audio_filter_update(jeal_filter* filter)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->update_filter(filter);
 }
 
-void jeal_close_filter(jeal_filter* filter)
+void je_audio_filter_close(jeal_filter* filter)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->close_filter(filter);
 }
 
-jeal_effect_slot* jeal_create_effect_slot()
+jeal_effect_slot* je_audio_effect_slot_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->create_effect_slot();
 }
-void jeal_effect_slot_bind(jeal_effect_slot* slot, /* OPTIONAL */ void* effect_may_null)
+void je_audio_effect_slot_bind(jeal_effect_slot* slot, /* OPTIONAL */ void* effect_may_null)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->set_slot_effect(
         slot, effect_may_null != nullptr ? JE_EFFECT_HEAD(effect_may_null) : nullptr);
 }
-void jeal_close_effect_slot(jeal_effect_slot* slot)
+void je_audio_effect_slot_close(jeal_effect_slot* slot)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->close_effect_slot(slot);
 }
-void jeal_update_effect_slot(jeal_effect_slot* slot)
+void je_audio_effect_slot_update(jeal_effect_slot* slot)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->update_effect_slot(slot);
 }
 
-jeal_effect_reverb* jeal_create_effect_reverb()
+jeal_effect_reverb* je_audio_effect_reverb_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->create_effect<jeal_effect_reverb>();
 }
-jeal_effect_chorus* jeal_create_effect_chorus()
+jeal_effect_chorus* je_audio_effect_chorus_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->create_effect<jeal_effect_chorus>();
 }
-jeal_effect_distortion* jeal_create_effect_distortion()
+jeal_effect_distortion* je_audio_effect_distortion_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->create_effect<jeal_effect_distortion>();
 }
-jeal_effect_echo* jeal_create_effect_echo()
+jeal_effect_echo* je_audio_effect_echo_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->create_effect<jeal_effect_echo>();
 }
-jeal_effect_flanger* jeal_create_effect_flanger()
+jeal_effect_flanger* je_audio_effect_flanger_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->create_effect<jeal_effect_flanger>();
 }
-jeal_effect_frequency_shifter* jeal_create_effect_frequency_shifter()
+jeal_effect_frequency_shifter* je_audio_effect_frequency_shifter_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->create_effect<jeal_effect_frequency_shifter>();
 }
-jeal_effect_vocal_morpher* jeal_create_effect_vocal_morpher()
+jeal_effect_vocal_morpher* je_audio_effect_vocal_morpher_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->create_effect<jeal_effect_vocal_morpher>();
 }
-jeal_effect_pitch_shifter* jeal_create_effect_pitch_shifter()
+jeal_effect_pitch_shifter* je_audio_effect_pitch_shifter_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->create_effect<jeal_effect_pitch_shifter>();
 }
-jeal_effect_ring_modulator* jeal_create_effect_ring_modulator()
+jeal_effect_ring_modulator* je_audio_effect_ring_modulator_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->create_effect<jeal_effect_ring_modulator>();
 }
-jeal_effect_autowah* jeal_create_effect_autowah()
+jeal_effect_autowah* je_audio_effect_autowah_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->create_effect<jeal_effect_autowah>();
 }
-jeal_effect_compressor* jeal_create_effect_compressor()
+jeal_effect_compressor* je_audio_effect_compressor_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->create_effect<jeal_effect_compressor>();
 }
-jeal_effect_equalizer* jeal_create_effect_equalizer()
+jeal_effect_equalizer* je_audio_effect_equalizer_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->create_effect<jeal_effect_equalizer>();
 }
-jeal_effect_eaxreverb* jeal_create_effect_eaxreverb()
+jeal_effect_eaxreverb* je_audio_effect_eaxreverb_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->create_effect<jeal_effect_eaxreverb>();
 }
-void jeal_close_effect(void* effect)
+void je_audio_effect_close(void* effect)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->close_effect(effect);
 }
-void jeal_update_effect(void* effect)
+void je_audio_effect_update(void* effect)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->update_effect(effect);
 }
 
-void jeal_enumerate_devices_and_do(
+void je_audio_devices_enumerate_and_do(
     jeal_enumerate_device_callback_t callback, /* OPTIONAL */ void* userdata)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
@@ -3085,7 +3085,7 @@ void jeal_enumerate_devices_and_do(
         userdata);
 }
 
-void jeal_disconnect_all_devices()
+void je_audio_devices_disconnect_all()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
     jeecs::g_engine_audio_context->disconnect_all_devices();

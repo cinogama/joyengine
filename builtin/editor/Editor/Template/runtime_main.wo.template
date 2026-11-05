@@ -2,7 +2,7 @@
 //
 // 项目导出向导会填充下面这些占位符，然后用 dumpling 把它预编译为 WORT
 // 二进制，以 @/builtin/main.wo 为键打包进资源镜像。引擎启动时
-// je_main_script_entry 会优先加载该入口（见 src/jeecs_startup.cpp）。
+// je_core_main_script_entry 会优先加载该入口（见 src/jeecs_startup.cpp）。
 //
 // 占位符（每个在正文中只出现一次，由导出向导整体替换）：
 //   LOAD_DYLIB_MODULES   装载导出的原生模块

@@ -57,27 +57,27 @@ namespace
         T* resource = static_cast<T*>(ptr);
 
         if constexpr (std::is_same_v<T, jegl_shader>)
-            jegl_close_shader(resource);
+            je_graphic_shader_close(resource);
         else if constexpr (std::is_same_v<T, jegl_texture_2d>)
-            jegl_close_texture_2d(resource);
+            je_graphic_texture_2d_close(resource);
         else if constexpr (std::is_same_v<T, jegl_texture_3d>)
-            jegl_close_texture_3d(resource);
+            je_graphic_texture_3d_close(resource);
         else if constexpr (std::is_same_v<T, jegl_texture_array>)
-            jegl_close_texture_array(resource);
+            je_graphic_texture_array_close(resource);
         else if constexpr (std::is_same_v<T, jegl_texture_cube>)
-            jegl_close_texture_cube(resource);
+            je_graphic_texture_cube_close(resource);
         else if constexpr (std::is_same_v<T, jegl_texture_msaa>)
-            jegl_close_texture_msaa(resource);
+            je_graphic_texture_msaa_close(resource);
         else if constexpr (std::is_same_v<T, jegl_vertex>)
-            jegl_close_vertex(resource);
+            je_graphic_vertex_close(resource);
         else if constexpr (std::is_same_v<T, jegl_frame_buffer>)
-            jegl_close_framebuf(resource);
+            je_graphic_framebuf_close(resource);
         else if constexpr (std::is_same_v<T, jegl_uniform_buffer>)
-            jegl_close_uniformbuf(resource);
+            je_graphic_uniformbuf_close(resource);
         else if constexpr (std::is_same_v<T, jegl_pipeline>)
-            jegl_close_pipeline(resource);
+            je_graphic_pipeline_close(resource);
         else if constexpr (std::is_same_v<T, jegl_sampler>)
-            jegl_close_sampler(resource);
+            je_graphic_sampler_close(resource);
         else
             static_assert(!sizeof(T*), "Unsupported graphic resource type.");
     }
@@ -513,7 +513,7 @@ struct jegl_command_buffer
 // Pipeline / uniform reflection
 /////////////////////////////////////////////////////////////////////////////
 
-jegl_pipeline_state jegl_pipeline_state_from_shader(jegl_shader* shader)
+jegl_pipeline_state je_graphic_pipeline_state_from_shader(jegl_shader* shader)
 {
     assert(shader != nullptr);
 
@@ -561,7 +561,7 @@ jegl_pipeline_state jegl_pipeline_state_from_shader(jegl_shader* shader)
     return state;
 }
 
-jegl_uniform_slot jegl_pipeline_uniform_slot(
+jegl_uniform_slot je_graphic_pipeline_uniform_slot(
     jegl_pipeline* pipeline, const char* name)
 {
     assert(pipeline != nullptr);
@@ -578,7 +578,7 @@ jegl_uniform_slot jegl_pipeline_uniform_slot(
     return jegl_uniform_slot{ JEGL_UNIFORM_SLOT_NONE, 0 };
 }
 
-const jegl_builtin_uniform_slots* jegl_pipeline_builtin_uniform_slots(
+const jegl_builtin_uniform_slots* je_graphic_pipeline_builtin_uniform_slots(
     jegl_pipeline* pipeline)
 {
     assert(pipeline != nullptr);
@@ -589,31 +589,31 @@ const jegl_builtin_uniform_slots* jegl_pipeline_builtin_uniform_slots(
 // Command buffer
 /////////////////////////////////////////////////////////////////////////////
 
-jegl_command_buffer* jegl_cmd_create(jegl_context* context)
+jegl_command_buffer* je_graphic_cmd_create(jegl_context* context)
 {
     assert(context != nullptr);
     return new jegl_command_buffer(context);
 }
 
-void jegl_cmd_close(jegl_command_buffer* cmd)
+void je_graphic_cmd_close(jegl_command_buffer* cmd)
 {
     assert(cmd != nullptr);
     delete cmd;
 }
 
-void jegl_cmd_reset(jegl_command_buffer* cmd)
+void je_graphic_cmd_reset(jegl_command_buffer* cmd)
 {
     assert(cmd != nullptr);
     cmd->reset();
 }
 
-jegl_context* jegl_cmd_get_context(jegl_command_buffer* cmd)
+jegl_context* je_graphic_cmd_get_context(jegl_command_buffer* cmd)
 {
     assert(cmd != nullptr);
     return cmd->m_context;
 }
 
-void jegl_cmd_begin_pass(
+void je_graphic_cmd_begin_pass(
     jegl_command_buffer* cmd,
     /* OPTIONAL: nullptr means screen */ jegl_frame_buffer* target,
     const jegl_viewport* viewport)
@@ -652,7 +652,7 @@ void jegl_cmd_begin_pass(
     cmd->push_command(command);
 }
 
-void jegl_cmd_clear_color(
+void je_graphic_cmd_clear_color(
     jegl_command_buffer* cmd, uint32_t attachment, const float rgba[4])
 {
     assert(cmd != nullptr);
@@ -672,7 +672,7 @@ void jegl_cmd_clear_color(
     cmd->push_command(command);
 }
 
-void jegl_cmd_clear_depth(jegl_command_buffer* cmd, float depth)
+void je_graphic_cmd_clear_depth(jegl_command_buffer* cmd, float depth)
 {
     assert(cmd != nullptr);
     assert(cmd->m_in_pass);
@@ -685,7 +685,7 @@ void jegl_cmd_clear_depth(jegl_command_buffer* cmd, float depth)
     cmd->push_command(command);
 }
 
-void jegl_cmd_end_pass(jegl_command_buffer* cmd)
+void je_graphic_cmd_end_pass(jegl_command_buffer* cmd)
 {
     assert(cmd != nullptr);
     assert(cmd->m_in_pass);
@@ -699,7 +699,7 @@ void jegl_cmd_end_pass(jegl_command_buffer* cmd)
     cmd->m_target = nullptr;
 }
 
-void jegl_cmd_bind_pipeline(
+void je_graphic_cmd_bind_pipeline(
     jegl_command_buffer* cmd, jegl_pipeline* pipeline)
 {
     assert(cmd != nullptr);
@@ -720,7 +720,7 @@ void jegl_cmd_bind_pipeline(
     cmd->reset_uniform_staging(pipeline);
 }
 
-void jegl_cmd_bind_vertex(
+void je_graphic_cmd_bind_vertex(
     jegl_command_buffer* cmd, jegl_vertex* vertex)
 {
     assert(cmd != nullptr);
@@ -739,7 +739,7 @@ void jegl_cmd_bind_vertex(
     cmd->m_vertex = vertex;
 }
 
-void jegl_cmd_bind_uniform_buffer(
+void je_graphic_cmd_bind_uniform_buffer(
     jegl_command_buffer* cmd, jegl_uniform_buffer* buffer)
 {
     assert(cmd != nullptr);
@@ -797,35 +797,35 @@ static void _jegl_cmd_bind_texture_impl(
     }
 }
 
-void jegl_cmd_bind_texture_2d(
+void je_graphic_cmd_bind_texture_2d(
     jegl_command_buffer* cmd, uint32_t pass, jegl_texture_2d* texture)
 {
     _jegl_cmd_bind_texture_impl(
         cmd, jegl_cmd_op::BIND_TEXTURE_2D, jegl_texture_kind::TEXTURE_2D, pass, texture);
 }
 
-void jegl_cmd_bind_texture_3d(
+void je_graphic_cmd_bind_texture_3d(
     jegl_command_buffer* cmd, uint32_t pass, jegl_texture_3d* texture)
 {
     _jegl_cmd_bind_texture_impl(
         cmd, jegl_cmd_op::BIND_TEXTURE_3D, jegl_texture_kind::TEXTURE_3D, pass, texture);
 }
 
-void jegl_cmd_bind_texture_array(
+void je_graphic_cmd_bind_texture_array(
     jegl_command_buffer* cmd, uint32_t pass, jegl_texture_array* texture)
 {
     _jegl_cmd_bind_texture_impl(
         cmd, jegl_cmd_op::BIND_TEXTURE_ARRAY, jegl_texture_kind::TEXTURE_ARRAY, pass, texture);
 }
 
-void jegl_cmd_bind_texture_cube(
+void je_graphic_cmd_bind_texture_cube(
     jegl_command_buffer* cmd, uint32_t pass, jegl_texture_cube* texture)
 {
     _jegl_cmd_bind_texture_impl(
         cmd, jegl_cmd_op::BIND_TEXTURE_CUBE, jegl_texture_kind::TEXTURE_CUBE, pass, texture);
 }
 
-void jegl_cmd_bind_sampler(
+void je_graphic_cmd_bind_sampler(
     jegl_command_buffer* cmd, uint32_t sampler_id, jegl_sampler* sampler)
 {
     assert(cmd != nullptr);
@@ -844,7 +844,7 @@ void jegl_cmd_bind_sampler(
     cmd->push_command(command);
 }
 
-void jegl_cmd_set_uniform(
+void je_graphic_cmd_set_uniform(
     jegl_command_buffer* cmd,
     jegl_uniform_slot slot,
     const void* data,
@@ -867,69 +867,69 @@ void jegl_cmd_set_uniform(
     cmd->m_has_last_uniform_block = false;
 }
 
-void jegl_cmd_set_uniform_float(
+void je_graphic_cmd_set_uniform_float(
     jegl_command_buffer* cmd, jegl_uniform_slot slot, float value)
 {
     assert(slot.m_size == sizeof(float));
-    jegl_cmd_set_uniform(cmd, slot, &value, sizeof(value));
+    je_graphic_cmd_set_uniform(cmd, slot, &value, sizeof(value));
 }
 
-void jegl_cmd_set_uniform_float2(
+void je_graphic_cmd_set_uniform_float2(
     jegl_command_buffer* cmd, jegl_uniform_slot slot, float x, float y)
 {
     const float value[2] = { x, y };
     assert(slot.m_size == sizeof(value));
-    jegl_cmd_set_uniform(cmd, slot, value, sizeof(value));
+    je_graphic_cmd_set_uniform(cmd, slot, value, sizeof(value));
 }
 
-void jegl_cmd_set_uniform_float3(
+void je_graphic_cmd_set_uniform_float3(
     jegl_command_buffer* cmd, jegl_uniform_slot slot, float x, float y, float z)
 {
     const float value[3] = { x, y, z };
     assert(slot.m_size == sizeof(value));
-    jegl_cmd_set_uniform(cmd, slot, value, sizeof(value));
+    je_graphic_cmd_set_uniform(cmd, slot, value, sizeof(value));
 }
 
-void jegl_cmd_set_uniform_float4(
+void je_graphic_cmd_set_uniform_float4(
     jegl_command_buffer* cmd, jegl_uniform_slot slot, float x, float y, float z, float w)
 {
     const float value[4] = { x, y, z, w };
     assert(slot.m_size == sizeof(value));
-    jegl_cmd_set_uniform(cmd, slot, value, sizeof(value));
+    je_graphic_cmd_set_uniform(cmd, slot, value, sizeof(value));
 }
 
-void jegl_cmd_set_uniform_int(
+void je_graphic_cmd_set_uniform_int(
     jegl_command_buffer* cmd, jegl_uniform_slot slot, int value)
 {
     assert(slot.m_size == sizeof(int));
-    jegl_cmd_set_uniform(cmd, slot, &value, sizeof(value));
+    je_graphic_cmd_set_uniform(cmd, slot, &value, sizeof(value));
 }
 
-void jegl_cmd_set_uniform_int2(
+void je_graphic_cmd_set_uniform_int2(
     jegl_command_buffer* cmd, jegl_uniform_slot slot, int x, int y)
 {
     const int value[2] = { x, y };
     assert(slot.m_size == sizeof(value));
-    jegl_cmd_set_uniform(cmd, slot, value, sizeof(value));
+    je_graphic_cmd_set_uniform(cmd, slot, value, sizeof(value));
 }
 
-void jegl_cmd_set_uniform_int3(
+void je_graphic_cmd_set_uniform_int3(
     jegl_command_buffer* cmd, jegl_uniform_slot slot, int x, int y, int z)
 {
     const int value[3] = { x, y, z };
     assert(slot.m_size == sizeof(value));
-    jegl_cmd_set_uniform(cmd, slot, value, sizeof(value));
+    je_graphic_cmd_set_uniform(cmd, slot, value, sizeof(value));
 }
 
-void jegl_cmd_set_uniform_int4(
+void je_graphic_cmd_set_uniform_int4(
     jegl_command_buffer* cmd, jegl_uniform_slot slot, int x, int y, int z, int w)
 {
     const int value[4] = { x, y, z, w };
     assert(slot.m_size == sizeof(value));
-    jegl_cmd_set_uniform(cmd, slot, value, sizeof(value));
+    je_graphic_cmd_set_uniform(cmd, slot, value, sizeof(value));
 }
 
-void jegl_cmd_set_uniform_float2x2(
+void je_graphic_cmd_set_uniform_float2x2(
     jegl_command_buffer* cmd, jegl_uniform_slot slot, const float (*mat)[2])
 {
     assert(cmd != nullptr);
@@ -948,7 +948,7 @@ void jegl_cmd_set_uniform_float2x2(
     cmd->m_has_last_uniform_block = false;
 }
 
-void jegl_cmd_set_uniform_float3x3(
+void je_graphic_cmd_set_uniform_float3x3(
     jegl_command_buffer* cmd, jegl_uniform_slot slot, const float (*mat)[3])
 {
     assert(cmd != nullptr);
@@ -969,7 +969,7 @@ void jegl_cmd_set_uniform_float3x3(
     cmd->m_has_last_uniform_block = false;
 }
 
-void jegl_cmd_set_uniform_float4x4(
+void je_graphic_cmd_set_uniform_float4x4(
     jegl_command_buffer* cmd, jegl_uniform_slot slot, const float (*mat)[4])
 {
     assert(cmd != nullptr);
@@ -988,7 +988,7 @@ void jegl_cmd_set_uniform_float4x4(
     cmd->m_has_last_uniform_block = false;
 }
 
-void jegl_cmd_draw_indexed(
+void je_graphic_cmd_draw_indexed(
     jegl_command_buffer* cmd,
     uint32_t index_count, uint32_t first_index, uint32_t instance_count)
 {
@@ -1005,7 +1005,7 @@ void jegl_cmd_draw_indexed(
         instance_count);
 }
 
-void jegl_cmd_draw(
+void je_graphic_cmd_draw(
     jegl_command_buffer* cmd,
     uint32_t vertex_count, uint32_t first_vertex, uint32_t instance_count)
 {
@@ -1022,7 +1022,7 @@ void jegl_cmd_draw(
         instance_count);
 }
 
-void jegl_cmd_commit(jegl_command_buffer* cmd)
+void je_graphic_cmd_commit(jegl_command_buffer* cmd)
 {
     assert(cmd != nullptr);
     assert(cmd->m_context != nullptr);
@@ -1031,7 +1031,7 @@ void jegl_cmd_commit(jegl_command_buffer* cmd)
     if (cmd->m_pending_draw)
         cmd->flush_pending_draw();
 
-    // A pass begun by jegl_branch_new_command_buffer may still be open; close
+    // A pass begun by je_graphic_branch_new_command_buffer may still be open; close
     // it here so callers can follow the "record, commit" flow.
     if (cmd->m_in_pass)
     {
@@ -1310,8 +1310,8 @@ void _jegl_cmd_begin_deferred_draw(
     assert(index_count > 0);
     assert(instance_count > 0);
 
-    jegl_cmd_bind_pipeline(cmd, pipeline);
-    jegl_cmd_bind_vertex(cmd, vertex);
+    je_graphic_cmd_bind_pipeline(cmd, pipeline);
+    je_graphic_cmd_bind_vertex(cmd, vertex);
 
     cmd->m_pending_draw = true;
     cmd->m_pending_draw_op = jegl_cmd_op::DRAW_INDEXED;

@@ -13,60 +13,60 @@
 uint64_t _crc64_of_file(const char* filepath)
 {
     uint64_t crc64_result = 0;
-    if (auto* origin_file = jeecs_file_open(filepath))
+    if (auto* origin_file = je_file_open(filepath))
     {
         constexpr size_t READ_COUNT_PER_GROUP = 256;
 
         char buf[READ_COUNT_PER_GROUP];
 
-        size_t reserved_byte_len = jeecs_file_size(origin_file);
+        size_t reserved_byte_len = je_file_size(origin_file);
         while (reserved_byte_len > 0)
         {
             size_t this_time_read_size = std::min(READ_COUNT_PER_GROUP, reserved_byte_len);
             reserved_byte_len -= this_time_read_size;
 
-            jeecs_file_read(buf, sizeof(char), this_time_read_size, origin_file);
+            je_file_read(buf, sizeof(char), this_time_read_size, origin_file);
 
             for (size_t i = 0; i < this_time_read_size; ++i)
                 crc64_result = wo_crc64_u8(buf[i], crc64_result);
         }
-        jeecs_file_close(origin_file);
+        je_file_close(origin_file);
     }
 
     return crc64_result;
 }
 
-/* OPTIONAL */ jeecs_file* jeecs_load_cache_file(
+/* OPTIONAL */ jeecs_file* je_cache_file_load(
     const char* filepath, uint32_t format_version, uint64_t virtual_crc64)
 {
     using namespace std;
 
     string file_cache_path = filepath + ".je4cache"s;
     // 1. Try open cache file for read.
-    if (auto* cache_file = jeecs_file_open(file_cache_path.c_str()))
+    if (auto* cache_file = je_file_open(file_cache_path.c_str()))
     {
         // 1. Verify format_version;
         uint32_t cache_mgr_ver, cache_format_ver;
 
-        jeecs_file_read(&cache_mgr_ver, sizeof(uint32_t), 1, cache_file);
+        je_file_read(&cache_mgr_ver, sizeof(uint32_t), 1, cache_file);
         if (cache_mgr_ver != CACHE_MANAGER_MAIN_VERSION || CACHE_MANAGER_MAIN_VERSION == 0)
         {
             jeecs::debug::loginfo(
                 "Reloading `%s`, cache file outdated (cache-manager version changed).",
                 filepath);
 
-            jeecs_file_close(cache_file);
+            je_file_close(cache_file);
             return nullptr;
         }
 
-        jeecs_file_read(&cache_format_ver, sizeof(uint32_t), 1, cache_file);
+        je_file_read(&cache_format_ver, sizeof(uint32_t), 1, cache_file);
         if (cache_format_ver != format_version)
         {
             jeecs::debug::loginfo(
                 "Reloading `%s`, cache file outdated (cache version changed).",
                 filepath);
 
-            jeecs_file_close(cache_file);
+            je_file_close(cache_file);
             return nullptr;
         }
 
@@ -81,7 +81,7 @@ uint64_t _crc64_of_file(const char* filepath)
                 virtual_crc64 ? virtual_crc64 : _crc64_of_file(filepath);
 
             uint64_t cache_crc64 = 0;
-            jeecs_file_read(&cache_crc64, sizeof(uint64_t), 1, cache_file);
+            je_file_read(&cache_crc64, sizeof(uint64_t), 1, cache_file);
 
             if (crc64_result != 0)
             {
@@ -90,7 +90,7 @@ uint64_t _crc64_of_file(const char* filepath)
                     jeecs::debug::loginfo(
                         "Reloading `%s`, cache file outdated (origin file changed).",
                         filepath);
-                    jeecs_file_close(cache_file);
+                    je_file_close(cache_file);
                     return nullptr;
                 }
             }
@@ -100,7 +100,7 @@ uint64_t _crc64_of_file(const char* filepath)
     return nullptr;
 }
 
-/* OPTIONAL */ je_writing_cache_file* jeecs_create_cache_file(
+/* OPTIONAL */ je_writing_cache_file* je_cache_file_create(
     const char* filepath, uint32_t format_version, uint64_t usecrc64)
 {
     using namespace std;
@@ -117,9 +117,9 @@ uint64_t _crc64_of_file(const char* filepath)
 
     string file_cache_path = filepath + ".je4cache"s;
     if (file_cache_path[0] == '@')
-        file_cache_path = jeecs_file_get_runtime_path() + file_cache_path.substr(1);
+        file_cache_path = je_file_runtime_path_get() + file_cache_path.substr(1);
     if (file_cache_path[0] == '!')
-        file_cache_path = jeecs_file_get_host_path() + file_cache_path.substr(1);
+        file_cache_path = je_file_host_path_get() + file_cache_path.substr(1);
 
     FILE* f = fopen(file_cache_path.c_str(), "wb");
 
@@ -136,7 +136,7 @@ uint64_t _crc64_of_file(const char* filepath)
     return reinterpret_cast<je_writing_cache_file*>(f);
 }
 
-size_t jeecs_write_cache_file(
+size_t je_cache_file_write(
     const void* write_buffer, 
     size_t elem_size, 
     size_t count, 
@@ -145,7 +145,7 @@ size_t jeecs_write_cache_file(
     return fwrite(write_buffer, elem_size, count, reinterpret_cast<FILE*>(file));
 }
 
-void jeecs_close_cache_file(je_writing_cache_file* file)
+void je_cache_file_close(je_writing_cache_file* file)
 {
     fclose(reinterpret_cast<FILE*>(file));
 }

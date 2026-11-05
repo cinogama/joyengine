@@ -1,5 +1,5 @@
 // 瓦片图集缓存生成器：把 .je4tileset TOML 源转换为引擎可读的
-// 二进制缓存文档（jeecs_cache_binary_* 格式）。
+// 二进制缓存文档（je_cache_binary_* 格式）。
 //
 // 由引擎在 .je4cache 缺失或失效时加载，调用 generate：
 //   cache  —— C 侧创建好的缓存写入器（文件头已写入）
