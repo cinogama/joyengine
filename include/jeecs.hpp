@@ -2127,16 +2127,6 @@ jeecs_close_cache_file [基本接口]
 */
 JE_API void jeecs_close_cache_file(je_writing_cache_file* file);
 
-/*
-jeecs_remove_cache_file [基本接口]
-删除 filepath 对应的 <filepath>.je4cache 缓存文件（不存在时无操作）
-    * filepath 的 @/ 与 !/ 前缀展开规则与 jeecs_create_cache_file 一致
-    * 供生成器调用失败后清理半成品缓存
-请参见：
-    jeecs_create_cache_file
-*/
-JE_API void jeecs_remove_cache_file(const char* filepath);
-
 /////////////////////////// CACHE BINARY DOCUMENT /////////////////////////////////
 
 /*
@@ -2674,6 +2664,8 @@ je_animation_find_action [基本接口]
 JE_API /* OPTIONAL */ const je_animation_action_data* je_animation_find_action(
     const je_animation* animation,
     const char* name);
+
+JE_API /* OPTIONAL */ jeecs_file* jeecs_animation_create_cache(const char* path);
 
 /*
 je_image_texture_color_space [类型]
@@ -7211,6 +7203,8 @@ JE_API bool je_tilemap_get_tile_property(je_TilesetDocument* tileset,
     je_TileId tile_id, const char* name, je_PropertyType type,
     /* OPTIONAL */ void* out_value);
 
+JE_API /* OPTIONAL */ jeecs_file* jeecs_tileset_create_cache(const char* path)
+
 // ---- 单元格渲染信息（编辑器预览用，与实际渲染一致） ----
 
 /*
@@ -7236,6 +7230,8 @@ JE_API bool je_tilemap_cell_quad(je_TilemapDocument* map, je_LayerId layer,
     /* OPTIONAL */ const char** texture_path,
     /* OPTIONAL */ float* u0, /* OPTIONAL */ float* v0, /* OPTIONAL */ float* u1, /* OPTIONAL */ float* v1,
     /* OPTIONAL */ int32_t* qx, /* OPTIONAL */ int32_t* qy, /* OPTIONAL */ int32_t* qcols);
+
+JE_API /* OPTIONAL */ jeecs_file* jeecs_tilemap_create_cache(const char* path);
 
 // DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR
 #ifdef JE_ENABLE_DEBUG_API
