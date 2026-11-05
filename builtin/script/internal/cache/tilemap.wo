@@ -1,0 +1,589 @@
+// 瓦片地图缓存生成器：把 .je4tilemap TOML 源转换为引擎可读的
+// 二进制缓存文档（jeecs_cache_binary_* 格式）。
+//
+// 由引擎在 .je4cache 缺失或失效时加载，调用 generate：
+//   cache  —— C 侧创建好的缓存写入器（文件头已写入）
+//   source —— 地图 TOML 的引擎路径（@/ 或 !/），经 je::file::readall 读取
+//
+// 文档结构与 src/jeecs_core_tilemap_model.hpp 顶部注释一一对应：
+//   DOCUMENT
+//     "width" / "height" / "tile_px" -> INT32
+//     "tilesets" -> LIST of STRING
+//     "layers" -> LIST of DOCUMENT
+//         "name" -> STRING, "visible" / "locked" -> BOOL
+//         "z" -> FLOAT32, "rend_queue" -> INT32
+//         "selfshadow" / "blockshadow" -> INT32
+//         "selfshadow_factor" / "blockshadow_factor" -> FLOAT32
+//         "grid" -> BUFFER（int32，行优先，长度 = width*height）
+//         "shader" -> STRING（空 = 未指定）
+//         "textures" -> LIST of DOCUMENT
+//             "slot" -> INT32, "path" -> STRING
+//         "uniforms" -> LIST of DOCUMENT
+//             "name" -> STRING, "type" -> INT32, "value" -> 值
+//     "cell_properties" -> LIST of DOCUMENT
+//         "layer" / "x" / "y" -> INT32
+//         "properties" -> LIST of DOCUMENT
+//             "name" -> STRING, "type" -> INT32, "value" -> 类型化值
+//
+// uniform 类型标记：0 INT / 1 INT2 / 2 INT3 / 3 INT4 /
+//                   4 FLOAT / 5 FLOAT2 / 6 FLOAT3 / 7 FLOAT4
+// 属性（property）类型标记 = je::tilemap::property_type。
+
+import pkg::std;
+import pkg::toml;
+
+import je;
+import je::cache;
+
+using std;
+using toml;
+
+// TOML 文本枚举名 -> 引擎枚举值。与 je/tilemap.wo 的同名映射保持一致；
+// 生成器脚本不导入 je::tilemap（单文件检查时无法解析其内部命名空间）。
+func shadow_mode_from_toml_name(name: string)=> option<int>
+{
+    let mode = name->lower;
+    if (mode == "off") return option::value(0);
+    if (mode == "on") return option::value(1);
+    if (mode == "auto") return option::value(2);
+    return option::none;
+}
+
+func array_of(value: Toml)=> array<Toml>
+{
+    let mut result = []mut: vec<Toml>;
+    match (value->as_array)
+    {
+        value(items)?
+        {
+            for (let item : items)
+                result->add(item);
+        }
+        none?;
+    }
+    return result->to_array;
+}
+
+func string_of(value: Toml)=> string
+{
+    match (value->as_string)
+    {
+        value(str)? return str;
+        none?;
+    }
+    return "";
+}
+
+func bool_of(value: Toml)=> bool
+{
+    match (value->as_bool)
+    {
+        value(flag)? return flag;
+        none?;
+    }
+    return false;
+}
+
+func bool_or(value: Toml, fallback: bool)=> bool
+{
+    match (value->as_bool)
+    {
+        value(flag)? return flag;
+        none?;
+    }
+    return fallback;
+}
+
+func int_of(value: Toml)=> int
+{
+    match (value->as_int)
+    {
+        value(number)? return number;
+        none?;
+    }
+    return 0;
+}
+
+func int_or(value: Toml, fallback: int)=> int
+{
+    match (value->as_int)
+    {
+        value(number)? return number;
+        none?;
+    }
+    return fallback;
+}
+
+func real_of(value: Toml)=> real
+{
+    match (value->as_float)
+    {
+        value(number)? return number;
+        none?;
+    }
+    match (value->as_int)
+    {
+        value(number)? return number as real;
+        none?;
+    }
+    return 0.;
+}
+
+func real_or(value: Toml, fallback: real)=> real
+{
+    if (value->as_float->is_none && value->as_int->is_none)
+        return fallback;
+    return real_of(value);
+}
+
+func real_at(values: array<Toml>, index: int)=> real
+{
+    if (index < 0 || index >= values->len)
+        return 0.;
+    return real_of(values[index]);
+}
+
+func int_at(values: array<Toml>, index: int)=> int
+{
+    if (index < 0 || index >= values->len)
+        return 0;
+    return int_of(values[index]);
+}
+
+func fail(what: string, message: string)=> bool
+{
+    je::logerr(F"瓦片地图 TOML {what}：{message}");
+    return false;
+}
+
+func append_key(cache: je::cache::binary_writer, key: string)=> bool
+{
+    return cache->append_string(key);
+}
+
+func append_float_list(
+    cache: je::cache::binary_writer, values: array<Toml>, count: int)=> bool
+{
+    if (!cache->append_list())
+        return false;
+    for (let mut i = 0; i < count; i += 1)
+        if (!cache->append_float32(real_at(values, i)))
+            return false;
+    return cache->append_end();
+}
+
+func append_int_list(
+    cache: je::cache::binary_writer, values: array<Toml>, count: int)=> bool
+{
+    if (!cache->append_list())
+        return false;
+    for (let mut i = 0; i < count; i += 1)
+        if (!cache->append_int32(int_at(values, i)))
+            return false;
+    return cache->append_end();
+}
+
+// 嵌套行数组（grid）展平为行优先一维数组；行列数不符返回 none
+func int_rows_of(
+    value: Toml, rows: int, cols: int)=> option<array<int>>
+{
+    match (value->as_array)
+    {
+        value(row_values)?
+        {
+            if (rows >= 0 && row_values->len != rows)
+                return option::none;
+            let mut flat = []mut: vec<int>;
+            for (let row : row_values)
+            {
+                match (row->as_array)
+                {
+                    value(cells)?
+                    {
+                        if (cols >= 0 && cells->len != cols)
+                            return option::none;
+                        for (let cell : cells)
+                            flat->add(int_of(cell));
+                    }
+                    none? return option::none;
+                }
+            }
+            return option::value(flat->to_array);
+        }
+        none? return option::none;
+    }
+}
+
+// 按值形态推断 je_PropertyType；无法识别返回 -1
+func infer_property_type(value: Toml)=> int
+{
+    match (value->as_bool)
+    {
+        value(_)? return 0;
+        none?;
+    }
+    match (value->as_string)
+    {
+        value(_)? return 1;
+        none?;
+    }
+    match (value->as_int)
+    {
+        value(_)? return 2;
+        none?;
+    }
+    match (value->as_float)
+    {
+        value(_)? return 3;
+        none?;
+    }
+    match (value->as_array)
+    {
+        value(items)?
+        {
+            if (items->len >= 2 && items->len <= 4)
+                return 2 + items->len;
+        }
+        none?;
+    }
+    return -1;
+}
+
+func append_property_value(
+    cache: je::cache::binary_writer, type_tag: int, value: Toml)=> bool
+{
+    if (type_tag == 0)
+        return cache->append_bool(bool_of(value));
+    if (type_tag == 1)
+        return cache->append_string(string_of(value));
+    if (type_tag == 2)
+        return cache->append_int32(int_of(value));
+    if (type_tag == 3)
+        return cache->append_float32(real_of(value));
+
+    // VEC2/3/4：type_tag - 2 = 分量数
+    let count = type_tag - 2;
+    return append_float_list(cache, array_of(value), count);
+}
+
+// 输出一条格属性（名称 + 推断类型 + 值）
+func append_property_entry(
+    cache: je::cache::binary_writer, name: string, value: Toml)=> bool
+{
+    let type_tag = infer_property_type(value);
+    if (type_tag < 0)
+    {
+        je::logerr(F"瓦片地图 TOML 属性 '{name}' 的值类型无法识别");
+        return false;
+    }
+
+    return cache->append_document()
+        && append_key(cache, "name")
+        && cache->append_string(name)
+        && append_key(cache, "type")
+        && cache->append_int32(type_tag)
+        && append_key(cache, "value")
+        && append_property_value(cache, type_tag, value)
+        && cache->append_end();
+}
+
+// 按值形态推断 uniform 类型标记；无法识别返回 -1
+func infer_uniform_type(value: Toml)=> int
+{
+    match (value->as_int)
+    {
+        value(_)? return 0;
+        none?;
+    }
+    match (value->as_float)
+    {
+        value(_)? return 4;
+        none?;
+    }
+    match (value->as_array)
+    {
+        value(items)?
+        {
+            if (items->len < 2 || items->len > 4)
+                return -1;
+
+            let mut all_int = true;
+            for (let item : items)
+                if (item->as_int->is_none)
+                {
+                    all_int = false;
+                    break;
+                }
+
+            if (all_int)
+                return 1 + (items->len - 2);
+            return 5 + (items->len - 2);
+        }
+        none?;
+    }
+    return -1;
+}
+
+func append_uniform_value(
+    cache: je::cache::binary_writer, type_tag: int, value: Toml)=> bool
+{
+    if (type_tag == 0)
+        return cache->append_int32(int_of(value));
+    if (type_tag == 4)
+        return cache->append_float32(real_of(value));
+
+    if (type_tag >= 1 && type_tag <= 3)
+    {
+        let count = type_tag + 1;   // INT2/3/4 -> 2/3/4
+        return append_int_list(cache, array_of(value), count);
+    }
+    if (type_tag >= 5 && type_tag <= 7)
+    {
+        let count = type_tag - 3;   // FLOAT2/3/4 -> 2/3/4
+        return append_float_list(cache, array_of(value), count);
+    }
+    return false;
+}
+
+extern func generate(
+    cache: je::cache::binary_writer, source: string)=> bool
+{
+    let mut source_text = option::none: option<string>;
+    match (je::file::readall(source))
+    {
+        value(text)? source_text = option::value(text);
+        none?
+        {
+            je::logerr(F"无法读取瓦片地图 TOML 文件 {source}");
+            return false;
+        }
+    }
+
+    let mut loaded = option::none: option<Toml>;
+    match (toml::parse(source_text->unwrap))
+    {
+        ok(root)? loaded = option::value(root);
+        err(msg)?
+        {
+            je::logerr(F"无法解析瓦片地图 TOML 文件 {source}：{msg}");
+            return false;
+        }
+    }
+    let root = loaded->unwrap;
+
+    if (!cache->append_document())
+        return false;
+
+    let width = int_of(root["width"]);
+    let height = int_of(root["height"]);
+    let tile_px = int_of(root["tile_px"]);
+    if (width <= 0 || height <= 0 || tile_px <= 0)
+        return fail(source, "width/height/tile_px 必须是正整数");
+
+    if (!append_key(cache, "width") || !cache->append_int32(width))
+        return false;
+    if (!append_key(cache, "height") || !cache->append_int32(height))
+        return false;
+    if (!append_key(cache, "tile_px") || !cache->append_int32(tile_px))
+        return false;
+
+    // ---- tilesets（引用表，顺序即瓦片值中的图集下标） ----
+    if (!append_key(cache, "tilesets") || !cache->append_list())
+        return false;
+    for (let tileset_path : array_of(root["tilesets"]))
+        if (!cache->append_string(string_of(tileset_path)))
+            return false;
+    if (!cache->append_end())
+        return false;
+
+    // ---- layers ----
+    if (!append_key(cache, "layers") || !cache->append_list())
+        return false;
+
+    let mut layer_index = 0;
+    for (let layer : array_of(root["layers"]))
+    {
+        if (!cache->append_document())
+            return false;
+
+        if (!append_key(cache, "name")
+            || !cache->append_string(string_of(layer["name"])))
+            return false;
+        if (!append_key(cache, "visible")
+            || !cache->append_bool(bool_or(layer["visible"], true)))
+            return false;
+        if (!append_key(cache, "locked")
+            || !cache->append_bool(bool_or(layer["locked"], false)))
+            return false;
+        if (!append_key(cache, "z")
+            || !cache->append_float32(
+                real_or(layer["z"], -(layer_index as real))))
+            return false;
+        if (!append_key(cache, "rend_queue")
+            || !cache->append_int32(
+                int_or(layer["rend_queue"], 10000 + layer_index)))
+            return false;
+
+        let selfshadow_name = string_of(layer["selfshadow"]);
+        let mut selfshadow = 0;
+        if (selfshadow_name != "")
+        {
+            match (shadow_mode_from_toml_name(selfshadow_name))
+            {
+                value(value)? selfshadow = value;
+                none? return fail(source,
+                    F"selfshadow '{selfshadow_name}' 无法识别");
+            }
+        }
+        let blockshadow_name = string_of(layer["blockshadow"]);
+        let mut blockshadow = 0;
+        if (blockshadow_name != "")
+        {
+            match (shadow_mode_from_toml_name(blockshadow_name))
+            {
+                value(value)? blockshadow = value;
+                none? return fail(source,
+                    F"blockshadow '{blockshadow_name}' 无法识别");
+            }
+        }
+
+        if (!append_key(cache, "selfshadow")
+            || !cache->append_int32(selfshadow))
+            return false;
+        if (!append_key(cache, "selfshadow_factor")
+            || !cache->append_float32(
+                real_or(layer["selfshadow_factor"], 1.)))
+            return false;
+        if (!append_key(cache, "blockshadow")
+            || !cache->append_int32(blockshadow))
+            return false;
+        if (!append_key(cache, "blockshadow_factor")
+            || !cache->append_float32(
+                real_or(layer["blockshadow_factor"], 1.)))
+            return false;
+
+        let mut grid_opt = option::none: option<array<int>>;
+        grid_opt = int_rows_of(layer["grid"], height, width);
+        if (grid_opt->is_none)
+            return fail(source,
+                "layer.grid 必须是 height 行、每行 width 个整数");
+        if (!append_key(cache, "grid")
+            || !cache->append_int32_buffer(grid_opt->unwrap))
+            return false;
+
+        if (!append_key(cache, "shader")
+            || !cache->append_string(string_of(layer["shader"])))
+            return false;
+
+        // 附加纹理：槽 0 保留给图集源纹理
+        if (!append_key(cache, "textures") || !cache->append_list())
+            return false;
+        for (let texture : array_of(layer["style_textures"]))
+        {
+            if (!cache->append_document())
+                return false;
+
+            let slot = int_of(texture["slot"]);
+            let path = string_of(texture["path"]);
+            if (slot < 1 || path == "")
+                return fail(source,
+                    "style_textures 的 slot/path 不合法");
+
+            if (!append_key(cache, "slot") || !cache->append_int32(slot))
+                return false;
+            if (!append_key(cache, "path") || !cache->append_string(path))
+                return false;
+            if (!cache->append_end())
+                return false;
+        }
+        if (!cache->append_end())
+            return false;
+
+        // uniform 值（表：名称 -> 值，类型按值推断）
+        if (!append_key(cache, "uniforms") || !cache->append_list())
+            return false;
+        match (layer["style_uniforms"]->as_table)
+        {
+            value(uniforms)?
+            {
+                for (let (name, value) : uniforms)
+                {
+                    let type_tag = infer_uniform_type(value);
+                    if (type_tag < 0)
+                        return fail(source,
+                            F"style_uniforms '{name}' 的值类型无法识别");
+
+                    if (!cache->append_document())
+                        return false;
+                    if (!append_key(cache, "name")
+                        || !cache->append_string(name))
+                        return false;
+                    if (!append_key(cache, "type")
+                        || !cache->append_int32(type_tag))
+                        return false;
+                    if (!append_key(cache, "value")
+                        || !append_uniform_value(cache, type_tag, value))
+                        return false;
+                    if (!cache->append_end())
+                        return false;
+                }
+            }
+            none?;
+        }
+        if (!cache->append_end())
+            return false;
+
+        if (!cache->append_end())   // layer document
+            return false;
+
+        layer_index += 1;
+    }
+
+    if (!cache->append_end())       // layers
+        return false;
+
+    // ---- cell_properties ----
+    if (!append_key(cache, "cell_properties") || !cache->append_list())
+        return false;
+
+    for (let cell : array_of(root["cell_properties"]))
+    {
+        if (!cache->append_document())
+            return false;
+
+        if (!append_key(cache, "layer")
+            || !cache->append_int32(int_of(cell["layer"])))
+            return false;
+        if (!append_key(cache, "x")
+            || !cache->append_int32(int_of(cell["x"])))
+            return false;
+        if (!append_key(cache, "y")
+            || !cache->append_int32(int_of(cell["y"])))
+            return false;
+
+        if (!append_key(cache, "properties") || !cache->append_list())
+            return false;
+        match (cell["properties"]->as_table)
+        {
+            value(properties)?
+            {
+                for (let (name, value) : properties)
+                    if (!append_property_entry(cache, name, value))
+                        return false;
+            }
+            none?;
+        }
+        if (!cache->append_end())
+            return false;
+
+        if (!cache->append_end())   // cell document
+            return false;
+    }
+
+    if (!cache->append_end())       // cell_properties
+        return false;
+    if (!cache->append_end())       // root document
+        return false;
+
+    return true;
+}

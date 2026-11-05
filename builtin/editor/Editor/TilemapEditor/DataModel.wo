@@ -10,6 +10,8 @@ import je::tilemap;
 
 import pkg::fsys;
 
+import Serialize;
+
 using std;
 using je;
 using fsys;
@@ -81,11 +83,12 @@ namespace JEEditor::Editor::TilemapEditor
             }
         }
 
-        // 保存到指定路径并更新文档登记（保存后各世界按新路径共享）
+        // 保存到指定路径并更新文档登记（序列化为 TOML 后由编辑器写盘，
+        // 再登记路径；保存后各世界按新路径共享，缓存下次加载时重建）
         public func save_to(self: TilemapContext, path: fsys::path_t)=> bool
         {
             let path_str = path->to_string;
-            if (!self.m_map->save(path_str))
+            if (!save_map_document(self.m_map, path_str))
                 return false;
             self.m_path = path;
             return true;

@@ -1,0 +1,52 @@
+// Joyengine 4.x
+import pkg::std;
+
+namespace je::cache
+{
+    // 二进制缓存文档写入器（C 侧 je_writing_cache_file*）。
+    // 缓存文件头由引擎创建，脚本只负责按 jeecs_cache_binary_* 的格式写
+    // 文档内容；失败时返回 false，调用方会删除半成品缓存。
+    public using binary_writer = handle
+    {
+        extern("libjoyecs", "wojeapi_cache_binary_append_document")
+            public func append_document(self: binary_writer)=> bool;
+
+        extern("libjoyecs", "wojeapi_cache_binary_append_list")
+            public func append_list(self: binary_writer)=> bool;
+
+        extern("libjoyecs", "wojeapi_cache_binary_append_end")
+            public func append_end(self: binary_writer)=> bool;
+
+        extern("libjoyecs", "wojeapi_cache_binary_append_string")
+            public func append_string(self: binary_writer, value: string)=> bool;
+
+        extern("libjoyecs", "wojeapi_cache_binary_append_bool")
+            public func append_bool(self: binary_writer, value: bool)=> bool;
+
+        extern("libjoyecs", "wojeapi_cache_binary_append_int32")
+            public func append_int32(self: binary_writer, value: int)=> bool;
+
+        // 整段 int32 数组按 BUFFER 写入（瓦片网格/格 id 等大批量数据）。
+        // 读取侧用 jeecs_cache_binary_buffer_read 一次性取出，避免逐元素
+        // LIST 读取的重复扫描。
+        extern("libjoyecs", "wojeapi_cache_binary_append_int32_buffer")
+            public func append_int32_buffer(self: binary_writer,
+                values: array<int>)=> bool;
+
+        extern("libjoyecs", "wojeapi_cache_binary_append_float32")
+            public func append_float32(self: binary_writer, value: real)=> bool;
+    }
+
+    // 确保 path 指向的 .je4animation TOML 已有可用的 .je4cache；缺失或
+    // 失效时调用 builtin/script/internal/cache/animation.wo 生成。
+    // 引擎加载动画时会自动走同一流程，这里提供给导出流程预生成缓存。
+    extern("libjoyecs", "wojeapi_animation_cache_ensure")
+        public func generate_animation_cache(path: string)=> bool;
+
+    // 同上，对应 .je4tileset / .je4tilemap 与 internal/cache 下的生成器。
+    extern("libjoyecs", "wojeapi_tileset_cache_ensure")
+        public func generate_tileset_cache(path: string)=> bool;
+
+    extern("libjoyecs", "wojeapi_tilemap_cache_ensure")
+        public func generate_map_cache(path: string)=> bool;
+}

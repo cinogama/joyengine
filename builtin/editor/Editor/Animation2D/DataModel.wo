@@ -1,7 +1,20 @@
 // 2D 帧动画编辑器 —— 数据模型与文件序列化。
-// 数据模型 / 文件格式与运行时 Animation::FrameAnimation 完全对齐
-// （魔数 0xA213A710，见 src/jeecs.hpp 的 animation_data_set::load_animation），
-// 序列化部分请勿改动。
+// .je4animation 以 TOML 文本保存（便于 git 管理），数据模型与运行时
+// Animation::FrameAnimation 对齐；引擎加载时会把 TOML 交给
+// builtin/script/cache_generator/animation.wo 生成二进制 .je4cache，
+// 运行时只读取缓存（见 src/jeecs_frame_animation_cache.cpp）。
+//
+// TOML 结构：
+//   [[animations]]                 动作
+//   name = "idle"
+//   [[animations.frames]]          帧
+//   time = 0.1
+//   [[animations.frames.components]]
+//   name / member / offset / type / value
+//   [[animations.frames.uniforms]]
+//   name / type / value
+// type 为 int/float/vec2/vec3/vec4/quat4；quat4 的 value 保存欧拉角
+// （度）[ex, ey, ez]，与 DataValue::QUAT4 的语义一致。
 
 import pkg::std;
 
@@ -11,21 +24,19 @@ import je::typeinfo;
 import je::towoo;
 import je::towoo::types;
 
-import pkg::buffer;
-import pkg::filestream;
 import pkg::fsys;
 import pkg::math;
-import pkg::try;
-import pkg::worst;
+import pkg::toml;
 
 using std;
 using je::gui;
 using fsys;
+using toml;
 
 namespace JEEditor::Editor::Animation2D
 {
     // ======================================================================
-    // Section 1 — 数据模型（保持与运行时二进制格式一致，请勿改动序列化）
+    // Section 1 — 数据模型（与 .je4animation 的 TOML 序列化对应）
     // ======================================================================
     public enum DataValueType
     {
@@ -103,40 +114,59 @@ namespace JEEditor::Editor::Animation2D
             }
         }
 
-        func append_to_buffer(buf: buffer, value: DataValue) => buffer
+        // TOML 中的类型名（与缓存生成器 animation.wo 的约定一致）
+        func type_name(self: DataValue)=> string
         {
-            match (value)
+            match (self)
             {
-                INT(n)?
-                {
-                    let b = buf->appendui8(DataValueType::INT as int);
-                    return b->appendi32(n);
-                }
-                FLOAT(x)?
-                {
-                    let b = buf->appendui8(DataValueType::FLOAT as int);
-                    return b->appendf32(x);
-                }
+                INT(_)? return "int";
+                FLOAT(_)? return "float";
+                VEC2(_)? return "vec2";
+                VEC3(_)? return "vec3";
+                VEC4(_)? return "vec4";
+                QUAT4(_)? return "quat4";
+            }
+        }
+
+        // 把 DataValue 写入 TOML 表的 "value" 键；调用方另行写入 "type"。
+        // quat4 保存欧拉角三元组，运行时缓存由生成器换算成四元数。
+        func write_toml(self: DataValue, tbl: Toml)=> void
+        {
+            match (self)
+            {
+                INT(n)? tbl->set("value", n);
+                FLOAT(x)? tbl->set("value", x);
                 VEC2((x, y))?
                 {
-                    let b = buf->appendui8(DataValueType::VEC2 as int);
-                    return b->appendf32(x)->appendf32(y);
+                    let values = toml::new_array();
+                    values->push(x);
+                    values->push(y);
+                    tbl->set("value", values);
                 }
                 VEC3((x, y, z))?
                 {
-                    let b = buf->appendui8(DataValueType::VEC3 as int);
-                    return b->appendf32(x)->appendf32(y)->appendf32(z);
+                    let values = toml::new_array();
+                    values->push(x);
+                    values->push(y);
+                    values->push(z);
+                    tbl->set("value", values);
                 }
                 VEC4((x, y, z, w))?
                 {
-                    let b = buf->appendui8(DataValueType::VEC4 as int);
-                    return b->appendf32(x)->appendf32(y)->appendf32(z)->appendf32(w);
+                    let values = toml::new_array();
+                    values->push(x);
+                    values->push(y);
+                    values->push(z);
+                    values->push(w);
+                    tbl->set("value", values);
                 }
                 QUAT4((ex, ey, ez))?
                 {
-                    let (x, y, z, w) = quat::euler(ez, ey, ex);
-                    let b = buf->appendui8(DataValueType::QUAT4 as int);
-                    return b->appendf32(x)->appendf32(y)->appendf32(z)->appendf32(w);
+                    let values = toml::new_array();
+                    values->push(ex);
+                    values->push(ey);
+                    values->push(ez);
+                    tbl->set("value", values);
                 }
             }
         }
@@ -563,8 +593,115 @@ namespace JEEditor::Editor::Animation2D
     }
 
     // ======================================================================
-    // Section 2 — AnimationContext（公共 API 与文件格式保持不变）
+    // Section 2 — AnimationContext 与 TOML 读写
     // ======================================================================
+    // TOML 读取辅助：缺失/类型不符的字段按空值处理，让手写文件也能打开。
+    func array_of_toml(value: Toml)=> array<Toml>
+    {
+        let mut result = []mut: vec<Toml>;
+        match (value->as_array)
+        {
+            value(items)?
+            {
+                for (let item : items)
+                    result->add(item);
+            }
+            none?;
+        }
+        return result->to_array;
+    }
+    func string_of_toml(value: Toml)=> string
+    {
+        match (value->as_string)
+        {
+            value(str)? return str;
+            none?;
+        }
+        return "";
+    }
+    func bool_of_toml(value: Toml)=> bool
+    {
+        match (value->as_bool)
+        {
+            value(flag)? return flag;
+            none?;
+        }
+        return false;
+    }
+    func real_of_toml(value: Toml)=> real
+    {
+        match (value->as_float)
+        {
+            value(number)? return number;
+            none?;
+        }
+        match (value->as_int)
+        {
+            value(number)? return number as real;
+            none?;
+        }
+        return 0.;
+    }
+    func int_of_toml(value: Toml)=> int
+    {
+        match (value->as_int)
+        {
+            value(number)? return number;
+            none?;
+        }
+        return 0;
+    }
+    func real_at_toml(values: array<Toml>, index: int)=> real
+    {
+        if (index < 0 || index >= values->len)
+            return 0.;
+        return real_of_toml(values[index]);
+    }
+    // 按 TOML 的 type 名解析 value；类型未知或数值数组过短时返回 none。
+    // quat4 的 value 是欧拉角三元组，与 DataValue::QUAT4 的语义一致。
+    func read_data_value(type_name: string, value: Toml)=> option<DataValue>
+    {
+        let kind = type_name->lower;
+        if (kind == "int")
+            return option::value(DataValue::INT(int_of_toml(value)));
+        if (kind == "float")
+            return option::value(DataValue::FLOAT(real_of_toml(value)));
+
+        let values = array_of_toml(value);
+        if (kind == "vec2")
+        {
+            if (values->len < 2)
+                return option::none;
+            return option::value(DataValue::VEC2(
+                (real_at_toml(values, 0), real_at_toml(values, 1))));
+        }
+        if (kind == "vec3")
+        {
+            if (values->len < 3)
+                return option::none;
+            return option::value(DataValue::VEC3(
+                (real_at_toml(values, 0), real_at_toml(values, 1),
+                    real_at_toml(values, 2))));
+        }
+        if (kind == "vec4")
+        {
+            if (values->len < 4)
+                return option::none;
+            return option::value(DataValue::VEC4(
+                (real_at_toml(values, 0), real_at_toml(values, 1),
+                    real_at_toml(values, 2), real_at_toml(values, 3))));
+        }
+        if (kind == "quat4")
+        {
+            if (values->len < 3)
+                return option::none;
+            return option::value(DataValue::QUAT4(
+                (real_at_toml(values, 0), real_at_toml(values, 1),
+                    real_at_toml(values, 2))));
+        }
+        return option::none;
+    }
+
     public using AnimationContext = struct{
         protected m_animations: map<string, AnimationActionData>,
         protected m_path: fsys::path_t,
@@ -585,9 +722,17 @@ namespace JEEditor::Editor::Animation2D
                 m_selected_c_or_u_data = mut SelectedComponentOrUniformData::None,
             };
         }
-        public func open(path: fsys::path_t)
+        // 从 TOML 读取动画；文件无法解析时返回错误。结构上缺失的字段
+        // 按空值处理（手写 TOML 也能打开），未知类型的数据项跳过。
+        public func open(path: fsys::path_t)=> result<AnimationContext, string>
         {
-            try! bufdata = buffer::builder::fromfile(path->to_string, 0, -1);
+            let mut loaded = option::none: option<Toml>;
+            match (toml::load(path))
+            {
+                ok(root)? loaded = option::value(root);
+                err(msg)? return result::err(msg);
+            }
+            let root = loaded->unwrap;
 
             let self = AnimationContext{
                 m_animations = {}mut,
@@ -597,95 +742,47 @@ namespace JEEditor::Editor::Animation2D
                 m_selected_c_or_u_data = mut SelectedComponentOrUniformData::None,
             };
 
-            func read_typed_value(bufdata: buffer::builder)
+            for (let action : array_of_toml(root["animations"]))
             {
-                let value_type = bufdata->readui8() as DataValueType;
-                if (value_type == DataValueType::INT)
-                    return DataValue::INT(bufdata->readi32());
-                else if (value_type == DataValueType::FLOAT)
-                    return DataValue::FLOAT(bufdata->readf32());
-                else if (value_type == DataValueType::VEC2)
-                {
-                    let x = bufdata->readf32();
-                    let y = bufdata->readf32();
-                    return DataValue::VEC2((x, y));
-                }
-                else if (value_type == DataValueType::VEC3)
-                {
-                    let x = bufdata->readf32();
-                    let y = bufdata->readf32();
-                    let z = bufdata->readf32();
-                    return DataValue::VEC3((x, y, z));
-                }
-                else if (value_type == DataValueType::VEC4)
-                {
-                    let x = bufdata->readf32();
-                    let y = bufdata->readf32();
-                    let z = bufdata->readf32();
-                    let w = bufdata->readf32();
-                    return DataValue::VEC4((x, y, z, w));
-                }
-                else if (value_type == DataValueType::QUAT4)
-                {
-                    let x = bufdata->readf32();
-                    let y = bufdata->readf32();
-                    let z = bufdata->readf32();
-                    let w = bufdata->readf32();
-                    let (rz, ry, rx) = (x, y, z, w) as quat->euler_angle as (real, real, real);
-                    return DataValue::QUAT4((rx, ry, rz));
-                }
-                return std::panic(F"Unknown type: {value_type}");
-            }
-
-            if (bufdata->readui32() != 0xA213A710)
-                return result::err(0 as buffer::builder::errno_t);
-
-            let animation_count = bufdata->readi64();
-            for (let mut i = 0; i < animation_count; i += 1)
-            {
-                let frame_count = bufdata->readi64();
-                let frame_name_len = bufdata->readi64();
-                let frame_name = bufdata->readbuffer(frame_name_len): buffer as string;
-
                 let frames = AnimationActionData{m_frames = []mut};
-                self.m_animations->set(frame_name, frames);
+                self.m_animations->set(string_of_toml(action["name"]), frames);
 
-                for (let mut j = 0; j < frame_count; j += 1)
+                for (let frame_toml : array_of_toml(action["frames"]))
                 {
-                    let time = bufdata->readf32();
                     let frame_data = Animation2dFrameData{
-                        m_time = mut time,
+                        m_time = mut real_of_toml(frame_toml["time"]),
                         m_component_data = []mut,
                         m_uniform_data = []mut,
                     };
 
-                    let component_data_count = bufdata->readi64();
-                    for (let mut k = 0; k < component_data_count; k += 1)
+                    for (let component : array_of_toml(frame_toml["components"]))
                     {
-                        let component_name_len = bufdata->readi64();
-                        let component_name = bufdata->readbuffer(component_name_len): buffer as string;
-                        let member_name_len = bufdata->readi64();
-                        let member_name = bufdata->readbuffer(member_name_len): buffer as string;
-                        let offset_mode = bufdata->readui8() != 0;
-                        let value = read_typed_value(bufdata);
-                        frame_data.m_component_data->add(FrameComponentData{
-                                m_component_name = component_name,
-                                m_member_name = member_name,
-                                m_offset_mode = mut offset_mode,
-                                m_value = mut value,
-                            });
+                        match (read_data_value(
+                                string_of_toml(component["type"]), component["value"]))
+                        {
+                            value(v)?
+                                do frame_data.m_component_data->add(FrameComponentData{
+                                        m_component_name = string_of_toml(component["name"]),
+                                        m_member_name = string_of_toml(component["member"]),
+                                        m_offset_mode = mut bool_of_toml(component["offset"]),
+                                        m_value = mut v,
+                                    });
+                            none?; // 未知类型或数值缺失，跳过该条目
+                        }
                     }
 
-                    let uniform_data_count = bufdata->readi64();
-                    for (let mut k = 0; k < uniform_data_count; k += 1)
+                    for (let uniform : array_of_toml(frame_toml["uniforms"]))
                     {
-                        let uniform_name_len = bufdata->readi64();
-                        let uniform_name = bufdata->readbuffer(uniform_name_len): buffer as string;
-                        let value = read_typed_value(bufdata);
-                        frame_data.m_uniform_data->add(FrameUniformData{
-                                m_uniform_name = uniform_name,
-                                m_value = mut value,
-                            });
+                        match (read_data_value(
+                                string_of_toml(uniform["type"]), uniform["value"]))
+                        {
+                            value(v)?
+                                do frame_data.m_uniform_data->add(FrameUniformData{
+                                        m_uniform_name = string_of_toml(uniform["name"]),
+                                        m_value = mut v,
+                                    });
+                            none?;
+                        }
                     }
 
                     frames.m_frames->add(frame_data);
@@ -695,49 +792,61 @@ namespace JEEditor::Editor::Animation2D
         }
         public func save(self: AnimationContext)=> bool
         {
-            let mut result = buffer::createui32(0xA213A710);
-            result = result->appendi64(self.m_animations->len);
+            let root = toml::new_table();
 
+            let actions = toml::new_array();
             for (let (action_name, action_data) : self.m_animations)
             {
-                result = result
-                    ->appendi64(action_data.m_frames->len)
-                    ->appendi64(action_name->byte_len)
-                    + action_name: string as buffer;
+                let action = toml::new_table();
+                action->set("name", action_name);
 
-                for (let frame: action_data.m_frames)
+                let frames = toml::new_array();
+                for (let frame : action_data.m_frames)
                 {
-                    result = result->appendf32(frame.m_time);
+                    let frame_toml = toml::new_table();
+                    frame_toml->set("time", frame.m_time);
 
-                    result = result->appendi64(frame.m_component_data->len);
+                    let components = toml::new_array();
                     for (let cdata : frame.m_component_data)
                     {
-                        result = result->appendi64(cdata.m_component_name->byte_len)
-                            + cdata.m_component_name: string as buffer;
-                        result = result->appendi64(cdata.m_member_name->byte_len)
-                            + cdata.m_member_name: string as buffer;
-                        result = result->appendui8(cdata.m_offset_mode? 1 | 0);
-                        result = DataValue::append_to_buffer(result, cdata.m_value);
+                        let component = toml::new_table();
+                        component->set("name", cdata.m_component_name);
+                        component->set("member", cdata.m_member_name);
+                        component->set("offset", cdata.m_offset_mode);
+                        component->set("type", cdata.m_value->type_name);
+                        cdata.m_value->write_toml(component);
+                        components->push(component);
                     }
+                    frame_toml->set("components", components);
 
-                    result = result->appendi64(frame.m_uniform_data->len);
+                    let uniforms = toml::new_array();
                     for (let udata : frame.m_uniform_data)
                     {
-                        result = result->appendi64(udata.m_uniform_name->byte_len)
-                            + udata.m_uniform_name: string as buffer;
-                        result = DataValue::append_to_buffer(result, udata.m_value);
+                        let uniform = toml::new_table();
+                        uniform->set("name", udata.m_uniform_name);
+                        uniform->set("type", udata.m_value->type_name);
+                        udata.m_value->write_toml(uniform);
+                        uniforms->push(uniform);
                     }
-                }
-            }
+                    frame_toml->set("uniforms", uniforms);
 
-            match (filestream::open(self.m_path, filestream::mode::write))
+                    frames->push(frame_toml);
+                }
+                action->set("frames", frames);
+
+                actions->push(action);
+            }
+            // 即使没有动作也写出 animations 键，保证源文件非空
+            //（jeecs_create_cache_file 拒绝为 0 字节文件生成缓存）。
+            root->set("animations", actions);
+
+            match (toml::save(root, self.m_path))
             {
-                none?
-                    return false;
-                value(fs)?
+                ok(_)? return true;
+                err(msg)?
                 {
-                    defer do fs->close();
-                    return fs->write(result, 0, result->len);
+                    je::logerr(F"保存动画 {self.m_path->to_string()} 失败：{msg}");
+                    return false;
                 }
             }
         }

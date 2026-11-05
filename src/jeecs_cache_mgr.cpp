@@ -4,6 +4,7 @@
 
 #include "wo.h"
 
+#include <cstdio>
 #include <string>
 
 // WARNING!!!!
@@ -99,7 +100,7 @@ uint64_t _crc64_of_file(const char* filepath)
     return nullptr;
 }
 
-/* OPTIONAL */ void* jeecs_create_cache_file(
+/* OPTIONAL */ je_writing_cache_file* jeecs_create_cache_file(
     const char* filepath, uint32_t format_version, uint64_t usecrc64)
 {
     using namespace std;
@@ -132,15 +133,19 @@ uint64_t _crc64_of_file(const char* filepath)
     fwrite(&format_version, sizeof(uint32_t), 1, f);
     fwrite(&crc64_result, sizeof(uint64_t), 1, f);
 
-    return f;
+    return reinterpret_cast<je_writing_cache_file*>(f);
 }
 
-size_t jeecs_write_cache_file(const void* write_buffer, size_t elem_size, size_t count, void* file)
+size_t jeecs_write_cache_file(
+    const void* write_buffer, 
+    size_t elem_size, 
+    size_t count, 
+    je_writing_cache_file* file)
 {
-    return fwrite(write_buffer, elem_size, count, (FILE*)file);
+    return fwrite(write_buffer, elem_size, count, reinterpret_cast<FILE*>(file));
 }
 
-void jeecs_close_cache_file(void* file)
+void jeecs_close_cache_file(je_writing_cache_file* file)
 {
-    fclose((FILE*)file);
+    fclose(reinterpret_cast<FILE*>(file));
 }

@@ -2092,6 +2092,8 @@ JE_API /* OPTIONAL */ jeecs_file* jeecs_load_cache_file(
 
 // If usecrc64 != 0, cache file will use it instead of reading from origin file.
 
+typedef struct je_writing_cache_file je_writing_cache_file;
+
 /*
 jeecs_create_cache_file [基本接口]
 为 filepath 指定的文件创建缓存文件，将覆盖已有的缓存文件（如果已有的话）
@@ -2104,7 +2106,7 @@ jeecs_create_cache_file [基本接口]
     jeecs_close_cache_file
     jeecs_write_cache_file
 */
-JE_API /* OPTIONAL */ void* jeecs_create_cache_file(
+JE_API /* OPTIONAL */ je_writing_cache_file* jeecs_create_cache_file(
     const char* filepath,
     uint32_t format_version,
     uint64_t usecrc64);
@@ -2117,13 +2119,553 @@ JE_API size_t jeecs_write_cache_file(
     const void* write_buffer,
     size_t elem_size,
     size_t count,
-    void* file);
+    je_writing_cache_file* file);
 
 /*
 jeecs_close_cache_file [基本接口]
 关闭创建出的缓存文件
 */
-JE_API void jeecs_close_cache_file(void* file);
+JE_API void jeecs_close_cache_file(je_writing_cache_file* file);
+
+/////////////////////////// CACHE BINARY DOCUMENT /////////////////////////////////
+
+/*
+jeecs_cache_binary_value_type [类型]
+二进制缓存文档中的值类型标记。每个值都从一个 1 字节的类型标记开始：
+    * BOOL ~ FLOAT64 —— 标量，紧跟固定宽度的数据，按本机字节序存储；
+                         BOOL 固定占用 1 字节，读取时非 0 即 true
+    * STRING / BUFFER —— 紧跟 uint64 长度和对应长度的内容
+    * LIST / DOCUMENT —— 容器，紧跟若干子值，以 JE_CACHE_BINARY_VALUE_END 结束
+标记值即缓存文件格式的一部分，只能追加新类型，不可重排或修改已有值。
+缓存文件由本机生成，不保证跨端序兼容。
+请参见：
+    jeecs_cache_binary_append_document
+    jeecs_cache_binary_document_index
+*/
+typedef enum jeecs_cache_binary_value_type
+{
+    JE_CACHE_BINARY_VALUE_BOOL = 0,
+    JE_CACHE_BINARY_VALUE_INT8 = 1,
+    JE_CACHE_BINARY_VALUE_INT16 = 2,
+    JE_CACHE_BINARY_VALUE_INT32 = 3,
+    JE_CACHE_BINARY_VALUE_INT64 = 4,
+    JE_CACHE_BINARY_VALUE_UINT8 = 5,
+    JE_CACHE_BINARY_VALUE_UINT16 = 6,
+    JE_CACHE_BINARY_VALUE_UINT32 = 7,
+    JE_CACHE_BINARY_VALUE_UINT64 = 8,
+    JE_CACHE_BINARY_VALUE_FLOAT32 = 9,
+    JE_CACHE_BINARY_VALUE_FLOAT64 = 10,
+    JE_CACHE_BINARY_VALUE_STRING = 11,
+    JE_CACHE_BINARY_VALUE_BUFFER = 12,
+    JE_CACHE_BINARY_VALUE_LIST = 13,
+    JE_CACHE_BINARY_VALUE_DOCUMENT = 14,
+    JE_CACHE_BINARY_VALUE_END = 15,
+} jeecs_cache_binary_value_type;
+
+/*
+jeecs_cache_binary_document [类型]
+二进制缓存文档的只读句柄，位置指向文档的第一个键（DOCUMENT 标记之后）
+    * 文档由若干 [STRING 键][值] 组成，以 END 结束
+    * 句柄不拥有文件，句柄有效期间对应的 jeecs_file 必须保持打开
+    * 读取接口会移动文件读取位置，不要与顺序读取混用
+字段由引擎内部维护，请勿直接修改
+请参见：
+    jeecs_cache_binary_document_open
+    jeecs_cache_binary_document_index
+*/
+typedef struct jeecs_cache_binary_document
+{
+    jeecs_file* m_file;
+    size_t m_location;
+} jeecs_cache_binary_document;
+
+/*
+jeecs_cache_binary_list [类型]
+二进制缓存列表的只读句柄，位置指向列表的第一个元素（LIST 标记之后）
+    * 列表由若干值组成，以 END 结束
+    * 句柄不拥有文件，句柄有效期间对应的 jeecs_file 必须保持打开
+    * 读取接口会移动文件读取位置，不要与顺序读取混用
+字段由引擎内部维护，请勿直接修改
+请参见：
+    jeecs_cache_binary_list_open
+    jeecs_cache_binary_list_index
+*/
+typedef struct jeecs_cache_binary_list
+{
+    jeecs_file* m_file;
+    size_t m_location;
+} jeecs_cache_binary_list;
+
+/*
+jeecs_cache_binary_list_iterator [类型]
+二进制缓存列表的顺序遍历游标，位置指向下一个尚未读取的元素
+    * 由 jeecs_cache_binary_list_iterator_open 从列表句柄初始化
+    * 不拥有文件，游标有效期间对应的 jeecs_file 必须保持打开
+    * 读取接口会移动文件读取位置，不要与顺序读取混用
+字段由引擎内部维护，请勿直接修改
+请参见：
+    jeecs_cache_binary_list_iterator_open
+    jeecs_cache_binary_list_iterator_is_end
+    jeecs_cache_binary_list_iterator_read
+    jeecs_cache_binary_list_iterator_advance
+*/
+typedef struct jeecs_cache_binary_list_iterator
+{
+    jeecs_file* m_file;
+    size_t m_location;
+} jeecs_cache_binary_list_iterator;
+
+/*
+jeecs_cache_binary_string [类型]
+二进制缓存字符串值的只读句柄，位置指向该值自己的 STRING 标记
+    * 句柄不拥有文件，句柄有效期间对应的 jeecs_file 必须保持打开
+    * 读取接口会移动文件读取位置，不要与顺序读取混用
+字段由引擎内部维护，请勿直接修改
+请参见：
+    jeecs_cache_binary_string_read
+*/
+typedef struct jeecs_cache_binary_string
+{
+    jeecs_file* m_file;
+    size_t m_location;
+} jeecs_cache_binary_string;
+
+/*
+jeecs_cache_binary_buffer [类型]
+二进制缓存缓冲区值的只读句柄，位置指向该值自己的 BUFFER 标记
+    * 句柄不拥有文件，句柄有效期间对应的 jeecs_file 必须保持打开
+    * 读取接口会移动文件读取位置，不要与顺序读取混用
+字段由引擎内部维护，请勿直接修改
+请参见：
+    jeecs_cache_binary_buffer_read
+*/
+typedef struct jeecs_cache_binary_buffer
+{
+    jeecs_file* m_file;
+    size_t m_location;
+} jeecs_cache_binary_buffer;
+
+/*
+jeecs_cache_binary_document_open [基本接口]
+从文件当前位置读取一个 DOCUMENT 标记并初始化文档句柄
+    * 当前位置不是 DOCUMENT 标记时返回 false
+    * 成功时 out_doc 被填入文档句柄，文件位置移动到文档的第一个键
+请参见：
+    jeecs_cache_binary_document_index
+    jeecs_cache_binary_list_open
+*/
+JE_API bool jeecs_cache_binary_document_open(
+    jeecs_file* file,
+    jeecs_cache_binary_document* out_doc);
+
+/*
+jeecs_cache_binary_list_open [基本接口]
+从文件当前位置读取一个 LIST 标记并初始化列表句柄
+    * 当前位置不是 LIST 标记时返回 false
+    * 成功时 out_list 被填入列表句柄，文件位置移动到列表的第一个元素
+请参见：
+    jeecs_cache_binary_list_index
+    jeecs_cache_binary_document_open
+*/
+JE_API bool jeecs_cache_binary_list_open(
+    jeecs_file* file,
+    jeecs_cache_binary_list* out_list);
+
+/*
+jeecs_cache_binary_string_read [基本接口]
+从字符串句柄读取字符串内容
+    * inout_dst_len 传入 dst 的容量，成功返回时被改写为字符串的实际长度
+    * 容量不足时只复制前 inout_dst_len 个字节；复制后仍有空位时才写入 '\0'
+    * dst == nullptr 时 inout_dst_len 必须为 0，此时仅查询字符串长度
+    * 实际长度可能大于容量，调用方可据此重新分配后再次读取
+    * 读取失败返回 false
+请参见：
+    jeecs_cache_binary_document_index
+    jeecs_cache_binary_list_index
+*/
+JE_API bool jeecs_cache_binary_string_read(
+    /* OPTIONAL: If *inout_dst_len == 0 */ char* dst,
+    size_t* inout_dst_len,
+    const jeecs_cache_binary_string* str);
+
+/*
+jeecs_cache_binary_buffer_read [基本接口]
+从缓冲区句柄读取缓冲区内容
+    * inout_dst_len 传入 dst 的容量，成功返回时被改写为缓冲区的实际长度
+    * 容量不足时只复制前 inout_dst_len 个字节，缓冲区没有结尾符
+    * dst == nullptr 时 inout_dst_len 必须为 0，此时仅查询缓冲区长度
+    * 实际长度可能大于容量，调用方可据此重新分配后再次读取
+    * 读取失败返回 false
+请参见：
+    jeecs_cache_binary_buffer
+    jeecs_cache_binary_document_index
+*/
+JE_API bool jeecs_cache_binary_buffer_read(
+    /* OPTIONAL: If *inout_dst_len == 0 */ void* dst,
+    size_t* inout_dst_len,
+    const jeecs_cache_binary_buffer* buf);
+
+/*
+jeecs_cache_binary_document_index [基本接口]
+查找文档中指定键对应的值
+    * expected_type 指定期望的值类型，实际类型不符时返回 false
+    * out_value 按 expected_type 解释：
+        BOOL 写入 bool
+        INT8 / INT16 / INT32 / INT64 写入 int8_t / int16_t / int32_t / int64_t
+        UINT8 / UINT16 / UINT32 / UINT64 写入 uint8_t / uint16_t / uint32_t / uint64_t
+        FLOAT32 / FLOAT64 写入 float / double
+        STRING 写入 jeecs_cache_binary_string
+        BUFFER 写入 jeecs_cache_binary_buffer
+        LIST 写入 jeecs_cache_binary_list
+        DOCUMENT 写入 jeecs_cache_binary_document
+    * 同一个键出现多次时使用第一个
+    * 键不存在、类型不符或读取失败时返回 false
+请参见：
+    jeecs_cache_binary_value_type
+    jeecs_cache_binary_string_read
+    jeecs_cache_binary_buffer_read
+    jeecs_cache_binary_list_index
+*/
+JE_API bool jeecs_cache_binary_document_index(
+    const jeecs_cache_binary_document* document,
+    const char* key,
+    jeecs_cache_binary_value_type expected_type,
+    void* out_value);
+
+/*
+jeecs_cache_binary_list_index [基本接口]
+获取列表中指定下标的值
+    * expected_type 和 out_value 的约定与 jeecs_cache_binary_document_index 相同
+    * 下标越界、类型不符或读取失败时返回 false
+请参见：
+    jeecs_cache_binary_document_index
+*/
+JE_API bool jeecs_cache_binary_list_index(
+    const jeecs_cache_binary_list* list,
+    size_t index,
+    jeecs_cache_binary_value_type expected_type,
+    void* out_value);
+
+/*
+jeecs_cache_binary_list_iterator_open [基本接口]
+从列表句柄初始化顺序遍历游标
+    * 游标指向列表的第一个元素（可能已经是 END）
+    * 读取接口会移动文件读取位置，不要与顺序读取混用
+请参见：
+    jeecs_cache_binary_list_iterator
+*/
+JE_API bool jeecs_cache_binary_list_iterator_open(
+    const jeecs_cache_binary_list* list,
+    jeecs_cache_binary_list_iterator* out_iterator);
+
+/*
+jeecs_cache_binary_list_iterator_is_end [基本接口]
+判断游标是否已经到达列表末尾
+    * 到达 END 返回 true
+    * 读取失败（越界/截断）返回 false，随后 iterator_read 会失败，调用方
+      据此拒绝损坏的缓存
+    * 读取不会移动游标的逻辑位置
+请参见：
+    jeecs_cache_binary_list_iterator
+*/
+JE_API bool jeecs_cache_binary_list_iterator_is_end(
+    const jeecs_cache_binary_list_iterator* iterator);
+
+/*
+jeecs_cache_binary_list_iterator_read [基本接口]
+读取游标当前元素
+    * expected_type 和 out_value 的约定与 jeecs_cache_binary_document_index 相同
+    * 不移动游标；类型不符或读取失败时返回 false
+请参见：
+    jeecs_cache_binary_list_iterator_advance
+*/
+JE_API bool jeecs_cache_binary_list_iterator_read(
+    const jeecs_cache_binary_list_iterator* iterator,
+    jeecs_cache_binary_value_type expected_type,
+    void* out_value);
+
+/*
+jeecs_cache_binary_list_iterator_advance [基本接口]
+把游标移动到下一个元素
+    * 已到达 END 或读取失败时返回 false
+请参见：
+    jeecs_cache_binary_list_iterator_read
+*/
+JE_API bool jeecs_cache_binary_list_iterator_advance(
+    jeecs_cache_binary_list_iterator* inout_iterator);
+
+/*
+jeecs_cache_binary_append_document [基本接口]
+向缓存文件追加一个 DOCUMENT 标记
+    * 之后依次写入 [STRING 键][值]，最后由 jeecs_cache_binary_append_end 结束
+    * 写入失败返回 false
+请参见：
+    jeecs_cache_binary_append_end
+    jeecs_cache_binary_append_string
+*/
+JE_API bool jeecs_cache_binary_append_document(je_writing_cache_file* file);
+
+/*
+jeecs_cache_binary_append_list [基本接口]
+向缓存文件追加一个 LIST 标记
+    * 之后依次写入各元素，最后由 jeecs_cache_binary_append_end 结束
+    * 写入失败返回 false
+请参见：
+    jeecs_cache_binary_append_end
+*/
+JE_API bool jeecs_cache_binary_append_list(je_writing_cache_file* file);
+
+/*
+jeecs_cache_binary_append_end [基本接口]
+向缓存文件追加一个 END 标记，结束最近一个尚未结束的列表或文档
+    * 写入失败返回 false
+请参见：
+    jeecs_cache_binary_append_document
+    jeecs_cache_binary_append_list
+*/
+JE_API bool jeecs_cache_binary_append_end(je_writing_cache_file* file);
+
+/*
+jeecs_cache_binary_append_string [基本接口]
+向缓存文件追加一个字符串值
+    * 写入 uint64 长度和字符串内容，不写入结尾的 '\0'，长度由 strlen 决定
+    * 写入失败返回 false
+请参见：
+    jeecs_cache_binary_string_read
+*/
+JE_API bool jeecs_cache_binary_append_string(
+    je_writing_cache_file* file,
+    const char* str);
+
+/*
+jeecs_cache_binary_append_buffer [基本接口]
+向缓存文件追加一个缓冲区值
+    * 写入 uint64 长度和 buflen 个字节
+    * 写入失败返回 false
+请参见：
+    jeecs_cache_binary_buffer_read
+*/
+JE_API bool jeecs_cache_binary_append_buffer(
+    je_writing_cache_file* file,
+    const void* buf,
+    size_t buflen);
+
+/*
+jeecs_cache_binary_append_bool [基本接口]
+向缓存文件追加一个 bool 值
+    * 固定写入 1 字节，true 写为 1，false 写为 0
+    * 写入失败返回 false
+*/
+JE_API bool jeecs_cache_binary_append_bool(
+    je_writing_cache_file* file,
+    bool val);
+
+/*
+jeecs_cache_binary_append_int8 [基本接口]
+向缓存文件追加一个 int8 值，写入失败返回 false
+*/
+JE_API bool jeecs_cache_binary_append_int8(
+    je_writing_cache_file* file,
+    int8_t val);
+
+/*
+jeecs_cache_binary_append_int16 [基本接口]
+向缓存文件追加一个 int16 值，写入失败返回 false
+*/
+JE_API bool jeecs_cache_binary_append_int16(
+    je_writing_cache_file* file,
+    int16_t val);
+
+/*
+jeecs_cache_binary_append_int32 [基本接口]
+向缓存文件追加一个 int32 值，写入失败返回 false
+*/
+JE_API bool jeecs_cache_binary_append_int32(
+    je_writing_cache_file* file,
+    int32_t val);
+
+/*
+jeecs_cache_binary_append_int64 [基本接口]
+向缓存文件追加一个 int64 值，写入失败返回 false
+*/
+JE_API bool jeecs_cache_binary_append_int64(
+    je_writing_cache_file* file,
+    int64_t val);
+
+/*
+jeecs_cache_binary_append_uint8 [基本接口]
+向缓存文件追加一个 uint8 值，写入失败返回 false
+*/
+JE_API bool jeecs_cache_binary_append_uint8(
+    je_writing_cache_file* file,
+    uint8_t val);
+
+/*
+jeecs_cache_binary_append_uint16 [基本接口]
+向缓存文件追加一个 uint16 值，写入失败返回 false
+*/
+JE_API bool jeecs_cache_binary_append_uint16(
+    je_writing_cache_file* file,
+    uint16_t val);
+
+/*
+jeecs_cache_binary_append_uint32 [基本接口]
+向缓存文件追加一个 uint32 值，写入失败返回 false
+*/
+JE_API bool jeecs_cache_binary_append_uint32(
+    je_writing_cache_file* file,
+    uint32_t val);
+
+/*
+jeecs_cache_binary_append_uint64 [基本接口]
+向缓存文件追加一个 uint64 值，写入失败返回 false
+*/
+JE_API bool jeecs_cache_binary_append_uint64(
+    je_writing_cache_file* file,
+    uint64_t val);
+
+/*
+jeecs_cache_binary_append_float32 [基本接口]
+向缓存文件追加一个 float32 值，写入失败返回 false
+*/
+JE_API bool jeecs_cache_binary_append_float32(
+    je_writing_cache_file* file,
+    float val);
+
+/*
+jeecs_cache_binary_append_float64 [基本接口]
+向缓存文件追加一个 float64 值，写入失败返回 false
+*/
+JE_API bool jeecs_cache_binary_append_float64(
+    je_writing_cache_file* file,
+    double val);
+
+/////////////////////////// ANIMATION RESOURCE /////////////////////////////////
+
+/*
+je_animation_value_type [类型]
+帧动画中一个数据值的类型标记，与缓存文档中写入的 type 字段一致
+*/
+typedef enum je_animation_value_type
+{
+    JE_ANIMATION_VALUE_INT = 0,
+    JE_ANIMATION_VALUE_FLOAT,
+    JE_ANIMATION_VALUE_VEC2,
+    JE_ANIMATION_VALUE_VEC3,
+    JE_ANIMATION_VALUE_VEC4,
+    JE_ANIMATION_VALUE_QUAT4,
+} je_animation_value_type;
+
+/*
+je_animation_value [类型]
+帧动画中的一个数据值。按 m_type 解释 m_value：
+    * INT   —— i32
+    * FLOAT —— f32
+    * VEC2  —— v2[0..1]
+    * VEC3  —— v3[0..2]
+    * VEC4  —— v4[0..3]
+    * QUAT4 —— q4[0..3]（x, y, z, w）
+*/
+typedef struct je_animation_value
+{
+    uint8_t m_type;
+    union
+    {
+        int32_t i32;
+        float f32;
+        float v2[2];
+        float v3[3];
+        float v4[4];
+        float q4[4];
+    } m_value;
+} je_animation_value;
+
+/*
+je_animation_component_data [类型]
+帧动画中作用于组件成员的一段数据
+    * m_component_type / m_member_info 在加载时解析并校验，无效条目不会保留
+    * m_offset_mode 为 true 时在原值上叠加，否则直接赋值
+*/
+typedef struct je_animation_component_data
+{
+    const je_TypeInfo* m_component_type;
+    const je_MemberInfo* m_member_info;
+    je_animation_value m_member_value;
+    bool m_offset_mode;
+} je_animation_component_data;
+
+/*
+je_animation_uniform_data [类型]
+帧动画中作用于着色器变量的一段数据
+*/
+typedef struct je_animation_uniform_data
+{
+    const char* m_uniform_name;
+    je_animation_value m_uniform_value;
+} je_animation_uniform_data;
+
+/*
+je_animation_frame_data [类型]
+帧动画中的一帧：持续时间、组件数据与着色器变量数据
+*/
+typedef struct je_animation_frame_data
+{
+    float m_frame_time;
+    je_animation_component_data* m_component_data;
+    size_t m_component_data_count;
+    je_animation_uniform_data* m_uniform_data;
+    size_t m_uniform_data_count;
+} je_animation_frame_data;
+
+/*
+je_animation_action_data [类型]
+帧动画中的一个动作（一组帧）
+*/
+typedef struct je_animation_action_data
+{
+    const char* m_name;
+    je_animation_frame_data* m_frames;
+    size_t m_frame_count;
+} je_animation_action_data;
+
+/*
+je_animation [类型]
+帧动画的只读数据，由 je_animation_open 创建、je_animation_close 释放
+    * 该结构不包含任何 C++ 容器，动画数据以连续数组持有
+    * 数据在加载完成后不再修改，可被多个组件/实体共享
+*/
+typedef struct je_animation
+{
+    je_animation_action_data* m_actions;
+    size_t m_action_count;
+} je_animation;
+
+/*
+je_animation_open [基本接口]
+加载 path 指向的帧动画：
+    * 读取 <path>.je4cache；缓存缺失/失效时先调用
+      builtin/script/cache_generator/animation.wo 生成
+    * 空路径返回一个不含任何动作的空动画
+    * 其他失败情况返回 nullptr 并记录日志
+    * 返回的数据使用 je_animation_close 释放
+*/
+JE_API /* OPTIONAL */ je_animation* je_animation_open(const char* path);
+
+/*
+je_animation_close [基本接口]
+释放 je_animation_open 返回的帧动画数据
+*/
+JE_API void je_animation_close(je_animation* animation);
+
+/*
+je_animation_find_action [基本接口]
+按名称查找动作，找不到返回 nullptr
+*/
+JE_API /* OPTIONAL */ const je_animation_action_data* je_animation_find_action(
+    const je_animation* animation,
+    const char* name);
+
+JE_API /* OPTIONAL */ jeecs_file* jeecs_animation_open_or_create_cache(const char* path);
 
 /*
 je_image_texture_color_space [类型]
@@ -5686,11 +6228,19 @@ je_tilemap_create_map [基本接口]
 JE_API /* OPTIONAL: If size is invalid */ je_TilemapDocument* je_tilemap_create_map(int32_t w, int32_t h, int32_t tile_px);
 
 /*
-je_tilemap_save_map [基本接口]
-将地图文档保存为 .je4tilemap，并把该路径登记为文档路径
-    * 写出失败返回 false
+je_tilemap_bind_map_path [基本接口]
+编辑器已把地图的 TOML 源写入 path（.je4tilemap）后，把该路径登记为
+文档路径
+    * 引擎不写盘、不生成/重建缓存：<path>.je4cache 在下次加载时按
+      源文件 CRC64 自动失效并重建
+    * 解除本文档的旧路径绑定并顶替 path 上的既有绑定
+    * 文档须由调用方持有外部引用，否则返回 false
+    * path 支持 @/ 与 !/ 前缀（与 je_tilemap_open_map 一致）
+请参见：
+    je_tilemap_open_map
 */
-JE_API bool je_tilemap_save_map(je_TilemapDocument* map, const char* path);
+JE_API bool je_tilemap_bind_map_path(
+    je_TilemapDocument* map, const char* path);
 
 /*
 je_tilemap_reload_map [基本接口]
@@ -6022,6 +6572,17 @@ JE_API int32_t je_tilemap_get_tile(je_TilemapDocument* map, je_LayerId layer,
     int32_t x, int32_t y);
 
 /*
+je_tilemap_layer_grid [基本接口]
+取图层完整网格的只读视图（行优先，y 自上而下，长度 = width*height）
+    * out_count 返回元素数量（可为 nullptr）
+    * 图层无效时返回 nullptr
+    * 指针在文档存活且网格未改动期间有效
+    * 供编辑器序列化等需要遍历整层的场景，避免逐格调用 get_tile
+*/
+JE_API /* OPTIONAL: If layer is invalid */ const int32_t* je_tilemap_layer_grid(
+    je_TilemapDocument* map, je_LayerId layer, /* OPTIONAL */ int32_t* out_count);
+
+/*
 je_tilemap_set_tile [基本接口]
 设置指定图层某格的瓦片值（编码见本段说明）
 */
@@ -6107,6 +6668,48 @@ JE_API bool je_tilemap_get_property(je_TilemapDocument* map, je_LayerId layer,
     /* OPTIONAL */ void* out_value);
 
 /*
+je_TilemapCellPropertyEntry [类型]
+逐格属性覆盖条目的只读索引项，供编辑器序列化枚举
+    * m_layer 为图层下标，m_x/m_y 为格子坐标
+    * m_property_count 为该格覆盖的属性数量（名称/类型经
+      je_tilemap_cell_property_entry_property_info 取得）
+请参见：
+    je_tilemap_cell_property_entries
+*/
+typedef struct je_TilemapCellPropertyEntry
+{
+    je_LayerId m_layer;
+    int32_t m_x;
+    int32_t m_y;
+    int32_t m_property_count;
+} je_TilemapCellPropertyEntry;
+
+/*
+je_tilemap_cell_property_entries [基本接口]
+枚举文档中全部逐格属性覆盖条目（按 (layer, cell) 升序），返回条目总数
+    * out_entries 容量不足时只写入前 capacity 项
+    * out_entries 为 nullptr 或 capacity <= 0 时仅查询数量
+请参见：
+    je_TilemapCellPropertyEntry
+    je_tilemap_cell_property_entry_property_info
+*/
+JE_API int32_t je_tilemap_cell_property_entries(je_TilemapDocument* map,
+    /* OPTIONAL */ je_TilemapCellPropertyEntry* out_entries, int32_t capacity);
+
+/*
+je_tilemap_cell_property_entry_property_info [基本接口]
+取某格覆盖表中指定序号的属性名称与类型
+    * index 越界或该格无覆盖时返回 false
+请参见：
+    je_tilemap_cell_property_entries
+    je_PropertyType
+*/
+JE_API bool je_tilemap_cell_property_entry_property_info(
+    je_TilemapDocument* map, je_LayerId layer, int32_t x, int32_t y,
+    int32_t index, /* OPTIONAL */ const char** name,
+    /* OPTIONAL */ je_PropertyType* type);
+
+/*
 je_tilemap_is_walkable [基本接口]
 取某格全图层合并的通行性（任一图层不可通行即不可通行），出界视为不可通行
     * 返回 1/0
@@ -6167,10 +6770,19 @@ je_tilemap_create_tileset [基本接口]
 JE_API je_TilesetDocument* je_tilemap_create_tileset(const char* name);
 
 /*
-je_tilemap_save_tileset [基本接口]
-将图集文档保存为 .je4tileset，并把该路径登记为文档路径
+je_tilemap_bind_tileset_path [基本接口]
+编辑器已把图集的 TOML 源写入 path（.je4tileset）后，把该路径登记为
+文档路径
+    * 引擎不写盘、不生成/重建缓存：<path>.je4cache 在下次加载时按
+      源文件 CRC64 自动失效并重建
+    * 解除本文档的旧路径绑定并顶替 path 上的既有绑定
+    * 文档须由调用方持有外部引用，否则返回 false
+    * path 支持 @/ 与 !/ 前缀（与 je_tilemap_open_tileset 一致）
+请参见：
+    je_tilemap_open_tileset
 */
-JE_API bool je_tilemap_save_tileset(je_TilesetDocument* tileset, const char* path);
+JE_API bool je_tilemap_bind_tileset_path(
+    je_TilesetDocument* tileset, const char* path);
 
 /*
 je_tilemap_reload_tileset [基本接口]
@@ -6222,6 +6834,14 @@ je_tilemap_tileset_name [基本接口]
 */
 JE_API const char* je_tilemap_tileset_name(je_TilesetDocument* tileset);
 
+/*
+je_tilemap_tileset_next_tile_id [基本接口]
+取图集文档下一个可分配的瓦片 id（只增不减：删除源/裁掉格子后其 id
+作废，不会被后续新增格复用）
+    * 编辑器序列化 .je4tileset 时须原样保存，保证地图按 id 的引用不漂移
+*/
+JE_API int32_t je_tilemap_tileset_next_tile_id(je_TilesetDocument* tileset);
+
 // ---- 图集源纹理 ----
 
 /*
@@ -6261,6 +6881,29 @@ je_tilemap_source_info [基本接口]
 */
 JE_API bool je_tilemap_source_info(je_TilesetDocument* tileset, je_SourceId source_idx,
     /* OPTIONAL */ const char** texture_path, /* OPTIONAL */ int32_t* tile_px, /* OPTIONAL */ int32_t* xcount, /* OPTIONAL */ int32_t* ycount);
+
+/*
+je_tilemap_source_tex_size [基本接口]
+取指定源纹理的实测像素尺寸，经出参返回 (tex_w, tex_h)
+    * 尺寸未知（尚未测量）时写 0；下标越界返回 false
+    * 编辑器序列化 .je4tileset 时原样保存（加载时仍会按纹理重测）
+*/
+JE_API bool je_tilemap_source_tex_size(je_TilesetDocument* tileset,
+    je_SourceId source_idx,
+    /* OPTIONAL */ int32_t* tex_w, /* OPTIONAL */ int32_t* tex_h);
+
+/*
+je_tilemap_source_cell_ids [基本接口]
+取指定源纹理逐格瓦片 id 表的只读视图（行优先，长度 = xcount*ycount）
+    * out_count 返回元素数量（可为 nullptr）
+    * 下标越界返回 nullptr；指针在文档存活且源网格未改动期间有效
+    * 供编辑器序列化原样保存（纹理尺寸变化后 id 与格坐标不是固定公式）
+请参见：
+    je_tilemap_tile_id_at
+*/
+JE_API /* OPTIONAL: If source_idx is invalid */ const int32_t*
+    je_tilemap_source_cell_ids(je_TilesetDocument* tileset,
+        je_SourceId source_idx, /* OPTIONAL */ int32_t* out_count);
 
 // ---- 图集源纹理附加层级 ----
 
@@ -6303,6 +6946,16 @@ JE_API bool je_tilemap_source_extra_info(je_TilesetDocument* tileset,
     /* OPTIONAL */ int32_t* pass, /* OPTIONAL */ const char** texture_path);
 
 /*
+je_tilemap_source_extra_tex_size [基本接口]
+取指定附加层级的实测像素尺寸，经出参返回 (tex_w, tex_h)
+    * 尺寸未知（尚未测量）时写 0；下标越界返回 false
+    * 附加层级 cell 尺寸由该尺寸与主网格推得，编辑器序列化时原样保存
+*/
+JE_API bool je_tilemap_source_extra_tex_size(je_TilesetDocument* tileset,
+    je_SourceId source_idx, int32_t extra_idx,
+    /* OPTIONAL */ int32_t* tex_w, /* OPTIONAL */ int32_t* tex_h);
+
+/*
 je_tilemap_set_source_extra_pass [基本接口]
 修改附加层级的绑定通道 id（>= 1，同源内通道唯一），渲染侧逐帧对齐自动重绑
 */
@@ -6328,6 +6981,38 @@ je_tilemap_tile_at_index [基本接口]
 */
 JE_API bool je_tilemap_tile_at_index(je_TilesetDocument* tileset, int32_t index,
     je_TileId* out_id);
+
+/*
+je_tilemap_tile_defs [基本接口]
+枚举图集中带有稀疏元数据定义的瓦片 id（按 id 升序），返回总数
+    * 未定义的瓦片按默认元数据（可通行、普通瓦片、无属性、空名称）处理
+    * out_ids 容量不足时只写入前 capacity 项
+    * out_ids 为 nullptr 或 capacity <= 0 时仅查询数量
+    * 供编辑器序列化 .je4tileset 的 [[tiles]] 段
+请参见：
+    je_tilemap_tile_def_property_info
+*/
+JE_API int32_t je_tilemap_tile_defs(je_TilesetDocument* tileset,
+    /* OPTIONAL */ je_TileId* out_ids, int32_t capacity);
+
+/*
+je_tilemap_tile_def_property_count [基本接口]
+取某瓦片定义的默认属性数量（该瓦片无定义返回 0）
+*/
+JE_API int32_t je_tilemap_tile_def_property_count(je_TilesetDocument* tileset,
+    je_TileId tile_id);
+
+/*
+je_tilemap_tile_def_property_info [基本接口]
+取某瓦片定义中指定序号的属性名称与类型（按名称升序）
+    * index 越界或该瓦片无定义返回 false
+请参见：
+    je_tilemap_tile_defs
+    je_PropertyType
+*/
+JE_API bool je_tilemap_tile_def_property_info(je_TilesetDocument* tileset,
+    je_TileId tile_id, int32_t index,
+    /* OPTIONAL */ const char** name, /* OPTIONAL */ je_PropertyType* type);
 
 /*
 je_tilemap_tile_id_at [基本接口]
@@ -6522,6 +7207,8 @@ JE_API bool je_tilemap_get_tile_property(je_TilesetDocument* tileset,
     je_TileId tile_id, const char* name, je_PropertyType type,
     /* OPTIONAL */ void* out_value);
 
+JE_API /* OPTIONAL */ jeecs_file* jeecs_tileset_open_or_create_cache(const char* path);
+
 // ---- 单元格渲染信息（编辑器预览用，与实际渲染一致） ----
 
 /*
@@ -6547,6 +7234,8 @@ JE_API bool je_tilemap_cell_quad(je_TilemapDocument* map, je_LayerId layer,
     /* OPTIONAL */ const char** texture_path,
     /* OPTIONAL */ float* u0, /* OPTIONAL */ float* v0, /* OPTIONAL */ float* u1, /* OPTIONAL */ float* v1,
     /* OPTIONAL */ int32_t* qx, /* OPTIONAL */ int32_t* qy, /* OPTIONAL */ int32_t* qcols);
+
+JE_API /* OPTIONAL */ jeecs_file* jeecs_tilemap_open_or_create_cache(const char* path);
 
 // DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR
 #ifdef JE_ENABLE_DEBUG_API
@@ -10849,7 +11538,8 @@ namespace jeecs
                 std::same_as<T, jegl_frame_buffer> ||
                 std::same_as<T, jegl_uniform_buffer> ||
                 std::same_as<T, jegl_pipeline> ||
-                std::same_as<T, jegl_sampler>;
+                std::same_as<T, jegl_sampler> ||
+                std::same_as<T, je_animation>;
         }
 
         template<requirements::basic_graphic_resource T>
@@ -10889,6 +11579,8 @@ namespace jeecs
                     jegl_close_pipeline(_m_resource);
                 else if constexpr (std::is_same_v<T, jegl_sampler>)
                     jegl_close_sampler(_m_resource);
+                else if constexpr (std::is_same_v<T, je_animation>)
+                    je_animation_close(_m_resource);
                 else
                 {
                     static_assert(sizeof(T) == 0,
@@ -11503,6 +12195,30 @@ namespace jeecs
                     jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
                 return nullptr;
+            }
+        };
+        class animation : public resource_basic<je_animation>
+        {
+            explicit animation(je_animation* res)
+                : resource_basic(res)
+            {
+            }
+
+        public:
+            // 加载 .je4animation 对应的缓存；失败时记录日志并返回空动画，
+            // 保证 animation_list 的条目下标始终与脚本数据对齐。
+            static basic::resource<animation> load(const std::string& path)
+            {
+                je_animation* res = je_animation_open(path.c_str());
+                if (res == nullptr)
+                    res = je_animation_open("");
+
+                assert(res != nullptr);
+                return basic::resource<animation>(new animation(res));
+            }
+            const je_animation_action_data* find_action(const char* name) const
+            {
+                return je_animation_find_action(resource(), name);
             }
         };
         class vertex : public resource_basic<jegl_vertex>
@@ -14049,86 +14765,13 @@ namespace jeecs
 
             struct animation_list
             {
-                struct frame_data
+                // 每个动画条目的播放状态。动画数据本身由 graphic::animation
+                // 资源共享，播放进度必须按条目/实体独立。
+                struct animation_state
                 {
-                    struct data_value
-                    {
-                        enum type : uint8_t
-                        {
-                            INT,
-                            FLOAT,
-                            VEC2,
-                            VEC3,
-                            VEC4,
-                            QUAT4,
-                        };
-                        union value
-                        {
-                            int i32;
-                            float f32;
-                            math::vec2 v2;
-                            math::vec3 v3;
-                            math::vec4 v4;
-                            math::quat q4;
-                        };
-
-                        type m_type = type::INT;
-                        value m_value = { 0 };
-
-                        data_value() noexcept = default;
-                        data_value(const data_value& val) noexcept
-                        {
-                            m_type = val.m_type;
-                            memcpy((void*)&m_value, &val.m_value, sizeof(value));
-                        }
-                        data_value(data_value&& val) noexcept
-                        {
-                            m_type = val.m_type;
-                            memcpy((void*)&m_value, &val.m_value, sizeof(value));
-                        }
-                        data_value& operator=(const data_value& val) noexcept
-                        {
-                            m_type = val.m_type;
-                            memcpy((void*)&m_value, &val.m_value, sizeof(value));
-                            return *this;
-                        }
-                        data_value& operator=(data_value&& val) noexcept
-                        {
-                            m_type = val.m_type;
-                            memcpy((void*)&m_value, &val.m_value, sizeof(value));
-                            return *this;
-                        }
-                    };
-                    struct component_data
-                    {
-                        const je_TypeInfo*
-                            m_component_type;
-                        const je_MemberInfo*
-                            m_member_info;
-                        data_value m_member_value;
-                        bool m_offset_mode;
-
-                        void* m_member_addr_cache;
-                        jeecs::game_entity m_entity_cache;
-                    };
-                    struct uniform_data
-                    {
-                        basic::string m_uniform_name;
-                        data_value m_uniform_value;
-                    };
-
-                    float m_frame_time;
-                    basic::vector<component_data> m_component_data;
-                    basic::vector<uniform_data> m_uniform_data;
-                };
-                struct animation_data
-                {
-                    basic::vector<frame_data> frames;
-                };
-
-                struct animation_data_set
-                {
-                    basic::map<basic::string, animation_data> m_animations;
+                    // 动画数据（按资源共享）与播放状态同属一个条目，
+                    // 单一 m_animations 数组即可保证二者一一对应。
+                    basic::resource<graphic::animation> m_animation;
                     basic::string m_path;
 
                     basic::optional<basic::string> m_current_action;
@@ -14137,6 +14780,12 @@ namespace jeecs
                     float m_last_speed = 1.0f;
 
                     bool m_loop = false;
+
+                    animation_state(const std::string& path)
+                        : m_animation(graphic::animation::load(path))
+                        , m_path(path)
+                    {
+                    }
 
                     void set_loop(bool loop)
                     {
@@ -14161,194 +14810,9 @@ namespace jeecs
                         else
                             return std::nullopt;
                     }
-
-                    void load_animation(const std::string& str)
-                    {
-                        m_animations.clear();
-                        m_path = str;
-
-                        if (str != "")
-                        {
-                            auto* file_handle = jeecs_file_open(m_path.c_str());
-                            if (file_handle == nullptr)
-                            {
-                                jeecs::debug::logerr("Cannot open animation file '%s'.", str.c_str());
-
-                                return;
-                            }
-                            else
-                            {
-                                // 0. 读取魔数，验证文件是否是合法的动画文件
-                                uint32_t mg_number = 0;
-                                jeecs_file_read(&mg_number, sizeof(uint32_t), 1, file_handle);
-                                if (mg_number != 0xA213A710u)
-                                {
-                                    jeecs::debug::logerr("Invalid animation file '%s'.", str.c_str());
-                                    jeecs_file_close(file_handle);
-                                    return;
-                                }
-
-                                // 1. 读取动画组数量
-                                uint64_t animation_count = 0;
-                                jeecs_file_read(&animation_count, sizeof(uint64_t), 1, file_handle);
-
-                                for (uint64_t i = 0; i < animation_count; ++i)
-                                {
-                                    // 2. 读取当前动画的帧数量、名称
-                                    uint64_t frame_count = 0;
-                                    uint64_t frames_name_len = 0;
-
-                                    jeecs_file_read(&frame_count, sizeof(uint64_t), 1, file_handle);
-                                    jeecs_file_read(&frames_name_len, sizeof(uint64_t), 1, file_handle);
-
-                                    std::string frame_name((size_t)frames_name_len, '\0');
-                                    jeecs_file_read(frame_name.data(), sizeof(char), (size_t)frames_name_len, file_handle);
-
-                                    auto& animation_frame_datas = m_animations[frame_name.c_str()];
-
-                                    for (uint64_t j = 0; j < frame_count; ++j)
-                                    {
-                                        // 3. 读取每一帧的持续时间和数据数量
-                                        frame_data frame_dat;
-                                        jeecs_file_read(&frame_dat.m_frame_time, sizeof(frame_dat.m_frame_time), 1, file_handle);
-
-                                        uint64_t component_data_count = 0;
-                                        jeecs_file_read(&component_data_count, sizeof(component_data_count), 1, file_handle);
-                                        for (uint64_t k = 0; k < component_data_count; ++k)
-                                        {
-                                            // 4. 读取帧组件数据
-                                            uint64_t component_name_len = 0;
-                                            jeecs_file_read(&component_name_len, sizeof(uint64_t), 1, file_handle);
-
-                                            std::string component_name((size_t)component_name_len, '\0');
-                                            jeecs_file_read(component_name.data(), sizeof(char), (size_t)component_name_len, file_handle);
-
-                                            uint64_t member_name_len = 0;
-                                            jeecs_file_read(&member_name_len, sizeof(uint64_t), 1, file_handle);
-
-                                            std::string member_name((size_t)member_name_len, '\0');
-                                            jeecs_file_read(member_name.data(), sizeof(char), (size_t)member_name_len, file_handle);
-
-                                            uint8_t offset_mode = 0;
-                                            jeecs_file_read(&offset_mode, sizeof(offset_mode), 1, file_handle);
-
-                                            frame_data::data_value value;
-                                            jeecs_file_read(&value.m_type, sizeof(value.m_type), 1, file_handle);
-                                            switch (value.m_type)
-                                            {
-                                            case frame_data::data_value::type::INT:
-                                                jeecs_file_read(&value.m_value.i32, sizeof(value.m_value.i32), 1, file_handle);
-                                                break;
-                                            case frame_data::data_value::type::FLOAT:
-                                                jeecs_file_read(&value.m_value.f32, sizeof(value.m_value.f32), 1, file_handle);
-                                                break;
-                                            case frame_data::data_value::type::VEC2:
-                                                jeecs_file_read(&value.m_value.v2, sizeof(value.m_value.v2), 1, file_handle);
-                                                break;
-                                            case frame_data::data_value::type::VEC3:
-                                                jeecs_file_read(&value.m_value.v3, sizeof(value.m_value.v3), 1, file_handle);
-                                                break;
-                                            case frame_data::data_value::type::VEC4:
-                                                jeecs_file_read(&value.m_value.v4, sizeof(value.m_value.v4), 1, file_handle);
-                                                break;
-                                            case frame_data::data_value::type::QUAT4:
-                                                jeecs_file_read(&value.m_value.q4, sizeof(value.m_value.q4), 1, file_handle);
-                                                break;
-                                            default:
-                                                jeecs::debug::logerr(
-                                                    "Unknown value type(%d) for component frame data when reading animation '%s' frame %zu in '%s'.",
-                                                    (int)value.m_type,
-                                                    frame_name.c_str(),
-                                                    (size_t)j,
-                                                    str.c_str());
-                                                break;
-                                            }
-
-                                            auto* component_type = jeecs::typing::of(component_name.c_str());
-                                            if (component_type == nullptr)
-                                                jeecs::debug::logerr(
-                                                    "Failed to found component type named '%s' when reading animation '%s' frame %zu in '%s'.",
-                                                    component_name.c_str(),
-                                                    frame_name.c_str(),
-                                                    (size_t)j,
-                                                    str.c_str());
-                                            else
-                                            {
-                                                frame_data::component_data cdata;
-                                                cdata.m_component_type = component_type;
-                                                cdata.m_member_info = jeecs::typing::find_member_by_name(component_type, member_name.c_str());
-                                                cdata.m_member_value = value;
-                                                cdata.m_offset_mode = offset_mode != 0;
-                                                cdata.m_member_addr_cache = nullptr;
-                                                cdata.m_entity_cache = {};
-
-                                                if (cdata.m_member_info == nullptr)
-                                                    jeecs::debug::logerr(
-                                                        "Component '%s' donot have member named '%s' when reading animation '%s' frame %zu in '%s'.",
-                                                        component_name.c_str(),
-                                                        member_name.c_str(),
-                                                        frame_name.c_str(),
-                                                        (size_t)j,
-                                                        str.c_str());
-                                                else
-                                                    frame_dat.m_component_data.push_back(cdata);
-                                            }
-                                        }
-
-                                        uint64_t uniform_data_count = 0;
-                                        jeecs_file_read(&uniform_data_count, sizeof(uniform_data_count), 1, file_handle);
-                                        for (uint64_t k = 0; k < uniform_data_count; ++k)
-                                        {
-                                            // 5. 读取帧一致变量数据
-                                            uint64_t uniform_name_len = 0;
-                                            jeecs_file_read(&uniform_name_len, sizeof(uint64_t), 1, file_handle);
-
-                                            std::string uniform_name((size_t)uniform_name_len, '\0');
-                                            jeecs_file_read(uniform_name.data(), sizeof(char), (size_t)uniform_name_len, file_handle);
-
-                                            frame_data::data_value value;
-                                            jeecs_file_read(&value.m_type, sizeof(value.m_type), 1, file_handle);
-                                            switch (value.m_type)
-                                            {
-                                            case frame_data::data_value::type::INT:
-                                                jeecs_file_read(&value.m_value.i32, sizeof(value.m_value.i32), 1, file_handle);
-                                                break;
-                                            case frame_data::data_value::type::FLOAT:
-                                                jeecs_file_read(&value.m_value.f32, sizeof(value.m_value.f32), 1, file_handle);
-                                                break;
-                                            case frame_data::data_value::type::VEC2:
-                                                jeecs_file_read(&value.m_value.v2, sizeof(value.m_value.v2), 1, file_handle);
-                                                break;
-                                            case frame_data::data_value::type::VEC3:
-                                                jeecs_file_read(&value.m_value.v3, sizeof(value.m_value.v3), 1, file_handle);
-                                                break;
-                                            case frame_data::data_value::type::VEC4:
-                                                jeecs_file_read(&value.m_value.v4, sizeof(value.m_value.v4), 1, file_handle);
-                                                break;
-                                            default:
-                                                jeecs::debug::logerr("Unknown value type(%d) for uniform frame data when reading animation '%s' frame %zu in '%s'.",
-                                                    (int)value.m_type, str.c_str());
-                                                break;
-                                            }
-
-                                            frame_data::uniform_data udata;
-                                            udata.m_uniform_name = uniform_name;
-                                            udata.m_uniform_value = value;
-
-                                            frame_dat.m_uniform_data.push_back(udata);
-                                        }
-
-                                        animation_frame_datas.frames.push_back(frame_dat);
-                                    }
-                                }
-
-                                // OK，读取完毕！
-                                jeecs_file_close(file_handle);
-                            }
-                        }
-                    }
                 };
-                basic::vector<animation_data_set> m_animations;
+
+                basic::vector<animation_state> m_animations;
 
                 void active_action(size_t id, const char* act_name, bool loop)
                 {
@@ -14404,13 +14868,13 @@ namespace jeecs
 
                         for (size_t i = 0; i < animation_count; ++i)
                         {
-                            m_animations.push_back(animation_data_set{});
-                            auto& animation_inst = m_animations.back();
-
                             (void)woort_vec_get(animation, v, i);
 
                             woort_struct_get(tmp, animation, 0);
-                            animation_inst.load_animation(woort_string(tmp));
+                            const std::string path = woort_string(tmp);
+
+                            m_animations.push_back(animation_state(path));
+                            auto& animation_inst = m_animations.back();
 
                             woort_struct_get(tmp, animation, 1);
                             if (woort_option_get(tmp, tmp))
@@ -14440,7 +14904,7 @@ namespace jeecs
 
                         for (size_t i = 0; i < m_animations.size(); ++i)
                         {
-                            auto animation_inst = m_animations.at(i);
+                            auto& animation_inst = m_animations.at(i);
                             woort_set_struct(animation, 3);
 
                             woort_set_string(tmp, animation_inst.m_path.c_str());

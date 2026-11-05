@@ -1,6 +1,6 @@
 // 2D 帧动画编辑器（包入口）。
 // 自旧版单文件编辑器（builtin/editor/gui/animation2d.wo）移植而来，
-// 数据模型与 .je4animation 二进制格式保持不变，交互层适配新编辑器的
+// .je4animation 以 TOML 文本保存，交互层适配新编辑器的
 // IWindows 窗口系统与 MsgBox/InputBox/AskBox/Statebar 表单组件。
 //
 // 既有的

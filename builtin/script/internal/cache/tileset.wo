@@ -1,0 +1,526 @@
+// 瓦片图集缓存生成器：把 .je4tileset TOML 源转换为引擎可读的
+// 二进制缓存文档（jeecs_cache_binary_* 格式）。
+//
+// 由引擎在 .je4cache 缺失或失效时加载，调用 generate：
+//   cache  —— C 侧创建好的缓存写入器（文件头已写入）
+//   source —— 图集 TOML 的引擎路径（@/ 或 !/），经 je::file::readall 读取
+//
+// 文档结构与 src/jeecs_core_tilemap_model.hpp 顶部注释一一对应：
+//   DOCUMENT
+//     "name" -> STRING
+//     "next_tile_id" -> INT32
+//     "sources" -> LIST of DOCUMENT
+//         "path" -> STRING
+//         "tile_px" / "xcount" / "ycount" -> INT32
+//         "tex_w" / "tex_h" -> INT32（0 = 未测量）
+//         "cell_ids" -> BUFFER（int32，行优先，长度 = xcount*ycount）
+//         "extras" -> LIST of DOCUMENT
+//             "pass" -> INT32, "path" -> STRING
+//             "tex_w" / "tex_h" -> INT32
+//     "properties" -> LIST of DOCUMENT
+//         "name" -> STRING, "type" -> INT32, "default" -> 类型化值
+//     "tiles" -> LIST of DOCUMENT
+//         "id" -> INT32, "name" -> STRING, "walkable" -> BOOL
+//         "kind" -> INT32, "normal" -> LIST of 3 FLOAT32
+//         "variants" -> BUFFER（int32）
+//         "properties" -> LIST of DOCUMENT
+//             "name" -> STRING, "type" -> INT32, "value" -> 类型化值
+// "type" 即 je::tilemap::property_type；tile/cell 属性值在 TOML 中以
+// 值形态表达，这里按 TOML 值推断类型。
+
+import pkg::std;
+import pkg::toml;
+
+import je;
+import je::cache;
+
+using std;
+using toml;
+
+// TOML 文本枚举名 -> 引擎枚举值。与 je/tilemap.wo 的同名映射保持一致；
+// 生成器脚本不导入 je::tilemap（单文件检查时无法解析其内部命名空间）。
+func property_type_from_toml_name(name: string)=> option<int>
+{
+    let type = name->lower;
+    if (type == "bool") return option::value(0);
+    if (type == "string") return option::value(1);
+    if (type == "int") return option::value(2);
+    if (type == "float") return option::value(3);
+    if (type == "vec2") return option::value(4);
+    if (type == "vec3") return option::value(5);
+    if (type == "vec4") return option::value(6);
+    return option::none;
+}
+
+func tile_kind_from_toml_name(name: string)=> option<int>
+{
+    let kind = name->lower;
+    if (kind == "plain") return option::value(0);
+    if (kind == "rpgmaker_xp") return option::value(1);
+    if (kind == "blob47") return option::value(2);
+    if (kind == "rpgmaker_vx") return option::value(3);
+    return option::none;
+}
+
+func array_of(value: Toml)=> array<Toml>
+{
+    let mut result = []mut: vec<Toml>;
+    match (value->as_array)
+    {
+        value(items)?
+        {
+            for (let item : items)
+                result->add(item);
+        }
+        none?;
+    }
+    return result->to_array;
+}
+
+func string_of(value: Toml)=> string
+{
+    match (value->as_string)
+    {
+        value(str)? return str;
+        none?;
+    }
+    return "";
+}
+
+func bool_of(value: Toml)=> bool
+{
+    match (value->as_bool)
+    {
+        value(flag)? return flag;
+        none?;
+    }
+    return false;
+}
+
+func bool_or(value: Toml, fallback: bool)=> bool
+{
+    match (value->as_bool)
+    {
+        value(flag)? return flag;
+        none?;
+    }
+    return fallback;
+}
+
+func int_of(value: Toml)=> int
+{
+    match (value->as_int)
+    {
+        value(number)? return number;
+        none?;
+    }
+    return 0;
+}
+
+func real_of(value: Toml)=> real
+{
+    match (value->as_float)
+    {
+        value(number)? return number;
+        none?;
+    }
+    match (value->as_int)
+    {
+        value(number)? return number as real;
+        none?;
+    }
+    return 0.;
+}
+
+func real_at(values: array<Toml>, index: int)=> real
+{
+    if (index < 0 || index >= values->len)
+        return 0.;
+    return real_of(values[index]);
+}
+
+func int_at(values: array<Toml>, index: int)=> int
+{
+    if (index < 0 || index >= values->len)
+        return 0;
+    return int_of(values[index]);
+}
+
+func fail(what: string, message: string)=> bool
+{
+    je::logerr(F"瓦片图集 TOML {what}：{message}");
+    return false;
+}
+
+func append_key(cache: je::cache::binary_writer, key: string)=> bool
+{
+    return cache->append_string(key);
+}
+
+func append_float_list(
+    cache: je::cache::binary_writer, values: array<Toml>, count: int)=> bool
+{
+    if (!cache->append_list())
+        return false;
+    for (let mut i = 0; i < count; i += 1)
+        if (!cache->append_float32(real_at(values, i)))
+            return false;
+    return cache->append_end();
+}
+
+// 嵌套行数组（cell_ids / grid）展平为行优先一维数组；行列数不符返回 none
+func int_rows_of(
+    value: Toml, rows: int, cols: int)=> option<array<int>>
+{
+    match (value->as_array)
+    {
+        value(row_values)?
+        {
+            if (rows >= 0 && row_values->len != rows)
+                return option::none;
+            let mut flat = []mut: vec<int>;
+            for (let row : row_values)
+            {
+                match (row->as_array)
+                {
+                    value(cells)?
+                    {
+                        if (cols >= 0 && cells->len != cols)
+                            return option::none;
+                        for (let cell : cells)
+                            flat->add(int_of(cell));
+                    }
+                    none? return option::none;
+                }
+            }
+            return option::value(flat->to_array);
+        }
+        none? return option::none;
+    }
+}
+
+func int_array_of(value: Toml)=> array<int>
+{
+    let mut flat = []mut: vec<int>;
+    match (value->as_array)
+    {
+        value(items)?
+        {
+            for (let item : items)
+                flat->add(int_of(item));
+        }
+        none?;
+    }
+    return flat->to_array;
+}
+
+// 按值形态推断 je_PropertyType；无法识别返回 -1
+func infer_property_type(value: Toml)=> int
+{
+    match (value->as_bool)
+    {
+        value(_)? return 0;
+        none?;
+    }
+    match (value->as_string)
+    {
+        value(_)? return 1;
+        none?;
+    }
+    match (value->as_int)
+    {
+        value(_)? return 2;
+        none?;
+    }
+    match (value->as_float)
+    {
+        value(_)? return 3;
+        none?;
+    }
+    match (value->as_array)
+    {
+        value(items)?
+        {
+            if (items->len >= 2 && items->len <= 4)
+                return 2 + items->len;
+        }
+        none?;
+    }
+    return -1;
+}
+
+func append_property_value(
+    cache: je::cache::binary_writer, type_tag: int, value: Toml)=> bool
+{
+    if (type_tag == 0)
+        return cache->append_bool(bool_of(value));
+    if (type_tag == 1)
+        return cache->append_string(string_of(value));
+    if (type_tag == 2)
+        return cache->append_int32(int_of(value));
+    if (type_tag == 3)
+        return cache->append_float32(real_of(value));
+
+    // VEC2/3/4：type_tag - 2 = 分量数
+    let count = type_tag - 2;
+    return append_float_list(cache, array_of(value), count);
+}
+
+// 输出一条瓦片/格属性（名称 + 推断类型 + 值）
+func append_property_entry(
+    cache: je::cache::binary_writer, name: string, value: Toml)=> bool
+{
+    let type_tag = infer_property_type(value);
+    if (type_tag < 0)
+    {
+        je::logerr(F"瓦片图集 TOML 属性 '{name}' 的值类型无法识别");
+        return false;
+    }
+
+    return cache->append_document()
+        && append_key(cache, "name")
+        && cache->append_string(name)
+        && append_key(cache, "type")
+        && cache->append_int32(type_tag)
+        && append_key(cache, "value")
+        && append_property_value(cache, type_tag, value)
+        && cache->append_end();
+}
+
+extern func generate(
+    cache: je::cache::binary_writer, source: string)=> bool
+{
+    let mut source_text = option::none: option<string>;
+    match (je::file::readall(source))
+    {
+        value(text)? source_text = option::value(text);
+        none?
+        {
+            je::logerr(F"无法读取瓦片图集 TOML 文件 {source}");
+            return false;
+        }
+    }
+
+    let mut loaded = option::none: option<Toml>;
+    match (toml::parse(source_text->unwrap))
+    {
+        ok(root)? loaded = option::value(root);
+        err(msg)?
+        {
+            je::logerr(F"无法解析瓦片图集 TOML 文件 {source}：{msg}");
+            return false;
+        }
+    }
+    let root = loaded->unwrap;
+
+    if (!cache->append_document())
+        return false;
+
+    if (!append_key(cache, "name")
+        || !cache->append_string(string_of(root["name"])))
+        return false;
+
+    let next_tile_id = int_of(root["next_tile_id"]);
+    if (next_tile_id <= 0)
+        return fail(source, "next_tile_id 必须是正整数");
+    if (!append_key(cache, "next_tile_id")
+        || !cache->append_int32(next_tile_id))
+        return false;
+
+    // ---- sources ----
+    if (!append_key(cache, "sources") || !cache->append_list())
+        return false;
+
+    for (let source_toml : array_of(root["sources"]))
+    {
+        if (!cache->append_document())
+            return false;
+
+        let path = string_of(source_toml["path"]);
+        let tile_px = int_of(source_toml["tile_px"]);
+        let xcount = int_of(source_toml["xcount"]);
+        let ycount = int_of(source_toml["ycount"]);
+        if (path == "" || tile_px <= 0 || xcount <= 0 || ycount <= 0)
+            return fail(source, "source 的 path/tile_px/行列数不合法");
+
+        if (!append_key(cache, "path") || !cache->append_string(path))
+            return false;
+        if (!append_key(cache, "tile_px") || !cache->append_int32(tile_px))
+            return false;
+        if (!append_key(cache, "xcount") || !cache->append_int32(xcount))
+            return false;
+        if (!append_key(cache, "ycount") || !cache->append_int32(ycount))
+            return false;
+        if (!append_key(cache, "tex_w")
+            || !cache->append_int32(int_of(source_toml["tex_w"])))
+            return false;
+        if (!append_key(cache, "tex_h")
+            || !cache->append_int32(int_of(source_toml["tex_h"])))
+            return false;
+
+        let mut cell_ids_opt = option::none: option<array<int>>;
+        cell_ids_opt = int_rows_of(
+            source_toml["cell_ids"], ycount, xcount);
+        if (cell_ids_opt->is_none)
+            return fail(source,
+                "source.cell_ids 必须是 ycount 行、每行 xcount 个整数");
+        let cell_ids = cell_ids_opt->unwrap;
+
+        if (!append_key(cache, "cell_ids")
+            || !cache->append_int32_buffer(cell_ids))
+            return false;
+
+        if (!append_key(cache, "extras") || !cache->append_list())
+            return false;
+
+        for (let extra : array_of(source_toml["extras"]))
+        {
+            if (!cache->append_document())
+                return false;
+
+            let pass = int_of(extra["pass"]);
+            let extra_path = string_of(extra["path"]);
+            if (pass < 1 || extra_path == "")
+                return fail(source,
+                    "source.extras 的 pass/path 不合法");
+
+            if (!append_key(cache, "pass") || !cache->append_int32(pass))
+                return false;
+            if (!append_key(cache, "path")
+                || !cache->append_string(extra_path))
+                return false;
+            if (!append_key(cache, "tex_w")
+                || !cache->append_int32(int_of(extra["tex_w"])))
+                return false;
+            if (!append_key(cache, "tex_h")
+                || !cache->append_int32(int_of(extra["tex_h"])))
+                return false;
+
+            if (!cache->append_end())
+                return false;
+        }
+
+        if (!cache->append_end())   // extras
+            return false;
+        if (!cache->append_end())   // source document
+            return false;
+    }
+
+    if (!cache->append_end())       // sources
+        return false;
+
+    // ---- properties（schema） ----
+    if (!append_key(cache, "properties") || !cache->append_list())
+        return false;
+
+    for (let property : array_of(root["properties"]))
+    {
+        if (!cache->append_document())
+            return false;
+
+        let name = string_of(property["name"]);
+        let type_name = string_of(property["type"]);
+        let mut type_tag = -1;
+        match (property_type_from_toml_name(type_name))
+        {
+            value(value)? type_tag = value;
+            none?;
+        }
+        if (name == "" || type_tag < 0)
+            return fail(source,
+                F"properties '{name}' 的类型 '{type_name}' 无法识别");
+
+        if (!append_key(cache, "name") || !cache->append_string(name))
+            return false;
+        if (!append_key(cache, "type") || !cache->append_int32(type_tag))
+            return false;
+        if (!append_key(cache, "default")
+            || !append_property_value(cache, type_tag, property["default"]))
+            return false;
+
+        if (!cache->append_end())
+            return false;
+    }
+
+    if (!cache->append_end())       // properties
+        return false;
+
+    // ---- tiles（稀疏元数据） ----
+    if (!append_key(cache, "tiles") || !cache->append_list())
+        return false;
+
+    for (let tile : array_of(root["tiles"]))
+    {
+        if (!cache->append_document())
+            return false;
+
+        let tile_id = int_of(tile["id"]);
+        let kind_name = string_of(tile["kind"]);
+        let mut kind = -1;
+        match (tile_kind_from_toml_name(kind_name))
+        {
+            value(value)? kind = value;
+            none?;
+        }
+        if (tile_id <= 0 || kind < 0)
+            return fail(source,
+                F"tiles 条目 id '{tile_id}' 或 kind '{kind_name}' 不合法");
+
+        if (!append_key(cache, "id") || !cache->append_int32(tile_id))
+            return false;
+        if (!append_key(cache, "name")
+            || !cache->append_string(string_of(tile["name"])))
+            return false;
+        if (!append_key(cache, "walkable")
+            || !cache->append_bool(bool_or(tile["walkable"], true)))
+            return false;
+        if (!append_key(cache, "kind") || !cache->append_int32(kind))
+            return false;
+
+        let normal = array_of(tile["normal"]);
+        if (!append_key(cache, "normal"))
+            return false;
+        if (normal->len == 0)
+        {
+            // 缺省法线：指向屏幕外侧 (0, 0, -1)
+            if (!cache->append_list()
+                || !cache->append_float32(0.)
+                || !cache->append_float32(0.)
+                || !cache->append_float32(-1.)
+                || !cache->append_end())
+                return false;
+        }
+        else if (!append_float_list(cache, normal, 3))
+            return false;
+
+        if (!append_key(cache, "variants")
+            || !cache->append_int32_buffer(int_array_of(tile["variants"])))
+            return false;
+
+        if (!append_key(cache, "properties") || !cache->append_list())
+            return false;
+
+        match (tile["properties"]->as_table)
+        {
+            value(properties)?
+            {
+                for (let (name, value) : properties)
+                    if (!append_property_entry(cache, name, value))
+                        return false;
+            }
+            none?;
+        }
+
+        if (!cache->append_end())   // properties
+            return false;
+        if (!cache->append_end())   // tile document
+            return false;
+    }
+
+    if (!cache->append_end())       // tiles
+        return false;
+    if (!cache->append_end())       // root document
+        return false;
+
+    return true;
+}
