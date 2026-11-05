@@ -16,3 +16,5 @@ constexpr uint32_t ANIMATION_CACHE_VERSION = 0x00000001;
 // sources; payloads are binary cache documents.
 constexpr uint32_t TILESET_CACHE_VERSION = 0x00000001;
 constexpr uint32_t TILEMAP_CACHE_VERSION = 0x00000001;
+
+constexpr uint32_t INTERNAL_SCRIPT_CACHE_VERSION = 0x00000001;
