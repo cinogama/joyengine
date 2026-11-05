@@ -227,7 +227,7 @@ static jeecs_file* _jeecs_generate_cache(
     if (vmm == nullptr)
     {
         debug::logerr("Failed to create new script vm for generating `%s`.");
-        return false;
+        return nullptr;
     }
 
     je_writing_cache_file* const cache_file = jeecs_create_cache_file(
@@ -235,8 +235,8 @@ static jeecs_file* _jeecs_generate_cache(
 
     if (cache_file == nullptr)
     {
-        woort_codeenv_drop(cenv);
-        return false;
+        debug::logerr("Failed to create cache file for generating `%s`.");
+        return nullptr;
     }
 
     bool succ = true;
@@ -297,8 +297,11 @@ static jeecs_file* _jeecs_generate_cache(
     return nullptr;
 }
 
-/* OPTIONAL */ jeecs_file* jeecs_animation_create_cache(const char* path)
+/* OPTIONAL */ jeecs_file* jeecs_animation_open_or_create_cache(const char* path)
 {
+    if (jeecs_file* file = jeecs_load_cache_file(path, ANIMATION_CACHE_VERSION, 0))
+        return file;
+
     if (cache_builder_of_animation.has_value())
         return _jeecs_generate_cache(
             path,
@@ -307,8 +310,11 @@ static jeecs_file* _jeecs_generate_cache(
     return nullptr;
 }
 
-/* OPTIONAL */ jeecs_file* jeecs_tilemap_create_cache(const char* path)
+/* OPTIONAL */ jeecs_file* jeecs_tilemap_open_or_create_cache(const char* path)
 {
+    if (jeecs_file* file = jeecs_load_cache_file(path, TILEMAP_CACHE_VERSION, 0))
+        return file;
+
     if (cache_builder_of_tilemap.has_value())
         return _jeecs_generate_cache(
             path,
@@ -317,8 +323,11 @@ static jeecs_file* _jeecs_generate_cache(
     return nullptr;
 }
 
-/* OPTIONAL */ jeecs_file* jeecs_tileset_create_cache(const char* path)
+/* OPTIONAL */ jeecs_file* jeecs_tileset_open_or_create_cache(const char* path)
 {
+    if (jeecs_file* file = jeecs_load_cache_file(path, TILESET_CACHE_VERSION, 0))
+        return file;
+
     if (cache_builder_of_tileset.has_value())
         return _jeecs_generate_cache(
             path,

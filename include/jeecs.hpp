@@ -2665,7 +2665,7 @@ JE_API /* OPTIONAL */ const je_animation_action_data* je_animation_find_action(
     const je_animation* animation,
     const char* name);
 
-JE_API /* OPTIONAL */ jeecs_file* jeecs_animation_create_cache(const char* path);
+JE_API /* OPTIONAL */ jeecs_file* jeecs_animation_open_or_create_cache(const char* path);
 
 /*
 je_image_texture_color_space [类型]
@@ -7203,7 +7203,7 @@ JE_API bool je_tilemap_get_tile_property(je_TilesetDocument* tileset,
     je_TileId tile_id, const char* name, je_PropertyType type,
     /* OPTIONAL */ void* out_value);
 
-JE_API /* OPTIONAL */ jeecs_file* jeecs_tileset_create_cache(const char* path)
+JE_API /* OPTIONAL */ jeecs_file* jeecs_tileset_open_or_create_cache(const char* path);
 
 // ---- 单元格渲染信息（编辑器预览用，与实际渲染一致） ----
 
@@ -7231,7 +7231,7 @@ JE_API bool je_tilemap_cell_quad(je_TilemapDocument* map, je_LayerId layer,
     /* OPTIONAL */ float* u0, /* OPTIONAL */ float* v0, /* OPTIONAL */ float* u1, /* OPTIONAL */ float* v1,
     /* OPTIONAL */ int32_t* qx, /* OPTIONAL */ int32_t* qy, /* OPTIONAL */ int32_t* qcols);
 
-JE_API /* OPTIONAL */ jeecs_file* jeecs_tilemap_create_cache(const char* path);
+JE_API /* OPTIONAL */ jeecs_file* jeecs_tilemap_open_or_create_cache(const char* path);
 
 // DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR
 #ifdef JE_ENABLE_DEBUG_API

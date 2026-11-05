@@ -1,7 +1,6 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 #include "jeecs_cache_version.hpp"
-#include "jeecs_cache_generator.hpp"
 
 #include "wo.h"
 
@@ -167,16 +166,6 @@ namespace
         }
     }
 
-    // 调用生成器脚本，把 TOML 源转换为引擎可读的 .je4cache。
-    // 返回 true 表示缓存已写出并通过 jeecs_load_cache_file 校验。
-    bool _generate_animation_cache(const char* filepath)
-    {
-        return jeecs::cache::generate_from_script(filepath,
-            ANIMATION_CACHE_VERSION,
-            ANIMATION_CACHE_GENERATOR_PATH,
-            ANIMATION_CACHE_GENERATOR_ENTRY);
-    }
-
     // 组件成员类型必须在加载时匹配，运行期不再逐帧校验。
     bool _animation_member_type_matches(
         uint8_t type, const je_TypeInfo* member_type)
@@ -295,36 +284,11 @@ namespace
     bool _load_animation_actions(
         const char* path, std::vector<_temp_action>* out_actions)
     {
-        jeecs_file* cache_file =
-            jeecs_load_cache_file(path, ANIMATION_CACHE_VERSION, 0);
+        jeecs_file* cache_file = jeecs_animation_open_or_create_cache(path);
         if (cache_file == nullptr)
         {
-            if (!_generate_animation_cache(path))
-            {
-                jeecs::debug::logerr(
-                    "Failed to load animation '%s': cannot generate the binary cache.",
-                    path);
-                return false;
-            }
-
-            cache_file =
-                jeecs_load_cache_file(path, ANIMATION_CACHE_VERSION, 0);
-            if (cache_file == nullptr)
-            {
-                jeecs::debug::logerr(
-                    "Failed to load animation '%s': generated cache is invalid.",
-                    path);
-                return false;
-            }
-        }
-
-        if (!jeecs_file_seek(
-            cache_file, (int64_t)jeecs::cache::CACHE_FILE_HEADER_SIZE, JE_READ_FILE_SEEK_SET))
-        {
             jeecs::debug::logerr(
-                "Failed to seek animation cache for '%s'.", path);
-            jeecs_file_close(cache_file);
-            return false;
+                "Failed to load animation '%s'.", path);
         }
 
         jeecs_cache_binary_document root;
@@ -596,12 +560,12 @@ WOORT_API woort_api wojeapi_animation_cache_ensure(void)
 {
     const std::string path = woort_string(0);
 
-    if (jeecs_file* cache =
-        jeecs_load_cache_file(path.c_str(), ANIMATION_CACHE_VERSION, 0))
+    jeecs_file* cache = jeecs_animation_open_or_create_cache(path.c_str());
+    if (nullptr != cache)
     {
         jeecs_file_close(cache);
         return woort_ret_bool(true);
     }
 
-    return woort_ret_bool(_generate_animation_cache(path.c_str()));
+    return woort_ret_bool(false);
 }

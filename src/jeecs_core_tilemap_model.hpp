@@ -17,7 +17,6 @@
 #endif
 #include "jeecs.hpp"
 #include "jeecs_cache_version.hpp"
-#include "jeecs_cache_generator.hpp"
 
 #include <vector>
 #include <map>
@@ -447,52 +446,6 @@ namespace jeecs
         //   4 FLOAT / 5 FLOAT2 / 6 FLOAT3 / 7 FLOAT4
         // 值形态：BOOL/INT32/FLOAT32 为标量，STRING 为字符串；VEC2/3/4 与
         // 多分量 uniform 为对应分量数的 LIST。
-        constexpr const char* TILESET_CACHE_GENERATOR_PATH =
-            "!/builtin/script/cache_generator/tileset.wo";
-        constexpr const char* TILEMAP_CACHE_GENERATOR_PATH =
-            "!/builtin/script/cache_generator/tilemap.wo";
-        constexpr const char* CACHE_GENERATOR_ENTRY = "generate";
-
-        // 打开缓存；缺失/失效时调用对应生成器重建后重试
-        inline /* OPTIONAL */ jeecs_file* open_resource_cache(const char* path,
-            uint32_t format_version, const char* generator_path)
-        {
-            if (jeecs_file* file =
-                ::jeecs_load_cache_file(path, format_version, 0))
-                return file;
-
-            if (!jeecs::cache::generate_from_script(path, format_version,
-                generator_path, CACHE_GENERATOR_ENTRY))
-                return nullptr;
-
-            return ::jeecs_load_cache_file(path, format_version, 0);
-        }
-
-        // 确保缓存有效；缺失/失效时调用生成器重建（导出预生成用）
-        inline bool ensure_tileset_cache(const char* path)
-        {
-            if (jeecs_file* file =
-                ::jeecs_load_cache_file(path, TILESET_CACHE_VERSION, 0))
-            {
-                ::jeecs_file_close(file);
-                return true;
-            }
-            return jeecs::cache::generate_from_script(path,
-                TILESET_CACHE_VERSION, TILESET_CACHE_GENERATOR_PATH,
-                CACHE_GENERATOR_ENTRY);
-        }
-        inline bool ensure_map_cache(const char* path)
-        {
-            if (jeecs_file* file =
-                ::jeecs_load_cache_file(path, TILEMAP_CACHE_VERSION, 0))
-            {
-                ::jeecs_file_close(file);
-                return true;
-            }
-            return jeecs::cache::generate_from_script(path,
-                TILEMAP_CACHE_VERSION, TILEMAP_CACHE_GENERATOR_PATH,
-                CACHE_GENERATOR_ENTRY);
-        }
 
         // 缓存文件所有者：任何失败路径都保证关闭
         struct cache_file_holder
@@ -512,16 +465,6 @@ namespace jeecs
             cache_file_holder(const cache_file_holder&) = delete;
             cache_file_holder& operator=(const cache_file_holder&) = delete;
         };
-
-        // 跳过缓存文件头，打开根文档
-        inline bool open_cache_root(
-            jeecs_file* file, jeecs_cache_binary_document* out_document)
-        {
-            return ::jeecs_file_seek(file,
-                       (int64_t)jeecs::cache::CACHE_FILE_HEADER_SIZE,
-                       JE_READ_FILE_SEEK_SET)
-                && ::jeecs_cache_binary_document_open(file, out_document);
-        }
 
         inline bool read_cache_string_value(
             const jeecs_cache_binary_string* str, std::string* out)
@@ -875,15 +818,14 @@ namespace jeecs
 
         inline std::optional<std::shared_ptr<TilesetDocument>> load_tileset_from(const std::string& path)
         {
-            jeecs_file* cache = open_resource_cache(path.c_str(),
-                TILESET_CACHE_VERSION, TILESET_CACHE_GENERATOR_PATH);
+            jeecs_file* cache = jeecs_tileset_open_or_create_cache(path.c_str());
             if (cache == nullptr)
                 return std::nullopt;
 
             cache_file_holder holder(cache);
 
             jeecs_cache_binary_document root;
-            if (!open_cache_root(cache, &root))
+            if (!jeecs_cache_binary_document_open(cache, &root))
                 return std::nullopt;
 
             auto ts = std::make_shared<TilesetDocument>();
@@ -1200,15 +1142,14 @@ namespace jeecs
 
         inline std::optional<std::shared_ptr<MapDocument>> load_map_from(const std::string& path)
         {
-            jeecs_file* cache = open_resource_cache(path.c_str(),
-                TILEMAP_CACHE_VERSION, TILEMAP_CACHE_GENERATOR_PATH);
+            jeecs_file* cache = jeecs_tilemap_open_or_create_cache(path.c_str());
             if (cache == nullptr)
                 return std::nullopt;
 
             cache_file_holder holder(cache);
 
             jeecs_cache_binary_document root;
-            if (!open_cache_root(cache, &root))
+            if (!jeecs_cache_binary_document_open(cache, &root))
                 return std::nullopt;
 
             auto m = std::make_shared<MapDocument>();
