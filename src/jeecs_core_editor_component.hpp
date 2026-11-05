@@ -73,18 +73,17 @@ inline void update_shader(
     const std::string& uname,
     jeecs::graphic::shader* new_shad)
 {
-    using UT = je_gl_shader_uniform_type_t;
     const auto& v = uni_var->m_value;
     switch (uni_var->m_uniform_type)
     {
-    case UT::INT:    new_shad->set_uniform(uname, v.m_int); break;
-    case UT::INT2:   new_shad->set_uniform(uname, v.m_int2[0], v.m_int2[1]); break;
-    case UT::INT3:   new_shad->set_uniform(uname, v.m_int3[0], v.m_int3[1], v.m_int3[2]); break;
-    case UT::INT4:   new_shad->set_uniform(uname, v.m_int4[0], v.m_int4[1], v.m_int4[2], v.m_int4[3]); break;
-    case UT::FLOAT:  new_shad->set_uniform(uname, v.m_float); break;
-    case UT::FLOAT2: new_shad->set_uniform(uname, jeecs::math::vec2(v.m_float2[0], v.m_float2[1])); break;
-    case UT::FLOAT3: new_shad->set_uniform(uname, jeecs::math::vec3(v.m_float3[0], v.m_float3[1], v.m_float3[2])); break;
-    case UT::FLOAT4: new_shad->set_uniform(uname, jeecs::math::vec4(v.m_float4[0], v.m_float4[1], v.m_float4[2], v.m_float4[3])); break;
+    case JE_GL_SHADER_UNIFORM_TYPE_INT:    new_shad->set_uniform(uname, v.m_int); break;
+    case JE_GL_SHADER_UNIFORM_TYPE_INT2:   new_shad->set_uniform(uname, v.m_int2[0], v.m_int2[1]); break;
+    case JE_GL_SHADER_UNIFORM_TYPE_INT3:   new_shad->set_uniform(uname, v.m_int3[0], v.m_int3[1], v.m_int3[2]); break;
+    case JE_GL_SHADER_UNIFORM_TYPE_INT4:   new_shad->set_uniform(uname, v.m_int4[0], v.m_int4[1], v.m_int4[2], v.m_int4[3]); break;
+    case JE_GL_SHADER_UNIFORM_TYPE_FLOAT:  new_shad->set_uniform(uname, v.m_float); break;
+    case JE_GL_SHADER_UNIFORM_TYPE_FLOAT2: new_shad->set_uniform(uname, jeecs::math::vec2(v.m_float2[0], v.m_float2[1])); break;
+    case JE_GL_SHADER_UNIFORM_TYPE_FLOAT3: new_shad->set_uniform(uname, jeecs::math::vec3(v.m_float3[0], v.m_float3[1], v.m_float3[2])); break;
+    case JE_GL_SHADER_UNIFORM_TYPE_FLOAT4: new_shad->set_uniform(uname, jeecs::math::vec4(v.m_float4[0], v.m_float4[1], v.m_float4[2], v.m_float4[3])); break;
     default: break; // donothing
     }
 }
