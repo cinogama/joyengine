@@ -50,8 +50,9 @@ jegl_frame_buffer* fbo = je_graphic_framebuf_create(
     true    // 包含深度附件
 );
 
-// 渲染到帧缓冲
-jegl_rend_to_framebuffer(fbo, 0, 0, 1920, 1080);
+// 在命令缓冲区中以该帧缓冲为目标开始一个 pass
+// cmd 为当前命令缓冲区，viewport 描述渲染区域
+je_graphic_cmd_begin_pass(cmd, fbo, &viewport);
 
 // 使用完毕后释放
 je_graphic_framebuf_close(fbo);
@@ -66,4 +67,4 @@ je_graphic_framebuf_close(fbo);
 ## 相关接口
 
 - [je_graphic_framebuf_close](je_graphic_framebuf_close.md) - 关闭帧缓冲
-- [jegl_rend_to_framebuffer](jegl_rend_to_framebuffer.md) - 渲染到帧缓冲
+- [je_graphic_cmd_begin_pass](je_graphic_cmd_begin_pass.md) - 以帧缓冲为目标开始 pass

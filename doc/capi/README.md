@@ -12,7 +12,7 @@ C-API 是 JoyEngine 的外部实现与引擎核心的交互接口。出于规避
 - `je_build_version` / `je_build_commit` - 构建信息
 - `je_core_main_script_entry` - 脚本入口
 
-### log - 日志接口
+### [logging/](logging/) - 日志接口
 日志输出与回调管理。
 
 - `je_log` - 日志输出
@@ -31,6 +31,7 @@ C-API 是 JoyEngine 的外部实现与引擎核心的交互接口。出于规避
 
 - `je_ecs_universe_*` - Universe 生命周期与任务管理
 - `je_ecs_world_*` - World 管理与实体操作
+- `je_ecs_requirements_collect` / `je_ecs_world_collection_update` - 切片查询需求收集与刷新
 - `je_arch_*` - 原型（Archetype）遍历
 
 ### [clock/](clock/) - 时钟接口
@@ -47,14 +48,22 @@ C-API 是 JoyEngine 的外部实现与引擎核心的交互接口。出于规避
 - `je_fimg_*` - 资源镜像（打开、查询、打包与逐文件压缩）
 - `je_cache_file_*` / `je_cache_binary_*` - 缓存文件与二进制缓存文档
 
+### [animation/](animation/) - 帧动画
+帧动画资源、动作查询与缓存。
+
+- `je_animation_open` / `je_animation_close` - 打开与关闭帧动画
+- `je_animation_action_find` - 按名称查找动作
+- `je_animation_cache_open_or_create` - 打开或生成帧动画缓存
+
 ### [graphic/](graphic/) - 图形接口
 图形渲染相关的底层接口。
 
 - `je_graphic_thread_start` / `je_graphic_thread_terminate` - 图形线程
 - `je_graphic_texture_*` / `je_graphic_shader_*` / `je_graphic_vertex_*` / `je_graphic_framebuf_*` / `je_graphic_uniformbuf_*` - 资源管理
 - `je_graphic_cmd_*` / `je_graphic_pipeline_*` / `je_graphic_sampler_*` - 新渲染 API（命令缓冲区/pipeline/采样器），见 [render_api_v2.md](graphic/render_api_v2.md)
-- `je_graphic_uhost_*` - 图形上下文管理
+- `je_graphic_branch_*` / `je_graphic_uhost_*` / `je_graphic_sync_*` - 绘制组、图形上下文与同步
 - `je_graphic_using_*_apis` - 图形 API 选择
+- `je_image_texture_*` - 图片纹理颜色空间
 - `je_font_*` - 字体管理
 
 ### [gui/](gui/) - GUI 接口
@@ -78,6 +87,13 @@ C-API 是 JoyEngine 的外部实现与引擎核心的交互接口。出于规避
 - `je_audio_effect_*` - 音频效果
 - `je_audio_filter_*` - 音频滤波器
 - `je_audio_listener_*` - 监听者
+
+### [tilemap/](tilemap/) - 瓦片地图
+地图/瓦片集文档、图层、瓦片、源与逐格属性的读写。
+
+- `je_tilemap_map_*` / `je_tilemap_layer_*` / `je_tilemap_tile_*` - 地图、图层与瓦片操作
+- `je_tilemap_tileset_*` / `je_tileset_*` - 瓦片集与瓦片集缓存
+- `je_tilemap_cache_open_or_create` - 打开或生成地图缓存
 
 ### [module/](module/) - 模块加载
 动态库加载与函数调用。

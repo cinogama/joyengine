@@ -1199,10 +1199,25 @@ je_towoo_api_update [基本接口]
 */
 JE_API void je_towoo_api_update();
 
+/*
+je_towoo_system_register [基本接口]
+注册一个 Woolang 脚本系统，返回系统对应的类型信息
+    * script_path 为系统脚本路径；读取或注册失败时返回 nullptr
+请参见：
+    je_towoo_system_unregister
+    je_towoo_api_update
+*/
 JE_API /* OPTIONAL: If registration failed */ const je_TypeInfo* je_towoo_system_register(
     const char* system_name,
     const char* script_path);
 
+/*
+je_towoo_system_unregister [基本接口]
+注销一个之前注册的 Woolang 脚本系统
+    * tinfo 为 nullptr 时不做任何事
+请参见：
+    je_towoo_system_register
+*/
 JE_API void je_towoo_system_unregister(/* OPTIONAL */ const je_TypeInfo* tinfo);
 
 ////////////////////// ARCH //////////////////////
@@ -1536,11 +1551,29 @@ typedef struct je_RequirementCollection {
     je_CollectedRequirements* m_collected_requirement;
 }je_RequirementCollection;
 
+/*
+je_ecs_requirements_collect [基本接口]
+把一组组件需求整理为供切片查询使用的紧凑需求对象
+    * requirements 的前 view_requiremnt_count 项作为视图需求，其余作为附加需求
+    * requirements 为 nullptr 仅当总需求数为 0
+请参见：
+    je_ecs_world_collection_update
+    je_ecs_world_slice_dependence_query
+*/
 JE_API je_CollectedRequirements* je_ecs_requirements_collect(
     /* OPTIONAL: If total requirement count is 0 */ const je_ComponentRequirement* requirements,
     size_t view_requiremnt_count,
     size_t other_requiremnts_count);
 
+/*
+je_ecs_world_collection_update [基本接口]
+按世界当前的 arch-type 状态刷新需求集合的切片查询缓存
+    * 通常配合 je_ecs_world_arch_change_version_get 判断是否需要刷新
+    * collection 中的 m_collected_requirement 应当已经由 je_ecs_requirements_collect 填充
+请参见：
+    je_ecs_requirements_collect
+    je_ecs_world_arch_change_version_get
+*/
 JE_API void je_ecs_world_collection_update(
     je_GameWorld* world,
     je_RequirementCollection* collection);
@@ -2665,6 +2698,14 @@ JE_API /* OPTIONAL */ const je_animation_action_data* je_animation_action_find(
     const je_animation* animation,
     const char* name);
 
+/*
+je_animation_cache_open_or_create [基本接口]
+打开指定的帧动画缓存文件；缓存缺失或失效时调用内置缓存生成器重建
+    * 返回的句柄由调用方负责关闭（见 je_file_close）；无法生成时返回 nullptr
+请参见：
+    je_cache_file_load
+    je_file_close
+*/
 JE_API /* OPTIONAL */ jeecs_file* je_animation_cache_open_or_create(const char* path);
 
 /*
@@ -5907,7 +5948,7 @@ je_audio_effect_slot_bind [基本接口]
 JE_API void je_audio_effect_slot_bind(jeal_effect_slot* slot, /* OPTIONAL */ void* effect_may_null);
 
 /*
-jeal_effect_slot_close [基本接口]
+je_audio_effect_slot_close [基本接口]
 关闭一个效果槽
 */
 JE_API void je_audio_effect_slot_close(jeal_effect_slot* slot);
@@ -5919,21 +5960,81 @@ je_audio_effect_slot_update [基本接口]
 JE_API void je_audio_effect_slot_update(jeal_effect_slot* slot);
 
 /*
-jeal_create_effect_... [基本接口]
-创建一个音频效果实例
+je_audio_effect_reverb_create [基本接口]
+创建一个混响效果实例
 */
 JE_API jeal_effect_reverb* je_audio_effect_reverb_create();
+
+/*
+je_audio_effect_chorus_create [基本接口]
+创建一个合唱效果实例
+*/
 JE_API jeal_effect_chorus* je_audio_effect_chorus_create();
+
+/*
+je_audio_effect_distortion_create [基本接口]
+创建一个失真效果实例
+*/
 JE_API jeal_effect_distortion* je_audio_effect_distortion_create();
+
+/*
+je_audio_effect_echo_create [基本接口]
+创建一个回声效果实例
+*/
 JE_API jeal_effect_echo* je_audio_effect_echo_create();
+
+/*
+je_audio_effect_flanger_create [基本接口]
+创建一个镶边效果实例
+*/
 JE_API jeal_effect_flanger* je_audio_effect_flanger_create();
+
+/*
+je_audio_effect_frequency_shifter_create [基本接口]
+创建一个移频效果实例
+*/
 JE_API jeal_effect_frequency_shifter* je_audio_effect_frequency_shifter_create();
+
+/*
+je_audio_effect_vocal_morpher_create [基本接口]
+创建一个人声变形效果实例
+*/
 JE_API jeal_effect_vocal_morpher* je_audio_effect_vocal_morpher_create();
+
+/*
+je_audio_effect_pitch_shifter_create [基本接口]
+创建一个变调效果实例
+*/
 JE_API jeal_effect_pitch_shifter* je_audio_effect_pitch_shifter_create();
+
+/*
+je_audio_effect_ring_modulator_create [基本接口]
+创建一个环形调制效果实例
+*/
 JE_API jeal_effect_ring_modulator* je_audio_effect_ring_modulator_create();
+
+/*
+je_audio_effect_autowah_create [基本接口]
+创建一个自动哇音效果实例
+*/
 JE_API jeal_effect_autowah* je_audio_effect_autowah_create();
+
+/*
+je_audio_effect_compressor_create [基本接口]
+创建一个压缩效果实例
+*/
 JE_API jeal_effect_compressor* je_audio_effect_compressor_create();
+
+/*
+je_audio_effect_equalizer_create [基本接口]
+创建一个均衡效果实例
+*/
 JE_API jeal_effect_equalizer* je_audio_effect_equalizer_create();
+
+/*
+je_audio_effect_eaxreverb_create [基本接口]
+创建一个 EAX 混响效果实例
+*/
 JE_API jeal_effect_eaxreverb* je_audio_effect_eaxreverb_create();
 
 /*
@@ -7207,6 +7308,14 @@ JE_API bool je_tilemap_tile_property_get(je_TilesetDocument* tileset,
     je_TileId tile_id, const char* name, je_PropertyType type,
     /* OPTIONAL */ void* out_value);
 
+/*
+je_tileset_cache_open_or_create [基本接口]
+打开指定的瓦片集缓存文件；缓存缺失或失效时调用内置缓存生成器重建
+    * 返回的句柄由调用方负责关闭（见 je_file_close）；无法生成时返回 nullptr
+请参见：
+    je_tilemap_cache_open_or_create
+    je_file_close
+*/
 JE_API /* OPTIONAL */ jeecs_file* je_tileset_cache_open_or_create(const char* path);
 
 // ---- 单元格渲染信息（编辑器预览用，与实际渲染一致） ----
@@ -7235,6 +7344,14 @@ JE_API bool je_tilemap_cell_quad(je_TilemapDocument* map, je_LayerId layer,
     /* OPTIONAL */ float* u0, /* OPTIONAL */ float* v0, /* OPTIONAL */ float* u1, /* OPTIONAL */ float* v1,
     /* OPTIONAL */ int32_t* qx, /* OPTIONAL */ int32_t* qy, /* OPTIONAL */ int32_t* qcols);
 
+/*
+je_tilemap_cache_open_or_create [基本接口]
+打开指定的瓦片地图缓存文件；缓存缺失或失效时调用内置缓存生成器重建
+    * 返回的句柄由调用方负责关闭（见 je_file_close）；无法生成时返回 nullptr
+请参见：
+    je_tileset_cache_open_or_create
+    je_file_close
+*/
 JE_API /* OPTIONAL */ jeecs_file* je_tilemap_cache_open_or_create(const char* path);
 
 // DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR

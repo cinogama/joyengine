@@ -72,4 +72,4 @@ je_graphic_uniformbuf_close(ubo);
 ## 相关接口
 
 - [je_graphic_uniformbuf_create](je_graphic_uniformbuf_create.md) - 创建一致变量缓冲
-- [jegl_bind_uniform_buffer](jegl_bind_uniform_buffer.md) - 绑定一致变量缓冲
+- [je_graphic_cmd_bind_uniform_buffer](je_graphic_cmd_bind_uniform_buffer.md) - 绑定一致变量缓冲

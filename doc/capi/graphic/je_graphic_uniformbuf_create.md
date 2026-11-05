@@ -48,7 +48,8 @@ CameraData camera_data;
 je_graphic_uniformbuf_update(ubo, &camera_data, 0, sizeof(CameraData));
 
 // 绑定 UBO
-jegl_bind_uniform_buffer(ubo);
+// cmd 为当前命令缓冲区
+je_graphic_cmd_bind_uniform_buffer(cmd, ubo);
 
 // 使用完毕后释放
 je_graphic_uniformbuf_close(ubo);
@@ -63,5 +64,5 @@ je_graphic_uniformbuf_close(ubo);
 ## 相关接口
 
 - [je_graphic_uniformbuf_update](je_graphic_uniformbuf_update.md) - 更新一致变量缓冲
-- [jegl_bind_uniform_buffer](jegl_bind_uniform_buffer.md) - 绑定一致变量缓冲
+- [je_graphic_cmd_bind_uniform_buffer](je_graphic_cmd_bind_uniform_buffer.md) - 绑定一致变量缓冲
 - [je_graphic_uniformbuf_close](je_graphic_uniformbuf_close.md) - 关闭一致变量缓冲

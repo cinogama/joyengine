@@ -47,8 +47,10 @@ JE_API jegl_vertex* je_graphic_vertex_load(
 jegl_vertex* mesh = je_graphic_vertex_load(ctx, "@/models/character.obj");
 
 if (mesh != nullptr) {
-    // 绘制模型
-    jegl_draw_vertex(mesh);
+    // 绑定顶点，并通过命令缓冲区提交绘制
+    // cmd 为当前命令缓冲区，vertex_count 为本次绘制的顶点数
+    je_graphic_cmd_bind_vertex(cmd, mesh);
+    je_graphic_cmd_draw(cmd, vertex_count, 0, 1);
     
     // 使用完毕后释放
     je_graphic_vertex_close(mesh);
@@ -65,4 +67,5 @@ if (mesh != nullptr) {
 
 - [je_graphic_vertex_create](je_graphic_vertex_create.md) - 创建顶点
 - [je_graphic_vertex_close](je_graphic_vertex_close.md) - 关闭顶点
-- [jegl_draw_vertex](jegl_draw_vertex.md) - 绘制顶点
+- [je_graphic_cmd_bind_vertex](je_graphic_cmd_bind_vertex.md) - 绑定顶点缓冲
+- [je_graphic_cmd_draw](je_graphic_cmd_draw.md) - 发出非索引绘制

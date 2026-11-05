@@ -38,8 +38,8 @@ jeecs::rendchain_branch* branch = je_graphic_uhost_alloc_branch(host);
 // 开始新帧
 je_graphic_branch_new_frame(branch, 0);
 
-// 创建渲染链
-jegl_rendchain* chain = jegl_branch_new_chain(branch, nullptr, 0, 0, width, height);
+// 每帧开始时通知该绘制组开始新帧
+je_graphic_branch_new_frame(branch, 0);
 
 // 使用完毕后释放
 je_graphic_uhost_free_branch(host, branch);
@@ -53,4 +53,3 @@ je_graphic_uhost_free_branch(host, branch);
 
 - [je_graphic_uhost_free_branch](je_graphic_uhost_free_branch.md) - 释放绘制组
 - [je_graphic_branch_new_frame](je_graphic_branch_new_frame.md) - 开始新帧
-- [jegl_branch_new_chain](jegl_branch_new_chain.md) - 创建渲染链

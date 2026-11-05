@@ -4,7 +4,7 @@
 
 ```c
 JE_API void je_graphic_branch_new_frame(
-    jeecs::rendchain_branch* branch,
+    je_RenderBranch* branch,
     int priority);
 ```
 
@@ -16,7 +16,7 @@ JE_API void je_graphic_branch_new_frame(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `branch` | `jeecs::rendchain_branch*` | 绘制组指针 |
+| `branch` | `je_RenderBranch*` | 绘制组指针 |
 | `priority` | `int` | 绘制优先级 |
 
 ## 返回值
@@ -30,21 +30,21 @@ JE_API void je_graphic_branch_new_frame(
 ### 示例
 
 ```cpp
-jeecs::rendchain_branch* branch = je_graphic_uhost_alloc_branch(host);
+je_RenderBranch* branch = je_graphic_uhost_alloc_branch(host);
 
 // 每帧开始时调用
 je_graphic_branch_new_frame(branch, 0);  // 优先级 0
 
-// 创建并使用渲染链
-jegl_rendchain* chain = jegl_branch_new_chain(branch, nullptr, 0, 0, width, height);
+// 之后通过 je_graphic_cmd_* 录制并提交本帧的绘制命令
 ```
 
 ## 注意事项
 
 - 优先级较低的绘制组会先被渲染
-- 必须在 `jegl_branch_new_chain` 之前调用
+- 必须在向该绘制组提交任何绘制命令之前调用
 
 ## 相关接口
 
 - [je_graphic_uhost_alloc_branch](je_graphic_uhost_alloc_branch.md) - 分配绘制组
-- [jegl_branch_new_chain](jegl_branch_new_chain.md) - 创建渲染链
+- [je_graphic_cmd_begin_pass](je_graphic_cmd_begin_pass.md) - 开始渲染 pass
+- [je_graphic_cmd_commit](je_graphic_cmd_commit.md) - 提交命令缓冲区
